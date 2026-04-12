@@ -1,4 +1,63 @@
 use std::sync::OnceLock;
+use std::fs;
+use std::path::PathBuf;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[serde(tag = "type")]
+enum Action {
+    #[serde(rename = "servant")]
+    Servant {
+        id: String,
+        servant: Option<String>,
+        skill: Option<String>,
+        target: Option<String>,
+    },
+    #[serde(rename = "equipment")]
+    Equipment {
+        id: String,
+        skill: Option<String>,
+    },
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct AttackCard {
+    id: String,
+    card: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct Turn {
+    id: String,
+    #[serde(rename = "servantActions")]
+    servant_actions: Vec<Action>,
+    #[serde(rename = "equipmentActions")]
+    equipment_actions: Vec<Action>,
+    #[serde(rename = "attackPriority")]
+    attack_priority: Vec<AttackCard>,
+}
+
+fn turns_file_path(app: &tauri::AppHandle) -> PathBuf {
+    use tauri::Manager;
+    let dir = app.path().app_data_dir().expect("failed to resolve app data dir");
+    fs::create_dir_all(&dir).ok();
+    dir.join("turns.json")
+}
+
+#[tauri::command]
+fn save_turns(app: tauri::AppHandle, turns: Vec<Turn>) -> Result<(), String> {
+    let path = turns_file_path(&app);
+    let json = serde_json::to_string_pretty(&turns).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn load_turns(app: tauri::AppHandle) -> Vec<Turn> {
+    let path = turns_file_path(&app);
+    match fs::read_to_string(&path) {
+        Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
+        Err(_) => Vec::new(),
+    }
+}
 
 #[derive(serde::Serialize, Clone)]
 struct ServantInfo {
@@ -76,7 +135,7 @@ fn get_servants() -> &'static [ServantInfo] {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_servants])
+        .invoke_handler(tauri::generate_handler![get_servants, save_turns, load_turns])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

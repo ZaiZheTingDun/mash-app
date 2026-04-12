@@ -1,15 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Box, Flex, Text, Spinner } from "@radix-ui/themes";
 import { invoke } from "@tauri-apps/api/core";
 import { Sidebar } from "./components/Sidebar";
 import { StageNavigator } from "./components/StageNavigator";
-import { ContentGrid } from "./components/ContentGrid";
+import { ContentGrid, createInitialSlots } from "./components/ContentGrid";
+import { CommandEditor } from "./components/CommandEditor";
+import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
 import "./App.css";
 
 function App() {
   const [activeStage, setActiveStage] = useState(1);
   const [servants, setServants] = useState<Servant[]>([]);
+  const [slots, setSlots] = useState<SlotItem[]>(createInitialSlots);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,6 +22,11 @@ function App() {
       .catch((err) => setError(String(err)))
       .finally(() => setLoading(false));
   }, []);
+
+  const partyServants = useMemo(() => {
+    const nonSupport = slots.filter((s) => s.type !== "support");
+    return nonSupport.slice(0, 3).map((s) => s.servant);
+  }, [slots]);
 
   return (
     <Flex className="app-container">
@@ -48,8 +56,14 @@ function App() {
                 {error}
               </Text>
             </Flex>
+          ) : activeStage === 3 ? (
+            <CommandEditor partyServants={partyServants} />
           ) : (
-            <ContentGrid servants={servants} />
+            <ContentGrid
+              servants={servants}
+              slots={slots}
+              onSlotsChange={setSlots}
+            />
           )}
         </Box>
       </Box>

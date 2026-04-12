@@ -19,17 +19,13 @@ import { CSS } from "@dnd-kit/utilities";
 import { ServantSelectDialog } from "./ServantSelectDialog";
 import type { Servant } from "../types/servant";
 
-interface ContentGridProps {
-  servants: Servant[];
-}
-
-interface SlotItem {
+export interface SlotItem {
   id: string;
   type: "servant" | "support";
   servant: Servant | null;
 }
 
-function createInitialSlots(): SlotItem[] {
+export function createInitialSlots(): SlotItem[] {
   return [
     { id: "slot-0", type: "servant", servant: null },
     { id: "slot-1", type: "servant", servant: null },
@@ -38,6 +34,12 @@ function createInitialSlots(): SlotItem[] {
     { id: "slot-4", type: "servant", servant: null },
     { id: "slot-5", type: "servant", servant: null },
   ];
+}
+
+interface ContentGridProps {
+  servants: Servant[];
+  slots: SlotItem[];
+  onSlotsChange: (slots: SlotItem[]) => void;
 }
 
 function ImageCard() {
@@ -149,8 +151,7 @@ function SortableSlot({ slot, onSelect }: SortableSlotProps) {
   );
 }
 
-export function ContentGrid({ servants }: ContentGridProps) {
-  const [slots, setSlots] = useState<SlotItem[]>(createInitialSlots);
+export function ContentGrid({ servants, slots, onSlotsChange }: ContentGridProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
 
@@ -162,11 +163,9 @@ export function ContentGrid({ servants }: ContentGridProps) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    setSlots((prev) => {
-      const oldIndex = prev.findIndex((s) => s.id === active.id);
-      const newIndex = prev.findIndex((s) => s.id === over.id);
-      return arrayMove(prev, oldIndex, newIndex);
-    });
+    const oldIndex = slots.findIndex((s) => s.id === active.id);
+    const newIndex = slots.findIndex((s) => s.id === over.id);
+    onSlotsChange(arrayMove(slots, oldIndex, newIndex));
   };
 
   const handleSlotClick = (slot: SlotItem) => {
@@ -176,8 +175,8 @@ export function ContentGrid({ servants }: ContentGridProps) {
   };
 
   const handleSelect = (servant: Servant) => {
-    setSlots((prev) =>
-      prev.map((s) =>
+    onSlotsChange(
+      slots.map((s) =>
         s.id === activeSlotId ? { ...s, servant } : s
       )
     );
