@@ -6,10 +6,9 @@ interface StageNavigatorProps {
 }
 
 const stages = [
-  { id: 1, label: "Stage 1" },
-  { id: 2, label: "Stage 2" },
-  { id: 3, label: "Stage 3" },
-  { id: 4, label: "Stage 4" },
+  { id: 1, label: "队伍设置" },
+  { id: 2, label: "助战设置" },
+  { id: 3, label: "指令设置" },
 ];
 
 export function StageNavigator({
@@ -17,7 +16,7 @@ export function StageNavigator({
   onStageChange,
 }: StageNavigatorProps) {
   return (
-    <Flex align="center" gap="2" className="stage-navigator">
+    <Flex align="center" justify="center" gap="2" className="stage-navigator">
       {stages.map((stage, index) => (
         <Flex key={stage.id} align="center" gap="2">
           <button
@@ -25,13 +24,6 @@ export function StageNavigator({
             onClick={() => onStageChange(stage.id)}
           >
             <Flex align="center" gap="2" className="stage-button-inner">
-              <Box
-                className={`stage-number ${activeStage === stage.id ? "active" : ""}`}
-              >
-                <Text size="1" weight="bold">
-                  {stage.id}
-                </Text>
-              </Box>
               <Text size="2" weight="medium">
                 {stage.label}
               </Text>
