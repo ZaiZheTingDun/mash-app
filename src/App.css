@@ -25,8 +25,14 @@ body,
 
 /* ── App Layout ── */
 
-.app-container {
+.app-root {
   height: 100vh;
+  width: 100%;
+}
+
+.app-container {
+  flex: 1;
+  min-height: 0;
   width: 100%;
   flex-direction: row;
 }
@@ -36,7 +42,7 @@ body,
 .sidebar {
   width: 256px;
   min-width: 256px;
-  height: 100vh;
+  height: 100%;
   background: rgba(223, 224, 225, 0.8);
   border-right: 1px solid var(--gray-7);
   backdrop-filter: blur(12px);
@@ -139,43 +145,45 @@ body,
   background: rgba(0, 0, 0, 0.06);
 }
 
-/* ── Profile ── */
+/* ── Start Button ── */
 
-.sidebar-profile {
+.sidebar-start-btn {
+  appearance: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 13px;
-  margin: 0 32px 32px;
-  background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
   border-radius: var(--radius-3);
-  backdrop-filter: blur(4px);
+  color: #fff;
+  background: linear-gradient(135deg, var(--blue-9), var(--violet-9));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s;
 }
 
-.profile-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, var(--blue-6), var(--violet-6));
-  border: 2px solid #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  flex-shrink: 0;
+.sidebar-start-btn:hover {
+  background: linear-gradient(135deg, var(--blue-10), var(--violet-10));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.profile-name {
-  color: var(--gray-12);
+.sidebar-start-btn:active {
+  transform: scale(0.98);
 }
 
-.profile-role {
-  color: var(--gray-9);
+.sidebar-start-btn:focus-visible {
+  outline: 2px solid var(--blue-8);
+  outline-offset: 2px;
 }
 
 /* ── Main Content ── */
 
 .main-content {
   flex: 1;
-  height: 100vh;
+  height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -625,4 +633,70 @@ body,
 
 .add-turn-btn:hover {
   background: #16a34a;
+}
+
+/* ── Status Bar ── */
+
+.status-bar {
+  width: 100%;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  background: var(--gray-3);
+  border-top: 1px solid var(--gray-6);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.status-dot.connected {
+  background: #22c55e;
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.4);
+}
+
+.status-dot.disconnected {
+  background: #ef4444;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.3);
+}
+
+.status-trigger {
+  appearance: none;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: var(--radius-1);
+  transition: background 0.12s;
+}
+
+.status-trigger:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.status-label {
+  color: var(--gray-11);
+  user-select: none;
+}
+
+.status-popover {
+  min-width: 180px;
+}
+
+.bluestack-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--gray-5);
+  user-select: none;
 }

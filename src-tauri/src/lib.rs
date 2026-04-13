@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::fs;
 use std::path::PathBuf;
 
@@ -131,11 +131,99 @@ fn get_servants() -> &'static [ServantInfo] {
     servants_data()
 }
 
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AdbStatus {
+    connected: bool,
+    device_name: Option<String>,
+}
+
+fn adb_settings_path(app: &tauri::AppHandle) -> PathBuf {
+    use tauri::Manager;
+    let dir = app.path().app_data_dir().expect("failed to resolve app data dir");
+    fs::create_dir_all(&dir).ok();
+    dir.join("adb_settings.json")
+}
+
+fn load_bluestack_setting(app: &tauri::AppHandle) -> bool {
+    let path = adb_settings_path(app);
+    fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get("useBluestack")?.as_bool())
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+fn get_use_bluestack(state: tauri::State<'_, Mutex<bool>>) -> bool {
+    *state.lock().unwrap()
+}
+
+#[tauri::command]
+fn set_use_bluestack(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<bool>>,
+    value: bool,
+) -> Result<(), String> {
+    *state.lock().unwrap() = value;
+    let path = adb_settings_path(&app);
+    let json = serde_json::json!({ "useBluestack": value });
+    fs::write(&path, serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn check_adb(state: tauri::State<'_, Mutex<bool>>) -> AdbStatus {
+    let use_bluestack = *state.lock().unwrap();
+    if use_bluestack {
+        std::process::Command::new("adb")
+            .args(["connect", "127.0.0.1:5555"])
+            .output()
+            .ok();
+    }
+
+    let device_name = std::process::Command::new("adb")
+        .arg("devices")
+        .output()
+        .ok()
+        .and_then(|out| {
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .skip(1)
+                .find_map(|line| {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() && trimmed.contains("device") {
+                        Some(trimmed.split('\t').next().unwrap_or(trimmed).to_string())
+                    } else {
+                        None
+                    }
+                })
+        });
+
+    AdbStatus {
+        connected: device_name.is_some(),
+        device_name,
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_servants, save_turns, load_turns])
+        .setup(|app| {
+            use tauri::Manager;
+            let use_bluestack = load_bluestack_setting(&app.handle());
+            app.manage(Mutex::new(use_bluestack));
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            get_servants,
+            save_turns,
+            load_turns,
+            check_adb,
+            get_use_bluestack,
+            set_use_bluestack,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

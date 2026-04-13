@@ -8,6 +8,7 @@ import {
   BarChartIcon,
   PersonIcon,
   CubeIcon,
+  PlayIcon,
 } from "@radix-ui/react-icons";
 
 interface FolderItem {
@@ -68,16 +69,13 @@ export function Sidebar() {
         </Box>
       </Box>
 
-      <Box className="sidebar-profile">
-        <div className="profile-avatar" />
-        <Flex direction="column" gap="0">
-          <Text size="2" weight="bold" className="profile-name">
-            User
+      <Box style={{ padding: "0 32px 32px" }}>
+        <button className="sidebar-start-btn">
+          <PlayIcon width={16} height={16} />
+          <Text size="3" weight="bold">
+            开始运行
           </Text>
-          <Text size="1" className="profile-role">
-            Admin
-          </Text>
-        </Flex>
+        </button>
       </Box>
     </Box>
   );
