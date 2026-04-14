@@ -1,0 +1,63 @@
+{
+  "detect": [
+    {
+      "image": "screenshots/team_confirm.png",
+      "expectedScreen": "TeamConfirm"
+    },
+    {
+      "image": "screenshots/team_change.png",
+      "expectedScreen": "TeamChange"
+    }
+  ],
+  "findElement": [
+    {
+      "image": "screenshots/team_confirm.png",
+      "templateKey": "mission_start_button",
+      "region": {
+        "x": 0.818,
+        "y": 0.851,
+        "w": 0.187,
+        "h": 0.161
+      },
+      "threshold": 0.8,
+      "expectedFound": true
+    },
+    {
+      "image": "screenshots/team_change.png",
+      "templateKey": "confirm_button",
+      "region": {
+        "x": 0.828,
+        "y": 0.863,
+        "w": 0.167,
+        "h": 0.137
+      },
+      "threshold": 0.8,
+      "expectedFound": true
+    },
+    {
+      "image": "screenshots/team_change.png",
+      "templateKey": "close_button",
+      "region": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 0.155,
+        "h": 0.13
+      },
+      "threshold": 0.8,
+      "expectedFound": true
+    },
+
+    {
+      "image": "screenshots/team_change.png",
+      "templateKey": "mission_start_button",
+      "region": {
+        "x": 0.818,
+        "y": 0.851,
+        "w": 0.187,
+        "h": 0.161
+      },
+      "threshold": 0.8,
+      "expectedFound": false
+    }
+  ]
+}

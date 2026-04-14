@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "mash-cv"
+version = "0.1.0"
+description = "OpenCV-based screen detection sidecar for mash"
+authors = []
+readme = "README.md"
+packages = [{ include = "mash_cv" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+opencv-python-headless = "*"
+numpy = "*"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+pyinstaller = "*"
+
+[tool.poetry.scripts]
+run = "mash_cv:main"
+region = "mash_cv.region_tool:main"
+unit = "mash_cv.run_tests:unit"
+integration = "mash_cv.run_tests:integration"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
