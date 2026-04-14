@@ -1,6 +1,13 @@
-use std::sync::{Mutex, OnceLock};
+mod adb;
+mod runner;
+mod screen;
+
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex, OnceLock};
+
+use runner::{RunConfig, RunnerHandle, RunnerState};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 #[serde(tag = "type")]
@@ -206,14 +213,74 @@ fn check_adb(state: tauri::State<'_, Mutex<bool>>) -> AdbStatus {
     }
 }
 
+#[tauri::command]
+fn start_automation(
+    app: tauri::AppHandle,
+    config: RunConfig,
+    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+) -> Result<(), String> {
+    let mut handle = handle_state.lock().unwrap();
+
+    if matches!(*handle.state.lock().unwrap(), RunnerState::Running) {
+        return Err("自动化正在运行中".into());
+    }
+
+    let use_bluestack = *bluestack_state.lock().unwrap();
+
+    let mut adb_dev = adb::Adb::new(use_bluestack);
+    adb_dev.connect()?;
+
+    // Resolve templates directory from app data dir
+    use tauri::Manager;
+    let templates_dir = app
+        .path()
+        .app_data_dir()
+        .map(|d| d.join("templates"))
+        .ok();
+
+    // Spawn the Python sidecar for image recognition
+    let sidecar = screen::SidecarClient::spawn(&app, templates_dir.as_deref())?;
+
+    // Prepare shared state
+    let state = Arc::new(Mutex::new(RunnerState::Running));
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+    handle.state = state.clone();
+    handle.cancel = cancel.clone();
+
+    let runner = runner::Runner::new(adb_dev, sidecar, config, app, state, cancel);
+    std::thread::spawn(move || runner.run());
+
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_automation(handle_state: tauri::State<'_, Mutex<RunnerHandle>>) -> Result<(), String> {
+    let handle = handle_state.lock().unwrap();
+    handle.cancel.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+fn get_automation_status(
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+) -> RunnerState {
+    let handle = handle_state.lock().unwrap();
+    let state = handle.state.lock().unwrap().clone();
+    state
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             use tauri::Manager;
             let use_bluestack = load_bluestack_setting(&app.handle());
             app.manage(Mutex::new(use_bluestack));
+            app.manage(Mutex::new(RunnerHandle::new_idle()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -223,6 +290,9 @@ pub fn run() {
             check_adb,
             get_use_bluestack,
             set_use_bluestack,
+            start_automation,
+            stop_automation,
+            get_automation_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

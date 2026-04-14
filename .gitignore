@@ -13,6 +13,22 @@ dist
 dist-ssr
 *.local
 
+# Python
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pyzw
+*.pyz
+__pycache__/
+
+# Sidecar build artifacts
+sidecar/*/build/
+sidecar/*/dist/
+src-tauri/binaries/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
