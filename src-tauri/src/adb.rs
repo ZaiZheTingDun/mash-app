@@ -21,6 +21,31 @@ impl Adb {
         }
     }
 
+    fn parse_first_ready_device(output: &str) -> Option<String> {
+        output.lines().skip(1).find_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            let mut parts = trimmed.split('\t');
+            let serial = parts.next()?.trim();
+            let status = parts.next()?.trim();
+            if status == "device" {
+                Some(serial.to_string())
+            } else {
+                None
+            }
+        })
+    }
+
+    fn parse_size_token(text: &str) -> Option<(u32, u32)> {
+        let token = text.split_whitespace().find(|part| part.contains('x'))?;
+        let (w, h) = token.split_once('x')?;
+        let width = w.parse::<u32>().ok()?;
+        let height = h.parse::<u32>().ok()?;
+        Some((width, height))
+    }
+
     /// Detect and connect to a device. Must be called before other operations.
     pub fn connect(&mut self) -> Result<(), String> {
         if self.use_bluestack {
@@ -35,24 +60,33 @@ impl Adb {
             .output()
             .map_err(|e| format!("failed to run adb: {e}"))?;
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        self.device = stdout
-            .lines()
-            .skip(1)
-            .find_map(|line| {
-                let trimmed = line.trim();
-                if !trimmed.is_empty() && trimmed.contains("device") {
-                    Some(trimmed.split('\t').next().unwrap_or(trimmed).to_string())
-                } else {
-                    None
-                }
-            });
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        self.device = Self::parse_first_ready_device(&stdout);
 
         if self.device.is_some() {
             Ok(())
         } else {
             Err("no device found".into())
         }
+    }
+
+    pub fn screen_size(&self) -> Option<(u32, u32)> {
+        let mut args = self.base_args();
+        args.extend(["shell".into(), "wm".into(), "size".into()]);
+        let output = Command::new("adb").args(&args).output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        stdout.lines().find_map(|line| {
+            let trimmed = line.trim();
+            if let Some((_, rhs)) = trimmed.split_once(':') {
+                Self::parse_size_token(rhs.trim())
+            } else {
+                Self::parse_size_token(trimmed)
+            }
+        })
     }
 
     /// Capture a screenshot and write the PNG to a temp file.
@@ -101,10 +135,13 @@ impl Adb {
             y.to_string(),
         ]);
 
-        Command::new("adb")
+        let output = Command::new("adb")
             .args(&args)
             .output()
             .map_err(|e| format!("adb tap failed: {e}"))?;
+        if !output.status.success() {
+            return Err(format!("adb tap exited with: {}", output.status));
+        }
 
         Ok(())
     }
@@ -127,10 +164,13 @@ impl Adb {
             duration_ms.to_string(),
         ]);
 
-        Command::new("adb")
+        let output = Command::new("adb")
             .args(&args)
             .output()
             .map_err(|e| format!("adb swipe failed: {e}"))?;
+        if !output.status.success() {
+            return Err(format!("adb swipe exited with: {}", output.status));
+        }
 
         Ok(())
     }

@@ -106,7 +106,9 @@ impl Runner {
         app_handle: tauri::AppHandle,
         state: Arc<Mutex<RunnerState>>,
         cancel: Arc<AtomicBool>,
+        screen_size: Option<(u32, u32)>,
     ) -> Self {
+        let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         Self {
             adb,
             sidecar,
@@ -114,8 +116,8 @@ impl Runner {
             state,
             cancel,
             app_handle,
-            screen_w: DEFAULT_W,
-            screen_h: DEFAULT_H,
+            screen_w,
+            screen_h,
             team_changed: false,
             support_selected: false,
             support_scroll_count: 0,
@@ -146,6 +148,37 @@ impl Runner {
 
     fn is_cancelled(&self) -> bool {
         self.cancel.load(Ordering::Relaxed)
+    }
+
+    fn fail_action(&self, screen: &str, action: &str, err: String) {
+        let message = format!("{action}失败: {err}");
+        self.set_state(RunnerState::Error {
+            message: message.clone(),
+        });
+        self.emit(screen, &message);
+    }
+
+    fn tap_at(&self, screen: &str, point: Point) -> bool {
+        let (px, py) = point.to_physical(self.screen_w, self.screen_h);
+        match self.adb.tap(px, py) {
+            Ok(()) => true,
+            Err(err) => {
+                self.fail_action(screen, "点击", err);
+                false
+            }
+        }
+    }
+
+    fn swipe_at(&self, screen: &str, from: Point, to: Point, duration_ms: u32) -> bool {
+        let from_px = from.to_physical(self.screen_w, self.screen_h);
+        let to_px = to.to_physical(self.screen_w, self.screen_h);
+        match self.adb.swipe(from_px, to_px, duration_ms) {
+            Ok(()) => true,
+            Err(err) => {
+                self.fail_action(screen, "滑动", err);
+                false
+            }
+        }
     }
 
     // -- main loop -----------------------------------------------------------
@@ -224,6 +257,10 @@ impl Runner {
 
             let _ = std::fs::remove_file(&img_path);
 
+            if matches!(*self.state.lock().unwrap(), RunnerState::Error { .. }) {
+                return;
+            }
+
             if matches!(*self.state.lock().unwrap(), RunnerState::Finished) {
                 self.emit("", "自动化已完成");
                 return;
@@ -236,12 +273,11 @@ impl Runner {
     // -- per-screen handlers -------------------------------------------------
 
     fn handle_team_confirm(&mut self, _img_path: &std::path::Path) {
-        let (w, h) = (self.screen_w, self.screen_h);
-
         if self.config.party_order.is_some() && !self.team_changed {
             self.emit("TeamConfirm", "需要调整队伍顺序，进入编成变更");
-            let (px, py) = Point::new(0.83, 0.90).to_physical(w, h);
-            let _ = self.adb.tap(px, py);
+            if !self.tap_at("TeamConfirm", Point::new(0.83, 0.90)) {
+                return;
+            }
             thread::sleep(ACTION_DELAY);
             return;
         }
@@ -252,38 +288,38 @@ impl Runner {
                 &format!("选择从者到槽位 {}", slot_cfg.slot_index),
             );
             let slot_x = slot_x_position(slot_cfg.slot_index);
-            let (px, py) = Point::new(slot_x, 0.45).to_physical(w, h);
-            let _ = self.adb.tap(px, py);
+            if !self.tap_at("TeamConfirm", Point::new(slot_x, 0.45)) {
+                return;
+            }
             thread::sleep(ACTION_DELAY);
             return;
         }
 
         self.emit("TeamConfirm", "队伍就绪，点击开始任务");
-        let (px, py) = Point::new(0.90, 0.93).to_physical(w, h);
-        let _ = self.adb.tap(px, py);
+        if !self.tap_at("TeamConfirm", Point::new(0.90, 0.93)) {
+            return;
+        }
         thread::sleep(ACTION_DELAY);
     }
 
     fn handle_team_change(&mut self) {
-        let (w, h) = (self.screen_w, self.screen_h);
-
         if self.config.party_order.is_some() {
             // TODO: implement swap logic based on current vs desired order.
             self.emit("TeamChange", "完成顺序调整，确认返回");
-            let (px, py) = Point::new(0.90, 0.93).to_physical(w, h);
-            let _ = self.adb.tap(px, py);
+            if !self.tap_at("TeamChange", Point::new(0.90, 0.93)) {
+                return;
+            }
             self.team_changed = true;
             thread::sleep(ACTION_DELAY);
         } else {
-            let (px, py) = Point::new(0.05, 0.05).to_physical(w, h);
-            let _ = self.adb.tap(px, py);
+            if !self.tap_at("TeamChange", Point::new(0.05, 0.05)) {
+                return;
+            }
             thread::sleep(ACTION_DELAY);
         }
     }
 
     fn handle_support_select(&mut self, img_path: &std::path::Path) {
-        let (w, h) = (self.screen_w, self.screen_h);
-
         if self.support_scroll_count == 0 {
             if let Some(ref _class) = self.config.support_class_filter {
                 self.emit("SupportSelect", "选择职阶筛选");
@@ -291,7 +327,7 @@ impl Runner {
             }
         }
 
-        if let Some(ref name) = self.config.support_servant_name.clone() {
+        if let Some(name) = self.config.support_servant_name.as_deref() {
             let region = NormRect {
                 x: 0.0,
                 y: 0.15,
@@ -300,8 +336,9 @@ impl Runner {
             };
             if let Ok(Some(pos)) = self.sidecar.find_element(img_path, name, region, 0.8) {
                 self.emit("SupportSelect", &format!("找到助战从者: {name}"));
-                let (px, py) = pos.to_physical(w, h);
-                let _ = self.adb.tap(px, py);
+                if !self.tap_at("SupportSelect", pos) {
+                    return;
+                }
                 self.support_selected = true;
                 self.support_scroll_count = 0;
                 thread::sleep(ACTION_DELAY);
@@ -309,8 +346,9 @@ impl Runner {
             }
         } else {
             self.emit("SupportSelect", "选择第一个助战从者");
-            let (px, py) = Point::new(0.50, 0.35).to_physical(w, h);
-            let _ = self.adb.tap(px, py);
+            if !self.tap_at("SupportSelect", Point::new(0.50, 0.35)) {
+                return;
+            }
             self.support_selected = true;
             thread::sleep(ACTION_DELAY);
             return;
@@ -325,23 +363,23 @@ impl Runner {
                     self.config.max_support_scrolls,
                 ),
             );
-            let from = Point::new(0.50, 0.70).to_physical(w, h);
-            let to = Point::new(0.50, 0.30).to_physical(w, h);
-            let _ = self.adb.swipe(from, to, 300);
+            if !self.swipe_at("SupportSelect", Point::new(0.50, 0.70), Point::new(0.50, 0.30), 300)
+            {
+                return;
+            }
             self.support_scroll_count += 1;
             thread::sleep(ACTION_DELAY);
         } else {
             self.emit("SupportSelect", "刷新助战列表");
-            let (px, py) = Point::new(0.92, 0.08).to_physical(w, h);
-            let _ = self.adb.tap(px, py);
+            if !self.tap_at("SupportSelect", Point::new(0.92, 0.08)) {
+                return;
+            }
             self.support_scroll_count = 0;
             thread::sleep(Duration::from_secs(2));
         }
     }
 
     fn handle_servant_select(&mut self, img_path: &std::path::Path) {
-        let (w, h) = (self.screen_w, self.screen_h);
-
         if let Some(slot_cfg) = self.next_unfilled_slot() {
             let servant_key = format!("servant_{}", slot_cfg.servant_id);
             let region = NormRect {
@@ -359,8 +397,9 @@ impl Runner {
                     "ServantSelect",
                     &format!("找到从者 {}，点击选择", slot_cfg.servant_id),
                 );
-                let (px, py) = pos.to_physical(w, h);
-                let _ = self.adb.tap(px, py);
+                if !self.tap_at("ServantSelect", pos) {
+                    return;
+                }
                 self.servants_placed.push(slot_cfg.slot_index);
                 thread::sleep(ACTION_DELAY);
             } else {
@@ -368,15 +407,17 @@ impl Runner {
                     "ServantSelect",
                     &format!("搜索从者 {}…", slot_cfg.servant_id),
                 );
-                let from = Point::new(0.50, 0.70).to_physical(w, h);
-                let to = Point::new(0.50, 0.30).to_physical(w, h);
-                let _ = self.adb.swipe(from, to, 300);
+                if !self.swipe_at("ServantSelect", Point::new(0.50, 0.70), Point::new(0.50, 0.30), 300)
+                {
+                    return;
+                }
                 thread::sleep(ACTION_DELAY);
             }
         } else {
             self.emit("ServantSelect", "所有从者已选择，返回");
-            let (px, py) = Point::new(0.05, 0.05).to_physical(w, h);
-            let _ = self.adb.tap(px, py);
+            if !self.tap_at("ServantSelect", Point::new(0.05, 0.05)) {
+                return;
+            }
             thread::sleep(ACTION_DELAY);
         }
     }

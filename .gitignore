@@ -21,7 +21,6 @@ dist-ssr
 *.pyz
 *.pywz
 *.pyzw
-*.pyz
 __pycache__/
 
 # Sidecar build artifacts

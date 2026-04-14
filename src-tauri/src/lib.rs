@@ -6,6 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock};
+use tauri::Manager;
 
 use runner::{RunConfig, RunnerHandle, RunnerState};
 
@@ -161,6 +162,23 @@ fn load_bluestack_setting(app: &tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+fn parse_first_ready_device(output: &str) -> Option<String> {
+    output.lines().skip(1).find_map(|line| {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        let mut parts = trimmed.split('\t');
+        let serial = parts.next()?.trim();
+        let status = parts.next()?.trim();
+        if status == "device" {
+            Some(serial.to_string())
+        } else {
+            None
+        }
+    })
+}
+
 #[tauri::command]
 fn get_use_bluestack(state: tauri::State<'_, Mutex<bool>>) -> bool {
     *state.lock().unwrap()
@@ -193,19 +211,7 @@ fn check_adb(state: tauri::State<'_, Mutex<bool>>) -> AdbStatus {
         .arg("devices")
         .output()
         .ok()
-        .and_then(|out| {
-            String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .skip(1)
-                .find_map(|line| {
-                    let trimmed = line.trim();
-                    if !trimmed.is_empty() && trimmed.contains("device") {
-                        Some(trimmed.split('\t').next().unwrap_or(trimmed).to_string())
-                    } else {
-                        None
-                    }
-                })
-        });
+        .and_then(|out| parse_first_ready_device(&String::from_utf8_lossy(&out.stdout)));
 
     AdbStatus {
         connected: device_name.is_some(),
@@ -220,9 +226,12 @@ fn start_automation(
     bluestack_state: tauri::State<'_, Mutex<bool>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<(), String> {
-    let mut handle = handle_state.lock().unwrap();
-
-    if matches!(*handle.state.lock().unwrap(), RunnerState::Running) {
+    let is_running = {
+        let state = handle_state.lock().unwrap().state.clone();
+        let running = matches!(*state.lock().unwrap(), RunnerState::Running);
+        running
+    };
+    if is_running {
         return Err("自动化正在运行中".into());
     }
 
@@ -230,9 +239,9 @@ fn start_automation(
 
     let mut adb_dev = adb::Adb::new(use_bluestack);
     adb_dev.connect()?;
+    let screen_size = adb_dev.screen_size();
 
     // Resolve templates directory from app data dir
-    use tauri::Manager;
     let templates_dir = app
         .path()
         .app_data_dir()
@@ -246,10 +255,11 @@ fn start_automation(
     let state = Arc::new(Mutex::new(RunnerState::Running));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
+    let mut handle = handle_state.lock().unwrap();
     handle.state = state.clone();
     handle.cancel = cancel.clone();
 
-    let runner = runner::Runner::new(adb_dev, sidecar, config, app, state, cancel);
+    let runner = runner::Runner::new(adb_dev, sidecar, config, app, state, cancel, screen_size);
     std::thread::spawn(move || runner.run());
 
     Ok(())
@@ -277,7 +287,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            use tauri::Manager;
             let use_bluestack = load_bluestack_setting(&app.handle());
             app.manage(Mutex::new(use_bluestack));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
