@@ -293,21 +293,9 @@ impl Runner {
                 return;
             }
 
-            let img_path = match self.adb.screenshot_to_file() {
-                Ok(p) => p,
-                Err(e) => {
-                    self.set_state(RunnerState::Error {
-                        message: e.clone(),
-                    });
-                    self.emit("", &format!("截图失败: {e}"));
-                    return;
-                }
-            };
-
-            let screen = match self.sidecar.detect(&img_path) {
+            let screen = match self.sidecar.detect(None) {
                 Ok(s) => s,
                 Err(e) => {
-                    let _ = std::fs::remove_file(&img_path);
                     self.set_state(RunnerState::Error {
                         message: e.clone(),
                     });
@@ -319,7 +307,7 @@ impl Runner {
             match screen {
                 Screen::TeamConfirm => {
                     unknown_count = 0;
-                    self.handle_team_confirm(&img_path);
+                    self.handle_team_confirm();
                 }
                 Screen::TeamChange => {
                     unknown_count = 0;
@@ -327,20 +315,20 @@ impl Runner {
                 }
                 Screen::SupportSelect => {
                     unknown_count = 0;
-                    self.handle_support_select(&img_path);
+                    self.handle_support_select();
                 }
                 Screen::ServantSelect => {
                     unknown_count = 0;
-                    self.handle_servant_select(&img_path);
+                    self.handle_servant_select();
                 }
                 Screen::Battle => {
                     unknown_count = 0;
                     self.battle.waiting_for_battle = false;
-                    self.handle_battle(&img_path);
+                    self.handle_battle();
                 }
                 Screen::Attack => {
                     unknown_count = 0;
-                    self.handle_attack(&img_path);
+                    self.handle_attack();
                 }
                 Screen::Unknown => {
                     unknown_count += 1;
@@ -350,7 +338,6 @@ impl Runner {
                         UNKNOWN_TIMEOUT
                     };
                     if unknown_count >= timeout {
-                        let _ = std::fs::remove_file(&img_path);
                         self.set_state(RunnerState::Error {
                             message: "无法识别当前画面".into(),
                         });
@@ -363,8 +350,6 @@ impl Runner {
                     );
                 }
             }
-
-            let _ = std::fs::remove_file(&img_path);
 
             if matches!(*self.state.lock().unwrap(), RunnerState::Error { .. }) {
                 return;
@@ -381,7 +366,7 @@ impl Runner {
 
     // -- pre-battle screen handlers ------------------------------------------
 
-    fn handle_team_confirm(&mut self, _img_path: &std::path::Path) {
+    fn handle_team_confirm(&mut self) {
         if self.config.party_order.is_some() && !self.team_changed {
             self.emit("TeamConfirm", "需要调整队伍顺序，进入编成变更");
             if !self.tap_at("TeamConfirm", Point::new(0.83, 0.90)) {
@@ -429,7 +414,7 @@ impl Runner {
         }
     }
 
-    fn handle_support_select(&mut self, img_path: &std::path::Path) {
+    fn handle_support_select(&mut self) {
         if self.support_scroll_count == 0 {
             if let Some(ref _class) = self.config.support_class_filter {
                 self.emit("SupportSelect", "选择职阶筛选");
@@ -444,7 +429,7 @@ impl Runner {
                 w: 1.0,
                 h: 0.75,
             };
-            if let Ok(Some(pos)) = self.sidecar.find_element(img_path, name, region, 0.8) {
+            if let Ok(Some(pos)) = self.sidecar.find_element(None, name, region, 0.8) {
                 self.emit("SupportSelect", &format!("找到助战从者: {name}"));
                 if !self.tap_at("SupportSelect", pos) {
                     return;
@@ -489,7 +474,7 @@ impl Runner {
         }
     }
 
-    fn handle_servant_select(&mut self, img_path: &std::path::Path) {
+    fn handle_servant_select(&mut self) {
         if let Some(slot_cfg) = self.next_unfilled_slot() {
             let servant_key = format!("servant_{}", slot_cfg.servant_id);
             let region = NormRect {
@@ -501,7 +486,7 @@ impl Runner {
 
             if let Ok(Some(pos)) =
                 self.sidecar
-                    .find_element(img_path, &servant_key, region, 0.8)
+                    .find_element(None, &servant_key, region, 0.8)
             {
                 self.emit(
                     "ServantSelect",
@@ -534,11 +519,11 @@ impl Runner {
 
     // -- battle screen handlers ----------------------------------------------
 
-    fn handle_battle(&mut self, img_path: &std::path::Path) {
+    fn handle_battle(&mut self) {
         // Check if the attack button is present (our turn to act)
         let attack_present = self
             .sidecar
-            .find_element(img_path, "attack_button", ATTACK_BUTTON_REGION, 0.8)
+            .find_element(None, "attack_button", ATTACK_BUTTON_REGION, 0.8)
             .unwrap_or(None)
             .is_some();
 
@@ -550,7 +535,7 @@ impl Runner {
         // Read current turn number from the screen
         let screen_turn = self
             .sidecar
-            .read_turn(img_path, TURN_REGION)
+            .read_turn(None, TURN_REGION)
             .unwrap_or(None);
 
         let turn_changed = match (self.battle.last_screen_turn, screen_turn) {
@@ -604,7 +589,7 @@ impl Runner {
         thread::sleep(ACTION_DELAY);
     }
 
-    fn handle_attack(&mut self, _img_path: &std::path::Path) {
+    fn handle_attack(&mut self) {
         if self.battle.turn_config_used {
             // TODO: use attackPriority to select optimal cards via CV.
             // For now, select the first 3 command cards.

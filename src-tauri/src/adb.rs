@@ -14,6 +14,11 @@ impl Adb {
         }
     }
 
+    /// Serial of the connected device (populated after `connect`).
+    pub fn serial(&self) -> Option<&str> {
+        self.device.as_deref()
+    }
+
     fn base_args(&self) -> Vec<String> {
         match &self.device {
             Some(d) => vec!["-s".into(), d.clone()],
@@ -38,6 +43,7 @@ impl Adb {
         })
     }
 
+    #[allow(dead_code)]
     fn parse_size_token(text: &str) -> Option<(u32, u32)> {
         let token = text.split_whitespace().find(|part| part.contains('x'))?;
         let (w, h) = token.split_once('x')?;
@@ -70,6 +76,8 @@ impl Adb {
         }
     }
 
+    /// Kept as a fallback for environments where scrcpy reports odd dimensions.
+    #[allow(dead_code)]
     pub fn screen_size(&self) -> Option<(u32, u32)> {
         let mut args = self.base_args();
         args.extend(["shell".into(), "wm".into(), "size".into()]);
@@ -91,6 +99,10 @@ impl Adb {
 
     /// Capture a screenshot and write the PNG to a temp file.
     /// Returns the path. Caller is responsible for deleting the file.
+    ///
+    /// Superseded by the scrcpy video stream in production paths; kept for
+    /// tests and one-off debugging.
+    #[allow(dead_code)]
     pub fn screenshot_to_file(&self) -> Result<PathBuf, String> {
         let mut args = self.base_args();
         args.extend(["exec-out".into(), "screencap".into(), "-p".into()]);

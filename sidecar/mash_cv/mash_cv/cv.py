@@ -27,12 +27,21 @@ Protocol
 (process exits)
 """
 
+import base64
 import json
 import os
 import sys
+from typing import Optional
 
 import cv2
 import numpy as np
+
+# Eagerly load PyAV on the main thread before any CV2-FFmpeg dylib conflicts.
+# In PyInstaller bundles, loading ``av`` from a background thread deadlocks in
+# the macOS Objective-C runtime because cv2 and av ship overlapping FFmpeg
+# dylibs and the class-registration path is not thread-safe.
+import av  # noqa: F401
+
 
 # ---------------------------------------------------------------------------
 # State
@@ -40,6 +49,9 @@ import numpy as np
 
 templates: dict[str, np.ndarray] = {}
 config: dict = {"screens": {}}
+# Populated once start_stream succeeds. Imported lazily to avoid pulling PyAV /
+# ffmpeg into the process tree for tests that don't need the stream.
+stream: Optional["object"] = None  # type: ignore[assignment]
 
 DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 
@@ -202,6 +214,115 @@ def _respond(obj: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Frame source: either an explicit `imagePath` (tests, legacy) or the scrcpy
+# stream started via `start_stream`.
+# ---------------------------------------------------------------------------
+
+
+def _load_frame(cmd: dict) -> tuple[Optional[np.ndarray], Optional[str]]:
+    image_path = cmd.get("imagePath")
+    if image_path:
+        img = cv2.imread(image_path)
+        if img is None:
+            return None, f"failed to read image: {image_path}"
+        return img, None
+
+    if stream is None:
+        return None, "no frame available: stream not started and no imagePath provided"
+
+    # First frame can take several seconds after start_stream while the
+    # device-side encoder warms up, especially on emulators. Wait briefly
+    # instead of failing the CV call immediately.
+    frame = stream.wait_for_frame(timeout=float(cmd.get("waitSeconds", 5.0)))
+    if frame is None:
+        return None, "no frame available yet from scrcpy stream"
+    return frame, None
+
+
+def _start_stream(cmd: dict) -> dict:
+    global stream
+
+    jar_path = cmd.get("jarPath")
+    if not jar_path:
+        return {"ok": False, "error": "missing 'jarPath'"}
+    if not os.path.exists(jar_path):
+        return {"ok": False, "error": f"jar not found: {jar_path}"}
+
+    if stream is not None:
+        try:
+            stream.stop()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[mash-cv] previous stream stop error: {exc}", file=sys.stderr)
+        stream = None
+
+    try:
+        from mash_cv.stream import ScrcpyStream
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"failed to import stream module: {exc}"}
+
+    serial = cmd.get("serial") or None
+    max_size = int(cmd.get("maxSize", 0))
+    bit_rate = int(cmd.get("bitRate", 8_000_000))
+
+    new_stream = ScrcpyStream(
+        jar_path=jar_path,
+        serial=serial,
+        max_size=max_size,
+        bit_rate=bit_rate,
+    )
+    try:
+        width, height = new_stream.start()
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"failed to start stream: {exc}"}
+
+    # Wait for the first decoded frame. Scrcpy on BlueStacks / the bundled
+    # sidecar can take several seconds to warm up the H.264 pipeline before
+    # the first NAL unit arrives; returning from start_stream before then
+    # means the very next CV call sees "no frame yet" and fails.
+    warmup = float(cmd.get("warmupSeconds", 15.0))
+    if new_stream.wait_for_frame(timeout=warmup) is None:
+        try:
+            new_stream.stop()
+        except Exception:  # noqa: BLE001
+            pass
+        return {
+            "ok": False,
+            "error": f"stream started but no frame arrived within {warmup:.0f}s",
+        }
+
+    stream = new_stream
+    return {"ok": True, "width": width, "height": height}
+
+
+def _stop_stream() -> dict:
+    global stream
+    if stream is None:
+        return {"ok": True, "running": False}
+    try:
+        stream.stop()
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+    stream = None
+    return {"ok": True, "running": False}
+
+
+def _get_frame(cmd: dict) -> dict:
+    if stream is None:
+        return {"ok": False, "error": "stream not started"}
+    quality = int(cmd.get("quality", 85))
+    wait = float(cmd.get("waitSeconds", 10.0))
+    jpeg = stream.get_latest_jpeg(quality=quality, wait=wait)
+    if jpeg is None:
+        return {"ok": False, "error": "no frame available yet"}
+    return {
+        "ok": True,
+        "jpegB64": base64.b64encode(jpeg).decode("ascii"),
+        "width": stream.width,
+        "height": stream.height,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main REPL
 # ---------------------------------------------------------------------------
 
@@ -220,21 +341,34 @@ def main() -> None:
         action = cmd.get("cmd")
 
         if action == "quit":
+            if stream is not None:
+                try:
+                    stream.stop()
+                except Exception:  # noqa: BLE001
+                    pass
             break
+        elif action == "ping":
+            _respond({"ok": True})
         elif action == "load_templates":
             _respond(_load_templates(cmd["dir"]))
         elif action == "load_config":
             _respond(_load_config(cmd["path"]))
+        elif action == "start_stream":
+            _respond(_start_stream(cmd))
+        elif action == "stop_stream":
+            _respond(_stop_stream())
+        elif action == "get_frame":
+            _respond(_get_frame(cmd))
         elif action == "detect":
-            img = cv2.imread(cmd["imagePath"])
+            img, err = _load_frame(cmd)
             if img is None:
-                _respond({"screen": "Unknown", "error": "failed to read image"})
+                _respond({"screen": "Unknown", "score": 0.0, "error": err})
             else:
                 _respond(_detect_screen(img))
         elif action == "find_element":
-            img = cv2.imread(cmd["imagePath"])
+            img, err = _load_frame(cmd)
             if img is None:
-                _respond({"found": False, "error": "failed to read image"})
+                _respond({"found": False, "error": err})
             else:
                 _respond(
                     _find_element(
@@ -245,9 +379,9 @@ def main() -> None:
                     )
                 )
         elif action == "find_element_by_name":
-            img = cv2.imread(cmd["imagePath"])
+            img, err = _load_frame(cmd)
             if img is None:
-                _respond({"found": False, "error": "failed to read image"})
+                _respond({"found": False, "error": err})
             else:
                 _respond(
                     _find_element_by_name(
@@ -256,10 +390,12 @@ def main() -> None:
                         cmd["element"],
                     )
                 )
+        elif action == "read_turn":
+            _respond({"turn": None})
         elif action == "find_region":
-            img = cv2.imread(cmd["imagePath"])
+            img, err = _load_frame(cmd)
             if img is None:
-                _respond({"found": False, "error": "failed to read screenshot"})
+                _respond({"found": False, "error": err})
                 continue
             tmpl = cv2.imread(cmd["templatePath"], cv2.IMREAD_GRAYSCALE)
             if tmpl is None:

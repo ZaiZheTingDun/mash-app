@@ -16,7 +16,9 @@ poetry run pyinstaller --onefile mash_cv/__main__.py \
   --name mash-cv \
   --distpath dist \
   --workpath build \
-  --specpath build
+  --specpath build \
+  --collect-submodules av \
+  --collect-binaries av
 
 triple=$(rustc --print host-tuple)
 binaries_dir="../../src-tauri/binaries"

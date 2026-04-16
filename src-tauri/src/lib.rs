@@ -304,15 +304,29 @@ fn start_automation(
 
     let mut adb_dev = adb::Adb::new(use_bluestack);
     adb_dev.connect()?;
-    let screen_size = adb_dev.screen_size();
+    let serial = adb_dev.serial().map(|s| s.to_string());
+
+    let jar_path = resolve_scrcpy_jar(&app)
+        .ok_or_else(|| "找不到 scrcpy-server.jar 资源".to_string())?;
+    if !jar_path.exists() {
+        return Err(format!(
+            "scrcpy-server.jar 不存在: {}",
+            jar_path.display()
+        ));
+    }
 
     let templates_dir = resolve_templates_dir(&app);
     let cv_config = resolve_cv_config_path(&app);
-    let sidecar = screen::SidecarClient::spawn(
+    let mut sidecar = screen::SidecarClient::spawn(
         &app,
         templates_dir.as_deref(),
         cv_config.as_deref(),
     )?;
+
+    let (w, h) = sidecar
+        .start_stream(&jar_path, serial.as_deref(), 0, 8_000_000)
+        .map_err(|e| format!("启动 scrcpy 视频流失败: {e}"))?;
+    let screen_size = Some((w, h));
 
     let state = Arc::new(Mutex::new(RunnerState::Running));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -370,7 +384,7 @@ struct DebugCaptureResult {
 fn debug_image_path(app: &tauri::AppHandle) -> PathBuf {
     let dir = app_data_dir(app).join("debug");
     fs::create_dir_all(&dir).ok();
-    dir.join("last.png")
+    dir.join("last.jpg")
 }
 
 /// Resolve the bundled templates directory. In dev and prod this lives under
@@ -384,6 +398,12 @@ fn resolve_templates_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
 fn resolve_cv_config_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     let base = app.path().resource_dir().ok()?;
     Some(base.join("resources").join("cv.json"))
+}
+
+/// Resolve the bundled scrcpy-server.jar path.
+fn resolve_scrcpy_jar(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let base = app.path().resource_dir().ok()?;
+    Some(base.join("resources").join("scrcpy").join("scrcpy-server.jar"))
 }
 
 fn ensure_debug_sidecar(
@@ -410,6 +430,40 @@ fn ensure_debug_sidecar(
     Ok(())
 }
 
+/// Ensure the debug sidecar has a live scrcpy stream. Idempotent.
+fn ensure_debug_stream(
+    app: &tauri::AppHandle,
+    debug_state: &DebugSidecar,
+    serial: Option<&str>,
+) -> Result<(), String> {
+    ensure_debug_sidecar(app, debug_state)?;
+
+    let mut guard = debug_state.0.lock().unwrap();
+    let client = guard
+        .as_mut()
+        .ok_or_else(|| "debug sidecar not initialized".to_string())?;
+
+    // Cheap no-op probe: get_frame will fail if the stream isn't running.
+    if client.get_frame_jpeg().is_ok() {
+        return Ok(());
+    }
+
+    let jar = resolve_scrcpy_jar(app)
+        .ok_or_else(|| "找不到 scrcpy-server.jar 资源".to_string())?;
+    if !jar.exists() {
+        return Err(format!("scrcpy-server.jar 不存在: {}", jar.display()));
+    }
+
+    eprintln!(
+        "[debug] starting scrcpy stream (serial={}, jar={})",
+        serial.unwrap_or("<auto>"),
+        jar.display()
+    );
+    let (w, h) = client.start_stream(&jar, serial, 0, 8_000_000)?;
+    eprintln!("[debug] scrcpy stream started: {w}x{h}");
+    Ok(())
+}
+
 #[tauri::command]
 fn debug_capture(
     app: tauri::AppHandle,
@@ -424,46 +478,104 @@ fn debug_capture(
         eprintln!("[debug_capture] adb connect failed: {e}");
         e
     })?;
-    let screen_size = adb_dev.screen_size();
-    eprintln!("[debug_capture] adb connected, screen_size={screen_size:?}");
+    let serial = adb_dev.serial().map(|s| s.to_string());
+    eprintln!("[debug_capture] adb connected, serial={serial:?}");
 
-    let tmp_path = adb_dev.screenshot_to_file().map_err(|e| {
-        eprintln!("[debug_capture] screenshot failed: {e}");
+    ensure_debug_stream(&app, &debug_state, serial.as_deref()).map_err(|e| {
+        eprintln!("[debug_capture] ensure stream failed: {e}");
         e
     })?;
+
     let dest = debug_image_path(&app);
-    fs::copy(&tmp_path, &dest).map_err(|e| {
-        eprintln!("[debug_capture] copy screenshot failed: {e}");
-        format!("failed to copy screenshot: {e}")
-    })?;
-    let _ = fs::remove_file(&tmp_path);
-    let size_bytes = fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
-    eprintln!(
-        "[debug_capture] screenshot saved: {} ({} bytes)",
-        dest.display(),
-        size_bytes
-    );
 
-    ensure_debug_sidecar(&app, &debug_state)?;
-
-    let (screen, score) = {
+    let (jpeg, screen, score) = {
         let mut guard = debug_state.0.lock().unwrap();
         let client = guard
             .as_mut()
             .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-        client.detect_full(&dest).map_err(|e| {
+
+        // Retry briefly: the first frame may still be in flight right after
+        // start_stream returns.
+        let mut jpeg: Option<Vec<u8>> = None;
+        for _ in 0..20 {
+            match client.get_frame_jpeg() {
+                Ok(buf) => {
+                    jpeg = Some(buf);
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("[debug_capture] get_frame retry: {e}");
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
+        }
+        let jpeg = jpeg.ok_or_else(|| "未获取到视频帧".to_string())?;
+
+        fs::write(&dest, &jpeg).map_err(|e| {
+            eprintln!("[debug_capture] write frame failed: {e}");
+            format!("failed to write frame: {e}")
+        })?;
+        let (screen, score) = client.detect_full(Some(&dest)).map_err(|e| {
             eprintln!("[debug_capture] detect failed: {e}");
             e
-        })?
+        })?;
+        (jpeg, screen, score)
     };
-    eprintln!("[debug_capture] detected screen = {screen} (score={score:.3})");
+
+    let size_bytes = jpeg.len();
+    eprintln!(
+        "[debug_capture] frame saved: {} ({} bytes), screen={screen} score={score:.3}",
+        dest.display(),
+        size_bytes,
+    );
+
+    // Screen size comes from the scrcpy stream metadata captured during
+    // start_stream; we don't have a direct getter yet, so decode dimensions
+    // from the JPEG header via a lightweight probe.
+    let screen_size = probe_jpeg_size(&jpeg).map(|(w, h)| DebugScreenSize { w, h });
 
     Ok(DebugCaptureResult {
         image_path: dest.to_string_lossy().to_string(),
         screen: screen.to_string(),
         score,
-        screen_size: screen_size.map(|(w, h)| DebugScreenSize { w, h }),
+        screen_size,
     })
+}
+
+/// Minimal JPEG SOF scanner to recover dimensions without pulling in an image
+/// crate. Returns (width, height) or None on malformed input.
+fn probe_jpeg_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.len() < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8 {
+        return None;
+    }
+    let mut i = 2;
+    while i + 3 < bytes.len() {
+        if bytes[i] != 0xFF {
+            return None;
+        }
+        let marker = bytes[i + 1];
+        i += 2;
+        // Standalone markers (no length)
+        if marker == 0xD8 || marker == 0xD9 {
+            return None;
+        }
+        let seg_len = u16::from_be_bytes([bytes[i], bytes[i + 1]]) as usize;
+        if seg_len < 2 || i + seg_len > bytes.len() {
+            return None;
+        }
+        // SOF0..SOF3, SOF5..SOF7, SOF9..SOF11, SOF13..SOF15 carry dimensions.
+        let is_sof = matches!(
+            marker,
+            0xC0..=0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF
+        );
+        if is_sof && seg_len >= 7 {
+            let h = u16::from_be_bytes([bytes[i + 3], bytes[i + 4]]) as u32;
+            let w = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
+            return Some((w, h));
+        }
+        i += seg_len;
+    }
+    None
 }
 
 #[tauri::command]
@@ -498,7 +610,7 @@ fn debug_find_element(
     let client = guard
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-    let result = client.find_element_full(&image_path, &template_key, region, threshold)?;
+    let result = client.find_element_full(Some(&image_path), &template_key, region, threshold)?;
     eprintln!(
         "[debug_find_element] result: found={} score={:.3} xy=({:.3},{:.3})",
         result.found, result.score, result.x, result.y
@@ -564,7 +676,7 @@ fn debug_find_element_by_name(
     let client = guard
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-    let result = client.find_element_by_name(&image_path, &screen, &element)?;
+    let result = client.find_element_by_name(Some(&image_path), &screen, &element)?;
     eprintln!(
         "[debug_find_element_by_name] result: found={} score={:.3}",
         result.found, result.score

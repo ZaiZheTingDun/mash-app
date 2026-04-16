@@ -7,13 +7,14 @@ readme = "README.md"
 packages = [{ include = "mash_cv" }]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11,<3.15"
 opencv-python-headless = "*"
 numpy = "*"
+av = "*"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"
-pyinstaller = "*"
+pyinstaller = "^6.10"
 
 [tool.poetry.scripts]
 run = "mash_cv:main"

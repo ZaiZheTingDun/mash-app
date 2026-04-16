@@ -42,7 +42,8 @@
     ],
     "resources": [
       "resources/cv.json",
-      "resources/templates/*"
+      "resources/templates/*",
+      "resources/scrcpy/scrcpy-server.jar"
     ]
   }
 }
