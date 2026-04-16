@@ -14,7 +14,10 @@ av = "*"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"
-pyinstaller = "^6.10"
+# 6.15+ is required for Python 3.13 support and ships modern pkg_resources
+# shims, so the build script no longer has to `pip install` setuptools/
+# pyinstaller out-of-band on top of poetry.
+pyinstaller = "^6.15"
 
 [tool.poetry.scripts]
 run = "mash_cv:main"

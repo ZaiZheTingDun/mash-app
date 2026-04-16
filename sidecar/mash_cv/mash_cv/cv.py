@@ -2,36 +2,39 @@
 mash-cv: OpenCV-based screen detection sidecar for mash.
 
 Long-running process. Reads JSON commands from stdin (one per line),
-writes JSON responses to stdout (one per line).
+writes JSON responses to stdout (one per line). Every request may carry an
+``id`` field; if present, the response echoes the same ``id`` so the caller
+can ignore stale responses left over from a previously timed-out request.
 
 Protocol
 --------
-→ {"cmd":"load_templates","dir":"/path/to/templates"}
-← {"ok":true,"count":3}
+Lifecycle / streaming:
+→ {"cmd":"ping"}                                    ← {"ok":true}
+→ {"cmd":"load_templates","dir":"..."}              ← {"ok":true,"count":3}
+→ {"cmd":"load_config","path":"..."}                ← {"ok":true,"screens":4}
+→ {"cmd":"start_stream","jarPath":"...","serial":"...","maxSize":0,"bitRate":8000000}
+                                                    ← {"ok":true,"width":1080,"height":1920}
+→ {"cmd":"stop_stream"}                             ← {"ok":true,"running":false}
+→ {"cmd":"get_frame","quality":85,"waitSeconds":10} ← {"ok":true,"jpegB64":"...","width":w,"height":h}
+→ {"cmd":"quit"}                                    (process exits)
 
-→ {"cmd":"load_config","path":"/path/to/cv.json"}
-← {"ok":true,"screens":4}
+CV (every CV command also accepts ``imagePath``; if omitted the latest scrcpy
+stream frame is used):
 
-→ {"cmd":"detect","imagePath":"/tmp/ss.png"}
-← {"screen":"TeamConfirm","score":0.91}
-
-→ {"cmd":"find_element","imagePath":"/tmp/ss.png","templateKey":"attack_button",
+→ {"cmd":"detect"}                                  ← {"screen":"TeamConfirm","score":0.91}
+→ {"cmd":"find_element","templateKey":"attack_button",
     "region":{"x":0.0,"y":0.75,"w":1.0,"h":0.25},"threshold":0.8}
-← {"found":true,"x":0.45,"y":0.32,"score":0.87,"region":{...}}
-
-→ {"cmd":"find_element_by_name","imagePath":"/tmp/ss.png",
-    "screen":"Battle","element":"attackButton"}
-← {"found":true,"x":0.82,"y":0.88,"score":0.89,"region":{...}}
-
-→ {"cmd":"quit"}
-(process exits)
+                                                    ← {"found":true,"x":0.45,"y":0.32,"score":0.87,"region":{...}}
+→ {"cmd":"find_element_by_name","screen":"Battle","element":"attackButton"}
+                                                    ← {"found":true,"x":0.82,"y":0.88,"score":0.89,"region":{...}}
+→ {"cmd":"read_turn","region":{...}}                ← {"turn":null}   (stub; see runner.rs)
 """
 
 import base64
 import json
 import os
 import sys
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import cv2
 import numpy as np
@@ -42,6 +45,9 @@ import numpy as np
 # dylibs and the class-registration path is not thread-safe.
 import av  # noqa: F401
 
+if TYPE_CHECKING:
+    from mash_cv.stream import ScrcpyStream
+
 
 # ---------------------------------------------------------------------------
 # State
@@ -49,9 +55,11 @@ import av  # noqa: F401
 
 templates: dict[str, np.ndarray] = {}
 config: dict = {"screens": {}}
-# Populated once start_stream succeeds. Imported lazily to avoid pulling PyAV /
-# ffmpeg into the process tree for tests that don't need the stream.
-stream: Optional["object"] = None  # type: ignore[assignment]
+# Populated once start_stream succeeds. The stream module is imported lazily
+# inside _start_stream so tests that never touch the stream don't pay PyAV's
+# import cost (and so we don't pull ffmpeg into every subprocess that just
+# wants to load a template).
+stream: Optional["ScrcpyStream"] = None
 
 DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 
@@ -210,6 +218,16 @@ def _load_config(path: str) -> dict:
 
 
 def _respond(obj: dict) -> None:
+    """Write a JSON response line. Kept for tests / direct callers; the REPL
+    uses :func:`_reply` so it can echo the request id."""
+    print(json.dumps(obj), flush=True)
+
+
+def _reply(req_id, obj: dict) -> None:
+    """Write a response line, attaching the request ``id`` so the Rust client
+    can ignore stale responses from previously timed-out requests."""
+    if req_id is not None and "id" not in obj:
+        obj = {**obj, "id": req_id}
     print(json.dumps(obj), flush=True)
 
 
@@ -235,6 +253,10 @@ def _load_frame(cmd: dict) -> tuple[Optional[np.ndarray], Optional[str]]:
     # instead of failing the CV call immediately.
     frame = stream.wait_for_frame(timeout=float(cmd.get("waitSeconds", 5.0)))
     if frame is None:
+        # Distinguish "decoder thread died" from "no frame yet" so the runner
+        # can fail fast instead of silently grinding on a dead stream.
+        if not stream.is_decoder_alive():
+            return None, "scrcpy decoder thread stopped (stream is dead)"
         return None, "no frame available yet from scrcpy stream"
     return frame, None
 
@@ -313,6 +335,11 @@ def _get_frame(cmd: dict) -> dict:
     wait = float(cmd.get("waitSeconds", 10.0))
     jpeg = stream.get_latest_jpeg(quality=quality, wait=wait)
     if jpeg is None:
+        if not stream.is_decoder_alive():
+            return {
+                "ok": False,
+                "error": "scrcpy decoder thread stopped (stream is dead)",
+            }
         return {"ok": False, "error": "no frame available yet"}
     return {
         "ok": True,
@@ -335,9 +362,11 @@ def main() -> None:
         try:
             cmd = json.loads(line)
         except json.JSONDecodeError as exc:
+            # No id available when the line itself failed to parse.
             _respond({"error": f"invalid JSON: {exc}"})
             continue
 
+        req_id = cmd.get("id")
         action = cmd.get("cmd")
 
         if action == "quit":
@@ -348,66 +377,73 @@ def main() -> None:
                     pass
             break
         elif action == "ping":
-            _respond({"ok": True})
+            _reply(req_id, {"ok": True})
         elif action == "load_templates":
-            _respond(_load_templates(cmd["dir"]))
+            _reply(req_id, _load_templates(cmd["dir"]))
         elif action == "load_config":
-            _respond(_load_config(cmd["path"]))
+            _reply(req_id, _load_config(cmd["path"]))
         elif action == "start_stream":
-            _respond(_start_stream(cmd))
+            _reply(req_id, _start_stream(cmd))
         elif action == "stop_stream":
-            _respond(_stop_stream())
+            _reply(req_id, _stop_stream())
         elif action == "get_frame":
-            _respond(_get_frame(cmd))
+            _reply(req_id, _get_frame(cmd))
         elif action == "detect":
             img, err = _load_frame(cmd)
             if img is None:
-                _respond({"screen": "Unknown", "score": 0.0, "error": err})
+                _reply(req_id, {"screen": "Unknown", "score": 0.0, "error": err})
             else:
-                _respond(_detect_screen(img))
+                _reply(req_id, _detect_screen(img))
         elif action == "find_element":
             img, err = _load_frame(cmd)
             if img is None:
-                _respond({"found": False, "error": err})
+                _reply(req_id, {"found": False, "error": err})
             else:
-                _respond(
+                _reply(
+                    req_id,
                     _find_element(
                         img,
                         cmd["templateKey"],
                         cmd.get("region", DEFAULT_REGION),
                         cmd.get("threshold", 0.8),
-                    )
+                    ),
                 )
         elif action == "find_element_by_name":
             img, err = _load_frame(cmd)
             if img is None:
-                _respond({"found": False, "error": err})
+                _reply(req_id, {"found": False, "error": err})
             else:
-                _respond(
+                _reply(
+                    req_id,
                     _find_element_by_name(
                         img,
                         cmd["screen"],
                         cmd["element"],
-                    )
+                    ),
                 )
         elif action == "read_turn":
-            _respond({"turn": None})
+            # TODO(runner): the Rust runner expects this to detect the screen
+            # turn number for skill scheduling. Currently a stub; until the OCR
+            # path is implemented, handle_battle in runner.rs cannot reliably
+            # advance ``current_turn``. See review #1.
+            _reply(req_id, {"turn": None})
         elif action == "find_region":
             img, err = _load_frame(cmd)
             if img is None:
-                _respond({"found": False, "error": err})
+                _reply(req_id, {"found": False, "error": err})
                 continue
             tmpl = cv2.imread(cmd["templatePath"], cv2.IMREAD_GRAYSCALE)
             if tmpl is None:
-                _respond({"found": False, "error": "failed to read template"})
+                _reply(req_id, {"found": False, "error": "failed to read template"})
                 continue
-            _respond(
+            _reply(
+                req_id,
                 _match_template_region(
                     img,
                     tmpl,
                     cmd.get("region", DEFAULT_REGION),
                     cmd.get("threshold", 0.8),
-                )
+                ),
             )
         else:
-            _respond({"error": f"unknown command: {action}"})
+            _reply(req_id, {"error": f"unknown command: {action}"})

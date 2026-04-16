@@ -11,6 +11,13 @@ use tauri::Manager;
 use runner::{RunConfig, RunnerHandle, RunnerState};
 use screen::{ElementMatch, NormRect, SidecarClient};
 
+// ---------------------------------------------------------------------------
+// scrcpy stream tunables. ``STREAM_MAX_SIZE = 0`` means "do not downscale";
+// the device transmits at native resolution. Bit rate is the H.264 budget.
+// ---------------------------------------------------------------------------
+const STREAM_MAX_SIZE: u32 = 0;
+const STREAM_BIT_RATE: u32 = 8_000_000;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
 pub enum Action {
@@ -324,7 +331,12 @@ fn start_automation(
     )?;
 
     let (w, h) = sidecar
-        .start_stream(&jar_path, serial.as_deref(), 0, 8_000_000)
+        .start_stream(
+            &jar_path,
+            serial.as_deref(),
+            STREAM_MAX_SIZE,
+            STREAM_BIT_RATE,
+        )
         .map_err(|e| format!("启动 scrcpy 视频流失败: {e}"))?;
     let screen_size = Some((w, h));
 
@@ -443,8 +455,12 @@ fn ensure_debug_stream(
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
 
-    // Cheap no-op probe: get_frame will fail if the stream isn't running.
-    if client.get_frame_jpeg().is_ok() {
+    // Cheap no-op probe: ``stream_size`` is set by ``start_stream`` and
+    // cleared by ``stop_stream``, so a Some value means we believe a stream
+    // is live. We follow up with a zero-wait ``get_frame`` to make sure the
+    // sidecar agrees (catches the case where the decoder thread died after
+    // a successful ``start_stream`` returned).
+    if client.stream_size().is_some() && client.get_frame_jpeg(0.0).is_ok() {
         return Ok(());
     }
 
@@ -459,9 +475,24 @@ fn ensure_debug_stream(
         serial.unwrap_or("<auto>"),
         jar.display()
     );
-    let (w, h) = client.start_stream(&jar, serial, 0, 8_000_000)?;
+    let (w, h) = client.start_stream(&jar, serial, STREAM_MAX_SIZE, STREAM_BIT_RATE)?;
     eprintln!("[debug] scrcpy stream started: {w}x{h}");
     Ok(())
+}
+
+/// Returns Err with a user-facing message when automation is currently
+/// running. Debug commands route through this so we don't end up with two
+/// scrcpy servers + sidecars touching the same device at the same time.
+fn require_automation_idle(
+    handle_state: &Mutex<RunnerHandle>,
+) -> Result<(), String> {
+    let handle = handle_state.lock().unwrap();
+    let state = handle.state.lock().unwrap().clone();
+    if matches!(state, RunnerState::Running) {
+        Err("自动化正在运行中，请先停止后再使用调试功能".into())
+    } else {
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -469,7 +500,10 @@ fn debug_capture(
     app: tauri::AppHandle,
     bluestack_state: tauri::State<'_, Mutex<bool>>,
     debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<DebugCaptureResult, String> {
+    require_automation_idle(&handle_state)?;
+
     let use_bluestack = *bluestack_state.lock().unwrap();
     eprintln!("[debug_capture] begin (use_bluestack={use_bluestack})");
 
@@ -488,28 +522,20 @@ fn debug_capture(
 
     let dest = debug_image_path(&app);
 
-    let (jpeg, screen, score) = {
+    let (jpeg, screen, score, stream_size) = {
         let mut guard = debug_state.0.lock().unwrap();
         let client = guard
             .as_mut()
             .ok_or_else(|| "debug sidecar not initialized".to_string())?;
 
-        // Retry briefly: the first frame may still be in flight right after
-        // start_stream returns.
-        let mut jpeg: Option<Vec<u8>> = None;
-        for _ in 0..20 {
-            match client.get_frame_jpeg() {
-                Ok(buf) => {
-                    jpeg = Some(buf);
-                    break;
-                }
-                Err(e) => {
-                    eprintln!("[debug_capture] get_frame retry: {e}");
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                }
-            }
-        }
-        let jpeg = jpeg.ok_or_else(|| "未获取到视频帧".to_string())?;
+        // ``ensure_debug_stream`` already waited for the warmup frame inside
+        // start_stream, so a single in-sidecar wait of 2s is enough to cover
+        // the post-handshake key-frame gap. No need for a polling retry loop
+        // on the Rust side.
+        let jpeg = client.get_frame_jpeg(2.0).map_err(|e| {
+            eprintln!("[debug_capture] get_frame failed: {e}");
+            format!("未获取到视频帧: {e}")
+        })?;
 
         fs::write(&dest, &jpeg).map_err(|e| {
             eprintln!("[debug_capture] write frame failed: {e}");
@@ -519,73 +545,34 @@ fn debug_capture(
             eprintln!("[debug_capture] detect failed: {e}");
             e
         })?;
-        (jpeg, screen, score)
+        (jpeg, screen, score, client.stream_size())
     };
 
-    let size_bytes = jpeg.len();
     eprintln!(
         "[debug_capture] frame saved: {} ({} bytes), screen={screen} score={score:.3}",
         dest.display(),
-        size_bytes,
+        jpeg.len(),
     );
-
-    // Screen size comes from the scrcpy stream metadata captured during
-    // start_stream; we don't have a direct getter yet, so decode dimensions
-    // from the JPEG header via a lightweight probe.
-    let screen_size = probe_jpeg_size(&jpeg).map(|(w, h)| DebugScreenSize { w, h });
 
     Ok(DebugCaptureResult {
         image_path: dest.to_string_lossy().to_string(),
         screen: screen.to_string(),
         score,
-        screen_size,
+        screen_size: stream_size.map(|(w, h)| DebugScreenSize { w, h }),
     })
-}
-
-/// Minimal JPEG SOF scanner to recover dimensions without pulling in an image
-/// crate. Returns (width, height) or None on malformed input.
-fn probe_jpeg_size(bytes: &[u8]) -> Option<(u32, u32)> {
-    if bytes.len() < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8 {
-        return None;
-    }
-    let mut i = 2;
-    while i + 3 < bytes.len() {
-        if bytes[i] != 0xFF {
-            return None;
-        }
-        let marker = bytes[i + 1];
-        i += 2;
-        // Standalone markers (no length)
-        if marker == 0xD8 || marker == 0xD9 {
-            return None;
-        }
-        let seg_len = u16::from_be_bytes([bytes[i], bytes[i + 1]]) as usize;
-        if seg_len < 2 || i + seg_len > bytes.len() {
-            return None;
-        }
-        // SOF0..SOF3, SOF5..SOF7, SOF9..SOF11, SOF13..SOF15 carry dimensions.
-        let is_sof = matches!(
-            marker,
-            0xC0..=0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF
-        );
-        if is_sof && seg_len >= 7 {
-            let h = u16::from_be_bytes([bytes[i + 3], bytes[i + 4]]) as u32;
-            let w = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
-            return Some((w, h));
-        }
-        i += seg_len;
-    }
-    None
 }
 
 #[tauri::command]
 fn debug_find_element(
     app: tauri::AppHandle,
     debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     template_key: String,
     region: Option<NormRect>,
     threshold: Option<f64>,
 ) -> Result<ElementMatch, String> {
+    require_automation_idle(&handle_state)?;
+
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
         eprintln!("[debug_find_element] no screenshot at {}", image_path.display());
@@ -658,9 +645,12 @@ fn debug_list_templates(app: tauri::AppHandle) -> Vec<String> {
 fn debug_find_element_by_name(
     app: tauri::AppHandle,
     debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     screen: String,
     element: String,
 ) -> Result<ElementMatch, String> {
+    require_automation_idle(&handle_state)?;
+
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
         return Err("尚未截取画面，请先点击 截取画面".into());
@@ -699,7 +689,9 @@ fn debug_get_cv_config(app: tauri::AppHandle) -> Result<serde_json::Value, Strin
 fn debug_reload_sidecar(
     app: tauri::AppHandle,
     debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<(), String> {
+    require_automation_idle(&handle_state)?;
     {
         let mut guard = debug_state.0.lock().unwrap();
         guard.take();
@@ -712,6 +704,22 @@ fn debug_shutdown(debug_state: tauri::State<'_, DebugSidecar>) -> Result<(), Str
     let mut guard = debug_state.0.lock().unwrap();
     guard.take();
     Ok(())
+}
+
+/// Pre-warm the debug sidecar process so the first user interaction with the
+/// Debug page doesn't pay the 20-40s PyInstaller cold-boot cost. Safe to call
+/// at any time; idempotent. The frontend should invoke this on app startup
+/// (or on Debug page mount) to move the cold-boot off the critical path.
+///
+/// This intentionally does *not* start the scrcpy stream -- streaming would
+/// conflict with a running automation session and is started lazily by
+/// `debug_capture` itself.
+#[tauri::command]
+fn warm_sidecar(
+    app: tauri::AppHandle,
+    debug_state: tauri::State<'_, DebugSidecar>,
+) -> Result<(), String> {
+    ensure_debug_sidecar(&app, &debug_state)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -746,6 +754,7 @@ pub fn run() {
             debug_get_cv_config,
             debug_reload_sidecar,
             debug_shutdown,
+            warm_sidecar,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

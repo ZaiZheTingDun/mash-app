@@ -207,6 +207,15 @@ class ScrcpyStream:
         ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
         return buf.tobytes() if ok else None
 
+    def is_decoder_alive(self) -> bool:
+        """Return True iff the H.264 decode thread is still running.
+
+        Callers can use this to distinguish "no frame yet (still warming up)"
+        from "the stream is dead and will never produce frames" -- the
+        former should be retried, the latter is fatal.
+        """
+        return self._decode_thread is not None and self._decode_thread.is_alive()
+
     # -- internal ------------------------------------------------------------
 
     def _push_jar(self) -> None:
@@ -243,13 +252,10 @@ class ScrcpyStream:
         ]
         # ``adb shell`` folds the device-side stderr into stdout, so merge our
         # local handles and read from stdout to capture every server message.
-        # Crucially, ``stdin=DEVNULL``: otherwise the subprocess inherits the
-        # sidecar's own stdin (which is a pipe of JSON commands from Rust) and
-        # forwards those bytes to the device-side scrcpy server, which causes
-        # it to close the video tunnel as soon as spurious input arrives.
-        # ``stdin=DEVNULL`` so the ``adb shell`` subprocess does not inherit
-        # (and consume from) the sidecar's real stdin, which carries our JSON
-        # command pipe from Rust.
+        # ``stdin=DEVNULL`` is critical: otherwise the subprocess inherits the
+        # sidecar's own stdin (a pipe of JSON commands from Rust) and forwards
+        # those bytes to the device-side scrcpy server, which then closes the
+        # video tunnel as soon as spurious input arrives.
         self._server_proc = subprocess.Popen(
             cmd,
             stdin=subprocess.DEVNULL,

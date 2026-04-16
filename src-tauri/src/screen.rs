@@ -1,8 +1,9 @@
+use base64::Engine;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
@@ -101,6 +102,14 @@ pub struct SidecarClient {
     child: Option<tauri_plugin_shell::process::CommandChild>,
     /// Receives stdout lines forwarded from the async task.
     line_rx: mpsc::Receiver<String>,
+    /// Monotonic request id. Every outgoing request carries `{"id": n}` and
+    /// the sidecar echoes the same id back; responses whose id does not match
+    /// the in-flight request are dropped (they are stale leftovers from a
+    /// previously timed-out call). 0 is reserved for "no id sent yet".
+    next_id: u64,
+    /// Last (width, height) reported by `start_stream`. None until a stream
+    /// has been started successfully.
+    stream_size: Option<(u32, u32)>,
 }
 
 impl SidecarClient {
@@ -157,6 +166,8 @@ impl SidecarClient {
         let mut client = Self {
             child: Some(child),
             line_rx,
+            next_id: 1,
+            stream_size: None,
         };
 
         // Wait for the sidecar to finish its cold-boot before sending any real
@@ -203,16 +214,6 @@ impl SidecarClient {
         Ok(client)
     }
 
-    /// Drop any unread lines left in the channel from prior interactions.
-    /// We rely on strict request/response pairing, so any buffered line now is
-    /// a stale response whose caller already timed out -- surfacing it would
-    /// desynchronize every subsequent call.
-    fn drain_stale(&self) {
-        while let Ok(stale) = self.line_rx.try_recv() {
-            eprintln!("[mash-cv] dropping stale response: {stale}");
-        }
-    }
-
     /// Send a JSON command and wait for the JSON response line.
     fn send_recv(&mut self, request: &serde_json::Value) -> Result<serde_json::Value, String> {
         self.send_recv_with_timeout(request, Duration::from_secs(10))
@@ -221,14 +222,28 @@ impl SidecarClient {
     /// Like `send_recv` but with a caller-specified timeout. Used by commands
     /// that can legitimately take longer than 10s (sidecar cold boot, scrcpy
     /// handshake).
+    ///
+    /// Tags the outgoing request with a monotonic ``id`` and discards any
+    /// response whose ``id`` doesn't match -- those are stale leftovers from
+    /// a previously timed-out call still in flight from the sidecar.
     fn send_recv_with_timeout(
         &mut self,
         request: &serde_json::Value,
         timeout: Duration,
     ) -> Result<serde_json::Value, String> {
-        self.drain_stale();
+        let id = self.next_id;
+        self.next_id = self.next_id.wrapping_add(1).max(1);
 
-        let mut line = request.to_string();
+        let mut tagged = request.clone();
+        if let Some(obj) = tagged.as_object_mut() {
+            obj.insert("id".into(), serde_json::Value::from(id));
+        } else {
+            return Err(format!(
+                "send_recv: request must be a JSON object, got {request}"
+            ));
+        }
+
+        let mut line = tagged.to_string();
         line.push('\n');
         self.child
             .as_mut()
@@ -236,13 +251,38 @@ impl SidecarClient {
             .write(line.as_bytes())
             .map_err(|e| format!("failed to write to sidecar: {e}"))?;
 
-        let response = self
-            .line_rx
-            .recv_timeout(timeout)
-            .map_err(|e| format!("sidecar response timeout: {e}"))?;
-
-        serde_json::from_str(&response)
-            .map_err(|e| format!("invalid JSON from sidecar: {e}: {response}"))
+        let deadline = Instant::now() + timeout;
+        loop {
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .ok_or_else(|| {
+                    format!("sidecar response timeout (waiting for id={id})")
+                })?;
+            let response = self
+                .line_rx
+                .recv_timeout(remaining)
+                .map_err(|e| format!("sidecar response timeout: {e}"))?;
+            let parsed: serde_json::Value = serde_json::from_str(&response)
+                .map_err(|e| format!("invalid JSON from sidecar: {e}: {response}"))?;
+            match parsed.get("id").and_then(|v| v.as_u64()) {
+                Some(rid) if rid == id => return Ok(parsed),
+                Some(rid) => {
+                    eprintln!(
+                        "[mash-cv] dropping stale response id={rid} (expected {id}): {response}"
+                    );
+                    continue;
+                }
+                None => {
+                    // Strict mode: a sidecar built against this Rust client
+                    // must echo the id. A response without one almost certainly
+                    // means the sidecar binary is from an older build -- tell
+                    // the operator instead of silently corrupting CV results.
+                    return Err(format!(
+                        "sidecar response missing 'id' field (rebuild mash-cv sidecar): {response}"
+                    ));
+                }
+            }
+        }
     }
 
     /// Helper to inject `imagePath` into the request when the caller provided one.
@@ -412,7 +452,9 @@ impl SidecarClient {
     }
 
     /// Start the scrcpy server on the device and begin streaming.
-    /// Returns the device-reported (width, height).
+    /// Returns the negotiated codec (width, height) -- already downscaled by
+    /// the device if `max_size` was non-zero, so this is what every decoded
+    /// frame will measure, not the raw display size.
     pub fn start_stream(
         &mut self,
         jar_path: &Path,
@@ -441,6 +483,7 @@ impl SidecarClient {
         if w == 0 || h == 0 {
             return Err("start_stream returned invalid dimensions".into());
         }
+        self.stream_size = Some((w, h));
         Ok((w, h))
     }
 
@@ -452,12 +495,23 @@ impl SidecarClient {
             let err = resp["error"].as_str().unwrap_or("unknown error");
             return Err(format!("stop_stream failed: {err}"));
         }
+        self.stream_size = None;
         Ok(())
     }
 
-    /// Return the latest decoded frame as a JPEG byte buffer.
-    pub fn get_frame_jpeg(&mut self) -> Result<Vec<u8>, String> {
-        let req = serde_json::json!({ "cmd": "get_frame" });
+    /// Return the (width, height) of the live stream, if one was started.
+    pub fn stream_size(&self) -> Option<(u32, u32)> {
+        self.stream_size
+    }
+
+    /// Return the latest decoded frame as a JPEG byte buffer. ``wait_seconds``
+    /// is the maximum time the sidecar will block waiting for a fresh frame
+    /// (0 = return immediately if none is cached).
+    pub fn get_frame_jpeg(&mut self, wait_seconds: f64) -> Result<Vec<u8>, String> {
+        let req = serde_json::json!({
+            "cmd": "get_frame",
+            "waitSeconds": wait_seconds,
+        });
         let resp = self.send_recv(&req)?;
         if !resp["ok"].as_bool().unwrap_or(false) {
             let err = resp["error"].as_str().unwrap_or("unknown error");
@@ -466,7 +520,6 @@ impl SidecarClient {
         let b64 = resp["jpegB64"]
             .as_str()
             .ok_or_else(|| "get_frame missing jpegB64".to_string())?;
-        use base64::Engine;
         base64::engine::general_purpose::STANDARD
             .decode(b64)
             .map_err(|e| format!("invalid base64 in jpegB64: {e}"))
@@ -474,6 +527,16 @@ impl SidecarClient {
 
     /// Tell the sidecar to exit.
     pub fn shutdown(&mut self) {
+        // Best-effort: ask the device-side scrcpy server to exit cleanly
+        // before we kill the host process. Without this, abruptly killing the
+        // sidecar mid-stream relies on scrcpy's `cleanup=true` to GC the
+        // server -- which works most of the time but occasionally leaves a
+        // zombie `app_process` on the device.
+        if self.child.is_some() && self.stream_size.is_some() {
+            if let Err(e) = self.stop_stream() {
+                eprintln!("[mash-cv] stop_stream during shutdown failed: {e}");
+            }
+        }
         if let Some(mut child) = self.child.take() {
             let req = serde_json::json!({"cmd": "quit"});
             let mut line = req.to_string();

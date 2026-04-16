@@ -22,11 +22,22 @@ this jar to `/data/local/tmp/scrcpy-server.jar` and launching it via
 `app_process`. The protocol implemented in the sidecar targets scrcpy **2.7**
 specifically; keep the jar in lockstep with the sidecar when upgrading.
 
-To refresh the jar:
+To refresh the jar (download + verify in one shot):
 
 ```bash
-curl -fsSL -o src-tauri/resources/scrcpy/scrcpy-server.jar \
+JAR=src-tauri/resources/scrcpy/scrcpy-server.jar
+EXPECTED=a23c5659f36c260f105c022d27bcb3eafffa26070e7baa9eda66d01377a1adba
+
+curl -fsSL -o "$JAR" \
   https://github.com/Genymobile/scrcpy/releases/download/v2.7/scrcpy-server-v2.7
+
+ACTUAL=$(shasum -a 256 "$JAR" | awk '{print $1}')
+if [ "$ACTUAL" != "$EXPECTED" ]; then
+  echo "checksum mismatch: got $ACTUAL, want $EXPECTED" >&2
+  rm -f "$JAR"
+  exit 1
+fi
+echo "scrcpy-server.jar OK ($EXPECTED)"
 ```
 
 Expected SHA-256 (v2.7): `a23c5659f36c260f105c022d27bcb3eafffa26070e7baa9eda66d01377a1adba`.
