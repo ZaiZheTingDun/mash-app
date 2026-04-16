@@ -1,5 +1,6 @@
 use crate::adb::Adb;
 use crate::screen::{NormRect, Point, Screen, SidecarClient};
+use crate::{Action, Turn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -20,6 +21,7 @@ pub struct ServantSlotConfig {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunConfig {
+    pub project_id: String,
     /// Desired party slot order, e.g. [2,0,1,3,4,5]. None = don't reorder.
     pub party_order: Option<Vec<u32>>,
     /// Class filter to tap in the support list (e.g. "Caster").
@@ -69,16 +71,105 @@ impl RunnerHandle {
 }
 
 // ---------------------------------------------------------------------------
+// Placeholder positions (normalized 0..1, to be configured later)
+// ---------------------------------------------------------------------------
+
+/// Servant skill buttons: [servant_index][skill_index]
+/// servant_1 = index 0, servant_2 = index 1, servant_3 = index 2
+/// skill_1 = index 0, skill_2 = index 1, skill_3 = index 2
+const SERVANT_SKILLS: [[Point; 3]; 3] = [
+    [Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(0.0, 0.0)],
+    [Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(0.0, 0.0)],
+    [Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(0.0, 0.0)],
+];
+
+/// Master / equipment skill buttons
+const EQUIPMENT_SKILLS: [Point; 3] = [
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 0.0),
+];
+
+/// Attack button position on the battle screen
+const ATTACK_BUTTON: Point = Point::new(0.0, 0.0);
+
+/// Region to search for the attack button template
+const ATTACK_BUTTON_REGION: NormRect = NormRect {
+    x: 0.0,
+    y: 0.0,
+    w: 1.0,
+    h: 1.0,
+};
+
+/// Region where the turn number is displayed
+const TURN_REGION: NormRect = NormRect {
+    x: 0.0,
+    y: 0.0,
+    w: 0.2,
+    h: 0.1,
+};
+
+/// Ally target positions for skill targeting (servant_1, servant_2, servant_3)
+const SKILL_TARGETS: [Point; 3] = [
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 0.0),
+];
+
+/// Enemy target positions for attack targeting (enemy_1, enemy_2, enemy_3)
+const ENEMY_TARGETS: [Point; 3] = [
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 0.0),
+];
+
+/// Command card positions on the attack screen (5 cards left to right)
+const COMMAND_CARDS: [Point; 5] = [
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 0.0),
+];
+
+// ---------------------------------------------------------------------------
+// Battle state
+// ---------------------------------------------------------------------------
+
+struct BattleState {
+    /// Which turn config index we're executing (0-based into the turns vec)
+    current_turn: usize,
+    /// Turn number last detected from the screen
+    last_screen_turn: Option<u32>,
+    /// Whether we've already executed skills for the current turn
+    skills_executed: bool,
+    /// Whether we used the turn config (vs fallback) — drives card selection
+    turn_config_used: bool,
+    /// Set after clicking start on TeamConfirm; tolerates longer Unknown streaks
+    waiting_for_battle: bool,
+}
+
+impl BattleState {
+    fn new() -> Self {
+        Self {
+            current_turn: 0,
+            last_screen_turn: None,
+            skills_executed: false,
+            turn_config_used: false,
+            waiting_for_battle: false,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 
 const POLL_INTERVAL: Duration = Duration::from_millis(800);
 const ACTION_DELAY: Duration = Duration::from_millis(500);
 const UNKNOWN_TIMEOUT: u32 = 10;
+const UNKNOWN_TIMEOUT_LOADING: u32 = 30;
 
-/// Screen dimensions read from the first screenshot.
-/// Used to convert normalized coords to physical pixels for tap/swipe.
-/// Falls back to 1080x1920 if detection fails.
 const DEFAULT_W: u32 = 1080;
 const DEFAULT_H: u32 = 1920;
 
@@ -86,16 +177,19 @@ pub struct Runner {
     adb: Adb,
     sidecar: SidecarClient,
     config: RunConfig,
+    turns: Vec<Turn>,
     state: Arc<Mutex<RunnerState>>,
     cancel: Arc<AtomicBool>,
     app_handle: tauri::AppHandle,
     screen_w: u32,
     screen_h: u32,
-    // Internal progress tracking
+    // Pre-battle progress tracking
     team_changed: bool,
     support_selected: bool,
     support_scroll_count: u32,
     servants_placed: Vec<u32>,
+    // Battle progress tracking
+    battle: BattleState,
 }
 
 impl Runner {
@@ -103,6 +197,7 @@ impl Runner {
         adb: Adb,
         sidecar: SidecarClient,
         config: RunConfig,
+        turns: Vec<Turn>,
         app_handle: tauri::AppHandle,
         state: Arc<Mutex<RunnerState>>,
         cancel: Arc<AtomicBool>,
@@ -113,6 +208,7 @@ impl Runner {
             adb,
             sidecar,
             config,
+            turns,
             state,
             cancel,
             app_handle,
@@ -122,6 +218,7 @@ impl Runner {
             support_selected: false,
             support_scroll_count: 0,
             servants_placed: Vec::new(),
+            battle: BattleState::new(),
         }
     }
 
@@ -196,7 +293,6 @@ impl Runner {
                 return;
             }
 
-            // Take screenshot → temp file
             let img_path = match self.adb.screenshot_to_file() {
                 Ok(p) => p,
                 Err(e) => {
@@ -208,7 +304,6 @@ impl Runner {
                 }
             };
 
-            // Detect screen via sidecar
             let screen = match self.sidecar.detect(&img_path) {
                 Ok(s) => s,
                 Err(e) => {
@@ -238,9 +333,23 @@ impl Runner {
                     unknown_count = 0;
                     self.handle_servant_select(&img_path);
                 }
+                Screen::Battle => {
+                    unknown_count = 0;
+                    self.battle.waiting_for_battle = false;
+                    self.handle_battle(&img_path);
+                }
+                Screen::Attack => {
+                    unknown_count = 0;
+                    self.handle_attack(&img_path);
+                }
                 Screen::Unknown => {
                     unknown_count += 1;
-                    if unknown_count >= UNKNOWN_TIMEOUT {
+                    let timeout = if self.battle.waiting_for_battle {
+                        UNKNOWN_TIMEOUT_LOADING
+                    } else {
+                        UNKNOWN_TIMEOUT
+                    };
+                    if unknown_count >= timeout {
                         let _ = std::fs::remove_file(&img_path);
                         self.set_state(RunnerState::Error {
                             message: "无法识别当前画面".into(),
@@ -250,7 +359,7 @@ impl Runner {
                     }
                     self.emit(
                         "Unknown",
-                        &format!("等待识别画面… ({unknown_count}/{UNKNOWN_TIMEOUT})"),
+                        &format!("等待识别画面… ({unknown_count}/{timeout})"),
                     );
                 }
             }
@@ -270,7 +379,7 @@ impl Runner {
         }
     }
 
-    // -- per-screen handlers -------------------------------------------------
+    // -- pre-battle screen handlers ------------------------------------------
 
     fn handle_team_confirm(&mut self, _img_path: &std::path::Path) {
         if self.config.party_order.is_some() && !self.team_changed {
@@ -299,6 +408,7 @@ impl Runner {
         if !self.tap_at("TeamConfirm", Point::new(0.90, 0.93)) {
             return;
         }
+        self.battle.waiting_for_battle = true;
         thread::sleep(ACTION_DELAY);
     }
 
@@ -422,6 +532,160 @@ impl Runner {
         }
     }
 
+    // -- battle screen handlers ----------------------------------------------
+
+    fn handle_battle(&mut self, img_path: &std::path::Path) {
+        // Check if the attack button is present (our turn to act)
+        let attack_present = self
+            .sidecar
+            .find_element(img_path, "attack_button", ATTACK_BUTTON_REGION, 0.8)
+            .unwrap_or(None)
+            .is_some();
+
+        if !attack_present {
+            self.emit("Battle", "等待行动回合…");
+            return;
+        }
+
+        // Read current turn number from the screen
+        let screen_turn = self
+            .sidecar
+            .read_turn(img_path, TURN_REGION)
+            .unwrap_or(None);
+
+        let turn_changed = match (self.battle.last_screen_turn, screen_turn) {
+            (None, _) => true,
+            (Some(prev), Some(curr)) if curr != prev => true,
+            _ => false,
+        };
+
+        if turn_changed {
+            if self.battle.last_screen_turn.is_some() {
+                self.battle.current_turn += 1;
+            }
+            self.battle.last_screen_turn = screen_turn;
+            self.battle.skills_executed = false;
+            self.battle.turn_config_used = false;
+
+            self.emit(
+                "Battle",
+                &format!(
+                    "回合变更 → 执行第 {} 组指令 (画面回合: {})",
+                    self.battle.current_turn + 1,
+                    screen_turn.map(|n| n.to_string()).unwrap_or_else(|| "?".into()),
+                ),
+            );
+        } else {
+            self.emit("Battle", "回合未变更，直接攻击");
+        }
+
+        // Execute skills if this is a new turn and we have config for it
+        if !self.battle.skills_executed {
+            if let Some(turn_cfg) = self.turns.get(self.battle.current_turn).cloned() {
+                self.execute_turn_skills(&turn_cfg);
+                self.battle.turn_config_used = true;
+            } else {
+                self.emit(
+                    "Battle",
+                    &format!(
+                        "无第 {} 组指令配置，直接攻击",
+                        self.battle.current_turn + 1
+                    ),
+                );
+            }
+            self.battle.skills_executed = true;
+        }
+
+        // Click the attack button
+        self.emit("Battle", "点击攻击按钮");
+        if !self.tap_at("Battle", ATTACK_BUTTON) {
+            return;
+        }
+        thread::sleep(ACTION_DELAY);
+    }
+
+    fn handle_attack(&mut self, _img_path: &std::path::Path) {
+        if self.battle.turn_config_used {
+            // TODO: use attackPriority to select optimal cards via CV.
+            // For now, select the first 3 command cards.
+            self.emit("Attack", "选择指令卡（前3张）");
+        } else {
+            self.emit("Attack", "回合未变更，选择默认指令卡（前3张）");
+        }
+
+        for i in 0..3 {
+            if !self.tap_at("Attack", COMMAND_CARDS[i]) {
+                return;
+            }
+            thread::sleep(ACTION_DELAY);
+        }
+
+        // Reset for next cycle
+        self.battle.turn_config_used = false;
+    }
+
+    // -- skill execution -----------------------------------------------------
+
+    fn execute_turn_skills(&mut self, turn: &Turn) {
+        for action in &turn.servant_actions {
+            if let Action::Servant {
+                servant,
+                skill,
+                target,
+                ..
+            } = action
+            {
+                let Some(pos) = skill_position(servant.as_deref(), skill.as_deref()) else {
+                    continue;
+                };
+
+                self.emit(
+                    "Battle",
+                    &format!(
+                        "从者技能: {} 使用 {}",
+                        servant.as_deref().unwrap_or("?"),
+                        skill.as_deref().unwrap_or("?"),
+                    ),
+                );
+                if !self.tap_at("Battle", pos) {
+                    return;
+                }
+                thread::sleep(ACTION_DELAY);
+
+                if let Some(target_pos) = skill_target_position(target.as_deref()) {
+                    self.emit(
+                        "Battle",
+                        &format!("选择目标: {}", target.as_deref().unwrap_or("?")),
+                    );
+                    if !self.tap_at("Battle", target_pos) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+                }
+            }
+        }
+
+        for action in &turn.equipment_actions {
+            if let Action::Equipment { skill, .. } = action {
+                let Some(pos) = equipment_skill_position(skill.as_deref()) else {
+                    continue;
+                };
+
+                self.emit(
+                    "Battle",
+                    &format!(
+                        "御主技能: {}",
+                        skill.as_deref().unwrap_or("?"),
+                    ),
+                );
+                if !self.tap_at("Battle", pos) {
+                    return;
+                }
+                thread::sleep(ACTION_DELAY);
+            }
+        }
+    }
+
     // -- utilities -----------------------------------------------------------
 
     fn next_unfilled_slot(&self) -> Option<ServantSlotConfig> {
@@ -431,6 +695,42 @@ impl Runner {
             .find(|s| !self.servants_placed.contains(&s.slot_index))
             .cloned()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Position mapping helpers
+// ---------------------------------------------------------------------------
+
+fn parse_index(s: &str, prefix: &str) -> Option<usize> {
+    s.strip_prefix(prefix)
+        .and_then(|n| n.parse::<usize>().ok())
+        .map(|n| n.saturating_sub(1))
+}
+
+fn skill_position(servant: Option<&str>, skill: Option<&str>) -> Option<Point> {
+    let si = parse_index(servant?, "servant_")?;
+    let ki = parse_index(skill?, "skill_")?;
+    SERVANT_SKILLS.get(si).and_then(|row| row.get(ki)).copied()
+}
+
+fn equipment_skill_position(skill: Option<&str>) -> Option<Point> {
+    let ki = parse_index(skill?, "skill_")?;
+    EQUIPMENT_SKILLS.get(ki).copied()
+}
+
+/// Skill targets are always allies (servant_1, servant_2, servant_3).
+fn skill_target_position(target: Option<&str>) -> Option<Point> {
+    let t = target?;
+    let si = parse_index(t, "servant_")?;
+    SKILL_TARGETS.get(si).copied()
+}
+
+/// Enemy targets (enemy_1, enemy_2, enemy_3). Available for future use.
+#[allow(dead_code)]
+fn enemy_target_position(target: Option<&str>) -> Option<Point> {
+    let t = target?;
+    let ei = parse_index(t, "enemy_")?;
+    ENEMY_TARGETS.get(ei).copied()
 }
 
 fn slot_x_position(index: u32) -> f64 {

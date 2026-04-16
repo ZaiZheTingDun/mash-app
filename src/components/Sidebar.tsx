@@ -1,32 +1,70 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Box, Text, Flex } from "@radix-ui/themes";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
   FileIcon,
-  GearIcon,
-  BarChartIcon,
-  PersonIcon,
-  CubeIcon,
+  PlusIcon,
   PlayIcon,
+  TrashIcon,
+  MagnifyingGlassIcon,
 } from "@radix-ui/react-icons";
+import { invoke } from "@tauri-apps/api/core";
+import type { Project } from "../types/project";
 
-interface FolderItem {
-  id: string;
-  label: string;
-  icon: React.ReactNode;
+interface SidebarProps {
+  activeProjectId: string | null;
+  onProjectSelect: (id: string) => void;
+  onStartRun: () => void;
+  onOpenDebug: () => void;
 }
 
-const menuItems: FolderItem[] = [
-  { id: "setting1", label: "Setting 1", icon: <PersonIcon /> },
-  { id: "setting2", label: "Setting 2", icon: <BarChartIcon /> },
-  { id: "setting3", label: "Setting 3", icon: <GearIcon /> },
-  { id: "setting4", label: "Setting 4", icon: <CubeIcon /> },
-];
-
-export function Sidebar() {
+export function Sidebar({
+  activeProjectId,
+  onProjectSelect,
+  onStartRun,
+  onOpenDebug,
+}: SidebarProps) {
   const [folderOpen, setFolderOpen] = useState(true);
-  const [activeItem, setActiveItem] = useState("setting1");
+  const [projects, setProjects] = useState<Project[]>([]);
+
+  const loadProjects = useCallback(() => {
+    invoke<Project[]>("list_projects")
+      .then(setProjects)
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
+  const handleCreateProject = useCallback(() => {
+    const name = `Project ${projects.length + 1}`;
+    invoke<Project>("create_project", { name })
+      .then((p) => {
+        setProjects((prev) => [...prev, p]);
+        onProjectSelect(p.id);
+      })
+      .catch(console.error);
+  }, [projects.length, onProjectSelect]);
+
+  const handleDeleteProject = useCallback(
+    (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
+      invoke("delete_project", { id })
+        .then(() => {
+          setProjects((prev) => {
+            const next = prev.filter((p) => p.id !== id);
+            if (activeProjectId === id && next.length > 0) {
+              onProjectSelect(next[0].id);
+            }
+            return next;
+          });
+        })
+        .catch(console.error);
+    },
+    [activeProjectId, onProjectSelect]
+  );
 
   return (
     <Box className="sidebar">
@@ -55,26 +93,51 @@ export function Sidebar() {
 
           {folderOpen && (
             <Box className="sidebar-items">
-              {menuItems.map((item) => (
+              {projects.map((project) => (
                 <button
-                  key={item.id}
-                  className={`sidebar-item ${activeItem === item.id ? "active" : ""}`}
-                  onClick={() => setActiveItem(item.id)}
+                  key={project.id}
+                  className={`sidebar-item ${activeProjectId === project.id ? "active" : ""}`}
+                  onClick={() => onProjectSelect(project.id)}
                 >
-                  <Text size="2">{item.label}</Text>
+                  <Flex
+                    align="center"
+                    justify="between"
+                    style={{ width: "100%" }}
+                  >
+                    <Text size="2">{project.name}</Text>
+                    <button
+                      className="sidebar-item-delete"
+                      onClick={(e) => handleDeleteProject(e, project.id)}
+                    >
+                      <TrashIcon width={12} height={12} />
+                    </button>
+                  </Flex>
                 </button>
               ))}
+              <button
+                className="sidebar-item sidebar-add-btn"
+                onClick={handleCreateProject}
+              >
+                <Flex align="center" gap="1">
+                  <PlusIcon width={12} height={12} />
+                  <Text size="2">新建项目</Text>
+                </Flex>
+              </button>
             </Box>
           )}
         </Box>
       </Box>
 
       <Box style={{ padding: "0 32px 32px" }}>
-        <button className="sidebar-start-btn">
+        <button className="sidebar-start-btn" onClick={onStartRun}>
           <PlayIcon width={16} height={16} />
           <Text size="3" weight="bold">
             开始运行
           </Text>
+        </button>
+        <button className="sidebar-debug-btn" onClick={onOpenDebug}>
+          <MagnifyingGlassIcon width={14} height={14} />
+          <Text size="2">CV 调试</Text>
         </button>
       </Box>
     </Box>

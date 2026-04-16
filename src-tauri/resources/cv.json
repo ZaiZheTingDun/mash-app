@@ -1,0 +1,121 @@
+{
+  "$comment": "Screen + element template mapping. All coordinates are normalized (0.0..1.0). 'template' refers to a PNG filename (without extension) in resources/templates/. Detection is template matching: for each screen, find its 'detect' template within its region at >= threshold; the highest-scoring screen wins.",
+  "screens": {
+    "TeamConfirm": {
+      "detect": {
+        "template": "screen_team_confirm",
+        "region": {
+          "x": 0.711,
+          "y": 0.0,
+          "w": 0.289,
+          "h": 0.113
+        },
+        "threshold": 0.85
+      },
+      "elements": {
+        "mission_start": {
+          "template": "button_mission_start",
+          "region": {
+            "x": 0.818,
+            "y": 0.851,
+            "w": 0.187,
+            "h": 0.161
+          },
+          "threshold": 0.8
+        },
+        "return": {
+          "template": "button_return",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 0.155,
+            "h": 0.131
+          },
+          "threshold": 0.8
+        }
+      }
+    },
+    "TeamChange": {
+      "detect": {
+        "template": "screen_team_change",
+        "region": {
+          "x": 0.778,
+          "y": 0.0,
+          "w": 0.222,
+          "h": 0.114
+        },
+        "threshold": 0.85
+      },
+      "elements": {
+        "confirm": {
+          "template": "button_confirm",
+          "region": {
+            "x": 0.828,
+            "y": 0.863,
+            "w": 0.167,
+            "h": 0.137
+          },
+          "threshold": 0.8
+        },
+        "close": {
+          "template": "button_close",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 0.155,
+            "h": 0.13
+          },
+          "threshold": 0.8
+        }
+      }
+    },
+    "SupportSelect": {
+      "detect": {
+        "template": "screen_support_select",
+        "region": {
+          "x": 0.709,
+          "y": 0.0,
+          "w": 0.291,
+          "h": 0.112
+        },
+        "threshold": 0.85
+      },
+      "elements": {
+        "return": {
+          "template": "button_return",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 0.155,
+            "h": 0.131
+          },
+          "threshold": 0.8
+        }
+      }
+    },
+    "ServantSelect": {
+      "detect": {
+        "template": "screen_servant_select",
+        "region": {
+          "x": 0.623,
+          "y": 0.0,
+          "w": 0.377,
+          "h": 0.112
+        },
+        "threshold": 0.85
+      },
+      "elements": {
+        "return": {
+          "template": "button_return",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 0.155,
+            "h": 0.131
+          },
+          "threshold": 0.8
+        }
+      }
+    }
+  }
+}

@@ -9,12 +9,19 @@ Protocol
 → {"cmd":"load_templates","dir":"/path/to/templates"}
 ← {"ok":true,"count":3}
 
-→ {"cmd":"detect","imagePath":"/tmp/ss.png"}
-← {"screen":"TeamConfirm"}
+→ {"cmd":"load_config","path":"/path/to/cv.json"}
+← {"ok":true,"screens":4}
 
-→ {"cmd":"find_element","imagePath":"/tmp/ss.png","templateKey":"servant_123",
-    "region":{"x":0.0,"y":0.1,"w":1.0,"h":0.85},"threshold":0.8}
-← {"found":true,"x":0.45,"y":0.32}
+→ {"cmd":"detect","imagePath":"/tmp/ss.png"}
+← {"screen":"TeamConfirm","score":0.91}
+
+→ {"cmd":"find_element","imagePath":"/tmp/ss.png","templateKey":"attack_button",
+    "region":{"x":0.0,"y":0.75,"w":1.0,"h":0.25},"threshold":0.8}
+← {"found":true,"x":0.45,"y":0.32,"score":0.87,"region":{...}}
+
+→ {"cmd":"find_element_by_name","imagePath":"/tmp/ss.png",
+    "screen":"Battle","element":"attackButton"}
+← {"found":true,"x":0.82,"y":0.88,"score":0.89,"region":{...}}
 
 → {"cmd":"quit"}
 (process exits)
@@ -32,86 +39,14 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 templates: dict[str, np.ndarray] = {}
+config: dict = {"screens": {}}
 
-# ---------------------------------------------------------------------------
-# Pixel-anchor screen signatures
-# ---------------------------------------------------------------------------
-
-SCREEN_SIGNATURES = [
-    {
-        "screen": "TeamConfirm",
-        "anchors": [
-            # Top-right title area (パーティ確認): bright
-            {"x": 0.85, "y": 0.04, "r": 223, "g": 231, "b": 236, "tol": 20},
-            # Bottom-right near クエスト開始 button: light gray
-            {"x": 0.90, "y": 0.93, "r": 207, "g": 209, "b": 212, "tol": 20},
-        ],
-    },
-    {
-        "screen": "TeamChange",
-        "anchors": [
-            # Top-right title area (配置変更): dark
-            {"x": 0.85, "y": 0.04, "r": 53, "g": 59, "b": 73, "tol": 20},
-            # Bottom-left キャンセル button: pinkish
-            {"x": 0.05, "y": 0.93, "r": 224, "g": 86, "b": 142, "tol": 30},
-        ],
-    },
-    {
-        "screen": "SupportSelect",
-        "anchors": [
-            # TODO: calibrate with real screenshot
-            {"x": 0.50, "y": 0.10, "r": 30, "g": 30, "b": 50, "tol": 30},
-        ],
-    },
-    {
-        "screen": "ServantSelect",
-        "anchors": [
-            # TODO: calibrate with real screenshot
-            {"x": 0.50, "y": 0.50, "r": 20, "g": 20, "b": 40, "tol": 30},
-        ],
-    },
-]
-
-
-def _pixel_matches(img: np.ndarray, anchor: dict) -> bool:
-    h, w = img.shape[:2]
-    px = int(anchor["x"] * w)
-    py = int(anchor["y"] * h)
-    if px < 0 or px >= w or py < 0 or py >= h:
-        return False
-    # OpenCV BGR order
-    b, g, r = img[py, px][:3]
-    tol = anchor["tol"]
-    return (
-        abs(int(r) - anchor["r"]) <= tol
-        and abs(int(g) - anchor["g"]) <= tol
-        and abs(int(b) - anchor["b"]) <= tol
-    )
-
-
-def _detect_screen(img: np.ndarray) -> str:
-    for sig in SCREEN_SIGNATURES:
-        if all(_pixel_matches(img, a) for a in sig["anchors"]):
-            return sig["screen"]
-    return "Unknown"
+DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 
 
 # ---------------------------------------------------------------------------
 # Template matching
 # ---------------------------------------------------------------------------
-
-
-def _find_element(
-    img: np.ndarray,
-    template_key: str,
-    region: dict,
-    threshold: float,
-) -> dict:
-    tmpl = templates.get(template_key)
-    if tmpl is None:
-        return {"found": False}
-
-    return _match_template_region(img, tmpl, region, threshold)
 
 
 def _match_template_region(
@@ -132,17 +67,18 @@ def _match_template_region(
 
     roi = img[ry : ry + rh, rx : rx + rw]
     if roi.size == 0:
-        return {"found": False}
+        return {"found": False, "score": 0.0}
 
     gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     th, tw = tmpl.shape[:2]
     if tw > gray_roi.shape[1] or th > gray_roi.shape[0]:
-        return {"found": False}
+        return {"found": False, "score": 0.0}
 
     result = cv2.matchTemplate(gray_roi, tmpl, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
-    if max_val >= threshold:
+    score = float(max_val)
+    if score >= threshold:
         left = rx + max_loc[0]
         top = ry + max_loc[1]
         cx = left + tw // 2
@@ -151,7 +87,7 @@ def _match_template_region(
             "found": True,
             "x": cx / w,
             "y": cy / h,
-            "score": float(max_val),
+            "score": score,
             "region": {
                 "x": left / w,
                 "y": top / h,
@@ -159,15 +95,81 @@ def _match_template_region(
                 "h": th / h,
             },
         }
-    return {"found": False, "score": float(max_val)}
+    return {"found": False, "score": score}
+
+
+def _find_element(
+    img: np.ndarray,
+    template_key: str,
+    region: dict,
+    threshold: float,
+) -> dict:
+    tmpl = templates.get(template_key)
+    if tmpl is None:
+        return {"found": False, "error": f"template not loaded: {template_key}"}
+    return _match_template_region(img, tmpl, region, threshold)
+
+
+def _find_element_by_name(
+    img: np.ndarray,
+    screen_name: str,
+    element_name: str,
+) -> dict:
+    screen = config.get("screens", {}).get(screen_name)
+    if not screen:
+        return {"found": False, "error": f"unknown screen: {screen_name}"}
+    element = screen.get("elements", {}).get(element_name)
+    if not element:
+        return {
+            "found": False,
+            "error": f"unknown element: {screen_name}.{element_name}",
+        }
+    template_key = element.get("template")
+    if not template_key:
+        return {"found": False, "error": "element missing 'template'"}
+    return _find_element(
+        img,
+        template_key,
+        element.get("region", DEFAULT_REGION),
+        float(element.get("threshold", 0.8)),
+    )
 
 
 # ---------------------------------------------------------------------------
-# Template loading
+# Screen detection (template-based, driven by config)
+# ---------------------------------------------------------------------------
+
+
+def _detect_screen(img: np.ndarray) -> dict:
+    best_name = "Unknown"
+    best_score = 0.0
+    for screen_name, spec in config.get("screens", {}).items():
+        det = spec.get("detect")
+        if not det:
+            continue
+        template_key = det.get("template")
+        tmpl = templates.get(template_key) if template_key else None
+        if tmpl is None:
+            continue
+        result = _match_template_region(
+            img,
+            tmpl,
+            det.get("region", DEFAULT_REGION),
+            float(det.get("threshold", 0.85)),
+        )
+        if result.get("found") and result.get("score", 0.0) > best_score:
+            best_score = float(result["score"])
+            best_name = screen_name
+    return {"screen": best_name, "score": best_score}
+
+
+# ---------------------------------------------------------------------------
+# Template / config loading
 # ---------------------------------------------------------------------------
 
 
 def _load_templates(directory: str) -> dict:
+    templates.clear()
     count = 0
     if not os.path.isdir(directory):
         return {"ok": False, "error": f"directory not found: {directory}"}
@@ -182,6 +184,17 @@ def _load_templates(directory: str) -> dict:
                 templates[key] = mat
                 count += 1
     return {"ok": True, "count": count}
+
+
+def _load_config(path: str) -> dict:
+    global config
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except Exception as exc:
+        return {"ok": False, "error": f"failed to load config: {exc}"}
+    screens = len(config.get("screens", {}))
+    return {"ok": True, "screens": screens}
 
 
 def _respond(obj: dict) -> None:
@@ -210,12 +223,14 @@ def main() -> None:
             break
         elif action == "load_templates":
             _respond(_load_templates(cmd["dir"]))
+        elif action == "load_config":
+            _respond(_load_config(cmd["path"]))
         elif action == "detect":
             img = cv2.imread(cmd["imagePath"])
             if img is None:
                 _respond({"screen": "Unknown", "error": "failed to read image"})
             else:
-                _respond({"screen": _detect_screen(img)})
+                _respond(_detect_screen(img))
         elif action == "find_element":
             img = cv2.imread(cmd["imagePath"])
             if img is None:
@@ -225,8 +240,20 @@ def main() -> None:
                     _find_element(
                         img,
                         cmd["templateKey"],
-                        cmd.get("region", {"x": 0, "y": 0, "w": 1, "h": 1}),
+                        cmd.get("region", DEFAULT_REGION),
                         cmd.get("threshold", 0.8),
+                    )
+                )
+        elif action == "find_element_by_name":
+            img = cv2.imread(cmd["imagePath"])
+            if img is None:
+                _respond({"found": False, "error": "failed to read image"})
+            else:
+                _respond(
+                    _find_element_by_name(
+                        img,
+                        cmd["screen"],
+                        cmd["element"],
                     )
                 )
         elif action == "find_region":
@@ -242,7 +269,7 @@ def main() -> None:
                 _match_template_region(
                     img,
                     tmpl,
-                    cmd.get("region", {"x": 0, "y": 0, "w": 1, "h": 1}),
+                    cmd.get("region", DEFAULT_REGION),
                     cmd.get("threshold", 0.8),
                 )
             )

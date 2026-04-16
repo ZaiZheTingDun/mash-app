@@ -13,11 +13,13 @@ import mash_cv
 
 
 @pytest.fixture(autouse=True)
-def _clear_templates():
-    """Reset global template state between tests."""
+def _clear_state():
+    """Reset global template + config state between tests."""
     mash_cv.templates.clear()
+    mash_cv._set_config({"screens": {}})
     yield
     mash_cv.templates.clear()
+    mash_cv._set_config({"screens": {}})
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -29,73 +31,92 @@ def _make_bgr_image(width: int, height: int, bgr=(0, 0, 0)) -> np.ndarray:
     return img
 
 
-def _set_pixel_bgr(img: np.ndarray, x_frac: float, y_frac: float, bgr: tuple):
-    h, w = img.shape[:2]
-    img[int(y_frac * h), int(x_frac * w)] = bgr
-
-
 def _save_image(img: np.ndarray, path: str):
     cv2.imwrite(path, img)
 
 
-# ── _pixel_matches ──────────────────────────────────────────────────────
-
-
-class TestPixelMatches:
-    def test_exact_match(self):
-        img = _make_bgr_image(100, 100)
-        _set_pixel_bgr(img, 0.5, 0.5, (220, 120, 40))  # BGR
-        anchor = {"x": 0.5, "y": 0.5, "r": 40, "g": 120, "b": 220, "tol": 0}
-        assert mash_cv._pixel_matches(img, anchor) is True
-
-    def test_within_tolerance(self):
-        img = _make_bgr_image(100, 100)
-        _set_pixel_bgr(img, 0.5, 0.5, (210, 115, 50))
-        anchor = {"x": 0.5, "y": 0.5, "r": 40, "g": 120, "b": 220, "tol": 15}
-        assert mash_cv._pixel_matches(img, anchor) is True
-
-    def test_outside_tolerance(self):
-        img = _make_bgr_image(100, 100)
-        _set_pixel_bgr(img, 0.5, 0.5, (100, 100, 100))
-        anchor = {"x": 0.5, "y": 0.5, "r": 40, "g": 120, "b": 220, "tol": 10}
-        assert mash_cv._pixel_matches(img, anchor) is False
-
-    def test_out_of_bounds(self):
-        img = _make_bgr_image(100, 100)
-        anchor = {"x": 1.5, "y": 0.5, "r": 0, "g": 0, "b": 0, "tol": 255}
-        assert mash_cv._pixel_matches(img, anchor) is False
+def _gradient_patch(size: int = 20) -> np.ndarray:
+    """Grayscale patch with non-zero variance (so template matching is stable)."""
+    return np.tile(np.arange(size, dtype=np.uint8) * 12, (size, 1))
 
 
 # ── _detect_screen ──────────────────────────────────────────────────────
 
 
 class TestDetectScreen:
-    def test_team_confirm(self):
-        img = _make_bgr_image(100, 100)
-        # TeamConfirm anchors: (0.85,0.04) RGB(223,231,236), (0.90,0.93) RGB(207,209,212)
-        _set_pixel_bgr(img, 0.85, 0.04, (236, 231, 223))
-        _set_pixel_bgr(img, 0.90, 0.93, (212, 209, 207))
-        assert mash_cv._detect_screen(img) == "TeamConfirm"
+    def test_unknown_when_config_empty(self):
+        img = _make_bgr_image(200, 200)
+        assert mash_cv._detect_screen(img) == {"screen": "Unknown", "score": 0.0}
 
-    def test_team_change(self):
-        img = _make_bgr_image(100, 100)
-        # TeamChange anchors: (0.85,0.04) RGB(53,59,73), (0.05,0.93) RGB(224,86,142)
-        _set_pixel_bgr(img, 0.85, 0.04, (73, 59, 53))
-        _set_pixel_bgr(img, 0.05, 0.93, (142, 86, 224))
-        assert mash_cv._detect_screen(img) == "TeamChange"
+    def test_unknown_when_template_not_loaded(self):
+        mash_cv._set_config({
+            "screens": {
+                "Foo": {
+                    "detect": {
+                        "template": "missing_template",
+                        "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                        "threshold": 0.5,
+                    }
+                }
+            }
+        })
+        img = _make_bgr_image(200, 200)
+        assert mash_cv._detect_screen(img) == {"screen": "Unknown", "score": 0.0}
 
-    def test_unknown_when_no_match(self):
-        img = _make_bgr_image(100, 100)
-        assert mash_cv._detect_screen(img) == "Unknown"
+    def test_picks_matching_screen(self):
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        img[10:30, 10:30] = patch_3ch
 
-    def test_first_match_wins(self):
-        """When multiple signatures could match, the first one wins."""
-        img = _make_bgr_image(100, 100)
-        # Set pixels for both TeamConfirm and TeamChange
-        _set_pixel_bgr(img, 0.85, 0.04, (236, 231, 223))
-        _set_pixel_bgr(img, 0.90, 0.93, (212, 209, 207))
-        _set_pixel_bgr(img, 0.05, 0.93, (142, 86, 224))
-        assert mash_cv._detect_screen(img) == "TeamConfirm"
+        mash_cv.templates["tmpl_foo"] = patch.copy()
+        mash_cv._set_config({
+            "screens": {
+                "Foo": {
+                    "detect": {
+                        "template": "tmpl_foo",
+                        "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                        "threshold": 0.8,
+                    }
+                }
+            }
+        })
+        result = mash_cv._detect_screen(img)
+        assert result["screen"] == "Foo"
+        assert result["score"] >= 0.8
+
+    def test_best_score_wins(self):
+        """When multiple screens match, the one with the highest score wins."""
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        img[10:30, 10:30] = patch_3ch
+
+        noisy_patch = patch.copy()
+        noisy_patch[0, 0] = 250
+
+        mash_cv.templates["exact"] = patch.copy()
+        mash_cv.templates["noisy"] = noisy_patch
+        mash_cv._set_config({
+            "screens": {
+                "Noisy": {
+                    "detect": {
+                        "template": "noisy",
+                        "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                        "threshold": 0.5,
+                    }
+                },
+                "Exact": {
+                    "detect": {
+                        "template": "exact",
+                        "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                        "threshold": 0.5,
+                    }
+                },
+            }
+        })
+        result = mash_cv._detect_screen(img)
+        assert result["screen"] == "Exact"
 
 
 # ── _load_templates ─────────────────────────────────────────────────────
@@ -136,6 +157,30 @@ class TestLoadTemplates:
         assert "deep" in mash_cv.templates
 
 
+# ── _load_config ────────────────────────────────────────────────────────
+
+
+class TestLoadConfig:
+    def test_missing_file(self):
+        result = mash_cv._load_config("/nonexistent/cv.json")
+        assert result["ok"] is False
+        assert "failed to load config" in result["error"]
+
+    def test_loads_valid_config(self, tmp_path):
+        cfg = {
+            "screens": {
+                "Foo": {"detect": {"template": "t"}},
+                "Bar": {"detect": {"template": "t"}},
+            }
+        }
+        path = tmp_path / "cv.json"
+        path.write_text(json.dumps(cfg))
+
+        result = mash_cv._load_config(str(path))
+        assert result == {"ok": True, "screens": 2}
+        assert mash_cv._get_config() == cfg
+
+
 # ── _find_element ───────────────────────────────────────────────────────
 
 
@@ -145,18 +190,16 @@ class TestFindElement:
         result = mash_cv._find_element(
             img, "nonexistent", {"x": 0, "y": 0, "w": 1, "h": 1}, 0.8
         )
-        assert result == {"found": False}
+        assert result["found"] is False
+        assert "template not loaded" in result["error"]
 
-    def test_finds_embedded_patch(self, tmp_path):
+    def test_finds_embedded_patch(self):
         img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
-        # Paint a gradient patch at (80,80) so it has non-zero variance
-        patch_bgr = np.tile(
-            np.arange(20, dtype=np.uint8) * 12, (20, 1)
-        )  # horizontal gradient
-        patch_bgr_3ch = cv2.merge([patch_bgr, patch_bgr, patch_bgr])
-        img[80:100, 80:100] = patch_bgr_3ch
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
+        img[80:100, 80:100] = patch_3ch
 
-        mash_cv.templates["grad"] = patch_bgr.copy()
+        mash_cv.templates["grad"] = patch.copy()
 
         result = mash_cv._find_element(
             img, "grad", {"x": 0, "y": 0, "w": 1, "h": 1}, 0.8
@@ -173,18 +216,16 @@ class TestFindElement:
         result = mash_cv._find_element(
             img, "big", {"x": 0, "y": 0, "w": 1, "h": 1}, 0.8
         )
-        assert result == {"found": False}
+        assert result["found"] is False
 
     def test_respects_region(self):
         img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
-        # Place a gradient patch in the top-left corner
-        patch_gray = np.tile(np.arange(20, dtype=np.uint8) * 12, (20, 1))
-        patch_3ch = cv2.merge([patch_gray, patch_gray, patch_gray])
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
         img[10:30, 10:30] = patch_3ch
 
-        mash_cv.templates["patch"] = patch_gray.copy()
+        mash_cv.templates["patch"] = patch.copy()
 
-        # Region that excludes the patch (bottom-right quadrant)
         result = mash_cv._find_element(
             img, "patch", {"x": 0.5, "y": 0.5, "w": 0.5, "h": 0.5}, 0.8
         )
@@ -193,7 +234,7 @@ class TestFindElement:
     def test_below_threshold(self):
         img = _make_bgr_image(200, 200, bgr=(128, 128, 128))
         patch = np.zeros((20, 20), dtype=np.uint8)
-        patch[:] = 100  # slightly different gray
+        patch[:] = 100
         mash_cv.templates["gray"] = patch
 
         result = mash_cv._find_element(
@@ -203,10 +244,10 @@ class TestFindElement:
 
     def test_returns_region_for_match(self):
         img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
-        patch_gray = np.tile(np.arange(20, dtype=np.uint8) * 12, (20, 1))
-        patch_3ch = cv2.merge([patch_gray, patch_gray, patch_gray])
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
         img[40:60, 120:140] = patch_3ch
-        mash_cv.templates["patch"] = patch_gray
+        mash_cv.templates["patch"] = patch
 
         result = mash_cv._find_element(
             img, "patch", {"x": 0, "y": 0, "w": 1, "h": 1}, 0.8
@@ -216,6 +257,47 @@ class TestFindElement:
         assert 0.19 <= result["region"]["y"] <= 0.21
         assert result["region"]["w"] == pytest.approx(0.1)
         assert result["region"]["h"] == pytest.approx(0.1)
+
+
+# ── _find_element_by_name ───────────────────────────────────────────────
+
+
+class TestFindElementByName:
+    def test_unknown_screen(self):
+        img = _make_bgr_image(100, 100)
+        result = mash_cv._find_element_by_name(img, "NoSuch", "button")
+        assert result["found"] is False
+        assert "unknown screen" in result["error"]
+
+    def test_unknown_element(self):
+        mash_cv._set_config({"screens": {"Foo": {"elements": {}}}})
+        img = _make_bgr_image(100, 100)
+        result = mash_cv._find_element_by_name(img, "Foo", "missing")
+        assert result["found"] is False
+        assert "unknown element" in result["error"]
+
+    def test_uses_config_region_and_threshold(self):
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
+        img[40:60, 120:140] = patch_3ch
+
+        mash_cv.templates["patch"] = patch.copy()
+        mash_cv._set_config({
+            "screens": {
+                "Foo": {
+                    "elements": {
+                        "btn": {
+                            "template": "patch",
+                            "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                            "threshold": 0.8,
+                        }
+                    }
+                }
+            }
+        })
+        result = mash_cv._find_element_by_name(img, "Foo", "btn")
+        assert result["found"] is True
 
 
 # ── Integration: subprocess REPL ────────────────────────────────────────
@@ -255,11 +337,12 @@ class TestREPL:
     def test_load_and_find(self, tmp_path):
         tmpl_dir = tmp_path / "templates"
         tmpl_dir.mkdir()
-        patch = np.zeros((20, 20), dtype=np.uint8)
-        cv2.imwrite(str(tmpl_dir / "blk.png"), patch)
+        patch = _gradient_patch(20)
+        cv2.imwrite(str(tmpl_dir / "grad.png"), patch)
 
         img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
-        img[80:100, 80:100] = (0, 0, 0)
+        patch_3ch = cv2.merge([patch, patch, patch])
+        img[80:100, 80:100] = patch_3ch
         img_path = str(tmp_path / "scene.png")
         _save_image(img, img_path)
 
@@ -268,7 +351,7 @@ class TestREPL:
             {
                 "cmd": "find_element",
                 "imagePath": img_path,
-                "templateKey": "blk",
+                "templateKey": "grad",
                 "region": {"x": 0, "y": 0, "w": 1, "h": 1},
                 "threshold": 0.8,
             },
@@ -277,6 +360,43 @@ class TestREPL:
 
         assert responses[0] == {"ok": True, "count": 1}
         assert responses[1]["found"] is True
+
+    def test_load_config_and_detect(self, tmp_path):
+        tmpl_dir = tmp_path / "templates"
+        tmpl_dir.mkdir()
+        patch = _gradient_patch(20)
+        cv2.imwrite(str(tmpl_dir / "grad.png"), patch)
+
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        patch_3ch = cv2.merge([patch, patch, patch])
+        img[10:30, 10:30] = patch_3ch
+        img_path = str(tmp_path / "scene.png")
+        _save_image(img, img_path)
+
+        cfg = {
+            "screens": {
+                "Foo": {
+                    "detect": {
+                        "template": "grad",
+                        "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                        "threshold": 0.8,
+                    }
+                }
+            }
+        }
+        cfg_path = tmp_path / "cv.json"
+        cfg_path.write_text(json.dumps(cfg))
+
+        responses = self._run([
+            {"cmd": "load_templates", "dir": str(tmpl_dir)},
+            {"cmd": "load_config", "path": str(cfg_path)},
+            {"cmd": "detect", "imagePath": img_path},
+            {"cmd": "quit"},
+        ])
+
+        assert responses[0] == {"ok": True, "count": 1}
+        assert responses[1] == {"ok": True, "screens": 1}
+        assert responses[2]["screen"] == "Foo"
 
     def test_invalid_json(self):
         proc = subprocess.run(
@@ -293,8 +413,8 @@ class TestREPL:
         assert "invalid JSON" in responses[0]["error"]
 
     def test_find_region(self, tmp_path):
-        patch_gray = np.tile(np.arange(20, dtype=np.uint8) * 12, (20, 1))
-        patch_3ch = cv2.merge([patch_gray, patch_gray, patch_gray])
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
 
         img = _make_bgr_image(200, 200, bgr=(180, 180, 180))
         img[80:100, 40:60] = patch_3ch
@@ -302,7 +422,7 @@ class TestREPL:
         img_path = str(tmp_path / "scene.png")
         tmpl_path = str(tmp_path / "tmpl.png")
         _save_image(img, img_path)
-        cv2.imwrite(tmpl_path, patch_gray)
+        cv2.imwrite(tmpl_path, patch)
 
         responses = self._run([
             {
@@ -322,8 +442,8 @@ class TestREPL:
 
 class TestRegionTool:
     def test_cli_outputs_region(self, tmp_path):
-        patch_gray = np.tile(np.arange(20, dtype=np.uint8) * 12, (20, 1))
-        patch_3ch = cv2.merge([patch_gray, patch_gray, patch_gray])
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
 
         img = _make_bgr_image(200, 200, bgr=(120, 120, 120))
         img[30:50, 60:80] = patch_3ch
@@ -331,7 +451,7 @@ class TestRegionTool:
         img_path = str(tmp_path / "scene.png")
         tmpl_path = str(tmp_path / "tmpl.png")
         _save_image(img, img_path)
-        cv2.imwrite(tmpl_path, patch_gray)
+        cv2.imwrite(tmpl_path, patch)
 
         proc = subprocess.run(
             [
@@ -360,8 +480,8 @@ class TestRegionTool:
         assert result["paddedRoi"]["y"] < result["region"]["y"]
 
     def test_cli_outputs_padded_roi_with_custom_padding(self, tmp_path):
-        patch_gray = np.tile(np.arange(20, dtype=np.uint8) * 12, (20, 1))
-        patch_3ch = cv2.merge([patch_gray, patch_gray, patch_gray])
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
 
         img = _make_bgr_image(200, 200, bgr=(120, 120, 120))
         img[0:20, 0:20] = patch_3ch
@@ -369,7 +489,7 @@ class TestRegionTool:
         img_path = str(tmp_path / "scene.png")
         tmpl_path = str(tmp_path / "tmpl.png")
         _save_image(img, img_path)
-        cv2.imwrite(tmpl_path, patch_gray)
+        cv2.imwrite(tmpl_path, patch)
 
         proc = subprocess.run(
             [

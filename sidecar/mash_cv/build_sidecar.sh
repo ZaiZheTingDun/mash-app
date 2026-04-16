@@ -6,6 +6,12 @@ cd "$SCRIPT_DIR"
 
 poetry install
 
+# PyInstaller imports pkg_resources, provided by setuptools.
+# Pin to a version that still ships pkg_resources.
+poetry run pip install --quiet "setuptools<81"
+# Ensure a Python 3.13-compatible PyInstaller even if lockfile is stale.
+poetry run pip install --quiet --upgrade "pyinstaller>=6.15"
+
 poetry run pyinstaller --onefile mash_cv/__main__.py \
   --name mash-cv \
   --distpath dist \

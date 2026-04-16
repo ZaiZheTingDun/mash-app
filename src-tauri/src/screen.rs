@@ -1,3 +1,4 @@
+use std::io::ErrorKind;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::mpsc;
@@ -28,12 +29,22 @@ impl Point {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct NormRect {
     pub x: f64,
     pub y: f64,
     pub w: f64,
     pub h: f64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ElementMatch {
+    pub found: bool,
+    pub x: f64,
+    pub y: f64,
+    pub score: f64,
+    pub region: Option<NormRect>,
 }
 
 // ---------------------------------------------------------------------------
@@ -46,6 +57,8 @@ pub enum Screen {
     TeamChange,
     SupportSelect,
     ServantSelect,
+    Battle,
+    Attack,
     Unknown,
 }
 
@@ -56,6 +69,8 @@ impl std::fmt::Display for Screen {
             Self::TeamChange => write!(f, "TeamChange"),
             Self::SupportSelect => write!(f, "SupportSelect"),
             Self::ServantSelect => write!(f, "ServantSelect"),
+            Self::Battle => write!(f, "Battle"),
+            Self::Attack => write!(f, "Attack"),
             Self::Unknown => write!(f, "Unknown"),
         }
     }
@@ -70,6 +85,8 @@ impl FromStr for Screen {
             "TeamChange" => Self::TeamChange,
             "SupportSelect" => Self::SupportSelect,
             "ServantSelect" => Self::ServantSelect,
+            "Battle" => Self::Battle,
+            "Attack" => Self::Attack,
             _ => Self::Unknown,
         };
         Ok(screen)
@@ -87,16 +104,27 @@ pub struct SidecarClient {
 }
 
 impl SidecarClient {
-    /// Spawn the mash-cv sidecar and optionally load templates.
-    pub fn spawn(app: &tauri::AppHandle, templates_dir: Option<&Path>) -> Result<Self, String> {
+    /// Spawn the mash-cv sidecar and optionally load templates + config.
+    pub fn spawn(
+        app: &tauri::AppHandle,
+        templates_dir: Option<&Path>,
+        config_path: Option<&Path>,
+    ) -> Result<Self, String> {
         let shell = app.shell();
         let cmd = shell
-            .sidecar("binaries/mash-cv")
+            .sidecar("mash-cv")
             .map_err(|e| format!("failed to create sidecar command: {e}"))?;
 
         let (mut rx, child) = cmd
             .spawn()
-            .map_err(|e| format!("failed to spawn sidecar: {e}"))?;
+            .map_err(|e| {
+                if let tauri_plugin_shell::Error::Io(io_err) = &e {
+                    if io_err.kind() == ErrorKind::NotFound {
+                        return "failed to spawn sidecar: 未找到 mash-cv sidecar 可执行文件。请先在项目根目录执行 `cd sidecar/mash_cv && bash build_sidecar.sh` 构建 sidecar，再重新运行应用。".to_string();
+                    }
+                }
+                format!("failed to spawn sidecar: {e}")
+            })?;
 
         // Bridge the async tokio receiver into a sync std::mpsc channel so the
         // blocking runner thread can call recv() without an async runtime.
@@ -137,7 +165,27 @@ impl SidecarClient {
                     "cmd": "load_templates",
                     "dir": dir.to_string_lossy(),
                 });
-                let _ = client.send_recv(&req);
+                match client.send_recv(&req) {
+                    Ok(resp) => eprintln!("[mash-cv] load_templates -> {resp}"),
+                    Err(e) => eprintln!("[mash-cv] load_templates failed: {e}"),
+                }
+            } else {
+                eprintln!("[mash-cv] templates dir missing: {}", dir.display());
+            }
+        }
+
+        if let Some(path) = config_path {
+            if path.exists() {
+                let req = serde_json::json!({
+                    "cmd": "load_config",
+                    "path": path.to_string_lossy(),
+                });
+                match client.send_recv(&req) {
+                    Ok(resp) => eprintln!("[mash-cv] load_config -> {resp}"),
+                    Err(e) => eprintln!("[mash-cv] load_config failed: {e}"),
+                }
+            } else {
+                eprintln!("[mash-cv] config path missing: {}", path.display());
             }
         }
 
@@ -165,13 +213,21 @@ impl SidecarClient {
 
     /// Detect which screen is shown in the screenshot at `image_path`.
     pub fn detect(&mut self, image_path: &Path) -> Result<Screen, String> {
+        let (screen, _) = self.detect_full(image_path)?;
+        Ok(screen)
+    }
+
+    /// Like `detect` but also returns the classifier score.
+    pub fn detect_full(&mut self, image_path: &Path) -> Result<(Screen, f64), String> {
         let req = serde_json::json!({
             "cmd": "detect",
             "imagePath": image_path.to_string_lossy(),
         });
         let resp = self.send_recv(&req)?;
         let screen_str = resp["screen"].as_str().unwrap_or("Unknown");
-        Ok(screen_str.parse::<Screen>().unwrap_or(Screen::Unknown))
+        let screen = screen_str.parse::<Screen>().unwrap_or(Screen::Unknown);
+        let score = resp["score"].as_f64().unwrap_or(0.0);
+        Ok((screen, score))
     }
 
     /// Search for a template element within a region of the screenshot.
@@ -202,6 +258,111 @@ impl SidecarClient {
         } else {
             Ok(None)
         }
+    }
+
+    /// Like `find_element`, but returns the full match (score + bounding box)
+    /// for debug/visualization purposes.
+    pub fn find_element_full(
+        &mut self,
+        image_path: &Path,
+        template_key: &str,
+        region: NormRect,
+        threshold: f64,
+    ) -> Result<ElementMatch, String> {
+        let req = serde_json::json!({
+            "cmd": "find_element",
+            "imagePath": image_path.to_string_lossy(),
+            "templateKey": template_key,
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+            "threshold": threshold,
+        });
+        let resp = self.send_recv(&req)?;
+        let found = resp["found"].as_bool().unwrap_or(false);
+        let score = resp["score"].as_f64().unwrap_or(0.0);
+        let x = resp["x"].as_f64().unwrap_or(0.0);
+        let y = resp["y"].as_f64().unwrap_or(0.0);
+        let region = resp.get("region").and_then(|r| {
+            Some(NormRect {
+                x: r.get("x")?.as_f64()?,
+                y: r.get("y")?.as_f64()?,
+                w: r.get("w")?.as_f64()?,
+                h: r.get("h")?.as_f64()?,
+            })
+        });
+        Ok(ElementMatch {
+            found,
+            x,
+            y,
+            score,
+            region,
+        })
+    }
+
+    /// Look up an element by `(screen, element)` name in the loaded cv.json
+    /// and run template matching for it.
+    pub fn find_element_by_name(
+        &mut self,
+        image_path: &Path,
+        screen: &str,
+        element: &str,
+    ) -> Result<ElementMatch, String> {
+        let req = serde_json::json!({
+            "cmd": "find_element_by_name",
+            "imagePath": image_path.to_string_lossy(),
+            "screen": screen,
+            "element": element,
+        });
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            if !resp.get("found").and_then(|v| v.as_bool()).unwrap_or(false) {
+                return Err(err.to_string());
+            }
+        }
+        let found = resp["found"].as_bool().unwrap_or(false);
+        let score = resp["score"].as_f64().unwrap_or(0.0);
+        let x = resp["x"].as_f64().unwrap_or(0.0);
+        let y = resp["y"].as_f64().unwrap_or(0.0);
+        let region = resp.get("region").and_then(|r| {
+            Some(NormRect {
+                x: r.get("x")?.as_f64()?,
+                y: r.get("y")?.as_f64()?,
+                w: r.get("w")?.as_f64()?,
+                h: r.get("h")?.as_f64()?,
+            })
+        });
+        Ok(ElementMatch {
+            found,
+            x,
+            y,
+            score,
+            region,
+        })
+    }
+
+    /// Read the current turn number from the battle screen.
+    /// Returns None if the sidecar cannot detect the turn number.
+    pub fn read_turn(
+        &mut self,
+        image_path: &Path,
+        region: NormRect,
+    ) -> Result<Option<u32>, String> {
+        let req = serde_json::json!({
+            "cmd": "read_turn",
+            "imagePath": image_path.to_string_lossy(),
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+        });
+        let resp = self.send_recv(&req)?;
+        Ok(resp["turn"].as_u64().map(|n| n as u32))
     }
 
     /// Tell the sidecar to exit.

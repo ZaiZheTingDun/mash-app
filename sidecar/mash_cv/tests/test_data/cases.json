@@ -7,12 +7,20 @@
     {
       "image": "screenshots/team_change.png",
       "expectedScreen": "TeamChange"
+    },
+    {
+      "image": "screenshots/servant_select.png",
+      "expectedScreen": "ServantSelect"
+    },
+    {
+      "image": "screenshots/support_select.png",
+      "expectedScreen": "SupportSelect"
     }
   ],
   "findElement": [
     {
       "image": "screenshots/team_confirm.png",
-      "templateKey": "mission_start_button",
+      "templateKey": "button_mission_start",
       "region": {
         "x": 0.818,
         "y": 0.851,
@@ -24,7 +32,7 @@
     },
     {
       "image": "screenshots/team_change.png",
-      "templateKey": "confirm_button",
+      "templateKey": "button_confirm",
       "region": {
         "x": 0.828,
         "y": 0.863,
@@ -36,7 +44,7 @@
     },
     {
       "image": "screenshots/team_change.png",
-      "templateKey": "close_button",
+      "templateKey": "button_close",
       "region": {
         "x": 0.0,
         "y": 0.0,
@@ -46,10 +54,9 @@
       "threshold": 0.8,
       "expectedFound": true
     },
-
     {
       "image": "screenshots/team_change.png",
-      "templateKey": "mission_start_button",
+      "templateKey": "button_mission_start",
       "region": {
         "x": 0.818,
         "y": 0.851,

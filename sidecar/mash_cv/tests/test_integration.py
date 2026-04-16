@@ -41,6 +41,9 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "test_data")
 CASES_FILE = os.path.join(DATA_DIR, "cases.json")
 SIDECAR_DIR = os.path.dirname(os.path.dirname(__file__))
 TEMPLATES_DIR = os.path.join(DATA_DIR, "templates")
+CONFIG_FILE = os.path.abspath(
+    os.path.join(SIDECAR_DIR, "..", "..", "src-tauri", "resources", "cv.json")
+)
 
 
 def _load_cases() -> dict:
@@ -96,14 +99,22 @@ def _detect_cases():
 def test_detect_screen(image, expected_screen):
     if not _image_exists(image):
         pytest.skip(f"image not found: {image}")
+    if not os.path.isfile(CONFIG_FILE):
+        pytest.skip(f"config not found: {CONFIG_FILE}")
+    if not _has_templates():
+        pytest.skip("no templates in test_data/templates/")
 
     responses = _run_commands([
+        {"cmd": "load_templates", "dir": TEMPLATES_DIR},
+        {"cmd": "load_config", "path": CONFIG_FILE},
         {"cmd": "detect", "imagePath": _resolve(image)},
         {"cmd": "quit"},
     ])
-    assert len(responses) == 1
-    assert responses[0]["screen"] == expected_screen, (
-        f"expected {expected_screen}, got {responses[0]}"
+    assert len(responses) == 3
+    assert responses[0].get("ok") is True, f"load_templates failed: {responses[0]}"
+    assert responses[1].get("ok") is True, f"load_config failed: {responses[1]}"
+    assert responses[2]["screen"] == expected_screen, (
+        f"expected {expected_screen}, got {responses[2]}"
     )
 
 
@@ -180,17 +191,20 @@ def _pipeline_cases():
 
 @pytest.mark.parametrize("image,expected_screen,find_case", _pipeline_cases())
 def test_detect_then_find(image, expected_screen, find_case):
-    """Single sidecar session: load templates → detect screen → find element."""
+    """Single sidecar session: load templates → load config → detect → find."""
     if not _image_exists(image):
         pytest.skip(f"image not found: {image}")
     if not _has_templates():
         pytest.skip("no templates in test_data/templates/")
+    if not os.path.isfile(CONFIG_FILE):
+        pytest.skip(f"config not found: {CONFIG_FILE}")
 
     region = find_case.get("region", {"x": 0, "y": 0, "w": 1, "h": 1})
     threshold = find_case.get("threshold", 0.8)
 
     responses = _run_commands([
         {"cmd": "load_templates", "dir": TEMPLATES_DIR},
+        {"cmd": "load_config", "path": CONFIG_FILE},
         {"cmd": "detect", "imagePath": _resolve(image)},
         {
             "cmd": "find_element",
@@ -202,13 +216,13 @@ def test_detect_then_find(image, expected_screen, find_case):
         {"cmd": "quit"},
     ])
 
-    assert len(responses) == 3
+    assert len(responses) == 4
 
-    load_resp = responses[0]
-    assert load_resp.get("ok") is True
+    assert responses[0].get("ok") is True
+    assert responses[1].get("ok") is True
 
-    detect_resp = responses[1]
+    detect_resp = responses[2]
     assert detect_resp["screen"] == expected_screen
 
-    find_resp = responses[2]
+    find_resp = responses[3]
     assert find_resp["found"] is find_case["expectedFound"]

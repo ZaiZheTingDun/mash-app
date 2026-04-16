@@ -18,7 +18,13 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": ["$APPDATA/**"]
+        }
+      }
     }
   },
   "bundle": {
@@ -33,6 +39,10 @@
     ],
     "externalBin": [
       "binaries/mash-cv"
+    ],
+    "resources": [
+      "resources/cv.json",
+      "resources/templates/*"
     ]
   }
 }

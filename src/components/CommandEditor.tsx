@@ -6,6 +6,7 @@ import type { Turn, AttackCard } from "../types/command";
 import type { Servant } from "../types/servant";
 
 interface CommandEditorProps {
+  projectId: string | null;
   partyServants: (Servant | null)[];
 }
 
@@ -32,12 +33,18 @@ function createDefaultTurn(): Turn {
   };
 }
 
-export function CommandEditor({ partyServants }: CommandEditorProps) {
+export function CommandEditor({ projectId, partyServants }: CommandEditorProps) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    invoke<Turn[]>("load_turns")
+    if (!projectId) {
+      setTurns([createDefaultTurn()]);
+      setLoaded(true);
+      return;
+    }
+    setLoaded(false);
+    invoke<Turn[]>("load_turns", { projectId })
       .then((saved) => {
         if (saved.length > 0) {
           setTurns(saved);
@@ -49,11 +56,15 @@ export function CommandEditor({ partyServants }: CommandEditorProps) {
         setTurns([createDefaultTurn()]);
       })
       .finally(() => setLoaded(true));
-  }, []);
+  }, [projectId]);
 
-  const saveTurns = useCallback((updated: Turn[]) => {
-    invoke("save_turns", { turns: updated }).catch(console.error);
-  }, []);
+  const saveTurns = useCallback(
+    (updated: Turn[]) => {
+      if (!projectId) return;
+      invoke("save_turns", { projectId, turns: updated }).catch(console.error);
+    },
+    [projectId]
+  );
 
   const handleTurnChange = useCallback(
     (turnId: string, updatedTurn: Turn) => {
