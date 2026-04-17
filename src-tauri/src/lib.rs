@@ -394,6 +394,15 @@ pub(crate) fn resolve_scrcpy_jar(app: &tauri::AppHandle) -> Option<PathBuf> {
     Some(base.join("resources").join("scrcpy").join("scrcpy-server.jar"))
 }
 
+/// Resolve the bundled mash-cv sidecar executable path. The sidecar is shipped
+/// as a PyInstaller --onedir directory under `binaries/mash-cv/` (containing
+/// the executable and a sibling `_internal/` directory).
+pub(crate) fn resolve_sidecar_exe(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let base = app.path().resource_dir().ok()?;
+    let exe_name = if cfg!(windows) { "mash-cv.exe" } else { "mash-cv" };
+    Some(base.join("binaries").join("mash-cv").join(exe_name))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

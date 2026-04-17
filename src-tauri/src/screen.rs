@@ -1,5 +1,4 @@
 use base64::Engine;
-use std::io::ErrorKind;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::mpsc;
@@ -119,21 +118,19 @@ impl SidecarClient {
         templates_dir: Option<&Path>,
         config_path: Option<&Path>,
     ) -> Result<Self, String> {
-        let shell = app.shell();
-        let cmd = shell
-            .sidecar("mash-cv")
-            .map_err(|e| format!("failed to create sidecar command: {e}"))?;
+        let exe = crate::resolve_sidecar_exe(app)
+            .ok_or_else(|| "failed to resolve sidecar resource_dir".to_string())?;
+        if !exe.exists() {
+            return Err(format!(
+                "未找到 mash-cv sidecar 可执行文件 ({}). 请在项目根目录执行 `cd sidecar/mash_cv && bash build_sidecar.sh` 构建 sidecar，再重新运行应用。",
+                exe.display()
+            ));
+        }
 
+        let cmd = app.shell().command(&exe);
         let (mut rx, child) = cmd
             .spawn()
-            .map_err(|e| {
-                if let tauri_plugin_shell::Error::Io(io_err) = &e {
-                    if io_err.kind() == ErrorKind::NotFound {
-                        return "failed to spawn sidecar: 未找到 mash-cv sidecar 可执行文件。请先在项目根目录执行 `cd sidecar/mash_cv && bash build_sidecar.sh` 构建 sidecar，再重新运行应用。".to_string();
-                    }
-                }
-                format!("failed to spawn sidecar: {e}")
-            })?;
+            .map_err(|e| format!("failed to spawn sidecar: {e}"))?;
 
         // Bridge the async tokio receiver into a sync std::mpsc channel so the
         // blocking runner thread can call recv() without an async runtime.

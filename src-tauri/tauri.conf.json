@@ -37,13 +37,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": [
-      "binaries/mash-cv"
-    ],
+    "externalBin": [],
     "resources": [
       "resources/cv.json",
       "resources/templates/*",
-      "resources/scrcpy/scrcpy-server.jar"
+      "resources/scrcpy/scrcpy-server.jar",
+      "binaries/mash-cv/**/*"
     ]
   }
 }

@@ -6,7 +6,7 @@ cd "$SCRIPT_DIR"
 
 poetry install
 
-poetry run pyinstaller --onefile mash_cv/__main__.py \
+poetry run pyinstaller --onedir mash_cv/__main__.py \
   --name mash-cv \
   --distpath dist \
   --workpath build \
@@ -14,9 +14,9 @@ poetry run pyinstaller --onefile mash_cv/__main__.py \
   --collect-submodules av \
   --collect-binaries av
 
-triple=$(rustc --print host-tuple)
 binaries_dir="../../src-tauri/binaries"
+rm -rf "${binaries_dir}/mash-cv"
 mkdir -p "$binaries_dir"
-cp "dist/mash-cv" "${binaries_dir}/mash-cv-${triple}"
+cp -R "dist/mash-cv" "${binaries_dir}/mash-cv"
 
-echo "Built sidecar: ${binaries_dir}/mash-cv-${triple}"
+echo "Built sidecar: ${binaries_dir}/mash-cv/mash-cv"
