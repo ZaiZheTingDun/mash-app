@@ -27,7 +27,7 @@ stream frame is used):
                                                     ← {"found":true,"x":0.45,"y":0.32,"score":0.87,"region":{...}}
 → {"cmd":"find_element_by_name","screen":"Battle","element":"attackButton"}
                                                     ← {"found":true,"x":0.82,"y":0.88,"score":0.89,"region":{...}}
-→ {"cmd":"read_turn","region":{...}}                ← {"turn":null}   (stub; see runner.rs)
+→ {"cmd":"read_turn","region":{...}}                ← {"turn":1}     (or null if anchors miss)
 """
 
 import base64
@@ -181,6 +181,84 @@ def _detect_screen(img: np.ndarray) -> dict:
             best_score = float(result["score"])
             best_name = screen_name
     return {"screen": best_name, "score": best_score}
+
+
+# ---------------------------------------------------------------------------
+# Turn-number OCR (template-matched digits inside the TURN_REGION)
+# ---------------------------------------------------------------------------
+
+
+def _read_turn(img: np.ndarray, region: dict) -> dict:
+    """Recognize the current-turn integer drawn inside ``region``.
+
+    The strip is bounded on the left by the cyan ``TURN`` label
+    (``text_turn_label`` template) and on the right by the ``ターン``
+    katakana suffix (``text_tan`` template). Digit glyphs ``digit_0`` ..
+    ``digit_9`` are matched inside that strip and concatenated by x-order.
+    Returns ``{"turn": int}`` on success or ``{"turn": None}`` when either
+    anchor is missing (e.g. NP overlay) or no digit clears the threshold.
+    """
+    h, w = img.shape[:2]
+    rx, ry = int(region["x"] * w), int(region["y"] * h)
+    rw, rh = int(region["w"] * w), int(region["h"] * h)
+    roi = img[ry : ry + rh, rx : rx + rw]
+    if roi.size == 0:
+        return {"turn": None}
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+
+    left = templates.get("text_turn_label")
+    right = templates.get("text_tan")
+    if left is None or right is None:
+        return {"turn": None}
+
+    def _best(tmpl: np.ndarray, thresh: float = 0.7):
+        if tmpl.shape[0] > gray.shape[0] or tmpl.shape[1] > gray.shape[1]:
+            return None
+        res = cv2.matchTemplate(gray, tmpl, cv2.TM_CCOEFF_NORMED)
+        _, mv, _, ml = cv2.minMaxLoc(res)
+        return ml if mv >= thresh else None
+
+    lloc = _best(left)
+    rloc = _best(right)
+    if lloc is None or rloc is None:
+        return {"turn": None}
+
+    x_start = lloc[0] + left.shape[1]
+    x_end = rloc[0]
+    if x_end - x_start < 5:
+        return {"turn": None}
+    strip = gray[:, x_start:x_end]
+
+    cands: list[tuple[int, int, float, int]] = []  # (x, digit, score, w)
+    for d in range(10):
+        tmpl = templates.get(f"digit_{d}")
+        if tmpl is None:
+            continue
+        th, tw = tmpl.shape[:2]
+        if tw > strip.shape[1] or th > strip.shape[0]:
+            continue
+        res = cv2.matchTemplate(strip, tmpl, cv2.TM_CCOEFF_NORMED)
+        ys, xs = np.where(res >= 0.8)
+        for y, x in zip(ys, xs):
+            cands.append((int(x), d, float(res[y, x]), tw))
+
+    if not cands:
+        return {"turn": None}
+
+    # Greedy NMS on x-coordinate: keep the highest-scoring detection first
+    # and drop any later candidate whose centre is within ~half a glyph.
+    cands.sort(key=lambda c: -c[2])
+    kept: list[tuple[int, int, float, int]] = []
+    for c in cands:
+        if any(abs(c[0] - k[0]) < max(c[3], k[3]) * 0.5 for k in kept):
+            continue
+        kept.append(c)
+
+    kept.sort(key=lambda c: c[0])
+    try:
+        return {"turn": int("".join(str(c[1]) for c in kept))}
+    except ValueError:
+        return {"turn": None}
 
 
 # ---------------------------------------------------------------------------
@@ -422,11 +500,14 @@ def main() -> None:
                     ),
                 )
         elif action == "read_turn":
-            # TODO(runner): the Rust runner expects this to detect the screen
-            # turn number for skill scheduling. Currently a stub; until the OCR
-            # path is implemented, handle_battle in runner.rs cannot reliably
-            # advance ``current_turn``. See review #1.
-            _reply(req_id, {"turn": None})
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(req_id, {"turn": None, "error": err})
+            else:
+                _reply(
+                    req_id,
+                    _read_turn(img, cmd.get("region", DEFAULT_REGION)),
+                )
         elif action == "find_region":
             img, err = _load_frame(cmd)
             if img is None:

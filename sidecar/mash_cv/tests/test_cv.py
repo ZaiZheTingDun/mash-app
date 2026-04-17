@@ -300,6 +300,58 @@ class TestFindElementByName:
         assert result["found"] is True
 
 
+# ── _read_turn ──────────────────────────────────────────────────────────
+
+
+# Mirrors the Rust constant in src-tauri/src/runner.rs (TURN_REGION).
+TURN_REGION = {"x": 0.587, "y": 0.090, "w": 0.208, "h": 0.087}
+
+_TEST_TEMPLATES_DIR = os.path.join(
+    os.path.dirname(__file__), "test_data", "templates"
+)
+_TEST_SCREENSHOTS_DIR = os.path.join(
+    os.path.dirname(__file__), "test_data", "screenshots"
+)
+
+
+class TestReadTurn:
+    def _load_real_templates(self):
+        result = mash_cv._load_templates(_TEST_TEMPLATES_DIR)
+        assert result["ok"] is True
+        # Anchors and at least the two digits we have samples for must be loaded.
+        for key in ("text_turn_label", "text_tan", "digit_1", "digit_6"):
+            assert key in mash_cv.templates, f"missing template {key}"
+
+    def test_returns_none_when_anchors_missing(self):
+        img = _make_bgr_image(2560, 1440)
+        result = mash_cv._read_turn(img, TURN_REGION)
+        assert result == {"turn": None}
+
+    def test_battle_screenshot_reads_one(self):
+        self._load_real_templates()
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle.png"))
+        assert img is not None
+        result = mash_cv._read_turn(img, TURN_REGION)
+        assert result == {"turn": 1}
+
+    def test_six_turn_screenshot_reads_six(self):
+        self._load_real_templates()
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "turn_six.png"))
+        assert img is not None
+        result = mash_cv._read_turn(img, TURN_REGION)
+        assert result == {"turn": 6}
+
+    def test_np_overlay_returns_none(self):
+        # battle_np.png has the noble-phantasm splash covering the TURN row,
+        # so the right-anchor (text_tan) match falls below threshold and the
+        # function bails with turn=None.
+        self._load_real_templates()
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle_np.png"))
+        assert img is not None
+        result = mash_cv._read_turn(img, TURN_REGION)
+        assert result == {"turn": None}
+
+
 # ── Integration: subprocess REPL ────────────────────────────────────────
 
 
