@@ -78,59 +78,215 @@ impl RunnerHandle {
 /// servant_1 = index 0, servant_2 = index 1, servant_3 = index 2
 /// skill_1 = index 0, skill_2 = index 1, skill_3 = index 2
 const SERVANT_SKILLS: [[Point; 3]; 3] = [
-    [Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(0.0, 0.0)],
-    [Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(0.0, 0.0)],
-    [Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(0.0, 0.0)],
+    [Point::new(0.058, 0.807), Point::new(0.127, 0.807), Point::new(0.196, 0.807)],
+    [Point::new(0.305, 0.807), Point::new(0.374, 0.807), Point::new(0.443, 0.807)],
+    [Point::new(0.553, 0.807), Point::new(0.622, 0.807), Point::new(0.691, 0.807)],
 ];
+
+const EQUIPMENT_BUTTON: Point = Point::new(0.933, 0.434);
 
 /// Master / equipment skill buttons
 const EQUIPMENT_SKILLS: [Point; 3] = [
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 0.0),
+    Point::new(0.708, 0.436),
+    Point::new(0.777, 0.436),
+    Point::new(0.848, 0.436),
 ];
 
 /// Attack button position on the battle screen
-const ATTACK_BUTTON: Point = Point::new(0.0, 0.0);
+const ATTACK_BUTTON: Point = Point::new(0.887, 0.844);
 
 /// Region to search for the attack button template
 const ATTACK_BUTTON_REGION: NormRect = NormRect {
-    x: 0.0,
-    y: 0.0,
-    w: 1.0,
-    h: 1.0,
+    x: 0.799,
+    y: 0.746,
+    w: 0.177,
+    h: 0.195,
 };
 
 /// Region where the turn number is displayed
 const TURN_REGION: NormRect = NormRect {
-    x: 0.0,
-    y: 0.0,
-    w: 0.2,
-    h: 0.1,
+    x: 0.587,
+    y: 0.090,
+    w: 0.208,
+    h: 0.087,
 };
 
 /// Ally target positions for skill targeting (servant_1, servant_2, servant_3)
 const SKILL_TARGETS: [Point; 3] = [
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 0.0),
+    Point::new(0.254, 0.474),
+    Point::new(0.499, 0.474),
+    Point::new(0.744, 0.474),
 ];
 
 /// Enemy target positions for attack targeting (enemy_1, enemy_2, enemy_3)
 const ENEMY_TARGETS: [Point; 3] = [
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 0.0),
+    Point::new(0.035, 0.060),
+    Point::new(0.230, 0.060),
+    Point::new(0.425, 0.060),
 ];
 
 /// Command card positions on the attack screen (5 cards left to right)
 const COMMAND_CARDS: [Point; 5] = [
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 0.0),
+    Point::new(0.097, 0.678),
+    Point::new(0.303, 0.678),
+    Point::new(0.504, 0.678),
+    Point::new(0.705, 0.678),
+    Point::new(0.907, 0.678),
 ];
+
+const NOBLE_PHANTASMS: [Point; 3] = [
+    Point::new(0.319, 0.242),
+    Point::new(0.497, 0.242),
+    Point::new(0.680, 0.242),
+];
+
+// ---------------------------------------------------------------------------
+// Debug: expose coordinate constants for visualization
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LabeledPoint {
+    pub label: String,
+    pub point: Point,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LabeledRegion {
+    pub label: String,
+    pub region: NormRect,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoordGroup {
+    pub id: String,
+    pub label: String,
+    pub points: Vec<LabeledPoint>,
+    pub regions: Vec<LabeledRegion>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DebugCoordinates {
+    pub groups: Vec<CoordGroup>,
+}
+
+/// Snapshot of every `Point` / `NormRect` constant the runner uses, grouped
+/// for display in the debug UI.
+pub fn debug_coordinates() -> DebugCoordinates {
+    let mut servant_skill_points = Vec::with_capacity(9);
+    for (si, row) in SERVANT_SKILLS.iter().enumerate() {
+        for (ki, p) in row.iter().enumerate() {
+            servant_skill_points.push(LabeledPoint {
+                label: format!("S{}.{}", si + 1, ki + 1),
+                point: *p,
+            });
+        }
+    }
+
+    let mut equipment_points = Vec::with_capacity(4);
+    equipment_points.push(LabeledPoint {
+        label: "Menu".into(),
+        point: EQUIPMENT_BUTTON,
+    });
+    for (i, p) in EQUIPMENT_SKILLS.iter().enumerate() {
+        equipment_points.push(LabeledPoint {
+            label: format!("E{}", i + 1),
+            point: *p,
+        });
+    }
+
+    let groups = vec![
+        CoordGroup {
+            id: "servantSkills".into(),
+            label: "从者技能".into(),
+            points: servant_skill_points,
+            regions: Vec::new(),
+        },
+        CoordGroup {
+            id: "equipment".into(),
+            label: "御主技能 / 装备".into(),
+            points: equipment_points,
+            regions: Vec::new(),
+        },
+        CoordGroup {
+            id: "attack".into(),
+            label: "攻击".into(),
+            points: vec![LabeledPoint {
+                label: "Attack".into(),
+                point: ATTACK_BUTTON,
+            }],
+            regions: vec![LabeledRegion {
+                label: "AttackRegion".into(),
+                region: ATTACK_BUTTON_REGION,
+            }],
+        },
+        CoordGroup {
+            id: "turn".into(),
+            label: "回合".into(),
+            points: Vec::new(),
+            regions: vec![LabeledRegion {
+                label: "TurnRegion".into(),
+                region: TURN_REGION,
+            }],
+        },
+        CoordGroup {
+            id: "skillTargets".into(),
+            label: "技能目标".into(),
+            points: SKILL_TARGETS
+                .iter()
+                .enumerate()
+                .map(|(i, p)| LabeledPoint {
+                    label: format!("Ally{}", i + 1),
+                    point: *p,
+                })
+                .collect(),
+            regions: Vec::new(),
+        },
+        CoordGroup {
+            id: "enemyTargets".into(),
+            label: "敌人目标".into(),
+            points: ENEMY_TARGETS
+                .iter()
+                .enumerate()
+                .map(|(i, p)| LabeledPoint {
+                    label: format!("Enemy{}", i + 1),
+                    point: *p,
+                })
+                .collect(),
+            regions: Vec::new(),
+        },
+        CoordGroup {
+            id: "commandCards".into(),
+            label: "指令卡".into(),
+            points: COMMAND_CARDS
+                .iter()
+                .enumerate()
+                .map(|(i, p)| LabeledPoint {
+                    label: format!("C{}", i + 1),
+                    point: *p,
+                })
+                .collect(),
+            regions: Vec::new(),
+        },
+        CoordGroup {
+            id: "noblePhantasms".into(),
+            label: "宝具".into(),
+            points: NOBLE_PHANTASMS
+                .iter()
+                .enumerate()
+                .map(|(i, p)| LabeledPoint {
+                    label: format!("NP{}", i + 1),
+                    point: *p,
+                })
+                .collect(),
+            regions: Vec::new(),
+        },
+    ];
+
+    DebugCoordinates { groups }
+}
 
 // ---------------------------------------------------------------------------
 // Battle state

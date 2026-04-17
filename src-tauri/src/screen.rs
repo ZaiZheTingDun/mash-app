@@ -11,7 +11,7 @@ use tauri_plugin_shell::ShellExt;
 // Core geometry types (normalized 0.0..1.0)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize)]
 pub struct Point {
     pub x: f64,
     pub y: f64,

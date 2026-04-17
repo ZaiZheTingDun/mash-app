@@ -38,6 +38,32 @@ interface ProbeResult {
   timestamp: string;
 }
 
+interface PointDto {
+  x: number;
+  y: number;
+}
+
+interface LabeledPointDto {
+  label: string;
+  point: PointDto;
+}
+
+interface LabeledRegionDto {
+  label: string;
+  region: NormRectDto;
+}
+
+interface CoordGroupDto {
+  id: string;
+  label: string;
+  points: LabeledPointDto[];
+  regions: LabeledRegionDto[];
+}
+
+interface RunnerCoordinatesDto {
+  groups: CoordGroupDto[];
+}
+
 interface LogEntry {
   time: string;
   level: "info" | "warn" | "error";
@@ -75,6 +101,14 @@ export function DebugPage({ onBack }: DebugPageProps) {
   const [probing, setProbing] = useState(false);
   const [reloading, setReloading] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+
+  const [coordinates, setCoordinates] = useState<RunnerCoordinatesDto | null>(
+    null
+  );
+  const [showCoordOverlay, setShowCoordOverlay] = useState(false);
+  const [visibleCoordGroups, setVisibleCoordGroups] = useState<Set<string>>(
+    new Set()
+  );
   const logEndRef = useRef<HTMLDivElement>(null);
   const didShutdown = useRef(false);
 
@@ -115,10 +149,25 @@ export function DebugPage({ onBack }: DebugPageProps) {
     }
   }, [log]);
 
+  const loadCoordinates = useCallback(async () => {
+    try {
+      const coords = await invoke<RunnerCoordinatesDto>(
+        "debug_get_runner_coordinates"
+      );
+      setCoordinates(coords);
+      log(
+        `已加载坐标分组: ${coords.groups.map((g) => g.label).join(", ") || "(空)"}`
+      );
+    } catch (err) {
+      log(`读取坐标配置失败: ${err}`, "error");
+    }
+  }, [log]);
+
   useEffect(() => {
     log("初始化 CV 调试页面");
     loadConfig();
     loadTemplateList();
+    loadCoordinates();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -432,6 +481,37 @@ export function DebugPage({ onBack }: DebugPageProps) {
             </button>
           </Flex>
 
+          <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
+            <label className="debug-coord-toggle">
+              <input
+                type="checkbox"
+                checked={showCoordOverlay}
+                onChange={(e) => setShowCoordOverlay(e.target.checked)}
+              />
+              <Text size="1">坐标叠层</Text>
+            </label>
+            {coordinates?.groups.map((g) => (
+              <label key={g.id} className="debug-coord-toggle">
+                <input
+                  type="checkbox"
+                  disabled={!showCoordOverlay}
+                  checked={visibleCoordGroups.has(g.id)}
+                  onChange={(e) => {
+                    setVisibleCoordGroups((prev) => {
+                      const next = new Set(prev);
+                      if (e.target.checked) next.add(g.id);
+                      else next.delete(g.id);
+                      return next;
+                    });
+                  }}
+                />
+                <Text size="1" color={showCoordOverlay ? undefined : "gray"}>
+                  {g.label}
+                </Text>
+              </label>
+            ))}
+          </Flex>
+
           <Box className="debug-canvas-wrapper">
             {imageSrc ? (
               <Box className="debug-canvas">
@@ -460,6 +540,41 @@ export function DebugPage({ onBack }: DebugPageProps) {
                     </Box>
                   ) : null
                 )}
+                {showCoordOverlay &&
+                  coordinates?.groups
+                    .filter((g) => visibleCoordGroups.has(g.id))
+                    .flatMap((g) => [
+                      ...g.regions.map((r) => (
+                        <Box
+                          key={`coord-region-${g.id}-${r.label}`}
+                          className="debug-coord-region"
+                          style={{
+                            left: `${r.region.x * 100}%`,
+                            top: `${r.region.y * 100}%`,
+                            width: `${r.region.w * 100}%`,
+                            height: `${r.region.h * 100}%`,
+                          }}
+                          title={`${g.label} · ${r.label}`}
+                        >
+                          <span className="debug-coord-label">
+                            {g.label} · {r.label}
+                          </span>
+                        </Box>
+                      )),
+                      ...g.points.map((p) => (
+                        <Box
+                          key={`coord-dot-${g.id}-${p.label}`}
+                          className="debug-coord-dot"
+                          style={{
+                            left: `${p.point.x * 100}%`,
+                            top: `${p.point.y * 100}%`,
+                          }}
+                          title={`${g.label} · ${p.label} (${p.point.x.toFixed(3)}, ${p.point.y.toFixed(3)})`}
+                        >
+                          <span className="debug-coord-label">{p.label}</span>
+                        </Box>
+                      )),
+                    ])}
               </Box>
             ) : (
               <Flex

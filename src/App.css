@@ -1077,6 +1077,64 @@ body,
   white-space: nowrap;
 }
 
+.debug-coord-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.debug-coord-toggle input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.debug-coord-region {
+  position: absolute;
+  border: 2px dashed var(--orange-9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.debug-coord-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--blue-9);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.debug-coord-label {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  border-radius: var(--radius-1);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.debug-coord-region > .debug-coord-label {
+  top: -18px;
+  left: 0;
+  transform: none;
+  background: var(--orange-9);
+}
+
 .debug-side {
   width: 280px;
   flex-shrink: 0;
