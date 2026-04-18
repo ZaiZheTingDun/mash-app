@@ -91,6 +91,11 @@ The Rust backend is the single source of truth for all application state. The fr
 - **No business logic in React.** Validation, defaults, computed values, and side effects belong in Rust. React components should contain only presentation logic (conditional rendering, formatting, layout).
 - **React local state is only for transient UI concerns** — dialog open/close, input field drafts before submission, animation flags, hover/focus tracking. These are never persisted or shared across components via prop drilling as a substitute for backend state.
 
+## Device Automation
+
+- **Always jitter taps and swipes.** Every ADB tap / swipe issued by the runner must add a small random per-axis pixel offset (currently ±`TAP_JITTER_PX` in `src-tauri/src/runner.rs`) before sending the coordinates to the device. Two consecutive runs of the same automation should never produce byte-identical input streams — exact, repeated coordinates are the easiest signal a game's anti-cheat can flag. The jitter must be applied at the lowest layer (`Runner::tap_at` / `swipe_at`) so callers can keep using clean normalized `Point` constants without worrying about it.
+- **Pick jitter bounds that stay inside button hit-boxes.** A handful of pixels is enough; do not jitter so much that you risk missing the intended UI element on smaller resolutions.
+
 ## Tauri Best Practices
 
 ### Frontend ↔ Backend Communication

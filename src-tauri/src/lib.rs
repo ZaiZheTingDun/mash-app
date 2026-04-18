@@ -349,8 +349,9 @@ fn start_automation(
     handle.state = state.clone();
     handle.cancel = cancel.clone();
 
+    let assets_dir = resolve_assets_dir(&app);
     let runner = runner::Runner::new(
-        adb_dev, sidecar, config, turns, app, state, cancel, screen_size,
+        adb_dev, sidecar, config, turns, app, state, cancel, screen_size, assets_dir,
     );
     std::thread::spawn(move || runner.run());
 

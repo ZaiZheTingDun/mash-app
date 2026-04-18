@@ -1,6 +1,10 @@
 use crate::adb::Adb;
-use crate::screen::{NormRect, Point, Screen, SidecarClient};
-use crate::{Action, Turn};
+use crate::screen::{
+    CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
+};
+use crate::{Action, AttackCard, Turn};
+use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -94,6 +98,11 @@ const EQUIPMENT_SKILLS: [Point; 3] = [
 
 /// Attack button position on the battle screen
 const ATTACK_BUTTON: Point = Point::new(0.887, 0.844);
+
+/// Tap target that, when pressed during a skill / NP animation, makes the
+/// game skip ahead to the next actionable frame. Same physical button
+/// works after every skill on the battle screen.
+const SKIP_ANIMATION_BUTTON: Point = Point::new(0.685, 0.095);
 
 /// Region to search for the attack button template
 const ATTACK_BUTTON_REGION: NormRect = NormRect {
@@ -321,10 +330,30 @@ impl BattleState {
 // Runner
 // ---------------------------------------------------------------------------
 
-const POLL_INTERVAL: Duration = Duration::from_millis(800);
-const ACTION_DELAY: Duration = Duration::from_millis(500);
+const POLL_INTERVAL: Duration = Duration::from_millis(500);
+const ACTION_DELAY: Duration = Duration::from_millis(300);
 const UNKNOWN_TIMEOUT: u32 = 10;
-const UNKNOWN_TIMEOUT_LOADING: u32 = 30;
+/// Tolerated streak of `Unknown` screens while a long animation / loading
+/// transition is playing -- raised from the default so a stacked NP chain
+/// (which can run 30s+ of cut-ins before the battle screen reappears)
+/// doesn't trip the "无法识别当前画面" error. 75 * 800ms = 60s.
+const UNKNOWN_TIMEOUT_LOADING: u32 = 75;
+
+/// Poll cadence for `wait_for_attack_button` while a skill animation
+/// (cut-in, NP charge effect, etc.) is hiding the attack button.
+const SKILL_POLL_INTERVAL: Duration = Duration::from_millis(300);
+/// Hard cap on how long we'll wait for the attack button to come back
+/// after a skill. Some skills trigger long buff cut-ins or animations
+/// (and a few skills push an NP-charge cut-in on top), so this needs
+/// to cover NP-length animations without hanging forever if something
+/// genuinely went wrong.
+const SKILL_WAIT_TIMEOUT: Duration = Duration::from_secs(45);
+
+/// Maximum per-axis jitter (in physical pixels) added to every tap so
+/// repeated runs don't land on identical coordinates. Small enough to
+/// stay well inside button hit-boxes; large enough that the noise is
+/// distinguishable from a deterministic script.
+const TAP_JITTER_PX: i32 = 6;
 
 const DEFAULT_W: u32 = 1080;
 const DEFAULT_H: u32 = 1920;
@@ -339,6 +368,11 @@ pub struct Runner {
     app_handle: tauri::AppHandle,
     screen_w: u32,
     screen_h: u32,
+    /// Per-servant face assets (`{id}/card_servant_*.png`). When ``None`` the
+    /// sidecar can still report suit + slot but cannot identify which
+    /// servant owns each command card, which means priority entries can't
+    /// be matched and we fall through to the leftmost-fill path.
+    assets_dir: Option<PathBuf>,
     // Pre-battle progress tracking
     team_changed: bool,
     support_selected: bool,
@@ -358,6 +392,7 @@ impl Runner {
         state: Arc<Mutex<RunnerState>>,
         cancel: Arc<AtomicBool>,
         screen_size: Option<(u32, u32)>,
+        assets_dir: Option<PathBuf>,
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         Self {
@@ -370,6 +405,7 @@ impl Runner {
             app_handle,
             screen_w,
             screen_h,
+            assets_dir,
             team_changed: false,
             support_selected: false,
             support_scroll_count: 0,
@@ -413,7 +449,14 @@ impl Runner {
 
     fn tap_at(&self, screen: &str, point: Point) -> bool {
         let (px, py) = point.to_physical(self.screen_w, self.screen_h);
-        match self.adb.tap(px, py) {
+        let (jx, jy) = jitter_offset();
+        // Saturate at the screen edges so a near-edge button still
+        // registers even if the jitter would push it off-screen.
+        let tap_x = (px as i32 + jx)
+            .clamp(0, self.screen_w.saturating_sub(1) as i32) as u32;
+        let tap_y = (py as i32 + jy)
+            .clamp(0, self.screen_h.saturating_sub(1) as i32) as u32;
+        match self.adb.tap(tap_x, tap_y) {
             Ok(()) => true,
             Err(err) => {
                 self.fail_action(screen, "点击", err);
@@ -431,6 +474,40 @@ impl Runner {
                 self.fail_action(screen, "滑动", err);
                 false
             }
+        }
+    }
+
+    /// Block until the attack button reappears in `ATTACK_BUTTON_REGION`,
+    /// polling every `SKILL_POLL_INTERVAL`. Used after firing a skill so
+    /// the next tap doesn't land during the cut-in / animation while the
+    /// button is hidden.
+    ///
+    /// Returns ``true`` when the button is detected, ``false`` on timeout
+    /// or cancellation. Emits status updates so the user can see the wait.
+    fn wait_for_attack_button(&mut self, screen: &str, timeout: Duration) -> bool {
+        let start = std::time::Instant::now();
+        let mut tick: u32 = 0;
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+            let found = self
+                .sidecar
+                .find_element(None, "button_attack", ATTACK_BUTTON_REGION, 0.8)
+                .unwrap_or(None)
+                .is_some();
+            if found {
+                return true;
+            }
+            if start.elapsed() >= timeout {
+                self.emit(screen, "等待攻击按钮超时");
+                return false;
+            }
+            tick += 1;
+            if tick % 4 == 1 {
+                self.emit(screen, "等待技能动画结束…");
+            }
+            thread::sleep(SKILL_POLL_INTERVAL);
         }
     }
 
@@ -479,7 +556,13 @@ impl Runner {
                 }
                 Screen::Battle => {
                     unknown_count = 0;
-                    self.battle.waiting_for_battle = false;
+                    // NOTE: do NOT clear `waiting_for_battle` here. The
+                    // screen classifier briefly returns Battle between
+                    // taps and the NP cinematic, and clearing the flag
+                    // too early would shrink the Unknown tolerance back
+                    // to UNKNOWN_TIMEOUT mid-animation. handle_battle
+                    // clears it itself once the attack button is
+                    // actually visible (= we can really act).
                     self.handle_battle();
                 }
                 Screen::Attack => {
@@ -688,6 +771,10 @@ impl Runner {
             return;
         }
 
+        // Attack button is back -- the prior NP / attack cinematic (if
+        // any) has finished. Drop back to the short Unknown tolerance.
+        self.battle.waiting_for_battle = false;
+
         // Read current turn number from the screen
         let screen_turn = self
             .sidecar
@@ -745,21 +832,181 @@ impl Runner {
         thread::sleep(ACTION_DELAY);
     }
 
-    fn handle_attack(&mut self) {
-        if self.battle.turn_config_used {
-            // TODO: use attackPriority to select optimal cards via CV.
-            // For now, select the first 3 command cards.
-            self.emit("Attack", "选择指令卡（前3张）");
-        } else {
-            self.emit("Attack", "回合未变更，选择默认指令卡（前3张）");
+    /// Build the front-line ``[party_slot_0, party_slot_1, party_slot_2]``
+    /// id map. Player-configured slots take precedence; any remaining
+    /// front-line slot is assumed to be the support (its id parsed out of
+    /// ``support_servant_name`` when the user pinned a specific servant).
+    fn build_party_ids(&self) -> [Option<u32>; 3] {
+        let mut ids: [Option<u32>; 3] = [None, None, None];
+        for sel in &self.config.servant_selections {
+            let slot = sel.slot_index as usize;
+            if slot < 3 {
+                ids[slot] = Some(sel.servant_id);
+            }
         }
 
-        for i in 0..3 {
-            if !self.tap_at("Attack", COMMAND_CARDS[i]) {
+        if let Some(support_id) = self
+            .config
+            .support_servant_name
+            .as_deref()
+            .and_then(parse_servant_name_id)
+        {
+            for slot in ids.iter_mut() {
+                if slot.is_none() {
+                    *slot = Some(support_id);
+                    break;
+                }
+            }
+        }
+        ids
+    }
+
+    fn handle_attack(&mut self) {
+        let party_ids = self.build_party_ids();
+
+        // Unique candidate set, stable by party position.
+        let mut candidate_ids: Vec<u32> = Vec::with_capacity(3);
+        for id in party_ids.iter().flatten() {
+            if !candidate_ids.contains(id) {
+                candidate_ids.push(*id);
+            }
+        }
+
+        if self.assets_dir.is_none() {
+            self.emit(
+                "Attack",
+                "未找到从者资源目录，将无法按从者匹配指令卡",
+            );
+        }
+
+        let cards = match self.sidecar.find_command_cards(
+            None,
+            None,
+            &candidate_ids,
+            self.assets_dir.as_deref(),
+        ) {
+            Ok(c) => c,
+            Err(err) => {
+                self.fail_action("Attack", "识别指令卡", err);
+                return;
+            }
+        };
+
+        let nps = match self.sidecar.find_noble_phantasms(None, None) {
+            Ok(n) => n,
+            Err(err) => {
+                self.fail_action("Attack", "识别宝具卡", err);
+                return;
+            }
+        };
+
+        let card_summary: Vec<String> = cards
+            .iter()
+            .map(|c| {
+                format!(
+                    "C{}={}{}",
+                    c.slot + 1,
+                    c.suit.as_deref().unwrap_or("?"),
+                    c.servant_id
+                        .map(|id| format!("/{id}"))
+                        .unwrap_or_default(),
+                )
+            })
+            .collect();
+        self.emit(
+            "Attack",
+            &format!("指令卡: {}", card_summary.join(" ")),
+        );
+        let ready: Vec<String> = nps
+            .iter()
+            .filter(|n| n.ready)
+            .map(|n| format!("NP{}", n.slot + 1))
+            .collect();
+        if ready.is_empty() {
+            self.emit("Attack", "宝具就绪: 无");
+        } else {
+            self.emit("Attack", &format!("宝具就绪: {}", ready.join(" ")));
+        }
+
+        let mut used_card_slots: HashSet<u32> = HashSet::new();
+        let mut used_np_slots: HashSet<u32> = HashSet::new();
+        let mut picks: Vec<Pick> = Vec::with_capacity(3);
+
+        if self.battle.turn_config_used {
+            if let Some(turn_cfg) = self.turns.get(self.battle.current_turn) {
+                picks = pick_by_priority(
+                    &turn_cfg.attack_priority,
+                    &cards,
+                    &nps,
+                    &party_ids,
+                    &mut used_card_slots,
+                    &mut used_np_slots,
+                );
+            }
+        } else {
+            self.emit("Attack", "回合未变更，按默认顺序补位");
+        }
+
+        if picks.len() < 3 {
+            fill_remaining(&mut picks, &cards, &mut used_card_slots);
+        }
+
+        if picks.is_empty() {
+            self.emit("Attack", "未能选出任何卡，跳过");
+            self.battle.turn_config_used = false;
+            return;
+        }
+
+        for (i, pick) in picks.iter().enumerate() {
+            let (msg, point) = match pick {
+                Pick::Card {
+                    slot,
+                    point,
+                    servant_id,
+                    suit,
+                    from_priority,
+                } => {
+                    let label = match from_priority {
+                        Some(p) => format!("选择 {p} → C{}", slot + 1),
+                        None => format!("补位: C{}", slot + 1),
+                    };
+                    let detail = format!(
+                        " ({}{})",
+                        suit.as_deref().unwrap_or("?"),
+                        servant_id
+                            .map(|id| format!("/{id}"))
+                            .unwrap_or_default(),
+                    );
+                    (format!("{}/{} {}{}", i + 1, picks.len(), label, detail), *point)
+                }
+                Pick::Np {
+                    slot,
+                    point,
+                    from_priority,
+                } => (
+                    format!(
+                        "{}/{} 选择 {} → NP{}",
+                        i + 1,
+                        picks.len(),
+                        from_priority,
+                        slot + 1,
+                    ),
+                    *point,
+                ),
+            };
+            self.emit("Attack", &msg);
+            if !self.tap_at("Attack", point) {
                 return;
             }
             thread::sleep(ACTION_DELAY);
         }
+
+        // The 3 cards (especially when an NP is included) trigger a long
+        // attack cinematic before the battle screen comes back. While that
+        // animation plays the screen classifier returns Unknown, so flag
+        // the loop to use the longer Unknown tolerance until handle_battle
+        // sees a real Battle frame again.
+        self.battle.waiting_for_battle = true;
 
         // Reset for next cycle
         self.battle.turn_config_used = false;
@@ -803,6 +1050,16 @@ impl Runner {
                     }
                     thread::sleep(ACTION_DELAY);
                 }
+
+                self.skip_after_skill();
+
+                // Skill animation (cut-in, buff effect, etc.) hides the
+                // attack button. Wait for it to reappear before firing
+                // the next skill, otherwise rapid taps land on nothing
+                // or, worse, on whatever overlay is currently shown.
+                if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                    return;
+                }
             }
         }
 
@@ -840,8 +1097,24 @@ impl Runner {
                     }
                     thread::sleep(ACTION_DELAY);
                 }
+
+                self.skip_after_skill();
+
+                if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                    return;
+                }
             }
         }
+    }
+
+    /// Tap the in-game "skip animation" button so the cut-in / buff
+    /// effect plays at full speed. The button is in the top-right corner
+    /// and is safe to tap whether or not an animation is currently
+    /// playing -- on a normal Battle frame this region is the turn-counter
+    /// pill which has no interactive effect.
+    fn skip_after_skill(&self) {
+        let _ = self.tap_at("Battle", SKIP_ANIMATION_BUTTON);
+        thread::sleep(ACTION_DELAY);
     }
 
     // -- utilities -----------------------------------------------------------
@@ -900,5 +1173,191 @@ fn slot_x_position(index: u32) -> f64 {
         4 => 0.72,
         5 => 0.88,
         _ => 0.50,
+    }
+}
+
+/// Parse a template-key style servant name like ``"servant_215"`` into its
+/// numeric id. Returns ``None`` for any other string shape so callers can
+/// gracefully drop unknown supports instead of erroring.
+fn parse_servant_name_id(name: &str) -> Option<u32> {
+    name.strip_prefix("servant_")?.parse::<u32>().ok()
+}
+
+/// Cheap (dx, dy) pixel jitter in the range
+/// `[-TAP_JITTER_PX, TAP_JITTER_PX]` derived from the current wall-clock
+/// nanos. Avoids pulling in a `rand` dependency for what is essentially
+/// "make our taps look slightly less robotic" -- the distribution does
+/// not need to be cryptographically uniform.
+fn jitter_offset() -> (i32, i32) {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    // Two independent low-bit slices of the same nanos value.
+    let span = (TAP_JITTER_PX * 2 + 1) as u32;
+    let dx = (nanos % span) as i32 - TAP_JITTER_PX;
+    let dy = ((nanos / span) % span) as i32 - TAP_JITTER_PX;
+    (dx, dy)
+}
+
+/// Center of a normalized rectangle (used to derive a tap point from a
+/// detected NP slot's `card_region`).
+fn rect_center(r: &NormRect) -> Point {
+    Point::new(r.x + r.w / 2.0, r.y + r.h / 2.0)
+}
+
+// ---------------------------------------------------------------------------
+// Attack pick logic
+// ---------------------------------------------------------------------------
+
+/// One card chosen by the priority walk / fill step. Carries enough info to
+/// log + tap.
+#[derive(Debug, Clone)]
+enum Pick {
+    Card {
+        slot: u32,
+        point: Point,
+        servant_id: Option<u32>,
+        suit: Option<String>,
+        /// Source of the pick: priority entry text (e.g. ``"servant_2_arts"``)
+        /// or ``None`` if it came from the leftmost-fill step.
+        from_priority: Option<String>,
+    },
+    Np {
+        slot: u32,
+        point: Point,
+        from_priority: String,
+    },
+}
+
+/// Map ``"quick"|"arts"|"buster"`` to the suit code returned by the sidecar.
+fn suit_code(suit: &str) -> Option<&'static str> {
+    match suit {
+        "quick" => Some("q"),
+        "arts" => Some("a"),
+        "buster" => Some("b"),
+        _ => None,
+    }
+}
+
+/// Walk `priority` in order, picking matching cards / NPs until 3 are chosen
+/// or the list is exhausted. Cards / NPs already picked are tracked in
+/// `used_card_slots` / `used_np_slots` and will not be re-selected.
+fn pick_by_priority(
+    priority: &[AttackCard],
+    cards: &[CommandCardMatch],
+    nps: &[NoblePhantasmMatch],
+    party_ids: &[Option<u32>; 3],
+    used_card_slots: &mut HashSet<u32>,
+    used_np_slots: &mut HashSet<u32>,
+) -> Vec<Pick> {
+    let mut picks: Vec<Pick> = Vec::with_capacity(3);
+
+    for entry in priority {
+        if picks.len() >= 3 {
+            break;
+        }
+        let Some(card_str) = entry.card.as_deref() else {
+            continue;
+        };
+
+        // Expect ``servant_{i}_{suit|np}``; bail on anything else.
+        let rest = match card_str.strip_prefix("servant_") {
+            Some(r) => r,
+            None => continue,
+        };
+        let (idx_str, kind) = match rest.split_once('_') {
+            Some(p) => p,
+            None => continue,
+        };
+        let Ok(field_pos) = idx_str.parse::<usize>() else {
+            continue;
+        };
+        if !(1..=3).contains(&field_pos) {
+            continue;
+        }
+
+        if kind == "np" {
+            let np_slot = (field_pos - 1) as u32;
+            if used_np_slots.contains(&np_slot) {
+                continue;
+            }
+            if let Some(np) = nps.iter().find(|n| n.slot == np_slot) {
+                if np.ready {
+                    used_np_slots.insert(np_slot);
+                    picks.push(Pick::Np {
+                        slot: np_slot,
+                        point: rect_center(&np.card_region),
+                        from_priority: card_str.to_string(),
+                    });
+                }
+            }
+            continue;
+        }
+
+        let Some(wanted_suit) = suit_code(kind) else {
+            continue;
+        };
+        let Some(wanted_id) = party_ids[field_pos - 1] else {
+            // No known servant at that field position — can't match by face.
+            continue;
+        };
+
+        // Leftmost-by-slot scan among unused cards owned by this servant
+        // with the desired suit.
+        let mut best: Option<&CommandCardMatch> = None;
+        for c in cards {
+            if used_card_slots.contains(&c.slot) {
+                continue;
+            }
+            if c.servant_id != Some(wanted_id) {
+                continue;
+            }
+            if c.suit.as_deref() != Some(wanted_suit) {
+                continue;
+            }
+            if best.map_or(true, |b| c.slot < b.slot) {
+                best = Some(c);
+            }
+        }
+        if let Some(c) = best {
+            used_card_slots.insert(c.slot);
+            picks.push(Pick::Card {
+                slot: c.slot,
+                point: Point::new(c.x, c.y),
+                servant_id: c.servant_id,
+                suit: c.suit.clone(),
+                from_priority: Some(card_str.to_string()),
+            });
+        }
+    }
+
+    picks
+}
+
+/// After the priority walk, top picks up to 3 by choosing the leftmost
+/// command cards that have not yet been used.
+fn fill_remaining(
+    picks: &mut Vec<Pick>,
+    cards: &[CommandCardMatch],
+    used_card_slots: &mut HashSet<u32>,
+) {
+    let mut sorted: Vec<&CommandCardMatch> = cards.iter().collect();
+    sorted.sort_by_key(|c| c.slot);
+    for c in sorted {
+        if picks.len() >= 3 {
+            break;
+        }
+        if used_card_slots.contains(&c.slot) {
+            continue;
+        }
+        used_card_slots.insert(c.slot);
+        picks.push(Pick::Card {
+            slot: c.slot,
+            point: Point::new(c.x, c.y),
+            servant_id: c.servant_id,
+            suit: c.suit.clone(),
+            from_priority: None,
+        });
     }
 }
