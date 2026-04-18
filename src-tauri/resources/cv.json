@@ -116,6 +116,30 @@
           "threshold": 0.8
         }
       }
+    },
+    "Battle": {
+      "detect": {
+        "template": "screen_battle",
+        "region": {
+          "x": 0.589,
+          "y": 0.0,
+          "w": 0.103,
+          "h": 0.127
+        },
+        "threshold": 0.85
+      }
+    },
+    "Attack": {
+      "detect": {
+        "template": "button_battle_speed",
+        "region": {
+          "x": 0.803,
+          "y": 0.020,
+          "w": 0.167,
+          "h": 0.141
+        },
+        "threshold": 0.85
+      }
     }
   }
 }

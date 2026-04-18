@@ -679,7 +679,7 @@ impl Runner {
         // Check if the attack button is present (our turn to act)
         let attack_present = self
             .sidecar
-            .find_element(None, "attack_button", ATTACK_BUTTON_REGION, 0.8)
+            .find_element(None, "button_attack", ATTACK_BUTTON_REGION, 0.8)
             .unwrap_or(None)
             .is_some();
 
