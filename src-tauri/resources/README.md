@@ -7,13 +7,20 @@ These files ship with the app (declared in `tauri.conf.json` → `bundle.resourc
 ```
 resources/
   cv.json         # screen + element template mapping (see below)
-  templates/      # PNG templates referenced by cv.json
-    screen_team_confirm.png
-    attack_button.png
+  templates/      # PNG templates, loaded by stem (filename without extension)
+    screen_team_confirm.png     # anchors referenced by cv.json
+    button_attack.png
     ...
+    text_turn_label.png         # turn-number OCR anchors (not in cv.json)
+    text_tan.png
+    digit_0.png .. digit_9.png  # digit glyphs for turn OCR
   scrcpy/
     scrcpy-server.jar   # pinned scrcpy server, pushed to device for streaming
 ```
+
+Every PNG in `templates/` is loaded by the sidecar on startup and keyed by its
+filename stem. Most are referenced by `cv.json`, but a few (the turn OCR set
+below) are looked up directly by the Rust runner.
 
 ## scrcpy-server.jar
 
@@ -82,3 +89,25 @@ Elements are nested under their screen. The debug page (and runner) look them up
 1. Crop the region of interest from a real device screenshot at the same resolution used at runtime. Save as PNG under `resources/templates/`.
 2. Reference the basename (no extension) from `cv.json`.
 3. Restart `pnpm tauri dev` — the Rust side resolves the bundled resources at startup and passes them to the sidecar.
+
+## Turn-number OCR templates
+
+During battle the sidecar's `read_turn` command recognizes the current turn
+integer by template-matching digit glyphs inside the turn strip. The strip is
+bounded on the left by the cyan "TURN" label and on the right by the "ターン"
+katakana suffix, so digits are only searched in the narrow window between the
+anchors (robust to NP overlays and future UI shifts).
+
+Required template stems (loaded by name, not via `cv.json`):
+
+- `text_turn_label` — cyan "TURN" label, left anchor.
+- `text_tan` — "ターン" katakana suffix, right anchor.
+- `digit_0` through `digit_9` — individual digit glyphs.
+
+Drop each as a tight, grayscale PNG under `resources/templates/` (no padding,
+no extension in the filename stem). Any missing `digit_N` simply means turns
+containing that digit currently return `null`; add the file and the pipeline
+picks it up on the next `load_templates` call — no code changes needed.
+Multi-digit turn numbers (10, 23, 100, …) are handled automatically: every
+non-overlapping hit inside the strip is kept via greedy NMS on x, then sorted
+and concatenated.
