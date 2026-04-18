@@ -32,6 +32,8 @@ pub enum Action {
     Equipment {
         id: String,
         skill: Option<String>,
+        #[serde(default)]
+        target: Option<String>,
     },
 }
 

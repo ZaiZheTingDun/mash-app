@@ -807,10 +807,16 @@ impl Runner {
         }
 
         for action in &turn.equipment_actions {
-            if let Action::Equipment { skill, .. } = action {
+            if let Action::Equipment { skill, target, .. } = action {
                 let Some(pos) = equipment_skill_position(skill.as_deref()) else {
                     continue;
                 };
+
+                self.emit("Battle", "打开御主技能面板");
+                if !self.tap_at("Battle", EQUIPMENT_BUTTON) {
+                    return;
+                }
+                thread::sleep(ACTION_DELAY);
 
                 self.emit(
                     "Battle",
@@ -823,6 +829,17 @@ impl Runner {
                     return;
                 }
                 thread::sleep(ACTION_DELAY);
+
+                if let Some(target_pos) = skill_target_position(target.as_deref()) {
+                    self.emit(
+                        "Battle",
+                        &format!("选择目标: {}", target.as_deref().unwrap_or("?")),
+                    );
+                    if !self.tap_at("Battle", target_pos) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+                }
             }
         }
     }

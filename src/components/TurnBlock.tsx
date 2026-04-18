@@ -152,13 +152,17 @@ function ServantActionRow({
 
 function EquipmentActionRow({
   action,
+  partyServants,
   onChange,
   onDelete,
 }: {
   action: EquipmentAction;
+  partyServants: (Servant | null)[];
   onChange: (a: EquipmentAction) => void;
   onDelete: () => void;
 }) {
+  const servantOpts = getServantOptions(partyServants);
+
   return (
     <Flex align="center" gap="2" className="action-row action-row-equipment">
       <Text size="2" className="action-label">
@@ -173,6 +177,21 @@ function EquipmentActionRow({
         {SKILLS.map((s) => (
           <option key={s} value={s}>
             {SKILL_LABELS[s]}
+          </option>
+        ))}
+      </select>
+      <Text size="2" className="action-label">
+        to
+      </Text>
+      <select
+        className="action-select"
+        value={action.target ?? ""}
+        onChange={(e) => onChange({ ...action, target: e.target.value || null })}
+      >
+        <option value="">-- None --</option>
+        {servantOpts.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
           </option>
         ))}
       </select>
@@ -274,6 +293,7 @@ export function TurnBlock({
       type: "equipment",
       id: `eq_${Date.now()}`,
       skill: null,
+      target: null,
     };
     onChange({
       ...turn,
@@ -378,6 +398,7 @@ export function TurnBlock({
           <EquipmentActionRow
             key={action.id}
             action={action}
+            partyServants={partyServants}
             onChange={(a) => updateEquipmentAction(i, a)}
             onDelete={() => deleteEquipmentAction(i)}
           />

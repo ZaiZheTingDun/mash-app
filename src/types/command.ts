@@ -10,6 +10,7 @@ export interface EquipmentAction {
   type: "equipment";
   id: string;
   skill: string | null;
+  target: string | null;
 }
 
 export interface AttackCard {
