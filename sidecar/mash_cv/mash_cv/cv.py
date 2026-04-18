@@ -28,6 +28,9 @@ stream frame is used):
 → {"cmd":"find_element_by_name","screen":"Battle","element":"attackButton"}
                                                     ← {"found":true,"x":0.82,"y":0.88,"score":0.89,"region":{...}}
 → {"cmd":"read_turn","region":{...}}                ← {"turn":1}     (or null if anchors miss)
+→ {"cmd":"find_noble_phantasms"}                    ← {"slots":[{"slot":0,"cardRegion":{...},
+                                                                  "ready":true,"edgeFrac":0.12,
+                                                                  "stdBgr":91.4}, ...]}
 """
 
 import base64
@@ -121,6 +124,31 @@ FACE_RESIZE_CARD_REL = 0.9
 # source portrait drives the score down. Keep only the upper N%, which is
 # the part that's reliably visible on every card.
 FACE_CROP_REL_H = 0.5
+
+
+# ---------------------------------------------------------------------------
+# Noble-Phantasm (NP) card layout
+# ---------------------------------------------------------------------------
+# The three NP card slots sit in the upper band of the attack screen —
+# one per front-line servant. A slot is occupied iff that servant's NP
+# gauge is at >= 100%; otherwise the slot is empty and the battle scene
+# shows through.
+#
+# Detection uses Canny edge density inside the slot rather than template
+# matching against the NP frame: the NP card is the only thing in this
+# region of the screen with a dense, geometric X-frame + face circle +
+# text glyphs (~12% edges). An empty slot shows the much smoother battle
+# background (~5% edges). The threshold sits comfortably between the two
+# clusters and is robust against scenes where the background happens to
+# be uniformly colorful (which would defeat a saturation-only check).
+DEFAULT_NP_CARD_SLOTS: tuple[dict, ...] = (
+    {"x": 0.241, "y": 0.097, "w": 0.187, "h": 0.396},
+    {"x": 0.410, "y": 0.097, "w": 0.187, "h": 0.396},
+    {"x": 0.603, "y": 0.097, "w": 0.187, "h": 0.396},
+)
+NP_READY_EDGE_THRESHOLD = 0.08
+NP_CANNY_LOW = 80
+NP_CANNY_HIGH = 160
 
 
 # ---------------------------------------------------------------------------
@@ -669,6 +697,57 @@ def _find_command_cards(
     return {"cards": cards}
 
 
+def _find_noble_phantasms(
+    img: np.ndarray,
+    np_regions: list[dict],
+    edge_threshold: float = NP_READY_EDGE_THRESHOLD,
+) -> dict:
+    """Report whether each fixed NP card slot currently holds a card.
+
+    For every slot in ``np_regions`` we crop the slot, compute Canny edge
+    density on its grayscale, and mark it ready iff the edge fraction
+    crosses ``edge_threshold``. ``stdBgr`` is also reported as a
+    corroborating signal so callers can re-tune from a debug UI without
+    code changes.
+
+    Returns one record per slot so callers can render every slot in a
+    debug overlay regardless of readiness.
+    """
+    h, w = img.shape[:2]
+    if h == 0 or w == 0 or not np_regions:
+        return {"slots": []}
+
+    slots: list[dict] = []
+    for slot, region in enumerate(np_regions):
+        slot_px = _slot_to_pixels(region, w, h)
+        sx, sy, sw, sh = slot_px
+        roi = img[sy : sy + sh, sx : sx + sw]
+
+        if roi.size == 0:
+            edge_frac = 0.0
+            std_bgr = 0.0
+        else:
+            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, NP_CANNY_LOW, NP_CANNY_HIGH)
+            edge_frac = float((edges > 0).mean())
+            std_bgr = float(roi.std())
+
+        slots.append({
+            "slot": slot,
+            "cardRegion": {
+                "x": sx / w,
+                "y": sy / h,
+                "w": sw / w,
+                "h": sh / h,
+            },
+            "ready": edge_frac >= edge_threshold,
+            "edgeFrac": edge_frac,
+            "stdBgr": std_bgr,
+        })
+
+    return {"slots": slots}
+
+
 # ---------------------------------------------------------------------------
 # Template / config loading
 # ---------------------------------------------------------------------------
@@ -935,6 +1014,22 @@ def main() -> None:
                         [int(s) for s in cmd.get("servantIds", []) if s is not None],
                         cmd.get("assetsDir"),
                         float(cmd.get("faceThreshold", 0.5)),
+                    ),
+                )
+        elif action == "find_noble_phantasms":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(req_id, {"slots": [], "error": err})
+            else:
+                regions = cmd.get("npRegions")
+                if not regions:
+                    regions = list(DEFAULT_NP_CARD_SLOTS)
+                _reply(
+                    req_id,
+                    _find_noble_phantasms(
+                        img,
+                        regions,
+                        float(cmd.get("edgeThreshold", NP_READY_EDGE_THRESHOLD)),
                     ),
                 )
         elif action == "find_region":

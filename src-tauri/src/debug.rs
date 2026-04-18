@@ -4,7 +4,9 @@ use std::sync::Mutex;
 
 use crate::adb;
 use crate::runner::{self, RunnerHandle, RunnerState};
-use crate::screen::{CommandCardMatch, ElementMatch, NormRect, SidecarClient};
+use crate::screen::{
+    CommandCardMatch, ElementMatch, NoblePhantasmMatch, NormRect, SidecarClient,
+};
 use crate::{
     app_data_dir, resolve_assets_dir, resolve_cv_config_path, resolve_scrcpy_jar,
     resolve_templates_dir, STREAM_BIT_RATE, STREAM_MAX_SIZE,
@@ -374,6 +376,38 @@ pub fn debug_find_command_cards(
     )?;
     eprintln!("[debug_find_command_cards] {} card(s) found", cards.len());
     Ok(cards)
+}
+
+/// Run the NP-readiness detector against the most recent debug screenshot.
+/// Returns one record per Noble Phantasm card slot, each with a
+/// ``ready`` flag plus the underlying edge-density / std measurements
+/// for tuning.
+#[tauri::command]
+pub fn debug_find_noble_phantasms(
+    app: tauri::AppHandle,
+    debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+) -> Result<Vec<NoblePhantasmMatch>, String> {
+    require_automation_idle(&handle_state)?;
+
+    let image_path = debug_image_path(&app);
+    if !image_path.exists() {
+        return Err("尚未截取画面，请先点击 截取画面".into());
+    }
+
+    ensure_debug_sidecar(&app, &debug_state)?;
+
+    let mut guard = debug_state.0.lock().unwrap();
+    let client = guard
+        .as_mut()
+        .ok_or_else(|| "debug sidecar not initialized".to_string())?;
+    let slots = client.find_noble_phantasms(Some(&image_path), None)?;
+    eprintln!(
+        "[debug_find_noble_phantasms] {} slot(s) found, ready={}",
+        slots.len(),
+        slots.iter().filter(|s| s.ready).count(),
+    );
+    Ok(slots)
 }
 
 /// List every servant id under ``assets/`` that has at least one

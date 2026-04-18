@@ -464,6 +464,7 @@ pub fn run() {
             debug::debug_shutdown,
             debug::debug_get_runner_coordinates,
             debug::debug_find_command_cards,
+            debug::debug_find_noble_phantasms,
             debug::debug_list_servant_assets,
             debug::warm_sidecar,
         ])

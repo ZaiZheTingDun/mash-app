@@ -82,6 +82,22 @@ pub struct CommandCardMatch {
     pub face_score: Option<f64>,
 }
 
+/// Result of NP-readiness detection for a single Noble Phantasm card slot.
+///
+/// One record is returned per slot regardless of readiness so callers can
+/// render every slot in a debug overlay. ``ready`` is the primary signal;
+/// ``edge_frac`` and ``std_bgr`` expose the underlying measurements so
+/// thresholds can be re-tuned from the debug UI without code changes.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoblePhantasmMatch {
+    pub slot: u32,
+    pub card_region: NormRect,
+    pub ready: bool,
+    pub edge_frac: f64,
+    pub std_bgr: f64,
+}
+
 // ---------------------------------------------------------------------------
 // Screen enum
 // ---------------------------------------------------------------------------
@@ -517,6 +533,47 @@ impl SidecarClient {
             .ok_or_else(|| "find_command_cards: response missing 'cards'".to_string())?;
         serde_json::from_value::<Vec<CommandCardMatch>>(cards.clone())
             .map_err(|e| format!("invalid command-card response: {e}"))
+    }
+
+    /// Report whether each fixed Noble Phantasm card slot currently holds
+    /// a card. ``np_regions`` overrides the sidecar's built-in three-slot
+    /// layout — pass ``None`` to use the defaults.
+    pub fn find_noble_phantasms(
+        &mut self,
+        image_path: Option<&Path>,
+        np_regions: Option<&[NormRect]>,
+    ) -> Result<Vec<NoblePhantasmMatch>, String> {
+        let mut req = serde_json::json!({
+            "cmd": "find_noble_phantasms",
+        });
+        if let Some(regions) = np_regions {
+            if let Some(obj) = req.as_object_mut() {
+                obj.insert(
+                    "npRegions".into(),
+                    serde_json::Value::Array(
+                        regions
+                            .iter()
+                            .map(|r| {
+                                serde_json::json!({
+                                    "x": r.x, "y": r.y, "w": r.w, "h": r.h,
+                                })
+                            })
+                            .collect(),
+                    ),
+                );
+            }
+        }
+        Self::add_image_path(&mut req, image_path);
+
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(err.to_string());
+        }
+        let slots = resp
+            .get("slots")
+            .ok_or_else(|| "find_noble_phantasms: response missing 'slots'".to_string())?;
+        serde_json::from_value::<Vec<NoblePhantasmMatch>>(slots.clone())
+            .map_err(|e| format!("invalid noble-phantasm response: {e}"))
     }
 
     /// Read the current turn number from the battle screen.

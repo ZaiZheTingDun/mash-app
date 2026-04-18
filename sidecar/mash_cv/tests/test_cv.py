@@ -506,6 +506,81 @@ class TestFindCommandCards:
         assert c.shape == (expected_h2, 80)
 
 
+class TestFindNoblePhantasms:
+    """Exercise the NP readiness detector against a real attack-screen
+    capture. Detection is structural (Canny edge density inside the slot)
+    and requires no templates or assets."""
+
+    def test_returns_empty_when_no_regions(self):
+        img = _make_bgr_image(2560, 1440)
+        result = mash_cv._find_noble_phantasms(img, [])
+        assert result == {"slots": []}
+
+    def test_blank_image_marks_all_empty(self):
+        """A flat-colour image has zero edges, so no slot is ready."""
+        img = _make_bgr_image(2560, 1440, bgr=(20, 20, 20))
+        result = mash_cv._find_noble_phantasms(
+            img, list(mash_cv.DEFAULT_NP_CARD_SLOTS)
+        )
+        assert len(result["slots"]) == 3
+        for slot, s in enumerate(result["slots"]):
+            assert s["slot"] == slot
+            assert "cardRegion" in s
+            assert s["ready"] is False
+            assert s["edgeFrac"] == pytest.approx(0.0, abs=1e-6)
+            assert s["stdBgr"] == pytest.approx(0.0, abs=1e-6)
+
+    def test_returns_three_slots_with_correct_ready_flags(self):
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "noble_debug.png"))
+        assert img is not None, "noble_debug.png fixture missing"
+
+        result = mash_cv._find_noble_phantasms(
+            img, list(mash_cv.DEFAULT_NP_CARD_SLOTS)
+        )
+        slots = result["slots"]
+        assert len(slots) == 3
+
+        ready_flags = [s["ready"] for s in slots]
+        assert ready_flags == [True, True, False]
+
+        # Calibration sanity: the two ready slots have substantially more
+        # edge structure than the empty one. Use loose thresholds so minor
+        # OpenCV/Canny tweaks don't invalidate the test.
+        assert slots[0]["edgeFrac"] > 0.10
+        assert slots[1]["edgeFrac"] > 0.10
+        assert slots[2]["edgeFrac"] < 0.07
+
+        # Card regions are returned in the same order as the input slots
+        # and span sensible portions of the screen.
+        for slot, s in enumerate(slots):
+            assert s["slot"] == slot
+            box = s["cardRegion"]
+            assert 0.0 <= box["x"] < 1.0
+            assert 0.0 <= box["y"] < 1.0
+            assert 0.0 < box["w"] <= 1.0
+            assert 0.0 < box["h"] <= 1.0
+
+    def test_threshold_override_marks_all_empty(self):
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "noble_debug.png"))
+        assert img is not None
+        result = mash_cv._find_noble_phantasms(
+            img, list(mash_cv.DEFAULT_NP_CARD_SLOTS), edge_threshold=0.99
+        )
+        assert all(s["ready"] is False for s in result["slots"])
+
+    def test_custom_regions_passthrough(self):
+        img = _make_bgr_image(2560, 1440)
+        custom = [{"x": 0.10, "y": 0.20, "w": 0.05, "h": 0.05}]
+        result = mash_cv._find_noble_phantasms(img, custom)
+        assert len(result["slots"]) == 1
+        box = result["slots"][0]["cardRegion"]
+        # Snap to integer pixel boundaries so allow a tiny tolerance.
+        assert box["x"] == pytest.approx(0.10, abs=1e-3)
+        assert box["y"] == pytest.approx(0.20, abs=1e-3)
+        assert box["w"] == pytest.approx(0.05, abs=1e-3)
+        assert box["h"] == pytest.approx(0.05, abs=1e-3)
+
+
 # ── Integration: subprocess REPL ────────────────────────────────────────
 
 

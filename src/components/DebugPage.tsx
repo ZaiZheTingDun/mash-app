@@ -78,6 +78,14 @@ interface CommandCardMatchDto {
   faceScore?: number;
 }
 
+interface NoblePhantasmMatchDto {
+  slot: number;
+  cardRegion: NormRectDto;
+  ready: boolean;
+  edgeFrac: number;
+  stdBgr: number;
+}
+
 interface LogEntry {
   time: string;
   level: "info" | "warn" | "error";
@@ -128,6 +136,10 @@ export function DebugPage({ onBack }: DebugPageProps) {
   const [cardServantInput, setCardServantInput] = useState("");
   const [commandCards, setCommandCards] = useState<CommandCardMatchDto[]>([]);
   const [findingCards, setFindingCards] = useState(false);
+  const [noblePhantasms, setNoblePhantasms] = useState<NoblePhantasmMatchDto[]>(
+    []
+  );
+  const [findingNps, setFindingNps] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const didShutdown = useRef(false);
 
@@ -384,6 +396,30 @@ export function DebugPage({ onBack }: DebugPageProps) {
     }
   }, [capture, parsedCardServantIds, log]);
 
+  const handleFindNoblePhantasms = useCallback(async () => {
+    if (!capture) return;
+    setFindingNps(true);
+    log("调用 debug_find_noble_phantasms");
+    try {
+      const slots = await invoke<NoblePhantasmMatchDto[]>(
+        "debug_find_noble_phantasms"
+      );
+      setNoblePhantasms(slots);
+      const readyCount = slots.filter((s) => s.ready).length;
+      const summary = slots
+        .map(
+          (s) =>
+            `NP${s.slot + 1}:${s.ready ? "有" : "无"}(${(s.edgeFrac * 100).toFixed(1)}%)`
+        )
+        .join("  ");
+      log(`识别到 ${readyCount}/${slots.length} 张宝具卡 | ${summary}`);
+    } catch (err) {
+      log(`debug_find_noble_phantasms 失败: ${err}`, "error");
+    } finally {
+      setFindingNps(false);
+    }
+  }, [capture, log]);
+
   const handleUseAllAvailableIds = useCallback(() => {
     setCardServantInput(availableServantIds.join(", "));
   }, [availableServantIds]);
@@ -590,6 +626,13 @@ export function DebugPage({ onBack }: DebugPageProps) {
             >
               {findingCards ? "识别中…" : "识别指令卡"}
             </button>
+            <button
+              className="battle-btn battle-btn-start debug-btn-small"
+              disabled={findingNps || !capture}
+              onClick={handleFindNoblePhantasms}
+            >
+              {findingNps ? "识别中…" : "识别宝具卡"}
+            </button>
           </Flex>
 
           <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
@@ -700,6 +743,28 @@ export function DebugPage({ onBack }: DebugPageProps) {
                   }
                   return overlays;
                 })}
+                {noblePhantasms.map((s) => (
+                  <Box
+                    key={`np-slot-${s.slot}`}
+                    className={`debug-overlay-box ${
+                      s.ready
+                        ? "debug-overlay-np-ready"
+                        : "debug-overlay-np-empty"
+                    }`}
+                    style={{
+                      left: `${s.cardRegion.x * 100}%`,
+                      top: `${s.cardRegion.y * 100}%`,
+                      width: `${s.cardRegion.w * 100}%`,
+                      height: `${s.cardRegion.h * 100}%`,
+                    }}
+                  >
+                    <span className="debug-overlay-label">
+                      NP{s.slot + 1} · {s.ready ? "ready" : "empty"} · edge{" "}
+                      {(s.edgeFrac * 100).toFixed(1)}% · std{" "}
+                      {s.stdBgr.toFixed(0)}
+                    </span>
+                  </Box>
+                ))}
                 {showCoordOverlay &&
                   coordinates?.groups
                     .filter((g) => visibleCoordGroups.has(g.id))
@@ -874,6 +939,39 @@ export function DebugPage({ onBack }: DebugPageProps) {
                   )}
                   <Text size="1" color="gray">
                     中心 ({c.x.toFixed(3)}, {c.y.toFixed(3)})
+                  </Text>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+
+          <Box>
+            <Text size="1" color="gray" className="debug-side-label">
+              宝具卡识别 ({noblePhantasms.filter((s) => s.ready).length}/
+              {noblePhantasms.length})
+            </Text>
+            <Box className="debug-match-list">
+              {noblePhantasms.length === 0 && (
+                <Text size="1" color="gray">
+                  暂无识别结果
+                </Text>
+              )}
+              {noblePhantasms.map((s) => (
+                <Box
+                  key={`np-row-${s.slot}`}
+                  className={`debug-match-entry ${s.ready ? "found" : "missed"}`}
+                >
+                  <Flex justify="between" align="center">
+                    <Text size="2" weight="medium">
+                      NP{s.slot + 1}
+                    </Text>
+                    <Text size="1" color={s.ready ? "green" : "gray"}>
+                      {s.ready ? "ready" : "empty"}
+                    </Text>
+                  </Flex>
+                  <Text size="1" color="gray">
+                    edge {(s.edgeFrac * 100).toFixed(2)}% · std{" "}
+                    {s.stdBgr.toFixed(1)}
                   </Text>
                 </Box>
               ))}

@@ -1095,6 +1095,24 @@ body,
   background: rgba(255, 170, 0, 0.08);
 }
 
+.debug-overlay-np-ready {
+  border: 2px solid var(--green-9);
+  background: rgba(0, 200, 80, 0.1);
+}
+
+.debug-overlay-np-ready > .debug-overlay-label {
+  background: var(--green-9);
+}
+
+.debug-overlay-np-empty {
+  border: 2px dashed var(--gray-9);
+  background: rgba(120, 120, 120, 0.1);
+}
+
+.debug-overlay-np-empty > .debug-overlay-label {
+  background: var(--gray-9);
+}
+
 .debug-coord-toggle {
   display: inline-flex;
   align-items: center;
