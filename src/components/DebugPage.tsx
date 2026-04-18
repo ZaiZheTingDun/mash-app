@@ -64,6 +64,20 @@ interface RunnerCoordinatesDto {
   groups: CoordGroupDto[];
 }
 
+interface CommandCardMatchDto {
+  slot: number;
+  x: number;
+  y: number;
+  cardRegion: NormRectDto;
+  faceRegion: NormRectDto;
+  suit?: "a" | "b" | "q";
+  iconScore?: number;
+  iconRegion?: NormRectDto;
+  servantId?: number;
+  ascension?: number;
+  faceScore?: number;
+}
+
 interface LogEntry {
   time: string;
   level: "info" | "warn" | "error";
@@ -109,6 +123,11 @@ export function DebugPage({ onBack }: DebugPageProps) {
   const [visibleCoordGroups, setVisibleCoordGroups] = useState<Set<string>>(
     new Set()
   );
+
+  const [availableServantIds, setAvailableServantIds] = useState<number[]>([]);
+  const [cardServantInput, setCardServantInput] = useState("");
+  const [commandCards, setCommandCards] = useState<CommandCardMatchDto[]>([]);
+  const [findingCards, setFindingCards] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const didShutdown = useRef(false);
 
@@ -149,6 +168,18 @@ export function DebugPage({ onBack }: DebugPageProps) {
     }
   }, [log]);
 
+  const loadAvailableServantIds = useCallback(async () => {
+    try {
+      const ids = await invoke<number[]>("debug_list_servant_assets");
+      setAvailableServantIds(ids);
+      log(
+        `已加载 ${ids.length} 个从者素材${ids.length > 0 ? ": " + ids.slice(0, 8).join(", ") + (ids.length > 8 ? " …" : "") : ""}`
+      );
+    } catch (err) {
+      log(`读取从者素材失败: ${err}`, "error");
+    }
+  }, [log]);
+
   const loadCoordinates = useCallback(async () => {
     try {
       const coords = await invoke<RunnerCoordinatesDto>(
@@ -168,6 +199,7 @@ export function DebugPage({ onBack }: DebugPageProps) {
     loadConfig();
     loadTemplateList();
     loadCoordinates();
+    loadAvailableServantIds();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -215,6 +247,7 @@ export function DebugPage({ onBack }: DebugPageProps) {
       setCapture(result);
       setCacheBuster(Date.now());
       setProbes([]);
+      setCommandCards([]);
       setImgNaturalSize(null);
       log(
         `截图成功 | 画面 = ${result.screen} (score=${result.score.toFixed(3)})` +
@@ -302,8 +335,58 @@ export function DebugPage({ onBack }: DebugPageProps) {
 
   const handleClearOverlays = useCallback(() => {
     setProbes([]);
+    setCommandCards([]);
     log("已清除标注");
   }, [log]);
+
+  const parsedCardServantIds = useMemo<number[]>(() => {
+    const seen = new Set<number>();
+    const out: number[] = [];
+    for (const tok of cardServantInput.split(/[\s,，]+/)) {
+      const n = Number(tok.trim());
+      if (Number.isFinite(n) && n > 0 && !seen.has(n)) {
+        seen.add(n);
+        out.push(n);
+      }
+    }
+    return out;
+  }, [cardServantInput]);
+
+  const handleFindCommandCards = useCallback(async () => {
+    if (!capture) return;
+    setFindingCards(true);
+    log(
+      `调用 debug_find_command_cards (servantIds=[${parsedCardServantIds.join(", ")}])`
+    );
+    try {
+      const cards = await invoke<CommandCardMatchDto[]>(
+        "debug_find_command_cards",
+        { servantIds: parsedCardServantIds }
+      );
+      setCommandCards(cards);
+      if (cards.length === 0) {
+        log("未识别到指令卡 — 检查截图是否为攻击画面", "warn");
+      } else {
+        const summary = cards
+          .map((c) => {
+            const ident = c.servantId
+              ? ` ${c.servantId}@${c.ascension ?? "?"}(${(c.faceScore ?? 0).toFixed(2)})`
+              : "";
+            return `C${c.slot + 1}:${c.suit}${ident}`;
+          })
+          .join("  ");
+        log(`识别到 ${cards.length} 张指令卡 | ${summary}`);
+      }
+    } catch (err) {
+      log(`debug_find_command_cards 失败: ${err}`, "error");
+    } finally {
+      setFindingCards(false);
+    }
+  }, [capture, parsedCardServantIds, log]);
+
+  const handleUseAllAvailableIds = useCallback(() => {
+    setCardServantInput(availableServantIds.join(", "));
+  }, [availableServantIds]);
 
   const handleClearLogs = useCallback(() => setLogs([]), []);
 
@@ -482,6 +565,34 @@ export function DebugPage({ onBack }: DebugPageProps) {
           </Flex>
 
           <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
+            <Text size="1" color="gray">
+              指令卡识别
+            </Text>
+            <input
+              className="debug-input"
+              placeholder="候选从者 id (逗号分隔，可留空只定位卡槽)"
+              value={cardServantInput}
+              onChange={(e) => setCardServantInput(e.target.value)}
+              style={{ flex: 1, minWidth: 240 }}
+            />
+            <button
+              className="battle-btn battle-btn-start debug-btn-small"
+              disabled={availableServantIds.length === 0}
+              onClick={handleUseAllAvailableIds}
+              title={`填入全部 ${availableServantIds.length} 个有素材的从者 id`}
+            >
+              全选 ({availableServantIds.length})
+            </button>
+            <button
+              className="battle-btn battle-btn-start debug-btn-small"
+              disabled={findingCards || !capture}
+              onClick={handleFindCommandCards}
+            >
+              {findingCards ? "识别中…" : "识别指令卡"}
+            </button>
+          </Flex>
+
+          <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
             <label className="debug-coord-toggle">
               <input
                 type="checkbox"
@@ -540,6 +651,55 @@ export function DebugPage({ onBack }: DebugPageProps) {
                     </Box>
                   ) : null
                 )}
+                {commandCards.flatMap((c) => {
+                  const overlays = [
+                    <Box
+                      key={`card-face-${c.slot}`}
+                      className="debug-overlay-box debug-overlay-face"
+                      style={{
+                        left: `${c.faceRegion.x * 100}%`,
+                        top: `${c.faceRegion.y * 100}%`,
+                        width: `${c.faceRegion.w * 100}%`,
+                        height: `${c.faceRegion.h * 100}%`,
+                      }}
+                    />,
+                    <Box
+                      key={`card-slot-${c.slot}`}
+                      className="debug-overlay-box debug-overlay-card"
+                      style={{
+                        left: `${c.cardRegion.x * 100}%`,
+                        top: `${c.cardRegion.y * 100}%`,
+                        width: `${c.cardRegion.w * 100}%`,
+                        height: `${c.cardRegion.h * 100}%`,
+                      }}
+                    >
+                      <span className="debug-overlay-label">
+                        C{c.slot + 1}
+                        {c.suit ? `·${c.suit.toUpperCase()}` : ""}
+                        {c.servantId !== undefined
+                          ? ` · ${c.servantId}@${c.ascension ?? "?"} (${(c.faceScore ?? 0).toFixed(2)})`
+                          : c.iconScore !== undefined
+                            ? ` · ${c.iconScore.toFixed(2)}`
+                            : ""}
+                      </span>
+                    </Box>,
+                  ];
+                  if (c.iconRegion) {
+                    overlays.push(
+                      <Box
+                        key={`card-icon-${c.slot}`}
+                        className="debug-overlay-box debug-overlay-icon"
+                        style={{
+                          left: `${c.iconRegion.x * 100}%`,
+                          top: `${c.iconRegion.y * 100}%`,
+                          width: `${c.iconRegion.w * 100}%`,
+                          height: `${c.iconRegion.h * 100}%`,
+                        }}
+                      />
+                    );
+                  }
+                  return overlays;
+                })}
                 {showCoordOverlay &&
                   coordinates?.groups
                     .filter((g) => visibleCoordGroups.has(g.id))
@@ -675,6 +835,50 @@ export function DebugPage({ onBack }: DebugPageProps) {
               </Box>
             </Box>
           )}
+
+          <Box>
+            <Text size="1" color="gray" className="debug-side-label">
+              指令卡识别 ({commandCards.length})
+            </Text>
+            <Box className="debug-match-list">
+              {commandCards.length === 0 && (
+                <Text size="1" color="gray">
+                  暂无识别结果
+                </Text>
+              )}
+              {commandCards.map((c) => (
+                <Box
+                  key={`card-row-${c.slot}`}
+                  className={`debug-match-entry ${c.servantId !== undefined ? "found" : "missed"}`}
+                >
+                  <Flex justify="between" align="center">
+                    <Text size="2" weight="medium">
+                      C{c.slot + 1}
+                      {c.suit ? ` · ${c.suit.toUpperCase()}` : " · ?"}
+                    </Text>
+                    <Text size="1" color="gray">
+                      {c.iconScore !== undefined
+                        ? `icon ${c.iconScore.toFixed(3)}`
+                        : "无图标"}
+                    </Text>
+                  </Flex>
+                  {c.servantId !== undefined ? (
+                    <Text size="1" color="green">
+                      从者 {c.servantId} · 进阶 {c.ascension ?? "?"} · face{" "}
+                      {(c.faceScore ?? 0).toFixed(3)}
+                    </Text>
+                  ) : (
+                    <Text size="1" color="gray">
+                      未识别从者
+                    </Text>
+                  )}
+                  <Text size="1" color="gray">
+                    中心 ({c.x.toFixed(3)}, {c.y.toFixed(3)})
+                  </Text>
+                </Box>
+              ))}
+            </Box>
+          </Box>
 
           <Box>
             <Text size="1" color="gray" className="debug-side-label">

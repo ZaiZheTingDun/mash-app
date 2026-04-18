@@ -396,6 +396,31 @@ pub(crate) fn resolve_scrcpy_jar(app: &tauri::AppHandle) -> Option<PathBuf> {
     Some(base.join("resources").join("scrcpy").join("scrcpy-server.jar"))
 }
 
+/// Resolve the per-servant assets directory (containing
+/// `{servant_id}/card_servant_*.png`). This dir is intentionally NOT
+/// bundled into the app yet (production bundling is a future decision);
+/// in dev we read it directly from the source tree.
+///
+/// Lookup order:
+/// 1. `<resource_dir>/assets/` — present once the user opts to bundle it.
+/// 2. `<CARGO_MANIFEST_DIR>/assets/` — the dev-time source location.
+///
+/// Returns ``None`` if neither exists; callers should treat that as
+/// "no per-servant identification available" rather than an error.
+pub(crate) fn resolve_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    if let Ok(base) = app.path().resource_dir() {
+        let bundled = base.join("assets");
+        if bundled.is_dir() {
+            return Some(bundled);
+        }
+    }
+    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+    if dev.is_dir() {
+        return Some(dev);
+    }
+    None
+}
+
 /// Resolve the bundled mash-cv sidecar executable path. The sidecar is shipped
 /// as a PyInstaller --onedir directory under `binaries/mash-cv/` (containing
 /// the executable and a sibling `_internal/` directory).
@@ -438,6 +463,8 @@ pub fn run() {
             debug::debug_reload_sidecar,
             debug::debug_shutdown,
             debug::debug_get_runner_coordinates,
+            debug::debug_find_command_cards,
+            debug::debug_list_servant_assets,
             debug::warm_sidecar,
         ])
         .run(tauri::generate_context!())

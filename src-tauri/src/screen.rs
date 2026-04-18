@@ -47,6 +47,41 @@ pub struct ElementMatch {
     pub region: Option<NormRect>,
 }
 
+/// One detected command-card slot on the attack screen.
+///
+/// The five slot bboxes are fixed positions (configured in the Python
+/// sidecar's ``DEFAULT_COMMAND_CARD_SLOTS``) and always present in the
+/// response. ``suit`` / ``icon_*`` are filled in when at least one suit
+/// icon template scores inside the slot. ``servant_id`` / ``ascension``
+/// / ``face_score`` are populated only when the caller passes a non-empty
+/// candidate list **and** an assets directory containing
+/// ``{id}/card_servant_*.png`` files.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandCardMatch {
+    pub slot: u32,
+    /// Tap point (slot center) in normalized coordinates.
+    pub x: f64,
+    pub y: f64,
+    /// The slot bbox itself.
+    pub card_region: NormRect,
+    /// Upper-portion of the slot used as the face-template search area.
+    pub face_region: NormRect,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Suit code: ``"a"`` (Arts), ``"b"`` (Buster), or ``"q"`` (Quick).
+    pub suit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon_score: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon_region: Option<NormRect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub servant_id: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ascension: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face_score: Option<f64>,
+}
+
 // ---------------------------------------------------------------------------
 // Screen enum
 // ---------------------------------------------------------------------------
@@ -425,6 +460,63 @@ impl SidecarClient {
             score,
             region,
         })
+    }
+
+    /// Identify the suit and (optionally) servant occupying each fixed
+    /// command-card slot on the attack screen.
+    ///
+    /// ``card_regions`` overrides the sidecar's built-in five-slot layout
+    /// — pass ``None`` to use the defaults. ``assets_dir`` must contain
+    /// ``{servant_id}/card_servant_*.png`` for identification to succeed;
+    /// when missing or empty, only suit + slot position are returned.
+    pub fn find_command_cards(
+        &mut self,
+        image_path: Option<&Path>,
+        card_regions: Option<&[NormRect]>,
+        servant_ids: &[u32],
+        assets_dir: Option<&Path>,
+    ) -> Result<Vec<CommandCardMatch>, String> {
+        let mut req = serde_json::json!({
+            "cmd": "find_command_cards",
+            "servantIds": servant_ids,
+        });
+        if let Some(regions) = card_regions {
+            if let Some(obj) = req.as_object_mut() {
+                obj.insert(
+                    "cardRegions".into(),
+                    serde_json::Value::Array(
+                        regions
+                            .iter()
+                            .map(|r| {
+                                serde_json::json!({
+                                    "x": r.x, "y": r.y, "w": r.w, "h": r.h,
+                                })
+                            })
+                            .collect(),
+                    ),
+                );
+            }
+        }
+        if let Some(dir) = assets_dir {
+            if let Some(obj) = req.as_object_mut() {
+                obj.insert(
+                    "assetsDir".into(),
+                    serde_json::Value::String(dir.to_string_lossy().into_owned()),
+                );
+            }
+        }
+        Self::add_image_path(&mut req, image_path);
+
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            // Sidecar reports a missing frame / bad path here. Surface it.
+            return Err(err.to_string());
+        }
+        let cards = resp
+            .get("cards")
+            .ok_or_else(|| "find_command_cards: response missing 'cards'".to_string())?;
+        serde_json::from_value::<Vec<CommandCardMatch>>(cards.clone())
+            .map_err(|e| format!("invalid command-card response: {e}"))
     }
 
     /// Read the current turn number from the battle screen.

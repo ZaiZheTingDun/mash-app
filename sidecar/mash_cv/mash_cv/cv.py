@@ -54,6 +54,9 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 templates: dict[str, np.ndarray] = {}
+# Last directory passed to ``_load_templates``. Used by ``_ensure_icon_cache``
+# to re-read RGBA icons with their alpha mask preserved.
+templates_dir: Optional[str] = None
 config: dict = {"screens": {}}
 # Populated once start_stream succeeds. The stream module is imported lazily
 # inside _start_stream so tests that never touch the stream don't pay PyAV's
@@ -62,6 +65,62 @@ config: dict = {"screens": {}}
 stream: Optional["ScrcpyStream"] = None
 
 DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
+
+# ---------------------------------------------------------------------------
+# Command-card layout
+# ---------------------------------------------------------------------------
+# The five attack-screen card slots live at fixed positions on the device
+# (calibrated against 2560x1440 BlueStacks captures via the `region` tool).
+# Detection is therefore a per-slot lookup rather than an icon NMS sweep:
+# for every slot we (a) pick the suit whose icon template scores highest
+# inside the slot, and (b) match candidate servant faces inside the slot's
+# upper portion.
+#
+# Override at runtime by passing ``cardRegions`` in the ``find_command_cards``
+# command if a future device reports different coordinates.
+DEFAULT_COMMAND_CARD_SLOTS: tuple[dict, ...] = (
+    {"x": 0.011, "y": 0.483, "w": 0.189, "h": 0.408},
+    {"x": 0.206, "y": 0.491, "w": 0.189, "h": 0.408},
+    {"x": 0.411, "y": 0.489, "w": 0.189, "h": 0.408},
+    {"x": 0.607, "y": 0.499, "w": 0.189, "h": 0.408},
+    {"x": 0.814, "y": 0.489, "w": 0.189, "h": 0.408},
+)
+
+# Suits we consider for each slot. Ordering only matters as a deterministic
+# tie-breaker if two suits score identically (extremely unlikely).
+COMMAND_CARD_SUITS = ("a", "b", "q")
+
+# Suit classification works by color, not template-matching. The three
+# icon templates share the same X-shape and only differ by hue + a small
+# embedded letter, so masked grayscale TM_CCOEFF_NORMED scores them
+# nearly identically (and finds the X at noisy positions). Instead we
+# compute a saturation-weighted mean BGR over the lower portion of each
+# slot (where the colored suit ribbon + icon dominate, away from the
+# muted face circle) and pick the suit whose pre-computed template-color
+# signature has the highest cosine similarity.
+SUIT_SAMPLE_REL_Y = 0.5  # start sampling at 50% down the slot
+SUIT_SAMPLE_REL_H = 0.5  # ... continue through the bottom edge
+
+# Face-template search window expressed as a fraction of the slot bbox.
+# The suit-icon overlay sits in the lower ~35% of the card, so confining
+# the face search to the upper portion both avoids spurious matches and
+# halves the matchTemplate work per candidate servant.
+FACE_SEARCH_REL_Y = 0.0
+FACE_SEARCH_REL_H = 0.65
+FACE_SEARCH_REL_X = 0.0
+FACE_SEARCH_REL_W = 1.0
+
+# Resize the source face PNG to this fraction of the slot width before
+# template-matching. The on-screen face circle takes up roughly the full
+# card width minus the rounded border.
+FACE_RESIZE_CARD_REL = 0.9
+
+# Crop the source face PNG to its top portion before matching. The bottom
+# of the on-screen face circle is occluded by the suit icon overlay and
+# the command text — comparing those occluded pixels against the full
+# source portrait drives the score down. Keep only the upper N%, which is
+# the part that's reliably visible on every card.
+FACE_CROP_REL_H = 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -262,12 +321,363 @@ def _read_turn(img: np.ndarray, region: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Command-card detection
+# ---------------------------------------------------------------------------
+
+# Cache: maps (path, target_size) -> grayscale ndarray. Populated lazily on
+# the first servant-id lookup so a 300-servant assets dir doesn't pay any
+# cost upfront. Resized variants are cached separately because the on-screen
+# face size is derived from the icon match and varies slightly between
+# devices.
+_face_cache: dict[tuple[str, int], np.ndarray] = {}
+
+# Per-suit BGR signature: mean color of the opaque template pixels.
+# Populated by ``_ensure_icon_color_sigs`` from the RGBA icon PNGs and
+# consumed by ``_classify_suit_in_slot``. Cosine similarity against the
+# slot's saturation-weighted mean BGR picks the suit.
+_icon_color_sig: dict[str, np.ndarray] = {}
+
+
+def _ensure_icon_color_sigs(templates_dir_hint: Optional[str] = None) -> None:
+    """Populate :data:`_icon_color_sig` from the RGBA suit-icon templates.
+
+    ``_load_templates`` stores grayscale versions and discards alpha + color,
+    both of which are needed here. We re-read the original PNGs with
+    ``IMREAD_UNCHANGED`` once and remember the mean BGR of every opaque
+    pixel for each suit.
+    """
+    if all(suit in _icon_color_sig for suit in COMMAND_CARD_SUITS):
+        return
+
+    candidate_dirs: list[str] = []
+    if templates_dir_hint and os.path.isdir(templates_dir_hint):
+        candidate_dirs.append(templates_dir_hint)
+
+    for suit in COMMAND_CARD_SUITS:
+        if suit in _icon_color_sig:
+            continue
+        path = None
+        for d in candidate_dirs:
+            cand = os.path.join(d, f"command_icon_{suit}.png")
+            if os.path.isfile(cand):
+                path = cand
+                break
+        if path is None:
+            continue
+        raw = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        if raw is None:
+            continue
+        if raw.ndim == 3 and raw.shape[2] == 4:
+            bgr = raw[:, :, :3]
+            opaque = raw[:, :, 3] > 128
+        elif raw.ndim == 3:
+            bgr = raw
+            opaque = np.ones(raw.shape[:2], dtype=bool)
+        else:
+            # Single-channel template — degenerate, skip color sig.
+            continue
+        if not opaque.any():
+            continue
+        _icon_color_sig[suit] = bgr[opaque].mean(axis=0).astype(np.float32)
+
+
+def _list_servant_face_files(assets_dir: str, servant_id: int) -> list[str]:
+    """Return absolute paths of every ``card_servant_*.png`` under
+    ``{assets_dir}/{servant_id}/``. Returns ``[]`` if the folder is missing
+    so callers can iterate the full candidate list without try/except."""
+    folder = os.path.join(assets_dir, str(servant_id))
+    if not os.path.isdir(folder):
+        return []
+    out: list[str] = []
+    for name in sorted(os.listdir(folder)):
+        if name.startswith("card_servant_") and name.lower().endswith(".png"):
+            out.append(os.path.join(folder, name))
+    return out
+
+
+def _load_face_template(path: str, target_w: int) -> Optional[np.ndarray]:
+    """Load, top-crop, and grayscale-resize a servant face PNG.
+
+    The result is the upper :data:`FACE_CROP_REL_H` fraction of the source
+    portrait, scaled so its width is ``target_w`` while preserving the
+    crop's aspect ratio (so the returned shape is ``(target_w *
+    FACE_CROP_REL_H, target_w)``). Cached per ``(path, target_w)`` pair.
+    """
+    key = (path, target_w)
+    cached = _face_cache.get(key)
+    if cached is not None:
+        return cached
+
+    img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    if img is None:
+        return None
+    if img.ndim == 3 and img.shape[2] == 4:
+        # Composite onto a black background so transparent corners don't
+        # bleed into the matched score (the in-game card has dark blue bg
+        # behind the face circle, but black is close enough for matching).
+        bgr = img[:, :, :3]
+        alpha = img[:, :, 3:4].astype(np.float32) / 255.0
+        composed = (bgr.astype(np.float32) * alpha).astype(np.uint8)
+        gray = cv2.cvtColor(composed, cv2.COLOR_BGR2GRAY)
+    elif img.ndim == 3:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = img
+
+    crop_h = max(1, int(round(gray.shape[0] * FACE_CROP_REL_H)))
+    gray = gray[:crop_h, :]
+
+    if target_w > 0 and gray.shape[1] != target_w:
+        target_h = max(1, int(round(target_w * gray.shape[0] / gray.shape[1])))
+        gray = cv2.resize(gray, (target_w, target_h), interpolation=cv2.INTER_AREA)
+    _face_cache[key] = gray
+    return gray
+
+
+def _slot_to_pixels(
+    slot: dict, img_w: int, img_h: int
+) -> tuple[int, int, int, int]:
+    """Convert a normalized slot bbox to integer pixel ``(x, y, w, h)``,
+    clipped to the image bounds and guaranteed to be at least 1x1."""
+    sx = max(0, min(int(round(slot["x"] * img_w)), img_w - 1))
+    sy = max(0, min(int(round(slot["y"] * img_h)), img_h - 1))
+    sw = max(1, min(int(round(slot["w"] * img_w)), img_w - sx))
+    sh = max(1, min(int(round(slot["h"] * img_h)), img_h - sy))
+    return sx, sy, sw, sh
+
+
+def _suit_sample_bbox(
+    slot_px: tuple[int, int, int, int]
+) -> tuple[int, int, int, int]:
+    """Crop the slot bbox down to the lower portion sampled for the suit
+    color signature."""
+    sx, sy, sw, sh = slot_px
+    by = sy + int(round(sh * SUIT_SAMPLE_REL_Y))
+    bh = max(1, int(round(sh * SUIT_SAMPLE_REL_H)))
+    bh = min(bh, sy + sh - by)
+    return sx, by, sw, bh
+
+
+def _classify_suit_in_slot(
+    bgr_img: np.ndarray,
+    slot_px: tuple[int, int, int, int],
+) -> Optional[tuple[str, float, tuple[int, int, int, int]]]:
+    """Identify the suit by color signature.
+
+    The three icon templates share the same X-shape — masked grayscale
+    template matching scores them nearly identically and finds the X at
+    noisy positions. Instead we compute a saturation-weighted mean BGR
+    over the lower portion of the slot (where the colored suit ribbon +
+    icon dominate, away from the muted face circle) and return the suit
+    whose pre-computed template-color signature has the highest cosine
+    similarity to that mean.
+
+    Returns ``(suit, score, sample_bbox)`` or ``None`` if no signatures
+    were loaded or the sample area is empty / colorless.
+    """
+    if not _icon_color_sig:
+        return None
+
+    sample_bbox = _suit_sample_bbox(slot_px)
+    sx, by, sw, bh = sample_bbox
+    roi = bgr_img[by : by + bh, sx : sx + sw]
+    if roi.size == 0:
+        return None
+
+    # Saturation-weighted mean BGR: saturated pixels (the icon + ribbon)
+    # dominate the average, while the muted face circle is down-weighted.
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    sat = hsv[:, :, 1].astype(np.float32)
+    total = float(sat.sum())
+    if total <= 0.0:
+        return None
+
+    weights = (sat / total).reshape(-1)
+    bgr_flat = roi.astype(np.float32).reshape(-1, 3)
+    weighted_mean = (bgr_flat * weights[:, None]).sum(axis=0)
+    norm_w = float(np.linalg.norm(weighted_mean))
+    if norm_w < 1e-6:
+        return None
+
+    best: Optional[tuple[str, float]] = None
+    for suit in COMMAND_CARD_SUITS:
+        sig = _icon_color_sig.get(suit)
+        if sig is None:
+            continue
+        denom = norm_w * float(np.linalg.norm(sig)) + 1e-9
+        score = float(np.dot(weighted_mean, sig) / denom)
+        if best is None or score > best[1]:
+            best = (suit, score)
+
+    if best is None:
+        return None
+    return best[0], best[1], sample_bbox
+
+
+def _face_search_bbox(
+    slot_px: tuple[int, int, int, int]
+) -> tuple[int, int, int, int]:
+    """Crop the slot bbox down to the upper portion where the face circle
+    lives (the suit icon overlay sits in the lower ~35%)."""
+    sx, sy, sw, sh = slot_px
+    fx = sx + int(round(FACE_SEARCH_REL_X * sw))
+    fy = sy + int(round(FACE_SEARCH_REL_Y * sh))
+    fw = max(1, int(round(FACE_SEARCH_REL_W * sw)))
+    fh = max(1, int(round(FACE_SEARCH_REL_H * sh)))
+    return fx, fy, fw, fh
+
+
+def _identify_servant_in_slot(
+    gray_img: np.ndarray,
+    slot_px: tuple[int, int, int, int],
+    servant_ids: list[int],
+    assets_dir: str,
+    threshold: float,
+) -> Optional[dict]:
+    """Match every candidate face PNG inside the slot's face-search bbox
+    and return the best ``{"servantId":..,"ascension":..,"faceScore":..}``
+    above threshold, or ``None`` if nothing matched."""
+    fx, fy, fw, fh = _face_search_bbox(slot_px)
+    roi = gray_img[fy : fy + fh, fx : fx + fw]
+    if roi.size == 0:
+        return None
+
+    # Face template size is driven by the slot width, not the cropped face
+    # bbox — the face circle scales with the card, not with our search crop.
+    target = int(round(slot_px[2] * FACE_RESIZE_CARD_REL))
+    if target < 16:
+        return None
+
+    best: Optional[dict] = None
+    for sid in servant_ids:
+        for path in _list_servant_face_files(assets_dir, sid):
+            tmpl = _load_face_template(path, target)
+            if tmpl is None or tmpl.shape[0] > roi.shape[0] or tmpl.shape[1] > roi.shape[1]:
+                continue
+            res = cv2.matchTemplate(roi, tmpl, cv2.TM_CCOEFF_NORMED)
+            _, mv, _, _ = cv2.minMaxLoc(res)
+            score = float(mv)
+            if score < threshold:
+                continue
+            if best is None or score > best["faceScore"]:
+                ascension = _ascension_from_filename(os.path.basename(path))
+                best = {
+                    "servantId": int(sid),
+                    "ascension": ascension,
+                    "faceScore": score,
+                    "facePath": path,
+                }
+    return best
+
+
+def _ascension_from_filename(name: str) -> Optional[int]:
+    """Extract the integer suffix from ``card_servant_2.png`` -> ``2``."""
+    stem = os.path.splitext(name)[0]
+    if stem.startswith("card_servant_"):
+        try:
+            return int(stem[len("card_servant_") :])
+        except ValueError:
+            return None
+    return None
+
+
+def _find_command_cards(
+    img: np.ndarray,
+    card_regions: list[dict],
+    servant_ids: list[int],
+    assets_dir: Optional[str],
+    face_threshold: float = 0.5,
+) -> dict:
+    """Identify the suit and (optionally) servant occupying each fixed
+    command-card slot.
+
+    For every slot in ``card_regions`` we:
+
+    1. Sample the lower portion of the slot in BGR and pick the suit
+       whose template-color signature has the highest cosine similarity
+       to the saturation-weighted slot color.
+    2. Crop the upper portion of the slot and template-match every
+       candidate face PNG (``card_servant_*.png``) under
+       ``{assets_dir}/{servant_id}/`` to identify the servant.
+
+    Returns one record per slot regardless of match quality so callers can
+    visualize empty slots / debug low scores. ``servantId`` is only set
+    when a face match cleared ``face_threshold`` and assets were provided.
+    """
+    h, w = img.shape[:2]
+    if h == 0 or w == 0 or not card_regions:
+        return {"cards": []}
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    _ensure_icon_color_sigs(templates_dir)
+
+    can_identify = bool(servant_ids) and bool(assets_dir) and os.path.isdir(assets_dir)
+
+    cards: list[dict] = []
+    for slot, region in enumerate(card_regions):
+        slot_px = _slot_to_pixels(region, w, h)
+        sx, sy, sw, sh = slot_px
+
+        record: dict = {
+            "slot": slot,
+            # Tap point: slot center.
+            "x": (sx + sw / 2.0) / w,
+            "y": (sy + sh / 2.0) / h,
+            "cardRegion": {
+                "x": sx / w,
+                "y": sy / h,
+                "w": sw / w,
+                "h": sh / h,
+            },
+        }
+
+        suit_match = _classify_suit_in_slot(img, slot_px)
+        if suit_match is not None:
+            suit, sscore, sample_bbox = suit_match
+            bx, by, bw, bh = sample_bbox
+            record["suit"] = suit
+            # Field name kept for backwards compatibility with the Rust
+            # struct + frontend overlay; semantically this is now a color
+            # cosine similarity in [-1, 1] (always positive in practice).
+            record["iconScore"] = sscore
+            record["iconRegion"] = {
+                "x": bx / w,
+                "y": by / h,
+                "w": bw / w,
+                "h": bh / h,
+            }
+
+        fx, fy, fw, fh = _face_search_bbox(slot_px)
+        record["faceRegion"] = {
+            "x": fx / w,
+            "y": fy / h,
+            "w": fw / w,
+            "h": fh / h,
+        }
+
+        if can_identify:
+            ident = _identify_servant_in_slot(
+                gray, slot_px, servant_ids, assets_dir, face_threshold
+            )
+            if ident is not None:
+                record["servantId"] = ident["servantId"]
+                record["ascension"] = ident["ascension"]
+                record["faceScore"] = ident["faceScore"]
+
+        cards.append(record)
+
+    return {"cards": cards}
+
+
+# ---------------------------------------------------------------------------
 # Template / config loading
 # ---------------------------------------------------------------------------
 
 
 def _load_templates(directory: str) -> dict:
+    global templates_dir
     templates.clear()
+    _icon_color_sig.clear()
     count = 0
     if not os.path.isdir(directory):
         return {"ok": False, "error": f"directory not found: {directory}"}
@@ -281,6 +691,7 @@ def _load_templates(directory: str) -> dict:
             if mat is not None:
                 templates[key] = mat
                 count += 1
+    templates_dir = directory
     return {"ok": True, "count": count}
 
 
@@ -507,6 +918,24 @@ def main() -> None:
                 _reply(
                     req_id,
                     _read_turn(img, cmd.get("region", DEFAULT_REGION)),
+                )
+        elif action == "find_command_cards":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(req_id, {"cards": [], "error": err})
+            else:
+                regions = cmd.get("cardRegions")
+                if not regions:
+                    regions = list(DEFAULT_COMMAND_CARD_SLOTS)
+                _reply(
+                    req_id,
+                    _find_command_cards(
+                        img,
+                        regions,
+                        [int(s) for s in cmd.get("servantIds", []) if s is not None],
+                        cmd.get("assetsDir"),
+                        float(cmd.get("faceThreshold", 0.5)),
+                    ),
                 )
         elif action == "find_region":
             img, err = _load_frame(cmd)

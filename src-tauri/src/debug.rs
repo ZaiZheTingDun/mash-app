@@ -4,10 +4,10 @@ use std::sync::Mutex;
 
 use crate::adb;
 use crate::runner::{self, RunnerHandle, RunnerState};
-use crate::screen::{ElementMatch, NormRect, SidecarClient};
+use crate::screen::{CommandCardMatch, ElementMatch, NormRect, SidecarClient};
 use crate::{
-    app_data_dir, resolve_cv_config_path, resolve_scrcpy_jar, resolve_templates_dir,
-    STREAM_BIT_RATE, STREAM_MAX_SIZE,
+    app_data_dir, resolve_assets_dir, resolve_cv_config_path, resolve_scrcpy_jar,
+    resolve_templates_dir, STREAM_BIT_RATE, STREAM_MAX_SIZE,
 };
 
 // ---------------------------------------------------------------------------
@@ -332,6 +332,104 @@ pub fn debug_shutdown(debug_state: tauri::State<'_, DebugSidecar>) -> Result<(),
 #[tauri::command]
 pub fn debug_get_runner_coordinates() -> runner::DebugCoordinates {
     runner::debug_coordinates()
+}
+
+/// Run the command-card detector against the most recent debug screenshot.
+/// Pass any number of candidate ``servant_ids`` to attempt face
+/// identification; pass an empty list to only locate the 5 slots + suits.
+#[tauri::command]
+pub fn debug_find_command_cards(
+    app: tauri::AppHandle,
+    debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    servant_ids: Vec<u32>,
+) -> Result<Vec<CommandCardMatch>, String> {
+    require_automation_idle(&handle_state)?;
+
+    let image_path = debug_image_path(&app);
+    if !image_path.exists() {
+        return Err("尚未截取画面，请先点击 截取画面".into());
+    }
+
+    ensure_debug_sidecar(&app, &debug_state)?;
+
+    let assets_dir = resolve_assets_dir(&app);
+    eprintln!(
+        "[debug_find_command_cards] servant_ids={servant_ids:?} assets_dir={}",
+        assets_dir
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| "<none>".into()),
+    );
+
+    let mut guard = debug_state.0.lock().unwrap();
+    let client = guard
+        .as_mut()
+        .ok_or_else(|| "debug sidecar not initialized".to_string())?;
+    let cards = client.find_command_cards(
+        Some(&image_path),
+        None,
+        &servant_ids,
+        assets_dir.as_deref(),
+    )?;
+    eprintln!("[debug_find_command_cards] {} card(s) found", cards.len());
+    Ok(cards)
+}
+
+/// List every servant id under ``assets/`` that has at least one
+/// ``card_servant_*.png`` file. The Debug UI uses this to populate the
+/// candidate-id picker without the user having to know what ships.
+#[tauri::command]
+pub fn debug_list_servant_assets(app: tauri::AppHandle) -> Vec<u32> {
+    let Some(dir) = resolve_assets_dir(&app) else {
+        eprintln!("[debug_list_servant_assets] no assets dir resolved");
+        return Vec::new();
+    };
+    let mut ids: Vec<u32> = Vec::new();
+    let entries = match fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!(
+                "[debug_list_servant_assets] cannot read {}: {e}",
+                dir.display()
+            );
+            return Vec::new();
+        }
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let Ok(id) = name.parse::<u32>() else { continue };
+
+        let mut has_face = false;
+        if let Ok(inner) = fs::read_dir(&path) {
+            for f in inner.flatten() {
+                let fname = f.file_name();
+                let Some(fname) = fname.to_str() else { continue };
+                if fname.starts_with("card_servant_")
+                    && fname.to_lowercase().ends_with(".png")
+                {
+                    has_face = true;
+                    break;
+                }
+            }
+        }
+        if has_face {
+            ids.push(id);
+        }
+    }
+    ids.sort_unstable();
+    eprintln!(
+        "[debug_list_servant_assets] {} servant(s) under {}",
+        ids.len(),
+        dir.display()
+    );
+    ids
 }
 
 /// Pre-warm the debug sidecar process so the first user interaction with the

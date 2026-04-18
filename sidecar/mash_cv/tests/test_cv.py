@@ -17,9 +17,16 @@ def _clear_state():
     """Reset global template + config state between tests."""
     mash_cv.templates.clear()
     mash_cv._set_config({"screens": {}})
+    mash_cv._face_cache.clear()
+    mash_cv._icon_color_sig.clear()
+    from mash_cv import cv as _cv_module
+    _cv_module.templates_dir = None
     yield
     mash_cv.templates.clear()
     mash_cv._set_config({"screens": {}})
+    mash_cv._face_cache.clear()
+    mash_cv._icon_color_sig.clear()
+    _cv_module.templates_dir = None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -312,6 +319,15 @@ _TEST_TEMPLATES_DIR = os.path.join(
 _TEST_SCREENSHOTS_DIR = os.path.join(
     os.path.dirname(__file__), "test_data", "screenshots"
 )
+# Production templates (RGBA command_icon_*.png live here, not in the
+# pruned tests/test_data/templates/ copy). Resolved relative to repo root.
+_PROD_TEMPLATES_DIR = os.path.normpath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..", "..", "..",
+        "src-tauri", "resources", "templates",
+    )
+)
 
 
 class TestReadTurn:
@@ -350,6 +366,144 @@ class TestReadTurn:
         assert img is not None
         result = mash_cv._read_turn(img, TURN_REGION)
         assert result == {"turn": None}
+
+
+# ── _find_command_cards ─────────────────────────────────────────────────
+
+
+@pytest.mark.skipif(
+    not os.path.isdir(_PROD_TEMPLATES_DIR),
+    reason="production templates dir not available",
+)
+class TestFindCommandCards:
+    """Exercise the command-card detector against real attack-screen
+    captures. We use the *production* templates (RGBA with alpha masks)
+    because the alpha channel is critical for icon matching."""
+
+    def _load(self):
+        result = mash_cv._load_templates(_PROD_TEMPLATES_DIR)
+        assert result["ok"] is True
+        for suit in ("a", "b", "q"):
+            assert f"command_icon_{suit}" in mash_cv.templates
+
+    def test_returns_empty_when_no_regions(self):
+        self._load()
+        img = _make_bgr_image(2560, 1440)
+        result = mash_cv._find_command_cards(img, [], [], None)
+        assert result == {"cards": []}
+
+    def test_blank_image_returns_one_record_per_slot(self):
+        """A blank image still produces one card record per slot — the
+        slots are fixed positions, suit/face just won't populate cleanly."""
+        self._load()
+        img = _make_bgr_image(2560, 1440)
+        result = mash_cv._find_command_cards(
+            img, list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS), [], None
+        )
+        assert len(result["cards"]) == 5
+        for slot, c in enumerate(result["cards"]):
+            assert c["slot"] == slot
+            assert "cardRegion" in c
+            assert "faceRegion" in c
+            assert "servantId" not in c
+
+    def test_detects_five_cards_in_battle_command(self):
+        self._load()
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command.png"))
+        assert img is not None
+
+        result = mash_cv._find_command_cards(
+            img, list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS), [], None
+        )
+        cards = result["cards"]
+        assert len(cards) == 5
+
+        # Slot order is preserved (left-to-right by construction of the
+        # default slot list).
+        xs = [c["x"] for c in cards]
+        assert xs == sorted(xs)
+        assert xs[0] < 0.20
+        assert xs[-1] > 0.80
+
+        # All five tap points live in the same horizontal band.
+        ys = [c["y"] for c in cards]
+        assert max(ys) - min(ys) < 0.06
+
+        for slot, c in enumerate(cards):
+            assert c["slot"] == slot
+            # Suit must be classified for every visible card; the cosine-
+            # similarity score is bounded but rarely exceeds 0.999.
+            assert c["suit"] in ("a", "b", "q")
+            assert -1.0 <= c["iconScore"] <= 1.0
+            assert c["iconScore"] > 0.5
+            for key in ("cardRegion", "iconRegion", "faceRegion"):
+                box = c[key]
+                assert 0.0 <= box["x"] < 1.0
+                assert 0.0 <= box["y"] < 1.0
+                assert 0.0 < box["w"] <= 1.0
+                assert 0.0 < box["h"] <= 1.0
+            # The color-sample bbox covers the lower half of the slot.
+            card = c["cardRegion"]
+            icon = c["iconRegion"]
+            assert icon["x"] == pytest.approx(card["x"], abs=1e-6)
+            assert icon["w"] == pytest.approx(card["w"], abs=1e-6)
+            assert icon["y"] >= card["y"] + card["h"] / 2 - 1e-6
+            # Face search bbox sits in the upper portion of the card.
+            assert c["faceRegion"]["y"] >= card["y"] - 1e-6
+            assert (
+                c["faceRegion"]["y"] + c["faceRegion"]["h"]
+                <= card["y"] + card["h"] + 1e-6
+            )
+            assert "servantId" not in c
+
+    def test_servant_identification_skipped_without_assets_dir(self):
+        self._load()
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command.png"))
+        result = mash_cv._find_command_cards(
+            img, list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS), [284], None
+        )
+        for c in result["cards"]:
+            assert "servantId" not in c
+
+    def test_servant_identification_skipped_when_id_folder_missing(
+        self, tmp_path
+    ):
+        self._load()
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command.png"))
+        result = mash_cv._find_command_cards(
+            img,
+            list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS),
+            [99999],
+            str(tmp_path),
+        )
+        for c in result["cards"]:
+            assert "servantId" not in c
+
+    def test_face_template_caching(self, tmp_path):
+        # Build a minimal assets dir with a synthetic 256x256 face.
+        sid = 12345
+        folder = tmp_path / str(sid)
+        folder.mkdir()
+        face = _gradient_patch(256)
+        cv2.imwrite(str(folder / "card_servant_1.png"), face)
+
+        # First load goes through cv2.imread; second hits the cache.
+        from mash_cv import cv as _cv_module
+        path = str(folder / "card_servant_1.png")
+        a = _cv_module._load_face_template(path, 64)
+        b = _cv_module._load_face_template(path, 64)
+        assert a is b
+        # Templates are cropped to the top FACE_CROP_REL_H of the source
+        # before being resized to target_w (preserving crop aspect ratio),
+        # so the result is rectangular, not square.
+        expected_h = max(1, int(round(64 * _cv_module.FACE_CROP_REL_H)))
+        assert a.shape == (expected_h, 64)
+
+        # Different target_w = different cache entry.
+        c = _cv_module._load_face_template(path, 80)
+        assert c is not a
+        expected_h2 = max(1, int(round(80 * _cv_module.FACE_CROP_REL_H)))
+        assert c.shape == (expected_h2, 80)
 
 
 # ── Integration: subprocess REPL ────────────────────────────────────────
