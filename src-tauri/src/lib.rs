@@ -349,7 +349,7 @@ fn start_automation(
     handle.state = state.clone();
     handle.cancel = cancel.clone();
 
-    let assets_dir = resolve_assets_dir(&app);
+    let assets_dir = resolve_servant_assets_dir(&app);
     let runner = runner::Runner::new(
         adb_dev, sidecar, config, turns, app, state, cancel, screen_size, assets_dir,
     );
@@ -398,24 +398,28 @@ pub(crate) fn resolve_scrcpy_jar(app: &tauri::AppHandle) -> Option<PathBuf> {
 }
 
 /// Resolve the per-servant assets directory (containing
-/// `{servant_id}/card_servant_*.png`). This dir is intentionally NOT
-/// bundled into the app yet (production bundling is a future decision);
-/// in dev we read it directly from the source tree.
+/// `{servant_id}/card_servant_*.png`). This is the `servants/` subtree
+/// of the broader `assets/` tree (which also holds `ces/` for craft
+/// essences). The dir is intentionally NOT bundled into the app yet
+/// (production bundling is a future decision); in dev we read it
+/// directly from the source tree.
 ///
 /// Lookup order:
-/// 1. `<resource_dir>/assets/` — present once the user opts to bundle it.
-/// 2. `<CARGO_MANIFEST_DIR>/assets/` — the dev-time source location.
+/// 1. `<resource_dir>/assets/servants/` — present once the user opts to bundle it.
+/// 2. `<CARGO_MANIFEST_DIR>/assets/servants/` — the dev-time source location.
 ///
 /// Returns ``None`` if neither exists; callers should treat that as
 /// "no per-servant identification available" rather than an error.
-pub(crate) fn resolve_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+pub(crate) fn resolve_servant_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
     if let Ok(base) = app.path().resource_dir() {
-        let bundled = base.join("assets");
+        let bundled = base.join("assets").join("servants");
         if bundled.is_dir() {
             return Some(bundled);
         }
     }
-    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join("servants");
     if dev.is_dir() {
         return Some(dev);
     }

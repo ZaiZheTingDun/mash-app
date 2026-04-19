@@ -8,7 +8,7 @@ use crate::screen::{
     CommandCardMatch, ElementMatch, NoblePhantasmMatch, NormRect, SidecarClient,
 };
 use crate::{
-    app_data_dir, resolve_assets_dir, resolve_cv_config_path, resolve_scrcpy_jar,
+    app_data_dir, resolve_cv_config_path, resolve_scrcpy_jar, resolve_servant_assets_dir,
     resolve_templates_dir, STREAM_BIT_RATE, STREAM_MAX_SIZE,
 };
 
@@ -355,7 +355,7 @@ pub fn debug_find_command_cards(
 
     ensure_debug_sidecar(&app, &debug_state)?;
 
-    let assets_dir = resolve_assets_dir(&app);
+    let assets_dir = resolve_servant_assets_dir(&app);
     eprintln!(
         "[debug_find_command_cards] servant_ids={servant_ids:?} assets_dir={}",
         assets_dir
@@ -410,12 +410,12 @@ pub fn debug_find_noble_phantasms(
     Ok(slots)
 }
 
-/// List every servant id under ``assets/`` that has at least one
+/// List every servant id under ``assets/servants/`` that has at least one
 /// ``card_servant_*.png`` file. The Debug UI uses this to populate the
 /// candidate-id picker without the user having to know what ships.
 #[tauri::command]
 pub fn debug_list_servant_assets(app: tauri::AppHandle) -> Vec<u32> {
-    let Some(dir) = resolve_assets_dir(&app) else {
+    let Some(dir) = resolve_servant_assets_dir(&app) else {
         eprintln!("[debug_list_servant_assets] no assets dir resolved");
         return Vec::new();
     };
