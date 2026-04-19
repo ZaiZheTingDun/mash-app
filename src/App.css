@@ -1113,6 +1113,48 @@ body,
   background: var(--gray-9);
 }
 
+.debug-overlay-support-region {
+  border: 2px dashed var(--purple-9);
+  background: rgba(160, 80, 200, 0.04);
+}
+
+.debug-overlay-support-region > .debug-overlay-label {
+  background: var(--purple-9);
+}
+
+.debug-overlay-support-name-cand {
+  border: 1px dashed var(--cyan-8);
+  background: rgba(0, 180, 200, 0.05);
+}
+
+.debug-overlay-support-name-cand > .debug-overlay-label {
+  background: var(--cyan-9);
+  font-size: 9px;
+}
+
+.debug-overlay-support-np-cand {
+  border: 1px dashed var(--amber-8);
+  background: rgba(220, 170, 0, 0.05);
+}
+
+.debug-overlay-support-np-cand > .debug-overlay-label {
+  background: var(--amber-9);
+  font-size: 9px;
+}
+
+.debug-overlay-support-row {
+  border: 2px solid var(--green-9);
+  background: rgba(0, 200, 80, 0.08);
+}
+
+.debug-overlay-support-row > .debug-overlay-label {
+  background: var(--green-9);
+}
+
+.debug-overlay-support-tap {
+  background: var(--green-9);
+}
+
 .debug-coord-toggle {
   display: inline-flex;
   align-items: center;

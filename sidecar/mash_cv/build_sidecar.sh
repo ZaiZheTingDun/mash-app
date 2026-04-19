@@ -12,7 +12,10 @@ poetry run pyinstaller --onedir mash_cv/__main__.py \
   --workpath build \
   --specpath build \
   --collect-submodules av \
-  --collect-binaries av
+  --collect-binaries av \
+  --collect-data rapidocr_onnxruntime \
+  --collect-submodules rapidocr_onnxruntime \
+  --add-data "${SCRIPT_DIR}/mash_cv/models:mash_cv/models"
 
 binaries_dir="../../src-tauri/binaries"
 rm -rf "${binaries_dir}/mash-cv"

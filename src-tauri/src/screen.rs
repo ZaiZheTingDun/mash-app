@@ -10,7 +10,7 @@ use tauri_plugin_shell::ShellExt;
 // Core geometry types (normalized 0.0..1.0)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct Point {
     pub x: f64,
     pub y: f64,
@@ -96,6 +96,63 @@ pub struct NoblePhantasmMatch {
     pub ready: bool,
     pub edge_frac: f64,
     pub std_bgr: f64,
+}
+
+/// One support row whose servant-name and NP-name fragments OCR'd, fuzzy-
+/// matched the expected strings, and were paired by vertical proximity.
+///
+/// Returned by ``SidecarClient::find_supports`` for the support-select
+/// screen. The list is scrollable so row positions are dynamic — the
+/// detector OCRs the whole list region and synthesizes ``row_region`` from
+/// the union of the matched name + NP fragment bboxes.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportRowMatch {
+    pub row_region: NormRect,
+    pub tap: Point,
+    pub name_text: String,
+    pub name_score: f64,
+    pub name_region: NormRect,
+    pub np_text: String,
+    pub np_score: f64,
+    pub np_region: NormRect,
+    /// Which entry of the caller's ``expected_np_names`` list won the fuzzy
+    /// match — useful when a servant has multiple candidate NPs.
+    pub np_matched_name: String,
+}
+
+/// One OCR fragment that fuzzy-matched the expected servant-name or NP-name
+/// above its threshold. Surfaced through diagnostics so the debug UI can
+/// render misses (a candidate that matched but had no proximity partner).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportCandidate {
+    pub text: String,
+    pub score: f64,
+    pub region: NormRect,
+    /// Set on NP candidates to identify which expected NP they matched;
+    /// always ``None`` for name candidates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub matched_name: Option<String>,
+}
+
+/// Diagnostic payload accompanying every ``find_supports`` response. Always
+/// returned (even when ``supports`` is empty) so the debug UI can show
+/// "OCR ran but matched nothing" vs. "OCR didn't find any candidates".
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportDiagnostics {
+    pub list_region: NormRect,
+    pub name_candidates: Vec<SupportCandidate>,
+    pub np_candidates: Vec<SupportCandidate>,
+    pub fragment_count: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindSupportsResult {
+    pub supports: Vec<SupportRowMatch>,
+    pub diagnostics: SupportDiagnostics,
 }
 
 // ---------------------------------------------------------------------------
@@ -574,6 +631,37 @@ impl SidecarClient {
             .ok_or_else(|| "find_noble_phantasms: response missing 'slots'".to_string())?;
         serde_json::from_value::<Vec<NoblePhantasmMatch>>(slots.clone())
             .map_err(|e| format!("invalid noble-phantasm response: {e}"))
+    }
+
+    /// OCR the support-select screen's list region and return rows whose
+    /// servant-name + NP-name fragments fuzzy-match ``expected_name`` and
+    /// any of ``expected_np_names`` and sit close enough vertically to be
+    /// part of the same row. Defaults (list region, thresholds, pair_dy)
+    /// are owned by the sidecar; this binding stays minimal so retuning
+    /// happens on the Python side.
+    pub fn find_supports(
+        &mut self,
+        image_path: Option<&Path>,
+        expected_name: &str,
+        expected_np_names: &[String],
+    ) -> Result<FindSupportsResult, String> {
+        let mut req = serde_json::json!({
+            "cmd": "find_supports",
+            "expectedName": expected_name,
+            "expectedNpNames": expected_np_names,
+        });
+        Self::add_image_path(&mut req, image_path);
+
+        // OCR cold-start (loading the ONNX model on first call) can run
+        // 5-10s on a fresh sidecar; bump the per-call timeout accordingly.
+        // Subsequent calls return in <1s.
+        let resp = self.send_recv_with_timeout(&req, Duration::from_secs(30))?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(err.to_string());
+        }
+        serde_json::from_value::<FindSupportsResult>(resp).map_err(|e| {
+            format!("invalid find_supports response: {e}")
+        })
     }
 
     /// Read the current turn number from the battle screen.

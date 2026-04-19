@@ -3,6 +3,7 @@ mod debug;
 mod runner;
 mod screen;
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
@@ -210,6 +211,80 @@ fn servants_data() -> &'static [ServantInfo] {
 #[tauri::command]
 fn get_servants() -> &'static [ServantInfo] {
     servants_data()
+}
+
+/// Subset of `assets/servants/{id}/servant.json` needed by the OCR-based
+/// support detector: the servant's primary name and every Noble Phantasm
+/// name. The frontend uses this to seed `find_supports` from a chosen
+/// servant id without shipping the full Atlas Academy blob over IPC.
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ServantMetadata {
+    pub id: u32,
+    pub name: String,
+    pub np_names: Vec<String>,
+}
+
+/// Parse and cache the (id, name, np_names) triple for one servant.
+///
+/// Reads `<servant_assets_dir>/{id}/servant.json` (the Atlas Academy dump
+/// committed under `src-tauri/assets/servants/`), pulls the top-level
+/// `name` field plus every entry of `noblePhantasms[].name`. Cached in a
+/// process-wide `OnceLock<Mutex<HashMap>>` so repeat lookups (e.g. the
+/// debug page calling `find_supports` repeatedly) are free.
+pub(crate) fn load_servant_metadata(
+    app: &tauri::AppHandle,
+    id: u32,
+) -> Result<ServantMetadata, String> {
+    static CACHE: OnceLock<Mutex<HashMap<u32, ServantMetadata>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    {
+        let map = cache.lock().unwrap();
+        if let Some(meta) = map.get(&id) {
+            return Ok(meta.clone());
+        }
+    }
+
+    let assets_dir = resolve_servant_assets_dir(app)
+        .ok_or_else(|| "未找到 servant 资源目录 (src-tauri/assets/servants/)".to_string())?;
+    let path = assets_dir.join(id.to_string()).join("servant.json");
+    let raw = fs::read_to_string(&path).map_err(|e| {
+        format!("无法读取 servant.json ({}): {e}", path.display())
+    })?;
+    let json: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| format!("servant.json 解析失败 ({}): {e}", path.display()))?;
+    let name = json
+        .get("name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("servant.json 缺少 'name' 字段: {}", path.display()))?
+        .to_string();
+
+    // Deduplicate while preserving discovery order: a few servants list the
+    // same NP under multiple `num` overcharge tiers and we only want the
+    // distinct names for fuzzy matching.
+    let mut np_names: Vec<String> = Vec::new();
+    if let Some(arr) = json.get("noblePhantasms").and_then(|v| v.as_array()) {
+        for entry in arr {
+            if let Some(n) = entry.get("name").and_then(|v| v.as_str()) {
+                let trimmed = n.trim();
+                if !trimmed.is_empty() && !np_names.iter().any(|x| x == trimmed) {
+                    np_names.push(trimmed.to_string());
+                }
+            }
+        }
+    }
+
+    let meta = ServantMetadata { id, name, np_names };
+    cache.lock().unwrap().insert(id, meta.clone());
+    Ok(meta)
+}
+
+#[tauri::command]
+fn get_servant_metadata(
+    app: tauri::AppHandle,
+    id: u32,
+) -> Result<ServantMetadata, String> {
+    load_servant_metadata(&app, id)
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -470,8 +545,10 @@ pub fn run() {
             debug::debug_get_runner_coordinates,
             debug::debug_find_command_cards,
             debug::debug_find_noble_phantasms,
+            debug::debug_find_supports,
             debug::debug_list_servant_assets,
             debug::warm_sidecar,
+            get_servant_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

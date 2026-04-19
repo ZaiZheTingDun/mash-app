@@ -654,6 +654,16 @@ impl Runner {
     }
 
     fn handle_support_select(&mut self) {
+        // TODO(support-recognition): replace the legacy template-based
+        // ``find_element(name, ...)`` lookup below with a call to
+        // ``self.sidecar.find_supports(...)`` once the OCR detector is
+        // validated end-to-end through the Debug page (debug_find_supports).
+        // The metadata helper ``crate::load_servant_metadata`` already
+        // exposes the (name, np_names) pair from
+        // ``assets/servants/{id}/servant.json``; once we plumb the pinned
+        // servant id from ``RunConfig`` we can match the row and tap its
+        // synthesized center directly. Until then, the legacy behavior
+        // below stays in place so the runner doesn't regress.
         if self.support_scroll_count == 0 {
             if let Some(ref _class) = self.config.support_class_filter {
                 self.emit("SupportSelect", "选择职阶筛选");

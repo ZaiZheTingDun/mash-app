@@ -86,6 +86,43 @@ interface NoblePhantasmMatchDto {
   stdBgr: number;
 }
 
+interface SupportRowMatchDto {
+  rowRegion: NormRectDto;
+  tap: PointDto;
+  nameText: string;
+  nameScore: number;
+  nameRegion: NormRectDto;
+  npText: string;
+  npScore: number;
+  npRegion: NormRectDto;
+  npMatchedName: string;
+}
+
+interface SupportCandidateDto {
+  text: string;
+  score: number;
+  region: NormRectDto;
+  matchedName?: string;
+}
+
+interface SupportDiagnosticsDto {
+  listRegion: NormRectDto;
+  nameCandidates: SupportCandidateDto[];
+  npCandidates: SupportCandidateDto[];
+  fragmentCount: number;
+}
+
+interface FindSupportsResultDto {
+  supports: SupportRowMatchDto[];
+  diagnostics: SupportDiagnosticsDto;
+}
+
+interface ServantMetadataDto {
+  id: number;
+  name: string;
+  npNames: string[];
+}
+
 interface LogEntry {
   time: string;
   level: "info" | "warn" | "error";
@@ -140,6 +177,12 @@ export function DebugPage({ onBack }: DebugPageProps) {
     []
   );
   const [findingNps, setFindingNps] = useState(false);
+  const [supportServantId, setSupportServantId] = useState<string>("");
+  const [supportMetadata, setSupportMetadata] =
+    useState<ServantMetadataDto | null>(null);
+  const [supportResult, setSupportResult] =
+    useState<FindSupportsResultDto | null>(null);
+  const [findingSupports, setFindingSupports] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const didShutdown = useRef(false);
 
@@ -260,6 +303,8 @@ export function DebugPage({ onBack }: DebugPageProps) {
       setCacheBuster(Date.now());
       setProbes([]);
       setCommandCards([]);
+      setNoblePhantasms([]);
+      setSupportResult(null);
       setImgNaturalSize(null);
       log(
         `截图成功 | 画面 = ${result.screen} (score=${result.score.toFixed(3)})` +
@@ -348,6 +393,8 @@ export function DebugPage({ onBack }: DebugPageProps) {
   const handleClearOverlays = useCallback(() => {
     setProbes([]);
     setCommandCards([]);
+    setNoblePhantasms([]);
+    setSupportResult(null);
     log("已清除标注");
   }, [log]);
 
@@ -423,6 +470,56 @@ export function DebugPage({ onBack }: DebugPageProps) {
   const handleUseAllAvailableIds = useCallback(() => {
     setCardServantInput(availableServantIds.join(", "));
   }, [availableServantIds]);
+
+  const parsedSupportServantId = useMemo<number | null>(() => {
+    const n = Number(supportServantId.trim());
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [supportServantId]);
+
+  const handleFindSupports = useCallback(async () => {
+    if (!capture || parsedSupportServantId === null) return;
+    setFindingSupports(true);
+    log(`调用 debug_find_supports (servantId=${parsedSupportServantId})`);
+    try {
+      // Fetch metadata first so the log + side panel can show what we
+      // actually fed the OCR detector (helpful when a row misses).
+      let meta = supportMetadata;
+      if (!meta || meta.id !== parsedSupportServantId) {
+        meta = await invoke<ServantMetadataDto>("get_servant_metadata", {
+          id: parsedSupportServantId,
+        });
+        setSupportMetadata(meta);
+        log(
+          `加载从者元数据: ${meta.name} · 宝具 [${meta.npNames.join(" / ")}]`
+        );
+      }
+      const result = await invoke<FindSupportsResultDto>(
+        "debug_find_supports",
+        { servantId: parsedSupportServantId }
+      );
+      setSupportResult(result);
+      const diag = result.diagnostics;
+      log(
+        `识别到 ${result.supports.length} 行助战 | OCR ${diag.fragmentCount} 片段` +
+          ` · 名称候选 ${diag.nameCandidates.length}` +
+          ` · 宝具候选 ${diag.npCandidates.length}`
+      );
+      if (result.supports.length === 0) {
+        log("未匹配到助战行 — 检查截图是否为助战选择画面", "warn");
+      } else {
+        for (const s of result.supports) {
+          log(
+            `  行 y=${s.rowRegion.y.toFixed(3)} | 名称='${s.nameText}' (${s.nameScore.toFixed(2)})` +
+              ` | 宝具='${s.npText}' (${s.npScore.toFixed(2)})`
+          );
+        }
+      }
+    } catch (err) {
+      log(`debug_find_supports 失败: ${err}`, "error");
+    } finally {
+      setFindingSupports(false);
+    }
+  }, [capture, parsedSupportServantId, supportMetadata, log]);
 
   const handleClearLogs = useCallback(() => setLogs([]), []);
 
@@ -550,7 +647,12 @@ export function DebugPage({ onBack }: DebugPageProps) {
 
             <button
               className="battle-btn battle-btn-stop"
-              disabled={probes.length === 0}
+              disabled={
+                probes.length === 0 &&
+                commandCards.length === 0 &&
+                noblePhantasms.length === 0 &&
+                supportResult === null
+              }
               onClick={handleClearOverlays}
             >
               清除标注
@@ -633,6 +735,39 @@ export function DebugPage({ onBack }: DebugPageProps) {
             >
               {findingNps ? "识别中…" : "识别宝具卡"}
             </button>
+          </Flex>
+
+          <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
+            <Text size="1" color="gray">
+              助战识别
+            </Text>
+            <input
+              className="debug-input"
+              list="debug-support-servant-list"
+              placeholder="助战从者 id"
+              value={supportServantId}
+              onChange={(e) => setSupportServantId(e.target.value)}
+              style={{ width: 140 }}
+            />
+            <datalist id="debug-support-servant-list">
+              {availableServantIds.map((id) => (
+                <option key={`support-id-${id}`} value={id} />
+              ))}
+            </datalist>
+            <button
+              className="battle-btn battle-btn-start debug-btn-small"
+              disabled={
+                findingSupports || !capture || parsedSupportServantId === null
+              }
+              onClick={handleFindSupports}
+            >
+              {findingSupports ? "识别中…" : "识别助战"}
+            </button>
+            {supportMetadata && (
+              <Text size="1" color="gray">
+                {supportMetadata.name} · {supportMetadata.npNames.length} 宝具
+              </Text>
+            )}
           </Flex>
 
           <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
@@ -765,6 +900,85 @@ export function DebugPage({ onBack }: DebugPageProps) {
                     </span>
                   </Box>
                 ))}
+                {supportResult && (
+                  <>
+                    <Box
+                      key="support-list-region"
+                      className="debug-overlay-box debug-overlay-support-region"
+                      style={{
+                        left: `${supportResult.diagnostics.listRegion.x * 100}%`,
+                        top: `${supportResult.diagnostics.listRegion.y * 100}%`,
+                        width: `${supportResult.diagnostics.listRegion.w * 100}%`,
+                        height: `${supportResult.diagnostics.listRegion.h * 100}%`,
+                      }}
+                    >
+                      <span className="debug-overlay-label">助战列表</span>
+                    </Box>
+                    {supportResult.diagnostics.nameCandidates.map((c, i) => (
+                      <Box
+                        key={`support-name-cand-${i}`}
+                        className="debug-overlay-box debug-overlay-support-name-cand"
+                        style={{
+                          left: `${c.region.x * 100}%`,
+                          top: `${c.region.y * 100}%`,
+                          width: `${c.region.w * 100}%`,
+                          height: `${c.region.h * 100}%`,
+                        }}
+                      >
+                        <span className="debug-overlay-label">
+                          名 {c.score.toFixed(2)} · {c.text}
+                        </span>
+                      </Box>
+                    ))}
+                    {supportResult.diagnostics.npCandidates.map((c, i) => (
+                      <Box
+                        key={`support-np-cand-${i}`}
+                        className="debug-overlay-box debug-overlay-support-np-cand"
+                        style={{
+                          left: `${c.region.x * 100}%`,
+                          top: `${c.region.y * 100}%`,
+                          width: `${c.region.w * 100}%`,
+                          height: `${c.region.h * 100}%`,
+                        }}
+                      >
+                        <span className="debug-overlay-label">
+                          宝 {c.score.toFixed(2)} · {c.text}
+                          {c.matchedName ? ` (${c.matchedName})` : ""}
+                        </span>
+                      </Box>
+                    ))}
+                    {supportResult.supports.map((s, i) => (
+                      <Box
+                        key={`support-row-${i}`}
+                        className="debug-overlay-box debug-overlay-support-row"
+                        style={{
+                          left: `${s.rowRegion.x * 100}%`,
+                          top: `${s.rowRegion.y * 100}%`,
+                          width: `${s.rowRegion.w * 100}%`,
+                          height: `${s.rowRegion.h * 100}%`,
+                        }}
+                      >
+                        <span className="debug-overlay-label">
+                          助战 {i + 1} · 名 {s.nameScore.toFixed(2)} · 宝{" "}
+                          {s.npScore.toFixed(2)}
+                        </span>
+                      </Box>
+                    ))}
+                    {supportResult.supports.map((s, i) => (
+                      <Box
+                        key={`support-tap-${i}`}
+                        className="debug-coord-dot debug-overlay-support-tap"
+                        style={{
+                          left: `${s.tap.x * 100}%`,
+                          top: `${s.tap.y * 100}%`,
+                        }}
+                        title={`tap (${s.tap.x.toFixed(3)}, ${s.tap.y.toFixed(3)})`}
+                      >
+                        <span className="debug-coord-label">点击 {i + 1}</span>
+                      </Box>
+                    ))}
+                  </>
+                )}
                 {showCoordOverlay &&
                   coordinates?.groups
                     .filter((g) => visibleCoordGroups.has(g.id))
@@ -975,6 +1189,99 @@ export function DebugPage({ onBack }: DebugPageProps) {
                   </Text>
                 </Box>
               ))}
+            </Box>
+          </Box>
+
+          <Box>
+            <Text size="1" color="gray" className="debug-side-label">
+              助战识别 ({supportResult?.supports.length ?? 0})
+            </Text>
+            <Box className="debug-match-list">
+              {!supportResult && (
+                <Text size="1" color="gray">
+                  暂无识别结果
+                </Text>
+              )}
+              {supportResult && supportMetadata && (
+                <Box className="debug-match-entry">
+                  <Text size="2" weight="medium">
+                    目标：{supportMetadata.name} (#{supportMetadata.id})
+                  </Text>
+                  <Text size="1" color="gray">
+                    宝具候选: {supportMetadata.npNames.join(" / ")}
+                  </Text>
+                  <Text size="1" color="gray">
+                    OCR 片段 {supportResult.diagnostics.fragmentCount} · 名称候选{" "}
+                    {supportResult.diagnostics.nameCandidates.length} ·
+                    宝具候选 {supportResult.diagnostics.npCandidates.length}
+                  </Text>
+                </Box>
+              )}
+              {supportResult?.supports.map((s, i) => (
+                <Box
+                  key={`support-side-${i}`}
+                  className="debug-match-entry found"
+                >
+                  <Flex justify="between" align="center">
+                    <Text size="2" weight="medium">
+                      助战 {i + 1}
+                    </Text>
+                    <Text size="1" color="gray">
+                      tap ({s.tap.x.toFixed(3)}, {s.tap.y.toFixed(3)})
+                    </Text>
+                  </Flex>
+                  <Text size="1" color="green">
+                    名: {s.nameText} ({s.nameScore.toFixed(2)})
+                  </Text>
+                  <Text size="1" color="green">
+                    宝: {s.npText} ({s.npScore.toFixed(2)})
+                    {s.npMatchedName ? ` → ${s.npMatchedName}` : ""}
+                  </Text>
+                  <Text size="1" color="gray">
+                    行 y={s.rowRegion.y.toFixed(3)} h=
+                    {s.rowRegion.h.toFixed(3)}
+                  </Text>
+                </Box>
+              ))}
+              {supportResult && supportResult.supports.length === 0 && (
+                <>
+                  {supportResult.diagnostics.nameCandidates.length > 0 && (
+                    <Box className="debug-match-entry missed">
+                      <Text size="1" color="gray">
+                        名称候选 (未配对):
+                      </Text>
+                      {supportResult.diagnostics.nameCandidates
+                        .slice(0, 8)
+                        .map((c, i) => (
+                          <Text
+                            size="1"
+                            color="gray"
+                            key={`name-cand-side-${i}`}
+                          >
+                            · {c.text} ({c.score.toFixed(2)}) @ y=
+                            {c.region.y.toFixed(3)}
+                          </Text>
+                        ))}
+                    </Box>
+                  )}
+                  {supportResult.diagnostics.npCandidates.length > 0 && (
+                    <Box className="debug-match-entry missed">
+                      <Text size="1" color="gray">
+                        宝具候选 (未配对):
+                      </Text>
+                      {supportResult.diagnostics.npCandidates
+                        .slice(0, 8)
+                        .map((c, i) => (
+                          <Text size="1" color="gray" key={`np-cand-side-${i}`}>
+                            · {c.text} ({c.score.toFixed(2)})
+                            {c.matchedName ? ` → ${c.matchedName}` : ""} @ y=
+                            {c.region.y.toFixed(3)}
+                          </Text>
+                        ))}
+                    </Box>
+                  )}
+                </>
+              )}
             </Box>
           </Box>
 

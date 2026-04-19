@@ -5,11 +5,12 @@ use std::sync::Mutex;
 use crate::adb;
 use crate::runner::{self, RunnerHandle, RunnerState};
 use crate::screen::{
-    CommandCardMatch, ElementMatch, NoblePhantasmMatch, NormRect, SidecarClient,
+    CommandCardMatch, ElementMatch, FindSupportsResult, NoblePhantasmMatch, NormRect,
+    SidecarClient,
 };
 use crate::{
-    app_data_dir, resolve_cv_config_path, resolve_scrcpy_jar, resolve_servant_assets_dir,
-    resolve_templates_dir, STREAM_BIT_RATE, STREAM_MAX_SIZE,
+    app_data_dir, load_servant_metadata, resolve_cv_config_path, resolve_scrcpy_jar,
+    resolve_servant_assets_dir, resolve_templates_dir, STREAM_BIT_RATE, STREAM_MAX_SIZE,
 };
 
 // ---------------------------------------------------------------------------
@@ -408,6 +409,49 @@ pub fn debug_find_noble_phantasms(
         slots.iter().filter(|s| s.ready).count(),
     );
     Ok(slots)
+}
+
+/// Run the OCR-based support-row detector against the most recent debug
+/// screenshot. Loads the servant's metadata (name + every Noble Phantasm
+/// name) from ``assets/servants/{servant_id}/servant.json`` and returns
+/// every row whose OCR'd name fragment + NP fragment fuzzy-match within
+/// the proximity tolerance, plus diagnostics for missed candidates so the
+/// debug overlay can render misses too.
+#[tauri::command]
+pub fn debug_find_supports(
+    app: tauri::AppHandle,
+    debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    servant_id: u32,
+) -> Result<FindSupportsResult, String> {
+    require_automation_idle(&handle_state)?;
+
+    let image_path = debug_image_path(&app);
+    if !image_path.exists() {
+        return Err("尚未截取画面，请先点击 截取画面".into());
+    }
+
+    let meta = load_servant_metadata(&app, servant_id)?;
+    eprintln!(
+        "[debug_find_supports] servant_id={servant_id} name={:?} np_names={:?}",
+        meta.name, meta.np_names
+    );
+
+    ensure_debug_sidecar(&app, &debug_state)?;
+
+    let mut guard = debug_state.0.lock().unwrap();
+    let client = guard
+        .as_mut()
+        .ok_or_else(|| "debug sidecar not initialized".to_string())?;
+    let result = client.find_supports(Some(&image_path), &meta.name, &meta.np_names)?;
+    eprintln!(
+        "[debug_find_supports] {} match(es), {} name cand(s), {} np cand(s), {} fragment(s)",
+        result.supports.len(),
+        result.diagnostics.name_candidates.len(),
+        result.diagnostics.np_candidates.len(),
+        result.diagnostics.fragment_count,
+    );
+    Ok(result)
 }
 
 /// List every servant id under ``assets/servants/`` that has at least one

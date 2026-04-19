@@ -31,13 +31,24 @@ stream frame is used):
 → {"cmd":"find_noble_phantasms"}                    ← {"slots":[{"slot":0,"cardRegion":{...},
                                                                   "ready":true,"edgeFrac":0.12,
                                                                   "stdBgr":91.4}, ...]}
+→ {"cmd":"find_supports","expectedName":"アルトリア・キャスター",
+    "expectedNpNames":["きみをいだく希望の星"]}
+                                                    ← {"supports":[{"rowRegion":{...},"tap":{...},
+                                                                    "nameText":"...","npText":"...",
+                                                                    "nameScore":..,"npScore":..,...}],
+                                                       "diagnostics":{"listRegion":{...},
+                                                                      "nameCandidates":[...],
+                                                                      "npCandidates":[...],
+                                                                      "fragmentCount":N}}
 """
 
 import base64
+import difflib
 import json
 import os
 import sys
-from typing import TYPE_CHECKING, Optional
+import unicodedata
+from typing import TYPE_CHECKING, Any, Optional
 
 import cv2
 import numpy as np
@@ -149,6 +160,32 @@ DEFAULT_NP_CARD_SLOTS: tuple[dict, ...] = (
 NP_READY_EDGE_THRESHOLD = 0.08
 NP_CANNY_LOW = 80
 NP_CANNY_HIGH = 160
+
+
+# ---------------------------------------------------------------------------
+# Support-select OCR layout
+# ---------------------------------------------------------------------------
+# The support-select screen lists the user's friends' available servants in a
+# vertical, scrollable column. Row count and y-positions are unknown at
+# runtime (the user can scroll), so instead of fixed slot regions we OCR the
+# whole list area in a single pass and pair name/NP fragments by vertical
+# proximity.
+#
+
+SUPPORT_LIST_REGION = {"x": 0.177, "y": 0.233, "w": 0.466, "h": 0.76}
+
+# Two text fragments belong to the same support row iff their y-centers are
+# within this fraction of the image height. In the reference screenshot the
+# servant-name line sits ~0.05 of image height above the NP-name line; rows
+# are spaced ~0.28 apart. 0.10 leaves comfortable margin both ways.
+SUPPORT_ROW_PAIR_DY = 0.10
+
+# Fuzzy-match thresholds for OCR'd Japanese. Game OCR is lossy (the model
+# occasionally substitutes look-alike kana / drops trailing characters), so
+# 0.65 lets through the typical 1-2 character error per name without
+# admitting unrelated fragments.
+SUPPORT_NAME_THRESHOLD = 0.65
+SUPPORT_NP_THRESHOLD = 0.65
 
 
 # ---------------------------------------------------------------------------
@@ -749,6 +786,310 @@ def _find_noble_phantasms(
 
 
 # ---------------------------------------------------------------------------
+# Support-select OCR detector
+# ---------------------------------------------------------------------------
+
+# Lazy singleton: RapidOCR cold-start (ONNX runtime + model warmup) costs
+# ~1s, which we don't want on `ping` or on every CV command that doesn't
+# touch OCR. Constructed on first ``find_supports`` call and reused after.
+_ocr_engine: Any = None
+
+
+def _ocr_models_dir() -> Optional[str]:
+    """Resolve the directory holding the bundled Japanese OCR rec model.
+
+    The model files live under ``mash_cv/models/`` in the source tree and
+    must be shipped via PyInstaller's ``--add-data mash_cv/models:mash_cv/models``
+    so the same relative path resolves inside the bundled ``_internal/``.
+
+    Tries (in order):
+      1. ``<this_dir>/models`` — works in dev (poetry run) and in
+         PyInstaller --onedir bundles where ``__file__`` resolves to
+         ``_internal/mash_cv/cv.pyc``.
+      2. ``<sys._MEIPASS>/mash_cv/models`` — fallback for --onefile or
+         odd PyInstaller layouts where step 1 misses.
+    """
+    candidates: list[str] = [os.path.join(os.path.dirname(__file__), "models")]
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(os.path.join(meipass, "mash_cv", "models"))
+    for path in candidates:
+        if os.path.isdir(path):
+            return path
+    return None
+
+
+def _get_ocr() -> Optional[Any]:
+    """Lazily build the RapidOCR engine pinned to the Japanese rec model.
+
+    Returns ``None`` if rapidocr-onnxruntime isn't importable so callers
+    can degrade gracefully (the dep is optional in the unit-test sandbox).
+    Logs to stderr exactly which rec model + dict path won so deployment
+    bugs (e.g. bundle missing the JP model) are obvious from the logs.
+    """
+    global _ocr_engine
+    if _ocr_engine is not None:
+        return _ocr_engine
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+    except Exception as exc:  # noqa: BLE001
+        print(f"[mash-cv] rapidocr import failed: {exc}", file=sys.stderr)
+        return None
+
+    models_dir = _ocr_models_dir()
+    rec_model = (
+        os.path.join(models_dir, "japan_PP-OCRv4_rec_infer.onnx")
+        if models_dir
+        else None
+    )
+    rec_keys = (
+        os.path.join(models_dir, "japan_dict.txt") if models_dir else None
+    )
+    if rec_model and rec_keys and os.path.isfile(rec_model) and os.path.isfile(rec_keys):
+        print(
+            f"[mash-cv] OCR using JP rec model: {rec_model}",
+            file=sys.stderr,
+        )
+        _ocr_engine = RapidOCR(rec_model_path=rec_model, rec_keys_path=rec_keys)
+    else:
+        # Default Chinese model; recognition is essentially unusable on JP
+        # servant names (it returns garbled hiragana / wrong kana), but the
+        # engine still loads so debug callers see *something*. This branch
+        # almost always indicates a build/bundle bug — the model files
+        # weren't copied into the PyInstaller --onedir output.
+        print(
+            f"[mash-cv] WARNING: japanese rec model not found "
+            f"(searched: dir={models_dir!r} rec={rec_model!r} keys={rec_keys!r}); "
+            "falling back to default rapidocr model (Japanese OCR will fail). "
+            "Rebuild the sidecar so PyInstaller picks up mash_cv/models/.",
+            file=sys.stderr,
+        )
+        _ocr_engine = RapidOCR()
+    return _ocr_engine
+
+
+def _normalize_jp_text(s: str) -> str:
+    """Aggressively normalize an OCR fragment for fuzzy comparison.
+
+    NFKC folds full-width / half-width forms (the JP rec model emits both
+    "Lv" and "Ｌv" interchangeably), then we drop whitespace and a few
+    cosmetic separators that shift between captures.
+    """
+    s = unicodedata.normalize("NFKC", s)
+    drop = " \t\u3000・·.,。、;:!?-_／/|·"
+    return "".join(ch for ch in s if ch not in drop).lower()
+
+
+def _fuzzy_score(haystack: str, needle: str) -> float:
+    """Return the best substring-similarity score of ``needle`` against
+    ``haystack``. We use the maximum of the full-string ratio and the
+    sliding-window ratio so a longer OCR fragment that contains the needle
+    plus extra noise (e.g. a trailing ``Lv.2``) still scores high.
+    """
+    h = _normalize_jp_text(haystack)
+    n = _normalize_jp_text(needle)
+    if not h or not n:
+        return 0.0
+    full = difflib.SequenceMatcher(None, h, n).ratio()
+    if len(h) <= len(n):
+        return full
+    best = full
+    step = max(1, (len(h) - len(n)) // 8)
+    for start in range(0, len(h) - len(n) + 1, step):
+        window = h[start : start + len(n)]
+        score = difflib.SequenceMatcher(None, window, n).ratio()
+        if score > best:
+            best = score
+    return best
+
+
+def _poly_to_norm_rect(box: Any, img_w: int, img_h: int) -> dict:
+    """Convert a RapidOCR 4-point polygon to a normalized {x,y,w,h}."""
+    pts = np.asarray(box, dtype=np.float32)
+    x0 = float(pts[:, 0].min())
+    y0 = float(pts[:, 1].min())
+    x1 = float(pts[:, 0].max())
+    y1 = float(pts[:, 1].max())
+    return {
+        "x": max(0.0, x0 / img_w),
+        "y": max(0.0, y0 / img_h),
+        "w": max(0.0, (x1 - x0) / img_w),
+        "h": max(0.0, (y1 - y0) / img_h),
+    }
+
+
+def _find_supports(
+    img: np.ndarray,
+    list_region: dict,
+    expected_name: str,
+    expected_np_names: list[str],
+    name_threshold: float,
+    np_threshold: float,
+    pair_dy: float,
+) -> dict:
+    """OCR the support-select list region and return matched support rows.
+
+    A row is considered a match iff a name fragment that fuzzy-matches
+    ``expected_name`` and an NP fragment that fuzzy-matches one of
+    ``expected_np_names`` are detected with their y-centers within
+    ``pair_dy`` of each other. Synthesized row bbox = union of the pair,
+    expanded horizontally to the full ``list_region`` width so the
+    downstream tap point lands on the row's tap target.
+
+    Always returns rich diagnostics (every name/NP candidate that crossed
+    its threshold, plus the raw fragment count) so the debug UI can show
+    misses as well as hits.
+    """
+    h, w = img.shape[:2]
+    diag: dict = {
+        "listRegion": dict(list_region),
+        "nameCandidates": [],
+        "npCandidates": [],
+        "fragmentCount": 0,
+    }
+    if h == 0 or w == 0:
+        return {"supports": [], "diagnostics": diag}
+
+    rx = max(0, int(round(list_region["x"] * w)))
+    ry = max(0, int(round(list_region["y"] * h)))
+    rw = max(1, min(int(round(list_region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(list_region["h"] * h)), h - ry))
+    crop = img[ry : ry + rh, rx : rx + rw]
+    if crop.size == 0:
+        return {"supports": [], "diagnostics": diag}
+
+    ocr = _get_ocr()
+    if ocr is None:
+        return {
+            "supports": [],
+            "diagnostics": diag,
+            "error": "rapidocr_onnxruntime not available",
+        }
+
+    raw, _ = ocr(crop)
+    if not raw:
+        return {"supports": [], "diagnostics": diag}
+
+    diag["fragmentCount"] = int(len(raw))
+
+    name_cands: list[dict] = []
+    np_cands: list[dict] = []
+    for box, text, _conf in raw:
+        # Map crop-local polygon to full-image normalized rect.
+        pts = np.asarray(box, dtype=np.float32) + np.array(
+            [rx, ry], dtype=np.float32
+        )
+        region = _poly_to_norm_rect(pts, w, h)
+
+        ns = _fuzzy_score(text, expected_name)
+        if ns >= name_threshold:
+            name_cands.append(
+                {
+                    "text": str(text),
+                    "score": float(ns),
+                    "region": region,
+                    "yc": region["y"] + region["h"] / 2.0,
+                }
+            )
+
+        best_np: Optional[tuple[str, float]] = None
+        for npn in expected_np_names:
+            if not npn:
+                continue
+            s = _fuzzy_score(text, npn)
+            if s >= np_threshold and (best_np is None or s > best_np[1]):
+                best_np = (npn, float(s))
+        if best_np is not None:
+            np_cands.append(
+                {
+                    "text": str(text),
+                    "score": best_np[1],
+                    "matchedName": best_np[0],
+                    "region": region,
+                    "yc": region["y"] + region["h"] / 2.0,
+                }
+            )
+
+    diag["nameCandidates"] = [
+        {"text": c["text"], "score": c["score"], "region": c["region"]}
+        for c in name_cands
+    ]
+    diag["npCandidates"] = [
+        {
+            "text": c["text"],
+            "score": c["score"],
+            "matchedName": c["matchedName"],
+            "region": c["region"],
+        }
+        for c in np_cands
+    ]
+
+    # Greedy proximity pairing. Sort name candidates strongest-first so the
+    # most confident name wins its NP if two names compete for the same one.
+    name_cands_sorted = sorted(name_cands, key=lambda c: -c["score"])
+    used_np: set[int] = set()
+    supports: list[dict] = []
+    for nc in name_cands_sorted:
+        best_idx = -1
+        best_dy = pair_dy
+        best_score = -1.0
+        for i, npc in enumerate(np_cands):
+            if i in used_np:
+                continue
+            dy = abs(npc["yc"] - nc["yc"])
+            if dy > pair_dy:
+                continue
+            # Prefer the closer fragment, breaking ties by NP score.
+            if dy < best_dy - 1e-6 or (
+                abs(dy - best_dy) <= 1e-6 and npc["score"] > best_score
+            ):
+                best_idx = i
+                best_dy = dy
+                best_score = npc["score"]
+        if best_idx < 0:
+            continue
+        npc = np_cands[best_idx]
+        used_np.add(best_idx)
+
+        # Synthesize the row bbox: union of the two fragment rects,
+        # expanded horizontally to the full list_region width so the tap
+        # point lands on the visual row, not just on the text.
+        nr = nc["region"]
+        npr = npc["region"]
+        y0 = min(nr["y"], npr["y"])
+        y1 = max(nr["y"] + nr["h"], npr["y"] + npr["h"])
+        row_x = list_region["x"]
+        row_w = list_region["w"]
+        row_region = {
+            "x": float(row_x),
+            "y": float(y0),
+            "w": float(row_w),
+            "h": float(y1 - y0),
+        }
+        tap = {
+            "x": float(row_x + row_w / 2.0),
+            "y": float((y0 + y1) / 2.0),
+        }
+        supports.append(
+            {
+                "rowRegion": row_region,
+                "tap": tap,
+                "nameText": nc["text"],
+                "nameScore": float(nc["score"]),
+                "nameRegion": nr,
+                "npText": npc["text"],
+                "npScore": float(npc["score"]),
+                "npRegion": npr,
+                "npMatchedName": npc["matchedName"],
+            }
+        )
+
+    # Stable order: top-down so the runner can pick "first visible match".
+    supports.sort(key=lambda s: s["rowRegion"]["y"])
+    return {"supports": supports, "diagnostics": diag}
+
+
+# ---------------------------------------------------------------------------
 # Template / config loading
 # ---------------------------------------------------------------------------
 
@@ -1030,6 +1371,35 @@ def main() -> None:
                         img,
                         regions,
                         float(cmd.get("edgeThreshold", NP_READY_EDGE_THRESHOLD)),
+                    ),
+                )
+        elif action == "find_supports":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(
+                    req_id,
+                    {
+                        "supports": [],
+                        "diagnostics": {
+                            "listRegion": SUPPORT_LIST_REGION,
+                            "nameCandidates": [],
+                            "npCandidates": [],
+                            "fragmentCount": 0,
+                        },
+                        "error": err,
+                    },
+                )
+            else:
+                _reply(
+                    req_id,
+                    _find_supports(
+                        img,
+                        cmd.get("listRegion") or SUPPORT_LIST_REGION,
+                        str(cmd.get("expectedName", "")),
+                        [str(n) for n in cmd.get("expectedNpNames", []) if n],
+                        float(cmd.get("nameThreshold", SUPPORT_NAME_THRESHOLD)),
+                        float(cmd.get("npThreshold", SUPPORT_NP_THRESHOLD)),
+                        float(cmd.get("pairDy", SUPPORT_ROW_PAIR_DY)),
                     ),
                 )
         elif action == "find_region":

@@ -581,6 +581,98 @@ class TestFindNoblePhantasms:
         assert box["h"] == pytest.approx(0.05, abs=1e-3)
 
 
+# ── _find_supports ──────────────────────────────────────────────────────
+
+_RAPIDOCR_AVAILABLE = True
+try:
+    import rapidocr_onnxruntime  # noqa: F401
+except Exception:  # noqa: BLE001
+    _RAPIDOCR_AVAILABLE = False
+
+_SUPPORT_SCREENSHOT = os.path.join(_TEST_SCREENSHOTS_DIR, "support_select.png")
+
+
+@pytest.mark.skipif(
+    not _RAPIDOCR_AVAILABLE,
+    reason="rapidocr_onnxruntime not installed",
+)
+@pytest.mark.skipif(
+    not os.path.isfile(_SUPPORT_SCREENSHOT),
+    reason="support_select.png fixture not available",
+)
+class TestFindSupports:
+    """Exercise the OCR-based support-row detector against a real
+    support-select capture (2560x1440) showing two visible rows
+    (Altria Caster + Marlin) plus a partial third row (Altria Caster
+    name only — its NP line is below the visible area).
+    """
+
+    EXPECTED_NAME_ALTRIA = "アルトリア・キャスター"
+    EXPECTED_NP_ALTRIA = "きみをいだく希望の星"
+    EXPECTED_NAME_MARLIN = "マーリン"
+    EXPECTED_NP_MARLIN = "永久に閉ざされた理想郷"
+
+    def _img(self):
+        from mash_cv.cv import (
+            SUPPORT_LIST_REGION,
+            SUPPORT_NAME_THRESHOLD,
+            SUPPORT_NP_THRESHOLD,
+            SUPPORT_ROW_PAIR_DY,
+        )
+        img = cv2.imread(_SUPPORT_SCREENSHOT)
+        assert img is not None, f"failed to read {_SUPPORT_SCREENSHOT}"
+        return (
+            img,
+            SUPPORT_LIST_REGION,
+            SUPPORT_NAME_THRESHOLD,
+            SUPPORT_NP_THRESHOLD,
+            SUPPORT_ROW_PAIR_DY,
+        )
+
+    def _call(self, name, np_names):
+        from mash_cv.cv import _find_supports
+        img, region, nt, npt, dy = self._img()
+        return _find_supports(img, region, name, list(np_names), nt, npt, dy)
+
+    def test_altria_caster_pairs_first_row(self):
+        result = self._call(self.EXPECTED_NAME_ALTRIA, [self.EXPECTED_NP_ALTRIA])
+        # Only the topmost Altria row has both name AND NP visible — the
+        # bottom row (third on screen) has its name but its NP is below
+        # the viewport, so it must NOT match (proves we require the pair).
+        assert len(result["supports"]) == 1
+        row = result["supports"][0]
+        assert row["npMatchedName"] == self.EXPECTED_NP_ALTRIA
+        # The matched row sits in the top half of the list (~y=0.39).
+        assert row["rowRegion"]["y"] < 0.5
+        # The OCR should still surface the unmatched name candidate so the
+        # debug UI can visualize the partially visible third row.
+        diag = result["diagnostics"]
+        assert diag["fragmentCount"] > 0
+        assert len(diag["nameCandidates"]) >= 2
+
+    def test_marlin_pairs_middle_row(self):
+        result = self._call(self.EXPECTED_NAME_MARLIN, [self.EXPECTED_NP_MARLIN])
+        assert len(result["supports"]) == 1
+        row = result["supports"][0]
+        # Marlin sits between the two Altria rows (~y=0.67).
+        assert 0.5 < row["rowRegion"]["y"] < 0.85
+
+    def test_cross_paired_name_and_np_yields_no_match(self):
+        # Pairing Altria's name with Marlin's NP must yield zero matches:
+        # they sit on different rows, and proximity pairing should reject
+        # the cross combination even though both fragments are detected.
+        result = self._call(
+            self.EXPECTED_NAME_ALTRIA, [self.EXPECTED_NP_MARLIN]
+        )
+        assert result["supports"] == []
+
+    def test_unknown_servant_yields_no_match(self):
+        # Confirm that fuzzy matching doesn't admit completely unrelated
+        # text under our default thresholds.
+        result = self._call("ジャンヌ・ダルク", ["紅蓮の聖女"])
+        assert result["supports"] == []
+
+
 # ── Integration: subprocess REPL ────────────────────────────────────────
 
 
