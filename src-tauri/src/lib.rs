@@ -247,6 +247,10 @@ pub struct ServantMetadata {
     pub id: u32,
     pub name: String,
     pub np_names: Vec<String>,
+    /// Atlas Academy `className`, lowercased (e.g. `caster`, `alterego`,
+    /// `mooncancer`). Drives the support-select class-tab tap so the
+    /// runner only OCRs the filtered list instead of "all + mix".
+    pub class_name: String,
 }
 
 /// Parse and cache the (id, name, np_names) triple for one servant.
@@ -282,6 +286,13 @@ pub(crate) fn load_servant_metadata(
         .and_then(|v| v.as_str())
         .ok_or_else(|| format!("servant.json 缺少 'name' 字段: {}", path.display()))?
         .to_string();
+    // Atlas dump uses camelCase like "alterEgo" / "moonCancer"; lowercase
+    // here so the runner's class-tab map can use simple lowercase keys.
+    let class_name = json
+        .get("className")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
 
     // Deduplicate while preserving discovery order: a few servants list the
     // same NP under multiple `num` overcharge tiers and we only want the
@@ -298,7 +309,12 @@ pub(crate) fn load_servant_metadata(
         }
     }
 
-    let meta = ServantMetadata { id, name, np_names };
+    let meta = ServantMetadata {
+        id,
+        name,
+        np_names,
+        class_name,
+    };
     cache.lock().unwrap().insert(id, meta.clone());
     Ok(meta)
 }

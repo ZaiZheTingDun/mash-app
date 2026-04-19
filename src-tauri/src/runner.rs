@@ -299,6 +299,25 @@ pub fn debug_coordinates() -> DebugCoordinates {
                 .collect(),
             regions: Vec::new(),
         },
+        CoordGroup {
+            id: "supportSelect".into(),
+            label: "助战选择".into(),
+            points: vec![
+                LabeledPoint { label: "Saber".into(),     point: SUPPORT_TAB_SABER     },
+                LabeledPoint { label: "Archer".into(),    point: SUPPORT_TAB_ARCHER    },
+                LabeledPoint { label: "Lancer".into(),    point: SUPPORT_TAB_LANCER    },
+                LabeledPoint { label: "Rider".into(),     point: SUPPORT_TAB_RIDER     },
+                LabeledPoint { label: "Caster".into(),    point: SUPPORT_TAB_CASTER    },
+                LabeledPoint { label: "Assassin".into(),  point: SUPPORT_TAB_ASSASSIN  },
+                LabeledPoint { label: "Berserker".into(), point: SUPPORT_TAB_BERSERKER },
+                LabeledPoint { label: "Extra".into(),     point: SUPPORT_TAB_EXTRA     },
+                LabeledPoint { label: "Refresh".into(),   point: SUPPORT_REFRESH_BUTTON },
+            ],
+            regions: vec![LabeledRegion {
+                label: "ScrollEnd".into(),
+                region: SUPPORT_SCROLL_END_REGION,
+            }],
+        },
     ];
 
     DebugCoordinates { groups }
@@ -369,6 +388,53 @@ const SUPPORT_SCROLL_END_REGION: NormRect = NormRect {
 /// fixed-shape sprite so we can demand a tight match; lowering this risks
 /// false positives that prematurely trigger refreshes mid-list.
 const SUPPORT_SCROLL_END_THRESHOLD: f64 = 0.85;
+
+/// Refresh-friend-list button on the support-select screen, captured from
+/// a 2560x1440 landscape device. Calibrated alongside the class-tab strip
+/// (same row, x further right).
+const SUPPORT_REFRESH_BUTTON: Point = Point::new(0.726, 0.178);
+
+/// Class-filter tab bar across the top of the support-select screen. All
+/// tabs share the same y. Order mirrors the FGO UI: all → saber → ...
+/// → berserker → extra → mix. Lookup happens via `class_tab_for` which
+/// maps Atlas Academy `className` strings into one of these tabs.
+const SUPPORT_CLASS_TAB_Y: f64 = 0.178;
+const SUPPORT_TAB_SABER: Point = Point::new(0.1246, SUPPORT_CLASS_TAB_Y);
+const SUPPORT_TAB_ARCHER: Point = Point::new(0.1773, SUPPORT_CLASS_TAB_Y);
+const SUPPORT_TAB_LANCER: Point = Point::new(0.2301, SUPPORT_CLASS_TAB_Y);
+const SUPPORT_TAB_RIDER: Point = Point::new(0.2828, SUPPORT_CLASS_TAB_Y);
+const SUPPORT_TAB_CASTER: Point = Point::new(0.3355, SUPPORT_CLASS_TAB_Y);
+const SUPPORT_TAB_ASSASSIN: Point = Point::new(0.3883, SUPPORT_CLASS_TAB_Y);
+const SUPPORT_TAB_BERSERKER: Point = Point::new(0.4410, SUPPORT_CLASS_TAB_Y);
+const SUPPORT_TAB_EXTRA: Point = Point::new(0.4938, SUPPORT_CLASS_TAB_Y);
+
+/// Settle time after tapping a class tab. The list animates a quick fade
+/// when filtering; ~600ms is enough for the new rows to render before we
+/// kick off the OCR pass.
+const SUPPORT_CLASS_TAB_SETTLE: Duration = Duration::from_millis(600);
+
+/// Map an Atlas Academy `className` (already lowercased by
+/// `load_servant_metadata`) to the support-select class-filter tab.
+/// Returns `None` for unknown / boss-only classes (beasts, etc.) so the
+/// caller can skip the tap and log it instead of guessing wrong.
+fn class_tab_for(class_name: &str) -> Option<Point> {
+    match class_name {
+        "saber" => Some(SUPPORT_TAB_SABER),
+        "archer" => Some(SUPPORT_TAB_ARCHER),
+        "lancer" => Some(SUPPORT_TAB_LANCER),
+        "rider" => Some(SUPPORT_TAB_RIDER),
+        "caster" => Some(SUPPORT_TAB_CASTER),
+        "assassin" => Some(SUPPORT_TAB_ASSASSIN),
+        "berserker" => Some(SUPPORT_TAB_BERSERKER),
+        // "Extra" tab covers every non-knight / non-cavalry class:
+        // shielder, ruler, avenger, alterego, mooncancer, foreigner,
+        // pretender. Atlas mixes camelCase and lowercase forms so
+        // `load_servant_metadata` lowercases before we land here.
+        "shielder" | "ruler" | "avenger" | "alterego" | "mooncancer" | "foreigner"
+        | "pretender" => Some(SUPPORT_TAB_EXTRA),
+        _ => None,
+    }
+}
 const UNKNOWN_TIMEOUT: u32 = 10;
 /// Tolerated streak of `Unknown` screens while a long animation / loading
 /// transition is playing -- raised from the default so a stacked NP chain
@@ -417,10 +483,15 @@ pub struct Runner {
     /// How many times we've tapped the friend-list refresh button this run.
     /// Reset alongside `support_scroll_count` once a match is selected.
     support_refresh_count: u32,
-    /// Cached `(name, np_names)` for the pinned support servant. Loaded
-    /// lazily on the first `handle_support_select` poll so we don't do disk
-    /// I/O at 500ms cadence (and cleared between runs because each run
-    /// owns its own `Runner`).
+    /// True once we've tapped the class-filter tab corresponding to the
+    /// pinned servant's class. Reset on refresh (the refresh sometimes
+    /// snaps the UI back to "all") so we always re-confirm the filter
+    /// after a friend-list reload.
+    support_class_tab_done: bool,
+    /// Cached `(name, np_names, class_name)` for the pinned support
+    /// servant. Loaded lazily on the first `handle_support_select` poll so
+    /// we don't do disk I/O at 500ms cadence (and cleared between runs
+    /// because each run owns its own `Runner`).
     support_meta: Option<ServantMetadata>,
     servants_placed: Vec<u32>,
     // Battle progress tracking
@@ -455,6 +526,7 @@ impl Runner {
             support_selected: false,
             support_scroll_count: 0,
             support_refresh_count: 0,
+            support_class_tab_done: false,
             support_meta: None,
             servants_placed: Vec::new(),
             battle: BattleState::new(),
@@ -701,14 +773,6 @@ impl Runner {
     }
 
     fn handle_support_select(&mut self) {
-        // Optional class-tab filter (still TODO: map name → tab coords).
-        if self.support_scroll_count == 0 && self.support_refresh_count == 0 {
-            if let Some(ref _class) = self.config.support_class_filter {
-                self.emit("SupportSelect", "选择职阶筛选");
-                // TODO: map class name → tab position and tap
-            }
-        }
-
         // No servant pinned → fall back to "tap the top of the list" so
         // existing setups that never picked a support still work.
         let Some(servant_id) = self.config.support_servant_id else {
@@ -716,9 +780,9 @@ impl Runner {
             return;
         };
 
-        // Lazy-load (name, np_names) once per run. The shared static cache
-        // in `lib.rs` makes this cheap, but caching on the runner avoids
-        // even hashing it at every poll.
+        // Lazy-load (name, np_names, class_name) once per run. The shared
+        // static cache in `lib.rs` makes this cheap, but caching on the
+        // runner avoids even hashing it at every poll.
         if self.support_meta.is_none() {
             match load_servant_metadata(&self.app_handle, servant_id) {
                 Ok(meta) => self.support_meta = Some(meta),
@@ -734,8 +798,38 @@ impl Runner {
         }
         let meta = self.support_meta.clone().unwrap();
 
-        // OCR the current screen and look for a row whose name + NP both
-        // fuzzy-match the pinned servant's (name, np_names) pair.
+        // Filter the list to the servant's class before scanning. We avoid
+        // searching from "all" + "mix" because they interleave duplicates
+        // and lengthen every OCR pass; the class tab restricts the list to
+        // exactly the rows we care about.
+        if !self.support_class_tab_done {
+            match class_tab_for(&meta.class_name) {
+                Some(tab) => {
+                    self.emit(
+                        "SupportSelect",
+                        &format!("切换职阶筛选 -> {}", meta.class_name),
+                    );
+                    if !self.tap_at("SupportSelect", tab) {
+                        return;
+                    }
+                    self.support_class_tab_done = true;
+                    thread::sleep(SUPPORT_CLASS_TAB_SETTLE);
+                    return;
+                }
+                None => {
+                    // Unknown class → mark done so we don't loop, and let
+                    // the OCR pass run against whatever tab is active.
+                    eprintln!(
+                        "[runner] no class-tab mapping for className='{}', skipping filter",
+                        meta.class_name,
+                    );
+                    self.support_class_tab_done = true;
+                }
+            }
+        }
+
+        // OCR the current (class-filtered) screen and look for a row
+        // whose name + NP both fuzzy-match the pinned servant.
         let result = match self.sidecar.find_supports(None, &meta.name, &meta.np_names) {
             Ok(r) => r,
             Err(e) => {
@@ -761,6 +855,7 @@ impl Runner {
             self.support_selected = true;
             self.support_scroll_count = 0;
             self.support_refresh_count = 0;
+            self.support_class_tab_done = false;
             thread::sleep(ACTION_DELAY);
             return;
         }
@@ -796,11 +891,14 @@ impl Runner {
                     SUPPORT_MAX_REFRESHES,
                 ),
             );
-            if !self.tap_at("SupportSelect", Point::new(0.92, 0.08)) {
+            if !self.tap_at("SupportSelect", SUPPORT_REFRESH_BUTTON) {
                 return;
             }
             self.support_scroll_count = 0;
             self.support_refresh_count += 1;
+            // Refresh occasionally snaps the class filter back to "all";
+            // re-tap the class tab on the next poll to be safe.
+            self.support_class_tab_done = false;
             thread::sleep(SUPPORT_REFRESH_SETTLE);
         } else {
             self.fail_action(
