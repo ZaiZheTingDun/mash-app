@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Box, Text, Flex } from "@radix-ui/themes";
 import {
   ChevronDownIcon,
@@ -13,6 +13,10 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Project } from "../types/project";
 
 interface SidebarProps {
+  projects: Project[];
+  onProjectsChange: (
+    updater: Project[] | ((prev: Project[]) => Project[])
+  ) => void;
   activeProjectId: string | null;
   onProjectSelect: (id: string) => void;
   onStartRun: () => void;
@@ -20,50 +24,39 @@ interface SidebarProps {
 }
 
 export function Sidebar({
+  projects,
+  onProjectsChange,
   activeProjectId,
   onProjectSelect,
   onStartRun,
   onOpenDebug,
 }: SidebarProps) {
   const [folderOpen, setFolderOpen] = useState(true);
-  const [projects, setProjects] = useState<Project[]>([]);
-
-  const loadProjects = useCallback(() => {
-    invoke<Project[]>("list_projects")
-      .then(setProjects)
-      .catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
 
   const handleCreateProject = useCallback(() => {
     const name = `Project ${projects.length + 1}`;
     invoke<Project>("create_project", { name })
       .then((p) => {
-        setProjects((prev) => [...prev, p]);
+        onProjectsChange((prev) => [...prev, p]);
         onProjectSelect(p.id);
       })
       .catch(console.error);
-  }, [projects.length, onProjectSelect]);
+  }, [projects.length, onProjectSelect, onProjectsChange]);
 
   const handleDeleteProject = useCallback(
     (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
       invoke("delete_project", { id })
         .then(() => {
-          setProjects((prev) => {
-            const next = prev.filter((p) => p.id !== id);
-            if (activeProjectId === id && next.length > 0) {
-              onProjectSelect(next[0].id);
-            }
-            return next;
-          });
+          const next = projects.filter((p) => p.id !== id);
+          onProjectsChange(next);
+          if (activeProjectId === id && next.length > 0) {
+            onProjectSelect(next[0].id);
+          }
         })
         .catch(console.error);
     },
-    [activeProjectId, onProjectSelect]
+    [activeProjectId, onProjectSelect, onProjectsChange, projects]
   );
 
   return (

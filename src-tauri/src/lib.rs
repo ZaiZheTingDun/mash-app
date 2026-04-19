@@ -64,6 +64,14 @@ pub struct Turn {
 pub struct Project {
     pub id: String,
     pub name: String,
+    /// Pinned support-select servant id. The runner's `handle_support_select`
+    /// reads this through `RunConfig::support_servant_id` to drive the OCR
+    /// detector. `None` means the user hasn't pinned anyone yet, in which
+    /// case the runner falls back to tapping the topmost visible support.
+    /// `#[serde(default)]` so legacy `projects.json` rows without the field
+    /// continue to deserialize.
+    #[serde(default)]
+    pub support_servant_id: Option<u32>,
 }
 
 pub(crate) fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
@@ -106,9 +114,25 @@ fn create_project(app: tauri::AppHandle, name: String) -> Result<Project, String
     let project = Project {
         id: uuid::Uuid::new_v4().to_string(),
         name,
+        support_servant_id: None,
     };
     let mut projects = read_projects(&app);
     projects.push(project.clone());
+    write_projects(&app, &projects)?;
+    Ok(project)
+}
+
+/// Replace the stored project entry whose ``id`` matches ``project.id`` with
+/// the supplied value. Used by the team-builder support slot to persist the
+/// pinned servant id without a dedicated single-field setter (so future
+/// project-level fields don't each need their own command).
+#[tauri::command]
+fn update_project(app: tauri::AppHandle, project: Project) -> Result<Project, String> {
+    let mut projects = read_projects(&app);
+    let Some(slot) = projects.iter_mut().find(|p| p.id == project.id) else {
+        return Err(format!("project not found: {}", project.id));
+    };
+    *slot = project.clone();
     write_projects(&app, &projects)?;
     Ok(project)
 }
@@ -528,6 +552,7 @@ pub fn run() {
             load_turns,
             list_projects,
             create_project,
+            update_project,
             delete_project,
             check_adb,
             get_use_bluestack,

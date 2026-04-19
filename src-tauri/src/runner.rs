@@ -2,7 +2,7 @@ use crate::adb::Adb;
 use crate::screen::{
     CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
 };
-use crate::{Action, AttackCard, Turn};
+use crate::{load_servant_metadata, Action, AttackCard, ServantMetadata, Turn};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -30,8 +30,15 @@ pub struct RunConfig {
     pub party_order: Option<Vec<u32>>,
     /// Class filter to tap in the support list (e.g. "Caster").
     pub support_class_filter: Option<String>,
-    /// Support servant template key to search for.
+    /// Legacy support servant template key. Only consulted by the no-pin
+    /// fallback path in `handle_support_select`; the OCR detector reads
+    /// `support_servant_id` instead.
     pub support_servant_name: Option<String>,
+    /// Servant id pinned via the team-builder support slot. Drives the
+    /// OCR-based `find_supports` lookup. `None` falls back to legacy
+    /// behaviour (tap top of the list).
+    #[serde(default)]
+    pub support_servant_id: Option<u32>,
     /// Servants to place into specific party slots.
     pub servant_selections: Vec<ServantSlotConfig>,
     /// Max scrolls before refreshing the support list.
@@ -332,6 +339,36 @@ impl BattleState {
 
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
 const ACTION_DELAY: Duration = Duration::from_millis(300);
+
+/// Hard cap on friend-list refreshes inside `handle_support_select`. After
+/// this many refreshes (each preceded by a full scroll cycle) without
+/// finding the pinned servant, the runner aborts with an error so the user
+/// isn't stuck looping forever on a servant that simply isn't available.
+const SUPPORT_MAX_REFRESHES: u32 = 3;
+/// Settle time after the support-list scroll swipe completes; long enough
+/// for momentum scrolling to come to rest before the next OCR pass.
+const SUPPORT_SCROLL_SETTLE: Duration = Duration::from_millis(900);
+/// Settle time after tapping the "refresh friend list" button. The friend
+/// list refetch and re-render takes ~2.5s on slow devices; one extra second
+/// of buffer keeps us from OCRing a half-loaded list.
+const SUPPORT_REFRESH_SETTLE: Duration = Duration::from_secs(3);
+
+/// Template that appears at the bottom of the support scroll bar once the
+/// list is fully scrolled. Bundled under `resources/templates/` so it's
+/// auto-registered by `_load_templates` under this stem-only key.
+const SUPPORT_SCROLL_END_TEMPLATE: &str = "ui_scroll_bar_end";
+/// Crop the scroll-bar tail so template matching only inspects the corner
+/// where the indicator can appear. Keeps the match unambiguous and cheap.
+const SUPPORT_SCROLL_END_REGION: NormRect = NormRect {
+    x: 0.937,
+    y: 0.904,
+    w: 0.063,
+    h: 0.096,
+};
+/// Match threshold for `SUPPORT_SCROLL_END_TEMPLATE`. The indicator is a
+/// fixed-shape sprite so we can demand a tight match; lowering this risks
+/// false positives that prematurely trigger refreshes mid-list.
+const SUPPORT_SCROLL_END_THRESHOLD: f64 = 0.85;
 const UNKNOWN_TIMEOUT: u32 = 10;
 /// Tolerated streak of `Unknown` screens while a long animation / loading
 /// transition is playing -- raised from the default so a stacked NP chain
@@ -377,6 +414,14 @@ pub struct Runner {
     team_changed: bool,
     support_selected: bool,
     support_scroll_count: u32,
+    /// How many times we've tapped the friend-list refresh button this run.
+    /// Reset alongside `support_scroll_count` once a match is selected.
+    support_refresh_count: u32,
+    /// Cached `(name, np_names)` for the pinned support servant. Loaded
+    /// lazily on the first `handle_support_select` poll so we don't do disk
+    /// I/O at 500ms cadence (and cleared between runs because each run
+    /// owns its own `Runner`).
+    support_meta: Option<ServantMetadata>,
     servants_placed: Vec<u32>,
     // Battle progress tracking
     battle: BattleState,
@@ -409,6 +454,8 @@ impl Runner {
             team_changed: false,
             support_selected: false,
             support_scroll_count: 0,
+            support_refresh_count: 0,
+            support_meta: None,
             servants_placed: Vec::new(),
             battle: BattleState::new(),
         }
@@ -654,23 +701,152 @@ impl Runner {
     }
 
     fn handle_support_select(&mut self) {
-        // TODO(support-recognition): replace the legacy template-based
-        // ``find_element(name, ...)`` lookup below with a call to
-        // ``self.sidecar.find_supports(...)`` once the OCR detector is
-        // validated end-to-end through the Debug page (debug_find_supports).
-        // The metadata helper ``crate::load_servant_metadata`` already
-        // exposes the (name, np_names) pair from
-        // ``assets/servants/{id}/servant.json``; once we plumb the pinned
-        // servant id from ``RunConfig`` we can match the row and tap its
-        // synthesized center directly. Until then, the legacy behavior
-        // below stays in place so the runner doesn't regress.
-        if self.support_scroll_count == 0 {
+        // Optional class-tab filter (still TODO: map name → tab coords).
+        if self.support_scroll_count == 0 && self.support_refresh_count == 0 {
             if let Some(ref _class) = self.config.support_class_filter {
                 self.emit("SupportSelect", "选择职阶筛选");
                 // TODO: map class name → tab position and tap
             }
         }
 
+        // No servant pinned → fall back to "tap the top of the list" so
+        // existing setups that never picked a support still work.
+        let Some(servant_id) = self.config.support_servant_id else {
+            self.legacy_pick_first_support();
+            return;
+        };
+
+        // Lazy-load (name, np_names) once per run. The shared static cache
+        // in `lib.rs` makes this cheap, but caching on the runner avoids
+        // even hashing it at every poll.
+        if self.support_meta.is_none() {
+            match load_servant_metadata(&self.app_handle, servant_id) {
+                Ok(meta) => self.support_meta = Some(meta),
+                Err(e) => {
+                    self.fail_action(
+                        "SupportSelect",
+                        "加载助战元数据",
+                        format!("servant {servant_id}: {e}"),
+                    );
+                    return;
+                }
+            }
+        }
+        let meta = self.support_meta.clone().unwrap();
+
+        // OCR the current screen and look for a row whose name + NP both
+        // fuzzy-match the pinned servant's (name, np_names) pair.
+        let result = match self.sidecar.find_supports(None, &meta.name, &meta.np_names) {
+            Ok(r) => r,
+            Err(e) => {
+                self.fail_action("SupportSelect", "OCR 助战识别", e);
+                return;
+            }
+        };
+
+        // `supports` is already sorted top-down by the sidecar; pick the
+        // topmost match so a servant that occurs twice in the list (e.g.
+        // friend + non-friend slot) yields a deterministic tap target.
+        if let Some(row) = result.supports.first() {
+            self.emit(
+                "SupportSelect",
+                &format!(
+                    "找到助战 {} (name {:.2}, np {:.2})",
+                    meta.name, row.name_score, row.np_score,
+                ),
+            );
+            if !self.tap_at("SupportSelect", row.tap) {
+                return;
+            }
+            self.support_selected = true;
+            self.support_scroll_count = 0;
+            self.support_refresh_count = 0;
+            thread::sleep(ACTION_DELAY);
+            return;
+        }
+
+        // No match in the visible viewport. The scroll-bar tail indicator
+        // is the source of truth for "have we reached the bottom of the
+        // friend list" — keep swiping until it shows up, then refresh.
+        if !self.support_scroll_bar_at_end() {
+            self.emit(
+                "SupportSelect",
+                &format!(
+                    "未找到 {}，滚动列表 (第 {} 次)",
+                    meta.name,
+                    self.support_scroll_count + 1,
+                ),
+            );
+            if !self.swipe_at(
+                "SupportSelect",
+                Point::new(0.50, 0.70),
+                Point::new(0.50, 0.30),
+                300,
+            ) {
+                return;
+            }
+            self.support_scroll_count += 1;
+            thread::sleep(SUPPORT_SCROLL_SETTLE);
+        } else if self.support_refresh_count < SUPPORT_MAX_REFRESHES {
+            self.emit(
+                "SupportSelect",
+                &format!(
+                    "已到底部，刷新助战列表 ({}/{})",
+                    self.support_refresh_count + 1,
+                    SUPPORT_MAX_REFRESHES,
+                ),
+            );
+            if !self.tap_at("SupportSelect", Point::new(0.92, 0.08)) {
+                return;
+            }
+            self.support_scroll_count = 0;
+            self.support_refresh_count += 1;
+            thread::sleep(SUPPORT_REFRESH_SETTLE);
+        } else {
+            self.fail_action(
+                "SupportSelect",
+                "查找助战",
+                format!("刷新 {} 次仍未找到 {}", SUPPORT_MAX_REFRESHES, meta.name),
+            );
+        }
+    }
+
+    /// Return true when the scroll-bar-end indicator is visible in the
+    /// bottom-right corner of the support list, meaning the user has
+    /// scrolled all the way down. Logs the actual match score every poll
+    /// so the threshold can be tuned from real numbers; transient sidecar
+    /// errors degrade to `false` so a CV blip just means "keep scrolling"
+    /// instead of triggering a refresh loop.
+    fn support_scroll_bar_at_end(&mut self) -> bool {
+        match self.sidecar.find_element_full(
+            None,
+            SUPPORT_SCROLL_END_TEMPLATE,
+            SUPPORT_SCROLL_END_REGION,
+            SUPPORT_SCROLL_END_THRESHOLD,
+        ) {
+            Ok(m) => {
+                eprintln!(
+                    "[runner] scroll-bar-end score={:.3} (threshold {:.2}) -> {}",
+                    m.score,
+                    SUPPORT_SCROLL_END_THRESHOLD,
+                    if m.found { "AT-BOTTOM" } else { "scrolling" },
+                );
+                m.found
+            }
+            Err(e) => {
+                eprintln!(
+                    "[runner] scroll-bar-end check failed (treating as not-at-bottom): {e}"
+                );
+                false
+            }
+        }
+    }
+
+    /// Legacy "tap the top of the list" path used when the project hasn't
+    /// pinned a support servant. Mirrors the pre-OCR behaviour so existing
+    /// projects don't regress; new setups should pin a servant via the
+    /// team-builder support slot to engage the OCR-based flow above.
+    fn legacy_pick_first_support(&mut self) {
         if let Some(name) = self.config.support_servant_name.as_deref() {
             let region = NormRect {
                 x: 0.0,
@@ -688,39 +864,34 @@ impl Runner {
                 thread::sleep(ACTION_DELAY);
                 return;
             }
-        } else {
-            self.emit("SupportSelect", "选择第一个助战从者");
-            if !self.tap_at("SupportSelect", Point::new(0.50, 0.35)) {
-                return;
+            // Template miss → fall through to scroll/refresh below.
+            if self.support_scroll_count < self.config.max_support_scrolls {
+                if !self.swipe_at(
+                    "SupportSelect",
+                    Point::new(0.50, 0.70),
+                    Point::new(0.50, 0.30),
+                    300,
+                ) {
+                    return;
+                }
+                self.support_scroll_count += 1;
+                thread::sleep(ACTION_DELAY);
+            } else {
+                if !self.tap_at("SupportSelect", Point::new(0.92, 0.08)) {
+                    return;
+                }
+                self.support_scroll_count = 0;
+                thread::sleep(Duration::from_secs(2));
             }
-            self.support_selected = true;
-            thread::sleep(ACTION_DELAY);
             return;
         }
 
-        if self.support_scroll_count < self.config.max_support_scrolls {
-            self.emit(
-                "SupportSelect",
-                &format!(
-                    "未找到目标助战，滚动列表 ({}/{})",
-                    self.support_scroll_count + 1,
-                    self.config.max_support_scrolls,
-                ),
-            );
-            if !self.swipe_at("SupportSelect", Point::new(0.50, 0.70), Point::new(0.50, 0.30), 300)
-            {
-                return;
-            }
-            self.support_scroll_count += 1;
-            thread::sleep(ACTION_DELAY);
-        } else {
-            self.emit("SupportSelect", "刷新助战列表");
-            if !self.tap_at("SupportSelect", Point::new(0.92, 0.08)) {
-                return;
-            }
-            self.support_scroll_count = 0;
-            thread::sleep(Duration::from_secs(2));
+        self.emit("SupportSelect", "选择第一个助战从者");
+        if !self.tap_at("SupportSelect", Point::new(0.50, 0.35)) {
+            return;
         }
+        self.support_selected = true;
+        thread::sleep(ACTION_DELAY);
     }
 
     fn handle_servant_select(&mut self) {

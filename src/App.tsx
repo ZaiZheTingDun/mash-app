@@ -10,6 +10,7 @@ import { DebugPage } from "./components/DebugPage";
 import { StatusBar } from "./components/StatusBar";
 import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
+import type { Project } from "./types/project";
 import "./App.css";
 
 type View = "config" | "battle" | "debug";
@@ -18,6 +19,7 @@ function App() {
   const [view, setView] = useState<View>("config");
   const [activeStage, setActiveStage] = useState(1);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
   const [slots, setSlots] = useState<SlotItem[]>(createInitialSlots);
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,33 @@ function App() {
       .then(setServants)
       .catch((err) => setError(String(err)))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Load the project list once at startup so the team-builder can read/write
+  // `supportServantId` directly off the active project. Sidebar still owns
+  // the create/delete UI, but it now mutates this lifted state instead of
+  // its own local copy so the support slot stays in sync.
+  useEffect(() => {
+    invoke<Project[]>("list_projects")
+      .then((list) => {
+        setProjects(list);
+        if (list.length > 0) {
+          setActiveProjectId((prev) => prev ?? list[0].id);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  const activeProject = useMemo(
+    () => projects.find((p) => p.id === activeProjectId) ?? null,
+    [projects, activeProjectId]
+  );
+
+  // Persist a project mutation through the backend and refresh local state.
+  // The team-builder support slot uses this to pin/unpin a servant.
+  const handleUpdateProject = useCallback(async (next: Project) => {
+    const saved = await invoke<Project>("update_project", { project: next });
+    setProjects((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
   }, []);
 
   const partyServants = useMemo(() => {
@@ -51,6 +80,8 @@ function App() {
     <Flex direction="column" className="app-root">
       <Flex className="app-container">
         <Sidebar
+          projects={projects}
+          onProjectsChange={setProjects}
           activeProjectId={activeProjectId}
           onProjectSelect={setActiveProjectId}
           onStartRun={handleStartRun}
@@ -99,6 +130,8 @@ function App() {
                   servants={servants}
                   slots={slots}
                   onSlotsChange={setSlots}
+                  activeProject={activeProject}
+                  onUpdateActiveProject={handleUpdateProject}
                 />
               )}
             </Box>

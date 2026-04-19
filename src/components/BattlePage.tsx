@@ -69,11 +69,13 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
     setLogs([]);
     setRunning(true);
 
+    const project = projects.find((p) => p.id === selectedId);
     const config = {
       projectId: selectedId,
       partyOrder: null,
       supportClassFilter: null,
       supportServantName: null,
+      supportServantId: project?.supportServantId ?? null,
       servantSelections: [],
       maxSupportScrolls: 3,
     };
@@ -85,7 +87,7 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
       ]);
       setRunning(false);
     });
-  }, [selectedId]);
+  }, [selectedId, projects]);
 
   const handleStop = useCallback(() => {
     invoke("stop_automation").catch(console.error);

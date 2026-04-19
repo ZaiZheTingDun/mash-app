@@ -350,7 +350,11 @@ body,
   border-color: var(--orange-6);
   border-style: dashed;
   background: linear-gradient(135deg, var(--orange-2), var(--amber-2));
-  cursor: default;
+  cursor: pointer;
+}
+
+.servant-slot.support:hover {
+  border-color: var(--orange-8);
 }
 
 .support-slot-icon {
@@ -359,6 +363,20 @@ body,
 
 .support-slot-label {
   color: var(--orange-11);
+}
+
+.servant-slot.support-filled {
+  border-color: var(--orange-7);
+  background: linear-gradient(135deg, var(--orange-2), var(--amber-2));
+}
+
+.support-slot-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--orange-9);
+  color: white;
+  letter-spacing: 1px;
 }
 
 /* ── Servant Select Dialog ── */

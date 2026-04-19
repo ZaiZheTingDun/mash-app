@@ -442,6 +442,13 @@ impl SidecarClient {
         });
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
+        // Sidecar surfaces hard errors (e.g. ``template not loaded: <key>``)
+        // through the ``error`` field. Treat those as Err so callers don't
+        // silently degrade to "not found" — historically this masked a
+        // missing-template bug for hours during the support-select work.
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(format!("find_element({template_key}): {err}"));
+        }
         if resp["found"].as_bool().unwrap_or(false) {
             let x = resp["x"].as_f64().unwrap_or(0.0);
             let y = resp["y"].as_f64().unwrap_or(0.0);
@@ -473,6 +480,9 @@ impl SidecarClient {
         });
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(format!("find_element({template_key}): {err}"));
+        }
         let found = resp["found"].as_bool().unwrap_or(false);
         let score = resp["score"].as_f64().unwrap_or(0.0);
         let x = resp["x"].as_f64().unwrap_or(0.0);
