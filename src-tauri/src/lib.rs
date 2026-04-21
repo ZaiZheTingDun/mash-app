@@ -109,6 +109,12 @@ pub struct Project {
     /// Defaulted via `default_project_slots` for legacy rows.
     #[serde(default = "default_project_slots")]
     pub slots: Vec<ProjectSlot>,
+    /// When `true`, the runner taps "Next" on the post-battle continue
+    /// screen so the same quest is queued again; when `false`, it taps
+    /// "Close" and the run terminates. `#[serde(default)]` keeps legacy
+    /// rows (no field) defaulting to `false` = single-run behaviour.
+    #[serde(default)]
+    pub repeat_mission: bool,
 }
 
 pub(crate) fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
@@ -153,6 +159,7 @@ fn create_project(app: tauri::AppHandle, name: String) -> Result<Project, String
         name,
         support_servant_id: None,
         slots: default_project_slots(),
+        repeat_mission: false,
     };
     let mut projects = read_projects(&app);
     projects.push(project.clone());

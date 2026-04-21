@@ -26,4 +26,12 @@ export interface Project {
    * drag-and-drop layout survive across sessions and project switches.
    */
   slots: ProjectSlot[];
+  /**
+   * When `true`, the runner taps "Continue" on the post-battle continue
+   * page so the same quest is queued again; when `false`, it taps
+   * "Close" and the run terminates. Optional in the wire payload because
+   * older `projects.json` rows don't carry it; the backend defaults to
+   * `false`.
+   */
+  repeatMission?: boolean;
 }
