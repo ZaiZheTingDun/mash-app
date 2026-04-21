@@ -59,6 +59,38 @@ pub struct Turn {
 // Project system
 // ---------------------------------------------------------------------------
 
+/// One cell of the team-builder grid. The frontend stores six of these per
+/// project (5 servant slots + 1 support slot) along with their order, so
+/// drag-and-drop layouts and chosen servants survive across sessions.
+///
+/// `kind` is either `"servant"` or `"support"`. For support slots,
+/// `servant_id` is ignored — the pinned servant lives on
+/// `Project::support_servant_id` (kept separate because the runner reads
+/// it through `RunConfig::support_servant_id` and we don't want two
+/// sources of truth for the same value).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSlot {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(default)]
+    pub servant_id: Option<u32>,
+}
+
+/// Default 6-slot layout used both when creating a fresh project and when
+/// deserializing a legacy `projects.json` that predates the `slots` field.
+fn default_project_slots() -> Vec<ProjectSlot> {
+    vec![
+        ProjectSlot { id: "slot-0".into(), kind: "servant".into(), servant_id: None },
+        ProjectSlot { id: "slot-1".into(), kind: "servant".into(), servant_id: None },
+        ProjectSlot { id: "slot-2".into(), kind: "support".into(), servant_id: None },
+        ProjectSlot { id: "slot-3".into(), kind: "servant".into(), servant_id: None },
+        ProjectSlot { id: "slot-4".into(), kind: "servant".into(), servant_id: None },
+        ProjectSlot { id: "slot-5".into(), kind: "servant".into(), servant_id: None },
+    ]
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
@@ -72,6 +104,11 @@ pub struct Project {
     /// continue to deserialize.
     #[serde(default)]
     pub support_servant_id: Option<u32>,
+    /// Team-builder grid layout (chosen servants + slot order). Persisted
+    /// so the user's selections survive app restarts and project switches.
+    /// Defaulted via `default_project_slots` for legacy rows.
+    #[serde(default = "default_project_slots")]
+    pub slots: Vec<ProjectSlot>,
 }
 
 pub(crate) fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
@@ -115,6 +152,7 @@ fn create_project(app: tauri::AppHandle, name: String) -> Result<Project, String
         id: uuid::Uuid::new_v4().to_string(),
         name,
         support_servant_id: None,
+        slots: default_project_slots(),
     };
     let mut projects = read_projects(&app);
     projects.push(project.clone());

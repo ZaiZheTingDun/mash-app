@@ -18,7 +18,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { ServantSelectDialog } from "./ServantSelectDialog";
 import type { Servant } from "../types/servant";
-import type { Project } from "../types/project";
+import type { Project, ProjectSlot } from "../types/project";
 
 export interface SlotItem {
   id: string;
@@ -26,14 +26,19 @@ export interface SlotItem {
   servant: Servant | null;
 }
 
-export function createInitialSlots(): SlotItem[] {
+/**
+ * Default 6-slot layout used when no project is active. Matches the Rust
+ * `default_project_slots()` so the empty-project view in the frontend
+ * renders the same arrangement a freshly-created project would have.
+ */
+export function createInitialProjectSlots(): ProjectSlot[] {
   return [
-    { id: "slot-0", type: "servant", servant: null },
-    { id: "slot-1", type: "servant", servant: null },
-    { id: "slot-2", type: "support", servant: null },
-    { id: "slot-3", type: "servant", servant: null },
-    { id: "slot-4", type: "servant", servant: null },
-    { id: "slot-5", type: "servant", servant: null },
+    { id: "slot-0", type: "servant", servantId: null },
+    { id: "slot-1", type: "servant", servantId: null },
+    { id: "slot-2", type: "support", servantId: null },
+    { id: "slot-3", type: "servant", servantId: null },
+    { id: "slot-4", type: "servant", servantId: null },
+    { id: "slot-5", type: "servant", servantId: null },
   ];
 }
 

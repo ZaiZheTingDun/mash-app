@@ -3,7 +3,7 @@ import { Box, Flex, Text, Spinner } from "@radix-ui/themes";
 import { invoke } from "@tauri-apps/api/core";
 import { Sidebar } from "./components/Sidebar";
 import { StageNavigator } from "./components/StageNavigator";
-import { ContentGrid, createInitialSlots } from "./components/ContentGrid";
+import { ContentGrid, createInitialProjectSlots } from "./components/ContentGrid";
 import { CommandEditor } from "./components/CommandEditor";
 import { BattlePage } from "./components/BattlePage";
 import { DebugPage } from "./components/DebugPage";
@@ -21,7 +21,6 @@ function App() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
-  const [slots, setSlots] = useState<SlotItem[]>(createInitialSlots);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,11 +52,44 @@ function App() {
   );
 
   // Persist a project mutation through the backend and refresh local state.
-  // The team-builder support slot uses this to pin/unpin a servant.
+  // The team-builder support slot and party slots both flow through this.
   const handleUpdateProject = useCallback(async (next: Project) => {
     const saved = await invoke<Project>("update_project", { project: next });
     setProjects((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
   }, []);
+
+  // Derive the SlotItem array shown by ContentGrid from the active project.
+  // The backend owns slot order + servant ids; here we just rehydrate the
+  // referenced Servant objects so the UI can render names/classes/rarity.
+  // When no project is active we fall back to the empty default layout so
+  // the grid still renders (selections are no-ops in that case).
+  const slots = useMemo<SlotItem[]>(() => {
+    const raw = activeProject?.slots ?? createInitialProjectSlots();
+    return raw.map((s) => ({
+      id: s.id,
+      type: s.type,
+      servant:
+        s.servantId != null
+          ? (servants.find((sv) => sv.id === s.servantId) ?? null)
+          : null,
+    }));
+  }, [activeProject, servants]);
+
+  // Persist any slot mutation (drag-reorder or selection from the dialog)
+  // back onto the project. ContentGrid still receives a synchronous-looking
+  // setter so its DnD/select code stays unchanged.
+  const handleSlotsChange = useCallback(
+    (next: SlotItem[]) => {
+      if (!activeProject) return;
+      const projectSlots = next.map((s) => ({
+        id: s.id,
+        type: s.type,
+        servantId: s.servant?.id ?? null,
+      }));
+      void handleUpdateProject({ ...activeProject, slots: projectSlots });
+    },
+    [activeProject, handleUpdateProject]
+  );
 
   const partyServants = useMemo(() => {
     const nonSupport = slots.filter((s) => s.type !== "support");
@@ -129,7 +161,7 @@ function App() {
                 <ContentGrid
                   servants={servants}
                   slots={slots}
-                  onSlotsChange={setSlots}
+                  onSlotsChange={handleSlotsChange}
                   activeProject={activeProject}
                   onUpdateActiveProject={handleUpdateProject}
                 />
