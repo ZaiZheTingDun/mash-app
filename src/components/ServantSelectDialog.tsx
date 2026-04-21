@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import {
   Dialog,
   Flex,
@@ -15,6 +15,13 @@ interface ServantSelectDialogProps {
   onOpenChange: (open: boolean) => void;
   onSelect: (servant: Servant) => void;
   servants: Servant[];
+  /**
+   * Servant ids to hide from the picker. Used by the team-builder to
+   * prevent the same servant from being picked into two non-support
+   * slots at once. Defaults to nothing-disabled, so callers (like the
+   * support slot) that want to allow duplicates can simply omit it.
+   */
+  disabledIds?: number[];
 }
 
 const CLASS_COLORS: Record<string, string> = {
@@ -48,22 +55,39 @@ export function ServantSelectDialog({
   onOpenChange,
   onSelect,
   servants,
+  disabledIds,
 }: ServantSelectDialogProps) {
   const [search, setSearch] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Hide already-picked servants entirely. Filtering (vs disabling) keeps
+  // keyboard navigation simple — every visible item is selectable, so we
+  // never have to skip-over disabled rows on ArrowUp/Down.
   const filtered = useMemo(() => {
-    if (!search.trim()) return servants;
+    const blocked = new Set(disabledIds ?? []);
+    const pool = blocked.size
+      ? servants.filter((s) => !blocked.has(s.id))
+      : servants;
+    if (!search.trim()) return pool;
     const q = search.toLowerCase().trim();
-    return servants.filter(
+    return pool.filter(
       (s) =>
         s.name_cn.toLowerCase().includes(q) ||
         s.name_en.toLowerCase().includes(q) ||
         s.name_jp.includes(q) ||
         (s.name_other ?? "").toLowerCase().includes(q)
     );
-  }, [servants, search]);
+  }, [servants, search, disabledIds]);
+
+  // Keep the keyboard-highlighted row valid when the visible list shrinks
+  // (e.g. opening the dialog from a different slot tightens `disabledIds`).
+  useEffect(() => {
+    setActiveIndex((prev) => {
+      if (filtered.length === 0) return 0;
+      return Math.min(prev, filtered.length - 1);
+    });
+  }, [filtered.length]);
 
   const handleSelect = useCallback(
     (servant: Servant) => {

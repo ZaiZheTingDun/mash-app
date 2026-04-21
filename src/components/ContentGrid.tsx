@@ -223,6 +223,25 @@ export function ContentGrid({
     );
   };
 
+  // Disallow picking the same servant into two non-support slots. The
+  // support slot is intentionally exempt — the player can stack their own
+  // copy of a friend's servant — so we only build the block-list for
+  // party slots and exclude the slot currently being edited (so the user
+  // can re-open the dialog on a filled slot without that slot's own
+  // servant disappearing from the list).
+  const activeSlot = slots.find((s) => s.id === activeSlotId);
+  const disabledIds: number[] | undefined =
+    activeSlot && activeSlot.type !== "support"
+      ? slots
+          .filter(
+            (s) =>
+              s.type !== "support" &&
+              s.id !== activeSlotId &&
+              s.servant != null
+          )
+          .map((s) => s.servant!.id)
+      : undefined;
+
   const leftSlots = displaySlots.slice(0, 3);
   const rightSlots = displaySlots.slice(3, 6);
   const slotIds = displaySlots.map((s) => s.id);
@@ -265,6 +284,7 @@ export function ContentGrid({
         onOpenChange={setDialogOpen}
         onSelect={handleSelect}
         servants={servants}
+        disabledIds={disabledIds}
       />
     </>
   );
