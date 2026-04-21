@@ -78,6 +78,7 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
       supportServantId: project?.supportServantId ?? null,
       servantSelections: [],
       maxSupportScrolls: 3,
+      repeatMission: project?.repeatMission ?? false,
     };
 
     invoke("start_automation", { config }).catch((err) => {
@@ -92,6 +93,28 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
   const handleStop = useCallback(() => {
     invoke("stop_automation").catch(console.error);
   }, []);
+
+  // Persist the "repeat mission" toggle on the active project so it
+  // survives reloads and project switches. Updates the local list in
+  // place from the backend's saved copy to avoid a refetch round-trip.
+  const handleToggleRepeat = useCallback(
+    (next: boolean) => {
+      const project = projects.find((p) => p.id === selectedId);
+      if (!project) return;
+      invoke<Project>("update_project", {
+        project: { ...project, repeatMission: next },
+      })
+        .then((saved) => {
+          setProjects((prev) =>
+            prev.map((p) => (p.id === saved.id ? saved : p))
+          );
+        })
+        .catch(console.error);
+    },
+    [projects, selectedId]
+  );
+
+  const selectedProject = projects.find((p) => p.id === selectedId);
 
   return (
     <Flex direction="column" className="battle-page">
@@ -126,6 +149,20 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
             ))}
           </select>
         </Box>
+
+        <Flex align="center" gap="2">
+          <input
+            id="repeat-mission"
+            type="checkbox"
+            className="battle-checkbox"
+            checked={selectedProject?.repeatMission ?? false}
+            disabled={running || !selectedProject}
+            onChange={(e) => handleToggleRepeat(e.target.checked)}
+          />
+          <label htmlFor="repeat-mission">
+            <Text size="2">重复任务（结算后继续同一任务）</Text>
+          </label>
+        </Flex>
 
         <Flex gap="3" className="battle-controls">
           <button

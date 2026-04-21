@@ -43,6 +43,11 @@ pub struct RunConfig {
     pub servant_selections: Vec<ServantSlotConfig>,
     /// Max scrolls before refreshing the support list.
     pub max_support_scrolls: u32,
+    /// Drives the BattleResultContinue branch: when `true`, the runner
+    /// taps "Next" on the continue page so FGO re-queues the same quest;
+    /// when `false`, it taps "Close" and the run finishes.
+    #[serde(default)]
+    pub repeat_mission: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +160,28 @@ const NOBLE_PHANTASMS: [Point; 3] = [
     Point::new(0.497, 0.242),
     Point::new(0.680, 0.242),
 ];
+
+// ---------------------------------------------------------------------------
+// Battle-result tap targets. Each post-battle page has a single forward
+// button; constants are kept here so the debug page (and future overlay)
+// can introspect them without crawling the match arm.
+// ---------------------------------------------------------------------------
+
+/// "Next" arrow on the bond-points result page.
+const BATTLE_RESULT_BOND_NEXT: Point = Point::new(0.041, 0.945);
+/// "Next" arrow on the EXP-gain result page (same physical button as bond).
+const BATTLE_RESULT_EXP_NEXT: Point = Point::new(0.041, 0.945);
+/// "Next" button on the loot/drops summary page.
+const BATTLE_RESULT_LOOT_NEXT: Point = Point::new(0.874, 0.890);
+/// "Skip / Close" on the optional friend-request prompt that appears
+/// after using a non-friend support.
+const BATTLE_RESULT_FRIEND_SKIP: Point = Point::new(0.254, 0.854);
+/// "Continue / Repeat" button on the final continue page — taps this when
+/// `RunConfig::repeat_mission` is true.
+const BATTLE_RESULT_CONTINUE_REPEAT: Point = Point::new(0.657, 0.809);
+/// "Close / Stop" button on the final continue page — taps this when
+/// `RunConfig::repeat_mission` is false. The runner finishes after.
+const BATTLE_RESULT_CONTINUE_STOP: Point = Point::new(0.348, 0.809);
 
 // ---------------------------------------------------------------------------
 // Debug: expose coordinate constants for visualization
@@ -688,22 +715,25 @@ impl Runner {
                     unknown_count = 0;
                     self.handle_attack();
                 }
-                // The post-battle result sequence (loot → exp → bond →
-                // continue) is currently identification-only. We reset
-                // `unknown_count` so the runner doesn't time out on these
-                // recognized pages, but no automated taps run yet — the
-                // user-facing emit makes it clear nothing further happens
-                // until a handler is wired up.
-                Screen::BattleResultLoot
-                | Screen::BattleResultExp
-                | Screen::BattleResultBond
-                | Screen::BattleResultContinue
-                | Screen::BattleResultFriendRequest => {
+                Screen::BattleResultBond => {
                     unknown_count = 0;
-                    self.emit(
-                        &screen.to_string(),
-                        "已识别战斗结算画面 (尚未实现自动操作)",
-                    );
+                    self.handle_battle_result_bond();
+                }
+                Screen::BattleResultExp => {
+                    unknown_count = 0;
+                    self.handle_battle_result_exp();
+                }
+                Screen::BattleResultLoot => {
+                    unknown_count = 0;
+                    self.handle_battle_result_loot();
+                }
+                Screen::BattleResultFriendRequest => {
+                    unknown_count = 0;
+                    self.handle_battle_result_friend_request();
+                }
+                Screen::BattleResultContinue => {
+                    unknown_count = 0;
+                    self.handle_battle_result_continue();
                 }
                 Screen::Unknown => {
                     unknown_count += 1;
@@ -1306,6 +1336,66 @@ impl Runner {
 
         // Reset for next cycle
         self.battle.turn_config_used = false;
+    }
+
+    // -- battle-result screen handlers ---------------------------------------
+
+    fn handle_battle_result_bond(&mut self) {
+        self.emit("BattleResultBond", "羁绊点数结算，前往下一画面");
+        if self.tap_at("BattleResultBond", BATTLE_RESULT_BOND_NEXT) {
+            thread::sleep(ACTION_DELAY);
+        }
+    }
+
+    fn handle_battle_result_exp(&mut self) {
+        self.emit("BattleResultExp", "经验结算，前往下一画面");
+        if self.tap_at("BattleResultExp", BATTLE_RESULT_EXP_NEXT) {
+            thread::sleep(ACTION_DELAY);
+        }
+    }
+
+    fn handle_battle_result_loot(&mut self) {
+        self.emit("BattleResultLoot", "掉落结算，前往下一画面");
+        if self.tap_at("BattleResultLoot", BATTLE_RESULT_LOOT_NEXT) {
+            thread::sleep(ACTION_DELAY);
+        }
+    }
+
+    fn handle_battle_result_friend_request(&mut self) {
+        self.emit("BattleResultFriendRequest", "跳过好友申请");
+        if self.tap_at("BattleResultFriendRequest", BATTLE_RESULT_FRIEND_SKIP) {
+            thread::sleep(ACTION_DELAY);
+        }
+    }
+
+    /// Final continue page. Branches on `RunConfig::repeat_mission`:
+    ///
+    /// * `true` — tap "Next" so FGO re-queues the same quest. Per-run
+    ///   bookkeeping (team-change flag, battle turn counters, placed-
+    ///   servant set) is reset so the next loop reuses pre-battle handlers
+    ///   from a clean slate. The pinned support metadata is intentionally
+    ///   kept since the same servant is still desired.
+    /// * `false` — tap "Close" and transition to `Finished`. The main
+    ///   loop's post-handler check exits cleanly so the user sees the
+    ///   "已完成" toast.
+    fn handle_battle_result_continue(&mut self) {
+        if self.config.repeat_mission {
+            self.emit("BattleResultContinue", "继续重复任务");
+            if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_REPEAT) {
+                return;
+            }
+            self.team_changed = false;
+            self.servants_placed.clear();
+            self.battle = BattleState::new();
+            self.battle.waiting_for_battle = true;
+            thread::sleep(ACTION_DELAY);
+        } else {
+            self.emit("BattleResultContinue", "结束任务");
+            if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_STOP) {
+                return;
+            }
+            self.set_state(RunnerState::Finished);
+        }
     }
 
     // -- skill execution -----------------------------------------------------
