@@ -167,6 +167,17 @@ pub enum Screen {
     ServantSelect,
     Battle,
     Attack,
+    /// Battle-result drops/loot summary (1st post-battle page).
+    BattleResultLoot,
+    /// Master/servant EXP gain summary.
+    BattleResultExp,
+    /// Bond-points summary.
+    BattleResultBond,
+    /// Final "Continue / Next" page closing out the result sequence.
+    BattleResultContinue,
+    /// Friend-request prompt that appears after a battle when an
+    /// unfriended support was used.
+    BattleResultFriendRequest,
     Unknown,
 }
 
@@ -179,6 +190,11 @@ impl std::fmt::Display for Screen {
             Self::ServantSelect => write!(f, "ServantSelect"),
             Self::Battle => write!(f, "Battle"),
             Self::Attack => write!(f, "Attack"),
+            Self::BattleResultLoot => write!(f, "BattleResultLoot"),
+            Self::BattleResultExp => write!(f, "BattleResultExp"),
+            Self::BattleResultBond => write!(f, "BattleResultBond"),
+            Self::BattleResultContinue => write!(f, "BattleResultContinue"),
+            Self::BattleResultFriendRequest => write!(f, "BattleResultFriendRequest"),
             Self::Unknown => write!(f, "Unknown"),
         }
     }
@@ -195,6 +211,11 @@ impl FromStr for Screen {
             "ServantSelect" => Self::ServantSelect,
             "Battle" => Self::Battle,
             "Attack" => Self::Attack,
+            "BattleResultLoot" => Self::BattleResultLoot,
+            "BattleResultExp" => Self::BattleResultExp,
+            "BattleResultBond" => Self::BattleResultBond,
+            "BattleResultContinue" => Self::BattleResultContinue,
+            "BattleResultFriendRequest" => Self::BattleResultFriendRequest,
             _ => Self::Unknown,
         };
         Ok(screen)

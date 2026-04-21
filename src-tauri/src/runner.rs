@@ -688,6 +688,23 @@ impl Runner {
                     unknown_count = 0;
                     self.handle_attack();
                 }
+                // The post-battle result sequence (loot → exp → bond →
+                // continue) is currently identification-only. We reset
+                // `unknown_count` so the runner doesn't time out on these
+                // recognized pages, but no automated taps run yet — the
+                // user-facing emit makes it clear nothing further happens
+                // until a handler is wired up.
+                Screen::BattleResultLoot
+                | Screen::BattleResultExp
+                | Screen::BattleResultBond
+                | Screen::BattleResultContinue
+                | Screen::BattleResultFriendRequest => {
+                    unknown_count = 0;
+                    self.emit(
+                        &screen.to_string(),
+                        "已识别战斗结算画面 (尚未实现自动操作)",
+                    );
+                }
                 Screen::Unknown => {
                     unknown_count += 1;
                     let timeout = if self.battle.waiting_for_battle {
