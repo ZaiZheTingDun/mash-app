@@ -70,12 +70,17 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
     setRunning(true);
 
     const project = projects.find((p) => p.id === selectedId);
+    // The runner currently only consumes the support slot's CE pin (for
+    // row verification on the support-select screen). Party-slot CEs
+    // are persisted on the project but ignored here.
+    const supportSlot = project?.slots?.find((s) => s.type === "support");
     const config = {
       projectId: selectedId,
       partyOrder: null,
       supportClassFilter: null,
       supportServantName: null,
       supportServantId: project?.supportServantId ?? null,
+      supportCraftEssenceId: supportSlot?.craftEssenceId ?? null,
       servantSelections: [],
       maxSupportScrolls: 3,
       repeatMission: project?.repeatMission ?? false,

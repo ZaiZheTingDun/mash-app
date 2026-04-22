@@ -6,11 +6,12 @@ use crate::adb;
 use crate::runner::{self, RunnerHandle, RunnerState};
 use crate::screen::{
     CommandCardMatch, ElementMatch, FindSupportsResult, NoblePhantasmMatch, NormRect,
-    SidecarClient,
+    SidecarClient, SupportDiagnostics, SupportRowMatch,
 };
 use crate::{
-    app_data_dir, load_servant_metadata, resolve_cv_config_path, resolve_scrcpy_jar,
-    resolve_servant_assets_dir, resolve_templates_dir, STREAM_BIT_RATE, STREAM_MAX_SIZE,
+    app_data_dir, load_servant_metadata, resolve_ce_assets_dir, resolve_cv_config_path,
+    resolve_scrcpy_jar, resolve_servant_assets_dir, resolve_templates_dir,
+    STREAM_BIT_RATE, STREAM_MAX_SIZE,
 };
 
 // ---------------------------------------------------------------------------
@@ -411,19 +412,81 @@ pub fn debug_find_noble_phantasms(
     Ok(slots)
 }
 
+/// Per-row CE verification info computed by `debug_find_supports` when a
+/// `craft_essence_id` is supplied. Surfaces both the search region (so
+/// the overlay can draw a second box per row to confirm the offset) and
+/// the raw `TM_CCOEFF_NORMED` score (so the user can tune
+/// `SUPPORT_CE_THRESHOLD` against real numbers).
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DebugSupportCeInfo {
+    pub region: NormRect,
+    pub score: f64,
+    pub passed: bool,
+    /// Threshold the runner would have applied. Returned alongside the
+    /// score so the debug UI doesn't have to mirror the constant.
+    pub threshold: f64,
+    /// Resolved template path, useful for "we couldn't find the file"
+    /// diagnostics. `None` when the template isn't on disk.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template_path: Option<String>,
+    /// Sidecar error message when verification failed before scoring.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DebugSupportRow {
+    #[serde(flatten)]
+    pub row: SupportRowMatch,
+    /// Present only when the caller passed a `craft_essence_id` *and*
+    /// the template was resolvable. Absent rows render exactly like the
+    /// pre-CE behaviour so the overlay stays backwards-compatible.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ce: Option<DebugSupportCeInfo>,
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DebugFindSupportsResult {
+    pub supports: Vec<DebugSupportRow>,
+    pub diagnostics: SupportDiagnostics,
+}
+
+/// Apply the runner's `SUPPORT_CE_OFFSET_IN_ROW` to a row bbox. Kept in
+/// sync manually with `Runner::support_ce_search_region` (the runner's
+/// version is private to that module).
+fn ce_search_region(row: &SupportRowMatch) -> NormRect {
+    let r = row.row_region;
+    let off = runner::SUPPORT_CE_OFFSET_IN_ROW;
+    NormRect {
+        x: r.x + off.x * r.w,
+        y: r.y + off.y * r.h,
+        w: off.w * r.w,
+        h: off.h * r.h,
+    }
+}
+
 /// Run the OCR-based support-row detector against the most recent debug
 /// screenshot. Loads the servant's metadata (name + every Noble Phantasm
 /// name) from ``assets/servants/{servant_id}/servant.json`` and returns
 /// every row whose OCR'd name fragment + NP fragment fuzzy-match within
 /// the proximity tolerance, plus diagnostics for missed candidates so the
 /// debug overlay can render misses too.
+///
+/// When `craft_essence_id` is supplied, also runs the runner's CE
+/// verification per row and returns the search region + score so the
+/// user can iterate on `SUPPORT_CE_OFFSET_IN_ROW` and
+/// `SUPPORT_CE_THRESHOLD` without restarting a real run.
 #[tauri::command]
 pub fn debug_find_supports(
     app: tauri::AppHandle,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     servant_id: u32,
-) -> Result<FindSupportsResult, String> {
+    craft_essence_id: Option<u32>,
+) -> Result<DebugFindSupportsResult, String> {
     require_automation_idle(&handle_state)?;
 
     let image_path = debug_image_path(&app);
@@ -433,17 +496,35 @@ pub fn debug_find_supports(
 
     let meta = load_servant_metadata(&app, servant_id)?;
     eprintln!(
-        "[debug_find_supports] servant_id={servant_id} name={:?} np_names={:?}",
-        meta.name, meta.np_names
+        "[debug_find_supports] servant_id={servant_id} name={:?} np_names={:?} ce={:?}",
+        meta.name, meta.np_names, craft_essence_id
     );
 
     ensure_debug_sidecar(&app, &debug_state)?;
+
+    // Resolve the CE template up-front (outside the sidecar lock). A
+    // missing or unconfigured CE just leaves `ce_template = None` so the
+    // OCR pass still runs and the response carries no per-row CE info.
+    let ce_template: Option<PathBuf> = craft_essence_id.and_then(|id| {
+        let dir = resolve_ce_assets_dir(&app)?;
+        let path = dir.join(id.to_string()).join("card_ce.png");
+        if path.is_file() {
+            Some(path)
+        } else {
+            eprintln!(
+                "[debug_find_supports] CE template missing: {} (skipping CE verify)",
+                path.display()
+            );
+            None
+        }
+    });
 
     let mut guard = debug_state.0.lock().unwrap();
     let client = guard
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-    let result = client.find_supports(Some(&image_path), &meta.name, &meta.np_names)?;
+    let result: FindSupportsResult =
+        client.find_supports(Some(&image_path), &meta.name, &meta.np_names)?;
     eprintln!(
         "[debug_find_supports] {} match(es), {} name cand(s), {} np cand(s), {} fragment(s)",
         result.supports.len(),
@@ -451,7 +532,65 @@ pub fn debug_find_supports(
         result.diagnostics.np_candidates.len(),
         result.diagnostics.fragment_count,
     );
-    Ok(result)
+
+    let template_path_str = ce_template
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string());
+
+    let mut supports: Vec<DebugSupportRow> = Vec::with_capacity(result.supports.len());
+    for row in result.supports {
+        let ce = match ce_template.as_deref() {
+            Some(template) => {
+                let region = ce_search_region(&row);
+                let info = match client.verify_support_ce(
+                    Some(&image_path),
+                    region,
+                    template,
+                    runner::SUPPORT_CE_THRESHOLD,
+                ) {
+                    Ok((score, passed)) => {
+                        eprintln!(
+                            "[debug_find_supports] row y={:.3} CE score={:.3} threshold={:.2} -> {}",
+                            row.row_region.y,
+                            score,
+                            runner::SUPPORT_CE_THRESHOLD,
+                            if passed { "PASS" } else { "skip" },
+                        );
+                        DebugSupportCeInfo {
+                            region,
+                            score,
+                            passed,
+                            threshold: runner::SUPPORT_CE_THRESHOLD,
+                            template_path: template_path_str.clone(),
+                            error: None,
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[debug_find_supports] row y={:.3} CE verify failed: {e}",
+                            row.row_region.y,
+                        );
+                        DebugSupportCeInfo {
+                            region,
+                            score: 0.0,
+                            passed: false,
+                            threshold: runner::SUPPORT_CE_THRESHOLD,
+                            template_path: template_path_str.clone(),
+                            error: Some(e),
+                        }
+                    }
+                };
+                Some(info)
+            }
+            None => None,
+        };
+        supports.push(DebugSupportRow { row, ce });
+    }
+
+    Ok(DebugFindSupportsResult {
+        supports,
+        diagnostics: result.diagnostics,
+    })
 }
 
 /// List every servant id under ``assets/servants/`` that has at least one

@@ -394,6 +394,13 @@ body,
   margin-top: 12px;
 }
 
+.ce-list-scroll {
+  height: 420px;
+  margin-top: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .servant-option {
   appearance: none;
   border: none;
@@ -959,6 +966,51 @@ body,
 
 .debug-toolbar {
   flex-shrink: 0;
+}
+
+.debug-section {
+  flex-shrink: 0;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  background: #fff;
+}
+
+.debug-section-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  border-radius: var(--radius-2);
+}
+
+.debug-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.debug-section-summary:hover {
+  background: var(--gray-2);
+}
+
+.debug-section-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+  color: var(--gray-9);
+}
+
+.debug-section[open] > .debug-section-summary .debug-section-chevron {
+  transform: rotate(90deg);
+}
+
+.debug-section-badge {
+  margin-left: auto;
+}
+
+.debug-section-body {
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--gray-5);
 }
 
 .debug-input {

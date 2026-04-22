@@ -695,6 +695,45 @@ impl SidecarClient {
         })
     }
 
+    /// Score a support row's CE icon against the bundled template.
+    ///
+    /// The runner calls this once per OCR-matched support row when a CE
+    /// is pinned on the team-builder support slot. ``region`` is the
+    /// search window in absolute normalized coordinates (computed by
+    /// applying ``SUPPORT_CE_OFFSET_IN_ROW`` to the row's bbox).
+    /// ``template_path`` points at ``assets/ces/{id}/card_ce.png``.
+    ///
+    /// Returns ``(score, passed)``; both are ``(0.0, false)`` if the
+    /// template can't be read or the crop is empty so the caller can
+    /// treat read failures the same as score failures.
+    pub fn verify_support_ce(
+        &mut self,
+        image_path: Option<&Path>,
+        region: NormRect,
+        template_path: &Path,
+        threshold: f64,
+    ) -> Result<(f64, bool), String> {
+        let mut req = serde_json::json!({
+            "cmd": "verify_support_ce",
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+            "templatePath": template_path.to_string_lossy(),
+            "threshold": threshold,
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(err.to_string());
+        }
+        let score = resp.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let passed = resp.get("passed").and_then(|v| v.as_bool()).unwrap_or(false);
+        Ok((score, passed))
+    }
+
     /// Read the current turn number from the battle screen.
     /// Returns None if the sidecar cannot detect the turn number.
     pub fn read_turn(

@@ -1,10 +1,11 @@
 use crate::adb::Adb;
 use crate::screen::{
     CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
+    SupportRowMatch,
 };
 use crate::{load_servant_metadata, Action, AttackCard, ServantMetadata, Turn};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -39,6 +40,14 @@ pub struct RunConfig {
     /// behaviour (tap top of the list).
     #[serde(default)]
     pub support_servant_id: Option<u32>,
+    /// Craft-essence id pinned via the team-builder support CE slot.
+    /// When `Some`, `handle_support_select` runs `verify_support_ce`
+    /// against each OCR-detected row and picks the first row whose CE
+    /// matches the template at `assets/ces/{id}/card_ce.png`. `None`
+    /// (or a missing template) preserves legacy behaviour: pick the
+    /// first OCR match.
+    #[serde(default)]
+    pub support_craft_essence_id: Option<u32>,
     /// Servants to place into specific party slots.
     pub servant_selections: Vec<ServantSlotConfig>,
     /// Max scrolls before refreshing the support list.
@@ -440,6 +449,31 @@ const SUPPORT_TAB_EXTRA: Point = Point::new(0.4938, SUPPORT_CLASS_TAB_Y);
 /// kick off the OCR pass.
 const SUPPORT_CLASS_TAB_SETTLE: Duration = Duration::from_millis(600);
 
+/// Search window for the support row's craft-essence icon, expressed as
+/// fractions of the row bbox. The OCR-derived `row_region` only covers
+/// the name + NP text strip (anchored to `SUPPORT_LIST_REGION.x`/`.w`);
+/// the CE icon overlay actually sits on the **face card to the left of
+/// the row**, so `x` is negative on purpose to push the search window
+/// outside the row's left edge. `h > 1.0` lets the window span the
+/// face vertically (the face is taller than the text strip).
+///
+/// Reference screenshot: `tests/test_data/screenshots/support_select.png`
+/// (1024×576). row_region for row 1: `x≈0.177, w≈0.466, y≈0.30, h≈0.13`.
+/// With the values below the search window resolves to roughly
+/// `x≈0.05, w≈0.10, y≈0.39, h≈0.13` — bottom of the face card. Retune
+/// via the debug page (`助战识别` panel) against real captures.
+pub const SUPPORT_CE_OFFSET_IN_ROW: NormRect = NormRect {
+    x: -0.33,
+    y: -1.60,
+    w: 0.35,
+    h: 3.45,
+};
+/// Minimum `TM_CCOEFF_NORMED` score to accept a row's CE icon as the
+/// pinned CE. Conservative on purpose — the CE icons share a lot of dark
+/// background pixels so even mismatched CEs score ~0.4-0.5; the matched
+/// CE typically scores 0.75+.
+pub const SUPPORT_CE_THRESHOLD: f64 = 0.70;
+
 /// Map an Atlas Academy `className` (already lowercased by
 /// `load_servant_metadata`) to the support-select class-filter tab.
 /// Returns `None` for unknown / boss-only classes (beasts, etc.) so the
@@ -503,6 +537,12 @@ pub struct Runner {
     /// servant owns each command card, which means priority entries can't
     /// be matched and we fall through to the leftmost-fill path.
     assets_dir: Option<PathBuf>,
+    /// Per-CE icon assets (`{ce_id}/card_ce.png`). Used by
+    /// `handle_support_select` to verify a row's equipped CE matches the
+    /// pinned support CE. `None` means we couldn't locate the dir on
+    /// disk; CE verification is silently skipped in that case so the
+    /// existing flow (pick first OCR match) still works.
+    ce_assets_dir: Option<PathBuf>,
     // Pre-battle progress tracking
     team_changed: bool,
     support_selected: bool,
@@ -520,6 +560,12 @@ pub struct Runner {
     /// we don't do disk I/O at 500ms cadence (and cleared between runs
     /// because each run owns its own `Runner`).
     support_meta: Option<ServantMetadata>,
+    /// Cached resolved path to the pinned support CE template, computed
+    /// once on the first poll where `support_craft_essence_id` is set.
+    /// Outer `Option` is "have we tried to resolve yet"; inner `Option`
+    /// is "did it succeed" (`None` = template missing / no CE pinned →
+    /// skip verification).
+    support_ce_template: Option<Option<PathBuf>>,
     servants_placed: Vec<u32>,
     // Battle progress tracking
     battle: BattleState,
@@ -536,6 +582,7 @@ impl Runner {
         cancel: Arc<AtomicBool>,
         screen_size: Option<(u32, u32)>,
         assets_dir: Option<PathBuf>,
+        ce_assets_dir: Option<PathBuf>,
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         Self {
@@ -549,12 +596,14 @@ impl Runner {
             screen_w,
             screen_h,
             assets_dir,
+            ce_assets_dir,
             team_changed: false,
             support_selected: false,
             support_scroll_count: 0,
             support_refresh_count: 0,
             support_class_tab_done: false,
             support_meta: None,
+            support_ce_template: None,
             servants_placed: Vec::new(),
             battle: BattleState::new(),
         }
@@ -885,10 +934,19 @@ impl Runner {
             }
         };
 
-        // `supports` is already sorted top-down by the sidecar; pick the
-        // topmost match so a servant that occurs twice in the list (e.g.
-        // friend + non-friend slot) yields a deterministic tap target.
-        if let Some(row) = result.supports.first() {
+        // `supports` is already sorted top-down by the sidecar. Default
+        // pick = first match, but if the user pinned a CE on the support
+        // slot we filter rows by CE-template score first and fall through
+        // to the scroll/refresh path when no row's CE matches.
+        let ce_template = self.resolve_support_ce_template();
+        let chosen = match (ce_template.as_deref(), result.supports.first()) {
+            (Some(template), _) if !result.supports.is_empty() => {
+                self.pick_support_row_with_ce(&result.supports, template)
+            }
+            (_, first) => first,
+        };
+
+        if let Some(row) = chosen {
             self.emit(
                 "SupportSelect",
                 &format!(
@@ -905,6 +963,17 @@ impl Runner {
             self.support_class_tab_done = false;
             thread::sleep(ACTION_DELAY);
             return;
+        }
+
+        // OCR found rows but the pinned CE didn't match any of them —
+        // emit a distinct message before falling through to the
+        // scroll/refresh branch so the user knows it's a CE filter miss
+        // (vs a name miss).
+        if ce_template.is_some() && !result.supports.is_empty() {
+            self.emit(
+                "SupportSelect",
+                "找到从者但礼装不匹配，继续滚动…",
+            );
         }
 
         // No match in the visible viewport. The scroll-bar tail indicator
@@ -954,6 +1023,83 @@ impl Runner {
                 format!("刷新 {} 次仍未找到 {}", SUPPORT_MAX_REFRESHES, meta.name),
             );
         }
+    }
+
+    /// Resolve the on-disk path for the pinned support CE template, or
+    /// `None` if no CE is pinned, no CE assets directory was located, or
+    /// the template file is missing. Cached on first call so repeated
+    /// `handle_support_select` polls don't restat the filesystem.
+    fn resolve_support_ce_template(&mut self) -> Option<PathBuf> {
+        if let Some(cached) = &self.support_ce_template {
+            return cached.clone();
+        }
+        let resolved = self.config.support_craft_essence_id.and_then(|ce_id| {
+            let dir = self.ce_assets_dir.as_ref()?;
+            let path = dir.join(ce_id.to_string()).join("card_ce.png");
+            if path.is_file() {
+                Some(path)
+            } else {
+                eprintln!(
+                    "[runner] support CE template missing: {} (skipping CE filter)",
+                    path.display()
+                );
+                None
+            }
+        });
+        self.support_ce_template = Some(resolved.clone());
+        resolved
+    }
+
+    /// Compute the absolute search window for a row's CE icon by
+    /// applying `SUPPORT_CE_OFFSET_IN_ROW` (a row-local rect) to the
+    /// row's full bbox.
+    fn support_ce_search_region(row: &SupportRowMatch) -> NormRect {
+        let r = row.row_region;
+        NormRect {
+            x: r.x + SUPPORT_CE_OFFSET_IN_ROW.x * r.w,
+            y: r.y + SUPPORT_CE_OFFSET_IN_ROW.y * r.h,
+            w: SUPPORT_CE_OFFSET_IN_ROW.w * r.w,
+            h: SUPPORT_CE_OFFSET_IN_ROW.h * r.h,
+        }
+    }
+
+    /// Iterate `rows` top-down and return the first whose CE icon scores
+    /// at or above `SUPPORT_CE_THRESHOLD` against `template_path`. A
+    /// transient verify error treats that row as "didn't pass" so the
+    /// caller will fall through to the scroll/refresh path instead of
+    /// hanging on a sidecar blip.
+    fn pick_support_row_with_ce<'a>(
+        &mut self,
+        rows: &'a [SupportRowMatch],
+        template_path: &Path,
+    ) -> Option<&'a SupportRowMatch> {
+        for row in rows {
+            let region = Self::support_ce_search_region(row);
+            match self.sidecar.verify_support_ce(
+                None,
+                region,
+                template_path,
+                SUPPORT_CE_THRESHOLD,
+            ) {
+                Ok((score, passed)) => {
+                    eprintln!(
+                        "[runner] support CE verify: score={:.3} threshold={:.2} -> {}",
+                        score,
+                        SUPPORT_CE_THRESHOLD,
+                        if passed { "PASS" } else { "skip" },
+                    );
+                    if passed {
+                        return Some(row);
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[runner] support CE verify failed (treating as skip): {e}"
+                    );
+                }
+            }
+        }
+        None
     }
 
     /// Return true when the scroll-bar-end indicator is visible in the

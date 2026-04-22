@@ -10,6 +10,7 @@ import { DebugPage } from "./components/DebugPage";
 import { StatusBar } from "./components/StatusBar";
 import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
+import type { CraftEssence } from "./types/craftEssence";
 import type { Project } from "./types/project";
 import "./App.css";
 
@@ -21,12 +22,22 @@ function App() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
+  const [craftEssences, setCraftEssences] = useState<CraftEssence[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Load both static catalogs in parallel. The CE catalog is small (just
+  // id/name) and shared across all projects, so caching it on the App
+  // component keeps the team-builder picker instant.
   useEffect(() => {
-    invoke<Servant[]>("get_servants")
-      .then(setServants)
+    Promise.all([
+      invoke<Servant[]>("get_servants"),
+      invoke<CraftEssence[]>("get_craft_essences"),
+    ])
+      .then(([s, ce]) => {
+        setServants(s);
+        setCraftEssences(ce);
+      })
       .catch((err) => setError(String(err)))
       .finally(() => setLoading(false));
   }, []);
@@ -72,8 +83,12 @@ function App() {
         s.servantId != null
           ? (servants.find((sv) => sv.id === s.servantId) ?? null)
           : null,
+      craftEssence:
+        s.craftEssenceId != null
+          ? (craftEssences.find((c) => c.id === s.craftEssenceId) ?? null)
+          : null,
     }));
-  }, [activeProject, servants]);
+  }, [activeProject, servants, craftEssences]);
 
   // Persist any slot mutation (drag-reorder or selection from the dialog)
   // back onto the project. ContentGrid still receives a synchronous-looking
@@ -85,6 +100,7 @@ function App() {
         id: s.id,
         type: s.type,
         servantId: s.servant?.id ?? null,
+        craftEssenceId: s.craftEssence?.id ?? null,
       }));
       void handleUpdateProject({ ...activeProject, slots: projectSlots });
     },
@@ -160,6 +176,7 @@ function App() {
               ) : (
                 <ContentGrid
                   servants={servants}
+                  craftEssences={craftEssences}
                   slots={slots}
                   onSlotsChange={handleSlotsChange}
                   activeProject={activeProject}

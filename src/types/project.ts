@@ -8,6 +8,13 @@ export interface ProjectSlot {
   id: string;
   type: "servant" | "support";
   servantId: number | null;
+  /**
+   * Optional pinned craft-essence id. Persisted per-slot so each loadout
+   * can carry its own equipment plan. The runner only consumes the
+   * support slot's CE today (for support-row verification); party-slot
+   * CEs are stored for future use.
+   */
+  craftEssenceId?: number | null;
 }
 
 export interface Project {

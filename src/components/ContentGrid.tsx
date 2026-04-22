@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Box, Flex, Text } from "@radix-ui/themes";
-import { ImageIcon, PlusIcon, PersonIcon } from "@radix-ui/react-icons";
+import { PlusIcon, PersonIcon, Cross2Icon } from "@radix-ui/react-icons";
 import {
   DndContext,
   closestCenter,
@@ -17,13 +17,22 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ServantSelectDialog } from "./ServantSelectDialog";
+import { CraftEssenceSelectDialog } from "./CraftEssenceSelectDialog";
 import type { Servant } from "../types/servant";
+import type { CraftEssence } from "../types/craftEssence";
 import type { Project, ProjectSlot } from "../types/project";
 
 export interface SlotItem {
   id: string;
   type: "servant" | "support";
   servant: Servant | null;
+  /**
+   * Pinned craft essence for this slot. Persisted on the project but
+   * only consumed by the runner for the support slot today (party-slot
+   * CEs are stored for future auto-equip work). Renders as a small
+   * picker tile beneath each servant slot.
+   */
+  craftEssence: CraftEssence | null;
 }
 
 /**
@@ -33,17 +42,18 @@ export interface SlotItem {
  */
 export function createInitialProjectSlots(): ProjectSlot[] {
   return [
-    { id: "slot-0", type: "servant", servantId: null },
-    { id: "slot-1", type: "servant", servantId: null },
-    { id: "slot-2", type: "support", servantId: null },
-    { id: "slot-3", type: "servant", servantId: null },
-    { id: "slot-4", type: "servant", servantId: null },
-    { id: "slot-5", type: "servant", servantId: null },
+    { id: "slot-0", type: "servant", servantId: null, craftEssenceId: null },
+    { id: "slot-1", type: "servant", servantId: null, craftEssenceId: null },
+    { id: "slot-2", type: "support", servantId: null, craftEssenceId: null },
+    { id: "slot-3", type: "servant", servantId: null, craftEssenceId: null },
+    { id: "slot-4", type: "servant", servantId: null, craftEssenceId: null },
+    { id: "slot-5", type: "servant", servantId: null, craftEssenceId: null },
   ];
 }
 
 interface ContentGridProps {
   servants: Servant[];
+  craftEssences: CraftEssence[];
   slots: SlotItem[];
   onSlotsChange: (slots: SlotItem[]) => void;
   /**
@@ -55,11 +65,77 @@ interface ContentGridProps {
   onUpdateActiveProject: (next: Project) => Promise<void> | void;
 }
 
-function ImageCard() {
+interface CraftEssenceSlotProps {
+  craftEssence: CraftEssence | null;
+  onSelect: () => void;
+  onClear: () => void;
+}
+
+/**
+ * One picker tile rendered directly below a servant slot. Clicking the
+ * tile opens the CE picker dialog; when a CE is pinned the tile shows
+ * the CE name and a small clear button so the user can unpin without
+ * having to re-open the dialog.
+ */
+function CraftEssenceSlot({ craftEssence, onSelect, onClear }: CraftEssenceSlotProps) {
+  if (!craftEssence) {
+    return (
+      <Box className="image-card servant-slot empty" onClick={onSelect}>
+        <Flex
+          direction="column"
+          align="center"
+          justify="center"
+          gap="1"
+          className="image-card-inner"
+        >
+          <PlusIcon width={24} height={24} className="servant-slot-icon" />
+          <Text size="1" color="gray">
+            选择礼装
+          </Text>
+        </Flex>
+      </Box>
+    );
+  }
+
   return (
-    <Box className="image-card">
-      <Flex align="center" justify="center" className="image-card-inner">
-        <ImageIcon width={36} height={36} className="image-card-icon" />
+    <Box className="image-card servant-slot filled" onClick={onSelect}>
+      <Flex
+        direction="column"
+        align="center"
+        justify="center"
+        gap="1"
+        className="image-card-inner"
+        style={{ position: "relative", padding: "4px" }}
+      >
+        <button
+          type="button"
+          className="ce-clear-btn"
+          aria-label="清除礼装"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClear();
+          }}
+          style={{
+            position: "absolute",
+            top: 2,
+            right: 2,
+            background: "transparent",
+            border: "none",
+            color: "var(--gray-9)",
+            cursor: "pointer",
+            padding: 2,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          <Cross2Icon width={12} height={12} />
+        </button>
+        <Text size="2" weight="bold" align="center">
+          {craftEssence.name}
+        </Text>
+        <Text size="1" color="gray">
+          #{craftEssence.id}
+        </Text>
       </Flex>
     </Box>
   );
@@ -163,6 +239,7 @@ function SortableSlot({ slot, onSelect }: SortableSlotProps) {
 
 export function ContentGrid({
   servants,
+  craftEssences,
   slots,
   onSlotsChange,
   activeProject,
@@ -170,6 +247,8 @@ export function ContentGrid({
 }: ContentGridProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
+  const [ceDialogOpen, setCeDialogOpen] = useState(false);
+  const [activeCeSlotId, setActiveCeSlotId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -201,6 +280,26 @@ export function ContentGrid({
   const handleSlotClick = (slot: SlotItem) => {
     setActiveSlotId(slot.id);
     setDialogOpen(true);
+  };
+
+  const handleCeSlotClick = (slotId: string) => {
+    setActiveCeSlotId(slotId);
+    setCeDialogOpen(true);
+  };
+
+  const handleCeSelect = (ce: CraftEssence) => {
+    if (!activeCeSlotId) return;
+    onSlotsChange(
+      slots.map((s) =>
+        s.id === activeCeSlotId ? { ...s, craftEssence: ce } : s
+      )
+    );
+  };
+
+  const handleCeClear = (slotId: string) => {
+    onSlotsChange(
+      slots.map((s) => (s.id === slotId ? { ...s, craftEssence: null } : s))
+    );
   };
 
   const handleSelect = (servant: Servant) => {
@@ -269,11 +368,21 @@ export function ContentGrid({
                 onSelect={() => handleSlotClick(slot)}
               />
             ))}
-            {Array.from({ length: 3 }).map((_, i) => (
-              <ImageCard key={`left-bottom-${i}`} />
+            {leftSlots.map((slot) => (
+              <CraftEssenceSlot
+                key={`ce-${slot.id}`}
+                craftEssence={slot.craftEssence}
+                onSelect={() => handleCeSlotClick(slot.id)}
+                onClear={() => handleCeClear(slot.id)}
+              />
             ))}
-            {Array.from({ length: 3 }).map((_, i) => (
-              <ImageCard key={`right-bottom-${i}`} />
+            {rightSlots.map((slot) => (
+              <CraftEssenceSlot
+                key={`ce-${slot.id}`}
+                craftEssence={slot.craftEssence}
+                onSelect={() => handleCeSlotClick(slot.id)}
+                onClear={() => handleCeClear(slot.id)}
+              />
             ))}
           </Box>
         </SortableContext>
@@ -285,6 +394,13 @@ export function ContentGrid({
         onSelect={handleSelect}
         servants={servants}
         disabledIds={disabledIds}
+      />
+
+      <CraftEssenceSelectDialog
+        open={ceDialogOpen}
+        onOpenChange={setCeDialogOpen}
+        onSelect={handleCeSelect}
+        craftEssences={craftEssences}
       />
     </>
   );

@@ -76,18 +76,30 @@ pub struct ProjectSlot {
     pub kind: String,
     #[serde(default)]
     pub servant_id: Option<u32>,
+    /// Pinned craft-essence id for this slot. Persisted alongside the
+    /// servant so each loadout can carry its own equipment plan; for
+    /// support slots the runner uses this to verify candidate rows on
+    /// the support-select screen, party slots store it for future use.
+    #[serde(default)]
+    pub craft_essence_id: Option<u32>,
 }
 
 /// Default 6-slot layout used both when creating a fresh project and when
 /// deserializing a legacy `projects.json` that predates the `slots` field.
 fn default_project_slots() -> Vec<ProjectSlot> {
+    let new_slot = |id: &str, kind: &str| ProjectSlot {
+        id: id.into(),
+        kind: kind.into(),
+        servant_id: None,
+        craft_essence_id: None,
+    };
     vec![
-        ProjectSlot { id: "slot-0".into(), kind: "servant".into(), servant_id: None },
-        ProjectSlot { id: "slot-1".into(), kind: "servant".into(), servant_id: None },
-        ProjectSlot { id: "slot-2".into(), kind: "support".into(), servant_id: None },
-        ProjectSlot { id: "slot-3".into(), kind: "servant".into(), servant_id: None },
-        ProjectSlot { id: "slot-4".into(), kind: "servant".into(), servant_id: None },
-        ProjectSlot { id: "slot-5".into(), kind: "servant".into(), servant_id: None },
+        new_slot("slot-0", "servant"),
+        new_slot("slot-1", "servant"),
+        new_slot("slot-2", "support"),
+        new_slot("slot-3", "servant"),
+        new_slot("slot-4", "servant"),
+        new_slot("slot-5", "servant"),
     ]
 }
 
@@ -280,6 +292,55 @@ fn servants_data() -> &'static [ServantInfo] {
 #[tauri::command]
 fn get_servants() -> &'static [ServantInfo] {
     servants_data()
+}
+
+/// One craft-essence entry exposed to the frontend. Mirrors the shape of
+/// `resources/craft_essences.json` (which only ships `id`, `name`, and a
+/// wiki link). Kept minimal — additional metadata lives in the per-CE
+/// `assets/ces/{id}/craft-essence.json` Atlas dump and is loaded lazily
+/// only when the runner actually needs it.
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CraftEssenceInfo {
+    pub id: u32,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name_link: Option<String>,
+}
+
+fn craft_essences_data() -> &'static [CraftEssenceInfo] {
+    static CES: OnceLock<Vec<CraftEssenceInfo>> = OnceLock::new();
+    CES.get_or_init(|| {
+        let raw: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("resources/craft_essences.json"))
+                .expect("invalid craft_essences.json");
+        raw.iter()
+            .enumerate()
+            .filter_map(|(idx, ce)| {
+                let result = (|| {
+                    let id = ce.get("id")?.as_u64()? as u32;
+                    let name = ce.get("name")?.as_str()?.to_string();
+                    let name_link = ce
+                        .get("name_link")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    Some(CraftEssenceInfo { id, name, name_link })
+                })();
+                if result.is_none() {
+                    let id_hint = ce.get("id").and_then(|v| v.as_u64());
+                    eprintln!(
+                        "[craft_essences] dropping entry at index {idx} (id={id_hint:?}): missing or invalid fields"
+                    );
+                }
+                result
+            })
+            .collect()
+    })
+}
+
+#[tauri::command]
+fn get_craft_essences() -> &'static [CraftEssenceInfo] {
+    craft_essences_data()
 }
 
 /// Subset of `assets/servants/{id}/servant.json` needed by the OCR-based
@@ -510,8 +571,18 @@ fn start_automation(
     handle.cancel = cancel.clone();
 
     let assets_dir = resolve_servant_assets_dir(&app);
+    let ce_assets_dir = resolve_ce_assets_dir(&app);
     let runner = runner::Runner::new(
-        adb_dev, sidecar, config, turns, app, state, cancel, screen_size, assets_dir,
+        adb_dev,
+        sidecar,
+        config,
+        turns,
+        app,
+        state,
+        cancel,
+        screen_size,
+        assets_dir,
+        ce_assets_dir,
     );
     std::thread::spawn(move || runner.run());
 
@@ -586,6 +657,28 @@ pub(crate) fn resolve_servant_assets_dir(app: &tauri::AppHandle) -> Option<PathB
     None
 }
 
+/// Resolve the per-craft-essence assets directory (containing
+/// `{ce_id}/card_ce.png`). Mirrors `resolve_servant_assets_dir` — the
+/// runner uses these templates to verify support rows on the fly, so we
+/// look up bundled assets first, then fall back to the dev-time source
+/// tree. Returns `None` when neither path exists; callers fall back to
+/// the legacy behaviour (pick the first OCR match) in that case.
+pub(crate) fn resolve_ce_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    if let Ok(base) = app.path().resource_dir() {
+        let bundled = base.join("assets").join("ces");
+        if bundled.is_dir() {
+            return Some(bundled);
+        }
+    }
+    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join("ces");
+    if dev.is_dir() {
+        return Some(dev);
+    }
+    None
+}
+
 /// Resolve the bundled mash-cv sidecar executable path. The sidecar is shipped
 /// as a PyInstaller --onedir directory under `binaries/mash-cv/` (containing
 /// the executable and a sibling `_internal/` directory).
@@ -609,6 +702,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_servants,
+            get_craft_essences,
             save_turns,
             load_turns,
             list_projects,

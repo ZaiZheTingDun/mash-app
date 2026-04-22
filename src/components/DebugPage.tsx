@@ -1,8 +1,51 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Box, Flex, Text } from "@radix-ui/themes";
-import { ChevronLeftIcon, ReloadIcon } from "@radix-ui/react-icons";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ReloadIcon,
+} from "@radix-ui/react-icons";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import type { CvConfig } from "../types/cv";
+
+/**
+ * Collapsible group used throughout the debug UI. Built on the native
+ * `<details>` element so it needs zero React state and is naturally
+ * keyboard-accessible. The chevron rotates via a CSS rule on
+ * `.debug-section[open] > summary > .debug-section-chevron`.
+ */
+function DebugSection({
+  title,
+  defaultOpen = false,
+  badge,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="debug-section" open={defaultOpen}>
+      <summary className="debug-section-summary">
+        <ChevronRightIcon
+          className="debug-section-chevron"
+          width={14}
+          height={14}
+        />
+        <Text size="2" weight="medium">
+          {title}
+        </Text>
+        {badge !== undefined && badge !== null && (
+          <Text size="1" color="gray" className="debug-section-badge">
+            {badge}
+          </Text>
+        )}
+      </summary>
+      <div className="debug-section-body">{children}</div>
+    </details>
+  );
+}
 
 interface DebugScreenSize {
   w: number;
@@ -86,6 +129,15 @@ interface NoblePhantasmMatchDto {
   stdBgr: number;
 }
 
+interface SupportCeInfoDto {
+  region: NormRectDto;
+  score: number;
+  passed: boolean;
+  threshold: number;
+  templatePath?: string;
+  error?: string;
+}
+
 interface SupportRowMatchDto {
   rowRegion: NormRectDto;
   tap: PointDto;
@@ -96,6 +148,13 @@ interface SupportRowMatchDto {
   npScore: number;
   npRegion: NormRectDto;
   npMatchedName: string;
+  /**
+   * Per-row craft-essence verification, populated only when the user
+   * supplies a CE id in the debug toolbar. Lets the overlay draw the
+   * CE search window and the score so `SUPPORT_CE_OFFSET_IN_ROW` /
+   * `SUPPORT_CE_THRESHOLD` can be calibrated against real captures.
+   */
+  ce?: SupportCeInfoDto;
 }
 
 interface SupportCandidateDto {
@@ -178,6 +237,7 @@ export function DebugPage({ onBack }: DebugPageProps) {
   );
   const [findingNps, setFindingNps] = useState(false);
   const [supportServantId, setSupportServantId] = useState<string>("");
+  const [supportCraftEssenceId, setSupportCraftEssenceId] = useState<string>("");
   const [supportMetadata, setSupportMetadata] =
     useState<ServantMetadataDto | null>(null);
   const [supportResult, setSupportResult] =
@@ -476,6 +536,13 @@ export function DebugPage({ onBack }: DebugPageProps) {
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [supportServantId]);
 
+  const parsedSupportCraftEssenceId = useMemo<number | null>(() => {
+    const raw = supportCraftEssenceId.trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [supportCraftEssenceId]);
+
   const handleFindSupports = useCallback(async () => {
     if (!capture || parsedSupportServantId === null) return;
     setFindingSupports(true);
@@ -495,7 +562,10 @@ export function DebugPage({ onBack }: DebugPageProps) {
       }
       const result = await invoke<FindSupportsResultDto>(
         "debug_find_supports",
-        { servantId: parsedSupportServantId }
+        {
+          servantId: parsedSupportServantId,
+          craftEssenceId: parsedSupportCraftEssenceId,
+        }
       );
       setSupportResult(result);
       const diag = result.diagnostics;
@@ -508,9 +578,13 @@ export function DebugPage({ onBack }: DebugPageProps) {
         log("未匹配到助战行 — 检查截图是否为助战选择画面", "warn");
       } else {
         for (const s of result.supports) {
+          const cePart = s.ce
+            ? ` | 礼装 ${s.ce.score.toFixed(2)}/${s.ce.threshold.toFixed(2)} ${s.ce.passed ? "✓" : "✗"}`
+            : "";
           log(
             `  行 y=${s.rowRegion.y.toFixed(3)} | 名称='${s.nameText}' (${s.nameScore.toFixed(2)})` +
-              ` | 宝具='${s.npText}' (${s.npScore.toFixed(2)})`
+              ` | 宝具='${s.npText}' (${s.npScore.toFixed(2)})` +
+              cePart
           );
         }
       }
@@ -519,7 +593,13 @@ export function DebugPage({ onBack }: DebugPageProps) {
     } finally {
       setFindingSupports(false);
     }
-  }, [capture, parsedSupportServantId, supportMetadata, log]);
+  }, [
+    capture,
+    parsedSupportServantId,
+    parsedSupportCraftEssenceId,
+    supportMetadata,
+    log,
+  ]);
 
   const handleClearLogs = useCallback(() => setLogs([]), []);
 
@@ -587,7 +667,7 @@ export function DebugPage({ onBack }: DebugPageProps) {
       </Flex>
 
       <Flex className="debug-body" gap="4">
-        <Flex direction="column" className="debug-canvas-col" gap="3">
+        <Flex direction="column" className="debug-canvas-col" gap="2">
           <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
             <button
               className="battle-btn battle-btn-start"
@@ -659,147 +739,163 @@ export function DebugPage({ onBack }: DebugPageProps) {
             </button>
           </Flex>
 
-          <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-            <Text size="1" color="gray">
-              原始模板探针
-            </Text>
-            <input
-              className="debug-input"
-              list="debug-template-list"
-              placeholder="模板 key"
-              value={rawTemplateInput}
-              onChange={(e) => setRawTemplateInput(e.target.value)}
-            />
-            <datalist id="debug-template-list">
-              {templateKeys.map((k) => (
-                <option key={k} value={k} />
-              ))}
-            </datalist>
-            <Flex align="center" gap="1">
-              <Text size="1" color="gray">
-                阈值
-              </Text>
+          <DebugSection title="原始模板探针">
+            <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
               <input
-                className="debug-input debug-input-threshold"
-                type="number"
-                min={0}
-                max={1}
-                step={0.05}
-                value={threshold}
-                onChange={(e) =>
-                  setThreshold(
-                    Math.max(0, Math.min(1, Number(e.target.value) || 0))
-                  )
-                }
+                className="debug-input"
+                list="debug-template-list"
+                placeholder="模板 key"
+                value={rawTemplateInput}
+                onChange={(e) => setRawTemplateInput(e.target.value)}
               />
+              <datalist id="debug-template-list">
+                {templateKeys.map((k) => (
+                  <option key={k} value={k} />
+                ))}
+              </datalist>
+              <Flex align="center" gap="1">
+                <Text size="1" color="gray">
+                  阈值
+                </Text>
+                <input
+                  className="debug-input debug-input-threshold"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={threshold}
+                  onChange={(e) =>
+                    setThreshold(
+                      Math.max(0, Math.min(1, Number(e.target.value) || 0))
+                    )
+                  }
+                />
+              </Flex>
+              <button
+                className="battle-btn battle-btn-start debug-btn-small"
+                disabled={probing || !capture || !rawTemplateInput.trim()}
+                onClick={handleProbeRaw}
+              >
+                {probing ? "查找中…" : "查找"}
+              </button>
             </Flex>
-            <button
-              className="battle-btn battle-btn-start debug-btn-small"
-              disabled={probing || !capture || !rawTemplateInput.trim()}
-              onClick={handleProbeRaw}
-            >
-              {probing ? "查找中…" : "查找"}
-            </button>
-          </Flex>
+          </DebugSection>
 
-          <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-            <Text size="1" color="gray">
-              指令卡识别
-            </Text>
-            <input
-              className="debug-input"
-              placeholder="候选从者 id (逗号分隔，可留空只定位卡槽)"
-              value={cardServantInput}
-              onChange={(e) => setCardServantInput(e.target.value)}
-              style={{ flex: 1, minWidth: 240 }}
-            />
-            <button
-              className="battle-btn battle-btn-start debug-btn-small"
-              disabled={availableServantIds.length === 0}
-              onClick={handleUseAllAvailableIds}
-              title={`填入全部 ${availableServantIds.length} 个有素材的从者 id`}
-            >
-              全选 ({availableServantIds.length})
-            </button>
-            <button
-              className="battle-btn battle-btn-start debug-btn-small"
-              disabled={findingCards || !capture}
-              onClick={handleFindCommandCards}
-            >
-              {findingCards ? "识别中…" : "识别指令卡"}
-            </button>
-            <button
-              className="battle-btn battle-btn-start debug-btn-small"
-              disabled={findingNps || !capture}
-              onClick={handleFindNoblePhantasms}
-            >
-              {findingNps ? "识别中…" : "识别宝具卡"}
-            </button>
-          </Flex>
-
-          <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-            <Text size="1" color="gray">
-              助战识别
-            </Text>
-            <input
-              className="debug-input"
-              list="debug-support-servant-list"
-              placeholder="助战从者 id"
-              value={supportServantId}
-              onChange={(e) => setSupportServantId(e.target.value)}
-              style={{ width: 140 }}
-            />
-            <datalist id="debug-support-servant-list">
-              {availableServantIds.map((id) => (
-                <option key={`support-id-${id}`} value={id} />
-              ))}
-            </datalist>
-            <button
-              className="battle-btn battle-btn-start debug-btn-small"
-              disabled={
-                findingSupports || !capture || parsedSupportServantId === null
-              }
-              onClick={handleFindSupports}
-            >
-              {findingSupports ? "识别中…" : "识别助战"}
-            </button>
-            {supportMetadata && (
-              <Text size="1" color="gray">
-                {supportMetadata.name} · {supportMetadata.npNames.length} 宝具
-              </Text>
-            )}
-          </Flex>
-
-          <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-            <label className="debug-coord-toggle">
+          <DebugSection title="指令卡 / 宝具卡识别">
+            <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
               <input
-                type="checkbox"
-                checked={showCoordOverlay}
-                onChange={(e) => setShowCoordOverlay(e.target.checked)}
+                className="debug-input"
+                placeholder="候选从者 id (逗号分隔，可留空只定位卡槽)"
+                value={cardServantInput}
+                onChange={(e) => setCardServantInput(e.target.value)}
+                style={{ flex: 1, minWidth: 240 }}
               />
-              <Text size="1">坐标叠层</Text>
-            </label>
-            {coordinates?.groups.map((g) => (
-              <label key={g.id} className="debug-coord-toggle">
+              <button
+                className="battle-btn battle-btn-start debug-btn-small"
+                disabled={availableServantIds.length === 0}
+                onClick={handleUseAllAvailableIds}
+                title={`填入全部 ${availableServantIds.length} 个有素材的从者 id`}
+              >
+                全选 ({availableServantIds.length})
+              </button>
+              <button
+                className="battle-btn battle-btn-start debug-btn-small"
+                disabled={findingCards || !capture}
+                onClick={handleFindCommandCards}
+              >
+                {findingCards ? "识别中…" : "识别指令卡"}
+              </button>
+              <button
+                className="battle-btn battle-btn-start debug-btn-small"
+                disabled={findingNps || !capture}
+                onClick={handleFindNoblePhantasms}
+              >
+                {findingNps ? "识别中…" : "识别宝具卡"}
+              </button>
+            </Flex>
+          </DebugSection>
+
+          <DebugSection
+            title="助战识别"
+            badge={
+              supportMetadata
+                ? `${supportMetadata.name} · ${supportMetadata.npNames.length} 宝具`
+                : undefined
+            }
+          >
+            <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
+              <input
+                className="debug-input"
+                list="debug-support-servant-list"
+                placeholder="助战从者 id"
+                value={supportServantId}
+                onChange={(e) => setSupportServantId(e.target.value)}
+                style={{ width: 140 }}
+              />
+              <datalist id="debug-support-servant-list">
+                {availableServantIds.map((id) => (
+                  <option key={`support-id-${id}`} value={id} />
+                ))}
+              </datalist>
+              <input
+                className="debug-input"
+                placeholder="礼装 id (可选)"
+                value={supportCraftEssenceId}
+                onChange={(e) => setSupportCraftEssenceId(e.target.value)}
+                style={{ width: 140 }}
+                title="留空跳过礼装识别。提供后会按行运行 verify_support_ce 并叠加搜索框 + 分数。"
+              />
+              <button
+                className="battle-btn battle-btn-start debug-btn-small"
+                disabled={
+                  findingSupports || !capture || parsedSupportServantId === null
+                }
+                onClick={handleFindSupports}
+              >
+                {findingSupports ? "识别中…" : "识别助战"}
+              </button>
+            </Flex>
+          </DebugSection>
+
+          <DebugSection
+            title="坐标叠层"
+            badge={
+              showCoordOverlay
+                ? `${visibleCoordGroups.size} / ${coordinates?.groups.length ?? 0}`
+                : "off"
+            }
+          >
+            <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
+              <label className="debug-coord-toggle">
                 <input
                   type="checkbox"
-                  disabled={!showCoordOverlay}
-                  checked={visibleCoordGroups.has(g.id)}
-                  onChange={(e) => {
-                    setVisibleCoordGroups((prev) => {
-                      const next = new Set(prev);
-                      if (e.target.checked) next.add(g.id);
-                      else next.delete(g.id);
-                      return next;
-                    });
-                  }}
+                  checked={showCoordOverlay}
+                  onChange={(e) => setShowCoordOverlay(e.target.checked)}
                 />
-                <Text size="1" color={showCoordOverlay ? undefined : "gray"}>
-                  {g.label}
-                </Text>
+                <Text size="1">坐标叠层</Text>
               </label>
-            ))}
-          </Flex>
+              {coordinates?.groups.map((g) => (
+                <label key={g.id} className="debug-coord-toggle">
+                  <input
+                    type="checkbox"
+                    disabled={!showCoordOverlay}
+                    checked={visibleCoordGroups.has(g.id)}
+                    onChange={(e) => {
+                      setVisibleCoordGroups((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(g.id);
+                        else next.delete(g.id);
+                        return next;
+                      });
+                    }}
+                  />
+                  <Text size="1" color={showCoordOverlay ? undefined : "gray"}>
+                    {g.label}
+                  </Text>
+                </label>
+              ))}
+            </Flex>
+          </DebugSection>
 
           <Box className="debug-canvas-wrapper">
             {imageSrc ? (
@@ -977,6 +1073,31 @@ export function DebugPage({ onBack }: DebugPageProps) {
                         <span className="debug-coord-label">点击 {i + 1}</span>
                       </Box>
                     ))}
+                    {supportResult.supports.map((s, i) =>
+                      s.ce ? (
+                        <Box
+                          key={`support-ce-${i}`}
+                          className="debug-overlay-box debug-overlay-support-ce"
+                          style={{
+                            left: `${s.ce.region.x * 100}%`,
+                            top: `${s.ce.region.y * 100}%`,
+                            width: `${s.ce.region.w * 100}%`,
+                            height: `${s.ce.region.h * 100}%`,
+                            outline: `2px solid ${s.ce.passed ? "#3fb950" : "#f85149"}`,
+                          }}
+                          title={
+                            s.ce.error
+                              ? `CE verify error: ${s.ce.error}`
+                              : `CE score ${s.ce.score.toFixed(3)} (threshold ${s.ce.threshold.toFixed(2)})`
+                          }
+                        >
+                          <span className="debug-overlay-label">
+                            礼 {s.ce.score.toFixed(2)}/{s.ce.threshold.toFixed(2)}{" "}
+                            {s.ce.passed ? "✓" : "✗"}
+                          </span>
+                        </Box>
+                      ) : null
+                    )}
                   </>
                 )}
                 {showCoordOverlay &&
@@ -1089,10 +1210,7 @@ export function DebugPage({ onBack }: DebugPageProps) {
           </Box>
 
           {selectedElementSpec && (
-            <Box>
-              <Text size="1" color="gray" className="debug-side-label">
-                当前元素配置
-              </Text>
+            <DebugSection title="当前元素配置">
               <Box className="debug-screen-badge">
                 <Text size="2" weight="medium">
                   {selectedScreen}.{selectedElement}
@@ -1112,13 +1230,13 @@ export function DebugPage({ onBack }: DebugPageProps) {
                   </Text>
                 )}
               </Box>
-            </Box>
+            </DebugSection>
           )}
 
-          <Box>
-            <Text size="1" color="gray" className="debug-side-label">
-              指令卡识别 ({commandCards.length})
-            </Text>
+          <DebugSection
+            title="指令卡识别"
+            badge={commandCards.length || undefined}
+          >
             <Box className="debug-match-list">
               {commandCards.length === 0 && (
                 <Text size="1" color="gray">
@@ -1157,13 +1275,16 @@ export function DebugPage({ onBack }: DebugPageProps) {
                 </Box>
               ))}
             </Box>
-          </Box>
+          </DebugSection>
 
-          <Box>
-            <Text size="1" color="gray" className="debug-side-label">
-              宝具卡识别 ({noblePhantasms.filter((s) => s.ready).length}/
-              {noblePhantasms.length})
-            </Text>
+          <DebugSection
+            title="宝具卡识别"
+            badge={
+              noblePhantasms.length > 0
+                ? `${noblePhantasms.filter((s) => s.ready).length}/${noblePhantasms.length}`
+                : undefined
+            }
+          >
             <Box className="debug-match-list">
               {noblePhantasms.length === 0 && (
                 <Text size="1" color="gray">
@@ -1190,12 +1311,12 @@ export function DebugPage({ onBack }: DebugPageProps) {
                 </Box>
               ))}
             </Box>
-          </Box>
+          </DebugSection>
 
-          <Box>
-            <Text size="1" color="gray" className="debug-side-label">
-              助战识别 ({supportResult?.supports.length ?? 0})
-            </Text>
+          <DebugSection
+            title="助战识别"
+            badge={supportResult?.supports.length || undefined}
+          >
             <Box className="debug-match-list">
               {!supportResult && (
                 <Text size="1" color="gray">
@@ -1241,6 +1362,17 @@ export function DebugPage({ onBack }: DebugPageProps) {
                     行 y={s.rowRegion.y.toFixed(3)} h=
                     {s.rowRegion.h.toFixed(3)}
                   </Text>
+                  {s.ce && (
+                    <Text
+                      size="1"
+                      color={s.ce.passed ? "green" : "red"}
+                    >
+                      礼装 {s.ce.score.toFixed(3)} /{" "}
+                      {s.ce.threshold.toFixed(2)}{" "}
+                      {s.ce.passed ? "✓ 匹配" : "✗ 未达阈值"}
+                      {s.ce.error ? ` · ${s.ce.error}` : ""}
+                    </Text>
+                  )}
                 </Box>
               ))}
               {supportResult && supportResult.supports.length === 0 && (
@@ -1283,12 +1415,12 @@ export function DebugPage({ onBack }: DebugPageProps) {
                 </>
               )}
             </Box>
-          </Box>
+          </DebugSection>
 
-          <Box>
-            <Text size="1" color="gray" className="debug-side-label">
-              匹配历史
-            </Text>
+          <DebugSection
+            title="匹配历史"
+            badge={probes.length || undefined}
+          >
             <Box className="debug-match-list">
               {probes.length === 0 && (
                 <Text size="1" color="gray">
@@ -1320,7 +1452,7 @@ export function DebugPage({ onBack }: DebugPageProps) {
                 </Box>
               ))}
             </Box>
-          </Box>
+          </DebugSection>
         </Flex>
       </Flex>
     </Flex>

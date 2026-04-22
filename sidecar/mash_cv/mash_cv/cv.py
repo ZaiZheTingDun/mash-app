@@ -40,6 +40,9 @@ stream frame is used):
                                                                       "nameCandidates":[...],
                                                                       "npCandidates":[...],
                                                                       "fragmentCount":N}}
+→ {"cmd":"verify_support_ce","region":{...},
+    "templatePath":"/.../assets/ces/{id}/card_ce.png","threshold":0.7}
+                                                    ← {"score":0.81,"passed":true}
 """
 
 import base64
@@ -1090,6 +1093,168 @@ def _find_supports(
 
 
 # ---------------------------------------------------------------------------
+# Support craft-essence verification
+# ---------------------------------------------------------------------------
+# After ``find_supports`` locates candidate rows by OCR, the runner can
+# additionally verify that each row's CE icon matches the player's pinned
+# support CE. The CE icon sits inside the row bbox at a small offset
+# (left of the servant name + NP, below the face). Templates live under
+# ``assets/ces/{ce_id}/card_ce.png`` and are loaded on demand — we never
+# bundle the full CE catalog into the sidecar.
+
+# Cache: (template_path, target_w, target_h) -> grayscale ndarray. Mirrors
+# the face template cache (``_face_cache``) — verifying multiple rows in
+# one call resizes the template once and reuses it for every row.
+_ce_template_cache: dict[tuple[str, int, int], np.ndarray] = {}
+
+# The bundled card_ce.png assets (under ``assets/ces/{id}/``) are a uniform
+# 150x68 with a decorative top/bottom frame and a right-side gradient that
+# the support-select screen crops away when it renders the CE overlay on a
+# face card. Drop the same strips before matching so the template covers
+# only the inner art that actually appears on screen, otherwise
+# matchTemplate has to find the inner art inside the framed template and
+# the score collapses.
+CE_TEMPLATE_TOP_CROP = 16
+CE_TEMPLATE_BOTTOM_CROP = 16
+CE_TEMPLATE_RIGHT_CROP = 0
+
+# On-screen size of the support-row CE icon, expressed as fractions of the
+# full screenshot dimensions. Reference data point: at 2560×1440 the icon
+# renders at 315×90 px (315/2560 ≈ 0.123, 90/1440 ≈ 0.0625). FGO scales
+# the support UI proportionally, so these fractions hold across the
+# common emulator/native resolutions and we resize the template to
+# exactly this pixel size before running ``cv2.matchTemplate``. Doing
+# this also implicitly corrects the small (~3%) aspect-ratio mismatch
+# between the cropped template (122/36 = 3.389) and the on-screen icon
+# (315/90 = 3.500).
+CE_ICON_W_FRAC = 315.0 / 2560.0
+CE_ICON_H_FRAC = 90.0 / 1440.0
+
+
+def _load_ce_template(
+    path: str, target_w: int, target_h: int
+) -> Optional[np.ndarray]:
+    """Load a CE icon template, drop alpha, grayscale, trim the framed
+    top/bottom + right strips, and resize to **exactly** ``target_w`` x
+    ``target_h`` (no aspect-ratio preservation — both axes are forced so
+    the template matches the on-screen icon dimensions). Cached per
+    ``(path, target_w, target_h)`` so repeated row checks pay the
+    read/resize cost only once."""
+    key = (path, target_w, target_h)
+    cached = _ce_template_cache.get(key)
+    if cached is not None:
+        return cached
+
+    raw = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    if raw is None:
+        return None
+    if raw.ndim == 3 and raw.shape[2] == 4:
+        bgr = raw[:, :, :3]
+        alpha = raw[:, :, 3:4].astype(np.float32) / 255.0
+        composed = (bgr.astype(np.float32) * alpha).astype(np.uint8)
+        gray = cv2.cvtColor(composed, cv2.COLOR_BGR2GRAY)
+    elif raw.ndim == 3:
+        gray = cv2.cvtColor(raw, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = raw
+
+    # Trim the decorative frame (top/bottom) and the right-side gradient.
+    # Each strip is clamped to a third of its respective dimension so we
+    # never over-crop a non-standard template (defensive — the bundled
+    # assets are uniformly 150x68 today).
+    h_full, w_full = gray.shape[:2]
+    max_v_strip = max(0, h_full // 3)
+    top = min(CE_TEMPLATE_TOP_CROP, max_v_strip)
+    bot = min(CE_TEMPLATE_BOTTOM_CROP, max_v_strip)
+    max_h_strip = max(0, w_full // 3)
+    right = min(CE_TEMPLATE_RIGHT_CROP, max_h_strip)
+    new_h = h_full - top - bot
+    new_w = w_full - right
+    if new_h > 0 and new_w > 0 and (top + bot + right) > 0:
+        gray = gray[top : h_full - bot, : w_full - right]
+
+    if target_w > 0 and target_h > 0 and (
+        gray.shape[1] != target_w or gray.shape[0] != target_h
+    ):
+        gray = cv2.resize(
+            gray, (target_w, target_h), interpolation=cv2.INTER_AREA
+        )
+
+    _ce_template_cache[key] = gray
+    return gray
+
+
+def _verify_support_ce(
+    img: np.ndarray,
+    region: dict,
+    template_path: str,
+    threshold: float,
+) -> dict:
+    """Score a row's CE icon against ``template_path``.
+
+    ``region`` is the absolute search window (typically the row rect with
+    ``SUPPORT_CE_OFFSET_IN_ROW`` applied on the Rust side). We crop the
+    region in grayscale, resize the template to the crop's width, and
+    take ``max(matchTemplate)`` with ``TM_CCOEFF_NORMED``.
+
+    Returns ``{"score": float, "passed": bool}``. A missing template or
+    empty crop yields ``score=0.0, passed=False`` so callers can treat
+    "couldn't read the icon" the same as "didn't match".
+    """
+    h, w = img.shape[:2]
+    if h == 0 or w == 0:
+        return {"score": 0.0, "passed": False, "error": "empty image"}
+
+    rx = max(0, int(round(region["x"] * w)))
+    ry = max(0, int(round(region["y"] * h)))
+    rw = max(1, min(int(round(region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(region["h"] * h)), h - ry))
+    crop = img[ry : ry + rh, rx : rx + rw]
+    if crop.size == 0:
+        return {"score": 0.0, "passed": False, "error": "empty crop"}
+
+    crop_gray = (
+        cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
+    )
+
+    # Resize the template to match the on-screen icon's pixel size in the
+    # **full** screenshot (not the crop), since the crop is sliced at
+    # native scale. Forcing both axes also corrects the small aspect-
+    # ratio mismatch between the cropped template and the rendered icon.
+    target_w = max(8, int(round(CE_ICON_W_FRAC * w)))
+    target_h = max(8, int(round(CE_ICON_H_FRAC * h)))
+    tmpl = _load_ce_template(template_path, target_w, target_h)
+    if tmpl is None:
+        return {"score": 0.0, "passed": False, "error": "template not readable"}
+
+    # If the search window is too small for the icon (caller misconfigured
+    # SUPPORT_CE_OFFSET_IN_ROW), shrink the template proportionally so
+    # matchTemplate can still run instead of failing outright. The score
+    # will be lower in that case, surfacing the bad calibration.
+    if (
+        tmpl.shape[0] > crop_gray.shape[0]
+        or tmpl.shape[1] > crop_gray.shape[1]
+    ):
+        scale = min(
+            crop_gray.shape[0] / tmpl.shape[0],
+            crop_gray.shape[1] / tmpl.shape[1],
+        )
+        new_w = max(8, int(round(tmpl.shape[1] * scale)))
+        new_h = max(8, int(round(tmpl.shape[0] * scale)))
+        tmpl = cv2.resize(
+            tmpl, (new_w, new_h), interpolation=cv2.INTER_AREA
+        )
+
+    if tmpl.shape[0] > crop_gray.shape[0] or tmpl.shape[1] > crop_gray.shape[1]:
+        return {"score": 0.0, "passed": False, "error": "template larger than crop"}
+
+    res = cv2.matchTemplate(crop_gray, tmpl, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, _ = cv2.minMaxLoc(res)
+    score = float(max_val)
+    return {"score": score, "passed": score >= threshold}
+
+
+# ---------------------------------------------------------------------------
 # Template / config loading
 # ---------------------------------------------------------------------------
 
@@ -1402,6 +1567,27 @@ def main() -> None:
                         float(cmd.get("pairDy", SUPPORT_ROW_PAIR_DY)),
                     ),
                 )
+        elif action == "verify_support_ce":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(req_id, {"score": 0.0, "passed": False, "error": err})
+                continue
+            template_path = cmd.get("templatePath")
+            if not template_path:
+                _reply(
+                    req_id,
+                    {"score": 0.0, "passed": False, "error": "missing 'templatePath'"},
+                )
+                continue
+            _reply(
+                req_id,
+                _verify_support_ce(
+                    img,
+                    cmd.get("region", DEFAULT_REGION),
+                    template_path,
+                    float(cmd.get("threshold", 0.7)),
+                ),
+            )
         elif action == "find_region":
             img, err = _load_frame(cmd)
             if img is None:
