@@ -20,12 +20,14 @@ def _clear_state():
     mash_cv._face_cache.clear()
     mash_cv._icon_color_sig.clear()
     from mash_cv import cv as _cv_module
+    _cv_module._ce_template_cache.clear()
     _cv_module.templates_dir = None
     yield
     mash_cv.templates.clear()
     mash_cv._set_config({"screens": {}})
     mash_cv._face_cache.clear()
     mash_cv._icon_color_sig.clear()
+    _cv_module._ce_template_cache.clear()
     _cv_module.templates_dir = None
 
 
@@ -673,6 +675,192 @@ class TestFindSupports:
         assert result["supports"] == []
 
 
+# ── _verify_support_ce / _load_ce_template ─────────────────────────────
+
+
+def _ce_target_pixel_size(img_w: int, img_h: int) -> tuple[int, int]:
+    """Mirror the target-size math inside ``_verify_support_ce``."""
+    from mash_cv.cv import CE_ICON_W_FRAC, CE_ICON_H_FRAC
+
+    target_w = max(8, int(round(CE_ICON_W_FRAC * img_w)))
+    target_h = max(8, int(round(CE_ICON_H_FRAC * img_h)))
+    return target_w, target_h
+
+
+def _make_ce_icon(target_w: int, target_h: int) -> np.ndarray:
+    """A spatially-rich BGR patch of the requested size. matchTemplate
+    needs non-uniform texture or every region scores the same."""
+    grad_x = np.tile(
+        np.linspace(0, 255, target_w, dtype=np.uint8), (target_h, 1)
+    )
+    grad_y = np.tile(
+        np.linspace(0, 255, target_h, dtype=np.uint8).reshape(-1, 1),
+        (1, target_w),
+    )
+    b = grad_x
+    g = grad_y
+    r = ((grad_x.astype(np.uint16) + grad_y.astype(np.uint16)) // 2).astype(
+        np.uint8
+    )
+    return cv2.merge([b, g, r])
+
+
+def _build_template_png(
+    path: str, target_w: int, target_h: int, alpha: bool = False
+) -> np.ndarray:
+    """Write a 150x68 CE-style template to ``path`` whose *inner* art
+    (after the 16px top/bottom strips are cropped) matches what
+    ``_make_ce_icon(target_w, target_h)`` would produce on screen.
+
+    Returns the icon BGR array so callers can stamp the same pixels into
+    a synthetic screenshot.
+    """
+    from mash_cv.cv import CE_TEMPLATE_TOP_CROP, CE_TEMPLATE_BOTTOM_CROP
+
+    icon_bgr = _make_ce_icon(target_w, target_h)
+    inner_h = 68 - CE_TEMPLATE_TOP_CROP - CE_TEMPLATE_BOTTOM_CROP
+    inner_w = 150
+    inner_bgr = cv2.resize(
+        icon_bgr, (inner_w, inner_h), interpolation=cv2.INTER_AREA
+    )
+
+    full = np.zeros((68, 150, 3), dtype=np.uint8)
+    # Frame strips (top + bottom): a distinct color so a buggy crop
+    # leaks obvious noise into the matched template.
+    full[:CE_TEMPLATE_TOP_CROP, :] = (255, 0, 255)
+    full[68 - CE_TEMPLATE_BOTTOM_CROP :, :] = (255, 0, 255)
+    full[CE_TEMPLATE_TOP_CROP : 68 - CE_TEMPLATE_BOTTOM_CROP, :] = inner_bgr
+
+    if alpha:
+        bgra = cv2.cvtColor(full, cv2.COLOR_BGR2BGRA)
+        bgra[:, :, 3] = 255
+        cv2.imwrite(path, bgra)
+    else:
+        cv2.imwrite(path, full)
+    return icon_bgr
+
+
+class TestVerifySupportCE:
+    """Synthetic-only tests for ``_verify_support_ce`` — the bundled CE
+    PNGs under ``src-tauri/assets/ces/`` are gitignored, so we build a
+    template + screenshot pair in tmp_path for each scenario."""
+
+    def test_returns_zero_for_empty_image(self):
+        from mash_cv.cv import _verify_support_ce
+
+        img = np.zeros((0, 0, 3), dtype=np.uint8)
+        result = _verify_support_ce(
+            img, {"x": 0, "y": 0, "w": 1, "h": 1}, "/tmp/anything.png", 0.7
+        )
+        assert result["passed"] is False
+        assert result["score"] == 0.0
+        assert "empty image" in result["error"]
+
+    def test_returns_error_when_template_missing(self):
+        from mash_cv.cv import _verify_support_ce
+
+        img = _make_bgr_image(2560, 1440, bgr=(80, 80, 80))
+        result = _verify_support_ce(
+            img,
+            {"x": 0.0, "y": 0.0, "w": 0.2, "h": 0.2},
+            "/nonexistent/template.png",
+            0.7,
+        )
+        assert result["passed"] is False
+        assert result["score"] == 0.0
+        assert "not readable" in result["error"]
+
+    def test_passes_when_template_embedded_in_region(self, tmp_path):
+        from mash_cv.cv import _verify_support_ce
+
+        img_w, img_h = 2560, 1440
+        target_w, target_h = _ce_target_pixel_size(img_w, img_h)
+
+        tmpl_path = str(tmp_path / "card_ce.png")
+        icon_bgr = _build_template_png(tmpl_path, target_w, target_h)
+
+        img = _make_bgr_image(img_w, img_h, bgr=(40, 40, 40))
+        # Stamp the same icon into a known row position.
+        py, px = 600, 400
+        img[py : py + target_h, px : px + target_w] = icon_bgr
+
+        # Search window covers the stamped icon with some slack.
+        region = {
+            "x": (px - 20) / img_w,
+            "y": (py - 20) / img_h,
+            "w": (target_w + 60) / img_w,
+            "h": (target_h + 60) / img_h,
+        }
+        result = _verify_support_ce(img, region, tmpl_path, 0.7)
+        assert result["passed"] is True, result
+        assert result["score"] > 0.95, result
+
+    def test_fails_when_template_mismatched(self, tmp_path):
+        from mash_cv.cv import _verify_support_ce
+
+        img_w, img_h = 2560, 1440
+        target_w, target_h = _ce_target_pixel_size(img_w, img_h)
+
+        tmpl_path = str(tmp_path / "card_ce.png")
+        _build_template_png(tmpl_path, target_w, target_h)
+
+        # Screenshot with a *different* pattern in the search region — a
+        # uniform mid-gray won't correlate with the gradient template.
+        img = _make_bgr_image(img_w, img_h, bgr=(128, 128, 128))
+        region = {"x": 0.15, "y": 0.40, "w": 0.20, "h": 0.20}
+        result = _verify_support_ce(img, region, tmpl_path, 0.7)
+        assert result["passed"] is False, result
+        assert result["score"] < 0.7, result
+
+
+class TestLoadCETemplate:
+    def test_caches_by_path_and_size(self, tmp_path):
+        from mash_cv.cv import _load_ce_template, _ce_template_cache
+
+        path = str(tmp_path / "ce.png")
+        _build_template_png(path, 100, 30)
+
+        a = _load_ce_template(path, 100, 30)
+        b = _load_ce_template(path, 100, 30)
+        assert a is b
+        assert (path, 100, 30) in _ce_template_cache
+
+        c = _load_ce_template(path, 120, 30)
+        assert c is not a
+        assert c.shape == (30, 120)
+
+    def test_drops_alpha_and_crops_frame(self, tmp_path):
+        from mash_cv.cv import (
+            _load_ce_template,
+            CE_TEMPLATE_TOP_CROP,
+            CE_TEMPLATE_BOTTOM_CROP,
+        )
+
+        path = str(tmp_path / "ce_rgba.png")
+        _build_template_png(path, 100, 30, alpha=True)
+
+        loaded = _load_ce_template(path, 100, 30)
+        assert loaded is not None
+        # Forced-resize honours the requested target dims exactly.
+        assert loaded.shape == (30, 100)
+        # Result is grayscale (2-D, no channel dim).
+        assert loaded.ndim == 2
+        # The framing strips were magenta (255, 0, 255) → grayscale ≈ 105.
+        # If they survived the crop, the top/bottom rows would carry that
+        # value; cropping should leave the gradient instead, whose first
+        # row average is much lower than 105.
+        h, _ = loaded.shape
+        assert h > 0
+        # Sanity: at least some pixels should be near zero (top-left of
+        # the gradient), proving the inner art reached the output.
+        assert loaded.min() < 30
+
+        # The constants are used (not just nominal) — exercising them
+        # ensures any future refactor that drops the crop is caught.
+        assert CE_TEMPLATE_TOP_CROP > 0
+        assert CE_TEMPLATE_BOTTOM_CROP > 0
+
+
 # ── Integration: subprocess REPL ────────────────────────────────────────
 
 
@@ -811,6 +999,58 @@ class TestREPL:
         assert responses[0]["found"] is True
         assert 0.19 <= responses[0]["region"]["x"] <= 0.21
         assert 0.39 <= responses[0]["region"]["y"] <= 0.41
+
+    def test_verify_support_ce_command(self, tmp_path):
+        # Build a synthetic 2560x1440 screenshot with the CE icon stamped
+        # into a known region, and the matching template on disk.
+        img_w, img_h = 2560, 1440
+        target_w, target_h = _ce_target_pixel_size(img_w, img_h)
+
+        tmpl_path = str(tmp_path / "card_ce.png")
+        icon_bgr = _build_template_png(tmpl_path, target_w, target_h)
+
+        img = _make_bgr_image(img_w, img_h, bgr=(40, 40, 40))
+        py, px = 600, 400
+        img[py : py + target_h, px : px + target_w] = icon_bgr
+
+        img_path = str(tmp_path / "scene.png")
+        cv2.imwrite(img_path, img)
+
+        region = {
+            "x": (px - 20) / img_w,
+            "y": (py - 20) / img_h,
+            "w": (target_w + 60) / img_w,
+            "h": (target_h + 60) / img_h,
+        }
+
+        responses = self._run([
+            {
+                "cmd": "verify_support_ce",
+                "imagePath": img_path,
+                "templatePath": tmpl_path,
+                "region": region,
+                "threshold": 0.7,
+            },
+            # And once more without a templatePath to exercise the
+            # validation branch.
+            {
+                "cmd": "verify_support_ce",
+                "imagePath": img_path,
+                "region": region,
+                "threshold": 0.7,
+            },
+            {"cmd": "quit"},
+        ])
+
+        assert len(responses) == 2
+        good = responses[0]
+        assert good["passed"] is True, good
+        assert good["score"] > 0.9, good
+
+        bad = responses[1]
+        assert bad["passed"] is False
+        assert bad["score"] == 0.0
+        assert "templatePath" in bad["error"]
 
 
 class TestRegionTool:

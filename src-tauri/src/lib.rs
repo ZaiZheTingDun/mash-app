@@ -733,3 +733,136 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    // --- default_project_slots -----------------------------------------
+
+    #[test]
+    fn default_project_slots_yields_six_slots_with_support_at_index_two() {
+        let slots = default_project_slots();
+        assert_eq!(slots.len(), 6);
+        for (i, slot) in slots.iter().enumerate() {
+            assert_eq!(slot.id, format!("slot-{i}"));
+            assert!(slot.servant_id.is_none());
+            assert!(slot.craft_essence_id.is_none());
+        }
+        // Slot 2 is the support pin; everything else is a party slot.
+        assert_eq!(slots[2].kind, "support");
+        for i in [0, 1, 3, 4, 5] {
+            assert_eq!(slots[i].kind, "servant");
+        }
+    }
+
+    // --- ProjectSlot serde --------------------------------------------
+
+    #[test]
+    fn project_slot_legacy_json_without_ce_field_deserializes_with_none() {
+        // Mirrors a row from a pre-CE-picker `projects.json`. The
+        // `#[serde(default)]` on `craft_essence_id` is what keeps these
+        // legacy rows loading; this test guards against accidentally
+        // dropping that attribute.
+        let json = serde_json::json!({
+            "id": "slot-0",
+            "type": "servant",
+            "servantId": 284,
+        });
+        let slot: ProjectSlot = serde_json::from_value(json).unwrap();
+        assert_eq!(slot.id, "slot-0");
+        assert_eq!(slot.kind, "servant");
+        assert_eq!(slot.servant_id, Some(284));
+        assert!(slot.craft_essence_id.is_none());
+    }
+
+    #[test]
+    fn project_slot_round_trips_craft_essence_id() {
+        let json = serde_json::json!({
+            "id": "slot-2",
+            "type": "support",
+            "servantId": 284,
+            "craftEssenceId": 1485,
+        });
+        let slot: ProjectSlot = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(slot.craft_essence_id, Some(1485));
+
+        // Camel-case rename round-trips on serialize too.
+        let serialized = serde_json::to_value(&slot).unwrap();
+        assert_eq!(serialized["craftEssenceId"], serde_json::json!(1485));
+        assert_eq!(serialized["servantId"], serde_json::json!(284));
+        assert_eq!(serialized["type"], serde_json::json!("support"));
+    }
+
+    #[test]
+    fn project_slot_servant_id_also_defaults_when_missing() {
+        // Sanity-check the sibling `#[serde(default)]` on `servant_id`
+        // so a slot row with neither id field still parses (legacy
+        // empty slots).
+        let json = serde_json::json!({
+            "id": "slot-0",
+            "type": "servant",
+        });
+        let slot: ProjectSlot = serde_json::from_value(json).unwrap();
+        assert!(slot.servant_id.is_none());
+        assert!(slot.craft_essence_id.is_none());
+    }
+
+    // --- Project (top-level legacy JSON) -------------------------------
+
+    #[test]
+    fn project_legacy_json_without_slots_falls_back_to_defaults() {
+        // The `#[serde(default = "default_project_slots")]` attribute is
+        // what makes pre-team-builder `projects.json` rows continue to
+        // load; this test pins that contract.
+        let json = serde_json::json!({
+            "id": "abc",
+            "name": "Legacy",
+        });
+        let project: Project = serde_json::from_value(json).unwrap();
+        assert_eq!(project.slots.len(), 6);
+        assert!(project.support_servant_id.is_none());
+        assert_eq!(project.repeat_mission, false);
+    }
+
+    // --- craft_essences_data -------------------------------------------
+
+    #[test]
+    fn craft_essences_data_parses_and_has_unique_ids() {
+        let ces = craft_essences_data();
+        assert!(
+            !ces.is_empty(),
+            "bundled craft_essences.json parsed to an empty list"
+        );
+
+        let mut seen: HashSet<u32> = HashSet::with_capacity(ces.len());
+        for ce in ces {
+            assert!(
+                !ce.name.is_empty(),
+                "CE id {} has an empty name",
+                ce.id
+            );
+            assert!(
+                seen.insert(ce.id),
+                "duplicate CE id {} in craft_essences.json",
+                ce.id
+            );
+        }
+    }
+
+    #[test]
+    fn craft_essences_data_is_memoized_via_oncelock() {
+        // OnceLock-backed `&'static [CraftEssenceInfo]` should hand back
+        // the exact same slice on repeated calls (same pointer + len).
+        // If somebody refactors away the cache, this catches it.
+        let a = craft_essences_data();
+        let b = craft_essences_data();
+        assert_eq!(a.as_ptr(), b.as_ptr());
+        assert_eq!(a.len(), b.len());
+    }
+}

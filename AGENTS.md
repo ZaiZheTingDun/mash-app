@@ -7,32 +7,34 @@
 ## Directory Structure
 
 ```
-src/                    # React frontend
-  main.tsx              # Entry point, wraps app in Radix <Theme>
-  App.tsx               # Top-level layout, stage routing, servant loading
-  App.css               # All styles (single file, uses Radix CSS variables)
-  components/           # Flat folder of React components
-  types/                # Shared TypeScript interfaces
-src-tauri/              # Tauri / Rust backend
-  src/
-    main.rs             # Thin entry: calls mash_lib::run()
-    lib.rs              # Commands, serde types, plugin registration
-    adb.rs              # ADB device connection, tap, swipe
-    screen.rs           # Python sidecar IPC (stream, detect, find_element, read_turn)
-    runner.rs           # Automation main loop (state machine, UI coord constants)
-    debug.rs            # Debug-page commands (screenshot capture, coord dump)
-  resources/            # Bundled runtime assets (see resources/README.md)
-    cv.json             # Screen / element template config
-    templates/          # PNG templates (buttons, anchors, digit_0..9, …)
-    scrcpy/             # Pinned scrcpy-server.jar for realtime streaming
-  binaries/mash-cv/     # PyInstaller --onedir output (checked-in sidecar bundle)
-  capabilities/         # Tauri permission capabilities
-  tauri.conf.json       # Tauri app configuration
-  Cargo.toml            # Rust dependencies
-sidecar/mash_cv/        # Python image recognition process (Poetry)
-  mash_cv/              # Package source (cv.py REPL, stream.py, region_tool.py)
-  tests/                # pytest suite + sample screenshots/templates
-  build_sidecar.sh      # PyInstaller --onedir build script
+src/                              # React frontend
+  main.tsx                        # Entry point, wraps app in Radix <Theme>
+  App.tsx                         # Top-level layout, stage routing, servant loading
+  App.css                         # All styles (single file, uses Radix CSS variables)
+  components/                     # Flat folder of React components
+    __tests__/                    # Vitest specs colocated by sibling folder (*.test.tsx)
+  test/                           # Shared frontend test helpers (setup.ts, renderWithTheme.tsx)
+  types/                          # Shared TypeScript interfaces
+src-tauri/                        # Tauri / Rust backend
+  src/                            # Each module ends with a `#[cfg(test)] mod tests` block
+    main.rs                       # Thin entry: calls mash_lib::run()
+    lib.rs                        # Commands, serde types, plugin registration
+    adb.rs                        # ADB device connection, tap, swipe
+    screen.rs                     # Python sidecar IPC (stream, detect, find_element, read_turn)
+    runner.rs                     # Automation main loop (state machine, UI coord constants)
+    debug.rs                      # Debug-page commands (screenshot capture, coord dump)
+  resources/                      # Bundled runtime assets (see resources/README.md)
+    cv.json                       # Screen / element template config
+    templates/                    # PNG templates (buttons, anchors, digit_0..9, …)
+    scrcpy/                       # Pinned scrcpy-server.jar for realtime streaming
+  binaries/mash-cv/               # PyInstaller --onedir output (checked-in sidecar bundle)
+  capabilities/                   # Tauri permission capabilities
+  tauri.conf.json                 # Tauri app configuration
+  Cargo.toml                      # Rust dependencies
+sidecar/mash_cv/                  # Python image recognition process (Poetry)
+  mash_cv/                        # Package source (cv.py REPL, stream.py, region_tool.py)
+  tests/                          # pytest suite + sample screenshots/templates
+  build_sidecar.sh                # PyInstaller --onedir build script
 ```
 
 ## Tech Stack
@@ -59,7 +61,15 @@ pnpm tauri dev        # Start Tauri dev mode (Vite + Rust hot reload)
 pnpm tauri build      # Production build
 pnpm dev              # Vite-only dev server (no Tauri shell)
 pnpm lint             # Run ESLint
-pnpm build            # Lint + type-check + Vite build (lint runs first)
+pnpm test             # Run the frontend Vitest suite (jsdom + RTL)
+pnpm test:watch       # Watch-mode for the same suite
+pnpm build            # Lint + type-check + Vitest + Vite build (in that order)
+```
+
+Backend Rust tests (run from repo root):
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml    # Unit tests under #[cfg(test)]
 ```
 
 Sidecar commands (run from `sidecar/mash_cv/`):
@@ -70,7 +80,30 @@ poetry run pytest           # Run the CV test suite
 bash build_sidecar.sh       # Rebuild the --onedir bundle into src-tauri/binaries/mash-cv/
 ```
 
+## Testing
+
+Three independent test runners cover the three layers — none of them require an ADB device, scrcpy stream, or PyInstaller-bundled sidecar:
+
+- **Frontend** — Vitest + `@testing-library/react` + jsdom. Configured in [vite.config.ts](vite.config.ts) under the `test` block (`include: ["src/**/__tests__/**/*.test.{ts,tsx}"]`). The shared setup (`src/test/setup.ts`) stubs `@tauri-apps/api/core` so `invoke()` resolves against an in-memory mock; component tests use `renderWithTheme` from `src/test/renderWithTheme.tsx` to mount inside a Radix `<Theme>`. **Test files live in a sibling `__tests__/` folder next to the code they cover** (e.g. `src/components/__tests__/Foo.test.tsx` for `src/components/Foo.tsx`) — never colocated alongside the component file.
+- **Rust** — plain `cargo test` against `#[cfg(test)] mod tests { ... }` blocks at the bottom of each `src-tauri/src/*.rs` module. No extra dev-deps needed.
+- **Python sidecar** — pytest under `sidecar/mash_cv/tests/`. See `tests/test_cv.py` for both pure unit tests and end-to-end REPL tests that spin up `python -m mash_cv` as a subprocess.
+
+`pnpm build` runs `eslint . && tsc && vitest run && vite build` in order, so a broken test fails the production build (and therefore `pnpm tauri build`). Always run the layer-appropriate test command after edits — see the next section.
+
 The Vite dev server runs on port **1420** with `strictPort: true`.
+
+### Test-First Expectation
+
+**Every change must consider tests.** Before opening a PR or marking a task done, ask:
+
+1. **Does this change need a new test?** New behavior, new commands, new components, new serde shapes, new CV math, new edge cases — yes, write one. The seed suites in each layer are the templates to follow.
+2. **Does this change break an existing test?** Run the relevant suite locally:
+   - Frontend / TS edits → `pnpm test` (or `pnpm build` for full lint+types+test+build).
+   - Rust edits in `src-tauri/` → `cargo test --manifest-path src-tauri/Cargo.toml`.
+   - Python edits in `sidecar/mash_cv/` → `cd sidecar/mash_cv && poetry run pytest`.
+3. **Does this change cross layers?** (e.g. a new Tauri command, a new sidecar REPL verb, a new serde field.) Run **all three** suites; type alignment between Rust serde structs and TS interfaces is one of the easiest things to silently break.
+
+The only acceptable reasons to skip writing a test are: (a) the change is purely cosmetic (CSS, Chinese copy, comment tweaks), (b) the surface is genuinely untestable without a live ADB device / scrcpy stream / PyInstaller bundle (document this in the PR), or (c) the change is a pure rename whose behaviour is already pinned by an existing test.
 
 ## Project Conventions
 

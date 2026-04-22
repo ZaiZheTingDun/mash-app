@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 // @ts-expect-error process is a nodejs global
@@ -28,5 +28,17 @@ export default defineConfig(async () => ({
       // 3. tell vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
+  },
+
+  // Vitest config — runs component tests in jsdom against a stubbed
+  // Tauri IPC layer (see `src/test/setup.ts`). Kept colocated with the
+  // Vite config so a single config file controls both dev/build and
+  // the test runner.
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test/setup.ts"],
+    css: true,
+    include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
   },
 }));

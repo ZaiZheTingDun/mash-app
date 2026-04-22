@@ -474,6 +474,20 @@ pub const SUPPORT_CE_OFFSET_IN_ROW: NormRect = NormRect {
 /// CE typically scores 0.75+.
 pub const SUPPORT_CE_THRESHOLD: f64 = 0.70;
 
+/// Pure helper: apply [`SUPPORT_CE_OFFSET_IN_ROW`] (a row-local rect) to
+/// `row` (an absolute row bbox) and return the absolute search window for
+/// the row's CE icon. Extracted from `Runner::support_ce_search_region`
+/// so unit tests can exercise the math directly without needing to build
+/// a full `SupportRowMatch`.
+pub fn ce_search_region(row: NormRect) -> NormRect {
+    NormRect {
+        x: row.x + SUPPORT_CE_OFFSET_IN_ROW.x * row.w,
+        y: row.y + SUPPORT_CE_OFFSET_IN_ROW.y * row.h,
+        w: SUPPORT_CE_OFFSET_IN_ROW.w * row.w,
+        h: SUPPORT_CE_OFFSET_IN_ROW.h * row.h,
+    }
+}
+
 /// Map an Atlas Academy `className` (already lowercased by
 /// `load_servant_metadata`) to the support-select class-filter tab.
 /// Returns `None` for unknown / boss-only classes (beasts, etc.) so the
@@ -1052,15 +1066,11 @@ impl Runner {
 
     /// Compute the absolute search window for a row's CE icon by
     /// applying `SUPPORT_CE_OFFSET_IN_ROW` (a row-local rect) to the
-    /// row's full bbox.
+    /// row's full bbox. Thin method wrapper around the pure free helper
+    /// [`ce_search_region`] (kept free so unit tests can exercise the
+    /// math without constructing a full `SupportRowMatch`).
     fn support_ce_search_region(row: &SupportRowMatch) -> NormRect {
-        let r = row.row_region;
-        NormRect {
-            x: r.x + SUPPORT_CE_OFFSET_IN_ROW.x * r.w,
-            y: r.y + SUPPORT_CE_OFFSET_IN_ROW.y * r.h,
-            w: SUPPORT_CE_OFFSET_IN_ROW.w * r.w,
-            h: SUPPORT_CE_OFFSET_IN_ROW.h * r.h,
-        }
+        ce_search_region(row.row_region)
     }
 
     /// Iterate `rows` top-down and return the first whose CE icon scores
@@ -1891,5 +1901,114 @@ fn fill_remaining(
             suit: c.suit.clone(),
             from_priority: None,
         });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: assert two `f64` are approximately equal. The CE search
+    /// region math is just adds + multiplies on small constants, so the
+    /// epsilon is tight.
+    fn approx(a: f64, b: f64) {
+        assert!(
+            (a - b).abs() < 1e-9,
+            "expected ≈{b}, got {a} (diff {})",
+            (a - b).abs()
+        );
+    }
+
+    #[test]
+    fn ce_search_region_identity_row_returns_offset() {
+        // A unit row at the origin → the absolute window equals the
+        // raw `SUPPORT_CE_OFFSET_IN_ROW` (it's already in unit-row coords).
+        let row = NormRect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 };
+        let out = ce_search_region(row);
+        approx(out.x, SUPPORT_CE_OFFSET_IN_ROW.x);
+        approx(out.y, SUPPORT_CE_OFFSET_IN_ROW.y);
+        approx(out.w, SUPPORT_CE_OFFSET_IN_ROW.w);
+        approx(out.h, SUPPORT_CE_OFFSET_IN_ROW.h);
+    }
+
+    #[test]
+    fn ce_search_region_scales_and_translates_offset_row() {
+        // Row at (0.10, 0.20) sized (0.50, 0.10): the CE icon search
+        // window is the row-local offset, scaled by row size, then
+        // translated by row origin.
+        let row = NormRect { x: 0.10, y: 0.20, w: 0.50, h: 0.10 };
+        let out = ce_search_region(row);
+        approx(out.x, 0.10 + SUPPORT_CE_OFFSET_IN_ROW.x * 0.50);
+        approx(out.y, 0.20 + SUPPORT_CE_OFFSET_IN_ROW.y * 0.10);
+        approx(out.w, SUPPORT_CE_OFFSET_IN_ROW.w * 0.50);
+        approx(out.h, SUPPORT_CE_OFFSET_IN_ROW.h * 0.10);
+    }
+
+    #[test]
+    fn ce_search_region_handles_negative_offset() {
+        // SUPPORT_CE_OFFSET_IN_ROW.x is negative on purpose (the CE icon
+        // sits to the *left* of the OCR-anchored row strip). For a row
+        // that starts at x=0.20 with w=0.40, the search window should
+        // start to the *left* of the row origin.
+        let row = NormRect { x: 0.20, y: 0.30, w: 0.40, h: 0.10 };
+        let out = ce_search_region(row);
+        assert!(
+            out.x < row.x,
+            "search window should be left of row origin: got x={} vs row x={}",
+            out.x, row.x,
+        );
+    }
+
+    // --- RunConfig serde -----------------------------------------------
+
+    /// Build the smallest valid RunConfig JSON (omitting all
+    /// `#[serde(default)]` fields so the test exercises the defaults).
+    fn minimal_run_config_json() -> serde_json::Value {
+        serde_json::json!({
+            "projectId": "p1",
+            "partyOrder": null,
+            "supportClassFilter": null,
+            "supportServantName": null,
+            "servantSelections": [],
+            "maxSupportScrolls": 5,
+        })
+    }
+
+    #[test]
+    fn run_config_defaults_support_ce_to_none_when_field_missing() {
+        let cfg: RunConfig =
+            serde_json::from_value(minimal_run_config_json()).unwrap();
+        assert!(cfg.support_craft_essence_id.is_none());
+        // Other defaults travel through the same path; sanity-check
+        // them so legacy `projects.json` rows keep deserializing.
+        assert!(cfg.support_servant_id.is_none());
+        assert_eq!(cfg.repeat_mission, false);
+    }
+
+    #[test]
+    fn run_config_round_trips_support_craft_essence_id() {
+        let mut payload = minimal_run_config_json();
+        payload["supportCraftEssenceId"] = serde_json::json!(1485);
+        let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+        assert_eq!(cfg.support_craft_essence_id, Some(1485));
+
+        // Re-serialize and confirm the field round-trips under the
+        // camelCase rename rule applied to the whole struct.
+        let json = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(json["supportCraftEssenceId"], serde_json::json!(1485));
+    }
+
+    #[test]
+    fn run_config_round_trips_support_servant_id_and_repeat_flag() {
+        let mut payload = minimal_run_config_json();
+        payload["supportServantId"] = serde_json::json!(284);
+        payload["repeatMission"] = serde_json::json!(true);
+        let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+        assert_eq!(cfg.support_servant_id, Some(284));
+        assert_eq!(cfg.repeat_mission, true);
     }
 }
