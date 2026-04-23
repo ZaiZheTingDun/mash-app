@@ -60,6 +60,15 @@ poetry run run
 ← {"found":true,"x":0.45,"y":0.32,"score":0.97,
     "region":{"x":0.42,"y":0.30,"w":0.06,"h":0.04}}
 
+→ {"cmd":"read_battle_scene","imagePath":"/tmp/ss.png",
+    "region":{"x":0.587,"y":0.0,"w":0.16,"h":0.062}}
+← {"scene":1,"total":3}
+  // both null when the BATTLE label anchor misses (e.g. NP overlay)
+  // or fewer than two digits clear the threshold; add "debug":true to
+  // the request for a "diagnostics" object with anchor score, every
+  // candidate/kept digit, the chosen split + best gap, and a
+  // failReason enum.
+
 → {"cmd":"quit"}
 (process exits)
 ```
@@ -70,6 +79,7 @@ Supported commands:
 - `detect`: classify screenshot as known screen or `Unknown`.
 - `find_element`: template-match within normalized `region` (`x`, `y`, `w`, `h` in `[0, 1]`) and return normalized center coordinate when found.
 - `find_region`: template-match with direct `templatePath` and return normalized center point + normalized bounding region.
+- `read_battle_scene`: OCR the `BATTLE m/n` HUD strip in the top-right of the battle screen. Anchors on the gold `BATTLE` label (`text_battle_label` template), template-matches `digit_0` .. `digit_9` to its right, runs greedy x-NMS, and splits the kept detections into `(scene, total)` by the single largest x-gap (the slash). Returns `{"scene":m,"total":n}` or `{"scene":null,"total":null}`. Pass `"debug":true` to also receive a diagnostics payload describing every intermediate decision.
 - `quit`: stop the process.
 
 ## Region CLI tool

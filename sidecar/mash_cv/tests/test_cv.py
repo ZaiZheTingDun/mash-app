@@ -361,6 +361,60 @@ class TestReadBattleScene:
         result = mash_cv._read_battle_scene(img, BATTLE_SCENE_REGION)
         assert result == {"scene": None, "total": None}
 
+    def test_cohesion_trim_drops_stray_digit_on_outer_edge(self):
+        """Synthesize a strip with a real ``BATTLE 1/3`` reading plus a
+        spurious extra digit pasted on the outer right edge of the
+        n-cluster. The stray sits close enough that the largest x-gap is
+        still the slash (so the m/n split lands correctly), but its gap
+        to the real ``3`` exceeds the cohesion-trim threshold and must
+        be removed by ``_trim_right``. Without the trim the function
+        would return ``total=33`` instead of ``total=3``."""
+        self._load_real_templates()
+
+        label = mash_cv.templates["text_battle_label"]
+        d1 = mash_cv.templates["digit_1"]
+        d3 = mash_cv.templates["digit_3"]
+
+        img = _make_bgr_image(2560, 1440)
+        rx = int(BATTLE_SCENE_REGION["x"] * 2560)
+        ry = int(BATTLE_SCENE_REGION["y"] * 1440)
+
+        # Use the average digit width as the unit for spacing decisions
+        # (mirrors the in-function logic).
+        avg_w = (d1.shape[1] + d3.shape[1]) / 2.0
+        kerning_gap = max(1, int(avg_w * 0.15))   # within-number kerning
+        slash_gap = max(2, int(avg_w * 0.85))     # > kerning, the m/n split
+        # Strictly between cohesion threshold (0.6) and slash gap (0.85).
+        # This is what makes the stray a "spurious neighbour" rather than
+        # a separator the splitter could latch on to.
+        outer_stray_gap = max(2, int(avg_w * 0.7))
+
+        y = ry + 8
+        cursor_x = rx + 6
+
+        def _paste(tmpl, x_at):
+            h, w = tmpl.shape[:2]
+            tmpl_bgr = cv2.merge([tmpl, tmpl, tmpl])
+            img[y : y + h, x_at : x_at + w] = tmpl_bgr
+            return x_at + w
+
+        cursor_x = _paste(label, cursor_x) + kerning_gap
+        cursor_x = _paste(d1, cursor_x) + slash_gap
+        cursor_x = _paste(d3, cursor_x) + outer_stray_gap
+        # Stray digit_3 — would parse as ``total=33`` without the trim.
+        cursor_x = _paste(d3, cursor_x)
+        assert cursor_x < rx + int(BATTLE_SCENE_REGION["w"] * 2560), (
+            "synthesized strip overflows BATTLE_SCENE_REGION"
+        )
+
+        result = mash_cv._read_battle_scene(img, BATTLE_SCENE_REGION, debug=True)
+        assert result["scene"] == 1, result
+        assert result["total"] == 3, result
+        diag = result["diagnostics"]
+        assert diag["failReason"] is None, diag
+        assert diag["trimmedRight"] == 1, diag
+        assert diag["trimmedLeft"] == 0, diag
+
 
 # ── _find_command_cards ─────────────────────────────────────────────────
 

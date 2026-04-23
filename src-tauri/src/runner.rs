@@ -371,13 +371,17 @@ struct BattleState {
     /// `scenes` vec). One config block = one battle scene as labeled in
     /// the HUD's `BATTLE m/n`.
     current_scene_index: usize,
-    /// `m` value last detected from the BATTLE m/n HUD strip. `None` until
-    /// the first successful read after entering battle.
+    /// `m` value last successfully detected from the BATTLE m/n HUD strip.
+    /// Stays `Some(prev)` across transient failed reads (e.g. NP overlay
+    /// briefly covers the strip) so we don't double-trigger skill
+    /// execution when the strip reappears.
     last_screen_scene: Option<u32>,
-    /// Whether we've already executed the configured skills for the current
-    /// battle scene (so we don't re-fire them on every turn within the same
-    /// scene).
-    skills_executed: bool,
+    /// `current_scene_index` value we last executed skills for. We
+    /// re-run the configured skills exactly once per index value, so
+    /// transient failed reads (`scene_m == None`) never cause duplicate
+    /// execution — only an actual `Some(prev) → Some(curr != prev)`
+    /// transition advances the index and triggers a re-execution.
+    executed_scene_index: Option<usize>,
     /// Whether we used the scene config (vs fallback) — drives card selection
     scene_config_used: bool,
     /// Set after clicking start on TeamConfirm; tolerates longer Unknown streaks
@@ -389,10 +393,57 @@ impl BattleState {
         Self {
             current_scene_index: 0,
             last_screen_scene: None,
-            skills_executed: false,
+            executed_scene_index: None,
             scene_config_used: false,
             waiting_for_battle: false,
         }
+    }
+}
+
+/// Outcome of merging a fresh `BATTLE m/n` reading into the prior scene
+/// state. Returned by [`tick_scene_state`] so the decision logic
+/// (advance? lock in? re-execute?) is testable independently of the
+/// runner's I/O side effects (taps, sidecar IPC, emitted events).
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+struct SceneTick {
+    /// New value for `BattleState::last_screen_scene`. Preserves the
+    /// prior `Some(prev)` across transient `None` reads.
+    last_screen_scene: Option<u32>,
+    /// New value for `BattleState::current_scene_index`. Increments
+    /// only on an actual `Some(prev) → Some(curr != prev)` transition.
+    current_scene_index: usize,
+    /// True iff the configured skills for `current_scene_index` should
+    /// be executed this iteration. False on every iteration where the
+    /// caller has already executed for the same index value, including
+    /// when the latest CV read failed and we're sitting on a previously
+    /// locked-in scene.
+    needs_exec: bool,
+}
+
+fn tick_scene_state(
+    last_screen_scene: Option<u32>,
+    current_scene_index: usize,
+    executed_scene_index: Option<usize>,
+    scene_m: Option<u32>,
+) -> SceneTick {
+    let advanced = matches!(
+        (last_screen_scene, scene_m),
+        (Some(prev), Some(curr)) if prev != curr
+    );
+    let next_index = if advanced {
+        current_scene_index + 1
+    } else {
+        current_scene_index
+    };
+    let next_last = if scene_m.is_some() {
+        scene_m
+    } else {
+        last_screen_scene
+    };
+    SceneTick {
+        last_screen_scene: next_last,
+        current_scene_index: next_index,
+        needs_exec: executed_scene_index != Some(next_index),
     }
 }
 
@@ -1272,20 +1323,22 @@ impl Runner {
             .unwrap_or(None);
         let scene_m = screen_scene.map(|(m, _)| m);
 
-        let scene_changed = match (self.battle.last_screen_scene, scene_m) {
-            (None, _) => true,
-            (Some(prev), Some(curr)) if curr != prev => true,
-            _ => false,
-        };
+        // Decide what to do based on (prior scene, fresh read). See
+        // `tick_scene_state` for the full state-transition rules; the
+        // key invariant is that a failed CV read (`scene_m == None`)
+        // never advances the index, never re-locks `last_screen_scene`,
+        // and never re-fires skills for an already-executed scene.
+        let tick = tick_scene_state(
+            self.battle.last_screen_scene,
+            self.battle.current_scene_index,
+            self.battle.executed_scene_index,
+            scene_m,
+        );
+        self.battle.current_scene_index = tick.current_scene_index;
+        self.battle.last_screen_scene = tick.last_screen_scene;
 
-        if scene_changed {
-            if self.battle.last_screen_scene.is_some() {
-                self.battle.current_scene_index += 1;
-            }
-            self.battle.last_screen_scene = scene_m;
-            self.battle.skills_executed = false;
+        if tick.needs_exec {
             self.battle.scene_config_used = false;
-
             let scene_str = match screen_scene {
                 Some((m, n)) => format!("{m}/{n}"),
                 None => "?".into(),
@@ -1293,17 +1346,11 @@ impl Runner {
             self.emit(
                 "Battle",
                 &format!(
-                    "场景变更 → 执行第 {} 组指令 (画面场景: {})",
+                    "执行第 {} 组指令 (画面场景: {})",
                     self.battle.current_scene_index + 1,
                     scene_str,
                 ),
             );
-        } else {
-            self.emit("Battle", "场景未变更，直接攻击");
-        }
-
-        // Execute skills once per scene transition, when we have config for it.
-        if !self.battle.skills_executed {
             if let Some(scene_cfg) = self.scenes.get(self.battle.current_scene_index).cloned() {
                 self.execute_scene_skills(&scene_cfg);
                 self.battle.scene_config_used = true;
@@ -1316,7 +1363,9 @@ impl Runner {
                     ),
                 );
             }
-            self.battle.skills_executed = true;
+            self.battle.executed_scene_index = Some(self.battle.current_scene_index);
+        } else {
+            self.emit("Battle", "场景未变更，直接攻击");
         }
 
         // Click the attack button
@@ -2023,5 +2072,103 @@ mod tests {
         let cfg: RunConfig = serde_json::from_value(payload).unwrap();
         assert_eq!(cfg.support_servant_id, Some(284));
         assert_eq!(cfg.repeat_mission, true);
+    }
+
+    // --- tick_scene_state -----------------------------------------------
+    //
+    // These cover the full state-transition matrix for the BATTLE m/n
+    // reading. The previous implementation reset `skills_executed` (and
+    // therefore re-fired skills) on every iteration where the CV read
+    // returned `None`, which double-fired skills any time the NP overlay
+    // covered the strip. The helper now treats failed reads as "stay
+    // put" so the bug can't come back without breaking these tests.
+
+    #[test]
+    fn tick_scene_state_first_successful_read_locks_in_without_advancing() {
+        let tick = tick_scene_state(None, 0, None, Some(1));
+        assert_eq!(
+            tick,
+            SceneTick {
+                last_screen_scene: Some(1),
+                current_scene_index: 0,
+                needs_exec: true,
+            }
+        );
+    }
+
+    #[test]
+    fn tick_scene_state_failed_read_after_lockin_holds_state_and_skips_exec() {
+        // We executed scene 0 last iteration; the CV now fails (NP
+        // overlay). Index must not advance, last_screen_scene must
+        // stay at the previously locked value, and needs_exec must be
+        // false so we don't double-fire skills.
+        let tick = tick_scene_state(Some(1), 0, Some(0), None);
+        assert_eq!(
+            tick,
+            SceneTick {
+                last_screen_scene: Some(1),
+                current_scene_index: 0,
+                needs_exec: false,
+            }
+        );
+    }
+
+    #[test]
+    fn tick_scene_state_same_scene_read_skips_exec() {
+        let tick = tick_scene_state(Some(1), 0, Some(0), Some(1));
+        assert_eq!(
+            tick,
+            SceneTick {
+                last_screen_scene: Some(1),
+                current_scene_index: 0,
+                needs_exec: false,
+            }
+        );
+    }
+
+    #[test]
+    fn tick_scene_state_real_transition_advances_and_triggers_exec() {
+        let tick = tick_scene_state(Some(1), 0, Some(0), Some(2));
+        assert_eq!(
+            tick,
+            SceneTick {
+                last_screen_scene: Some(2),
+                current_scene_index: 1,
+                needs_exec: true,
+            }
+        );
+    }
+
+    #[test]
+    fn tick_scene_state_failed_first_read_executes_default_index_zero() {
+        // CV fails before we ever locked in a scene → we still want to
+        // execute the configured first block so the runner doesn't
+        // stall on a missing read. Subsequent successful reads must
+        // not re-trigger execution for the same index.
+        let first = tick_scene_state(None, 0, None, None);
+        assert_eq!(
+            first,
+            SceneTick {
+                last_screen_scene: None,
+                current_scene_index: 0,
+                needs_exec: true,
+            }
+        );
+        // Caller would then mark executed_scene_index = Some(0). Next
+        // iteration: still no successful read.
+        let second = tick_scene_state(None, 0, Some(0), None);
+        assert_eq!(second.needs_exec, false);
+        // First successful read of scene 1: locks in but does NOT
+        // advance the index (we never observed a transition), and
+        // does NOT re-execute (executed already at index 0).
+        let third = tick_scene_state(None, 0, Some(0), Some(1));
+        assert_eq!(
+            third,
+            SceneTick {
+                last_screen_scene: Some(1),
+                current_scene_index: 0,
+                needs_exec: false,
+            }
+        );
     }
 }

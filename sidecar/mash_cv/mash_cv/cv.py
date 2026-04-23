@@ -322,12 +322,14 @@ def _detect_screen(img: np.ndarray) -> dict:
 
 BATTLE_LABEL_THRESHOLD = 0.7
 BATTLE_DIGIT_THRESHOLD = 0.8
-# Two adjacent digits inside a single multi-digit number sit essentially
-# touching: their bbox edges are at most ~30% of the average glyph width
-# apart (FGO uses tight kerning for the BATTLE m/n indicator). Anything
-# wider than this is either the slash gap (handled separately) or a
-# spurious detection from neighbouring UI text — drop it.
-BATTLE_DIGIT_COHESION_GAP = 0.6
+# Cohesion cutoff used when trimming each side of the m/n split: the
+# maximum allowed bbox-edge gap between two digits *inside the same
+# number*, expressed as a multiple of the average glyph width. FGO
+# kerns adjacent digits in the BATTLE m/n indicator very tight (~30%
+# of glyph width), so a gap larger than ~60% of glyph width is almost
+# certainly either the slash separator (handled separately) or a
+# spurious detection from neighbouring UI text — drop the outlier.
+BATTLE_DIGIT_COHESION_GAP_RATIO = 0.6
 
 
 def _read_battle_scene(
@@ -501,11 +503,11 @@ def _read_battle_scene(
 
     # Cohesion trim: digits inside a single number are kerned tight. Any
     # neighbour whose gap to the rest of its cluster exceeds
-    # ``BATTLE_DIGIT_COHESION_GAP * avg_w`` is a spurious detection from
-    # adjacent UI text (e.g. a stray glyph after the BATTLE row that the
-    # digit_N templates partially match). Trim from the outer edge of each
-    # side inward so the side that abuts the slash stays anchored.
-    cohesion_threshold = avg_w * BATTLE_DIGIT_COHESION_GAP
+    # ``BATTLE_DIGIT_COHESION_GAP_RATIO * avg_w`` is a spurious detection
+    # from adjacent UI text (e.g. a stray glyph after the BATTLE row that
+    # the digit_N templates partially match). Trim from the outer edge of
+    # each side inward so the side that abuts the slash stays anchored.
+    cohesion_threshold = avg_w * BATTLE_DIGIT_COHESION_GAP_RATIO
 
     def _trim_left(side: list) -> list:
         """Drop leading digits whose gap to the *next* digit exceeds the

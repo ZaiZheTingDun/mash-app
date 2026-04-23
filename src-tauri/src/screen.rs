@@ -734,15 +734,16 @@ impl SidecarClient {
         Ok((score, passed))
     }
 
-    /// Read the current battle-scene indicator (`m` of `n`) drawn next to
-    /// the BATTLE label in the top-right HUD. Returns `None` when the
-    /// sidecar cannot resolve both numbers (anchor missing, NP overlay
-    /// covering the strip, etc.).
-    pub fn read_battle_scene(
+    /// Send a `read_battle_scene` request to the sidecar and return the
+    /// raw JSON response. Shared by both the lean (`read_battle_scene`)
+    /// and diagnostic (`read_battle_scene_debug`) variants so the
+    /// request shape stays in one place.
+    fn send_read_battle_scene(
         &mut self,
         image_path: Option<&Path>,
         region: NormRect,
-    ) -> Result<Option<(u32, u32)>, String> {
+        debug: bool,
+    ) -> Result<serde_json::Value, String> {
         let mut req = serde_json::json!({
             "cmd": "read_battle_scene",
             "region": {
@@ -752,8 +753,23 @@ impl SidecarClient {
                 "h": region.h,
             },
         });
+        if debug {
+            req["debug"] = serde_json::Value::Bool(true);
+        }
         Self::add_image_path(&mut req, image_path);
-        let resp = self.send_recv(&req)?;
+        self.send_recv(&req)
+    }
+
+    /// Read the current battle-scene indicator (`m` of `n`) drawn next to
+    /// the BATTLE label in the top-right HUD. Returns `None` when the
+    /// sidecar cannot resolve both numbers (anchor missing, NP overlay
+    /// covering the strip, etc.).
+    pub fn read_battle_scene(
+        &mut self,
+        image_path: Option<&Path>,
+        region: NormRect,
+    ) -> Result<Option<(u32, u32)>, String> {
+        let resp = self.send_read_battle_scene(image_path, region, false)?;
         let scene = resp["scene"].as_u64().map(|n| n as u32);
         let total = resp["total"].as_u64().map(|n| n as u32);
         Ok(scene.zip(total))
@@ -770,18 +786,7 @@ impl SidecarClient {
         image_path: Option<&Path>,
         region: NormRect,
     ) -> Result<serde_json::Value, String> {
-        let mut req = serde_json::json!({
-            "cmd": "read_battle_scene",
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "debug": true,
-        });
-        Self::add_image_path(&mut req, image_path);
-        self.send_recv(&req)
+        self.send_read_battle_scene(image_path, region, true)
     }
 
     /// Start the scrcpy server on the device and begin streaming.
