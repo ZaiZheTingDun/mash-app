@@ -20,7 +20,7 @@ src-tauri/                        # Tauri / Rust backend
     main.rs                       # Thin entry: calls mash_lib::run()
     lib.rs                        # Commands, serde types, plugin registration
     adb.rs                        # ADB device connection, tap, swipe
-    screen.rs                     # Python sidecar IPC (stream, detect, find_element, read_turn)
+    screen.rs                     # Python sidecar IPC (stream, detect, find_element, read_battle_scene)
     runner.rs                     # Automation main loop (state machine, UI coord constants)
     debug.rs                      # Debug-page commands (screenshot capture, coord dump)
   resources/                      # Bundled runtime assets (see resources/README.md)
@@ -174,5 +174,5 @@ The Rust backend is the single source of truth for all application state. The fr
 
 - Lives in `sidecar/mash_cv/` as a Poetry-managed package. Source is under `sidecar/mash_cv/mash_cv/` (package) with `cv.py` as the JSON-line REPL entry point, `stream.py` for the scrcpy/PyAV pipeline, and `region_tool.py` for template-region extraction.
 - Communication with the Rust side is one JSON object per line over stdin/stdout. Every request may carry an `id`; responses echo it so the Rust client can drop stale replies after a timeout.
-- Templates are loaded by filename stem from `src-tauri/resources/templates/`. Most are referenced via `cv.json`, but the turn-OCR set (`text_turn_label`, `text_tan`, `digit_0`..`digit_9`) is looked up by name directly by `_read_turn`.
+- Templates are loaded by filename stem from `src-tauri/resources/templates/`. Most are referenced via `cv.json`, but the battle-scene OCR set (`text_battle_label`, `digit_0`..`digit_9`) is looked up by name directly by `_read_battle_scene`, which anchors on the gold `BATTLE` label and splits the digits to its right into `(m, n)` by the largest x-gap.
 - When adding new templates or changing screen detection behavior, mirror test fixtures under `sidecar/mash_cv/tests/test_data/` and add a pytest case — the sidecar tests run entirely offline and are the fastest feedback loop for CV changes.

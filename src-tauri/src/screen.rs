@@ -734,15 +734,17 @@ impl SidecarClient {
         Ok((score, passed))
     }
 
-    /// Read the current turn number from the battle screen.
-    /// Returns None if the sidecar cannot detect the turn number.
-    pub fn read_turn(
+    /// Read the current battle-scene indicator (`m` of `n`) drawn next to
+    /// the BATTLE label in the top-right HUD. Returns `None` when the
+    /// sidecar cannot resolve both numbers (anchor missing, NP overlay
+    /// covering the strip, etc.).
+    pub fn read_battle_scene(
         &mut self,
         image_path: Option<&Path>,
         region: NormRect,
-    ) -> Result<Option<u32>, String> {
+    ) -> Result<Option<(u32, u32)>, String> {
         let mut req = serde_json::json!({
-            "cmd": "read_turn",
+            "cmd": "read_battle_scene",
             "region": {
                 "x": region.x,
                 "y": region.y,
@@ -752,7 +754,34 @@ impl SidecarClient {
         });
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
-        Ok(resp["turn"].as_u64().map(|n| n as u32))
+        let scene = resp["scene"].as_u64().map(|n| n as u32);
+        let total = resp["total"].as_u64().map(|n| n as u32);
+        Ok(scene.zip(total))
+    }
+
+    /// Diagnostic variant of [`Self::read_battle_scene`] that asks the
+    /// sidecar for the full intermediate state (anchor score & box,
+    /// strip, every above-threshold digit candidate, the kept set after
+    /// NMS, the chosen split + best gap, and a `failReason` enum). Used
+    /// only by the `debug_read_battle_scene` Tauri command — the runner
+    /// stays on the lean variant.
+    pub fn read_battle_scene_debug(
+        &mut self,
+        image_path: Option<&Path>,
+        region: NormRect,
+    ) -> Result<serde_json::Value, String> {
+        let mut req = serde_json::json!({
+            "cmd": "read_battle_scene",
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+            "debug": true,
+        });
+        Self::add_image_path(&mut req, image_path);
+        self.send_recv(&req)
     }
 
     /// Start the scrcpy server on the device and begin streaming.

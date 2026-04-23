@@ -24,7 +24,7 @@ src-tauri/                   # Tauri / Rust backend
     main.rs                  # Thin entry, calls mash_lib::run()
     lib.rs                   # Tauri command registration & plugin wiring
     adb.rs                   # ADB device connection, tap, swipe
-    screen.rs                # Python sidecar IPC (stream, detect, find_element, read_turn)
+    screen.rs                # Python sidecar IPC (stream, detect, find_element, read_battle_scene)
     runner.rs                # Automation main loop (state machine, UI coord constants)
     debug.rs                 # Debug-page commands (screenshot capture, coord dump)
   resources/

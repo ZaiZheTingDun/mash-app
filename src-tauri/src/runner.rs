@@ -3,7 +3,7 @@ use crate::screen::{
     CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
     SupportRowMatch,
 };
-use crate::{load_servant_metadata, Action, AttackCard, ServantMetadata, Turn};
+use crate::{load_servant_metadata, Action, AttackCard, BattleScene, ServantMetadata};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -133,12 +133,15 @@ const ATTACK_BUTTON_REGION: NormRect = NormRect {
     h: 0.195,
 };
 
-/// Region where the turn number is displayed
-const TURN_REGION: NormRect = NormRect {
+/// Region of the top-right `BATTLE m/n` HUD strip. The CV sidecar
+/// anchors on the gold `BATTLE` label inside this region and reads
+/// the `(m, n)` digit pair to its right; `m` drives which configured
+/// `BattleScene` block runs this iteration.
+pub const BATTLE_SCENE_REGION: NormRect = NormRect {
     x: 0.587,
-    y: 0.090,
-    w: 0.208,
-    h: 0.087,
+    y: 0.000,
+    w: 0.160,
+    h: 0.062,
 };
 
 /// Ally target positions for skill targeting (servant_1, servant_2, servant_3)
@@ -275,12 +278,12 @@ pub fn debug_coordinates() -> DebugCoordinates {
             }],
         },
         CoordGroup {
-            id: "turn".into(),
-            label: "回合".into(),
+            id: "battleScene".into(),
+            label: "战斗场景".into(),
             points: Vec::new(),
             regions: vec![LabeledRegion {
-                label: "TurnRegion".into(),
-                region: TURN_REGION,
+                label: "BattleSceneRegion".into(),
+                region: BATTLE_SCENE_REGION,
             }],
         },
         CoordGroup {
@@ -364,14 +367,19 @@ pub fn debug_coordinates() -> DebugCoordinates {
 // ---------------------------------------------------------------------------
 
 struct BattleState {
-    /// Which turn config index we're executing (0-based into the turns vec)
-    current_turn: usize,
-    /// Turn number last detected from the screen
-    last_screen_turn: Option<u32>,
-    /// Whether we've already executed skills for the current turn
+    /// Which battle-scene config index we're executing (0-based into the
+    /// `scenes` vec). One config block = one battle scene as labeled in
+    /// the HUD's `BATTLE m/n`.
+    current_scene_index: usize,
+    /// `m` value last detected from the BATTLE m/n HUD strip. `None` until
+    /// the first successful read after entering battle.
+    last_screen_scene: Option<u32>,
+    /// Whether we've already executed the configured skills for the current
+    /// battle scene (so we don't re-fire them on every turn within the same
+    /// scene).
     skills_executed: bool,
-    /// Whether we used the turn config (vs fallback) — drives card selection
-    turn_config_used: bool,
+    /// Whether we used the scene config (vs fallback) — drives card selection
+    scene_config_used: bool,
     /// Set after clicking start on TeamConfirm; tolerates longer Unknown streaks
     waiting_for_battle: bool,
 }
@@ -379,10 +387,10 @@ struct BattleState {
 impl BattleState {
     fn new() -> Self {
         Self {
-            current_turn: 0,
-            last_screen_turn: None,
+            current_scene_index: 0,
+            last_screen_scene: None,
             skills_executed: false,
-            turn_config_used: false,
+            scene_config_used: false,
             waiting_for_battle: false,
         }
     }
@@ -540,7 +548,7 @@ pub struct Runner {
     adb: Adb,
     sidecar: SidecarClient,
     config: RunConfig,
-    turns: Vec<Turn>,
+    scenes: Vec<BattleScene>,
     state: Arc<Mutex<RunnerState>>,
     cancel: Arc<AtomicBool>,
     app_handle: tauri::AppHandle,
@@ -590,7 +598,7 @@ impl Runner {
         adb: Adb,
         sidecar: SidecarClient,
         config: RunConfig,
-        turns: Vec<Turn>,
+        scenes: Vec<BattleScene>,
         app_handle: tauri::AppHandle,
         state: Arc<Mutex<RunnerState>>,
         cancel: Arc<AtomicBool>,
@@ -603,7 +611,7 @@ impl Runner {
             adb,
             sidecar,
             config,
-            turns,
+            scenes,
             state,
             cancel,
             app_handle,
@@ -1249,7 +1257,7 @@ impl Runner {
             .is_some();
 
         if !attack_present {
-            self.emit("Battle", "等待行动回合…");
+            self.emit("Battle", "等待战斗动作…");
             return;
         }
 
@@ -1257,49 +1265,54 @@ impl Runner {
         // any) has finished. Drop back to the short Unknown tolerance.
         self.battle.waiting_for_battle = false;
 
-        // Read current turn number from the screen
-        let screen_turn = self
+        // Read the current battle scene (m of n) from the BATTLE label HUD.
+        let screen_scene = self
             .sidecar
-            .read_turn(None, TURN_REGION)
+            .read_battle_scene(None, BATTLE_SCENE_REGION)
             .unwrap_or(None);
+        let scene_m = screen_scene.map(|(m, _)| m);
 
-        let turn_changed = match (self.battle.last_screen_turn, screen_turn) {
+        let scene_changed = match (self.battle.last_screen_scene, scene_m) {
             (None, _) => true,
             (Some(prev), Some(curr)) if curr != prev => true,
             _ => false,
         };
 
-        if turn_changed {
-            if self.battle.last_screen_turn.is_some() {
-                self.battle.current_turn += 1;
+        if scene_changed {
+            if self.battle.last_screen_scene.is_some() {
+                self.battle.current_scene_index += 1;
             }
-            self.battle.last_screen_turn = screen_turn;
+            self.battle.last_screen_scene = scene_m;
             self.battle.skills_executed = false;
-            self.battle.turn_config_used = false;
+            self.battle.scene_config_used = false;
 
+            let scene_str = match screen_scene {
+                Some((m, n)) => format!("{m}/{n}"),
+                None => "?".into(),
+            };
             self.emit(
                 "Battle",
                 &format!(
-                    "回合变更 → 执行第 {} 组指令 (画面回合: {})",
-                    self.battle.current_turn + 1,
-                    screen_turn.map(|n| n.to_string()).unwrap_or_else(|| "?".into()),
+                    "场景变更 → 执行第 {} 组指令 (画面场景: {})",
+                    self.battle.current_scene_index + 1,
+                    scene_str,
                 ),
             );
         } else {
-            self.emit("Battle", "回合未变更，直接攻击");
+            self.emit("Battle", "场景未变更，直接攻击");
         }
 
-        // Execute skills if this is a new turn and we have config for it
+        // Execute skills once per scene transition, when we have config for it.
         if !self.battle.skills_executed {
-            if let Some(turn_cfg) = self.turns.get(self.battle.current_turn).cloned() {
-                self.execute_turn_skills(&turn_cfg);
-                self.battle.turn_config_used = true;
+            if let Some(scene_cfg) = self.scenes.get(self.battle.current_scene_index).cloned() {
+                self.execute_scene_skills(&scene_cfg);
+                self.battle.scene_config_used = true;
             } else {
                 self.emit(
                     "Battle",
                     &format!(
                         "无第 {} 组指令配置，直接攻击",
-                        self.battle.current_turn + 1
+                        self.battle.current_scene_index + 1
                     ),
                 );
             }
@@ -1414,10 +1427,10 @@ impl Runner {
         let mut used_np_slots: HashSet<u32> = HashSet::new();
         let mut picks: Vec<Pick> = Vec::with_capacity(3);
 
-        if self.battle.turn_config_used {
-            if let Some(turn_cfg) = self.turns.get(self.battle.current_turn) {
+        if self.battle.scene_config_used {
+            if let Some(scene_cfg) = self.scenes.get(self.battle.current_scene_index) {
                 picks = pick_by_priority(
-                    &turn_cfg.attack_priority,
+                    &scene_cfg.attack_priority,
                     &cards,
                     &nps,
                     &party_ids,
@@ -1426,7 +1439,7 @@ impl Runner {
                 );
             }
         } else {
-            self.emit("Attack", "回合未变更，按默认顺序补位");
+            self.emit("Attack", "场景未变更，按默认顺序补位");
         }
 
         if picks.len() < 3 {
@@ -1435,7 +1448,7 @@ impl Runner {
 
         if picks.is_empty() {
             self.emit("Attack", "未能选出任何卡，跳过");
-            self.battle.turn_config_used = false;
+            self.battle.scene_config_used = false;
             return;
         }
 
@@ -1491,7 +1504,7 @@ impl Runner {
         self.battle.waiting_for_battle = true;
 
         // Reset for next cycle
-        self.battle.turn_config_used = false;
+        self.battle.scene_config_used = false;
     }
 
     // -- battle-result screen handlers ---------------------------------------
@@ -1556,8 +1569,8 @@ impl Runner {
 
     // -- skill execution -----------------------------------------------------
 
-    fn execute_turn_skills(&mut self, turn: &Turn) {
-        for action in &turn.servant_actions {
+    fn execute_scene_skills(&mut self, scene: &BattleScene) {
+        for action in &scene.servant_actions {
             if let Action::Servant {
                 servant,
                 skill,
@@ -1605,7 +1618,7 @@ impl Runner {
             }
         }
 
-        for action in &turn.equipment_actions {
+        for action in &scene.equipment_actions {
             if let Action::Equipment { skill, target, .. } = action {
                 let Some(pos) = equipment_skill_position(skill.as_deref()) else {
                     continue;

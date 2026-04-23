@@ -24,18 +24,18 @@ import {
   LightningBoltIcon,
 } from "@radix-ui/react-icons";
 import type {
-  Turn,
+  BattleScene,
   ServantAction,
   EquipmentAction,
   AttackCard,
 } from "../types/command";
 import type { Servant } from "../types/servant";
 
-interface TurnBlockProps {
-  turn: Turn;
+interface BattleSceneBlockProps {
+  scene: BattleScene;
   index: number;
   partyServants: (Servant | null)[];
-  onChange: (updated: Turn) => void;
+  onChange: (updated: BattleScene) => void;
   onDelete: () => void;
   canDelete: boolean;
 }
@@ -261,14 +261,14 @@ function SortableAttackRow({
   );
 }
 
-export function TurnBlock({
-  turn,
+export function BattleSceneBlock({
+  scene,
   index,
   partyServants,
   onChange,
   onDelete,
   canDelete,
-}: TurnBlockProps) {
+}: BattleSceneBlockProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor)
@@ -283,8 +283,8 @@ export function TurnBlock({
       target: null,
     };
     onChange({
-      ...turn,
-      servantActions: [...turn.servantActions, newAction],
+      ...scene,
+      servantActions: [...scene.servantActions, newAction],
     });
   };
 
@@ -296,56 +296,56 @@ export function TurnBlock({
       target: null,
     };
     onChange({
-      ...turn,
-      equipmentActions: [...turn.equipmentActions, newAction],
+      ...scene,
+      equipmentActions: [...scene.equipmentActions, newAction],
     });
   };
 
   const updateServantAction = (idx: number, updated: ServantAction) => {
-    const next = [...turn.servantActions];
+    const next = [...scene.servantActions];
     next[idx] = updated;
-    onChange({ ...turn, servantActions: next });
+    onChange({ ...scene, servantActions: next });
   };
 
   const deleteServantAction = (idx: number) => {
     onChange({
-      ...turn,
-      servantActions: turn.servantActions.filter((_, i) => i !== idx),
+      ...scene,
+      servantActions: scene.servantActions.filter((_, i) => i !== idx),
     });
   };
 
   const updateEquipmentAction = (idx: number, updated: EquipmentAction) => {
-    const next = [...turn.equipmentActions];
+    const next = [...scene.equipmentActions];
     next[idx] = updated;
-    onChange({ ...turn, equipmentActions: next });
+    onChange({ ...scene, equipmentActions: next });
   };
 
   const deleteEquipmentAction = (idx: number) => {
     onChange({
-      ...turn,
-      equipmentActions: turn.equipmentActions.filter((_, i) => i !== idx),
+      ...scene,
+      equipmentActions: scene.equipmentActions.filter((_, i) => i !== idx),
     });
   };
 
   const updateAttackCard = (idx: number, updated: AttackCard) => {
-    const next = [...turn.attackPriority];
+    const next = [...scene.attackPriority];
     next[idx] = updated;
-    onChange({ ...turn, attackPriority: next });
+    onChange({ ...scene, attackPriority: next });
   };
 
   const deleteAttackCard = (idx: number) => {
     onChange({
-      ...turn,
-      attackPriority: turn.attackPriority.filter((_, i) => i !== idx),
+      ...scene,
+      attackPriority: scene.attackPriority.filter((_, i) => i !== idx),
     });
   };
 
   const addAttackCard = () => {
     onChange({
-      ...turn,
+      ...scene,
       attackPriority: [
-        ...turn.attackPriority,
-        { id: `atk_${Date.now()}_${turn.attackPriority.length}`, card: null },
+        ...scene.attackPriority,
+        { id: `atk_${Date.now()}_${scene.attackPriority.length}`, card: null },
       ],
     });
   };
@@ -353,39 +353,39 @@ export function TurnBlock({
   const handleAttackDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = turn.attackPriority.findIndex((c) => c.id === active.id);
-    const newIndex = turn.attackPriority.findIndex((c) => c.id === over.id);
+    const oldIndex = scene.attackPriority.findIndex((c) => c.id === active.id);
+    const newIndex = scene.attackPriority.findIndex((c) => c.id === over.id);
     onChange({
-      ...turn,
-      attackPriority: arrayMove(turn.attackPriority, oldIndex, newIndex),
+      ...scene,
+      attackPriority: arrayMove(scene.attackPriority, oldIndex, newIndex),
     });
   };
 
   return (
-    <div className="turn-block">
-      <Flex align="center" justify="between" className="turn-header">
+    <div className="scene-block">
+      <Flex align="center" justify="between" className="scene-header">
         <Text size="4" weight="bold">
-          Turn {index + 1}
+          场景 {index + 1}
         </Text>
         <Flex gap="2" align="center">
-          <button className="turn-action-btn turn-action-btn-servant" onClick={addServantAction}>
+          <button className="scene-action-btn scene-action-btn-servant" onClick={addServantAction}>
             <PersonIcon />
             <span>Servant</span>
           </button>
-          <button className="turn-action-btn turn-action-btn-equipment" onClick={addEquipmentAction}>
+          <button className="scene-action-btn scene-action-btn-equipment" onClick={addEquipmentAction}>
             <HeartIcon />
             <span>Equipment</span>
           </button>
           {canDelete && (
-            <button className="turn-delete-btn" onClick={onDelete}>
+            <button className="scene-delete-btn" onClick={onDelete}>
               <TrashIcon />
             </button>
           )}
         </Flex>
       </Flex>
 
-      <div className="turn-actions">
-        {turn.servantActions.map((action, i) => (
+      <div className="scene-actions">
+        {scene.servantActions.map((action, i) => (
           <ServantActionRow
             key={action.id}
             action={action}
@@ -394,7 +394,7 @@ export function TurnBlock({
             onDelete={() => deleteServantAction(i)}
           />
         ))}
-        {turn.equipmentActions.map((action, i) => (
+        {scene.equipmentActions.map((action, i) => (
           <EquipmentActionRow
             key={action.id}
             action={action}
@@ -424,17 +424,17 @@ export function TurnBlock({
           onDragEnd={handleAttackDragEnd}
         >
           <SortableContext
-            items={turn.attackPriority.map((c) => c.id)}
+            items={scene.attackPriority.map((c) => c.id)}
             strategy={verticalListSortingStrategy}
           >
-            {turn.attackPriority.map((card, i) => (
+            {scene.attackPriority.map((card, i) => (
               <SortableAttackRow
                 key={card.id}
                 card={card}
                 partyServants={partyServants}
                 onChange={(c) => updateAttackCard(i, c)}
                 onDelete={() => deleteAttackCard(i)}
-                canDelete={turn.attackPriority.length > 3}
+                canDelete={scene.attackPriority.length > 3}
               />
             ))}
           </SortableContext>

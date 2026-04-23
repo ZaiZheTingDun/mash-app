@@ -309,11 +309,11 @@ class TestFindElementByName:
         assert result["found"] is True
 
 
-# ── _read_turn ──────────────────────────────────────────────────────────
+# ── _read_battle_scene ──────────────────────────────────────────────────
 
 
-# Mirrors the Rust constant in src-tauri/src/runner.rs (TURN_REGION).
-TURN_REGION = {"x": 0.587, "y": 0.090, "w": 0.208, "h": 0.087}
+# Mirrors the Rust constant in src-tauri/src/runner.rs (BATTLE_SCENE_REGION).
+BATTLE_SCENE_REGION = {"x": 0.587, "y": 0.0, "w": 0.16, "h": 0.062}
 
 _TEST_TEMPLATES_DIR = os.path.join(
     os.path.dirname(__file__), "test_data", "templates"
@@ -332,42 +332,34 @@ _PROD_TEMPLATES_DIR = os.path.normpath(
 )
 
 
-class TestReadTurn:
+class TestReadBattleScene:
     def _load_real_templates(self):
         result = mash_cv._load_templates(_TEST_TEMPLATES_DIR)
         assert result["ok"] is True
-        # Anchors and at least the two digits we have samples for must be loaded.
-        for key in ("text_turn_label", "text_tan", "digit_1", "digit_6"):
+        for key in ("text_battle_label", "digit_1", "digit_3"):
             assert key in mash_cv.templates, f"missing template {key}"
 
-    def test_returns_none_when_anchors_missing(self):
+    def test_returns_none_when_anchor_missing(self):
         img = _make_bgr_image(2560, 1440)
-        result = mash_cv._read_turn(img, TURN_REGION)
-        assert result == {"turn": None}
+        result = mash_cv._read_battle_scene(img, BATTLE_SCENE_REGION)
+        assert result == {"scene": None, "total": None}
 
-    def test_battle_screenshot_reads_one(self):
+    def test_battle_screenshot_reads_one_of_three(self):
         self._load_real_templates()
         img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle.png"))
         assert img is not None
-        result = mash_cv._read_turn(img, TURN_REGION)
-        assert result == {"turn": 1}
-
-    def test_six_turn_screenshot_reads_six(self):
-        self._load_real_templates()
-        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "turn_six.png"))
-        assert img is not None
-        result = mash_cv._read_turn(img, TURN_REGION)
-        assert result == {"turn": 6}
+        result = mash_cv._read_battle_scene(img, BATTLE_SCENE_REGION)
+        assert result == {"scene": 1, "total": 3}
 
     def test_np_overlay_returns_none(self):
-        # battle_np.png has the noble-phantasm splash covering the TURN row,
-        # so the right-anchor (text_tan) match falls below threshold and the
-        # function bails with turn=None.
+        # battle_np.png has the noble-phantasm splash covering the HUD,
+        # so the BATTLE anchor falls below threshold and the function bails
+        # with both fields None.
         self._load_real_templates()
         img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle_np.png"))
         assert img is not None
-        result = mash_cv._read_turn(img, TURN_REGION)
-        assert result == {"turn": None}
+        result = mash_cv._read_battle_scene(img, BATTLE_SCENE_REGION)
+        assert result == {"scene": None, "total": None}
 
 
 # ── _find_command_cards ─────────────────────────────────────────────────

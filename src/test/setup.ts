@@ -45,7 +45,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "get_servants":
       case "get_craft_essences":
       case "list_projects":
-      case "load_turns":
+      case "load_battle_scenes":
         return [];
       case "check_adb":
         return { ready: false, devices: [] };

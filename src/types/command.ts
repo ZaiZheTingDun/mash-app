@@ -18,7 +18,7 @@ export interface AttackCard {
   card: string | null;
 }
 
-export interface Turn {
+export interface BattleScene {
   id: string;
   servantActions: ServantAction[];
   equipmentActions: EquipmentAction[];

@@ -129,6 +129,46 @@ interface NoblePhantasmMatchDto {
   stdBgr: number;
 }
 
+interface DigitMatchDto {
+  value: number;
+  score: number;
+  region: NormRectDto;
+}
+
+interface BattleSceneResultDto {
+  region: NormRectDto;
+  scene: number | null;
+  total: number | null;
+  labelTemplateLoaded: boolean;
+  labelThreshold: number;
+  digitThreshold: number;
+  anchorScore: number;
+  anchorBox: NormRectDto | null;
+  stripRegion: NormRectDto | null;
+  candidates: DigitMatchDto[];
+  kept: DigitMatchDto[];
+  splitAt: number | null;
+  bestGap: number;
+  avgWidth: number;
+  trimmedLeft: number;
+  trimmedRight: number;
+  missingDigitTemplates: number[];
+  failReason: string | null;
+}
+
+const BATTLE_SCENE_FAIL_HINTS: Record<string, string> = {
+  empty_region: "区域为空（NormRect 越界？）",
+  missing_label_template: "缺少 text_battle_label 模板",
+  region_smaller_than_label: "区域比锚点模板还小，请扩大",
+  anchor_below_threshold: "未找到 BATTLE 锚点（被遮挡或区域偏移）",
+  strip_too_narrow: "锚点右侧空间不足以容纳数字",
+  no_digit_candidates: "右侧未匹配到任何数字（阈值 ≥ 0.8）",
+  fewer_than_two_digits: "数字不足 2 个（无法切分 m/n）",
+  no_separator_gap: "数字间无足够间隔（找不到斜杠位置）",
+  cohesion_trim_emptied_side: "切分后某一侧无有效数字（误检过多）",
+  parse_error: "数字解析失败",
+};
+
 interface SupportCeInfoDto {
   region: NormRectDto;
   score: number;
@@ -236,6 +276,9 @@ export function DebugPage({ onBack }: DebugPageProps) {
     []
   );
   const [findingNps, setFindingNps] = useState(false);
+  const [battleScene, setBattleScene] =
+    useState<BattleSceneResultDto | null>(null);
+  const [readingBattleScene, setReadingBattleScene] = useState(false);
   const [supportServantId, setSupportServantId] = useState<string>("");
   const [supportCraftEssenceId, setSupportCraftEssenceId] = useState<string>("");
   const [supportMetadata, setSupportMetadata] =
@@ -364,6 +407,7 @@ export function DebugPage({ onBack }: DebugPageProps) {
       setProbes([]);
       setCommandCards([]);
       setNoblePhantasms([]);
+      setBattleScene(null);
       setSupportResult(null);
       setImgNaturalSize(null);
       log(
@@ -454,6 +498,7 @@ export function DebugPage({ onBack }: DebugPageProps) {
     setProbes([]);
     setCommandCards([]);
     setNoblePhantasms([]);
+    setBattleScene(null);
     setSupportResult(null);
     log("已清除标注");
   }, [log]);
@@ -524,6 +569,53 @@ export function DebugPage({ onBack }: DebugPageProps) {
       log(`debug_find_noble_phantasms 失败: ${err}`, "error");
     } finally {
       setFindingNps(false);
+    }
+  }, [capture, log]);
+
+  const handleReadBattleScene = useCallback(async () => {
+    if (!capture) return;
+    setReadingBattleScene(true);
+    log("调用 debug_read_battle_scene");
+    try {
+      const result = await invoke<BattleSceneResultDto>(
+        "debug_read_battle_scene"
+      );
+      setBattleScene(result);
+      const anchor = `锚点 ${(result.anchorScore * 100).toFixed(1)}% (阈值 ${(
+        result.labelThreshold * 100
+      ).toFixed(0)}%)`;
+      const digits =
+        result.kept.length > 0
+          ? `命中数字 [${result.kept
+              .map((d) => `${d.value}@${(d.score * 100).toFixed(0)}%`)
+              .join(", ")}]`
+          : `数字 0 个 (阈值 ${(result.digitThreshold * 100).toFixed(0)}%)`;
+      const trimNote =
+        result.trimmedLeft + result.trimmedRight > 0
+          ? ` | 已剔除 ${result.trimmedLeft + result.trimmedRight} 个噪声数字`
+          : "";
+      if (result.scene !== null && result.total !== null) {
+        log(
+          `战斗场景: ${result.scene}/${result.total} → 第 ${result.scene} 组指令 | ${anchor} | ${digits}${trimNote}`
+        );
+      } else {
+        const reason = result.failReason ?? "unknown";
+        const hint = BATTLE_SCENE_FAIL_HINTS[reason] ?? reason;
+        log(
+          `战斗场景: 未识别 (${hint}) | ${anchor} | ${digits}`,
+          "warn"
+        );
+        if (result.missingDigitTemplates.length > 0) {
+          log(
+            `缺失数字模板: ${result.missingDigitTemplates.join(", ")}`,
+            "warn"
+          );
+        }
+      }
+    } catch (err) {
+      log(`debug_read_battle_scene 失败: ${err}`, "error");
+    } finally {
+      setReadingBattleScene(false);
     }
   }, [capture, log]);
 
@@ -816,6 +908,30 @@ export function DebugPage({ onBack }: DebugPageProps) {
           </DebugSection>
 
           <DebugSection
+            title="战斗场景识别"
+            badge={
+              battleScene && battleScene.scene !== null && battleScene.total !== null
+                ? `${battleScene.scene}/${battleScene.total}`
+                : battleScene
+                  ? "未识别"
+                  : undefined
+            }
+          >
+            <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
+              <Text size="2" color="gray">
+                读取右上角 BATTLE m/n，用于挑选第 m 组指令配置。
+              </Text>
+              <button
+                className="battle-btn battle-btn-start debug-btn-small"
+                disabled={readingBattleScene || !capture}
+                onClick={handleReadBattleScene}
+              >
+                {readingBattleScene ? "识别中…" : "识别战斗场景"}
+              </button>
+            </Flex>
+          </DebugSection>
+
+          <DebugSection
             title="助战识别"
             badge={
               supportMetadata
@@ -996,6 +1112,78 @@ export function DebugPage({ onBack }: DebugPageProps) {
                     </span>
                   </Box>
                 ))}
+                {battleScene && (
+                  <>
+                    <Box
+                      key="battle-scene-region"
+                      className={`debug-overlay-box ${
+                        battleScene.scene !== null
+                          ? "debug-overlay-np-ready"
+                          : "debug-overlay-np-empty"
+                      }`}
+                      style={{
+                        left: `${battleScene.region.x * 100}%`,
+                        top: `${battleScene.region.y * 100}%`,
+                        width: `${battleScene.region.w * 100}%`,
+                        height: `${battleScene.region.h * 100}%`,
+                      }}
+                    >
+                      <span className="debug-overlay-label">
+                        战斗场景{" "}
+                        {battleScene.scene !== null &&
+                        battleScene.total !== null
+                          ? `${battleScene.scene}/${battleScene.total}`
+                          : "未识别"}
+                      </span>
+                    </Box>
+                    {battleScene.anchorBox && (
+                      <Box
+                        key="battle-scene-anchor"
+                        className="debug-overlay-box debug-overlay-support-region"
+                        style={{
+                          left: `${battleScene.anchorBox.x * 100}%`,
+                          top: `${battleScene.anchorBox.y * 100}%`,
+                          width: `${battleScene.anchorBox.w * 100}%`,
+                          height: `${battleScene.anchorBox.h * 100}%`,
+                        }}
+                      >
+                        <span className="debug-overlay-label">
+                          BATTLE 锚点 {(battleScene.anchorScore * 100).toFixed(0)}
+                          %
+                        </span>
+                      </Box>
+                    )}
+                    {battleScene.candidates.map((d, i) => {
+                      const isKept = battleScene.kept.some(
+                        (k) =>
+                          k.value === d.value &&
+                          Math.abs(k.region.x - d.region.x) < 1e-6 &&
+                          Math.abs(k.region.y - d.region.y) < 1e-6
+                      );
+                      return (
+                        <Box
+                          key={`battle-scene-digit-${i}`}
+                          className={`debug-overlay-box ${
+                            isKept
+                              ? "debug-overlay-support-name-cand"
+                              : "debug-overlay-support-np-cand"
+                          }`}
+                          style={{
+                            left: `${d.region.x * 100}%`,
+                            top: `${d.region.y * 100}%`,
+                            width: `${d.region.w * 100}%`,
+                            height: `${d.region.h * 100}%`,
+                          }}
+                        >
+                          <span className="debug-overlay-label">
+                            {d.value} · {(d.score * 100).toFixed(0)}%
+                            {isKept ? "" : " (drop)"}
+                          </span>
+                        </Box>
+                      );
+                    })}
+                  </>
+                )}
                 {supportResult && (
                   <>
                     <Box

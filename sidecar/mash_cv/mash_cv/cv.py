@@ -27,7 +27,12 @@ stream frame is used):
                                                     ← {"found":true,"x":0.45,"y":0.32,"score":0.87,"region":{...}}
 → {"cmd":"find_element_by_name","screen":"Battle","element":"attackButton"}
                                                     ← {"found":true,"x":0.82,"y":0.88,"score":0.89,"region":{...}}
-→ {"cmd":"read_turn","region":{...}}                ← {"turn":1}     (or null if anchors miss)
+→ {"cmd":"read_battle_scene","region":{...},"debug":false}
+                                                    ← {"scene":1,"total":3}  (both null if anchor misses;
+                                                       when "debug":true the response also carries a
+                                                       "diagnostics" object with anchorScore, stripRegion,
+                                                       per-digit candidates+kept lists, splitAt, bestGap,
+                                                       avgWidth, and a failReason enum.)
 → {"cmd":"find_noble_phantasms"}                    ← {"slots":[{"slot":0,"cardRegion":{...},
                                                                   "ready":true,"edgeFrac":0.12,
                                                                   "stdBgr":91.4}, ...]}
@@ -311,81 +316,235 @@ def _detect_screen(img: np.ndarray) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Turn-number OCR (template-matched digits inside the TURN_REGION)
+# Battle-scene OCR (template-matched digits next to the BATTLE label)
 # ---------------------------------------------------------------------------
 
 
-def _read_turn(img: np.ndarray, region: dict) -> dict:
-    """Recognize the current-turn integer drawn inside ``region``.
+BATTLE_LABEL_THRESHOLD = 0.7
+BATTLE_DIGIT_THRESHOLD = 0.8
+# Two adjacent digits inside a single multi-digit number sit essentially
+# touching: their bbox edges are at most ~30% of the average glyph width
+# apart (FGO uses tight kerning for the BATTLE m/n indicator). Anything
+# wider than this is either the slash gap (handled separately) or a
+# spurious detection from neighbouring UI text — drop it.
+BATTLE_DIGIT_COHESION_GAP = 0.6
 
-    The strip is bounded on the left by the cyan ``TURN`` label
-    (``text_turn_label`` template) and on the right by the ``ターン``
-    katakana suffix (``text_tan`` template). Digit glyphs ``digit_0`` ..
-    ``digit_9`` are matched inside that strip and concatenated by x-order.
-    Returns ``{"turn": int}`` on success or ``{"turn": None}`` when either
-    anchor is missing (e.g. NP overlay) or no digit clears the threshold.
+
+def _read_battle_scene(
+    img: np.ndarray, region: dict, debug: bool = False
+) -> dict:
+    """Recognize the ``BATTLE m/n`` indicator drawn inside ``region``.
+
+    The strip is anchored on the left by the gold ``BATTLE`` label
+    (``text_battle_label`` template). Digit glyphs ``digit_0`` .. ``digit_9``
+    are matched in the area to the right of that anchor and split into two
+    integers by the single largest horizontal gap between adjacent kept
+    detections (the slash between ``m`` and ``n``). Returns
+    ``{"scene": m, "total": n}`` on success or ``{"scene": None,
+    "total": None}`` when the anchor misses (e.g. NP overlay) or fewer than
+    two digits clear the threshold.
+
+    When ``debug`` is true, the response additionally carries a
+    ``diagnostics`` object describing every intermediate decision (anchor
+    score & box, strip rect, every above-threshold digit candidate with
+    its NMS-kept flag, the chosen split index + best gap, and a
+    ``failReason`` enum so callers can render a precise root cause without
+    having to mirror the threshold constants).
     """
+    diag: dict = {
+        "region": dict(region),
+        "labelTemplateLoaded": False,
+        "labelThreshold": BATTLE_LABEL_THRESHOLD,
+        "digitThreshold": BATTLE_DIGIT_THRESHOLD,
+        "anchorScore": 0.0,
+        "anchorBox": None,
+        "stripRegion": None,
+        "candidates": [],
+        "kept": [],
+        "splitAt": None,
+        "bestGap": 0.0,
+        "avgWidth": 0.0,
+        "missingDigitTemplates": [],
+        "failReason": None,
+    }
+
+    def _wrap(scene, total, *, fail: Optional[str] = None) -> dict:
+        if fail is not None:
+            diag["failReason"] = fail
+        out: dict = {"scene": scene, "total": total}
+        if debug:
+            out["diagnostics"] = diag
+        return out
+
     h, w = img.shape[:2]
     rx, ry = int(region["x"] * w), int(region["y"] * h)
     rw, rh = int(region["w"] * w), int(region["h"] * h)
     roi = img[ry : ry + rh, rx : rx + rw]
     if roi.size == 0:
-        return {"turn": None}
+        return _wrap(None, None, fail="empty_region")
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
 
-    left = templates.get("text_turn_label")
-    right = templates.get("text_tan")
-    if left is None or right is None:
-        return {"turn": None}
+    label = templates.get("text_battle_label")
+    if label is None:
+        return _wrap(None, None, fail="missing_label_template")
+    diag["labelTemplateLoaded"] = True
 
-    def _best(tmpl: np.ndarray, thresh: float = 0.7):
-        if tmpl.shape[0] > gray.shape[0] or tmpl.shape[1] > gray.shape[1]:
-            return None
-        res = cv2.matchTemplate(gray, tmpl, cv2.TM_CCOEFF_NORMED)
-        _, mv, _, ml = cv2.minMaxLoc(res)
-        return ml if mv >= thresh else None
+    if label.shape[0] > gray.shape[0] or label.shape[1] > gray.shape[1]:
+        return _wrap(None, None, fail="region_smaller_than_label")
+    res = cv2.matchTemplate(gray, label, cv2.TM_CCOEFF_NORMED)
+    _, mv, _, ml = cv2.minMaxLoc(res)
+    diag["anchorScore"] = float(mv)
+    diag["anchorBox"] = {
+        "x": (rx + ml[0]) / w,
+        "y": (ry + ml[1]) / h,
+        "w": label.shape[1] / w,
+        "h": label.shape[0] / h,
+    }
+    if mv < BATTLE_LABEL_THRESHOLD:
+        return _wrap(None, None, fail="anchor_below_threshold")
 
-    lloc = _best(left)
-    rloc = _best(right)
-    if lloc is None or rloc is None:
-        return {"turn": None}
+    x_start = ml[0] + label.shape[1]
+    if gray.shape[1] - x_start < 5:
+        return _wrap(None, None, fail="strip_too_narrow")
+    strip = gray[:, x_start:]
+    diag["stripRegion"] = {
+        "x": (rx + x_start) / w,
+        "y": ry / h,
+        "w": strip.shape[1] / w,
+        "h": strip.shape[0] / h,
+    }
 
-    x_start = lloc[0] + left.shape[1]
-    x_end = rloc[0]
-    if x_end - x_start < 5:
-        return {"turn": None}
-    strip = gray[:, x_start:x_end]
-
-    cands: list[tuple[int, int, float, int]] = []  # (x, digit, score, w)
+    cands: list[tuple[int, int, float, int, int, int]] = []
+    # (x, digit, score, w, h, y)
     for d in range(10):
         tmpl = templates.get(f"digit_{d}")
         if tmpl is None:
+            diag["missingDigitTemplates"].append(d)
             continue
         th, tw = tmpl.shape[:2]
         if tw > strip.shape[1] or th > strip.shape[0]:
             continue
-        res = cv2.matchTemplate(strip, tmpl, cv2.TM_CCOEFF_NORMED)
-        ys, xs = np.where(res >= 0.8)
+        dres = cv2.matchTemplate(strip, tmpl, cv2.TM_CCOEFF_NORMED)
+        ys, xs = np.where(dres >= BATTLE_DIGIT_THRESHOLD)
         for y, x in zip(ys, xs):
-            cands.append((int(x), d, float(res[y, x]), tw))
+            cands.append(
+                (int(x), d, float(dres[y, x]), tw, th, int(y))
+            )
+
+    if debug:
+        diag["candidates"] = [
+            {
+                "value": int(c[1]),
+                "score": float(c[2]),
+                "region": {
+                    "x": (rx + x_start + c[0]) / w,
+                    "y": (ry + c[5]) / h,
+                    "w": c[3] / w,
+                    "h": c[4] / h,
+                },
+            }
+            for c in cands
+        ]
 
     if not cands:
-        return {"turn": None}
+        return _wrap(None, None, fail="no_digit_candidates")
 
     # Greedy NMS on x-coordinate: keep the highest-scoring detection first
     # and drop any later candidate whose centre is within ~half a glyph.
     cands.sort(key=lambda c: -c[2])
-    kept: list[tuple[int, int, float, int]] = []
+    kept: list[tuple[int, int, float, int, int, int]] = []
     for c in cands:
         if any(abs(c[0] - k[0]) < max(c[3], k[3]) * 0.5 for k in kept):
             continue
         kept.append(c)
 
     kept.sort(key=lambda c: c[0])
+
+    if debug:
+        diag["kept"] = [
+            {
+                "value": int(c[1]),
+                "score": float(c[2]),
+                "region": {
+                    "x": (rx + x_start + c[0]) / w,
+                    "y": (ry + c[5]) / h,
+                    "w": c[3] / w,
+                    "h": c[4] / h,
+                },
+            }
+            for c in kept
+        ]
+
+    if len(kept) < 2:
+        return _wrap(None, None, fail="fewer_than_two_digits")
+
+    # Split into (m, n) by the largest gap between adjacent kept detections;
+    # the gap must exceed half the average glyph width to be considered the
+    # slash separator (otherwise the digits all belong to the same number
+    # and we have no idea where to cut).
+    avg_w = sum(c[3] for c in kept) / len(kept)
+    diag["avgWidth"] = float(avg_w)
+    best_gap = 0.0
+    split_at = -1
+    for i in range(len(kept) - 1):
+        gap = (kept[i + 1][0]) - (kept[i][0] + kept[i][3])
+        if gap > best_gap:
+            best_gap = gap
+            split_at = i + 1
+    diag["bestGap"] = float(best_gap)
+    diag["splitAt"] = int(split_at) if split_at >= 1 else None
+    if split_at < 1 or best_gap < avg_w * 0.5:
+        return _wrap(None, None, fail="no_separator_gap")
+
+    left_digits = kept[:split_at]
+    right_digits = kept[split_at:]
+
+    # Cohesion trim: digits inside a single number are kerned tight. Any
+    # neighbour whose gap to the rest of its cluster exceeds
+    # ``BATTLE_DIGIT_COHESION_GAP * avg_w`` is a spurious detection from
+    # adjacent UI text (e.g. a stray glyph after the BATTLE row that the
+    # digit_N templates partially match). Trim from the outer edge of each
+    # side inward so the side that abuts the slash stays anchored.
+    cohesion_threshold = avg_w * BATTLE_DIGIT_COHESION_GAP
+
+    def _trim_left(side: list) -> list:
+        """Drop leading digits whose gap to the *next* digit exceeds the
+        cohesion threshold (the side closest to the slash is on the right
+        end of the left cluster, so we trim from the front)."""
+        while len(side) > 1:
+            gap = side[1][0] - (side[0][0] + side[0][3])
+            if gap > cohesion_threshold:
+                side = side[1:]
+            else:
+                break
+        return side
+
+    def _trim_right(side: list) -> list:
+        """Drop trailing digits whose gap to the *previous* digit exceeds
+        the cohesion threshold (the side closest to the slash is on the
+        left end of the right cluster, so we trim from the back)."""
+        while len(side) > 1:
+            gap = side[-1][0] - (side[-2][0] + side[-2][3])
+            if gap > cohesion_threshold:
+                side = side[:-1]
+            else:
+                break
+        return side
+
+    trimmed_left = _trim_left(left_digits)
+    trimmed_right = _trim_right(right_digits)
+    diag["trimmedLeft"] = len(left_digits) - len(trimmed_left)
+    diag["trimmedRight"] = len(right_digits) - len(trimmed_right)
+
+    if not trimmed_left or not trimmed_right:
+        return _wrap(None, None, fail="cohesion_trim_emptied_side")
+
     try:
-        return {"turn": int("".join(str(c[1]) for c in kept))}
+        scene = int("".join(str(c[1]) for c in trimmed_left))
+        total = int("".join(str(c[1]) for c in trimmed_right))
     except ValueError:
-        return {"turn": None}
+        return _wrap(None, None, fail="parse_error")
+    return _wrap(scene, total)
 
 
 # ---------------------------------------------------------------------------
@@ -1495,14 +1654,18 @@ def main() -> None:
                         cmd["element"],
                     ),
                 )
-        elif action == "read_turn":
+        elif action == "read_battle_scene":
             img, err = _load_frame(cmd)
             if img is None:
-                _reply(req_id, {"turn": None, "error": err})
+                _reply(req_id, {"scene": None, "total": None, "error": err})
             else:
                 _reply(
                     req_id,
-                    _read_turn(img, cmd.get("region", DEFAULT_REGION)),
+                    _read_battle_scene(
+                        img,
+                        cmd.get("region", DEFAULT_REGION),
+                        debug=bool(cmd.get("debug", False)),
+                    ),
                 )
         elif action == "find_command_cards":
             img, err = _load_frame(cmd)

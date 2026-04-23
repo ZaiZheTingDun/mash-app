@@ -44,8 +44,13 @@ pub struct AttackCard {
     pub card: Option<String>,
 }
 
+/// One configured battle-scene block. The runner picks which block to
+/// execute by reading the `BATTLE m/n` HUD strip and indexing on `m - 1`,
+/// so each block represents the per-scene action plan rather than a
+/// per-turn one. JSON shape on the wire is unchanged from the legacy
+/// `Turn` struct so old `turns.json` files can be migrated in place.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct Turn {
+pub struct BattleScene {
     pub id: String,
     #[serde(rename = "servantActions")]
     pub servant_actions: Vec<Action>,
@@ -139,10 +144,20 @@ fn projects_file_path(app: &tauri::AppHandle) -> PathBuf {
     app_data_dir(app).join("projects.json")
 }
 
-fn project_turns_path(app: &tauri::AppHandle, project_id: &str) -> PathBuf {
+fn project_battle_scenes_path(app: &tauri::AppHandle, project_id: &str) -> PathBuf {
     let dir = app_data_dir(app).join("projects").join(project_id);
     fs::create_dir_all(&dir).ok();
-    dir.join("turns.json")
+    dir.join("battle_scenes.json")
+}
+
+/// Legacy filename used before the per-scene rename. Kept around so
+/// `load_battle_scenes` can migrate any pre-existing project data on
+/// first launch after the rename.
+fn legacy_project_turns_path(app: &tauri::AppHandle, project_id: &str) -> PathBuf {
+    app_data_dir(app)
+        .join("projects")
+        .join(project_id)
+        .join("turns.json")
 }
 
 fn read_projects(app: &tauri::AppHandle) -> Vec<Project> {
@@ -207,19 +222,39 @@ fn delete_project(app: tauri::AppHandle, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn save_turns(app: tauri::AppHandle, project_id: String, turns: Vec<Turn>) -> Result<(), String> {
-    let path = project_turns_path(&app, &project_id);
-    let json = serde_json::to_string_pretty(&turns).map_err(|e| e.to_string())?;
+fn save_battle_scenes(
+    app: tauri::AppHandle,
+    project_id: String,
+    scenes: Vec<BattleScene>,
+) -> Result<(), String> {
+    let path = project_battle_scenes_path(&app, &project_id);
+    let json = serde_json::to_string_pretty(&scenes).map_err(|e| e.to_string())?;
     fs::write(&path, json).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn load_turns(app: tauri::AppHandle, project_id: String) -> Vec<Turn> {
-    let path = project_turns_path(&app, &project_id);
-    match fs::read_to_string(&path) {
-        Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
-        Err(_) => Vec::new(),
+fn load_battle_scenes(app: tauri::AppHandle, project_id: String) -> Vec<BattleScene> {
+    let path = project_battle_scenes_path(&app, &project_id);
+    if let Ok(contents) = fs::read_to_string(&path) {
+        return serde_json::from_str(&contents).unwrap_or_default();
     }
+
+    // One-shot migration: pre-rename projects stored their per-scene
+    // config under `turns.json`. The on-disk JSON shape is identical
+    // (BattleScene was just renamed from Turn), so we can read it as-is,
+    // write it under the new filename, and remove the legacy file.
+    let legacy = legacy_project_turns_path(&app, &project_id);
+    if let Ok(contents) = fs::read_to_string(&legacy) {
+        let scenes: Vec<BattleScene> =
+            serde_json::from_str(&contents).unwrap_or_default();
+        if let Ok(json) = serde_json::to_string_pretty(&scenes) {
+            let _ = fs::write(&path, json);
+        }
+        let _ = fs::remove_file(&legacy);
+        return scenes;
+    }
+
+    Vec::new()
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -528,7 +563,7 @@ fn start_automation(
         return Err("自动化正在运行中".into());
     }
 
-    let turns = load_turns(app.clone(), config.project_id.clone());
+    let scenes = load_battle_scenes(app.clone(), config.project_id.clone());
 
     let use_bluestack = *bluestack_state.lock().unwrap();
 
@@ -576,7 +611,7 @@ fn start_automation(
         adb_dev,
         sidecar,
         config,
-        turns,
+        scenes,
         app,
         state,
         cancel,
@@ -703,8 +738,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_servants,
             get_craft_essences,
-            save_turns,
-            load_turns,
+            save_battle_scenes,
+            load_battle_scenes,
             list_projects,
             create_project,
             update_project,
@@ -725,6 +760,7 @@ pub fn run() {
             debug::debug_get_runner_coordinates,
             debug::debug_find_command_cards,
             debug::debug_find_noble_phantasms,
+            debug::debug_read_battle_scene,
             debug::debug_find_supports,
             debug::debug_list_servant_assets,
             debug::warm_sidecar,

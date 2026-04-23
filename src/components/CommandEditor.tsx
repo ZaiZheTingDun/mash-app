@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Flex } from "@radix-ui/themes";
 import { invoke } from "@tauri-apps/api/core";
-import { TurnBlock } from "./TurnBlock";
-import type { Turn, AttackCard } from "../types/command";
+import { BattleSceneBlock } from "./BattleSceneBlock";
+import type { BattleScene, AttackCard } from "../types/command";
 import type { Servant } from "../types/servant";
 
 interface CommandEditorProps {
@@ -10,10 +10,10 @@ interface CommandEditorProps {
   partyServants: (Servant | null)[];
 }
 
-let nextTurnId = 1;
+let nextSceneId = 1;
 
-function createTurnId(): string {
-  return `turn_${nextTurnId++}_${Date.now()}`;
+function createSceneId(): string {
+  return `scene_${nextSceneId++}_${Date.now()}`;
 }
 
 function createDefaultAttackPriority(): AttackCard[] {
@@ -24,9 +24,9 @@ function createDefaultAttackPriority(): AttackCard[] {
   ];
 }
 
-function createDefaultTurn(): Turn {
+function createDefaultScene(): BattleScene {
   return {
-    id: createTurnId(),
+    id: createSceneId(),
     servantActions: [],
     equipmentActions: [],
     attackPriority: createDefaultAttackPriority(),
@@ -34,85 +34,85 @@ function createDefaultTurn(): Turn {
 }
 
 export function CommandEditor({ projectId, partyServants }: CommandEditorProps) {
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const [scenes, setScenes] = useState<BattleScene[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!projectId) {
-      setTurns([createDefaultTurn()]);
+      setScenes([createDefaultScene()]);
       setLoaded(true);
       return;
     }
     setLoaded(false);
-    invoke<Turn[]>("load_turns", { projectId })
+    invoke<BattleScene[]>("load_battle_scenes", { projectId })
       .then((saved) => {
         if (saved.length > 0) {
-          setTurns(saved);
+          setScenes(saved);
         } else {
-          setTurns([createDefaultTurn()]);
+          setScenes([createDefaultScene()]);
         }
       })
       .catch(() => {
-        setTurns([createDefaultTurn()]);
+        setScenes([createDefaultScene()]);
       })
       .finally(() => setLoaded(true));
   }, [projectId]);
 
-  const saveTurns = useCallback(
-    (updated: Turn[]) => {
+  const saveScenes = useCallback(
+    (updated: BattleScene[]) => {
       if (!projectId) return;
-      invoke("save_turns", { projectId, turns: updated }).catch(console.error);
+      invoke("save_battle_scenes", { projectId, scenes: updated }).catch(console.error);
     },
     [projectId]
   );
 
-  const handleTurnChange = useCallback(
-    (turnId: string, updatedTurn: Turn) => {
-      setTurns((prev) => {
-        const next = prev.map((t) => (t.id === turnId ? updatedTurn : t));
-        saveTurns(next);
+  const handleSceneChange = useCallback(
+    (sceneId: string, updatedScene: BattleScene) => {
+      setScenes((prev) => {
+        const next = prev.map((s) => (s.id === sceneId ? updatedScene : s));
+        saveScenes(next);
         return next;
       });
     },
-    [saveTurns]
+    [saveScenes]
   );
 
-  const handleDeleteTurn = useCallback(
-    (turnId: string) => {
-      setTurns((prev) => {
-        const next = prev.filter((t) => t.id !== turnId);
-        saveTurns(next);
+  const handleDeleteScene = useCallback(
+    (sceneId: string) => {
+      setScenes((prev) => {
+        const next = prev.filter((s) => s.id !== sceneId);
+        saveScenes(next);
         return next;
       });
     },
-    [saveTurns]
+    [saveScenes]
   );
 
-  const handleAddTurn = useCallback(() => {
-    setTurns((prev) => {
-      const next = [...prev, createDefaultTurn()];
-      saveTurns(next);
+  const handleAddScene = useCallback(() => {
+    setScenes((prev) => {
+      const next = [...prev, createDefaultScene()];
+      saveScenes(next);
       return next;
     });
-  }, [saveTurns]);
+  }, [saveScenes]);
 
   if (!loaded) return null;
 
   return (
     <Flex direction="column" gap="4" style={{ flex: 1 }}>
-      {turns.map((turn, index) => (
-        <TurnBlock
-          key={turn.id}
-          turn={turn}
+      {scenes.map((scene, index) => (
+        <BattleSceneBlock
+          key={scene.id}
+          scene={scene}
           index={index}
           partyServants={partyServants}
-          onChange={(updated) => handleTurnChange(turn.id, updated)}
-          onDelete={() => handleDeleteTurn(turn.id)}
-          canDelete={turns.length > 1}
+          onChange={(updated) => handleSceneChange(scene.id, updated)}
+          onDelete={() => handleDeleteScene(scene.id)}
+          canDelete={scenes.length > 1}
         />
       ))}
-      <button className="add-turn-btn" onClick={handleAddTurn}>
-        + Add New Turn
+      <button className="add-scene-btn" onClick={handleAddScene}>
+        + 添加新场景
       </button>
     </Flex>
   );

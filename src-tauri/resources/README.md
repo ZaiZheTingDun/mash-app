@@ -11,16 +11,19 @@ resources/
     screen_team_confirm.png     # anchors referenced by cv.json
     button_attack.png
     ...
-    text_turn_label.png         # turn-number OCR anchors (not in cv.json)
-    text_tan.png
-    digit_0.png .. digit_9.png  # digit glyphs for turn OCR
+    text_battle_label.png       # battle-scene OCR anchor (not in cv.json)
+    digit_0.png .. digit_9.png  # digit glyphs for battle-scene OCR
   scrcpy/
     scrcpy-server.jar   # pinned scrcpy server, pushed to device for streaming
 ```
 
 Every PNG in `templates/` is loaded by the sidecar on startup and keyed by its
-filename stem. Most are referenced by `cv.json`, but a few (the turn OCR set
-below) are looked up directly by the Rust runner.
+filename stem. Most are referenced by `cv.json`, but a few (the battle-scene
+OCR set below) are looked up directly by the Rust runner.
+
+Legacy `text_turn_label.png` and `text_tan.png` files may still be present on
+disk from earlier versions; they are no longer referenced by code and can be
+safely deleted.
 
 ## scrcpy-server.jar
 
@@ -90,24 +93,29 @@ Elements are nested under their screen. The debug page (and runner) look them up
 2. Reference the basename (no extension) from `cv.json`.
 3. Restart `pnpm tauri dev` — the Rust side resolves the bundled resources at startup and passes them to the sidecar.
 
-## Turn-number OCR templates
+## Battle-scene OCR templates
 
-During battle the sidecar's `read_turn` command recognizes the current turn
-integer by template-matching digit glyphs inside the turn strip. The strip is
-bounded on the left by the cyan "TURN" label and on the right by the "ターン"
-katakana suffix, so digits are only searched in the narrow window between the
-anchors (robust to NP overlays and future UI shifts).
+During battle the sidecar's `read_battle_scene` command recognizes the
+current battle-scene indicator (`BATTLE m/n`) by template-matching digit
+glyphs in the strip to the right of the gold `BATTLE` label. The strip is
+anchored on the left by `text_battle_label`; everything to the right of the
+anchor (within the configured region) is searched. Kept digit detections
+are split into `(m, n)` by the single largest x-gap between adjacent
+glyphs (the slash between the two numbers).
+
+The runner uses `m` (1-indexed) to pick which configured `BattleScene`
+block to execute — i.e. one config block per battle scene, not per
+in-game turn.
 
 Required template stems (loaded by name, not via `cv.json`):
 
-- `text_turn_label` — cyan "TURN" label, left anchor.
-- `text_tan` — "ターン" katakana suffix, right anchor.
-- `digit_0` through `digit_9` — individual digit glyphs.
+- `text_battle_label` — gold `BATTLE` word, left anchor.
+- `digit_0` through `digit_9` — individual digit glyphs (shared with any
+  other digit-based readers).
 
 Drop each as a tight, grayscale PNG under `resources/templates/` (no padding,
-no extension in the filename stem). Any missing `digit_N` simply means turns
-containing that digit currently return `null`; add the file and the pipeline
-picks it up on the next `load_templates` call — no code changes needed.
-Multi-digit turn numbers (10, 23, 100, …) are handled automatically: every
-non-overlapping hit inside the strip is kept via greedy NMS on x, then sorted
-and concatenated.
+no extension in the filename stem). Any missing `digit_N` simply means
+scenes containing that digit currently return `null`; add the file and the
+pipeline picks it up on the next `load_templates` call — no code changes
+needed. Multi-digit values (10, 23, …) are handled automatically by the
+same greedy-NMS-on-x pass, then split-by-largest-gap into `(m, n)`.
