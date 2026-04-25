@@ -225,7 +225,7 @@ function useAssetPaths(
  * Resolve full-art portrait paths for any servant ids that don't have a
  * cached entry yet. The resolver lives in Rust
  * (`get_servant_portrait_path`) and walks
- * `assets/servants/{id}/graph_*.png` dynamically, so newly dropped-in
+ * `assets/servants/{id}/narrow_servant_*.png` dynamically, so newly dropped-in
  * portraits get picked up without a rebuild.
  */
 function usePortraits(servantIds: number[]): Record<number, string | null | undefined> {
@@ -251,6 +251,25 @@ interface SortableSlotProps {
   onSelect: () => void;
   onCeSelect: () => void;
   onCeClear: () => void;
+}
+
+/**
+ * Map a servant's rarity to the CSS class that drives its portrait
+ * frame gradient. Rarity buckets follow FGO's metallic frame scheme:
+ *
+ *   1 ★ / 2 ★  → brass
+ *   3 ★        → silver
+ *   4 ★ / 5 ★  → gold
+ *
+ * Returns an empty string for unknown / out-of-range values so the
+ * caller can opt out of the gradient (the default flat-grey frame
+ * still renders).
+ */
+function rarityFrameClass(rarity: number): string {
+  if (rarity >= 4) return "rarity-gold";
+  if (rarity === 3) return "rarity-silver";
+  if (rarity >= 1) return "rarity-brass";
+  return "";
 }
 
 /**
@@ -294,6 +313,7 @@ function SortableSlot({
 
   const { servant } = slot;
   const isSupport = slot.type === "support";
+  const rarityClass = servant ? rarityFrameClass(servant.rarity) : "";
 
   return (
     <div
@@ -306,7 +326,7 @@ function SortableSlot({
       <Flex direction="column" className="slot-card">
         <div className="slot-header" />
         <div
-          className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}`}
+          className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}${rarityClass ? ` ${rarityClass}` : ""}`}
           onClick={onSelect}
         >
           {servant ? (

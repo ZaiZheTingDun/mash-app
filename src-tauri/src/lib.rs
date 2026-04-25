@@ -434,11 +434,12 @@ fn get_craft_essences() -> &'static [CraftEssenceInfo] {
 }
 
 /// Look inside a single servant's asset directory and return the path of
-/// the highest-numbered `graph_*.png` portrait, or `None` when no such
-/// file exists. `graph_<n>.png` corresponds to ascension stage `n` (1-4
-/// for typical servants, with `4` being the final art); picking the
-/// lexicographic max is a stable proxy for "most-recent ascension" since
-/// the source filenames are zero-prefix-free single digits.
+/// the highest-numbered `narrow_servant_*.png` portrait, or `None` when
+/// no such file exists. `narrow_servant_<n>.png` corresponds to
+/// ascension stage `n` (1-4 for typical servants, with `4` being the
+/// final art); picking the lexicographic max is a stable proxy for
+/// "most-recent ascension" since the source filenames are
+/// zero-prefix-free single digits.
 ///
 /// Pure helper so [`get_servant_portrait_path`] stays a thin wrapper and
 /// the file-walk logic is unit-testable without spinning up a
@@ -450,7 +451,7 @@ fn pick_portrait_in(servant_dir: &std::path::Path) -> Option<PathBuf> {
         .filter(|p| {
             p.file_name()
                 .and_then(|n| n.to_str())
-                .map(|n| n.starts_with("graph_") && n.ends_with(".png"))
+                .map(|n| n.starts_with("narrow_servant_") && n.ends_with(".png"))
                 .unwrap_or(false)
         })
         .max()
@@ -462,11 +463,11 @@ fn pick_portrait_in(servant_dir: &std::path::Path) -> Option<PathBuf> {
 /// Lookup chain mirrors [`resolve_servant_assets_dir`] (bundled
 /// `<resource_dir>/assets/servants/` first, dev-time
 /// `CARGO_MANIFEST_DIR/assets/servants/` second), then narrows to
-/// `{servant_id}/graph_*.png` and picks the highest ascension stage via
-/// [`pick_portrait_in`]. Returning `Ok(None)` (rather than an `Err`) on
-/// a missing file lets the UI fall back to a placeholder card without
-/// surfacing a scary error toast — a portrait being absent is the
-/// expected default state for most servants today.
+/// `{servant_id}/narrow_servant_*.png` and picks the highest ascension
+/// stage via [`pick_portrait_in`]. Returning `Ok(None)` (rather than an
+/// `Err`) on a missing file lets the UI fall back to a placeholder
+/// card without surfacing a scary error toast — a portrait being
+/// absent is the expected default state for most servants today.
 #[tauri::command]
 fn get_servant_portrait_path(
     app: tauri::AppHandle,
@@ -1245,9 +1246,9 @@ mod tests {
     #[test]
     fn pick_portrait_in_returns_none_when_only_face_and_card_files_present() {
         // Mirrors the real `assets/servants/1/` layout for servants that
-        // haven't had a `graph_*.png` portrait dropped in yet — face and
-        // card art exist but they aren't full-body portraits and must
-        // not be served as one.
+        // haven't had a `narrow_servant_*.png` portrait dropped in yet —
+        // face and card art exist but they aren't full-body portraits
+        // and must not be served as one.
         let tmp = tempfile::tempdir().unwrap();
         for name in ["face_servant_1.png", "card_servant_1.png", "servant.json"] {
             fs::write(tmp.path().join(name), b"").unwrap();
@@ -1257,18 +1258,22 @@ mod tests {
 
     #[test]
     fn pick_portrait_in_picks_highest_ascension_stage() {
-        // With multiple `graph_<n>.png` siblings, the resolver must hand
-        // back the lexicographically-largest filename — which for the
-        // single-digit ascension scheme used by the Atlas dump is also
-        // the highest stage (i.e. the final-ascension full art).
+        // With multiple `narrow_servant_<n>.png` siblings, the resolver
+        // must hand back the lexicographically-largest filename — which
+        // for the single-digit ascension scheme used by the Atlas dump
+        // is also the highest stage (i.e. the final-ascension full art).
         let tmp = tempfile::tempdir().unwrap();
-        for name in ["graph_3.png", "graph_4.png", "graph_1.png"] {
+        for name in [
+            "narrow_servant_3.png",
+            "narrow_servant_4.png",
+            "narrow_servant_1.png",
+        ] {
             fs::write(tmp.path().join(name), b"").unwrap();
         }
         let picked = pick_portrait_in(tmp.path()).expect("expected a match");
         assert_eq!(
             picked.file_name().and_then(|n| n.to_str()),
-            Some("graph_4.png")
+            Some("narrow_servant_4.png")
         );
     }
 

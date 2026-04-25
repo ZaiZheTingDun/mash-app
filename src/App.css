@@ -177,6 +177,29 @@ body,
    * `.ce-overlay` plate so equipped CE artwork renders at its real
    * proportions instead of being cropped to a square. */
   --ce-card-aspect: 150 / 68;
+  /* Diagonal corner chamfer applied to every `.servant-portrait`.
+   * Bigger value = more aggressive cut; ~6–10 px reads as a subtle
+   * FGO-style bevel without eating the CE overlay's bottom brackets. */
+  --portrait-chamfer: 14px;
+  /* Width of the metallic frame ring around each portrait. The
+   * gradient is painted by `.servant-portrait::after` and clipped to a
+   * chamfered donut whose inner edge is inset by this value; the
+   * parent also reserves the same amount as `padding` so child art
+   * doesn't bleed under the frame. 3 px reads as a proper FGO-style
+   * frame; pushing past ~4 px starts cutting visibly into the
+   * portrait crop. */
+  --portrait-frame-width: 3px;
+  /* How far to pull the inner-loop chamfer endpoints inward along
+   * their edge (beyond the natural `(C, F)` / `(F, C)` position).
+   * Without this pull-in, the diagonal frame would be √2 times
+   * thinner than the straight edges, because the perpendicular
+   * distance between the outer chamfer line (`x + y = C`) and the
+   * inner chamfer line (`x + y = C + F`) is `F / √2`. Pulling the
+   * endpoints in by `F · (√2 − 1) ≈ 0.414·F` shifts the inner line
+   * to `x + y = C + F·√2`, making its perpendicular distance from
+   * the outer line exactly `F` — i.e., the diagonal frame ends up
+   * the same thickness as the straight edges. */
+  --portrait-frame-diag-pull: calc(var(--portrait-frame-width) * 0.4142);
   --slot-band-height: 12px;
 
   flex: 1;
@@ -227,35 +250,133 @@ body,
   min-height: var(--slot-band-height);
 }
 
-/* ── Servant Portrait ── */
-
+/* ── Servant Portrait ──
+ *
+ * Each portrait card is octagonally chamfered (four diagonal cuts, one
+ * per corner) via `clip-path: polygon(...)`. Because `clip-path` clips
+ * the rendered border, border-radius and box-shadow alike, the visible
+ * "frame" line and the drop-shadow are reconstructed in two
+ * `clip-path`-friendly ways:
+ *
+ *   - The frame line: a `::after` pseudo-element fills the padding
+ *     ring (`inset: 0`, `padding: var(--portrait-frame-width)`,
+ *     `box-sizing: border-box`) and uses the standard "border with
+ *     gradient via mask" recipe (XOR of padding-box and content-box
+ *     mask layers) so only the ring paints. The pseudo sits at
+ *     `z-index: 3` — above the CE overlay (`z-index: 2`) — so the
+ *     metallic frame draws *over* the CE strip and stays visually
+ *     continuous around the entire card. `pointer-events: none` keeps
+ *     it from swallowing clicks meant for the CE.
+ *   - The shadow: `box-shadow` would be clipped away, so we use
+ *     `filter: drop-shadow(...)` which paints based on the clipped
+ *     alpha mask and therefore follows the chamfer.
+ *
+ * Empty / filled / support / rarity-* states swap the two custom
+ * properties (`--portrait-frame`, `--portrait-body`); no per-state
+ * shape rules are needed.
+ */
 .servant-portrait {
+  --portrait-frame: var(--gray-7);
+  --portrait-body: var(--gray-3);
+
   position: relative;
   width: 100%;
   aspect-ratio: var(--portrait-aspect);
   overflow: hidden;
-  border: 1px solid var(--gray-7);
-  border-radius: var(--radius-2);
-  background: var(--gray-3);
+  padding: var(--portrait-frame-width);
+  background: linear-gradient(var(--portrait-body), var(--portrait-body))
+    content-box;
   cursor: pointer;
-  transition: all 0.15s;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: filter 0.15s, background 0.15s;
+  clip-path: polygon(
+    var(--portrait-chamfer) 0,
+    calc(100% - var(--portrait-chamfer)) 0,
+    100% var(--portrait-chamfer),
+    100% calc(100% - var(--portrait-chamfer)),
+    calc(100% - var(--portrait-chamfer)) 100%,
+    var(--portrait-chamfer) 100%,
+    0 calc(100% - var(--portrait-chamfer)),
+    0 var(--portrait-chamfer)
+  );
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.06));
+}
+
+/* Frame ring drawn on top of every interior child (CE overlay,
+ * support badge, portrait img) so the rarity gradient never gets
+ * occluded — particularly along the bottom edge where the CE strip
+ * would otherwise hide the lower 2 px of frame.
+ *
+ * The shape is a chamfered "donut": the outer ring follows the same
+ * 8-vertex octagon as the parent's `clip-path`, and the inner cutout
+ * follows a slightly smaller octagon inset by `--portrait-frame-width`
+ * on every edge (with chamfer endpoints at `(C, F)` / `(F, C)` instead
+ * of `(C, 0)` / `(0, C)`). The two loops are stitched by a 0-width
+ * slit along the top-left chamfer end, and `evenodd` fill rule
+ * carves the hole. This is necessary because a rectangular mask hole
+ * would leave the diagonal cuts unbordered after the parent's
+ * chamfer clip — the inner rectangle reaches further into the corner
+ * than the chamfer cut, so no paint survives along the diagonal.
+ */
+.servant-portrait::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: var(--portrait-frame);
+  clip-path: polygon(
+    evenodd,
+    /* Outer chamfer (CW from top-left chamfer end on top edge) */
+    var(--portrait-chamfer) 0,
+    calc(100% - var(--portrait-chamfer)) 0,
+    100% var(--portrait-chamfer),
+    100% calc(100% - var(--portrait-chamfer)),
+    calc(100% - var(--portrait-chamfer)) 100%,
+    var(--portrait-chamfer) 100%,
+    0 calc(100% - var(--portrait-chamfer)),
+    0 var(--portrait-chamfer),
+    /* Close outer + bridge inward (the slit is the diagonal from
+     * the outer chamfer endpoint `(C, 0)` to the inner chamfer
+     * endpoint `(C + diag-pull, F)`; it is traced again on the
+     * auto-close from the last inner point back to the first outer
+     * point, so it has zero net winding and stays invisible) */
+    var(--portrait-chamfer) 0,
+    calc(var(--portrait-chamfer) + var(--portrait-frame-diag-pull))
+      var(--portrait-frame-width),
+    /* Inner chamfer (CCW from top-left chamfer end on inner top
+     * edge). Each `C` offset is bumped by `--portrait-frame-diag-pull`
+     * so the diagonal frame is perpendicular-equal in thickness to
+     * the straight edges. */
+    var(--portrait-frame-width)
+      calc(var(--portrait-chamfer) + var(--portrait-frame-diag-pull)),
+    var(--portrait-frame-width)
+      calc(100% - var(--portrait-chamfer) - var(--portrait-frame-diag-pull)),
+    calc(var(--portrait-chamfer) + var(--portrait-frame-diag-pull))
+      calc(100% - var(--portrait-frame-width)),
+    calc(100% - var(--portrait-chamfer) - var(--portrait-frame-diag-pull))
+      calc(100% - var(--portrait-frame-width)),
+    calc(100% - var(--portrait-frame-width))
+      calc(100% - var(--portrait-chamfer) - var(--portrait-frame-diag-pull)),
+    calc(100% - var(--portrait-frame-width))
+      calc(var(--portrait-chamfer) + var(--portrait-frame-diag-pull)),
+    calc(100% - var(--portrait-chamfer) - var(--portrait-frame-diag-pull))
+      var(--portrait-frame-width),
+    calc(var(--portrait-chamfer) + var(--portrait-frame-diag-pull))
+      var(--portrait-frame-width)
+  );
 }
 
 .servant-portrait:hover {
-  border-color: var(--blue-7);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --portrait-frame: var(--blue-7);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.1));
 }
 
 .servant-portrait.empty {
-  border-style: dashed;
-  border-color: var(--gray-7);
-  background: var(--gray-2);
+  --portrait-body: var(--gray-2);
 }
 
 .servant-portrait.empty:hover {
-  border-color: var(--blue-7);
-  background: var(--blue-2);
+  --portrait-body: var(--blue-2);
 }
 
 .servant-portrait.empty:hover .servant-slot-icon {
@@ -263,25 +384,94 @@ body,
 }
 
 .servant-portrait.filled {
-  border-color: var(--blue-6);
-  background: linear-gradient(135deg, var(--blue-2), var(--violet-2));
+  --portrait-frame: var(--blue-6);
+  --portrait-body: var(--blue-2);
 }
 
 .servant-portrait.filled:hover {
-  border-color: var(--blue-8);
+  --portrait-frame: var(--blue-8);
 }
 
 .servant-portrait.support {
-  border-color: var(--orange-6);
+  --portrait-frame: var(--orange-6);
 }
 
 .servant-portrait.support.empty {
-  border-style: dashed;
-  background: linear-gradient(135deg, var(--orange-2), var(--amber-2));
+  --portrait-body: var(--amber-2);
 }
 
 .servant-portrait.support:hover {
-  border-color: var(--orange-8);
+  --portrait-frame: var(--orange-8);
+}
+
+/* ── Rarity Frames ──
+ *
+ * Override `--portrait-frame` with a metallic vertical gradient that
+ * mimics FGO's formation card frame: bright highlight at the top,
+ * mid-tone through the body, deep shadow at the bottom. The gradient
+ * fills the `::after` ring (see `.servant-portrait::after`), which
+ * sits above the CE overlay so the metallic outline stays continuous
+ * around the entire card. State-based frame swaps (`.empty`,
+ * `.support`, `:hover`) intentionally come *before* these rules so
+ * that a filled servant always shows its rarity colour regardless of
+ * hover state.
+ *
+ * Buckets: 1-2 ★ → brass, 3 ★ → silver, 4-5 ★ → gold.
+ */
+/* Each rarity uses a *mirrored* vertical gradient: the same stop
+ * sequence walks light→mid→dark over the top half and then dark→
+ * mid→light over the bottom half, so both the top and bottom edges
+ * read as the highlight and the deepest shadow sits in the middle.
+ * That mimics a polished metal bevel catching light from above
+ * *and* below, which is how the FGO formation cards are painted.
+ * To re-flatten the gradient (single light→dark sweep), drop the
+ * three bottom-half stops. */
+.servant-portrait.rarity-brass,
+.servant-portrait.rarity-brass:hover,
+.servant-portrait.rarity-brass.support,
+.servant-portrait.rarity-brass.support:hover {
+  --portrait-frame: linear-gradient(
+    180deg,
+    #f4dcb1 0%,
+    #d6a76a 22%,
+    #a36c2c 38%,
+    #2b1806 50%,
+    #a36c2c 62%,
+    #d6a76a 78%,
+    #f4dcb1 100%
+  );
+}
+
+.servant-portrait.rarity-silver,
+.servant-portrait.rarity-silver:hover,
+.servant-portrait.rarity-silver.support,
+.servant-portrait.rarity-silver.support:hover {
+  --portrait-frame: linear-gradient(
+    180deg,
+    #f6f6f6 0%,
+    #d4d4d4 22%,
+    #8f8f8f 38%,
+    #161616 50%,
+    #8f8f8f 62%,
+    #d4d4d4 78%,
+    #f6f6f6 100%
+  );
+}
+
+.servant-portrait.rarity-gold,
+.servant-portrait.rarity-gold:hover,
+.servant-portrait.rarity-gold.support,
+.servant-portrait.rarity-gold.support:hover {
+  --portrait-frame: linear-gradient(
+    180deg,
+    #fff3a8 0%,
+    #ffd24a 22%,
+    #c08a1f 38%,
+    #2a1b04 50%,
+    #c08a1f 62%,
+    #ffd24a 78%,
+    #fff3a8 100%
+  );
 }
 
 .servant-portrait-img {

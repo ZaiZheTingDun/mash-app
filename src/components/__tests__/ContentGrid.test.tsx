@@ -224,7 +224,7 @@ describe("ContentGrid", () => {
       if (cmd === "get_servant_portrait_path") {
         const { servantId } = (args ?? {}) as { servantId?: number };
         return servantId === 1
-          ? "/abs/src-tauri/assets/servants/1/graph_4.png"
+          ? "/abs/src-tauri/assets/servants/1/narrow_servant_4.png"
           : null;
       }
       return null;
@@ -249,7 +249,7 @@ describe("ContentGrid", () => {
     expect(img).toBeInTheDocument();
     expect(img.tagName).toBe("IMG");
     expect(img.getAttribute("src")).toBe(
-      "asset:///abs/src-tauri/assets/servants/1/graph_4.png"
+      "asset:///abs/src-tauri/assets/servants/1/narrow_servant_4.png"
     );
   });
 
@@ -313,5 +313,37 @@ describe("ContentGrid", () => {
     );
 
     expect(screen.getAllByText("SUPPORT")).toHaveLength(1);
+  });
+
+  // --- Rarity frame --------------------------------------------------
+
+  it("tags the portrait frame class by servant rarity", () => {
+    // 1-2 ★ → brass, 3 ★ → silver, 4-5 ★ → gold. Slot 0 holds Mash
+    // (4 ★ → gold), slot 1 holds Altria Caster (5 ★ → also gold);
+    // the support row is empty so it stays default-framed.
+    const slots = buildSlots();
+    slots[0] = { ...slots[0], servant: MASH };
+    slots[1] = { ...slots[1], servant: ALTRIA_CASTER };
+
+    const { container } = renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={slots}
+        onSlotsChange={vi.fn()}
+        activeProject={PROJECT}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    const portraits = container.querySelectorAll(".servant-portrait");
+    expect(portraits).toHaveLength(6);
+    // Filled slots get a rarity class (gold for both fixtures).
+    expect(portraits[0].className).toMatch(/\brarity-gold\b/);
+    expect(portraits[1].className).toMatch(/\brarity-gold\b/);
+    // Empty slots get no rarity class — only the default frame applies.
+    for (let i = 2; i < portraits.length; i++) {
+      expect(portraits[i].className).not.toMatch(/\brarity-/);
+    }
   });
 });
