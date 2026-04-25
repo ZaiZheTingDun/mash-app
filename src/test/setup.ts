@@ -84,10 +84,21 @@ vi.mock("@tauri-apps/api/core", () => ({
         return false;
       case "get_server":
         return "JP";
+      // Default to "no portrait on disk" so component tests render
+      // the placeholder branch unless they explicitly opt in. Tests
+      // that want a real `<img>` should `vi.mocked(invoke).mockImpl(...)`.
+      case "get_servant_portrait_path":
+      case "get_craft_essence_card_path":
+        return null;
       default:
         return null;
     }
   }),
+  // `convertFileSrc` normally produces an `asset://localhost/...` URL
+  // backed by Tauri's asset protocol. In jsdom we just need a stable
+  // string that the component can hand to `<img src>` so assertions
+  // can target it.
+  convertFileSrc: (path: string) => `asset://${path}`,
 }));
 
 // Reset DOM + mock state between tests so one component leaking state

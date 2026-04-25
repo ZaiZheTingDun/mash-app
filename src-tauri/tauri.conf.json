@@ -13,8 +13,10 @@
     "windows": [
       {
         "title": "mash",
-        "width": 800,
-        "height": 600
+        "width": 1018,
+        "height": 608,
+        "resizable": true,
+        "fullscreen": false
       }
     ],
     "security": {
@@ -22,7 +24,13 @@
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": ["$APPDATA/**"]
+          "allow": [
+            "$APPDATA/**",
+            "$RESOURCE/assets/servants/**",
+            "$RESOURCE/assets/ces/**",
+            "**/src-tauri/assets/servants/**",
+            "**/src-tauri/assets/ces/**"
+          ]
         }
       }
     }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import {
   ContentGrid,
@@ -20,16 +21,25 @@ function buildSlots(): SlotItem[] {
   }));
 }
 
-const SERVANTS: Servant[] = [
-  {
-    id: 284,
-    name_cn: "阿尔托莉雅·卡斯特",
-    name_jp: "アルトリア・キャスター",
-    name_en: "Altria Caster",
-    class: "Caster",
-    rarity: 5,
-  },
-];
+const MASH: Servant = {
+  id: 1,
+  name_cn: "玛修",
+  name_jp: "マシュ・キリエライト",
+  name_en: "Mash Kyrielight",
+  class: "Shielder",
+  rarity: 4,
+};
+
+const ALTRIA_CASTER: Servant = {
+  id: 284,
+  name_cn: "阿尔托莉雅·卡斯特",
+  name_jp: "アルトリア・キャスター",
+  name_en: "Altria Caster",
+  class: "Caster",
+  rarity: 5,
+};
+
+const SERVANTS: Servant[] = [MASH, ALTRIA_CASTER];
 
 const CES: CraftEssence[] = [
   { id: 1, name: "Kaleidoscope" },
@@ -65,7 +75,7 @@ describe("createInitialProjectSlots", () => {
 });
 
 describe("ContentGrid", () => {
-  it("renders six CE picker tiles, all showing the empty placeholder", () => {
+  it("renders six CE picker plates, all showing the empty placeholder", () => {
     renderWithTheme(
       <ContentGrid
         servants={SERVANTS}
@@ -77,8 +87,10 @@ describe("ContentGrid", () => {
       />
     );
 
-    // Six "选择礼装" placeholders, one per CE slot under each servant.
-    const placeholders = screen.getAllByText("选择礼装");
+    // Six empty CE plates, one per slot. The empty plate carries
+    // `aria-label="选择礼装"` on its outer button (the visible glyph
+    // is just a `+` icon, no text).
+    const placeholders = screen.getAllByLabelText("选择礼装");
     expect(placeholders).toHaveLength(6);
 
     // The 5 party servant slots show "选择从者"; the support slot shows
@@ -88,7 +100,7 @@ describe("ContentGrid", () => {
     expect(servantPlaceholders).toHaveLength(5);
   });
 
-  it("opens the CE picker dialog when a CE tile is clicked", async () => {
+  it("opens the CE picker dialog when an empty CE plate is clicked", async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <ContentGrid
@@ -101,12 +113,10 @@ describe("ContentGrid", () => {
       />
     );
 
-    // Initially no dialog is open.
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    // Click one of the CE placeholder tiles. We grab the first
-    // "选择礼装" placeholder and click its enclosing card.
-    const placeholder = screen.getAllByText("选择礼装")[0];
+    // Click the first empty CE plate (located via its aria-label).
+    const placeholder = screen.getAllByLabelText("选择礼装")[0];
     await user.click(placeholder);
 
     const dialog = await screen.findByRole("dialog");
@@ -114,7 +124,10 @@ describe("ContentGrid", () => {
     expect(within(dialog).getByText("选择礼装")).toBeInTheDocument();
   });
 
-  it("renders the pinned CE name in a slot that has one", () => {
+  it("falls back to the CE name in the scrim when the card art is missing", () => {
+    // The setup mock returns null for `get_craft_essence_card_path`,
+    // so a pinned CE renders the fallback scrim instead of an
+    // `<img>` — the scrim shows the CE name as text.
     const slots = buildSlots();
     slots[0] = { ...slots[0], craftEssence: CES[0] };
     renderWithTheme(
@@ -128,14 +141,49 @@ describe("ContentGrid", () => {
       />
     );
 
-    // Pinned CE: name + #id pair is visible.
     expect(screen.getByText("Kaleidoscope")).toBeInTheDocument();
-    expect(screen.getByText("#1")).toBeInTheDocument();
-    // Five remaining CE slots still show the placeholder.
-    expect(screen.getAllByText("选择礼装")).toHaveLength(5);
-    // And the slot exposes a clear button (the `Cross2Icon` carries
+    // Filled plate is labelled with the CE name (not "选择礼装").
+    expect(screen.getByLabelText("礼装：Kaleidoscope")).toBeInTheDocument();
+    // Five remaining CE slots still show the empty placeholder.
+    expect(screen.getAllByLabelText("选择礼装")).toHaveLength(5);
+    // Filled plates expose a clear button (Cross2Icon
     // `aria-label="清除礼装"`).
     expect(screen.getByLabelText("清除礼装")).toBeInTheDocument();
+  });
+
+  it("renders the CE card <img> when the resolver returns a path", async () => {
+    // Override the default "no card on disk" stub so CE #1 resolves
+    // to a real on-disk path. `convertFileSrc` (mocked to return
+    // `asset://...`) wraps it for use as `<img src>`.
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === "get_craft_essence_card_path") {
+        const { craftEssenceId } = (args ?? {}) as { craftEssenceId?: number };
+        return craftEssenceId === 1
+          ? "/abs/src-tauri/assets/ces/1/card_ce.png"
+          : null;
+      }
+      return null;
+    });
+
+    const slots = buildSlots();
+    slots[0] = { ...slots[0], craftEssence: CES[0] };
+
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={slots}
+        onSlotsChange={vi.fn()}
+        activeProject={PROJECT}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    const img = await screen.findByAltText("Kaleidoscope");
+    expect(img.tagName).toBe("IMG");
+    expect(img.getAttribute("src")).toBe(
+      "asset:///abs/src-tauri/assets/ces/1/card_ce.png"
+    );
   });
 
   it("clearing a pinned CE calls onSlotsChange with the slot's CE nulled", async () => {
@@ -164,5 +212,106 @@ describe("ContentGrid", () => {
     for (let i = 1; i < next.length; i++) {
       expect(next[i].craftEssence).toBeNull();
     }
+  });
+
+  // --- Portrait rendering -------------------------------------------
+
+  it("renders an <img> with the resolved portrait when the resolver returns a path", async () => {
+    // Override the default "no portrait" stub for `get_servant_portrait_path`
+    // so the Mash slot resolves to a real on-disk path. `convertFileSrc`
+    // (mocked to return `asset://...`) wraps it for use as `<img src>`.
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === "get_servant_portrait_path") {
+        const { servantId } = (args ?? {}) as { servantId?: number };
+        return servantId === 1
+          ? "/abs/src-tauri/assets/servants/1/graph_4.png"
+          : null;
+      }
+      return null;
+    });
+
+    const slots = buildSlots();
+    slots[0] = { ...slots[0], servant: MASH };
+
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={slots}
+        onSlotsChange={vi.fn()}
+        activeProject={PROJECT}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    // The portrait <img> uses the servant's Chinese name as alt text.
+    const img = await screen.findByAltText("玛修");
+    expect(img).toBeInTheDocument();
+    expect(img.tagName).toBe("IMG");
+    expect(img.getAttribute("src")).toBe(
+      "asset:///abs/src-tauri/assets/servants/1/graph_4.png"
+    );
+  });
+
+  it("renders a placeholder card with the servant name when the resolver returns null", async () => {
+    // Default mock from setup.ts already returns null for
+    // `get_servant_portrait_path`, so a servant without an on-disk
+    // portrait should fall back to the placeholder card.
+    const slots = buildSlots();
+    slots[0] = { ...slots[0], servant: ALTRIA_CASTER };
+
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={slots}
+        onSlotsChange={vi.fn()}
+        activeProject={PROJECT}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    // No <img> for this servant, but the placeholder shows the name.
+    expect(screen.queryByAltText("阿尔托莉雅·卡斯特")).not.toBeInTheDocument();
+    expect(screen.getByText("阿尔托莉雅·卡斯特")).toBeInTheDocument();
+  });
+
+  // --- Support badge -------------------------------------------------
+
+  it("shows a SUPPORT corner badge on an empty support slot", () => {
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={PROJECT}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    // The corner badge is text-only, fixed copy "SUPPORT".
+    const badges = screen.getAllByText("SUPPORT");
+    expect(badges).toHaveLength(1);
+  });
+
+  it("keeps the SUPPORT badge when the support slot has a pinned servant", () => {
+    const projectWithSupport: Project = {
+      ...PROJECT,
+      supportServantId: MASH.id,
+    };
+
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={projectWithSupport}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    expect(screen.getAllByText("SUPPORT")).toHaveLength(1);
   });
 });

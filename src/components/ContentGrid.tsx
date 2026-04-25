@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { PlusIcon, PersonIcon, Cross2Icon } from "@radix-ui/react-icons";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import type React from "react";
 import {
   DndContext,
   closestCenter,
@@ -65,88 +67,215 @@ interface ContentGridProps {
   onUpdateActiveProject: (next: Project) => Promise<void> | void;
 }
 
-interface CraftEssenceSlotProps {
+interface CraftEssenceOverlayProps {
   craftEssence: CraftEssence | null;
+  cardSrc: string | null | undefined;
   onSelect: () => void;
   onClear: () => void;
 }
 
 /**
- * One picker tile rendered directly below a servant slot. Clicking the
- * tile opens the CE picker dialog; when a CE is pinned the tile shows
- * the CE name and a small clear button so the user can unpin without
- * having to re-open the dialog.
+ * Plate pinned to the bottom of the servant portrait, sized to the
+ * natural CE card aspect (`--ce-card-aspect` in CSS).
+ *
+ * Empty state:  translucent gray scrim + four red L-shaped corner
+ *               brackets (the FGO "this is where the CE goes"
+ *               affordance).
+ * Filled state: just the CE card artwork (or a fallback scrim with
+ *               the CE name when the asset isn't on disk) plus a
+ *               hover-revealed `×` clear button. The brackets are
+ *               intentionally hidden once a CE is equipped so they
+ *               don't compete visually with the artwork.
+ *
+ * Click target spans the full plate; `stopPropagation` keeps clicks
+ * from bubbling up to the portrait's own click handler (which opens
+ * the servant picker instead).
  */
-function CraftEssenceSlot({ craftEssence, onSelect, onClear }: CraftEssenceSlotProps) {
-  if (!craftEssence) {
-    return (
-      <Box className="image-card servant-slot empty" onClick={onSelect}>
-        <Flex
-          direction="column"
-          align="center"
-          justify="center"
-          gap="1"
-          className="image-card-inner"
-        >
-          <PlusIcon width={24} height={24} className="servant-slot-icon" />
-          <Text size="1" color="gray">
-            选择礼装
-          </Text>
-        </Flex>
-      </Box>
-    );
-  }
+function CraftEssenceOverlay({
+  craftEssence,
+  cardSrc,
+  onSelect,
+  onClear,
+}: CraftEssenceOverlayProps) {
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect();
+  };
 
   return (
-    <Box className="image-card servant-slot filled" onClick={onSelect}>
-      <Flex
-        direction="column"
-        align="center"
-        justify="center"
-        gap="1"
-        className="image-card-inner"
-        style={{ position: "relative", padding: "4px" }}
-      >
+    <div
+      className={`ce-overlay${craftEssence ? " filled" : " empty"}`}
+      onClick={handleClick}
+      role="button"
+      aria-label={craftEssence ? `礼装：${craftEssence.name}` : "选择礼装"}
+    >
+      {craftEssence && cardSrc ? (
+        <img
+          className="ce-overlay-img"
+          src={cardSrc}
+          alt={craftEssence.name}
+          draggable={false}
+        />
+      ) : (
+        <div className="ce-overlay-scrim">
+          {craftEssence ? (
+            <Text
+              size="1"
+              weight="bold"
+              align="center"
+              className="ce-overlay-fallback-label"
+              truncate
+            >
+              {craftEssence.name}
+            </Text>
+          ) : (
+            <PlusIcon width={20} height={20} className="ce-overlay-empty-icon" />
+          )}
+        </div>
+      )}
+      {!craftEssence && (
+        <>
+          <span className="ce-overlay-corner tl" aria-hidden />
+          <span className="ce-overlay-corner tr" aria-hidden />
+          <span className="ce-overlay-corner bl" aria-hidden />
+          <span className="ce-overlay-corner br" aria-hidden />
+        </>
+      )}
+      {craftEssence && (
         <button
           type="button"
-          className="ce-clear-btn"
+          className="ce-overlay-clear"
           aria-label="清除礼装"
           onClick={(e) => {
             e.stopPropagation();
             onClear();
           }}
-          style={{
-            position: "absolute",
-            top: 2,
-            right: 2,
-            background: "transparent",
-            border: "none",
-            color: "var(--gray-9)",
-            cursor: "pointer",
-            padding: 2,
-            display: "flex",
-            alignItems: "center",
-          }}
         >
-          <Cross2Icon width={12} height={12} />
+          <Cross2Icon width={11} height={11} />
         </button>
-        <Text size="2" weight="bold" align="center">
-          {craftEssence.name}
-        </Text>
-        <Text size="1" color="gray">
-          #{craftEssence.id}
-        </Text>
-      </Flex>
-    </Box>
+      )}
+    </div>
   );
+}
+
+/**
+ * Generic asset-path resolver hook. Walks a Rust command that takes a
+ * single integer id and returns either an absolute file path or
+ * `null`, then wraps the path with `convertFileSrc` so the result is
+ * ready to drop into `<img src>`.
+ *
+ * Returns a map keyed by id; values are either a `convertFileSrc` URL,
+ * `null` when the resolver returned `None`, or `undefined` while the
+ * fetch is still in flight. Refires only when the id set actually
+ * changes (slot reorders that don't add/remove ids are no-ops).
+ *
+ * Two callers today: `usePortraits` (servant full-art) and
+ * `useCeCards` (craft essence card art); both share this body
+ * because the only differences are the command name and the
+ * argument key.
+ */
+function useAssetPaths(
+  command: string,
+  argKey: string,
+  ids: number[],
+): Record<number, string | null | undefined> {
+  const [cache, setCache] = useState<Record<number, string | null>>({});
+
+  const key = ids
+    .filter((id, i, arr) => arr.indexOf(id) === i)
+    .sort((a, b) => a - b)
+    .join(",");
+
+  useEffect(() => {
+    const parsedIds = key
+      ? key.split(",").map((s) => Number(s)).filter((n) => Number.isFinite(n))
+      : [];
+    const missing = parsedIds.filter((id) => !(id in cache));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map((id) =>
+        invoke<string | null>(command, { [argKey]: id })
+          .then((path) => [id, path ? convertFileSrc(path) : null] as const)
+          .catch(() => [id, null] as const)
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      setCache((prev) => {
+        const next = { ...prev };
+        for (const [id, src] of results) {
+          next[id] = src;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // `cache` intentionally excluded — re-running on cache writes would
+    // create an infinite loop. The effect re-fires only when the id set
+    // changes, which is exactly when we need to fetch new ones.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, command, argKey]);
+
+  return cache;
+}
+
+/**
+ * Resolve full-art portrait paths for any servant ids that don't have a
+ * cached entry yet. The resolver lives in Rust
+ * (`get_servant_portrait_path`) and walks
+ * `assets/servants/{id}/graph_*.png` dynamically, so newly dropped-in
+ * portraits get picked up without a rebuild.
+ */
+function usePortraits(servantIds: number[]): Record<number, string | null | undefined> {
+  return useAssetPaths("get_servant_portrait_path", "servantId", servantIds);
+}
+
+/**
+ * Resolve craft-essence card art paths. The resolver lives in Rust
+ * (`get_craft_essence_card_path`) and looks up
+ * `assets/ces/{id}/card_ce.png`. Cards are checked into the repo today
+ * for the full Atlas Academy CE list, so this almost always resolves
+ * to a real file — the `null` branch in `CraftEssenceOverlay` exists
+ * only as a defensive fallback for missing assets.
+ */
+function useCeCards(ceIds: number[]): Record<number, string | null | undefined> {
+  return useAssetPaths("get_craft_essence_card_path", "craftEssenceId", ceIds);
 }
 
 interface SortableSlotProps {
   slot: SlotItem;
+  portraitSrc: string | null | undefined;
+  ceCardSrc: string | null | undefined;
   onSelect: () => void;
+  onCeSelect: () => void;
+  onCeClear: () => void;
 }
 
-function SortableSlot({ slot, onSelect }: SortableSlotProps) {
+/**
+ * One unified servant+CE card. The vertical stack is:
+ *   1. `.slot-header` — empty reserved band (future: ascension/lv/etc).
+ *   2. `.servant-portrait` — aspect-ratio-locked image area that owns:
+ *        - the portrait `<img>` (or placeholder),
+ *        - the top-right `SUPPORT` badge on the support slot,
+ *        - a `.ce-overlay` strip pinned to the bottom edge that covers
+ *          the lower slice of the portrait (replaces the standalone CE
+ *          tile that used to sit below this card).
+ *   3. `.slot-footer` — empty reserved band (future: name/HP/etc).
+ *
+ * Empty / empty-support states keep the same skeleton so the card
+ * height matches a filled card; only the middle portrait region swaps
+ * for a `+ 选择从者` / `助战` placeholder.
+ */
+function SortableSlot({
+  slot,
+  portraitSrc,
+  ceCardSrc,
+  onSelect,
+  onCeSelect,
+  onCeClear,
+}: SortableSlotProps) {
   const {
     attributes,
     listeners,
@@ -174,65 +303,71 @@ function SortableSlot({ slot, onSelect }: SortableSlotProps) {
       {...attributes}
       {...listeners}
     >
-      {servant ? (
-        <Box
-          className={`image-card servant-slot filled${isSupport ? " support-filled" : ""}`}
+      <Flex direction="column" className="slot-card">
+        <div className="slot-header" />
+        <div
+          className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}`}
           onClick={onSelect}
         >
-          <Flex
-            direction="column"
-            align="center"
-            justify="center"
-            gap="2"
-            className="image-card-inner"
-          >
-            {isSupport && (
-              <Text size="1" weight="medium" className="support-slot-badge">
+          {servant ? (
+            portraitSrc ? (
+              <img
+                className="servant-portrait-img"
+                src={portraitSrc}
+                alt={servant.name_cn}
+                draggable={false}
+              />
+            ) : (
+              <Flex
+                direction="column"
+                align="center"
+                justify="center"
+                className="servant-portrait-placeholder"
+              >
+                <Text size="2" weight="bold" align="center">
+                  {servant.name_cn}
+                </Text>
+              </Flex>
+            )
+          ) : isSupport ? (
+            <Flex
+              direction="column"
+              align="center"
+              justify="center"
+              gap="1"
+              className="servant-portrait-placeholder"
+            >
+              <PersonIcon width={28} height={28} className="support-slot-icon" />
+              <Text size="1" weight="medium" className="support-slot-label">
                 助战
               </Text>
-            )}
-            <Text size="2" weight="bold" align="center">
-              {servant.name_cn}
-            </Text>
-            <Text size="1" style={{ color: "#d4a537", letterSpacing: "1px" }}>
-              {"★".repeat(servant.rarity)}
-            </Text>
-            <Text size="1" color="gray">
-              {servant.class}
-            </Text>
-          </Flex>
-        </Box>
-      ) : isSupport ? (
-        <Box className="image-card servant-slot support" onClick={onSelect}>
-          <Flex
-            direction="column"
-            align="center"
-            justify="center"
-            gap="1"
-            className="image-card-inner"
-          >
-            <PersonIcon width={28} height={28} className="support-slot-icon" />
-            <Text size="1" weight="medium" className="support-slot-label">
-              助战
-            </Text>
-          </Flex>
-        </Box>
-      ) : (
-        <Box className="image-card servant-slot empty" onClick={onSelect}>
-          <Flex
-            direction="column"
-            align="center"
-            justify="center"
-            gap="1"
-            className="image-card-inner"
-          >
-            <PlusIcon width={28} height={28} className="servant-slot-icon" />
-            <Text size="1" color="gray">
-              选择从者
-            </Text>
-          </Flex>
-        </Box>
-      )}
+            </Flex>
+          ) : (
+            <Flex
+              direction="column"
+              align="center"
+              justify="center"
+              gap="1"
+              className="servant-portrait-placeholder"
+            >
+              <PlusIcon width={28} height={28} className="servant-slot-icon" />
+              <Text size="1" color="gray">
+                选择从者
+              </Text>
+            </Flex>
+          )}
+          {isSupport && (
+            <span className="support-corner-badge">SUPPORT</span>
+          )}
+          <CraftEssenceOverlay
+            craftEssence={slot.craftEssence}
+            cardSrc={ceCardSrc}
+            onSelect={onCeSelect}
+            onClear={onCeClear}
+          />
+        </div>
+        <div className="slot-footer" />
+      </Flex>
     </div>
   );
 }
@@ -266,6 +401,18 @@ export function ContentGrid({
 
   const displaySlots: SlotItem[] = slots.map((s) =>
     s.type === "support" ? { ...s, servant: supportPinned } : s
+  );
+
+  const portraitMap = usePortraits(
+    displaySlots
+      .map((s) => s.servant?.id)
+      .filter((id): id is number => id != null)
+  );
+
+  const ceCardMap = useCeCards(
+    displaySlots
+      .map((s) => s.craftEssence?.id)
+      .filter((id): id is number => id != null)
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -345,6 +492,18 @@ export function ContentGrid({
   const rightSlots = displaySlots.slice(3, 6);
   const slotIds = displaySlots.map((s) => s.id);
 
+  const renderSlot = (slot: SlotItem) => (
+    <SortableSlot
+      key={slot.id}
+      slot={slot}
+      portraitSrc={slot.servant ? portraitMap[slot.servant.id] : null}
+      ceCardSrc={slot.craftEssence ? ceCardMap[slot.craftEssence.id] : null}
+      onSelect={() => handleSlotClick(slot)}
+      onCeSelect={() => handleCeSlotClick(slot.id)}
+      onCeClear={() => handleCeClear(slot.id)}
+    />
+  );
+
   return (
     <>
       <DndContext
@@ -354,36 +513,8 @@ export function ContentGrid({
       >
         <SortableContext items={slotIds} strategy={rectSortingStrategy}>
           <Box className="content-unified-grid">
-            {leftSlots.map((slot) => (
-              <SortableSlot
-                key={slot.id}
-                slot={slot}
-                onSelect={() => handleSlotClick(slot)}
-              />
-            ))}
-            {rightSlots.map((slot) => (
-              <SortableSlot
-                key={slot.id}
-                slot={slot}
-                onSelect={() => handleSlotClick(slot)}
-              />
-            ))}
-            {leftSlots.map((slot) => (
-              <CraftEssenceSlot
-                key={`ce-${slot.id}`}
-                craftEssence={slot.craftEssence}
-                onSelect={() => handleCeSlotClick(slot.id)}
-                onClear={() => handleCeClear(slot.id)}
-              />
-            ))}
-            {rightSlots.map((slot) => (
-              <CraftEssenceSlot
-                key={`ce-${slot.id}`}
-                craftEssence={slot.craftEssence}
-                onSelect={() => handleCeSlotClick(slot.id)}
-                onClear={() => handleCeClear(slot.id)}
-              />
-            ))}
+            {leftSlots.map(renderSlot)}
+            {rightSlots.map(renderSlot)}
           </Box>
         </SortableContext>
       </DndContext>

@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Flex, Text, Popover, Button, Spinner, Checkbox, Select } from "@radix-ui/themes";
-import { Link2Icon, DesktopIcon } from "@radix-ui/react-icons";
+import {
+  Link2Icon,
+  DesktopIcon,
+  MagnifyingGlassIcon,
+} from "@radix-ui/react-icons";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { SERVER_LABELS, type Server } from "../types/server";
@@ -16,7 +20,14 @@ interface AutomationStatusEvent {
 
 const POLL_INTERVAL_MS = 3000;
 
-export function StatusBar() {
+interface StatusBarProps {
+  /** Wired by `App.tsx` to switch the main view to the CV debug page.
+   * Optional so existing tests (and any callers that don't need the
+   * shortcut) can still mount `<StatusBar />` with no props. */
+  onOpenDebug?: () => void;
+}
+
+export function StatusBar({ onOpenDebug }: StatusBarProps = {}) {
   const [status, setStatus] = useState<AdbStatus>({ connected: false, deviceName: null });
   const [checking, setChecking] = useState(false);
   const [useBluestack, setUseBluestack] = useState(false);
@@ -87,7 +98,17 @@ export function StatusBar() {
   }, [server]);
 
   return (
-    <Flex className="status-bar" align="center" justify="end">
+    <Flex className="status-bar" align="center" justify="end" gap="2">
+      {onOpenDebug && (
+        <button
+          type="button"
+          className="status-debug-btn"
+          onClick={onOpenDebug}
+        >
+          <MagnifyingGlassIcon width={12} height={12} />
+          <Text size="1">CV 调试</Text>
+        </button>
+      )}
       <Popover.Root>
         <Popover.Trigger>
           <button className="status-trigger">

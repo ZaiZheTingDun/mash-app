@@ -433,6 +433,85 @@ fn get_craft_essences() -> &'static [CraftEssenceInfo] {
     craft_essences_data()
 }
 
+/// Look inside a single servant's asset directory and return the path of
+/// the highest-numbered `graph_*.png` portrait, or `None` when no such
+/// file exists. `graph_<n>.png` corresponds to ascension stage `n` (1-4
+/// for typical servants, with `4` being the final art); picking the
+/// lexicographic max is a stable proxy for "most-recent ascension" since
+/// the source filenames are zero-prefix-free single digits.
+///
+/// Pure helper so [`get_servant_portrait_path`] stays a thin wrapper and
+/// the file-walk logic is unit-testable without spinning up a
+/// `tauri::AppHandle`.
+fn pick_portrait_in(servant_dir: &std::path::Path) -> Option<PathBuf> {
+    let entries = fs::read_dir(servant_dir).ok()?;
+    entries
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with("graph_") && n.ends_with(".png"))
+                .unwrap_or(false)
+        })
+        .max()
+}
+
+/// Resolve the full-art portrait file for a single servant, returning
+/// the absolute path so the frontend can hand it to `convertFileSrc()`.
+///
+/// Lookup chain mirrors [`resolve_servant_assets_dir`] (bundled
+/// `<resource_dir>/assets/servants/` first, dev-time
+/// `CARGO_MANIFEST_DIR/assets/servants/` second), then narrows to
+/// `{servant_id}/graph_*.png` and picks the highest ascension stage via
+/// [`pick_portrait_in`]. Returning `Ok(None)` (rather than an `Err`) on
+/// a missing file lets the UI fall back to a placeholder card without
+/// surfacing a scary error toast — a portrait being absent is the
+/// expected default state for most servants today.
+#[tauri::command]
+fn get_servant_portrait_path(
+    app: tauri::AppHandle,
+    servant_id: u32,
+) -> Result<Option<String>, String> {
+    let Some(root) = resolve_servant_assets_dir(&app) else {
+        return Ok(None);
+    };
+    Ok(pick_portrait_in(&root.join(servant_id.to_string()))
+        .map(|p| p.to_string_lossy().into_owned()))
+}
+
+/// Pure helper so [`get_craft_essence_card_path`] stays a thin wrapper
+/// and the file-walk logic is unit-testable without spinning up a
+/// `tauri::AppHandle`. Returns `Some(path)` when
+/// `<ce_root>/<id>/card_ce.png` exists, `None` otherwise.
+fn pick_ce_card_in(ce_root: &std::path::Path, ce_id: u32) -> Option<PathBuf> {
+    let candidate = ce_root.join(ce_id.to_string()).join("card_ce.png");
+    if candidate.is_file() {
+        Some(candidate)
+    } else {
+        None
+    }
+}
+
+/// Resolve the card art for a single craft essence, returning the
+/// absolute path so the frontend can hand it to `convertFileSrc()`.
+///
+/// Mirrors [`get_servant_portrait_path`] but for the CE asset tree
+/// (`assets/ces/{id}/card_ce.png`). The single-file layout means there
+/// is no glob/pick-highest step — the file either exists or it
+/// doesn't. Returning `Ok(None)` (rather than an `Err`) on a missing
+/// file keeps the empty-state placeholder a normal render path instead
+/// of an error toast.
+#[tauri::command]
+fn get_craft_essence_card_path(
+    app: tauri::AppHandle,
+    craft_essence_id: u32,
+) -> Result<Option<String>, String> {
+    let Some(root) = resolve_ce_assets_dir(&app) else {
+        return Ok(None);
+    };
+    Ok(pick_ce_card_in(&root, craft_essence_id).map(|p| p.to_string_lossy().into_owned()))
+}
+
 /// Subset of `assets/servants/{id}/servant.json` needed by the OCR-based
 /// support detector: the servant's primary name and every Noble Phantasm
 /// name. The frontend uses this to seed `find_supports` from a chosen
@@ -1022,6 +1101,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_servants,
             get_craft_essences,
+            get_servant_portrait_path,
+            get_craft_essence_card_path,
             save_battle_scenes,
             load_battle_scenes,
             list_projects,
@@ -1150,6 +1231,78 @@ mod tests {
         assert_eq!(project.slots.len(), 6);
         assert!(project.support_servant_id.is_none());
         assert_eq!(project.repeat_mission, false);
+    }
+
+    // --- pick_portrait_in ----------------------------------------------
+
+    #[test]
+    fn pick_portrait_in_returns_none_for_missing_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let missing = tmp.path().join("does-not-exist");
+        assert!(pick_portrait_in(&missing).is_none());
+    }
+
+    #[test]
+    fn pick_portrait_in_returns_none_when_only_face_and_card_files_present() {
+        // Mirrors the real `assets/servants/1/` layout for servants that
+        // haven't had a `graph_*.png` portrait dropped in yet — face and
+        // card art exist but they aren't full-body portraits and must
+        // not be served as one.
+        let tmp = tempfile::tempdir().unwrap();
+        for name in ["face_servant_1.png", "card_servant_1.png", "servant.json"] {
+            fs::write(tmp.path().join(name), b"").unwrap();
+        }
+        assert!(pick_portrait_in(tmp.path()).is_none());
+    }
+
+    #[test]
+    fn pick_portrait_in_picks_highest_ascension_stage() {
+        // With multiple `graph_<n>.png` siblings, the resolver must hand
+        // back the lexicographically-largest filename — which for the
+        // single-digit ascension scheme used by the Atlas dump is also
+        // the highest stage (i.e. the final-ascension full art).
+        let tmp = tempfile::tempdir().unwrap();
+        for name in ["graph_3.png", "graph_4.png", "graph_1.png"] {
+            fs::write(tmp.path().join(name), b"").unwrap();
+        }
+        let picked = pick_portrait_in(tmp.path()).expect("expected a match");
+        assert_eq!(
+            picked.file_name().and_then(|n| n.to_str()),
+            Some("graph_4.png")
+        );
+    }
+
+    // --- pick_ce_card_in -----------------------------------------------
+
+    #[test]
+    fn pick_ce_card_in_returns_none_when_directory_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        // No `123/` subdirectory ever created.
+        assert!(pick_ce_card_in(tmp.path(), 123).is_none());
+    }
+
+    #[test]
+    fn pick_ce_card_in_returns_none_when_only_metadata_present() {
+        // CE directories may exist with only `craft-essence.json` but
+        // no `card_ce.png` if the asset hasn't been pulled yet — the
+        // resolver must report `None` in that case so the frontend
+        // renders the gray placeholder rather than a broken `<img>`.
+        let tmp = tempfile::tempdir().unwrap();
+        let ce_dir = tmp.path().join("42");
+        fs::create_dir_all(&ce_dir).unwrap();
+        fs::write(ce_dir.join("craft-essence.json"), b"{}").unwrap();
+        assert!(pick_ce_card_in(tmp.path(), 42).is_none());
+    }
+
+    #[test]
+    fn pick_ce_card_in_returns_path_when_file_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ce_dir = tmp.path().join("42");
+        fs::create_dir_all(&ce_dir).unwrap();
+        let card = ce_dir.join("card_ce.png");
+        fs::write(&card, b"fake png bytes").unwrap();
+        let picked = pick_ce_card_in(tmp.path(), 42).expect("expected a match");
+        assert_eq!(picked, card);
     }
 
     // --- craft_essences_data -------------------------------------------

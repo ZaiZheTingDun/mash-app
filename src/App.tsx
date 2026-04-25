@@ -1,24 +1,27 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Box, Flex, Text, Spinner } from "@radix-ui/themes";
 import { invoke } from "@tauri-apps/api/core";
-import { Sidebar } from "./components/Sidebar";
-import { StageNavigator } from "./components/StageNavigator";
+import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { ContentGrid, createInitialProjectSlots } from "./components/ContentGrid";
 import { CommandEditor } from "./components/CommandEditor";
 import { BattlePage } from "./components/BattlePage";
 import { DebugPage } from "./components/DebugPage";
 import { StatusBar } from "./components/StatusBar";
+import { ProjectBar } from "./components/ProjectBar";
 import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
 import type { CraftEssence } from "./types/craftEssence";
 import type { Project } from "./types/project";
 import "./App.css";
 
-type View = "config" | "battle" | "debug";
+// Linear flow: 队伍设置 → 指令设置 → 开始任务. Each forward step is
+// triggered by the bottom-right primary button on the previous page;
+// `debug` is reached out-of-band from the sidebar. Replaces the older
+// horizontal `StageNavigator` (queue/support/command tabs).
+type View = "team" | "command" | "battle" | "debug";
 
 function App() {
-  const [view, setView] = useState<View>("config");
-  const [activeStage, setActiveStage] = useState(1);
+  const [view, setView] = useState<View>("team");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
@@ -112,6 +115,36 @@ function App() {
     return nonSupport.slice(0, 3).map((s) => s.servant);
   }, [slots]);
 
+  // Project create/delete used to live inside `Sidebar`; with the
+  // sidebar now reduced to action buttons, the picker moves to the
+  // `<ProjectBar/>` ribbon above the team grid and the mutations live
+  // here so both `App` and `ProjectBar` mutate the same lifted state.
+  const handleCreateProject = useCallback(() => {
+    invoke<Project>("create_project", { name: `Project ${projects.length + 1}` })
+      .then((p) => {
+        setProjects((prev) => [...prev, p]);
+        setActiveProjectId(p.id);
+      })
+      .catch(console.error);
+  }, [projects.length]);
+
+  const handleDeleteProject = useCallback(
+    (id: string) => {
+      invoke("delete_project", { id })
+        .then(() => {
+          setProjects((prev) => {
+            const next = prev.filter((p) => p.id !== id);
+            if (activeProjectId === id) {
+              setActiveProjectId(next.length > 0 ? next[0].id : null);
+            }
+            return next;
+          });
+        })
+        .catch(console.error);
+    },
+    [activeProjectId]
+  );
+
   const handleStartRun = useCallback(() => {
     setView("battle");
   }, []);
@@ -120,21 +153,23 @@ function App() {
     setView("debug");
   }, []);
 
+  // After the runner exits we return to the team page (the start of
+  // the linear flow) rather than to "config", which no longer exists.
   const handleBackToConfig = useCallback(() => {
-    setView("config");
+    setView("team");
+  }, []);
+
+  const handleGotoCommand = useCallback(() => {
+    setView("command");
+  }, []);
+
+  const handleBackToTeam = useCallback(() => {
+    setView("team");
   }, []);
 
   return (
     <Flex direction="column" className="app-root">
       <Flex className="app-container">
-        <Sidebar
-          projects={projects}
-          onProjectsChange={setProjects}
-          activeProjectId={activeProjectId}
-          onProjectSelect={setActiveProjectId}
-          onStartRun={handleStartRun}
-          onOpenDebug={handleOpenDebug}
-        />
         <Box className="main-content">
           {view === "battle" ? (
             <BattlePage
@@ -145,9 +180,12 @@ function App() {
             <DebugPage onBack={handleBackToConfig} />
           ) : (
             <Box className="main-content-inner">
-              <StageNavigator
-                activeStage={activeStage}
-                onStageChange={setActiveStage}
+              <ProjectBar
+                projects={projects}
+                activeProjectId={activeProjectId}
+                onProjectSelect={setActiveProjectId}
+                onCreateProject={handleCreateProject}
+                onDeleteProject={handleDeleteProject}
               />
               {loading ? (
                 <Flex align="center" justify="center" style={{ flex: 1 }}>
@@ -168,26 +206,60 @@ function App() {
                     {error}
                   </Text>
                 </Flex>
-              ) : activeStage === 3 ? (
-                <CommandEditor
-                  projectId={activeProjectId}
-                  partyServants={partyServants}
-                />
+              ) : view === "command" ? (
+                <>
+                  <CommandEditor
+                    projectId={activeProjectId}
+                    partyServants={partyServants}
+                  />
+                  <Flex justify="between" align="center" className="page-footer">
+                    <button
+                      type="button"
+                      className="page-back-btn"
+                      onClick={handleBackToTeam}
+                    >
+                      <ArrowLeftIcon width={14} height={14} />
+                      <Text size="2">队伍设置</Text>
+                    </button>
+                    <button
+                      type="button"
+                      className="page-next-btn"
+                      onClick={handleStartRun}
+                    >
+                      <Text size="2" weight="bold">
+                        开始任务
+                      </Text>
+                    </button>
+                  </Flex>
+                </>
               ) : (
-                <ContentGrid
-                  servants={servants}
-                  craftEssences={craftEssences}
-                  slots={slots}
-                  onSlotsChange={handleSlotsChange}
-                  activeProject={activeProject}
-                  onUpdateActiveProject={handleUpdateProject}
-                />
+                <>
+                  <ContentGrid
+                    servants={servants}
+                    craftEssences={craftEssences}
+                    slots={slots}
+                    onSlotsChange={handleSlotsChange}
+                    activeProject={activeProject}
+                    onUpdateActiveProject={handleUpdateProject}
+                  />
+                  <Flex justify="end" align="center" className="page-footer">
+                    <button
+                      type="button"
+                      className="page-next-btn"
+                      onClick={handleGotoCommand}
+                    >
+                      <Text size="2" weight="bold">
+                        指令设置
+                      </Text>
+                    </button>
+                  </Flex>
+                </>
               )}
             </Box>
           )}
         </Box>
       </Flex>
-      <StatusBar />
+      <StatusBar onOpenDebug={handleOpenDebug} />
     </Flex>
   );
 }
