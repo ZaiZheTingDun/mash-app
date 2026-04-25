@@ -1,11 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
-import { Flex, Text, Popover, Button, Spinner, Checkbox } from "@radix-ui/themes";
+import { Flex, Text, Popover, Button, Spinner, Checkbox, Select } from "@radix-ui/themes";
 import { Link2Icon, DesktopIcon } from "@radix-ui/react-icons";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { SERVER_LABELS, type Server } from "../types/server";
 
 interface AdbStatus {
   connected: boolean;
   deviceName: string | null;
+}
+
+interface AutomationStatusEvent {
+  state: string;
 }
 
 const POLL_INTERVAL_MS = 3000;
@@ -14,9 +20,18 @@ export function StatusBar() {
   const [status, setStatus] = useState<AdbStatus>({ connected: false, deviceName: null });
   const [checking, setChecking] = useState(false);
   const [useBluestack, setUseBluestack] = useState(false);
+  const [server, setServer] = useState<Server>("JP");
+  // The server selector must be locked while the runner is mid-run: the
+  // sidecar already pinned templates / OCR for the previous server when
+  // it spawned, so flipping the global setting now would silently
+  // desync. We track the runner's state by listening to the same
+  // ``automation-status`` event the BattlePage consumes — no extra
+  // command needed.
+  const [runnerRunning, setRunnerRunning] = useState(false);
 
   useEffect(() => {
     invoke<boolean>("get_use_bluestack").then(setUseBluestack).catch(() => {});
+    invoke<Server>("get_server").then(setServer).catch(() => {});
   }, []);
 
   const pollAdb = useCallback(() => {
@@ -31,6 +46,20 @@ export function StatusBar() {
     return () => clearInterval(id);
   }, [pollAdb]);
 
+  useEffect(() => {
+    const unlisten = listen<AutomationStatusEvent>("automation-status", (event) => {
+      const state = event.payload.state ?? "";
+      // Mirrors BattlePage's terminal-state heuristic: anything that
+      // isn't `Running` releases the lock so the user can flip servers
+      // again immediately after a stop / error.
+      const running = state.includes("Running");
+      setRunnerRunning(running);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   const handleConnect = useCallback(() => {
     setChecking(true);
     invoke<AdbStatus>("check_adb")
@@ -43,6 +72,19 @@ export function StatusBar() {
     setUseBluestack(checked);
     invoke("set_use_bluestack", { value: checked }).catch(() => {});
   }, []);
+
+  const handleServerChange = useCallback((value: string) => {
+    if (value !== "JP" && value !== "CN") return;
+    const next = value as Server;
+    const previous = server;
+    // Optimistic update; revert + log on backend rejection (e.g. the
+    // runner started between this render and the IPC round-trip).
+    setServer(next);
+    invoke("set_server", { value: next }).catch((err) => {
+      console.error("set_server failed", err);
+      setServer(previous);
+    });
+  }, [server]);
 
   return (
     <Flex className="status-bar" align="center" justify="end">
@@ -59,6 +101,22 @@ export function StatusBar() {
         </Popover.Trigger>
         <Popover.Content side="top" align="end" size="1" className="status-popover">
           <Flex direction="column" gap="3">
+            <Flex align="center" justify="between" gap="2">
+              <Text size="2">服务器</Text>
+              <Select.Root
+                size="1"
+                value={server}
+                onValueChange={handleServerChange}
+                disabled={runnerRunning}
+              >
+                <Select.Trigger aria-label="服务器" />
+                <Select.Content>
+                  <Select.Item value="JP">{SERVER_LABELS.JP}</Select.Item>
+                  <Select.Item value="CN">{SERVER_LABELS.CN}</Select.Item>
+                </Select.Content>
+              </Select.Root>
+            </Flex>
+
             <label className="bluestack-checkbox">
               <Checkbox
                 size="1"

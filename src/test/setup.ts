@@ -32,6 +32,26 @@ if (typeof window !== "undefined") {
   if (!Element.prototype.scrollIntoView) {
     Element.prototype.scrollIntoView = function () {};
   }
+  // jsdom also lacks the Pointer Events API. Radix `<Select>` calls
+  // `hasPointerCapture` / `setPointerCapture` / `releasePointerCapture`
+  // during open / close transitions and crashes without these stubs.
+  // The actual semantics don't matter for our tests — we just need the
+  // methods to exist so the click handler doesn't throw.
+  type ElementWithCapture = Element & {
+    hasPointerCapture?: (id: number) => boolean;
+    setPointerCapture?: (id: number) => void;
+    releasePointerCapture?: (id: number) => void;
+  };
+  const proto = Element.prototype as ElementWithCapture;
+  if (!proto.hasPointerCapture) {
+    proto.hasPointerCapture = () => false;
+  }
+  if (!proto.setPointerCapture) {
+    proto.setPointerCapture = () => {};
+  }
+  if (!proto.releasePointerCapture) {
+    proto.releasePointerCapture = () => {};
+  }
 }
 
 // Centralized stub for the Tauri IPC bridge. Components that call
@@ -39,6 +59,17 @@ if (typeof window !== "undefined") {
 // of trying to reach a real Tauri runtime (which doesn't exist in
 // jsdom). Individual tests can override the mock with `vi.mocked(invoke)
 // .mockResolvedValueOnce(...)` for command-specific behaviour.
+// `@tauri-apps/api/event` is also unavailable under jsdom. Default the
+// `listen` subscription to a no-op so components that hook automation /
+// runtime events at mount time (e.g. `StatusBar` listening for
+// `automation-status`) don't blow up. Individual tests can override the
+// mock to capture the registered handler if they need to simulate
+// events.
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async () => () => {}),
+  emit: vi.fn(async () => {}),
+}));
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(async (cmd: string) => {
     switch (cmd) {
@@ -51,6 +82,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         return { ready: false, devices: [] };
       case "get_use_bluestack":
         return false;
+      case "get_server":
+        return "JP";
       default:
         return null;
     }

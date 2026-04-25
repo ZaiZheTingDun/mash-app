@@ -255,7 +255,8 @@
           "card": "Arts",
           "name": "Lord Camelot",
           "name_cn": "已然遥远的理想之城",
-          "name_jp": "ロード・キャメロットいまは遙か理想の城",
+          "name_katakana": "ロード・キャメロット",
+          "name_jp": "いまは遙か理想の城",
           "option": "宝具解放后"
         },
         {
@@ -288,7 +289,8 @@
           "card": "Arts",
           "name": "Lord Chaldeas",
           "name_cn": "假想宝具 拟似展开／人理之础",
-          "name_jp": "ロード・カルデアス仮想宝具 疑似展開／人理の礎",
+          "name_katakana": "ロード・カルデアス",
+          "name_jp": "仮想宝具 疑似展開／人理の礎",
           "option": "宝具解放前"
         }
       ],
@@ -334,7 +336,8 @@
           "card": "Arts",
           "name": "Lord Camelot",
           "name_cn": "依然存在的梦想之城",
-          "name_jp": "ロード・キャメロットいまに在りし夢想の城",
+          "name_katakana": "ロード・キャメロット",
+          "name_jp": "いまに在りし夢想の城",
           "option": "强化后"
         },
         {
@@ -367,7 +370,8 @@
           "card": "Arts",
           "name": "Mold Camelot",
           "name_cn": "已然脆弱的梦想之城",
-          "name_jp": "モールド・キャメロットいまは脆き夢想の城",
+          "name_katakana": "モールド・キャメロット",
+          "name_jp": "いまは脆き夢想の城",
           "option": "强化前"
         }
       ],
@@ -437,7 +441,8 @@
           "card": "Arts",
           "name": "Lord Chaldeas",
           "name_cn": "构筑希望的人理之盾",
-          "name_jp": "ロード・カルデアス希望築く人理の盾",
+          "name_katakana": "ロード・カルデアス",
+          "name_jp": "希望築く人理の盾",
           "option": "普通时"
         },
         {
@@ -498,7 +503,8 @@
           "card": "Buster",
           "name": "Ray Proof Kyrielight",
           "name_cn": "明证希望的人理之剑",
-          "name_jp": "レイプルーフ・キリエライト希望証す人理の剣",
+          "name_katakana": "レイプルーフ・キリエライト",
+          "name_jp": "希望証す人理の剣",
           "option": "圣剑装填时"
         },
         {
@@ -545,7 +551,8 @@
           "card": "Arts",
           "name": "Lord Chaldeas",
           "name_cn": "构筑希望的人理之盾",
-          "name_jp": "ロード・カルデアス希望築く人理の盾",
+          "name_katakana": "ロード・カルデアス",
+          "name_jp": "希望築く人理の盾",
           "option": "奏章Ⅳ剧情限定"
         }
       ]
@@ -1432,7 +1439,8 @@
         "card": "Buster",
         "name": "Excalibur",
         "name_cn": "誓约胜利之剑",
-        "name_jp": "エクスカリバー約束された勝利の剣",
+        "name_katakana": "エクスカリバー",
+        "name_jp": "約束された勝利の剣",
         "option": "强化后"
       },
       {
@@ -1465,7 +1473,8 @@
         "card": "Buster",
         "name": "Excalibur",
         "name_cn": "誓约胜利之剑",
-        "name_jp": "エクスカリバー約束された勝利の剣",
+        "name_katakana": "エクスカリバー",
+        "name_jp": "約束された勝利の剣",
         "option": "强化前"
       }
     ],
@@ -1875,7 +1884,8 @@
         "card": "Buster",
         "name": "Excalibur Morgan",
         "name_cn": "誓约胜利之剑",
-        "name_jp": "エクスカリバー・モルガン約束された勝利の剣",
+        "name_katakana": "エクスカリバー・モルガン",
+        "name_jp": "約束された勝利の剣",
         "option": "default"
       }
     ],
@@ -2261,7 +2271,8 @@
         "card": "Buster",
         "name": "Caliburn",
         "name_cn": "必胜黄金之剑",
-        "name_jp": "カリバーン勝利すべき黄金の剣",
+        "name_katakana": "カリバーン",
+        "name_jp": "勝利すべき黄金の剣",
         "option": "强化后"
       },
       {
@@ -2294,7 +2305,8 @@
         "card": "Buster",
         "name": "Caliburn",
         "name_cn": "必胜黄金之剑",
-        "name_jp": "カリバーン勝利すべき黄金の剣",
+        "name_katakana": "カリバーン",
+        "name_jp": "勝利すべき黄金の剣",
         "option": "强化前"
       }
     ],
@@ -2672,7 +2684,8 @@
         "card": "Arts",
         "name": "Laus Saint Claudius",
         "name_cn": "童女讴歌的荣华帝政",
-        "name_jp": "ラウス・セント・クラウディウス童女謳う華の帝政",
+        "name_katakana": "ラウス・セント・クラウディウス",
+        "name_jp": "童女謳う華の帝政",
         "option": "强化后"
       },
       {
@@ -2705,7 +2718,8 @@
         "card": "Arts",
         "name": "Laus Saint Claudius",
         "name_cn": "童女讴歌的荣华帝政",
-        "name_jp": "ラウス・セント・クラウディウス童女謳う華の帝政",
+        "name_katakana": "ラウス・セント・クラウディウス",
+        "name_jp": "童女謳う華の帝政",
         "option": "强化前"
       }
     ],
@@ -3295,7 +3309,8 @@
         "card": "Buster",
         "name": "Balmung",
         "name_cn": "幻想大剑·天魔失坠",
-        "name_jp": "バルムンク幻想大剣·天魔失墜",
+        "name_katakana": "バルムンク",
+        "name_jp": "幻想大剣·天魔失墜",
         "option": "强化后"
       },
       {
@@ -3328,7 +3343,8 @@
         "card": "Buster",
         "name": "Balmung",
         "name_cn": "幻想大剑·天魔失坠",
-        "name_jp": "バルムンク幻想大剣·天魔失墜",
+        "name_katakana": "バルムンク",
+        "name_jp": "幻想大剣·天魔失墜",
         "option": "强化前"
       }
     ],
@@ -3771,7 +3787,8 @@
         "card": "Quick",
         "name": "Crocea Mors",
         "name_cn": "黄之死",
-        "name_jp": "クロケア・モース黄の死",
+        "name_katakana": "クロケア・モース",
+        "name_jp": "黄の死",
         "option": "强化后"
       },
       {
@@ -3804,7 +3821,8 @@
         "card": "Quick",
         "name": "Crocea Mors",
         "name_cn": "黄之死",
-        "name_jp": "クロケア・モース黄の死",
+        "name_katakana": "クロケア・モース",
+        "name_jp": "黄の死",
         "option": "强化前"
       }
     ],
@@ -4184,7 +4202,8 @@
         "card": "Buster",
         "name": "Photon Ray",
         "name_cn": "军神之剑",
-        "name_jp": "フォトン・レイ軍神の剣",
+        "name_katakana": "フォトン・レイ",
+        "name_jp": "軍神の剣",
         "option": "强化后"
       },
       {
@@ -4217,7 +4236,8 @@
         "card": "Buster",
         "name": "Photon Ray",
         "name_cn": "军神之剑",
-        "name_jp": "フォトン・レイ軍神の剣",
+        "name_katakana": "フォトン・レイ",
+        "name_jp": "軍神の剣",
         "option": "强化前"
       }
     ],
@@ -4749,7 +4769,8 @@
         "card": "Arts",
         "name": "Saint War Order",
         "name_cn": "集结于圣旗之下怒吼吧",
-        "name_jp": "セイント・ウォーオーダー神聖たる旗に集いて吼えよ",
+        "name_katakana": "セイント・ウォーオーダー",
+        "name_jp": "神聖たる旗に集いて吼えよ",
         "option": "default"
       }
     ],
@@ -5152,7 +5173,8 @@
         "card": "Arts",
         "name": "Fleur de Lys",
         "name_cn": "百合花开豪华绚烂",
-        "name_jp": "フルール・ド・リス百合の花咲く豪華絢爛",
+        "name_katakana": "フルール・ド・リス",
+        "name_jp": "百合の花咲く豪華絢爛",
         "option": "强化后"
       },
       {
@@ -5196,7 +5218,8 @@
         "card": "Arts",
         "name": "Fleur de Lys",
         "name_cn": "百合花开豪华绚烂",
-        "name_jp": "フルール・ド・リス百合の花咲く豪華絢爛",
+        "name_katakana": "フルール・ド・リス",
+        "name_jp": "百合の花咲く豪華絢爛",
         "option": "强化前"
       }
     ],
@@ -5606,7 +5629,8 @@
         "card": "Buster",
         "name": "Unlimited Blade Works",
         "name_cn": "无限剑制",
-        "name_jp": "アンリミテッド・ブレイドワークス無限の剣製",
+        "name_katakana": "アンリミテッド・ブレイドワークス",
+        "name_jp": "無限の剣製",
         "option": "Buster/强化后"
       },
       {
@@ -5639,7 +5663,8 @@
         "card": "Buster",
         "name": "Unlimited Blade Works",
         "name_cn": "无限剑制",
-        "name_jp": "アンリミテッド・ブレイドワークス無限の剣製",
+        "name_katakana": "アンリミテッド・ブレイドワークス",
+        "name_jp": "無限の剣製",
         "option": "Buster/强化前"
       },
       {
@@ -5672,7 +5697,8 @@
         "card": "Arts",
         "name": "Unlimited Blade Works",
         "name_cn": "无限剑制",
-        "name_jp": "アンリミテッド・ブレイドワークス無限の剣製",
+        "name_katakana": "アンリミテッド・ブレイドワークス",
+        "name_jp": "無限の剣製",
         "option": "Arts/强化后"
       },
       {
@@ -5705,7 +5731,8 @@
         "card": "Arts",
         "name": "Unlimited Blade Works",
         "name_cn": "无限剑制",
-        "name_jp": "アンリミテッド・ブレイドワークス無限の剣製",
+        "name_katakana": "アンリミテッド・ブレイドワークス",
+        "name_jp": "無限の剣製",
         "option": "Arts/强化前"
       }
     ],
@@ -6254,7 +6281,8 @@
         "card": "Buster",
         "name": "Enuma Elish",
         "name_cn": "天地乖离开辟之星",
-        "name_jp": "エヌマ・エリシュ天地乖離す開闢の星",
+        "name_katakana": "エヌマ・エリシュ",
+        "name_jp": "天地乖離す開闢の星",
         "option": "强化后"
       },
       {
@@ -6287,7 +6315,8 @@
         "card": "Buster",
         "name": "Enuma Elish",
         "name_cn": "天地乖离开辟之星",
-        "name_jp": "エヌマ・エリシュ天地乖離す開闢の星",
+        "name_katakana": "エヌマ・エリシュ",
+        "name_jp": "天地乖離す開闢の星",
         "option": "强化前"
       }
     ],
@@ -6709,7 +6738,8 @@
         "card": "Arts",
         "name": "Yew Bow",
         "name_cn": "祈祷之弓",
-        "name_jp": "イー・バウ祈りの弓",
+        "name_katakana": "イー・バウ",
+        "name_jp": "祈りの弓",
         "option": "default"
       }
     ],
@@ -7103,7 +7133,8 @@
         "card": "Quick",
         "name": "Phoebus Catastrophe",
         "name_cn": "诉状箭书",
-        "name_jp": "ポイボス・カタストロフェ訴状の矢文",
+        "name_katakana": "ポイボス・カタストロフェ",
+        "name_jp": "訴状の矢文",
         "option": "强化后"
       },
       {
@@ -7136,7 +7167,8 @@
         "card": "Quick",
         "name": "Phoebus Catastrophe",
         "name_cn": "诉状箭书",
-        "name_jp": "ポイボス・カタストロフェ訴状の矢文",
+        "name_katakana": "ポイボス・カタストロフェ",
+        "name_jp": "訴状の矢文",
         "option": "强化前"
       }
     ],
@@ -7503,7 +7535,8 @@
         "card": "Arts",
         "name": "Eye of the Euryale",
         "name_cn": "女神的视线",
-        "name_jp": "アイ・オブ・ザ・エウリュアレ女神の視線",
+        "name_katakana": "アイ・オブ・ザ・エウリュアレ",
+        "name_jp": "女神の視線",
         "option": "强化后"
       },
       {
@@ -7550,7 +7583,8 @@
         "card": "Arts",
         "name": "Eye of the Euryale",
         "name_cn": "女神的视线",
-        "name_jp": "アイ・オブ・ザ・エウリュアレ女神の視線",
+        "name_katakana": "アイ・オブ・ザ・エウリュアレ",
+        "name_jp": "女神の視線",
         "option": "强化前"
       }
     ],
@@ -7899,7 +7933,8 @@
         "card": "Buster",
         "name": "Stella",
         "name_cn": "流星一条",
-        "name_jp": "ステラ流星一条",
+        "name_katakana": "ステラ",
+        "name_jp": "流星一条",
         "option": "强化后"
       },
       {
@@ -7939,7 +7974,8 @@
         "card": "Buster",
         "name": "Stella",
         "name_cn": "流星一条",
-        "name_jp": "ステラ流星一条",
+        "name_katakana": "ステラ",
+        "name_jp": "流星一条",
         "option": "强化前"
       }
     ],
@@ -8310,7 +8346,8 @@
         "card": "Quick",
         "name": "Gae Bolg",
         "name_cn": "穿刺死棘之枪",
-        "name_jp": "ゲイ・ボルク刺し穿つ死棘の槍",
+        "name_katakana": "ゲイ・ボルク",
+        "name_jp": "刺し穿つ死棘の槍",
         "option": "强化后"
       },
       {
@@ -8354,7 +8391,8 @@
         "card": "Quick",
         "name": "Gae Bolg",
         "name_cn": "穿刺死棘之枪",
-        "name_jp": "ゲイ・ボルク刺し穿つ死棘の槍",
+        "name_katakana": "ゲイ・ボルク",
+        "name_jp": "刺し穿つ死棘の槍",
         "option": "强化前"
       }
     ],
@@ -8723,7 +8761,8 @@
         "card": "Buster",
         "name": "Bathory Erzsebet",
         "name_cn": "鲜血魔女",
-        "name_jp": "バートリ・エルジェーベト鮮血魔嬢",
+        "name_katakana": "バートリ・エルジェーベト",
+        "name_jp": "鮮血魔嬢",
         "option": "强化后"
       },
       {
@@ -8756,7 +8795,8 @@
         "card": "Buster",
         "name": "Bathory Erzsebet",
         "name_cn": "鲜血魔女",
-        "name_jp": "バートリ・エルジェーベト鮮血魔嬢",
+        "name_katakana": "バートリ・エルジェーベト",
+        "name_jp": "鮮血魔嬢",
         "option": "强化前"
       }
     ],
@@ -9213,7 +9253,8 @@
         "card": "Arts",
         "name": "Gohyaku Rakan Fudarakutokai",
         "name_cn": "五百罗汉补陀落渡海",
-        "name_jp": "ごひゃくらかんふだらくとかい五百羅漢補陀落渡海",
+        "name_katakana": "ごひゃくらかんふだらくとかい",
+        "name_jp": "五百羅漢補陀落渡海",
         "option": "强化后"
       },
       {
@@ -9246,7 +9287,8 @@
         "card": "Arts",
         "name": "Gohyaku Rakan Fudarakutokai",
         "name_cn": "五百罗汉补陀落渡海",
-        "name_jp": "ごひゃくらかんふだらくとかい五百羅漢補陀落渡海",
+        "name_katakana": "ごひゃくらかんふだらくとかい",
+        "name_jp": "五百羅漢補陀落渡海",
         "option": "强化前"
       }
     ],
@@ -9593,7 +9635,8 @@
         "card": "Quick",
         "name": "Gae Bolg",
         "name_cn": "贯穿之朱枪",
-        "name_jp": "ゲイ・ボルク穿ちの朱槍",
+        "name_katakana": "ゲイ・ボルク",
+        "name_jp": "穿ちの朱槍",
         "option": "强化后"
       },
       {
@@ -9637,7 +9680,8 @@
         "card": "Quick",
         "name": "Gae Bolg",
         "name_cn": "贯穿之朱枪",
-        "name_jp": "ゲイ・ボルク穿ちの朱槍",
+        "name_katakana": "ゲイ・ボルク",
+        "name_jp": "穿ちの朱槍",
         "option": "强化前"
       }
     ],
@@ -10027,7 +10071,8 @@
         "card": "Buster",
         "name": "Thermopylae Enomotia",
         "name_cn": "炎门守护者",
-        "name_jp": "テルモピュライ・エノモタイア炎門の守護者",
+        "name_katakana": "テルモピュライ・エノモタイア",
+        "name_jp": "炎門の守護者",
         "option": "default"
       }
     ],
@@ -10386,7 +10431,8 @@
         "card": "Buster",
         "name": "Magna Voluisse Magnum",
         "name_cn": "吾枪通达万物",
-        "name_jp": "マグナ・ウォルイッセ・マグヌムすべては我が槍に通ずる",
+        "name_katakana": "マグナ・ウォルイッセ・マグヌム",
+        "name_jp": "すべては我が槍に通ずる",
         "option": "default"
       }
     ],
@@ -10808,7 +10854,8 @@
         "card": "Quick",
         "name": "Bellerophon",
         "name_cn": "骑英之缰绳",
-        "name_jp": "ベルレフォーン騎英の手綱",
+        "name_katakana": "ベルレフォーン",
+        "name_jp": "騎英の手綱",
         "option": "强化后"
       },
       {
@@ -10841,7 +10888,8 @@
         "card": "Quick",
         "name": "Bellerophon",
         "name_cn": "骑英之缰绳",
-        "name_jp": "ベルレフォーン騎英の手綱",
+        "name_katakana": "ベルレフォーン",
+        "name_jp": "騎英の手綱",
         "option": "强化前"
       }
     ],
@@ -11240,7 +11288,8 @@
         "card": "Arts",
         "name": "Ascalon",
         "name_cn": "刚力屠戮祝福之剑",
-        "name_jp": "アスカロン力屠る祝福の剣",
+        "name_katakana": "アスカロン",
+        "name_jp": "力屠る祝福の剣",
         "option": "default"
       }
     ],
@@ -11598,7 +11647,8 @@
         "card": "Buster",
         "name": "Queen Anne's Revenge",
         "name_cn": "安妮女王之复仇",
-        "name_jp": "クイーンアンズ・リベンジアン女王の復讐",
+        "name_katakana": "クイーンアンズ・リベンジ",
+        "name_jp": "アン女王の復讐",
         "option": "强化后"
       },
       {
@@ -11638,7 +11688,8 @@
         "card": "Buster",
         "name": "Queen Anne's Revenge",
         "name_cn": "安妮女王之复仇",
-        "name_jp": "クイーンアンズ・リベンジアン女王の復讐",
+        "name_katakana": "クイーンアンズ・リベンジ",
+        "name_jp": "アン女王の復讐",
         "option": "强化前"
       }
     ],
@@ -12005,7 +12056,8 @@
         "card": "Arts",
         "name": "Chariot of Boudica",
         "name_cn": "无以誓约守护之车轮",
-        "name_jp": "チャリオット・オブ・ブディカ約束されざる守護の車輪",
+        "name_katakana": "チャリオット・オブ・ブディカ",
+        "name_jp": "約束されざる守護の車輪",
         "option": "强化后"
       },
       {
@@ -12038,7 +12090,8 @@
         "card": "Arts",
         "name": "Chariot of Boudica",
         "name_cn": "无以誓约守护之车轮",
-        "name_jp": "チャリオット・オブ・ブディカ約束されざる守護の車輪",
+        "name_katakana": "チャリオット・オブ・ブディカ",
+        "name_jp": "約束されざる守護の車輪",
         "option": "强化前"
       }
     ],
@@ -12439,7 +12492,8 @@
         "card": "Quick",
         "name": "Dan-no-ura Hasso Tobi",
         "name_cn": "坛之浦·八艘跳",
-        "name_jp": "だんのうら・はっそうとび壇ノ浦·八艘跳",
+        "name_katakana": "だんのうら・はっそうとび",
+        "name_jp": "壇ノ浦·八艘跳",
         "option": "强化后"
       },
       {
@@ -12472,7 +12526,8 @@
         "card": "Quick",
         "name": "Dan-no-ura Hasso Tobi",
         "name_cn": "坛之浦·八艘跳",
-        "name_jp": "だんのうら・はっそうとび壇ノ浦·八艘跳",
+        "name_katakana": "だんのうら・はっそうとび",
+        "name_jp": "壇ノ浦·八艘跳",
         "option": "强化前"
       }
     ],
@@ -12894,7 +12949,8 @@
         "card": "Quick",
         "name": "Bucephalus",
         "name_cn": "初始的蹂躏制霸",
-        "name_jp": "ブケファラス始まりの蹂躙制覇",
+        "name_katakana": "ブケファラス",
+        "name_jp": "始まりの蹂躙制覇",
         "option": "强化后"
       },
       {
@@ -12927,7 +12983,8 @@
         "card": "Quick",
         "name": "Bucephalus",
         "name_cn": "初始的蹂躏制霸",
-        "name_jp": "ブケファラス始まりの蹂躙制覇",
+        "name_katakana": "ブケファラス",
+        "name_jp": "始まりの蹂躙制覇",
         "option": "强化前"
       }
     ],
@@ -13341,7 +13398,8 @@
         "card": "Quick",
         "name": "Guillotine Breaker",
         "name_cn": "愿百合王冠荣光永在",
-        "name_jp": "ギロチン・ブレイカー百合の王冠に栄光あれ",
+        "name_katakana": "ギロチン・ブレイカー",
+        "name_jp": "百合の王冠に栄光あれ",
         "option": "强化后"
       },
       {
@@ -13381,7 +13439,8 @@
         "card": "Quick",
         "name": "Guillotine Breaker",
         "name_cn": "愿百合王冠荣光永在",
-        "name_jp": "ギロチン・ブレイカー百合の王冠に栄光あれ",
+        "name_katakana": "ギロチン・ブレイカー",
+        "name_jp": "百合の王冠に栄光あれ",
         "option": "强化前"
       }
     ],
@@ -13768,7 +13827,8 @@
         "card": "Buster",
         "name": "Tarasque",
         "name_cn": "不识爱的悲哀之龙啊",
-        "name_jp": "タラスク愛知らぬ哀しき竜よ",
+        "name_katakana": "タラスク",
+        "name_jp": "愛知らぬ哀しき竜よ",
         "option": "强化后"
       },
       {
@@ -13801,7 +13861,8 @@
         "card": "Buster",
         "name": "Tarasque",
         "name_cn": "不识爱的悲哀之龙啊",
-        "name_jp": "タラスク愛知らぬ哀しき竜よ",
+        "name_katakana": "タラスク",
+        "name_jp": "愛知らぬ哀しき竜よ",
         "option": "强化前"
       }
     ],
@@ -14262,7 +14323,8 @@
         "card": "Arts",
         "name": "Rule Breaker",
         "name_cn": "万符必应破戒",
-        "name_jp": "ルールブレイカー破戒すべき全ての符",
+        "name_katakana": "ルールブレイカー",
+        "name_jp": "破戒すべき全ての符",
         "option": "强化后"
       },
       {
@@ -14302,7 +14364,8 @@
         "card": "Arts",
         "name": "Rule Breaker",
         "name_cn": "万符必应破戒",
-        "name_jp": "ルールブレイカー破戒すべき全ての符",
+        "name_katakana": "ルールブレイカー",
+        "name_jp": "破戒すべき全ての符",
         "option": "强化前"
       }
     ],
@@ -14718,7 +14781,8 @@
         "card": "Buster",
         "name": "Prelati's·spellbook",
         "name_cn": "螺湮城教本",
-        "name_jp": "プレラーティーズ・スペルブック螺湮城教本",
+        "name_katakana": "プレラーティーズ・スペルブック",
+        "name_jp": "螺湮城教本",
         "option": "强化后"
       },
       {
@@ -14751,7 +14815,8 @@
         "card": "Buster",
         "name": "Prelati's·spellbook",
         "name_cn": "螺湮城教本",
-        "name_jp": "プレラーティーズ・スペルブック螺湮城教本",
+        "name_katakana": "プレラーティーズ・スペルブック",
+        "name_jp": "螺湮城教本",
         "option": "强化前"
       }
     ],
@@ -15188,7 +15253,8 @@
         "card": "Arts",
         "name": "Marchen Meines Lebens",
         "name_cn": "为你撰写的故事",
-        "name_jp": "メルヒェン・マイネスレーベンス貴方のための物語",
+        "name_katakana": "メルヒェン・マイネスレーベンス",
+        "name_jp": "貴方のための物語",
         "option": "强化后"
       },
       {
@@ -15254,7 +15320,8 @@
         "card": "Arts",
         "name": "Marchen Meines Lebens",
         "name_cn": "为你撰写的故事",
-        "name_jp": "メルヒェン・マイネスレーベンス貴方のための物語",
+        "name_katakana": "メルヒェン・マイネスレーベンス",
+        "name_jp": "貴方のための物語",
         "option": "强化前"
       }
     ],
@@ -15701,7 +15768,8 @@
         "card": "Buster",
         "name": "First Folio",
         "name_cn": "开演之刻已至，此处应有雷鸣般的喝彩",
-        "name_jp": "ファースト・フォリオ開演の刻は来たれり、此処に万雷の喝采を",
+        "name_katakana": "ファースト・フォリオ",
+        "name_jp": "開演の刻は来たれり、此処に万雷の喝采を",
         "option": "强化后"
       },
       {
@@ -15734,7 +15802,8 @@
         "card": "Buster",
         "name": "First Folio",
         "name_cn": "开演之刻已至，此处应有雷鸣般的喝彩",
-        "name_jp": "ファースト・フォリオ開演の刻は来たれり、此処に万雷の喝采を",
+        "name_katakana": "ファースト・フォリオ",
+        "name_jp": "開演の刻は来たれり、此処に万雷の喝采を",
         "option": "强化前"
       }
     ],
@@ -16111,7 +16180,8 @@
         "card": "Buster",
         "name": "Ticktock Bomb",
         "name_cn": "浅眠炸弹",
-        "name_jp": "チクタク・ボム微睡む爆弾",
+        "name_katakana": "チクタク・ボム",
+        "name_jp": "微睡む爆弾",
         "option": "强化后"
       },
       {
@@ -16155,7 +16225,8 @@
         "card": "Buster",
         "name": "Ticktock Bomb",
         "name_cn": "浅眠炸弹",
-        "name_jp": "チクタク・ボム微睡む爆弾",
+        "name_katakana": "チクタク・ボム",
+        "name_jp": "微睡む爆弾",
         "option": "强化前"
       }
     ],
@@ -16572,7 +16643,8 @@
         "card": "Arts",
         "name": "Requiem for Death",
         "name_cn": "献给死神的安魂曲",
-        "name_jp": "レクイエム・フォー・デス死神のための葬送曲",
+        "name_katakana": "レクイエム・フォー・デス",
+        "name_jp": "死神のための葬送曲",
         "option": "default"
       }
     ],
@@ -16954,7 +17026,8 @@
         "card": "Arts",
         "name": "无还之阵",
         "name_cn": "石兵八阵",
-        "name_jp": "かえらずのじん石兵八陣",
+        "name_katakana": "かえらずのじん",
+        "name_jp": "石兵八陣",
         "option": "强化后"
       },
       {
@@ -17001,7 +17074,8 @@
         "card": "Arts",
         "name": "无还之阵",
         "name_cn": "石兵八阵",
-        "name_jp": "かえらずのじん石兵八陣",
+        "name_katakana": "かえらずのじん",
+        "name_jp": "石兵八陣",
         "option": "强化前"
       }
     ],
@@ -17443,7 +17517,8 @@
         "card": "Buster",
         "name": "Wicker Man",
         "name_cn": "灼烧殆尽的炎笼",
-        "name_jp": "ウィッカーマン灼き尽くす炎の檻",
+        "name_katakana": "ウィッカーマン",
+        "name_jp": "灼き尽くす炎の檻",
         "option": "强化后"
       },
       {
@@ -17487,7 +17562,8 @@
         "card": "Buster",
         "name": "Wicker Man",
         "name_cn": "灼烧殆尽的炎笼",
-        "name_jp": "ウィッカーマン灼き尽くす炎の檻",
+        "name_katakana": "ウィッカーマン",
+        "name_jp": "灼き尽くす炎の檻",
         "option": "强化前"
       }
     ],
@@ -17956,7 +18032,8 @@
         "card": "Quick",
         "name": "Tsubame Gaeshi",
         "name_cn": "燕返",
-        "name_jp": "つばめがえし燕返し",
+        "name_katakana": "つばめがえし",
+        "name_jp": "燕返し",
         "option": "强化后"
       },
       {
@@ -17988,7 +18065,8 @@
         "card": "Quick",
         "name": "Tsubame Gaeshi",
         "name_cn": "燕返",
-        "name_jp": "つばめがえし燕返し",
+        "name_katakana": "つばめがえし",
+        "name_jp": "燕返し",
         "option": "强化前"
       }
     ],
@@ -18414,7 +18492,8 @@
         "card": "Quick",
         "name": "Zabaniya",
         "name_cn": "妄想心音",
-        "name_jp": "ザバーニーヤ妄想心音",
+        "name_katakana": "ザバーニーヤ",
+        "name_jp": "妄想心音",
         "option": "强化后"
       },
       {
@@ -18447,7 +18526,8 @@
         "card": "Quick",
         "name": "Zabaniya",
         "name_cn": "妄想心音",
-        "name_jp": "ザバーニーヤ妄想心音",
+        "name_katakana": "ザバーニーヤ",
+        "name_jp": "妄想心音",
         "option": "强化前"
       }
     ],
@@ -18826,7 +18906,8 @@
         "card": "Buster",
         "name": "Smile of the Stheno",
         "name_cn": "女神的微笑",
-        "name_jp": "スマイル・オブ・ザ・ステンノ女神の微笑",
+        "name_katakana": "スマイル・オブ・ザ・ステンノ",
+        "name_jp": "女神の微笑",
         "option": "强化后"
       },
       {
@@ -18866,7 +18947,8 @@
         "card": "Buster",
         "name": "Smile of the Stheno",
         "name_cn": "女神的微笑",
-        "name_jp": "スマイル・オブ・ザ・ステンノ女神の微笑",
+        "name_katakana": "スマイル・オブ・ザ・ステンノ",
+        "name_jp": "女神の微笑",
         "option": "强化前"
       }
     ],
@@ -19307,7 +19389,8 @@
         "card": "Quick",
         "name": "只为刺杀而存",
         "name_cn": "不归匕首",
-        "name_jp": "ただ、あやめるのみ不還匕首",
+        "name_katakana": "ただ、あやめるのみ",
+        "name_jp": "不還匕首",
         "option": "强化后"
       },
       {
@@ -19358,7 +19441,8 @@
         "card": "Quick",
         "name": "只为刺杀而存",
         "name_cn": "不归匕首",
-        "name_jp": "ただ、あやめるのみ不還匕首",
+        "name_katakana": "ただ、あやめるのみ",
+        "name_jp": "不還匕首",
         "option": "强化前"
       }
     ],
@@ -19748,7 +19832,8 @@
         "card": "Buster",
         "name": "La Mort Espoir",
         "name_cn": "死亡将为明日的希望",
-        "name_jp": "ラモール・エスポワール死は明日への希望なり",
+        "name_katakana": "ラモール・エスポワール",
+        "name_jp": "死は明日への希望なり",
         "option": "强化后"
       },
       {
@@ -19792,7 +19877,8 @@
         "card": "Buster",
         "name": "La Mort Espoir",
         "name_cn": "死亡将为明日的希望",
-        "name_jp": "ラモール・エスポワール死は明日への希望なり",
+        "name_katakana": "ラモール・エスポワール",
+        "name_jp": "死は明日への希望なり",
         "option": "强化前"
       }
     ],
@@ -20211,7 +20297,8 @@
         "card": "Arts",
         "name": "Christine，Christine",
         "name_cn": "吾之情歌只在地狱回响",
-        "name_jp": "クリスティーヌ・クリスティーヌ地獄にこそ響け我が愛の唄",
+        "name_katakana": "クリスティーヌ・クリスティーヌ",
+        "name_jp": "地獄にこそ響け我が愛の唄",
         "option": "强化后"
       },
       {
@@ -20244,7 +20331,8 @@
         "card": "Arts",
         "name": "Christine，Christine",
         "name_cn": "吾之情歌只在地狱回响",
-        "name_jp": "クリスティーヌ・クリスティーヌ地獄にこそ響け我が愛の唄",
+        "name_katakana": "クリスティーヌ・クリスティーヌ",
+        "name_jp": "地獄にこそ響け我が愛の唄",
         "option": "强化前"
       }
     ],
@@ -20687,7 +20775,8 @@
         "card": "Arts",
         "name": "Mata Hari",
         "name_cn": "拥有阳眼之女",
-        "name_jp": "マタ・ハリ陽の眼を持つ女",
+        "name_katakana": "マタ・ハリ",
+        "name_jp": "陽の眼を持つ女",
         "option": "default"
       }
     ],
@@ -21153,7 +21242,8 @@
         "card": "Buster",
         "name": "Phantom Maiden",
         "name_cn": "幻想铁处女",
-        "name_jp": "ファントム・メイデン幻想の鉄処女",
+        "name_katakana": "ファントム・メイデン",
+        "name_jp": "幻想の鉄処女",
         "option": "强化后"
       },
       {
@@ -21200,7 +21290,8 @@
         "card": "Buster",
         "name": "Phantom Maiden",
         "name_cn": "幻想铁处女",
-        "name_jp": "ファントム・メイデン幻想の鉄処女",
+        "name_katakana": "ファントム・メイデン",
+        "name_jp": "幻想の鉄処女",
         "option": "强化前"
       }
     ],
@@ -21548,7 +21639,8 @@
         "card": "Buster",
         "name": "Nine Lives",
         "name_cn": "射杀百头",
-        "name_jp": "ナインライブズ射殺す百頭",
+        "name_katakana": "ナインライブズ",
+        "name_jp": "射殺す百頭",
         "option": "default"
       }
     ],
@@ -21920,7 +22012,8 @@
         "card": "Quick",
         "name": "Knight of Owner",
         "name_cn": "骑士不徒手而亡",
-        "name_jp": "ナイト・オブ・オーナー騎士は徒手にて死せず",
+        "name_katakana": "ナイト・オブ・オーナー",
+        "name_jp": "騎士は徒手にて死せず",
         "option": "default"
       }
     ],
@@ -22254,7 +22347,8 @@
         "card": "Buster",
         "name": "God Force",
         "name_cn": "军神五兵",
-        "name_jp": "ゴッドフォース軍神五兵",
+        "name_katakana": "ゴッドフォース",
+        "name_jp": "軍神五兵",
         "option": "default"
       }
     ],
@@ -22600,7 +22694,8 @@
         "card": "Buster",
         "name": "Crying Warmonger",
         "name_cn": "伤兽的咆哮",
-        "name_jp": "クライング・ウォーモンガー疵獣の咆吼",
+        "name_katakana": "クライング・ウォーモンガー",
+        "name_jp": "疵獣の咆吼",
         "option": "强化后"
       },
       {
@@ -22633,7 +22728,8 @@
         "card": "Buster",
         "name": "Crying Warmonger",
         "name_cn": "伤兽的咆哮",
-        "name_jp": "クライング・ウォーモンガー疵獣の咆吼",
+        "name_katakana": "クライング・ウォーモンガー",
+        "name_jp": "疵獣の咆吼",
         "option": "强化前"
       }
     ],
@@ -23002,7 +23098,8 @@
         "card": "Buster",
         "name": "Golden Spark",
         "name_cn": "黄金冲击",
-        "name_jp": "ゴールデンスパーク黄金衝撃",
+        "name_katakana": "ゴールデンスパーク",
+        "name_jp": "黄金衝撃",
         "option": "强化后"
       },
       {
@@ -23035,7 +23132,8 @@
         "card": "Buster",
         "name": "Golden Spark",
         "name_cn": "黄金冲击",
-        "name_jp": "ゴールデンスパーク黄金衝撃",
+        "name_katakana": "ゴールデンスパーク",
+        "name_jp": "黄金衝撃",
         "option": "强化前"
       }
     ],
@@ -23379,7 +23477,8 @@
         "card": "Arts",
         "name": "Kazikli Bey",
         "name_cn": "血染的王鬼",
-        "name_jp": "カズィクル・ベイ血塗れ王鬼",
+        "name_katakana": "カズィクル・ベイ",
+        "name_jp": "血塗れ王鬼",
         "option": "再强化后"
       },
       {
@@ -23412,7 +23511,8 @@
         "card": "Arts",
         "name": "Kazikli Bey",
         "name_cn": "血染的王鬼",
-        "name_jp": "カズィクル・ベイ血塗れ王鬼",
+        "name_katakana": "カズィクル・ベイ",
+        "name_jp": "血塗れ王鬼",
         "option": "强化后"
       },
       {
@@ -23445,7 +23545,8 @@
         "card": "Arts",
         "name": "Kazikli Bey",
         "name_cn": "血染的王鬼",
-        "name_jp": "カズィクル・ベイ血塗れ王鬼",
+        "name_katakana": "カズィクル・ベイ",
+        "name_jp": "血塗れ王鬼",
         "option": "强化前"
       }
     ],
@@ -23885,7 +23986,8 @@
         "card": "Arts",
         "name": "Chaos Labyrinthos",
         "name_cn": "万古不变的迷宫",
-        "name_jp": "ケイオス・ラビュリントス万古不易の迷宮",
+        "name_katakana": "ケイオス・ラビュリントス",
+        "name_jp": "万古不易の迷宮",
         "option": "强化后"
       },
       {
@@ -23918,7 +24020,8 @@
         "card": "Arts",
         "name": "Chaos Labyrinthos",
         "name_cn": "万古不变的迷宫",
-        "name_jp": "ケイオス・ラビュリントス万古不易の迷宮",
+        "name_katakana": "ケイオス・ラビュリントス",
+        "name_jp": "万古不易の迷宮",
         "option": "强化前"
       }
     ],
@@ -24353,7 +24456,8 @@
         "card": "Arts",
         "name": "Flucticulus Diana",
         "name_cn": "吞噬吾心吧，月光",
-        "name_jp": "フルクティクルス・ディアーナ我が心を喰らえ、月の光",
+        "name_katakana": "フルクティクルス・ディアーナ",
+        "name_jp": "我が心を喰らえ、月の光",
         "option": "强化后"
       },
       {
@@ -24386,7 +24490,8 @@
         "card": "Arts",
         "name": "Flucticulus Diana",
         "name_cn": "吞噬吾心吧，月光",
-        "name_jp": "フルクティクルス・ディアーナ我が心を喰らえ、月の光",
+        "name_katakana": "フルクティクルス・ディアーナ",
+        "name_jp": "我が心を喰らえ、月の光",
         "option": "强化前"
       }
     ],
@@ -24753,7 +24858,8 @@
         "card": "Buster",
         "name": "Athanatoi Ten Thousand",
         "name_cn": "不死的万名骑兵",
-        "name_jp": "アタナトイ・テン・サウザンド不死の一万騎兵",
+        "name_katakana": "アタナトイ・テン・サウザンド",
+        "name_jp": "不死の一万騎兵",
         "option": "强化后"
       },
       {
@@ -24797,7 +24903,8 @@
         "card": "Buster",
         "name": "Athanatoi Ten Thousand",
         "name_cn": "不死的万名骑兵",
-        "name_jp": "アタナトイ・テン・サウザンド不死の一万騎兵",
+        "name_katakana": "アタナトイ・テン・サウザンド",
+        "name_jp": "不死の一万騎兵",
         "option": "强化前"
       }
     ],
@@ -25231,7 +25338,8 @@
         "card": "Buster",
         "name": "Tenshin Kasho Zanmaii",
         "name_cn": "转身火生三昧",
-        "name_jp": "てんしんかしょうざんまい転身火生三昧",
+        "name_katakana": "てんしんかしょうざんまい",
+        "name_jp": "転身火生三昧",
         "option": "default"
       }
     ],
@@ -25653,7 +25761,8 @@
         "card": "Buster",
         "name": "Bloodbath Crown",
         "name_cn": "血染的加冕仪式",
-        "name_jp": "ブラッドバス・クラウン血塗れの戴冠式",
+        "name_katakana": "ブラッドバス・クラウン",
+        "name_jp": "血塗れの戴冠式",
         "option": "default"
       }
     ],
@@ -26037,7 +26146,8 @@
         "card": "Quick",
         "name": "Sansan Nikko Hiruyasumi Shuchi Nikurin",
         "name_cn": "璀璨日光午睡宫酒池肉林",
-        "name_jp": "さんさんにっこう　ひるやすみしゅちにくりん燦々日光午睡宮酒池肉林",
+        "name_katakana": "さんさんにっこう　ひるやすみしゅちにくりん",
+        "name_jp": "燦々日光午睡宮酒池肉林",
         "option": "强化后"
       },
       {
@@ -26077,7 +26187,8 @@
         "card": "Quick",
         "name": "Sansan Nikko Hiruyasumi Shuchi Nikurin",
         "name_cn": "璀璨日光午睡宫酒池肉林",
-        "name_jp": "さんさんにっこう　ひるやすみしゅちにくりん燦々日光午睡宮酒池肉林",
+        "name_katakana": "さんさんにっこう　ひるやすみしゅちにくりん",
+        "name_jp": "燦々日光午睡宮酒池肉林",
         "option": "强化前"
       }
     ],
@@ -26479,7 +26590,8 @@
         "card": "Arts",
         "name": "Luminosite Eternelle",
         "name_cn": "吾主在此",
-        "name_jp": "リュミノジテ・エテルネッル我が神はここにありて",
+        "name_katakana": "リュミノジテ・エテルネッル",
+        "name_jp": "我が神はここにありて",
         "option": "强化后"
       },
       {
@@ -26526,7 +26638,8 @@
         "card": "Arts",
         "name": "Luminosite Eternelle",
         "name_cn": "吾主在此",
-        "name_jp": "リュミノジテ・エテルネッル我が神はここにありて",
+        "name_katakana": "リュミノジテ・エテルネッル",
+        "name_jp": "我が神はここにありて",
         "option": "强化前"
       }
     ],
@@ -26965,7 +27078,8 @@
         "card": "Arts",
         "name": "Tri-star Amore Mio",
         "name_cn": "月女神的爱箭恋矢",
-        "name_jp": "トライスター・アモーレ・ミオ月女神の愛矢恋矢",
+        "name_katakana": "トライスター・アモーレ・ミオ",
+        "name_jp": "月女神の愛矢恋矢",
         "option": "强化后"
       },
       {
@@ -27005,7 +27119,8 @@
         "card": "Arts",
         "name": "Tri-star Amore Mio",
         "name_cn": "月女神的爱箭恋矢",
-        "name_jp": "トライスター・アモーレ・ミオ月女神の愛矢恋矢",
+        "name_katakana": "トライスター・アモーレ・ミオ",
+        "name_jp": "月女神の愛矢恋矢",
         "option": "强化前"
       }
     ],
@@ -27404,7 +27519,8 @@
         "card": "Buster",
         "name": "Bathory Halloween Erzsebet",
         "name_cn": "鲜血极致魔女",
-        "name_jp": "バートリ・ハロウィン・エルジェーベト鮮血特上魔嬢",
+        "name_katakana": "バートリ・ハロウィン・エルジェーベト",
+        "name_jp": "鮮血特上魔嬢",
         "option": "强化前"
       },
       {
@@ -27462,7 +27578,8 @@
         "card": "Buster",
         "name": "Bathory Halloween Erzsebet",
         "name_cn": "鲜血极致魔女",
-        "name_jp": "バートリ・ハロウィン・エルジェーベト鮮血特上魔嬢",
+        "name_katakana": "バートリ・ハロウィン・エルジェーベト",
+        "name_jp": "鮮血特上魔嬢",
         "option": "强化后"
       }
     ],
@@ -27936,7 +28053,8 @@
         "card": "Arts",
         "name": "Suiten Nikko Amaterasu Yano Shizu-Ishi",
         "name_cn": "水天日光天照八野镇石",
-        "name_jp": "すいてんにっこう　あまてらすやのしずいし水天日光天照八野鎮石",
+        "name_katakana": "すいてんにっこう　あまてらすやのしずいし",
+        "name_jp": "水天日光天照八野鎮石",
         "option": "强化后"
       },
       {
@@ -27976,7 +28094,8 @@
         "card": "Arts",
         "name": "Suiten Nikko Amaterasu Yano Shizu-Ishi",
         "name_cn": "水天日光天照八野镇石",
-        "name_jp": "すいてんにっこう　あまてらすやのしずいし水天日光天照八野鎮石",
+        "name_katakana": "すいてんにっこう　あまてらすやのしずいし",
+        "name_jp": "水天日光天照八野鎮石",
         "option": "强化前"
       }
     ],
@@ -28395,7 +28514,8 @@
         "card": "Buster",
         "name": "Hamesh Avanim",
         "name_cn": "五块石头",
-        "name_jp": "ハメシュ・ アヴァニム五つの石",
+        "name_katakana": "ハメシュ・ アヴァニム",
+        "name_jp": "五つの石",
         "option": "强化后"
       },
       {
@@ -28435,7 +28555,8 @@
         "card": "Buster",
         "name": "Hamesh Avanim",
         "name_cn": "五块石头",
-        "name_jp": "ハメシュ・ アヴァニム五つの石",
+        "name_katakana": "ハメシュ・ アヴァニム",
+        "name_jp": "五つの石",
         "option": "强化前"
       }
     ],
@@ -28773,7 +28894,8 @@
         "card": "Buster",
         "name": "Durindana",
         "name_cn": "不毁的极枪",
-        "name_jp": "ドゥリンダナ不毀の極槍",
+        "name_katakana": "ドゥリンダナ",
+        "name_jp": "不毀の極槍",
         "option": "强化后"
       },
       {
@@ -28806,7 +28928,8 @@
         "card": "Buster",
         "name": "Durindana",
         "name_cn": "不毁的极枪",
-        "name_jp": "ドゥリンダナ不毀の極槍",
+        "name_katakana": "ドゥリンダナ",
+        "name_jp": "不毀の極槍",
         "option": "强化前"
       }
     ],
@@ -29235,7 +29358,8 @@
         "card": "Buster",
         "name": "Golden Wild Hunt",
         "name_cn": "黄金鹿与暴风夜",
-        "name_jp": "ゴールデン・ワイルドハント黄金鹿と嵐の夜",
+        "name_katakana": "ゴールデン・ワイルドハント",
+        "name_jp": "黄金鹿と嵐の夜",
         "option": "强化后"
       },
       {
@@ -29268,7 +29392,8 @@
         "card": "Buster",
         "name": "Golden Wild Hunt",
         "name_cn": "黄金鹿与暴风夜",
-        "name_jp": "ゴールデン・ワイルドハント黄金鹿と嵐の夜",
+        "name_katakana": "ゴールデン・ワイルドハント",
+        "name_jp": "黄金鹿と嵐の夜",
         "option": "强化前"
       }
     ],
@@ -29714,7 +29839,8 @@
         "card": "Quick",
         "name": "Carribbean Free Bird",
         "name_cn": "比翼连理",
-        "name_jp": "カリビアン・フリーバード比翼にして連理",
+        "name_katakana": "カリビアン・フリーバード",
+        "name_jp": "比翼にして連理",
         "option": "强化后"
       },
       {
@@ -29747,7 +29873,8 @@
         "card": "Quick",
         "name": "Carribbean Free Bird",
         "name_cn": "比翼连理",
-        "name_jp": "カリビアン・フリーバード比翼にして連理",
+        "name_katakana": "カリビアン・フリーバード",
+        "name_jp": "比翼にして連理",
         "option": "强化前"
       }
     ],
@@ -30174,7 +30301,8 @@
         "card": "Arts",
         "name": "Pain Breaker",
         "name_cn": "万疵必应修补",
-        "name_jp": "ペインブレイカー修補すべき全ての疵",
+        "name_katakana": "ペインブレイカー",
+        "name_jp": "修補すべき全ての疵",
         "option": "强化后"
       },
       {
@@ -30214,7 +30342,8 @@
         "card": "Arts",
         "name": "Pain Breaker",
         "name_cn": "万疵必应修补",
-        "name_jp": "ペインブレイカー修補すべき全ての疵",
+        "name_katakana": "ペインブレイカー",
+        "name_jp": "修補すべき全ての疵",
         "option": "强化前"
       }
     ],
@@ -30611,7 +30740,8 @@
         "card": "Quick",
         "name": "Mumyo Sandan Zuki",
         "name_cn": "无明三段突",
-        "name_jp": "むみょうさんだんづき無明三段突き",
+        "name_katakana": "むみょうさんだんづき",
+        "name_jp": "無明三段突き",
         "option": "强化前"
       },
       {
@@ -30665,7 +30795,8 @@
         "card": "Quick",
         "name": "Mumyo Sandan Zuki",
         "name_cn": "无明三段突",
-        "name_jp": "むみょうさんだんづき無明三段突き",
+        "name_katakana": "むみょうさんだんづき",
+        "name_jp": "無明三段突き",
         "option": "强化后"
       }
     ],
@@ -31075,7 +31206,8 @@
         "card": "Buster",
         "name": "三段击",
         "name_cn": "三千世界",
-        "name_jp": "さんだんうち三千世界",
+        "name_katakana": "さんだんうち",
+        "name_jp": "三千世界",
         "option": "default"
       }
     ],
@@ -31475,7 +31607,8 @@
         "card": "Quick",
         "name": "Gae Bolg Alternative",
         "name_cn": "贯穿死翔之枪",
-        "name_jp": "ゲイ・ボルク・オルタナティブ貫き穿つ死翔の槍",
+        "name_katakana": "ゲイ・ボルク・オルタナティブ",
+        "name_jp": "貫き穿つ死翔の槍",
         "option": "强化后"
       },
       {
@@ -31515,7 +31648,8 @@
         "card": "Quick",
         "name": "Gae Bolg Alternative",
         "name_cn": "贯穿死翔之枪",
-        "name_jp": "ゲイ・ボルク・オルタナティブ貫き穿つ死翔の槍",
+        "name_katakana": "ゲイ・ボルク・オルタナティブ",
+        "name_jp": "貫き穿つ死翔の槍",
         "option": "强化前"
       }
     ],
@@ -31961,7 +32095,8 @@
         "card": "Quick",
         "name": "Gae Dearg＆Gae Buidhe",
         "name_cn": "破魔的红蔷薇、必灭的黄蔷薇",
-        "name_jp": "ゲイ・ジャルグ＆ゲイ・ボウ破魔の紅薔薇、必滅の黄薔薇",
+        "name_katakana": "ゲイ・ジャルグ＆ゲイ・ボウ",
+        "name_jp": "破魔の紅薔薇、必滅の黄薔薇",
         "option": "强化后"
       },
       {
@@ -32001,7 +32136,8 @@
         "card": "Quick",
         "name": "Gae Dearg＆Gae Buidhe",
         "name_cn": "破魔的红蔷薇、必灭的黄蔷薇",
-        "name_jp": "ゲイ・ジャルグ＆ゲイ・ボウ破魔の紅薔薇、必滅の黄薔薇",
+        "name_katakana": "ゲイ・ジャルグ＆ゲイ・ボウ",
+        "name_jp": "破魔の紅薔薇、必滅の黄薔薇",
         "option": "强化前"
       }
     ],
@@ -32401,7 +32537,8 @@
         "card": "Buster",
         "name": "Caladbolg",
         "name_cn": "虹霓剑",
-        "name_jp": "カラドボルグ虹霓剣",
+        "name_katakana": "カラドボルグ",
+        "name_jp": "虹霓剣",
         "option": "强化后"
       },
       {
@@ -32441,7 +32578,8 @@
         "card": "Buster",
         "name": "Caladbolg",
         "name_cn": "虹霓剑",
-        "name_jp": "カラドボルグ虹霓剣",
+        "name_katakana": "カラドボルグ",
+        "name_jp": "虹霓剣",
         "option": "强化前"
       }
     ],
@@ -32846,7 +32984,8 @@
         "card": "Buster",
         "name": "Excalibur Morgan",
         "name_cn": "誓约胜利之剑",
-        "name_jp": "エクスカリバー・モルガン約束された勝利の剣",
+        "name_katakana": "エクスカリバー・モルガン",
+        "name_jp": "約束された勝利の剣",
         "option": "default"
       }
     ],
@@ -33230,7 +33369,8 @@
         "card": "Arts",
         "name": "Nursery Rhyme",
         "name_cn": "献给某人的故事",
-        "name_jp": "ナーサリー・ライム誰かの為の物語",
+        "name_katakana": "ナーサリー・ライム",
+        "name_jp": "誰かの為の物語",
         "option": "强化后"
       },
       {
@@ -33270,7 +33410,8 @@
         "card": "Arts",
         "name": "Nursery Rhyme",
         "name_cn": "献给某人的故事",
-        "name_jp": "ナーサリー・ライム誰かの為の物語",
+        "name_katakana": "ナーサリー・ライム",
+        "name_jp": "誰かの為の物語",
         "option": "强化前"
       }
     ],
@@ -33714,7 +33855,8 @@
         "card": "Quick",
         "name": "Maria the Ripper",
         "name_cn": "解体圣母",
-        "name_jp": "マリア・ザ・リッパー解体聖母",
+        "name_katakana": "マリア・ザ・リッパー",
+        "name_jp": "解体聖母",
         "option": "强化后"
       },
       {
@@ -33747,7 +33889,8 @@
         "card": "Quick",
         "name": "Maria the Ripper",
         "name_cn": "解体圣母",
-        "name_jp": "マリア・ザ・リッパー解体聖母",
+        "name_katakana": "マリア・ザ・リッパー",
+        "name_jp": "解体聖母",
         "option": "强化前"
       }
     ],
@@ -34141,7 +34284,8 @@
         "card": "Buster",
         "name": "Clarent Blood Arthur",
         "name_cn": "对吾华丽父王的叛逆",
-        "name_jp": "クラレント・ブラッドアーサー我が麗しき父への叛逆",
+        "name_katakana": "クラレント・ブラッドアーサー",
+        "name_jp": "我が麗しき父への叛逆",
         "option": "强化后"
       },
       {
@@ -34185,7 +34329,8 @@
         "card": "Buster",
         "name": "Clarent Blood Arthur",
         "name_cn": "对吾华丽父王的叛逆",
-        "name_jp": "クラレント・ブラッドアーサー我が麗しき父への叛逆",
+        "name_katakana": "クラレント・ブラッドアーサー",
+        "name_jp": "我が麗しき父への叛逆",
         "option": "强化前"
       }
     ],
@@ -34646,7 +34791,8 @@
         "card": "Buster",
         "name": "System Keraunos",
         "name_cn": "人类神话·雷电降临",
-        "name_jp": "システム・ケラウノス人類神話·雷電降臨",
+        "name_katakana": "システム・ケラウノス",
+        "name_jp": "人類神話·雷電降臨",
         "option": "强化后"
       },
       {
@@ -34693,7 +34839,8 @@
         "card": "Buster",
         "name": "System Keraunos",
         "name_cn": "人类神话·雷电降临",
-        "name_jp": "システム・ケラウノス人類神話·雷電降臨",
+        "name_katakana": "システム・ケラウノス",
+        "name_jp": "人類神話·雷電降臨",
         "option": "强化前"
       }
     ],
@@ -35245,7 +35392,8 @@
         "card": "Buster",
         "name": "Rhongomyniad",
         "name_cn": "闪耀于终焉之枪",
-        "name_jp": "ロンゴミニアド最果てにて輝ける槍",
+        "name_katakana": "ロンゴミニアド",
+        "name_jp": "最果てにて輝ける槍",
         "option": "强化后"
       },
       {
@@ -35285,7 +35433,8 @@
         "card": "Buster",
         "name": "Rhongomyniad",
         "name_cn": "闪耀于终焉之枪",
-        "name_jp": "ロンゴミニアド最果てにて輝ける槍",
+        "name_katakana": "ロンゴミニアド",
+        "name_jp": "最果てにて輝ける槍",
         "option": "强化前"
       }
     ],
@@ -35719,7 +35868,8 @@
         "card": "Arts",
         "name": "Sword of Paracelsus",
         "name_cn": "元素使的魔剑",
-        "name_jp": "ソード・オブ・パラケルスス元素使いの魔剣",
+        "name_katakana": "ソード・オブ・パラケルスス",
+        "name_jp": "元素使いの魔剣",
         "option": "强化后"
       },
       {
@@ -35752,7 +35902,8 @@
         "card": "Arts",
         "name": "Sword of Paracelsus",
         "name_cn": "元素使的魔剑",
-        "name_jp": "ソード・オブ・パラケルスス元素使いの魔剣",
+        "name_katakana": "ソード・オブ・パラケルスス",
+        "name_jp": "元素使いの魔剣",
         "option": "强化前"
       }
     ],
@@ -36111,7 +36262,8 @@
         "card": "Buster",
         "name": "Dimension of Steam",
         "name_cn": "绚烂的灰烬世界",
-        "name_jp": "ディメンジョン・オブ・スチーム絢爛なりし灰燼世界",
+        "name_katakana": "ディメンジョン・オブ・スチーム",
+        "name_jp": "絢爛なりし灰燼世界",
         "option": "强化后"
       },
       {
@@ -36144,7 +36296,8 @@
         "card": "Buster",
         "name": "Dimension of Steam",
         "name_cn": "绚烂的灰烬世界",
-        "name_jp": "ディメンジョン・オブ・スチーム絢爛なりし灰燼世界",
+        "name_katakana": "ディメンジョン・オブ・スチーム",
+        "name_jp": "絢爛なりし灰燼世界",
         "option": "强化前"
       }
     ],
@@ -36519,7 +36672,8 @@
         "card": "Buster",
         "name": "Dangerous Game",
         "name_cn": "隐秘的罪之游戏",
-        "name_jp": "デンジャラス・ゲーム密やかなる罪の遊戯",
+        "name_katakana": "デンジャラス・ゲーム",
+        "name_jp": "密やかなる罪の遊戯",
         "option": "强化后"
       },
       {
@@ -36566,7 +36720,8 @@
         "card": "Buster",
         "name": "Dangerous Game",
         "name_cn": "隐秘的罪之游戏",
-        "name_jp": "デンジャラス・ゲーム密やかなる罪の遊戯",
+        "name_katakana": "デンジャラス・ゲーム",
+        "name_jp": "密やかなる罪の遊戯",
         "option": "强化前"
       }
     ],
@@ -36986,7 +37141,8 @@
         "card": "Quick",
         "name": "Blasted Tree",
         "name_cn": "磔刑之雷树",
-        "name_jp": "ブラステッド・ツリー磔刑の雷樹",
+        "name_katakana": "ブラステッド・ツリー",
+        "name_jp": "磔刑の雷樹",
         "option": "强化后"
       },
       {
@@ -37026,7 +37182,8 @@
         "card": "Quick",
         "name": "Blasted Tree",
         "name_cn": "磔刑之雷树",
-        "name_jp": "ブラステッド・ツリー磔刑の雷樹",
+        "name_katakana": "ブラステッド・ツリー",
+        "name_jp": "磔刑の雷樹",
         "option": "强化前"
       }
     ],
@@ -37317,7 +37474,8 @@
         "rank_type_raw": "",
         "card": "Arts",
         "name": "烧却式·贝雷特",
-        "name_jp": "しょうきゃくしき・ベレト焼却式・ベレト",
+        "name_katakana": "しょうきゃくしき・ベレト",
+        "name_jp": "焼却式・ベレト",
         "option": "default"
       }
     ],
@@ -37513,7 +37671,8 @@
         "card": "Buster",
         "name": "Pashupata",
         "name_cn": "破坏神之手影",
-        "name_jp": "パーシュパタ破壊神の手翳",
+        "name_katakana": "パーシュパタ",
+        "name_jp": "破壊神の手翳",
         "option": "强化后"
       },
       {
@@ -37560,7 +37719,8 @@
         "card": "Buster",
         "name": "Pashupata",
         "name_cn": "破坏神之手影",
-        "name_jp": "パーシュパタ破壊神の手翳",
+        "name_katakana": "パーシュパタ",
+        "name_jp": "破壊神の手翳",
         "option": "强化前"
       }
     ],
@@ -38070,7 +38230,8 @@
         "card": "Buster",
         "name": "Vasavi Shakti",
         "name_cn": "日轮啊，顺从死亡",
-        "name_jp": "ヴァサヴィ・シャクティ日輪よ、死に随え",
+        "name_katakana": "ヴァサヴィ・シャクティ",
+        "name_jp": "日輪よ、死に随え",
         "option": "强化后"
       },
       {
@@ -38103,7 +38264,8 @@
         "card": "Buster",
         "name": "Vasavi Shakti",
         "name_cn": "日轮啊，顺从死亡",
-        "name_jp": "ヴァサヴィ・シャクティ日輪よ、死に随え",
+        "name_katakana": "ヴァサヴィ・シャクティ",
+        "name_jp": "日輪よ、死に随え",
         "option": "强化前"
       }
     ],
@@ -38587,7 +38749,8 @@
         "card": "Quick",
         "name": "Himitsu Calibur",
         "name_cn": "无铭胜利剑",
-        "name_jp": "ひみつかりばー無銘勝利剣",
+        "name_katakana": "ひみつかりばー",
+        "name_jp": "無銘勝利剣",
         "option": "强化后"
       },
       {
@@ -38620,7 +38783,8 @@
         "card": "Quick",
         "name": "Himitsu Calibur",
         "name_cn": "无铭胜利剑",
-        "name_jp": "ひみつかりばー無銘勝利剣",
+        "name_katakana": "ひみつかりばー",
+        "name_jp": "無銘勝利剣",
         "option": "强化前"
       }
     ],
@@ -39086,7 +39250,8 @@
         "card": "Arts",
         "name": "Mac an Luin",
         "name_cn": "无败紫靫草",
-        "name_jp": "マク・ア・ルイン無敗の紫靫草",
+        "name_katakana": "マク・ア・ルイン",
+        "name_jp": "無敗の紫靫草",
         "option": "强化后"
       },
       {
@@ -39126,7 +39291,8 @@
         "card": "Arts",
         "name": "Mac an Luin",
         "name_cn": "无败紫靫草",
-        "name_jp": "マク・ア・ルイン無敗の紫靫草",
+        "name_katakana": "マク・ア・ルイン",
+        "name_jp": "無敗の紫靫草",
         "option": "强化前"
       }
     ],
@@ -39577,7 +39743,8 @@
         "card": "Buster",
         "name": "Brynhild Romantia",
         "name_cn": "直至死亡拆散两人",
-        "name_jp": "ブリュンヒルデ・ロマンシア死がふたりを分断つまで",
+        "name_katakana": "ブリュンヒルデ・ロマンシア",
+        "name_jp": "死がふたりを分断つまで",
         "option": "强化后"
       },
       {
@@ -39617,7 +39784,8 @@
         "card": "Buster",
         "name": "Brynhild Romantia",
         "name_cn": "直至死亡拆散两人",
-        "name_jp": "ブリュンヒルデ・ロマンシア死がふたりを分断つまで",
+        "name_katakana": "ブリュンヒルデ・ロマンシア",
+        "name_jp": "死がふたりを分断つまで",
         "option": "强化前"
       }
     ],
@@ -40103,7 +40271,8 @@
         "card": "Buster",
         "name": "Grendel Buster",
         "name_cn": "源流斗争",
-        "name_jp": "グレンデル・バスター源流闘争",
+        "name_katakana": "グレンデル・バスター",
+        "name_jp": "源流闘争",
         "option": "强化后"
       },
       {
@@ -40143,7 +40312,8 @@
         "card": "Buster",
         "name": "Grendel Buster",
         "name_cn": "源流斗争",
-        "name_jp": "グレンデル・バスター源流闘争",
+        "name_katakana": "グレンデル・バスター",
+        "name_jp": "源流闘争",
         "option": "强化前"
       }
     ],
@@ -40620,7 +40790,8 @@
         "card": "Arts",
         "name": "Fax Caelestis",
         "name_cn": "星辰驰骋的终幕蔷薇",
-        "name_jp": "ファクス・カエレスティス星馳せる終幕の薔薇",
+        "name_katakana": "ファクス・カエレスティス",
+        "name_jp": "星馳せる終幕の薔薇",
         "option": "强化后"
       },
       {
@@ -40675,7 +40846,8 @@
         "card": "Arts",
         "name": "Fax Caelestis",
         "name_cn": "星辰驰骋的终幕蔷薇",
-        "name_jp": "ファクス・カエレスティス星馳せる終幕の薔薇",
+        "name_katakana": "ファクス・カエレスティス",
+        "name_jp": "星馳せる終幕の薔薇",
         "option": "强化前"
       }
     ],
@@ -41140,7 +41312,8 @@
         "card": "Arts",
         "name": "Mukushiki Kara no Kyoukai",
         "name_cn": "无垢识·空之境界",
-        "name_jp": "むくしき・からのきょうかい無垢識・空の境界",
+        "name_katakana": "むくしき・からのきょうかい",
+        "name_jp": "無垢識・空の境界",
         "option": "强化后"
       },
       {
@@ -41180,7 +41353,8 @@
         "card": "Arts",
         "name": "Mukushiki Kara no Kyoukai",
         "name_cn": "无垢识·空之境界",
-        "name_jp": "むくしき・からのきょうかい無垢識・空の境界",
+        "name_katakana": "むくしき・からのきょうかい",
+        "name_jp": "無垢識・空の境界",
         "option": "强化前"
       }
     ],
@@ -41647,7 +41821,8 @@
         "card": "Arts",
         "name": "Yuishiki Chokushi no Magan",
         "name_cn": "唯识·直死之魔眼",
-        "name_jp": "ゆいしき・ちょくしのまがん唯識・直死の魔眼",
+        "name_katakana": "ゆいしき・ちょくしのまがん",
+        "name_jp": "唯識・直死の魔眼",
         "option": "强化后"
       },
       {
@@ -41680,7 +41855,8 @@
         "card": "Arts",
         "name": "Yuishiki Chokushi no Magan",
         "name_cn": "唯识·直死之魔眼",
-        "name_jp": "ゆいしき・ちょくしのまがん唯識・直死の魔眼",
+        "name_katakana": "ゆいしき・ちょくしのまがん",
+        "name_jp": "唯識・直死の魔眼",
         "option": "强化前"
       }
     ],
@@ -42083,7 +42259,8 @@
         "card": "Buster",
         "name": "Twin Arm - Big Crunch",
         "name_cn": "双腕·零次集束",
-        "name_jp": "ツインアーム・ビッグクランチ双腕·零次集束",
+        "name_katakana": "ツインアーム・ビッグクランチ",
+        "name_jp": "双腕·零次集束",
         "option": "强化后"
       },
       {
@@ -42123,7 +42300,8 @@
         "card": "Buster",
         "name": "Twin Arm - Big Crunch",
         "name_cn": "双腕·零次集束",
-        "name_jp": "ツインアーム・ビッグクランチ双腕·零次集束",
+        "name_katakana": "ツインアーム・ビッグクランチ",
+        "name_jp": "双腕·零次集束",
         "option": "强化前"
       }
     ],
@@ -42583,7 +42761,8 @@
         "card": "Quick",
         "name": "Hippogriff",
         "name_cn": "非世间所存之幻马",
-        "name_jp": "ヒポグリフこの世ならざる幻馬",
+        "name_katakana": "ヒポグリフ",
+        "name_jp": "この世ならざる幻馬",
         "option": "强化后"
       },
       {
@@ -42623,7 +42802,8 @@
         "card": "Quick",
         "name": "Hippogriff",
         "name_cn": "非世间所存之幻马",
-        "name_jp": "ヒポグリフこの世ならざる幻馬",
+        "name_katakana": "ヒポグリフ",
+        "name_jp": "この世ならざる幻馬",
         "option": "强化前"
       }
     ],
@@ -43073,7 +43253,8 @@
         "card": "Buster",
         "name": "Gate of Babylon",
         "name_cn": "王之财宝",
-        "name_jp": "ゲート・オブ・バビロン王の財宝",
+        "name_katakana": "ゲート・オブ・バビロン",
+        "name_jp": "王の財宝",
         "option": "强化后"
       },
       {
@@ -43128,7 +43309,8 @@
         "card": "Buster",
         "name": "Gate of Babylon",
         "name_cn": "王之财宝",
-        "name_jp": "ゲート・オブ・バビロン王の財宝",
+        "name_katakana": "ゲート・オブ・バビロン",
+        "name_jp": "王の財宝",
         "option": "强化前"
       }
     ],
@@ -43511,7 +43693,8 @@
         "card": "Quick",
         "name": "Enfer Chateau d'If",
         "name_cn": "虎啊，煌煌燎燃",
-        "name_jp": "アンフェル・シャトー・ディフ虎よ、煌々と燃え盛れ",
+        "name_katakana": "アンフェル・シャトー・ディフ",
+        "name_jp": "虎よ、煌々と燃え盛れ",
         "option": "强化后"
       },
       {
@@ -43555,7 +43738,8 @@
         "card": "Quick",
         "name": "Enfer Chateau d'If",
         "name_cn": "虎啊，煌煌燎燃",
-        "name_jp": "アンフェル・シャトー・ディフ虎よ、煌々と燃え盛れ",
+        "name_katakana": "アンフェル・シャトー・ディフ",
+        "name_jp": "虎よ、煌々と燃え盛れ",
         "option": "强化前"
       }
     ],
@@ -43971,7 +44155,8 @@
         "card": "Arts",
         "name": "Nightingale Pledge",
         "name_cn": "我将根绝一切毒物，一切害物",
-        "name_jp": "ナイチンゲール・プレッジ我はすべて毒あるもの、害あるものを絶つ",
+        "name_katakana": "ナイチンゲール・プレッジ",
+        "name_jp": "我はすべて毒あるもの、害あるものを絶つ",
         "option": "强化后"
       },
       {
@@ -44011,7 +44196,8 @@
         "card": "Arts",
         "name": "Nightingale Pledge",
         "name_cn": "我将根绝一切毒物，一切害物",
-        "name_jp": "ナイチンゲール・プレッジ我はすべて毒あるもの、害あるものを絶つ",
+        "name_katakana": "ナイチンゲール・プレッジ",
+        "name_jp": "我はすべて毒あるもの、害あるものを絶つ",
         "option": "强化前"
       }
     ],
@@ -44451,7 +44637,8 @@
         "card": "Buster",
         "name": "Curruid Coinchenn",
         "name_cn": "噬碎死牙之兽",
-        "name_jp": "クリード・コインヘン噛み砕く死牙の獣",
+        "name_katakana": "クリード・コインヘン",
+        "name_jp": "噛み砕く死牙の獣",
         "option": "强化后"
       },
       {
@@ -44495,7 +44682,8 @@
         "card": "Buster",
         "name": "Curruid Coinchenn",
         "name_cn": "噬碎死牙之兽",
-        "name_jp": "クリード・コインヘン噛み砕く死牙の獣",
+        "name_katakana": "クリード・コインヘン",
+        "name_jp": "噛み砕く死牙の獣",
         "option": "强化前"
       }
     ],
@@ -44850,7 +45038,8 @@
         "card": "Buster",
         "name": "Chariot My Love",
         "name_cn": "我心爱的钢铁战车",
-        "name_jp": "チャリオット・マイ・ラブ愛しき私の鉄戦車",
+        "name_katakana": "チャリオット・マイ・ラブ",
+        "name_jp": "愛しき私の鉄戦車",
         "option": "强化后"
       },
       {
@@ -44894,7 +45083,8 @@
         "card": "Buster",
         "name": "Chariot My Love",
         "name_cn": "我心爱的钢铁战车",
-        "name_jp": "チャリオット・マイ・ラブ愛しき私の鉄戦車",
+        "name_katakana": "チャリオット・マイ・ラブ",
+        "name_jp": "愛しき私の鉄戦車",
         "option": "强化前"
       }
     ],
@@ -45391,7 +45581,8 @@
         "card": "Arts",
         "name": "Sanat Kumara",
         "name_cn": "金星神·火炎天主",
-        "name_jp": "サナト・クマラ金星神・火炎天主",
+        "name_katakana": "サナト・クマラ",
+        "name_jp": "金星神・火炎天主",
         "option": "强化后"
       },
       {
@@ -45446,7 +45637,8 @@
         "card": "Arts",
         "name": "Sanat Kumara",
         "name_cn": "金星神·火炎天主",
-        "name_jp": "サナト・クマラ金星神・火炎天主",
+        "name_katakana": "サナト・クマラ",
+        "name_jp": "金星神・火炎天主",
         "option": "强化前"
       }
     ],
@@ -45866,7 +46058,8 @@
         "card": "Buster",
         "name": "Brahmastra",
         "name_cn": "穿透罗刹之不灭",
-        "name_jp": "ブラフマーストラ羅刹を穿つ不滅",
+        "name_katakana": "ブラフマーストラ",
+        "name_jp": "羅刹を穿つ不滅",
         "option": "强化后"
       },
       {
@@ -45899,7 +46092,8 @@
         "card": "Buster",
         "name": "Brahmastra",
         "name_cn": "穿透罗刹之不灭",
-        "name_jp": "ブラフマーストラ羅刹を穿つ不滅",
+        "name_katakana": "ブラフマーストラ",
+        "name_jp": "羅刹を穿つ不滅",
         "option": "强化前"
       }
     ],
@@ -46302,7 +46496,8 @@
         "card": "Arts",
         "name": "Shinsou Nino Uchi Irazu",
         "name_cn": "神枪无二打",
-        "name_jp": "しんそうにのうちいらず神槍无二打",
+        "name_katakana": "しんそうにのうちいらず",
+        "name_jp": "神槍无二打",
         "option": "强化后"
       },
       {
@@ -46341,7 +46536,8 @@
         "card": "Arts",
         "name": "Shinsou Nino Uchi Irazu",
         "name_cn": "神枪无二打",
-        "name_jp": "しんそうにのうちいらず神槍无二打",
+        "name_katakana": "しんそうにのうちいらず",
+        "name_jp": "神槍无二打",
         "option": "强化前"
       }
     ],
@@ -46741,7 +46937,8 @@
         "card": "Arts",
         "name": "World Faith Domination",
         "name_cn": "W·F·D",
-        "name_jp": "ワールド・フェイス・ドミネーションＷ・Ｆ・Ｄ",
+        "name_katakana": "ワールド・フェイス・ドミネーション",
+        "name_jp": "Ｗ・Ｆ・Ｄ",
         "option": "强化后"
       },
       {
@@ -46788,7 +46985,8 @@
         "card": "Arts",
         "name": "World Faith Domination",
         "name_cn": "W·F·D",
-        "name_jp": "ワールド・フェイス・ドミネーションＷ・Ｆ・Ｄ",
+        "name_katakana": "ワールド・フェイス・ドミネーション",
+        "name_jp": "Ｗ・Ｆ・Ｄ",
         "option": "强化前"
       }
     ],
@@ -47230,7 +47428,8 @@
         "card": "Arts",
         "name": "Tsago Degi Naleya",
         "name_cn": "大地的创造者",
-        "name_jp": "ツァゴ・デジ・ナレヤ大地を創りし者",
+        "name_katakana": "ツァゴ・デジ・ナレヤ",
+        "name_jp": "大地を創りし者",
         "option": "强化后"
       },
       {
@@ -47281,7 +47480,8 @@
         "card": "Arts",
         "name": "Tsago Degi Naleya",
         "name_cn": "大地的创造者",
-        "name_jp": "ツァゴ・デジ・ナレヤ大地を創りし者",
+        "name_katakana": "ツァゴ・デジ・ナレヤ",
+        "name_jp": "大地を創りし者",
         "option": "强化前"
       }
     ],
@@ -47637,7 +47837,8 @@
         "card": "Quick",
         "name": "Thunderer",
         "name_cn": "坏音霹雳",
-        "name_jp": "サンダラー壊音の霹靂",
+        "name_katakana": "サンダラー",
+        "name_jp": "壊音の霹靂",
         "option": "强化后"
       },
       {
@@ -47677,7 +47878,8 @@
         "card": "Quick",
         "name": "Thunderer",
         "name_cn": "坏音霹雳",
-        "name_jp": "サンダラー壊音の霹靂",
+        "name_katakana": "サンダラー",
+        "name_jp": "壊音の霹靂",
         "option": "强化前"
       }
     ],
@@ -48091,7 +48293,8 @@
         "card": "Buster",
         "name": "La Grondement Du Haine",
         "name_cn": "咆哮吧，吾之愤怒",
-        "name_jp": "ラ・グロンドメント・デュ・ヘイン吼え立てよ、我が憤怒",
+        "name_katakana": "ラ・グロンドメント・デュ・ヘイン",
+        "name_jp": "吼え立てよ、我が憤怒",
         "option": "强化后"
       },
       {
@@ -48131,7 +48334,8 @@
         "card": "Buster",
         "name": "La Grondement Du Haine",
         "name_cn": "咆哮吧，吾之愤怒",
-        "name_jp": "ラ・グロンドメント・デュ・ヘイン吼え立てよ、我が憤怒",
+        "name_katakana": "ラ・グロンドメント・デュ・ヘイン",
+        "name_jp": "吼え立てよ、我が憤怒",
         "option": "强化前"
       }
     ],
@@ -48554,7 +48758,8 @@
         "card": "Arts",
         "name": "Verg Avesta",
         "name_cn": "万象之伪誊抄",
-        "name_jp": "ヴェルグ・アヴェスター偽り写し記す万象",
+        "name_katakana": "ヴェルグ・アヴェスター",
+        "name_jp": "偽り写し記す万象",
         "option": "default"
       }
     ],
@@ -49092,7 +49297,8 @@
         "card": "Buster",
         "name": "Ionioi Hetairoi",
         "name_cn": "王之军势",
-        "name_jp": "アイオニオン・ヘタイロイ王の軍勢",
+        "name_katakana": "アイオニオン・ヘタイロイ",
+        "name_jp": "王の軍勢",
         "option": "强化后"
       },
       {
@@ -49125,7 +49331,8 @@
         "card": "Buster",
         "name": "Ionioi Hetairoi",
         "name_cn": "王之军势",
-        "name_jp": "アイオニオン・ヘタイロイ王の軍勢",
+        "name_katakana": "アイオニオン・ヘタイロイ",
+        "name_jp": "王の軍勢",
         "option": "强化前"
       }
     ],
@@ -49547,7 +49754,8 @@
         "card": "Arts",
         "name": "Chronos Rose",
         "name_cn": "花开堪折直须折",
-        "name_jp": "クロノス・ローズ時のある間に薔薇を摘め",
+        "name_katakana": "クロノス・ローズ",
+        "name_jp": "時のある間に薔薇を摘め",
         "option": "强化后"
       },
       {
@@ -49587,7 +49795,8 @@
         "card": "Arts",
         "name": "Chronos Rose",
         "name_cn": "花开堪折直须折",
-        "name_jp": "クロノス・ローズ時のある間に薔薇を摘め",
+        "name_katakana": "クロノス・ローズ",
+        "name_jp": "時のある間に薔薇を摘め",
         "option": "强化前"
       }
     ],
@@ -49975,7 +50184,8 @@
         "card": "Arts",
         "name": "Zabaniya",
         "name_cn": "妄想幻像",
-        "name_jp": "ザバーニーヤ妄想幻像",
+        "name_katakana": "ザバーニーヤ",
+        "name_jp": "妄想幻像",
         "option": "强化后"
       },
       {
@@ -50008,7 +50218,8 @@
         "card": "Arts",
         "name": "Zabaniya",
         "name_cn": "妄想幻像",
-        "name_jp": "ザバーニーヤ妄想幻像",
+        "name_katakana": "ザバーニーヤ",
+        "name_jp": "妄想幻像",
         "option": "强化前"
       }
     ],
@@ -50380,7 +50591,8 @@
         "card": "Arts",
         "name": "Song of Grail",
         "name_cn": "白之圣杯啊，咏唱吧",
-        "name_jp": "ソング・オブ・グレイル白き聖杯よ、謳え",
+        "name_katakana": "ソング・オブ・グレイル",
+        "name_jp": "白き聖杯よ、謳え",
         "option": "default"
       }
     ],
@@ -50815,7 +51027,8 @@
         "card": "Arts",
         "name": "Senshibankou Shinpenkidoku",
         "name_cn": "千紫万红·神便鬼毒",
-        "name_jp": "せんしばんこう・しんぺんきどく千紫万紅·神便鬼毒",
+        "name_katakana": "せんしばんこう・しんぺんきどく",
+        "name_jp": "千紫万紅·神便鬼毒",
         "option": "强化后"
       },
       {
@@ -50890,7 +51103,8 @@
         "card": "Arts",
         "name": "Senshibankou Shinpenkidoku",
         "name_cn": "千紫万红·神便鬼毒",
-        "name_jp": "せんしばんこう・しんぺんきどく千紫万紅·神便鬼毒",
+        "name_katakana": "せんしばんこう・しんぺんきどく",
+        "name_jp": "千紫万紅·神便鬼毒",
         "option": "强化前"
       }
     ],
@@ -51269,7 +51483,8 @@
         "card": "Buster",
         "name": "Gogyousan Shakanyoraishou",
         "name_cn": "五行山·释迦如来掌",
-        "name_jp": "ごぎょうさん・しゃかにょらいしょう五行山·釈迦如来掌",
+        "name_katakana": "ごぎょうさん・しゃかにょらいしょう",
+        "name_jp": "五行山·釈迦如来掌",
         "option": "强化后"
       },
       {
@@ -51302,7 +51517,8 @@
         "card": "Buster",
         "name": "Gogyousan Shakanyoraishou",
         "name_cn": "五行山·释迦如来掌",
-        "name_jp": "ごぎょうさん・しゃかにょらいしょう五行山·釈迦如来掌",
+        "name_katakana": "ごぎょうさん・しゃかにょらいしょう",
+        "name_jp": "五行山·釈迦如来掌",
         "option": "强化前"
       }
     ],
@@ -51719,7 +51935,8 @@
         "card": "Buster",
         "name": "Gooushourai Tenmoukaikai",
         "name_cn": "牛王招雷·天网恢恢",
-        "name_jp": "ごおうしょうらい・てんもうかいかい牛王招雷・天網恢々",
+        "name_katakana": "ごおうしょうらい・てんもうかいかい",
+        "name_jp": "牛王招雷・天網恢々",
         "option": "强化后"
       },
       {
@@ -51752,7 +51969,8 @@
         "card": "Buster",
         "name": "Gooushourai Tenmoukaikai",
         "name_cn": "牛王招雷·天网恢恢",
-        "name_jp": "ごおうしょうらい・てんもうかいかい牛王招雷・天網恢々",
+        "name_katakana": "ごおうしょうらい・てんもうかいかい",
+        "name_jp": "牛王招雷・天網恢々",
         "option": "强化前"
       }
     ],
@@ -52193,7 +52411,8 @@
         "card": "Quick",
         "name": "Golden Drive Goodnight",
         "name_cn": "夜狼死九·黄金疾走",
-        "name_jp": "ゴールデンドライブ・グッドナイト夜狼死九·黄金疾走",
+        "name_katakana": "ゴールデンドライブ・グッドナイト",
+        "name_jp": "夜狼死九·黄金疾走",
         "option": "default"
       }
     ],
@@ -52546,7 +52765,8 @@
         "card": "Buster",
         "name": "Rashoumon Daiengi",
         "name_cn": "罗生门大怨起",
-        "name_jp": "らしょうもんだいえんぎ羅生門大怨起",
+        "name_katakana": "らしょうもんだいえんぎ",
+        "name_jp": "羅生門大怨起",
         "option": "default"
       }
     ],
@@ -52961,7 +53181,8 @@
         "card": "Quick",
         "name": "Immortal Chaos Brigade",
         "name_cn": "不灭的混沌旅团",
-        "name_jp": "イモータル・カオス・ブリゲイド不滅の混沌旅団",
+        "name_katakana": "イモータル・カオス・ブリゲイド",
+        "name_jp": "不滅の混沌旅団",
         "option": "强化后"
       },
       {
@@ -52994,7 +53215,8 @@
         "card": "Quick",
         "name": "Immortal Chaos Brigade",
         "name_cn": "不灭的混沌旅团",
-        "name_jp": "イモータル・カオス・ブリゲイド不滅の混沌旅団",
+        "name_katakana": "イモータル・カオス・ブリゲイド",
+        "name_jp": "不滅の混沌旅団",
         "option": "强化前"
       }
     ],
@@ -53390,7 +53612,8 @@
         "card": "Buster",
         "name": "Ramesseum Tentyris",
         "name_cn": "光辉之大复合神殿",
-        "name_jp": "ラムセウム・テンティリス光輝の大複合神殿",
+        "name_katakana": "ラムセウム・テンティリス",
+        "name_jp": "光輝の大複合神殿",
         "option": "强化后"
       },
       {
@@ -53430,7 +53653,8 @@
         "card": "Buster",
         "name": "Ramesseum Tentyris",
         "name_cn": "光辉之大复合神殿",
-        "name_jp": "ラムセウム・テンティリス光輝の大複合神殿",
+        "name_katakana": "ラムセウム・テンティリス",
+        "name_jp": "光輝の大複合神殿",
         "option": "强化前"
       }
     ],
@@ -53850,7 +54074,8 @@
         "card": "Buster",
         "name": "Rhongomyniad",
         "name_cn": "闪耀于终焉之枪",
-        "name_jp": "ロンゴミニアド最果てにて輝ける槍",
+        "name_katakana": "ロンゴミニアド",
+        "name_jp": "最果てにて輝ける槍",
         "option": "default"
       }
     ],
@@ -54295,7 +54520,8 @@
         "card": "Arts",
         "name": "Anpu Neb Ta Djeser",
         "name_cn": "冥镜宝典",
-        "name_jp": "アンプゥ・ネブ・タ・ジェセル冥鏡宝典",
+        "name_katakana": "アンプゥ・ネブ・タ・ジェセル",
+        "name_jp": "冥鏡宝典",
         "option": "强化后"
       },
       {
@@ -54328,7 +54554,8 @@
         "card": "Arts",
         "name": "Anpu Neb Ta Djeser",
         "name_cn": "冥镜宝典",
-        "name_jp": "アンプゥ・ネブ・タ・ジェセル冥鏡宝典",
+        "name_katakana": "アンプゥ・ネブ・タ・ジェセル",
+        "name_jp": "冥鏡宝典",
         "option": "强化前"
       }
     ],
@@ -54743,7 +54970,8 @@
         "card": "Arts",
         "name": "Aroundight Overload",
         "name_cn": "缚锁全断·过重湖光",
-        "name_jp": "アロンダイト・オーバーロード縛鎖全断・過重湖光",
+        "name_katakana": "アロンダイト・オーバーロード",
+        "name_jp": "縛鎖全断・過重湖光",
         "option": "强化后"
       },
       {
@@ -54783,7 +55011,8 @@
         "card": "Arts",
         "name": "Aroundight Overload",
         "name_cn": "缚锁全断·过重湖光",
-        "name_jp": "アロンダイト・オーバーロード縛鎖全断·過重湖光",
+        "name_katakana": "アロンダイト・オーバーロード",
+        "name_jp": "縛鎖全断·過重湖光",
         "option": "强化前"
       }
     ],
@@ -55135,7 +55364,8 @@
         "card": "Quick",
         "name": "Failnaught",
         "name_cn": "痛哭幻奏",
-        "name_jp": "フェイルノート痛哭の幻奏",
+        "name_katakana": "フェイルノート",
+        "name_jp": "痛哭の幻奏",
         "option": "强化后"
       },
       {
@@ -55175,7 +55405,8 @@
         "card": "Quick",
         "name": "Failnaught",
         "name_cn": "痛哭幻奏",
-        "name_jp": "フェイルノート痛哭の幻奏",
+        "name_katakana": "フェイルノート",
+        "name_jp": "痛哭の幻奏",
         "option": "强化前"
       }
     ],
@@ -55598,7 +55829,8 @@
         "card": "Buster",
         "name": "Excalibur Galatine",
         "name_cn": "轮转胜利之剑",
-        "name_jp": "エクスカリバー・ガラティーン転輪する勝利の剣",
+        "name_katakana": "エクスカリバー・ガラティーン",
+        "name_jp": "転輪する勝利の剣",
         "option": "强化后"
       },
       {
@@ -55638,7 +55870,8 @@
         "card": "Buster",
         "name": "Excalibur Galatine",
         "name_cn": "轮转胜利之剑",
-        "name_jp": "エクスカリバー・ガラティーン転輪する勝利の剣",
+        "name_katakana": "エクスカリバー・ガラティーン",
+        "name_jp": "転輪する勝利の剣",
         "option": "强化前"
       }
     ],
@@ -56035,7 +56268,8 @@
         "card": "Arts",
         "name": "Zabaniya",
         "name_cn": "妄想毒身",
-        "name_jp": "ザバーニーヤ妄想毒身",
+        "name_katakana": "ザバーニーヤ",
+        "name_jp": "妄想毒身",
         "option": "强化后"
       },
       {
@@ -56089,7 +56323,8 @@
         "card": "Arts",
         "name": "Zabaniya",
         "name_cn": "妄想毒身",
-        "name_jp": "ザバーニーヤ妄想毒身",
+        "name_katakana": "ザバーニーヤ",
+        "name_jp": "妄想毒身",
         "option": "强化前"
       }
     ],
@@ -56525,7 +56760,8 @@
         "card": "Buster",
         "name": "南无八幡大菩萨·请赐予此箭矢加持",
         "name_cn": "八幡祈愿·大妖射贯",
-        "name_jp": "なむはちまんだいぼさつ・このやにかごを八幡祈願·大妖射貫",
+        "name_katakana": "なむはちまんだいぼさつ・このやにかごを",
+        "name_jp": "八幡祈願·大妖射貫",
         "option": "强化后"
       },
       {
@@ -56558,7 +56794,8 @@
         "card": "Buster",
         "name": "南无八幡大菩萨·请赐予此箭矢加持",
         "name_cn": "八幡祈愿·大妖射贯",
-        "name_jp": "なむはちまんだいぼさつ・このやにかごを八幡祈願·大妖射貫",
+        "name_katakana": "なむはちまんだいぼさつ・このやにかごを",
+        "name_jp": "八幡祈願·大妖射貫",
         "option": "强化前"
       }
     ],
@@ -56947,7 +57184,8 @@
         "card": "Buster",
         "name": "Switch On Agateram",
         "name_cn": "紧握其剑，银之臂",
-        "name_jp": "スイッチオン・アガートラム剣を摂れ、銀色の腕",
+        "name_katakana": "スイッチオン・アガートラム",
+        "name_jp": "剣を摂れ、銀色の腕",
         "option": "强化后"
       },
       {
@@ -56980,7 +57218,8 @@
         "card": "Buster",
         "name": "Switch On Agateram",
         "name_cn": "紧握其剑，银之臂",
-        "name_jp": "スイッチオン・アガートラム剣を摂れ、銀色の腕",
+        "name_katakana": "スイッチオン・アガートラム",
+        "name_jp": "剣を摂れ、銀色の腕",
         "option": "强化前"
       }
     ],
@@ -57356,7 +57595,8 @@
         "card": "Arts",
         "name": "Uomo Universale",
         "name_cn": "万能之人",
-        "name_jp": "ウォモ・ウニヴェルサーレ万能の人",
+        "name_katakana": "ウォモ・ウニヴェルサーレ",
+        "name_jp": "万能の人",
         "option": "强化后"
       },
       {
@@ -57396,7 +57636,8 @@
         "card": "Arts",
         "name": "Uomo Universale",
         "name_cn": "万能之人",
-        "name_jp": "ウォモ・ウニヴェルサーレ万能の人",
+        "name_katakana": "ウォモ・ウニヴェルサーレ",
+        "name_jp": "万能の人",
         "option": "强化前"
       }
     ],
@@ -57886,7 +58127,8 @@
         "card": "Buster",
         "name": "Tokonatsunikko Hiyokegasachouaiisshin",
         "name_cn": "常夏日光·遮阳伞宠爱一神",
-        "name_jp": "とこなつにっこう・ひよけがさちょうあいいっしん常夏日光・日除傘寵愛一神",
+        "name_katakana": "とこなつにっこう・ひよけがさちょうあいいっしん",
+        "name_jp": "常夏日光・日除傘寵愛一神",
         "option": "default"
       }
     ],
@@ -58384,7 +58626,8 @@
         "card": "Arts",
         "name": "Excalibur Vivian",
         "name_cn": "阳光璀璨胜利之剑",
-        "name_jp": "エクスカリバー・ヴィヴィアン陽光煌めく勝利の剣",
+        "name_katakana": "エクスカリバー・ヴィヴィアン",
+        "name_jp": "陽光煌めく勝利の剣",
         "option": "default"
       }
     ],
@@ -58812,7 +59055,8 @@
         "card": "Arts",
         "name": "Crystal Dress",
         "name_cn": "吾爱辉煌永恒长驻",
-        "name_jp": "クリスタル・ドレス愛すべき輝きは永遠に",
+        "name_katakana": "クリスタル・ドレス",
+        "name_jp": "愛すべき輝きは永遠に",
         "option": "default"
       }
     ],
@@ -59176,7 +59420,8 @@
         "card": "Buster",
         "name": "Caribbean Free Bird Act2",
         "name_cn": "比翼连理",
-        "name_jp": "カリビアン・フリーバード・アクト２比翼にして連理",
+        "name_katakana": "カリビアン・フリーバード・アクト２",
+        "name_jp": "比翼にして連理",
         "option": "default"
       }
     ],
@@ -59596,7 +59841,8 @@
         "card": "Arts",
         "name": "Prydwen Tube Riding",
         "name_cn": "掌控翻涌波涛王者心境！",
-        "name_jp": "プリドゥエン・チューブライディング逆巻く波濤を制する王様気分！",
+        "name_katakana": "プリドゥエン・チューブライディング",
+        "name_jp": "逆巻く波濤を制する王様気分！",
         "option": "强化前"
       },
       {
@@ -59647,7 +59893,8 @@
         "card": "Arts",
         "name": "Prydwen Tube Riding",
         "name_cn": "掌控翻涌波涛王者心境！",
-        "name_jp": "プリドゥエン・チューブライディング逆巻く波濤を制する王様気分！",
+        "name_katakana": "プリドゥエン・チューブライディング",
+        "name_jp": "逆巻く波濤を制する王様気分！",
         "option": "强化后"
       }
     ],
@@ -59979,7 +60226,8 @@
         "card": "Quick",
         "name": "Gae Bolg Alternative",
         "name_cn": "蹴穿死翔之枪",
-        "name_jp": "ゲイ・ボルク・オルタナティブ蹴り穿つ死翔の槍",
+        "name_katakana": "ゲイ・ボルク・オルタナティブ",
+        "name_jp": "蹴り穿つ死翔の槍",
         "option": "default"
       }
     ],
@@ -60409,7 +60657,8 @@
         "card": "Buster",
         "name": "Doujyoujikane Hyakuhachishikikaryuunagi",
         "name_cn": "道成寺钟百八式火龙薙",
-        "name_jp": "どうじょうじかねひゃくはちしきかりゅうなぎ道成寺鐘百八式火竜薙",
+        "name_katakana": "どうじょうじかねひゃくはちしきかりゅうなぎ",
+        "name_jp": "道成寺鐘百八式火竜薙",
         "option": "default"
       }
     ],
@@ -60784,7 +61033,8 @@
         "card": "Buster",
         "name": "Tarasque",
         "name_cn": "狂暴的悲哀之龙啊",
-        "name_jp": "タラスク荒れ狂う哀しき竜よ",
+        "name_katakana": "タラスク",
+        "name_jp": "荒れ狂う哀しき竜よ",
         "option": "强化后"
       },
       {
@@ -60817,7 +61067,8 @@
         "card": "Buster",
         "name": "Tarasque",
         "name_cn": "狂暴的悲哀之龙啊",
-        "name_jp": "タラスク荒れ狂う哀しき竜よ",
+        "name_katakana": "タラスク",
+        "name_jp": "荒れ狂う哀しき竜よ",
         "option": "强化前"
       }
     ],
@@ -61177,7 +61428,8 @@
         "card": "Buster",
         "name": "Quintett Feuer",
         "name_cn": "多元重奏饱和炮击",
-        "name_jp": "クウィンテットフォイア多元重奏飽和砲撃",
+        "name_katakana": "クウィンテットフォイア",
+        "name_jp": "多元重奏飽和砲撃",
         "option": "强化后"
       },
       {
@@ -61217,7 +61469,8 @@
         "card": "Buster",
         "name": "Quintett Feuer",
         "name_cn": "多元重奏饱和炮击",
-        "name_jp": "クウィンテットフォイア多元重奏飽和砲撃",
+        "name_katakana": "クウィンテットフォイア",
+        "name_jp": "多元重奏飽和砲撃",
         "option": "强化前"
       }
     ],
@@ -61609,7 +61862,8 @@
         "card": "Arts",
         "name": "Kakuyoku Sanren",
         "name_cn": "鹤翼三连",
-        "name_jp": "かくよくさんれん鶴翼三連",
+        "name_katakana": "かくよくさんれん",
+        "name_jp": "鶴翼三連",
         "option": "default"
       }
     ],
@@ -62034,7 +62288,8 @@
         "card": "Buster",
         "name": "Bathory Brave Erzsebet",
         "name_cn": "鲜血龙卷魔女",
-        "name_jp": "バートリ・ブレイブ・エルジェーベト鮮血竜巻魔嬢",
+        "name_katakana": "バートリ・ブレイブ・エルジェーベト",
+        "name_jp": "鮮血竜巻魔嬢",
         "option": "强化后"
       },
       {
@@ -62067,7 +62322,8 @@
         "card": "Buster",
         "name": "Bathory Brave Erzsebet",
         "name_cn": "鲜血龙卷魔女",
-        "name_jp": "バートリ・ブレイブ・エルジェーベト鮮血竜巻魔嬢",
+        "name_katakana": "バートリ・ブレイブ・エルジェーベト",
+        "name_jp": "鮮血竜巻魔嬢",
         "option": "强化前"
       }
     ],
@@ -62559,7 +62815,8 @@
         "card": "Buster",
         "name": "Uraeus Astrape",
         "name_cn": "终结破晓之蛇啊，降临此处",
-        "name_jp": "ウラエウス・アストラペ暁の時を終える蛇よ、此処に",
+        "name_katakana": "ウラエウス・アストラペ",
+        "name_jp": "暁の時を終える蛇よ、此処に",
         "option": "强化后"
       },
       {
@@ -62599,7 +62856,8 @@
         "card": "Buster",
         "name": "Uraeus Astrape",
         "name_cn": "终结破晓之蛇啊，降临此处",
-        "name_jp": "ウラエウス・アストラペ暁の時を終える蛇よ、此処に",
+        "name_katakana": "ウラエウス・アストラペ",
+        "name_jp": "暁の時を終える蛇よ、此処に",
         "option": "强化前"
       }
     ],
@@ -63063,7 +63321,8 @@
         "card": "Buster",
         "name": "Kazikli Bey",
         "name_cn": "串刺城塞",
-        "name_jp": "カズィクル・ベイ串刺城塞",
+        "name_katakana": "カズィクル・ベイ",
+        "name_jp": "串刺城塞",
         "option": "default"
       }
     ],
@@ -63500,7 +63759,8 @@
         "card": "Buster",
         "name": "La Grace Fille Noël",
         "name_cn": "优雅歌唱吧，为那圣诞",
-        "name_jp": "ラ・グラスフィーユ・ノエル優雅に歌え、かの聖誕を",
+        "name_katakana": "ラ・グラスフィーユ・ノエル",
+        "name_jp": "優雅に歌え、かの聖誕を",
         "option": "强化后"
       },
       {
@@ -63551,7 +63811,8 @@
         "card": "Buster",
         "name": "La Grace Fille Noël",
         "name_cn": "优雅歌唱吧，为那圣诞",
-        "name_jp": "ラ・グラスフィーユ・ノエル優雅に歌え、かの聖誕を",
+        "name_katakana": "ラ・グラスフィーユ・ノエル",
+        "name_jp": "優雅に歌え、かの聖誕を",
         "option": "强化前"
       }
     ],
@@ -63900,7 +64161,8 @@
         "card": "Buster",
         "name": "An Gal Ta Kigal She",
         "name_cn": "山脉震撼明星之薪",
-        "name_jp": "アンガルタ・キガルシュ山脈震撼す明星の薪",
+        "name_katakana": "アンガルタ・キガルシュ",
+        "name_jp": "山脈震撼す明星の薪",
         "option": "强化后"
       },
       {
@@ -63933,7 +64195,8 @@
         "card": "Buster",
         "name": "An Gal Ta Kigal She",
         "name_cn": "山脉震撼明星之薪",
-        "name_jp": "アンガルタ・キガルシュ山脈震撼す明星の薪",
+        "name_katakana": "アンガルタ・キガルシュ",
+        "name_jp": "山脈震撼す明星の薪",
         "option": "强化前"
       }
     ],
@@ -64336,7 +64599,8 @@
         "card": "Buster",
         "name": "Enuma Elish",
         "name_cn": "世人啊，冀以锁系神明",
-        "name_jp": "エヌマ・エリシュ人よ、神を繋ぎとめよう",
+        "name_katakana": "エヌマ・エリシュ",
+        "name_jp": "人よ、神を繋ぎとめよう",
         "option": "强化后"
       },
       {
@@ -64376,7 +64640,8 @@
         "card": "Buster",
         "name": "Enuma Elish",
         "name_cn": "世人啊，冀以锁系神明",
-        "name_jp": "エヌマ・エリシュ人よ、神を繋ぎとめよう",
+        "name_katakana": "エヌマ・エリシュ",
+        "name_jp": "人よ、神を繋ぎとめよう",
         "option": "强化前"
       }
     ],
@@ -64811,7 +65076,8 @@
         "card": "Buster",
         "name": "Xiuhcoatl",
         "name_cn": "炽焰，亦焚尽神灵",
-        "name_jp": "シウ・コアトル炎、神をも灼き尽くせ",
+        "name_katakana": "シウ・コアトル",
+        "name_jp": "炎、神をも灼き尽くせ",
         "option": "default"
       }
     ],
@@ -65281,7 +65547,8 @@
         "card": "Arts",
         "name": "Melammu Dingir",
         "name_cn": "王之号炮",
-        "name_jp": "メラム・ディンギル王の号砲",
+        "name_katakana": "メラム・ディンギル",
+        "name_jp": "王の号砲",
         "option": "强化后"
       },
       {
@@ -65321,7 +65588,8 @@
         "card": "Arts",
         "name": "Melammu Dingir",
         "name_cn": "王之号炮",
-        "name_jp": "メラム・ディンギル王の号砲",
+        "name_katakana": "メラム・ディンギル",
+        "name_jp": "王の号砲",
         "option": "强化前"
       }
     ],
@@ -65726,7 +65994,8 @@
         "card": "Quick",
         "name": "Caress of the Medusa",
         "name_cn": "女神的拥抱",
-        "name_jp": "カレス・オブ・ザ・メドゥーサ女神の抱擁",
+        "name_katakana": "カレス・オブ・ザ・メドゥーサ",
+        "name_jp": "女神の抱擁",
         "option": "强化后"
       },
       {
@@ -65759,7 +66028,8 @@
         "card": "Quick",
         "name": "Caress of the Medusa",
         "name_cn": "女神的拥抱",
-        "name_jp": "カレス・オブ・ザ・メドゥーサ女神の抱擁",
+        "name_katakana": "カレス・オブ・ザ・メドゥーサ",
+        "name_jp": "女神の抱擁",
         "option": "强化前"
       }
     ],
@@ -66178,7 +66448,8 @@
         "card": "Buster",
         "name": "Pandemonium Cetus",
         "name_cn": "强制封印·万魔神殿",
-        "name_jp": "パンデモニウム・ケトゥス強制封印・万魔神殿",
+        "name_katakana": "パンデモニウム・ケトゥス",
+        "name_jp": "強制封印・万魔神殿",
         "option": "强化后"
       },
       {
@@ -66218,7 +66489,8 @@
         "card": "Buster",
         "name": "Pandemonium Cetus",
         "name_cn": "强制封印·万魔神殿",
-        "name_jp": "パンデモニウム・ケトゥス強制封印・万魔神殿",
+        "name_katakana": "パンデモニウム・ケトゥス",
+        "name_jp": "強制封印・万魔神殿",
         "option": "强化前"
       }
     ],
@@ -66677,7 +66949,8 @@
         "card": "Buster",
         "name": "Great Death Claw",
         "name_cn": "无可逃脱死亡钩爪",
-        "name_jp": "グレート・デス・クロー逃れ得ぬ死の鉤爪",
+        "name_katakana": "グレート・デス・クロー",
+        "name_jp": "逃れ得ぬ死の鉤爪",
         "option": "default"
       }
     ],
@@ -67069,7 +67342,8 @@
         "card": "Arts",
         "name": "Nammu Duranki",
         "name_cn": "吾子啊，必遵创世之理",
-        "name_jp": "ナンム・ドゥルアンキ仔よ、創世の理に従え",
+        "name_katakana": "ナンム・ドゥルアンキ",
+        "name_jp": "仔よ、創世の理に従え",
         "option": "default"
       }
     ],
@@ -67283,7 +67557,8 @@
         "card": "Arts",
         "name": "Garden of Avalon",
         "name_cn": "永世隔绝的理想乡",
-        "name_jp": "ガーデン・オブ・アヴァロン永久に閉ざされた理想郷",
+        "name_katakana": "ガーデン・オブ・アヴァロン",
+        "name_jp": "永久に閉ざされた理想郷",
         "option": "通常"
       },
       {
@@ -67334,7 +67609,8 @@
         "card": "Arts",
         "name": "Garden of Avalon",
         "name_cn": "永世隔绝的理想乡",
-        "name_jp": "ガーデン・オブ・アヴァロン永久に閉ざされた理想郷",
+        "name_katakana": "ガーデン・オブ・アヴァロン",
+        "name_jp": "永久に閉ざされた理想郷",
         "option": "第七特异点助战限定"
       }
     ],
@@ -67722,7 +67998,8 @@
         "card": "Arts",
         "name": "Ars Almadel Salomonis",
         "name_cn": "诞生之时已至，以此修正万象",
-        "name_jp": "アルス・アルマデル・サロモニス誕生の時きたれり、其は全てを修めるもの",
+        "name_katakana": "アルス・アルマデル・サロモニス",
+        "name_jp": "誕生の時きたれり、其は全てを修めるもの",
         "option": "魔神王盖提亚"
       },
       {
@@ -67746,7 +68023,8 @@
         "card": "Arts",
         "name": "Ars Almadel Salomonis",
         "name_cn": "主啊，生命的喜悦",
-        "name_jp": "アルス・アルマデル・サロモニス主よ、生命の歓びを",
+        "name_katakana": "アルス・アルマデル・サロモニス",
+        "name_jp": "主よ、生命の歓びを",
         "option": "人王盖提亚"
       }
     ],
@@ -67873,7 +68151,8 @@
         "card": "Buster",
         "name": "Ars Nova",
         "name_cn": "诀别之时已至，以此，舍弃世界",
-        "name_jp": "アルス・ノヴァ訣別の時きたれり、其は、世界を手放すもの",
+        "name_katakana": "アルス・ノヴァ",
+        "name_jp": "訣別の時きたれり、其は、世界を手放すもの",
         "option": "default"
       }
     ],
@@ -68005,7 +68284,8 @@
         "card": "Buster",
         "name": "Rikudougorin Kurikaratenshou",
         "name_cn": "六道五轮·俱利伽罗天象",
-        "name_jp": "りくどうごりん・くりからてんしょう六道五輪·倶利伽羅天象",
+        "name_katakana": "りくどうごりん・くりからてんしょう",
+        "name_jp": "六道五輪·倶利伽羅天象",
         "option": "强化后"
       },
       {
@@ -68045,7 +68325,8 @@
         "card": "Buster",
         "name": "Rikudougorin Kurikaratenshou",
         "name_cn": "六道五轮·俱利伽罗天象",
-        "name_jp": "りくどうごりん・くりからてんしょう六道五輪·倶利伽羅天象",
+        "name_katakana": "りくどうごりん・くりからてんしょう",
+        "name_jp": "六道五輪·倶利伽羅天象",
         "option": "强化前"
       }
     ],
@@ -68414,7 +68695,8 @@
         "card": "Buster",
         "name": "Azrael",
         "name_cn": "死告天使",
-        "name_jp": "アズライール死告天使",
+        "name_katakana": "アズライール",
+        "name_jp": "死告天使",
         "option": "default"
       }
     ],
@@ -68927,7 +69209,8 @@
         "card": "Quick",
         "name": "Cross Calibur",
         "name_cn": "黑龙双克胜利剑",
-        "name_jp": "クロス・カリバー黒竜双剋勝利剣",
+        "name_katakana": "クロス・カリバー",
+        "name_jp": "黒竜双剋勝利剣",
         "option": "强化后"
       },
       {
@@ -68960,7 +69243,8 @@
         "card": "Quick",
         "name": "Cross Calibur",
         "name_cn": "黑龙双克胜利剑",
-        "name_jp": "クロス・カリバー黒竜双剋勝利剣",
+        "name_katakana": "クロス・カリバー",
+        "name_jp": "黒竜双剋勝利剣",
         "option": "强化前"
       }
     ],
@@ -69461,7 +69745,8 @@
         "card": "Buster",
         "name": "The Dynamics of an Asteroid",
         "name_cn": "终极犯罪",
-        "name_jp": "ザ・ダイナミクス・オブ・アン・アステロイド終局的犯罪",
+        "name_katakana": "ザ・ダイナミクス・オブ・アン・アステロイド",
+        "name_jp": "終局的犯罪",
         "option": "真名判明后"
       },
       {
@@ -69494,7 +69779,8 @@
         "card": "Buster",
         "name": "Catastrophe Crime",
         "name_cn": "终极犯罪",
-        "name_jp": "カタストロフ・クライム終局的犯罪",
+        "name_katakana": "カタストロフ・クライム",
+        "name_jp": "終局的犯罪",
         "option": "亚种特异点Ⅰ敌方限定"
       }
     ],
@@ -69932,7 +70218,8 @@
         "card": "Arts",
         "name": "Unlimited Lost Works",
         "name_cn": "无限剑制",
-        "name_jp": "アンリミテッド・ロストワークス無限の剣製",
+        "name_katakana": "アンリミテッド・ロストワークス",
+        "name_jp": "無限の剣製",
         "option": "强化后"
       },
       {
@@ -69965,7 +70252,8 @@
         "card": "Arts",
         "name": "Unlimited Lost Works",
         "name_cn": "无限剑制",
-        "name_jp": "アンリミテッド・ロストワークス無限の剣製",
+        "name_katakana": "アンリミテッド・ロストワークス",
+        "name_jp": "無限の剣製",
         "option": "强化前"
       }
     ],
@@ -70415,7 +70703,8 @@
         "card": "Quick",
         "name": "Frieren Scharfrichter",
         "name_cn": "对遥远之辈的斩罪",
-        "name_jp": "フリーレン・シャルフリヒター遥かなる者への斬罪",
+        "name_katakana": "フリーレン・シャルフリヒター",
+        "name_jp": "遥かなる者への斬罪",
         "option": "强化后"
       },
       {
@@ -70455,7 +70744,8 @@
         "card": "Quick",
         "name": "Frieren Scharfrichter",
         "name_cn": "对遥远之辈的斩罪",
-        "name_jp": "フリーレン・シャルフリヒター遥かなる者への斬罪",
+        "name_katakana": "フリーレン・シャルフリヒター",
+        "name_jp": "遥かなる者への斬罪",
         "option": "强化前"
       }
     ],
@@ -70873,7 +71163,8 @@
         "card": "Quick",
         "name": "Jumenmaifuku Mueinogotoku",
         "name_cn": "十面埋伏·无影踪",
-        "name_jp": "じゅうめんまいふく・むえいのごとく十面埋伏・無影の如く",
+        "name_katakana": "じゅうめんまいふく・むえいのごとく",
+        "name_jp": "十面埋伏・無影の如く",
         "option": "强化后"
       },
       {
@@ -70906,7 +71197,8 @@
         "card": "Quick",
         "name": "Jumenmaifuku Mueinogotoku",
         "name_cn": "十面埋伏·无影踪",
-        "name_jp": "じゅうめんまいふく・むえいのごとく十面埋伏・無影の如く",
+        "name_katakana": "じゅうめんまいふく・むえいのごとく",
+        "name_jp": "十面埋伏・無影の如く",
         "option": "强化前"
       }
     ],
@@ -71378,7 +71670,8 @@
         "card": "Buster",
         "name": "Excalibur",
         "name_cn": "誓约胜利之剑",
-        "name_jp": "エクスカリバー約束された勝利の剣",
+        "name_katakana": "エクスカリバー",
+        "name_jp": "約束された勝利の剣",
         "option": "default"
       }
     ],
@@ -71836,7 +72129,8 @@
         "card": "Buster",
         "name": "新选组",
         "name_cn": "不灭之诚",
-        "name_jp": "しんせんぐみ不滅の誠",
+        "name_katakana": "しんせんぐみ",
+        "name_jp": "不滅の誠",
         "option": "强化后"
       },
       {
@@ -71869,7 +72163,8 @@
         "card": "Buster",
         "name": "新选组",
         "name_cn": "不灭之诚",
-        "name_jp": "しんせんぐみ不滅の誠",
+        "name_katakana": "しんせんぐみ",
+        "name_jp": "不滅の誠",
         "option": "强化前"
       }
     ],
@@ -72309,7 +72604,8 @@
         "card": "Buster",
         "name": "Kenran Makai Nichirinjyou",
         "name_cn": "绚烂魔界日轮城",
-        "name_jp": "けんらんまかいにちりんじょう絢爛魔界日輪城",
+        "name_katakana": "けんらんまかいにちりんじょう",
+        "name_jp": "絢爛魔界日輪城",
         "option": "default"
       }
     ],
@@ -72720,7 +73016,8 @@
         "card": "Quick",
         "name": "Sarasvati Meltout",
         "name_cn": "弁财天五弦琵琶",
-        "name_jp": "サラスヴァティー・メルトアウト弁財天五弦琵琶",
+        "name_katakana": "サラスヴァティー・メルトアウト",
+        "name_jp": "弁財天五弦琵琶",
         "option": "强化后"
       },
       {
@@ -72760,7 +73057,8 @@
         "card": "Quick",
         "name": "Sarasvati Meltout",
         "name_cn": "弁财天五弦琵琶",
-        "name_jp": "サラスヴァティー・メルトアウト弁財天五弦琵琶",
+        "name_katakana": "サラスヴァティー・メルトアウト",
+        "name_jp": "弁財天五弦琵琶",
         "option": "强化前"
       }
     ],
@@ -73251,7 +73549,8 @@
         "card": "Buster",
         "name": "Brynhild Romantia",
         "name_cn": "纵使死亡分离两人",
-        "name_jp": "ブリュンヒルデ・ロマンシア死が二人を別離つとも",
+        "name_katakana": "ブリュンヒルデ・ロマンシア",
+        "name_jp": "死が二人を別離つとも",
         "option": "初始/强化后"
       },
       {
@@ -73284,7 +73583,8 @@
         "card": "Buster",
         "name": "Brynhild Romantia",
         "name_cn": "纵使死亡分离两人",
-        "name_jp": "ブリュンヒルデ・ロマンシア死が二人を別離つとも",
+        "name_katakana": "ブリュンヒルデ・ロマンシア",
+        "name_jp": "死が二人を別離つとも",
         "option": "初始/强化前"
       },
       {
@@ -73317,7 +73617,8 @@
         "card": "Buster",
         "name": "Brynhild Romantia",
         "name_cn": "直至死亡拆散两人",
-        "name_jp": "ブリュンヒルデ・ロマンシア死がふたりを分断つまで",
+        "name_katakana": "ブリュンヒルデ・ロマンシア",
+        "name_jp": "死がふたりを分断つまで",
         "option": "纯真之花/强化后"
       },
       {
@@ -73350,7 +73651,8 @@
         "card": "Buster",
         "name": "Brynhild Romantia",
         "name_cn": "直至死亡拆散两人",
-        "name_jp": "ブリュンヒルデ・ロマンシア死がふたりを分断つまで",
+        "name_katakana": "ブリュンヒルデ・ロマンシア",
+        "name_jp": "死がふたりを分断つまで",
         "option": "纯真之花/强化前"
       }
     ],
@@ -73861,7 +74163,8 @@
         "card": "Buster",
         "name": "Tenkiame",
         "name_cn": "天鬼雨",
-        "name_jp": "てんきあめ天鬼雨",
+        "name_katakana": "てんきあめ",
+        "name_jp": "天鬼雨",
         "option": "强化后"
       },
       {
@@ -73894,7 +74197,8 @@
         "card": "Buster",
         "name": "Tenkiame",
         "name_cn": "天鬼雨",
-        "name_jp": "てんきあめ天鬼雨",
+        "name_katakana": "てんきあめ",
+        "name_jp": "天鬼雨",
         "option": "强化前"
       }
     ],
@@ -74323,7 +74627,8 @@
         "card": "Arts",
         "name": "Cursed Cupid Cleanser",
         "name_cn": "C.C.C.",
-        "name_jp": "カースド・キューピッド・クレンザーＣ.Ｃ.Ｃ.",
+        "name_katakana": "カースド・キューピッド・クレンザー",
+        "name_jp": "Ｃ.Ｃ.Ｃ.",
         "option": "default"
       }
     ],
@@ -74746,7 +75051,8 @@
         "card": "Arts",
         "name": "Amitabha Amidala Heaven's Hole",
         "name_cn": "快乐天·胎藏曼荼罗",
-        "name_jp": "アミダアミデュラ・ヘブンズホール快楽天・胎蔵曼荼羅",
+        "name_katakana": "アミダアミデュラ・ヘブンズホール",
+        "name_jp": "快楽天・胎蔵曼荼羅",
         "option": "强化后"
       },
       {
@@ -74786,7 +75092,8 @@
         "card": "Arts",
         "name": "Amitabha Amidala Heaven's Hole",
         "name_cn": "快乐天·胎藏曼荼罗",
-        "name_jp": "アミダアミデュラ・ヘブンズホール快楽天・胎蔵曼荼羅",
+        "name_katakana": "アミダアミデュラ・ヘブンズホール",
+        "name_jp": "快楽天・胎蔵曼荼羅",
         "option": "强化前"
       }
     ],
@@ -75554,7 +75861,8 @@
         "card": "Arts",
         "name": "Alf Layla wa Layla",
         "name_cn": "一千零一夜",
-        "name_jp": "アルフ・ライラ・ワ・ライラ千夜一夜物語",
+        "name_katakana": "アルフ・ライラ・ワ・ライラ",
+        "name_jp": "千夜一夜物語",
         "option": "真名判明后/强化后"
       },
       {
@@ -75594,7 +75902,8 @@
         "card": "Arts",
         "name": "Alf Layla wa Layla",
         "name_cn": "一千零一夜",
-        "name_jp": "アルフ・ライラ・ワ・ライラ千夜一夜物語",
+        "name_katakana": "アルフ・ライラ・ワ・ライラ",
+        "name_jp": "千夜一夜物語",
         "option": "真名判明后/强化前"
       }
     ],
@@ -76151,7 +76460,8 @@
         "card": "Quick",
         "name": "Kokumitsu Rashokukei",
         "name_cn": "告密罗织经",
-        "name_jp": "こくみつらしょくけい告密羅織経",
+        "name_katakana": "こくみつらしょくけい",
+        "name_jp": "告密羅織経",
         "option": "真名判明后/强化后"
       },
       {
@@ -76191,7 +76501,8 @@
         "card": "Quick",
         "name": "Kokumitsu Rashokukei",
         "name_cn": "告密罗织经",
-        "name_jp": "こくみつらしょくけい告密羅織経",
+        "name_katakana": "こくみつらしょくけい",
+        "name_jp": "告密羅織経",
         "option": "真名判明后/强化前"
       }
     ],
@@ -76707,7 +77018,8 @@
         "card": "Buster",
         "name": "Outrage Amazon",
         "name_cn": "于吾之瞋恚中终结吧，英雄",
-        "name_jp": "アウトレイジ・アマゾーン我が瞋恚にて果てよ英雄",
+        "name_katakana": "アウトレイジ・アマゾーン",
+        "name_jp": "我が瞋恚にて果てよ英雄",
         "option": "真名判明后"
       }
     ],
@@ -77111,7 +77423,8 @@
         "card": "Buster",
         "name": "Santa Maria Drop Anchor",
         "name_cn": "新天地探索航行",
-        "name_jp": "サンタマリア・ドロップアンカー新天地探索航",
+        "name_katakana": "サンタマリア・ドロップアンカー",
+        "name_jp": "新天地探索航",
         "option": "真名判明后/强化后"
       },
       {
@@ -77144,7 +77457,8 @@
         "card": "Buster",
         "name": "Santa Maria Drop Anchor",
         "name_cn": "新天地探索航行",
-        "name_jp": "サンタマリア・ドロップアンカー新天地探索航",
+        "name_katakana": "サンタマリア・ドロップアンカー",
+        "name_jp": "新天地探索航",
         "option": "真名判明后/强化前"
       }
     ],
@@ -77510,7 +77824,8 @@
         "card": "Arts",
         "name": "Elementary My Dear",
         "name_cn": "这是常识，我亲爱的朋友啊",
-        "name_jp": "エレメンタリー・マイ・ディア初歩的なことだ、友よ",
+        "name_katakana": "エレメンタリー・マイ・ディア",
+        "name_jp": "初歩的なことだ、友よ",
         "option": "default"
       }
     ],
@@ -77940,7 +78255,8 @@
         "card": "Buster",
         "name": "Marvelous Exploits",
         "name_cn": "令人惊叹的伟业",
-        "name_jp": "マーベラス・エクスプロイツ驚くべき偉業",
+        "name_katakana": "マーベラス・エクスプロイツ",
+        "name_jp": "驚くべき偉業",
         "option": "强化后"
       },
       {
@@ -77973,7 +78289,8 @@
         "card": "Buster",
         "name": "Marvelous Exploits",
         "name_cn": "令人惊叹的伟业",
-        "name_jp": "マーベラス・エクスプロイツ驚くべき偉業",
+        "name_katakana": "マーベラス・エクスプロイツ",
+        "name_jp": "驚くべき偉業",
         "option": "强化前"
       }
     ],
@@ -78327,7 +78644,8 @@
         "card": "Buster",
         "name": "Lauda Lentum Domus Illustrius",
         "name_cn": "讴歌荣耀的黄金剧场",
-        "name_jp": "ラウダレントゥム・ドムス・イルステリアス誉れ歌う黄金劇場",
+        "name_katakana": "ラウダレントゥム・ドムス・イルステリアス",
+        "name_jp": "誉れ歌う黄金劇場",
         "option": "强化前"
       },
       {
@@ -78388,7 +78706,8 @@
         "card": "Buster",
         "name": "Lauda Lentum Domus Illustrius",
         "name_cn": "讴歌荣耀的黄金剧场",
-        "name_jp": "ラウダレントゥム・ドムス・イルステリアス誉れ歌う黄金劇場",
+        "name_katakana": "ラウダレントゥム・ドムス・イルステリアス",
+        "name_jp": "誉れ歌う黄金劇場",
         "option": "强化后"
       }
     ],
@@ -78767,7 +79086,8 @@
         "card": "Quick",
         "name": "Skewered Plasma Blade",
         "name_cn": "穿刺之雷刃",
-        "name_jp": "スキュアド・プラズマブレイド串刺の雷刃",
+        "name_katakana": "スキュアド・プラズマブレイド",
+        "name_jp": "串刺の雷刃",
         "option": "default"
       }
     ],
@@ -79157,7 +79477,8 @@
         "card": "Arts",
         "name": "Sneferu Iteru Nile",
         "name_cn": "洗刷污秽吧，青色美丽的尼罗河",
-        "name_jp": "スネフェル・イオテル・ナイル穢れを漱げ、青く美しきナイル",
+        "name_katakana": "スネフェル・イオテル・ナイル",
+        "name_jp": "穢れを漱げ、青く美しきナイル",
         "option": "强化后"
       },
       {
@@ -79197,7 +79518,8 @@
         "card": "Arts",
         "name": "Sneferu Iteru Nile",
         "name_cn": "洗刷污秽吧，青色美丽的尼罗河",
-        "name_jp": "スネフェル・イオテル・ナイル穢れを漱げ、青く美しきナイル",
+        "name_katakana": "スネフェル・イオテル・ナイル",
+        "name_jp": "穢れを漱げ、青く美しきナイル",
         "option": "强化前"
       }
     ],
@@ -79573,7 +79895,8 @@
         "card": "Buster",
         "name": "Nobunaga THE Rock 'n' Roll",
         "name_cn": "第六天魔王波旬～盛夏～",
-        "name_jp": "ノブナガ・ＴＨＥ・ロックンロール第六天魔王波旬～夏盛～",
+        "name_katakana": "ノブナガ・ＴＨＥ・ロックンロール",
+        "name_jp": "第六天魔王波旬～夏盛～",
         "option": "强化后"
       },
       {
@@ -79606,7 +79929,8 @@
         "card": "Buster",
         "name": "Nobunaga THE Rock 'n' Roll",
         "name_cn": "第六天魔王波旬～盛夏～",
-        "name_jp": "ノブナガ・ＴＨＥ・ロックンロール第六天魔王波旬～夏盛～",
+        "name_katakana": "ノブナガ・ＴＨＥ・ロックンロール",
+        "name_jp": "第六天魔王波旬～夏盛～",
         "option": "强化前"
       }
     ],
@@ -79980,7 +80304,8 @@
         "card": "Quick",
         "name": "Sequence Morgan",
         "name_cn": "不挠燃烧胜利之剑",
-        "name_jp": "セクエンス・モルガン不撓燃えたつ勝利の剣",
+        "name_katakana": "セクエンス・モルガン",
+        "name_jp": "不撓燃えたつ勝利の剣",
         "option": "default"
       }
     ],
@@ -80405,7 +80730,8 @@
         "card": "Arts",
         "name": "Sanat Kumara Wheel",
         "name_cn": "金星神·白银圆环",
-        "name_jp": "サナト・クマラ・ホイール金星神・白銀円環",
+        "name_katakana": "サナト・クマラ・ホイール",
+        "name_jp": "金星神・白銀円環",
         "option": "强化后"
       },
       {
@@ -80449,7 +80775,8 @@
         "card": "Arts",
         "name": "Sanat Kumara Wheel",
         "name_cn": "金星神·白银圆环",
-        "name_jp": "サナト・クマラ・ホイール金星神·白銀円環",
+        "name_katakana": "サナト・クマラ・ホイール",
+        "name_jp": "金星神·白銀円環",
         "option": "强化前"
       }
     ],
@@ -80791,7 +81118,8 @@
         "card": "Buster",
         "name": "Shakudai Kan'in Kongousho",
         "name_cn": "释提桓因·金刚杵",
-        "name_jp": "しゃくだいかんいん・こんごうしょ釈提桓因·金剛杵",
+        "name_katakana": "しゃくだいかんいん・こんごうしょ",
+        "name_jp": "釈提桓因·金剛杵",
         "option": "default"
       }
     ],
@@ -81164,7 +81492,8 @@
         "card": "Quick",
         "name": "An Gal Ta Seven Colors",
         "name_cn": "神峰天回明星之虹",
-        "name_jp": "アンガルタ・セブンカラーズ神峰天廻る明星の虹",
+        "name_katakana": "アンガルタ・セブンカラーズ",
+        "name_jp": "神峰天廻る明星の虹",
         "option": "default"
       }
     ],
@@ -81653,7 +81982,8 @@
         "card": "Quick",
         "name": "Trishula Shakti",
         "name_cn": "知恋不为，无爱也",
-        "name_jp": "トリシューラ・シャクティ恋見てせざるは愛無きなり",
+        "name_katakana": "トリシューラ・シャクティ",
+        "name_jp": "恋見てせざるは愛無きなり",
         "option": "default"
       }
     ],
@@ -82217,7 +82547,8 @@
         "card": "Buster",
         "name": "Om Alolik Svaha",
         "name_cn": "真言·圣观世音菩萨",
-        "name_jp": "オン・アロリキヤ・ソワカ真言・聖観世音菩薩",
+        "name_katakana": "オン・アロリキヤ・ソワカ",
+        "name_jp": "真言・聖観世音菩薩",
         "option": "真名判明后/强化后"
       },
       {
@@ -82264,7 +82595,8 @@
         "card": "Buster",
         "name": "Om Alolik Svaha",
         "name_cn": "真言·圣观世音菩萨",
-        "name_jp": "オン・アロリキヤ・ソワカ真言·聖観世音菩薩",
+        "name_katakana": "オン・アロリキヤ・ソワカ",
+        "name_jp": "真言·聖観世音菩薩",
         "option": "真名判明后/强化前"
       }
     ],
@@ -82804,7 +83136,8 @@
         "card": "Arts",
         "name": "Kuchiyose Ibukidaimyoujinengi",
         "name_cn": "通灵·伊吹大明神缘起",
-        "name_jp": "くちよせ・いぶきだいみょうじんえんぎ口寄せ・伊吹大明神縁起",
+        "name_katakana": "くちよせ・いぶきだいみょうじんえんぎ",
+        "name_jp": "口寄せ・伊吹大明神縁起",
         "option": "真名判明后/强化后"
       },
       {
@@ -82844,7 +83177,8 @@
         "card": "Arts",
         "name": "Kuchiyose Ibukidaimyoujinengi",
         "name_cn": "通灵·伊吹大明神缘起",
-        "name_jp": "くちよせ・いぶきだいみょうじんえんぎ口寄せ·伊吹大明神縁起",
+        "name_katakana": "くちよせ・いぶきだいみょうじんえんぎ",
+        "name_jp": "口寄せ·伊吹大明神縁起",
         "option": "真名判明后/强化前"
       }
     ],
@@ -83244,7 +83578,8 @@
         "card": "Arts",
         "name": "Oborourazuki Juichishiki",
         "name_cn": "胧里月十一式",
-        "name_jp": "おぼろうらづきじゅういちしき朧裏月十一式",
+        "name_katakana": "おぼろうらづきじゅういちしき",
+        "name_jp": "朧裏月十一式",
         "option": "default"
       }
     ],
@@ -83652,7 +83987,8 @@
         "card": "Arts",
         "name": "Kenjutsumusou Kenzenichinyo",
         "name_cn": "剑术无双·剑禅一如",
-        "name_jp": "けんじゅつむそう・けんぜんいちにょ剣術無双・剣禅一如",
+        "name_katakana": "けんじゅつむそう・けんぜんいちにょ",
+        "name_jp": "剣術無双・剣禅一如",
         "option": "强化后"
       },
       {
@@ -83685,7 +84021,8 @@
         "card": "Arts",
         "name": "Kenjutsumusou Kenzenichinyo",
         "name_cn": "剑术无双·剑禅一如",
-        "name_jp": "けんじゅつむそう・けんぜんいちにょ剣術無双·剣禅一如",
+        "name_katakana": "けんじゅつむそう・けんぜんいちにょ",
+        "name_jp": "剣術無双·剣禅一如",
         "option": "强化前"
       }
     ],
@@ -84100,7 +84437,8 @@
         "card": "Buster",
         "name": "Karakurigenpou Dongyu",
         "name_cn": "机关幻法·吞牛",
-        "name_jp": "からくりげんぽう・どんぎゅう絡繰幻法・呑牛",
+        "name_katakana": "からくりげんぽう・どんぎゅう",
+        "name_jp": "絡繰幻法・呑牛",
         "option": "强化后"
       },
       {
@@ -84133,7 +84471,8 @@
         "card": "Buster",
         "name": "Karakurigenpou Dongyu",
         "name_cn": "机关幻法·吞牛",
-        "name_jp": "からくりげんぽう・どんぎゅう絡繰幻法·呑牛",
+        "name_katakana": "からくりげんぽう・どんぎゅう",
+        "name_jp": "絡繰幻法·呑牛",
         "option": "强化前"
       }
     ],
@@ -84494,7 +84833,8 @@
         "card": "Quick",
         "name": "Hakurojyou no Hyakkihachitendousama",
         "name_cn": "白鹭城百鬼八天堂大人",
-        "name_jp": "はくろじょうのひゃっきはちてんどうさま白鷺城の百鬼八天堂様",
+        "name_katakana": "はくろじょうのひゃっきはちてんどうさま",
+        "name_jp": "白鷺城の百鬼八天堂様",
         "option": "强化后"
       },
       {
@@ -84534,7 +84874,8 @@
         "card": "Quick",
         "name": "Hakurojyou no Hyakkihachitendousama",
         "name_cn": "白鹭城百鬼八天堂大人",
-        "name_jp": "はくろじょうのひゃっきはちてんどうさま白鷺城の百鬼八天堂様",
+        "name_katakana": "はくろじょうのひゃっきはちてんどうさま",
+        "name_jp": "白鷺城の百鬼八天堂様",
         "option": "强化前"
       }
     ],
@@ -85014,7 +85355,8 @@
         "card": "Buster",
         "name": "Breast Zero Erzsebet",
         "name_cn": "钢铁天空魔女",
-        "name_jp": "ブレストゼロ・エリジェーベト鋼鉄天空魔嬢",
+        "name_katakana": "ブレストゼロ・エリジェーベト",
+        "name_jp": "鋼鉄天空魔嬢",
         "option": "default"
       }
     ],
@@ -85479,7 +85821,8 @@
         "card": "Buster",
         "name": "Breast Zero Erzsebet",
         "name_cn": "钢铁天空魔女",
-        "name_jp": "ブレストゼロ・エリジェーベト鋼鉄天空魔嬢",
+        "name_katakana": "ブレストゼロ・エリジェーベト",
+        "name_jp": "鋼鉄天空魔嬢",
         "option": "default"
       }
     ],
@@ -85953,7 +86296,8 @@
         "card": "Buster",
         "name": "Metabo Piglets",
         "name_cn": "禁忌狂宴",
-        "name_jp": "メタボ・ピグレッツ禁断なる狂宴",
+        "name_katakana": "メタボ・ピグレッツ",
+        "name_jp": "禁断なる狂宴",
         "option": "强化后"
       },
       {
@@ -85993,7 +86337,8 @@
         "card": "Buster",
         "name": "Metabo Piglets",
         "name_cn": "禁忌狂宴",
-        "name_jp": "メタボ・ピグレッツ禁断なる狂宴",
+        "name_katakana": "メタボ・ピグレッツ",
+        "name_jp": "禁断なる狂宴",
         "option": "强化前"
       }
     ],
@@ -86417,7 +86762,8 @@
         "card": "Buster",
         "name": "Chihisourei Kasensou",
         "name_cn": "地飞爽灵 火尖枪",
-        "name_jp": "ちひそうれい かせんそう地飛爽霊 火尖槍",
+        "name_katakana": "ちひそうれい かせんそう",
+        "name_jp": "地飛爽霊 火尖槍",
         "option": "强化后"
       },
       {
@@ -86457,7 +86803,8 @@
         "card": "Buster",
         "name": "Chihisourei Kasensou",
         "name_cn": "地飞爽灵 火尖枪",
-        "name_jp": "ちひそうれい かせんそう地飛爽霊 火尖槍",
+        "name_katakana": "ちひそうれい かせんそう",
+        "name_jp": "地飛爽霊 火尖槍",
         "option": "强化前"
       }
     ],
@@ -86918,7 +87265,8 @@
         "card": "Arts",
         "name": "Three Enigmas",
         "name_cn": "三道谜语",
-        "name_jp": "スリー・エニグマズ三つの謎かけ",
+        "name_katakana": "スリー・エニグマズ",
+        "name_jp": "三つの謎かけ",
         "option": "default"
       }
     ],
@@ -87314,7 +87662,8 @@
         "card": "Buster",
         "name": "Qliphoth Rhizome",
         "name_cn": "光壳流溢的虚树",
-        "name_jp": "クリフォー・ライゾォム光殻湛えし虚樹",
+        "name_katakana": "クリフォー・ライゾォム",
+        "name_jp": "光殻湛えし虚樹",
         "option": "default"
       }
     ],
@@ -87794,7 +88143,8 @@
         "card": "Buster",
         "name": "Kur Kigal Irkalla",
         "name_cn": "灵峰踏抱冥府之鞴",
-        "name_jp": "クル・キガル・イルカルラ霊峰踏抱く冥府の鞴",
+        "name_katakana": "クル・キガル・イルカルラ",
+        "name_jp": "霊峰踏抱く冥府の鞴",
         "option": "强化后"
       },
       {
@@ -87834,7 +88184,8 @@
         "card": "Buster",
         "name": "Kur Kigal Irkalla",
         "name_cn": "灵峰踏抱冥府之鞴",
-        "name_jp": "クル・キガル・イルカルラ霊峰踏抱く冥府の鞴",
+        "name_katakana": "クル・キガル・イルカルラ",
+        "name_jp": "霊峰踏抱く冥府の鞴",
         "option": "强化前"
       }
     ],
@@ -88313,7 +88664,8 @@
         "card": "Quick",
         "name": "Candy Star Photon Ray",
         "name_cn": "圣夜之虹，军神之剑",
-        "name_jp": "キャンディスター・フォトン・レイ聖夜の虹、軍神の剣",
+        "name_katakana": "キャンディスター・フォトン・レイ",
+        "name_jp": "聖夜の虹、軍神の剣",
         "option": "default"
       }
     ],
@@ -88744,7 +89096,8 @@
         "card": "Arts",
         "name": "Fugaku Sanjurokkei",
         "name_cn": "富岳三十六景",
-        "name_jp": "ふがくさんじゅうろっけい冨嶽三十六景",
+        "name_katakana": "ふがくさんじゅうろっけい",
+        "name_jp": "冨嶽三十六景",
         "option": "强化后"
       },
       {
@@ -88777,7 +89130,8 @@
         "card": "Arts",
         "name": "Fugaku Sanjurokkei",
         "name_cn": "富岳三十六景",
-        "name_jp": "ふがくさんじゅうろっけい冨嶽三十六景",
+        "name_katakana": "ふがくさんじゅうろっけい",
+        "name_jp": "冨嶽三十六景",
         "option": "强化前"
       }
     ],
@@ -89215,7 +89569,8 @@
         "card": "Buster",
         "name": "Hanging Gardens of Babylon",
         "name_cn": "虚荣的空中庭园",
-        "name_jp": "ハンギングガーデンズ・オブ・バビロン虚栄の空中庭園",
+        "name_katakana": "ハンギングガーデンズ・オブ・バビロン",
+        "name_jp": "虚栄の空中庭園",
         "option": "强化后"
       },
       {
@@ -89255,7 +89610,8 @@
         "card": "Buster",
         "name": "Hanging Gardens of Babylon",
         "name_cn": "虚荣的空中庭园",
-        "name_jp": "ハンギングガーデンズ・オブ・バビロン虚栄の空中庭園",
+        "name_katakana": "ハンギングガーデンズ・オブ・バビロン",
+        "name_jp": "虚栄の空中庭園",
         "option": "强化前"
       }
     ],
@@ -89705,7 +90061,8 @@
         "card": "Buster",
         "name": "Yuishiki Waikyoku no Magan",
         "name_cn": "唯识·歪曲之魔眼",
-        "name_jp": "ゆいしき・わいきょくのまがん唯識・歪曲の魔眼",
+        "name_katakana": "ゆいしき・わいきょくのまがん",
+        "name_jp": "唯識・歪曲の魔眼",
         "option": "强化后"
       },
       {
@@ -89745,7 +90102,8 @@
         "card": "Buster",
         "name": "Yuishiki Waikyoku no Magan",
         "name_cn": "唯识·歪曲之魔眼",
-        "name_jp": "ゆいしき・わいきょくのまがん唯識・歪曲の魔眼",
+        "name_katakana": "ゆいしき・わいきょくのまがん",
+        "name_jp": "唯識・歪曲の魔眼",
         "option": "强化前"
       }
     ],
@@ -90160,7 +90518,8 @@
         "card": "Arts",
         "name": "Viy Viy Viy",
         "name_cn": "疾驰·精灵眼球",
-        "name_jp": "ヴィイ・ヴィイ・ヴィイ疾走・精霊眼球",
+        "name_katakana": "ヴィイ・ヴィイ・ヴィイ",
+        "name_jp": "疾走・精霊眼球",
         "option": "default"
       }
     ],
@@ -90595,7 +90954,8 @@
         "card": "Quick",
         "name": "Tauropolos Skia Thermokrasia",
         "name_cn": "暗天蚀射",
-        "name_jp": "タウロポロス・スキア・セルモクラスィア闇天蝕射",
+        "name_katakana": "タウロポロス・スキア・セルモクラスィア",
+        "name_jp": "闇天蝕射",
         "option": "default"
       }
     ],
@@ -90999,7 +91359,8 @@
         "card": "Buster",
         "name": "Golem Keter Malkuth",
         "name_cn": "王冠：睿智之光",
-        "name_jp": "ゴーレム・ケテルマルクト王冠：叡智の光",
+        "name_katakana": "ゴーレム・ケテルマルクト",
+        "name_jp": "王冠：叡智の光",
         "option": "强化后"
       },
       {
@@ -91032,7 +91393,8 @@
         "card": "Buster",
         "name": "Golem Keter Malkuth",
         "name_cn": "王冠：睿智之光",
-        "name_jp": "ゴーレム・ケテルマルクト王冠：叡智の光",
+        "name_katakana": "ゴーレム・ケテルマルクト",
+        "name_jp": "王冠：叡智の光",
         "option": "强化前"
       }
     ],
@@ -91392,7 +91754,8 @@
         "card": "Arts",
         "name": "Dio Santissimo Misericordia de mi",
         "name_cn": "至高之神啊，请垂怜于我",
-        "name_jp": "ディオ・サンティシモ・ミゼルコディア・ディ・ミ至高の神よ、我を憐れみたまえ",
+        "name_katakana": "ディオ・サンティシモ・ミゼルコディア・ディ・ミ",
+        "name_jp": "至高の神よ、我を憐れみたまえ",
         "option": "强化后"
       },
       {
@@ -91432,7 +91795,8 @@
         "card": "Arts",
         "name": "Dio Santissimo Misericordia de mi",
         "name_cn": "至高之神啊，请垂怜于我",
-        "name_jp": "ディオ・サンティシモ・ミゼルコディア・ディ・ミ至高の神よ、我を憐れみたまえ",
+        "name_katakana": "ディオ・サンティシモ・ミゼルコディア・ディ・ミ",
+        "name_jp": "至高の神よ、我を憐れみたまえ",
         "option": "强化前"
       }
     ],
@@ -91837,7 +92201,8 @@
         "card": "Buster",
         "name": "Zveri Krestnyy Khod",
         "name_cn": "于吾旅路随行之兽",
-        "name_jp": "ズヴェーリ・クレースニーホッド我が旅路に従え獣",
+        "name_katakana": "ズヴェーリ・クレースニーホッド",
+        "name_jp": "我が旅路に従え獣",
         "option": "强化后"
       },
       {
@@ -91877,7 +92242,8 @@
         "card": "Buster",
         "name": "Zveri Krestnyy Khod",
         "name_cn": "于吾旅路随行之兽",
-        "name_jp": "ズヴェーリ・クレースニーホッド我が旅路に従え獣",
+        "name_katakana": "ズヴェーリ・クレースニーホッド",
+        "name_jp": "我が旅路に従え獣",
         "option": "强化前"
       }
     ],
@@ -92330,7 +92696,8 @@
         "card": "Quick",
         "name": "Troias Tragoidia",
         "name_cn": "疾风怒涛的不死战车",
-        "name_jp": "トロイアス・トラゴーイディア疾風怒濤の不死戦車",
+        "name_katakana": "トロイアス・トラゴーイディア",
+        "name_jp": "疾風怒濤の不死戦車",
         "option": "强化后"
       },
       {
@@ -92363,7 +92730,8 @@
         "card": "Quick",
         "name": "Troias Tragoidia",
         "name_cn": "疾风怒涛的不死战车",
-        "name_jp": "トロイアス・トラゴーイディア疾風怒濤の不死戦車",
+        "name_katakana": "トロイアス・トラゴーイディア",
+        "name_jp": "疾風怒濤の不死戦車",
         "option": "强化前"
       }
     ],
@@ -92748,7 +93116,8 @@
         "card": "Arts",
         "name": "Antares Snipe",
         "name_cn": "天蝎一射",
-        "name_jp": "アンタレス・スナイプ天蠍一射",
+        "name_katakana": "アンタレス・スナイプ",
+        "name_jp": "天蠍一射",
         "option": "强化后"
       },
       {
@@ -92788,7 +93157,8 @@
         "card": "Arts",
         "name": "Antares Snipe",
         "name_cn": "天蝎一射",
-        "name_jp": "アンタレス・スナイプ天蠍一射",
+        "name_katakana": "アンタレス・スナイプ",
+        "name_jp": "天蠍一射",
         "option": "强化前"
       }
     ],
@@ -93170,7 +93540,8 @@
         "card": "Arts",
         "name": "Ákafiloga Allgríð",
         "name_cn": "灼热龙息·万地融解",
-        "name_jp": "アカフィローガ・アルグリーズ灼熱竜息·万地融解",
+        "name_katakana": "アカフィローガ・アルグリーズ",
+        "name_jp": "灼熱竜息·万地融解",
         "option": "default"
       }
     ],
@@ -93523,7 +93894,8 @@
         "card": "Buster",
         "name": "Zekken Mukyuu Sandan",
         "name_cn": "绝剑·无穹三段",
-        "name_jp": "ぜっけん・むきゅうさんだん絶剱·無穹三段",
+        "name_katakana": "ぜっけん・むきゅうさんだん",
+        "name_jp": "絶剱·無穹三段",
         "option": "default"
       }
     ],
@@ -94032,7 +94404,8 @@
         "card": "Arts",
         "name": "Shimatsuken",
         "name_cn": "了结剑",
-        "name_jp": "しまつけん始末剣",
+        "name_katakana": "しまつけん",
+        "name_jp": "始末剣",
         "option": "强化后"
       },
       {
@@ -94064,7 +94437,8 @@
         "card": "Arts",
         "name": "Shimatsuken",
         "name_cn": "了结剑",
-        "name_jp": "しまつけん始末剣",
+        "name_katakana": "しまつけん",
+        "name_jp": "始末剣",
         "option": "强化前"
       }
     ],
@@ -94463,7 +94837,8 @@
         "card": "Arts",
         "name": "Amakakeru Ryu ga Gotoku",
         "name_cn": "如翱翔天际之龙",
-        "name_jp": "あまかけるりゅうがごとく天駆ける竜が如く",
+        "name_katakana": "あまかけるりゅうがごとく",
+        "name_jp": "天駆ける竜が如く",
         "option": "强化后"
       },
       {
@@ -94496,7 +94871,8 @@
         "card": "Arts",
         "name": "Amakakeru Ryu ga Gotoku",
         "name_cn": "如翱翔天际之龙",
-        "name_jp": "あまかけるりゅうがごとく天駆ける竜が如く",
+        "name_katakana": "あまかけるりゅうがごとく",
+        "name_jp": "天駆ける竜が如く",
         "option": "强化前"
       }
     ],
@@ -94856,7 +95232,8 @@
         "card": "Buster",
         "name": "Arc de Triomphe de l'Etoile",
         "name_cn": "高歌凯旋之虹弓",
-        "name_jp": "アルク・ドゥ・トリオンフ・ドゥ・レトワール凱旋を高らかに告げる虹弓",
+        "name_katakana": "アルク・ドゥ・トリオンフ・ドゥ・レトワール",
+        "name_jp": "凱旋を高らかに告げる虹弓",
         "option": "强化后"
       },
       {
@@ -94896,7 +95273,8 @@
         "card": "Buster",
         "name": "Arc de Triomphe de l'Etoile",
         "name_cn": "高歌凯旋之虹弓",
-        "name_jp": "アルク・ドゥ・トリオンフ・ドゥ・レトワール凱旋を高らかに告げる虹弓",
+        "name_katakana": "アルク・ドゥ・トリオンフ・ドゥ・レトワール",
+        "name_jp": "凱旋を高らかに告げる虹弓",
         "option": "强化前"
       }
     ],
@@ -95318,7 +95696,8 @@
         "card": "Buster",
         "name": "Bolverk Gram",
         "name_cn": "坏劫之天轮",
-        "name_jp": "ベルヴェルク・グラム壊劫の天輪",
+        "name_katakana": "ベルヴェルク・グラム",
+        "name_jp": "壊劫の天輪",
         "option": "强化后"
       },
       {
@@ -95351,7 +95730,8 @@
         "card": "Buster",
         "name": "Bolverk Gram",
         "name_cn": "坏劫之天轮",
-        "name_jp": "ベルヴェルク・グラム壊劫の天輪",
+        "name_katakana": "ベルヴェルク・グラム",
+        "name_jp": "壊劫の天輪",
         "option": "强化前"
       }
     ],
@@ -95729,7 +96109,8 @@
         "card": "Quick",
         "name": "Ragnarok Lifthrasir",
         "name_cn": "终末幻想·少女降临",
-        "name_jp": "ラグナロク・リーヴスラシル終末幻想·少女降臨",
+        "name_katakana": "ラグナロク・リーヴスラシル",
+        "name_jp": "終末幻想·少女降臨",
         "option": "default"
       }
     ],
@@ -96133,7 +96514,8 @@
         "card": "Arts",
         "name": "Gate of Skye",
         "name_cn": "通往死亡满溢的魔境之门",
-        "name_jp": "ゲート・オブ・スカイ死溢るる魔境への門",
+        "name_katakana": "ゲート・オブ・スカイ",
+        "name_jp": "死溢るる魔境への門",
         "option": "强化后"
       },
       {
@@ -96180,7 +96562,8 @@
         "card": "Arts",
         "name": "Gate of Skye",
         "name_cn": "通往死亡满溢的魔境之门",
-        "name_jp": "ゲート・オブ・スカイ死溢るる魔境への門",
+        "name_katakana": "ゲート・オブ・スカイ",
+        "name_jp": "死溢るる魔境への門",
         "option": "强化前"
       }
     ],
@@ -96535,7 +96918,8 @@
         "card": "Arts",
         "name": "Des Oceans d'Allegresse",
         "name_cn": "丰收之海啊，伴随着喜悦",
-        "name_jp": "デ・オセアン・ダレグレス豊穣たる大海よ、歓喜と共に",
+        "name_katakana": "デ・オセアン・ダレグレス",
+        "name_jp": "豊穣たる大海よ、歓喜と共に",
         "option": "default"
       }
     ],
@@ -96916,7 +97300,8 @@
         "card": "Buster",
         "name": "Encomium Moriae",
         "name_cn": "愚神礼赞·一条归桥",
-        "name_jp": "エンコミウム・モリエ愚神礼讃・一条戻橋",
+        "name_katakana": "エンコミウム・モリエ",
+        "name_jp": "愚神礼讃・一条戻橋",
         "option": "default"
       }
     ],
@@ -97310,7 +97695,8 @@
         "card": "Quick",
         "name": "Tengu no Hauchiwa Akarashimakaze",
         "name_cn": "天狗之羽团扇·暴风",
-        "name_jp": "てんぐのはうちわ・あからしまかぜ天狗ノ羽団扇・暴風",
+        "name_katakana": "てんぐのはうちわ・あからしまかぜ",
+        "name_jp": "天狗ノ羽団扇・暴風",
         "option": "强化后"
       },
       {
@@ -97350,7 +97736,8 @@
         "card": "Quick",
         "name": "Tengu no Hauchiwa Akarashimakaze",
         "name_cn": "天狗之羽团扇·暴风",
-        "name_jp": "てんぐのはうちわ・あからしまかぜ天狗ノ羽団扇・暴風",
+        "name_katakana": "てんぐのはうちわ・あからしまかぜ",
+        "name_jp": "天狗ノ羽団扇・暴風",
         "option": "强化前"
       }
     ],
@@ -97694,7 +98081,8 @@
         "card": "Buster",
         "name": "Volkermord Feuerdrache",
         "name_cn": "烧却天理·鏖杀龙",
-        "name_jp": "フェルカーモルト・フォイアドラッヘ焼却天理·鏖殺竜",
+        "name_katakana": "フェルカーモルト・フォイアドラッヘ",
+        "name_jp": "焼却天理·鏖殺竜",
         "option": "default"
       }
     ],
@@ -98046,7 +98434,8 @@
         "card": "Buster",
         "name": "Cursed Cutting Crater",
         "name_cn": "C.C.C.",
-        "name_jp": "カースド・カッティング・クレーターＣ.Ｃ.Ｃ.",
+        "name_katakana": "カースド・カッティング・クレーター",
+        "name_jp": "Ｃ.Ｃ.Ｃ.",
         "option": "default"
       }
     ],
@@ -98528,7 +98917,8 @@
         "card": "Arts",
         "name": "One Shot My Love",
         "name_cn": "心爱的夏日幽会",
-        "name_jp": "ワンショット・マイ・ラブ愛しき夏の恋逢瀬",
+        "name_katakana": "ワンショット・マイ・ラブ",
+        "name_jp": "愛しき夏の恋逢瀬",
         "option": "default"
       }
     ],
@@ -98896,7 +99286,8 @@
         "card": "Arts",
         "name": "以太宇宙需秩序",
         "name_cn": "苍辉银河即宇宙",
-        "name_jp": "エーテル宇宙然るに秩序蒼輝銀河即ちコスモス",
+        "name_katakana": "エーテル宇宙然るに秩序",
+        "name_jp": "蒼輝銀河即ちコスモス",
         "option": "强化后"
       },
       {
@@ -98936,7 +99327,8 @@
         "card": "Arts",
         "name": "以太宇宙需秩序",
         "name_cn": "苍辉银河即宇宙",
-        "name_jp": "エーテル宇宙然るに秩序蒼輝銀河即ちコスモス",
+        "name_katakana": "エーテル宇宙然るに秩序",
+        "name_jp": "蒼輝銀河即ちコスモス",
         "option": "强化前"
       }
     ],
@@ -99320,7 +99712,8 @@
         "card": "Quick",
         "name": "Móralltach",
         "name_cn": "愤怒的波涛",
-        "name_jp": "モラ・ルタ憤怒の波濤",
+        "name_katakana": "モラ・ルタ",
+        "name_jp": "憤怒の波濤",
         "option": "default"
       }
     ],
@@ -99713,7 +100106,8 @@
         "card": "Arts",
         "name": "Optateshke Okimunpe",
         "name_cn": "咆哮吧吾友，吾之力量",
-        "name_jp": "オプタテシケ・オキムンペ吼えよ我が友、我が力",
+        "name_katakana": "オプタテシケ・オキムンペ",
+        "name_jp": "吼えよ我が友、我が力",
         "option": "default"
       }
     ],
@@ -100189,7 +100583,8 @@
         "card": "Buster",
         "name": "Gohoushoujyo Kuzuryuuousatsu",
         "name_cn": "护法少女·九头龙鏖杀",
-        "name_jp": "ごほうしょうじょ・くずりゅうおうさつ護法少女・九頭竜鏖殺",
+        "name_katakana": "ごほうしょうじょ・くずりゅうおうさつ",
+        "name_jp": "護法少女・九頭竜鏖殺",
         "option": "default"
       }
     ],
@@ -100587,7 +100982,8 @@
         "card": "Quick",
         "name": "拔山盖世",
         "name_cn": "力拔山兮气盖世",
-        "name_jp": "ばつざんがいせい力拔山兮氣蓋世",
+        "name_katakana": "ばつざんがいせい",
+        "name_jp": "力拔山兮氣蓋世",
         "option": "强化后"
       },
       {
@@ -100620,7 +101016,8 @@
         "card": "Quick",
         "name": "拔山盖世",
         "name_cn": "力拔山兮气盖世",
-        "name_jp": "ばつざんがいせい力拔山兮氣蓋世",
+        "name_katakana": "ばつざんがいせい",
+        "name_jp": "力拔山兮氣蓋世",
         "option": "强化前"
       }
     ],
@@ -101039,7 +101436,8 @@
         "card": "Arts",
         "name": "骁勇无畏披面者，音容兼美陵王也",
         "name_cn": "兰陵王入阵曲",
-        "name_jp": "いさましきはかめんのもの、おんようけんびのりょうおうなり蘭陵王入陣曲",
+        "name_katakana": "いさましきはかめんのもの、おんようけんびのりょうおうなり",
+        "name_jp": "蘭陵王入陣曲",
         "option": "default"
       }
     ],
@@ -101484,7 +101882,8 @@
         "card": "Arts",
         "name": "无欲而忠义之歌",
         "name_cn": "崇祯帝四诗歌",
-        "name_jp": "むよくにしてちゅうぎのうた崇禎帝四詩歌",
+        "name_katakana": "むよくにしてちゅうぎのうた",
+        "name_jp": "崇禎帝四詩歌",
         "option": "default"
       }
     ],
@@ -101920,7 +102319,8 @@
         "card": "Arts",
         "name": "The Domination Beginning",
         "name_cn": "始皇帝",
-        "name_jp": "ザ・ドミネーション・ビギニング始皇帝",
+        "name_katakana": "ザ・ドミネーション・ビギニング",
+        "name_jp": "始皇帝",
         "option": "default"
       }
     ],
@@ -102371,7 +102771,8 @@
         "card": "Buster",
         "name": "Eternal Lament",
         "name_cn": "咒血尸解叹歌",
-        "name_jp": "エターナル・ラメント呪血尸解嘆歌",
+        "name_katakana": "エターナル・ラメント",
+        "name_jp": "呪血尸解嘆歌",
         "option": "default"
       }
     ],
@@ -102848,7 +103249,8 @@
         "card": "Quick",
         "name": "Imitation God Force",
         "name_cn": "伪·军神五兵",
-        "name_jp": "イミテーション・ゴッド・フォース偽·軍神五兵",
+        "name_katakana": "イミテーション・ゴッド・フォース",
+        "name_jp": "偽·軍神五兵",
         "option": "default"
       }
     ],
@@ -103271,7 +103673,8 @@
         "card": "Quick",
         "name": "Bouclier de Atlante",
         "name_cn": "眩目的闪光魔盾",
-        "name_jp": "ブークリエ・デ・アトラント目映きは閃光の魔盾",
+        "name_katakana": "ブークリエ・デ・アトラント",
+        "name_jp": "目映きは閃光の魔盾",
         "option": "强化后"
       },
       {
@@ -103318,7 +103721,8 @@
         "card": "Quick",
         "name": "Bouclier de Atlante",
         "name_cn": "眩目的闪光魔盾",
-        "name_jp": "ブークリエ・デ・アトラント目映きは閃光の魔盾",
+        "name_katakana": "ブークリエ・デ・アトラント",
+        "name_jp": "目映きは閃光の魔盾",
         "option": "强化前"
       }
     ],
@@ -103740,7 +104144,8 @@
         "card": "Buster",
         "name": "Yucatan Regalo de Navidad",
         "name_cn": "将爱，于圣夜递送给孩子们",
-        "name_jp": "ユカタン・レガーロ・デ・ナヴィダ愛、聖夜に子供達へ届け",
+        "name_katakana": "ユカタン・レガーロ・デ・ナヴィダ",
+        "name_jp": "愛、聖夜に子供達へ届け",
         "option": "default"
       }
     ],
@@ -104112,7 +104517,8 @@
         "card": "Arts",
         "name": "Jyuuou Hanketsu Tsuzura no Michiyuki",
         "name_cn": "十王判决·葛笼纪行",
-        "name_jp": "じゅうおうはんけつ・つづらのみちゆき十王判決・葛籠の道行",
+        "name_katakana": "じゅうおうはんけつ・つづらのみちゆき",
+        "name_jp": "十王判決・葛籠の道行",
         "option": "default"
       }
     ],
@@ -104582,7 +104988,8 @@
         "card": "Arts",
         "name": "Nino Uchi Irazu",
         "name_cn": "无二打",
-        "name_jp": "にのうちいらず无二打",
+        "name_katakana": "にのうちいらず",
+        "name_jp": "无二打",
         "option": "强化后"
       },
       {
@@ -104621,7 +105028,8 @@
         "card": "Arts",
         "name": "Nino Uchi Irazu",
         "name_cn": "无二打",
-        "name_jp": "にのうちいらず无二打",
+        "name_katakana": "にのうちいらず",
+        "name_jp": "无二打",
         "option": "强化前"
       }
     ],
@@ -105083,7 +105491,8 @@
         "card": "Arts",
         "name": "向星星许愿",
         "name_cn": "照耀星天的地之朔月",
-        "name_jp": "ほしにねがいを星天を照らせ地の朔月",
+        "name_katakana": "ほしにねがいを",
+        "name_jp": "星天を照らせ地の朔月",
         "option": "强化后"
       },
       {
@@ -105137,7 +105546,8 @@
         "card": "Arts",
         "name": "向星星许愿",
         "name_cn": "照耀星天的地之朔月",
-        "name_jp": "ほしにねがいを星天を照らせ地の朔月",
+        "name_katakana": "ほしにねがいを",
+        "name_jp": "星天を照らせ地の朔月",
         "option": "强化前"
       }
     ],
@@ -105499,7 +105909,8 @@
         "card": "Arts",
         "name": "Genjimonogatari Aoi Mononoke",
         "name_cn": "源氏物语·葵·物之怪",
-        "name_jp": "げんじものがたり・あおい・もののけ源氏物語・葵・物の怪",
+        "name_katakana": "げんじものがたり・あおい・もののけ",
+        "name_jp": "源氏物語・葵・物の怪",
         "option": "default"
       }
     ],
@@ -105957,7 +106368,8 @@
         "card": "Buster",
         "name": "Airavata King Size",
         "name_cn": "巨影，现于生命之海",
-        "name_jp": "アイラーヴァタ・キングサイズ巨影、生命の海より出ずる",
+        "name_katakana": "アイラーヴァタ・キングサイズ",
+        "name_jp": "巨影、生命の海より出ずる",
         "option": "default"
       }
     ],
@@ -106455,7 +106867,8 @@
         "card": "Quick",
         "name": "Kama Sammohana",
         "name_cn": "持爱却枯，无恋也",
-        "name_jp": "カーマ・サンモーハナ愛もてかれるは恋無きなり",
+        "name_katakana": "カーマ・サンモーハナ",
+        "name_jp": "愛もてかれるは恋無きなり",
         "option": "第1·第2阶段形象时/强化后"
       },
       {
@@ -106495,7 +106908,8 @@
         "card": "Quick",
         "name": "Kama Sammohana",
         "name_cn": "持爱却枯，无恋也",
-        "name_jp": "カーマ・サンモーハナ愛もてかれるは恋無きなり",
+        "name_katakana": "カーマ・サンモーハナ",
+        "name_jp": "愛もてかれるは恋無きなり",
         "option": "第1·第2阶段形象时/强化前"
       },
       {
@@ -106542,7 +106956,8 @@
         "card": "Quick",
         "name": "Samsara Kama",
         "name_cn": "以恋焦炙，因爱也",
-        "name_jp": "サンサーラ・カーマ恋もて焦がすは愛ゆえなり",
+        "name_katakana": "サンサーラ・カーマ",
+        "name_jp": "恋もて焦がすは愛ゆえなり",
         "option": "第3阶段形象时/强化后"
       },
       {
@@ -106582,7 +106997,8 @@
         "card": "Quick",
         "name": "Samsara Kama",
         "name_cn": "以恋焦炙，因爱也",
-        "name_jp": "サンサーラ・カーマ恋もて焦がすは愛ゆえなり",
+        "name_katakana": "サンサーラ・カーマ",
+        "name_jp": "恋もて焦がすは愛ゆえなり",
         "option": "第3阶段形象时/强化前"
       }
     ],
@@ -106921,7 +107337,8 @@
         "card": "Quick",
         "name": "Mara Avaruddha",
         "name_cn": "爱的世界，燃烧的宇宙",
-        "name_jp": "マーラ・アヴァローダ愛の世界、燃える宇宙",
+        "name_katakana": "マーラ・アヴァローダ",
+        "name_jp": "愛の世界、燃える宇宙",
         "option": "default"
       }
     ],
@@ -107159,7 +107576,8 @@
         "card": "Arts",
         "name": "不语之阵",
         "name_cn": "混元一阵",
-        "name_jp": "かたらずのじん混元一陣",
+        "name_katakana": "かたらずのじん",
+        "name_jp": "混元一陣",
         "option": "强化后"
       },
       {
@@ -107206,7 +107624,8 @@
         "card": "Arts",
         "name": "不语之阵",
         "name_cn": "混元一阵",
-        "name_jp": "かたらずのじん混元一陣",
+        "name_katakana": "かたらずのじん",
+        "name_jp": "混元一陣",
         "option": "强化前"
       }
     ],
@@ -107632,7 +108051,8 @@
         "card": "Arts",
         "name": "Custos Morum",
         "name_cn": "现为裁决之刻。上告汝之名来",
-        "name_jp": "クストス・モルム裁きの時はいま。汝の名を告げよ",
+        "name_katakana": "クストス・モルム",
+        "name_jp": "裁きの時はいま。汝の名を告げよ",
         "option": "强化后"
       },
       {
@@ -107672,7 +108092,8 @@
         "card": "Arts",
         "name": "Custos Morum",
         "name_cn": "现为裁决之刻。上告汝之名来",
-        "name_jp": "クストス・モルム裁きの時はいま。汝の名を告げよ",
+        "name_katakana": "クストス・モルム",
+        "name_jp": "裁きの時はいま。汝の名を告げよ",
         "option": "强化前"
       }
     ],
@@ -108096,7 +108517,8 @@
         "card": "Buster",
         "name": "Rhongomyniad",
         "name_cn": "闪耀于终焉之枪",
-        "name_jp": "ロンゴミニアド最果てにて輝ける槍",
+        "name_katakana": "ロンゴミニアド",
+        "name_jp": "最果てにて輝ける槍",
         "option": "强化后"
       },
       {
@@ -108140,7 +108562,8 @@
         "card": "Buster",
         "name": "Rhongomyniad",
         "name_cn": "闪耀于终焉之枪",
-        "name_jp": "ロンゴミニアド最果てにて輝ける槍",
+        "name_katakana": "ロンゴミニアド",
+        "name_jp": "最果てにて輝ける槍",
         "option": "强化前"
       }
     ],
@@ -108524,7 +108947,8 @@
         "card": "Arts",
         "name": "Ganesh Impact",
         "name_cn": "肉弹啊，明天再开始努力吧",
-        "name_jp": "ガーネッシュ・インパクト肉弾よ、翌日から本気であれ",
+        "name_katakana": "ガーネッシュ・インパクト",
+        "name_jp": "肉弾よ、翌日から本気であれ",
         "option": "default"
       }
     ],
@@ -108970,7 +109394,8 @@
         "card": "Quick",
         "name": "Nahi Doongi",
         "name_cn": "不容侵夺之拒绝王国",
-        "name_jp": "ナヒン・デーンゲー侵奪怺えぬ拒絶の王国",
+        "name_katakana": "ナヒン・デーンゲー",
+        "name_jp": "侵奪怺えぬ拒絶の王国",
         "option": "default"
       }
     ],
@@ -109450,7 +109875,8 @@
         "card": "Arts",
         "name": "Apfel Schiessen",
         "name_cn": "射出之信念一箭",
-        "name_jp": "アプフェル・シーセン放たれし信力の一矢",
+        "name_katakana": "アプフェル・シーセン",
+        "name_jp": "放たれし信力の一矢",
         "option": "default"
       }
     ],
@@ -109854,7 +110280,8 @@
         "card": "Buster",
         "name": "Maha Pralaya",
         "name_cn": "裁定归灭之回剑",
-        "name_jp": "マハー・プララヤ帰滅を裁定せし廻剣",
+        "name_katakana": "マハー・プララヤ",
+        "name_jp": "帰滅を裁定せし廻剣",
         "option": "default"
       }
     ],
@@ -110229,7 +110656,8 @@
         "card": "Buster",
         "name": "Sudarshana Chakra Yamaraj",
         "name_cn": "转轮啊，卷起愤怒之炎吧",
-        "name_jp": "スダルシャンチャクラ・ヤムラージ転輪よ、憤炎を巻き起こせ",
+        "name_katakana": "スダルシャンチャクラ・ヤムラージ",
+        "name_jp": "転輪よ、憤炎を巻き起こせ",
         "option": "default"
       }
     ],
@@ -110611,7 +111039,8 @@
         "card": "Arts",
         "name": "Resurrection Fraught Hades",
         "name_cn": "仿药·无用的冥府悲叹",
-        "name_jp": "リザレクション・フロートハデス倣薬・不要なる冥府の悲歎",
+        "name_katakana": "リザレクション・フロートハデス",
+        "name_jp": "倣薬・不要なる冥府の悲歎",
         "option": "default"
       }
     ],
@@ -111063,7 +111492,8 @@
         "card": "Buster",
         "name": "Hajunhenjou Sanzendaisentenmaou",
         "name_cn": "波旬变生·三千大千天魔王",
-        "name_jp": "はじゅんへんじょう・さんぜんだいせんてんまおう波旬変生・三千大千天魔王",
+        "name_katakana": "はじゅんへんじょう・さんぜんだいせんてんまおう",
+        "name_jp": "波旬変生・三千大千天魔王",
         "option": "default"
       }
     ],
@@ -111547,7 +111977,8 @@
         "card": "Buster",
         "name": "Ningen Mukotsu",
         "name_cn": "人类无骨",
-        "name_jp": "にんげんむこつ人間無骨",
+        "name_katakana": "にんげんむこつ",
+        "name_jp": "人間無骨",
         "option": "default"
       }
     ],
@@ -111923,7 +112354,8 @@
         "card": "Arts",
         "name": "Bitenhassou Kurumagakari no Jin",
         "name_cn": "毗天八相车悬之阵",
-        "name_jp": "びてんはっそうくるまがかりのじん毘天八相車懸りの陣",
+        "name_katakana": "びてんはっそうくるまがかりのじん",
+        "name_jp": "毘天八相車懸りの陣",
         "option": "default"
       }
     ],
@@ -112352,7 +112784,8 @@
         "card": "Arts",
         "name": "Beautiful Journey",
         "name_cn": "超越边界的存在",
-        "name_jp": "ビューティフル・ジャーニー境界を超えるもの",
+        "name_katakana": "ビューティフル・ジャーニー",
+        "name_jp": "境界を超えるもの",
         "option": "default"
       }
     ],
@@ -112780,7 +113213,8 @@
         "card": "Arts",
         "name": "Astrapste Argo",
         "name_cn": "撕裂天际的光辉之船",
-        "name_jp": "アストラプスィテ・アルゴー天上引き裂きし煌々の船",
+        "name_katakana": "アストラプスィテ・アルゴー",
+        "name_jp": "天上引き裂きし煌々の船",
         "option": "强化后"
       },
       {
@@ -112813,7 +113247,8 @@
         "card": "Arts",
         "name": "Astrapste Argo",
         "name_cn": "撕裂天际的光辉之船",
-        "name_jp": "アストラプスィテ・アルゴー天上引き裂きし煌々の船",
+        "name_katakana": "アストラプスィテ・アルゴー",
+        "name_jp": "天上引き裂きし煌々の船",
         "option": "强化前"
       }
     ],
@@ -113206,7 +113641,8 @@
         "card": "Quick",
         "name": "Troia Velos",
         "name_cn": "闪耀的终天一箭",
-        "name_jp": "トロイア・ヴェロス輝かしき終天の一矢",
+        "name_katakana": "トロイア・ヴェロス",
+        "name_jp": "輝かしき終天の一矢",
         "option": "default"
       }
     ],
@@ -113590,7 +114026,8 @@
         "card": "Buster",
         "name": "Ira Lupus",
         "name_cn": "狂暴少女狼",
-        "name_jp": "イーラ・ルプス猛り狂う乙女狼",
+        "name_katakana": "イーラ・ルプス",
+        "name_jp": "猛り狂う乙女狼",
         "option": "default"
       }
     ],
@@ -113968,7 +114405,8 @@
         "card": "Quick",
         "name": "Black Dirty Barty Howling",
         "name_cn": "高贵海盗准男爵的咆哮",
-        "name_jp": "ブラック・ダーティ・バーティ・ハウリング高貴なる海賊準男爵の咆吼",
+        "name_katakana": "ブラック・ダーティ・バーティ・ハウリング",
+        "name_jp": "高貴なる海賊準男爵の咆吼",
         "option": "default"
       }
     ],
@@ -114380,7 +114818,8 @@
         "card": "Arts",
         "name": "Kikaku Ichijin",
         "name_cn": "掎角一阵",
-        "name_jp": "きかくいちじん掎角一陣",
+        "name_katakana": "きかくいちじん",
+        "name_jp": "掎角一陣",
         "option": "default"
       }
     ],
@@ -114762,7 +115201,8 @@
         "card": "Arts",
         "name": "Le Reve Ensoleille",
         "name_cn": "予故国以爱，以沉溺般的梦",
-        "name_jp": "ラ・レーヴ・アンソレイエ故国に愛を、溺れるような夢を",
+        "name_katakana": "ラ・レーヴ・アンソレイエ",
+        "name_jp": "故国に愛を、溺れるような夢を",
         "option": "default"
       }
     ],
@@ -115210,7 +115650,8 @@
         "card": "Arts",
         "name": "Femme Fatale Baiser",
         "name_cn": "已然亲吻你",
-        "name_jp": "ファム・ファタル・ベゼあなたにくちづけしたわ",
+        "name_katakana": "ファム・ファタル・ベゼ",
+        "name_jp": "あなたにくちづけしたわ",
         "option": "default"
       }
     ],
@@ -115592,7 +116033,8 @@
         "card": "Arts",
         "name": "岩流岛",
         "name_cn": "破魔剑，谨承！",
-        "name_jp": "がんりゅうじま魔剣破り、承る！",
+        "name_katakana": "がんりゅうじま",
+        "name_jp": "魔剣破り、承る！",
         "option": "强化后"
       },
       {
@@ -115632,7 +116074,8 @@
         "card": "Arts",
         "name": "岩流岛",
         "name_cn": "破魔剑，谨承！",
-        "name_jp": "がんりゅうじま魔剣破り、承る！",
+        "name_katakana": "がんりゅうじま",
+        "name_jp": "魔剣破り、承る！",
         "option": "强化前"
       }
     ],
@@ -116031,7 +116474,8 @@
         "card": "Buster",
         "name": "Hakurojyou Senshiki Milimili Night Fever",
         "name_cn": "白鹭城·千式MILIMILI午夜狂欢！",
-        "name_jp": "はくろじょう・せんしきミリミリナイトフィーバー白鷺城・千式ミリミリナイトフィーバー！",
+        "name_katakana": "はくろじょう・せんしきミリミリナイトフィーバー",
+        "name_jp": "白鷺城・千式ミリミリナイトフィーバー！",
         "option": "default"
       }
     ],
@@ -116405,7 +116849,8 @@
         "card": "Quick",
         "name": "Testarossa Maiden",
         "name_cn": "夜间飞驰的铁处女",
-        "name_jp": "テスタロッサ・メイデン夜闇を駆ける鉄処女",
+        "name_katakana": "テスタロッサ・メイデン",
+        "name_jp": "夜闇を駆ける鉄処女",
         "option": "default"
       }
     ],
@@ -116793,7 +117238,8 @@
         "card": "Arts",
         "name": "Shokoku Takimeguri",
         "name_cn": "诸国瀑布揽胜",
-        "name_jp": "しょこくたきめぐり諸国瀧廻り",
+        "name_katakana": "しょこくたきめぐり",
+        "name_jp": "諸国瀧廻り",
         "option": "default"
       }
     ],
@@ -117194,7 +117640,8 @@
         "card": "Buster",
         "name": "Bright Ehangwen",
         "name_cn": "熠熠生辉吧，吾之光辉大厅",
-        "name_jp": "ブライト・エハングウェン燦々とあれ、我が輝きの広間",
+        "name_katakana": "ブライト・エハングウェン",
+        "name_jp": "燦々とあれ、我が輝きの広間",
         "option": "default"
       }
     ],
@@ -117677,7 +118124,8 @@
         "card": "Arts",
         "name": "Blue Summer Palladion",
         "name_cn": "这夏露如玻璃",
-        "name_jp": "ブルーサマー・パラディオンその夏露は硝子のように",
+        "name_katakana": "ブルーサマー・パラディオン",
+        "name_jp": "その夏露は硝子のように",
         "option": "default"
       }
     ],
@@ -118075,7 +118523,8 @@
         "card": "Quick",
         "name": "Jet Sandan Zuki",
         "name_cn": "喷射三段突",
-        "name_jp": "じぇっとさんだんづきジェット三段突き",
+        "name_katakana": "じぇっとさんだんづき",
+        "name_jp": "ジェット三段突き",
         "option": "第1·第3阶段形象时"
       },
       {
@@ -118122,7 +118571,8 @@
         "card": "Quick",
         "name": "闪耀于拂晓的无明之光",
         "name_cn": "苍穹三段突",
-        "name_jp": "しののめにきらめくむみょうのひかり蒼穹三段突き",
+        "name_katakana": "しののめにきらめくむみょうのひかり",
+        "name_jp": "蒼穹三段突き",
         "option": "第2阶段形象时"
       }
     ],
@@ -118580,7 +119030,8 @@
         "card": "Arts",
         "name": "Edin Shugurra Quasar",
         "name_cn": "闪耀于原始宇宙的王冠",
-        "name_jp": "エディン・シュグラ・クエーサー原始宇宙に輝く王冠",
+        "name_katakana": "エディン・シュグラ・クエーサー",
+        "name_jp": "原始宇宙に輝く王冠",
         "option": "Arts"
       },
       {
@@ -118620,7 +119071,8 @@
         "card": "Buster",
         "name": "Edin Shugurra Quasar",
         "name_cn": "闪耀于原始宇宙的王冠",
-        "name_jp": "エディン・シュグラ・クエーサー原始宇宙に輝く王冠",
+        "name_katakana": "エディン・シュグラ・クエーサー",
+        "name_jp": "原始宇宙に輝く王冠",
         "option": "Buster"
       },
       {
@@ -118660,7 +119112,8 @@
         "card": "Quick",
         "name": "Edin Shugurra Quasar",
         "name_cn": "闪耀于原始宇宙的王冠",
-        "name_jp": "エディン・シュグラ・クエーサー原始宇宙に輝く王冠",
+        "name_katakana": "エディン・シュグラ・クエーサー",
+        "name_jp": "原始宇宙に輝く王冠",
         "option": "Quick"
       }
     ],
@@ -119073,7 +119526,8 @@
         "card": "Quick",
         "name": "Space Dead Man's Hand",
         "name_cn": "招致死亡的黑之一手",
-        "name_jp": "スペース・デッドマンズ・ハンド死を招く黒の一手",
+        "name_katakana": "スペース・デッドマンズ・ハンド",
+        "name_jp": "死を招く黒の一手",
         "option": "default"
       }
     ],
@@ -119581,7 +120035,8 @@
         "card": "Quick",
         "name": "Vulcano Caligorante",
         "name_cn": "侥幸的拘捕网",
-        "name_jp": "ヴルカーノ・カリゴランテ僥倖の拘引網",
+        "name_katakana": "ヴルカーノ・カリゴランテ",
+        "name_jp": "僥倖の拘引網",
         "option": "default"
       }
     ],
@@ -120015,7 +120470,8 @@
         "card": "Quick",
         "name": "Assault Medicine Full Burst Party",
         "name_cn": "天使在呐喊，恶魔消失于影中",
-        "name_jp": "アサルト・メディスン・フルバースト・パーティー天使は叫び、悪魔は影の中に消える",
+        "name_katakana": "アサルト・メディスン・フルバースト・パーティー",
+        "name_jp": "天使は叫び、悪魔は影の中に消える",
         "option": "default"
       }
     ],
@@ -120413,7 +120869,8 @@
         "card": "Arts",
         "name": "Artemis Agnos",
         "name_cn": "月女神的纯洁之爱",
-        "name_jp": "アルテミス・アグノス月女神の無垢な愛",
+        "name_katakana": "アルテミス・アグノス",
+        "name_jp": "月女神の無垢な愛",
         "option": "default"
       }
     ],
@@ -120832,7 +121289,8 @@
         "card": "Arts",
         "name": "Serment de Durandal",
         "name_cn": "不带剑的誓言",
-        "name_jp": "セルマン・デ・デュランダル不帯剣の誓い",
+        "name_katakana": "セルマン・デ・デュランダル",
+        "name_jp": "不帯剣の誓い",
         "option": "default"
       }
     ],
@@ -121276,7 +121734,8 @@
         "card": "Buster",
         "name": "Sfyri tou Talos",
         "name_cn": "青铜巨人的超重锤",
-        "name_jp": "スフィリ・トゥ・ターロー青銅巨人の超重鎚",
+        "name_katakana": "スフィリ・トゥ・ターロー",
+        "name_jp": "青銅巨人の超重鎚",
         "option": "default"
       }
     ],
@@ -121746,7 +122205,8 @@
         "card": "Arts",
         "name": "Geishouui Hiyokurenri",
         "name_cn": "霓裳羽衣 比翼连理",
-        "name_jp": "げいしょううい ひよくれんり霓裳羽衣 比翼連理",
+        "name_katakana": "げいしょううい ひよくれんり",
+        "name_jp": "霓裳羽衣 比翼連理",
         "option": "default"
       }
     ],
@@ -122249,7 +122709,8 @@
         "card": "Quick",
         "name": "Emotional Engine Full Drive",
         "name_cn": "枕草子·春曙抄",
-        "name_jp": "エモーショナルエンジン・フルドライブ枕草子・春曙抄",
+        "name_katakana": "エモーショナルエンジン・フルドライブ",
+        "name_jp": "枕草子・春曙抄",
         "option": "default"
       }
     ],
@@ -122686,7 +123147,8 @@
         "card": "Arts",
         "name": "Troia Ippos",
         "name_cn": "终焉的大木马",
-        "name_jp": "トロイア・イポス終焉の大木馬",
+        "name_katakana": "トロイア・イポス",
+        "name_jp": "終焉の大木馬",
         "option": "强化前"
       },
       {
@@ -122747,7 +123209,8 @@
         "card": "Arts",
         "name": "Troia Ippos",
         "name_cn": "终焉的大木马",
-        "name_jp": "トロイア・イポス終焉の大木馬",
+        "name_katakana": "トロイア・イポス",
+        "name_jp": "終焉の大木馬",
         "option": "强化后"
       }
     ],
@@ -123162,7 +123625,8 @@
         "card": "Arts",
         "name": "Dioscures Tyndaridae",
         "name_cn": "双神赞歌",
-        "name_jp": "ディオスクレス・テュンダリダイ双神賛歌",
+        "name_katakana": "ディオスクレス・テュンダリダイ",
+        "name_jp": "双神賛歌",
         "option": "default"
       }
     ],
@@ -123641,7 +124105,8 @@
         "card": "Buster",
         "name": "Lapithai Caeneus",
         "name_cn": "飞翔吧，吾之金色大翼",
-        "name_jp": "ラピタイ・カイネウス飛翔せよ、わが金色の大翼",
+        "name_katakana": "ラピタイ・カイネウス",
+        "name_jp": "飛翔せよ、わが金色の大翼",
         "option": "default"
       }
     ],
@@ -124064,7 +124529,8 @@
         "card": "Buster",
         "name": "Per Aspera Ad Astra",
         "name_cn": "吾等之臂开拓一切，至天际",
-        "name_jp": "ペル・アスペラ・アド・アストラ我らの腕はすべてを拓き、宙へ",
+        "name_katakana": "ペル・アスペラ・アド・アストラ",
+        "name_jp": "我らの腕はすべてを拓き、宙へ",
         "option": "default"
       }
     ],
@@ -124480,7 +124946,8 @@
         "card": "Quick",
         "name": "Pale Blue Dot",
         "name_cn": "遥远的蓝色星球啊",
-        "name_jp": "ペイル・ブルー・ドット遥か青き星よ",
+        "name_katakana": "ペイル・ブルー・ドット",
+        "name_jp": "遥か青き星よ",
         "option": "强化后"
       },
       {
@@ -124534,7 +125001,8 @@
         "card": "Quick",
         "name": "Pale Blue Dot",
         "name_cn": "遥远的蓝色星球啊",
-        "name_jp": "ペイル・ブルー・ドット遥か青き星よ",
+        "name_katakana": "ペイル・ブルー・ドット",
+        "name_jp": "遥か青き星よ",
         "option": "强化前"
       }
     ],
@@ -125003,7 +125471,8 @@
         "card": "Buster",
         "name": "Momijigari",
         "name_cn": "红叶狩",
-        "name_jp": "もみじがり紅葉狩",
+        "name_katakana": "もみじがり",
+        "name_jp": "紅葉狩",
         "option": "default"
       }
     ],
@@ -125380,7 +125849,8 @@
         "card": "Arts",
         "name": "Amenosakahoko",
         "name_cn": "天遡鉾",
-        "name_jp": "アメノサカホコ天遡鉾",
+        "name_katakana": "アメノサカホコ",
+        "name_jp": "天遡鉾",
         "option": "default"
       }
     ],
@@ -125763,7 +126233,8 @@
         "card": "Arts",
         "name": "Around Caliburn",
         "name_cn": "环抱着你的希望之星",
-        "name_jp": "アラウンド・カリバーンきみをいだく希望の星",
+        "name_katakana": "アラウンド・カリバーン",
+        "name_jp": "きみをいだく希望の星",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -125803,7 +126274,8 @@
         "card": "Arts",
         "name": "Round of Avalon",
         "name_cn": "真圆集结誓约之星",
-        "name_jp": "ラウンド・オブ・アヴァロン真円集う約束の星",
+        "name_katakana": "ラウンド・オブ・アヴァロン",
+        "name_jp": "真円集う約束の星",
         "option": "第3阶段形象时"
       }
     ],
@@ -126280,7 +126752,8 @@
         "card": "Arts",
         "name": "Nirmannarati Heaven's Foam",
         "name_cn": "化乐天·蛟蛤曼荼罗",
-        "name_jp": "ニルマーナラティ・ヘブンズフォーム化楽天・蛟蛤曼荼羅",
+        "name_katakana": "ニルマーナラティ・ヘブンズフォーム",
+        "name_jp": "化楽天・蛟蛤曼荼羅",
         "option": "default"
       }
     ],
@@ -126913,7 +127386,8 @@
         "card": "Quick",
         "name": "Prisma☆Splash Rainbow！",
         "name_cn": "少女啊，化为彩虹吧",
-        "name_jp": "プリズマ☆スプラッシュレインボー！少女よ虹になれ",
+        "name_katakana": "プリズマ☆スプラッシュレインボー！",
+        "name_jp": "少女よ虹になれ",
         "option": "default"
       }
     ],
@@ -127322,7 +127796,8 @@
         "card": "Buster",
         "name": "Brynhild Sigurteinn",
         "name_cn": "至少，直至死亡的瞬间",
-        "name_jp": "ブリュンヒルデ・シグルテインせめて、死の刹那までは",
+        "name_katakana": "ブリュンヒルデ・シグルテイン",
+        "name_jp": "せめて、死の刹那までは",
         "option": "default"
       }
     ],
@@ -127729,7 +128204,8 @@
         "card": "Quick",
         "name": "Anti-fling Rondo",
         "name_cn": "夏魔必灭枪舞",
-        "name_jp": "アンチフリング・ロンド夏魔必滅槍舞",
+        "name_katakana": "アンチフリング・ロンド",
+        "name_jp": "夏魔必滅槍舞",
         "option": "default"
       }
     ],
@@ -128111,7 +128587,8 @@
         "card": "Buster",
         "name": "Dreamlands",
         "name_cn": "遥远的幻梦境",
-        "name_jp": "ドリームランズ遥遠なりし幻夢郷",
+        "name_katakana": "ドリームランズ",
+        "name_jp": "遥遠なりし幻夢郷",
         "option": "default"
       }
     ],
@@ -128566,7 +129043,8 @@
         "card": "Arts",
         "name": "VR Shinkageryuu Ougi Tomoegafuchi Taiyouken",
         "name_cn": "VR新阴流奥义·巴渊太阳剑",
-        "name_jp": "ぶいあーるしんかげりゅうおうぎ・ともえがふちたいようけんＶＲ新陰流奥義・巴淵太陽剣",
+        "name_katakana": "ぶいあーるしんかげりゅうおうぎ・ともえがふちたいようけん",
+        "name_jp": "ＶＲ新陰流奥義・巴淵太陽剣",
         "option": "强化后"
       },
       {
@@ -128620,7 +129098,8 @@
         "card": "Arts",
         "name": "VR Shinkageryuu Ougi Tomoegafuchi Taiyouken",
         "name_cn": "VR新阴流奥义·巴渊太阳剑",
-        "name_jp": "ぶいあーるしんかげりゅうおうぎ・ともえがふちたいようけんＶＲ新陰流奥義・巴淵太陽剣",
+        "name_katakana": "ぶいあーるしんかげりゅうおうぎ・ともえがふちたいようけん",
+        "name_jp": "ＶＲ新陰流奥義・巴淵太陽剣",
         "option": "强化前"
       }
     ],
@@ -129011,7 +129490,8 @@
         "card": "Arts",
         "name": "Sotoorihime Kumo no Okonai",
         "name_cn": "衣通郎姬·蜘蛛行",
-        "name_jp": "そとおりひめ・くものおこない衣通郎姫・蜘蛛行",
+        "name_katakana": "そとおりひめ・くものおこない",
+        "name_jp": "衣通郎姫・蜘蛛行",
         "option": "强化后"
       },
       {
@@ -129051,7 +129531,8 @@
         "card": "Arts",
         "name": "Sotoorihime Kumo no Okonai",
         "name_cn": "衣通郎姬·蜘蛛行",
-        "name_jp": "そとおりひめ・くものおこない衣通郎姫・蜘蛛行",
+        "name_katakana": "そとおりひめ・くものおこない",
+        "name_jp": "衣通郎姫・蜘蛛行",
         "option": "强化前"
       }
     ],
@@ -129423,7 +129904,8 @@
         "card": "Buster",
         "name": "Seishinkatadoru Kyuuenkyou",
         "name_cn": "映像星辰之久远镜",
-        "name_jp": "せいしんかたどるきゅうえんきょう星辰象る久遠鏡",
+        "name_katakana": "せいしんかたどるきゅうえんきょう",
+        "name_jp": "星辰象る久遠鏡",
         "option": "default"
       }
     ],
@@ -129815,7 +130297,8 @@
         "card": "Arts",
         "name": "Mugyou",
         "name_cn": "无形",
-        "name_jp": "むぎょう無形",
+        "name_katakana": "むぎょう",
+        "name_jp": "無形",
         "option": "default"
       }
     ],
@@ -130259,7 +130742,8 @@
         "card": "Buster",
         "name": "Maoukaiten Higanbana",
         "name_cn": "魔王回天·曼殊沙华",
-        "name_jp": "まおうかいてん・ひがんばな魔王回天・曼殊沙華",
+        "name_katakana": "まおうかいてん・ひがんばな",
+        "name_jp": "魔王回天・曼殊沙華",
         "option": "default"
       }
     ],
@@ -130668,7 +131152,8 @@
         "card": "Arts",
         "name": "De sterrennacht",
         "name_cn": "星月夜",
-        "name_jp": "デ・ステーレンナフト星月夜",
+        "name_katakana": "デ・ステーレンナフト",
+        "name_jp": "星月夜",
         "option": "default"
       }
     ],
@@ -131196,7 +131681,8 @@
         "card": "Arts",
         "name": "Great Ram Nautilus",
         "name_cn": "吾将远征，鹦鹉螺的大冲角",
-        "name_jp": "グレートラム・ノーチラス我は征く、鸚鵡貝の大衝角",
+        "name_katakana": "グレートラム・ノーチラス",
+        "name_jp": "我は征く、鸚鵡貝の大衝角",
         "option": "default"
       }
     ],
@@ -131699,7 +132185,8 @@
         "card": "Quick",
         "name": "Kyourandotou Akuryousafu",
         "name_cn": "狂澜怒涛·恶灵左府",
-        "name_jp": "きょうらんどとう・あくりょうさふ狂瀾怒濤・悪霊左府",
+        "name_katakana": "きょうらんどとう・あくりょうさふ",
+        "name_jp": "狂瀾怒濤・悪霊左府",
         "option": "default"
       }
     ],
@@ -132169,7 +132656,8 @@
         "card": "Buster",
         "name": "Ooeyama Bodaikisatsu",
         "name_cn": "大江山·菩提鬼杀",
-        "name_jp": "おおえやま・ぼだいきさつ大江山・菩提鬼殺",
+        "name_katakana": "おおえやま・ぼだいきさつ",
+        "name_jp": "大江山・菩提鬼殺",
         "option": "default"
       }
     ],
@@ -132565,7 +133053,8 @@
         "card": "Buster",
         "name": "Shinken Kusanaginotachi",
         "name_cn": "神剑·草那艺之大刀",
-        "name_jp": "しんけん・くさなぎのたち神剣・草那芸之大刀",
+        "name_katakana": "しんけん・くさなぎのたち",
+        "name_jp": "神剣・草那芸之大刀",
         "option": "default"
       }
     ],
@@ -132985,7 +133474,8 @@
         "card": "Arts",
         "name": "Asurashreshth",
         "name_cn": "魔啊，阻塞尽天地",
-        "name_jp": "アスラシュレーシュタ魔よ、悉く天地を塞げ",
+        "name_katakana": "アスラシュレーシュタ",
+        "name_jp": "魔よ、悉く天地を塞げ",
         "option": "default"
       }
     ],
@@ -133374,7 +133864,8 @@
         "card": "Quick",
         "name": "Winning Arkaputra",
         "name_cn": "圣人连续拳",
-        "name_jp": "ウィニング・アルカプトラ聖人連続拳",
+        "name_katakana": "ウィニング・アルカプトラ",
+        "name_jp": "聖人連続拳",
         "option": "default"
       }
     ],
@@ -133771,7 +134262,8 @@
         "card": "Arts",
         "name": "都牟刈村正",
         "name_cn": "无元剑制",
-        "name_jp": "つむかりむらまさ無元の剣製",
+        "name_katakana": "つむかりむらまさ",
+        "name_jp": "無元の剣製",
         "option": "强化前"
       },
       {
@@ -133840,7 +134332,8 @@
         "card": "Arts",
         "name": "都牟刈村正",
         "name_cn": "无元剑制",
-        "name_jp": "つむかりむらまさ無元の剣製",
+        "name_katakana": "つむかりむらまさ",
+        "name_jp": "無元の剣製",
         "option": "强化后"
       }
     ],
@@ -134334,7 +134827,8 @@
         "card": "Quick",
         "name": "Shogyoumujou Joushahissui",
         "name_cn": "诸行无常·盛者必衰",
-        "name_jp": "しょぎょうむじょう・じょうしゃひっすい諸行無常・盛者必衰",
+        "name_katakana": "しょぎょうむじょう・じょうしゃひっすい",
+        "name_jp": "諸行無常・盛者必衰",
         "option": "default"
       }
     ],
@@ -134794,7 +135288,8 @@
         "card": "Quick",
         "name": "Rikutousanryaku Maousondaiusen",
         "name_cn": "六韬三略·魔王尊大羽扇",
-        "name_jp": "りくとうさんりゃく・まおうそんだいうせん六韜三略・魔王尊大羽扇",
+        "name_katakana": "りくとうさんりゃく・まおうそんだいうせん",
+        "name_jp": "六韜三略・魔王尊大羽扇",
         "option": "default"
       }
     ],
@@ -135234,7 +135729,8 @@
         "card": "Quick",
         "name": "The Greatest Hits \"Calling Agape\"",
         "name_cn": "无偿无限普遍之爱",
-        "name_jp": "ザ・グレイテストヒッツ・“コーリング・アガペー”遍く無償の無限の愛",
+        "name_katakana": "ザ・グレイテストヒッツ・“コーリング・アガペー”",
+        "name_jp": "遍く無償の無限の愛",
         "option": "强化后"
       },
       {
@@ -135281,7 +135777,8 @@
         "card": "Quick",
         "name": "The Greatest Hits \"Calling Agape\"",
         "name_cn": "无偿无限普遍之爱",
-        "name_jp": "ザ・グレイテストヒッツ・“コーリング・アガペー”遍く無償の無限の愛",
+        "name_katakana": "ザ・グレイテストヒッツ・“コーリング・アガペー”",
+        "name_jp": "遍く無償の無限の愛",
         "option": "强化前"
       }
     ],
@@ -135737,7 +136234,8 @@
         "card": "Arts",
         "name": "Pygmalion Chisel Out",
         "name_cn": "雕刻理想的王之凿",
-        "name_jp": "ピグマリオン・チーゼルアウト理想を刻する王の鑿",
+        "name_katakana": "ピグマリオン・チーゼルアウト",
+        "name_jp": "理想を刻する王の鑿",
         "option": "default"
       }
     ],
@@ -136174,7 +136672,8 @@
         "card": "Arts",
         "name": "Tenimuhou Tsuru no Enishi Namida no Wakare",
         "name_cn": "天衣无缝·鹤恩惜别歌",
-        "name_jp": "てんいむほう・つるのえにしなみだのわかれ天衣無縫・鶴恩惜別歌",
+        "name_katakana": "てんいむほう・つるのえにしなみだのわかれ",
+        "name_jp": "天衣無縫・鶴恩惜別歌",
         "option": "default"
       }
     ],
@@ -136564,7 +137063,8 @@
         "card": "Quick",
         "name": "Lumino Calibur",
         "name_cn": "煌彩幻奏霸道剑",
-        "name_jp": "ルミノカリバー煌彩幻奏覇道剣",
+        "name_katakana": "ルミノカリバー",
+        "name_jp": "煌彩幻奏覇道剣",
         "option": "default"
       }
     ],
@@ -136965,7 +137465,8 @@
         "card": "Buster",
         "name": "Roadless Camelot",
         "name_cn": "业已无法抵达的理想乡",
-        "name_jp": "ロードレス・キャメロットはや辿り着けぬ理想郷",
+        "name_katakana": "ロードレス・キャメロット",
+        "name_jp": "はや辿り着けぬ理想郷",
         "option": "default"
       }
     ],
@@ -137481,7 +137982,8 @@
         "card": "Buster",
         "name": "Blackdog Galatine",
         "name_cn": "捕食日轮之角",
-        "name_jp": "ブラックドッグ・ガラティーン捕食する日輪の角",
+        "name_katakana": "ブラックドッグ・ガラティーン",
+        "name_jp": "捕食する日輪の角",
         "option": "default"
       }
     ],
@@ -137864,7 +138366,8 @@
         "card": "Quick",
         "name": "Fetch Failnaught",
         "name_cn": "痛幻哭奏",
-        "name_jp": "フェッチ・フェイルノート痛幻の哭奏",
+        "name_katakana": "フェッチ・フェイルノート",
+        "name_jp": "痛幻の哭奏",
         "option": "强化后"
       },
       {
@@ -137911,7 +138414,8 @@
         "card": "Quick",
         "name": "Fetch Failnaught",
         "name_cn": "痛幻哭奏",
-        "name_jp": "フェッチ・フェイルノート痛幻の哭奏",
+        "name_katakana": "フェッチ・フェイルノート",
+        "name_jp": "痛幻の哭奏",
         "option": "强化前"
       }
     ],
@@ -138321,7 +138825,8 @@
         "card": "Arts",
         "name": "Innocence Aroundight",
         "name_cn": "尚未知晓的无垢湖光",
-        "name_jp": "イノセンス・アロンダイト今は知らず、無垢なる湖光",
+        "name_katakana": "イノセンス・アロンダイト",
+        "name_jp": "今は知らず、無垢なる湖光",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -138368,7 +138873,8 @@
         "card": "Buster",
         "name": "Hollow Heart Albion",
         "name_cn": "无人知晓的无垢搏动",
-        "name_jp": "ホロウハート・アルビオン誰も知らぬ、無垢なる鼓動",
+        "name_katakana": "ホロウハート・アルビオン",
+        "name_jp": "誰も知らぬ、無垢なる鼓動",
         "option": "第3阶段形象时"
       }
     ],
@@ -138816,7 +139322,8 @@
         "card": "Arts",
         "name": "Longinus Count Zero",
         "name_cn": "光耀的命运之枪",
-        "name_jp": "ロンギヌス・カウントゼロ光さす運命の槍",
+        "name_katakana": "ロンギヌス・カウントゼロ",
+        "name_jp": "光さす運命の槍",
         "option": "通常"
       },
       {
@@ -138863,7 +139370,8 @@
         "card": "Arts",
         "name": "Lost Longinus",
         "name_cn": "炫目的选定之枪",
-        "name_jp": "ロスト・ロンギヌス眩き選定の槍",
+        "name_katakana": "ロスト・ロンギヌス",
+        "name_jp": "眩き選定の槍",
         "option": "Lostbelt No.6助战限定"
       }
     ],
@@ -139225,7 +139733,8 @@
         "card": "Buster",
         "name": "Из Тула Sevendrive",
         "name_cn": "灵裳重光·79式掷祸大社",
-        "name_jp": "イズトゥーラ・セブンドライブ霊裳重光・79式擲禍大社",
+        "name_katakana": "イズトゥーラ・セブンドライブ",
+        "name_jp": "霊裳重光・79式擲禍大社",
         "option": "default"
       }
     ],
@@ -139668,7 +140177,8 @@
         "card": "Arts",
         "name": "Spinster Habetrot",
         "name_cn": "为你纺织的时光之轮",
-        "name_jp": "スピンスター・ハベトロットきみに紡ぐ刻の車輪",
+        "name_katakana": "スピンスター・ハベトロット",
+        "name_jp": "きみに紡ぐ刻の車輪",
         "option": "通常"
       },
       {
@@ -139704,7 +140214,8 @@
         "card": "Arts",
         "name": "Bridal Spin Wheel",
         "name_cn": "赠予新娘的纺车",
-        "name_jp": "ブライダル・スピンホイール花嫁に贈る糸車",
+        "name_katakana": "ブライダル・スピンホイール",
+        "name_jp": "花嫁に贈る糸車",
         "option": "Lostbelt No.6助战限定"
       }
     ],
@@ -140132,7 +140643,8 @@
         "card": "Buster",
         "name": "Rye Rhyme Goodfellow",
         "name_cn": "于彼方点缀的梦之童话",
-        "name_jp": "ライ・ライム・グッドフェロー彼方にかざす夢の噺",
+        "name_katakana": "ライ・ライム・グッドフェロー",
+        "name_jp": "彼方にかざす夢の噺",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -140186,7 +140698,8 @@
         "card": "Buster",
         "name": "Lie Like Vortigern",
         "name_cn": "与彼方同坠的梦之瞳眸",
-        "name_jp": "ライ・ライク・ヴォーティガーン彼方とおちる夢の瞳",
+        "name_katakana": "ライ・ライク・ヴォーティガーン",
+        "name_jp": "彼方とおちる夢の瞳",
         "option": "第3阶段形象时"
       }
     ],
@@ -140563,7 +141076,8 @@
         "card": "Quick",
         "name": "Zekken Mukyuu Issen",
         "name_cn": "绝剑·无穹一闪",
-        "name_jp": "ぜっけん・むきゅういっせん絶剱・無穹一閃",
+        "name_katakana": "ぜっけん・むきゅういっせん",
+        "name_jp": "絶剱・無穹一閃",
         "option": "default"
       }
     ],
@@ -140955,7 +141469,8 @@
         "card": "Arts",
         "name": "Snegleta Snegurochka",
         "name_cn": "雪夏，绚丽的雾凇之滴",
-        "name_jp": "スニエクレータ・スネグーラチカ雪夏、麗しきは霧氷の滴",
+        "name_katakana": "スニエクレータ・スネグーラチカ",
+        "name_jp": "雪夏、麗しきは霧氷の滴",
         "option": "default"
       }
     ],
@@ -141353,7 +141868,8 @@
         "card": "Arts",
         "name": "La Féerie d'une Nuit",
         "name_cn": "喝彩声声一夜之梦",
-        "name_jp": "ラ・フェーリ・デュン・ニュイ喝采されるは一夜の夢",
+        "name_katakana": "ラ・フェーリ・デュン・ニュイ",
+        "name_jp": "喝采されるは一夜の夢",
         "option": "default"
       }
     ],
@@ -141748,7 +142264,8 @@
         "card": "Buster",
         "name": "Dinosaur Summer Goodbye",
         "name_cn": "难忘暑假，白垩之梦",
-        "name_jp": "ダイナソア・サマー・グッドバイ忘れえぬ夏休み、白亜の夢",
+        "name_katakana": "ダイナソア・サマー・グッドバイ",
+        "name_jp": "忘れえぬ夏休み、白亜の夢",
         "option": "default"
       }
     ],
@@ -142153,7 +142670,8 @@
         "card": "Arts",
         "name": "Kama Rupastra",
         "name_cn": "持爱而至，恋夏也",
-        "name_jp": "カーマ・ルーパーストラ愛もていたるは恋夏なり",
+        "name_katakana": "カーマ・ルーパーストラ",
+        "name_jp": "愛もていたるは恋夏なり",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -142193,7 +142711,8 @@
         "card": "Arts",
         "name": "Mara Sunyata",
         "name_cn": "以恋堕落，爱尽也",
-        "name_jp": "マーラ・シューニャター恋もて堕とすは愛果てなり",
+        "name_katakana": "マーラ・シューニャター",
+        "name_jp": "恋もて堕とすは愛果てなり",
         "option": "第3阶段形象时"
       }
     ],
@@ -142597,7 +143116,8 @@
         "card": "Buster",
         "name": "Sea Serpent Storm Blue",
         "name_cn": "疾驰吧，吾之海色巨牙",
-        "name_jp": "シーサーペント・ストームブルー疾駆せよ、わが海色の大牙",
+        "name_katakana": "シーサーペント・ストームブルー",
+        "name_jp": "疾駆せよ、わが海色の大牙",
         "option": "default"
       }
     ],
@@ -143020,7 +143540,8 @@
         "card": "Quick",
         "name": "Emotional Engine Vivid Full Sensation",
         "name_cn": "夏天，世间少有之热",
-        "name_jp": "エモーショナルエンジン・ビビッドフルセンセーション夏は、世に知らず暑き",
+        "name_katakana": "エモーショナルエンジン・ビビッドフルセンセーション",
+        "name_jp": "夏は、世に知らず暑き",
         "option": "default"
       }
     ],
@@ -143435,7 +143956,8 @@
         "card": "Quick",
         "name": "Vendredi Treize",
         "name_cn": "13号星期五",
-        "name_jp": "ヴァンドルディ・トレイズ１３日の金曜日",
+        "name_katakana": "ヴァンドルディ・トレイズ",
+        "name_jp": "１３日の金曜日",
         "option": "default"
       }
     ],
@@ -143962,7 +144484,8 @@
         "card": "Arts",
         "name": "Authentic Triumph",
         "name_cn": "粉碎吧，黄金的枷锁、黄金的耻辱",
-        "name_jp": "オーセンティック・トライアンフ砕けよ黄金の枷鎖、黄金の恥辱",
+        "name_katakana": "オーセンティック・トライアンフ",
+        "name_jp": "砕けよ黄金の枷鎖、黄金の恥辱",
         "option": "default"
       }
     ],
@@ -144440,7 +144963,8 @@
         "card": "Buster",
         "name": "Fairytale Erzsebet",
         "name_cn": "童话荆棘雪魔女",
-        "name_jp": "フェアリーテイル・エルジェーベト御伽茨雪魔嬢",
+        "name_katakana": "フェアリーテイル・エルジェーベト",
+        "name_jp": "御伽茨雪魔嬢",
         "option": "default"
       }
     ],
@@ -144814,7 +145338,8 @@
         "card": "Quick",
         "name": "Okuni Juuhachiban Izumoaragami Kabuki",
         "name_cn": "阿国十八番·出云荒神歌舞伎",
-        "name_jp": "おくにじゅうはちばん・いづもあらがみかぶき阿国十八番・出雲荒神歌舞伎",
+        "name_katakana": "おくにじゅうはちばん・いづもあらがみかぶき",
+        "name_jp": "阿国十八番・出雲荒神歌舞伎",
         "option": "default"
       }
     ],
@@ -145262,7 +145787,8 @@
         "card": "Arts",
         "name": "Orchid Rounds X",
         "name_cn": "兰丸·X",
-        "name_jp": "おーきっどらうんず・えっくす蘭丸・Ｘ",
+        "name_katakana": "おーきっどらうんず・えっくす",
+        "name_jp": "蘭丸・Ｘ",
         "option": "default"
       }
     ],
@@ -145682,7 +146208,8 @@
         "card": "Arts",
         "name": "龙啊，趁赴绵津见之原",
         "name_cn": "君啊，趁赴绵津见之原",
-        "name_jp": "りゅうよ、わだつみのはらをゆけ君よ、綿津見の原を征け",
+        "name_katakana": "りゅうよ、わだつみのはらをゆけ",
+        "name_jp": "君よ、綿津見の原を征け",
         "option": "强化后"
       },
       {
@@ -145722,7 +146249,8 @@
         "card": "Arts",
         "name": "龙啊，趁赴绵津见之原",
         "name_cn": "君啊，趁赴绵津见之原",
-        "name_jp": "りゅうよ、わだつみのはらをゆけ君よ、綿津見の原を征け",
+        "name_katakana": "りゅうよ、わだつみのはらをゆけ",
+        "name_jp": "君よ、綿津見の原を征け",
         "option": "强化前"
       }
     ],
@@ -146133,7 +146661,8 @@
         "card": "Quick",
         "name": "Happy Merry Christmas",
         "name_cn": "圣夜的美味佳肴，大家齐享受",
-        "name_jp": "ハッピー・メリー・クリスマス聖夜の御馳走、皆で楽しく",
+        "name_katakana": "ハッピー・メリー・クリスマス",
+        "name_jp": "聖夜の御馳走、皆で楽しく",
         "option": "default"
       }
     ],
@@ -146517,7 +147046,8 @@
         "card": "Quick",
         "name": "Dashinben",
         "name_cn": "打神鞭",
-        "name_jp": "だしんべん打神鞭",
+        "name_katakana": "だしんべん",
+        "name_jp": "打神鞭",
         "option": "default"
       }
     ],
@@ -146923,7 +147453,8 @@
         "card": "Buster",
         "name": "Змей Горыныч",
         "name_cn": "邪龙吐罪而临",
-        "name_jp": "ズメイ・ゴルィニシチェ邪竜来りて罪を吐く",
+        "name_katakana": "ズメイ・ゴルィニシチェ",
+        "name_jp": "邪竜来りて罪を吐く",
         "option": "强化后"
       },
       {
@@ -146970,7 +147501,8 @@
         "card": "Buster",
         "name": "Змей Горыныч",
         "name_cn": "邪龙吐罪而临",
-        "name_jp": "ズメイ・ゴルィニシチェ邪竜来りて罪を吐く",
+        "name_katakana": "ズメイ・ゴルィニシチェ",
+        "name_jp": "邪竜来りて罪を吐く",
         "option": "强化前"
       }
     ],
@@ -147314,7 +147846,8 @@
         "card": "Arts",
         "name": "Raiten Nikkou Maganeboshi Rakka Ryuusui",
         "name_cn": "雷天日光·祸音星落火流锤",
-        "name_jp": "らいてんにっこう・まがねぼしらっかりゅうすい雷天日光・禍音星落火流錘",
+        "name_katakana": "らいてんにっこう・まがねぼしらっかりゅうすい",
+        "name_jp": "雷天日光・禍音星落火流錘",
         "option": "default"
       }
     ],
@@ -147503,7 +148036,8 @@
         "card": "Buster",
         "name": "Тунгуска Ninedrive",
         "name_cn": "雷天日光·祸音星落火流锤",
-        "name_jp": "ツングースカ・ナインドライブ雷天日光・禍音星落火流錘",
+        "name_katakana": "ツングースカ・ナインドライブ",
+        "name_jp": "雷天日光・禍音星落火流錘",
         "option": "default"
       }
     ],
@@ -147927,7 +148461,8 @@
         "card": "Arts",
         "name": "Hecatic Wheel",
         "name_cn": "魔天之车轮",
-        "name_jp": "ヘカティック・ホイール魔天の車輪",
+        "name_katakana": "ヘカティック・ホイール",
+        "name_jp": "魔天の車輪",
         "option": "default"
       }
     ],
@@ -148338,7 +148873,8 @@
         "card": "Quick",
         "name": "Fragarach",
         "name_cn": "斩剜战神之剑",
-        "name_jp": "フラガラック斬り抉る戦神の剣",
+        "name_katakana": "フラガラック",
+        "name_jp": "斬り抉る戦神の剣",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -148399,7 +148935,8 @@
         "card": "Quick",
         "name": "Fragarach Enbarr",
         "name_cn": "奔勇战神之剑",
-        "name_jp": "フラガラック・アンヴァル奔り猛る戦神の剣",
+        "name_katakana": "フラガラック・アンヴァル",
+        "name_jp": "奔り猛る戦神の剣",
         "option": "第3阶段形象时"
       }
     ],
@@ -148839,7 +149376,8 @@
         "card": "Arts",
         "name": "并肩前行吧，于我们的国家",
         "name_cn": "奋起的六十五城",
-        "name_jp": "ともにあゆもう、われらのくにを奮起の六十五城",
+        "name_katakana": "ともにあゆもう、われらのくにを",
+        "name_jp": "奮起の六十五城",
         "option": "default"
       }
     ],
@@ -149342,7 +149880,8 @@
         "card": "Arts",
         "name": "Taisui Awaken",
         "name_cn": "太岁头上动土",
-        "name_jp": "タイソエイ・アウェイクン太歳頭上動土",
+        "name_katakana": "タイソエイ・アウェイクン",
+        "name_jp": "太歳頭上動土",
         "option": "default"
       }
     ],
@@ -149757,7 +150296,8 @@
         "card": "Buster",
         "name": "America's Sweetheart of Darkness",
         "name_cn": "开拓黑暗的星条之象",
-        "name_jp": "アメリカズ・スイートハート・オブ・ダークネス闇を拓く星条の象り",
+        "name_katakana": "アメリカズ・スイートハート・オブ・ダークネス",
+        "name_jp": "闇を拓く星条の象り",
         "option": "强化后"
       },
       {
@@ -149797,7 +150337,8 @@
         "card": "Buster",
         "name": "America's Sweetheart of Darkness",
         "name_cn": "开拓黑暗的星条之象",
-        "name_jp": "アメリカズ・スイートハート・オブ・ダークネス闇を拓く星条の象り",
+        "name_katakana": "アメリカズ・スイートハート・オブ・ダークネス",
+        "name_jp": "闇を拓く星条の象り",
         "option": "强化前"
       }
     ],
@@ -150184,7 +150725,8 @@
         "card": "Quick",
         "name": "Nezumijoudo",
         "name_cn": "鼠净土",
-        "name_jp": "ねずみじょうど鼠浄土",
+        "name_katakana": "ねずみじょうど",
+        "name_jp": "鼠浄土",
         "option": "default"
       }
     ],
@@ -150566,7 +151108,8 @@
         "card": "Arts",
         "name": "Duria Antiquior",
         "name_cn": "往昔的多塞特沿岸",
-        "name_jp": "ドゥリア・アンティクィオル在りし世のドーセット沿岸",
+        "name_katakana": "ドゥリア・アンティクィオル",
+        "name_jp": "在りし世のドーセット沿岸",
         "option": "default"
       }
     ],
@@ -150946,7 +151489,8 @@
         "card": "Buster",
         "name": "Theodosius Constantinos",
         "name_cn": "誓之所祈乃三重高墙",
-        "name_jp": "テオドシウス・コンスタンティノス祈誓たるは三重の貴壁",
+        "name_katakana": "テオドシウス・コンスタンティノス",
+        "name_jp": "祈誓たるは三重の貴壁",
         "option": "强化后"
       },
       {
@@ -150993,7 +151537,8 @@
         "card": "Buster",
         "name": "Theodosius Constantinos",
         "name_cn": "誓之所祈乃三重高墙",
-        "name_jp": "テオドシウス・コンスタンティノス祈誓たるは三重の貴壁",
+        "name_katakana": "テオドシウス・コンスタンティノス",
+        "name_jp": "祈誓たるは三重の貴壁",
         "option": "强化前"
       }
     ],
@@ -151455,7 +152000,8 @@
         "card": "Quick",
         "name": "Joyeuse Ordre",
         "name_cn": "彰显王威吧，踏遍世间的十二辉剑",
-        "name_jp": "ジュワユーズ・オルドル王勇を示せ、遍く世を巡る十二の輝剣",
+        "name_katakana": "ジュワユーズ・オルドル",
+        "name_jp": "王勇を示せ、遍く世を巡る十二の輝剣",
         "option": "default"
       }
     ],
@@ -151952,7 +152498,8 @@
         "card": "Buster",
         "name": "Durandal",
         "name_cn": "不毁的极圣",
-        "name_jp": "デュランダル不毀の極聖",
+        "name_katakana": "デュランダル",
+        "name_jp": "不毀の極聖",
         "option": "default"
       }
     ],
@@ -152352,7 +152899,8 @@
         "card": "Arts",
         "name": "Balmung Kriemhild",
         "name_cn": "流离魔剑・圣妃失坠",
-        "name_jp": "バルムンク・クリームヒルト流離魔剣・聖妃失墜",
+        "name_katakana": "バルムンク・クリームヒルト",
+        "name_jp": "流離魔剣・聖妃失墜",
         "option": "default"
       }
     ],
@@ -152757,7 +153305,8 @@
         "card": "Arts",
         "name": "Mathematical Malignant Annihilate",
         "name_cn": "数理的恶性摘出",
-        "name_jp": "マセマティカル・マリグナント・アナイアレイト数理的悪性摘出",
+        "name_katakana": "マセマティカル・マリグナント・アナイアレイト",
+        "name_jp": "数理的悪性摘出",
         "option": "强化后"
       },
       {
@@ -152811,7 +153360,8 @@
         "card": "Arts",
         "name": "Mathematical Malignant Annihilate",
         "name_cn": "数理的恶性摘出",
-        "name_jp": "マセマティカル・マリグナント・アナイアレイト数理的悪性摘出",
+        "name_katakana": "マセマティカル・マリグナント・アナイアレイト",
+        "name_jp": "数理的悪性摘出",
         "option": "强化前"
       }
     ],
@@ -153255,7 +153805,8 @@
         "card": "Quick",
         "name": "Valiente Asalto Dedicado a la Princesa",
         "name_cn": "呜呼，吾之枪自当献予心爱的公主！",
-        "name_jp": "ヴァリエンテ・アサルト・デディカド・ア・ラ・プリンセッサ嗚呼、愛しき姫に捧ぐとも我が槍を！",
+        "name_katakana": "ヴァリエンテ・アサルト・デディカド・ア・ラ・プリンセッサ",
+        "name_jp": "嗚呼、愛しき姫に捧ぐとも我が槍を！",
         "option": "default"
       }
     ],
@@ -153742,7 +154293,8 @@
         "card": "Quick",
         "name": "Soutensudenishisu，Koutenmasanitatsubeshi",
         "name_cn": "苍天已死，黄天当立",
-        "name_jp": "そうてんすでにしす、こうてんまさにたつべし蒼天已死、黄天當立",
+        "name_katakana": "そうてんすでにしす、こうてんまさにたつべし",
+        "name_jp": "蒼天已死、黄天當立",
         "option": "强化前"
       },
       {
@@ -153817,7 +154369,8 @@
         "card": "Quick",
         "name": "Soutensudenishisu，Koutenmasanitatsubeshi",
         "name_cn": "苍天已死，黄天当立",
-        "name_jp": "そうてんすでにしす、こうてんまさにたつべし蒼天已死、黄天當立",
+        "name_katakana": "そうてんすでにしす、こうてんまさにたつべし",
+        "name_jp": "蒼天已死、黄天當立",
         "option": "强化后"
       }
     ],
@@ -154211,7 +154764,8 @@
         "card": "Arts",
         "name": "Nansousatomihakkenden",
         "name_cn": "南总里见八犬传",
-        "name_jp": "なんそうさとみはっけんでん南総里見八犬伝",
+        "name_katakana": "なんそうさとみはっけんでん",
+        "name_jp": "南総里見八犬伝",
         "option": "default"
       }
     ],
@@ -154673,7 +155227,8 @@
         "card": "Buster",
         "name": "Gouchin Yumiharizuki",
         "name_cn": "轰沉·弓张月",
-        "name_jp": "ごうちん・ゆみはりづき轟沈・弓張月",
+        "name_katakana": "ごうちん・ゆみはりづき",
+        "name_jp": "轟沈・弓張月",
         "option": "default"
       }
     ],
@@ -155080,7 +155635,8 @@
         "card": "Buster",
         "name": "Marble Phantasm",
         "name_cn": "空想具现化",
-        "name_jp": "マーブルファンタズム空想具現化",
+        "name_katakana": "マーブルファンタズム",
+        "name_jp": "空想具現化",
         "option": "default"
       }
     ],
@@ -155479,7 +156035,8 @@
         "card": "Arts",
         "name": "Korenaruwafuroufushinoreiyakunari,Usodesukedo",
         "name_cn": "此乃不老不死的灵药＜谎言＞",
-        "name_jp": "これなるはふろうふしのれいやくなり、うそですけど是なるは不老不死の霊薬なり＜嘘＞",
+        "name_katakana": "これなるはふろうふしのれいやくなり、うそですけど",
+        "name_jp": "是なるは不老不死の霊薬なり＜嘘＞",
         "option": "default"
       }
     ],
@@ -155925,7 +156482,8 @@
         "card": "Arts",
         "name": "Winds of Avalon",
         "name_cn": "于彼招手的理想乡",
-        "name_jp": "ウィンズ・オブ・アヴァロン彼方に手まねく理想郷",
+        "name_katakana": "ウィンズ・オブ・アヴァロン",
+        "name_jp": "彼方に手まねく理想郷",
         "option": "default"
       }
     ],
@@ -156333,7 +156891,8 @@
         "card": "Buster",
         "name": "Lupus Strike Fang",
         "name_cn": "真·少女狼拔剑击",
-        "name_jp": "ルプス・ストライクファング真・乙女狼抜剣撃",
+        "name_katakana": "ルプス・ストライクファング",
+        "name_jp": "真・乙女狼抜剣撃",
         "option": "default"
       }
     ],
@@ -156750,7 +157309,8 @@
         "card": "Arts",
         "name": "Ibukinomitama Hachimyakudoto",
         "name_cn": "伊吹御灵·八脉怒涛",
-        "name_jp": "いぶきのみたま・はちみゃくどとう伊吹御霊・八脈怒濤",
+        "name_katakana": "いぶきのみたま・はちみゃくどとう",
+        "name_jp": "伊吹御霊・八脈怒濤",
         "option": "default"
       }
     ],
@@ -157173,7 +157733,8 @@
         "card": "Arts",
         "name": "Amenokagaminofune",
         "name_cn": "天乃罗摩船",
-        "name_jp": "アメノカガミノフネ天乃羅摩船",
+        "name_katakana": "アメノカガミノフネ",
+        "name_jp": "天乃羅摩船",
         "option": "default"
       }
     ],
@@ -157593,7 +158154,8 @@
         "card": "Quick",
         "name": "Gate of Aegir",
         "name_cn": "通往生命满溢的大海之门",
-        "name_jp": "ゲート・オブ・エーギル命溢るる大海への門",
+        "name_katakana": "ゲート・オブ・エーギル",
+        "name_jp": "命溢るる大海への門",
         "option": "default"
       }
     ],
@@ -158030,7 +158592,8 @@
         "card": "Buster",
         "name": "Lailai Kokuri kyonshizu",
         "name_cn": "到来吧酷吏僵尸团",
-        "name_jp": "らいらい・こくりきょんしーず来たれよ酷吏殭屍団",
+        "name_katakana": "らいらい・こくりきょんしーず",
+        "name_jp": "来たれよ酷吏殭屍団",
         "option": "default"
       }
     ],
@@ -158431,7 +158994,8 @@
         "card": "Arts",
         "name": "Fylgja Valkyrie",
         "name_cn": "最终攻击·天枪光轮",
-        "name_jp": "フュルギア・ワルキューレ最終攻撃・天槍光輪",
+        "name_katakana": "フュルギア・ワルキューレ",
+        "name_jp": "最終攻撃・天槍光輪",
         "option": "default"
       }
     ],
@@ -158835,7 +159399,8 @@
         "card": "Arts",
         "name": "Fylgja Valkyrie",
         "name_cn": "最终攻击·天枪光轮",
-        "name_jp": "フュルギア・ワルキューレ最終攻撃・天槍光輪",
+        "name_katakana": "フュルギア・ワルキューレ",
+        "name_jp": "最終攻撃・天槍光輪",
         "option": "default"
       }
     ],
@@ -159239,7 +159804,8 @@
         "card": "Arts",
         "name": "Fylgja Valkyrie",
         "name_cn": "最终攻击·天枪光轮",
-        "name_jp": "フュルギア・ワルキューレ最終攻撃・天槍光輪",
+        "name_katakana": "フュルギア・ワルキューレ",
+        "name_jp": "最終攻撃・天槍光輪",
         "option": "default"
       }
     ],
@@ -159644,7 +160210,8 @@
         "card": "Quick",
         "name": "Ichigoichie",
         "name_cn": "一期一会",
-        "name_jp": "いちごいちえ一期一会",
+        "name_katakana": "いちごいちえ",
+        "name_jp": "一期一会",
         "option": "default"
       }
     ],
@@ -160054,7 +160621,8 @@
         "card": "Arts",
         "name": "Yamazakura",
         "name_cn": "山樱",
-        "name_jp": "やまざくら山桜",
+        "name_katakana": "やまざくら",
+        "name_jp": "山桜",
         "option": "default"
       }
     ],
@@ -160518,7 +161086,8 @@
         "card": "Arts",
         "name": "Yoiyamikageru Tsukinomitama",
         "name_cn": "遮蔽暮夜月御珠",
-        "name_jp": "よいやみかげるつきのみたま宵闇翳る月御珠",
+        "name_katakana": "よいやみかげるつきのみたま",
+        "name_jp": "宵闇翳る月御珠",
         "option": "default"
       }
     ],
@@ -160940,7 +161509,8 @@
         "card": "Quick",
         "name": "Empousa Chain Tempest",
         "name_cn": "连环马大岚阵",
-        "name_jp": "エンプーサ・チェインテンペスト連環馬大嵐陣",
+        "name_katakana": "エンプーサ・チェインテンペスト",
+        "name_jp": "連環馬大嵐陣",
         "option": "default"
       }
     ],
@@ -161361,7 +161931,8 @@
         "card": "Buster",
         "name": "Kouhiko Hangokan Tenka Bakuyahouken",
         "name_cn": "黄飞虎反五关·天化莫邪宝剑",
-        "name_jp": "こうひこはんごかん・てんかばくやほうけん黄飛虎反五関・天化莫耶宝剣",
+        "name_katakana": "こうひこはんごかん・てんかばくやほうけん",
+        "name_jp": "黄飛虎反五関・天化莫耶宝剣",
         "option": "default"
       }
     ],
@@ -161815,7 +162386,8 @@
         "card": "Buster",
         "name": "Jiulong Elichan Shooting Star!",
         "name_cn": "九大青龙姬·流星天！",
-        "name_jp": "ジウロンエリチャン・しゅーてぃんぐすたー！九大青竜姫・流星天！",
+        "name_katakana": "ジウロンエリチャン・しゅーてぃんぐすたー！",
+        "name_jp": "九大青竜姫・流星天！",
         "option": "default"
       }
     ],
@@ -162288,7 +162860,8 @@
         "card": "Quick",
         "name": "Penetrate Blaiddyd",
         "name_cn": "妖精骑士·魔风贯吼",
-        "name_jp": "ペネトレイト・ブレイダッド妖精騎士・魔風吶喊",
+        "name_katakana": "ペネトレイト・ブレイダッド",
+        "name_jp": "妖精騎士・魔風吶喊",
         "option": "强化后"
       },
       {
@@ -162335,7 +162908,8 @@
         "card": "Quick",
         "name": "Penetrate Blaiddyd",
         "name_cn": "妖精骑士·魔风贯吼",
-        "name_jp": "ペネトレイト・ブレイダッド妖精騎士・魔風吶喊",
+        "name_katakana": "ペネトレイト・ブレイダッド",
+        "name_jp": "妖精騎士・魔風吶喊",
         "option": "强化前"
       }
     ],
@@ -162697,7 +163271,8 @@
         "card": "Arts",
         "name": "Зажигание Aŋra Mainiuu",
         "name_cn": "零落泛滥的暗黑心脏",
-        "name_jp": "ザジガーニエ・アンリマユ零れ氾く暗黒心臓",
+        "name_katakana": "ザジガーニエ・アンリマユ",
+        "name_jp": "零れ氾く暗黒心臓",
         "option": "default"
       }
     ],
@@ -163176,7 +163751,8 @@
         "card": "Arts",
         "name": "Neferu Swen Anubis",
         "name_cn": "吾美丽的冥府，开启那道路吧",
-        "name_jp": "ネフェルウ・スエン・アヌビス美しきわが冥府、その道を開け",
+        "name_katakana": "ネフェルウ・スエン・アヌビス",
+        "name_jp": "美しきわが冥府、その道を開け",
         "option": "default"
       }
     ],
@@ -163623,7 +164199,8 @@
         "card": "Arts",
         "name": "First Sun Xibalba",
         "name_cn": "第一太阳",
-        "name_jp": "ファーストサン・シバルバー第一の太陽",
+        "name_katakana": "ファーストサン・シバルバー",
+        "name_jp": "第一の太陽",
         "option": "default"
       }
     ],
@@ -164067,7 +164644,8 @@
         "card": "Quick",
         "name": "？？？",
         "name_cn": "？？？",
-        "name_jp": "？？？？？？",
+        "name_katakana": "？？？",
+        "name_jp": "？？？",
         "option": "真名建造前"
       },
       {
@@ -164114,7 +164692,8 @@
         "card": "Quick",
         "name": "Ometeotl Tenochtitlan",
         "name_cn": "重启动心脏都市",
-        "name_jp": "オメテオトル・テノチティトラン重起動心臓都市",
+        "name_katakana": "オメテオトル・テノチティトラン",
+        "name_jp": "重起動心臓都市",
         "option": "真名建造后"
       }
     ],
@@ -164572,7 +165151,8 @@
         "card": "Buster",
         "name": "Kinich Ahau Impact",
         "name_cn": "星，自宇宙坠落",
-        "name_jp": "キニチ・アハウ・インパクト星、宙より落ち来たる",
+        "name_katakana": "キニチ・アハウ・インパクト",
+        "name_jp": "星、宙より落ち来たる",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -164626,7 +165206,8 @@
         "card": "Buster",
         "name": "Last Sun Xibalba",
         "name_cn": "星，自宇宙坠落",
-        "name_jp": "ラストサン・シバルバー星、宙より落ち来たる",
+        "name_katakana": "ラストサン・シバルバー",
+        "name_jp": "星、宙より落ち来たる",
         "option": "第3阶段形象时"
       }
     ],
@@ -165025,7 +165606,8 @@
         "card": "Arts",
         "name": "Legendum Papa Thronus",
         "name_cn": "祈祷敬献给光辉荣耀之玉座",
-        "name_jp": "レジェンダム・パーパ・トロヌス祈り捧ぐは輝きし栄光の玉座",
+        "name_katakana": "レジェンダム・パーパ・トロヌス",
+        "name_jp": "祈り捧ぐは輝きし栄光の玉座",
         "option": "default"
       }
     ],
@@ -165457,7 +166039,8 @@
         "card": "Quick",
         "name": "Choukyuuishin Kiheitai",
         "name_cn": "超级维新·奇兵队",
-        "name_jp": "ちょうきゅういしん・きへいたい超級維新・奇兵隊",
+        "name_katakana": "ちょうきゅういしん・きへいたい",
+        "name_jp": "超級維新・奇兵隊",
         "option": "default"
       }
     ],
@@ -165856,7 +166439,8 @@
         "card": "Buster",
         "name": "Nammu Duranki",
         "name_cn": "吾坚毅之子啊，必抗创世之理",
-        "name_jp": "ナンム・ドゥルアンキ毅き仔よ、創世の理に抗え",
+        "name_katakana": "ナンム・ドゥルアンキ",
+        "name_jp": "毅き仔よ、創世の理に抗え",
         "option": "default"
       }
     ],
@@ -166265,7 +166849,8 @@
         "card": "Arts",
         "name": "Babalon Domus Aurea",
         "name_cn": "拥抱融解的黄金剧场",
-        "name_jp": "ベイバロン・ドムス・アウレア抱き融す黄金劇場",
+        "name_katakana": "ベイバロン・ドムス・アウレア",
+        "name_jp": "抱き融す黄金劇場",
         "option": "default"
       }
     ],
@@ -166752,7 +167337,8 @@
         "card": "Arts",
         "name": "Finis Fungus",
         "name_cn": "菇，既为神圣肴馔",
-        "name_jp": "フィニス・フングス茸、聖なる御饌なれば",
+        "name_katakana": "フィニス・フングス",
+        "name_jp": "茸、聖なる御饌なれば",
         "option": "default"
       }
     ],
@@ -167146,7 +167732,8 @@
         "card": "Quick",
         "name": "Cruadin Setanta",
         "name_cn": "斩断死辉之刃",
-        "name_jp": "クルージーン・セタンタ裂き断つ死輝の刃",
+        "name_katakana": "クルージーン・セタンタ",
+        "name_jp": "裂き断つ死輝の刃",
         "option": "default"
       }
     ],
@@ -167618,7 +168205,8 @@
         "card": "Quick",
         "name": "Karakurigehou Shishifunjin",
         "name_cn": "机关外法·狮子奋迅",
-        "name_jp": "からくりげほう・ししふんじん絡繰外法・獅子奮迅",
+        "name_katakana": "からくりげほう・ししふんじん",
+        "name_jp": "絡繰外法・獅子奮迅",
         "option": "default"
       }
     ],
@@ -168041,7 +168629,8 @@
         "card": "Buster",
         "name": "Maruti Vayuputra",
         "name_cn": "风神之子，在此",
-        "name_jp": "マールティ・ヴァーユプトラ風神の子、此処に在り",
+        "name_katakana": "マールティ・ヴァーユプトラ",
+        "name_jp": "風神の子、此処に在り",
         "option": "default"
       }
     ],
@@ -168453,7 +169042,8 @@
         "card": "Arts",
         "name": "Jai Kaurava",
         "name_cn": "由一而生的持国百子",
-        "name_jp": "ジャイ・カウラヴァ一より生まれし百王子",
+        "name_katakana": "ジャイ・カウラヴァ",
+        "name_jp": "一より生まれし百王子",
         "option": "default"
       }
     ],
@@ -168873,7 +169463,8 @@
         "card": "Arts",
         "name": "Mahisasuramardini",
         "name_cn": "愤怒啊，愿望啊，戮尽诸魔的女神啊",
-        "name_jp": "マヒシャースラマルディニー怒りよ、願いよ、魔を鏖殺する女神よ",
+        "name_katakana": "マヒシャースラマルディニー",
+        "name_jp": "怒りよ、願いよ、魔を鏖殺する女神よ",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -168920,7 +169511,8 @@
         "card": "Arts",
         "name": "Samhara Kali",
         "name_cn": "粉碎世界的胜利之舞",
-        "name_jp": "サンハーラ・カーリー世界を砕く勝利の舞踏",
+        "name_katakana": "サンハーラ・カーリー",
+        "name_jp": "世界を砕く勝利の舞踏",
         "option": "第3阶段形象时"
       }
     ],
@@ -169337,7 +169929,8 @@
         "card": "Quick",
         "name": "Chrysaor",
         "name_cn": "怪物的黄金剑",
-        "name_jp": "クリューサーオール怪物の黄金剣",
+        "name_katakana": "クリューサーオール",
+        "name_jp": "怪物の黄金剣",
         "option": "default"
       }
     ],
@@ -169767,7 +170360,8 @@
         "card": "Buster",
         "name": "Memory of Londinium",
         "name_cn": "圣剑遥远梦之遗痕",
-        "name_jp": "メモリー・オブ・ロンディニウム聖剣遙か夢の名残",
+        "name_katakana": "メモリー・オブ・ロンディニウム",
+        "name_jp": "聖剣遙か夢の名残",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -169836,7 +170430,8 @@
         "card": "Buster",
         "name": "Summer Pool Dozmary",
         "name_cn": "孵化希望夏之水镜",
-        "name_jp": "サマープール・ドズマリー希望孵す夏の水鏡",
+        "name_katakana": "サマープール・ドズマリー",
+        "name_jp": "希望孵す夏の水鏡",
         "option": "第3阶段形象时"
       }
     ],
@@ -170309,7 +170904,8 @@
         "card": "Arts",
         "name": "Hope Will Camelot",
         "name_cn": "承继宿愿希望之剑",
-        "name_jp": "ホープウィル・キャメロット宿願接ぐ希望の剣",
+        "name_katakana": "ホープウィル・キャメロット",
+        "name_jp": "宿願接ぐ希望の剣",
         "option": "default"
       }
     ],
@@ -170722,7 +171318,8 @@
         "card": "Quick",
         "name": "Natsumorijoudo Kourinteien",
         "name_cn": "夏盛净土·光轮庭园",
-        "name_jp": "なつもりじょうど・こうりんていえん夏盛浄土・光輪庭園",
+        "name_katakana": "なつもりじょうど・こうりんていえん",
+        "name_jp": "夏盛浄土・光輪庭園",
         "option": "default"
       }
     ],
@@ -171142,7 +171739,8 @@
         "card": "Quick",
         "name": "Monochrome Impulse",
         "name_cn": "传递给你，五彩缤纷的白与黑",
-        "name_jp": "モノクローム・インパルス貴方へ届け、極彩色の白と黒",
+        "name_katakana": "モノクローム・インパルス",
+        "name_jp": "貴方へ届け、極彩色の白と黒",
         "option": "default"
       }
     ],
@@ -171535,7 +172133,8 @@
         "card": "Arts",
         "name": "Queen's Melty Heart",
         "name_cn": "永动机·妖精帝国",
-        "name_jp": "クイーンズ・メルティハート永久機関・妖精帝国",
+        "name_katakana": "クイーンズ・メルティハート",
+        "name_jp": "永久機関・妖精帝国",
         "option": "default"
       }
     ],
@@ -171990,7 +172589,8 @@
         "card": "Arts",
         "name": "Sprite Albion",
         "name_cn": "架起彩虹的无垢搏动",
-        "name_jp": "スプライト・アルビオン虹を架ける、無垢なる鼓動",
+        "name_katakana": "スプライト・アルビオン",
+        "name_jp": "虹を架ける、無垢なる鼓動",
         "option": "default"
       }
     ],
@@ -172442,7 +173042,8 @@
         "card": "Arts",
         "name": "Water Save Galatine",
         "name_cn": "驱灾日轮之角",
-        "name_jp": "ウォーターセーブ・ガラティーン災禍祓う日輪の角",
+        "name_katakana": "ウォーターセーブ・ガラティーン",
+        "name_jp": "災禍祓う日輪の角",
         "option": "普通时"
       },
       {
@@ -172489,7 +173090,8 @@
         "card": "Arts",
         "name": "Water Save Galatine",
         "name_cn": "驱灾日轮之角",
-        "name_jp": "ウォーターセーブ・ガラティーン災禍祓う日輪の角",
+        "name_katakana": "ウォーターセーブ・ガラティーン",
+        "name_jp": "災禍祓う日輪の角",
         "option": "宝具切换时<技能3可切换宝具·宝具阶级变化为A>"
       }
     ],
@@ -172945,7 +173547,8 @@
         "card": "Buster",
         "name": "Easter Failnaught",
         "name_cn": "祝贺跃祭",
-        "name_jp": "イースター・フェイルノート祝いの躍祭",
+        "name_katakana": "イースター・フェイルノート",
+        "name_jp": "祝いの躍祭",
         "option": "default"
       }
     ],
@@ -173412,7 +174015,8 @@
         "card": "Quick",
         "name": "Wandjina Mamaragan Seven Stars",
         "name_cn": "旺吉娜之怒",
-        "name_jp": "ワンジナ・ママラガン・セブンスターズワンジナの怒り",
+        "name_katakana": "ワンジナ・ママラガン・セブンスターズ",
+        "name_jp": "ワンジナの怒り",
         "option": "default"
       }
     ],
@@ -173836,7 +174440,8 @@
         "card": "Buster",
         "name": "Pharos Tis Alexandreias",
         "name_cn": "月所未知，久远之光",
-        "name_jp": "ファロス・ティス・アレクサンドリアス月は知らず、久遠の光",
+        "name_katakana": "ファロス・ティス・アレクサンドリアス",
+        "name_jp": "月は知らず、久遠の光",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -173883,7 +174488,8 @@
         "card": "Arts",
         "name": "Bibliotheca Basileus",
         "name_cn": "王之书库",
-        "name_jp": "ビブリオテーケ・バシレイオー王の書庫",
+        "name_katakana": "ビブリオテーケ・バシレイオー",
+        "name_jp": "王の書庫",
         "option": "第3阶段形象时"
       }
     ],
@@ -174430,7 +175036,8 @@
         "card": "Buster",
         "name": "Futatsutamaniteuchitesourou",
         "name_cn": "以二弹击之",
-        "name_jp": "ふたつたまにてうちてそうろう二つ玉にて撃ちて候",
+        "name_katakana": "ふたつたまにてうちてそうろう",
+        "name_jp": "二つ玉にて撃ちて候",
         "option": "强化后"
       },
       {
@@ -174502,7 +175109,8 @@
         "card": "Buster",
         "name": "Futatsutamaniteuchitesourou",
         "name_cn": "以二弹击之",
-        "name_jp": "ふたつたまにてうちてそうろう二つ玉にて撃ちて候",
+        "name_katakana": "ふたつたまにてうちてそうろう",
+        "name_jp": "二つ玉にて撃ちて候",
         "option": "强化前"
       }
     ],
@@ -174897,7 +175505,8 @@
         "card": "Arts",
         "name": "Ariadne Apólyto Ádis",
         "name_cn": "于是纺线引向极点",
-        "name_jp": "アリアドネ・アポリト・アディスかくして紡糸は極点へ誘う",
+        "name_katakana": "アリアドネ・アポリト・アディス",
+        "name_jp": "かくして紡糸は極点へ誘う",
         "option": "default"
       }
     ],
@@ -175336,7 +175945,8 @@
         "card": "Buster",
         "name": "Fuurinkazan",
         "name_cn": "风林火山",
-        "name_jp": "ふうりんかざん風林火山",
+        "name_katakana": "ふうりんかざん",
+        "name_jp": "風林火山",
         "option": "default"
       }
     ],
@@ -175731,7 +176341,8 @@
         "card": "Buster",
         "name": "Ryuuhikennn",
         "name_cn": "龙飞剑",
-        "name_jp": "りゅうひけん龍飛剣",
+        "name_katakana": "りゅうひけん",
+        "name_jp": "龍飛剣",
         "option": "default"
       }
     ],
@@ -176118,7 +176729,8 @@
         "card": "Quick",
         "name": "Juushin Yatagarasu",
         "name_cn": "铳神·八咫乌",
-        "name_jp": "じゅうしん・やたがらす銃神・八咫烏",
+        "name_katakana": "じゅうしん・やたがらす",
+        "name_jp": "銃神・八咫烏",
         "option": "default"
       }
     ],
@@ -176529,7 +177141,8 @@
         "card": "Arts",
         "name": "Bitennhassou Shiranui",
         "name_cn": "毗天八相·不知火",
-        "name_jp": "びてんはっそう・しらぬい毘天八相・不知火",
+        "name_katakana": "びてんはっそう・しらぬい",
+        "name_jp": "毘天八相・不知火",
         "option": "default"
       }
     ],
@@ -176945,7 +177558,8 @@
         "card": "Arts",
         "name": "Holy Run Nautilus",
         "name_cn": "吾将承担，平安夜的鹦鹉螺",
-        "name_jp": "ホーリーラン・ノーチラス我は担う、聖夜祭の鸚鵡貝",
+        "name_katakana": "ホーリーラン・ノーチラス",
+        "name_jp": "我は担う、聖夜祭の鸚鵡貝",
         "option": "default"
       }
     ],
@@ -177343,7 +177957,8 @@
         "card": "Arts",
         "name": "Zetsugi Hakkidotou",
         "name_cn": "绝技·八岐怒涛",
-        "name_jp": "ぜつぎ・はっきどとう絶技・八岐怒濤",
+        "name_katakana": "ぜつぎ・はっきどとう",
+        "name_jp": "絶技・八岐怒濤",
         "option": "default"
       }
     ],
@@ -177767,7 +178382,8 @@
         "card": "Quick",
         "name": "Goouhanntenn Jinnraihuuretsu",
         "name_cn": "牛王反转·迅雷风烈",
-        "name_jp": "ごおうはんてん・じんらいふうれつ牛王反転・迅雷風烈",
+        "name_katakana": "ごおうはんてん・じんらいふうれつ",
+        "name_jp": "牛王反転・迅雷風烈",
         "option": "default"
       }
     ],
@@ -178230,7 +178846,8 @@
         "card": "Arts",
         "name": "Resshijunnmei Fushakushinnmyou",
         "name_cn": "烈士徇名·不惜身命",
-        "name_jp": "れっしじゅんめい・ふしゃくしんみょう烈士徇名・不惜身命",
+        "name_katakana": "れっしじゅんめい・ふしゃくしんみょう",
+        "name_jp": "烈士徇名・不惜身命",
         "option": "default"
       }
     ],
@@ -178659,7 +179276,8 @@
         "card": "Buster",
         "name": "Hikenn Hiyokusennyou",
         "name_cn": "秘剑·比翼闪耀",
-        "name_jp": "ひけん・ひよくせんよう秘剣・比翼閃耀",
+        "name_katakana": "ひけん・ひよくせんよう",
+        "name_jp": "秘剣・比翼閃耀",
         "option": "default"
       }
     ],
@@ -179136,7 +179754,8 @@
         "card": "Quick",
         "name": "Aethiopis Ketos",
         "name_cn": "沉睡于那片海中的鲸龙",
-        "name_jp": "アイティオピアー・ケトゥス彼の海にて眠る鯨竜",
+        "name_katakana": "アイティオピアー・ケトゥス",
+        "name_jp": "彼の海にて眠る鯨竜",
         "option": "default"
       }
     ],
@@ -179597,7 +180216,8 @@
         "card": "Arts",
         "name": "Vae Victis",
         "name_cn": "悲剧流转·黑华葬列",
-        "name_jp": "ヴィ・ヴィクテス悲劇流転・黒華葬列",
+        "name_katakana": "ヴィ・ヴィクテス",
+        "name_jp": "悲劇流転・黒華葬列",
         "option": "default"
       }
     ],
@@ -180025,7 +180645,8 @@
         "card": "Arts",
         "name": "Zabaniya",
         "name_cn": "无想驱体",
-        "name_jp": "ザバーニーヤ無想駆体",
+        "name_katakana": "ザバーニーヤ",
+        "name_jp": "無想駆体",
         "option": "default"
       }
     ],
@@ -180419,7 +181040,8 @@
         "card": "Quick",
         "name": "Paradis Chateau d'If",
         "name_cn": "星啊，赴蹈辉途",
-        "name_jp": "パラディ・シャトー・ディフ星よ、輝きの道を征け",
+        "name_katakana": "パラディ・シャトー・ディフ",
+        "name_jp": "星よ、輝きの道を征け",
         "option": "default"
       }
     ],
@@ -180825,7 +181447,8 @@
         "card": "Arts",
         "name": "Rebellion au Monde",
         "name_cn": "赐秩序以死亡，授普世以混沌",
-        "name_jp": "レベリオン・ウ・モンド秩序に死を、遍く世界に混沌を",
+        "name_katakana": "レベリオン・ウ・モンド",
+        "name_jp": "秩序に死を、遍く世界に混沌を",
         "option": "default"
       }
     ],
@@ -181509,7 +182132,8 @@
         "card": "Arts",
         "name": "Unfinished Blue",
         "name_cn": "逆行银河·红移",
-        "name_jp": "アンフィニッシュド・ブルー逆行銀河・赤方偏移",
+        "name_katakana": "アンフィニッシュド・ブルー",
+        "name_jp": "逆行銀河・赤方偏移",
         "option": "苍崎青子时"
       },
       {
@@ -182351,7 +182975,8 @@
         "card": "Quick",
         "name": "Great Three, Flat Snark",
         "name_cn": "童话怪物，月之油",
-        "name_jp": "グレートスリー、フラットスナーク童話の怪物、月の油",
+        "name_katakana": "グレートスリー、フラットスナーク",
+        "name_jp": "童話の怪物、月の油",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -182412,7 +183037,8 @@
         "card": "Quick",
         "name": "Great Three, Wandersnatch",
         "name_cn": "童话怪物，蔷薇猎犬",
-        "name_jp": "グレートスリー、ワンダースナッチ童話の怪物、薔薇の猟犬",
+        "name_katakana": "グレートスリー、ワンダースナッチ",
+        "name_jp": "童話の怪物、薔薇の猟犬",
         "option": "第3阶段形象时"
       }
     ],
@@ -182884,7 +183510,8 @@
         "card": "Quick",
         "name": "Unasakahiraku Michihikinotama",
         "name_cn": "开辟海境的满干珠",
-        "name_jp": "うなさかひらくみちひきのたま海境闢く満干珠",
+        "name_katakana": "うなさかひらくみちひきのたま",
+        "name_jp": "海境闢く満干珠",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -182949,7 +183576,8 @@
         "card": "Quick",
         "name": "Starlit Marmalade",
         "name_cn": "照耀常夜的引导之星",
-        "name_jp": "スターリット・マーマレード常夜を照らす導きの星",
+        "name_katakana": "スターリット・マーマレード",
+        "name_jp": "常夜を照らす導きの星",
         "option": "第3阶段形象时"
       }
     ],
@@ -183423,7 +184051,8 @@
         "card": "Arts",
         "name": "Edin Shugrra Collapsar",
         "name_cn": "闪烁于终局宇宙的兽冠",
-        "name_jp": "エディン・シュグラ・コラプサー終局宇宙に閃く獣冠",
+        "name_katakana": "エディン・シュグラ・コラプサー",
+        "name_jp": "終局宇宙に閃く獣冠",
         "option": "default"
       }
     ],
@@ -183954,7 +184583,8 @@
         "card": "Buster",
         "name": "Code：Original Sin",
         "name_cn": "第七圣典·断罪死",
-        "name_jp": "コード：オリジナル・シン第七聖典・断罪死",
+        "name_katakana": "コード：オリジナル・シン",
+        "name_jp": "第七聖典・断罪死",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -184022,7 +184652,8 @@
         "card": "Buster",
         "name": "Calvaria Galgalim",
         "name_cn": "原理血戒·断头台",
-        "name_jp": "カルヴァリア・ガルガリン原理血戒・断頭台",
+        "name_katakana": "カルヴァリア・ガルガリン",
+        "name_jp": "原理血戒・断頭台",
         "option": "第3阶段形象时"
       }
     ],
@@ -184520,7 +185151,8 @@
         "card": "Arts",
         "name": "Кладенец Змей Татар",
         "name_cn": "四分五裂吧，大地母亲",
-        "name_jp": "クラデニェツ・ズメイ・タタール四つに裂けよ、母なる大地",
+        "name_katakana": "クラデニェツ・ズメイ・タタール",
+        "name_jp": "四つに裂けよ、母なる大地",
         "option": "default"
       }
     ],
@@ -184975,7 +185607,8 @@
         "card": "Buster",
         "name": "Yuugurenite Zessoku,Tasogarenite Chainsaw",
         "name_cn": "于日暮气绝，予黄昏电锯",
-        "name_jp": "ゆうぐれにてぜっそく、たそがれにてちぇーんそー夕暮にて絶息、黄昏にて電鋸",
+        "name_katakana": "ゆうぐれにてぜっそく、たそがれにてちぇーんそー",
+        "name_jp": "夕暮にて絶息、黄昏にて電鋸",
         "option": "default"
       }
     ],
@@ -185409,7 +186042,8 @@
         "card": "Arts",
         "name": "Cosmos Craft Crater",
         "name_cn": "C.C.C.",
-        "name_jp": "コスモス・クラフト・クレーターＣ.Ｃ.Ｃ.",
+        "name_katakana": "コスモス・クラフト・クレーター",
+        "name_jp": "Ｃ.Ｃ.Ｃ.",
         "option": "攻击类型"
       },
       {
@@ -185456,7 +186090,8 @@
         "card": "Arts",
         "name": "Gold Gigant Garment",
         "name_cn": "G.G.G.",
-        "name_jp": "ゴールド・ギガント・ガーメントＧ.Ｇ.Ｇ.",
+        "name_katakana": "ゴールド・ギガント・ガーメント",
+        "name_jp": "Ｇ.Ｇ.Ｇ.",
         "option": "防御类型"
       }
     ],
@@ -185944,7 +186579,8 @@
         "card": "Quick",
         "name": "Armored Tenochtitlan",
         "name_cn": "重装甲决战都市",
-        "name_jp": "アーマード・テノチティトラン重装甲決戦都市",
+        "name_katakana": "アーマード・テノチティトラン",
+        "name_jp": "重装甲決戦都市",
         "option": "default"
       }
     ],
@@ -186395,7 +187031,8 @@
         "card": "Buster",
         "name": "Soushisennkou Midaraba Chaos",
         "name_cn": "创始闪光紊乱即混沌",
-        "name_jp": "そうしせんこうみだらばけいおす創始閃光紊らば混沌",
+        "name_katakana": "そうしせんこうみだらばけいおす",
+        "name_jp": "創始閃光紊らば混沌",
         "option": "default"
       }
     ],
@@ -186825,7 +187462,8 @@
         "card": "Buster",
         "name": "Void Record Moon Anchor",
         "name_cn": "观测吧，没有主人的月之棺",
-        "name_jp": "ヴォイドレコード・ムーンアンカー観測せよ、主なき月の柩",
+        "name_katakana": "ヴォイドレコード・ムーンアンカー",
+        "name_jp": "観測せよ、主なき月の柩",
         "option": "通常"
       },
       {
@@ -186857,7 +187495,8 @@
         "card": "Buster",
         "name": "Void Record Moon Writer",
         "name_cn": "编撰吧，虚空之月",
-        "name_jp": "ヴォイドレコード・ムーンライター編纂せよ虚空の月",
+        "name_katakana": "ヴォイドレコード・ムーンライター",
+        "name_jp": "編纂せよ虚空の月",
         "option": "奏章Ⅲ剧情限定"
       }
     ],
@@ -187269,7 +187908,8 @@
         "card": "Buster",
         "name": "Void Record Moon Anchor",
         "name_cn": "记录吧，没有读者的月之棺",
-        "name_jp": "ヴォイドレコード・ムーンアンカー記録せよ、読み手なき月の柩",
+        "name_katakana": "ヴォイドレコード・ムーンアンカー",
+        "name_jp": "記録せよ、読み手なき月の柩",
         "option": "通常"
       },
       {
@@ -187301,7 +187941,8 @@
         "card": "Buster",
         "name": "Void Record Moon Writer",
         "name_cn": "编撰吧，虚空之月",
-        "name_jp": "ヴォイドレコード・ムーンライター編纂せよ虚空の月",
+        "name_katakana": "ヴォイドレコード・ムーンライター",
+        "name_jp": "編纂せよ虚空の月",
         "option": "奏章Ⅲ剧情限定"
       }
     ],
@@ -187726,7 +188367,8 @@
         "card": "Quick",
         "name": "Gallitraps Funny Murian",
         "name_cn": "不断扩张的世界",
-        "name_jp": "ガリトラップ・ファニームリアン拡がりゆく世界",
+        "name_katakana": "ガリトラップ・ファニームリアン",
+        "name_jp": "拡がりゆく世界",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -187773,7 +188415,8 @@
         "card": "Quick",
         "name": "Atom Micros Murian Foot",
         "name_cn": "逐渐缩小的世界",
-        "name_jp": "アトムミクロス・ムリアンフット縮みゆく世界",
+        "name_katakana": "アトムミクロス・ムリアンフット",
+        "name_jp": "縮みゆく世界",
         "option": "第3阶段形象时"
       }
     ],
@@ -188246,7 +188889,8 @@
         "card": "Arts",
         "name": "？？？",
         "name_cn": "？？？",
-        "name_jp": "？？？？？？",
+        "name_katakana": "？？？",
+        "name_jp": "？？？",
         "option": "灵基解放前"
       },
       {
@@ -188314,7 +188958,8 @@
         "card": "Arts",
         "name": "Ibi r Wenutef Nebedet Gereh",
         "name_cn": "过甚神秘的心脏",
-        "name_jp": "イヴァイヤー・ウェントゥ・ネベデト・ゲレク過分なる神秘の心臓",
+        "name_katakana": "イヴァイヤー・ウェントゥ・ネベデト・ゲレク",
+        "name_jp": "過分なる神秘の心臓",
         "option": "灵基解放后"
       }
     ],
@@ -188782,7 +189427,8 @@
         "card": "Quick",
         "name": "Caféterras bij nacht",
         "name_cn": "夜间露天咖啡座",
-        "name_jp": "カッフェーテラス・ベイ・ナフト夜のカフェテラス",
+        "name_katakana": "カッフェーテラス・ベイ・ナフト",
+        "name_jp": "夜のカフェテラス",
         "option": "default"
       }
     ],
@@ -189312,7 +189958,8 @@
         "card": "Quick",
         "name": "Polaris Circulation",
         "name_cn": "极星天球壳循环",
-        "name_jp": "ポラリス・サーキュレーション極星天球殻循環",
+        "name_katakana": "ポラリス・サーキュレーション",
+        "name_jp": "極星天球殻循環",
         "option": "default"
       }
     ],
@@ -189754,7 +190401,8 @@
         "card": "Arts",
         "name": "Grand Pas de Deux",
         "name_cn": "渴盼朦胧之梦",
-        "name_jp": "グラン・パ・ド・ドゥ希う淡き夢見し",
+        "name_katakana": "グラン・パ・ド・ドゥ",
+        "name_jp": "希う淡き夢見し",
         "option": "default"
       }
     ],
@@ -190213,7 +190861,8 @@
         "card": "Buster",
         "name": "Marble Phantasm Happy-Verse",
         "name_cn": "空想具现化·万物之篡夺",
-        "name_jp": "マーブルファンタズム・ハッピーヴァース空想具現化・万物の簒奪",
+        "name_katakana": "マーブルファンタズム・ハッピーヴァース",
+        "name_jp": "空想具現化・万物の簒奪",
         "option": "default"
       }
     ],
@@ -190712,7 +191361,8 @@
         "card": "Buster",
         "name": "Utopie Purgatoire",
         "name_cn": "狮子咆哮，吟咏那飒飒之炼狱吧",
-        "name_jp": "ユートピー・ピュルガトワール獅子吼よ詠え、颯颯たる煉獄を",
+        "name_katakana": "ユートピー・ピュルガトワール",
+        "name_jp": "獅子吼よ詠え、颯颯たる煉獄を",
         "option": "default"
       }
     ],
@@ -191189,7 +191839,8 @@
         "card": "Quick",
         "name": "Visconti Asenza",
         "name_cn": "米兰蛇龙·纹章咬合",
-        "name_jp": "ヴィスコンティ・アセンツァ未蘭蛇竜・紋章咬合",
+        "name_katakana": "ヴィスコンティ・アセンツァ",
+        "name_jp": "未蘭蛇竜・紋章咬合",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -191243,7 +191894,8 @@
         "card": "Quick",
         "name": "Dragon Phantasm",
         "name_cn": "有鳞幻想",
-        "name_jp": "ドラゴンファンタズム有鱗幻想",
+        "name_katakana": "ドラゴンファンタズム",
+        "name_jp": "有鱗幻想",
         "option": "第3阶段形象时"
       }
     ],
@@ -191697,7 +192349,8 @@
         "card": "Arts",
         "name": "Kurohime Monogatari Kaminagashi",
         "name_cn": "黑姬物语·发流",
-        "name_jp": "くろひめものがたり・かみながし黒姫物語・髪流",
+        "name_katakana": "くろひめものがたり・かみながし",
+        "name_jp": "黒姫物語・髪流",
         "option": "default"
       }
     ],
@@ -192165,7 +192818,8 @@
         "card": "Quick",
         "name": "Komachidennsetsu Kajinnhakumei",
         "name_cn": "小町传说·佳人薄命",
-        "name_jp": "こまちでんせつ・かじんはくめい小町伝説・佳人薄命",
+        "name_katakana": "こまちでんせつ・かじんはくめい",
+        "name_jp": "小町伝説・佳人薄命",
         "option": "default"
       }
     ],
@@ -192772,7 +193426,8 @@
         "card": "Arts",
         "name": "Lasciate ogni speranza, voi ch'entrate",
         "name_cn": "凡入此门者，必当捐弃一切希望",
-        "name_jp": "ラシャーテ・オーニ・スペランツァ、ヴォイ・ケントラーテ汝、この門を潜る者、一切の希望を捨てよ",
+        "name_katakana": "ラシャーテ・オーニ・スペランツァ、ヴォイ・ケントラーテ",
+        "name_jp": "汝、この門を潜る者、一切の希望を捨てよ",
         "option": "default"
       }
     ],
@@ -193262,7 +193917,8 @@
         "card": "Buster",
         "name": "Univers Immortelle Metatron",
         "name_cn": "那全知全能的将为主宰",
-        "name_jp": "ユニヴェール・イモルテル・メタトロン司るは全知全能なりて",
+        "name_katakana": "ユニヴェール・イモルテル・メタトロン",
+        "name_jp": "司るは全知全能なりて",
         "option": "default"
       }
     ],
@@ -193661,7 +194317,8 @@
         "card": "Arts",
         "name": "Dharma-Ashoka Chakra Vartin",
         "name_cn": "法阿育·转轮圣王",
-        "name_jp": "ダルマ＝アショーカ・チャクラ・ヴァルティン法阿育・転輪聖王",
+        "name_katakana": "ダルマ＝アショーカ・チャクラ・ヴァルティン",
+        "name_jp": "法阿育・転輪聖王",
         "option": "default"
       }
     ],
@@ -194138,7 +194795,8 @@
         "card": "Quick",
         "name": "Ishá Ra'á",
         "name_cn": "虚妄乃黑暗之女",
-        "name_jp": "イシャー・ラーアー虚妄は闇の娘",
+        "name_katakana": "イシャー・ラーアー",
+        "name_jp": "虚妄は闇の娘",
         "option": "default"
       }
     ],
@@ -194563,7 +195221,8 @@
         "card": "Buster",
         "name": "Typhon",
         "name_cn": "虚空回天的龙之杯",
-        "name_jp": "テュフォン虚空廻天す竜の杯",
+        "name_katakana": "テュフォン",
+        "name_jp": "虚空廻天す竜の杯",
         "option": "default"
       }
     ],
@@ -195053,7 +195712,8 @@
         "card": "Quick",
         "name": "Śakra Vajra",
         "name_cn": "神之雷",
-        "name_jp": "シャクラ・ヴァジュラ神の雷",
+        "name_katakana": "シャクラ・ヴァジュラ",
+        "name_jp": "神の雷",
         "option": "default"
       }
     ],
@@ -195739,7 +196399,8 @@
         "card": "Buster",
         "name": "Planet OlgaMarie",
         "name_cn": "既已过去的人理之终",
-        "name_jp": "プラネット・オルガマリーすでに過ぎし人理の終",
+        "name_katakana": "プラネット・オルガマリー",
+        "name_jp": "すでに過ぎし人理の終",
         "option": "default"
       }
     ],
@@ -196184,7 +196845,8 @@
         "card": "Buster",
         "name": "Parvati Grancia",
         "name_cn": "纵使爱会教人经受苦难",
-        "name_jp": "パールヴァティー・グランシア愛が受難を招くとも",
+        "name_katakana": "パールヴァティー・グランシア",
+        "name_jp": "愛が受難を招くとも",
         "option": "default"
       }
     ],
@@ -196776,7 +197438,8 @@
         "card": "Buster",
         "name": "Ritter der Ozeane",
         "name_cn": "回应我的呼唤吧，海骑士们",
-        "name_jp": "リッター・デア・オツェアネ我が叫びに応じよ、海騎士たちよ",
+        "name_katakana": "リッター・デア・オツェアネ",
+        "name_jp": "我が叫びに応じよ、海騎士たちよ",
         "option": "default"
       }
     ],
@@ -197216,7 +197879,8 @@
         "card": "Quick",
         "name": "Daikourin Renkanba Moushugeki",
         "name_cn": "大降临连环马猛袭击",
-        "name_jp": "だいこうりんれんかんばもうしゅうげき大降臨連環馬猛襲撃",
+        "name_katakana": "だいこうりんれんかんばもうしゅうげき",
+        "name_jp": "大降臨連環馬猛襲撃",
         "option": "default"
       }
     ],
@@ -197646,7 +198310,8 @@
         "card": "Arts",
         "name": "Manashiki Izayoi Zanka",
         "name_cn": "末那识·十六夜残花",
-        "name_jp": "まなしき・いざよいざんか末那識・十六夜残花",
+        "name_katakana": "まなしき・いざよいざんか",
+        "name_jp": "末那識・十六夜残花",
         "option": "【效果根据所处状态变化】〔日轮〕状态时"
       },
       {
@@ -197700,7 +198365,8 @@
         "card": "Arts",
         "name": "Manashiki Izayoi Zanka",
         "name_cn": "末那识·十六夜残花",
-        "name_jp": "まなしき・いざよいざんか末那識・十六夜残花",
+        "name_katakana": "まなしき・いざよいざんか",
+        "name_jp": "末那識・十六夜残花",
         "option": "【效果根据所处状态变化】〔月下〕状态时"
       }
     ],
@@ -198240,7 +198906,8 @@
         "card": "Arts",
         "name": "与你同见 这乳白色的梦",
         "name_cn": "贯穿日轮的星河朔月",
-        "name_jp": "みるくいろの・ゆめをあなたと日輪が穿つ星河の朔月",
+        "name_katakana": "みるくいろの・ゆめをあなたと",
+        "name_jp": "日輪が穿つ星河の朔月",
         "option": "default"
       }
     ],
@@ -198689,7 +199356,8 @@
         "card": "Quick",
         "name": "Nammu Marine Heart",
         "name_cn": "幻夏啊，必归青春之辉",
-        "name_jp": "ナンム・マリンハート儚き夏よ、青春のきらめきに還れ",
+        "name_katakana": "ナンム・マリンハート",
+        "name_jp": "儚き夏よ、青春のきらめきに還れ",
         "option": "default"
       }
     ],
@@ -199144,7 +199812,8 @@
         "card": "Arts",
         "name": "Kagerouken Tsuruno Vacance Kimito Mizugide Rendez-vous",
         "name_cn": "阳炎剑·鹤憩水恋歌",
-        "name_jp": "かげろうけん・つるのばかんす きみとみずぎでらんでぶー陽炎剣・鶴憩水恋歌",
+        "name_katakana": "かげろうけん・つるのばかんす きみとみずぎでらんでぶー",
+        "name_jp": "陽炎剣・鶴憩水恋歌",
         "option": "default"
       }
     ],
@@ -199588,7 +200257,8 @@
         "card": "Arts",
         "name": "Noah's Ark",
         "name_cn": "诺亚方舟",
-        "name_jp": "ノアズ・アークノアの方舟",
+        "name_katakana": "ノアズ・アーク",
+        "name_jp": "ノアの方舟",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -199649,7 +200319,8 @@
         "card": "Arts",
         "name": "Great Ram Noah's Ark",
         "name_cn": "再创世的试炼",
-        "name_jp": "グレートラム・ノアズ・アーク再創世の試練",
+        "name_katakana": "グレートラム・ノアズ・アーク",
+        "name_jp": "再創世の試練",
         "option": "第3阶段形象时"
       }
     ],
@@ -200164,7 +200835,8 @@
         "card": "Buster",
         "name": "Battou Kamui",
         "name_cn": "拔刀·神威",
-        "name_jp": "ばっとう・かむい抜刀・神威",
+        "name_katakana": "ばっとう・かむい",
+        "name_jp": "抜刀・神威",
         "option": "default"
       }
     ],
@@ -200611,7 +201283,8 @@
         "card": "Quick",
         "name": "Sakigake Ichibanboshi!!",
         "name_cn": "魁·一番星！！",
-        "name_jp": "さきがけ・いちばんぼし！！魁・一番星！！",
+        "name_katakana": "さきがけ・いちばんぼし！！",
+        "name_jp": "魁・一番星！！",
         "option": "default"
       }
     ],
@@ -201030,7 +201703,8 @@
         "card": "Buster",
         "name": "Shinazu Ichimonji",
         "name_cn": "死不了的一文字",
-        "name_jp": "しなずいちもんじ死損ね一文字",
+        "name_katakana": "しなずいちもんじ",
+        "name_jp": "死損ね一文字",
         "option": "default"
       }
     ],
@@ -201457,7 +202131,8 @@
         "card": "Arts",
         "name": "Makoto no Hata",
         "name_cn": "诚之旗",
-        "name_jp": "まことのはた誠の旗",
+        "name_katakana": "まことのはた",
+        "name_jp": "誠の旗",
         "option": "default"
       }
     ],
@@ -201928,7 +202603,8 @@
         "card": "Buster",
         "name": "Báthory Megsért",
         "name_cn": "不完全·鲜血行星",
-        "name_jp": "バートリ・メグシェールト不完全・鮮血惑星",
+        "name_katakana": "バートリ・メグシェールト",
+        "name_jp": "不完全・鮮血惑星",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -201989,7 +202665,8 @@
         "card": "Buster",
         "name": "Vér Mars Erzsébet",
         "name_cn": "向着完全的血之行星",
-        "name_jp": "ヴェールマールシュ・エルジェーベト完全なる血の惑星へ",
+        "name_katakana": "ヴェールマールシュ・エルジェーベト",
+        "name_jp": "完全なる血の惑星へ",
         "option": "第3阶段形象时"
       }
     ],
@@ -202420,7 +203097,8 @@
         "card": "Buster",
         "name": "King Elisa Tarsis Montes",
         "name_cn": "终焉的三首怪兽，再临",
-        "name_jp": "キングエリザ・タルシスモンテス終焉の三つ首怪獣、再び来る",
+        "name_katakana": "キングエリザ・タルシスモンテス",
+        "name_jp": "終焉の三つ首怪獣、再び来る",
         "option": "default"
       }
     ],
@@ -202877,7 +203555,8 @@
         "card": "Buster",
         "name": "Ars Almadel Salomonis",
         "name_cn": "诞生之时已至，以此修正万象",
-        "name_jp": "アルス・アルマデル・サロモニス誕生の時きたれり、其は全てを修めるもの",
+        "name_katakana": "アルス・アルマデル・サロモニス",
+        "name_jp": "誕生の時きたれり、其は全てを修めるもの",
         "option": "default"
       }
     ],
@@ -203422,7 +204101,8 @@
         "card": "Buster",
         "name": "Excalibur Excelsus",
         "name_cn": "由此，展现誓约胜利之剑",
-        "name_jp": "エクスカリバー・エクセルススかくて、約束された勝利の剣",
+        "name_katakana": "エクスカリバー・エクセルスス",
+        "name_jp": "かくて、約束された勝利の剣",
         "option": "default"
       }
     ],
@@ -203890,7 +204570,8 @@
         "card": "Quick",
         "name": "Karekinihanawosakasemashou",
         "name_cn": "让枯朽之木再绽鲜花吧",
-        "name_jp": "かれきにはなをさかせましょう枯れ木に花を咲かせましょう",
+        "name_katakana": "かれきにはなをさかせましょう",
+        "name_jp": "枯れ木に花を咲かせましょう",
         "option": "default"
       }
     ],
@@ -204364,7 +205045,8 @@
         "card": "Arts",
         "name": "为我可爱的婴孩，赠以母亲的眼睛",
         "name_cn": "眼球传承·慈育白珠",
-        "name_jp": "いとしきややこへ、ははのめを眼球伝承・慈育白珠",
+        "name_katakana": "いとしきややこへ、ははのめを",
+        "name_jp": "眼球伝承・慈育白珠",
         "option": "default"
       }
     ],
@@ -204798,7 +205480,8 @@
         "card": "Quick",
         "name": "World's End Flower Garden",
         "name_cn": "万花盛放的辉彩花园",
-        "name_jp": "ワールズエンド・フラワーガーデン全て咲き誇る精彩の花園",
+        "name_katakana": "ワールズエンド・フラワーガーデン",
+        "name_jp": "全て咲き誇る精彩の花園",
         "option": "普通状态时"
       },
       {
@@ -204866,7 +205549,8 @@
         "card": "Quick",
         "name": "Under World Flower Garden",
         "name_cn": "浅眠幽冥的常世花园",
-        "name_jp": "アンダーワールド・フラワーガーデン冥き微睡む常世の花園",
+        "name_katakana": "アンダーワールド・フラワーガーデン",
+        "name_jp": "冥き微睡む常世の花園",
         "option": "〔冥界花园〕状态时"
       }
     ],
@@ -205351,7 +206035,8 @@
         "card": "Arts",
         "name": "Scream Eleusis",
         "name_cn": "汝乃躬耕星辰之丰饶",
-        "name_jp": "スクリーム・エレウシス汝、星を鋤く豊穣",
+        "name_katakana": "スクリーム・エレウシス",
+        "name_jp": "汝、星を鋤く豊穣",
         "option": "第1·第2阶段形象时"
       },
       {
@@ -205405,7 +206090,8 @@
         "card": "Arts",
         "name": "Adamas Chronos Erinyes",
         "name_cn": "汝乃收割星辰之血刃",
-        "name_jp": "アダマス・クロノス・エリニュス汝、星を刈る血刃",
+        "name_katakana": "アダマス・クロノス・エリニュス",
+        "name_jp": "汝、星を刈る血刃",
         "option": "第3阶段形象时"
       }
     ],
@@ -205887,7 +206573,8 @@
         "card": "Buster",
         "name": "Pèlerinage du Temple",
         "name_cn": "如此漫长的巡礼之途",
-        "name_jp": "ピレリナージ・ド・テンプル斯くも永き巡礼の旅路",
+        "name_katakana": "ピレリナージ・ド・テンプル",
+        "name_jp": "斯くも永き巡礼の旅路",
         "option": "default"
       }
     ],

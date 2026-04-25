@@ -4,13 +4,68 @@ mod runner;
 mod screen;
 
 use std::collections::HashMap;
+use std::fmt;
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::Manager;
 
 use runner::{RunConfig, RunnerHandle, RunnerState};
+
+// ---------------------------------------------------------------------------
+// Server selection (global app setting). Drives which template/config bundle
+// the sidecar loads, which OCR model RapidOCR pins, and how
+// `load_servant_metadata` localizes the servant + NP names it sends into
+// `find_supports`. Default is JP because that's the only data the project
+// originally shipped — flipping the default here would break every existing
+// install whose templates assume Japanese UI text.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Server {
+    Jp,
+    Cn,
+}
+
+impl Default for Server {
+    fn default() -> Self {
+        Self::Jp
+    }
+}
+
+impl Server {
+    /// Lowercase directory token used under `resources/servers/{token}/...`.
+    /// Kept intentionally tiny so the resource resolvers stay one-liners.
+    pub fn dir_token(&self) -> &'static str {
+        match self {
+            Self::Jp => "jp",
+            Self::Cn => "cn",
+        }
+    }
+}
+
+impl fmt::Display for Server {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Jp => write!(f, "JP"),
+            Self::Cn => write!(f, "CN"),
+        }
+    }
+}
+
+impl FromStr for Server {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_uppercase().as_str() {
+            "JP" => Ok(Self::Jp),
+            "CN" => Ok(Self::Cn),
+            other => Err(format!("unknown server: {other}")),
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // scrcpy stream tunables. ``STREAM_MAX_SIZE = 0`` means "do not downscale";
@@ -394,22 +449,151 @@ pub struct ServantMetadata {
     pub class_name: String,
 }
 
+/// NFKC + whitespace-normalize a Japanese string so two cosmetically
+/// different forms (full-width vs. half-width punctuation, stray spaces
+/// from a manual data dump, etc.) hash to the same key. Mirrors the
+/// `_normalize_jp_text` pre-pass the sidecar runs on OCR output before
+/// fuzzy matching, so the JP→CN bridge here lines up with what the
+/// sidecar will actually see.
+fn normalize_jp_key(s: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    s.nfkc()
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+/// Process-wide `name_jp -> name_cn` map for every servant Noble
+/// Phantasm we know about, built once from `resources/servants.json`.
+/// Handles both shapes the source file uses:
+///   - flat list:           `noble_phantasms: [ {...}, ... ]`
+///   - dict-of-variants:    `noble_phantasms: { "初始": [...], "奥特瑙斯": [...] }`
+/// Drops entries whose JP name is missing, blank, or whose CN
+/// counterpart is the same as the JP name (a common placeholder when
+/// the localizer hasn't filled in the translation). Used only when the
+/// active server is `Server::Cn` to translate Atlas JP NP names into
+/// the strings the OCR will actually see on a CN client.
+fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
+    static INDEX: OnceLock<HashMap<String, String>> = OnceLock::new();
+    INDEX.get_or_init(|| {
+        let raw: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("resources/servants.json"))
+                .expect("invalid servants.json");
+
+        let mut map: HashMap<String, String> = HashMap::new();
+        let mut consider = |entry: &serde_json::Value| {
+            let jp = entry.get("name_jp").and_then(|v| v.as_str()).unwrap_or("").trim();
+            let cn = entry.get("name_cn").and_then(|v| v.as_str()).unwrap_or("").trim();
+            if jp.is_empty() || cn.is_empty() || jp == cn {
+                return;
+            }
+            let key = normalize_jp_key(jp);
+            if key.is_empty() {
+                return;
+            }
+            map.entry(key).or_insert_with(|| cn.to_string());
+        };
+
+        for s in raw.iter() {
+            let Some(nps) = s.get("noble_phantasms") else { continue };
+            if let Some(arr) = nps.as_array() {
+                for entry in arr {
+                    consider(entry);
+                }
+            } else if let Some(obj) = nps.as_object() {
+                for (_variant, value) in obj {
+                    if let Some(arr) = value.as_array() {
+                        for entry in arr {
+                            consider(entry);
+                        }
+                    }
+                }
+            }
+        }
+        map
+    })
+}
+
+/// Process-wide `name_jp -> name_cn` map for the servants themselves
+/// (as opposed to their NPs). Built once from `servants_data()`. Same
+/// drop rule as the NP index: skip entries whose CN field is missing or
+/// identical to the JP one.
+fn servant_jp_to_cn_index() -> &'static HashMap<String, String> {
+    static INDEX: OnceLock<HashMap<String, String>> = OnceLock::new();
+    INDEX.get_or_init(|| {
+        let mut map: HashMap<String, String> = HashMap::new();
+        for s in servants_data() {
+            let jp = s.name_jp.trim();
+            let cn = s.name_cn.trim();
+            if jp.is_empty() || cn.is_empty() || jp == cn {
+                continue;
+            }
+            let key = normalize_jp_key(jp);
+            if key.is_empty() {
+                continue;
+            }
+            map.entry(key).or_insert_with(|| cn.to_string());
+        }
+        map
+    })
+}
+
+/// Translate one Atlas JP servant name into the string the CN client
+/// renders. Falls back to the JP name if no mapping exists so OCR still
+/// has *some* target to fuzzy-match against rather than no name at all.
+fn localize_servant_name(jp: &str) -> String {
+    let key = normalize_jp_key(jp);
+    servant_jp_to_cn_index()
+        .get(&key)
+        .cloned()
+        .unwrap_or_else(|| jp.to_string())
+}
+
+/// Translate Atlas JP NP names into their CN equivalents. **Drops**
+/// unmapped NPs (the data-quality gap the user plans to fix later);
+/// the sidecar's `_find_supports` falls back to name-only matching when
+/// the resulting list is empty. Preserves input order and dedupes after
+/// translation in case two JP entries map to the same CN string.
+fn localize_np_names(jp_names: &[String]) -> Vec<String> {
+    let index = np_jp_to_cn_index();
+    let mut out: Vec<String> = Vec::new();
+    for jp in jp_names {
+        let key = normalize_jp_key(jp);
+        if let Some(cn) = index.get(&key) {
+            if !out.iter().any(|existing| existing == cn) {
+                out.push(cn.clone());
+            }
+        }
+    }
+    out
+}
+
 /// Parse and cache the (id, name, np_names) triple for one servant.
 ///
 /// Reads `<servant_assets_dir>/{id}/servant.json` (the Atlas Academy dump
 /// committed under `src-tauri/assets/servants/`), pulls the top-level
-/// `name` field plus every entry of `noblePhantasms[].name`. Cached in a
-/// process-wide `OnceLock<Mutex<HashMap>>` so repeat lookups (e.g. the
-/// debug page calling `find_supports` repeatedly) are free.
+/// `name` field plus every entry of `noblePhantasms[].name`. When
+/// `server == Server::Cn`, both the servant name and every NP name are
+/// translated through `resources/servants.json` (`name_jp -> name_cn`).
+/// Unmapped NPs are dropped — when the resulting `np_names` list is
+/// empty the sidecar transparently falls back to name-only matching, so
+/// support detection still proceeds at lower precision.
+///
+/// Cached in a process-wide `OnceLock<Mutex<HashMap<(u32, Server), _>>>`
+/// so repeat lookups (e.g. the debug page calling `find_supports`
+/// repeatedly) are free, and so JP and CN entries for the same servant
+/// id never clobber each other.
 pub(crate) fn load_servant_metadata(
     app: &tauri::AppHandle,
     id: u32,
+    server: Server,
 ) -> Result<ServantMetadata, String> {
-    static CACHE: OnceLock<Mutex<HashMap<u32, ServantMetadata>>> = OnceLock::new();
+    static CACHE: OnceLock<Mutex<HashMap<(u32, Server), ServantMetadata>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     {
         let map = cache.lock().unwrap();
-        if let Some(meta) = map.get(&id) {
+        if let Some(meta) = map.get(&(id, server)) {
             return Ok(meta.clone());
         }
     }
@@ -422,7 +606,7 @@ pub(crate) fn load_servant_metadata(
     })?;
     let json: serde_json::Value = serde_json::from_str(&raw)
         .map_err(|e| format!("servant.json 解析失败 ({}): {e}", path.display()))?;
-    let name = json
+    let name_jp = json
         .get("name")
         .and_then(|v| v.as_str())
         .ok_or_else(|| format!("servant.json 缺少 'name' 字段: {}", path.display()))?
@@ -438,17 +622,32 @@ pub(crate) fn load_servant_metadata(
     // Deduplicate while preserving discovery order: a few servants list the
     // same NP under multiple `num` overcharge tiers and we only want the
     // distinct names for fuzzy matching.
-    let mut np_names: Vec<String> = Vec::new();
+    let mut np_names_jp: Vec<String> = Vec::new();
     if let Some(arr) = json.get("noblePhantasms").and_then(|v| v.as_array()) {
         for entry in arr {
             if let Some(n) = entry.get("name").and_then(|v| v.as_str()) {
                 let trimmed = n.trim();
-                if !trimmed.is_empty() && !np_names.iter().any(|x| x == trimmed) {
-                    np_names.push(trimmed.to_string());
+                if !trimmed.is_empty() && !np_names_jp.iter().any(|x| x == trimmed) {
+                    np_names_jp.push(trimmed.to_string());
                 }
             }
         }
     }
+
+    let (name, np_names) = match server {
+        Server::Jp => (name_jp, np_names_jp),
+        Server::Cn => {
+            let cn_name = localize_servant_name(&name_jp);
+            let cn_nps = localize_np_names(&np_names_jp);
+            let dropped = np_names_jp.len().saturating_sub(cn_nps.len());
+            if dropped > 0 {
+                eprintln!(
+                    "[load_servant_metadata] servant {id}: dropped {dropped} unmapped NP name(s) for CN (will fall back to name-only matching if all dropped)"
+                );
+            }
+            (cn_name, cn_nps)
+        }
+    };
 
     let meta = ServantMetadata {
         id,
@@ -456,16 +655,18 @@ pub(crate) fn load_servant_metadata(
         np_names,
         class_name,
     };
-    cache.lock().unwrap().insert(id, meta.clone());
+    cache.lock().unwrap().insert((id, server), meta.clone());
     Ok(meta)
 }
 
 #[tauri::command]
 fn get_servant_metadata(
     app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<Server>>,
     id: u32,
 ) -> Result<ServantMetadata, String> {
-    load_servant_metadata(&app, id)
+    let server = *state.lock().unwrap();
+    load_servant_metadata(&app, id, server)
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -488,6 +689,22 @@ fn load_bluestack_setting(app: &tauri::AppHandle) -> bool {
         .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
         .and_then(|v| v.get("useBluestack")?.as_bool())
         .unwrap_or(false)
+}
+
+fn server_settings_path(app: &tauri::AppHandle) -> PathBuf {
+    let dir = app.path().app_data_dir().expect("failed to resolve app data dir");
+    fs::create_dir_all(&dir).ok();
+    dir.join("server_settings.json")
+}
+
+fn load_server_setting(app: &tauri::AppHandle) -> Server {
+    let path = server_settings_path(app);
+    fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get("server").and_then(|s| s.as_str()).map(|s| s.to_string()))
+        .and_then(|s| Server::from_str(&s).ok())
+        .unwrap_or_default()
 }
 
 fn parse_first_ready_device(output: &str) -> Option<String> {
@@ -526,6 +743,48 @@ fn set_use_bluestack(
 }
 
 #[tauri::command]
+fn get_server(state: tauri::State<'_, Mutex<Server>>) -> Server {
+    *state.lock().unwrap()
+}
+
+#[tauri::command]
+fn set_server(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<Server>>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    debug_state: tauri::State<'_, debug::DebugSidecar>,
+    value: Server,
+) -> Result<(), String> {
+    // Refuse to flip mid-run: the runner cached templates / OCR model /
+    // localized servant metadata for the *previous* server when it spawned;
+    // changing the global setting now would silently desync those caches.
+    {
+        let handle = handle_state.lock().unwrap();
+        let running = matches!(*handle.state.lock().unwrap(), RunnerState::Running);
+        if running {
+            return Err("自动化正在运行中，请先停止后再切换服务器".into());
+        }
+    }
+
+    *state.lock().unwrap() = value;
+    let path = server_settings_path(&app);
+    let json = serde_json::json!({ "server": value.to_string() });
+    fs::write(&path, serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+
+    // Tear down any cached debug sidecar so the next debug call respawns
+    // it with the new server's templates / OCR model. The automation
+    // sidecar is short-lived (born inside `start_automation`) so it
+    // always sees the fresh setting.
+    {
+        let mut guard = debug_state.0.lock().unwrap();
+        guard.take();
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 fn check_adb(state: tauri::State<'_, Mutex<bool>>) -> AdbStatus {
     let use_bluestack = *state.lock().unwrap();
     if use_bluestack {
@@ -552,6 +811,7 @@ fn start_automation(
     app: tauri::AppHandle,
     config: RunConfig,
     bluestack_state: tauri::State<'_, Mutex<bool>>,
+    server_state: tauri::State<'_, Mutex<Server>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<(), String> {
     let is_running = {
@@ -566,6 +826,7 @@ fn start_automation(
     let scenes = load_battle_scenes(app.clone(), config.project_id.clone());
 
     let use_bluestack = *bluestack_state.lock().unwrap();
+    let server = *server_state.lock().unwrap();
 
     let mut adb_dev = adb::Adb::new(use_bluestack);
     adb_dev.connect()?;
@@ -580,12 +841,13 @@ fn start_automation(
         ));
     }
 
-    let templates_dir = resolve_templates_dir(&app);
-    let cv_config = resolve_cv_config_path(&app);
+    let templates_dir = resolve_templates_dir(&app, server);
+    let cv_config = resolve_cv_config_path(&app, server);
     let mut sidecar = screen::SidecarClient::spawn(
         &app,
         templates_dir.as_deref(),
         cv_config.as_deref(),
+        server,
     )?;
 
     let (w, h) = sidecar
@@ -618,6 +880,7 @@ fn start_automation(
         screen_size,
         assets_dir,
         ce_assets_dir,
+        server,
     );
     std::thread::spawn(move || runner.run());
 
@@ -644,17 +907,36 @@ fn get_automation_status(
 // Shared resource-path resolvers (used by both automation + debug paths)
 // ---------------------------------------------------------------------------
 
-/// Resolve the bundled templates directory. In dev and prod this lives under
-/// the app's resource_dir (declared in tauri.conf.json > bundle.resources).
-pub(crate) fn resolve_templates_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+/// Resolve the bundled templates directory for the given server. Each
+/// server (JP/CN) ships its own subtree under
+/// `resources/servers/{token}/templates/` so flipping the global server
+/// setting hands the sidecar a different template set without touching
+/// any JP fixture.
+pub(crate) fn resolve_templates_dir(
+    app: &tauri::AppHandle,
+    server: Server,
+) -> Option<PathBuf> {
     let base = app.path().resource_dir().ok()?;
-    Some(base.join("resources").join("templates"))
+    Some(
+        base.join("resources")
+            .join("servers")
+            .join(server.dir_token())
+            .join("templates"),
+    )
 }
 
-/// Resolve the bundled cv.json path.
-pub(crate) fn resolve_cv_config_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+/// Resolve the bundled cv.json path for the given server.
+pub(crate) fn resolve_cv_config_path(
+    app: &tauri::AppHandle,
+    server: Server,
+) -> Option<PathBuf> {
     let base = app.path().resource_dir().ok()?;
-    Some(base.join("resources").join("cv.json"))
+    Some(
+        base.join("resources")
+            .join("servers")
+            .join(server.dir_token())
+            .join("cv.json"),
+    )
 }
 
 /// Resolve the bundled scrcpy-server.jar path.
@@ -730,7 +1012,9 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let use_bluestack = load_bluestack_setting(&app.handle());
+            let server = load_server_setting(&app.handle());
             app.manage(Mutex::new(use_bluestack));
+            app.manage(Mutex::new(server));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
             app.manage(debug::DebugSidecar(Mutex::new(None)));
             Ok(())
@@ -747,6 +1031,8 @@ pub fn run() {
             check_adb,
             get_use_bluestack,
             set_use_bluestack,
+            get_server,
+            set_server,
             start_automation,
             stop_automation,
             get_automation_status,
@@ -900,5 +1186,145 @@ mod tests {
         let b = craft_essences_data();
         assert_eq!(a.as_ptr(), b.as_ptr());
         assert_eq!(a.len(), b.len());
+    }
+
+    // --- Server enum --------------------------------------------------
+
+    #[test]
+    fn server_default_is_jp() {
+        assert_eq!(Server::default(), Server::Jp);
+    }
+
+    #[test]
+    fn server_display_and_dir_token_match_serde() {
+        for s in [Server::Jp, Server::Cn] {
+            // Display + dir_token must agree with the serde tag (the
+            // value the frontend sees) so JSON, file paths, and stderr
+            // logs all line up.
+            let serialized = serde_json::to_string(&s).unwrap();
+            assert_eq!(serialized, format!("\"{}\"", s));
+            assert_eq!(serialized.to_lowercase().trim_matches('"'), s.dir_token());
+        }
+    }
+
+    #[test]
+    fn server_from_str_round_trips_both_cases() {
+        // Persisted settings file stores `"JP"` / `"CN"`; defensive
+        // lower / mixed-case parsing keeps a hand-edited file working.
+        for (input, expected) in [
+            ("JP", Server::Jp),
+            ("jp", Server::Jp),
+            ("Jp", Server::Jp),
+            ("CN", Server::Cn),
+            ("cn", Server::Cn),
+        ] {
+            assert_eq!(Server::from_str(input).unwrap(), expected, "input={input}");
+        }
+        assert!(Server::from_str("us").is_err());
+    }
+
+    #[test]
+    fn server_serde_uses_uppercase_tag() {
+        let value: Server = serde_json::from_str("\"CN\"").unwrap();
+        assert_eq!(value, Server::Cn);
+        assert!(serde_json::from_str::<Server>("\"cn\"").is_err());
+    }
+
+    // --- Localization indices -----------------------------------------
+
+    #[test]
+    fn normalize_jp_key_strips_whitespace_and_nfkc_folds() {
+        // Full-width vs. half-width digits should collapse to the
+        // same key so JP→CN lookups don't miss on cosmetic
+        // differences between mooncell and Atlas dumps.
+        assert_eq!(normalize_jp_key("Ｌｖ１"), normalize_jp_key("Lv1"));
+        // Stray spaces in the source data must not split the key.
+        assert_eq!(
+            normalize_jp_key("アルトリア ペンドラゴン"),
+            normalize_jp_key("アルトリアペンドラゴン")
+        );
+    }
+
+    #[test]
+    fn servant_jp_to_cn_index_maps_known_servant_name() {
+        // Servant 2 = Altria Pendragon — the row exists in the
+        // bundled mooncell `servants.json` with both `name_jp` and
+        // `name_cn` populated, so the index must produce the CN
+        // string.
+        let idx = servant_jp_to_cn_index();
+        assert_eq!(
+            idx.get(&normalize_jp_key("アルトリア・ペンドラゴン"))
+                .map(|s| s.as_str()),
+            Some("阿尔托莉雅·潘德拉贡")
+        );
+    }
+
+    #[test]
+    fn np_index_handles_both_shapes() {
+        // Servant 1 uses the dict-of-variants `noble_phantasms`
+        // shape; servant 2 uses the flat-list shape. Both must be
+        // discoverable by the same builder.
+        let idx = np_jp_to_cn_index();
+        // Dict-of-variants entry from servant 1 (variant "初始").
+        assert_eq!(
+            idx.get(&normalize_jp_key("いまは遙か理想の城"))
+                .map(|s| s.as_str()),
+            Some("已然遥远的理想之城"),
+        );
+        // Flat-list entry from servant 2.
+        assert_eq!(
+            idx.get(&normalize_jp_key("約束された勝利の剣"))
+                .map(|s| s.as_str()),
+            Some("誓约胜利之剑"),
+        );
+        // Sanity: index contains a non-trivial number of entries —
+        // catches an outright build error in the parser.
+        assert!(idx.len() > 100, "NP index too small: {}", idx.len());
+    }
+
+    #[test]
+    fn np_index_dedupes_repeated_jp_names() {
+        // Servant 2 lists the same `name_jp` twice (two NP variants
+        // share the same wording). The OnceLock builder uses
+        // `entry().or_insert` so the duplicate is discarded; this
+        // test pins that contract — if a refactor flips to
+        // `insert()`, the second translation would silently overwrite
+        // the first, which is harmless here but a footgun for cases
+        // where the two CN translations actually disagree.
+        let idx = np_jp_to_cn_index();
+        let key = normalize_jp_key("約束された勝利の剣");
+        assert!(idx.contains_key(&key));
+    }
+
+    #[test]
+    fn localize_servant_name_falls_back_to_jp_when_unmapped() {
+        // A name we know isn't in the index must come back unchanged
+        // so OCR has *some* target.
+        let unknown = "存在しないサーヴァント";
+        assert_eq!(localize_servant_name(unknown), unknown);
+    }
+
+    #[test]
+    fn localize_np_names_drops_unmapped_and_dedupes() {
+        // One known + one unknown -> only the known one survives.
+        let mapped = localize_np_names(&[
+            "約束された勝利の剣".to_string(),
+            "存在しない宝具".to_string(),
+        ]);
+        assert_eq!(mapped, vec!["誓约胜利之剑".to_string()]);
+
+        // Two inputs that translate to the same CN string -> single
+        // output entry (preserves order, dedupes by post-translation
+        // string).
+        let mapped = localize_np_names(&[
+            "約束された勝利の剣".to_string(),
+            "約束された勝利の剣".to_string(),
+        ]);
+        assert_eq!(mapped, vec!["誓约胜利之剑".to_string()]);
+
+        // All-unknown input collapses to empty list, which is the
+        // signal `_find_supports` uses to switch into name-only mode.
+        let mapped = localize_np_names(&["存在しない宝具".to_string()]);
+        assert!(mapped.is_empty());
     }
 }

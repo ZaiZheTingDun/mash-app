@@ -6,20 +6,34 @@ These files ship with the app (declared in `tauri.conf.json` → `bundle.resourc
 
 ```
 resources/
-  cv.json         # screen + element template mapping (see below)
-  templates/      # PNG templates, loaded by stem (filename without extension)
-    screen_team_confirm.png     # anchors referenced by cv.json
-    button_attack.png
-    ...
-    text_battle_label.png       # battle-scene OCR anchor (not in cv.json)
-    digit_0.png .. digit_9.png  # digit glyphs for battle-scene OCR
+  servers/
+    jp/
+      cv.json       # screen + element template mapping (see below)
+      templates/    # PNG templates, loaded by stem (filename without extension)
+        screen_team_confirm.png     # anchors referenced by cv.json
+        button_attack.png
+        ...
+        text_battle_label.png       # battle-scene OCR anchor (not in cv.json)
+        digit_0.png .. digit_9.png  # digit glyphs for battle-scene OCR
+    cn/
+      cv.json       # CN-localized template mapping (currently a copy of JP)
+      templates/    # CN PNG templates (placeholder; fill in once you have them)
   scrcpy/
     scrcpy-server.jar   # pinned scrcpy server, pushed to device for streaming
 ```
 
-Every PNG in `templates/` is loaded by the sidecar on startup and keyed by its
-filename stem. Most are referenced by `cv.json`, but a few (the battle-scene
-OCR set below) are looked up directly by the Rust runner.
+The sidecar loads the bundle for whichever server is currently active (set
+via the `服务器` selector in the status bar; persisted in
+`server_settings.json`). JP is the default and ships fully populated; the
+CN bundle exists so the app can boot when CN is selected, but the PNG set
+will be incomplete until CN templates are captured — `find_element` calls
+for missing templates surface a clear error rather than silently
+misdetecting.
+
+Every PNG under a server's `templates/` folder is loaded by the sidecar on
+startup and keyed by its filename stem. Most are referenced by that
+server's `cv.json`, but a few (the battle-scene OCR set below) are looked
+up directly by the Rust runner.
 
 Legacy `text_turn_label.png` and `text_tan.png` files may still be present on
 disk from earlier versions; they are no longer referenced by code and can be
@@ -89,8 +103,8 @@ Elements are nested under their screen. The debug page (and runner) look them up
 
 ## Adding a template
 
-1. Crop the region of interest from a real device screenshot at the same resolution used at runtime. Save as PNG under `resources/templates/`.
-2. Reference the basename (no extension) from `cv.json`.
+1. Crop the region of interest from a real device screenshot at the same resolution used at runtime. Save as PNG under `resources/servers/<jp|cn>/templates/` (matching the server you captured the screenshot on).
+2. Reference the basename (no extension) from that server's `cv.json`.
 3. Restart `pnpm tauri dev` — the Rust side resolves the bundled resources at startup and passes them to the sidecar.
 
 ## Battle-scene OCR templates
@@ -113,7 +127,7 @@ Required template stems (loaded by name, not via `cv.json`):
 - `digit_0` through `digit_9` — individual digit glyphs (shared with any
   other digit-based readers).
 
-Drop each as a tight, grayscale PNG under `resources/templates/` (no padding,
+Drop each as a tight, grayscale PNG under `resources/servers/<jp|cn>/templates/` (no padding,
 no extension in the filename stem). Any missing `digit_N` simply means
 scenes containing that digit currently return `null`; add the file and the
 pipeline picks it up on the next `load_templates` call — no code changes

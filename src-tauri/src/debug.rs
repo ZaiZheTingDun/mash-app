@@ -10,7 +10,7 @@ use crate::screen::{
 };
 use crate::{
     app_data_dir, load_servant_metadata, resolve_ce_assets_dir, resolve_cv_config_path,
-    resolve_scrcpy_jar, resolve_servant_assets_dir, resolve_templates_dir,
+    resolve_scrcpy_jar, resolve_servant_assets_dir, resolve_templates_dir, Server,
     STREAM_BIT_RATE, STREAM_MAX_SIZE,
 };
 
@@ -42,16 +42,21 @@ fn debug_image_path(app: &tauri::AppHandle) -> PathBuf {
     dir.join("last.jpg")
 }
 
+fn current_server(server_state: &Mutex<Server>) -> Server {
+    *server_state.lock().unwrap()
+}
+
 fn ensure_debug_sidecar(
     app: &tauri::AppHandle,
     debug_state: &DebugSidecar,
+    server: Server,
 ) -> Result<(), String> {
     let mut guard = debug_state.0.lock().unwrap();
     if guard.is_none() {
-        let tdir = resolve_templates_dir(app);
-        let cfg = resolve_cv_config_path(app);
+        let tdir = resolve_templates_dir(app, server);
+        let cfg = resolve_cv_config_path(app, server);
         eprintln!(
-            "[debug] spawning mash-cv sidecar (templates_dir={}, config={})",
+            "[debug] spawning mash-cv sidecar (server={server}, templates_dir={}, config={})",
             tdir.as_ref()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|| "<none>".into()),
@@ -59,7 +64,7 @@ fn ensure_debug_sidecar(
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|| "<none>".into()),
         );
-        let client = SidecarClient::spawn(app, tdir.as_deref(), cfg.as_deref())?;
+        let client = SidecarClient::spawn(app, tdir.as_deref(), cfg.as_deref(), server)?;
         eprintln!("[debug] sidecar ready");
         *guard = Some(client);
     }
@@ -70,9 +75,10 @@ fn ensure_debug_sidecar(
 fn ensure_debug_stream(
     app: &tauri::AppHandle,
     debug_state: &DebugSidecar,
+    server: Server,
     serial: Option<&str>,
 ) -> Result<(), String> {
-    ensure_debug_sidecar(app, debug_state)?;
+    ensure_debug_sidecar(app, debug_state, server)?;
 
     let mut guard = debug_state.0.lock().unwrap();
     let client = guard
@@ -123,13 +129,15 @@ fn require_automation_idle(
 pub fn debug_capture(
     app: tauri::AppHandle,
     bluestack_state: tauri::State<'_, Mutex<bool>>,
+    server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<DebugCaptureResult, String> {
     require_automation_idle(&handle_state)?;
 
     let use_bluestack = *bluestack_state.lock().unwrap();
-    eprintln!("[debug_capture] begin (use_bluestack={use_bluestack})");
+    let server = current_server(&server_state);
+    eprintln!("[debug_capture] begin (use_bluestack={use_bluestack}, server={server})");
 
     let mut adb_dev = adb::Adb::new(use_bluestack);
     adb_dev.connect().map_err(|e| {
@@ -139,7 +147,7 @@ pub fn debug_capture(
     let serial = adb_dev.serial().map(|s| s.to_string());
     eprintln!("[debug_capture] adb connected, serial={serial:?}");
 
-    ensure_debug_stream(&app, &debug_state, serial.as_deref()).map_err(|e| {
+    ensure_debug_stream(&app, &debug_state, server, serial.as_deref()).map_err(|e| {
         eprintln!("[debug_capture] ensure stream failed: {e}");
         e
     })?;
@@ -189,6 +197,7 @@ pub fn debug_capture(
 #[tauri::command]
 pub fn debug_find_element(
     app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     template_key: String,
@@ -203,7 +212,7 @@ pub fn debug_find_element(
         return Err("尚未截取画面，请先点击 截取画面".into());
     }
 
-    ensure_debug_sidecar(&app, &debug_state)?;
+    ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))?;
 
     let region = region.unwrap_or(NormRect {
         x: 0.0,
@@ -230,8 +239,12 @@ pub fn debug_find_element(
 }
 
 #[tauri::command]
-pub fn debug_list_templates(app: tauri::AppHandle) -> Vec<String> {
-    let Some(dir) = resolve_templates_dir(&app) else {
+pub fn debug_list_templates(
+    app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
+) -> Vec<String> {
+    let server = current_server(&server_state);
+    let Some(dir) = resolve_templates_dir(&app, server) else {
         eprintln!("[debug_list_templates] resource_dir not available");
         return Vec::new();
     };
@@ -268,6 +281,7 @@ pub fn debug_list_templates(app: tauri::AppHandle) -> Vec<String> {
 #[tauri::command]
 pub fn debug_find_element_by_name(
     app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     screen: String,
@@ -280,7 +294,7 @@ pub fn debug_find_element_by_name(
         return Err("尚未截取画面，请先点击 截取画面".into());
     }
 
-    ensure_debug_sidecar(&app, &debug_state)?;
+    ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))?;
 
     eprintln!(
         "[debug_find_element_by_name] screen={screen} element={element}"
@@ -299,8 +313,12 @@ pub fn debug_find_element_by_name(
 }
 
 #[tauri::command]
-pub fn debug_get_cv_config(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let path = resolve_cv_config_path(&app)
+pub fn debug_get_cv_config(
+    app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
+) -> Result<serde_json::Value, String> {
+    let server = current_server(&server_state);
+    let path = resolve_cv_config_path(&app, server)
         .ok_or_else(|| "resource_dir not available".to_string())?;
     let contents = fs::read_to_string(&path).map_err(|e| {
         eprintln!("[debug_get_cv_config] read {} failed: {e}", path.display());
@@ -312,6 +330,7 @@ pub fn debug_get_cv_config(app: tauri::AppHandle) -> Result<serde_json::Value, S
 #[tauri::command]
 pub fn debug_reload_sidecar(
     app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<(), String> {
@@ -320,7 +339,7 @@ pub fn debug_reload_sidecar(
         let mut guard = debug_state.0.lock().unwrap();
         guard.take();
     }
-    ensure_debug_sidecar(&app, &debug_state)
+    ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))
 }
 
 #[tauri::command]
@@ -344,6 +363,7 @@ pub fn debug_get_runner_coordinates() -> runner::DebugCoordinates {
 #[tauri::command]
 pub fn debug_find_command_cards(
     app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     servant_ids: Vec<u32>,
@@ -355,7 +375,7 @@ pub fn debug_find_command_cards(
         return Err("尚未截取画面，请先点击 截取画面".into());
     }
 
-    ensure_debug_sidecar(&app, &debug_state)?;
+    ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))?;
 
     let assets_dir = resolve_servant_assets_dir(&app);
     eprintln!(
@@ -387,6 +407,7 @@ pub fn debug_find_command_cards(
 #[tauri::command]
 pub fn debug_find_noble_phantasms(
     app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<Vec<NoblePhantasmMatch>, String> {
@@ -397,7 +418,7 @@ pub fn debug_find_noble_phantasms(
         return Err("尚未截取画面，请先点击 截取画面".into());
     }
 
-    ensure_debug_sidecar(&app, &debug_state)?;
+    ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))?;
 
     let mut guard = debug_state.0.lock().unwrap();
     let client = guard
@@ -492,6 +513,7 @@ fn parse_digit_matches(value: &serde_json::Value) -> Vec<DebugDigitMatch> {
 #[tauri::command]
 pub fn debug_read_battle_scene(
     app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
 ) -> Result<DebugBattleSceneResult, String> {
@@ -502,7 +524,7 @@ pub fn debug_read_battle_scene(
         return Err("尚未截取画面，请先点击 截取画面".into());
     }
 
-    ensure_debug_sidecar(&app, &debug_state)?;
+    ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))?;
 
     let region = runner::BATTLE_SCENE_REGION;
     let mut guard = debug_state.0.lock().unwrap();
@@ -671,6 +693,7 @@ fn ce_search_region(row: &SupportRowMatch) -> NormRect {
 #[tauri::command]
 pub fn debug_find_supports(
     app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     servant_id: u32,
@@ -683,13 +706,14 @@ pub fn debug_find_supports(
         return Err("尚未截取画面，请先点击 截取画面".into());
     }
 
-    let meta = load_servant_metadata(&app, servant_id)?;
+    let server = current_server(&server_state);
+    let meta = load_servant_metadata(&app, servant_id, server)?;
     eprintln!(
-        "[debug_find_supports] servant_id={servant_id} name={:?} np_names={:?} ce={:?}",
+        "[debug_find_supports] servant_id={servant_id} server={server} name={:?} np_names={:?} ce={:?}",
         meta.name, meta.np_names, craft_essence_id
     );
 
-    ensure_debug_sidecar(&app, &debug_state)?;
+    ensure_debug_sidecar(&app, &debug_state, server)?;
 
     // Resolve the CE template up-front (outside the sidecar lock). A
     // missing or unconfigured CE just leaves `ce_template = None` so the
@@ -849,7 +873,8 @@ pub fn debug_list_servant_assets(app: tauri::AppHandle) -> Vec<u32> {
 #[tauri::command]
 pub fn warm_sidecar(
     app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
 ) -> Result<(), String> {
-    ensure_debug_sidecar(&app, &debug_state)
+    ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))
 }

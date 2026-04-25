@@ -39,8 +39,10 @@
     ],
     "externalBin": [],
     "resources": [
-      "resources/cv.json",
-      "resources/templates/*",
+      "resources/servers/jp/cv.json",
+      "resources/servers/jp/templates/*",
+      "resources/servers/cn/cv.json",
+      "resources/servers/cn/templates/*",
       "resources/scrcpy/scrcpy-server.jar",
       "binaries/mash-cv/**/*"
     ]

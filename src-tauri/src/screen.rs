@@ -96,6 +96,14 @@ pub struct NoblePhantasmMatch {
     pub ready: bool,
     pub edge_frac: f64,
     pub std_bgr: f64,
+    /// Edge-fraction threshold the sidecar used to flag this slot. The
+    /// detector now adapts per frame (see ``_decide_np_ready`` in
+    /// ``cv.py``) so the value can change between calls — surfacing it
+    /// here lets the debug overlay explain why a given slot landed on
+    /// either side of the line. Optional for backward compat with older
+    /// sidecar bundles that don't emit the field.
+    #[serde(default)]
+    pub edge_threshold: f64,
 }
 
 /// One support row whose servant-name and NP-name fragments OCR'd, fuzzy-
@@ -136,6 +144,35 @@ pub struct SupportCandidate {
     pub matched_name: Option<String>,
 }
 
+/// One raw OCR fragment from the support-list region, regardless of whether
+/// it scored above the name / NP fuzzy thresholds. Surfaced so the debug UI
+/// can show *why* a match failed — typically the closest NP fragment scored
+/// 0.4-0.5 against the expected text, just under the 0.65 threshold,
+/// because the mooncell `name_cn` doesn't match the in-game CN string.
+/// Without this, the only feedback for a 0-row response was "OCR found N
+/// fragments" without any way to see what those fragments said.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportFragment {
+    pub text: String,
+    pub region: NormRect,
+    /// RapidOCR's own per-fragment confidence (independent of our fuzzy
+    /// matching). 0.0 when the OCR backend doesn't return a confidence.
+    #[serde(default)]
+    pub ocr_confidence: f64,
+    /// Fuzzy score against the expected servant name (0.0-1.0).
+    #[serde(default)]
+    pub name_score: f64,
+    /// Best fuzzy score across the expected NP list (0.0-1.0); 0.0 when
+    /// no NPs were expected.
+    #[serde(default)]
+    pub best_np_score: f64,
+    /// Which expected NP produced ``best_np_score``; empty string when
+    /// no NPs were expected.
+    #[serde(default)]
+    pub best_np_name: String,
+}
+
 /// Diagnostic payload accompanying every ``find_supports`` response. Always
 /// returned (even when ``supports`` is empty) so the debug UI can show
 /// "OCR ran but matched nothing" vs. "OCR didn't find any candidates".
@@ -146,6 +183,25 @@ pub struct SupportDiagnostics {
     pub name_candidates: Vec<SupportCandidate>,
     pub np_candidates: Vec<SupportCandidate>,
     pub fragment_count: u32,
+    /// Every OCR fragment (above and below threshold). New in the
+    /// fragment-surfacing patch; `#[serde(default)]` keeps the Rust
+    /// client compatible with an older sidecar that doesn't emit it.
+    #[serde(default)]
+    pub fragments: Vec<SupportFragment>,
+    /// True when the sidecar synthesized rows from name candidates alone
+    /// because the strict pairing path couldn't run (no NPs expected, or
+    /// none cleared the NP threshold). Defaults to false for backwards
+    /// compatibility with older sidecars.
+    #[serde(default)]
+    pub name_only_fallback: bool,
+    /// Discriminator for `name_only_fallback`: empty string (default)
+    /// means strict pairing; "noNpExpected" means CN translation
+    /// dropped every NP for this servant; "noNpAboveThreshold" means
+    /// at least one NP was expected but none of the OCR fragments
+    /// scored high enough — almost always a sign the mooncell CN
+    /// translation doesn't match the in-game text.
+    #[serde(default)]
+    pub name_only_reason: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -242,10 +298,17 @@ pub struct SidecarClient {
 
 impl SidecarClient {
     /// Spawn the mash-cv sidecar and optionally load templates + config.
+    ///
+    /// ``server`` is forwarded to the sidecar via a `set_server` REPL call
+    /// after templates / config are loaded so the sidecar can pin the
+    /// matching OCR model on first use. Defaulting on the sidecar side
+    /// means an older sidecar binary that doesn't recognize `set_server`
+    /// degrades to JP-only behaviour rather than failing the spawn.
     pub fn spawn(
         app: &tauri::AppHandle,
         templates_dir: Option<&Path>,
         config_path: Option<&Path>,
+        server: crate::Server,
     ) -> Result<Self, String> {
         let exe = crate::resolve_sidecar_exe(app)
             .ok_or_else(|| "failed to resolve sidecar resource_dir".to_string())?;
@@ -335,6 +398,20 @@ impl SidecarClient {
             } else {
                 eprintln!("[mash-cv] config path missing: {}", path.display());
             }
+        }
+
+        // Tell the sidecar which server's OCR model to use. Sent after
+        // templates + config so a fresh `_ocr_engine` rebuild sees the
+        // right model on the first `find_supports` call. Failures are
+        // logged but non-fatal: an older sidecar binary that doesn't
+        // know `set_server` simply stays on its compile-time default.
+        let req = serde_json::json!({
+            "cmd": "set_server",
+            "server": server.to_string(),
+        });
+        match client.send_recv(&req) {
+            Ok(resp) => eprintln!("[mash-cv] set_server -> {resp}"),
+            Err(e) => eprintln!("[mash-cv] set_server failed (sidecar may be stale): {e}"),
         }
 
         Ok(client)

@@ -6,6 +6,10 @@ cd "$SCRIPT_DIR"
 
 poetry install
 
+# PyInstaller refuses to write into a non-empty distpath; nuke the
+# previous build artefacts so the script is safe to re-run.
+rm -rf dist build
+
 poetry run pyinstaller --onedir mash_cv/__main__.py \
   --name mash-cv \
   --distpath dist \

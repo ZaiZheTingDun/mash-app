@@ -127,6 +127,7 @@ interface NoblePhantasmMatchDto {
   ready: boolean;
   edgeFrac: number;
   stdBgr: number;
+  edgeThreshold?: number;
 }
 
 interface DigitMatchDto {
@@ -204,11 +205,23 @@ interface SupportCandidateDto {
   matchedName?: string;
 }
 
+interface SupportFragmentDto {
+  text: string;
+  region: NormRectDto;
+  ocrConfidence: number;
+  nameScore: number;
+  bestNpScore: number;
+  bestNpName: string;
+}
+
 interface SupportDiagnosticsDto {
   listRegion: NormRectDto;
   nameCandidates: SupportCandidateDto[];
   npCandidates: SupportCandidateDto[];
   fragmentCount: number;
+  fragments?: SupportFragmentDto[];
+  nameOnlyFallback?: boolean;
+  nameOnlyReason?: string;
 }
 
 interface FindSupportsResultDto {
@@ -564,7 +577,14 @@ export function DebugPage({ onBack }: DebugPageProps) {
             `NP${s.slot + 1}:${s.ready ? "有" : "无"}(${(s.edgeFrac * 100).toFixed(1)}%)`
         )
         .join("  ");
-      log(`识别到 ${readyCount}/${slots.length} 张宝具卡 | ${summary}`);
+      const threshold = slots[0]?.edgeThreshold;
+      const thresholdHint =
+        threshold !== undefined
+          ? ` · 阈值 ${(threshold * 100).toFixed(1)}%`
+          : "";
+      log(
+        `识别到 ${readyCount}/${slots.length} 张宝具卡${thresholdHint} | ${summary}`
+      );
     } catch (err) {
       log(`debug_find_noble_phantasms 失败: ${err}`, "error");
     } finally {
@@ -666,16 +686,46 @@ export function DebugPage({ onBack }: DebugPageProps) {
           ` · 名称候选 ${diag.nameCandidates.length}` +
           ` · 宝具候选 ${diag.npCandidates.length}`
       );
+      if (diag.nameOnlyFallback) {
+        // Surface the degraded path immediately instead of waiting for
+        // the user to expand the diagnostics panel — when this fires
+        // the rows are real but their CE / NP cross-check was skipped.
+        const why =
+          diag.nameOnlyReason === "noNpExpected"
+            ? "宝具中文翻译未映射（CN servants.json 缺失）"
+            : diag.nameOnlyReason === "noNpAboveThreshold"
+              ? "OCR 未找到匹配的宝具文本（mooncell 译名与游戏内不一致）"
+              : "回退到仅按名称识别";
+        log(`仅按名称识别（已跳过宝具核对）: ${why}`, "warn");
+      }
       if (result.supports.length === 0) {
         log("未匹配到助战行 — 检查截图是否为助战选择画面", "warn");
+        // When OCR ran but nothing matched, dump the closest 5 fragments
+        // by best-NP-score so the user can immediately see what OCR
+        // actually read in the NP region. Replaces the "lower the
+        // threshold and re-run" round-trip.
+        const frags = (diag.fragments ?? [])
+          .filter((f) => f.text.trim().length > 0)
+          .sort((a, b) => b.bestNpScore - a.bestNpScore)
+          .slice(0, 5);
+        for (const f of frags) {
+          log(
+            `  片段 '${f.text}' | 名称分 ${f.nameScore.toFixed(2)}` +
+              ` | 宝具最佳 ${f.bestNpScore.toFixed(2)}` +
+              (f.bestNpName ? ` (vs '${f.bestNpName}')` : "")
+          );
+        }
       } else {
         for (const s of result.supports) {
           const cePart = s.ce
             ? ` | 礼装 ${s.ce.score.toFixed(2)}/${s.ce.threshold.toFixed(2)} ${s.ce.passed ? "✓" : "✗"}`
             : "";
+          const npPart = s.npText
+            ? ` | 宝具='${s.npText}' (${s.npScore.toFixed(2)})`
+            : ` | 宝具(未核对)`;
           log(
             `  行 y=${s.rowRegion.y.toFixed(3)} | 名称='${s.nameText}' (${s.nameScore.toFixed(2)})` +
-              ` | 宝具='${s.npText}' (${s.npScore.toFixed(2)})` +
+              npPart +
               cePart
           );
         }

@@ -3,7 +3,7 @@ use crate::screen::{
     CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
     SupportRowMatch,
 };
-use crate::{load_servant_metadata, Action, AttackCard, BattleScene, ServantMetadata};
+use crate::{load_servant_metadata, Action, AttackCard, BattleScene, Server, ServantMetadata};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -426,14 +426,24 @@ fn tick_scene_state(
     executed_scene_index: Option<usize>,
     scene_m: Option<u32>,
 ) -> SceneTick {
-    let advanced = matches!(
-        (last_screen_scene, scene_m),
-        (Some(prev), Some(curr)) if prev != curr
-    );
-    let next_index = if advanced {
-        current_scene_index + 1
-    } else {
-        current_scene_index
+    // Three update paths for `current_scene_index`:
+    //
+    // 1. First successful read (no prior `last_screen_scene`): snap the
+    //    index to `scene_m - 1` so the runner aligns with whatever
+    //    scene the screen is actually on. This handles the user
+    //    starting the runner mid-quest (e.g. screen already shows 2/3
+    //    on the first poll) — without the snap we would execute
+    //    config block 0 for the actual scene 2 and only advance on the
+    //    *next* observed transition.
+    // 2. Subsequent transition (`prev → curr` with both Some and
+    //    different): increment the index by 1, mirroring the on-screen
+    //    advance.
+    // 3. Anything else (failed read, same `m` re-read, no read yet):
+    //    leave the index alone.
+    let next_index = match (last_screen_scene, scene_m) {
+        (None, Some(curr)) => curr.saturating_sub(1) as usize,
+        (Some(prev), Some(curr)) if prev != curr => current_scene_index + 1,
+        _ => current_scene_index,
     };
     let next_last = if scene_m.is_some() {
         scene_m
@@ -616,6 +626,11 @@ pub struct Runner {
     /// disk; CE verification is silently skipped in that case so the
     /// existing flow (pick first OCR match) still works.
     ce_assets_dir: Option<PathBuf>,
+    /// Game server this run targets (JP/CN). Forwarded to
+    /// `load_servant_metadata` so the cached `support_meta.name` /
+    /// `np_names` come out in the right language for the OCR model the
+    /// sidecar is using.
+    server: Server,
     // Pre-battle progress tracking
     team_changed: bool,
     support_selected: bool,
@@ -656,6 +671,7 @@ impl Runner {
         screen_size: Option<(u32, u32)>,
         assets_dir: Option<PathBuf>,
         ce_assets_dir: Option<PathBuf>,
+        server: Server,
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         Self {
@@ -670,6 +686,7 @@ impl Runner {
             screen_h,
             assets_dir,
             ce_assets_dir,
+            server,
             team_changed: false,
             support_selected: false,
             support_scroll_count: 0,
@@ -953,7 +970,7 @@ impl Runner {
         // static cache in `lib.rs` makes this cheap, but caching on the
         // runner avoids even hashing it at every poll.
         if self.support_meta.is_none() {
-            match load_servant_metadata(&self.app_handle, servant_id) {
+            match load_servant_metadata(&self.app_handle, servant_id, self.server) {
                 Ok(meta) => self.support_meta = Some(meta),
                 Err(e) => {
                     self.fail_action(
@@ -2084,13 +2101,70 @@ mod tests {
     // put" so the bug can't come back without breaking these tests.
 
     #[test]
-    fn tick_scene_state_first_successful_read_locks_in_without_advancing() {
+    fn tick_scene_state_first_successful_read_snaps_index_to_screen_scene() {
+        // First successful read of scene 1 from a fresh runner. The
+        // snap takes m=1 → index 0, which matches the runner's default
+        // starting index, so behaviour is identical to the legacy
+        // "lock in but don't advance" semantics for the m=1 case.
         let tick = tick_scene_state(None, 0, None, Some(1));
         assert_eq!(
             tick,
             SceneTick {
                 last_screen_scene: Some(1),
                 current_scene_index: 0,
+                needs_exec: true,
+            }
+        );
+    }
+
+    #[test]
+    fn tick_scene_state_first_successful_read_at_scene_two_snaps_to_index_one() {
+        // Mid-quest start: the runner is launched while the screen is
+        // already on scene 2/3. The first successful read must snap
+        // current_scene_index to 1 so the user's second configured
+        // command block runs — without the snap we would execute
+        // block 0 for the actual scene 2 and only advance after the
+        // *next* on-screen transition (i.e. when the screen moves to
+        // 3/3), wasting block 1 entirely.
+        let tick = tick_scene_state(None, 0, None, Some(2));
+        assert_eq!(
+            tick,
+            SceneTick {
+                last_screen_scene: Some(2),
+                current_scene_index: 1,
+                needs_exec: true,
+            }
+        );
+    }
+
+    #[test]
+    fn tick_scene_state_delayed_first_read_at_scene_two_replaces_default_exec() {
+        // First poll's CV read failed (e.g. NP overlay covered the
+        // strip), so the runner emitted the default block 0. The next
+        // poll succeeds with m=2: we must snap the index to 1 and
+        // re-execute, otherwise the user's scene-2 block never fires
+        // for the entire scene.
+        let tick = tick_scene_state(None, 0, Some(0), Some(2));
+        assert_eq!(
+            tick,
+            SceneTick {
+                last_screen_scene: Some(2),
+                current_scene_index: 1,
+                needs_exec: true,
+            }
+        );
+    }
+
+    #[test]
+    fn tick_scene_state_first_successful_read_at_scene_three_snaps_to_index_two() {
+        // Same as the scene-2 case but proves the snap is general,
+        // not a special-case of m=2.
+        let tick = tick_scene_state(None, 0, None, Some(3));
+        assert_eq!(
+            tick,
+            SceneTick {
+                last_screen_scene: Some(3),
+                current_scene_index: 2,
                 needs_exec: true,
             }
         );

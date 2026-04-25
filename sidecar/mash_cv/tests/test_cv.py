@@ -330,6 +330,16 @@ _PROD_TEMPLATES_DIR = os.path.normpath(
         "src-tauri", "resources", "templates",
     )
 )
+# Per-server production templates. Used by tests that exercise CN-specific
+# behaviour (different label glyphs / digit fonts) and need the real
+# bundle rather than the pruned tests/test_data/ copy.
+_PROD_CN_TEMPLATES_DIR = os.path.normpath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..", "..", "..",
+        "src-tauri", "resources", "servers", "cn", "templates",
+    )
+)
 
 
 class TestReadBattleScene:
@@ -414,6 +424,48 @@ class TestReadBattleScene:
         assert diag["failReason"] is None, diag
         assert diag["trimmedRight"] == 1, diag
         assert diag["trimmedLeft"] == 0, diag
+
+    @pytest.mark.skipif(
+        not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
+        reason="CN production templates dir not available",
+    )
+    def test_cn_battle_scene_reads_two_of_three(self):
+        """CN regression: the BATTLE strip on the CN client uses ``战斗场次
+        m/n`` instead of ``BATTLE m/n``. Two failure modes that motivated
+        the score-margin filter:
+
+        1. The CN font is rendered slightly differently from JP, so the
+           shipped JP-derived ``digit_2`` / ``digit_3`` templates only
+           scored 0.76 / 0.77 against the CN HUD — below the 0.80
+           absolute threshold. We re-cropped both from this fixture so
+           the bundled CN templates are now CN-native.
+        2. A faint vertical seam between the ``战斗场次`` label and the
+           ``m/n`` text accidentally matches the narrow ``digit_1``
+           template at ~0.89, producing an extra leading "1" that turns
+           ``2/3`` into ``12/3``. The score-margin filter
+           (``BATTLE_DIGIT_SCORE_MARGIN``) drops this artefact whenever
+           the real digits match noticeably better.
+        """
+        mash_cv.templates.clear()
+        mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+        img = cv2.imread(
+            os.path.join(_TEST_SCREENSHOTS_DIR, "battle_scene_cn.png")
+        )
+        assert img is not None, "battle_scene_cn.png fixture missing"
+
+        result = mash_cv._read_battle_scene(img, BATTLE_SCENE_REGION, debug=True)
+        assert result["scene"] == 2, result
+        assert result["total"] == 3, result
+        diag = result["diagnostics"]
+        assert diag["failReason"] is None
+        # Best two real-digit scores should both be near-perfect after the
+        # CN-native template re-crop.
+        kept_scores = sorted((k["score"] for k in diag["kept"]), reverse=True)
+        assert kept_scores[0] > 0.95
+        assert kept_scores[1] > 0.95
+        # Score floor must sit above the label-seam digit_1 artefact
+        # (observed at ~0.89 in this fixture) so the artefact is dropped.
+        assert diag["scoreFloor"] > 0.89
 
 
 # ── _find_command_cards ─────────────────────────────────────────────────
@@ -562,7 +614,12 @@ class TestFindNoblePhantasms:
     def test_returns_empty_when_no_regions(self):
         img = _make_bgr_image(2560, 1440)
         result = mash_cv._find_noble_phantasms(img, [])
-        assert result == {"slots": []}
+        assert result["slots"] == []
+        # The detector still echoes the default cutoff back so the debug
+        # UI has a stable field to render even on degenerate inputs.
+        assert result["edgeThreshold"] == pytest.approx(
+            mash_cv.NP_READY_EDGE_HIGH
+        )
 
     def test_blank_image_marks_all_empty(self):
         """A flat-colour image has zero edges, so no slot is ready."""
@@ -627,6 +684,107 @@ class TestFindNoblePhantasms:
         assert box["y"] == pytest.approx(0.20, abs=1e-3)
         assert box["w"] == pytest.approx(0.05, abs=1e-3)
         assert box["h"] == pytest.approx(0.05, abs=1e-3)
+
+    def test_cn_dark_np_card_is_detected(self):
+        """Regression: CN Morgan / Stella have low-detail dark NP art that
+        sits at ~5.8% edge density — well below the legacy 0.08 cutoff
+        but obviously ready to a human. The adaptive baseline (NP1's
+        ~1.0% empty edge density) should let it cross the threshold."""
+        img = cv2.imread(
+            os.path.join(_TEST_SCREENSHOTS_DIR, "noble_debug_cn.png")
+        )
+        assert img is not None, "noble_debug_cn.png fixture missing"
+
+        result = mash_cv._find_noble_phantasms(
+            img, list(mash_cv.DEFAULT_NP_CARD_SLOTS)
+        )
+        slots = result["slots"]
+        assert len(slots) == 3
+        ready_flags = [s["ready"] for s in slots]
+        assert ready_flags == [False, True, True]
+
+        # Sanity-check the underlying signals so a future change to
+        # OpenCV/Canny doesn't silently shift the calibration the
+        # adaptive logic depends on.
+        assert slots[0]["edgeFrac"] < 0.03   # empty floor
+        assert slots[1]["edgeFrac"] < 0.08   # dark-art ready BELOW old fixed cutoff
+        assert slots[2]["edgeFrac"] > 0.08   # busy-art ready ABOVE old fixed cutoff
+
+        # Adaptive threshold lands between empty and dark-ready; surfaced
+        # in the response so the debug UI can show it.
+        thr = result["edgeThreshold"]
+        assert slots[0]["edgeThreshold"] == pytest.approx(thr)
+        assert slots[0]["edgeFrac"] < thr <= slots[1]["edgeFrac"]
+
+
+class TestDecideNpReady:
+    """Pure-logic coverage for the adaptive readiness decision so we can
+    exhaustively probe scenarios that are awkward to stage as full
+    fixtures (e.g. all-empty / all-ready / explicit override)."""
+
+    def test_anchors_to_empty_baseline_when_one_slot_is_clearly_empty(self):
+        # CN runtime numbers: empty + dark-ready + busy-ready.
+        flags, thr = mash_cv._decide_np_ready(
+            [0.010, 0.058, 0.099], [38.0, 82.0, 84.0]
+        )
+        assert flags == [False, True, True]
+        # max(NP_READY_EDGE_LOW=0.035, baseline*ratio=0.020) -> 0.035.
+        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_LOW)
+
+    def test_uses_high_absolute_cutoff_when_no_slot_is_clearly_empty(self):
+        # JP fixture numbers: ready, ready, "empty" sitting at 5.2% over a
+        # busy background. baseline=0.052 >= NP_EMPTY_EDGE_HINT (0.03), so
+        # the adaptive logic refuses to anchor to it and falls back to
+        # the 0.07 absolute cutoff. stdBgr below NP_READY_STD_BGR keeps
+        # the empty slot empty.
+        flags, thr = mash_cv._decide_np_ready(
+            [0.120, 0.115, 0.052], [91.0, 96.0, 43.0]
+        )
+        assert flags == [True, True, False]
+        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_HIGH)
+
+    def test_std_bgr_rescues_dark_ready_card_with_no_empty_baseline(self):
+        # All three slots ready with one very dark card (low edges, but
+        # still high color variance from the framed art). Adaptive picks
+        # the high cutoff and the dark slot would otherwise be missed —
+        # the stdBgr backstop catches it.
+        flags, thr = mash_cv._decide_np_ready(
+            [0.058, 0.096, 0.120], [82.0, 84.0, 90.0]
+        )
+        assert flags == [True, True, True]
+        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_HIGH)
+
+    def test_all_empty_low_resolution_stays_empty(self):
+        flags, thr = mash_cv._decide_np_ready(
+            [0.009, 0.012, 0.015], [20.0, 22.0, 25.0]
+        )
+        assert flags == [False, False, False]
+        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_LOW)
+
+    def test_all_empty_busy_background_stays_empty(self):
+        # All three slots over busy backgrounds, no card present. Edge
+        # frac sits in the 0.05 range (above the empty hint), stdBgr
+        # below the ready backstop. Should still report all empty.
+        flags, thr = mash_cv._decide_np_ready(
+            [0.052, 0.050, 0.055], [43.0, 41.0, 45.0]
+        )
+        assert flags == [False, False, False]
+        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_HIGH)
+
+    def test_explicit_threshold_override_skips_adaptive_logic(self):
+        # When a caller pins a threshold, both the std backstop and the
+        # adaptive baseline are bypassed — the response should reflect
+        # that exact cutoff so calibration tools stay deterministic.
+        flags, thr = mash_cv._decide_np_ready(
+            [0.058, 0.096, 0.120], [82.0, 84.0, 90.0], edge_threshold=0.10
+        )
+        assert flags == [False, False, True]
+        assert thr == pytest.approx(0.10)
+
+    def test_empty_slots_returns_default_threshold(self):
+        flags, thr = mash_cv._decide_np_ready([], [])
+        assert flags == []
+        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_HIGH)
 
 
 # ── _find_supports ──────────────────────────────────────────────────────
@@ -719,6 +877,123 @@ class TestFindSupports:
         # text under our default thresholds.
         result = self._call("ジャンヌ・ダルク", ["紅蓮の聖女"])
         assert result["supports"] == []
+
+    def test_empty_np_names_falls_back_to_name_only_mode(self):
+        # CN servants whose Atlas JP NP names didn't survive the JP→CN
+        # translation step land here with an empty ``expectedNpNames``.
+        # In that case we can't pair name + NP, so each above-threshold
+        # name candidate should become its own row with empty NP fields.
+        # The fixture shows three rows where Altria's name appears (top
+        # full row + bottom partial row) — both name candidates must
+        # surface as standalone rows even though only the top row had a
+        # paired NP in the strict-pairing test above.
+        result = self._call(self.EXPECTED_NAME_ALTRIA, [])
+        rows = result["supports"]
+        assert len(rows) >= 1
+        # Every name-only row carries the name fields from the OCR fragment
+        # but empty NP fields — that's the contract downstream consumers
+        # use to tell name-only rows apart from paired ones.
+        for row in rows:
+            assert row["nameText"]
+            assert row["nameScore"] >= 0.7
+            assert row["npText"] == ""
+            assert row["npScore"] == 0.0
+            assert row["npMatchedName"] == ""
+            # Synthesized rowRegion spans the full list_region width.
+            assert row["rowRegion"]["w"] >= 0.3
+        # Diagnostics: name candidates populated, NP candidates stay
+        # empty (the loop that fills npCandidates still runs but found
+        # nothing because ``expected_np_names`` was empty).
+        assert len(result["diagnostics"]["nameCandidates"]) == len(rows)
+        assert result["diagnostics"]["npCandidates"] == []
+        # Reason flag distinguishes the two name-only paths.
+        diag = result["diagnostics"]
+        assert diag["nameOnlyFallback"] is True
+        assert diag["nameOnlyReason"] == "noNpExpected"
+
+    def test_unmatched_np_falls_back_to_name_only_mode(self):
+        # The "Morgan + 业已无法抵达的理想乡" scenario: caller supplies an
+        # NP name that the OCR fragments don't match closely enough
+        # (because the in-game CN string differs from the mooncell
+        # translation). Strict pairing produces 0 supports, but the
+        # graceful fallback should still emit name-only rows so the
+        # runner doesn't refresh forever — and the diagnostics must
+        # advertise the degraded path so the operator can spot bad data.
+        result = self._call(
+            self.EXPECTED_NAME_ALTRIA, ["完全に無関係な架空宝具"]
+        )
+        rows = result["supports"]
+        assert len(rows) >= 1, "expected name-only fallback rows"
+        for row in rows:
+            assert row["nameText"]
+            assert row["npText"] == ""
+            assert row["npScore"] == 0.0
+        diag = result["diagnostics"]
+        assert diag["nameOnlyFallback"] is True
+        assert diag["nameOnlyReason"] == "noNpAboveThreshold"
+        # The npCandidates list is empty (nothing cleared np_threshold),
+        # but the closest *fragment* should still surface in the new
+        # `fragments` array so the user can see what OCR actually read.
+        assert diag["npCandidates"] == []
+        assert len(diag["fragments"]) > 0
+
+    def test_no_name_match_returns_empty_without_fallback(self):
+        # Last sanity check: if the name itself doesn't match (e.g. wrong
+        # servant id supplied), the fallback must NOT kick in — there's
+        # nothing to fall back *to*. Returning rows here would let the
+        # runner tap a stranger's row.
+        result = self._call("完全に存在しないサーヴァント", ["何かの宝具"])
+        assert result["supports"] == []
+        diag = result["diagnostics"]
+        assert diag["nameOnlyFallback"] is False
+        assert diag["nameOnlyReason"] == ""
+
+    def test_diagnostics_fragments_carries_subthreshold_text(self):
+        # The whole point of the new `fragments` array is to surface
+        # OCR text that DIDN'T clear the fuzzy threshold — typically the
+        # only feedback path for diagnosing a 0-row CN run. Pass a
+        # deliberately wrong NP and confirm at least one fragment shows
+        # a non-zero best-NP score (proving we're scoring every fragment,
+        # not just the ones above threshold).
+        result = self._call(
+            self.EXPECTED_NAME_ALTRIA, ["完全に無関係な架空宝具"]
+        )
+        diag = result["diagnostics"]
+        assert "fragments" in diag
+        frags = diag["fragments"]
+        assert len(frags) == diag["fragmentCount"]
+        # Every fragment exposes the four diagnostic fields the debug UI
+        # consumes so a missing field would silently render as NaN.
+        for f in frags:
+            assert "text" in f
+            assert "region" in f
+            assert "ocrConfidence" in f
+            assert "nameScore" in f
+            assert "bestNpScore" in f
+            assert "bestNpName" in f
+            # Fields are floats, not None — protocol guarantees defaults.
+            assert isinstance(f["nameScore"], float)
+            assert isinstance(f["bestNpScore"], float)
+            assert 0.0 <= f["nameScore"] <= 1.0
+            assert 0.0 <= f["bestNpScore"] <= 1.0
+        # At least one fragment should match the expected NAME (the OCR
+        # found "アルトリア" somewhere); that fragment should score >= 0.5
+        # but the bestNpScore for the made-up NP must stay sub-threshold
+        # everywhere — otherwise our fixture or threshold drifted.
+        max_name = max(f["nameScore"] for f in frags)
+        max_np = max(f["bestNpScore"] for f in frags)
+        assert max_name >= 0.5, f"expected to find Altria's name; max name score = {max_name}"
+        assert max_np < 0.65, f"made-up NP unexpectedly matched; max np score = {max_np}"
+
+    def test_diagnostics_fragments_empty_np_list_keeps_zero_np_scores(self):
+        # When the caller passes no expected NPs, every fragment's
+        # ``bestNpScore`` / ``bestNpName`` should be 0.0 / "" — there's
+        # nothing to score against, but the array shape must stay stable
+        # so frontend renderers don't have to special-case the field.
+        result = self._call(self.EXPECTED_NAME_ALTRIA, [])
+        for f in result["diagnostics"]["fragments"]:
+            assert f["bestNpScore"] == 0.0
+            assert f["bestNpName"] == ""
 
 
 # ── _verify_support_ce / _load_ce_template ─────────────────────────────
@@ -907,6 +1182,59 @@ class TestLoadCETemplate:
         assert CE_TEMPLATE_BOTTOM_CROP > 0
 
 
+# ── _set_server ─────────────────────────────────────────────────────────
+
+
+class TestSetServer:
+    """Direct unit tests for ``_set_server`` — no subprocess, no OCR.
+
+    These cover the contract the Rust side relies on: response shape,
+    case normalization, JP-default for unknown values, and the
+    invariant that flipping the server invalidates the cached OCR
+    engine so the next ``find_supports`` rebuilds against the right
+    rec model.
+    """
+
+    def setup_method(self):
+        from mash_cv import cv as _cv_module
+        # Pin to JP at the top of every test so case-by-case
+        # transitions are easy to reason about.
+        _cv_module._current_server = "JP"
+        _cv_module._ocr_engine = None
+
+    def test_set_server_to_cn_normalizes_and_resets_ocr(self):
+        from mash_cv import cv as _cv_module
+
+        # Pretend an OCR engine was already built — flipping servers
+        # must drop it so the next call rebuilds against the new model.
+        sentinel = object()
+        _cv_module._ocr_engine = sentinel
+
+        resp = _cv_module._set_server("cn")
+        assert resp == {"ok": True, "server": "CN", "ocrReset": True}
+        assert _cv_module._current_server == "CN"
+        assert _cv_module._ocr_engine is None
+
+    def test_set_server_no_op_keeps_ocr_cache(self):
+        from mash_cv import cv as _cv_module
+        sentinel = object()
+        _cv_module._ocr_engine = sentinel
+
+        # Same server -> ocrReset=False, cached engine survives.
+        resp = _cv_module._set_server("JP")
+        assert resp == {"ok": True, "server": "JP", "ocrReset": False}
+        assert _cv_module._ocr_engine is sentinel
+
+    def test_set_server_unknown_value_falls_back_to_jp(self):
+        from mash_cv import cv as _cv_module
+        # An older Rust build that sends "us" should not crash the
+        # sidecar; we coerce to JP and keep going.
+        resp = _cv_module._set_server("us")
+        assert resp["ok"] is True
+        assert resp["server"] == "JP"
+        assert _cv_module._current_server == "JP"
+
+
 # ── Integration: subprocess REPL ────────────────────────────────────────
 
 
@@ -933,6 +1261,29 @@ class TestREPL:
         responses = self._run([{"cmd": "nope"}, {"cmd": "quit"}])
         assert len(responses) == 1
         assert "error" in responses[0]
+
+    def test_set_server_cn_round_trip(self):
+        # ``set_server`` should be a fire-and-forget no-op for the
+        # sidecar protocol — it returns ``{ok: true, server: "CN",
+        # ocrReset: ...}`` and the next command keeps working. This
+        # exercises the wire format end-to-end through a real
+        # subprocess so a regression in the REPL dispatch (e.g. a
+        # missing ``elif action == "set_server"``) shows up here.
+        responses = self._run([
+            {"cmd": "set_server", "server": "CN"},
+            {"cmd": "set_server", "server": "JP"},
+            {"cmd": "ping"},
+            {"cmd": "quit"},
+        ])
+        assert responses[0]["ok"] is True
+        assert responses[0]["server"] == "CN"
+        # ocrReset is True on the JP→CN flip because no OCR engine had
+        # been built yet (None != engine), but False is also acceptable
+        # if a future change pre-warms the engine — assert only the
+        # field exists so the test stays focused on the protocol.
+        assert "ocrReset" in responses[0]
+        assert responses[1]["server"] == "JP"
+        assert responses[2] == {"ok": True}
 
     def test_detect_missing_image(self):
         responses = self._run([

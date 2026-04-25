@@ -12,6 +12,7 @@ Lifecycle / streaming:
 → {"cmd":"ping"}                                    ← {"ok":true}
 → {"cmd":"load_templates","dir":"..."}              ← {"ok":true,"count":3}
 → {"cmd":"load_config","path":"..."}                ← {"ok":true,"screens":4}
+→ {"cmd":"set_server","server":"JP"|"CN"}           ← {"ok":true,"server":"CN","ocrReset":true}
 → {"cmd":"start_stream","jarPath":"...","serial":"...","maxSize":0,"bitRate":8000000}
                                                     ← {"ok":true,"width":1080,"height":1920}
 → {"cmd":"stop_stream"}                             ← {"ok":true,"running":false}
@@ -44,7 +45,10 @@ stream frame is used):
                                                        "diagnostics":{"listRegion":{...},
                                                                       "nameCandidates":[...],
                                                                       "npCandidates":[...],
-                                                                      "fragmentCount":N}}
+                                                                      "fragments":[...],
+                                                                      "fragmentCount":N,
+                                                                      "nameOnlyFallback":bool,
+                                                                      "nameOnlyReason":"..."}}
 → {"cmd":"verify_support_ce","region":{...},
     "templatePath":"/.../assets/ces/{id}/card_ce.png","threshold":0.7}
                                                     ← {"score":0.81,"passed":true}
@@ -165,9 +169,25 @@ DEFAULT_NP_CARD_SLOTS: tuple[dict, ...] = (
     {"x": 0.410, "y": 0.097, "w": 0.187, "h": 0.396},
     {"x": 0.603, "y": 0.097, "w": 0.187, "h": 0.396},
 )
-NP_READY_EDGE_THRESHOLD = 0.08
+# Readiness thresholds. We do NOT use a single fixed cutoff because edge
+# density varies across servers/resolutions/art styles: a dark NP card
+# (e.g. CN Morgan's "Roadless Camelot") can sit at ~5% edges while a JP
+# attack scene's empty slot over a busy background can also sit at ~5%.
+# Instead the detector adapts per-frame using the lowest slot as an
+# "empty" baseline, falling back to absolute cutoffs when no slot is
+# clearly empty.
+NP_READY_EDGE_HIGH = 0.07           # Absolute "definitely ready" cutoff.
+NP_READY_EDGE_LOW = 0.035           # Floor for the adaptive threshold.
+NP_EMPTY_EDGE_HINT = 0.03           # Slot below this is treated as empty baseline.
+NP_READY_BASELINE_RATIO = 2.0       # Slot must exceed baseline * ratio to count.
+NP_READY_STD_BGR = 60.0             # Color-variance backstop: dense art always > this,
+                                    # empty backgrounds we've seen sit < 50.
 NP_CANNY_LOW = 80
 NP_CANNY_HIGH = 160
+
+# Kept for backwards compatibility with callers/tests that still import
+# the old constant; the live detector no longer reads it.
+NP_READY_EDGE_THRESHOLD = NP_READY_EDGE_HIGH
 
 
 # ---------------------------------------------------------------------------
@@ -330,6 +350,16 @@ BATTLE_DIGIT_THRESHOLD = 0.8
 # certainly either the slash separator (handled separately) or a
 # spurious detection from neighbouring UI text — drop the outlier.
 BATTLE_DIGIT_COHESION_GAP_RATIO = 0.6
+# After NMS we also drop any kept candidate whose match score is more
+# than this margin below the best surviving candidate. Real digits in
+# the same frame match at very similar scores (within a few %); a
+# detection that's noticeably worse is almost always a coincidence — a
+# narrow ``digit_1`` template lighting up on a vertical seam inside the
+# label background, the right edge of an adjacent UI element, etc.
+# CN observed: real digits 0.999, label-seam ``digit_1`` 0.89 ⇒ margin
+# 0.08 cleanly drops the artefact while leaving genuine in-frame
+# scoring noise alone.
+BATTLE_DIGIT_SCORE_MARGIN = 0.08
 
 
 def _read_battle_scene(
@@ -459,6 +489,18 @@ def _read_battle_scene(
         if any(abs(c[0] - k[0]) < max(c[3], k[3]) * 0.5 for k in kept):
             continue
         kept.append(c)
+
+    # Score-margin filter: real m/n digits in the same frame match at
+    # nearly the same score, so a detection that's measurably worse than
+    # the best one is almost certainly an artefact (label-seam pickup,
+    # adjacent UI element). Drop anything more than
+    # ``BATTLE_DIGIT_SCORE_MARGIN`` below the best surviving score.
+    score_floor = 0.0
+    if kept:
+        best_score = max(k[2] for k in kept)
+        score_floor = best_score - BATTLE_DIGIT_SCORE_MARGIN
+        kept = [k for k in kept if k[2] >= score_floor]
+    diag["scoreFloor"] = float(score_floor)
 
     kept.sort(key=lambda c: c[0])
 
@@ -898,32 +940,87 @@ def _find_command_cards(
     return {"cards": cards}
 
 
+def _decide_np_ready(
+    edge_fracs: list[float],
+    std_bgrs: list[float],
+    edge_threshold: float | None = None,
+) -> tuple[list[bool], float]:
+    """Decide ready/empty for each NP slot from its edge + color signals.
+
+    If ``edge_threshold`` is provided, fall back to the legacy single
+    fixed-cutoff behaviour (slot is ready iff ``edgeFrac >= threshold``).
+    This branch exists so the JSON dispatcher and unit tests can still
+    pin a specific cutoff for calibration.
+
+    Otherwise pick a per-frame adaptive cutoff:
+
+      * If the lowest slot is clearly empty (edge_frac <
+        ``NP_EMPTY_EDGE_HINT``) it anchors the scene background — a slot
+        is ready iff its edge_frac is at least ``2x`` of that baseline,
+        floored at ``NP_READY_EDGE_LOW``. This handles the common case
+        of "1 empty + N ready" where one of the ready cards has dark or
+        low-detail art (e.g. CN Morgan, Stella) and would otherwise dip
+        below an absolute 0.08 cutoff calibrated against busier art.
+      * Otherwise (no slot looks empty — could be all-ready or
+        all-busy-background) use the conservative absolute cutoff
+        ``NP_READY_EDGE_HIGH``.
+
+    A high color-variance signal (``stdBgr >= NP_READY_STD_BGR``) also
+    marks a slot ready independent of edge density. This catches dark-
+    art ready cards in scenes where no slot is clearly empty to anchor
+    the baseline; both fixtures we have show ready slots clear ~80
+    while empty slots sit < 50.
+
+    Returns ``(ready_flags, edge_threshold_used)`` so callers can echo
+    the active threshold back to the debug UI for visibility.
+    """
+    if edge_threshold is not None:
+        return ([e >= edge_threshold for e in edge_fracs], edge_threshold)
+
+    if not edge_fracs:
+        return ([], NP_READY_EDGE_HIGH)
+
+    baseline = min(edge_fracs)
+    if baseline < NP_EMPTY_EDGE_HINT:
+        edge_thr = max(NP_READY_EDGE_LOW, baseline * NP_READY_BASELINE_RATIO)
+    else:
+        edge_thr = NP_READY_EDGE_HIGH
+
+    flags = [
+        (e >= edge_thr) or (s >= NP_READY_STD_BGR)
+        for e, s in zip(edge_fracs, std_bgrs)
+    ]
+    return (flags, edge_thr)
+
+
 def _find_noble_phantasms(
     img: np.ndarray,
     np_regions: list[dict],
-    edge_threshold: float = NP_READY_EDGE_THRESHOLD,
+    edge_threshold: float | None = None,
 ) -> dict:
     """Report whether each fixed NP card slot currently holds a card.
 
-    For every slot in ``np_regions`` we crop the slot, compute Canny edge
-    density on its grayscale, and mark it ready iff the edge fraction
-    crosses ``edge_threshold``. ``stdBgr`` is also reported as a
-    corroborating signal so callers can re-tune from a debug UI without
-    code changes.
+    For every slot in ``np_regions`` we crop the slot, compute Canny
+    edge density and BGR std on the crop, then hand the per-slot
+    measurements to :func:`_decide_np_ready` to pick an adaptive
+    threshold for the frame. The active threshold is returned per-slot
+    (and at the response top level) so the debug UI can show why a slot
+    was flagged ready/empty.
+
+    ``edge_threshold`` overrides the adaptive logic with a fixed cutoff
+    when provided — used by calibration tools and unit tests.
 
     Returns one record per slot so callers can render every slot in a
     debug overlay regardless of readiness.
     """
     h, w = img.shape[:2]
     if h == 0 or w == 0 or not np_regions:
-        return {"slots": []}
+        return {"slots": [], "edgeThreshold": NP_READY_EDGE_HIGH}
 
-    slots: list[dict] = []
-    for slot, region in enumerate(np_regions):
-        slot_px = _slot_to_pixels(region, w, h)
-        sx, sy, sw, sh = slot_px
+    measurements: list[tuple[int, int, int, int, float, float]] = []
+    for region in np_regions:
+        sx, sy, sw, sh = _slot_to_pixels(region, w, h)
         roi = img[sy : sy + sh, sx : sx + sw]
-
         if roi.size == 0:
             edge_frac = 0.0
             std_bgr = 0.0
@@ -932,7 +1029,16 @@ def _find_noble_phantasms(
             edges = cv2.Canny(gray, NP_CANNY_LOW, NP_CANNY_HIGH)
             edge_frac = float((edges > 0).mean())
             std_bgr = float(roi.std())
+        measurements.append((sx, sy, sw, sh, edge_frac, std_bgr))
 
+    edge_fracs = [m[4] for m in measurements]
+    std_bgrs = [m[5] for m in measurements]
+    ready_flags, edge_thr = _decide_np_ready(edge_fracs, std_bgrs, edge_threshold)
+
+    slots: list[dict] = []
+    for slot, ((sx, sy, sw, sh, edge_frac, std_bgr), ready) in enumerate(
+        zip(measurements, ready_flags)
+    ):
         slots.append({
             "slot": slot,
             "cardRegion": {
@@ -941,12 +1047,13 @@ def _find_noble_phantasms(
                 "w": sw / w,
                 "h": sh / h,
             },
-            "ready": edge_frac >= edge_threshold,
+            "ready": ready,
             "edgeFrac": edge_frac,
             "stdBgr": std_bgr,
+            "edgeThreshold": edge_thr,
         })
 
-    return {"slots": slots}
+    return {"slots": slots, "edgeThreshold": edge_thr}
 
 
 # ---------------------------------------------------------------------------
@@ -957,6 +1064,37 @@ def _find_noble_phantasms(
 # ~1s, which we don't want on `ping` or on every CV command that doesn't
 # touch OCR. Constructed on first ``find_supports`` call and reused after.
 _ocr_engine: Any = None
+
+# Active game server. Drives which OCR model `_get_ocr()` pins.
+# Updated by the `set_server` REPL command (sent by the Rust side after
+# `load_templates` / `load_config`). Defaults to "JP" so older Rust
+# binaries that don't issue `set_server` keep their original behaviour.
+_current_server: str = "JP"
+
+
+def _set_server(server: str) -> dict:
+    """REPL handler for ``{"cmd":"set_server","server":"JP"|"CN"}``.
+
+    Normalizes the value, drops the cached OCR engine so the next
+    ``find_supports`` rebuilds against the matching rec model, and
+    returns the resolved server in the response so the Rust side can log
+    what stuck. Unknown values are coerced to ``"JP"`` rather than
+    erroring — keeping the sidecar boot-resilient against a future Rust
+    binary sending a server token this build doesn't know about.
+    """
+    global _current_server, _ocr_engine
+    requested = (server or "").strip().upper()
+    resolved = requested if requested in ("JP", "CN") else "JP"
+    changed = resolved != _current_server
+    _current_server = resolved
+    if changed:
+        _ocr_engine = None
+    print(
+        f"[mash-cv] set_server -> {resolved} (requested={requested!r}, "
+        f"ocr_reset={changed})",
+        file=sys.stderr,
+    )
+    return {"ok": True, "server": resolved, "ocrReset": changed}
 
 
 def _ocr_models_dir() -> Optional[str]:
@@ -984,12 +1122,14 @@ def _ocr_models_dir() -> Optional[str]:
 
 
 def _get_ocr() -> Optional[Any]:
-    """Lazily build the RapidOCR engine pinned to the Japanese rec model.
+    """Lazily build the RapidOCR engine pinned to the active server's rec model.
 
     Returns ``None`` if rapidocr-onnxruntime isn't importable so callers
     can degrade gracefully (the dep is optional in the unit-test sandbox).
     Logs to stderr exactly which rec model + dict path won so deployment
-    bugs (e.g. bundle missing the JP model) are obvious from the logs.
+    bugs (e.g. bundle missing the active model) are obvious from the
+    logs. The cached engine is invalidated by `_set_server` so a
+    mid-session server flip rebuilds against the new model on next use.
     """
     global _ocr_engine
     if _ocr_engine is not None:
@@ -1001,31 +1141,45 @@ def _get_ocr() -> Optional[Any]:
         return None
 
     models_dir = _ocr_models_dir()
+
+    # Per-server (rec_model_filename, rec_keys_filename) pinning. JP
+    # ships with the project (japanese rec + dict). CN expects the
+    # standard PaddleOCR Chinese rec model + ppocr_keys_v1.txt — drop
+    # those two files into `mash_cv/models/` and rebuild the sidecar to
+    # light up CN OCR. Until then `_get_ocr()` falls back to the
+    # framework default with a loud warning.
+    server = _current_server
+    if server == "CN":
+        rec_filename = "chinese_PP-OCRv4_rec_infer.onnx"
+        keys_filename = "ppocr_keys_v1.txt"
+    else:
+        rec_filename = "japan_PP-OCRv4_rec_infer.onnx"
+        keys_filename = "japan_dict.txt"
+
     rec_model = (
-        os.path.join(models_dir, "japan_PP-OCRv4_rec_infer.onnx")
-        if models_dir
-        else None
+        os.path.join(models_dir, rec_filename) if models_dir else None
     )
     rec_keys = (
-        os.path.join(models_dir, "japan_dict.txt") if models_dir else None
+        os.path.join(models_dir, keys_filename) if models_dir else None
     )
     if rec_model and rec_keys and os.path.isfile(rec_model) and os.path.isfile(rec_keys):
         print(
-            f"[mash-cv] OCR using JP rec model: {rec_model}",
+            f"[mash-cv] OCR using {server} rec model: {rec_model}",
             file=sys.stderr,
         )
         _ocr_engine = RapidOCR(rec_model_path=rec_model, rec_keys_path=rec_keys)
     else:
-        # Default Chinese model; recognition is essentially unusable on JP
-        # servant names (it returns garbled hiragana / wrong kana), but the
-        # engine still loads so debug callers see *something*. This branch
-        # almost always indicates a build/bundle bug — the model files
-        # weren't copied into the PyInstaller --onedir output.
+        # JP missing -> almost always a build bug (PyInstaller bundle
+        # didn't pick up `mash_cv/models/`). CN missing -> expected
+        # state until someone drops the chinese rec model into the
+        # bundle; surface it loudly so it's obvious why every
+        # find_supports call returns nothing on a fresh CN install.
         print(
-            f"[mash-cv] WARNING: japanese rec model not found "
+            f"[mash-cv] WARNING: {server} rec model not found "
             f"(searched: dir={models_dir!r} rec={rec_model!r} keys={rec_keys!r}); "
-            "falling back to default rapidocr model (Japanese OCR will fail). "
-            "Rebuild the sidecar so PyInstaller picks up mash_cv/models/.",
+            "falling back to default rapidocr model (server-specific OCR will fail). "
+            "Drop the matching .onnx / dict files into mash_cv/models/ and "
+            "rebuild the sidecar.",
             file=sys.stderr,
         )
         _ocr_engine = RapidOCR()
@@ -1110,6 +1264,20 @@ def _find_supports(
         "nameCandidates": [],
         "npCandidates": [],
         "fragmentCount": 0,
+        # Every OCR fragment with its fuzzy score against the expected
+        # name + its best score across the expected NP list. Surfaced
+        # so the debug UI can show *why* a match failed (typically the
+        # closest fragment scored 0.4-0.5, just under threshold) without
+        # round-tripping back to lower the threshold and re-run.
+        "fragments": [],
+        # True when we synthesized rows from name candidates alone —
+        # either because ``expected_np_names`` was empty (CN servants
+        # whose NPs didn't survive translation) or because no OCR
+        # fragment cleared ``np_threshold``. Surfacing the reason lets
+        # the runner / debug UI flag rows that skipped the NP
+        # cross-check so the operator can spot bad data.
+        "nameOnlyFallback": False,
+        "nameOnlyReason": "",
     }
     if h == 0 or w == 0:
         return {"supports": [], "diagnostics": diag}
@@ -1138,7 +1306,8 @@ def _find_supports(
 
     name_cands: list[dict] = []
     np_cands: list[dict] = []
-    for box, text, _conf in raw:
+    fragments: list[dict] = []
+    for box, text, conf in raw:
         # Map crop-local polygon to full-image normalized rect.
         pts = np.asarray(box, dtype=np.float32) + np.array(
             [rx, ry], dtype=np.float32
@@ -1156,23 +1325,41 @@ def _find_supports(
                 }
             )
 
-        best_np: Optional[tuple[str, float]] = None
+        # Track the best NP fuzzy score for *every* fragment, not just
+        # the ones above threshold. Sub-threshold scores are what the
+        # debug UI renders to surface "OCR read this text and its best
+        # NP match was 0.42 against '业已无法抵达的理想乡'" — the typical
+        # smoking gun for bad mooncell translations vs. live game text.
+        best_np_text: str = ""
+        best_np_score: float = 0.0
         for npn in expected_np_names:
             if not npn:
                 continue
             s = _fuzzy_score(text, npn)
-            if s >= np_threshold and (best_np is None or s > best_np[1]):
-                best_np = (npn, float(s))
-        if best_np is not None:
+            if s > best_np_score:
+                best_np_score = float(s)
+                best_np_text = npn
+        if best_np_score >= np_threshold:
             np_cands.append(
                 {
                     "text": str(text),
-                    "score": best_np[1],
-                    "matchedName": best_np[0],
+                    "score": best_np_score,
+                    "matchedName": best_np_text,
                     "region": region,
                     "yc": region["y"] + region["h"] / 2.0,
                 }
             )
+
+        fragments.append(
+            {
+                "text": str(text),
+                "region": region,
+                "ocrConfidence": float(conf) if conf is not None else 0.0,
+                "nameScore": float(ns),
+                "bestNpScore": float(best_np_score),
+                "bestNpName": best_np_text,
+            }
+        )
 
     diag["nameCandidates"] = [
         {"text": c["text"], "score": c["score"], "region": c["region"]}
@@ -1187,6 +1374,68 @@ def _find_supports(
         }
         for c in np_cands
     ]
+    diag["fragments"] = fragments
+
+    # Name-only fallback. We synthesize one row per above-threshold name
+    # candidate (expanded horizontally to the full list region) instead
+    # of returning ``[]`` whenever the strict pairing path can't run:
+    #
+    # 1. ``expected_np_names`` is empty — happens for CN servants whose
+    #    Atlas JP NP names didn't survive the JP→CN translation step.
+    # 2. ``expected_np_names`` is non-empty but no OCR fragment cleared
+    #    ``np_threshold`` for any of them — happens when mooncell's
+    #    ``name_cn`` for the NP doesn't match the in-game CN string
+    #    (different official translation, different word order, etc.).
+    #
+    # Either way, blocking the run on a metadata bug we already know
+    # about is worse than proceeding without the NP cross-check.
+    # ``nameOnlyFallback`` + ``nameOnlyReason`` flag the degraded path
+    # so the debug UI can warn the operator and the runner can decide
+    # whether to still trust the row (e.g. by leaning harder on the CE
+    # icon verification that runs after the row is selected).
+    # ``npText`` / ``npScore`` / ``npMatchedName`` stay empty so a
+    # consumer can always tell name-only rows apart from paired ones.
+    if not name_cands:
+        # No name match at all — there's nothing to fall back to.
+        # Return empty supports with full diagnostics so the debug UI
+        # can show the closest sub-threshold name fragment.
+        return {"supports": [], "diagnostics": diag}
+
+    if not expected_np_names or not np_cands:
+        diag["nameOnlyFallback"] = True
+        diag["nameOnlyReason"] = (
+            "noNpExpected" if not expected_np_names else "noNpAboveThreshold"
+        )
+        rows: list[dict] = []
+        for nc in name_cands:
+            nr = nc["region"]
+            row_x = list_region["x"]
+            row_w = list_region["w"]
+            row_region = {
+                "x": float(row_x),
+                "y": float(nr["y"]),
+                "w": float(row_w),
+                "h": float(nr["h"]),
+            }
+            tap = {
+                "x": float(row_x + row_w / 2.0),
+                "y": float(nr["y"] + nr["h"] / 2.0),
+            }
+            rows.append(
+                {
+                    "rowRegion": row_region,
+                    "tap": tap,
+                    "nameText": nc["text"],
+                    "nameScore": float(nc["score"]),
+                    "nameRegion": nr,
+                    "npText": "",
+                    "npScore": 0.0,
+                    "npRegion": dict(nr),
+                    "npMatchedName": "",
+                }
+            )
+        rows.sort(key=lambda s: s["rowRegion"]["y"])
+        return {"supports": rows, "diagnostics": diag}
 
     # Greedy proximity pairing. Sort name candidates strongest-first so the
     # most confident name wins its NP if two names compete for the same one.
@@ -1617,6 +1866,8 @@ def main() -> None:
             _reply(req_id, _load_templates(cmd["dir"]))
         elif action == "load_config":
             _reply(req_id, _load_config(cmd["path"]))
+        elif action == "set_server":
+            _reply(req_id, _set_server(str(cmd.get("server", ""))))
         elif action == "start_stream":
             _reply(req_id, _start_stream(cmd))
         elif action == "stop_stream":
@@ -1695,13 +1946,16 @@ def main() -> None:
                 regions = cmd.get("npRegions")
                 if not regions:
                     regions = list(DEFAULT_NP_CARD_SLOTS)
+                # Pass None when caller didn't specify so the detector
+                # uses its adaptive per-frame logic; only honour an
+                # explicit override.
+                edge_thr_arg = cmd.get("edgeThreshold")
+                edge_thr_arg = (
+                    float(edge_thr_arg) if edge_thr_arg is not None else None
+                )
                 _reply(
                     req_id,
-                    _find_noble_phantasms(
-                        img,
-                        regions,
-                        float(cmd.get("edgeThreshold", NP_READY_EDGE_THRESHOLD)),
-                    ),
+                    _find_noble_phantasms(img, regions, edge_thr_arg),
                 )
         elif action == "find_supports":
             img, err = _load_frame(cmd)
@@ -1715,6 +1969,9 @@ def main() -> None:
                             "nameCandidates": [],
                             "npCandidates": [],
                             "fragmentCount": 0,
+                            "fragments": [],
+                            "nameOnlyFallback": False,
+                            "nameOnlyReason": "",
                         },
                         "error": err,
                     },
