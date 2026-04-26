@@ -1,0 +1,163 @@
+import { describe, it, expect } from "vitest";
+import { renderWithTheme } from "../../test/renderWithTheme";
+import { DebugCanvas, type DebugCanvasState } from "../DebugCanvas";
+
+/**
+ * Tiny helper — most fields are unused per test, so default everything
+ * to "off" and the individual specs override only what they care about.
+ */
+function makeState(overrides: Partial<DebugCanvasState> = {}): DebugCanvasState {
+  return {
+    imageSrc: null,
+    probes: [],
+    commandCards: [],
+    noblePhantasms: [],
+    battleScene: null,
+    attackButton: null,
+    supportResult: null,
+    coordinates: null,
+    showCoordOverlay: false,
+    visibleCoordGroups: [],
+    ...overrides,
+  };
+}
+
+describe("DebugCanvas", () => {
+  it("shows the placeholder text when no screenshot has been captured", () => {
+    renderWithTheme(<DebugCanvas {...makeState()} />);
+    expect(
+      document.body.textContent?.includes("点击 截取画面 开始")
+    ).toBe(true);
+  });
+
+  it("supports a custom placeholder for the popout view", () => {
+    renderWithTheme(
+      <DebugCanvas
+        {...makeState()}
+        placeholder="等待主窗口截取画面…"
+      />
+    );
+    expect(
+      document.body.textContent?.includes("等待主窗口截取画面…")
+    ).toBe(true);
+  });
+
+  it("renders the screenshot image and probe overlays when a probe is found", () => {
+    const { container } = renderWithTheme(
+      <DebugCanvas
+        {...makeState({
+          imageSrc: "tauri://localhost/fake.png?t=1",
+          probes: [
+            {
+              label: "battle_anchor",
+              threshold: 0.8,
+              timestamp: "12:00:00",
+              match: {
+                found: true,
+                x: 0.5,
+                y: 0.5,
+                score: 0.93,
+                region: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
+              },
+            },
+          ],
+        })}
+      />
+    );
+    const img = container.querySelector("img.debug-canvas-img");
+    expect(img).not.toBeNull();
+    expect(img?.getAttribute("src")).toBe("tauri://localhost/fake.png?t=1");
+    expect(
+      container.querySelectorAll(".debug-overlay-box").length
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      container.textContent?.includes("battle_anchor")
+    ).toBe(true);
+  });
+
+  it("renders the attack button overlay group when results are present", () => {
+    const { container } = renderWithTheme(
+      <DebugCanvas
+        {...makeState({
+          imageSrc: "tauri://localhost/fake.png?t=2",
+          attackButton: {
+            template: "button_attack",
+            region: { x: 0.799, y: 0.746, w: 0.177, h: 0.195 },
+            threshold: 0.8,
+            tapPoint: { x: 0.887, y: 0.844 },
+            found: true,
+            score: 0.91,
+            matchX: 0.88,
+            matchY: 0.84,
+            matchRegion: { x: 0.85, y: 0.82, w: 0.07, h: 0.05 },
+          },
+        })}
+      />
+    );
+    expect(container.textContent?.includes("攻击按钮")).toBe(true);
+    expect(
+      container.querySelectorAll(".debug-coord-dot").length
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("hides coord overlays when showCoordOverlay is false", () => {
+    const { container } = renderWithTheme(
+      <DebugCanvas
+        {...makeState({
+          imageSrc: "tauri://localhost/fake.png?t=3",
+          showCoordOverlay: false,
+          visibleCoordGroups: ["battle"],
+          coordinates: {
+            groups: [
+              {
+                id: "battle",
+                label: "战斗",
+                points: [{ label: "tap", point: { x: 0.5, y: 0.5 } }],
+                regions: [],
+              },
+            ],
+          },
+        })}
+      />
+    );
+    expect(container.querySelector(".debug-coord-region")).toBeNull();
+    // Coord-only points (no attack button etc.) should also be hidden.
+    expect(container.querySelectorAll(".debug-coord-dot").length).toBe(0);
+  });
+
+  it("renders coord overlays only for groups in visibleCoordGroups", () => {
+    const { container } = renderWithTheme(
+      <DebugCanvas
+        {...makeState({
+          imageSrc: "tauri://localhost/fake.png?t=4",
+          showCoordOverlay: true,
+          visibleCoordGroups: ["battle"],
+          coordinates: {
+            groups: [
+              {
+                id: "battle",
+                label: "战斗",
+                points: [{ label: "tap", point: { x: 0.5, y: 0.5 } }],
+                regions: [
+                  {
+                    label: "atk",
+                    region: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 },
+                  },
+                ],
+              },
+              {
+                id: "menu",
+                label: "菜单",
+                points: [{ label: "back", point: { x: 0.1, y: 0.9 } }],
+                regions: [],
+              },
+            ],
+          },
+        })}
+      />
+    );
+    expect(container.querySelectorAll(".debug-coord-region").length).toBe(1);
+    expect(container.textContent?.includes("战斗 · atk")).toBe(true);
+    expect(container.textContent?.includes("back")).toBe(false);
+  });
+});

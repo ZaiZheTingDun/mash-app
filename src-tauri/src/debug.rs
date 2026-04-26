@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use crate::adb;
 use crate::runner::{self, RunnerHandle, RunnerState};
 use crate::screen::{
-    CommandCardMatch, ElementMatch, FindSupportsResult, NoblePhantasmMatch, NormRect,
+    CommandCardMatch, ElementMatch, FindSupportsResult, NoblePhantasmMatch, NormRect, Point,
     SidecarClient, SupportDiagnostics, SupportRowMatch,
 };
 use crate::{
@@ -620,6 +620,80 @@ pub fn debug_read_battle_scene(
         trimmed_right,
         missing_digit_templates,
         fail_reason,
+    })
+}
+
+/// Snapshot of the attack-button probe the runner uses on the Battle
+/// screen to decide whether it's our turn (i.e. whether to fire skills /
+/// pick cards). Mirrors `Runner::handle_battle` /
+/// `wait_for_attack_button`: same template key
+/// (`ATTACK_BUTTON_TEMPLATE`), same search region
+/// (`ATTACK_BUTTON_REGION`), same threshold (`ATTACK_BUTTON_THRESHOLD`),
+/// and the same `ATTACK_BUTTON` tap point. Surfacing the raw `score` +
+/// match position lets the user calibrate against captures where the
+/// runner gets stuck in "等待战斗动作…" because the button just barely
+/// missed threshold.
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DebugAttackButtonResult {
+    pub template: String,
+    pub region: NormRect,
+    pub threshold: f64,
+    pub tap_point: Point,
+    pub found: bool,
+    pub score: f64,
+    pub match_x: f64,
+    pub match_y: f64,
+    pub match_region: Option<NormRect>,
+}
+
+/// Run the runner's exact attack-button probe against the most recent
+/// debug screenshot. Returns both the threshold/region/tap-point used by
+/// the runner and the live match score so the debug overlay can render
+/// the search box (green when found, red when missed) plus the tap
+/// target.
+#[tauri::command]
+pub fn debug_find_attack_button(
+    app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
+    debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+) -> Result<DebugAttackButtonResult, String> {
+    require_automation_idle(&handle_state)?;
+
+    let image_path = debug_image_path(&app);
+    if !image_path.exists() {
+        return Err("尚未截取画面，请先点击 截取画面".into());
+    }
+
+    ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))?;
+
+    let region = runner::ATTACK_BUTTON_REGION;
+    let threshold = runner::ATTACK_BUTTON_THRESHOLD;
+    let template = runner::ATTACK_BUTTON_TEMPLATE.to_string();
+    let tap_point = runner::ATTACK_BUTTON;
+
+    let mut guard = debug_state.0.lock().unwrap();
+    let client = guard
+        .as_mut()
+        .ok_or_else(|| "debug sidecar not initialized".to_string())?;
+    let m = client.find_element_full(Some(&image_path), &template, region, threshold)?;
+
+    eprintln!(
+        "[debug_find_attack_button] found={} score={:.3} threshold={:.2} center=({:.3},{:.3})",
+        m.found, m.score, threshold, m.x, m.y,
+    );
+
+    Ok(DebugAttackButtonResult {
+        template,
+        region,
+        threshold,
+        tap_point,
+        found: m.found,
+        score: m.score,
+        match_x: m.x,
+        match_y: m.y,
+        match_region: m.region,
     })
 }
 

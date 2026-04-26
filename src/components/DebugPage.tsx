@@ -3,10 +3,18 @@ import { Box, Flex, Text } from "@radix-ui/themes";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
+  ExternalLinkIcon,
   ReloadIcon,
 } from "@radix-ui/react-icons";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { emit, listen } from "@tauri-apps/api/event";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { CvConfig } from "../types/cv";
+import type { DebugCanvasState } from "./DebugCanvas";
+import {
+  DEBUG_CANVAS_REQUEST_EVENT,
+  DEBUG_CANVAS_STATE_EVENT,
+} from "./DebugCanvasWindow";
 
 /**
  * Collapsible group used throughout the debug UI. Built on the native
@@ -47,26 +55,26 @@ function DebugSection({
   );
 }
 
-interface DebugScreenSize {
+export interface DebugScreenSize {
   w: number;
   h: number;
 }
 
-interface DebugCaptureResult {
+export interface DebugCaptureResult {
   imagePath: string;
   screen: string;
   score: number;
   screenSize: DebugScreenSize | null;
 }
 
-interface NormRectDto {
+export interface NormRectDto {
   x: number;
   y: number;
   w: number;
   h: number;
 }
 
-interface ElementMatchDto {
+export interface ElementMatchDto {
   found: boolean;
   x: number;
   y: number;
@@ -74,40 +82,40 @@ interface ElementMatchDto {
   region: NormRectDto | null;
 }
 
-interface ProbeResult {
+export interface ProbeResult {
   label: string;
   threshold: number;
   match: ElementMatchDto;
   timestamp: string;
 }
 
-interface PointDto {
+export interface PointDto {
   x: number;
   y: number;
 }
 
-interface LabeledPointDto {
+export interface LabeledPointDto {
   label: string;
   point: PointDto;
 }
 
-interface LabeledRegionDto {
+export interface LabeledRegionDto {
   label: string;
   region: NormRectDto;
 }
 
-interface CoordGroupDto {
+export interface CoordGroupDto {
   id: string;
   label: string;
   points: LabeledPointDto[];
   regions: LabeledRegionDto[];
 }
 
-interface RunnerCoordinatesDto {
+export interface RunnerCoordinatesDto {
   groups: CoordGroupDto[];
 }
 
-interface CommandCardMatchDto {
+export interface CommandCardMatchDto {
   slot: number;
   x: number;
   y: number;
@@ -121,7 +129,7 @@ interface CommandCardMatchDto {
   faceScore?: number;
 }
 
-interface NoblePhantasmMatchDto {
+export interface NoblePhantasmMatchDto {
   slot: number;
   cardRegion: NormRectDto;
   ready: boolean;
@@ -130,13 +138,32 @@ interface NoblePhantasmMatchDto {
   edgeThreshold?: number;
 }
 
-interface DigitMatchDto {
+export interface DigitMatchDto {
   value: number;
   score: number;
   region: NormRectDto;
 }
 
-interface BattleSceneResultDto {
+/**
+ * Snapshot of the runner's attack-button probe (template
+ * `button_attack` inside `ATTACK_BUTTON_REGION` at threshold
+ * `ATTACK_BUTTON_THRESHOLD`). Surfaces both runner constants and the
+ * live match score so the user can tell why automation is stuck on
+ * "等待战斗动作…".
+ */
+export interface AttackButtonResultDto {
+  template: string;
+  region: NormRectDto;
+  threshold: number;
+  tapPoint: PointDto;
+  found: boolean;
+  score: number;
+  matchX: number;
+  matchY: number;
+  matchRegion: NormRectDto | null;
+}
+
+export interface BattleSceneResultDto {
   region: NormRectDto;
   scene: number | null;
   total: number | null;
@@ -170,7 +197,7 @@ const BATTLE_SCENE_FAIL_HINTS: Record<string, string> = {
   parse_error: "数字解析失败",
 };
 
-interface SupportCeInfoDto {
+export interface SupportCeInfoDto {
   region: NormRectDto;
   score: number;
   passed: boolean;
@@ -179,7 +206,7 @@ interface SupportCeInfoDto {
   error?: string;
 }
 
-interface SupportRowMatchDto {
+export interface SupportRowMatchDto {
   rowRegion: NormRectDto;
   tap: PointDto;
   nameText: string;
@@ -198,14 +225,14 @@ interface SupportRowMatchDto {
   ce?: SupportCeInfoDto;
 }
 
-interface SupportCandidateDto {
+export interface SupportCandidateDto {
   text: string;
   score: number;
   region: NormRectDto;
   matchedName?: string;
 }
 
-interface SupportFragmentDto {
+export interface SupportFragmentDto {
   text: string;
   region: NormRectDto;
   ocrConfidence: number;
@@ -214,7 +241,7 @@ interface SupportFragmentDto {
   bestNpName: string;
 }
 
-interface SupportDiagnosticsDto {
+export interface SupportDiagnosticsDto {
   listRegion: NormRectDto;
   nameCandidates: SupportCandidateDto[];
   npCandidates: SupportCandidateDto[];
@@ -224,7 +251,7 @@ interface SupportDiagnosticsDto {
   nameOnlyReason?: string;
 }
 
-interface FindSupportsResultDto {
+export interface FindSupportsResultDto {
   supports: SupportRowMatchDto[];
   diagnostics: SupportDiagnosticsDto;
 }
@@ -255,10 +282,6 @@ function timestamp(): string {
 export function DebugPage({ onBack }: DebugPageProps) {
   const [capture, setCapture] = useState<DebugCaptureResult | null>(null);
   const [cacheBuster, setCacheBuster] = useState(0);
-  const [imgNaturalSize, setImgNaturalSize] = useState<{
-    w: number;
-    h: number;
-  } | null>(null);
 
   const [cvConfig, setCvConfig] = useState<CvConfig | null>(null);
   const [templateKeys, setTemplateKeys] = useState<string[]>([]);
@@ -292,6 +315,9 @@ export function DebugPage({ onBack }: DebugPageProps) {
   const [battleScene, setBattleScene] =
     useState<BattleSceneResultDto | null>(null);
   const [readingBattleScene, setReadingBattleScene] = useState(false);
+  const [attackButton, setAttackButton] =
+    useState<AttackButtonResultDto | null>(null);
+  const [findingAttackButton, setFindingAttackButton] = useState(false);
   const [supportServantId, setSupportServantId] = useState<string>("");
   const [supportCraftEssenceId, setSupportCraftEssenceId] = useState<string>("");
   const [supportMetadata, setSupportMetadata] =
@@ -301,6 +327,7 @@ export function DebugPage({ onBack }: DebugPageProps) {
   const [findingSupports, setFindingSupports] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const didShutdown = useRef(false);
+  const [popoutOpen, setPopoutOpen] = useState(false);
 
   const log = useCallback(
     (message: string, level: LogEntry["level"] = "info") => {
@@ -421,8 +448,8 @@ export function DebugPage({ onBack }: DebugPageProps) {
       setCommandCards([]);
       setNoblePhantasms([]);
       setBattleScene(null);
+      setAttackButton(null);
       setSupportResult(null);
-      setImgNaturalSize(null);
       log(
         `截图成功 | 画面 = ${result.screen} (score=${result.score.toFixed(3)})` +
           (result.screenSize
@@ -512,6 +539,7 @@ export function DebugPage({ onBack }: DebugPageProps) {
     setCommandCards([]);
     setNoblePhantasms([]);
     setBattleScene(null);
+    setAttackButton(null);
     setSupportResult(null);
     log("已清除标注");
   }, [log]);
@@ -639,6 +667,34 @@ export function DebugPage({ onBack }: DebugPageProps) {
     }
   }, [capture, log]);
 
+  const handleFindAttackButton = useCallback(async () => {
+    if (!capture) return;
+    setFindingAttackButton(true);
+    log("调用 debug_find_attack_button");
+    try {
+      const result = await invoke<AttackButtonResultDto>(
+        "debug_find_attack_button"
+      );
+      setAttackButton(result);
+      const scorePct = (result.score * 100).toFixed(1);
+      const thresholdPct = (result.threshold * 100).toFixed(0);
+      if (result.found) {
+        log(
+          `攻击按钮: ✓ ${scorePct}% / ${thresholdPct}% | 中心 (${result.matchX.toFixed(3)}, ${result.matchY.toFixed(3)}) | 点击 (${result.tapPoint.x.toFixed(3)}, ${result.tapPoint.y.toFixed(3)})`
+        );
+      } else {
+        log(
+          `攻击按钮: ✗ ${scorePct}% < ${thresholdPct}% | 模板 ${result.template}`,
+          "warn"
+        );
+      }
+    } catch (err) {
+      log(`debug_find_attack_button 失败: ${err}`, "error");
+    } finally {
+      setFindingAttackButton(false);
+    }
+  }, [capture, log]);
+
   const handleUseAllAvailableIds = useCallback(() => {
     setCardServantInput(availableServantIds.join(", "));
   }, [availableServantIds]);
@@ -743,6 +799,57 @@ export function DebugPage({ onBack }: DebugPageProps) {
     log,
   ]);
 
+  /**
+   * Spawn (or focus, if already open) the popout `WebviewWindow` that
+   * mirrors the canvas at full size. The popout loads the same SPA
+   * bundle with `#debug-canvas` in the URL hash; `main.tsx` swaps in
+   * `<DebugCanvasWindow />` based on that hash. State sync runs over
+   * Tauri events (`debug-canvas:state` / `debug-canvas:request`) — see
+   * the popout-sync `useEffect`s above.
+   */
+  const handleOpenPopout = useCallback(async () => {
+    try {
+      const existing = await WebviewWindow.getByLabel("debug-canvas");
+      if (existing) {
+        await existing.show();
+        await existing.setFocus();
+        log("已聚焦弹出画面");
+        return;
+      }
+      const win = new WebviewWindow("debug-canvas", {
+        url: "index.html#debug-canvas",
+        title: "调试画面",
+        width: 1280,
+        height: 720,
+        resizable: true,
+      });
+      // Wait for the OS to finish creating the webview before
+      // re-broadcasting state. We deliberately do NOT register
+      // `onCloseRequested` here — that handler intercepts the
+      // native close action and forces us to call `destroy()`,
+      // which then needs window-close IPC perms and is easy to
+      // get wrong. `tauri://destroyed` fires after the window
+      // has actually closed, which is all we need to flip the
+      // button label back.
+      win.once("tauri://created", () => {
+        setPopoutOpen(true);
+        emit(DEBUG_CANVAS_STATE_EVENT, canvasStateRef.current).catch(
+          () => {}
+        );
+        log("弹出画面已打开");
+      });
+      win.once("tauri://destroyed", () => {
+        setPopoutOpen(false);
+        log("弹出画面已关闭");
+      });
+      win.once("tauri://error", (e) => {
+        log(`弹出画面创建失败: ${JSON.stringify(e.payload)}`, "error");
+      });
+    } catch (err) {
+      log(`弹出画面失败: ${err}`, "error");
+    }
+  }, [log]);
+
   const handleClearLogs = useCallback(() => setLogs([]), []);
 
   const handleReloadSidecar = useCallback(async () => {
@@ -760,25 +867,95 @@ export function DebugPage({ onBack }: DebugPageProps) {
     }
   }, [log, loadConfig, loadTemplateList]);
 
-  const handleImgLoad = useCallback(
-    (e: React.SyntheticEvent<HTMLImageElement>) => {
-      const img = e.currentTarget;
-      setImgNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
-      log(`图片加载成功 (${img.naturalWidth}×${img.naturalHeight})`);
-    },
-    [log]
-  );
-
-  const handleImgError = useCallback(() => {
-    log(
-      "图片加载失败 — 可能是 assetProtocol 未启用或路径不在 scope 内。",
-      "error"
-    );
-  }, [log]);
-
   const imageSrc = capture
     ? `${convertFileSrc(capture.imagePath)}?t=${cacheBuster}`
     : null;
+
+  // -------------------------------------------------------------------
+  // Popout window (DebugCanvasWindow) state sync
+  // -------------------------------------------------------------------
+  // The popout is a separate WebviewWindow rendering only the canvas,
+  // so it can be dragged onto a second monitor without the main page's
+  // toolbars and side-panels stealing space. State flows in one
+  // direction:
+  //
+  //   DebugPage ── debug-canvas:state ──▶ DebugCanvasWindow
+  //   DebugPage ◀── debug-canvas:request ── DebugCanvasWindow  (on mount)
+  //
+  // The popout has no debug state of its own, so on mount it emits a
+  // `request` event; the host responds by re-emitting the current
+  // snapshot. After that, every re-render of the host pushes the
+  // snapshot out — emit is cheap and the popout is the only listener.
+  const canvasState: DebugCanvasState = useMemo(
+    () => ({
+      imageSrc,
+      probes,
+      commandCards,
+      noblePhantasms,
+      battleScene,
+      attackButton,
+      supportResult,
+      coordinates,
+      showCoordOverlay,
+      visibleCoordGroups: Array.from(visibleCoordGroups),
+    }),
+    [
+      imageSrc,
+      probes,
+      commandCards,
+      noblePhantasms,
+      battleScene,
+      attackButton,
+      supportResult,
+      coordinates,
+      showCoordOverlay,
+      visibleCoordGroups,
+    ]
+  );
+
+  const canvasStateRef = useRef(canvasState);
+  useEffect(() => {
+    canvasStateRef.current = canvasState;
+    if (popoutOpen) {
+      emit(DEBUG_CANVAS_STATE_EVENT, canvasState).catch((err) => {
+        console.warn("[DebugPage] emit canvas state failed", err);
+      });
+    }
+  }, [canvasState, popoutOpen]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen(DEBUG_CANVAS_REQUEST_EVENT, () => {
+      emit(DEBUG_CANVAS_STATE_EVENT, canvasStateRef.current).catch(() => {});
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch((err) => {
+        console.warn("[DebugPage] listen canvas request failed", err);
+      });
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
+  // If the popout already exists when the page mounts (e.g. user
+  // navigated away from CV Debug and came back), reflect that in the
+  // button label and watch for native close via `tauri://destroyed`.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    (async () => {
+      const win = await WebviewWindow.getByLabel("debug-canvas");
+      if (!win) return;
+      setPopoutOpen(true);
+      unlisten = await win.once("tauri://destroyed", () => {
+        setPopoutOpen(false);
+      });
+    })().catch(() => {});
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
 
   return (
     <Flex direction="column" className="debug-page">
@@ -817,6 +994,15 @@ export function DebugPage({ onBack }: DebugPageProps) {
               onClick={handleCapture}
             >
               {capturing ? "截取中…" : "截取画面"}
+            </button>
+
+            <button
+              className="battle-btn battle-btn-start debug-btn-small"
+              onClick={handleOpenPopout}
+              title="把画面 + 标注弹到独立窗口，可拖到副屏全屏查看"
+            >
+              <ExternalLinkIcon width={12} height={12} />
+              <Text size="1">{popoutOpen ? "聚焦画面窗口" : "弹出画面"}</Text>
             </button>
 
             <Flex align="center" gap="1">
@@ -873,7 +1059,9 @@ export function DebugPage({ onBack }: DebugPageProps) {
                 probes.length === 0 &&
                 commandCards.length === 0 &&
                 noblePhantasms.length === 0 &&
-                supportResult === null
+                supportResult === null &&
+                battleScene === null &&
+                attackButton === null
               }
               onClick={handleClearOverlays}
             >
@@ -982,6 +1170,28 @@ export function DebugPage({ onBack }: DebugPageProps) {
           </DebugSection>
 
           <DebugSection
+            title="攻击按钮识别"
+            badge={
+              attackButton
+                ? `${(attackButton.score * 100).toFixed(0)}% ${attackButton.found ? "✓" : "✗"}`
+                : undefined
+            }
+          >
+            <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
+              <Text size="2" color="gray">
+                复用 runner 的 `button_attack` 探针，确认战斗回合开始时是否能命中攻击按钮。
+              </Text>
+              <button
+                className="battle-btn battle-btn-start debug-btn-small"
+                disabled={findingAttackButton || !capture}
+                onClick={handleFindAttackButton}
+              >
+                {findingAttackButton ? "识别中…" : "识别攻击按钮"}
+              </button>
+            </Flex>
+          </DebugSection>
+
+          <DebugSection
             title="助战识别"
             badge={
               supportMetadata
@@ -1063,330 +1273,6 @@ export function DebugPage({ onBack }: DebugPageProps) {
             </Flex>
           </DebugSection>
 
-          <Box className="debug-canvas-wrapper">
-            {imageSrc ? (
-              <Box className="debug-canvas">
-                <img
-                  src={imageSrc}
-                  alt="screenshot"
-                  className="debug-canvas-img"
-                  onLoad={handleImgLoad}
-                  onError={handleImgError}
-                />
-                {probes.map((p, idx) =>
-                  p.match.found && p.match.region ? (
-                    <Box
-                      key={`box-${idx}`}
-                      className="debug-overlay-box"
-                      style={{
-                        left: `${p.match.region.x * 100}%`,
-                        top: `${p.match.region.y * 100}%`,
-                        width: `${p.match.region.w * 100}%`,
-                        height: `${p.match.region.h * 100}%`,
-                      }}
-                    >
-                      <span className="debug-overlay-label">
-                        {p.label} · {p.match.score.toFixed(2)}
-                      </span>
-                    </Box>
-                  ) : null
-                )}
-                {commandCards.flatMap((c) => {
-                  const overlays = [
-                    <Box
-                      key={`card-face-${c.slot}`}
-                      className="debug-overlay-box debug-overlay-face"
-                      style={{
-                        left: `${c.faceRegion.x * 100}%`,
-                        top: `${c.faceRegion.y * 100}%`,
-                        width: `${c.faceRegion.w * 100}%`,
-                        height: `${c.faceRegion.h * 100}%`,
-                      }}
-                    />,
-                    <Box
-                      key={`card-slot-${c.slot}`}
-                      className="debug-overlay-box debug-overlay-card"
-                      style={{
-                        left: `${c.cardRegion.x * 100}%`,
-                        top: `${c.cardRegion.y * 100}%`,
-                        width: `${c.cardRegion.w * 100}%`,
-                        height: `${c.cardRegion.h * 100}%`,
-                      }}
-                    >
-                      <span className="debug-overlay-label">
-                        C{c.slot + 1}
-                        {c.suit ? `·${c.suit.toUpperCase()}` : ""}
-                        {c.servantId !== undefined
-                          ? ` · ${c.servantId}@${c.ascension ?? "?"} (${(c.faceScore ?? 0).toFixed(2)})`
-                          : c.iconScore !== undefined
-                            ? ` · ${c.iconScore.toFixed(2)}`
-                            : ""}
-                      </span>
-                    </Box>,
-                  ];
-                  if (c.iconRegion) {
-                    overlays.push(
-                      <Box
-                        key={`card-icon-${c.slot}`}
-                        className="debug-overlay-box debug-overlay-icon"
-                        style={{
-                          left: `${c.iconRegion.x * 100}%`,
-                          top: `${c.iconRegion.y * 100}%`,
-                          width: `${c.iconRegion.w * 100}%`,
-                          height: `${c.iconRegion.h * 100}%`,
-                        }}
-                      />
-                    );
-                  }
-                  return overlays;
-                })}
-                {noblePhantasms.map((s) => (
-                  <Box
-                    key={`np-slot-${s.slot}`}
-                    className={`debug-overlay-box ${
-                      s.ready
-                        ? "debug-overlay-np-ready"
-                        : "debug-overlay-np-empty"
-                    }`}
-                    style={{
-                      left: `${s.cardRegion.x * 100}%`,
-                      top: `${s.cardRegion.y * 100}%`,
-                      width: `${s.cardRegion.w * 100}%`,
-                      height: `${s.cardRegion.h * 100}%`,
-                    }}
-                  >
-                    <span className="debug-overlay-label">
-                      NP{s.slot + 1} · {s.ready ? "ready" : "empty"} · edge{" "}
-                      {(s.edgeFrac * 100).toFixed(1)}% · std{" "}
-                      {s.stdBgr.toFixed(0)}
-                    </span>
-                  </Box>
-                ))}
-                {battleScene && (
-                  <>
-                    <Box
-                      key="battle-scene-region"
-                      className={`debug-overlay-box ${
-                        battleScene.scene !== null
-                          ? "debug-overlay-np-ready"
-                          : "debug-overlay-np-empty"
-                      }`}
-                      style={{
-                        left: `${battleScene.region.x * 100}%`,
-                        top: `${battleScene.region.y * 100}%`,
-                        width: `${battleScene.region.w * 100}%`,
-                        height: `${battleScene.region.h * 100}%`,
-                      }}
-                    >
-                      <span className="debug-overlay-label">
-                        战斗场景{" "}
-                        {battleScene.scene !== null &&
-                        battleScene.total !== null
-                          ? `${battleScene.scene}/${battleScene.total}`
-                          : "未识别"}
-                      </span>
-                    </Box>
-                    {battleScene.anchorBox && (
-                      <Box
-                        key="battle-scene-anchor"
-                        className="debug-overlay-box debug-overlay-support-region"
-                        style={{
-                          left: `${battleScene.anchorBox.x * 100}%`,
-                          top: `${battleScene.anchorBox.y * 100}%`,
-                          width: `${battleScene.anchorBox.w * 100}%`,
-                          height: `${battleScene.anchorBox.h * 100}%`,
-                        }}
-                      >
-                        <span className="debug-overlay-label">
-                          BATTLE 锚点 {(battleScene.anchorScore * 100).toFixed(0)}
-                          %
-                        </span>
-                      </Box>
-                    )}
-                    {battleScene.candidates.map((d, i) => {
-                      const isKept = battleScene.kept.some(
-                        (k) =>
-                          k.value === d.value &&
-                          Math.abs(k.region.x - d.region.x) < 1e-6 &&
-                          Math.abs(k.region.y - d.region.y) < 1e-6
-                      );
-                      return (
-                        <Box
-                          key={`battle-scene-digit-${i}`}
-                          className={`debug-overlay-box ${
-                            isKept
-                              ? "debug-overlay-support-name-cand"
-                              : "debug-overlay-support-np-cand"
-                          }`}
-                          style={{
-                            left: `${d.region.x * 100}%`,
-                            top: `${d.region.y * 100}%`,
-                            width: `${d.region.w * 100}%`,
-                            height: `${d.region.h * 100}%`,
-                          }}
-                        >
-                          <span className="debug-overlay-label">
-                            {d.value} · {(d.score * 100).toFixed(0)}%
-                            {isKept ? "" : " (drop)"}
-                          </span>
-                        </Box>
-                      );
-                    })}
-                  </>
-                )}
-                {supportResult && (
-                  <>
-                    <Box
-                      key="support-list-region"
-                      className="debug-overlay-box debug-overlay-support-region"
-                      style={{
-                        left: `${supportResult.diagnostics.listRegion.x * 100}%`,
-                        top: `${supportResult.diagnostics.listRegion.y * 100}%`,
-                        width: `${supportResult.diagnostics.listRegion.w * 100}%`,
-                        height: `${supportResult.diagnostics.listRegion.h * 100}%`,
-                      }}
-                    >
-                      <span className="debug-overlay-label">助战列表</span>
-                    </Box>
-                    {supportResult.diagnostics.nameCandidates.map((c, i) => (
-                      <Box
-                        key={`support-name-cand-${i}`}
-                        className="debug-overlay-box debug-overlay-support-name-cand"
-                        style={{
-                          left: `${c.region.x * 100}%`,
-                          top: `${c.region.y * 100}%`,
-                          width: `${c.region.w * 100}%`,
-                          height: `${c.region.h * 100}%`,
-                        }}
-                      >
-                        <span className="debug-overlay-label">
-                          名 {c.score.toFixed(2)} · {c.text}
-                        </span>
-                      </Box>
-                    ))}
-                    {supportResult.diagnostics.npCandidates.map((c, i) => (
-                      <Box
-                        key={`support-np-cand-${i}`}
-                        className="debug-overlay-box debug-overlay-support-np-cand"
-                        style={{
-                          left: `${c.region.x * 100}%`,
-                          top: `${c.region.y * 100}%`,
-                          width: `${c.region.w * 100}%`,
-                          height: `${c.region.h * 100}%`,
-                        }}
-                      >
-                        <span className="debug-overlay-label">
-                          宝 {c.score.toFixed(2)} · {c.text}
-                          {c.matchedName ? ` (${c.matchedName})` : ""}
-                        </span>
-                      </Box>
-                    ))}
-                    {supportResult.supports.map((s, i) => (
-                      <Box
-                        key={`support-row-${i}`}
-                        className="debug-overlay-box debug-overlay-support-row"
-                        style={{
-                          left: `${s.rowRegion.x * 100}%`,
-                          top: `${s.rowRegion.y * 100}%`,
-                          width: `${s.rowRegion.w * 100}%`,
-                          height: `${s.rowRegion.h * 100}%`,
-                        }}
-                      >
-                        <span className="debug-overlay-label">
-                          助战 {i + 1} · 名 {s.nameScore.toFixed(2)} · 宝{" "}
-                          {s.npScore.toFixed(2)}
-                        </span>
-                      </Box>
-                    ))}
-                    {supportResult.supports.map((s, i) => (
-                      <Box
-                        key={`support-tap-${i}`}
-                        className="debug-coord-dot debug-overlay-support-tap"
-                        style={{
-                          left: `${s.tap.x * 100}%`,
-                          top: `${s.tap.y * 100}%`,
-                        }}
-                        title={`tap (${s.tap.x.toFixed(3)}, ${s.tap.y.toFixed(3)})`}
-                      >
-                        <span className="debug-coord-label">点击 {i + 1}</span>
-                      </Box>
-                    ))}
-                    {supportResult.supports.map((s, i) =>
-                      s.ce ? (
-                        <Box
-                          key={`support-ce-${i}`}
-                          className="debug-overlay-box debug-overlay-support-ce"
-                          style={{
-                            left: `${s.ce.region.x * 100}%`,
-                            top: `${s.ce.region.y * 100}%`,
-                            width: `${s.ce.region.w * 100}%`,
-                            height: `${s.ce.region.h * 100}%`,
-                            outline: `2px solid ${s.ce.passed ? "#3fb950" : "#f85149"}`,
-                          }}
-                          title={
-                            s.ce.error
-                              ? `CE verify error: ${s.ce.error}`
-                              : `CE score ${s.ce.score.toFixed(3)} (threshold ${s.ce.threshold.toFixed(2)})`
-                          }
-                        >
-                          <span className="debug-overlay-label">
-                            礼 {s.ce.score.toFixed(2)}/{s.ce.threshold.toFixed(2)}{" "}
-                            {s.ce.passed ? "✓" : "✗"}
-                          </span>
-                        </Box>
-                      ) : null
-                    )}
-                  </>
-                )}
-                {showCoordOverlay &&
-                  coordinates?.groups
-                    .filter((g) => visibleCoordGroups.has(g.id))
-                    .flatMap((g) => [
-                      ...g.regions.map((r) => (
-                        <Box
-                          key={`coord-region-${g.id}-${r.label}`}
-                          className="debug-coord-region"
-                          style={{
-                            left: `${r.region.x * 100}%`,
-                            top: `${r.region.y * 100}%`,
-                            width: `${r.region.w * 100}%`,
-                            height: `${r.region.h * 100}%`,
-                          }}
-                          title={`${g.label} · ${r.label}`}
-                        >
-                          <span className="debug-coord-label">
-                            {g.label} · {r.label}
-                          </span>
-                        </Box>
-                      )),
-                      ...g.points.map((p) => (
-                        <Box
-                          key={`coord-dot-${g.id}-${p.label}`}
-                          className="debug-coord-dot"
-                          style={{
-                            left: `${p.point.x * 100}%`,
-                            top: `${p.point.y * 100}%`,
-                          }}
-                          title={`${g.label} · ${p.label} (${p.point.x.toFixed(3)}, ${p.point.y.toFixed(3)})`}
-                        >
-                          <span className="debug-coord-label">{p.label}</span>
-                        </Box>
-                      )),
-                    ])}
-              </Box>
-            ) : (
-              <Flex
-                align="center"
-                justify="center"
-                className="debug-canvas-placeholder"
-              >
-                <Text size="2" color="gray">
-                  点击 截取画面 开始
-                </Text>
-              </Flex>
-            )}
-          </Box>
-
           <Box className="debug-log-container">
             <Flex justify="between" align="center" style={{ marginBottom: 6 }}>
               <Text size="1" color="gray" className="debug-side-label">
@@ -1437,11 +1323,6 @@ export function DebugPage({ onBack }: DebugPageProps) {
               {capture?.screenSize && (
                 <Text size="1" color="gray">
                   设备 {capture.screenSize.w} × {capture.screenSize.h}
-                </Text>
-              )}
-              {imgNaturalSize && (
-                <Text size="1" color="gray">
-                  图片 {imgNaturalSize.w} × {imgNaturalSize.h}
                 </Text>
               )}
             </Box>
@@ -1548,6 +1429,61 @@ export function DebugPage({ onBack }: DebugPageProps) {
                   </Text>
                 </Box>
               ))}
+            </Box>
+          </DebugSection>
+
+          <DebugSection
+            title="攻击按钮识别"
+            badge={
+              attackButton
+                ? `${(attackButton.score * 100).toFixed(0)}% ${attackButton.found ? "✓" : "✗"}`
+                : undefined
+            }
+          >
+            <Box className="debug-match-list">
+              {!attackButton && (
+                <Text size="1" color="gray">
+                  暂无识别结果
+                </Text>
+              )}
+              {attackButton && (
+                <Box
+                  className={`debug-match-entry ${attackButton.found ? "found" : "missed"}`}
+                >
+                  <Flex justify="between" align="center">
+                    <Text size="2" weight="medium">
+                      {attackButton.template}
+                    </Text>
+                    <Text
+                      size="1"
+                      color={attackButton.found ? "green" : "red"}
+                    >
+                      {attackButton.found ? "命中" : "未命中"}
+                    </Text>
+                  </Flex>
+                  <Text size="1" color="gray">
+                    score {attackButton.score.toFixed(3)} · 阈值{" "}
+                    {attackButton.threshold.toFixed(2)}
+                  </Text>
+                  <Text size="1" color="gray">
+                    搜索区域 (
+                    {attackButton.region.x.toFixed(3)},{" "}
+                    {attackButton.region.y.toFixed(3)},{" "}
+                    {attackButton.region.w.toFixed(3)},{" "}
+                    {attackButton.region.h.toFixed(3)})
+                  </Text>
+                  {attackButton.found && (
+                    <Text size="1" color="gray">
+                      命中中心 ({attackButton.matchX.toFixed(3)},{" "}
+                      {attackButton.matchY.toFixed(3)})
+                    </Text>
+                  )}
+                  <Text size="1" color="gray">
+                    点击 ({attackButton.tapPoint.x.toFixed(3)},{" "}
+                    {attackButton.tapPoint.y.toFixed(3)})
+                  </Text>
+                </Box>
+              )}
             </Box>
           </DebugSection>
 

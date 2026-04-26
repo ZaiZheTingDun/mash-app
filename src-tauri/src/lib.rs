@@ -1128,6 +1128,7 @@ pub fn run() {
             debug::debug_get_runner_coordinates,
             debug::debug_find_command_cards,
             debug::debug_find_noble_phantasms,
+            debug::debug_find_attack_button,
             debug::debug_read_battle_scene,
             debug::debug_find_supports,
             debug::debug_list_servant_assets,

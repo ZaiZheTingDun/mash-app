@@ -117,21 +117,35 @@ const EQUIPMENT_SKILLS: [Point; 3] = [
     Point::new(0.848, 0.436),
 ];
 
-/// Attack button position on the battle screen
-const ATTACK_BUTTON: Point = Point::new(0.887, 0.844);
+/// Attack button position on the battle screen.
+///
+/// Exposed so the debug page can render the exact tap target the
+/// runner would use, alongside `ATTACK_BUTTON_REGION` /
+/// `ATTACK_BUTTON_TEMPLATE` / `ATTACK_BUTTON_THRESHOLD`.
+pub const ATTACK_BUTTON: Point = Point::new(0.887, 0.844);
 
 /// Tap target that, when pressed during a skill / NP animation, makes the
 /// game skip ahead to the next actionable frame. Same physical button
 /// works after every skill on the battle screen.
 const SKIP_ANIMATION_BUTTON: Point = Point::new(0.685, 0.095);
 
-/// Region to search for the attack button template
-const ATTACK_BUTTON_REGION: NormRect = NormRect {
+/// Region to search for the attack button template.
+pub const ATTACK_BUTTON_REGION: NormRect = NormRect {
     x: 0.799,
     y: 0.746,
     w: 0.177,
     h: 0.195,
 };
+
+/// Template key the runner uses to detect the attack button is present
+/// (i.e. it's our turn). Centralized so the debug command stays in lock
+/// step with `handle_battle` / `wait_for_attack_button`.
+pub const ATTACK_BUTTON_TEMPLATE: &str = "button_attack";
+
+/// Score threshold the runner applies when probing for the attack
+/// button. Anything below this is treated as "skill / NP cinematic
+/// still playing, button hidden".
+pub const ATTACK_BUTTON_THRESHOLD: f64 = 0.75;
 
 /// Region of the top-right `BATTLE m/n` HUD strip. The CV sidecar
 /// anchors on the gold `BATTLE` label inside this region and reads
@@ -847,7 +861,12 @@ impl Runner {
             }
             let found = self
                 .sidecar
-                .find_element(None, "button_attack", ATTACK_BUTTON_REGION, 0.8)
+                .find_element(
+                    None,
+                    ATTACK_BUTTON_TEMPLATE,
+                    ATTACK_BUTTON_REGION,
+                    ATTACK_BUTTON_THRESHOLD,
+                )
                 .unwrap_or(None)
                 .is_some();
             if found {
@@ -1389,7 +1408,12 @@ impl Runner {
         // Check if the attack button is present (our turn to act)
         let attack_present = self
             .sidecar
-            .find_element(None, "button_attack", ATTACK_BUTTON_REGION, 0.8)
+            .find_element(
+                None,
+                ATTACK_BUTTON_TEMPLATE,
+                ATTACK_BUTTON_REGION,
+                ATTACK_BUTTON_THRESHOLD,
+            )
             .unwrap_or(None)
             .is_some();
 
