@@ -3,6 +3,7 @@ import { Box, Flex, Text, Spinner } from "@radix-ui/themes";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { ContentGrid, createInitialProjectSlots } from "./components/ContentGrid";
+import { derivePartyServants } from "./components/partyServants";
 import { CommandEditor } from "./components/CommandEditor";
 import { BattlePage } from "./components/BattlePage";
 import { DebugPage } from "./components/DebugPage";
@@ -110,10 +111,10 @@ function App() {
     [activeProject, handleUpdateProject]
   );
 
-  const partyServants = useMemo(() => {
-    const nonSupport = slots.filter((s) => s.type !== "support");
-    return nonSupport.slice(0, 3).map((s) => s.servant);
-  }, [slots]);
+  const partyServants = useMemo(
+    () => derivePartyServants(slots, activeProject, servants),
+    [slots, activeProject, servants]
+  );
 
   // Project create/delete used to live inside `Sidebar`; with the
   // sidebar now reduced to action buttons, the picker moves to the
