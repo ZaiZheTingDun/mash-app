@@ -155,7 +155,10 @@
     },
     "BattleResultFriendRequest": {
       "detect": {
-        "template": "text_battle_result_friend_request",
+        "templates": [
+          "text_battle_result_friend_request",
+          "text_battle_result_friend_request_dark"
+        ],
         "region": {
           "x": 0.62,
           "y": 0.806,

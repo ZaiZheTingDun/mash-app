@@ -319,18 +319,31 @@ def _detect_screen(img: np.ndarray) -> dict:
         det = spec.get("detect")
         if not det:
             continue
-        template_key = det.get("template")
-        tmpl = templates.get(template_key) if template_key else None
-        if tmpl is None:
-            continue
-        result = _match_template_region(
-            img,
-            tmpl,
-            det.get("region", DEFAULT_REGION),
-            float(det.get("threshold", 0.85)),
-        )
-        if result.get("found") and result.get("score", 0.0) > best_score:
-            best_score = float(result["score"])
+        # Accept either a single ``template`` string or a ``templates``
+        # list. The list form lets one screen carry multiple variant
+        # templates (e.g. CN's friend-request prompt has both a light and
+        # a dark background skin) — we run all variants and keep the
+        # highest score, treating them as alternatives. Falls back to the
+        # legacy single-template form if neither is present.
+        keys: list[str] = []
+        if isinstance(det.get("templates"), list):
+            keys = [str(k) for k in det["templates"] if k]
+        elif det.get("template"):
+            keys = [str(det["template"])]
+        threshold = float(det.get("threshold", 0.85))
+        region = det.get("region", DEFAULT_REGION)
+        screen_score = 0.0
+        for key in keys:
+            tmpl = templates.get(key)
+            if tmpl is None:
+                continue
+            result = _match_template_region(img, tmpl, region, threshold)
+            if result.get("found"):
+                score = float(result.get("score", 0.0))
+                if score > screen_score:
+                    screen_score = score
+        if screen_score > best_score:
+            best_score = screen_score
             best_name = screen_name
     return {"screen": best_name, "score": best_score}
 

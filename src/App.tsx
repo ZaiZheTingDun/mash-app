@@ -116,6 +116,23 @@ function App() {
     [slots, activeProject, servants]
   );
 
+  // Stable list of front-line servant ids (deduped, drops nulls). Fed to
+  // the Debug page so its "候选从者 id" input pre-fills with the same
+  // candidate set the runner would use during `handle_attack`, instead of
+  // making the user manually paste ids before the face-matcher will do
+  // anything.
+  const partyServantIds = useMemo(() => {
+    const seen = new Set<number>();
+    const ids: number[] = [];
+    for (const s of partyServants) {
+      if (s && !seen.has(s.id)) {
+        seen.add(s.id);
+        ids.push(s.id);
+      }
+    }
+    return ids;
+  }, [partyServants]);
+
   // Project create/delete used to live inside `Sidebar`; with the
   // sidebar now reduced to action buttons, the picker moves to the
   // `<ProjectBar/>` ribbon above the team grid and the mutations live
@@ -178,7 +195,10 @@ function App() {
               onBack={handleBackToConfig}
             />
           ) : view === "debug" ? (
-            <DebugPage onBack={handleBackToConfig} />
+            <DebugPage
+              onBack={handleBackToConfig}
+              defaultCardServantIds={partyServantIds}
+            />
           ) : (
             <Box className="main-content-inner">
               <ProjectBar

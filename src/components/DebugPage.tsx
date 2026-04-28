@@ -270,6 +270,15 @@ interface LogEntry {
 
 interface DebugPageProps {
   onBack: () => void;
+  /**
+   * Front-line servant ids (party slots 0–2 + support, deduped) derived
+   * from the currently active project. Used to seed the "候选从者 id"
+   * input so the face-matcher has candidates to compare against on first
+   * click — without this, the input is empty and every card returns as
+   * "未识别从者", which is what tripped users up before. Pass `[]` when
+   * no project is active or none of the slots have a servant pinned.
+   */
+  defaultCardServantIds: number[];
 }
 
 function timestamp(): string {
@@ -279,7 +288,7 @@ function timestamp(): string {
     .join(":");
 }
 
-export function DebugPage({ onBack }: DebugPageProps) {
+export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
   const [capture, setCapture] = useState<DebugCaptureResult | null>(null);
   const [cacheBuster, setCacheBuster] = useState(0);
 
@@ -305,7 +314,13 @@ export function DebugPage({ onBack }: DebugPageProps) {
   );
 
   const [availableServantIds, setAvailableServantIds] = useState<number[]>([]);
-  const [cardServantInput, setCardServantInput] = useState("");
+  // Seed the candidate-id input with the active project's front-line
+  // team. The lazy initializer runs once on mount; users can still hand-
+  // edit afterwards (e.g. to test "全选"), and switching projects
+  // remounts the page via the view router so we'll re-seed naturally.
+  const [cardServantInput, setCardServantInput] = useState(() =>
+    defaultCardServantIds.join(", ")
+  );
   const [commandCards, setCommandCards] = useState<CommandCardMatchDto[]>([]);
   const [findingCards, setFindingCards] = useState(false);
   const [noblePhantasms, setNoblePhantasms] = useState<NoblePhantasmMatchDto[]>(
@@ -1335,7 +1350,10 @@ export function DebugPage({ onBack }: DebugPageProps) {
                   {selectedScreen}.{selectedElement}
                 </Text>
                 <Text size="1" color="gray">
-                  模板: {selectedElementSpec.template}
+                  模板:{" "}
+                  {selectedElementSpec.templates?.join(", ") ??
+                    selectedElementSpec.template ??
+                    "(未配置)"}
                 </Text>
                 {selectedElementSpec.region && (
                   <Text size="1" color="gray">

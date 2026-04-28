@@ -127,6 +127,127 @@ class TestDetectScreen:
         result = mash_cv._detect_screen(img)
         assert result["screen"] == "Exact"
 
+    def test_templates_list_takes_best_variant(self):
+        """A screen carrying multiple variant templates should match when
+        *any* variant is present in the frame, and the reported score
+        should be the best-matching variant's score.
+
+        Mirrors the production layout where ``BattleResultFriendRequest``
+        on CN ships both a light-background and a dark-background skin
+        of the friend-request prompt under the same screen name."""
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        img[10:30, 10:30] = patch_3ch
+
+        # ``light`` doesn't appear in ``img``; ``dark`` does. The detector
+        # should still flag the screen because ``dark`` is a variant of
+        # the same screen.
+        light_only = _gradient_patch(20)
+        light_only[:] = 0  # solid black, won't correlate with the patch
+        mash_cv.templates["light"] = light_only
+        mash_cv.templates["dark"] = patch.copy()
+        mash_cv._set_config({
+            "screens": {
+                "FriendRequest": {
+                    "detect": {
+                        "templates": ["light", "dark"],
+                        "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                        "threshold": 0.8,
+                    }
+                }
+            }
+        })
+        result = mash_cv._detect_screen(img)
+        assert result["screen"] == "FriendRequest"
+        assert result["score"] >= 0.8
+
+    def test_templates_list_skips_when_no_variant_matches(self):
+        """If none of the listed variants are in the frame, the screen
+        must stay Unknown — variants are alternatives, not 'either-or-also'."""
+        # The frame contains a horizontal gradient; the variant templates
+        # are inverted / vertical gradients, both with non-trivial
+        # variance but anti-correlated with the patch in the frame.
+        horizontal = _gradient_patch(20)
+        vertical = horizontal.T.copy()
+        inverted = (255 - horizontal).copy()
+        mash_cv.templates["light"] = vertical
+        mash_cv.templates["dark"] = inverted
+
+        patch_3ch = cv2.merge([horizontal, horizontal, horizontal])
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        img[10:30, 10:30] = patch_3ch
+
+        mash_cv._set_config({
+            "screens": {
+                "FriendRequest": {
+                    "detect": {
+                        "templates": ["light", "dark"],
+                        "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                        "threshold": 0.95,
+                    }
+                }
+            }
+        })
+        result = mash_cv._detect_screen(img)
+        assert result["screen"] == "Unknown"
+
+    def test_templates_list_falls_back_to_legacy_template_key(self):
+        """``template`` (singular) keeps working when ``templates`` is
+        absent — the new schema is purely additive."""
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        img[10:30, 10:30] = patch_3ch
+
+        mash_cv.templates["legacy"] = patch.copy()
+        mash_cv._set_config({
+            "screens": {
+                "Legacy": {
+                    "detect": {
+                        "template": "legacy",
+                        "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                        "threshold": 0.8,
+                    }
+                }
+            }
+        })
+        result = mash_cv._detect_screen(img)
+        assert result["screen"] == "Legacy"
+        assert result["score"] >= 0.8
+
+    def test_cn_friend_request_dark_template_is_bundled(self):
+        """The dark-skin friend-request template must ship in the CN
+        templates dir and be referenced in cn/cv.json — otherwise the
+        dark prompt slips through and the runner stops tapping skip."""
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        cn_templates = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "templates"
+        )
+        cn_cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "cv.json"
+        )
+        if not (os.path.isdir(cn_templates) and os.path.isfile(cn_cv_json)):
+            pytest.skip("CN server resources not available in this checkout")
+
+        light_path = os.path.join(
+            cn_templates, "text_battle_result_friend_request.png"
+        )
+        dark_path = os.path.join(
+            cn_templates, "text_battle_result_friend_request_dark.png"
+        )
+        assert os.path.isfile(light_path), light_path
+        assert os.path.isfile(dark_path), dark_path
+
+        with open(cn_cv_json, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        detect = cfg["screens"]["BattleResultFriendRequest"]["detect"]
+        keys = detect.get("templates") or [detect.get("template")]
+        assert "text_battle_result_friend_request" in keys
+        assert "text_battle_result_friend_request_dark" in keys
+
 
 # ── _load_templates ─────────────────────────────────────────────────────
 
@@ -323,11 +444,15 @@ _TEST_SCREENSHOTS_DIR = os.path.join(
 )
 # Production templates (RGBA command_icon_*.png live here, not in the
 # pruned tests/test_data/templates/ copy). Resolved relative to repo root.
+# Templates moved under per-server folders during the CN-server work; the
+# JP set is the long-standing default and is what the command-card /
+# attack-button tests were written against, so we use that as the
+# "production" baseline.
 _PROD_TEMPLATES_DIR = os.path.normpath(
     os.path.join(
         os.path.dirname(__file__),
         "..", "..", "..",
-        "src-tauri", "resources", "templates",
+        "src-tauri", "resources", "servers", "jp", "templates",
     )
 )
 # Per-server production templates. Used by tests that exercise CN-specific
@@ -338,6 +463,16 @@ _PROD_CN_TEMPLATES_DIR = os.path.normpath(
         os.path.dirname(__file__),
         "..", "..", "..",
         "src-tauri", "resources", "servers", "cn", "templates",
+    )
+)
+# Per-servant face/portrait/CE assets. Used by the command-card identifier
+# tests to drive real face matching against checked-in `card_servant_*.png`
+# templates instead of synthetic patches.
+_PROD_SERVANTS_DIR = os.path.normpath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..", "..", "..",
+        "src-tauri", "assets", "servants",
     )
 )
 
@@ -578,6 +713,67 @@ class TestFindCommandCards:
         )
         for c in result["cards"]:
             assert "servantId" not in c
+
+    @pytest.mark.skipif(
+        not os.path.isdir(_PROD_SERVANTS_DIR),
+        reason="production servants assets dir not available",
+    )
+    def test_identifies_morgan_team_from_real_assets(self):
+        """End-to-end identification on a real CN-server attack-screen
+        capture. The on-screen team is アーラシュ (id=16) + 諸葛孔明
+        (id=37) + モルガン (id=309), drawn 1 own + 4 support cards. With
+        the project's three ids fed in as candidates, the matcher
+        identifies アーラシュ at slot 0 and the four モルガン support
+        cards at slots 2/3/4 (slot 4 is reused by the support card
+        layout) — pinning these saves us from silently regressing the
+        face-cropping / threshold code paths.
+
+        Slot 1 (諸葛孔明) is currently a borderline miss — its best
+        ascension template scores ≈0.497 in this fixture, just under
+        the 0.50 threshold, and is documented as a known limitation
+        below. The assertion is intentionally loose ("it's slot 1's id
+        if anything matched") so the test stays green if a future
+        template re-crop pushes that score over the line.
+        """
+        self._load()
+        img = cv2.imread(
+            os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command_morgan.png")
+        )
+        assert img is not None, "battle_command_morgan.png fixture missing"
+
+        result = mash_cv._find_command_cards(
+            img,
+            list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS),
+            [16, 37, 309],
+            _PROD_SERVANTS_DIR,
+        )
+        cards = result["cards"]
+        assert len(cards) == 5
+
+        # Suit detection is independent of face matching and must work
+        # for every card regardless of identification outcome.
+        suits = [c.get("suit") for c in cards]
+        assert suits == ["b", "b", "a", "b", "b"], suits
+        for c in cards:
+            assert c.get("iconScore", 0.0) > 0.95
+
+        # Slots 0, 2, 3, 4 must all clear the 0.50 face threshold against
+        # their respective candidates.
+        assert cards[0].get("servantId") == 16, cards[0]
+        for slot_idx in (2, 3, 4):
+            assert cards[slot_idx].get("servantId") == 309, cards[slot_idx]
+            # Morgan support cards score comfortably above threshold; pin
+            # a floor well below the observed ~0.67 so the test stays
+            # robust against minor template tweaks.
+            assert cards[slot_idx]["faceScore"] > 0.55, cards[slot_idx]
+
+        # Slot 1 is the borderline 諸葛孔明 case. Either it didn't
+        # clear the threshold (current state, no servantId set) or a
+        # future template push it through — in which case it must be
+        # id=37, not a wrong match against 16/309.
+        slot1 = cards[1]
+        if "servantId" in slot1:
+            assert slot1["servantId"] == 37, slot1
 
     def test_face_template_caching(self, tmp_path):
         # Build a minimal assets dir with a synthetic 256x256 face.
