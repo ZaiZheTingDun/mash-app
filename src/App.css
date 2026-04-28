@@ -822,6 +822,10 @@ body,
   background: #a855f7;
 }
 
+.scene-action-btn-command-spell {
+  background: #f59e0b;
+}
+
 .scene-delete-btn {
   appearance: none;
   border: none;
@@ -863,6 +867,10 @@ body,
 
 .action-row-equipment {
   background: rgba(168, 85, 247, 0.08);
+}
+
+.action-row-command-spell {
+  background: rgba(245, 158, 11, 0.08);
 }
 
 .action-label {

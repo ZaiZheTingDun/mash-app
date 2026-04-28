@@ -91,6 +91,13 @@ pub enum Action {
         #[serde(default)]
         target: Option<String>,
     },
+    #[serde(rename = "commandSpell")]
+    CommandSpell {
+        id: String,
+        spell: Option<String>,
+        #[serde(default)]
+        target: Option<String>,
+    },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -111,6 +118,11 @@ pub struct BattleScene {
     pub servant_actions: Vec<Action>,
     #[serde(rename = "equipmentActions")]
     pub equipment_actions: Vec<Action>,
+    /// Per-scene Command Spell taps (令咒). Optional for backwards
+    /// compatibility: legacy `battle_scenes.json` files written before
+    /// this field was added deserialize with an empty list.
+    #[serde(rename = "commandSpellActions", default)]
+    pub command_spell_actions: Vec<Action>,
     #[serde(rename = "attackPriority")]
     pub attack_priority: Vec<AttackCard>,
 }
@@ -1485,5 +1497,96 @@ mod tests {
         // signal `_find_supports` uses to switch into name-only mode.
         let mapped = localize_np_names(&["存在しない宝具".to_string()]);
         assert!(mapped.is_empty());
+    }
+
+    // --- Action::CommandSpell + BattleScene serde --------------------------
+
+    #[test]
+    fn action_command_spell_serializes_with_camel_case_tag() {
+        // The frontend identifies the variant by `type:"commandSpell"`;
+        // pin that wire shape so a refactor that drops the
+        // `#[serde(rename = "commandSpell")]` attribute breaks loudly.
+        let action = Action::CommandSpell {
+            id: "cs_1".into(),
+            spell: Some("np_release".into()),
+            target: Some("servant_2".into()),
+        };
+        let json = serde_json::to_value(&action).unwrap();
+        assert_eq!(json["type"], serde_json::json!("commandSpell"));
+        assert_eq!(json["spell"], serde_json::json!("np_release"));
+        assert_eq!(json["target"], serde_json::json!("servant_2"));
+    }
+
+    #[test]
+    fn action_command_spell_target_defaults_to_none_when_missing() {
+        // Mirror the equipment-action behaviour: an action stored
+        // without a target field still loads (target left null).
+        let json = serde_json::json!({
+            "type": "commandSpell",
+            "id": "cs_1",
+            "spell": "restore",
+        });
+        let action: Action = serde_json::from_value(json).unwrap();
+        match action {
+            Action::CommandSpell { id, spell, target } => {
+                assert_eq!(id, "cs_1");
+                assert_eq!(spell.as_deref(), Some("restore"));
+                assert!(target.is_none());
+            }
+            _ => panic!("expected Action::CommandSpell"),
+        }
+    }
+
+    #[test]
+    fn battle_scene_legacy_json_without_command_spell_actions_defaults_to_empty() {
+        // Pre-feature `battle_scenes.json` rows have no
+        // `commandSpellActions` key. The `#[serde(default)]` on the new
+        // field is what keeps them loading; this test pins that contract
+        // so a refactor that drops the attribute (and breaks every
+        // existing user's saved scenes) fails CI.
+        let json = serde_json::json!({
+            "id": "scene_1",
+            "servantActions": [],
+            "equipmentActions": [],
+            "attackPriority": [],
+        });
+        let scene: BattleScene = serde_json::from_value(json).unwrap();
+        assert_eq!(scene.id, "scene_1");
+        assert!(scene.command_spell_actions.is_empty());
+    }
+
+    #[test]
+    fn battle_scene_round_trips_command_spell_actions_under_camel_case_key() {
+        let scene = BattleScene {
+            id: "scene_1".into(),
+            servant_actions: vec![],
+            equipment_actions: vec![],
+            command_spell_actions: vec![Action::CommandSpell {
+                id: "cs_1".into(),
+                spell: Some("np_release".into()),
+                target: Some("servant_1".into()),
+            }],
+            attack_priority: vec![],
+        };
+        let json = serde_json::to_value(&scene).unwrap();
+        // Field is renamed on the wire; the inner action keeps its
+        // own camelCase tag from the variant rename.
+        assert!(json["commandSpellActions"].is_array());
+        assert_eq!(
+            json["commandSpellActions"][0]["type"],
+            serde_json::json!("commandSpell")
+        );
+
+        // Deserialize back — symmetry guards against accidentally
+        // exposing a field under one name and reading it under another.
+        let parsed: BattleScene = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.command_spell_actions.len(), 1);
+        match &parsed.command_spell_actions[0] {
+            Action::CommandSpell { spell, target, .. } => {
+                assert_eq!(spell.as_deref(), Some("np_release"));
+                assert_eq!(target.as_deref(), Some("servant_1"));
+            }
+            _ => panic!("expected Action::CommandSpell"),
+        }
     }
 }

@@ -187,6 +187,30 @@ const NOBLE_PHANTASMS: [Point; 3] = [
     Point::new(0.680, 0.242),
 ];
 
+/// Command Spell (令咒) entry button on the battle screen — opens the
+/// modal listing the available spells.
+const COMMAND_SPELL_BUTTON: Point = Point::new(0.829, 0.113);
+
+/// Spell-option tap targets inside the Command Spell modal
+/// (`CommandSpell_open.png`). Indices align with `command_spell_index`:
+/// 0 = "宝具解放" (np_release), 1 = "灵基修复" (restore).
+const COMMAND_SPELL_OPTIONS: [Point; 2] = [
+    Point::new(0.500, 0.460),
+    Point::new(0.500, 0.690),
+];
+
+/// "决定" confirm button on the Command Spell confirmation dialog
+/// (`command_spell_confirmation.png`). Its mirror "取消" button at
+/// roughly (0.340, 0.600) is intentionally not exposed — the runner
+/// always confirms.
+const COMMAND_SPELL_CONFIRM: Point = Point::new(0.660, 0.600);
+
+/// Settle time between taps in the Command Spell dialog stack. Each tap
+/// pops or pushes a full-screen modal (open dialog → confirmation →
+/// target picker), so we wait noticeably longer than `ACTION_DELAY`
+/// (which is sized for in-place taps on the battle screen).
+const COMMAND_SPELL_DIALOG_SETTLE: Duration = Duration::from_millis(600);
+
 // ---------------------------------------------------------------------------
 // Battle-result tap targets. Each post-battle page has a single forward
 // button; constants are kept here so the debug page (and future overlay)
@@ -362,6 +386,17 @@ pub fn debug_coordinates() -> DebugCoordinates {
                     point: *p,
                 })
                 .collect(),
+            regions: Vec::new(),
+        },
+        CoordGroup {
+            id: "commandSpell".into(),
+            label: "令咒".into(),
+            points: vec![
+                LabeledPoint { label: "Open".into(),     point: COMMAND_SPELL_BUTTON },
+                LabeledPoint { label: "宝具解放".into(), point: COMMAND_SPELL_OPTIONS[0] },
+                LabeledPoint { label: "灵基修复".into(), point: COMMAND_SPELL_OPTIONS[1] },
+                LabeledPoint { label: "决定".into(),     point: COMMAND_SPELL_CONFIRM },
+            ],
             regions: Vec::new(),
         },
         CoordGroup {
@@ -1827,6 +1862,57 @@ impl Runner {
                 }
             }
         }
+
+        // Command Spell (令咒) actions fire after all servant + master
+        // skills so a 宝具解放 boost lands on the freshly buffed NP. The
+        // tap chain walks four full-screen modals: button → spell row →
+        // 决定 confirm → ally target picker, settling between each step
+        // because each tap pops or pushes a modal.
+        for action in &scene.command_spell_actions {
+            if let Action::CommandSpell { spell, target, .. } = action {
+                let Some(option_idx) = command_spell_index(spell.as_deref()) else {
+                    continue;
+                };
+                let Some(target_pos) = skill_target_position(target.as_deref()) else {
+                    continue;
+                };
+
+                self.emit(
+                    "Battle",
+                    &format!("令咒: {}", spell.as_deref().unwrap_or("?")),
+                );
+                if !self.tap_at("Battle", COMMAND_SPELL_BUTTON) {
+                    return;
+                }
+                thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
+
+                if !self.tap_at("Battle", COMMAND_SPELL_OPTIONS[option_idx]) {
+                    return;
+                }
+                thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
+
+                self.emit("Battle", "确认令咒");
+                if !self.tap_at("Battle", COMMAND_SPELL_CONFIRM) {
+                    return;
+                }
+                thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
+
+                self.emit(
+                    "Battle",
+                    &format!("令咒目标: {}", target.as_deref().unwrap_or("?")),
+                );
+                if !self.tap_at("Battle", target_pos) {
+                    return;
+                }
+                thread::sleep(ACTION_DELAY);
+
+                self.skip_after_skill();
+
+                if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                    return;
+                }
+            }
+        }
     }
 
     /// Tap the in-game "skip animation" button so the cut-in / buff
@@ -1869,6 +1955,18 @@ fn skill_position(servant: Option<&str>, skill: Option<&str>) -> Option<Point> {
 fn equipment_skill_position(skill: Option<&str>) -> Option<Point> {
     let ki = parse_index(skill?, "skill_")?;
     EQUIPMENT_SKILLS.get(ki).copied()
+}
+
+/// Map a Command Spell name to its index in `COMMAND_SPELL_OPTIONS`.
+/// Returns `None` for unknown / missing values so the runner can skip
+/// the action gracefully (mirrors how `skill_position` returns `None`
+/// for malformed servant/skill strings).
+fn command_spell_index(spell: Option<&str>) -> Option<usize> {
+    match spell? {
+        "np_release" => Some(0),
+        "restore" => Some(1),
+        _ => None,
+    }
 }
 
 /// Skill targets are always allies (servant_1, servant_2, servant_3).
@@ -2312,6 +2410,28 @@ mod tests {
                 needs_exec: true,
             }
         );
+    }
+
+    // --- command_spell_index -------------------------------------------
+
+    #[test]
+    fn command_spell_index_maps_known_names_to_dialog_rows() {
+        // Dialog row order is documented next to `COMMAND_SPELL_OPTIONS`:
+        // 0 = 宝具解放 (np_release), 1 = 灵基修复 (restore). If anyone
+        // swaps the array entries without updating the helper the runner
+        // would tap the wrong spell — this test pins the mapping.
+        assert_eq!(command_spell_index(Some("np_release")), Some(0));
+        assert_eq!(command_spell_index(Some("restore")), Some(1));
+    }
+
+    #[test]
+    fn command_spell_index_returns_none_for_unknown_or_missing() {
+        // Unknown / missing spell names cause the runner's loop to
+        // `continue` instead of tapping a phantom row; mirrors how
+        // `skill_position` handles malformed inputs.
+        assert_eq!(command_spell_index(None), None);
+        assert_eq!(command_spell_index(Some("")), None);
+        assert_eq!(command_spell_index(Some("self_destruct")), None);
     }
 
     #[test]

@@ -22,11 +22,13 @@ import {
   PersonIcon,
   HeartIcon,
   LightningBoltIcon,
+  StarIcon,
 } from "@radix-ui/react-icons";
 import type {
   BattleScene,
   ServantAction,
   EquipmentAction,
+  CommandSpellAction,
   AttackCard,
 } from "../types/command";
 import type { Servant } from "../types/servant";
@@ -52,6 +54,12 @@ const CARD_LABELS: Record<string, string> = {
   quick: "Quick",
   arts: "Arts",
   buster: "Buster",
+};
+
+const COMMAND_SPELLS = ["np_release", "restore"] as const;
+const COMMAND_SPELL_LABELS: Record<string, string> = {
+  np_release: "宝具解放",
+  restore: "灵基修复",
 };
 
 function getServantLabel(index: number, servant: Servant | null): string {
@@ -202,6 +210,63 @@ function EquipmentActionRow({
   );
 }
 
+function CommandSpellActionRow({
+  action,
+  partyServants,
+  onChange,
+  onDelete,
+}: {
+  action: CommandSpellAction;
+  partyServants: (Servant | null)[];
+  onChange: (a: CommandSpellAction) => void;
+  onDelete: () => void;
+}) {
+  const servantOpts = getServantOptions(partyServants);
+
+  return (
+    <Flex align="center" gap="2" className="action-row action-row-command-spell">
+      <Text size="2" className="action-label">
+        令咒
+      </Text>
+      <select
+        className="action-select"
+        value={action.spell ?? ""}
+        onChange={(e) =>
+          onChange({
+            ...action,
+            spell: (e.target.value || null) as CommandSpellAction["spell"],
+          })
+        }
+      >
+        <option value="">-- 令咒 --</option>
+        {COMMAND_SPELLS.map((s) => (
+          <option key={s} value={s}>
+            {COMMAND_SPELL_LABELS[s]}
+          </option>
+        ))}
+      </select>
+      <Text size="2" className="action-label">
+        to
+      </Text>
+      <select
+        className="action-select"
+        value={action.target ?? ""}
+        onChange={(e) => onChange({ ...action, target: e.target.value || null })}
+      >
+        <option value="">-- Target --</option>
+        {servantOpts.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <button className="action-delete-btn" onClick={onDelete}>
+        <TrashIcon />
+      </button>
+    </Flex>
+  );
+}
+
 function SortableAttackRow({
   card,
   partyServants,
@@ -301,6 +366,19 @@ export function BattleSceneBlock({
     });
   };
 
+  const addCommandSpellAction = () => {
+    const newAction: CommandSpellAction = {
+      type: "commandSpell",
+      id: `cs_${Date.now()}`,
+      spell: null,
+      target: null,
+    };
+    onChange({
+      ...scene,
+      commandSpellActions: [...scene.commandSpellActions, newAction],
+    });
+  };
+
   const updateServantAction = (idx: number, updated: ServantAction) => {
     const next = [...scene.servantActions];
     next[idx] = updated;
@@ -324,6 +402,19 @@ export function BattleSceneBlock({
     onChange({
       ...scene,
       equipmentActions: scene.equipmentActions.filter((_, i) => i !== idx),
+    });
+  };
+
+  const updateCommandSpellAction = (idx: number, updated: CommandSpellAction) => {
+    const next = [...scene.commandSpellActions];
+    next[idx] = updated;
+    onChange({ ...scene, commandSpellActions: next });
+  };
+
+  const deleteCommandSpellAction = (idx: number) => {
+    onChange({
+      ...scene,
+      commandSpellActions: scene.commandSpellActions.filter((_, i) => i !== idx),
     });
   };
 
@@ -376,6 +467,13 @@ export function BattleSceneBlock({
             <HeartIcon />
             <span>Equipment</span>
           </button>
+          <button
+            className="scene-action-btn scene-action-btn-command-spell"
+            onClick={addCommandSpellAction}
+          >
+            <StarIcon />
+            <span>令咒</span>
+          </button>
           {canDelete && (
             <button className="scene-delete-btn" onClick={onDelete}>
               <TrashIcon />
@@ -401,6 +499,15 @@ export function BattleSceneBlock({
             partyServants={partyServants}
             onChange={(a) => updateEquipmentAction(i, a)}
             onDelete={() => deleteEquipmentAction(i)}
+          />
+        ))}
+        {scene.commandSpellActions.map((action, i) => (
+          <CommandSpellActionRow
+            key={action.id}
+            action={action}
+            partyServants={partyServants}
+            onChange={(a) => updateCommandSpellAction(i, a)}
+            onDelete={() => deleteCommandSpellAction(i)}
           />
         ))}
       </div>

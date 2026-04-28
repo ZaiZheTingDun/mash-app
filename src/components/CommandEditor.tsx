@@ -29,6 +29,7 @@ function createDefaultScene(): BattleScene {
     id: createSceneId(),
     servantActions: [],
     equipmentActions: [],
+    commandSpellActions: [],
     attackPriority: createDefaultAttackPriority(),
   };
 }
