@@ -1,5 +1,7 @@
 export interface Servant {
   id: number;
+  variantKey: string;
+  faceId?: number | null;
   name_cn: string;
   name_jp: string;
   name_en: string;

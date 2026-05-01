@@ -23,6 +23,7 @@ function buildSlots(): SlotItem[] {
 
 const MASH: Servant = {
   id: 1,
+  variantKey: "1",
   name_cn: "玛修",
   name_jp: "マシュ・キリエライト",
   name_en: "Mash Kyrielight",
@@ -30,8 +31,16 @@ const MASH: Servant = {
   rarity: 4,
 };
 
+const MASH_VARIANT: Servant = {
+  ...MASH,
+  variantKey: "1:1",
+  faceId: 800170,
+  noblePhantasmName: "已然遥远的理想之城",
+};
+
 const ALTRIA_CASTER: Servant = {
   id: 284,
+  variantKey: "284",
   name_cn: "阿尔托莉雅·卡斯特",
   name_jp: "アルトリア・キャスター",
   name_en: "Altria Caster",
@@ -69,6 +78,7 @@ describe("createInitialProjectSlots", () => {
     expect(slots[2].type).toBe("support");
     for (const s of slots) {
       expect(s.servantId).toBeNull();
+      expect(s.servantVariantKey).toBeNull();
       expect(s.craftEssenceId).toBeNull();
     }
   });
@@ -222,7 +232,11 @@ describe("ContentGrid", () => {
     // (mocked to return `asset://...`) wraps it for use as `<img src>`.
     vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
       if (cmd === "get_servant_portrait_path") {
-        const { servantId } = (args ?? {}) as { servantId?: number };
+        const { servantId, faceId } = (args ?? {}) as {
+          servantId?: number;
+          faceId?: number | null;
+        };
+        expect(faceId).toBeNull();
         return servantId === 1
           ? "/abs/src-tauri/assets/servants/1/narrow_servant_4.png"
           : null;
@@ -251,6 +265,44 @@ describe("ContentGrid", () => {
     expect(img.getAttribute("src")).toBe(
       "asset:///abs/src-tauri/assets/servants/1/narrow_servant_4.png"
     );
+  });
+
+  it("requests variant portraits by the variant asset id", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === "get_servant_portrait_path") {
+        const { servantId, faceId } = (args ?? {}) as {
+          servantId?: number;
+          faceId?: number | null;
+        };
+        return servantId === 1 && faceId === 800170
+          ? "/abs/src-tauri/assets/servants/1/narrow_servant_800170.png"
+          : null;
+      }
+      return null;
+    });
+
+    const slots = buildSlots();
+    slots[0] = { ...slots[0], servant: MASH_VARIANT };
+
+    renderWithTheme(
+      <ContentGrid
+        servants={[MASH_VARIANT, ALTRIA_CASTER]}
+        craftEssences={CES}
+        slots={slots}
+        onSlotsChange={vi.fn()}
+        activeProject={PROJECT}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    const img = await screen.findByAltText("玛修");
+    expect(img.getAttribute("src")).toBe(
+      "asset:///abs/src-tauri/assets/servants/1/narrow_servant_800170.png"
+    );
+    expect(invoke).toHaveBeenCalledWith("get_servant_portrait_path", {
+      servantId: 1,
+      faceId: 800170,
+    });
   });
 
   it("renders a placeholder card with the servant name when the resolver returns null", async () => {

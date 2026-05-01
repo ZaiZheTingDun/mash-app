@@ -11,6 +11,7 @@ import type { Servant } from "../../types/servant";
 
 const MASH: Servant = {
   id: 1,
+  variantKey: "1",
   name_cn: "玛修",
   name_jp: "マシュ・キリエライト",
   name_en: "Mash Kyrielight",
@@ -20,6 +21,7 @@ const MASH: Servant = {
 
 const ALTRIA: Servant = {
   id: 100,
+  variantKey: "100",
   name_cn: "阿尔托莉雅",
   name_jp: "アルトリア",
   name_en: "Altria",
@@ -29,6 +31,7 @@ const ALTRIA: Servant = {
 
 const MERLIN: Servant = {
   id: 150,
+  variantKey: "150",
   name_cn: "梅林",
   name_jp: "マーリン",
   name_en: "Merlin",
@@ -38,6 +41,7 @@ const MERLIN: Servant = {
 
 const WAVER: Servant = {
   id: 200,
+  variantKey: "200",
   name_cn: "韦伯",
   name_jp: "ウェイバー",
   name_en: "Waver",
@@ -47,6 +51,7 @@ const WAVER: Servant = {
 
 const ARASH: Servant = {
   id: 16,
+  variantKey: "16",
   name_cn: "阿拉什",
   name_jp: "アーラシュ",
   name_en: "Arash",
@@ -56,6 +61,7 @@ const ARASH: Servant = {
 
 const CHEN_GONG: Servant = {
   id: 258,
+  variantKey: "258",
   name_cn: "陈宫",
   name_jp: "陳宮",
   name_en: "Chen Gong",

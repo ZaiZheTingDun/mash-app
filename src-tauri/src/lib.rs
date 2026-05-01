@@ -148,6 +148,11 @@ pub struct ProjectSlot {
     pub kind: String,
     #[serde(default)]
     pub servant_id: Option<u32>,
+    /// Optional UI variant key for servants with multiple gameplay
+    /// variants. The runner still acts on the base servant id; this
+    /// keeps the team builder showing the exact variant the user picked.
+    #[serde(default)]
+    pub servant_variant_key: Option<String>,
     /// Pinned craft-essence id for this slot. Persisted alongside the
     /// servant so each loadout can carry its own equipment plan; for
     /// support slots the runner uses this to verify candidate rows on
@@ -163,6 +168,7 @@ fn default_project_slots() -> Vec<ProjectSlot> {
         id: id.into(),
         kind: kind.into(),
         servant_id: None,
+        servant_variant_key: None,
         craft_essence_id: None,
     };
     vec![
@@ -188,6 +194,8 @@ pub struct Project {
     /// continue to deserialize.
     #[serde(default)]
     pub support_servant_id: Option<u32>,
+    #[serde(default)]
+    pub support_servant_variant_key: Option<String>,
     /// Team-builder grid layout (chosen servants + slot order). Persisted
     /// so the user's selections survive app restarts and project switches.
     /// Defaulted via `default_project_slots` for legacy rows.
@@ -252,6 +260,7 @@ fn create_project(app: tauri::AppHandle, name: String) -> Result<Project, String
         id: uuid::Uuid::new_v4().to_string(),
         name,
         support_servant_id: None,
+        support_servant_variant_key: None,
         slots: default_project_slots(),
         repeat_mission: false,
     };
@@ -327,6 +336,10 @@ fn load_battle_scenes(app: tauri::AppHandle, project_id: String) -> Vec<BattleSc
 #[derive(serde::Serialize, Clone)]
 struct ServantInfo {
     id: u32,
+    #[serde(rename = "variantKey")]
+    variant_key: String,
+    #[serde(rename = "faceId")]
+    face_id: Option<u32>,
     name_cn: String,
     name_jp: String,
     name_en: String,
@@ -353,16 +366,47 @@ fn first_np_name(s: &serde_json::Value) -> Option<String> {
         .map(str::to_string)
 }
 
+fn last_variant_np_name(variant: &serde_json::Value) -> Option<String> {
+    let arr = variant
+        .get("noblePhantasms_cn")
+        .or_else(|| variant.get("noblePhantasms"))?
+        .as_array()?;
+    arr.iter()
+        .rev()
+        .find_map(|v| v.as_str().map(str::trim).filter(|s| !s.is_empty()))
+        .map(str::to_string)
+}
+
+fn variant_face_id(variant: &serde_json::Value) -> Option<u32> {
+    variant
+        .get("ids")?
+        .as_array()?
+        .iter()
+        .filter_map(|v| v.as_u64().map(|n| n as u32))
+        .max()
+}
+
 fn servants_data() -> &'static [ServantInfo] {
     static SERVANTS: OnceLock<Vec<ServantInfo>> = OnceLock::new();
     SERVANTS.get_or_init(|| {
         let raw: Vec<serde_json::Value> =
             serde_json::from_str(include_str!("resources/servants.json"))
                 .expect("invalid servants.json");
+        let variants_raw: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("resources/servants_variants.json"))
+                .expect("invalid servants_variants.json");
+        let variants_by_id: HashMap<u32, Vec<serde_json::Value>> = variants_raw
+            .into_iter()
+            .filter_map(|entry| {
+                let id = entry.get("id")?.as_u64()? as u32;
+                let variants = entry.get("variants")?.as_array()?.clone();
+                Some((id, variants))
+            })
+            .collect();
 
         raw.iter()
             .enumerate()
-            .filter_map(|(idx, s)| {
+            .flat_map(|(idx, s)| {
                 let result = (|| {
                     let id = s.get("id")?.as_u64()? as u32;
                     let name_cn = s.get("name_cn")?.as_str()?.to_string();
@@ -386,16 +430,41 @@ fn servants_data() -> &'static [ServantInfo] {
                         (class, rarity)
                     };
 
-                    Some(ServantInfo {
-                        id,
-                        name_cn,
-                        name_jp,
-                        name_en,
-                        name_other,
-                        class,
-                        rarity,
-                        noble_phantasm_name: first_np_name(s),
-                    })
+                    let base_np = first_np_name(s);
+                    let variants = variants_by_id.get(&id);
+                    let infos: Vec<ServantInfo> = if let Some(variants) = variants {
+                        variants
+                            .iter()
+                            .enumerate()
+                            .map(|(variant_idx, variant)| ServantInfo {
+                                id,
+                                variant_key: format!("{id}:{}", variant_idx + 1),
+                                face_id: variant_face_id(variant),
+                                name_cn: name_cn.clone(),
+                                name_jp: name_jp.clone(),
+                                name_en: name_en.clone(),
+                                name_other: name_other.clone(),
+                                class: class.clone(),
+                                rarity,
+                                noble_phantasm_name: last_variant_np_name(variant)
+                                    .or_else(|| base_np.clone()),
+                            })
+                            .collect()
+                    } else {
+                        vec![ServantInfo {
+                            id,
+                            variant_key: id.to_string(),
+                            face_id: None,
+                            name_cn,
+                            name_jp,
+                            name_en,
+                            name_other,
+                            class,
+                            rarity,
+                            noble_phantasm_name: base_np,
+                        }]
+                    };
+                    Some(infos)
                 })();
 
                 if result.is_none() {
@@ -404,7 +473,7 @@ fn servants_data() -> &'static [ServantInfo] {
                         "[servants] dropping entry at index {idx} (id={id_hint:?}): missing or invalid fields"
                     );
                 }
-                result
+                result.unwrap_or_default()
             })
             .collect()
     })
@@ -488,6 +557,15 @@ fn pick_portrait_in(servant_dir: &std::path::Path) -> Option<PathBuf> {
         .max()
 }
 
+fn pick_portrait_by_id_in(servant_dir: &std::path::Path, portrait_id: u32) -> Option<PathBuf> {
+    let candidate = servant_dir.join(format!("narrow_servant_{portrait_id}.png"));
+    if candidate.is_file() {
+        Some(candidate)
+    } else {
+        None
+    }
+}
+
 fn pick_face_in(servant_dir: &std::path::Path) -> Option<PathBuf> {
     let entries = fs::read_dir(servant_dir).ok()?;
     entries
@@ -499,6 +577,15 @@ fn pick_face_in(servant_dir: &std::path::Path) -> Option<PathBuf> {
                 .unwrap_or(false)
         })
         .max()
+}
+
+fn pick_face_by_id_in(servant_dir: &std::path::Path, face_id: u32) -> Option<PathBuf> {
+    let candidate = servant_dir.join(format!("face_servant_{face_id}.png"));
+    if candidate.is_file() {
+        Some(candidate)
+    } else {
+        None
+    }
 }
 
 /// Resolve the full-art portrait file for a single servant, returning
@@ -516,24 +603,32 @@ fn pick_face_in(servant_dir: &std::path::Path) -> Option<PathBuf> {
 fn get_servant_portrait_path(
     app: tauri::AppHandle,
     servant_id: u32,
+    face_id: Option<u32>,
 ) -> Result<Option<String>, String> {
     let Some(root) = resolve_servant_assets_dir(&app) else {
         return Ok(None);
     };
-    Ok(pick_portrait_in(&root.join(servant_id.to_string()))
-        .map(|p| p.to_string_lossy().into_owned()))
+    let servant_dir = root.join(servant_id.to_string());
+    let picked = face_id
+        .and_then(|id| pick_portrait_by_id_in(&servant_dir, id))
+        .or_else(|| pick_portrait_in(&servant_dir));
+    Ok(picked.map(|p| p.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]
 fn get_servant_face_path(
     app: tauri::AppHandle,
     servant_id: u32,
+    face_id: Option<u32>,
 ) -> Result<Option<String>, String> {
     let Some(root) = resolve_servant_assets_dir(&app) else {
         return Ok(None);
     };
-    Ok(pick_face_in(&root.join(servant_id.to_string()))
-        .map(|p| p.to_string_lossy().into_owned()))
+    let servant_dir = root.join(servant_id.to_string());
+    let picked = face_id
+        .and_then(|id| pick_face_by_id_in(&servant_dir, id))
+        .or_else(|| pick_face_in(&servant_dir));
+    Ok(picked.map(|p| p.to_string_lossy().into_owned()))
 }
 
 /// Pure helper so [`get_craft_essence_card_path`] stays a thin wrapper
@@ -1161,6 +1256,13 @@ pub fn run() {
         .setup(|app| {
             let use_bluestack = load_bluestack_setting(&app.handle());
             let server = load_server_setting(&app.handle());
+            let asset_scope = app.asset_protocol_scope();
+            if let Some(dir) = resolve_servant_assets_dir(&app.handle()) {
+                asset_scope.allow_directory(dir, true)?;
+            }
+            if let Some(dir) = resolve_ce_assets_dir(&app.handle()) {
+                asset_scope.allow_directory(dir, true)?;
+            }
             app.manage(Mutex::new(use_bluestack));
             app.manage(Mutex::new(server));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
@@ -1349,6 +1451,20 @@ mod tests {
     }
 
     #[test]
+    fn pick_portrait_by_id_in_prefers_exact_variant_asset() {
+        let tmp = tempfile::tempdir().unwrap();
+        for name in ["narrow_servant_4.png", "narrow_servant_800170.png"] {
+            fs::write(tmp.path().join(name), b"").unwrap();
+        }
+        let picked = pick_portrait_by_id_in(tmp.path(), 800170).expect("expected a match");
+        assert_eq!(
+            picked.file_name().and_then(|n| n.to_str()),
+            Some("narrow_servant_800170.png")
+        );
+        assert!(pick_portrait_by_id_in(tmp.path(), 800151).is_none());
+    }
+
+    #[test]
     fn pick_face_in_picks_highest_ascension_stage() {
         let tmp = tempfile::tempdir().unwrap();
         for name in [
@@ -1376,6 +1492,24 @@ mod tests {
             "noble_phantasms": [{ "name": "Stella" }]
         });
         assert_eq!(first_np_name(&fallback).as_deref(), Some("Stella"));
+    }
+
+    #[test]
+    fn servants_data_expands_variants_with_last_cn_np_and_face_id() {
+        let mash_variants: Vec<&ServantInfo> =
+            servants_data().iter().filter(|s| s.id == 1).collect();
+        assert_eq!(mash_variants.len(), 3);
+        assert_eq!(mash_variants[0].variant_key, "1:1");
+        assert_eq!(mash_variants[0].face_id, Some(800170));
+        assert_eq!(
+            mash_variants[0].noble_phantasm_name.as_deref(),
+            Some("已然遥远的理想之城")
+        );
+        assert_eq!(mash_variants[1].face_id, Some(800151));
+        assert_eq!(
+            mash_variants[1].noble_phantasm_name.as_deref(),
+            Some("依然存在的梦想之城")
+        );
     }
 
     // --- pick_ce_card_in -----------------------------------------------

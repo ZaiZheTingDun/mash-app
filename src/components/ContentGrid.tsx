@@ -44,12 +44,48 @@ export interface SlotItem {
  */
 export function createInitialProjectSlots(): ProjectSlot[] {
   return [
-    { id: "slot-0", type: "servant", servantId: null, craftEssenceId: null },
-    { id: "slot-1", type: "servant", servantId: null, craftEssenceId: null },
-    { id: "slot-2", type: "support", servantId: null, craftEssenceId: null },
-    { id: "slot-3", type: "servant", servantId: null, craftEssenceId: null },
-    { id: "slot-4", type: "servant", servantId: null, craftEssenceId: null },
-    { id: "slot-5", type: "servant", servantId: null, craftEssenceId: null },
+    {
+      id: "slot-0",
+      type: "servant",
+      servantId: null,
+      servantVariantKey: null,
+      craftEssenceId: null,
+    },
+    {
+      id: "slot-1",
+      type: "servant",
+      servantId: null,
+      servantVariantKey: null,
+      craftEssenceId: null,
+    },
+    {
+      id: "slot-2",
+      type: "support",
+      servantId: null,
+      servantVariantKey: null,
+      craftEssenceId: null,
+    },
+    {
+      id: "slot-3",
+      type: "servant",
+      servantId: null,
+      servantVariantKey: null,
+      craftEssenceId: null,
+    },
+    {
+      id: "slot-4",
+      type: "servant",
+      servantId: null,
+      servantVariantKey: null,
+      craftEssenceId: null,
+    },
+    {
+      id: "slot-5",
+      type: "servant",
+      servantId: null,
+      servantVariantKey: null,
+      craftEssenceId: null,
+    },
   ];
 }
 
@@ -169,10 +205,8 @@ function CraftEssenceOverlay({
  * fetch is still in flight. Refires only when the id set actually
  * changes (slot reorders that don't add/remove ids are no-ops).
  *
- * Two callers today: `usePortraits` (servant full-art) and
- * `useCeCards` (craft essence card art); both share this body
- * because the only differences are the command name and the
- * argument key.
+ * The CE card resolver uses this because it only needs one numeric id.
+ * Servant portraits are variant-aware and use a dedicated hook below.
  */
 function useAssetPaths(
   command: string,
@@ -222,14 +256,66 @@ function useAssetPaths(
 }
 
 /**
- * Resolve full-art portrait paths for any servant ids that don't have a
- * cached entry yet. The resolver lives in Rust
- * (`get_servant_portrait_path`) and walks
- * `assets/servants/{id}/narrow_servant_*.png` dynamically, so newly dropped-in
- * portraits get picked up without a rebuild.
+ * Resolve full-art portrait paths for servants that don't have a cached
+ * entry yet. Variants share the same base servant id, so the cache is
+ * keyed by `variantKey` and the backend receives the variant asset id
+ * (`faceId`) when one exists.
  */
-function usePortraits(servantIds: number[]): Record<number, string | null | undefined> {
-  return useAssetPaths("get_servant_portrait_path", "servantId", servantIds);
+function usePortraits(servants: Servant[]): Record<string, string | null | undefined> {
+  const [cache, setCache] = useState<Record<string, string | null>>({});
+  const byVariant = new Map<string, Servant>();
+  for (const servant of servants) {
+    byVariant.set(servant.variantKey, servant);
+  }
+  const requests = Array.from(byVariant.values())
+    .map((servant) => ({
+      variantKey: servant.variantKey,
+      servantId: servant.id,
+      faceId: servant.faceId ?? null,
+    }))
+    .sort((a, b) => a.variantKey.localeCompare(b.variantKey));
+  const key = JSON.stringify(requests);
+
+  useEffect(() => {
+    const parsed = JSON.parse(key) as typeof requests;
+    const missing = parsed.filter(({ variantKey }) => !(variantKey in cache));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map((request) =>
+        invoke<string | null>("get_servant_portrait_path", {
+          servantId: request.servantId,
+          faceId: request.faceId,
+        })
+          .then(
+            (path) =>
+              [
+                request.variantKey,
+                path ? convertFileSrc(path) : null,
+              ] as const
+          )
+          .catch(() => [request.variantKey, null] as const)
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      setCache((prev) => {
+        const next = { ...prev };
+        for (const [variantKey, src] of results) {
+          next[variantKey] = src;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // `cache` intentionally excluded — re-running on cache writes would
+    // create an infinite loop. The effect re-fires only when the servant
+    // variant set changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return cache;
 }
 
 /**
@@ -416,7 +502,11 @@ export function ContentGrid({
   const supportPinned: Servant | null = (() => {
     const id = activeProject?.supportServantId;
     if (id == null) return null;
-    return servants.find((s) => s.id === id) ?? null;
+    return (
+      servants.find((s) => s.variantKey === activeProject?.supportServantVariantKey) ??
+      servants.find((s) => s.id === id) ??
+      null
+    );
   })();
 
   const displaySlots: SlotItem[] = slots.map((s) =>
@@ -425,8 +515,8 @@ export function ContentGrid({
 
   const portraitMap = usePortraits(
     displaySlots
-      .map((s) => s.servant?.id)
-      .filter((id): id is number => id != null)
+      .map((s) => s.servant)
+      .filter((servant): servant is Servant => servant != null)
   );
 
   const ceCardMap = useCeCards(
@@ -480,6 +570,7 @@ export function ContentGrid({
         void onUpdateActiveProject({
           ...activeProject,
           supportServantId: servant.id,
+          supportServantVariantKey: servant.variantKey,
         });
       }
       return;
@@ -516,7 +607,7 @@ export function ContentGrid({
     <SortableSlot
       key={slot.id}
       slot={slot}
-      portraitSrc={slot.servant ? portraitMap[slot.servant.id] : null}
+      portraitSrc={slot.servant ? portraitMap[slot.servant.variantKey] : null}
       ceCardSrc={slot.craftEssence ? ceCardMap[slot.craftEssence.id] : null}
       onSelect={() => handleSlotClick(slot)}
       onCeSelect={() => handleCeSlotClick(slot.id)}

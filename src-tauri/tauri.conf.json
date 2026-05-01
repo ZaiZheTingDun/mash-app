@@ -52,6 +52,8 @@
       "resources/servers/cn/cv.json",
       "resources/servers/cn/templates/*",
       "resources/scrcpy/scrcpy-server.jar",
+      "assets/servants/**/*",
+      "assets/ces/**/*",
       "binaries/mash-cv/**/*"
     ]
   }

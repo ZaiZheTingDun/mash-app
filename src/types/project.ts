@@ -8,6 +8,7 @@ export interface ProjectSlot {
   id: string;
   type: "servant" | "support";
   servantId: number | null;
+  servantVariantKey?: string | null;
   /**
    * Optional pinned craft-essence id. Persisted per-slot so each loadout
    * can carry its own equipment plan. The runner only consumes the
@@ -27,6 +28,7 @@ export interface Project {
    * tapping the topmost row.
    */
   supportServantId?: number | null;
+  supportServantVariantKey?: string | null;
   /**
    * Team-builder grid layout (5 servant slots + 1 support slot, in
    * arrangement order). Persisted on the backend so selections and

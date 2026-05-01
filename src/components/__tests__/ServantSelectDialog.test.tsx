@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import { ServantSelectDialog } from "../ServantSelectDialog";
 import type { Servant } from "../../types/servant";
@@ -8,6 +9,7 @@ import type { Servant } from "../../types/servant";
 const FIXTURE: Servant[] = [
   {
     id: 284,
+    variantKey: "284",
     name_cn: "阿尔托莉雅·卡斯特",
     name_jp: "アルトリア・キャスター",
     name_en: "Altria Caster",
@@ -17,6 +19,7 @@ const FIXTURE: Servant[] = [
   },
   {
     id: 150,
+    variantKey: "150",
     name_cn: "梅林",
     name_jp: "マーリン",
     name_en: "Merlin",
@@ -26,6 +29,7 @@ const FIXTURE: Servant[] = [
   },
   {
     id: 215,
+    variantKey: "215",
     name_cn: "斯卡哈",
     name_jp: "スカサハ",
     name_en: "Scathach",
@@ -97,6 +101,7 @@ describe("ServantSelectDialog", () => {
         ...FIXTURE,
         {
           id: 16,
+          variantKey: "16",
           name_cn: "阿拉什",
           name_jp: "アーラシュ",
           name_en: "Arash",
@@ -117,6 +122,79 @@ describe("ServantSelectDialog", () => {
   it("renders noble phantasm names in the second row", () => {
     setup();
     expect(screen.getByText("永久关闭的理想乡")).toBeInTheDocument();
+  });
+
+  it("renders multiple variants for the same servant id", () => {
+    setup({
+      servants: [
+        {
+          id: 1,
+          variantKey: "1:1",
+          faceId: 800170,
+          name_cn: "玛修",
+          name_jp: "マシュ",
+          name_en: "Mash",
+          class: "Shielder",
+          rarity: 4,
+          noblePhantasmName: "已然遥远的理想之城",
+        },
+        {
+          id: 1,
+          variantKey: "1:2",
+          faceId: 800151,
+          name_cn: "玛修",
+          name_jp: "マシュ",
+          name_en: "Mash",
+          class: "Shielder",
+          rarity: 4,
+          noblePhantasmName: "依然存在的梦想之城",
+        },
+      ],
+    });
+
+    expect(screen.getAllByText("玛修")).toHaveLength(2);
+    expect(screen.getByText("已然遥远的理想之城")).toBeInTheDocument();
+    expect(screen.getByText("依然存在的梦想之城")).toBeInTheDocument();
+  });
+
+  it("requests each variant face by its max variant id", async () => {
+    setup({
+      servants: [
+        {
+          id: 1,
+          variantKey: "1:1",
+          faceId: 800170,
+          name_cn: "玛修",
+          name_jp: "マシュ",
+          name_en: "Mash",
+          class: "Shielder",
+          rarity: 4,
+          noblePhantasmName: "已然遥远的理想之城",
+        },
+        {
+          id: 1,
+          variantKey: "1:2",
+          faceId: 800151,
+          name_cn: "玛修",
+          name_jp: "マシュ",
+          name_en: "Mash",
+          class: "Shielder",
+          rarity: 4,
+          noblePhantasmName: "依然存在的梦想之城",
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("get_servant_face_path", {
+        servantId: 1,
+        faceId: 800170,
+      });
+      expect(invoke).toHaveBeenCalledWith("get_servant_face_path", {
+        servantId: 1,
+        faceId: 800151,
+      });
+    });
   });
 
   it("hides servants whose ids appear in disabledIds", () => {

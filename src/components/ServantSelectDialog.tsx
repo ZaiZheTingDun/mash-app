@@ -62,7 +62,7 @@ export function ServantSelectDialog({
   const [classFilter, setClassFilter] = useState("");
   const [rarityFilter, setRarityFilter] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
-  const [faceSrcById, setFaceSrcById] = useState<Record<number, string | null>>({});
+  const [faceSrcByKey, setFaceSrcByKey] = useState<Record<string, string | null>>({});
   const listRef = useRef<HTMLDivElement>(null);
 
   const classOptions = useMemo(
@@ -99,34 +99,35 @@ export function ServantSelectDialog({
     );
   }, [servants, search, classFilter, rarityFilter, disabledIds]);
 
-  const faceKey = useMemo(
+  const faceEntries = useMemo(
     () =>
-      filtered
-        .map((s) => s.id)
-        .sort((a, b) => a - b)
-        .join(","),
+      filtered.map((s) => ({
+        variantKey: s.variantKey,
+        id: s.id,
+        faceId: s.faceId ?? null,
+      })),
     [filtered]
   );
 
   useEffect(() => {
-    const ids = faceKey
-      ? faceKey.split(",").map((s) => Number(s)).filter((n) => Number.isFinite(n))
-      : [];
-    const missing = ids.filter((id) => !(id in faceSrcById));
+    const missing = faceEntries.filter((entry) => !(entry.variantKey in faceSrcByKey));
     if (missing.length === 0) return;
     let cancelled = false;
     Promise.all(
-      missing.map((id) =>
-        invoke<string | null>("get_servant_face_path", { servantId: id })
-          .then((path) => [id, path ? convertFileSrc(path) : null] as const)
-          .catch(() => [id, null] as const)
+      missing.map((entry) =>
+        invoke<string | null>("get_servant_face_path", {
+          servantId: entry.id,
+          faceId: entry.faceId,
+        })
+          .then((path) => [entry.variantKey, path ? convertFileSrc(path) : null] as const)
+          .catch(() => [entry.variantKey, null] as const)
       )
     ).then((results) => {
       if (cancelled) return;
-      setFaceSrcById((prev) => {
+      setFaceSrcByKey((prev) => {
         const next = { ...prev };
-        for (const [id, src] of results) {
-          next[id] = src;
+        for (const [variantKey, src] of results) {
+          next[variantKey] = src;
         }
         return next;
       });
@@ -134,10 +135,10 @@ export function ServantSelectDialog({
     return () => {
       cancelled = true;
     };
-    // `faceSrcById` is intentionally excluded; this effect should fetch
+    // `faceSrcByKey` is intentionally excluded; this effect should fetch
     // only when the visible id set changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [faceKey]);
+  }, [faceEntries]);
 
   // Keep the keyboard-highlighted row valid when the visible list shrinks
   // (e.g. opening the dialog from a different slot tightens `disabledIds`).
@@ -284,7 +285,7 @@ export function ServantSelectDialog({
             ) : (
               filtered.map((servant, index) => (
                 <button
-                  key={servant.id}
+                  key={servant.variantKey}
                   role="option"
                   aria-selected={index === activeIndex}
                   className={`servant-option ${index === activeIndex ? "focused" : ""}`}
@@ -293,8 +294,8 @@ export function ServantSelectDialog({
                 >
                   <div className="servant-option-content">
                     <div className="servant-face-frame">
-                      {faceSrcById[servant.id] ? (
-                        <img src={faceSrcById[servant.id] ?? ""} alt="" />
+                      {faceSrcByKey[servant.variantKey] ? (
+                        <img src={faceSrcByKey[servant.variantKey] ?? ""} alt="" />
                       ) : (
                         <span>{servant.class.slice(0, 2)}</span>
                       )}

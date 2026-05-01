@@ -85,7 +85,9 @@ function App() {
       type: s.type,
       servant:
         s.servantId != null
-          ? (servants.find((sv) => sv.id === s.servantId) ?? null)
+          ? (servants.find((sv) => sv.variantKey === s.servantVariantKey) ??
+            servants.find((sv) => sv.id === s.servantId) ??
+            null)
           : null,
       craftEssence:
         s.craftEssenceId != null
@@ -104,6 +106,7 @@ function App() {
         id: s.id,
         type: s.type,
         servantId: s.servant?.id ?? null,
+        servantVariantKey: s.servant?.variantKey ?? null,
         craftEssenceId: s.craftEssence?.id ?? null,
       }));
       void handleUpdateProject({ ...activeProject, slots: projectSlots });

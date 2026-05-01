@@ -9,6 +9,7 @@ import type { Servant } from "../../types/servant";
 function makeServant(id: number, name_cn: string): Servant {
   return {
     id,
+    variantKey: String(id),
     name_cn,
     name_jp: name_cn,
     name_en: name_cn,

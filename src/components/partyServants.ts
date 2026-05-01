@@ -47,7 +47,9 @@ export function derivePartyLineup(
 ): (Servant | null)[] {
   const supportPinned =
     activeProject?.supportServantId != null
-      ? (servants.find((s) => s.id === activeProject.supportServantId) ?? null)
+      ? (servants.find((s) => s.variantKey === activeProject.supportServantVariantKey) ??
+        servants.find((s) => s.id === activeProject.supportServantId) ??
+        null)
       : null;
   return slots.map((s) => (s.type === "support" ? supportPinned : s.servant));
 }
