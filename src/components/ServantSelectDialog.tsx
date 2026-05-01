@@ -7,6 +7,7 @@ import {
   ScrollArea,
   Box,
 } from "@radix-ui/themes";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import type { Servant } from "../types/servant";
 
@@ -58,8 +59,20 @@ export function ServantSelectDialog({
   disabledIds,
 }: ServantSelectDialogProps) {
   const [search, setSearch] = useState("");
+  const [classFilter, setClassFilter] = useState("");
+  const [rarityFilter, setRarityFilter] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [faceSrcById, setFaceSrcById] = useState<Record<number, string | null>>({});
   const listRef = useRef<HTMLDivElement>(null);
+
+  const classOptions = useMemo(
+    () => Array.from(new Set(servants.map((s) => s.class))).sort(),
+    [servants]
+  );
+  const rarityOptions = useMemo(
+    () => Array.from(new Set(servants.map((s) => s.rarity))).sort((a, b) => b - a),
+    [servants]
+  );
 
   // Hide already-picked servants entirely. Filtering (vs disabling) keeps
   // keyboard navigation simple — every visible item is selectable, so we
@@ -69,16 +82,62 @@ export function ServantSelectDialog({
     const pool = blocked.size
       ? servants.filter((s) => !blocked.has(s.id))
       : servants;
-    if (!search.trim()) return pool;
+    const filteredPool = pool.filter((s) => {
+      if (classFilter && s.class !== classFilter) return false;
+      if (rarityFilter && s.rarity !== Number(rarityFilter)) return false;
+      return true;
+    });
+    if (!search.trim()) return filteredPool;
     const q = search.toLowerCase().trim();
-    return pool.filter(
+    return filteredPool.filter(
       (s) =>
         s.name_cn.toLowerCase().includes(q) ||
         s.name_en.toLowerCase().includes(q) ||
         s.name_jp.includes(q) ||
-        (s.name_other ?? "").toLowerCase().includes(q)
+        (s.name_other ?? "").toLowerCase().includes(q) ||
+        (s.noblePhantasmName ?? "").toLowerCase().includes(q)
     );
-  }, [servants, search, disabledIds]);
+  }, [servants, search, classFilter, rarityFilter, disabledIds]);
+
+  const faceKey = useMemo(
+    () =>
+      filtered
+        .map((s) => s.id)
+        .sort((a, b) => a - b)
+        .join(","),
+    [filtered]
+  );
+
+  useEffect(() => {
+    const ids = faceKey
+      ? faceKey.split(",").map((s) => Number(s)).filter((n) => Number.isFinite(n))
+      : [];
+    const missing = ids.filter((id) => !(id in faceSrcById));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map((id) =>
+        invoke<string | null>("get_servant_face_path", { servantId: id })
+          .then((path) => [id, path ? convertFileSrc(path) : null] as const)
+          .catch(() => [id, null] as const)
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      setFaceSrcById((prev) => {
+        const next = { ...prev };
+        for (const [id, src] of results) {
+          next[id] = src;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // `faceSrcById` is intentionally excluded; this effect should fetch
+    // only when the visible id set changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [faceKey]);
 
   // Keep the keyboard-highlighted row valid when the visible list shrinks
   // (e.g. opening the dialog from a different slot tightens `disabledIds`).
@@ -104,6 +163,8 @@ export function ServantSelectDialog({
       onOpenChange(nextOpen);
       if (!nextOpen) {
         setSearch("");
+        setClassFilter("");
+        setRarityFilter("");
         setActiveIndex(0);
       }
     },
@@ -172,6 +233,39 @@ export function ServantSelectDialog({
           </TextField.Slot>
         </TextField.Root>
 
+        <Flex gap="2" className="servant-filter-row">
+          <select
+            className="servant-filter-select"
+            value={classFilter}
+            onChange={(e) => {
+              setClassFilter(e.target.value);
+              setActiveIndex(0);
+            }}
+          >
+            <option value="">全部职介</option>
+            {classOptions.map((cls) => (
+              <option key={cls} value={cls}>
+                {cls}
+              </option>
+            ))}
+          </select>
+          <select
+            className="servant-filter-select"
+            value={rarityFilter}
+            onChange={(e) => {
+              setRarityFilter(e.target.value);
+              setActiveIndex(0);
+            }}
+          >
+            <option value="">全部稀有度</option>
+            {rarityOptions.map((rarity) => (
+              <option key={rarity} value={rarity}>
+                ★{rarity}
+              </option>
+            ))}
+          </select>
+        </Flex>
+
         <ScrollArea className="servant-list-scroll">
           <Flex
             ref={listRef}
@@ -197,27 +291,36 @@ export function ServantSelectDialog({
                   onClick={() => handleSelect(servant)}
                   onMouseEnter={() => setActiveIndex(index)}
                 >
-                  <Flex align="center" gap="3">
-                    <Box
-                      className="servant-class-badge"
-                      style={{ background: getClassColor(servant.class) }}
-                    >
-                      <Text size="1" weight="bold" style={{ color: "#fff" }}>
-                        {servant.class.split(" ")[0]}
-                      </Text>
-                    </Box>
-                    <Flex direction="column" align="start" gap="0">
-                      <Text size="2" weight="medium">
-                        {servant.name_cn}
-                      </Text>
-                      <Text
-                        size="1"
-                        style={{ color: "#d4a537", letterSpacing: "1px" }}
-                      >
-                        {"★".repeat(servant.rarity)}
+                  <div className="servant-option-content">
+                    <div className="servant-face-frame">
+                      {faceSrcById[servant.id] ? (
+                        <img src={faceSrcById[servant.id] ?? ""} alt="" />
+                      ) : (
+                        <span>{servant.class.slice(0, 2)}</span>
+                      )}
+                    </div>
+                    <Flex direction="column" align="start" gap="1" className="servant-option-text">
+                      <Flex align="center" gap="2" wrap="wrap">
+                        <Text size="2" weight="medium">
+                          {servant.name_cn}
+                        </Text>
+                        <Box
+                          className="servant-class-badge"
+                          style={{ background: getClassColor(servant.class) }}
+                        >
+                          <Text size="1" weight="bold" style={{ color: "#fff" }}>
+                            {servant.class.split(" ")[0]}
+                          </Text>
+                        </Box>
+                        <Text size="1" className="servant-rarity">
+                          {"★".repeat(servant.rarity)}
+                        </Text>
+                      </Flex>
+                      <Text size="1" className="servant-np-name">
+                        {servant.noblePhantasmName ?? "宝具未记录"}
                       </Text>
                     </Flex>
-                  </Flex>
+                  </div>
                 </button>
               ))
             )}

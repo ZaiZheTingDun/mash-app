@@ -88,6 +88,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       // the placeholder branch unless they explicitly opt in. Tests
       // that want a real `<img>` should `vi.mocked(invoke).mockImpl(...)`.
       case "get_servant_portrait_path":
+      case "get_servant_face_path":
       case "get_craft_essence_card_path":
         return null;
       default:

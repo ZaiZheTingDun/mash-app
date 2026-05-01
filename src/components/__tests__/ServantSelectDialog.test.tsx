@@ -13,6 +13,7 @@ const FIXTURE: Servant[] = [
     name_en: "Altria Caster",
     class: "Caster",
     rarity: 5,
+    noblePhantasmName: "真圆集",
   },
   {
     id: 150,
@@ -21,6 +22,7 @@ const FIXTURE: Servant[] = [
     name_en: "Merlin",
     class: "Caster",
     rarity: 5,
+    noblePhantasmName: "永久关闭的理想乡",
   },
   {
     id: 215,
@@ -29,6 +31,7 @@ const FIXTURE: Servant[] = [
     name_en: "Scathach",
     class: "Lancer",
     rarity: 5,
+    noblePhantasmName: "贯穿死翔之枪",
   },
 ];
 
@@ -85,6 +88,35 @@ describe("ServantSelectDialog", () => {
     );
     expect(screen.getByText("斯卡哈")).toBeInTheDocument();
     expect(screen.queryByText("梅林")).not.toBeInTheDocument();
+  });
+
+  it("filters by class and rarity", async () => {
+    const user = userEvent.setup();
+    setup({
+      servants: [
+        ...FIXTURE,
+        {
+          id: 16,
+          name_cn: "阿拉什",
+          name_jp: "アーラシュ",
+          name_en: "Arash",
+          class: "Archer",
+          rarity: 1,
+          noblePhantasmName: "流星一条",
+        },
+      ],
+    });
+
+    const [classSelect, raritySelect] = screen.getAllByRole("combobox");
+    await user.selectOptions(classSelect, "Archer");
+    await user.selectOptions(raritySelect, "1");
+    expect(screen.getByText("阿拉什")).toBeInTheDocument();
+    expect(screen.queryByText("梅林")).not.toBeInTheDocument();
+  });
+
+  it("renders noble phantasm names in the second row", () => {
+    setup();
+    expect(screen.getByText("永久关闭的理想乡")).toBeInTheDocument();
   });
 
   it("hides servants whose ids appear in disabledIds", () => {

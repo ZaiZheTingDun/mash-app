@@ -729,6 +729,22 @@ body,
   margin-top: 12px;
 }
 
+.servant-filter-row {
+  margin-top: 10px;
+}
+
+.servant-filter-select {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 28px 7px 10px;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-2);
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E") no-repeat right 10px center;
+}
+
 .servant-list-scroll {
   height: 420px;
   margin-top: 12px;
@@ -756,6 +772,40 @@ body,
   box-sizing: border-box;
 }
 
+.servant-option-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.servant-face-frame {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  border-radius: var(--radius-2);
+  border: 1px solid var(--gray-6);
+  overflow: hidden;
+  background: var(--gray-3);
+  display: grid;
+  place-items: center;
+  color: var(--gray-10);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.servant-face-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.servant-option-text {
+  min-width: 0;
+  flex: 1;
+}
+
 .servant-option:hover,
 .servant-option.focused {
   background: var(--blue-3);
@@ -773,9 +823,21 @@ body,
 .servant-class-badge {
   padding: 2px 8px;
   border-radius: var(--radius-1);
-  min-width: 56px;
+  min-width: 48px;
   text-align: center;
   flex-shrink: 0;
+}
+
+.servant-rarity {
+  color: #d4a537;
+}
+
+.servant-np-name {
+  color: var(--gray-11);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── Battle Scene Block ── */
@@ -1167,6 +1229,20 @@ body,
 .battle-number-input:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.battle-apple-menu {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.battle-apple-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
 }
 
 .battle-controls {

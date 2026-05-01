@@ -203,6 +203,18 @@
         },
         "threshold": 0.85
       }
+    },
+    "APRecovery": {
+      "detect": {
+        "template": "item_gold_apple",
+        "region": {
+          "x": 0.22,
+          "y": 0.33,
+          "w": 0.16,
+          "h": 0.24
+        },
+        "threshold": 0.82
+      }
     }
   }
 }

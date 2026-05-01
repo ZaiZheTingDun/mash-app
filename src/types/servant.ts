@@ -6,4 +6,5 @@ export interface Servant {
   name_other?: string;
   class: string;
   rarity: number;
+  noblePhantasmName?: string | null;
 }

@@ -16,6 +16,16 @@ interface LogEntry {
   message: string;
 }
 
+type ApRecoveryItem = "rainbow" | "gold" | "silver" | "bronze" | "copper";
+
+const AP_RECOVERY_OPTIONS: { value: ApRecoveryItem; label: string }[] = [
+  { value: "rainbow", label: "彩苹果" },
+  { value: "gold", label: "黄金苹果" },
+  { value: "silver", label: "白银苹果" },
+  { value: "bronze", label: "青铜苹果" },
+  { value: "copper", label: "赤铜苹果" },
+];
+
 interface BattlePageProps {
   defaultProjectId: string | null;
   onBack: () => void;
@@ -33,6 +43,8 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
   const [selectedId, setSelectedId] = useState<string>(defaultProjectId ?? "");
   const [running, setRunning] = useState(false);
   const [runCount, setRunCount] = useState("");
+  const [autoEatApples, setAutoEatApples] = useState(false);
+  const [apRecoveryItems, setApRecoveryItems] = useState<ApRecoveryItem[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -91,6 +103,7 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
       maxSupportScrolls: 3,
       repeatMission: project?.repeatMission ?? false,
       maxMissionRuns,
+      apRecoveryItems: autoEatApples ? apRecoveryItems : [],
     };
 
     invoke("start_automation", { config }).catch((err) => {
@@ -100,7 +113,7 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
       ]);
       setRunning(false);
     });
-  }, [selectedId, projects, runCount]);
+  }, [selectedId, projects, runCount, autoEatApples, apRecoveryItems]);
 
   const handleStop = useCallback(() => {
     invoke("stop_automation").catch(console.error);
@@ -116,6 +129,19 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
       })
       .catch(console.error);
   }, []);
+
+  const handleToggleApRecoveryItem = useCallback((item: ApRecoveryItem) => {
+    if (
+      item === "rainbow" &&
+      !apRecoveryItems.includes("rainbow") &&
+      !window.confirm("彩苹果会消耗圣晶石。确定要在本次运行中允许自动使用彩苹果吗？")
+    ) {
+      return;
+    }
+    setApRecoveryItems((prev) =>
+      prev.includes(item) ? prev.filter((v) => v !== item) : [...prev, item]
+    );
+  }, [apRecoveryItems]);
 
   // Persist the "repeat mission" toggle on the active project so it
   // survives reloads and project switches. Updates the local list in
@@ -202,6 +228,38 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
             disabled={running}
             onChange={(e) => setRunCount(e.target.value)}
           />
+        </Box>
+
+        <Box>
+          <Flex align="center" gap="2">
+            <input
+              id="auto-eat-apples"
+              type="checkbox"
+              className="battle-checkbox"
+              checked={autoEatApples}
+              disabled={running}
+              onChange={(e) => setAutoEatApples(e.target.checked)}
+            />
+            <label htmlFor="auto-eat-apples">
+              <Text size="2">自动吃苹果</Text>
+            </label>
+          </Flex>
+          {autoEatApples && (
+            <div className="battle-apple-menu">
+              {AP_RECOVERY_OPTIONS.map((option) => (
+                <label key={option.value} className="battle-apple-option">
+                  <input
+                    type="checkbox"
+                    className="battle-checkbox"
+                    checked={apRecoveryItems.includes(option.value)}
+                    disabled={running}
+                    onChange={() => handleToggleApRecoveryItem(option.value)}
+                  />
+                  <Text size="2">{option.label}</Text>
+                </label>
+              ))}
+            </div>
+          )}
         </Box>
 
         <Flex gap="3" className="battle-controls">

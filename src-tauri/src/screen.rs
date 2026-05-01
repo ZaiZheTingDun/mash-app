@@ -234,6 +234,8 @@ pub enum Screen {
     /// Friend-request prompt that appears after a battle when an
     /// unfriended support was used.
     BattleResultFriendRequest,
+    /// AP recovery dialog shown after tapping repeat when AP is insufficient.
+    APRecovery,
     Unknown,
 }
 
@@ -251,6 +253,7 @@ impl std::fmt::Display for Screen {
             Self::BattleResultBond => write!(f, "BattleResultBond"),
             Self::BattleResultContinue => write!(f, "BattleResultContinue"),
             Self::BattleResultFriendRequest => write!(f, "BattleResultFriendRequest"),
+            Self::APRecovery => write!(f, "APRecovery"),
             Self::Unknown => write!(f, "Unknown"),
         }
     }
@@ -272,6 +275,7 @@ impl FromStr for Screen {
             "BattleResultBond" => Self::BattleResultBond,
             "BattleResultContinue" => Self::BattleResultContinue,
             "BattleResultFriendRequest" => Self::BattleResultFriendRequest,
+            "APRecovery" => Self::APRecovery,
             _ => Self::Unknown,
         };
         Ok(screen)
@@ -1019,5 +1023,11 @@ mod tests {
         let mut req = serde_json::json!([1, 2, 3]);
         SidecarClient::add_image_path(&mut req, Some(Path::new("/tmp/x.png")));
         assert_eq!(req, serde_json::json!([1, 2, 3]));
+    }
+
+    #[test]
+    fn ap_recovery_screen_round_trips_display_name() {
+        assert_eq!(Screen::APRecovery.to_string(), "APRecovery");
+        assert_eq!("APRecovery".parse::<Screen>().unwrap(), Screen::APRecovery);
     }
 }

@@ -333,6 +333,24 @@ struct ServantInfo {
     name_other: Option<String>,
     class: String,
     rarity: u32,
+    #[serde(rename = "noblePhantasmName")]
+    noble_phantasm_name: Option<String>,
+}
+
+fn first_np_name(s: &serde_json::Value) -> Option<String> {
+    let nps = s.get("noble_phantasms")?;
+    let entry = if let Some(arr) = nps.as_array() {
+        arr.first()?
+    } else {
+        nps.as_object()?.values().next()?
+    };
+    entry
+        .get("name_cn")
+        .or_else(|| entry.get("name"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
 }
 
 fn servants_data() -> &'static [ServantInfo] {
@@ -376,6 +394,7 @@ fn servants_data() -> &'static [ServantInfo] {
                         name_other,
                         class,
                         rarity,
+                        noble_phantasm_name: first_np_name(s),
                     })
                 })();
 
@@ -469,6 +488,19 @@ fn pick_portrait_in(servant_dir: &std::path::Path) -> Option<PathBuf> {
         .max()
 }
 
+fn pick_face_in(servant_dir: &std::path::Path) -> Option<PathBuf> {
+    let entries = fs::read_dir(servant_dir).ok()?;
+    entries
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with("face_servant_") && n.ends_with(".png"))
+                .unwrap_or(false)
+        })
+        .max()
+}
+
 /// Resolve the full-art portrait file for a single servant, returning
 /// the absolute path so the frontend can hand it to `convertFileSrc()`.
 ///
@@ -489,6 +521,18 @@ fn get_servant_portrait_path(
         return Ok(None);
     };
     Ok(pick_portrait_in(&root.join(servant_id.to_string()))
+        .map(|p| p.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+fn get_servant_face_path(
+    app: tauri::AppHandle,
+    servant_id: u32,
+) -> Result<Option<String>, String> {
+    let Some(root) = resolve_servant_assets_dir(&app) else {
+        return Ok(None);
+    };
+    Ok(pick_face_in(&root.join(servant_id.to_string()))
         .map(|p| p.to_string_lossy().into_owned()))
 }
 
@@ -1127,6 +1171,7 @@ pub fn run() {
             get_servants,
             get_craft_essences,
             get_servant_portrait_path,
+            get_servant_face_path,
             get_craft_essence_card_path,
             save_battle_scenes,
             load_battle_scenes,
@@ -1301,6 +1346,36 @@ mod tests {
             picked.file_name().and_then(|n| n.to_str()),
             Some("narrow_servant_4.png")
         );
+    }
+
+    #[test]
+    fn pick_face_in_picks_highest_ascension_stage() {
+        let tmp = tempfile::tempdir().unwrap();
+        for name in [
+            "face_servant_1.png",
+            "face_servant_4.png",
+            "narrow_servant_4.png",
+        ] {
+            fs::write(tmp.path().join(name), b"").unwrap();
+        }
+        let picked = pick_face_in(tmp.path()).expect("expected a face match");
+        assert_eq!(
+            picked.file_name().and_then(|n| n.to_str()),
+            Some("face_servant_4.png")
+        );
+    }
+
+    #[test]
+    fn first_np_name_prefers_cn_then_legacy_name() {
+        let flat = serde_json::json!({
+            "noble_phantasms": [{ "name_cn": "流星一条", "name": "Stella" }]
+        });
+        assert_eq!(first_np_name(&flat).as_deref(), Some("流星一条"));
+
+        let fallback = serde_json::json!({
+            "noble_phantasms": [{ "name": "Stella" }]
+        });
+        assert_eq!(first_np_name(&fallback).as_deref(), Some("Stella"));
     }
 
     // --- pick_ce_card_in -----------------------------------------------

@@ -22,6 +22,16 @@ pub struct ServantSlotConfig {
     pub servant_id: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ApRecoveryItem {
+    Rainbow,
+    Gold,
+    Silver,
+    Bronze,
+    Copper,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunConfig {
@@ -61,6 +71,10 @@ pub struct RunConfig {
     /// until this many final continue pages have been reached, then stops.
     #[serde(default)]
     pub max_mission_runs: Option<u32>,
+    /// Apple/AP recovery items allowed when the repeat tap opens the
+    /// insufficient-AP dialog. Empty means stop on that dialog.
+    #[serde(default)]
+    pub ap_recovery_items: Vec<ApRecoveryItem>,
 }
 
 // ---------------------------------------------------------------------------
@@ -247,6 +261,12 @@ const BATTLE_RESULT_CONTINUE_REPEAT: Point = Point::new(0.657, 0.809);
 /// "Close / Stop" button on the final continue page — taps this when
 /// `RunConfig::repeat_mission` is false. The runner finishes after.
 const BATTLE_RESULT_CONTINUE_STOP: Point = Point::new(0.348, 0.809);
+
+const AP_RECOVERY_ROW_1: Point = Point::new(0.500, 0.250);
+const AP_RECOVERY_ROW_2: Point = Point::new(0.500, 0.455);
+const AP_RECOVERY_ROW_3: Point = Point::new(0.500, 0.660);
+const AP_RECOVERY_SCROLL_FROM: Point = Point::new(0.780, 0.760);
+const AP_RECOVERY_SCROLL_TO: Point = Point::new(0.780, 0.300);
 
 /// Cadence used by `tap_until_screen_changes` when dismissing post-battle
 /// result pages. Slow enough for the device to register each tap and for
@@ -1059,6 +1079,10 @@ impl Runner {
                     unknown_count = 0;
                     self.handle_battle_result_continue();
                 }
+                Screen::APRecovery => {
+                    unknown_count = 0;
+                    self.handle_ap_recovery();
+                }
                 Screen::Unknown => {
                     unknown_count += 1;
                     let timeout = if self.battle.waiting_for_battle {
@@ -1833,6 +1857,50 @@ impl Runner {
         }
     }
 
+    fn preferred_ap_recovery_item(&self) -> Option<ApRecoveryItem> {
+        [
+            ApRecoveryItem::Rainbow,
+            ApRecoveryItem::Gold,
+            ApRecoveryItem::Silver,
+            ApRecoveryItem::Bronze,
+            ApRecoveryItem::Copper,
+        ]
+        .into_iter()
+        .find(|item| self.config.ap_recovery_items.contains(item))
+    }
+
+    fn handle_ap_recovery(&mut self) {
+        let Some(item) = self.preferred_ap_recovery_item() else {
+            self.emit("APRecovery", "行动力不足且未配置自动吃苹果，停止");
+            self.set_state(RunnerState::Finished);
+            return;
+        };
+
+        let (label, tap, needs_scroll) = match item {
+            ApRecoveryItem::Rainbow => ("彩苹果", AP_RECOVERY_ROW_1, false),
+            ApRecoveryItem::Gold => ("黄金苹果", AP_RECOVERY_ROW_2, false),
+            ApRecoveryItem::Silver => ("白银苹果", AP_RECOVERY_ROW_3, false),
+            ApRecoveryItem::Bronze => ("青铜苹果", AP_RECOVERY_ROW_2, true),
+            ApRecoveryItem::Copper => ("赤铜苹果", AP_RECOVERY_ROW_3, true),
+        };
+
+        self.emit("APRecovery", &format!("行动力不足，使用{label}"));
+        if needs_scroll {
+            if !self.swipe_at(
+                "APRecovery",
+                AP_RECOVERY_SCROLL_FROM,
+                AP_RECOVERY_SCROLL_TO,
+                350,
+            ) {
+                return;
+            }
+            thread::sleep(ACTION_DELAY);
+        }
+        if self.tap_at("APRecovery", tap) {
+            thread::sleep(ACTION_DELAY);
+        }
+    }
+
     // -- skill execution -----------------------------------------------------
 
     fn execute_scene_skills(&mut self, scene: &BattleScene) {
@@ -2342,6 +2410,7 @@ mod tests {
         assert!(cfg.support_servant_id.is_none());
         assert_eq!(cfg.repeat_mission, false);
         assert_eq!(cfg.max_mission_runs, None);
+        assert!(cfg.ap_recovery_items.is_empty());
     }
 
     #[test]
@@ -2363,10 +2432,15 @@ mod tests {
         payload["supportServantId"] = serde_json::json!(284);
         payload["repeatMission"] = serde_json::json!(true);
         payload["maxMissionRuns"] = serde_json::json!(3);
+        payload["apRecoveryItems"] = serde_json::json!(["gold", "bronze"]);
         let cfg: RunConfig = serde_json::from_value(payload).unwrap();
         assert_eq!(cfg.support_servant_id, Some(284));
         assert_eq!(cfg.repeat_mission, true);
         assert_eq!(cfg.max_mission_runs, Some(3));
+        assert_eq!(
+            cfg.ap_recovery_items,
+            vec![ApRecoveryItem::Gold, ApRecoveryItem::Bronze]
+        );
     }
 
     // --- tick_scene_state -----------------------------------------------
