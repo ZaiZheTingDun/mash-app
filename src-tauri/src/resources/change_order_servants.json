@@ -1,0 +1,58 @@
+[
+  {
+    "servantId": 16,
+    "nameCn": "阿拉什",
+    "trigger": { "type": "attackCard", "card": "np" },
+    "effect": { "type": "removeSelf" },
+    "source": "noble_phantasms.effects: 自身即死效果"
+  },
+  {
+    "servantId": 258,
+    "nameCn": "陈宫",
+    "trigger": { "type": "attackCard", "card": "np" },
+    "effect": { "type": "removeFirstAlly" },
+    "source": "noble_phantasms.effects: 将除自身以外的己方单体作为活祭"
+  },
+  {
+    "servantId": 294,
+    "nameCn": "织田信胜",
+    "trigger": { "type": "attackCard", "card": "np" },
+    "effect": { "type": "removeSelf" },
+    "source": "noble_phantasms.effects: 自身即死效果"
+  },
+  {
+    "servantId": 388,
+    "nameCn": "克洛伊·冯·爱因兹贝伦",
+    "trigger": { "type": "servantSkill", "skill": "skill_2" },
+    "effect": { "type": "withdrawSelfToBack" },
+    "source": "skills[2].effects: 回合结束时，自身撤退为替补"
+  },
+  {
+    "servantId": 414,
+    "nameCn": "静希草十郎",
+    "trigger": { "type": "attackCard", "card": "np" },
+    "effect": { "type": "removeSelf" },
+    "source": "noble_phantasms.effects: 自身即死效果"
+  },
+  {
+    "servantId": 427,
+    "nameCn": "图坦卡蒙",
+    "trigger": { "type": "attackCard", "card": "np" },
+    "effect": { "type": "removeSelf" },
+    "source": "noble_phantasms.effects: 自身即死效果"
+  },
+  {
+    "servantId": 454,
+    "nameCn": "藤堂平助",
+    "trigger": { "type": "attackCard", "card": "np" },
+    "effect": { "type": "removeSelf" },
+    "source": "noble_phantasms.effects: 自身即死效果"
+  },
+  {
+    "servantId": 463,
+    "nameCn": "蛇女房",
+    "trigger": { "type": "attackCard", "card": "np", "activationUseCount": 2 },
+    "effect": { "type": "removeSelf" },
+    "source": "noble_phantasms.effects: 第2次使用时，自身即死效果"
+  }
+]

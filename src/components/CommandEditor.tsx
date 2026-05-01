@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { Flex } from "@radix-ui/themes";
 import { invoke } from "@tauri-apps/api/core";
 import { BattleSceneBlock } from "./BattleSceneBlock";
+import { deriveScenePartyServants } from "./partyServants";
 import type { BattleScene, AttackCard } from "../types/command";
 import type { Servant } from "../types/servant";
 
 interface CommandEditorProps {
   projectId: string | null;
-  partyServants: (Servant | null)[];
+  partyLineup: (Servant | null)[];
 }
 
 let nextSceneId = 1;
@@ -34,9 +35,10 @@ function createDefaultScene(): BattleScene {
   };
 }
 
-export function CommandEditor({ projectId, partyServants }: CommandEditorProps) {
+export function CommandEditor({ projectId, partyLineup }: CommandEditorProps) {
   const [scenes, setScenes] = useState<BattleScene[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const scenePartyServants = deriveScenePartyServants(partyLineup, scenes);
 
   useEffect(() => {
     if (!projectId) {
@@ -106,7 +108,7 @@ export function CommandEditor({ projectId, partyServants }: CommandEditorProps) 
           key={scene.id}
           scene={scene}
           index={index}
-          partyServants={partyServants}
+          partyServants={scenePartyServants[index] ?? partyLineup.slice(0, 3)}
           onChange={(updated) => handleSceneChange(scene.id, updated)}
           onDelete={() => handleDeleteScene(scene.id)}
           canDelete={scenes.length > 1}

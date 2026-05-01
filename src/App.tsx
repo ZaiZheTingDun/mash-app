@@ -3,7 +3,7 @@ import { Box, Flex, Text, Spinner } from "@radix-ui/themes";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { ContentGrid, createInitialProjectSlots } from "./components/ContentGrid";
-import { derivePartyServants } from "./components/partyServants";
+import { derivePartyLineup, derivePartyServants } from "./components/partyServants";
 import { CommandEditor } from "./components/CommandEditor";
 import { BattlePage } from "./components/BattlePage";
 import { DebugPage } from "./components/DebugPage";
@@ -113,6 +113,10 @@ function App() {
 
   const partyServants = useMemo(
     () => derivePartyServants(slots, activeProject, servants),
+    [slots, activeProject, servants]
+  );
+  const partyLineup = useMemo(
+    () => derivePartyLineup(slots, activeProject, servants),
     [slots, activeProject, servants]
   );
 
@@ -231,7 +235,7 @@ function App() {
                 <>
                   <CommandEditor
                     projectId={activeProjectId}
-                    partyServants={partyServants}
+                    partyLineup={partyLineup}
                   />
                   <Flex justify="between" align="center" className="page-footer">
                     <button

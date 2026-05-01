@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { derivePartyServants } from "../partyServants";
+import {
+  derivePartyLineup,
+  derivePartyServants,
+  deriveScenePartyServants,
+} from "../partyServants";
 import { createInitialProjectSlots, type SlotItem } from "../ContentGrid";
+import type { BattleScene } from "../../types/command";
 import type { Project } from "../../types/project";
 import type { Servant } from "../../types/servant";
 
@@ -40,7 +45,25 @@ const WAVER: Servant = {
   rarity: 5,
 };
 
-const SERVANTS: Servant[] = [MASH, ALTRIA, MERLIN, WAVER];
+const ARASH: Servant = {
+  id: 16,
+  name_cn: "阿拉什",
+  name_jp: "アーラシュ",
+  name_en: "Arash",
+  class: "Archer",
+  rarity: 1,
+};
+
+const CHEN_GONG: Servant = {
+  id: 258,
+  name_cn: "陈宫",
+  name_jp: "陳宮",
+  name_en: "Chen Gong",
+  class: "Caster",
+  rarity: 2,
+};
+
+const SERVANTS: Servant[] = [MASH, ALTRIA, MERLIN, WAVER, ARASH, CHEN_GONG];
 
 function makeSlots(
   layout: ReadonlyArray<{ type: "servant" | "support"; servant: Servant | null }>
@@ -62,6 +85,21 @@ function makeProject(supportServantId: number | null): Project {
     supportServantId,
     slots: createInitialProjectSlots(),
     repeatMission: false,
+  };
+}
+
+function makeScene(overrides: Partial<BattleScene> = {}): BattleScene {
+  return {
+    id: "scene_1",
+    servantActions: [],
+    equipmentActions: [],
+    commandSpellActions: [],
+    attackPriority: [
+      { id: "atk_0", card: null },
+      { id: "atk_1", card: null },
+      { id: "atk_2", card: null },
+    ],
+    ...overrides,
   };
 }
 
@@ -148,6 +186,50 @@ describe("derivePartyServants", () => {
       null,
       null,
       null,
+    ]);
+  });
+});
+
+describe("deriveScenePartyServants", () => {
+  it("replaces Arash with the first back-line servant after an NP scene", () => {
+    const lineups = deriveScenePartyServants(
+      [ARASH, MERLIN, WAVER, ALTRIA, MASH, null],
+      [
+        makeScene({ attackPriority: [{ id: "atk_0", card: "servant_1_np" }] }),
+        makeScene({ id: "scene_2" }),
+      ]
+    );
+
+    expect(lineups[0]).toEqual([ARASH, MERLIN, WAVER]);
+    expect(lineups[1]).toEqual([ALTRIA, MERLIN, WAVER]);
+  });
+
+  it("sacrifices Chen Gong's first non-self front-line ally", () => {
+    const lineups = deriveScenePartyServants(
+      [CHEN_GONG, MERLIN, WAVER, ALTRIA, MASH, null],
+      [
+        makeScene({ attackPriority: [{ id: "atk_0", card: "servant_1_np" }] }),
+        makeScene({ id: "scene_2" }),
+      ]
+    );
+
+    expect(lineups[0]).toEqual([CHEN_GONG, MERLIN, WAVER]);
+    expect(lineups[1]).toEqual([CHEN_GONG, ALTRIA, WAVER]);
+  });
+
+  it("derives the full lineup with a pinned support before scene simulation", () => {
+    const slots = makeSlots([
+      { type: "servant", servant: ARASH },
+      { type: "servant", servant: MERLIN },
+      { type: "support", servant: null },
+      { type: "servant", servant: ALTRIA },
+    ]);
+
+    expect(derivePartyLineup(slots, makeProject(MASH.id), SERVANTS)).toEqual([
+      ARASH,
+      MERLIN,
+      MASH,
+      ALTRIA,
     ]);
   });
 });

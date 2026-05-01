@@ -32,6 +32,7 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedId, setSelectedId] = useState<string>(defaultProjectId ?? "");
   const [running, setRunning] = useState(false);
+  const [runCount, setRunCount] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -70,6 +71,11 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
     setRunning(true);
 
     const project = projects.find((p) => p.id === selectedId);
+    const parsedRunCount = Number(runCount);
+    const maxMissionRuns =
+      runCount.trim() && Number.isInteger(parsedRunCount) && parsedRunCount > 0
+        ? parsedRunCount
+        : null;
     // The runner currently only consumes the support slot's CE pin (for
     // row verification on the support-select screen). Party-slot CEs
     // are persisted on the project but ignored here.
@@ -84,6 +90,7 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
       servantSelections: [],
       maxSupportScrolls: 3,
       repeatMission: project?.repeatMission ?? false,
+      maxMissionRuns,
     };
 
     invoke("start_automation", { config }).catch((err) => {
@@ -93,10 +100,21 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
       ]);
       setRunning(false);
     });
-  }, [selectedId, projects]);
+  }, [selectedId, projects, runCount]);
 
   const handleStop = useCallback(() => {
     invoke("stop_automation").catch(console.error);
+  }, []);
+
+  const handleStopAfterCurrent = useCallback(() => {
+    invoke("stop_automation_after_current")
+      .then(() => {
+        setLogs((prev) => [
+          ...prev,
+          { time: timestamp(), message: "已设置：运行完当前轮次后停止" },
+        ]);
+      })
+      .catch(console.error);
   }, []);
 
   // Persist the "repeat mission" toggle on the active project so it
@@ -169,6 +187,23 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
           </label>
         </Flex>
 
+        <Box>
+          <Text size="2" weight="medium" style={{ marginBottom: 6, display: "block" }}>
+            运行轮数
+          </Text>
+          <input
+            className="battle-number-input"
+            type="number"
+            min="1"
+            step="1"
+            inputMode="numeric"
+            placeholder="不限制"
+            value={runCount}
+            disabled={running}
+            onChange={(e) => setRunCount(e.target.value)}
+          />
+        </Box>
+
         <Flex gap="3" className="battle-controls">
           <button
             className="battle-btn battle-btn-start"
@@ -183,6 +218,13 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
             onClick={handleStop}
           >
             停止
+          </button>
+          <button
+            className="battle-btn battle-btn-stop"
+            disabled={!running}
+            onClick={handleStopAfterCurrent}
+          >
+            运行完当前轮次后停止
           </button>
         </Flex>
 

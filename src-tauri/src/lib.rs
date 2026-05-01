@@ -954,10 +954,12 @@ fn start_automation(
 
     let state = Arc::new(Mutex::new(RunnerState::Running));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stop_after_current = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
     let mut handle = handle_state.lock().unwrap();
     handle.state = state.clone();
     handle.cancel = cancel.clone();
+    handle.stop_after_current = stop_after_current.clone();
 
     let assets_dir = resolve_servant_assets_dir(&app);
     let ce_assets_dir = resolve_ce_assets_dir(&app);
@@ -969,6 +971,7 @@ fn start_automation(
         app,
         state,
         cancel,
+        stop_after_current,
         screen_size,
         assets_dir,
         ce_assets_dir,
@@ -983,6 +986,15 @@ fn start_automation(
 fn stop_automation(handle_state: tauri::State<'_, Mutex<RunnerHandle>>) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
     handle.cancel.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_automation_after_current(
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+) -> Result<(), String> {
+    let handle = handle_state.lock().unwrap();
+    handle.stop_after_current.store(true, Ordering::Relaxed);
     Ok(())
 }
 
@@ -1129,6 +1141,7 @@ pub fn run() {
             set_server,
             start_automation,
             stop_automation,
+            stop_automation_after_current,
             get_automation_status,
             debug::debug_capture,
             debug::debug_find_element,

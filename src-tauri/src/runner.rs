@@ -1,9 +1,8 @@
 use crate::adb::Adb;
 use crate::screen::{
-    CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
-    SupportRowMatch,
+    CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient, SupportRowMatch,
 };
-use crate::{load_servant_metadata, Action, AttackCard, BattleScene, Server, ServantMetadata};
+use crate::{load_servant_metadata, Action, AttackCard, BattleScene, ServantMetadata, Server};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -57,6 +56,11 @@ pub struct RunConfig {
     /// when `false`, it taps "Close" and the run finishes.
     #[serde(default)]
     pub repeat_mission: bool,
+    /// Optional run cap measured in completed quest rounds. When set, it
+    /// takes precedence over `repeat_mission`: the runner keeps repeating
+    /// until this many final continue pages have been reached, then stops.
+    #[serde(default)]
+    pub max_mission_runs: Option<u32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +88,7 @@ pub struct AutomationEvent {
 pub struct RunnerHandle {
     pub state: Arc<Mutex<RunnerState>>,
     pub cancel: Arc<AtomicBool>,
+    pub stop_after_current: Arc<AtomicBool>,
 }
 
 impl RunnerHandle {
@@ -91,6 +96,7 @@ impl RunnerHandle {
         Self {
             state: Arc::new(Mutex::new(RunnerState::Idle)),
             cancel: Arc::new(AtomicBool::new(false)),
+            stop_after_current: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -103,9 +109,21 @@ impl RunnerHandle {
 /// servant_1 = index 0, servant_2 = index 1, servant_3 = index 2
 /// skill_1 = index 0, skill_2 = index 1, skill_3 = index 2
 const SERVANT_SKILLS: [[Point; 3]; 3] = [
-    [Point::new(0.058, 0.807), Point::new(0.127, 0.807), Point::new(0.196, 0.807)],
-    [Point::new(0.305, 0.807), Point::new(0.374, 0.807), Point::new(0.443, 0.807)],
-    [Point::new(0.553, 0.807), Point::new(0.622, 0.807), Point::new(0.691, 0.807)],
+    [
+        Point::new(0.058, 0.807),
+        Point::new(0.127, 0.807),
+        Point::new(0.196, 0.807),
+    ],
+    [
+        Point::new(0.305, 0.807),
+        Point::new(0.374, 0.807),
+        Point::new(0.443, 0.807),
+    ],
+    [
+        Point::new(0.553, 0.807),
+        Point::new(0.622, 0.807),
+        Point::new(0.691, 0.807),
+    ],
 ];
 
 const EQUIPMENT_BUTTON: Point = Point::new(0.933, 0.434);
@@ -194,10 +212,7 @@ const COMMAND_SPELL_BUTTON: Point = Point::new(0.829, 0.113);
 /// Spell-option tap targets inside the Command Spell modal
 /// (`CommandSpell_open.png`). Indices align with `command_spell_index`:
 /// 0 = "宝具解放" (np_release), 1 = "灵基修复" (restore).
-const COMMAND_SPELL_OPTIONS: [Point; 2] = [
-    Point::new(0.500, 0.460),
-    Point::new(0.500, 0.690),
-];
+const COMMAND_SPELL_OPTIONS: [Point; 2] = [Point::new(0.500, 0.460), Point::new(0.500, 0.690)];
 
 /// "决定" confirm button on the Command Spell confirmation dialog
 /// (`command_spell_confirmation.png`). Its mirror "取消" button at
@@ -392,10 +407,22 @@ pub fn debug_coordinates() -> DebugCoordinates {
             id: "commandSpell".into(),
             label: "令咒".into(),
             points: vec![
-                LabeledPoint { label: "Open".into(),     point: COMMAND_SPELL_BUTTON },
-                LabeledPoint { label: "宝具解放".into(), point: COMMAND_SPELL_OPTIONS[0] },
-                LabeledPoint { label: "灵基修复".into(), point: COMMAND_SPELL_OPTIONS[1] },
-                LabeledPoint { label: "决定".into(),     point: COMMAND_SPELL_CONFIRM },
+                LabeledPoint {
+                    label: "Open".into(),
+                    point: COMMAND_SPELL_BUTTON,
+                },
+                LabeledPoint {
+                    label: "宝具解放".into(),
+                    point: COMMAND_SPELL_OPTIONS[0],
+                },
+                LabeledPoint {
+                    label: "灵基修复".into(),
+                    point: COMMAND_SPELL_OPTIONS[1],
+                },
+                LabeledPoint {
+                    label: "决定".into(),
+                    point: COMMAND_SPELL_CONFIRM,
+                },
             ],
             regions: Vec::new(),
         },
@@ -403,15 +430,42 @@ pub fn debug_coordinates() -> DebugCoordinates {
             id: "supportSelect".into(),
             label: "助战选择".into(),
             points: vec![
-                LabeledPoint { label: "Saber".into(),     point: SUPPORT_TAB_SABER     },
-                LabeledPoint { label: "Archer".into(),    point: SUPPORT_TAB_ARCHER    },
-                LabeledPoint { label: "Lancer".into(),    point: SUPPORT_TAB_LANCER    },
-                LabeledPoint { label: "Rider".into(),     point: SUPPORT_TAB_RIDER     },
-                LabeledPoint { label: "Caster".into(),    point: SUPPORT_TAB_CASTER    },
-                LabeledPoint { label: "Assassin".into(),  point: SUPPORT_TAB_ASSASSIN  },
-                LabeledPoint { label: "Berserker".into(), point: SUPPORT_TAB_BERSERKER },
-                LabeledPoint { label: "Extra".into(),     point: SUPPORT_TAB_EXTRA     },
-                LabeledPoint { label: "Refresh".into(),   point: SUPPORT_REFRESH_BUTTON },
+                LabeledPoint {
+                    label: "Saber".into(),
+                    point: SUPPORT_TAB_SABER,
+                },
+                LabeledPoint {
+                    label: "Archer".into(),
+                    point: SUPPORT_TAB_ARCHER,
+                },
+                LabeledPoint {
+                    label: "Lancer".into(),
+                    point: SUPPORT_TAB_LANCER,
+                },
+                LabeledPoint {
+                    label: "Rider".into(),
+                    point: SUPPORT_TAB_RIDER,
+                },
+                LabeledPoint {
+                    label: "Caster".into(),
+                    point: SUPPORT_TAB_CASTER,
+                },
+                LabeledPoint {
+                    label: "Assassin".into(),
+                    point: SUPPORT_TAB_ASSASSIN,
+                },
+                LabeledPoint {
+                    label: "Berserker".into(),
+                    point: SUPPORT_TAB_BERSERKER,
+                },
+                LabeledPoint {
+                    label: "Extra".into(),
+                    point: SUPPORT_TAB_EXTRA,
+                },
+                LabeledPoint {
+                    label: "Refresh".into(),
+                    point: SUPPORT_REFRESH_BUTTON,
+                },
             ],
             regions: vec![LabeledRegion {
                 label: "ScrollEnd".into(),
@@ -673,6 +727,7 @@ pub struct Runner {
     scenes: Vec<BattleScene>,
     state: Arc<Mutex<RunnerState>>,
     cancel: Arc<AtomicBool>,
+    stop_after_current: Arc<AtomicBool>,
     app_handle: tauri::AppHandle,
     screen_w: u32,
     screen_h: u32,
@@ -718,6 +773,8 @@ pub struct Runner {
     servants_placed: Vec<u32>,
     // Battle progress tracking
     battle: BattleState,
+    completed_mission_runs: u32,
+    battle_result_continue_handled: bool,
 }
 
 impl Runner {
@@ -729,6 +786,7 @@ impl Runner {
         app_handle: tauri::AppHandle,
         state: Arc<Mutex<RunnerState>>,
         cancel: Arc<AtomicBool>,
+        stop_after_current: Arc<AtomicBool>,
         screen_size: Option<(u32, u32)>,
         assets_dir: Option<PathBuf>,
         ce_assets_dir: Option<PathBuf>,
@@ -742,6 +800,7 @@ impl Runner {
             scenes,
             state,
             cancel,
+            stop_after_current,
             app_handle,
             screen_w,
             screen_h,
@@ -757,6 +816,8 @@ impl Runner {
             support_ce_template: None,
             servants_placed: Vec::new(),
             battle: BattleState::new(),
+            completed_mission_runs: 0,
+            battle_result_continue_handled: false,
         }
     }
 
@@ -785,6 +846,10 @@ impl Runner {
         self.cancel.load(Ordering::Relaxed)
     }
 
+    fn should_stop_after_current(&self) -> bool {
+        self.stop_after_current.load(Ordering::Relaxed)
+    }
+
     fn fail_action(&self, screen: &str, action: &str, err: String) {
         let message = format!("{action}失败: {err}");
         self.set_state(RunnerState::Error {
@@ -798,10 +863,8 @@ impl Runner {
         let (jx, jy) = jitter_offset();
         // Saturate at the screen edges so a near-edge button still
         // registers even if the jitter would push it off-screen.
-        let tap_x = (px as i32 + jx)
-            .clamp(0, self.screen_w.saturating_sub(1) as i32) as u32;
-        let tap_y = (py as i32 + jy)
-            .clamp(0, self.screen_h.saturating_sub(1) as i32) as u32;
+        let tap_x = (px as i32 + jx).clamp(0, self.screen_w.saturating_sub(1) as i32) as u32;
+        let tap_y = (py as i32 + jy).clamp(0, self.screen_h.saturating_sub(1) as i32) as u32;
         match self.adb.tap(tap_x, tap_y) {
             Ok(()) => true,
             Err(err) => {
@@ -863,10 +926,7 @@ impl Runner {
             // "screen unchanged" so we keep tapping rather than bailing.
             // A persistent CV error will surface on the main loop's
             // next iteration via the same call path.
-            let detected = self
-                .sidecar
-                .detect(None)
-                .unwrap_or(from_screen);
+            let detected = self.sidecar.detect(None).unwrap_or(from_screen);
             if detected != from_screen {
                 return true;
             }
@@ -937,13 +997,15 @@ impl Runner {
             let screen = match self.sidecar.detect(None) {
                 Ok(s) => s,
                 Err(e) => {
-                    self.set_state(RunnerState::Error {
-                        message: e.clone(),
-                    });
+                    self.set_state(RunnerState::Error { message: e.clone() });
                     self.emit("", &format!("画面识别失败: {e}"));
                     return;
                 }
             };
+
+            if screen != Screen::BattleResultContinue {
+                self.battle_result_continue_handled = false;
+            }
 
             match screen {
                 Screen::TeamConfirm => {
@@ -1183,10 +1245,7 @@ impl Runner {
         // scroll/refresh branch so the user knows it's a CE filter miss
         // (vs a name miss).
         if ce_template.is_some() && !result.supports.is_empty() {
-            self.emit(
-                "SupportSelect",
-                "找到从者但礼装不匹配，继续滚动…",
-            );
+            self.emit("SupportSelect", "找到从者但礼装不匹配，继续滚动…");
         }
 
         // No match in the visible viewport. The scroll-bar tail indicator
@@ -1284,12 +1343,10 @@ impl Runner {
     ) -> Option<&'a SupportRowMatch> {
         for row in rows {
             let region = Self::support_ce_search_region(row);
-            match self.sidecar.verify_support_ce(
-                None,
-                region,
-                template_path,
-                SUPPORT_CE_THRESHOLD,
-            ) {
+            match self
+                .sidecar
+                .verify_support_ce(None, region, template_path, SUPPORT_CE_THRESHOLD)
+            {
                 Ok((score, passed)) => {
                     eprintln!(
                         "[runner] support CE verify: score={:.3} threshold={:.2} -> {}",
@@ -1302,9 +1359,7 @@ impl Runner {
                     }
                 }
                 Err(e) => {
-                    eprintln!(
-                        "[runner] support CE verify failed (treating as skip): {e}"
-                    );
+                    eprintln!("[runner] support CE verify failed (treating as skip): {e}");
                 }
             }
         }
@@ -1334,9 +1389,7 @@ impl Runner {
                 m.found
             }
             Err(e) => {
-                eprintln!(
-                    "[runner] scroll-bar-end check failed (treating as not-at-bottom): {e}"
-                );
+                eprintln!("[runner] scroll-bar-end check failed (treating as not-at-bottom): {e}");
                 false
             }
         }
@@ -1404,10 +1457,7 @@ impl Runner {
                 h: 0.85,
             };
 
-            if let Ok(Some(pos)) =
-                self.sidecar
-                    .find_element(None, &servant_key, region, 0.8)
-            {
+            if let Ok(Some(pos)) = self.sidecar.find_element(None, &servant_key, region, 0.8) {
                 self.emit(
                     "ServantSelect",
                     &format!("找到从者 {}，点击选择", slot_cfg.servant_id),
@@ -1422,8 +1472,12 @@ impl Runner {
                     "ServantSelect",
                     &format!("搜索从者 {}…", slot_cfg.servant_id),
                 );
-                if !self.swipe_at("ServantSelect", Point::new(0.50, 0.70), Point::new(0.50, 0.30), 300)
-                {
+                if !self.swipe_at(
+                    "ServantSelect",
+                    Point::new(0.50, 0.70),
+                    Point::new(0.50, 0.30),
+                    300,
+                ) {
                     return;
                 }
                 thread::sleep(ACTION_DELAY);
@@ -1562,10 +1616,7 @@ impl Runner {
         }
 
         if self.assets_dir.is_none() {
-            self.emit(
-                "Attack",
-                "未找到从者资源目录，将无法按从者匹配指令卡",
-            );
+            self.emit("Attack", "未找到从者资源目录，将无法按从者匹配指令卡");
         }
 
         let cards = match self.sidecar.find_command_cards(
@@ -1596,16 +1647,11 @@ impl Runner {
                     "C{}={}{}",
                     c.slot + 1,
                     c.suit.as_deref().unwrap_or("?"),
-                    c.servant_id
-                        .map(|id| format!("/{id}"))
-                        .unwrap_or_default(),
+                    c.servant_id.map(|id| format!("/{id}")).unwrap_or_default(),
                 )
             })
             .collect();
-        self.emit(
-            "Attack",
-            &format!("指令卡: {}", card_summary.join(" ")),
-        );
+        self.emit("Attack", &format!("指令卡: {}", card_summary.join(" ")));
         let ready: Vec<String> = nps
             .iter()
             .filter(|n| n.ready)
@@ -1662,11 +1708,12 @@ impl Runner {
                     let detail = format!(
                         " ({}{})",
                         suit.as_deref().unwrap_or("?"),
-                        servant_id
-                            .map(|id| format!("/{id}"))
-                            .unwrap_or_default(),
+                        servant_id.map(|id| format!("/{id}")).unwrap_or_default(),
                     );
-                    (format!("{}/{} {}{}", i + 1, picks.len(), label, detail), *point)
+                    (
+                        format!("{}/{} {}{}", i + 1, picks.len(), label, detail),
+                        *point,
+                    )
                 }
                 Pick::Np {
                     slot,
@@ -1750,7 +1797,21 @@ impl Runner {
     ///   loop's post-handler check exits cleanly so the user sees the
     ///   "已完成" toast.
     fn handle_battle_result_continue(&mut self) {
-        if self.config.repeat_mission {
+        if self.battle_result_continue_handled {
+            self.emit("BattleResultContinue", "等待结算页切换…");
+            thread::sleep(ACTION_DELAY);
+            return;
+        }
+        self.battle_result_continue_handled = true;
+
+        self.completed_mission_runs += 1;
+        let reached_run_cap = self
+            .config
+            .max_mission_runs
+            .is_some_and(|max| self.completed_mission_runs >= max);
+        let should_repeat = self.config.max_mission_runs.is_some() || self.config.repeat_mission;
+
+        if should_repeat && !reached_run_cap && !self.should_stop_after_current() {
             self.emit("BattleResultContinue", "继续重复任务");
             if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_REPEAT) {
                 return;
@@ -1761,7 +1822,10 @@ impl Runner {
             self.battle.waiting_for_battle = true;
             thread::sleep(ACTION_DELAY);
         } else {
-            self.emit("BattleResultContinue", "结束任务");
+            self.emit(
+                "BattleResultContinue",
+                &format!("结束任务（已完成 {} 轮）", self.completed_mission_runs),
+            );
             if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_STOP) {
                 return;
             }
@@ -1834,10 +1898,7 @@ impl Runner {
 
                 self.emit(
                     "Battle",
-                    &format!(
-                        "御主技能: {}",
-                        skill.as_deref().unwrap_or("?"),
-                    ),
+                    &format!("御主技能: {}", skill.as_deref().unwrap_or("?"),),
                 );
                 if !self.tap_at("Battle", pos) {
                     return;
@@ -2205,7 +2266,12 @@ mod tests {
     fn ce_search_region_identity_row_returns_offset() {
         // A unit row at the origin → the absolute window equals the
         // raw `SUPPORT_CE_OFFSET_IN_ROW` (it's already in unit-row coords).
-        let row = NormRect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 };
+        let row = NormRect {
+            x: 0.0,
+            y: 0.0,
+            w: 1.0,
+            h: 1.0,
+        };
         let out = ce_search_region(row);
         approx(out.x, SUPPORT_CE_OFFSET_IN_ROW.x);
         approx(out.y, SUPPORT_CE_OFFSET_IN_ROW.y);
@@ -2218,7 +2284,12 @@ mod tests {
         // Row at (0.10, 0.20) sized (0.50, 0.10): the CE icon search
         // window is the row-local offset, scaled by row size, then
         // translated by row origin.
-        let row = NormRect { x: 0.10, y: 0.20, w: 0.50, h: 0.10 };
+        let row = NormRect {
+            x: 0.10,
+            y: 0.20,
+            w: 0.50,
+            h: 0.10,
+        };
         let out = ce_search_region(row);
         approx(out.x, 0.10 + SUPPORT_CE_OFFSET_IN_ROW.x * 0.50);
         approx(out.y, 0.20 + SUPPORT_CE_OFFSET_IN_ROW.y * 0.10);
@@ -2232,12 +2303,18 @@ mod tests {
         // sits to the *left* of the OCR-anchored row strip). For a row
         // that starts at x=0.20 with w=0.40, the search window should
         // start to the *left* of the row origin.
-        let row = NormRect { x: 0.20, y: 0.30, w: 0.40, h: 0.10 };
+        let row = NormRect {
+            x: 0.20,
+            y: 0.30,
+            w: 0.40,
+            h: 0.10,
+        };
         let out = ce_search_region(row);
         assert!(
             out.x < row.x,
             "search window should be left of row origin: got x={} vs row x={}",
-            out.x, row.x,
+            out.x,
+            row.x,
         );
     }
 
@@ -2258,13 +2335,13 @@ mod tests {
 
     #[test]
     fn run_config_defaults_support_ce_to_none_when_field_missing() {
-        let cfg: RunConfig =
-            serde_json::from_value(minimal_run_config_json()).unwrap();
+        let cfg: RunConfig = serde_json::from_value(minimal_run_config_json()).unwrap();
         assert!(cfg.support_craft_essence_id.is_none());
         // Other defaults travel through the same path; sanity-check
         // them so legacy `projects.json` rows keep deserializing.
         assert!(cfg.support_servant_id.is_none());
         assert_eq!(cfg.repeat_mission, false);
+        assert_eq!(cfg.max_mission_runs, None);
     }
 
     #[test]
@@ -2285,9 +2362,11 @@ mod tests {
         let mut payload = minimal_run_config_json();
         payload["supportServantId"] = serde_json::json!(284);
         payload["repeatMission"] = serde_json::json!(true);
+        payload["maxMissionRuns"] = serde_json::json!(3);
         let cfg: RunConfig = serde_json::from_value(payload).unwrap();
         assert_eq!(cfg.support_servant_id, Some(284));
         assert_eq!(cfg.repeat_mission, true);
+        assert_eq!(cfg.max_mission_runs, Some(3));
     }
 
     // --- tick_scene_state -----------------------------------------------
