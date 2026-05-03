@@ -122,6 +122,99 @@ fn require_automation_idle(handle_state: &Mutex<RunnerHandle>) -> Result<(), Str
     }
 }
 
+fn cv_element_spec(
+    app: &tauri::AppHandle,
+    server: Server,
+    screen: &str,
+    element: &str,
+) -> Result<(String, NormRect, f64), String> {
+    let path = resolve_cv_config_path(app, server)
+        .ok_or_else(|| "resource_dir not available".to_string())?;
+    let contents = fs::read_to_string(&path).map_err(|e| format!("读取 cv.json 失败: {e}"))?;
+    let cfg: serde_json::Value =
+        serde_json::from_str(&contents).map_err(|e| format!("解析 cv.json 失败: {e}"))?;
+    let screen_spec = cfg
+        .get("screens")
+        .and_then(|screens| screens.get(screen))
+        .ok_or_else(|| format!("cv.json 缺少 screen 配置: {screen}"))?;
+    let spec = find_cv_target_spec(screen_spec, element)
+        .ok_or_else(|| format!("cv.json 缺少元素配置: {screen}.{element}"))?;
+    let template = spec
+        .get("template")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("cv.json 元素缺少 template: {screen}.{element}"))?
+        .to_string();
+    let region = spec
+        .get("region")
+        .and_then(parse_norm_rect)
+        .ok_or_else(|| format!("cv.json 元素缺少 region: {screen}.{element}"))?;
+    let threshold = spec
+        .get("threshold")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.8);
+    Ok((template, region, threshold))
+}
+
+fn find_cv_target_spec<'a>(
+    screen: &'a serde_json::Value,
+    element: &str,
+) -> Option<&'a serde_json::Value> {
+    if element == "detect" {
+        return screen.get("detect");
+    }
+    if screen
+        .get("detect")
+        .and_then(|detect| detect.get("template"))
+        .and_then(|template| template.as_str())
+        == Some(element)
+    {
+        return screen.get("detect");
+    }
+    if let Some(spec) = screen
+        .get("elements")
+        .and_then(|elements| elements.get(element))
+    {
+        return Some(spec);
+    }
+
+    let variants = screen.get("variants").and_then(|v| v.as_object())?;
+    if let Some(rest) = element.strip_prefix("variants.") {
+        let mut parts = rest.splitn(2, '.');
+        let variant_name = parts.next()?;
+        let target_name = parts.next()?;
+        let variant = variants.get(variant_name)?;
+        if target_name == "detect" {
+            return variant.get("detect");
+        }
+        if let Some(element_name) = target_name.strip_prefix("elements.") {
+            return variant
+                .get("elements")
+                .and_then(|elements| elements.get(element_name));
+        }
+        return variant
+            .get("elements")
+            .and_then(|elements| elements.get(target_name));
+    }
+
+    for variant in variants.values() {
+        if variant
+            .get("detect")
+            .and_then(|detect| detect.get("template"))
+            .and_then(|template| template.as_str())
+            == Some(element)
+        {
+            return variant.get("detect");
+        }
+        if let Some(spec) = variant
+            .get("elements")
+            .and_then(|elements| elements.get(element))
+        {
+            return Some(spec);
+        }
+    }
+    None
+}
+
 #[tauri::command]
 pub fn debug_capture(
     app: tauri::AppHandle,
@@ -170,7 +263,7 @@ pub fn debug_capture(
             eprintln!("[debug_capture] write frame failed: {e}");
             format!("failed to write frame: {e}")
         })?;
-        let (screen, score) = client.detect_full(Some(&dest)).map_err(|e| {
+        let (screen, score) = client.detect_label_full(Some(&dest)).map_err(|e| {
             eprintln!("[debug_capture] detect failed: {e}");
             e
         })?;
@@ -185,7 +278,7 @@ pub fn debug_capture(
 
     Ok(DebugCaptureResult {
         image_path: dest.to_string_lossy().to_string(),
-        screen: screen.to_string(),
+        screen,
         score,
         screen_size: stream_size.map(|(w, h)| DebugScreenSize { w, h }),
     })
@@ -625,15 +718,9 @@ pub fn debug_read_battle_scene(
 }
 
 /// Snapshot of the attack-button probe the runner uses on the Battle
-/// screen to decide whether it's our turn (i.e. whether to fire skills /
-/// pick cards). Mirrors `Runner::handle_battle` /
-/// `wait_for_attack_button`: same template key
-/// (`ATTACK_BUTTON_TEMPLATE`), same search region
-/// (`ATTACK_BUTTON_REGION`), same threshold (`ATTACK_BUTTON_THRESHOLD`),
-/// and the same `ATTACK_BUTTON` tap point. Surfacing the raw `score` +
-/// match position lets the user calibrate against captures where the
-/// runner gets stuck in "等待战斗动作…" because the button just barely
-/// missed threshold.
+/// screen to decide whether it's our turn. Template, region, and threshold
+/// come from `cv.json` (`Battle.variants.main.elements.attack_button`);
+/// only the tap point remains a runner coordinate.
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DebugAttackButtonResult {
@@ -649,10 +736,8 @@ pub struct DebugAttackButtonResult {
 }
 
 /// Run the runner's exact attack-button probe against the most recent
-/// debug screenshot. Returns both the threshold/region/tap-point used by
-/// the runner and the live match score so the debug overlay can render
-/// the search box (green when found, red when missed) plus the tap
-/// target.
+/// debug screenshot. Returns both the cv.json threshold/region and the live
+/// match score so the debug overlay can render the search box plus tap target.
 #[tauri::command]
 pub fn debug_find_attack_button(
     app: tauri::AppHandle,
@@ -667,18 +752,19 @@ pub fn debug_find_attack_button(
         return Err("尚未截取画面，请先点击 截取画面".into());
     }
 
-    ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))?;
+    let server = current_server(&server_state);
+    ensure_debug_sidecar(&app, &debug_state, server)?;
 
-    let region = runner::ATTACK_BUTTON_REGION;
-    let threshold = runner::ATTACK_BUTTON_THRESHOLD;
-    let template = runner::ATTACK_BUTTON_TEMPLATE.to_string();
+    let (template, region, threshold) =
+        cv_element_spec(&app, server, "Battle", runner::ATTACK_BUTTON_ELEMENT)?;
     let tap_point = runner::ATTACK_BUTTON;
 
     let mut guard = debug_state.0.lock().unwrap();
     let client = guard
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-    let m = client.find_element_full(Some(&image_path), &template, region, threshold)?;
+    let m =
+        client.find_element_by_name(Some(&image_path), "Battle", runner::ATTACK_BUTTON_ELEMENT)?;
 
     eprintln!(
         "[debug_find_attack_button] found={} score={:.3} threshold={:.2} center=({:.3},{:.3})",

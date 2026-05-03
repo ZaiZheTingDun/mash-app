@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-poetry install
+poetry install --no-root
 
 # PyInstaller refuses to write into a non-empty distpath; nuke the
 # previous build artefacts so the script is safe to re-run.

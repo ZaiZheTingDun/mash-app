@@ -286,6 +286,44 @@ def _find_element(
     return _match_template_region(img, tmpl, region, threshold)
 
 
+def _named_targets(screen: dict) -> list[tuple[str, dict]]:
+    targets: list[tuple[str, dict]] = []
+    detect = screen.get("detect")
+    if isinstance(detect, dict):
+        targets.append(("detect", detect))
+        template = detect.get("template")
+        if template:
+            targets.append((str(template), detect))
+    for element_name, element in screen.get("elements", {}).items():
+        if isinstance(element, dict):
+            targets.append((str(element_name), element))
+
+    for variant_name, variant in screen.get("variants", {}).items():
+        if not isinstance(variant, dict):
+            continue
+        prefix = f"variants.{variant_name}"
+        variant_detect = variant.get("detect")
+        if isinstance(variant_detect, dict):
+            targets.append((f"{prefix}.detect", variant_detect))
+            template = variant_detect.get("template")
+            if template:
+                targets.append((str(template), variant_detect))
+                targets.append((f"{prefix}.{template}", variant_detect))
+        for element_name, element in variant.get("elements", {}).items():
+            if isinstance(element, dict):
+                targets.append((str(element_name), element))
+                targets.append((f"{prefix}.{element_name}", element))
+                targets.append((f"{prefix}.elements.{element_name}", element))
+    return targets
+
+
+def _find_named_target(screen: dict, element_name: str) -> dict | None:
+    matches = [target for name, target in _named_targets(screen) if name == element_name]
+    if matches:
+        return matches[0]
+    return None
+
+
 def _find_element_by_name(
     img: np.ndarray,
     screen_name: str,
@@ -294,7 +332,7 @@ def _find_element_by_name(
     screen = config.get("screens", {}).get(screen_name)
     if not screen:
         return {"found": False, "error": f"unknown screen: {screen_name}"}
-    element = screen.get("elements", {}).get(element_name)
+    element = _find_named_target(screen, element_name)
     if not element:
         return {
             "found": False,

@@ -462,6 +462,58 @@ class TestFindElementByName:
         result = mash_cv._find_element_by_name(img, "Foo", "btn")
         assert result["found"] is True
 
+    def test_finds_variant_element_by_prefixed_name(self):
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
+        img[40:60, 120:140] = patch_3ch
+
+        mash_cv.templates["patch"] = patch.copy()
+        mash_cv._set_config({
+            "screens": {
+                "Foo": {
+                    "variants": {
+                        "actionable": {
+                            "elements": {
+                                "btn": {
+                                    "template": "patch",
+                                    "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                                    "threshold": 0.8,
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        result = mash_cv._find_element_by_name(img, "Foo", "variants.actionable.elements.btn")
+        assert result["found"] is True
+
+    def test_finds_variant_detect_by_template_alias(self):
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        patch = _gradient_patch(20)
+        patch_3ch = cv2.merge([patch, patch, patch])
+        img[40:60, 120:140] = patch_3ch
+
+        mash_cv.templates["patch"] = patch.copy()
+        mash_cv._set_config({
+            "screens": {
+                "Foo": {
+                    "variants": {
+                        "actionable": {
+                            "detect": {
+                                "template": "patch",
+                                "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                                "threshold": 0.8,
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        result = mash_cv._find_element_by_name(img, "Foo", "patch")
+        assert result["found"] is True
+
 
 # ── _read_battle_scene ──────────────────────────────────────────────────
 

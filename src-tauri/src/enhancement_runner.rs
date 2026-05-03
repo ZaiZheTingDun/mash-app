@@ -47,86 +47,89 @@ const ASCENSION_RESULT_REGION: NormRect = NormRect {
     h: 0.28,
 };
 
-const ENHANCEMENT_PROBE_SCREEN: &str = "EnhancementAutomation";
+const SCREEN_MAIN: &str = "Main";
+const SCREEN_ENHANCEMENT: &str = "Enhancement";
+const SCREEN_SERVANT_ENHANCEMENT: &str = "ServantEnhancement";
+const SCREEN_ASCENSION: &str = "Ascension";
 
 const PROBE_BUTTON_NOTIFICATION: TemplateProbe = TemplateProbe {
     key: "button_notification",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_MAIN,
     element: "button_notification",
 };
 const PROBE_TEXT_ENHANCEMENT: TemplateProbe = TemplateProbe {
     key: "text_enhancement",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_ENHANCEMENT,
     element: "text_enhancement",
 };
 const PROBE_TEXT_ENHANCEMENT_SERVANT: TemplateProbe = TemplateProbe {
     key: "text_enhancement_servant",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_SERVANT_ENHANCEMENT,
     element: "text_enhancement_servant",
 };
 const PROBE_SCREEN_ASCENSION: TemplateProbe = TemplateProbe {
     key: "screen_enhancement_ascension",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_ASCENSION,
     element: "screen_enhancement_ascension",
 };
 const PROBE_BUTTON_MENU: TemplateProbe = TemplateProbe {
     key: "button_menu",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_MAIN,
     element: "button_menu",
 };
 const PROBE_BUTTON_ENHANCEMENT: TemplateProbe = TemplateProbe {
     key: "button_enhancement",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_MAIN,
     element: "button_enhancement",
 };
 const PROBE_TEXT_ENHANCEMENT_RESULT: TemplateProbe = TemplateProbe {
     key: "text_enhancement_result",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_SERVANT_ENHANCEMENT,
     element: "text_enhancement_result",
 };
 const PROBE_TEXT_ENHANCEMENT_SERVANT_SELECT: TemplateProbe = TemplateProbe {
     key: "text_enhancement_servant_select",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_SERVANT_ENHANCEMENT,
     element: "text_enhancement_servant_select",
 };
 const PROBE_TEXT_ENHANCEMENT_MATERIAL: TemplateProbe = TemplateProbe {
     key: "text_enhancement_material",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_SERVANT_ENHANCEMENT,
     element: "text_enhancement_material",
 };
 const PROBE_DIALOG_FILTER_SETTING: TemplateProbe = TemplateProbe {
     key: "dialog_filter_setting",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_SERVANT_ENHANCEMENT,
     element: "dialog_filter_setting",
 };
 const PROBE_TEXT_FILTER_SETTING_TYPE: TemplateProbe = TemplateProbe {
     key: "text_filter_setting_type",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_SERVANT_ENHANCEMENT,
     element: "text_filter_setting_type",
 };
 const PROBE_BUTTON_SCALE_LEVEL_3: TemplateProbe = TemplateProbe {
     key: "button_scale_level_3",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_SERVANT_ENHANCEMENT,
     element: "button_scale_level_3",
 };
 const PROBE_TEXT_ASCENSION_MAIN_VARIANT: TemplateProbe = TemplateProbe {
     key: "text_ascension_main_variant",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_ASCENSION,
     element: "text_ascension_main_variant",
 };
 const PROBE_TEXT_ASCENSION_SERVANT_SELECT: TemplateProbe = TemplateProbe {
     key: "text_enhancement_ascension_servant_select",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_ASCENSION,
     element: "text_enhancement_ascension_servant_select",
 };
 const PROBE_ASCENSION_NOT_READY: TemplateProbe = TemplateProbe {
     key: "enhancement_ascension_not_ready",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_ASCENSION,
     element: "enhancement_ascension_not_ready",
 };
 const PROBE_BUTTON_ASCENSION_TO_SERVANT: TemplateProbe = TemplateProbe {
     key: "button_enhancement_ascension_to_servant",
-    screen: ENHANCEMENT_PROBE_SCREEN,
+    screen: SCREEN_ASCENSION,
     element: "button_enhancement_ascension_to_servant",
 };
 
@@ -150,7 +153,7 @@ const UNKNOWN_DIAGNOSTIC_PROBES: [TemplateProbe; 15] = [
 
 const HOME_MENU_BUTTON: Point = Point::new(0.926, 0.903);
 const HOME_STRENGTHEN_BUTTON: Point = Point::new(0.371, 0.840);
-const ENHANCE_SERVANT_ENTRY_BUTTON: Point = Point::new(0.730, 0.347);
+const ENHANCE_SERVANT_ENTRY_BUTTON: Point = Point::new(0.730, 0.203);
 const SERVANT_SELECT_BUTTON: Point = Point::new(0.152, 0.542);
 const MATERIAL_SELECT_BUTTON: Point = Point::new(0.340, 0.326);
 const ENHANCE_CONFIRM_BUTTON: Point = Point::new(0.895, 0.934);
@@ -273,11 +276,15 @@ enum EnhancementTopScreen {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EnhancementVariant {
-    MenuCollapsed,
-    MenuOpen,
     Main,
     ServantSelect,
     MaterialSelect,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EnhancementStatus {
+    None,
+    MenuOpen,
     FilterDialogOpen,
     NotReady,
 }
@@ -286,6 +293,7 @@ enum EnhancementVariant {
 struct EnhancementRoute {
     screen: EnhancementTopScreen,
     variant: EnhancementVariant,
+    status: EnhancementStatus,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -607,34 +615,38 @@ impl EnhancementRunner {
         route: EnhancementRoute,
         probes: &[TemplateProbeResult],
     ) -> Result<(EnhancementScreen, OcrRegionResult), String> {
-        let screen = match (route.screen, route.variant) {
-            (EnhancementTopScreen::Main, EnhancementVariant::MenuCollapsed) => {
-                EnhancementScreen::HomeMenuClosed
-            }
-            (EnhancementTopScreen::Main, EnhancementVariant::MenuOpen) => {
+        let screen = match (route.screen, route.variant, route.status) {
+            (EnhancementTopScreen::Main, EnhancementVariant::Main, EnhancementStatus::MenuOpen) => {
                 EnhancementScreen::HomeMenuOpen
             }
-            (EnhancementTopScreen::Enhancement, EnhancementVariant::Main) => {
+            (EnhancementTopScreen::Main, EnhancementVariant::Main, _) => {
+                EnhancementScreen::HomeMenuClosed
+            }
+            (EnhancementTopScreen::Enhancement, EnhancementVariant::Main, _) => {
                 EnhancementScreen::EnhanceMenu
             }
-            (EnhancementTopScreen::ServantEnhancement, EnhancementVariant::Main) => {
+            (EnhancementTopScreen::ServantEnhancement, EnhancementVariant::Main, _) => {
                 EnhancementScreen::ServantEnhance
             }
-            (EnhancementTopScreen::ServantEnhancement, EnhancementVariant::ServantSelect)
-            | (EnhancementTopScreen::Ascension, EnhancementVariant::ServantSelect) => {
+            (EnhancementTopScreen::ServantEnhancement, EnhancementVariant::ServantSelect, _)
+            | (EnhancementTopScreen::Ascension, EnhancementVariant::ServantSelect, _) => {
                 EnhancementScreen::ServantSelect
             }
-            (EnhancementTopScreen::ServantEnhancement, EnhancementVariant::MaterialSelect) => {
+            (
+                EnhancementTopScreen::ServantEnhancement,
+                EnhancementVariant::MaterialSelect,
+                EnhancementStatus::FilterDialogOpen,
+            ) => EnhancementScreen::FilterDialog,
+            (EnhancementTopScreen::ServantEnhancement, EnhancementVariant::MaterialSelect, _) => {
                 EnhancementScreen::MaterialSelect
             }
-            (EnhancementTopScreen::ServantEnhancement, EnhancementVariant::FilterDialogOpen) => {
-                EnhancementScreen::FilterDialog
-            }
-            (EnhancementTopScreen::Ascension, EnhancementVariant::Main) => {
+            (
+                EnhancementTopScreen::Ascension,
+                EnhancementVariant::Main,
+                EnhancementStatus::NotReady,
+            ) => EnhancementScreen::AscensionNotReady,
+            (EnhancementTopScreen::Ascension, EnhancementVariant::Main, _) => {
                 EnhancementScreen::Ascension
-            }
-            (EnhancementTopScreen::Ascension, EnhancementVariant::NotReady) => {
-                EnhancementScreen::AscensionNotReady
             }
             _ => EnhancementScreen::Unknown,
         };
@@ -1139,9 +1151,7 @@ fn detect_enhancement_screen(probes: &[TemplateProbeResult]) -> Option<Enhanceme
 
 fn classify_enhancement_route(snapshot: &ProbeSnapshot) -> Option<EnhancementRoute> {
     if snapshot.found("text_enhancement_servant") {
-        let variant = if snapshot.found("dialog_filter_setting") {
-            EnhancementVariant::FilterDialogOpen
-        } else if snapshot.found("text_enhancement_material") {
+        let variant = if snapshot.found("text_enhancement_material") {
             EnhancementVariant::MaterialSelect
         } else if snapshot.found("text_enhancement_servant_select") {
             EnhancementVariant::ServantSelect
@@ -1150,25 +1160,35 @@ fn classify_enhancement_route(snapshot: &ProbeSnapshot) -> Option<EnhancementRou
         } else {
             EnhancementVariant::Main
         };
+        let status = if snapshot.found("dialog_filter_setting") {
+            EnhancementStatus::FilterDialogOpen
+        } else {
+            EnhancementStatus::None
+        };
         return Some(EnhancementRoute {
             screen: EnhancementTopScreen::ServantEnhancement,
             variant,
+            status,
         });
     }
 
     if snapshot.found("screen_enhancement_ascension") {
-        let variant = if snapshot.found("enhancement_ascension_not_ready") {
-            EnhancementVariant::NotReady
-        } else if snapshot.found("text_enhancement_ascension_servant_select") {
+        let variant = if snapshot.found("text_enhancement_ascension_servant_select") {
             EnhancementVariant::ServantSelect
         } else if snapshot.found("text_ascension_main_variant") {
             EnhancementVariant::Main
         } else {
             EnhancementVariant::Main
         };
+        let status = if snapshot.found("enhancement_ascension_not_ready") {
+            EnhancementStatus::NotReady
+        } else {
+            EnhancementStatus::None
+        };
         return Some(EnhancementRoute {
             screen: EnhancementTopScreen::Ascension,
             variant,
+            status,
         });
     }
 
@@ -1176,18 +1196,20 @@ fn classify_enhancement_route(snapshot: &ProbeSnapshot) -> Option<EnhancementRou
         return Some(EnhancementRoute {
             screen: EnhancementTopScreen::Enhancement,
             variant: EnhancementVariant::Main,
+            status: EnhancementStatus::None,
         });
     }
 
     if snapshot.found("button_notification") {
-        let variant = if snapshot.found("button_enhancement") {
-            EnhancementVariant::MenuOpen
+        let status = if snapshot.found("button_enhancement") {
+            EnhancementStatus::MenuOpen
         } else {
-            EnhancementVariant::MenuCollapsed
+            EnhancementStatus::None
         };
         return Some(EnhancementRoute {
             screen: EnhancementTopScreen::Main,
-            variant,
+            variant: EnhancementVariant::Main,
+            status,
         });
     }
 
@@ -1502,8 +1524,8 @@ pub(crate) fn server_supported(server: Server) -> bool {
 mod tests {
     use super::{
         classify_enhancement_route, normalize_text, parse_level_pair, parse_selected_count,
-        scale_level_3_decision, EnhancementRoute, EnhancementTopScreen, EnhancementVariant,
-        ProbeSnapshot, ScaleLevel3Decision,
+        scale_level_3_decision, EnhancementRoute, EnhancementStatus, EnhancementTopScreen,
+        EnhancementVariant, ProbeSnapshot, ScaleLevel3Decision,
     };
 
     #[test]
@@ -1535,7 +1557,8 @@ mod tests {
             classify_enhancement_route(&ProbeSnapshot::from_keys(&["button_notification"])),
             Some(EnhancementRoute {
                 screen: EnhancementTopScreen::Main,
-                variant: EnhancementVariant::MenuCollapsed,
+                variant: EnhancementVariant::Main,
+                status: EnhancementStatus::None,
             })
         );
         assert_eq!(
@@ -1545,7 +1568,8 @@ mod tests {
             ])),
             Some(EnhancementRoute {
                 screen: EnhancementTopScreen::Main,
-                variant: EnhancementVariant::MenuOpen,
+                variant: EnhancementVariant::Main,
+                status: EnhancementStatus::MenuOpen,
             })
         );
     }
@@ -1560,6 +1584,7 @@ mod tests {
             Some(EnhancementRoute {
                 screen: EnhancementTopScreen::ServantEnhancement,
                 variant: EnhancementVariant::Main,
+                status: EnhancementStatus::None,
             })
         );
         assert_eq!(
@@ -1570,6 +1595,7 @@ mod tests {
             Some(EnhancementRoute {
                 screen: EnhancementTopScreen::ServantEnhancement,
                 variant: EnhancementVariant::ServantSelect,
+                status: EnhancementStatus::None,
             })
         );
         assert_eq!(
@@ -1580,6 +1606,7 @@ mod tests {
             Some(EnhancementRoute {
                 screen: EnhancementTopScreen::ServantEnhancement,
                 variant: EnhancementVariant::MaterialSelect,
+                status: EnhancementStatus::None,
             })
         );
         assert_eq!(
@@ -1590,7 +1617,8 @@ mod tests {
             ])),
             Some(EnhancementRoute {
                 screen: EnhancementTopScreen::ServantEnhancement,
-                variant: EnhancementVariant::FilterDialogOpen,
+                variant: EnhancementVariant::MaterialSelect,
+                status: EnhancementStatus::FilterDialogOpen,
             })
         );
     }
@@ -1605,6 +1633,7 @@ mod tests {
             Some(EnhancementRoute {
                 screen: EnhancementTopScreen::Ascension,
                 variant: EnhancementVariant::Main,
+                status: EnhancementStatus::None,
             })
         );
         assert_eq!(
@@ -1615,6 +1644,7 @@ mod tests {
             Some(EnhancementRoute {
                 screen: EnhancementTopScreen::Ascension,
                 variant: EnhancementVariant::ServantSelect,
+                status: EnhancementStatus::None,
             })
         );
         assert_eq!(
@@ -1624,7 +1654,8 @@ mod tests {
             ])),
             Some(EnhancementRoute {
                 screen: EnhancementTopScreen::Ascension,
-                variant: EnhancementVariant::NotReady,
+                variant: EnhancementVariant::Main,
+                status: EnhancementStatus::NotReady,
             })
         );
     }
@@ -1640,6 +1671,7 @@ mod tests {
             Some(EnhancementRoute {
                 screen: EnhancementTopScreen::ServantEnhancement,
                 variant: EnhancementVariant::Main,
+                status: EnhancementStatus::None,
             })
         );
     }

@@ -532,13 +532,22 @@ impl SidecarClient {
 
     /// Like `detect` but also returns the classifier score.
     pub fn detect_full(&mut self, image_path: Option<&Path>) -> Result<(Screen, f64), String> {
+        let (screen_str, score) = self.detect_label_full(image_path)?;
+        let screen = screen_str.parse::<Screen>().unwrap_or(Screen::Unknown);
+        Ok((screen, score))
+    }
+
+    /// Like `detect_full`, but preserves the raw configured screen name.
+    pub fn detect_label_full(
+        &mut self,
+        image_path: Option<&Path>,
+    ) -> Result<(String, f64), String> {
         let mut req = serde_json::json!({ "cmd": "detect" });
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         let screen_str = resp["screen"].as_str().unwrap_or("Unknown");
-        let screen = screen_str.parse::<Screen>().unwrap_or(Screen::Unknown);
         let score = resp["score"].as_f64().unwrap_or(0.0);
-        Ok((screen, score))
+        Ok((screen_str.to_string(), score))
     }
 
     /// Search for a template element within a region. Pass `None` to use the

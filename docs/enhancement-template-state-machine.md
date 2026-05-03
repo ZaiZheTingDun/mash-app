@@ -7,15 +7,15 @@
 状态由三层组成：
 
 - `screen`: `Main`、`Enhancement`、`ServantEnhancement`、`Ascension`
-- `variant`: `MenuCollapsed`、`MenuOpen`、`Main`、`ServantSelect`、`MaterialSelect`
-- `state`: `FilterDialogOpen`、`NotReady` 等覆盖在 variant 上的状态
+- `variant`: `Main`、`ServantSelect`、`MaterialSelect`
+- `status`: `MenuOpen`、`FilterDialogOpen`、`NotReady` 等由 variant 内的 element probe 指示
 
-每个 screen 先用唯一 anchor 模板确认，再用附加 probe 判断 variant/state。所有搜索区域来自临时 `rois.json` 里的 `paddedRoi`，当前已收束到 `src-tauri/resources/servers/jp/cv.json` 的 `EnhancementAutomation.elements` 中。
+每个 screen 先用唯一 anchor 模板确认，再用 variant detect 判断 view，并用 variant 内的 element probe 判断 status。所有搜索区域来自临时 `rois.json` 里的 `paddedRoi`，当前已收束到 `src-tauri/resources/servers/jp/cv.json` 的 `screens.*.detect` 和 `screens.*.variants` 中。
 
 默认阈值：
 
 - screen anchor: `0.85`
-- variant/state/button probe: `0.80`
+- variant detect 和 element status/button probe: `0.80`
 
 ## 模板映射
 
@@ -26,35 +26,35 @@ Screen anchors:
 - `ServantEnhancement`: `text_enhancement_servant`
 - `Ascension`: `screen_enhancement_ascension`
 
-Variant/state probes:
+Variant detects and status elements:
 
-- `Main / MenuOpen`: `button_enhancement`
+- `Main / Main / MenuOpen status`: `button_enhancement`
 - `ServantEnhancement / Main`: `text_enhancement_result`
 - `ServantEnhancement / ServantSelect`: `text_enhancement_servant_select`
 - `ServantEnhancement / MaterialSelect`: `text_enhancement_material`
-- `ServantEnhancement / FilterDialogOpen`: `dialog_filter_setting`
+- `ServantEnhancement / MaterialSelect / FilterDialogOpen status`: `dialog_filter_setting`
 - `Ascension / Main`: `text_ascension_main_variant`
 - `Ascension / ServantSelect`: `text_enhancement_ascension_servant_select`
-- `Ascension / NotReady`: `enhancement_ascension_not_ready`
+- `Ascension / Main / NotReady status`: `enhancement_ascension_not_ready`
 - 最大显示数量确认: `button_scale_level_3`
 
 Action button probes:
 
-- `Main / MenuCollapsed` -> tap `button_menu`
-- `Main / MenuOpen` -> tap `button_enhancement`
+- `Main / Main / menu collapsed status` -> tap `button_menu`
+- `Main / Main / menu open status` -> tap `button_enhancement`
 - `AscensionResult` fallback return -> tap `button_enhancement_ascension_to_servant` when present
 
 ## 跳转行为
 
-- `Main / MenuCollapsed`: 点击 `button_menu`，进入 `MenuOpen`
-- `Main / MenuOpen`: 点击 `button_enhancement`，进入 `Enhancement`
+- `Main / Main / menu collapsed status`: 点击 `button_menu`，进入 menu open status
+- `Main / Main / menu open status`: 点击 `button_enhancement`，进入 `Enhancement`
 - `Enhancement / Main`: 点击从者强化入口坐标，进入 `ServantEnhancement`
 - `ServantEnhancement / Main`: 读取等级 OCR；未满级进素材页，满级且有灵基再临入口则进入 `Ascension`
 - `ServantEnhancement / ServantSelect`: 先确认 `button_scale_level_3`；未命中则点击密度切换按钮，最多点击 3 次直到命中；之后用头像模板匹配目标从者
 - `ServantEnhancement / MaterialSelect`: 使用 OCR 确认当前列表只包含经验值素材；确认 `button_scale_level_3` 后拖选/点选 20 个素材
-- `ServantEnhancement / FilterDialogOpen`: 确认 `dialog_filter_setting` 和 `text_filter_setting_type`，再用现有 OCR 找到经验值素材筛选项并点击
+- `ServantEnhancement / MaterialSelect / FilterDialogOpen status`: 确认 `dialog_filter_setting` 和 `text_filter_setting_type`，再用现有 OCR 找到经验值素材筛选项并点击
 - `Ascension / Main`: 点击右下强化按钮并走现有二次确认
-- `Ascension / NotReady`: 停止自动化并提示材料或状态不可执行，避免继续点击右下强化按钮
+- `Ascension / Main / NotReady status`: 停止自动化并提示材料或状态不可执行，避免继续点击右下强化按钮
 
 ## 缺省与待补模板
 

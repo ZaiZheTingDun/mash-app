@@ -27,6 +27,12 @@ export interface CvTargetSpec {
 export interface CvScreenSpec {
   detect?: CvTargetSpec;
   elements?: Record<string, CvTargetSpec>;
+  variants?: Record<string, CvVariantSpec>;
+}
+
+export interface CvVariantSpec {
+  detect?: CvTargetSpec;
+  elements?: Record<string, CvTargetSpec>;
 }
 
 export interface CvConfig {

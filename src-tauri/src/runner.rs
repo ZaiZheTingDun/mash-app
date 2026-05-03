@@ -150,10 +150,6 @@ const EQUIPMENT_SKILLS: [Point; 3] = [
 ];
 
 /// Attack button position on the battle screen.
-///
-/// Exposed so the debug page can render the exact tap target the
-/// runner would use, alongside `ATTACK_BUTTON_REGION` /
-/// `ATTACK_BUTTON_TEMPLATE` / `ATTACK_BUTTON_THRESHOLD`.
 pub const ATTACK_BUTTON: Point = Point::new(0.887, 0.844);
 
 /// Tap target that, when pressed during a skill / NP animation, makes the
@@ -161,23 +157,10 @@ pub const ATTACK_BUTTON: Point = Point::new(0.887, 0.844);
 /// works after every skill on the battle screen.
 const SKIP_ANIMATION_BUTTON: Point = Point::new(0.685, 0.095);
 
-/// Region to search for the attack button template.
-pub const ATTACK_BUTTON_REGION: NormRect = NormRect {
-    x: 0.799,
-    y: 0.746,
-    w: 0.177,
-    h: 0.195,
-};
-
-/// Template key the runner uses to detect the attack button is present
-/// (i.e. it's our turn). Centralized so the debug command stays in lock
-/// step with `handle_battle` / `wait_for_attack_button`.
-pub const ATTACK_BUTTON_TEMPLATE: &str = "button_attack";
-
-/// Score threshold the runner applies when probing for the attack
-/// button. Anything below this is treated as "skill / NP cinematic
-/// still playing, button hidden".
-pub const ATTACK_BUTTON_THRESHOLD: f64 = 0.75;
+const BATTLE_SCREEN: &str = "Battle";
+const SUPPORT_SELECT_SCREEN: &str = "SupportSelect";
+pub const ATTACK_BUTTON_ELEMENT: &str = "attack_button";
+const SUPPORT_SCROLL_END_ELEMENT: &str = "support_scroll_end";
 
 /// Region of the top-right `BATTLE m/n` HUD strip. The CV sidecar
 /// anchors on the gold `BATTLE` label inside this region and reads
@@ -357,10 +340,7 @@ pub fn debug_coordinates() -> DebugCoordinates {
                 label: "Attack".into(),
                 point: ATTACK_BUTTON,
             }],
-            regions: vec![LabeledRegion {
-                label: "AttackRegion".into(),
-                region: ATTACK_BUTTON_REGION,
-            }],
+            regions: Vec::new(),
         },
         CoordGroup {
             id: "battleScene".into(),
@@ -487,10 +467,7 @@ pub fn debug_coordinates() -> DebugCoordinates {
                     point: SUPPORT_REFRESH_BUTTON,
                 },
             ],
-            regions: vec![LabeledRegion {
-                label: "ScrollEnd".into(),
-                region: SUPPORT_SCROLL_END_REGION,
-            }],
+            regions: Vec::new(),
         },
     ];
 
@@ -611,23 +588,6 @@ const SUPPORT_SCROLL_SETTLE: Duration = Duration::from_millis(900);
 /// list refetch and re-render takes ~2.5s on slow devices; one extra second
 /// of buffer keeps us from OCRing a half-loaded list.
 const SUPPORT_REFRESH_SETTLE: Duration = Duration::from_secs(3);
-
-/// Template that appears at the bottom of the support scroll bar once the
-/// list is fully scrolled. Bundled under `resources/templates/` so it's
-/// auto-registered by `_load_templates` under this stem-only key.
-const SUPPORT_SCROLL_END_TEMPLATE: &str = "ui_scroll_bar_end";
-/// Crop the scroll-bar tail so template matching only inspects the corner
-/// where the indicator can appear. Keeps the match unambiguous and cheap.
-const SUPPORT_SCROLL_END_REGION: NormRect = NormRect {
-    x: 0.937,
-    y: 0.904,
-    w: 0.063,
-    h: 0.096,
-};
-/// Match threshold for `SUPPORT_SCROLL_END_TEMPLATE`. The indicator is a
-/// fixed-shape sprite so we can demand a tight match; lowering this risks
-/// false positives that prematurely trigger refreshes mid-list.
-const SUPPORT_SCROLL_END_THRESHOLD: f64 = 0.85;
 
 /// Refresh-friend-list button on the support-select screen, captured from
 /// a 2560x1440 landscape device. Calibrated alongside the class-tab strip
@@ -960,8 +920,8 @@ impl Runner {
         }
     }
 
-    /// Block until the attack button reappears in `ATTACK_BUTTON_REGION`,
-    /// polling every `SKILL_POLL_INTERVAL`. Used after firing a skill so
+    /// Block until the attack-button probe in `cv.json` matches, polling
+    /// every `SKILL_POLL_INTERVAL`. Used after firing a skill so
     /// the next tap doesn't land during the cut-in / animation while the
     /// button is hidden.
     ///
@@ -976,14 +936,9 @@ impl Runner {
             }
             let found = self
                 .sidecar
-                .find_element(
-                    None,
-                    ATTACK_BUTTON_TEMPLATE,
-                    ATTACK_BUTTON_REGION,
-                    ATTACK_BUTTON_THRESHOLD,
-                )
-                .unwrap_or(None)
-                .is_some();
+                .find_element_by_name(None, BATTLE_SCREEN, ATTACK_BUTTON_ELEMENT)
+                .map(|m| m.found)
+                .unwrap_or(false);
             if found {
                 return true;
             }
@@ -1397,17 +1352,15 @@ impl Runner {
     /// errors degrade to `false` so a CV blip just means "keep scrolling"
     /// instead of triggering a refresh loop.
     fn support_scroll_bar_at_end(&mut self) -> bool {
-        match self.sidecar.find_element_full(
+        match self.sidecar.find_element_by_name(
             None,
-            SUPPORT_SCROLL_END_TEMPLATE,
-            SUPPORT_SCROLL_END_REGION,
-            SUPPORT_SCROLL_END_THRESHOLD,
+            SUPPORT_SELECT_SCREEN,
+            SUPPORT_SCROLL_END_ELEMENT,
         ) {
             Ok(m) => {
                 eprintln!(
-                    "[runner] scroll-bar-end score={:.3} (threshold {:.2}) -> {}",
+                    "[runner] scroll-bar-end score={:.3} -> {}",
                     m.score,
-                    SUPPORT_SCROLL_END_THRESHOLD,
                     if m.found { "AT-BOTTOM" } else { "scrolling" },
                 );
                 m.found
@@ -1521,14 +1474,9 @@ impl Runner {
         // Check if the attack button is present (our turn to act)
         let attack_present = self
             .sidecar
-            .find_element(
-                None,
-                ATTACK_BUTTON_TEMPLATE,
-                ATTACK_BUTTON_REGION,
-                ATTACK_BUTTON_THRESHOLD,
-            )
-            .unwrap_or(None)
-            .is_some();
+            .find_element_by_name(None, BATTLE_SCREEN, ATTACK_BUTTON_ELEMENT)
+            .map(|m| m.found)
+            .unwrap_or(false);
 
         if !attack_present {
             self.emit("Battle", "等待战斗动作…");

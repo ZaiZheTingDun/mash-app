@@ -146,9 +146,8 @@ export interface DigitMatchDto {
 
 /**
  * Snapshot of the runner's attack-button probe (template
- * `button_attack` inside `ATTACK_BUTTON_REGION` at threshold
- * `ATTACK_BUTTON_THRESHOLD`). Surfaces both runner constants and the
- * live match score so the user can tell why automation is stuck on
+ * `Battle.variants.main.elements.attack_button` from cv.json). Surfaces both cv.json
+ * template settings and the live match score so the user can tell why automation is stuck on
  * "等待战斗动作…".
  */
 export interface AttackButtonResultDto {
@@ -427,12 +426,56 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
     };
   }, []);
 
+  const collectElementNames = useCallback((screenName: string) => {
+    if (!cvConfig) return [];
+    const screen = cvConfig.screens[screenName];
+    if (!screen) return [];
+
+    const names: string[] = [];
+    if (screen.detect) {
+      names.push("detect");
+    }
+    if (screen.elements) {
+      names.push(...Object.keys(screen.elements));
+    }
+    for (const [variantName, variant] of Object.entries(screen.variants || {})) {
+      const prefix = `variants.${variantName}`;
+      if (variant.detect) {
+        names.push(`${prefix}.detect`);
+      }
+      if (variant.elements) {
+        names.push(
+          ...Object.keys(variant.elements).map((element) => `${prefix}.elements.${element}`)
+        );
+      }
+    }
+    return names;
+  }, [cvConfig]);
+
+  const resolveElementSpec = useCallback((screenName: string, elementName: string) => {
+    if (!cvConfig) return null;
+    const screen = cvConfig.screens[screenName];
+    if (!screen) return null;
+    if (elementName === "detect") return screen.detect ?? null;
+    if (screen.elements?.[elementName]) return screen.elements[elementName];
+
+    const match = /^variants\.([^.]+)\.(.+)$/.exec(elementName);
+    if (!match) return null;
+    const [, variantName, variantElement] = match;
+    const variant = screen.variants?.[variantName];
+    if (!variant) return null;
+    if (variantElement === "detect") return variant.detect ?? null;
+    if (variantElement.startsWith("elements.")) {
+      return variant.elements?.[variantElement.slice("elements.".length)] ?? null;
+    }
+    return variant.elements?.[variantElement] ?? null;
+  }, [cvConfig]);
+
   // Auto-select the first element when screen changes
   const elementNames = useMemo(() => {
-    if (!cvConfig || !selectedScreen) return [];
-    const screen = cvConfig.screens[selectedScreen];
-    return screen?.elements ? Object.keys(screen.elements) : [];
-  }, [cvConfig, selectedScreen]);
+    if (!selectedScreen) return [];
+    return collectElementNames(selectedScreen);
+  }, [collectElementNames, selectedScreen]);
 
   useEffect(() => {
     if (elementNames.length > 0 && !elementNames.includes(selectedElement)) {
@@ -449,8 +492,8 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
 
   const selectedElementSpec = useMemo(() => {
     if (!cvConfig || !selectedScreen || !selectedElement) return null;
-    return cvConfig.screens[selectedScreen]?.elements?.[selectedElement] ?? null;
-  }, [cvConfig, selectedScreen, selectedElement]);
+    return resolveElementSpec(selectedScreen, selectedElement);
+  }, [cvConfig, resolveElementSpec, selectedScreen, selectedElement]);
 
   const handleCapture = useCallback(async () => {
     setCapturing(true);
@@ -1194,7 +1237,7 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
           >
             <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
               <Text size="2" color="gray">
-                复用 runner 的 `button_attack` 探针，确认战斗回合开始时是否能命中攻击按钮。
+                复用 `cv.json` 的 `Battle.variants.main.elements.attack_button` 探针，确认战斗回合开始时是否能命中攻击按钮。
               </Text>
               <button
                 className="battle-btn battle-btn-start debug-btn-small"

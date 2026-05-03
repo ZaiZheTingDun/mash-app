@@ -1,37 +1,41 @@
 {
-  "$comment": "Screen + element template mapping. All coordinates are normalized (0.0..1.0). 'template' refers to a PNG filename (without extension) in resources/templates/. Detection is template matching: for each screen, find its 'detect' template within its region at >= threshold; the highest-scoring screen wins.",
+  "$comment": "Screen + variant + element template mapping. All coordinates are normalized (0.0..1.0). 'template' refers to a PNG filename (without extension) in resources/templates/. Detection is template matching: for each screen, find its 'detect' template within its region at >= threshold; the highest-scoring screen wins. Every screen has at least variants.main. Variants describe alternate views of the same screen; elements are used for interactions and status probes.",
   "screens": {
     "TeamConfirm": {
       "detect": {
         "template": "screen_team_confirm",
         "region": {
           "x": 0.711,
-          "y": 0.0,
+          "y": 0,
           "w": 0.289,
           "h": 0.113
         },
         "threshold": 0.85
       },
-      "elements": {
-        "mission_start": {
-          "template": "button_mission_start",
-          "region": {
-            "x": 0.818,
-            "y": 0.851,
-            "w": 0.187,
-            "h": 0.161
-          },
-          "threshold": 0.8
-        },
-        "return": {
-          "template": "button_return",
-          "region": {
-            "x": 0.0,
-            "y": 0.0,
-            "w": 0.155,
-            "h": 0.131
-          },
-          "threshold": 0.8
+      "variants": {
+        "main": {
+          "elements": {
+            "mission_start": {
+              "template": "button_mission_start",
+              "region": {
+                "x": 0.818,
+                "y": 0.851,
+                "w": 0.187,
+                "h": 0.161
+              },
+              "threshold": 0.8
+            },
+            "return": {
+              "template": "button_return",
+              "region": {
+                "x": 0,
+                "y": 0,
+                "w": 0.155,
+                "h": 0.131
+              },
+              "threshold": 0.8
+            }
+          }
         }
       }
     },
@@ -40,32 +44,36 @@
         "template": "screen_team_change",
         "region": {
           "x": 0.778,
-          "y": 0.0,
+          "y": 0,
           "w": 0.222,
           "h": 0.114
         },
         "threshold": 0.85
       },
-      "elements": {
-        "confirm": {
-          "template": "button_confirm",
-          "region": {
-            "x": 0.828,
-            "y": 0.863,
-            "w": 0.167,
-            "h": 0.137
-          },
-          "threshold": 0.8
-        },
-        "close": {
-          "template": "button_close",
-          "region": {
-            "x": 0.0,
-            "y": 0.0,
-            "w": 0.155,
-            "h": 0.13
-          },
-          "threshold": 0.8
+      "variants": {
+        "main": {
+          "elements": {
+            "confirm": {
+              "template": "button_confirm",
+              "region": {
+                "x": 0.828,
+                "y": 0.863,
+                "w": 0.167,
+                "h": 0.137
+              },
+              "threshold": 0.8
+            },
+            "close": {
+              "template": "button_close",
+              "region": {
+                "x": 0,
+                "y": 0,
+                "w": 0.155,
+                "h": 0.13
+              },
+              "threshold": 0.8
+            }
+          }
         }
       }
     },
@@ -74,22 +82,36 @@
         "template": "screen_support_select",
         "region": {
           "x": 0.709,
-          "y": 0.0,
+          "y": 0,
           "w": 0.291,
           "h": 0.112
         },
         "threshold": 0.85
       },
-      "elements": {
-        "return": {
-          "template": "button_return",
-          "region": {
-            "x": 0.0,
-            "y": 0.0,
-            "w": 0.155,
-            "h": 0.131
-          },
-          "threshold": 0.8
+      "variants": {
+        "main": {
+          "elements": {
+            "return": {
+              "template": "button_return",
+              "region": {
+                "x": 0,
+                "y": 0,
+                "w": 0.155,
+                "h": 0.131
+              },
+              "threshold": 0.8
+            },
+            "support_scroll_end": {
+              "template": "ui_scroll_bar_end",
+              "region": {
+                "x": 0.937,
+                "y": 0.904,
+                "w": 0.063,
+                "h": 0.096
+              },
+              "threshold": 0.85
+            }
+          }
         }
       }
     },
@@ -98,22 +120,26 @@
         "template": "screen_servant_select",
         "region": {
           "x": 0.623,
-          "y": 0.0,
+          "y": 0,
           "w": 0.377,
           "h": 0.112
         },
         "threshold": 0.85
       },
-      "elements": {
-        "return": {
-          "template": "button_return",
-          "region": {
-            "x": 0.0,
-            "y": 0.0,
-            "w": 0.155,
-            "h": 0.131
-          },
-          "threshold": 0.8
+      "variants": {
+        "main": {
+          "elements": {
+            "return": {
+              "template": "button_return",
+              "region": {
+                "x": 0,
+                "y": 0,
+                "w": 0.155,
+                "h": 0.131
+              },
+              "threshold": 0.8
+            }
+          }
         }
       }
     },
@@ -122,11 +148,37 @@
         "template": "screen_battle",
         "region": {
           "x": 0.589,
-          "y": 0.0,
+          "y": 0,
           "w": 0.103,
           "h": 0.127
         },
         "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {
+            "battle_scene_anchor": {
+              "template": "text_battle_label",
+              "region": {
+                "x": 0.587,
+                "y": 0,
+                "w": 0.16,
+                "h": 0.062
+              },
+              "threshold": 0.7
+            },
+            "attack_button": {
+              "template": "button_attack",
+              "region": {
+                "x": 0.799,
+                "y": 0.746,
+                "w": 0.177,
+                "h": 0.195
+              },
+              "threshold": 0.75
+            }
+          }
+        }
       }
     },
     "Attack": {
@@ -134,11 +186,16 @@
         "template": "button_battle_speed",
         "region": {
           "x": 0.803,
-          "y": 0.020,
+          "y": 0.02,
           "w": 0.167,
           "h": 0.141
         },
         "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
       }
     },
     "BattleResultLoot": {
@@ -151,6 +208,11 @@
           "h": 0.09
         },
         "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
       }
     },
     "BattleResultFriendRequest": {
@@ -166,6 +228,11 @@
           "h": 0.095
         },
         "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
       }
     },
     "BattleResultExp": {
@@ -178,6 +245,11 @@
           "h": 0.096
         },
         "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
       }
     },
     "BattleResultBond": {
@@ -190,6 +262,11 @@
           "h": 0.1
         },
         "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
       }
     },
     "BattleResultContinue": {
@@ -202,6 +279,11 @@
           "h": 0.098
         },
         "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
       }
     },
     "APRecovery": {
@@ -214,6 +296,233 @@
           "h": 0.24
         },
         "threshold": 0.82
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
+      }
+    },
+    "Main": {
+      "detect": {
+        "template": "button_notification",
+        "region": {
+          "x": 0.032,
+          "y": 0.015,
+          "w": 0.106,
+          "h": 0.087
+        },
+        "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {
+            "button_menu": {
+              "template": "button_menu",
+              "region": {
+                "x": 0.868,
+                "y": 0.858,
+                "w": 0.117,
+                "h": 0.093
+              },
+              "threshold": 0.8
+            },
+            "button_enhancement": {
+              "template": "button_enhancement",
+              "region": {
+                "x": 0.326,
+                "y": 0.85,
+                "w": 0.088,
+                "h": 0.082
+              },
+              "threshold": 0.8
+            }
+          }
+        }
+      }
+    },
+    "Enhancement": {
+      "detect": {
+        "template": "text_enhancement",
+        "region": {
+          "x": 0.886,
+          "y": 0,
+          "w": 0.114,
+          "h": 0.105
+        },
+        "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
+      }
+    },
+    "ServantEnhancement": {
+      "detect": {
+        "template": "text_enhancement_servant",
+        "region": {
+          "x": 0.641,
+          "y": 0,
+          "w": 0.359,
+          "h": 0.108
+        },
+        "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "detect": {
+            "template": "text_enhancement_result",
+            "region": {
+              "x": 0.317,
+              "y": 0.539,
+              "w": 0.104,
+              "h": 0.079
+            },
+            "threshold": 0.8
+          },
+          "elements": {}
+        },
+        "servantSelect": {
+          "detect": {
+            "template": "text_enhancement_servant_select",
+            "region": {
+              "x": 0.123,
+              "y": 0.021,
+              "w": 0.137,
+              "h": 0.079
+            },
+            "threshold": 0.8
+          },
+          "elements": {
+            "button_scale_level_3": {
+              "template": "button_scale_level_3",
+              "region": {
+                "x": 0,
+                "y": 0.89,
+                "w": 0.061,
+                "h": 0.104
+              },
+              "threshold": 0.8
+            }
+          }
+        },
+        "materialSelect": {
+          "detect": {
+            "template": "text_enhancement_material",
+            "region": {
+              "x": 0.122,
+              "y": 0.011,
+              "w": 0.107,
+              "h": 0.073
+            },
+            "threshold": 0.8
+          },
+          "elements": {
+            "button_scale_level_3": {
+              "template": "button_scale_level_3",
+              "region": {
+                "x": 0,
+                "y": 0.89,
+                "w": 0.061,
+                "h": 0.104
+              },
+              "threshold": 0.8
+            },
+            "dialog_filter_setting": {
+              "template": "dialog_filter_setting",
+              "region": {
+                "x": 0.398,
+                "y": 0.047,
+                "w": 0.208,
+                "h": 0.089
+              },
+              "threshold": 0.8
+            },
+            "text_filter_setting_type": {
+              "template": "text_filter_setting_type",
+              "region": {
+                "x": 0.457,
+                "y": 0.37,
+                "w": 0.088,
+                "h": 0.085
+              },
+              "threshold": 0.8
+            }
+          }
+        }
+      }
+    },
+    "Ascension": {
+      "detect": {
+        "template": "screen_enhancement_ascension",
+        "region": {
+          "x": 0.793,
+          "y": 0,
+          "w": 0.207,
+          "h": 0.106
+        },
+        "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "detect": {
+            "template": "text_ascension_main_variant",
+            "region": {
+              "x": 0.305,
+              "y": 0.515,
+              "w": 0.104,
+              "h": 0.077
+            },
+            "threshold": 0.8
+          },
+          "elements": {
+            "button_enhancement_ascension_to_servant": {
+              "template": "button_enhancement_ascension_to_servant",
+              "region": {
+                "x": 0.722,
+                "y": 0.358,
+                "w": 0.198,
+                "h": 0.075
+              },
+              "threshold": 0.8
+            },
+            "enhancement_ascension_not_ready": {
+              "template": "enhancement_ascension_not_ready",
+              "region": {
+                "x": 0.822,
+                "y": 0.883,
+                "w": 0.139,
+                "h": 0.098
+              },
+              "threshold": 0.8
+            }
+          }
+        },
+        "servantSelect": {
+          "detect": {
+            "template": "text_enhancement_ascension_servant_select",
+            "region": {
+              "x": 0.121,
+              "y": 0.011,
+              "w": 0.095,
+              "h": 0.071
+            },
+            "threshold": 0.8
+          },
+          "elements": {
+            "button_scale_level_3": {
+              "template": "button_scale_level_3",
+              "region": {
+                "x": 0,
+                "y": 0.89,
+                "w": 0.061,
+                "h": 0.104
+              },
+              "threshold": 0.8
+            }
+          }
+        }
       }
     }
   }
