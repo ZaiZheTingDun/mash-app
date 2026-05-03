@@ -98,6 +98,26 @@ body,
   outline-offset: 2px;
 }
 
+.page-secondary-btn {
+  appearance: none;
+  border: 1px solid var(--gray-7);
+  background: #fff;
+  color: var(--gray-12);
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 18px;
+  border-radius: 999px;
+  transition: border-color 0.15s, background 0.15s;
+  margin-right: 12px;
+}
+
+.page-secondary-btn:hover {
+  border-color: var(--blue-7);
+  background: var(--blue-2);
+}
+
 .page-back-btn {
   appearance: none;
   border: 1px solid var(--gray-7);
@@ -1322,6 +1342,23 @@ body,
 .battle-log-msg {
   color: var(--gray-12);
   word-break: break-all;
+}
+
+.enhancement-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--gray-6);
+  background: var(--gray-2);
+  border-radius: var(--radius-2);
+}
+
+.enhancement-servant-trigger {
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 /* ── Status bar debug shortcut ── */

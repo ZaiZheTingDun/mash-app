@@ -258,6 +258,39 @@ class TestLoadTemplates:
         assert result["ok"] is False
         assert "not found" in result["error"]
 
+
+class TestOcrRegion:
+    def test_returns_fragments_and_joined_text(self, monkeypatch):
+        img = _make_bgr_image(200, 100, bgr=(255, 255, 255))
+
+        class FakeOcr:
+            def __call__(self, _crop):
+                return (
+                    [
+                        (
+                            [[10, 10], [50, 10], [50, 30], [10, 30]],
+                            "MENU",
+                            0.98,
+                        ),
+                        (
+                            [[60, 10], [120, 10], [120, 30], [60, 30]],
+                            "強化",
+                            0.97,
+                        ),
+                    ],
+                    None,
+                )
+
+        from mash_cv import cv as _cv_module
+
+        monkeypatch.setattr(_cv_module, "_get_ocr", lambda: FakeOcr())
+        result = mash_cv._ocr_region(
+            img, {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
+        )
+        assert result["fullText"] == "MENU\n強化"
+        assert len(result["fragments"]) == 2
+        assert result["fragments"][0]["text"] == "MENU"
+
     def test_loads_png_files(self, tmp_path):
         tmpl = np.zeros((20, 30), dtype=np.uint8)
         cv2.imwrite(str(tmp_path / "btn_ok.png"), tmpl)

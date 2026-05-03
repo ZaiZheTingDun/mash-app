@@ -10,8 +10,8 @@ use crate::screen::{
 };
 use crate::{
     app_data_dir, load_servant_metadata, resolve_ce_assets_dir, resolve_cv_config_path,
-    resolve_scrcpy_jar, resolve_servant_assets_dir, resolve_templates_dir, Server,
-    STREAM_BIT_RATE, STREAM_MAX_SIZE,
+    resolve_scrcpy_jar, resolve_servant_assets_dir, resolve_templates_dir, Server, STREAM_BIT_RATE,
+    STREAM_MAX_SIZE,
 };
 
 // ---------------------------------------------------------------------------
@@ -94,8 +94,7 @@ fn ensure_debug_stream(
         return Ok(());
     }
 
-    let jar = resolve_scrcpy_jar(app)
-        .ok_or_else(|| "找不到 scrcpy-server.jar 资源".to_string())?;
+    let jar = resolve_scrcpy_jar(app).ok_or_else(|| "找不到 scrcpy-server.jar 资源".to_string())?;
     if !jar.exists() {
         return Err(format!("scrcpy-server.jar 不存在: {}", jar.display()));
     }
@@ -113,9 +112,7 @@ fn ensure_debug_stream(
 /// Returns Err with a user-facing message when automation is currently
 /// running. Debug commands route through this so we don't end up with two
 /// scrcpy servers + sidecars touching the same device at the same time.
-fn require_automation_idle(
-    handle_state: &Mutex<RunnerHandle>,
-) -> Result<(), String> {
+fn require_automation_idle(handle_state: &Mutex<RunnerHandle>) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
     let state = handle.state.lock().unwrap().clone();
     if matches!(state, RunnerState::Running) {
@@ -208,7 +205,10 @@ pub fn debug_find_element(
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
-        eprintln!("[debug_find_element] no screenshot at {}", image_path.display());
+        eprintln!(
+            "[debug_find_element] no screenshot at {}",
+            image_path.display()
+        );
         return Err("尚未截取画面，请先点击 截取画面".into());
     }
 
@@ -253,7 +253,10 @@ pub fn debug_list_templates(
         Ok(entries) => {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase())
+                if path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase())
                     == Some("png".to_string())
                 {
                     if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
@@ -263,10 +266,7 @@ pub fn debug_list_templates(
             }
         }
         Err(e) => {
-            eprintln!(
-                "[debug_list_templates] cannot read {}: {e}",
-                dir.display()
-            );
+            eprintln!("[debug_list_templates] cannot read {}: {e}", dir.display());
         }
     }
     keys.sort();
@@ -296,9 +296,7 @@ pub fn debug_find_element_by_name(
 
     ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))?;
 
-    eprintln!(
-        "[debug_find_element_by_name] screen={screen} element={element}"
-    );
+    eprintln!("[debug_find_element_by_name] screen={screen} element={element}");
 
     let mut guard = debug_state.0.lock().unwrap();
     let client = guard
@@ -390,12 +388,8 @@ pub fn debug_find_command_cards(
     let client = guard
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-    let cards = client.find_command_cards(
-        Some(&image_path),
-        None,
-        &servant_ids,
-        assets_dir.as_deref(),
-    )?;
+    let cards =
+        client.find_command_cards(Some(&image_path), None, &servant_ids, assets_dir.as_deref())?;
     eprintln!("[debug_find_command_cards] {} card(s) found", cards.len());
     Ok(cards)
 }
@@ -498,7 +492,11 @@ fn parse_digit_matches(value: &serde_json::Value) -> Vec<DebugDigitMatch> {
         };
         let value = item.get("value").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let score = item.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        out.push(DebugDigitMatch { value, score, region });
+        out.push(DebugDigitMatch {
+            value,
+            score,
+            region,
+        });
     }
     out
 }
@@ -532,7 +530,10 @@ pub fn debug_read_battle_scene(
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
     let resp = client.read_battle_scene_debug(Some(&image_path), region)?;
-    let diag = resp.get("diagnostics").cloned().unwrap_or(serde_json::Value::Null);
+    let diag = resp
+        .get("diagnostics")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
 
     let scene = resp["scene"].as_u64().map(|n| n as u32);
     let total = resp["total"].as_u64().map(|n| n as u32);
@@ -563,12 +564,12 @@ pub fn debug_read_battle_scene(
         .get("kept")
         .map(parse_digit_matches)
         .unwrap_or_default();
-    let split_at = diag.get("splitAt").and_then(|v| v.as_u64()).map(|n| n as u32);
+    let split_at = diag
+        .get("splitAt")
+        .and_then(|v| v.as_u64())
+        .map(|n| n as u32);
     let best_gap = diag.get("bestGap").and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let avg_width = diag
-        .get("avgWidth")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0);
+    let avg_width = diag.get("avgWidth").and_then(|v| v.as_f64()).unwrap_or(0.0);
     let trimmed_left = diag
         .get("trimmedLeft")
         .and_then(|v| v.as_u64())
@@ -908,16 +909,18 @@ pub fn debug_list_servant_assets(app: tauri::AppHandle) -> Vec<u32> {
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        let Ok(id) = name.parse::<u32>() else { continue };
+        let Ok(id) = name.parse::<u32>() else {
+            continue;
+        };
 
         let mut has_face = false;
         if let Ok(inner) = fs::read_dir(&path) {
             for f in inner.flatten() {
                 let fname = f.file_name();
-                let Some(fname) = fname.to_str() else { continue };
-                if fname.starts_with("card_servant_")
-                    && fname.to_lowercase().ends_with(".png")
-                {
+                let Some(fname) = fname.to_str() else {
+                    continue;
+                };
+                if fname.starts_with("card_servant_") && fname.to_lowercase().ends_with(".png") {
                     has_face = true;
                     break;
                 }

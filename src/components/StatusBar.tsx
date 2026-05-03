@@ -35,10 +35,12 @@ export function StatusBar({ onOpenDebug }: StatusBarProps = {}) {
   // The server selector must be locked while the runner is mid-run: the
   // sidecar already pinned templates / OCR for the previous server when
   // it spawned, so flipping the global setting now would silently
-  // desync. We track the runner's state by listening to the same
-  // ``automation-status`` event the BattlePage consumes — no extra
-  // command needed.
-  const [runnerRunning, setRunnerRunning] = useState(false);
+  // desync. Both battle automation and servant-enhancement automation
+  // pin server-specific OCR/templates, so either one should lock the
+  // selector until it exits.
+  const [battleRunnerRunning, setBattleRunnerRunning] = useState(false);
+  const [enhancementRunnerRunning, setEnhancementRunnerRunning] = useState(false);
+  const runnerRunning = battleRunnerRunning || enhancementRunnerRunning;
 
   useEffect(() => {
     invoke<boolean>("get_use_bluestack").then(setUseBluestack).catch(() => {});
@@ -58,16 +60,23 @@ export function StatusBar({ onOpenDebug }: StatusBarProps = {}) {
   }, [pollAdb]);
 
   useEffect(() => {
-    const unlisten = listen<AutomationStatusEvent>("automation-status", (event) => {
-      const state = event.payload.state ?? "";
-      // Mirrors BattlePage's terminal-state heuristic: anything that
-      // isn't `Running` releases the lock so the user can flip servers
-      // again immediately after a stop / error.
-      const running = state.includes("Running");
-      setRunnerRunning(running);
-    });
+    const unlistenBattle = listen<AutomationStatusEvent>(
+      "automation-status",
+      (event) => {
+        const state = event.payload.state ?? "";
+        setBattleRunnerRunning(state.includes("Running"));
+      }
+    );
+    const unlistenEnhancement = listen<AutomationStatusEvent>(
+      "enhancement-automation-status",
+      (event) => {
+        const state = event.payload.state ?? "";
+        setEnhancementRunnerRunning(state.includes("Running"));
+      }
+    );
     return () => {
-      unlisten.then((fn) => fn());
+      unlistenBattle.then((fn) => fn());
+      unlistenEnhancement.then((fn) => fn());
     };
   }, []);
 

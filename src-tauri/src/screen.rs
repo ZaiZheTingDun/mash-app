@@ -173,6 +173,27 @@ pub struct SupportFragment {
     pub best_np_name: String,
 }
 
+/// One raw OCR fragment returned by the generic `ocr_region` sidecar
+/// command. Used by the enhancement runner for OCR-driven page routing
+/// and text/button lookup outside the battle flow.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcrFragment {
+    pub text: String,
+    pub region: NormRect,
+    #[serde(default)]
+    pub ocr_confidence: f64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcrRegionResult {
+    #[serde(default)]
+    pub fragments: Vec<OcrFragment>,
+    #[serde(default)]
+    pub full_text: String,
+}
+
 /// Diagnostic payload accompanying every ``find_supports`` response. Always
 /// returned (even when ``supports`` is empty) so the debug UI can show
 /// "OCR ran but matched nothing" vs. "OCR didn't find any candidates".
@@ -462,9 +483,7 @@ impl SidecarClient {
         loop {
             let remaining = deadline
                 .checked_duration_since(Instant::now())
-                .ok_or_else(|| {
-                    format!("sidecar response timeout (waiting for id={id})")
-                })?;
+                .ok_or_else(|| format!("sidecar response timeout (waiting for id={id})"))?;
             let response = self
                 .line_rx
                 .recv_timeout(remaining)
@@ -771,9 +790,33 @@ impl SidecarClient {
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
             return Err(err.to_string());
         }
-        serde_json::from_value::<FindSupportsResult>(resp).map_err(|e| {
-            format!("invalid find_supports response: {e}")
-        })
+        serde_json::from_value::<FindSupportsResult>(resp)
+            .map_err(|e| format!("invalid find_supports response: {e}"))
+    }
+
+    /// Run OCR inside the given normalized region and return raw
+    /// fragments plus a joined text blob.
+    pub fn ocr_region(
+        &mut self,
+        image_path: Option<&Path>,
+        region: NormRect,
+    ) -> Result<OcrRegionResult, String> {
+        let mut req = serde_json::json!({
+            "cmd": "ocr_region",
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv_with_timeout(&req, Duration::from_secs(30))?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(err.to_string());
+        }
+        serde_json::from_value::<OcrRegionResult>(resp)
+            .map_err(|e| format!("invalid ocr_region response: {e}"))
     }
 
     /// Score a support row's CE icon against the bundled template.
@@ -811,8 +854,44 @@ impl SidecarClient {
             return Err(err.to_string());
         }
         let score = resp.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let passed = resp.get("passed").and_then(|v| v.as_bool()).unwrap_or(false);
+        let passed = resp
+            .get("passed")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         Ok((score, passed))
+    }
+
+    /// Search for an arbitrary grayscale template file within a region.
+    pub fn find_region(
+        &mut self,
+        image_path: Option<&Path>,
+        template_path: &Path,
+        region: NormRect,
+        threshold: f64,
+    ) -> Result<Option<Point>, String> {
+        let mut req = serde_json::json!({
+            "cmd": "find_region",
+            "templatePath": template_path.to_string_lossy(),
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+            "threshold": threshold,
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(format!("find_region({}): {err}", template_path.display()));
+        }
+        if resp["found"].as_bool().unwrap_or(false) {
+            let x = resp["x"].as_f64().unwrap_or(0.0);
+            let y = resp["y"].as_f64().unwrap_or(0.0);
+            Ok(Some(Point::new(x, y)))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Send a `read_battle_scene` request to the sidecar and return the
@@ -1007,10 +1086,7 @@ mod tests {
             "templateKey": "btn_ok",
             "threshold": 0.8,
         });
-        SidecarClient::add_image_path(
-            &mut req,
-            Some(Path::new("/tmp/scene.png")),
-        );
+        SidecarClient::add_image_path(&mut req, Some(Path::new("/tmp/scene.png")));
         assert_eq!(req["templateKey"], serde_json::json!("btn_ok"));
         assert_eq!(req["threshold"], serde_json::json!(0.8));
         assert_eq!(req["imagePath"], serde_json::json!("/tmp/scene.png"));

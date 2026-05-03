@@ -212,6 +212,170 @@
         },
         "threshold": 0.82
       }
+    },
+    "EnhancementAutomation": {
+      "elements": {
+        "button_notification": {
+          "template": "button_notification",
+          "region": {
+            "x": 0.032,
+            "y": 0.015,
+            "w": 0.106,
+            "h": 0.087
+          },
+          "threshold": 0.85
+        },
+        "text_enhancement": {
+          "template": "text_enhancement",
+          "region": {
+            "x": 0.886,
+            "y": 0.0,
+            "w": 0.114,
+            "h": 0.105
+          },
+          "threshold": 0.85
+        },
+        "text_enhancement_servant": {
+          "template": "text_enhancement_servant",
+          "region": {
+            "x": 0.641,
+            "y": 0.0,
+            "w": 0.359,
+            "h": 0.108
+          },
+          "threshold": 0.85
+        },
+        "screen_enhancement_ascension": {
+          "template": "screen_enhancement_ascension",
+          "region": {
+            "x": 0.793,
+            "y": 0.0,
+            "w": 0.207,
+            "h": 0.106
+          },
+          "threshold": 0.85
+        },
+        "button_menu": {
+          "template": "button_menu",
+          "region": {
+            "x": 0.868,
+            "y": 0.858,
+            "w": 0.117,
+            "h": 0.093
+          },
+          "threshold": 0.8
+        },
+        "button_enhancement": {
+          "template": "button_enhancement",
+          "region": {
+            "x": 0.326,
+            "y": 0.85,
+            "w": 0.088,
+            "h": 0.082
+          },
+          "threshold": 0.8
+        },
+        "text_enhancement_result": {
+          "template": "text_enhancement_result",
+          "region": {
+            "x": 0.317,
+            "y": 0.539,
+            "w": 0.104,
+            "h": 0.079
+          },
+          "threshold": 0.8
+        },
+        "text_enhancement_servant_select": {
+          "template": "text_enhancement_servant_select",
+          "region": {
+            "x": 0.123,
+            "y": 0.021,
+            "w": 0.137,
+            "h": 0.079
+          },
+          "threshold": 0.8
+        },
+        "text_enhancement_material": {
+          "template": "text_enhancement_material",
+          "region": {
+            "x": 0.122,
+            "y": 0.011,
+            "w": 0.107,
+            "h": 0.073
+          },
+          "threshold": 0.8
+        },
+        "dialog_filter_setting": {
+          "template": "dialog_filter_setting",
+          "region": {
+            "x": 0.398,
+            "y": 0.047,
+            "w": 0.208,
+            "h": 0.089
+          },
+          "threshold": 0.8
+        },
+        "text_filter_setting_type": {
+          "template": "text_filter_setting_type",
+          "region": {
+            "x": 0.457,
+            "y": 0.37,
+            "w": 0.088,
+            "h": 0.085
+          },
+          "threshold": 0.8
+        },
+        "button_scale_level_3": {
+          "template": "button_scale_level_3",
+          "region": {
+            "x": 0.0,
+            "y": 0.89,
+            "w": 0.061,
+            "h": 0.104
+          },
+          "threshold": 0.8
+        },
+        "text_ascension_main_variant": {
+          "template": "text_ascension_main_variant",
+          "region": {
+            "x": 0.305,
+            "y": 0.515,
+            "w": 0.104,
+            "h": 0.077
+          },
+          "threshold": 0.8
+        },
+        "text_enhancement_ascension_servant_select": {
+          "template": "text_enhancement_ascension_servant_select",
+          "region": {
+            "x": 0.121,
+            "y": 0.011,
+            "w": 0.095,
+            "h": 0.071
+          },
+          "threshold": 0.8
+        },
+        "enhancement_ascension_not_ready": {
+          "template": "enhancement_ascension_not_ready",
+          "region": {
+            "x": 0.822,
+            "y": 0.883,
+            "w": 0.139,
+            "h": 0.098
+          },
+          "threshold": 0.8
+        },
+        "button_enhancement_ascension_to_servant": {
+          "template": "button_enhancement_ascension_to_servant",
+          "region": {
+            "x": 0.722,
+            "y": 0.358,
+            "w": 0.198,
+            "h": 0.075
+          },
+          "threshold": 0.8
+        }
+      }
     }
   }
 }

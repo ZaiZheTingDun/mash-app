@@ -79,7 +79,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "load_battle_scenes":
         return [];
       case "check_adb":
-        return { ready: false, devices: [] };
+        return { connected: false, deviceName: null };
       case "get_use_bluestack":
         return false;
       case "get_server":

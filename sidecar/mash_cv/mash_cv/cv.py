@@ -49,6 +49,10 @@ stream frame is used):
                                                                       "fragmentCount":N,
                                                                       "nameOnlyFallback":bool,
                                                                       "nameOnlyReason":"..."}}
+→ {"cmd":"ocr_region","region":{...}}
+                                                    ← {"fragments":[{"text":"...","region":{...},
+                                                                      "ocrConfidence":0.98}, ...],
+                                                       "fullText":"..."}
 → {"cmd":"verify_support_ce","region":{...},
     "templatePath":"/.../assets/ces/{id}/card_ce.png","threshold":0.7}
                                                     ← {"score":0.81,"passed":true}
@@ -1249,6 +1253,51 @@ def _poly_to_norm_rect(box: Any, img_w: int, img_h: int) -> dict:
     }
 
 
+def _ocr_region(img: np.ndarray, region: dict) -> dict:
+    """Run OCR inside ``region`` and return raw fragments + joined text."""
+    h, w = img.shape[:2]
+    if h == 0 or w == 0:
+        return {"fragments": [], "fullText": ""}
+
+    rx = max(0, int(round(region["x"] * w)))
+    ry = max(0, int(round(region["y"] * h)))
+    rw = max(1, min(int(round(region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(region["h"] * h)), h - ry))
+    crop = img[ry : ry + rh, rx : rx + rw]
+    if crop.size == 0:
+        return {"fragments": [], "fullText": ""}
+
+    ocr = _get_ocr()
+    if ocr is None:
+        return {
+            "fragments": [],
+            "fullText": "",
+            "error": "rapidocr_onnxruntime not available",
+        }
+
+    raw, _ = ocr(crop)
+    if not raw:
+        return {"fragments": [], "fullText": ""}
+
+    fragments: list[dict] = []
+    texts: list[str] = []
+    for box, text, conf in raw:
+        pts = np.asarray(box, dtype=np.float32) + np.array([rx, ry], dtype=np.float32)
+        norm_region = _poly_to_norm_rect(pts, w, h)
+        text_str = str(text).strip()
+        if text_str:
+            texts.append(text_str)
+        fragments.append(
+            {
+                "text": text_str,
+                "region": norm_region,
+                "ocrConfidence": float(conf) if conf is not None else 0.0,
+            }
+        )
+
+    return {"fragments": fragments, "fullText": "\n".join(texts)}
+
+
 def _find_supports(
     img: np.ndarray,
     list_region: dict,
@@ -2002,6 +2051,12 @@ def main() -> None:
                         float(cmd.get("pairDy", SUPPORT_ROW_PAIR_DY)),
                     ),
                 )
+        elif action == "ocr_region":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(req_id, {"fragments": [], "fullText": "", "error": err})
+            else:
+                _reply(req_id, _ocr_region(img, cmd.get("region", DEFAULT_REGION)))
         elif action == "verify_support_ce":
             img, err = _load_frame(cmd)
             if img is None:

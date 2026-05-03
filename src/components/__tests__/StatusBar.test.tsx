@@ -12,15 +12,17 @@ import { SERVER_LABELS } from "../../types/server";
 // `set_server` (and friends) per-call to assert specific behaviour
 // without leaking into other tests.
 
-// Capture the handler so tests can drive `automation-status` events
-// through the component the same way the runner does.
+// Capture the handler so tests can drive automation events through the
+// component the same way the runners do.
 type AutomationPayload = { state: string };
 type AutomationListener = (event: Event<AutomationPayload>) => void;
 
-function captureAutomationListener(): { trigger: (state: string) => void } {
+function captureAutomationListener(
+  targetEvent = "automation-status"
+): { trigger: (state: string) => void } {
   const ref: { current: AutomationListener | null } = { current: null };
   vi.mocked(listen).mockImplementation(async (event, cb) => {
-    if (event === "automation-status") {
+    if (event === targetEvent) {
       ref.current = cb as AutomationListener;
     }
     return () => {};
@@ -33,7 +35,7 @@ function captureAutomationListener(): { trigger: (state: string) => void } {
       // before the test reads from the DOM.
       act(() => {
         ref.current?.({
-          event: "automation-status",
+          event: targetEvent,
           id: 0,
           payload: { state },
         } as Event<AutomationPayload>);
@@ -152,6 +154,33 @@ describe("StatusBar", () => {
     // And the lock releases the moment a non-Running state arrives
     // (Idle, Stopped, Error all share the same heuristic — pick one).
     automation.trigger("Idle");
+    await waitFor(() => {
+      expect(trigger).not.toBeDisabled();
+    });
+  });
+
+  it("also disables the server selector while enhancement automation is Running", async () => {
+    const enhancement = captureAutomationListener("enhancement-automation-status");
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      return null;
+    });
+
+    const user = userEvent.setup();
+    renderWithTheme(<StatusBar />);
+    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
+
+    const trigger = await screen.findByRole("combobox", { name: "服务器" });
+    expect(trigger).not.toBeDisabled();
+
+    enhancement.trigger("Running");
+    await waitFor(() => {
+      expect(trigger).toBeDisabled();
+    });
+
+    enhancement.trigger("Finished");
     await waitFor(() => {
       expect(trigger).not.toBeDisabled();
     });

@@ -1,5 +1,6 @@
 mod adb;
 mod debug;
+mod enhancement_runner;
 mod runner;
 mod screen;
 
@@ -12,6 +13,10 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::Manager;
 
+use enhancement_runner::{
+    server_supported as enhancement_server_supported, EnhancementConfig, EnhancementRunner,
+    EnhancementRunnerHandle, EnhancementRunnerState, EnhancementTarget,
+};
 use runner::{RunConfig, RunnerHandle, RunnerState};
 
 // ---------------------------------------------------------------------------
@@ -210,7 +215,10 @@ pub struct Project {
 }
 
 pub(crate) fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
-    let dir = app.path().app_data_dir().expect("failed to resolve app data dir");
+    let dir = app
+        .path()
+        .app_data_dir()
+        .expect("failed to resolve app data dir");
     fs::create_dir_all(&dir).ok();
     dir
 }
@@ -321,8 +329,7 @@ fn load_battle_scenes(app: tauri::AppHandle, project_id: String) -> Vec<BattleSc
     // write it under the new filename, and remove the legacy file.
     let legacy = legacy_project_turns_path(&app, &project_id);
     if let Ok(contents) = fs::read_to_string(&legacy) {
-        let scenes: Vec<BattleScene> =
-            serde_json::from_str(&contents).unwrap_or_default();
+        let scenes: Vec<BattleScene> = serde_json::from_str(&contents).unwrap_or_default();
         if let Ok(json) = serde_json::to_string_pretty(&scenes) {
             let _ = fs::write(&path, json);
         }
@@ -348,6 +355,37 @@ struct ServantInfo {
     rarity: u32,
     #[serde(rename = "noblePhantasmName")]
     noble_phantasm_name: Option<String>,
+}
+
+fn load_enhancement_target(
+    app: &tauri::AppHandle,
+    variant_key: &str,
+) -> Result<EnhancementTarget, String> {
+    let servant = servants_data()
+        .iter()
+        .find(|s| s.variant_key == variant_key)
+        .ok_or_else(|| format!("未找到目标从者 variantKey: {variant_key}"))?;
+    let root = resolve_servant_assets_dir(app)
+        .ok_or_else(|| "未找到从者资源目录，无法进行头像匹配".to_string())?;
+    let servant_dir = root.join(servant.id.to_string());
+    let face_template_path = servant
+        .face_id
+        .and_then(|id| pick_face_by_id_in(&servant_dir, id))
+        .or_else(|| pick_face_in(&servant_dir))
+        .ok_or_else(|| {
+            format!(
+                "缺少从者头像模板资源，无法在无名称列表中自动选择: {} ({})",
+                servant.name_jp, servant.variant_key
+            )
+        })?;
+    Ok(EnhancementTarget {
+        id: servant.id,
+        variant_key: servant.variant_key.clone(),
+        name_jp: servant.name_jp.clone(),
+        class_name: servant.class.clone(),
+        rarity: servant.rarity,
+        face_template_path,
+    })
 }
 
 fn first_np_name(s: &serde_json::Value) -> Option<String> {
@@ -714,8 +752,16 @@ fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
 
         let mut map: HashMap<String, String> = HashMap::new();
         let mut consider = |entry: &serde_json::Value| {
-            let jp = entry.get("name_jp").and_then(|v| v.as_str()).unwrap_or("").trim();
-            let cn = entry.get("name_cn").and_then(|v| v.as_str()).unwrap_or("").trim();
+            let jp = entry
+                .get("name_jp")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim();
+            let cn = entry
+                .get("name_cn")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim();
             if jp.is_empty() || cn.is_empty() || jp == cn {
                 return;
             }
@@ -727,7 +773,9 @@ fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
         };
 
         for s in raw.iter() {
-            let Some(nps) = s.get("noble_phantasms") else { continue };
+            let Some(nps) = s.get("noble_phantasms") else {
+                continue;
+            };
             if let Some(arr) = nps.as_array() {
                 for entry in arr {
                     consider(entry);
@@ -832,9 +880,8 @@ pub(crate) fn load_servant_metadata(
     let assets_dir = resolve_servant_assets_dir(app)
         .ok_or_else(|| "未找到 servant 资源目录 (src-tauri/assets/servants/)".to_string())?;
     let path = assets_dir.join(id.to_string()).join("servant.json");
-    let raw = fs::read_to_string(&path).map_err(|e| {
-        format!("无法读取 servant.json ({}): {e}", path.display())
-    })?;
+    let raw = fs::read_to_string(&path)
+        .map_err(|e| format!("无法读取 servant.json ({}): {e}", path.display()))?;
     let json: serde_json::Value = serde_json::from_str(&raw)
         .map_err(|e| format!("servant.json 解析失败 ({}): {e}", path.display()))?;
     let name_jp = json
@@ -908,7 +955,10 @@ struct AdbStatus {
 }
 
 fn adb_settings_path(app: &tauri::AppHandle) -> PathBuf {
-    let dir = app.path().app_data_dir().expect("failed to resolve app data dir");
+    let dir = app
+        .path()
+        .app_data_dir()
+        .expect("failed to resolve app data dir");
     fs::create_dir_all(&dir).ok();
     dir.join("adb_settings.json")
 }
@@ -923,7 +973,10 @@ fn load_bluestack_setting(app: &tauri::AppHandle) -> bool {
 }
 
 fn server_settings_path(app: &tauri::AppHandle) -> PathBuf {
-    let dir = app.path().app_data_dir().expect("failed to resolve app data dir");
+    let dir = app
+        .path()
+        .app_data_dir()
+        .expect("failed to resolve app data dir");
     fs::create_dir_all(&dir).ok();
     dir.join("server_settings.json")
 }
@@ -933,7 +986,11 @@ fn load_server_setting(app: &tauri::AppHandle) -> Server {
     fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .and_then(|v| v.get("server").and_then(|s| s.as_str()).map(|s| s.to_string()))
+        .and_then(|v| {
+            v.get("server")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string())
+        })
         .and_then(|s| Server::from_str(&s).ok())
         .unwrap_or_default()
 }
@@ -969,8 +1026,11 @@ fn set_use_bluestack(
     *state.lock().unwrap() = value;
     let path = adb_settings_path(&app);
     let json = serde_json::json!({ "useBluestack": value });
-    fs::write(&path, serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -983,6 +1043,7 @@ fn set_server(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<Server>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
     value: Server,
 ) -> Result<(), String> {
@@ -996,12 +1057,25 @@ fn set_server(
             return Err("自动化正在运行中，请先停止后再切换服务器".into());
         }
     }
+    {
+        let handle = enhancement_handle_state.lock().unwrap();
+        let running = matches!(
+            *handle.state.lock().unwrap(),
+            EnhancementRunnerState::Running
+        );
+        if running {
+            return Err("强化自动化正在运行中，请先停止后再切换服务器".into());
+        }
+    }
 
     *state.lock().unwrap() = value;
     let path = server_settings_path(&app);
     let json = serde_json::json!({ "server": value.to_string() });
-    fs::write(&path, serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
 
     // Tear down any cached debug sidecar so the next debug call respawns
     // it with the new server's templates / OCR model. The automation
@@ -1044,6 +1118,7 @@ fn start_automation(
     bluestack_state: tauri::State<'_, Mutex<bool>>,
     server_state: tauri::State<'_, Mutex<Server>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
 ) -> Result<(), String> {
     let is_running = {
         let state = handle_state.lock().unwrap().state.clone();
@@ -1052,6 +1127,16 @@ fn start_automation(
     };
     if is_running {
         return Err("自动化正在运行中".into());
+    }
+    {
+        let handle = enhancement_handle_state.lock().unwrap();
+        let running = matches!(
+            *handle.state.lock().unwrap(),
+            EnhancementRunnerState::Running
+        );
+        if running {
+            return Err("强化自动化正在运行中".into());
+        }
     }
 
     let scenes = load_battle_scenes(app.clone(), config.project_id.clone());
@@ -1063,23 +1148,16 @@ fn start_automation(
     adb_dev.connect()?;
     let serial = adb_dev.serial().map(|s| s.to_string());
 
-    let jar_path = resolve_scrcpy_jar(&app)
-        .ok_or_else(|| "找不到 scrcpy-server.jar 资源".to_string())?;
+    let jar_path =
+        resolve_scrcpy_jar(&app).ok_or_else(|| "找不到 scrcpy-server.jar 资源".to_string())?;
     if !jar_path.exists() {
-        return Err(format!(
-            "scrcpy-server.jar 不存在: {}",
-            jar_path.display()
-        ));
+        return Err(format!("scrcpy-server.jar 不存在: {}", jar_path.display()));
     }
 
     let templates_dir = resolve_templates_dir(&app, server);
     let cv_config = resolve_cv_config_path(&app, server);
-    let mut sidecar = screen::SidecarClient::spawn(
-        &app,
-        templates_dir.as_deref(),
-        cv_config.as_deref(),
-        server,
-    )?;
+    let mut sidecar =
+        screen::SidecarClient::spawn(&app, templates_dir.as_deref(), cv_config.as_deref(), server)?;
 
     let (w, h) = sidecar
         .start_stream(
@@ -1138,9 +1216,97 @@ fn stop_automation_after_current(
 }
 
 #[tauri::command]
-fn get_automation_status(
-    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
-) -> RunnerState {
+fn get_automation_status(handle_state: tauri::State<'_, Mutex<RunnerHandle>>) -> RunnerState {
+    let handle = handle_state.lock().unwrap();
+    let state = handle.state.lock().unwrap().clone();
+    state
+}
+
+#[tauri::command]
+fn start_enhancement_automation(
+    app: tauri::AppHandle,
+    config: EnhancementConfig,
+    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    server_state: tauri::State<'_, Mutex<Server>>,
+    battle_handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+) -> Result<(), String> {
+    {
+        let handle = handle_state.lock().unwrap();
+        let running = matches!(
+            *handle.state.lock().unwrap(),
+            EnhancementRunnerState::Running
+        );
+        if running {
+            return Err("强化自动化正在运行中".into());
+        }
+    }
+    {
+        let handle = battle_handle_state.lock().unwrap();
+        let running = matches!(*handle.state.lock().unwrap(), RunnerState::Running);
+        if running {
+            return Err("战斗自动化正在运行中，请先停止".into());
+        }
+    }
+
+    let use_bluestack = *bluestack_state.lock().unwrap();
+    let server = *server_state.lock().unwrap();
+    if !enhancement_server_supported(server) {
+        return Err("当前仅支持日服强化自动化".into());
+    }
+
+    let target = load_enhancement_target(&app, &config.target_servant_variant_key)?;
+    if target.id != config.target_servant_id {
+        return Err("目标从者 id 与 variantKey 不匹配".into());
+    }
+
+    let mut adb_dev = adb::Adb::new(use_bluestack);
+    adb_dev.connect()?;
+    let serial = adb_dev.serial().map(|s| s.to_string());
+
+    let jar_path =
+        resolve_scrcpy_jar(&app).ok_or_else(|| "找不到 scrcpy-server.jar 资源".to_string())?;
+    if !jar_path.exists() {
+        return Err(format!("scrcpy-server.jar 不存在: {}", jar_path.display()));
+    }
+
+    let templates_dir = resolve_templates_dir(&app, server);
+    let cv_config = resolve_cv_config_path(&app, server);
+    let mut sidecar =
+        screen::SidecarClient::spawn(&app, templates_dir.as_deref(), cv_config.as_deref(), server)?;
+    let (w, h) = sidecar
+        .start_stream(
+            &jar_path,
+            serial.as_deref(),
+            STREAM_MAX_SIZE,
+            STREAM_BIT_RATE,
+        )
+        .map_err(|e| format!("启动 scrcpy 视频流失败: {e}"))?;
+
+    let state = Arc::new(Mutex::new(EnhancementRunnerState::Running));
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut handle = handle_state.lock().unwrap();
+    handle.state = state.clone();
+    handle.cancel = cancel.clone();
+
+    let runner = EnhancementRunner::new(adb_dev, sidecar, app, state, cancel, (w, h), target);
+    std::thread::spawn(move || runner.run());
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_enhancement_automation(
+    handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+) -> Result<(), String> {
+    let handle = handle_state.lock().unwrap();
+    handle.cancel.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+fn get_enhancement_automation_status(
+    handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+) -> EnhancementRunnerState {
     let handle = handle_state.lock().unwrap();
     let state = handle.state.lock().unwrap().clone();
     state
@@ -1155,10 +1321,7 @@ fn get_automation_status(
 /// `resources/servers/{token}/templates/` so flipping the global server
 /// setting hands the sidecar a different template set without touching
 /// any JP fixture.
-pub(crate) fn resolve_templates_dir(
-    app: &tauri::AppHandle,
-    server: Server,
-) -> Option<PathBuf> {
+pub(crate) fn resolve_templates_dir(app: &tauri::AppHandle, server: Server) -> Option<PathBuf> {
     let base = app.path().resource_dir().ok()?;
     Some(
         base.join("resources")
@@ -1169,10 +1332,7 @@ pub(crate) fn resolve_templates_dir(
 }
 
 /// Resolve the bundled cv.json path for the given server.
-pub(crate) fn resolve_cv_config_path(
-    app: &tauri::AppHandle,
-    server: Server,
-) -> Option<PathBuf> {
+pub(crate) fn resolve_cv_config_path(app: &tauri::AppHandle, server: Server) -> Option<PathBuf> {
     let base = app.path().resource_dir().ok()?;
     Some(
         base.join("resources")
@@ -1185,7 +1345,11 @@ pub(crate) fn resolve_cv_config_path(
 /// Resolve the bundled scrcpy-server.jar path.
 pub(crate) fn resolve_scrcpy_jar(app: &tauri::AppHandle) -> Option<PathBuf> {
     let base = app.path().resource_dir().ok()?;
-    Some(base.join("resources").join("scrcpy").join("scrcpy-server.jar"))
+    Some(
+        base.join("resources")
+            .join("scrcpy")
+            .join("scrcpy-server.jar"),
+    )
 }
 
 /// Resolve the per-servant assets directory (containing
@@ -1244,7 +1408,11 @@ pub(crate) fn resolve_ce_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
 /// the executable and a sibling `_internal/` directory).
 pub(crate) fn resolve_sidecar_exe(app: &tauri::AppHandle) -> Option<PathBuf> {
     let base = app.path().resource_dir().ok()?;
-    let exe_name = if cfg!(windows) { "mash-cv.exe" } else { "mash-cv" };
+    let exe_name = if cfg!(windows) {
+        "mash-cv.exe"
+    } else {
+        "mash-cv"
+    };
     Some(base.join("binaries").join("mash-cv").join(exe_name))
 }
 
@@ -1266,6 +1434,7 @@ pub fn run() {
             app.manage(Mutex::new(use_bluestack));
             app.manage(Mutex::new(server));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
+            app.manage(Mutex::new(EnhancementRunnerHandle::new_idle()));
             app.manage(debug::DebugSidecar(Mutex::new(None)));
             Ok(())
         })
@@ -1290,6 +1459,9 @@ pub fn run() {
             stop_automation,
             stop_automation_after_current,
             get_automation_status,
+            start_enhancement_automation,
+            stop_enhancement_automation,
+            get_enhancement_automation_status,
             debug::debug_capture,
             debug::debug_find_element,
             debug::debug_find_element_by_name,
@@ -1557,11 +1729,7 @@ mod tests {
 
         let mut seen: HashSet<u32> = HashSet::with_capacity(ces.len());
         for ce in ces {
-            assert!(
-                !ce.name.is_empty(),
-                "CE id {} has an empty name",
-                ce.id
-            );
+            assert!(!ce.name.is_empty(), "CE id {} has an empty name", ce.id);
             assert!(
                 seen.insert(ce.id),
                 "duplicate CE id {} in craft_essences.json",

@@ -158,12 +158,7 @@ impl Adb {
         Ok(())
     }
 
-    pub fn swipe(
-        &self,
-        from: (u32, u32),
-        to: (u32, u32),
-        duration_ms: u32,
-    ) -> Result<(), String> {
+    pub fn swipe(&self, from: (u32, u32), to: (u32, u32), duration_ms: u32) -> Result<(), String> {
         let mut args = self.base_args();
         args.extend([
             "shell".into(),

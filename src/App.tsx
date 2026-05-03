@@ -6,6 +6,7 @@ import { ContentGrid, createInitialProjectSlots } from "./components/ContentGrid
 import { derivePartyLineup, derivePartyServants } from "./components/partyServants";
 import { CommandEditor } from "./components/CommandEditor";
 import { BattlePage } from "./components/BattlePage";
+import { EnhancementPage } from "./components/EnhancementPage";
 import { DebugPage } from "./components/DebugPage";
 import { StatusBar } from "./components/StatusBar";
 import { ProjectBar } from "./components/ProjectBar";
@@ -19,7 +20,7 @@ import "./App.css";
 // triggered by the bottom-right primary button on the previous page;
 // `debug` is reached out-of-band from the sidebar. Replaces the older
 // horizontal `StageNavigator` (queue/support/command tabs).
-type View = "team" | "command" | "battle" | "debug";
+type View = "team" | "command" | "battle" | "enhancement" | "debug";
 
 function App() {
   const [view, setView] = useState<View>("team");
@@ -178,6 +179,10 @@ function App() {
     setView("debug");
   }, []);
 
+  const handleOpenEnhancement = useCallback(() => {
+    setView("enhancement");
+  }, []);
+
   // After the runner exits we return to the team page (the start of
   // the linear flow) rather than to "config", which no longer exists.
   const handleBackToConfig = useCallback(() => {
@@ -201,6 +206,8 @@ function App() {
               defaultProjectId={activeProjectId}
               onBack={handleBackToConfig}
             />
+          ) : view === "enhancement" ? (
+            <EnhancementPage servants={servants} onBack={handleBackToConfig} />
           ) : view === "debug" ? (
             <DebugPage
               onBack={handleBackToConfig}
@@ -271,6 +278,15 @@ function App() {
                     onUpdateActiveProject={handleUpdateProject}
                   />
                   <Flex justify="end" align="center" className="page-footer">
+                    <button
+                      type="button"
+                      className="page-secondary-btn"
+                      onClick={handleOpenEnhancement}
+                    >
+                      <Text size="2" weight="medium">
+                        强化从者
+                      </Text>
+                    </button>
                     <button
                       type="button"
                       className="page-next-btn"
