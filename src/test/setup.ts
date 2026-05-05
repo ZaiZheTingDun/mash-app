@@ -78,6 +78,16 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "list_projects":
       case "load_battle_scenes":
         return [];
+      case "pick_asset_bundle":
+        return null;
+      case "import_asset_bundle":
+        return {
+          importedServants: false,
+          importedCraftEssences: false,
+          servantFiles: 0,
+          craftEssenceFiles: 0,
+          installDir: "/tmp/mash-assets",
+        };
       case "check_adb":
         return { connected: false, deviceName: null };
       case "get_use_bluestack":

@@ -10,6 +10,7 @@ import { EnhancementPage } from "./components/EnhancementPage";
 import { DebugPage } from "./components/DebugPage";
 import { StatusBar } from "./components/StatusBar";
 import { ProjectBar } from "./components/ProjectBar";
+import { AssetBundleButton } from "./components/AssetBundleButton";
 import { createInitialProjectSlots } from "./components/projectSlots";
 import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
@@ -29,6 +30,7 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
   const [craftEssences, setCraftEssences] = useState<CraftEssence[]>([]);
+  const [assetVersion, setAssetVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -272,6 +274,7 @@ function App() {
               ) : (
                 <>
                   <ContentGrid
+                    key={`assets-${assetVersion}`}
                     servants={servants}
                     craftEssences={craftEssences}
                     slots={slots}
@@ -279,7 +282,11 @@ function App() {
                     activeProject={activeProject}
                     onUpdateActiveProject={handleUpdateProject}
                   />
-                  <Flex justify="end" align="center" className="page-footer">
+                  <Flex justify="between" align="center" className="page-footer" gap="3">
+                    <AssetBundleButton
+                      onImported={() => setAssetVersion((prev) => prev + 1)}
+                    />
+                    <Flex align="center">
                     <button
                       type="button"
                       className="page-secondary-btn"
@@ -298,6 +305,7 @@ function App() {
                         指令设置
                       </Text>
                     </button>
+                    </Flex>
                   </Flex>
                 </>
               )}

@@ -19,6 +19,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
@@ -27,4 +28,4 @@ tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
 unicode-normalization = "0.1.25"
-
+zip = { version = "2", default-features = false, features = ["deflate"] }

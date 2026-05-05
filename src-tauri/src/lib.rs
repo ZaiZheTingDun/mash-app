@@ -7,11 +7,15 @@ mod screen;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
+use std::io::{self, Write};
+use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::Manager;
+use tauri_plugin_dialog::DialogExt;
+use zip::ZipArchive;
 
 use enhancement_runner::{
     server_supported as enhancement_server_supported, EnhancementConfig, EnhancementRunner,
@@ -219,6 +223,12 @@ pub(crate) fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
         .path()
         .app_data_dir()
         .expect("failed to resolve app data dir");
+    fs::create_dir_all(&dir).ok();
+    dir
+}
+
+fn app_assets_dir(app: &tauri::AppHandle) -> PathBuf {
+    let dir = app_data_dir(app).join("assets");
     fs::create_dir_all(&dir).ok();
     dir
 }
@@ -1381,6 +1391,10 @@ pub(crate) fn resolve_scrcpy_jar(app: &tauri::AppHandle) -> Option<PathBuf> {
 /// Returns ``None`` if neither exists; callers should treat that as
 /// "no per-servant identification available" rather than an error.
 pub(crate) fn resolve_servant_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let imported = app_assets_dir(app).join("servants");
+    if imported.is_dir() {
+        return Some(imported);
+    }
     if let Ok(base) = app.path().resource_dir() {
         let bundled = base.join("assets").join("servants");
         if bundled.is_dir() {
@@ -1403,6 +1417,10 @@ pub(crate) fn resolve_servant_assets_dir(app: &tauri::AppHandle) -> Option<PathB
 /// tree. Returns `None` when neither path exists; callers fall back to
 /// the legacy behaviour (pick the first OCR match) in that case.
 pub(crate) fn resolve_ce_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let imported = app_assets_dir(app).join("ces");
+    if imported.is_dir() {
+        return Some(imported);
+    }
     if let Ok(base) = app.path().resource_dir() {
         let bundled = base.join("assets").join("ces");
         if bundled.is_dir() {
@@ -1431,21 +1449,204 @@ pub(crate) fn resolve_sidecar_exe(app: &tauri::AppHandle) -> Option<PathBuf> {
     Some(base.join("binaries").join("mash-cv").join(exe_name))
 }
 
+#[derive(serde::Serialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AssetBundleImportResult {
+    imported_servants: bool,
+    imported_craft_essences: bool,
+    servant_files: u64,
+    craft_essence_files: u64,
+    install_dir: String,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct FileCopyStats {
+    files: u64,
+    bytes: u64,
+}
+
+impl std::ops::AddAssign for FileCopyStats {
+    fn add_assign(&mut self, rhs: Self) {
+        self.files += rhs.files;
+        self.bytes += rhs.bytes;
+    }
+}
+
+fn refresh_asset_protocol_scope(app: &tauri::AppHandle) -> Result<(), String> {
+    let asset_scope = app.asset_protocol_scope();
+    if let Some(dir) = resolve_servant_assets_dir(app) {
+        asset_scope
+            .allow_directory(dir, true)
+            .map_err(|e| e.to_string())?;
+    }
+    if let Some(dir) = resolve_ce_assets_dir(app) {
+        asset_scope
+            .allow_directory(dir, true)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn extract_zip_archive(zip_path: &Path, destination: &Path) -> Result<(), String> {
+    let file = fs::File::open(zip_path).map_err(|e| format!("无法打开压缩包: {e}"))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| format!("无法读取 zip 压缩包: {e}"))?;
+
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|e| format!("读取 zip 条目失败: {e}"))?;
+        let Some(relative) = entry.enclosed_name().map(|p| p.to_path_buf()) else {
+            continue;
+        };
+        let output = destination.join(relative);
+        if entry.name().ends_with('/') {
+            fs::create_dir_all(&output).map_err(|e| format!("创建目录失败: {e}"))?;
+            continue;
+        }
+        if let Some(parent) = output.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {e}"))?;
+        }
+        let mut out =
+            fs::File::create(&output).map_err(|e| format!("写入解压文件失败: {e}"))?;
+        io::copy(&mut entry, &mut out).map_err(|e| format!("解压文件失败: {e}"))?;
+        out.flush().map_err(|e| format!("写入解压文件失败: {e}"))?;
+    }
+
+    Ok(())
+}
+
+fn locate_import_root(extracted_root: &Path) -> PathBuf {
+    let nested_assets = extracted_root.join("assets");
+    if nested_assets.is_dir() {
+        nested_assets
+    } else {
+        extracted_root.to_path_buf()
+    }
+}
+
+fn copy_asset_tree(source: &Path, destination: &Path) -> Result<FileCopyStats, String> {
+    let mut stats = FileCopyStats::default();
+    fs::create_dir_all(destination).map_err(|e| format!("创建素材目录失败: {e}"))?;
+    let entries = fs::read_dir(source).map_err(|e| format!("读取素材目录失败: {e}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("读取素材目录失败: {e}"))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("读取素材类型失败: {e}"))?;
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        if file_type.is_dir() {
+            stats += copy_asset_tree(&source_path, &destination_path)?;
+        } else if file_type.is_file() {
+            if let Some(parent) = destination_path.parent() {
+                fs::create_dir_all(parent).map_err(|e| format!("创建素材目录失败: {e}"))?;
+            }
+            let bytes = fs::copy(&source_path, &destination_path)
+                .map_err(|e| format!("复制素材文件失败: {e}"))?;
+            stats += FileCopyStats { files: 1, bytes };
+        }
+    }
+    Ok(stats)
+}
+
+fn replace_asset_tree(source: &Path, destination: &Path) -> Result<FileCopyStats, String> {
+    let staging = destination.with_extension(format!("import-{}", uuid::Uuid::new_v4()));
+    if staging.exists() {
+        fs::remove_dir_all(&staging).map_err(|e| format!("清理临时目录失败: {e}"))?;
+    }
+    let stats = copy_asset_tree(source, &staging)?;
+    if destination.exists() {
+        fs::remove_dir_all(destination).map_err(|e| format!("替换旧素材失败: {e}"))?;
+    }
+    fs::rename(&staging, destination).map_err(|e| format!("安装素材失败: {e}"))?;
+    Ok(stats)
+}
+
+fn import_asset_bundle_from_zip_path(
+    zip_path: &Path,
+    assets_root: &Path,
+) -> Result<AssetBundleImportResult, String> {
+    let temp = tempfile::Builder::new()
+        .prefix("asset-import-")
+        .tempdir_in(
+            assets_root
+                .parent()
+                .ok_or_else(|| "无法定位素材根目录".to_string())?,
+        )
+        .map_err(|e| format!("创建临时目录失败: {e}"))?;
+    let extracted_root = temp.path().join("unzipped");
+    fs::create_dir_all(&extracted_root).map_err(|e| format!("创建临时目录失败: {e}"))?;
+    extract_zip_archive(zip_path, &extracted_root)?;
+
+    let import_root = locate_import_root(&extracted_root);
+    let servant_source = import_root.join("servants");
+    let ce_source = import_root.join("ces");
+    let has_servants = servant_source.is_dir();
+    let has_ces = ce_source.is_dir();
+    if !has_servants && !has_ces {
+        return Err("压缩包内未找到 assets/servants 或 assets/ces 目录".to_string());
+    }
+
+    fs::create_dir_all(assets_root).map_err(|e| format!("创建素材目录失败: {e}"))?;
+    let servant_stats = if has_servants {
+        replace_asset_tree(&servant_source, &assets_root.join("servants"))?
+    } else {
+        FileCopyStats::default()
+    };
+    let ce_stats = if has_ces {
+        replace_asset_tree(&ce_source, &assets_root.join("ces"))?
+    } else {
+        FileCopyStats::default()
+    };
+
+    Ok(AssetBundleImportResult {
+        imported_servants: has_servants,
+        imported_craft_essences: has_ces,
+        servant_files: servant_stats.files,
+        craft_essence_files: ce_stats.files,
+        install_dir: assets_root.to_string_lossy().into_owned(),
+    })
+}
+
+#[tauri::command]
+async fn pick_asset_bundle(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("ZIP", &["zip"])
+        .set_title("选择素材压缩包")
+        .blocking_pick_file();
+    let Some(path) = picked else {
+        return Ok(None);
+    };
+    let path = path.into_path().map_err(|e| e.to_string())?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+async fn import_asset_bundle(
+    app: tauri::AppHandle,
+    zip_path: String,
+) -> Result<AssetBundleImportResult, String> {
+    let zip_path = PathBuf::from(zip_path);
+    if !zip_path.is_file() {
+        return Err("选择的压缩包不存在".to_string());
+    }
+    let result = import_asset_bundle_from_zip_path(&zip_path, &app_assets_dir(&app))?;
+    refresh_asset_protocol_scope(&app)?;
+    Ok(result)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let use_bluestack = load_bluestack_setting(&app.handle());
             let server = load_server_setting(&app.handle());
-            let asset_scope = app.asset_protocol_scope();
-            if let Some(dir) = resolve_servant_assets_dir(&app.handle()) {
-                asset_scope.allow_directory(dir, true)?;
-            }
-            if let Some(dir) = resolve_ce_assets_dir(&app.handle()) {
-                asset_scope.allow_directory(dir, true)?;
-            }
+            refresh_asset_protocol_scope(&app.handle())?;
             app.manage(Mutex::new(use_bluestack));
             app.manage(Mutex::new(server));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
@@ -1456,6 +1657,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_servants,
             get_craft_essences,
+            pick_asset_bundle,
+            import_asset_bundle,
             get_servant_portrait_path,
             get_servant_face_path,
             get_craft_essence_card_path,
@@ -1507,6 +1710,8 @@ pub fn run() {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+    use std::io::Cursor;
+    use zip::write::SimpleFileOptions;
 
     // --- default_project_slots -----------------------------------------
 
@@ -1693,6 +1898,91 @@ mod tests {
                 "face_servant_1.png"
             ]
         );
+    }
+
+    fn build_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut cursor = Cursor::new(Vec::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut cursor);
+            let options = SimpleFileOptions::default();
+            for (name, contents) in entries {
+                writer.start_file(name, options).unwrap();
+                writer.write_all(contents).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        cursor.into_inner()
+    }
+
+    #[test]
+    fn import_asset_bundle_from_zip_path_accepts_assets_wrapper() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = tmp.path().join("bundle.zip");
+        fs::write(
+            &zip_path,
+            build_zip(&[
+                ("assets/servants/1/narrow_servant_4.png", b"portrait"),
+                ("assets/ces/2/card_ce.png", b"ce"),
+            ]),
+        )
+        .unwrap();
+
+        let result = import_asset_bundle_from_zip_path(&zip_path, &tmp.path().join("installed"))
+            .expect("import should succeed");
+
+        assert!(result.imported_servants);
+        assert!(result.imported_craft_essences);
+        assert_eq!(result.servant_files, 1);
+        assert_eq!(result.craft_essence_files, 1);
+        assert!(tmp
+            .path()
+            .join("installed")
+            .join("servants")
+            .join("1")
+            .join("narrow_servant_4.png")
+            .is_file());
+        assert!(tmp
+            .path()
+            .join("installed")
+            .join("ces")
+            .join("2")
+            .join("card_ce.png")
+            .is_file());
+    }
+
+    #[test]
+    fn import_asset_bundle_from_zip_path_replaces_existing_tree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let install_root = tmp.path().join("installed");
+        let existing = install_root.join("servants").join("1");
+        fs::create_dir_all(&existing).unwrap();
+        fs::write(existing.join("old.png"), b"old").unwrap();
+
+        let zip_path = tmp.path().join("bundle.zip");
+        fs::write(
+            &zip_path,
+            build_zip(&[("servants/1/new.png", b"new")]),
+        )
+        .unwrap();
+
+        let result =
+            import_asset_bundle_from_zip_path(&zip_path, &install_root).expect("import should work");
+
+        assert!(result.imported_servants);
+        assert_eq!(result.servant_files, 1);
+        assert!(!install_root.join("servants").join("1").join("old.png").exists());
+        assert!(install_root.join("servants").join("1").join("new.png").is_file());
+    }
+
+    #[test]
+    fn import_asset_bundle_from_zip_path_rejects_zip_without_asset_dirs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = tmp.path().join("bundle.zip");
+        fs::write(&zip_path, build_zip(&[("docs/readme.txt", b"no assets")])).unwrap();
+
+        let err = import_asset_bundle_from_zip_path(&zip_path, &tmp.path().join("installed"))
+            .expect_err("import should fail");
+        assert!(err.contains("assets/servants") || err.contains("assets/ces"));
     }
 
     #[test]
