@@ -60,14 +60,11 @@ export function EnhancementPage({ servants, onBack }: EnhancementPageProps) {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
-  useEffect(() => {
-    if (!selectedVariantKey && servants.length > 0) {
-      setSelectedVariantKey(servants[0].variantKey);
-    }
-  }, [selectedVariantKey, servants]);
-
   const selectedServant = useMemo(
-    () => servants.find((servant) => servant.variantKey === selectedVariantKey) ?? null,
+    () =>
+      servants.find((servant) => servant.variantKey === selectedVariantKey) ??
+      servants[0] ??
+      null,
     [servants, selectedVariantKey]
   );
 

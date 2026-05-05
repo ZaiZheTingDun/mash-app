@@ -36,29 +36,34 @@ function createDefaultScene(): BattleScene {
 }
 
 export function CommandEditor({ projectId, partyLineup }: CommandEditorProps) {
-  const [scenes, setScenes] = useState<BattleScene[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [scenes, setScenes] = useState<BattleScene[]>(() =>
+    projectId ? [] : [createDefaultScene()]
+  );
+  const [loaded, setLoaded] = useState(() => !projectId);
   const scenePartyServants = deriveScenePartyServants(partyLineup, scenes);
 
   useEffect(() => {
     if (!projectId) {
-      setScenes([createDefaultScene()]);
-      setLoaded(true);
       return;
     }
-    setLoaded(false);
+    let cancelled = false;
     invoke<BattleScene[]>("load_battle_scenes", { projectId })
       .then((saved) => {
-        if (saved.length > 0) {
-          setScenes(saved);
-        } else {
-          setScenes([createDefaultScene()]);
-        }
+        if (cancelled) return;
+        setScenes(saved.length > 0 ? saved : [createDefaultScene()]);
       })
       .catch(() => {
+        if (cancelled) return;
         setScenes([createDefaultScene()]);
       })
-      .finally(() => setLoaded(true));
+      .finally(() => {
+        if (!cancelled) {
+          setLoaded(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
   const saveScenes = useCallback(

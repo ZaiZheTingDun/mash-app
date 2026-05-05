@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Box, Flex, Text, Spinner } from "@radix-ui/themes";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
-import { ContentGrid, createInitialProjectSlots } from "./components/ContentGrid";
+import { ContentGrid } from "./components/ContentGrid";
 import { derivePartyLineup, derivePartyServants } from "./components/partyServants";
 import { CommandEditor } from "./components/CommandEditor";
 import { BattlePage } from "./components/BattlePage";
@@ -10,6 +10,7 @@ import { EnhancementPage } from "./components/EnhancementPage";
 import { DebugPage } from "./components/DebugPage";
 import { StatusBar } from "./components/StatusBar";
 import { ProjectBar } from "./components/ProjectBar";
+import { createInitialProjectSlots } from "./components/projectSlots";
 import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
 import type { CraftEssence } from "./types/craftEssence";
@@ -244,6 +245,7 @@ function App() {
               ) : view === "command" ? (
                 <>
                   <CommandEditor
+                    key={activeProjectId ?? "no-project"}
                     projectId={activeProjectId}
                     partyLineup={partyLineup}
                   />

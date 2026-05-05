@@ -52,9 +52,7 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
     invoke<Project[]>("list_projects")
       .then((list) => {
         setProjects(list);
-        if (!selectedId && list.length > 0) {
-          setSelectedId(list[0].id);
-        }
+        setSelectedId((prev) => prev || list[0]?.id || "");
       })
       .catch(console.error);
   }, []);

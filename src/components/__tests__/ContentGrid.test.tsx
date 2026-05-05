@@ -3,11 +3,8 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../test/renderWithTheme";
-import {
-  ContentGrid,
-  createInitialProjectSlots,
-  type SlotItem,
-} from "../ContentGrid";
+import { ContentGrid, type SlotItem } from "../ContentGrid";
+import { createInitialProjectSlots } from "../projectSlots";
 import type { Servant } from "../../types/servant";
 import type { CraftEssence } from "../../types/craftEssence";
 import type { Project } from "../../types/project";

@@ -4,7 +4,8 @@ import {
   derivePartyServants,
   deriveScenePartyServants,
 } from "../partyServants";
-import { createInitialProjectSlots, type SlotItem } from "../ContentGrid";
+import type { SlotItem } from "../ContentGrid";
+import { createInitialProjectSlots } from "../projectSlots";
 import type { BattleScene } from "../../types/command";
 import type { Project } from "../../types/project";
 import type { Servant } from "../../types/servant";

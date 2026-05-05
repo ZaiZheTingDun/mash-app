@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import { ProjectBar } from "../ProjectBar";
 import type { Project } from "../../types/project";
-import { createInitialProjectSlots } from "../ContentGrid";
+import { createInitialProjectSlots } from "../projectSlots";
 
 function makeProject(id: string, name: string): Project {
   return {
