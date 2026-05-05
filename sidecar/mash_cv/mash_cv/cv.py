@@ -53,6 +53,9 @@ stream frame is used):
                                                     ← {"fragments":[{"text":"...","region":{...},
                                                                       "ocrConfidence":0.98}, ...],
                                                        "fullText":"..."}
+→ {"cmd":"read_level_digits","region":{...},"debug":false}
+                                                    ← {"found":true,"current":90,"max":90,
+                                                       "text":"90/90"}
 → {"cmd":"verify_support_ce","region":{...},
     "templatePath":"/.../assets/ces/{id}/card_ce.png","threshold":0.7}
                                                     ← {"score":0.81,"passed":true}
@@ -63,6 +66,7 @@ import difflib
 import json
 import os
 import sys
+import time
 import unicodedata
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -274,6 +278,311 @@ def _match_template_region(
     return {"found": False, "score": score}
 
 
+def _score_template_region(
+    img: np.ndarray,
+    tmpl: np.ndarray,
+    region: dict,
+    threshold: float,
+) -> dict:
+    """Find the best template location and always return its normalized box."""
+    if len(tmpl.shape) == 3:
+        tmpl = cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
+
+    h, w = img.shape[:2]
+    rx = max(0, int(round(region["x"] * w)))
+    ry = max(0, int(round(region["y"] * h)))
+    rw = max(1, min(int(round(region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(region["h"] * h)), h - ry))
+
+    roi = img[ry : ry + rh, rx : rx + rw]
+    if roi.size == 0:
+        return {"found": False, "score": 0.0, "region": None, "x": 0.0, "y": 0.0}
+
+    gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    th, tw = tmpl.shape[:2]
+    if tw > gray_roi.shape[1] or th > gray_roi.shape[0]:
+        return {"found": False, "score": 0.0, "region": None, "x": 0.0, "y": 0.0}
+
+    result = cv2.matchTemplate(gray_roi, tmpl, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, max_loc = cv2.minMaxLoc(result)
+    score = float(max_val)
+    left = rx + max_loc[0]
+    top = ry + max_loc[1]
+    return {
+        "found": score >= threshold,
+        "x": (left + tw / 2.0) / w,
+        "y": (top + th / 2.0) / h,
+        "score": score,
+        "region": {
+            "x": left / w,
+            "y": top / h,
+            "w": tw / w,
+            "h": th / h,
+        },
+    }
+
+
+def _crop_template(tmpl: np.ndarray, crop: dict | None) -> np.ndarray:
+    if not crop:
+        return tmpl
+    h, w = tmpl.shape[:2]
+    x = max(0, int(float(crop.get("x", 0.0)) * w))
+    y = max(0, int(float(crop.get("y", 0.0)) * h))
+    cw = max(1, int(float(crop.get("w", 1.0)) * w))
+    ch = max(1, int(float(crop.get("h", 1.0)) * h))
+    return tmpl[y : min(h, y + ch), x : min(w, x + cw)]
+
+
+def _resize_template(tmpl: np.ndarray, size: dict | None) -> np.ndarray:
+    if not size:
+        return tmpl
+    width = int(size.get("w", 0) or size.get("width", 0) or 0)
+    height = int(size.get("h", 0) or size.get("height", 0) or 0)
+    if width <= 0 or height <= 0:
+        return tmpl
+    interpolation = cv2.INTER_AREA
+    if width > tmpl.shape[1] or height > tmpl.shape[0]:
+        interpolation = cv2.INTER_CUBIC
+    return cv2.resize(tmpl, (width, height), interpolation=interpolation)
+
+
+SERVANT_GRID_ANCHOR_TEMPLATE = "text_servant_avatar_bottom_line"
+SERVANT_GRID_COLUMNS = 7
+SERVANT_GRID_COL_PITCH = 266.25 / 2560.0
+SERVANT_GRID_ROW_PITCH = 284.0 / 1440.0
+SERVANT_GRID_ANCHOR_COL0_X = 157.0 / 2560.0
+SERVANT_GRID_CARD_W = 234.0 / 2560.0
+SERVANT_GRID_CARD_H = 258.0 / 1440.0
+SERVANT_GRID_ANCHOR_OFFSET_X = 9.0 / 2560.0
+SERVANT_GRID_ANCHOR_OFFSET_Y = 234.0 / 1440.0
+SERVANT_GRID_DEFAULT_REGION = {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747}
+
+
+def _norm_rect_from_px(x: float, y: float, width: float, height: float, img_w: int, img_h: int) -> dict:
+    return {"x": x / img_w, "y": y / img_h, "w": width / img_w, "h": height / img_h}
+
+
+def _nms_candidates(candidates: list[dict], overlap_w: float, overlap_h: float) -> list[dict]:
+    candidates.sort(key=lambda c: (-float(c["score"]), float(c["y"]), float(c["x"])))
+    kept: list[dict] = []
+    for cand in candidates:
+        cx = float(cand["x"]) + float(cand["w"]) / 2.0
+        cy = float(cand["y"]) + float(cand["h"]) / 2.0
+        if any(
+            abs(cx - (float(k["x"]) + float(k["w"]) / 2.0)) < overlap_w
+            and abs(cy - (float(k["y"]) + float(k["h"]) / 2.0)) < overlap_h
+            for k in kept
+        ):
+            continue
+        kept.append(cand)
+    kept.sort(key=lambda c: (float(c["y"]), float(c["x"])))
+    return kept
+
+
+def _detect_servant_grid_anchors(
+    img: np.ndarray,
+    anchor_template_key: str,
+    region: dict,
+    edge_threshold: float,
+    gray_threshold: float,
+) -> tuple[list[dict], Optional[str]]:
+    tmpl = templates.get(anchor_template_key)
+    if tmpl is None:
+        return [], f"template not loaded: {anchor_template_key}"
+
+    h, w = img.shape[:2]
+    rx = max(0, int(round(region["x"] * w)))
+    ry = max(0, int(round(region["y"] * h)))
+    rw = max(1, min(int(round(region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(region["h"] * h)), h - ry))
+    roi = img[ry : ry + rh, rx : rx + rw]
+    if roi.size == 0:
+        return [], "empty_region"
+
+    gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    tgray = tmpl if len(tmpl.shape) == 2 else cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
+    th, tw = tgray.shape[:2]
+    if tw > gray_roi.shape[1] or th > gray_roi.shape[0]:
+        return [], "region_smaller_than_anchor"
+
+    edge_roi = cv2.Canny(gray_roi, 80, 160)
+    edge_tmpl = cv2.Canny(tgray, 80, 160)
+    edge_res = cv2.matchTemplate(edge_roi, edge_tmpl, cv2.TM_CCOEFF_NORMED)
+    gray_res = cv2.matchTemplate(gray_roi, tgray, cv2.TM_CCOEFF_NORMED)
+
+    ys, xs = np.where((edge_res >= edge_threshold) | (gray_res >= gray_threshold))
+    candidates: list[dict] = []
+    for y, x in zip(ys, xs):
+        edge_score = float(edge_res[y, x])
+        gray_score = float(gray_res[y, x])
+        score = max(edge_score, gray_score)
+        candidates.append(
+            {
+                "x": (rx + int(x)) / w,
+                "y": (ry + int(y)) / h,
+                "w": tw / w,
+                "h": th / h,
+                "score": score,
+                "edgeScore": edge_score,
+                "grayScore": gray_score,
+                "source": "edge" if edge_score >= edge_threshold or edge_score >= gray_score else "gray",
+            }
+        )
+    anchors = _nms_candidates(candidates, (tw / w) * 0.5, (th / h) * 2.0)
+    return anchors, None
+
+
+def _infer_servant_grid_cells(anchors: list[dict], region: dict, img_w: int, img_h: int) -> tuple[list[dict], Optional[dict], Optional[str]]:
+    if not anchors:
+        return [], None, "no_anchors"
+
+    stable_refs = [
+        anchor
+        for anchor in anchors
+        if float(anchor.get("edgeScore", 0.0)) >= 0.8 or float(anchor.get("grayScore", 0.0)) >= 0.9
+    ]
+    ref_candidates = stable_refs or anchors
+    ref = min(ref_candidates, key=lambda a: (float(a["y"]), float(a["x"])))
+    ref_col = int(round((float(ref["x"]) - SERVANT_GRID_ANCHOR_COL0_X) / SERVANT_GRID_COL_PITCH))
+    ref_col = max(0, min(SERVANT_GRID_COLUMNS - 1, ref_col))
+    ref_card_x = float(ref["x"]) - SERVANT_GRID_ANCHOR_OFFSET_X
+    ref_card_y = float(ref["y"]) - SERVANT_GRID_ANCHOR_OFFSET_Y
+    list_top = float(region["y"])
+    if ref_card_y < list_top:
+        ref_card_y += SERVANT_GRID_ROW_PITCH
+
+    row0_y = ref_card_y
+    col0_x = ref_card_x - ref_col * SERVANT_GRID_COL_PITCH
+    cells: list[dict] = []
+    row = 0
+    while row0_y + row * SERVANT_GRID_ROW_PITCH + SERVANT_GRID_CARD_H <= float(region["y"]) + float(region["h"]) + 0.002:
+        y = row0_y + row * SERVANT_GRID_ROW_PITCH
+        if y < float(region["y"]) - 0.001:
+            row += 1
+            continue
+        for col in range(SERVANT_GRID_COLUMNS):
+            x = col0_x + col * SERVANT_GRID_COL_PITCH
+            if x + SERVANT_GRID_CARD_W < float(region["x"]) or x > float(region["x"]) + float(region["w"]):
+                continue
+            cells.append(
+                {
+                    "row": row,
+                    "col": col,
+                    "region": {
+                        "x": max(0.0, x),
+                        "y": max(0.0, y),
+                        "w": SERVANT_GRID_CARD_W,
+                        "h": SERVANT_GRID_CARD_H,
+                    },
+                }
+            )
+        row += 1
+        if row > 8:
+            break
+
+    ref_out = dict(ref)
+    ref_out["row"] = 0
+    ref_out["col"] = ref_col
+    return cells, ref_out, None
+
+
+def _find_enhancement_servant_grid(img: np.ndarray, cmd: dict) -> dict:
+    region = cmd.get("region", SERVANT_GRID_DEFAULT_REGION)
+    anchor_key = str(cmd.get("anchorTemplateKey", SERVANT_GRID_ANCHOR_TEMPLATE))
+    edge_threshold = float(cmd.get("anchorEdgeThreshold", 0.50))
+    gray_threshold = float(cmd.get("anchorGrayThreshold", 0.85))
+    face_threshold = float(cmd.get("faceThreshold", cmd.get("threshold", 0.85)))
+    template_paths = [str(p) for p in cmd.get("faceTemplatePaths", []) if p]
+    template_size = cmd.get("templateSize")
+    template_crop = cmd.get("templateCrop")
+
+    h, w = img.shape[:2]
+    anchors, anchor_error = _detect_servant_grid_anchors(
+        img, anchor_key, region, edge_threshold, gray_threshold
+    )
+    cells, reference_anchor, grid_error = _infer_servant_grid_cells(anchors, region, w, h)
+
+    matches: list[dict] = []
+    best: Optional[dict] = None
+    if not anchor_error and not grid_error and template_paths:
+        for template_path in template_paths:
+            raw = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE)
+            if raw is None:
+                matches.append(
+                    {
+                        "template": os.path.basename(template_path),
+                        "templatePath": template_path,
+                        "row": None,
+                        "col": None,
+                        "found": False,
+                        "score": 0.0,
+                        "x": 0.0,
+                        "y": 0.0,
+                        "region": None,
+                        "error": "failed to read template",
+                    }
+                )
+                continue
+            tmpl = _resize_template(raw, template_size)
+            tmpl = _crop_template(tmpl, template_crop)
+            for cell in cells:
+                scored = _score_template_region(img, tmpl, cell["region"], face_threshold)
+                item = {
+                    "template": os.path.basename(template_path),
+                    "templatePath": template_path,
+                    "row": int(cell["row"]),
+                    "col": int(cell["col"]),
+                    "found": bool(scored["found"]),
+                    "score": float(scored["score"]),
+                    "x": float(scored["x"]),
+                    "y": float(scored["y"]),
+                    "region": scored["region"],
+                }
+                matches.append(item)
+                if best is None:
+                    best = item
+                    continue
+                # Score first, then row-major order, then template order.
+                if item["score"] > float(best["score"]) + 1e-9:
+                    best = item
+                elif abs(item["score"] - float(best["score"])) <= 1e-9:
+                    if (int(item["row"]), int(item["col"])) < (int(best["row"]), int(best["col"])):
+                        best = item
+
+    found = bool(best and best.get("found"))
+    fail_reason = None
+    if anchor_error:
+        fail_reason = anchor_error
+    elif grid_error:
+        fail_reason = grid_error
+    elif not template_paths:
+        fail_reason = "no_face_templates"
+    elif not found:
+        fail_reason = "face_below_threshold"
+
+    return {
+        "found": found,
+        "x": float(best["x"]) if best else 0.0,
+        "y": float(best["y"]) if best else 0.0,
+        "score": float(best["score"]) if best else 0.0,
+        "best": best if found else best,
+        "anchors": anchors,
+        "referenceAnchor": reference_anchor,
+        "gridCells": cells,
+        "matches": matches,
+        "diagnostics": {
+            "failReason": fail_reason,
+            "anchorTemplateKey": anchor_key,
+            "anchorEdgeThreshold": edge_threshold,
+            "anchorGrayThreshold": gray_threshold,
+            "faceThreshold": face_threshold,
+            "region": dict(region),
+            "anchorCount": len(anchors),
+            "gridCellCount": len(cells),
+        },
+    }
+
+
 def _find_element(
     img: np.ndarray,
     template_key: str,
@@ -415,6 +724,214 @@ BATTLE_DIGIT_COHESION_GAP_RATIO = 0.6
 # 0.08 cleanly drops the artefact while leaving genuine in-frame
 # scoring noise alone.
 BATTLE_DIGIT_SCORE_MARGIN = 0.08
+
+
+LEVEL_DIGIT_TEMPLATE_PREFIX = "digit_"
+LEVEL_DIGIT_TEMPLATE_SUFFIX = "_v2"
+LEVEL_DIGIT_BRIGHT_THRESHOLD = 220
+LEVEL_DIGIT_MIN_COMPONENT_AREA = 80
+LEVEL_DIGIT_MIN_SCORE = 0.30
+LEVEL_DIGIT_SEPARATOR_GAP_RATIO = 0.6
+
+
+def _digit_template_key(digit: int, prefix: str, suffix: str) -> str:
+    return f"{prefix}{digit}{suffix}"
+
+
+def _load_digit_template_masks(prefix: str, suffix: str) -> tuple[list[tuple[int, np.ndarray]], list[int]]:
+    loaded: list[tuple[int, np.ndarray]] = []
+    missing: list[int] = []
+    for digit in range(10):
+        tmpl = templates.get(_digit_template_key(digit, prefix, suffix))
+        if tmpl is None:
+            missing.append(digit)
+            continue
+        _, mask = cv2.threshold(tmpl, 10, 255, cv2.THRESH_BINARY)
+        if mask.size == 0:
+            missing.append(digit)
+            continue
+        loaded.append((digit, mask))
+    return loaded, missing
+
+
+def _classify_digit_glyph(glyph: np.ndarray, refs: list[tuple[int, np.ndarray]]) -> tuple[Optional[int], float]:
+    best_digit: Optional[int] = None
+    best_score = 0.0
+    for digit, ref in refs:
+        resized = cv2.resize(glyph, (ref.shape[1], ref.shape[0]), interpolation=cv2.INTER_AREA)
+        _, resized = cv2.threshold(resized, 127, 255, cv2.THRESH_BINARY)
+        inter = np.logical_and(resized > 0, ref > 0).sum()
+        union = np.logical_or(resized > 0, ref > 0).sum()
+        score = float(inter / union) if union else 0.0
+        if score > best_score:
+            best_digit = digit
+            best_score = score
+    return best_digit, best_score
+
+
+def _read_level_digits(
+    img: np.ndarray,
+    region: dict,
+    debug: bool = False,
+    *,
+    prefix: str = LEVEL_DIGIT_TEMPLATE_PREFIX,
+    suffix: str = LEVEL_DIGIT_TEMPLATE_SUFFIX,
+    bright_threshold: int = LEVEL_DIGIT_BRIGHT_THRESHOLD,
+    min_score: float = LEVEL_DIGIT_MIN_SCORE,
+) -> dict:
+    """Read a ``current/max`` level pair using segmented digit templates.
+
+    The level glyphs are white digits with a dark outline on a pale panel.
+    Direct grayscale template matching is brittle because the bundled v2
+    templates contain only the white digit body. This reader therefore
+    thresholds the bright digit fill inside a tight ROI, segments components,
+    maps each component to ``digit_0_v2``..``digit_9_v2`` by binary IoU, and
+    splits the surviving digits at the slash gap.
+    """
+
+    diag: dict = {
+        "region": dict(region),
+        "templatePrefix": prefix,
+        "templateSuffix": suffix,
+        "brightThreshold": int(bright_threshold),
+        "minScore": float(min_score),
+        "missingDigitTemplates": [],
+        "components": [],
+        "digits": [],
+        "splitAt": None,
+        "bestGap": 0.0,
+        "avgWidth": 0.0,
+        "failReason": None,
+    }
+
+    def _wrap(found: bool, current=None, max_level=None, text: str = "", *, fail: Optional[str] = None) -> dict:
+        if fail is not None:
+            diag["failReason"] = fail
+        out: dict = {
+            "found": bool(found),
+            "current": current,
+            "max": max_level,
+            "text": text,
+        }
+        if fail is not None:
+            out["failReason"] = fail
+        if debug:
+            out["diagnostics"] = diag
+        return out
+
+    refs, missing = _load_digit_template_masks(prefix, suffix)
+    diag["missingDigitTemplates"] = missing
+    if missing:
+        return _wrap(False, fail="missing_digit_templates")
+
+    h, w = img.shape[:2]
+    rx = max(0, int(round(region["x"] * w)))
+    ry = max(0, int(round(region["y"] * h)))
+    rw = max(1, min(int(round(region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(region["h"] * h)), h - ry))
+    roi = img[ry : ry + rh, rx : rx + rw]
+    if roi.size == 0:
+        return _wrap(False, fail="empty_region")
+
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    mask = cv2.inRange(gray, int(bright_threshold), 255)
+    count, _labels, stats, _centroids = cv2.connectedComponentsWithStats(mask, 8)
+
+    candidates: list[dict] = []
+    for idx in range(1, count):
+        x, y, cw, ch, area = [int(v) for v in stats[idx]]
+        if area < LEVEL_DIGIT_MIN_COMPONENT_AREA:
+            continue
+        if cw < 8 or cw > max(48, int(rw * 0.25)):
+            continue
+        if ch < 24 or ch > max(72, int(rh * 0.9)):
+            continue
+        # Slash fragments are much thinner and score poorly against all digit
+        # refs; keep them in diagnostics but not in the digit stream.
+        glyph = mask[y : y + ch, x : x + cw]
+        digit, score = _classify_digit_glyph(glyph, refs)
+        comp = {
+            "x": (rx + x) / w,
+            "y": (ry + y) / h,
+            "w": cw / w,
+            "h": ch / h,
+            "area": area,
+            "digit": digit,
+            "score": float(score),
+        }
+        diag["components"].append(comp)
+        if digit is None or score < min_score:
+            continue
+        candidates.append(
+            {
+                "digit": int(digit),
+                "score": float(score),
+                "x": x,
+                "y": y,
+                "w": cw,
+                "h": ch,
+                "region": {
+                    "x": (rx + x) / w,
+                    "y": (ry + y) / h,
+                    "w": cw / w,
+                    "h": ch / h,
+                },
+            }
+        )
+
+    if not candidates:
+        return _wrap(False, fail="no_digit_candidates")
+
+    candidates.sort(key=lambda c: -float(c["score"]))
+    kept: list[dict] = []
+    for cand in candidates:
+        cx = float(cand["x"]) + float(cand["w"]) / 2.0
+        cy = float(cand["y"]) + float(cand["h"]) / 2.0
+        if any(
+            abs(cx - (float(k["x"]) + float(k["w"]) / 2.0)) < max(float(cand["w"]), float(k["w"])) * 0.55
+            and abs(cy - (float(k["y"]) + float(k["h"]) / 2.0)) < max(float(cand["h"]), float(k["h"])) * 0.65
+            for k in kept
+        ):
+            continue
+        kept.append(cand)
+    kept.sort(key=lambda c: int(c["x"]))
+    diag["digits"] = [
+        {
+            "value": int(c["digit"]),
+            "score": float(c["score"]),
+            "region": c["region"],
+        }
+        for c in kept
+    ]
+
+    if len(kept) < 2:
+        return _wrap(False, fail="fewer_than_two_digits")
+
+    avg_w = sum(float(c["w"]) for c in kept) / len(kept)
+    diag["avgWidth"] = float(avg_w)
+    best_gap = 0.0
+    split_at = -1
+    for i in range(len(kept) - 1):
+        gap = float(kept[i + 1]["x"]) - (float(kept[i]["x"]) + float(kept[i]["w"]))
+        if gap > best_gap:
+            best_gap = gap
+            split_at = i + 1
+    diag["bestGap"] = float(best_gap)
+    diag["splitAt"] = int(split_at) if split_at >= 1 else None
+    if split_at < 1 or best_gap < avg_w * LEVEL_DIGIT_SEPARATOR_GAP_RATIO:
+        return _wrap(False, fail="no_separator_gap")
+
+    left = kept[:split_at]
+    right = kept[split_at:]
+    if not left or not right:
+        return _wrap(False, fail="empty_side")
+
+    try:
+        current = int("".join(str(c["digit"]) for c in left))
+        max_level = int("".join(str(c["digit"]) for c in right))
+    except ValueError:
+        return _wrap(False, fail="parse_error")
+    return _wrap(True, current, max_level, f"{current}/{max_level}")
 
 
 def _read_battle_scene(
@@ -2095,6 +2612,23 @@ def main() -> None:
                 _reply(req_id, {"fragments": [], "fullText": "", "error": err})
             else:
                 _reply(req_id, _ocr_region(img, cmd.get("region", DEFAULT_REGION)))
+        elif action == "read_level_digits":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(req_id, {"found": False, "current": None, "max": None, "text": "", "error": err})
+            else:
+                _reply(
+                    req_id,
+                    _read_level_digits(
+                        img,
+                        cmd.get("region", DEFAULT_REGION),
+                        bool(cmd.get("debug", False)),
+                        prefix=str(cmd.get("templatePrefix", LEVEL_DIGIT_TEMPLATE_PREFIX)),
+                        suffix=str(cmd.get("templateSuffix", LEVEL_DIGIT_TEMPLATE_SUFFIX)),
+                        bright_threshold=int(cmd.get("brightThreshold", LEVEL_DIGIT_BRIGHT_THRESHOLD)),
+                        min_score=float(cmd.get("minScore", LEVEL_DIGIT_MIN_SCORE)),
+                    ),
+                )
         elif action == "verify_support_ce":
             img, err = _load_frame(cmd)
             if img is None:
@@ -2125,6 +2659,11 @@ def main() -> None:
             if tmpl is None:
                 _reply(req_id, {"found": False, "error": "failed to read template"})
                 continue
+            tmpl = _resize_template(tmpl, cmd.get("templateSize"))
+            tmpl = _crop_template(tmpl, cmd.get("templateCrop"))
+            if tmpl.size == 0:
+                _reply(req_id, {"found": False, "error": "empty template crop"})
+                continue
             _reply(
                 req_id,
                 _match_template_region(
@@ -2134,5 +2673,25 @@ def main() -> None:
                     cmd.get("threshold", 0.8),
                 ),
             )
+        elif action == "find_enhancement_servant_grid":
+            deadline = time.monotonic() + float(cmd.get("retrySeconds", 0.0))
+            interval = float(cmd.get("retryIntervalSeconds", 0.15))
+            attempts = 0
+            last_result: Optional[dict] = None
+            while True:
+                img, err = _load_frame(cmd)
+                attempts += 1
+                if img is None:
+                    _reply(req_id, {"found": False, "error": err})
+                    break
+                last_result = _find_enhancement_servant_grid(img, cmd)
+                last_result["diagnostics"]["attempts"] = attempts
+                if last_result["diagnostics"].get("anchorCount", 0) > 0:
+                    _reply(req_id, last_result)
+                    break
+                if "imagePath" in cmd or time.monotonic() >= deadline:
+                    _reply(req_id, last_result)
+                    break
+                time.sleep(max(0.02, interval))
         else:
             _reply(req_id, {"error": f"unknown command: {action}"})

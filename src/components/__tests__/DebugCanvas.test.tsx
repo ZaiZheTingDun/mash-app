@@ -14,6 +14,7 @@ function makeState(overrides: Partial<DebugCanvasState> = {}): DebugCanvasState 
     noblePhantasms: [],
     battleScene: null,
     attackButton: null,
+    enhancementServantResult: null,
     supportResult: null,
     coordinates: null,
     showCoordOverlay: false,

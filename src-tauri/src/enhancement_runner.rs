@@ -10,11 +10,18 @@ use tauri::Emitter;
 use unicode_normalization::UnicodeNormalization;
 
 const ENHANCEMENT_EVENT_NAME: &str = "enhancement-automation-status";
+
 const LEVEL_REGION: NormRect = NormRect {
     x: 0.313,
     y: 0.611,
     w: 0.332,
     h: 0.208,
+};
+const LEVEL_DIGIT_REGION: NormRect = NormRect {
+    x: 0.345,
+    y: 0.626,
+    w: 0.120,
+    h: 0.075,
 };
 const SERVANT_ENHANCE_REGION: NormRect = NormRect {
     x: 0.18,
@@ -171,12 +178,20 @@ const SERVANT_LIST_SCROLL_FROM: Point = Point::new(0.500, 0.780);
 const SERVANT_LIST_SCROLL_TO: Point = Point::new(0.500, 0.300);
 const FILTER_SCROLL_FROM: Point = Point::new(0.780, 0.780);
 const FILTER_SCROLL_TO: Point = Point::new(0.780, 0.360);
-const SERVANT_LIST_REGION: NormRect = NormRect {
-    x: 0.05,
-    y: 0.16,
-    w: 0.78,
-    h: 0.74,
+
+pub(crate) const SERVANT_LIST_REGION: NormRect = NormRect {
+    x: 0.055,
+    y: 0.251,
+    w: 0.755,
+    h: 0.747,
 };
+pub(crate) const SERVANT_FACE_MATCH_CROP: NormRect = NormRect {
+    x: 0.195,
+    y: 0.265,
+    w: 0.805,
+    h: 0.438,
+};
+pub(crate) const SERVANT_FACE_TEMPLATE_SIZE: (u32, u32) = (223, 223);
 
 const MATERIAL_GRID_POINTS: [Point; 20] = [
     Point::new(0.104, 0.351),
@@ -215,7 +230,7 @@ pub struct EnhancementTarget {
     pub name_jp: String,
     pub class_name: String,
     pub rarity: u32,
-    pub face_template_path: PathBuf,
+    pub face_template_paths: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -714,19 +729,15 @@ impl EnhancementRunner {
     }
 
     fn handle_servant_enhance(&mut self, ocr: &OcrRegionResult) {
-        let level_ocr = match self.ocr_region(LEVEL_REGION) {
+        let level = match self.sidecar.read_level_digits(None, LEVEL_DIGIT_REGION) {
             Ok(v) => v,
             Err(err) => {
-                self.fail("ServantEnhance", format!("读取等级失败: {err}"));
+                self.fail("ServantEnhance", format!("模板读取等级失败: {err}"));
                 return;
             }
         };
-        let level_text = if level_ocr.full_text.trim().is_empty() {
-            ocr.full_text.clone()
-        } else {
-            level_ocr.full_text
-        };
-        if let Some((current, max)) = parse_level_pair(&level_text) {
+        if let (true, Some(current), Some(max)) = (level.found, level.current, level.max_level) {
+            self.emit("ServantEnhance", &format!("level digits: {}", level.text));
             if current < max {
                 if self.exp_materials_verified {
                     self.emit(
@@ -770,7 +781,13 @@ impl EnhancementRunner {
             return;
         }
 
-        self.emit("ServantEnhance", "当前未选中目标从者，进入从者选择");
+        self.emit(
+            "ServantEnhance",
+            &format!(
+                "等级数字模板未命中({})，判定当前未选中目标从者，进入从者选择",
+                level.fail_reason.as_deref().unwrap_or("unknown")
+            ),
+        );
         if self.tap_at("ServantEnhance", SERVANT_SELECT_BUTTON) {
             thread::sleep(Duration::from_millis(900));
         }
@@ -788,21 +805,34 @@ impl EnhancementRunner {
             "ServantSelect",
             &format!("查找从者头像 {}", self.target.name_jp),
         );
-        match self.sidecar.find_region(
+        match self.sidecar.find_enhancement_servant_grid(
             None,
-            &self.target.face_template_path,
+            &self.target.face_template_paths,
             SERVANT_LIST_REGION,
-            0.72,
+            SERVANT_FACE_MATCH_CROP,
+            Some(SERVANT_FACE_TEMPLATE_SIZE),
+            0.85,
+            1.2,
         ) {
-            Ok(Some(center)) => {
-                if self.tap_at("ServantSelect", center) {
-                    thread::sleep(Duration::from_millis(900));
+            Ok(result) => {
+                self.emit(
+                    "ServantSelect",
+                    &format!(
+                        "网格 anchors={} cells={} best={:.3}",
+                        result.anchors.len(),
+                        result.grid_cells.len(),
+                        result.score
+                    ),
+                );
+                if result.found {
+                    if self.tap_at("ServantSelect", Point::new(result.x, result.y)) {
+                        thread::sleep(Duration::from_millis(900));
+                    }
+                    return;
                 }
-                return;
             }
-            Ok(None) => {}
             Err(err) => {
-                self.fail("ServantSelect", format!("头像匹配失败: {err}"));
+                self.fail("ServantSelect", format!("头像网格匹配失败: {err}"));
                 return;
             }
         }
@@ -1439,40 +1469,6 @@ fn normalize_text(s: &str) -> String {
         .to_lowercase()
 }
 
-fn parse_level_pair(text: &str) -> Option<(u32, u32)> {
-    let chars: Vec<char> = normalize_text(text).chars().collect();
-    for idx in 0..chars.len() {
-        if chars[idx] != 'l' {
-            continue;
-        }
-        if idx + 1 >= chars.len() || chars[idx + 1] != 'v' {
-            continue;
-        }
-        let mut j = idx + 2;
-        let mut left = String::new();
-        while j < chars.len() && chars[j].is_ascii_digit() {
-            left.push(chars[j]);
-            j += 1;
-        }
-        if left.is_empty() || j >= chars.len() || chars[j] != '/' {
-            continue;
-        }
-        j += 1;
-        let mut right = String::new();
-        while j < chars.len() && chars[j].is_ascii_digit() {
-            right.push(chars[j]);
-            j += 1;
-        }
-        if right.is_empty() {
-            continue;
-        }
-        let current = left.parse().ok()?;
-        let max = right.parse().ok()?;
-        return Some((current, max));
-    }
-    None
-}
-
 fn parse_selected_count(text: &str) -> Option<u32> {
     let normalized = normalize_text(text);
     for marker in ["選択済", "20/20", "/20"] {
@@ -1523,17 +1519,10 @@ pub(crate) fn server_supported(server: Server) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_enhancement_route, normalize_text, parse_level_pair, parse_selected_count,
-        scale_level_3_decision, EnhancementRoute, EnhancementStatus, EnhancementTopScreen,
-        EnhancementVariant, ProbeSnapshot, ScaleLevel3Decision,
+        classify_enhancement_route, normalize_text, parse_selected_count, scale_level_3_decision,
+        EnhancementRoute, EnhancementStatus, EnhancementTopScreen, EnhancementVariant,
+        ProbeSnapshot, ScaleLevel3Decision,
     };
-
-    #[test]
-    fn parse_level_pair_reads_current_and_max() {
-        assert_eq!(parse_level_pair("Lv. 70/80"), Some((70, 80)));
-        assert_eq!(parse_level_pair("Lv.80/90"), Some((80, 90)));
-        assert_eq!(parse_level_pair("Ｌｖ． 1 / 70"), Some((1, 70)));
-    }
 
     #[test]
     fn parse_selected_count_reads_counter() {

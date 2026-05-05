@@ -515,6 +515,23 @@ class TestFindElementByName:
         assert result["found"] is True
 
 
+def test_crop_template_uses_normalized_template_region():
+    tmpl = np.arange(100, dtype=np.uint8).reshape((10, 10))
+    cropped = mash_cv._crop_template(
+        tmpl,
+        {"x": 0.2, "y": 0.3, "w": 0.4, "h": 0.5},
+    )
+    assert cropped.shape == (5, 4)
+    assert cropped[0, 0] == tmpl[3, 2]
+    assert cropped[-1, -1] == tmpl[7, 5]
+
+
+def test_resize_template_uses_requested_size():
+    tmpl = np.arange(100, dtype=np.uint8).reshape((10, 10))
+    resized = mash_cv._resize_template(tmpl, {"w": 22, "h": 17})
+    assert resized.shape == (17, 22)
+
+
 # ── _read_battle_scene ──────────────────────────────────────────────────
 
 
@@ -559,6 +576,9 @@ _PROD_SERVANTS_DIR = os.path.normpath(
         "..", "..", "..",
         "src-tauri", "assets", "servants",
     )
+)
+_ROOT_SCREENSHOTS_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "screenshots")
 )
 
 
@@ -686,6 +706,81 @@ class TestReadBattleScene:
         # Score floor must sit above the label-seam digit_1 artefact
         # (observed at ~0.89 in this fixture) so the artefact is dropped.
         assert diag["scoreFloor"] > 0.89
+
+
+# ── _read_level_digits ──────────────────────────────────────────────────
+
+
+LEVEL_DIGIT_REGION = {"x": 0.345, "y": 0.626, "w": 0.12, "h": 0.075}
+
+
+@pytest.mark.skipif(
+    not os.path.isdir(_PROD_TEMPLATES_DIR),
+    reason="production templates dir not available",
+)
+class TestReadLevelDigits:
+    def test_servant_enhancement_selected_reads_ninety_of_ninety(self):
+        result = mash_cv._load_templates(_PROD_TEMPLATES_DIR)
+        assert result["ok"] is True
+        for digit in range(10):
+            assert f"digit_{digit}_v2" in mash_cv.templates
+
+        img = cv2.imread(
+            os.path.join(_ROOT_SCREENSHOTS_DIR, "servant_enhancement_selected.png")
+        )
+        assert img is not None, "servant_enhancement_selected.png fixture missing"
+
+        result = mash_cv._read_level_digits(img, LEVEL_DIGIT_REGION, debug=True)
+        assert result["found"] is True, result
+        assert result["current"] == 90
+        assert result["max"] == 90
+        assert result["text"] == "90/90"
+        assert [d["value"] for d in result["diagnostics"]["digits"]] == [9, 0, 9, 0]
+
+    def test_returns_not_found_when_templates_are_missing(self):
+        img = _make_bgr_image(400, 200, bgr=(255, 255, 255))
+        result = mash_cv._read_level_digits(img, LEVEL_DIGIT_REGION, debug=True)
+        assert result["found"] is False
+        assert result["failReason"] == "missing_digit_templates"
+        assert result["diagnostics"]["failReason"] == "missing_digit_templates"
+
+
+# ── _find_enhancement_servant_grid ──────────────────────────────────────
+
+
+class TestFindEnhancementServantGrid:
+    def _load(self):
+        result = mash_cv._load_templates(_PROD_TEMPLATES_DIR)
+        assert result["ok"] is True
+        assert "text_servant_avatar_bottom_line" in mash_cv.templates
+
+    @pytest.mark.skipif(
+        not os.path.isfile(os.path.join(_ROOT_SCREENSHOTS_DIR, "..", "servant_select_all.png")),
+        reason="servant_select_all.png fixture not available",
+    )
+    def test_servant_select_all_infers_reference_col_two(self):
+        self._load()
+        img = cv2.imread(os.path.join(_ROOT_SCREENSHOTS_DIR, "..", "servant_select_all.png"))
+        assert img is not None
+
+        result = mash_cv._find_enhancement_servant_grid(img, {"faceTemplatePaths": []})
+
+        assert result["diagnostics"]["failReason"] == "no_face_templates"
+        assert len(result["anchors"]) >= 7
+        assert result["referenceAnchor"]["col"] == 2
+        assert len(result["gridCells"]) >= 21
+        assert [c["col"] for c in result["gridCells"][:7]] == list(range(7))
+
+    def test_no_anchor_returns_clear_diagnostics(self):
+        self._load()
+        img = _make_bgr_image(800, 600, bgr=(32, 32, 32))
+
+        result = mash_cv._find_enhancement_servant_grid(img, {"faceTemplatePaths": []})
+
+        assert result["found"] is False
+        assert result["diagnostics"]["failReason"] == "no_anchors"
+        assert result["anchors"] == []
+        assert result["gridCells"] == []
 
 
 # ── _find_command_cards ─────────────────────────────────────────────────

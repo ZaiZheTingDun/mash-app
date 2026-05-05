@@ -1,5 +1,5 @@
 use base64::Engine;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -45,6 +45,96 @@ pub struct ElementMatch {
     pub y: f64,
     pub score: f64,
     pub region: Option<NormRect>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServantGridAnchor {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub score: f64,
+    #[serde(default)]
+    pub edge_score: f64,
+    #[serde(default)]
+    pub gray_score: f64,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub row: Option<u32>,
+    #[serde(default)]
+    pub col: Option<u32>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServantGridCell {
+    pub row: u32,
+    pub col: u32,
+    pub region: NormRect,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServantGridFaceMatch {
+    pub template: String,
+    pub template_path: String,
+    #[serde(default)]
+    pub row: Option<u32>,
+    #[serde(default)]
+    pub col: Option<u32>,
+    pub found: bool,
+    pub score: f64,
+    pub x: f64,
+    pub y: f64,
+    #[serde(default)]
+    pub region: Option<NormRect>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServantGridDiagnostics {
+    #[serde(default)]
+    pub fail_reason: Option<String>,
+    #[serde(default)]
+    pub anchor_template_key: String,
+    #[serde(default)]
+    pub anchor_edge_threshold: f64,
+    #[serde(default)]
+    pub anchor_gray_threshold: f64,
+    #[serde(default)]
+    pub face_threshold: f64,
+    #[serde(default)]
+    pub region: Option<NormRect>,
+    #[serde(default)]
+    pub anchor_count: u32,
+    #[serde(default)]
+    pub grid_cell_count: u32,
+    #[serde(default)]
+    pub attempts: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindEnhancementServantGridResult {
+    pub found: bool,
+    pub x: f64,
+    pub y: f64,
+    pub score: f64,
+    #[serde(default)]
+    pub best: Option<ServantGridFaceMatch>,
+    #[serde(default)]
+    pub anchors: Vec<ServantGridAnchor>,
+    #[serde(default)]
+    pub reference_anchor: Option<ServantGridAnchor>,
+    #[serde(default)]
+    pub grid_cells: Vec<ServantGridCell>,
+    #[serde(default)]
+    pub matches: Vec<ServantGridFaceMatch>,
+    pub diagnostics: ServantGridDiagnostics,
 }
 
 /// One detected command-card slot on the attack screen.
@@ -192,6 +282,21 @@ pub struct OcrRegionResult {
     pub fragments: Vec<OcrFragment>,
     #[serde(default)]
     pub full_text: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LevelDigitsResult {
+    #[serde(default)]
+    pub found: bool,
+    #[serde(default)]
+    pub current: Option<u32>,
+    #[serde(default, rename = "max")]
+    pub max_level: Option<u32>,
+    #[serde(default)]
+    pub text: String,
+    #[serde(default)]
+    pub fail_reason: Option<String>,
 }
 
 /// Diagnostic payload accompanying every ``find_supports`` response. Always
@@ -828,6 +933,31 @@ impl SidecarClient {
             .map_err(|e| format!("invalid ocr_region response: {e}"))
     }
 
+    /// Read the servant-enhancement level pair (``current/max``) using the
+    /// sidecar's digit-template mapper.
+    pub fn read_level_digits(
+        &mut self,
+        image_path: Option<&Path>,
+        region: NormRect,
+    ) -> Result<LevelDigitsResult, String> {
+        let mut req = serde_json::json!({
+            "cmd": "read_level_digits",
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(err.to_string());
+        }
+        serde_json::from_value::<LevelDigitsResult>(resp)
+            .map_err(|e| format!("invalid read_level_digits response: {e}"))
+    }
+
     /// Score a support row's CE icon against the bundled template.
     ///
     /// The runner calls this once per OCR-matched support row when a CE
@@ -871,6 +1001,7 @@ impl SidecarClient {
     }
 
     /// Search for an arbitrary grayscale template file within a region.
+    #[allow(dead_code)]
     pub fn find_region(
         &mut self,
         image_path: Option<&Path>,
@@ -901,6 +1032,160 @@ impl SidecarClient {
         } else {
             Ok(None)
         }
+    }
+
+    /// Search for an arbitrary template file after cropping the template.
+    #[allow(dead_code)]
+    pub fn find_region_with_template_crop(
+        &mut self,
+        image_path: Option<&Path>,
+        template_path: &Path,
+        region: NormRect,
+        template_crop: NormRect,
+        template_size: Option<(u32, u32)>,
+        threshold: f64,
+    ) -> Result<Option<Point>, String> {
+        let mut req = serde_json::json!({
+            "cmd": "find_region",
+            "templatePath": template_path.to_string_lossy(),
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+            "templateCrop": {
+                "x": template_crop.x,
+                "y": template_crop.y,
+                "w": template_crop.w,
+                "h": template_crop.h,
+            },
+            "threshold": threshold,
+        });
+        if let Some((w, h)) = template_size {
+            if let Some(obj) = req.as_object_mut() {
+                obj.insert("templateSize".into(), serde_json::json!({ "w": w, "h": h }));
+            }
+        }
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(format!("find_region({}): {err}", template_path.display()));
+        }
+        if resp["found"].as_bool().unwrap_or(false) {
+            let x = resp["x"].as_f64().unwrap_or(0.0);
+            let y = resp["y"].as_f64().unwrap_or(0.0);
+            Ok(Some(Point::new(x, y)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Search for an arbitrary template file after cropping the template,
+    /// returning the raw match payload even when it misses the threshold.
+    #[allow(dead_code)]
+    pub fn find_region_with_template_crop_full(
+        &mut self,
+        image_path: Option<&Path>,
+        template_path: &Path,
+        region: NormRect,
+        template_crop: NormRect,
+        template_size: Option<(u32, u32)>,
+        threshold: f64,
+    ) -> Result<ElementMatch, String> {
+        let mut req = serde_json::json!({
+            "cmd": "find_region",
+            "templatePath": template_path.to_string_lossy(),
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+            "templateCrop": {
+                "x": template_crop.x,
+                "y": template_crop.y,
+                "w": template_crop.w,
+                "h": template_crop.h,
+            },
+            "threshold": threshold,
+        });
+        if let Some((w, h)) = template_size {
+            if let Some(obj) = req.as_object_mut() {
+                obj.insert("templateSize".into(), serde_json::json!({ "w": w, "h": h }));
+            }
+        }
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(format!("find_region({}): {err}", template_path.display()));
+        }
+        let found = resp["found"].as_bool().unwrap_or(false);
+        let score = resp["score"].as_f64().unwrap_or(0.0);
+        let x = resp["x"].as_f64().unwrap_or(0.0);
+        let y = resp["y"].as_f64().unwrap_or(0.0);
+        let region = resp.get("region").and_then(|r| {
+            Some(NormRect {
+                x: r.get("x")?.as_f64()?,
+                y: r.get("y")?.as_f64()?,
+                w: r.get("w")?.as_f64()?,
+                h: r.get("h")?.as_f64()?,
+            })
+        });
+        Ok(ElementMatch {
+            found,
+            x,
+            y,
+            score,
+            region,
+        })
+    }
+
+    pub fn find_enhancement_servant_grid(
+        &mut self,
+        image_path: Option<&Path>,
+        face_template_paths: &[PathBuf],
+        region: NormRect,
+        template_crop: NormRect,
+        template_size: Option<(u32, u32)>,
+        threshold: f64,
+        retry_seconds: f64,
+    ) -> Result<FindEnhancementServantGridResult, String> {
+        let mut req = serde_json::json!({
+            "cmd": "find_enhancement_servant_grid",
+            "anchorTemplateKey": "text_servant_avatar_bottom_line",
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+            "templateCrop": {
+                "x": template_crop.x,
+                "y": template_crop.y,
+                "w": template_crop.w,
+                "h": template_crop.h,
+            },
+            "faceThreshold": threshold,
+            "retrySeconds": retry_seconds,
+            "retryIntervalSeconds": 0.15,
+            "faceTemplatePaths": face_template_paths
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect::<Vec<_>>(),
+        });
+        if let Some((w, h)) = template_size {
+            if let Some(obj) = req.as_object_mut() {
+                obj.insert("templateSize".into(), serde_json::json!({ "w": w, "h": h }));
+            }
+        }
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(err.to_string());
+        }
+        serde_json::from_value::<FindEnhancementServantGridResult>(resp)
+            .map_err(|e| format!("invalid find_enhancement_servant_grid response: {e}"))
     }
 
     /// Send a `read_battle_scene` request to the sidecar and return the

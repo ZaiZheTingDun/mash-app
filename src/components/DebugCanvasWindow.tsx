@@ -10,6 +10,7 @@ const EMPTY_STATE: DebugCanvasState = {
   noblePhantasms: [],
   battleScene: null,
   attackButton: null,
+  enhancementServantResult: null,
   supportResult: null,
   coordinates: null,
   showCoordOverlay: false,

@@ -138,6 +138,68 @@ export interface NoblePhantasmMatchDto {
   edgeThreshold?: number;
 }
 
+export interface EnhancementServantFaceMatchDto {
+  template: string;
+  templatePath: string;
+  row: number | null;
+  col: number | null;
+  found: boolean;
+  score: number;
+  x: number;
+  y: number;
+  region: NormRectDto | null;
+  error?: string;
+}
+
+export interface EnhancementServantAnchorDto {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  score: number;
+  edgeScore: number;
+  grayScore: number;
+  source: string;
+  row?: number | null;
+  col?: number | null;
+}
+
+export interface EnhancementServantGridCellDto {
+  row: number;
+  col: number;
+  region: NormRectDto;
+}
+
+export interface EnhancementServantDiagnosticsDto {
+  failReason?: string | null;
+  anchorTemplateKey: string;
+  anchorEdgeThreshold: number;
+  anchorGrayThreshold: number;
+  faceThreshold: number;
+  region?: NormRectDto | null;
+  anchorCount: number;
+  gridCellCount: number;
+  attempts: number;
+}
+
+export interface EnhancementServantMatchResultDto {
+  servantId: number;
+  searchRegion: NormRectDto;
+  templateCrop: NormRectDto;
+  templateSize: { w: number; h: number };
+  threshold: number;
+  found: boolean;
+  x: number;
+  y: number;
+  score: number;
+  best: EnhancementServantFaceMatchDto | null;
+  anchors: EnhancementServantAnchorDto[];
+  referenceAnchor: EnhancementServantAnchorDto | null;
+  gridCells: EnhancementServantGridCellDto[];
+  matches: EnhancementServantFaceMatchDto[];
+  diagnostics: EnhancementServantDiagnosticsDto;
+}
+
 export interface DigitMatchDto {
   value: number;
   score: number;
@@ -339,6 +401,13 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
   const [supportResult, setSupportResult] =
     useState<FindSupportsResultDto | null>(null);
   const [findingSupports, setFindingSupports] = useState(false);
+  const [enhancementServantId, setEnhancementServantId] = useState<string>("");
+  const [enhancementServantThreshold, setEnhancementServantThreshold] =
+    useState("0.85");
+  const [enhancementServantResult, setEnhancementServantResult] =
+    useState<EnhancementServantMatchResultDto | null>(null);
+  const [findingEnhancementServant, setFindingEnhancementServant] =
+    useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const didShutdown = useRef(false);
   const [popoutOpen, setPopoutOpen] = useState(false);
@@ -508,6 +577,7 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
       setBattleScene(null);
       setAttackButton(null);
       setSupportResult(null);
+      setEnhancementServantResult(null);
       log(
         `截图成功 | 画面 = ${result.screen} (score=${result.score.toFixed(3)})` +
           (result.screenSize
@@ -599,6 +669,7 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
     setBattleScene(null);
     setAttackButton(null);
     setSupportResult(null);
+    setEnhancementServantResult(null);
     log("已清除标注");
   }, [log]);
 
@@ -768,6 +839,69 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
     const n = Number(raw);
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [supportCraftEssenceId]);
+
+  const parsedEnhancementServantId = useMemo<number | null>(() => {
+    const n = Number(enhancementServantId.trim());
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [enhancementServantId]);
+
+  const parsedEnhancementServantThreshold = useMemo<number>(() => {
+    const n = Number(enhancementServantThreshold.trim());
+    return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.72;
+  }, [enhancementServantThreshold]);
+
+  const handleFindEnhancementServant = useCallback(async () => {
+    if (!capture || parsedEnhancementServantId === null) return;
+    setFindingEnhancementServant(true);
+    log(
+      `调用 debug_find_enhancement_servant (servantId=${parsedEnhancementServantId}, threshold=${parsedEnhancementServantThreshold})`
+    );
+    try {
+      const result = await invoke<EnhancementServantMatchResultDto>(
+        "debug_find_enhancement_servant",
+        {
+          servantId: parsedEnhancementServantId,
+          threshold: parsedEnhancementServantThreshold,
+        }
+      );
+      setEnhancementServantResult(result);
+      const sorted = [...result.matches].sort((a, b) => b.score - a.score);
+      const best = sorted[0];
+      log(
+        `强化从者网格: anchors=${result.anchors.length}, cells=${result.gridCells.length}, attempts=${result.diagnostics.attempts || 1}`
+      );
+      if (!best) {
+        log(
+          `从者 #${result.servantId}: 没有可用头像模板 (${result.diagnostics.failReason ?? "unknown"})`,
+          "warn"
+        );
+      } else if (best.found) {
+        log(
+          `强化从者 #${result.servantId}: 最佳 r${best.row}c${best.col} ${best.template} score=${best.score.toFixed(3)} ✓ center=(${best.x.toFixed(3)}, ${best.y.toFixed(3)})`
+        );
+      } else {
+        log(
+          `强化从者 #${result.servantId}: 最佳 r${best.row}c${best.col} ${best.template} score=${best.score.toFixed(3)} < ${result.threshold.toFixed(2)} (${result.diagnostics.failReason ?? "unknown"})`,
+          "warn"
+        );
+      }
+      for (const m of sorted.slice(0, 6)) {
+        log(
+          `  r${m.row}c${m.col} ${m.template}: ${m.score.toFixed(3)} ${m.found ? "✓" : "✗"}` +
+            (m.region ? ` @ (${m.x.toFixed(3)}, ${m.y.toFixed(3)})` : "")
+        );
+      }
+    } catch (err) {
+      log(`debug_find_enhancement_servant 失败: ${err}`, "error");
+    } finally {
+      setFindingEnhancementServant(false);
+    }
+  }, [
+    capture,
+    parsedEnhancementServantId,
+    parsedEnhancementServantThreshold,
+    log,
+  ]);
 
   const handleFindSupports = useCallback(async () => {
     if (!capture || parsedSupportServantId === null) return;
@@ -952,6 +1086,7 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
       noblePhantasms,
       battleScene,
       attackButton,
+      enhancementServantResult,
       supportResult,
       coordinates,
       showCoordOverlay,
@@ -964,6 +1099,7 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
       noblePhantasms,
       battleScene,
       attackButton,
+      enhancementServantResult,
       supportResult,
       coordinates,
       showCoordOverlay,
@@ -1118,6 +1254,7 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
                 commandCards.length === 0 &&
                 noblePhantasms.length === 0 &&
                 supportResult === null &&
+                enhancementServantResult === null &&
                 battleScene === null &&
                 attackButton === null
               }
@@ -1200,6 +1337,55 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
               >
                 {findingNps ? "识别中…" : "识别宝具卡"}
               </button>
+            </Flex>
+          </DebugSection>
+
+          <DebugSection
+            title="强化从者头像识别"
+            badge={
+              enhancementServantResult
+                ? `#${enhancementServantResult.servantId}`
+                : undefined
+            }
+          >
+            <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
+              <input
+                className="debug-input"
+                list="debug-enhancement-servant-list"
+                placeholder="从者 id"
+                value={enhancementServantId}
+                onChange={(e) => setEnhancementServantId(e.target.value)}
+                style={{ width: 120 }}
+              />
+              <datalist id="debug-enhancement-servant-list">
+                {availableServantIds.map((id) => (
+                  <option key={`enhancement-id-${id}`} value={id} />
+                ))}
+              </datalist>
+              <input
+                className="debug-input debug-input-threshold"
+                type="number"
+                step="0.01"
+                min="0"
+                max="1"
+                value={enhancementServantThreshold}
+                onChange={(e) => setEnhancementServantThreshold(e.target.value)}
+                title="强化从者头像匹配阈值"
+              />
+              <button
+                className="battle-btn battle-btn-start debug-btn-small"
+                disabled={
+                  findingEnhancementServant ||
+                  !capture ||
+                  parsedEnhancementServantId === null
+                }
+                onClick={handleFindEnhancementServant}
+              >
+                {findingEnhancementServant ? "识别中…" : "识别强化从者"}
+              </button>
+              <Text size="2" color="gray">
+                使用生产逻辑的从者列表区域和 face crop。
+              </Text>
             </Flex>
           </DebugSection>
 
@@ -1545,6 +1731,95 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
                   </Text>
                 </Box>
               )}
+            </Box>
+          </DebugSection>
+
+          <DebugSection
+            title="强化从者头像识别"
+            badge={
+              enhancementServantResult
+                ? `${enhancementServantResult.matches.filter((m) => m.found).length}/${enhancementServantResult.matches.length}`
+                : undefined
+            }
+          >
+            <Box className="debug-match-list">
+              {!enhancementServantResult && (
+                <Text size="1" color="gray">
+                  暂无识别结果
+                </Text>
+              )}
+              {enhancementServantResult && (
+                <Box className="debug-match-entry">
+                  <Text size="2" weight="medium">
+                    目标：#{enhancementServantResult.servantId}
+                  </Text>
+                  <Text size="1" color="gray">
+                    模板缩放: {enhancementServantResult.templateSize.w} ×{" "}
+                    {enhancementServantResult.templateSize.h}
+                  </Text>
+                  <Text size="1" color="gray">
+                    crop (
+                    {enhancementServantResult.templateCrop.x.toFixed(3)},{" "}
+                    {enhancementServantResult.templateCrop.y.toFixed(3)},{" "}
+                    {enhancementServantResult.templateCrop.w.toFixed(3)},{" "}
+                    {enhancementServantResult.templateCrop.h.toFixed(3)})
+                  </Text>
+                  <Text size="1" color="gray">
+                    搜索区域 (
+                    {enhancementServantResult.searchRegion.x.toFixed(3)},{" "}
+                    {enhancementServantResult.searchRegion.y.toFixed(3)},{" "}
+                    {enhancementServantResult.searchRegion.w.toFixed(3)},{" "}
+                    {enhancementServantResult.searchRegion.h.toFixed(3)})
+                  </Text>
+                  <Text size="1" color="gray">
+                    anchors {enhancementServantResult.anchors.length} · cells{" "}
+                    {enhancementServantResult.gridCells.length} · attempts{" "}
+                    {enhancementServantResult.diagnostics.attempts || 1}
+                    {enhancementServantResult.diagnostics.failReason
+                      ? ` · ${enhancementServantResult.diagnostics.failReason}`
+                      : ""}
+                  </Text>
+                </Box>
+              )}
+              {enhancementServantResult?.referenceAnchor && (
+                <Box className="debug-match-entry found">
+                  <Text size="2" weight="medium">
+                    参考 anchor
+                  </Text>
+                  <Text size="1" color="gray">
+                    col {enhancementServantResult.referenceAnchor.col ?? "?"} ·
+                    edge{" "}
+                    {enhancementServantResult.referenceAnchor.edgeScore.toFixed(3)} ·
+                    gray{" "}
+                    {enhancementServantResult.referenceAnchor.grayScore.toFixed(3)}
+                  </Text>
+                </Box>
+              )}
+              {enhancementServantResult?.matches
+                .slice()
+                .sort((a, b) => b.score - a.score)
+                .map((m) => (
+                  <Box
+                    key={`enhancement-side-${m.row}-${m.col}-${m.template}`}
+                    className={`debug-match-entry ${m.found ? "found" : "missed"}`}
+                  >
+                    <Flex justify="between" align="center">
+                      <Text size="2" weight="medium">
+                        {m.template}
+                      </Text>
+                      <Text size="1" color={m.found ? "green" : "red"}>
+                        {m.score.toFixed(3)}
+                      </Text>
+                    </Flex>
+                    <Text size="1" color="gray">
+                      r{m.row} c{m.col} · 阈值{" "}
+                      {enhancementServantResult.threshold.toFixed(2)}
+                      {m.region
+                        ? ` · center (${m.x.toFixed(3)}, ${m.y.toFixed(3)})`
+                        : ""}
+                    </Text>
+                  </Box>
+                ))}
             </Box>
           </DebugSection>
 

@@ -3,6 +3,7 @@ import type {
   AttackButtonResultDto,
   BattleSceneResultDto,
   CommandCardMatchDto,
+  EnhancementServantMatchResultDto,
   FindSupportsResultDto,
   NoblePhantasmMatchDto,
   ProbeResult,
@@ -22,6 +23,7 @@ export interface DebugCanvasState {
   noblePhantasms: NoblePhantasmMatchDto[];
   battleScene: BattleSceneResultDto | null;
   attackButton: AttackButtonResultDto | null;
+  enhancementServantResult: EnhancementServantMatchResultDto | null;
   supportResult: FindSupportsResultDto | null;
   coordinates: RunnerCoordinatesDto | null;
   showCoordOverlay: boolean;
@@ -50,6 +52,7 @@ export function DebugCanvas({
   noblePhantasms,
   battleScene,
   attackButton,
+  enhancementServantResult,
   supportResult,
   coordinates,
   showCoordOverlay,
@@ -290,6 +293,79 @@ export function DebugCanvas({
             >
               <span className="debug-coord-label">点击</span>
             </Box>
+          </>
+        )}
+        {enhancementServantResult && (
+          <>
+            <Box
+              key="enhancement-servant-search"
+              className="debug-overlay-box debug-overlay-support-region"
+              style={{
+                left: `${enhancementServantResult.searchRegion.x * 100}%`,
+                top: `${enhancementServantResult.searchRegion.y * 100}%`,
+                width: `${enhancementServantResult.searchRegion.w * 100}%`,
+                height: `${enhancementServantResult.searchRegion.h * 100}%`,
+              }}
+            >
+              <span className="debug-overlay-label">
+                强化从者 #{enhancementServantResult.servantId}
+              </span>
+            </Box>
+            {enhancementServantResult.anchors.map((a, i) => (
+              <Box
+                key={`enhancement-anchor-${i}`}
+                className="debug-overlay-box debug-overlay-support-name-cand"
+                style={{
+                  left: `${a.x * 100}%`,
+                  top: `${a.y * 100}%`,
+                  width: `${a.w * 100}%`,
+                  height: `${a.h * 100}%`,
+                }}
+              >
+                <span className="debug-overlay-label">
+                  anchor · e{a.edgeScore.toFixed(2)} · g{a.grayScore.toFixed(2)}
+                </span>
+              </Box>
+            ))}
+            {enhancementServantResult.gridCells.map((c) => (
+              <Box
+                key={`enhancement-cell-${c.row}-${c.col}`}
+                className="debug-overlay-box debug-overlay-card"
+                style={{
+                  left: `${c.region.x * 100}%`,
+                  top: `${c.region.y * 100}%`,
+                  width: `${c.region.w * 100}%`,
+                  height: `${c.region.h * 100}%`,
+                }}
+              >
+                <span className="debug-overlay-label">
+                  r{c.row}c{c.col}
+                </span>
+              </Box>
+            ))}
+            {enhancementServantResult.best?.region ? (
+                <Box
+                  key="enhancement-best-face"
+                  className={`debug-overlay-box ${
+                    enhancementServantResult.best.found
+                      ? "debug-overlay-support-name-cand"
+                      : "debug-overlay-support-np-cand"
+                  }`}
+                  style={{
+                    left: `${enhancementServantResult.best.region.x * 100}%`,
+                    top: `${enhancementServantResult.best.region.y * 100}%`,
+                    width: `${enhancementServantResult.best.region.w * 100}%`,
+                    height: `${enhancementServantResult.best.region.h * 100}%`,
+                  }}
+                >
+                  <span className="debug-overlay-label">
+                    best r{enhancementServantResult.best.row}c
+                    {enhancementServantResult.best.col} ·{" "}
+                    {enhancementServantResult.best.score.toFixed(2)}
+                    {enhancementServantResult.best.found ? "" : " ✗"}
+                  </span>
+                </Box>
+            ) : null}
           </>
         )}
         {supportResult && (

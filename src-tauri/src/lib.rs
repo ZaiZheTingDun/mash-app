@@ -368,23 +368,20 @@ fn load_enhancement_target(
     let root = resolve_servant_assets_dir(app)
         .ok_or_else(|| "未找到从者资源目录，无法进行头像匹配".to_string())?;
     let servant_dir = root.join(servant.id.to_string());
-    let face_template_path = servant
-        .face_id
-        .and_then(|id| pick_face_by_id_in(&servant_dir, id))
-        .or_else(|| pick_face_in(&servant_dir))
-        .ok_or_else(|| {
-            format!(
-                "缺少从者头像模板资源，无法在无名称列表中自动选择: {} ({})",
-                servant.name_jp, servant.variant_key
-            )
-        })?;
+    let face_template_paths = pick_faces_desc_in(&servant_dir);
+    if face_template_paths.is_empty() {
+        return Err(format!(
+            "缺少从者头像模板资源，无法在无名称列表中自动选择: {} ({})",
+            servant.name_jp, servant.variant_key
+        ));
+    }
     Ok(EnhancementTarget {
         id: servant.id,
         variant_key: servant.variant_key.clone(),
         name_jp: servant.name_jp.clone(),
         class_name: servant.class.clone(),
         rarity: servant.rarity,
-        face_template_path,
+        face_template_paths,
     })
 }
 
@@ -605,16 +602,34 @@ fn pick_portrait_by_id_in(servant_dir: &std::path::Path, portrait_id: u32) -> Op
 }
 
 fn pick_face_in(servant_dir: &std::path::Path) -> Option<PathBuf> {
-    let entries = fs::read_dir(servant_dir).ok()?;
-    entries
+    pick_faces_desc_in(servant_dir).into_iter().next()
+}
+
+fn pick_faces_desc_in(servant_dir: &std::path::Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(servant_dir) else {
+        return Vec::new();
+    };
+    let mut paths: Vec<PathBuf> = entries
         .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| {
-            p.file_name()
-                .and_then(|n| n.to_str())
-                .map(|n| n.starts_with("face_servant_") && n.ends_with(".png"))
-                .unwrap_or(false)
-        })
-        .max()
+        .filter(|p| is_face_template_path(p))
+        .collect();
+    paths.sort_by(|a, b| face_template_stage(b).cmp(&face_template_stage(a)));
+    paths
+}
+
+fn is_face_template_path(path: &std::path::Path) -> bool {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| n.starts_with("face_servant_") && n.ends_with(".png"))
+        .unwrap_or(false)
+}
+
+fn face_template_stage(path: &std::path::Path) -> u32 {
+    path.file_stem()
+        .and_then(|n| n.to_str())
+        .and_then(|n| n.strip_prefix("face_servant_"))
+        .and_then(|n| n.parse::<u32>().ok())
+        .unwrap_or(0)
 }
 
 fn pick_face_by_id_in(servant_dir: &std::path::Path, face_id: u32) -> Option<PathBuf> {
@@ -1472,6 +1487,7 @@ pub fn run() {
             debug::debug_get_runner_coordinates,
             debug::debug_find_command_cards,
             debug::debug_find_noble_phantasms,
+            debug::debug_find_enhancement_servant,
             debug::debug_find_attack_button,
             debug::debug_read_battle_scene,
             debug::debug_find_supports,
@@ -1650,6 +1666,32 @@ mod tests {
         assert_eq!(
             picked.file_name().and_then(|n| n.to_str()),
             Some("face_servant_4.png")
+        );
+    }
+
+    #[test]
+    fn pick_faces_desc_in_returns_all_faces_high_to_low() {
+        let tmp = tempfile::tempdir().unwrap();
+        for name in [
+            "face_servant_1.png",
+            "face_servant_10.png",
+            "face_servant_4.png",
+            "narrow_servant_4.png",
+        ] {
+            fs::write(tmp.path().join(name), b"").unwrap();
+        }
+        let picked = pick_faces_desc_in(tmp.path());
+        let names: Vec<_> = picked
+            .iter()
+            .filter_map(|p| p.file_name().and_then(|n| n.to_str()))
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                "face_servant_10.png",
+                "face_servant_4.png",
+                "face_servant_1.png"
+            ]
         );
     }
 
