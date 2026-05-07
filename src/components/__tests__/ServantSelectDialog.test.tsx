@@ -198,6 +198,31 @@ describe("ServantSelectDialog", () => {
     });
   });
 
+  it("virtualizes large lists and only resolves visible faces", async () => {
+    const servants: Servant[] = Array.from({ length: 120 }, (_, i) => ({
+      id: i + 1,
+      variantKey: String(i + 1),
+      name_cn: `从者 ${i + 1}`,
+      name_jp: `サーヴァント ${i + 1}`,
+      name_en: `Servant ${i + 1}`,
+      class: "Caster",
+      rarity: 5,
+      noblePhantasmName: `宝具 ${i + 1}`,
+    }));
+
+    setup({ servants });
+
+    const options = screen.queryAllByRole("option");
+    expect(options.length).toBeGreaterThan(0);
+    expect(options.length).toBeLessThan(40);
+
+    await waitFor(() => {
+      const faceCalls = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "get_servant_face_path");
+      expect(faceCalls.length).toBeGreaterThan(0);
+      expect(faceCalls.length).toBeLessThan(40);
+    });
+  });
+
   it("hides servants whose ids appear in disabledIds", () => {
     setup({ disabledIds: [150] });
     expect(screen.queryByText("梅林")).not.toBeInTheDocument();

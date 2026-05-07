@@ -4,7 +4,6 @@ import {
   Flex,
   Text,
   TextField,
-  ScrollArea,
   Box,
   Select,
 } from "@radix-ui/themes";
@@ -46,6 +45,9 @@ const CLASS_COLORS: Record<string, string> = {
 
 const ALL_CLASSES_VALUE = "__all_classes__";
 const ALL_RARITIES_VALUE = "__all_rarities__";
+const ROW_HEIGHT = 72;
+const OVERSCAN = 4;
+const VIEWPORT_H = 420;
 
 function getClassColor(cls: string): string {
   if (CLASS_COLORS[cls]) return CLASS_COLORS[cls];
@@ -66,8 +68,9 @@ export function ServantSelectDialog({
   const [classFilter, setClassFilter] = useState("");
   const [rarityFilter, setRarityFilter] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
   const [faceSrcByKey, setFaceSrcByKey] = useState<Record<string, string | null>>({});
-  const listRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const classOptions = useMemo(
     () => Array.from(new Set(servants.map((s) => s.class))).sort(),
@@ -103,14 +106,30 @@ export function ServantSelectDialog({
     );
   }, [servants, search, classFilter, rarityFilter, disabledIds]);
 
+  const safeActiveIndex =
+    filtered.length === 0 ? 0 : Math.min(activeIndex, filtered.length - 1);
+
+  const startIndex = Math.max(
+    0,
+    Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN
+  );
+  const endIndex = Math.min(
+    filtered.length,
+    Math.ceil((scrollTop + VIEWPORT_H) / ROW_HEIGHT) + OVERSCAN
+  );
+  const visible = useMemo(
+    () => filtered.slice(startIndex, endIndex),
+    [filtered, startIndex, endIndex]
+  );
+
   const faceEntries = useMemo(
     () =>
-      filtered.map((s) => ({
+      visible.map((s) => ({
         variantKey: s.variantKey,
         id: s.id,
         faceId: s.faceId ?? null,
       })),
-    [filtered]
+    [visible]
   );
 
   useEffect(() => {
@@ -144,14 +163,12 @@ export function ServantSelectDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [faceEntries]);
 
-  // Keep the keyboard-highlighted row valid when the visible list shrinks
-  // (e.g. opening the dialog from a different slot tightens `disabledIds`).
-  useEffect(() => {
-    setActiveIndex((prev) => {
-      if (filtered.length === 0) return 0;
-      return Math.min(prev, filtered.length - 1);
-    });
-  }, [filtered.length]);
+  const resetScroll = useCallback(() => {
+    setScrollTop(0);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, []);
 
   const handleSelect = useCallback(
     (servant: Servant) => {
@@ -159,8 +176,9 @@ export function ServantSelectDialog({
       onOpenChange(false);
       setSearch("");
       setActiveIndex(0);
+      resetScroll();
     },
-    [onSelect, onOpenChange]
+    [onSelect, onOpenChange, resetScroll]
   );
 
   const handleOpenChange = useCallback(
@@ -171,20 +189,23 @@ export function ServantSelectDialog({
         setClassFilter("");
         setRarityFilter("");
         setActiveIndex(0);
+        resetScroll();
       }
     },
-    [onOpenChange]
+    [onOpenChange, resetScroll]
   );
 
-  const scrollActiveIntoView = useCallback(
-    (index: number) => {
-      const list = listRef.current;
-      if (!list) return;
-      const items = list.querySelectorAll<HTMLElement>('[role="option"]');
-      items[index]?.scrollIntoView({ block: "nearest" });
-    },
-    []
-  );
+  const ensureVisible = useCallback((index: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const top = index * ROW_HEIGHT;
+    const bottom = top + ROW_HEIGHT;
+    if (top < el.scrollTop) {
+      el.scrollTop = top;
+    } else if (bottom > el.scrollTop + el.clientHeight) {
+      el.scrollTop = bottom - el.clientHeight;
+    }
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -193,28 +214,28 @@ export function ServantSelectDialog({
       switch (e.key) {
         case "ArrowDown": {
           e.preventDefault();
-          const next = Math.min(activeIndex + 1, filtered.length - 1);
+          const next = Math.min(safeActiveIndex + 1, filtered.length - 1);
           setActiveIndex(next);
-          scrollActiveIntoView(next);
+          ensureVisible(next);
           break;
         }
         case "ArrowUp": {
           e.preventDefault();
-          const prev = Math.max(activeIndex - 1, 0);
+          const prev = Math.max(safeActiveIndex - 1, 0);
           setActiveIndex(prev);
-          scrollActiveIntoView(prev);
+          ensureVisible(prev);
           break;
         }
         case "Enter": {
           e.preventDefault();
-          if (filtered[activeIndex]) {
-            handleSelect(filtered[activeIndex]);
+          if (filtered[safeActiveIndex]) {
+            handleSelect(filtered[safeActiveIndex]);
           }
           break;
         }
       }
     },
-    [filtered, activeIndex, handleSelect, scrollActiveIntoView]
+    [filtered, safeActiveIndex, handleSelect, ensureVisible]
   );
 
   return (
@@ -229,6 +250,7 @@ export function ServantSelectDialog({
           onChange={(e) => {
             setSearch(e.target.value);
             setActiveIndex(0);
+            resetScroll();
           }}
           onKeyDown={handleKeyDown}
           className="servant-search"
@@ -244,6 +266,7 @@ export function ServantSelectDialog({
             onValueChange={(value) => {
               setClassFilter(value === ALL_CLASSES_VALUE ? "" : value);
               setActiveIndex(0);
+              resetScroll();
             }}
           >
             <Select.Trigger
@@ -264,6 +287,7 @@ export function ServantSelectDialog({
             onValueChange={(value) => {
               setRarityFilter(value === ALL_RARITIES_VALUE ? "" : value);
               setActiveIndex(0);
+              resetScroll();
             }}
           >
             <Select.Trigger
@@ -281,66 +305,80 @@ export function ServantSelectDialog({
           </Select.Root>
         </Flex>
 
-        <ScrollArea className="servant-list-scroll">
-          <Flex
-            ref={listRef}
-            direction="column"
-            gap="1"
-            p="1"
-            role="listbox"
-            aria-label="从者列表"
-          >
-            {filtered.length === 0 ? (
-              <Flex align="center" justify="center" py="6">
-                <Text size="2" color="gray">
-                  未找到匹配的从者
-                </Text>
-              </Flex>
-            ) : (
-              filtered.map((servant, index) => (
-                <button
-                  key={servant.variantKey}
-                  role="option"
-                  aria-selected={index === activeIndex}
-                  className={`servant-option ${index === activeIndex ? "focused" : ""}`}
-                  onClick={() => handleSelect(servant)}
-                  onMouseEnter={() => setActiveIndex(index)}
-                >
-                  <div className="servant-option-content">
-                    <div className="servant-face-frame">
-                      {faceSrcByKey[servant.variantKey] ? (
-                        <img src={faceSrcByKey[servant.variantKey] ?? ""} alt="" />
-                      ) : (
-                        <span>{servant.class.slice(0, 2)}</span>
-                      )}
-                    </div>
-                    <Flex direction="column" align="start" gap="1" className="servant-option-text">
-                      <Flex align="center" gap="2" wrap="wrap">
-                        <Text size="2" weight="medium">
-                          {servant.name_cn}
-                        </Text>
-                        <Box
-                          className="servant-class-badge"
-                          style={{ background: getClassColor(servant.class) }}
-                        >
-                          <Text size="1" weight="bold" style={{ color: "#fff" }}>
-                            {servant.class.split(" ")[0]}
+        <div
+          className="servant-list-scroll"
+          ref={scrollRef}
+          onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+        >
+          {filtered.length === 0 ? (
+            <Flex align="center" justify="center" py="6">
+              <Text size="2" color="gray">
+                未找到匹配的从者
+              </Text>
+            </Flex>
+          ) : (
+            <div
+              style={{
+                height: filtered.length * ROW_HEIGHT,
+                position: "relative",
+              }}
+              role="listbox"
+              aria-label="从者列表"
+            >
+              {visible.map((servant, i) => {
+                const index = startIndex + i;
+                return (
+                  <button
+                    key={servant.variantKey}
+                    role="option"
+                    aria-selected={index === safeActiveIndex}
+                    className={`servant-option ${index === safeActiveIndex ? "focused" : ""}`}
+                    style={{
+                      position: "absolute",
+                      top: index * ROW_HEIGHT,
+                      left: 0,
+                      right: 0,
+                      height: ROW_HEIGHT,
+                    }}
+                    onClick={() => handleSelect(servant)}
+                    onMouseEnter={() => setActiveIndex(index)}
+                  >
+                    <div className="servant-option-content">
+                      <div className="servant-face-frame">
+                        {faceSrcByKey[servant.variantKey] ? (
+                          <img src={faceSrcByKey[servant.variantKey] ?? ""} alt="" />
+                        ) : (
+                          <span>{servant.class.slice(0, 2)}</span>
+                        )}
+                      </div>
+                      <Flex direction="column" align="start" gap="1" className="servant-option-text">
+                        <Flex align="center" gap="2" wrap="wrap">
+                          <Text size="2" weight="medium">
+                            {servant.name_cn}
                           </Text>
-                        </Box>
-                        <Text size="1" className="servant-rarity">
-                          {"★".repeat(servant.rarity)}
+                          <Box
+                            className="servant-class-badge"
+                            style={{ background: getClassColor(servant.class) }}
+                          >
+                            <Text size="1" weight="bold" style={{ color: "#fff" }}>
+                              {servant.class.split(" ")[0]}
+                            </Text>
+                          </Box>
+                          <Text size="1" className="servant-rarity">
+                            {"★".repeat(servant.rarity)}
+                          </Text>
+                        </Flex>
+                        <Text size="1" className="servant-np-name">
+                          {servant.noblePhantasmName ?? "宝具未记录"}
                         </Text>
                       </Flex>
-                      <Text size="1" className="servant-np-name">
-                        {servant.noblePhantasmName ?? "宝具未记录"}
-                      </Text>
-                    </Flex>
-                  </div>
-                </button>
-              ))
-            )}
-          </Flex>
-        </ScrollArea>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </Dialog.Content>
     </Dialog.Root>
   );
