@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import {
+  Box,
+  Button,
+  Checkbox,
+  Flex,
+  Select,
+  Text,
+  TextField,
+} from "@radix-ui/themes";
 import { invoke, listen } from "../tauri";
 import { ChevronLeftIcon } from "@radix-ui/react-icons";
 import type { Project } from "../types/project";
@@ -24,6 +32,8 @@ const AP_RECOVERY_OPTIONS: { value: ApRecoveryItem; label: string }[] = [
   { value: "bronze", label: "青铜苹果" },
   { value: "copper", label: "赤铜苹果" },
 ];
+
+const EMPTY_PROJECT_SELECT_VALUE = "__none__";
 
 interface BattlePageProps {
   defaultProjectId: string | null;
@@ -165,10 +175,10 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
   return (
     <Flex direction="column" className="battle-page">
       <Flex align="center" gap="3" className="battle-header">
-        <button className="battle-back-btn" onClick={onBack}>
+        <Button variant="soft" color="gray" onClick={onBack}>
           <ChevronLeftIcon width={16} height={16} />
           <Text size="2">返回</Text>
-        </button>
+        </Button>
         <Text size="4" weight="bold">
           战斗运行
         </Text>
@@ -179,31 +189,37 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
           <Text size="2" weight="medium" style={{ marginBottom: 6, display: "block" }}>
             选择项目
           </Text>
-          <select
-            className="battle-selector"
-            value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
+          <Select.Root
+            value={selectedId || EMPTY_PROJECT_SELECT_VALUE}
+            onValueChange={(value) => {
+              if (value !== EMPTY_PROJECT_SELECT_VALUE) {
+                setSelectedId(value);
+              }
+            }}
             disabled={running}
           >
-            {projects.length === 0 && (
-              <option value="">-- 无可用项目 --</option>
-            )}
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            <Select.Trigger className="battle-selector-trigger" />
+            <Select.Content>
+              {projects.length === 0 && (
+                <Select.Item value={EMPTY_PROJECT_SELECT_VALUE}>
+                  -- 无可用项目 --
+                </Select.Item>
+              )}
+              {projects.map((p) => (
+                <Select.Item key={p.id} value={p.id}>
+                  {p.name}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
         </Box>
 
         <Flex align="center" gap="2">
-          <input
+          <Checkbox
             id="repeat-mission"
-            type="checkbox"
-            className="battle-checkbox"
             checked={selectedProject?.repeatMission ?? false}
             disabled={running || !selectedProject}
-            onChange={(e) => handleToggleRepeat(e.target.checked)}
+            onCheckedChange={(checked) => handleToggleRepeat(checked === true)}
           />
           <label htmlFor="repeat-mission">
             <Text size="2">重复任务（结算后继续同一任务）</Text>
@@ -214,8 +230,8 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
           <Text size="2" weight="medium" style={{ marginBottom: 6, display: "block" }}>
             运行轮数
           </Text>
-          <input
-            className="battle-number-input"
+          <TextField.Root
+            className="battle-number-field"
             type="number"
             min="1"
             step="1"
@@ -229,13 +245,11 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
 
         <Box>
           <Flex align="center" gap="2">
-            <input
+            <Checkbox
               id="auto-eat-apples"
-              type="checkbox"
-              className="battle-checkbox"
               checked={autoEatApples}
               disabled={running}
-              onChange={(e) => setAutoEatApples(e.target.checked)}
+              onCheckedChange={(checked) => setAutoEatApples(checked === true)}
             />
             <label htmlFor="auto-eat-apples">
               <Text size="2">自动吃苹果</Text>
@@ -245,12 +259,10 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
             <div className="battle-apple-menu">
               {AP_RECOVERY_OPTIONS.map((option) => (
                 <label key={option.value} className="battle-apple-option">
-                  <input
-                    type="checkbox"
-                    className="battle-checkbox"
+                  <Checkbox
                     checked={apRecoveryItems.includes(option.value)}
                     disabled={running}
-                    onChange={() => handleToggleApRecoveryItem(option.value)}
+                    onCheckedChange={() => handleToggleApRecoveryItem(option.value)}
                   />
                   <Text size="2">{option.label}</Text>
                 </label>
@@ -260,27 +272,28 @@ export function BattlePage({ defaultProjectId, onBack }: BattlePageProps) {
         </Box>
 
         <Flex gap="3" className="battle-controls">
-          <button
-            className="battle-btn battle-btn-start"
+          <Button
             disabled={running || !selectedId}
             onClick={handleStart}
           >
             开始
-          </button>
-          <button
-            className="battle-btn battle-btn-stop"
+          </Button>
+          <Button
+            color="red"
+            variant="soft"
             disabled={!running}
             onClick={handleStop}
           >
             停止
-          </button>
-          <button
-            className="battle-btn battle-btn-stop"
+          </Button>
+          <Button
+            color="red"
+            variant="soft"
             disabled={!running}
             onClick={handleStopAfterCurrent}
           >
             运行完当前轮次后停止
-          </button>
+          </Button>
         </Flex>
 
         <Box className="battle-log-container">

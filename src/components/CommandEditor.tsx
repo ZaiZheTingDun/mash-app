@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Flex, Text } from "@radix-ui/themes";
+import { Flex, IconButton, Text } from "@radix-ui/themes";
 import { invoke } from "../tauri";
 import { BattleSceneBlock } from "./BattleSceneBlock";
 import { deriveScenePartyServants } from "./partyServants";
@@ -137,21 +137,23 @@ export function CommandEditor({ projectId, partyLineup }: CommandEditorProps) {
   return (
     <Flex direction="column" className="command-editor">
       <Flex align="center" justify="center" gap="3" className="battle-scene-nav">
-        <button
+        <IconButton
           type="button"
-          className="battle-nav-btn"
+          variant="surface"
+          color="gray"
           aria-label="上一场战斗"
           disabled={activeIndex === 0}
           onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}
         >
           <ChevronLeftIcon width={18} height={18} />
-        </button>
+        </IconButton>
         <Text size="4" weight="bold">
           Battle {activeIndex + 1} / {scenes.length}
         </Text>
-        <button
+        <IconButton
           type="button"
-          className="battle-nav-btn"
+          variant="surface"
+          color="gray"
           aria-label="下一场战斗"
           disabled={activeIndex >= scenes.length - 1}
           onClick={() =>
@@ -159,24 +161,26 @@ export function CommandEditor({ projectId, partyLineup }: CommandEditorProps) {
           }
         >
           <ChevronRightIcon width={18} height={18} />
-        </button>
-        <button
+        </IconButton>
+        <IconButton
           type="button"
-          className="battle-nav-btn"
+          variant="surface"
+          color="gray"
           aria-label="添加 Battle"
           onClick={handleAddScene}
         >
           <PlusIcon width={16} height={16} />
-        </button>
+        </IconButton>
         {scenes.length > 1 && (
-          <button
+          <IconButton
             type="button"
-            className="battle-nav-btn danger"
+            variant="surface"
+            color="red"
             aria-label="删除当前 Battle"
             onClick={() => handleDeleteScene(activeScene.id)}
           >
             <TrashIcon width={16} height={16} />
-          </button>
+          </IconButton>
         )}
       </Flex>
       <div className="command-scroll-region">

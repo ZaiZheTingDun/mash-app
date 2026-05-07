@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Box, DropdownMenu, Flex, Text } from "@radix-ui/themes";
+import { Box, Button, DropdownMenu, Flex, Text } from "@radix-ui/themes";
 import {
   ChevronDownIcon,
   PlusIcon,
@@ -52,12 +52,12 @@ export function ProjectBar({
     <Box className="project-bar">
       <DropdownMenu.Root>
         <DropdownMenu.Trigger>
-          <button type="button" className="project-bar-pill">
+          <Button type="button" variant="surface" color="gray" className="project-bar-pill">
             <Text size="3" weight="bold" className="project-bar-title">
               {`～ ${triggerLabel} ～`}
             </Text>
             <ChevronDownIcon width={15} height={15} className="project-bar-menu-icon" />
-          </button>
+          </Button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Content>
           {projects.length === 0 ? (

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import { Box, Button, Flex, Text } from "@radix-ui/themes";
 import { ChevronLeftIcon } from "@radix-ui/react-icons";
 import { invoke, listen } from "../tauri";
 import { ServantSelectDialog } from "./ServantSelectDialog";
@@ -93,10 +93,10 @@ export function EnhancementPage({ servants, onBack }: EnhancementPageProps) {
   return (
     <Flex direction="column" className="battle-page">
       <Flex align="center" gap="3" className="battle-header">
-        <button className="battle-back-btn" onClick={onBack}>
+        <Button variant="soft" color="gray" onClick={onBack}>
           <ChevronLeftIcon width={16} height={16} />
           <Text size="2">返回</Text>
-        </button>
+        </Button>
         <Text size="4" weight="bold">
           强化从者
         </Text>
@@ -107,18 +107,18 @@ export function EnhancementPage({ servants, onBack }: EnhancementPageProps) {
           <Text size="2" weight="medium" style={{ marginBottom: 6, display: "block" }}>
             目标从者
           </Text>
-          <button
+          <Button
             type="button"
-            className="battle-selector enhancement-servant-trigger"
+            variant="surface"
+            color="gray"
+            className="enhancement-servant-trigger"
             onClick={() => setDialogOpen(true)}
             disabled={running}
           >
-            <span>
-              {selectedServant
-                ? `${selectedServant.name_cn} / ${selectedServant.class} / ${selectedServant.rarity} 星`
-                : "选择从者"}
-            </span>
-          </button>
+            {selectedServant
+              ? `${selectedServant.name_cn} / ${selectedServant.class} / ${selectedServant.rarity} 星`
+              : "选择从者"}
+          </Button>
         </Box>
 
         <Box className="enhancement-summary">
@@ -133,20 +133,20 @@ export function EnhancementPage({ servants, onBack }: EnhancementPageProps) {
         </Box>
 
         <Flex gap="3" className="battle-controls">
-          <button
-            className="battle-btn battle-btn-start"
+          <Button
             disabled={running || !selectedServant}
             onClick={handleStart}
           >
             开始
-          </button>
-          <button
-            className="battle-btn battle-btn-stop"
+          </Button>
+          <Button
+            color="red"
+            variant="soft"
             disabled={!running}
             onClick={handleStop}
           >
             停止
-          </button>
+          </Button>
         </Flex>
 
         <Box className="battle-log-container">

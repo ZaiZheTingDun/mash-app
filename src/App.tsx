@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Box, Flex, Text, Spinner } from "@radix-ui/themes";
+import { Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
 import { invoke } from "./tauri";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { ContentGrid } from "./components/ContentGrid";
@@ -252,23 +252,20 @@ function App() {
                     partyLineup={partyLineup}
                   />
                   <Flex justify="between" align="center" className="page-footer">
-                    <button
+                    <Button
                       type="button"
-                      className="page-back-btn"
+                      variant="soft"
+                      color="gray"
                       onClick={handleBackToTeam}
                     >
                       <ArrowLeftIcon width={14} height={14} />
                       <Text size="2">队伍设置</Text>
-                    </button>
-                    <button
-                      type="button"
-                      className="page-next-btn"
-                      onClick={handleStartRun}
-                    >
+                    </Button>
+                    <Button type="button" onClick={handleStartRun}>
                       <Text size="2" weight="bold">
                         开始任务
                       </Text>
-                    </button>
+                    </Button>
                   </Flex>
                 </>
               ) : (
@@ -290,25 +287,22 @@ function App() {
                     <AssetBundleButton
                       onImported={() => setAssetVersion((prev) => prev + 1)}
                     />
-                    <Flex align="center">
-                    <button
-                      type="button"
-                      className="page-secondary-btn"
-                      onClick={handleOpenEnhancement}
-                    >
-                      <Text size="2" weight="medium">
-                        强化从者
-                      </Text>
-                    </button>
-                    <button
-                      type="button"
-                      className="page-next-btn"
-                      onClick={handleGotoCommand}
-                    >
-                      <Text size="2" weight="bold">
-                        指令设置
-                      </Text>
-                    </button>
+                    <Flex align="center" gap="3">
+                      <Button
+                        type="button"
+                        variant="soft"
+                        color="gray"
+                        onClick={handleOpenEnhancement}
+                      >
+                        <Text size="2" weight="medium">
+                          强化从者
+                        </Text>
+                      </Button>
+                      <Button type="button" onClick={handleGotoCommand}>
+                        <Text size="2" weight="bold">
+                          指令设置
+                        </Text>
+                      </Button>
                     </Flex>
                   </Flex>
                 </>

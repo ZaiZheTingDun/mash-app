@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Spinner, Text } from "@radix-ui/themes";
+import { Button, Spinner, Text } from "@radix-ui/themes";
 import { invoke } from "../tauri";
 
 interface AssetBundleImportResult {
@@ -65,9 +65,10 @@ export function AssetBundleButton({ onImported }: AssetBundleButtonProps) {
 
   return (
     <div className="asset-import-block">
-      <button
+      <Button
         type="button"
-        className="page-secondary-btn"
+        variant="soft"
+        color="gray"
         disabled={busy}
         onClick={handleImport}
       >
@@ -75,7 +76,7 @@ export function AssetBundleButton({ onImported }: AssetBundleButtonProps) {
         <Text size="2" weight="medium">
           {busy ? "导入中…" : "导入素材包"}
         </Text>
-      </button>
+      </Button>
       {status && (
         <Text size="1" color={status.startsWith("导入失败") ? "red" : "gray"}>
           {status}
