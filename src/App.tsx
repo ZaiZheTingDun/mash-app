@@ -273,15 +273,19 @@ function App() {
                 </>
               ) : (
                 <>
-                  <ContentGrid
-                    key={`assets-${assetVersion}`}
-                    servants={servants}
-                    craftEssences={craftEssences}
-                    slots={slots}
-                    onSlotsChange={handleSlotsChange}
-                    activeProject={activeProject}
-                    onUpdateActiveProject={handleUpdateProject}
-                  />
+                  <Box className="team-stage">
+                    <Box className="team-stage-body">
+                      <ContentGrid
+                        key={`assets-${assetVersion}`}
+                        servants={servants}
+                        craftEssences={craftEssences}
+                        slots={slots}
+                        onSlotsChange={handleSlotsChange}
+                        activeProject={activeProject}
+                        onUpdateActiveProject={handleUpdateProject}
+                      />
+                    </Box>
+                  </Box>
                   <Flex justify="between" align="center" className="page-footer" gap="3">
                     <AssetBundleButton
                       onImported={() => setAssetVersion((prev) => prev + 1)}

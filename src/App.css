@@ -178,29 +178,65 @@ body,
 }
 
 .project-bar-pill {
-  display: inline-flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 8px;
-  padding: 6px 18px;
-  background: var(--gray-2);
-  border: 1px solid var(--gray-6);
-  border-radius: 999px;
-  color: var(--gray-12);
+  justify-items: center;
+  height: 38px;
+  min-width: min(360px, calc(100vw - 96px));
+  padding: 0 44px;
+  background: linear-gradient(180deg, rgba(245, 249, 253, 0.96), rgba(215, 226, 234, 0.96));
+  border: 1px solid rgba(98, 111, 125, 0.5);
+  border-radius: 19px;
+  color: #1b2430;
   cursor: pointer;
   font-family: inherit;
-  transition: all 0.15s;
-  min-width: 200px;
-  justify-content: center;
+  filter: drop-shadow(0 2px 0 rgba(16, 28, 45, 0.3));
+  transition: filter 0.15s, transform 0.15s;
+  isolation: isolate;
+}
+
+.project-bar-title {
+  grid-column: 2;
+  min-width: 0;
+  max-width: 220px;
+  text-align: center;
+  color: inherit;
+  letter-spacing: 0;
+}
+
+.project-bar-menu-icon {
+  position: absolute;
+  right: 28px;
+  color: #1b2430;
 }
 
 .project-bar-pill:hover {
-  background: var(--gray-3);
-  border-color: var(--gray-8);
+  filter: drop-shadow(0 2px 0 rgba(16, 28, 45, 0.35)) brightness(1.03);
+  transform: translateY(-1px);
 }
 
 .project-bar-pill:focus-visible {
   outline: 2px solid var(--blue-9);
   outline-offset: 2px;
+}
+
+.team-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.team-stage-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 4px 0 12px;
 }
 
 /* ── Content Grid ── */
@@ -238,15 +274,15 @@ body,
   --portrait-frame-diag-pull: calc(var(--portrait-frame-width) * 0.4142);
   --slot-band-height: 12px;
 
-  flex: 1;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns:
     repeat(3, var(--slot-card-width)) 1px repeat(3, var(--slot-card-width));
   grid-template-rows: auto;
   gap: 16px;
   justify-content: center;
-  align-content: start;
-  padding-top: 8px;
+  align-content: center;
+  padding: 8px 0;
 }
 
 .content-unified-grid::before {

@@ -53,10 +53,10 @@ export function ProjectBar({
       <DropdownMenu.Root>
         <DropdownMenu.Trigger>
           <button type="button" className="project-bar-pill">
-            <Text size="2" weight="medium">
+            <Text size="3" weight="bold" className="project-bar-title">
               {`～ ${triggerLabel} ～`}
             </Text>
-            <ChevronDownIcon width={14} height={14} />
+            <ChevronDownIcon width={15} height={15} className="project-bar-menu-icon" />
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Content>
