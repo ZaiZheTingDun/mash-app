@@ -112,9 +112,10 @@ describe("ServantSelectDialog", () => {
       ],
     });
 
-    const [classSelect, raritySelect] = screen.getAllByRole("combobox");
-    await user.selectOptions(classSelect, "Archer");
-    await user.selectOptions(raritySelect, "1");
+    await user.click(screen.getByRole("combobox", { name: "职介筛选" }));
+    await user.click(await screen.findByRole("option", { name: "Archer" }));
+    await user.click(screen.getByRole("combobox", { name: "稀有度筛选" }));
+    await user.click(await screen.findByRole("option", { name: "★1" }));
     expect(screen.getByText("阿拉什")).toBeInTheDocument();
     expect(screen.queryByText("梅林")).not.toBeInTheDocument();
   });

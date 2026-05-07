@@ -154,14 +154,32 @@ function App({ theme, onThemeChange }: AppProps) {
   // sidebar now reduced to action buttons, the picker moves to the
   // `<ProjectBar/>` ribbon above the team grid and the mutations live
   // here so both `App` and `ProjectBar` mutate the same lifted state.
-  const handleCreateProject = useCallback(() => {
-    invoke<Project>("create_project", { name: `Project ${projects.length + 1}` })
+  const handleCreateProject = useCallback((name: string) => {
+    invoke<Project>("create_project", { name })
       .then((p) => {
         setProjects((prev) => [...prev, p]);
         setActiveProjectId(p.id);
       })
       .catch(console.error);
-  }, [projects.length]);
+  }, []);
+
+  const handleRenameProject = useCallback(
+    (id: string, name: string) => {
+      const project = projects.find((p) => p.id === id);
+      if (!project) return;
+      void handleUpdateProject({ ...project, name });
+    },
+    [handleUpdateProject, projects]
+  );
+
+  const handleDuplicateProject = useCallback((id: string, name: string) => {
+    invoke<Project>("duplicate_project", { sourceId: id, name })
+      .then((p) => {
+        setProjects((prev) => [...prev, p]);
+        setActiveProjectId(p.id);
+      })
+      .catch(console.error);
+  }, []);
 
   const handleDeleteProject = useCallback(
     (id: string) => {
@@ -229,6 +247,8 @@ function App({ theme, onThemeChange }: AppProps) {
                 activeProjectId={activeProjectId}
                 onProjectSelect={setActiveProjectId}
                 onCreateProject={handleCreateProject}
+                onRenameProject={handleRenameProject}
+                onDuplicateProject={handleDuplicateProject}
                 onDeleteProject={handleDeleteProject}
               />
               {loading ? (

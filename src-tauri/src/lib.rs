@@ -307,6 +307,52 @@ fn create_project(app: tauri::AppHandle, name: String) -> Result<Project, String
     Ok(project)
 }
 
+fn copy_project_dir(src: &Path, dst: &Path) -> Result<(), String> {
+    if !src.exists() {
+        return Ok(());
+    }
+    fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let entry_src = entry.path();
+        let entry_dst = dst.join(entry.file_name());
+        if entry_src.is_dir() {
+            copy_project_dir(&entry_src, &entry_dst)?;
+        } else {
+            fs::copy(&entry_src, &entry_dst).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn duplicate_project(
+    app: tauri::AppHandle,
+    source_id: String,
+    name: String,
+) -> Result<Project, String> {
+    let mut projects = read_projects(&app);
+    let source = projects
+        .iter()
+        .find(|p| p.id == source_id)
+        .cloned()
+        .ok_or_else(|| format!("project not found: {source_id}"))?;
+    let project = Project {
+        id: uuid::Uuid::new_v4().to_string(),
+        name,
+        ..source
+    };
+    projects.push(project.clone());
+    write_projects(&app, &projects)?;
+
+    let projects_dir = app_data_dir(&app).join("projects");
+    copy_project_dir(
+        &projects_dir.join(&source_id),
+        &projects_dir.join(&project.id),
+    )?;
+    Ok(project)
+}
+
 /// Replace the stored project entry whose ``id`` matches ``project.id`` with
 /// the supplied value. Used by the team-builder support slot to persist the
 /// pinned servant id without a dedicated single-field setter (so future
@@ -1696,6 +1742,7 @@ pub fn run() {
             load_battle_scenes,
             list_projects,
             create_project,
+            duplicate_project,
             update_project,
             delete_project,
             check_adb,
@@ -1828,6 +1875,28 @@ mod tests {
         assert_eq!(project.slots.len(), 6);
         assert!(project.support_servant_id.is_none());
         assert_eq!(project.repeat_mission, false);
+    }
+
+    #[test]
+    fn copy_project_dir_recursively_copies_saved_project_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src");
+        let nested = src.join("nested");
+        let dst = tmp.path().join("dst");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(src.join("battle_scenes.json"), br#"[{"id":"scene-1"}]"#).unwrap();
+        fs::write(nested.join("notes.json"), br#"{"ok":true}"#).unwrap();
+
+        copy_project_dir(&src, &dst).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(dst.join("battle_scenes.json")).unwrap(),
+            r#"[{"id":"scene-1"}]"#
+        );
+        assert_eq!(
+            fs::read_to_string(dst.join("nested").join("notes.json")).unwrap(),
+            r#"{"ok":true}"#
+        );
     }
 
     // --- pick_portrait_in ----------------------------------------------

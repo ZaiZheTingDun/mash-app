@@ -6,6 +6,7 @@ import {
   TextField,
   ScrollArea,
   Box,
+  Select,
 } from "@radix-ui/themes";
 import { invoke, convertFileSrc } from "../tauri";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
@@ -42,6 +43,9 @@ const CLASS_COLORS: Record<string, string> = {
   Shielder: "#a0a0a0",
   Alterego: "#a050a0",
 };
+
+const ALL_CLASSES_VALUE = "__all_classes__";
+const ALL_RARITIES_VALUE = "__all_rarities__";
 
 function getClassColor(cls: string): string {
   if (CLASS_COLORS[cls]) return CLASS_COLORS[cls];
@@ -235,36 +239,46 @@ export function ServantSelectDialog({
         </TextField.Root>
 
         <Flex gap="2" className="servant-filter-row">
-          <select
-            className="servant-filter-select"
-            value={classFilter}
-            onChange={(e) => {
-              setClassFilter(e.target.value);
+          <Select.Root
+            value={classFilter || ALL_CLASSES_VALUE}
+            onValueChange={(value) => {
+              setClassFilter(value === ALL_CLASSES_VALUE ? "" : value);
               setActiveIndex(0);
             }}
           >
-            <option value="">全部职介</option>
-            {classOptions.map((cls) => (
-              <option key={cls} value={cls}>
-                {cls}
-              </option>
-            ))}
-          </select>
-          <select
-            className="servant-filter-select"
-            value={rarityFilter}
-            onChange={(e) => {
-              setRarityFilter(e.target.value);
+            <Select.Trigger
+              className="servant-filter-trigger"
+              aria-label="职介筛选"
+            />
+            <Select.Content>
+              <Select.Item value={ALL_CLASSES_VALUE}>全部职介</Select.Item>
+              {classOptions.map((cls) => (
+                <Select.Item key={cls} value={cls}>
+                  {cls}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
+          <Select.Root
+            value={rarityFilter || ALL_RARITIES_VALUE}
+            onValueChange={(value) => {
+              setRarityFilter(value === ALL_RARITIES_VALUE ? "" : value);
               setActiveIndex(0);
             }}
           >
-            <option value="">全部稀有度</option>
-            {rarityOptions.map((rarity) => (
-              <option key={rarity} value={rarity}>
-                ★{rarity}
-              </option>
-            ))}
-          </select>
+            <Select.Trigger
+              className="servant-filter-trigger"
+              aria-label="稀有度筛选"
+            />
+            <Select.Content>
+              <Select.Item value={ALL_RARITIES_VALUE}>全部稀有度</Select.Item>
+              {rarityOptions.map((rarity) => (
+                <Select.Item key={rarity} value={String(rarity)}>
+                  ★{rarity}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
         </Flex>
 
         <ScrollArea className="servant-list-scroll">

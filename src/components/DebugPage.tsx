@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import {
+  Box,
+  Button,
+  Checkbox,
+  Flex,
+  Select,
+  Text,
+  TextField,
+} from "@radix-ui/themes";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -256,6 +264,8 @@ const BATTLE_SCENE_FAIL_HINTS: Record<string, string> = {
   cohesion_trim_emptied_side: "切分后某一侧无有效数字（误检过多）",
   parse_error: "数字解析失败",
 };
+
+const EMPTY_DEBUG_SELECT_VALUE = "__empty__";
 
 export interface SupportCeInfoDto {
   region: NormRectDto;
@@ -1159,95 +1169,114 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
         className="debug-header"
       >
         <Flex align="center" gap="3">
-          <button className="battle-back-btn" onClick={onBack}>
+          <Button type="button" variant="ghost" color="gray" onClick={onBack}>
             <ChevronLeftIcon width={16} height={16} />
             <Text size="2">返回</Text>
-          </button>
+          </Button>
           <Text size="4" weight="bold">
             CV 调试
           </Text>
         </Flex>
-        <button
-          className="debug-reload-btn"
+        <Button
+          type="button"
+          size="2"
+          variant="surface"
+          color="gray"
           disabled={reloading}
           onClick={handleReloadSidecar}
           title="重新加载 sidecar, cv.json 和模板"
         >
           <ReloadIcon width={14} height={14} />
           <Text size="1">{reloading ? "重载中…" : "重载模板/配置"}</Text>
-        </button>
+        </Button>
       </Flex>
 
       <Flex className="debug-body" gap="4">
         <Flex direction="column" className="debug-canvas-col" gap="2">
           <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-            <button
-              className="battle-btn battle-btn-start"
+            <Button
+              type="button"
+              size="3"
               disabled={capturing}
               onClick={handleCapture}
             >
               {capturing ? "截取中…" : "截取画面"}
-            </button>
+            </Button>
 
-            <button
-              className="battle-btn battle-btn-start debug-btn-small"
+            <Button
+              type="button"
+              size="1"
+              variant="surface"
               onClick={handleOpenPopout}
               title="把画面 + 标注弹到独立窗口，可拖到副屏全屏查看"
             >
               <ExternalLinkIcon width={12} height={12} />
               <Text size="1">{popoutOpen ? "聚焦画面窗口" : "弹出画面"}</Text>
-            </button>
+            </Button>
 
             <Flex align="center" gap="1">
               <Text size="1" color="gray">
                 画面
               </Text>
-              <select
-                className="debug-select"
-                value={selectedScreen}
-                onChange={(e) => setSelectedScreen(e.target.value)}
+              <Select.Root
+                value={selectedScreen || EMPTY_DEBUG_SELECT_VALUE}
+                onValueChange={(value) => setSelectedScreen(value)}
                 disabled={screenNames.length === 0}
               >
-                {screenNames.length === 0 && <option value="">—</option>}
-                {screenNames.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+                <Select.Trigger className="debug-select-trigger" aria-label="画面" />
+                <Select.Content>
+                  {screenNames.length === 0 && (
+                    <Select.Item value={EMPTY_DEBUG_SELECT_VALUE} disabled>
+                      —
+                    </Select.Item>
+                  )}
+                  {screenNames.map((s) => (
+                    <Select.Item key={s} value={s}>
+                      {s}
+                    </Select.Item>
+                  ))}
+                </Select.Content>
+              </Select.Root>
             </Flex>
 
             <Flex align="center" gap="1">
               <Text size="1" color="gray">
                 元素
               </Text>
-              <select
-                className="debug-select"
-                value={selectedElement}
-                onChange={(e) => setSelectedElement(e.target.value)}
+              <Select.Root
+                value={selectedElement || EMPTY_DEBUG_SELECT_VALUE}
+                onValueChange={(value) => setSelectedElement(value)}
                 disabled={elementNames.length === 0}
               >
-                {elementNames.length === 0 && <option value="">—</option>}
-                {elementNames.map((e) => (
-                  <option key={e} value={e}>
-                    {e}
-                  </option>
-                ))}
-              </select>
+                <Select.Trigger className="debug-select-trigger" aria-label="元素" />
+                <Select.Content>
+                  {elementNames.length === 0 && (
+                    <Select.Item value={EMPTY_DEBUG_SELECT_VALUE} disabled>
+                      —
+                    </Select.Item>
+                  )}
+                  {elementNames.map((e) => (
+                    <Select.Item key={e} value={e}>
+                      {e}
+                    </Select.Item>
+                  ))}
+                </Select.Content>
+              </Select.Root>
             </Flex>
 
-            <button
-              className="battle-btn battle-btn-start"
+            <Button
+              type="button"
               disabled={
                 probing || !capture || !selectedScreen || !selectedElement
               }
               onClick={handleProbeByName}
             >
               {probing ? "查找中…" : "查找元素"}
-            </button>
+            </Button>
 
-            <button
-              className="battle-btn battle-btn-stop"
+            <Button
+              type="button"
+              color="red"
               disabled={
                 probes.length === 0 &&
                 commandCards.length === 0 &&
@@ -1260,13 +1289,13 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
               onClick={handleClearOverlays}
             >
               清除标注
-            </button>
+            </Button>
           </Flex>
 
           <DebugSection title="原始模板探针">
             <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-              <input
-                className="debug-input"
+              <TextField.Root
+                className="debug-text-field"
                 list="debug-template-list"
                 placeholder="模板 key"
                 value={rawTemplateInput}
@@ -1281,8 +1310,8 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
                 <Text size="1" color="gray">
                   阈值
                 </Text>
-                <input
-                  className="debug-input debug-input-threshold"
+                <TextField.Root
+                  className="debug-threshold-field"
                   type="number"
                   min={0}
                   max={1}
@@ -1295,47 +1324,52 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
                   }
                 />
               </Flex>
-              <button
-                className="battle-btn battle-btn-start debug-btn-small"
+              <Button
+                type="button"
+                size="1"
                 disabled={probing || !capture || !rawTemplateInput.trim()}
                 onClick={handleProbeRaw}
               >
                 {probing ? "查找中…" : "查找"}
-              </button>
+              </Button>
             </Flex>
           </DebugSection>
 
           <DebugSection title="指令卡 / 宝具卡识别">
             <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-              <input
-                className="debug-input"
+              <TextField.Root
+                className="debug-text-field"
                 placeholder="候选从者 id (逗号分隔，可留空只定位卡槽)"
                 value={cardServantInput}
                 onChange={(e) => setCardServantInput(e.target.value)}
                 style={{ flex: 1, minWidth: 240 }}
               />
-              <button
-                className="battle-btn battle-btn-start debug-btn-small"
+              <Button
+                type="button"
+                size="1"
+                variant="surface"
                 disabled={availableServantIds.length === 0}
                 onClick={handleUseAllAvailableIds}
                 title={`填入全部 ${availableServantIds.length} 个有素材的从者 id`}
               >
                 全选 ({availableServantIds.length})
-              </button>
-              <button
-                className="battle-btn battle-btn-start debug-btn-small"
+              </Button>
+              <Button
+                type="button"
+                size="1"
                 disabled={findingCards || !capture}
                 onClick={handleFindCommandCards}
               >
                 {findingCards ? "识别中…" : "识别指令卡"}
-              </button>
-              <button
-                className="battle-btn battle-btn-start debug-btn-small"
+              </Button>
+              <Button
+                type="button"
+                size="1"
                 disabled={findingNps || !capture}
                 onClick={handleFindNoblePhantasms}
               >
                 {findingNps ? "识别中…" : "识别宝具卡"}
-              </button>
+              </Button>
             </Flex>
           </DebugSection>
 
@@ -1348,21 +1382,20 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
             }
           >
             <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-              <input
-                className="debug-input"
+              <TextField.Root
+                className="debug-id-field"
                 list="debug-enhancement-servant-list"
                 placeholder="从者 id"
                 value={enhancementServantId}
                 onChange={(e) => setEnhancementServantId(e.target.value)}
-                style={{ width: 120 }}
               />
               <datalist id="debug-enhancement-servant-list">
                 {availableServantIds.map((id) => (
                   <option key={`enhancement-id-${id}`} value={id} />
                 ))}
               </datalist>
-              <input
-                className="debug-input debug-input-threshold"
+              <TextField.Root
+                className="debug-threshold-field"
                 type="number"
                 step="0.01"
                 min="0"
@@ -1371,8 +1404,9 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
                 onChange={(e) => setEnhancementServantThreshold(e.target.value)}
                 title="强化从者头像匹配阈值"
               />
-              <button
-                className="battle-btn battle-btn-start debug-btn-small"
+              <Button
+                type="button"
+                size="1"
                 disabled={
                   findingEnhancementServant ||
                   !capture ||
@@ -1381,7 +1415,7 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
                 onClick={handleFindEnhancementServant}
               >
                 {findingEnhancementServant ? "识别中…" : "识别强化从者"}
-              </button>
+              </Button>
               <Text size="2" color="gray">
                 使用生产逻辑的从者列表区域和 face crop。
               </Text>
@@ -1402,13 +1436,14 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
               <Text size="2" color="gray">
                 读取右上角 BATTLE m/n，用于挑选第 m 组指令配置。
               </Text>
-              <button
-                className="battle-btn battle-btn-start debug-btn-small"
+              <Button
+                type="button"
+                size="1"
                 disabled={readingBattleScene || !capture}
                 onClick={handleReadBattleScene}
               >
                 {readingBattleScene ? "识别中…" : "识别战斗场景"}
-              </button>
+              </Button>
             </Flex>
           </DebugSection>
 
@@ -1424,13 +1459,14 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
               <Text size="2" color="gray">
                 复用 `cv.json` 的 `Battle.variants.main.elements.attack_button` 探针，确认战斗回合开始时是否能命中攻击按钮。
               </Text>
-              <button
-                className="battle-btn battle-btn-start debug-btn-small"
+              <Button
+                type="button"
+                size="1"
                 disabled={findingAttackButton || !capture}
                 onClick={handleFindAttackButton}
               >
                 {findingAttackButton ? "识别中…" : "识别攻击按钮"}
-              </button>
+              </Button>
             </Flex>
           </DebugSection>
 
@@ -1443,36 +1479,35 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
             }
           >
             <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-              <input
-                className="debug-input"
+              <TextField.Root
+                className="debug-id-field"
                 list="debug-support-servant-list"
                 placeholder="助战从者 id"
                 value={supportServantId}
                 onChange={(e) => setSupportServantId(e.target.value)}
-                style={{ width: 140 }}
               />
               <datalist id="debug-support-servant-list">
                 {availableServantIds.map((id) => (
                   <option key={`support-id-${id}`} value={id} />
                 ))}
               </datalist>
-              <input
-                className="debug-input"
+              <TextField.Root
+                className="debug-id-field"
                 placeholder="礼装 id (可选)"
                 value={supportCraftEssenceId}
                 onChange={(e) => setSupportCraftEssenceId(e.target.value)}
-                style={{ width: 140 }}
                 title="留空跳过礼装识别。提供后会按行运行 verify_support_ce 并叠加搜索框 + 分数。"
               />
-              <button
-                className="battle-btn battle-btn-start debug-btn-small"
+              <Button
+                type="button"
+                size="1"
                 disabled={
                   findingSupports || !capture || parsedSupportServantId === null
                 }
                 onClick={handleFindSupports}
               >
                 {findingSupports ? "识别中…" : "识别助战"}
-              </button>
+              </Button>
             </Flex>
           </DebugSection>
 
@@ -1486,23 +1521,23 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
           >
             <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
               <label className="debug-coord-toggle">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={showCoordOverlay}
-                  onChange={(e) => setShowCoordOverlay(e.target.checked)}
+                  onCheckedChange={(checked) =>
+                    setShowCoordOverlay(checked === true)
+                  }
                 />
                 <Text size="1">坐标叠层</Text>
               </label>
               {coordinates?.groups.map((g) => (
                 <label key={g.id} className="debug-coord-toggle">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     disabled={!showCoordOverlay}
                     checked={visibleCoordGroups.has(g.id)}
-                    onChange={(e) => {
+                    onCheckedChange={(checked) => {
                       setVisibleCoordGroups((prev) => {
                         const next = new Set(prev);
-                        if (e.target.checked) next.add(g.id);
+                        if (checked === true) next.add(g.id);
                         else next.delete(g.id);
                         return next;
                       });
@@ -1521,13 +1556,16 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
               <Text size="1" color="gray" className="debug-side-label">
                 调试日志
               </Text>
-              <button
-                className="debug-log-clear"
+              <Button
+                type="button"
+                size="1"
+                variant="surface"
+                color="gray"
                 disabled={logs.length === 0}
                 onClick={handleClearLogs}
               >
                 清空
-              </button>
+              </Button>
             </Flex>
             <Box className="debug-log">
               {logs.length === 0 && (

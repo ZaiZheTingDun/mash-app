@@ -151,6 +151,23 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       projects = [...projects, project];
       return clone(project) as T;
     }
+    case "duplicate_project": {
+      const source = projects.find((project) => project.id === args.sourceId);
+      if (!source) {
+        return null as T;
+      }
+      const project: Project = {
+        ...clone(source),
+        id: `dev-project-${nextProjectNumber++}`,
+        name: String(args.name ?? `${source.name} 副本`),
+      };
+      projects = [...projects, project];
+      battleScenesByProject.set(
+        project.id,
+        clone(battleScenesByProject.get(source.id) ?? [])
+      );
+      return clone(project) as T;
+    }
     case "update_project": {
       const project = args.project as Project;
       projects = projects.map((item) => (item.id === project.id ? clone(project) : item));
