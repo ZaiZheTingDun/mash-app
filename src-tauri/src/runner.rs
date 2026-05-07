@@ -1852,141 +1852,135 @@ impl Runner {
     // -- skill execution -----------------------------------------------------
 
     fn execute_scene_skills(&mut self, scene: &BattleScene) {
-        for action in &scene.servant_actions {
-            if let Action::Servant {
-                servant,
-                skill,
-                target,
-                ..
-            } = action
-            {
-                let Some(pos) = skill_position(servant.as_deref(), skill.as_deref()) else {
-                    continue;
-                };
+        for action in scene_preparation_actions(scene) {
+            match action {
+                Action::Servant {
+                    servant,
+                    skill,
+                    target,
+                    ..
+                } => {
+                    let Some(pos) = skill_position(servant.as_deref(), skill.as_deref()) else {
+                        continue;
+                    };
 
-                self.emit(
-                    "Battle",
-                    &format!(
-                        "从者技能: {} 使用 {}",
-                        servant.as_deref().unwrap_or("?"),
-                        skill.as_deref().unwrap_or("?"),
-                    ),
-                );
-                if !self.tap_at("Battle", pos) {
-                    return;
-                }
-                thread::sleep(ACTION_DELAY);
-
-                if let Some(target_pos) = skill_target_position(target.as_deref()) {
                     self.emit(
                         "Battle",
-                        &format!("选择目标: {}", target.as_deref().unwrap_or("?")),
+                        &format!(
+                            "从者技能: {} 使用 {}",
+                            servant.as_deref().unwrap_or("?"),
+                            skill.as_deref().unwrap_or("?"),
+                        ),
+                    );
+                    if !self.tap_at("Battle", pos) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+
+                    if let Some(target_pos) = skill_target_position(target.as_deref()) {
+                        self.emit(
+                            "Battle",
+                            &format!("选择目标: {}", target.as_deref().unwrap_or("?")),
+                        );
+                        if !self.tap_at("Battle", target_pos) {
+                            return;
+                        }
+                        thread::sleep(ACTION_DELAY);
+                    }
+
+                    self.skip_after_skill();
+
+                    // Skill animation (cut-in, buff effect, etc.) hides the
+                    // attack button. Wait for it to reappear before firing
+                    // the next skill, otherwise rapid taps land on nothing
+                    // or, worse, on whatever overlay is currently shown.
+                    if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                        return;
+                    }
+                }
+                Action::Equipment { skill, target, .. } => {
+                    let Some(pos) = equipment_skill_position(skill.as_deref()) else {
+                        continue;
+                    };
+
+                    self.emit("Battle", "打开御主技能面板");
+                    if !self.tap_at("Battle", EQUIPMENT_BUTTON) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+
+                    self.emit(
+                        "Battle",
+                        &format!("御主技能: {}", skill.as_deref().unwrap_or("?"),),
+                    );
+                    if !self.tap_at("Battle", pos) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+
+                    if let Some(target_pos) = skill_target_position(target.as_deref()) {
+                        self.emit(
+                            "Battle",
+                            &format!("选择目标: {}", target.as_deref().unwrap_or("?")),
+                        );
+                        if !self.tap_at("Battle", target_pos) {
+                            return;
+                        }
+                        thread::sleep(ACTION_DELAY);
+                    }
+
+                    self.skip_after_skill();
+
+                    if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                        return;
+                    }
+                }
+                // Command Spell (令咒) walks four full-screen modals:
+                // button → spell row → 决定 confirm → ally target picker,
+                // settling between each step because each tap pops or
+                // pushes a modal.
+                Action::CommandSpell { spell, target, .. } => {
+                    let Some(option_idx) = command_spell_index(spell.as_deref()) else {
+                        continue;
+                    };
+                    let Some(target_pos) = skill_target_position(target.as_deref()) else {
+                        continue;
+                    };
+
+                    self.emit(
+                        "Battle",
+                        &format!("令咒: {}", spell.as_deref().unwrap_or("?")),
+                    );
+                    if !self.tap_at("Battle", COMMAND_SPELL_BUTTON) {
+                        return;
+                    }
+                    thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
+
+                    if !self.tap_at("Battle", COMMAND_SPELL_OPTIONS[option_idx]) {
+                        return;
+                    }
+                    thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
+
+                    self.emit("Battle", "确认令咒");
+                    if !self.tap_at("Battle", COMMAND_SPELL_CONFIRM) {
+                        return;
+                    }
+                    thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
+
+                    self.emit(
+                        "Battle",
+                        &format!("令咒目标: {}", target.as_deref().unwrap_or("?")),
                     );
                     if !self.tap_at("Battle", target_pos) {
                         return;
                     }
                     thread::sleep(ACTION_DELAY);
-                }
 
-                self.skip_after_skill();
+                    self.skip_after_skill();
 
-                // Skill animation (cut-in, buff effect, etc.) hides the
-                // attack button. Wait for it to reappear before firing
-                // the next skill, otherwise rapid taps land on nothing
-                // or, worse, on whatever overlay is currently shown.
-                if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
-                    return;
-                }
-            }
-        }
-
-        for action in &scene.equipment_actions {
-            if let Action::Equipment { skill, target, .. } = action {
-                let Some(pos) = equipment_skill_position(skill.as_deref()) else {
-                    continue;
-                };
-
-                self.emit("Battle", "打开御主技能面板");
-                if !self.tap_at("Battle", EQUIPMENT_BUTTON) {
-                    return;
-                }
-                thread::sleep(ACTION_DELAY);
-
-                self.emit(
-                    "Battle",
-                    &format!("御主技能: {}", skill.as_deref().unwrap_or("?"),),
-                );
-                if !self.tap_at("Battle", pos) {
-                    return;
-                }
-                thread::sleep(ACTION_DELAY);
-
-                if let Some(target_pos) = skill_target_position(target.as_deref()) {
-                    self.emit(
-                        "Battle",
-                        &format!("选择目标: {}", target.as_deref().unwrap_or("?")),
-                    );
-                    if !self.tap_at("Battle", target_pos) {
+                    if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
                         return;
                     }
-                    thread::sleep(ACTION_DELAY);
-                }
-
-                self.skip_after_skill();
-
-                if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
-                    return;
-                }
-            }
-        }
-
-        // Command Spell (令咒) actions fire after all servant + master
-        // skills so a 宝具解放 boost lands on the freshly buffed NP. The
-        // tap chain walks four full-screen modals: button → spell row →
-        // 决定 confirm → ally target picker, settling between each step
-        // because each tap pops or pushes a modal.
-        for action in &scene.command_spell_actions {
-            if let Action::CommandSpell { spell, target, .. } = action {
-                let Some(option_idx) = command_spell_index(spell.as_deref()) else {
-                    continue;
-                };
-                let Some(target_pos) = skill_target_position(target.as_deref()) else {
-                    continue;
-                };
-
-                self.emit(
-                    "Battle",
-                    &format!("令咒: {}", spell.as_deref().unwrap_or("?")),
-                );
-                if !self.tap_at("Battle", COMMAND_SPELL_BUTTON) {
-                    return;
-                }
-                thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
-
-                if !self.tap_at("Battle", COMMAND_SPELL_OPTIONS[option_idx]) {
-                    return;
-                }
-                thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
-
-                self.emit("Battle", "确认令咒");
-                if !self.tap_at("Battle", COMMAND_SPELL_CONFIRM) {
-                    return;
-                }
-                thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
-
-                self.emit(
-                    "Battle",
-                    &format!("令咒目标: {}", target.as_deref().unwrap_or("?")),
-                );
-                if !self.tap_at("Battle", target_pos) {
-                    return;
-                }
-                thread::sleep(ACTION_DELAY);
-
-                self.skip_after_skill();
-
-                if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
-                    return;
                 }
             }
         }
@@ -2044,6 +2038,10 @@ fn command_spell_index(spell: Option<&str>) -> Option<usize> {
         "restore" => Some(1),
         _ => None,
     }
+}
+
+fn scene_preparation_actions(scene: &BattleScene) -> std::slice::Iter<'_, Action> {
+    scene.preparation_actions.iter()
 }
 
 /// Skill targets are always allies (servant_1, servant_2, servant_3).
@@ -2533,6 +2531,45 @@ mod tests {
         assert_eq!(command_spell_index(None), None);
         assert_eq!(command_spell_index(Some("")), None);
         assert_eq!(command_spell_index(Some("self_destruct")), None);
+    }
+
+    #[test]
+    fn scene_preparation_actions_preserves_configured_row_order() {
+        let scene = BattleScene {
+            id: "scene_1".into(),
+            preparation_actions: vec![
+                Action::Equipment {
+                    id: "eq_1".into(),
+                    skill: Some("skill_2".into()),
+                    target: None,
+                },
+                Action::Servant {
+                    id: "sa_1".into(),
+                    servant: Some("servant_1".into()),
+                    skill: Some("skill_3".into()),
+                    target: Some("servant_2".into()),
+                },
+                Action::CommandSpell {
+                    id: "cs_1".into(),
+                    spell: Some("restore".into()),
+                    target: Some("servant_1".into()),
+                },
+            ],
+            servant_actions: vec![],
+            equipment_actions: vec![],
+            command_spell_actions: vec![],
+            attack_priority: vec![],
+        };
+
+        let kinds: Vec<&str> = scene_preparation_actions(&scene)
+            .map(|action| match action {
+                Action::Servant { .. } => "servant",
+                Action::Equipment { .. } => "equipment",
+                Action::CommandSpell { .. } => "commandSpell",
+            })
+            .collect();
+
+        assert_eq!(kinds, vec!["equipment", "servant", "commandSpell"]);
     }
 
     #[test]

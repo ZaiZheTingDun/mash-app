@@ -106,7 +106,8 @@ export function deriveScenePartyServants(
   for (const scene of scenes) {
     sceneParties.push(lineup.slice(0, 3));
 
-    for (const action of scene.servantActions) {
+    for (const action of scene.preparationActions ?? scene.servantActions) {
+      if (action.type !== "servant") continue;
       const sourceIndex = parseServantPosition(action.servant);
       if (sourceIndex == null || !action.skill) continue;
       const servant = lineup[sourceIndex];

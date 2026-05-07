@@ -22,6 +22,11 @@ export interface CommandSpellAction {
   target: string | null;
 }
 
+export type PreparationAction =
+  | ServantAction
+  | EquipmentAction
+  | CommandSpellAction;
+
 export interface AttackCard {
   id: string;
   card: string | null;
@@ -29,6 +34,7 @@ export interface AttackCard {
 
 export interface BattleScene {
   id: string;
+  preparationActions: PreparationAction[];
   servantActions: ServantAction[];
   equipmentActions: EquipmentAction[];
   commandSpellActions: CommandSpellAction[];

@@ -21,14 +21,11 @@ function makeServant(id: number, name_cn: string): Servant {
 function makeScene(overrides: Partial<BattleScene> = {}): BattleScene {
   return {
     id: "scene_1",
+    preparationActions: [],
     servantActions: [],
     equipmentActions: [],
     commandSpellActions: [],
-    attackPriority: [
-      { id: "atk_0", card: null },
-      { id: "atk_1", card: null },
-      { id: "atk_2", card: null },
-    ],
+    attackPriority: [],
     ...overrides,
   };
 }
@@ -39,108 +36,89 @@ const PARTY: (Servant | null)[] = [
   makeServant(3, "丙"),
 ];
 
-describe("BattleSceneBlock command-spell row", () => {
-  it("appends a default commandSpell action when the 令咒 header button is clicked", async () => {
+describe("BattleSceneBlock staged action editor", () => {
+  it("shows the preparation source picker when the add row is clicked", async () => {
     const user = userEvent.setup();
-    const onChange = vi.fn();
-    const scene = makeScene();
     renderWithTheme(
-      <BattleSceneBlock
-        scene={scene}
-        index={0}
-        partyServants={PARTY}
-        onChange={onChange}
-        onDelete={vi.fn()}
-        canDelete={false}
-      />
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={vi.fn()} />
     );
 
-    await user.click(screen.getByRole("button", { name: /令咒/ }));
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
 
-    // The header button issues exactly one onChange with the new
-    // commandSpellActions list shape (camelCase wire field, type tag
-    // 'commandSpell', spell + target null until the user selects them).
-    expect(onChange).toHaveBeenCalledTimes(1);
-    const next = onChange.mock.calls[0][0] as BattleScene;
-    expect(next.commandSpellActions).toHaveLength(1);
-    expect(next.commandSpellActions[0]).toMatchObject({
-      type: "commandSpell",
-      spell: null,
-      target: null,
-    });
-    expect(next.commandSpellActions[0].id).toMatch(/^cs_/);
+    expect(screen.getByRole("button", { name: "甲" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "乙" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "丙" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /御主/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "令咒" })).toBeInTheDocument();
   });
 
-  it("emits an updated commandSpell action when the spell select changes", async () => {
+  it("appends an ordered servant preparation action after source, skill, and target are selected", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    const scene = makeScene({
-      commandSpellActions: [
-        { type: "commandSpell", id: "cs_1", spell: null, target: null },
-      ],
-    });
     renderWithTheme(
-      <BattleSceneBlock
-        scene={scene}
-        index={0}
-        partyServants={PARTY}
-        onChange={onChange}
-        onDelete={vi.fn()}
-        canDelete={false}
-      />
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
     );
 
-    // Two `-- 令咒 --` placeholders won't exist, but the spell select
-    // is the one whose options include "宝具解放" — find it by the
-    // option text and grab its parent select.
-    const npOption = screen.getByRole("option", { name: "宝具解放" });
-    const spellSelect = npOption.closest("select");
-    expect(spellSelect).not.toBeNull();
-    await user.selectOptions(spellSelect!, "np_release");
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "甲" }));
+    await user.click(screen.getByRole("button", { name: "技能 3" }));
+    await user.click(screen.getByRole("button", { name: "乙" }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
     const next = onChange.mock.calls[0][0] as BattleScene;
-    expect(next.commandSpellActions[0]).toMatchObject({
-      type: "commandSpell",
-      id: "cs_1",
-      spell: "np_release",
-      target: null,
-    });
-  });
-
-  it("emits an updated commandSpell action when the target select changes", async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    const scene = makeScene({
-      commandSpellActions: [
-        { type: "commandSpell", id: "cs_1", spell: "np_release", target: null },
-      ],
-    });
-    renderWithTheme(
-      <BattleSceneBlock
-        scene={scene}
-        index={0}
-        partyServants={PARTY}
-        onChange={onChange}
-        onDelete={vi.fn()}
-        canDelete={false}
-      />
-    );
-
-    // The command-spell row's target select is the one whose options
-    // are the party servant names; grab it via the servant_2 option.
-    const targetOption = screen.getAllByRole("option", { name: "乙" })[0];
-    const targetSelect = targetOption.closest("select");
-    expect(targetSelect).not.toBeNull();
-    await user.selectOptions(targetSelect!, "servant_2");
-
-    expect(onChange).toHaveBeenCalledTimes(1);
-    const next = onChange.mock.calls[0][0] as BattleScene;
-    expect(next.commandSpellActions[0]).toMatchObject({
-      type: "commandSpell",
-      id: "cs_1",
-      spell: "np_release",
+    expect(next.preparationActions).toHaveLength(1);
+    expect(next.preparationActions[0]).toMatchObject({
+      type: "servant",
+      servant: "servant_1",
+      skill: "skill_3",
       target: "servant_2",
     });
+    expect(next.servantActions).toEqual([]);
+  });
+
+  it("appends an attack priority row from servant and card choice", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithTheme(
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[1]);
+    await user.click(screen.getByRole("button", { name: "甲" }));
+    await user.click(screen.getByRole("button", { name: "B" }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const next = onChange.mock.calls[0][0] as BattleScene;
+    expect(next.attackPriority).toHaveLength(1);
+    expect(next.attackPriority[0]).toMatchObject({
+      card: "servant_1_buster",
+    });
+  });
+
+  it("removes an existing preparation row through its hover delete button", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          preparationActions: [
+            {
+              type: "equipment",
+              id: "eq_1",
+              skill: "skill_2",
+              target: null,
+            },
+          ],
+        })}
+        partyServants={PARTY}
+        onChange={onChange}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "删除行动" }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const next = onChange.mock.calls[0][0] as BattleScene;
+    expect(next.preparationActions).toEqual([]);
   });
 });

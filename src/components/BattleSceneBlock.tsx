@@ -1,552 +1,616 @@
-import { Flex, Text } from "@radix-ui/themes";
+import { useEffect, useMemo, useState } from "react";
+import type React from "react";
+import { Text } from "@radix-ui/themes";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  arrayMove,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import {
-  TrashIcon,
-  DragHandleDots2Icon,
-  PlusIcon,
+  Cross2Icon,
   PersonIcon,
-  HeartIcon,
-  LightningBoltIcon,
-  StarIcon,
+  PlusIcon,
 } from "@radix-ui/react-icons";
 import type {
-  BattleScene,
-  ServantAction,
-  EquipmentAction,
-  CommandSpellAction,
   AttackCard,
+  BattleScene,
+  CommandSpellAction,
+  EquipmentAction,
+  PreparationAction,
+  ServantAction,
 } from "../types/command";
 import type { Servant } from "../types/servant";
 
 interface BattleSceneBlockProps {
   scene: BattleScene;
-  index: number;
   partyServants: (Servant | null)[];
   onChange: (updated: BattleScene) => void;
-  onDelete: () => void;
-  canDelete: boolean;
 }
 
-const SKILLS = ["skill_1", "skill_2", "skill_3"];
+type PrepSource = "equipment" | "commandSpell" | `servant_${1 | 2 | 3}`;
+type AttackSource = `servant_${1 | 2 | 3}`;
+type PrepDraft =
+  | { step: "source" }
+  | { step: "option"; source: PrepSource }
+  | { step: "target"; source: PrepSource; option: string };
+type AttackDraft =
+  | { step: "source" }
+  | { step: "option"; source: AttackSource };
+
+const SKILLS = ["skill_1", "skill_2", "skill_3"] as const;
 const SKILL_LABELS: Record<string, string> = {
-  skill_1: "Skill 1",
-  skill_2: "Skill 2",
-  skill_3: "Skill 3",
+  skill_1: "技能 1",
+  skill_2: "技能 2",
+  skill_3: "技能 3",
 };
 
-const CARD_TYPES = ["quick", "arts", "buster"] as const;
-const CARD_LABELS: Record<string, string> = {
-  quick: "Quick",
-  arts: "Arts",
-  buster: "Buster",
-};
-
-const COMMAND_SPELLS = ["np_release", "restore"] as const;
 const COMMAND_SPELL_LABELS: Record<string, string> = {
   np_release: "宝具解放",
   restore: "灵基修复",
 };
 
-function getServantLabel(index: number, servant: Servant | null): string {
-  return servant ? servant.name_cn : `Servant ${index + 1}`;
+const ATTACK_OPTIONS = [
+  { value: "np", label: "宝具" },
+  { value: "buster", label: "B" },
+  { value: "arts", label: "A" },
+  { value: "quick", label: "Q" },
+] as const;
+
+const CARD_LABELS: Record<string, string> = {
+  np: "宝具",
+  buster: "红卡攻击",
+  arts: "蓝卡攻击",
+  quick: "绿卡攻击",
+};
+
+function createId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function getServantOptions(partyServants: (Servant | null)[]) {
-  return partyServants.map((s, i) => ({
-    value: `servant_${i + 1}`,
-    label: getServantLabel(i, s),
-  }));
+function emptyLegacyFields(scene: BattleScene): BattleScene {
+  return {
+    ...scene,
+    servantActions: [],
+    equipmentActions: [],
+    commandSpellActions: [],
+  };
 }
 
-function getAttackCardOptions(partyServants: (Servant | null)[]) {
-  const options: { value: string; label: string }[] = [];
-  for (let i = 0; i < 3; i++) {
-    const name = getServantLabel(i, partyServants[i] ?? null);
-    for (const cardType of CARD_TYPES) {
-      options.push({
-        value: `servant_${i + 1}_${cardType}`,
-        label: `${name} - ${CARD_LABELS[cardType]}`,
+function servantLabel(index: number, servant: Servant | null): string {
+  return servant?.name_cn || `从者 ${index + 1}`;
+}
+
+function sourceIndex(source: PrepSource | AttackSource): number | null {
+  const match = source.match(/^servant_([1-3])$/);
+  return match ? Number(match[1]) - 1 : null;
+}
+
+function useServantFaces(partyServants: (Servant | null)[]) {
+  const [faces, setFaces] = useState<Record<string, string | null>>({});
+  const requests = useMemo(
+    () =>
+      partyServants
+        .filter((servant): servant is Servant => Boolean(servant))
+        .map((servant) => ({
+          variantKey: servant.variantKey,
+          servantId: servant.id,
+          faceId: servant.faceId ?? null,
+        }))
+        .sort((a, b) => a.variantKey.localeCompare(b.variantKey)),
+    [partyServants]
+  );
+  const key = JSON.stringify(requests);
+
+  useEffect(() => {
+    const parsed = JSON.parse(key) as typeof requests;
+    const missing = parsed.filter(({ variantKey }) => !(variantKey in faces));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map((request) =>
+        invoke<string | null>("get_servant_face_path", {
+          servantId: request.servantId,
+          faceId: request.faceId,
+        })
+          .then((path) => [request.variantKey, path ? convertFileSrc(path) : null] as const)
+          .catch(() => [request.variantKey, null] as const)
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      setFaces((prev) => {
+        const next = { ...prev };
+        for (const [variantKey, src] of results) next[variantKey] = src;
+        return next;
       });
-    }
-  }
-  for (let i = 0; i < 3; i++) {
-    const name = getServantLabel(i, partyServants[i] ?? null);
-    options.push({
-      value: `servant_${i + 1}_np`,
-      label: `${name} - NP`,
     });
+    return () => {
+      cancelled = true;
+    };
+    // Keep this effect keyed by the request set; including `faces`
+    // would re-run every time the cache is filled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return faces;
+}
+
+function ServantFaceButton({
+  servant,
+  index,
+  faceSrc,
+  onClick,
+}: {
+  servant: Servant | null;
+  index: number;
+  faceSrc: string | null | undefined;
+  onClick: () => void;
+}) {
+  const label = servantLabel(index, servant);
+  return (
+    <button
+      type="button"
+      className="battle-face-btn"
+      aria-label={label}
+      onClick={onClick}
+    >
+      {faceSrc ? (
+        <img src={faceSrc} alt="" draggable={false} />
+      ) : (
+        <PersonIcon width={24} height={24} aria-hidden />
+      )}
+    </button>
+  );
+}
+
+function ServantInlineFace({
+  servant,
+  index,
+  faceSrc,
+}: {
+  servant: Servant | null;
+  index: number;
+  faceSrc: string | null | undefined;
+}) {
+  return (
+    <span className="battle-inline-face" aria-label={servantLabel(index, servant)}>
+      {faceSrc ? (
+        <img src={faceSrc} alt="" draggable={false} />
+      ) : (
+        <PersonIcon width={18} height={18} aria-hidden />
+      )}
+    </span>
+  );
+}
+
+function PreparationActionFaces({
+  action,
+  partyServants,
+  faces,
+}: {
+  action: PreparationAction;
+  partyServants: (Servant | null)[];
+  faces: Record<string, string | null>;
+}) {
+  const targetIndex = sourceIndex((action.target ?? "") as PrepSource);
+
+  let source: React.ReactNode;
+  if (action.type === "servant") {
+    const src = sourceIndex((action.servant ?? "servant_1") as PrepSource) ?? 0;
+    const servant = partyServants[src] ?? null;
+    source = (
+      <ServantInlineFace
+        servant={servant}
+        index={src}
+        faceSrc={servant ? faces[servant.variantKey] : null}
+      />
+    );
+  } else {
+    source = (
+      <span className="battle-inline-square">
+        {action.type === "equipment" ? "御主" : "令咒"}
+      </span>
+    );
   }
-  return options;
-}
-
-function ServantActionRow({
-  action,
-  partyServants,
-  onChange,
-  onDelete,
-}: {
-  action: ServantAction;
-  partyServants: (Servant | null)[];
-  onChange: (a: ServantAction) => void;
-  onDelete: () => void;
-}) {
-  const servantOpts = getServantOptions(partyServants);
 
   return (
-    <Flex align="center" gap="2" className="action-row action-row-servant">
-      <select
-        className="action-select"
-        value={action.servant ?? ""}
-        onChange={(e) => onChange({ ...action, servant: e.target.value || null })}
-      >
-        <option value="">-- Servant --</option>
-        {servantOpts.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <Text size="2" className="action-label">
-        Use
-      </Text>
-      <select
-        className="action-select"
-        value={action.skill ?? ""}
-        onChange={(e) => onChange({ ...action, skill: e.target.value || null })}
-      >
-        <option value="">-- Skill --</option>
-        {SKILLS.map((s) => (
-          <option key={s} value={s}>
-            {SKILL_LABELS[s]}
-          </option>
-        ))}
-      </select>
-      <Text size="2" className="action-label">
-        to
-      </Text>
-      <select
-        className="action-select"
-        value={action.target ?? ""}
-        onChange={(e) => onChange({ ...action, target: e.target.value || null })}
-      >
-        <option value="">-- Target --</option>
-        {servantOpts.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <button className="action-delete-btn" onClick={onDelete}>
-        <TrashIcon />
-      </button>
-    </Flex>
+    <span className="battle-action-faces">
+      {source}
+      {targetIndex != null && (
+        <>
+          <span className="battle-action-to">to</span>
+          <ServantInlineFace
+            servant={partyServants[targetIndex] ?? null}
+            index={targetIndex}
+            faceSrc={
+              partyServants[targetIndex]
+                ? faces[partyServants[targetIndex]!.variantKey]
+                : null
+            }
+          />
+        </>
+      )}
+    </span>
   );
 }
 
-function EquipmentActionRow({
-  action,
-  partyServants,
-  onChange,
-  onDelete,
-}: {
-  action: EquipmentAction;
-  partyServants: (Servant | null)[];
-  onChange: (a: EquipmentAction) => void;
-  onDelete: () => void;
-}) {
-  const servantOpts = getServantOptions(partyServants);
-
-  return (
-    <Flex align="center" gap="2" className="action-row action-row-equipment">
-      <Text size="2" className="action-label">
-        Master use
-      </Text>
-      <select
-        className="action-select"
-        value={action.skill ?? ""}
-        onChange={(e) => onChange({ ...action, skill: e.target.value || null })}
-      >
-        <option value="">-- Skill --</option>
-        {SKILLS.map((s) => (
-          <option key={s} value={s}>
-            {SKILL_LABELS[s]}
-          </option>
-        ))}
-      </select>
-      <Text size="2" className="action-label">
-        to
-      </Text>
-      <select
-        className="action-select"
-        value={action.target ?? ""}
-        onChange={(e) => onChange({ ...action, target: e.target.value || null })}
-      >
-        <option value="">-- None --</option>
-        {servantOpts.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <button className="action-delete-btn" onClick={onDelete}>
-        <TrashIcon />
-      </button>
-    </Flex>
-  );
-}
-
-function CommandSpellActionRow({
-  action,
-  partyServants,
-  onChange,
-  onDelete,
-}: {
-  action: CommandSpellAction;
-  partyServants: (Servant | null)[];
-  onChange: (a: CommandSpellAction) => void;
-  onDelete: () => void;
-}) {
-  const servantOpts = getServantOptions(partyServants);
-
-  return (
-    <Flex align="center" gap="2" className="action-row action-row-command-spell">
-      <Text size="2" className="action-label">
-        令咒
-      </Text>
-      <select
-        className="action-select"
-        value={action.spell ?? ""}
-        onChange={(e) =>
-          onChange({
-            ...action,
-            spell: (e.target.value || null) as CommandSpellAction["spell"],
-          })
-        }
-      >
-        <option value="">-- 令咒 --</option>
-        {COMMAND_SPELLS.map((s) => (
-          <option key={s} value={s}>
-            {COMMAND_SPELL_LABELS[s]}
-          </option>
-        ))}
-      </select>
-      <Text size="2" className="action-label">
-        to
-      </Text>
-      <select
-        className="action-select"
-        value={action.target ?? ""}
-        onChange={(e) => onChange({ ...action, target: e.target.value || null })}
-      >
-        <option value="">-- Target --</option>
-        {servantOpts.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <button className="action-delete-btn" onClick={onDelete}>
-        <TrashIcon />
-      </button>
-    </Flex>
-  );
-}
-
-function SortableAttackRow({
+function AttackActionFace({
   card,
   partyServants,
-  onChange,
-  onDelete,
-  canDelete,
+  faces,
 }: {
   card: AttackCard;
   partyServants: (Servant | null)[];
-  onChange: (c: AttackCard) => void;
-  onDelete: () => void;
-  canDelete: boolean;
+  faces: Record<string, string | null>;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: card.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-    zIndex: isDragging ? 10 : undefined,
-  };
-
-  const cardOptions = getAttackCardOptions(partyServants);
-
+  const match = card.card?.match(/^servant_([1-3])_/);
+  if (!match) return null;
+  const index = Number(match[1]) - 1;
+  const servant = partyServants[index] ?? null;
   return (
-    <Flex
-      ref={setNodeRef}
-      style={style}
-      align="center"
-      gap="2"
-      className="attack-priority-row"
-    >
-      <span className="drag-handle" {...attributes} {...listeners}>
-        <DragHandleDots2Icon />
-      </span>
-      <select
-        className="action-select attack-select"
-        value={card.card ?? ""}
-        onChange={(e) => onChange({ ...card, card: e.target.value || null })}
-      >
-        <option value="">-- Card --</option>
-        {cardOptions.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <button
-        className="action-delete-btn"
-        onClick={onDelete}
-        disabled={!canDelete}
-      >
-        <TrashIcon />
-      </button>
-    </Flex>
+    <ServantInlineFace
+      servant={servant}
+      index={index}
+      faceSrc={servant ? faces[servant.variantKey] : null}
+    />
   );
+}
+
+function ActionDeleteButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="battle-action-delete"
+      aria-label="删除行动"
+      onClick={onClick}
+    >
+      <Cross2Icon width={13} height={13} />
+    </button>
+  );
+}
+
+function actionSummary(
+  action: PreparationAction,
+  partyServants: (Servant | null)[]
+): string {
+  if (action.type === "servant") {
+    const src = sourceIndex((action.servant ?? "servant_1") as PrepSource) ?? 0;
+    const target = sourceIndex((action.target ?? "") as PrepSource);
+    return target == null
+      ? `${servantLabel(src, partyServants[src] ?? null)} 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`
+      : `${servantLabel(src, partyServants[src] ?? null)} 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"} to ${servantLabel(target, partyServants[target] ?? null)}`;
+  }
+
+  if (action.type === "equipment") {
+    const target = sourceIndex((action.target ?? "") as PrepSource);
+    return target == null
+      ? `御主礼装 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`
+      : `御主礼装 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"} to ${servantLabel(target, partyServants[target] ?? null)}`;
+  }
+
+  const target = sourceIndex((action.target ?? "") as PrepSource);
+  return target == null
+    ? `令咒 ${COMMAND_SPELL_LABELS[action.spell ?? ""] ?? "行动"}`
+    : `令咒 ${COMMAND_SPELL_LABELS[action.spell ?? ""] ?? "行动"} to ${servantLabel(target, partyServants[target] ?? null)}`;
+}
+
+function attackSummary(card: AttackCard, partyServants: (Servant | null)[]): string {
+  const match = card.card?.match(/^servant_([1-3])_(np|buster|arts|quick)$/);
+  if (!match) return "未设置攻击";
+  const index = Number(match[1]) - 1;
+  const kind = match[2];
+  return `${servantLabel(index, partyServants[index] ?? null)} ${CARD_LABELS[kind]}`;
 }
 
 export function BattleSceneBlock({
   scene,
-  index,
   partyServants,
   onChange,
-  onDelete,
-  canDelete,
 }: BattleSceneBlockProps) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor)
-  );
+  const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
+  const [attackDraft, setAttackDraft] = useState<AttackDraft | null>(null);
+  const faces = useServantFaces(partyServants);
+  const preparationActions =
+    scene.preparationActions ??
+    [
+      ...(scene.servantActions ?? []),
+      ...(scene.equipmentActions ?? []),
+      ...(scene.commandSpellActions ?? []),
+    ];
 
-  const addServantAction = () => {
-    const newAction: ServantAction = {
-      type: "servant",
-      id: `sa_${Date.now()}`,
-      servant: null,
-      skill: null,
-      target: null,
-    };
-    onChange({
-      ...scene,
-      servantActions: [...scene.servantActions, newAction],
-    });
+  const updatePreparationActions = (next: PreparationAction[]) => {
+    onChange(emptyLegacyFields({ ...scene, preparationActions: next }));
   };
 
-  const addEquipmentAction = () => {
-    const newAction: EquipmentAction = {
-      type: "equipment",
-      id: `eq_${Date.now()}`,
-      skill: null,
-      target: null,
-    };
-    onChange({
-      ...scene,
-      equipmentActions: [...scene.equipmentActions, newAction],
-    });
+  const updateAttackPriority = (next: AttackCard[]) => {
+    onChange(emptyLegacyFields({ ...scene, attackPriority: next }));
   };
 
-  const addCommandSpellAction = () => {
-    const newAction: CommandSpellAction = {
-      type: "commandSpell",
-      id: `cs_${Date.now()}`,
-      spell: null,
-      target: null,
-    };
-    onChange({
-      ...scene,
-      commandSpellActions: [...scene.commandSpellActions, newAction],
-    });
+  const finishPrepAction = (draft: Extract<PrepDraft, { step: "target" }>, target: string | null) => {
+    let action: PreparationAction;
+    if (draft.source === "equipment") {
+      action = {
+        type: "equipment",
+        id: createId("eq"),
+        skill: draft.option,
+        target,
+      } satisfies EquipmentAction;
+    } else if (draft.source === "commandSpell") {
+      action = {
+        type: "commandSpell",
+        id: createId("cs"),
+        spell: draft.option as CommandSpellAction["spell"],
+        target,
+      } satisfies CommandSpellAction;
+    } else {
+      action = {
+        type: "servant",
+        id: createId("sa"),
+        servant: draft.source,
+        skill: draft.option,
+        target,
+      } satisfies ServantAction;
+    }
+    updatePreparationActions([...preparationActions, action]);
+    setPrepDraft(null);
   };
 
-  const updateServantAction = (idx: number, updated: ServantAction) => {
-    const next = [...scene.servantActions];
-    next[idx] = updated;
-    onChange({ ...scene, servantActions: next });
-  };
-
-  const deleteServantAction = (idx: number) => {
-    onChange({
-      ...scene,
-      servantActions: scene.servantActions.filter((_, i) => i !== idx),
-    });
-  };
-
-  const updateEquipmentAction = (idx: number, updated: EquipmentAction) => {
-    const next = [...scene.equipmentActions];
-    next[idx] = updated;
-    onChange({ ...scene, equipmentActions: next });
-  };
-
-  const deleteEquipmentAction = (idx: number) => {
-    onChange({
-      ...scene,
-      equipmentActions: scene.equipmentActions.filter((_, i) => i !== idx),
-    });
-  };
-
-  const updateCommandSpellAction = (idx: number, updated: CommandSpellAction) => {
-    const next = [...scene.commandSpellActions];
-    next[idx] = updated;
-    onChange({ ...scene, commandSpellActions: next });
-  };
-
-  const deleteCommandSpellAction = (idx: number) => {
-    onChange({
-      ...scene,
-      commandSpellActions: scene.commandSpellActions.filter((_, i) => i !== idx),
-    });
-  };
-
-  const updateAttackCard = (idx: number, updated: AttackCard) => {
-    const next = [...scene.attackPriority];
-    next[idx] = updated;
-    onChange({ ...scene, attackPriority: next });
-  };
-
-  const deleteAttackCard = (idx: number) => {
-    onChange({
-      ...scene,
-      attackPriority: scene.attackPriority.filter((_, i) => i !== idx),
-    });
-  };
-
-  const addAttackCard = () => {
-    onChange({
-      ...scene,
-      attackPriority: [
-        ...scene.attackPriority,
-        { id: `atk_${Date.now()}_${scene.attackPriority.length}`, card: null },
-      ],
-    });
-  };
-
-  const handleAttackDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = scene.attackPriority.findIndex((c) => c.id === active.id);
-    const newIndex = scene.attackPriority.findIndex((c) => c.id === over.id);
-    onChange({
-      ...scene,
-      attackPriority: arrayMove(scene.attackPriority, oldIndex, newIndex),
-    });
+  const finishAttackAction = (source: AttackSource, option: string) => {
+    updateAttackPriority([
+      ...scene.attackPriority,
+      { id: createId("atk"), card: `${source}_${option}` },
+    ]);
+    setAttackDraft(null);
   };
 
   return (
-    <div className="scene-block">
-      <Flex align="center" justify="between" className="scene-header">
-        <Text size="4" weight="bold">
-          场景 {index + 1}
-        </Text>
-        <Flex gap="2" align="center">
-          <button className="scene-action-btn scene-action-btn-servant" onClick={addServantAction}>
-            <PersonIcon />
-            <span>Servant</span>
-          </button>
-          <button className="scene-action-btn scene-action-btn-equipment" onClick={addEquipmentAction}>
-            <HeartIcon />
-            <span>Equipment</span>
-          </button>
-          <button
-            className="scene-action-btn scene-action-btn-command-spell"
-            onClick={addCommandSpellAction}
-          >
-            <StarIcon />
-            <span>令咒</span>
-          </button>
-          {canDelete && (
-            <button className="scene-delete-btn" onClick={onDelete}>
-              <TrashIcon />
-            </button>
-          )}
-        </Flex>
-      </Flex>
+    <div className="battle-scene-editor">
+      <section className="battle-phase">
+        <div className="battle-phase-label">准备阶段</div>
+        <div className="battle-action-list">
+          {preparationActions.map((action, index) => (
+            <div className="battle-action-row committed" key={action.id}>
+              <ActionDeleteButton
+                onClick={() =>
+                  updatePreparationActions(
+                    preparationActions.filter((_, i) => i !== index)
+                  )
+                }
+              />
+              <PreparationActionFaces
+                action={action}
+                partyServants={partyServants}
+                faces={faces}
+              />
+              <Text size="2" weight="medium">
+                {actionSummary(action, partyServants)}
+              </Text>
+            </div>
+          ))}
+          <div className="battle-add-row">
+            {!prepDraft ? (
+              <button
+                type="button"
+                className="battle-add-trigger"
+                onClick={() => setPrepDraft({ step: "source" })}
+              >
+                <span className="battle-plus-box">
+                  <PlusIcon width={16} height={16} />
+                </span>
+                <Text size="2" weight="medium">
+                  添加一项新的行动
+                </Text>
+              </button>
+            ) : prepDraft.step === "source" ? (
+              <div className="battle-choice-row">
+                {partyServants.slice(0, 3).map((servant, index) => (
+                  <ServantFaceButton
+                    key={index}
+                    servant={servant}
+                    index={index}
+                    faceSrc={servant ? faces[servant.variantKey] : null}
+                    onClick={() =>
+                      setPrepDraft({
+                        step: "option",
+                        source: `servant_${index + 1}` as PrepSource,
+                      })
+                    }
+                  />
+                ))}
+                <span className="battle-choice-separator" aria-hidden />
+                <button
+                  type="button"
+                  className="battle-square-btn"
+                  onClick={() => setPrepDraft({ step: "option", source: "equipment" })}
+                >
+                  御主<br />礼装
+                </button>
+                <button
+                  type="button"
+                  className="battle-square-btn"
+                  onClick={() =>
+                    setPrepDraft({ step: "option", source: "commandSpell" })
+                  }
+                >
+                  令咒
+                </button>
+              </div>
+            ) : prepDraft.step === "option" ? (
+              <div className="battle-choice-row">
+                {prepDraft.source !== "equipment" &&
+                  prepDraft.source !== "commandSpell" && (
+                    <ServantFaceButton
+                      servant={partyServants[sourceIndex(prepDraft.source) ?? 0] ?? null}
+                      index={sourceIndex(prepDraft.source) ?? 0}
+                      faceSrc={
+                        partyServants[sourceIndex(prepDraft.source) ?? 0]
+                          ? faces[
+                              partyServants[sourceIndex(prepDraft.source) ?? 0]!
+                                .variantKey
+                            ]
+                          : null
+                      }
+                      onClick={() => setPrepDraft({ step: "source" })}
+                    />
+                  )}
+                {prepDraft.source === "equipment" && (
+                  <button
+                    type="button"
+                    className="battle-square-btn selected"
+                    onClick={() => setPrepDraft({ step: "source" })}
+                  >
+                    御主<br />礼装
+                  </button>
+                )}
+                {prepDraft.source === "commandSpell" && (
+                  <button
+                    type="button"
+                    className="battle-square-btn selected"
+                    onClick={() => setPrepDraft({ step: "source" })}
+                  >
+                    令咒
+                  </button>
+                )}
+                <div className="battle-option-group">
+                  {prepDraft.source === "commandSpell"
+                    ? Object.entries(COMMAND_SPELL_LABELS).map(([value, label]) => (
+                        <button
+                          type="button"
+                          key={value}
+                          className="battle-option-btn"
+                          onClick={() =>
+                            setPrepDraft({
+                              step: "target",
+                              source: prepDraft.source,
+                              option: value,
+                            })
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))
+                    : SKILLS.map((skill) => (
+                        <button
+                          type="button"
+                          key={skill}
+                          className="battle-option-btn"
+                          onClick={() =>
+                            setPrepDraft({
+                              step: "target",
+                              source: prepDraft.source,
+                              option: skill,
+                            })
+                          }
+                        >
+                          {SKILL_LABELS[skill]}
+                        </button>
+                      ))}
+                </div>
+              </div>
+            ) : (
+              <div className="battle-choice-row">
+                <button
+                  type="button"
+                  className="battle-option-btn"
+                  onClick={() => finishPrepAction(prepDraft, null)}
+                >
+                  无目标
+                </button>
+                {partyServants.slice(0, 3).map((servant, index) => (
+                  <ServantFaceButton
+                    key={index}
+                    servant={servant}
+                    index={index}
+                    faceSrc={servant ? faces[servant.variantKey] : null}
+                    onClick={() => finishPrepAction(prepDraft, `servant_${index + 1}`)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
 
-      <div className="scene-actions">
-        {scene.servantActions.map((action, i) => (
-          <ServantActionRow
-            key={action.id}
-            action={action}
-            partyServants={partyServants}
-            onChange={(a) => updateServantAction(i, a)}
-            onDelete={() => deleteServantAction(i)}
-          />
-        ))}
-        {scene.equipmentActions.map((action, i) => (
-          <EquipmentActionRow
-            key={action.id}
-            action={action}
-            partyServants={partyServants}
-            onChange={(a) => updateEquipmentAction(i, a)}
-            onDelete={() => deleteEquipmentAction(i)}
-          />
-        ))}
-        {scene.commandSpellActions.map((action, i) => (
-          <CommandSpellActionRow
-            key={action.id}
-            action={action}
-            partyServants={partyServants}
-            onChange={(a) => updateCommandSpellAction(i, a)}
-            onDelete={() => deleteCommandSpellAction(i)}
-          />
-        ))}
-      </div>
-
-      <div className="attack-priority-section">
-        <Flex align="center" justify="between" className="attack-priority-header">
-          <Flex align="center" gap="1">
-            <LightningBoltIcon />
-            <Text size="2" weight="bold">
-              Attack Priority
-            </Text>
-          </Flex>
-          <button className="add-priority-btn" onClick={addAttackCard}>
-            <PlusIcon />
-            <span>Add</span>
-          </button>
-        </Flex>
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleAttackDragEnd}
-        >
-          <SortableContext
-            items={scene.attackPriority.map((c) => c.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {scene.attackPriority.map((card, i) => (
-              <SortableAttackRow
-                key={card.id}
+      <section className="battle-phase">
+        <div className="battle-phase-label">攻击阶段</div>
+        <div className="battle-action-list">
+          {scene.attackPriority.map((card, index) => (
+            <div className="battle-action-row committed" key={card.id}>
+              <ActionDeleteButton
+                onClick={() =>
+                  updateAttackPriority(scene.attackPriority.filter((_, i) => i !== index))
+                }
+              />
+              <AttackActionFace
                 card={card}
                 partyServants={partyServants}
-                onChange={(c) => updateAttackCard(i, c)}
-                onDelete={() => deleteAttackCard(i)}
-                canDelete={scene.attackPriority.length > 3}
+                faces={faces}
               />
-            ))}
-          </SortableContext>
-        </DndContext>
-      </div>
+              <Text size="2" weight="medium">
+                {attackSummary(card, partyServants)}
+              </Text>
+            </div>
+          ))}
+          <div className="battle-add-row">
+            {!attackDraft ? (
+              <button
+                type="button"
+                className="battle-add-trigger"
+                onClick={() => setAttackDraft({ step: "source" })}
+              >
+                <span className="battle-plus-box">
+                  <PlusIcon width={16} height={16} />
+                </span>
+                <Text size="2" weight="medium">
+                  添加一项新的行动
+                </Text>
+              </button>
+            ) : attackDraft.step === "source" ? (
+              <div className="battle-choice-row">
+                {partyServants.slice(0, 3).map((servant, index) => (
+                  <ServantFaceButton
+                    key={index}
+                    servant={servant}
+                    index={index}
+                    faceSrc={servant ? faces[servant.variantKey] : null}
+                    onClick={() =>
+                      setAttackDraft({
+                        step: "option",
+                        source: `servant_${index + 1}` as AttackSource,
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="battle-choice-row">
+                <ServantFaceButton
+                  servant={partyServants[sourceIndex(attackDraft.source) ?? 0] ?? null}
+                  index={sourceIndex(attackDraft.source) ?? 0}
+                  faceSrc={
+                    partyServants[sourceIndex(attackDraft.source) ?? 0]
+                      ? faces[
+                          partyServants[sourceIndex(attackDraft.source) ?? 0]!
+                            .variantKey
+                        ]
+                      : null
+                  }
+                  onClick={() => setAttackDraft({ step: "source" })}
+                />
+                <div className="battle-option-group">
+                  {ATTACK_OPTIONS.map((option) => (
+                    <button
+                      type="button"
+                      key={option.value}
+                      className="battle-option-btn"
+                      onClick={() =>
+                        finishAttackAction(attackDraft.source, option.value)
+                      }
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -98,6 +98,7 @@ function makeProject(supportServantId: number | null): Project {
 function makeScene(overrides: Partial<BattleScene> = {}): BattleScene {
   return {
     id: "scene_1",
+    preparationActions: [],
     servantActions: [],
     equipmentActions: [],
     commandSpellActions: [],

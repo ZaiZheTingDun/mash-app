@@ -123,17 +123,36 @@ pub struct AttackCard {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BattleScene {
     pub id: String,
-    #[serde(rename = "servantActions")]
+    #[serde(rename = "preparationActions", default)]
+    pub preparation_actions: Vec<Action>,
+    #[serde(rename = "servantActions", default, skip_serializing)]
     pub servant_actions: Vec<Action>,
-    #[serde(rename = "equipmentActions")]
+    #[serde(rename = "equipmentActions", default, skip_serializing)]
     pub equipment_actions: Vec<Action>,
     /// Per-scene Command Spell taps (令咒). Optional for backwards
     /// compatibility: legacy `battle_scenes.json` files written before
     /// this field was added deserialize with an empty list.
-    #[serde(rename = "commandSpellActions", default)]
+    #[serde(rename = "commandSpellActions", default, skip_serializing)]
     pub command_spell_actions: Vec<Action>,
     #[serde(rename = "attackPriority")]
     pub attack_priority: Vec<AttackCard>,
+}
+
+impl BattleScene {
+    fn normalize_preparation_actions(mut self) -> Self {
+        if self.preparation_actions.is_empty() {
+            self.preparation_actions
+                .extend(self.servant_actions.iter().cloned());
+            self.preparation_actions
+                .extend(self.equipment_actions.iter().cloned());
+            self.preparation_actions
+                .extend(self.command_spell_actions.iter().cloned());
+        }
+        self.servant_actions.clear();
+        self.equipment_actions.clear();
+        self.command_spell_actions.clear();
+        self
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +341,10 @@ fn save_battle_scenes(
     scenes: Vec<BattleScene>,
 ) -> Result<(), String> {
     let path = project_battle_scenes_path(&app, &project_id);
+    let scenes: Vec<BattleScene> = scenes
+        .into_iter()
+        .map(BattleScene::normalize_preparation_actions)
+        .collect();
     let json = serde_json::to_string_pretty(&scenes).map_err(|e| e.to_string())?;
     fs::write(&path, json).map_err(|e| e.to_string())
 }
@@ -330,7 +353,11 @@ fn save_battle_scenes(
 fn load_battle_scenes(app: tauri::AppHandle, project_id: String) -> Vec<BattleScene> {
     let path = project_battle_scenes_path(&app, &project_id);
     if let Ok(contents) = fs::read_to_string(&path) {
-        return serde_json::from_str(&contents).unwrap_or_default();
+        return serde_json::from_str::<Vec<BattleScene>>(&contents)
+            .unwrap_or_default()
+            .into_iter()
+            .map(BattleScene::normalize_preparation_actions)
+            .collect();
     }
 
     // One-shot migration: pre-rename projects stored their per-scene
@@ -339,7 +366,11 @@ fn load_battle_scenes(app: tauri::AppHandle, project_id: String) -> Vec<BattleSc
     // write it under the new filename, and remove the legacy file.
     let legacy = legacy_project_turns_path(&app, &project_id);
     if let Ok(contents) = fs::read_to_string(&legacy) {
-        let scenes: Vec<BattleScene> = serde_json::from_str(&contents).unwrap_or_default();
+        let scenes: Vec<BattleScene> = serde_json::from_str::<Vec<BattleScene>>(&contents)
+            .unwrap_or_default()
+            .into_iter()
+            .map(BattleScene::normalize_preparation_actions)
+            .collect();
         if let Ok(json) = serde_json::to_string_pretty(&scenes) {
             let _ = fs::write(&path, json);
         }
@@ -1506,8 +1537,7 @@ fn extract_zip_archive(zip_path: &Path, destination: &Path) -> Result<(), String
         if let Some(parent) = output.parent() {
             fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {e}"))?;
         }
-        let mut out =
-            fs::File::create(&output).map_err(|e| format!("写入解压文件失败: {e}"))?;
+        let mut out = fs::File::create(&output).map_err(|e| format!("写入解压文件失败: {e}"))?;
         io::copy(&mut entry, &mut out).map_err(|e| format!("解压文件失败: {e}"))?;
         out.flush().map_err(|e| format!("写入解压文件失败: {e}"))?;
     }
@@ -1959,19 +1989,23 @@ mod tests {
         fs::write(existing.join("old.png"), b"old").unwrap();
 
         let zip_path = tmp.path().join("bundle.zip");
-        fs::write(
-            &zip_path,
-            build_zip(&[("servants/1/new.png", b"new")]),
-        )
-        .unwrap();
+        fs::write(&zip_path, build_zip(&[("servants/1/new.png", b"new")])).unwrap();
 
-        let result =
-            import_asset_bundle_from_zip_path(&zip_path, &install_root).expect("import should work");
+        let result = import_asset_bundle_from_zip_path(&zip_path, &install_root)
+            .expect("import should work");
 
         assert!(result.imported_servants);
         assert_eq!(result.servant_files, 1);
-        assert!(!install_root.join("servants").join("1").join("old.png").exists());
-        assert!(install_root.join("servants").join("1").join("new.png").is_file());
+        assert!(!install_root
+            .join("servants")
+            .join("1")
+            .join("old.png")
+            .exists());
+        assert!(install_root
+            .join("servants")
+            .join("1")
+            .join("new.png")
+            .is_file());
     }
 
     #[test]
@@ -2260,50 +2294,82 @@ mod tests {
     }
 
     #[test]
-    fn battle_scene_legacy_json_without_command_spell_actions_defaults_to_empty() {
-        // Pre-feature `battle_scenes.json` rows have no
-        // `commandSpellActions` key. The `#[serde(default)]` on the new
-        // field is what keeps them loading; this test pins that contract
-        // so a refactor that drops the attribute (and breaks every
-        // existing user's saved scenes) fails CI.
+    fn battle_scene_legacy_json_merges_old_action_buckets_in_fixed_order() {
+        // Pre-ordered-action configs stored three separate preparation
+        // buckets. Normalization preserves their historical execution
+        // order so old projects keep behaving the same after loading.
         let json = serde_json::json!({
             "id": "scene_1",
-            "servantActions": [],
-            "equipmentActions": [],
+            "servantActions": [{
+                "type": "servant",
+                "id": "sa_1",
+                "servant": "servant_1",
+                "skill": "skill_1",
+                "target": null
+            }],
+            "equipmentActions": [{
+                "type": "equipment",
+                "id": "eq_1",
+                "skill": "skill_2",
+                "target": null
+            }],
+            "commandSpellActions": [{
+                "type": "commandSpell",
+                "id": "cs_1",
+                "spell": "restore",
+                "target": "servant_2"
+            }],
             "attackPriority": [],
         });
-        let scene: BattleScene = serde_json::from_value(json).unwrap();
+        let scene: BattleScene = serde_json::from_value::<BattleScene>(json)
+            .unwrap()
+            .normalize_preparation_actions();
         assert_eq!(scene.id, "scene_1");
+        assert_eq!(scene.preparation_actions.len(), 3);
+        assert!(matches!(
+            scene.preparation_actions[0],
+            Action::Servant { .. }
+        ));
+        assert!(matches!(
+            scene.preparation_actions[1],
+            Action::Equipment { .. }
+        ));
+        assert!(matches!(
+            scene.preparation_actions[2],
+            Action::CommandSpell { .. }
+        ));
+        assert!(scene.servant_actions.is_empty());
+        assert!(scene.equipment_actions.is_empty());
         assert!(scene.command_spell_actions.is_empty());
     }
 
     #[test]
-    fn battle_scene_round_trips_command_spell_actions_under_camel_case_key() {
+    fn battle_scene_round_trips_preparation_actions_under_camel_case_key() {
         let scene = BattleScene {
             id: "scene_1".into(),
-            servant_actions: vec![],
-            equipment_actions: vec![],
-            command_spell_actions: vec![Action::CommandSpell {
+            preparation_actions: vec![Action::CommandSpell {
                 id: "cs_1".into(),
                 spell: Some("np_release".into()),
                 target: Some("servant_1".into()),
             }],
+            servant_actions: vec![],
+            equipment_actions: vec![],
+            command_spell_actions: vec![],
             attack_priority: vec![],
         };
         let json = serde_json::to_value(&scene).unwrap();
-        // Field is renamed on the wire; the inner action keeps its
-        // own camelCase tag from the variant rename.
-        assert!(json["commandSpellActions"].is_array());
+        assert!(json["preparationActions"].is_array());
+        assert!(json["commandSpellActions"].is_null());
         assert_eq!(
-            json["commandSpellActions"][0]["type"],
+            json["preparationActions"][0]["type"],
             serde_json::json!("commandSpell")
         );
 
         // Deserialize back — symmetry guards against accidentally
         // exposing a field under one name and reading it under another.
         let parsed: BattleScene = serde_json::from_value(json).unwrap();
-        assert_eq!(parsed.command_spell_actions.len(), 1);
-        match &parsed.command_spell_actions[0] {
+        assert_eq!(parsed.preparation_actions.len(), 1);
+        match &parsed.preparation_actions[0] {
             Action::CommandSpell { spell, target, .. } => {
                 assert_eq!(spell.as_deref(), Some("np_release"));
                 assert_eq!(target.as_deref(), Some("servant_1"));
