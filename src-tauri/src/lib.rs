@@ -1180,10 +1180,8 @@ fn set_server(
     )
     .map_err(|e| e.to_string())?;
 
-    // Tear down any cached debug sidecar so the next debug call respawns
-    // it with the new server's templates / OCR model. The automation
-    // sidecar is short-lived (born inside `start_automation`) so it
-    // always sees the fresh setting.
+    // Tear down any idle sidecar so the next debug or automation call
+    // respawns it with the new server's templates / OCR model.
     {
         let mut guard = debug_state.0.lock().unwrap();
         guard.take();
@@ -1214,6 +1212,27 @@ fn check_adb(state: tauri::State<'_, Mutex<bool>>) -> AdbStatus {
     }
 }
 
+pub(crate) fn spawn_configured_sidecar(
+    app: &tauri::AppHandle,
+    server: Server,
+) -> Result<screen::SidecarClient, String> {
+    let templates_dir = resolve_templates_dir(app, server);
+    let cv_config = resolve_cv_config_path(app, server);
+    screen::SidecarClient::spawn(app, templates_dir.as_deref(), cv_config.as_deref(), server)
+}
+
+fn take_or_spawn_sidecar(
+    app: &tauri::AppHandle,
+    shared_sidecar: &debug::DebugSidecar,
+    server: Server,
+) -> Result<screen::SidecarClient, String> {
+    if let Some(client) = shared_sidecar.0.lock().unwrap().take() {
+        eprintln!("[mash-cv] reusing cached sidecar");
+        return Ok(client);
+    }
+    spawn_configured_sidecar(app, server)
+}
+
 #[tauri::command]
 fn start_automation(
     app: tauri::AppHandle,
@@ -1222,6 +1241,7 @@ fn start_automation(
     server_state: tauri::State<'_, Mutex<Server>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
     let is_running = {
         let state = handle_state.lock().unwrap().state.clone();
@@ -1257,10 +1277,7 @@ fn start_automation(
         return Err(format!("scrcpy-server.jar 不存在: {}", jar_path.display()));
     }
 
-    let templates_dir = resolve_templates_dir(&app, server);
-    let cv_config = resolve_cv_config_path(&app, server);
-    let mut sidecar =
-        screen::SidecarClient::spawn(&app, templates_dir.as_deref(), cv_config.as_deref(), server)?;
+    let mut sidecar = take_or_spawn_sidecar(&app, &debug_state, server)?;
 
     let (w, h) = sidecar
         .start_stream(
@@ -1296,6 +1313,7 @@ fn start_automation(
         assets_dir,
         ce_assets_dir,
         server,
+        Some(debug_state.0.clone()),
     );
     std::thread::spawn(move || runner.run());
 
@@ -1333,6 +1351,7 @@ fn start_enhancement_automation(
     server_state: tauri::State<'_, Mutex<Server>>,
     battle_handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
     {
         let handle = handle_state.lock().unwrap();
@@ -1373,10 +1392,7 @@ fn start_enhancement_automation(
         return Err(format!("scrcpy-server.jar 不存在: {}", jar_path.display()));
     }
 
-    let templates_dir = resolve_templates_dir(&app, server);
-    let cv_config = resolve_cv_config_path(&app, server);
-    let mut sidecar =
-        screen::SidecarClient::spawn(&app, templates_dir.as_deref(), cv_config.as_deref(), server)?;
+    let mut sidecar = take_or_spawn_sidecar(&app, &debug_state, server)?;
     let (w, h) = sidecar
         .start_stream(
             &jar_path,
@@ -1392,7 +1408,16 @@ fn start_enhancement_automation(
     handle.state = state.clone();
     handle.cancel = cancel.clone();
 
-    let runner = EnhancementRunner::new(adb_dev, sidecar, app, state, cancel, (w, h), target);
+    let runner = EnhancementRunner::new(
+        adb_dev,
+        sidecar,
+        app,
+        state,
+        cancel,
+        (w, h),
+        target,
+        Some(debug_state.0.clone()),
+    );
     std::thread::spawn(move || runner.run());
     Ok(())
 }
@@ -1728,7 +1753,7 @@ pub fn run() {
             app.manage(Mutex::new(server));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
             app.manage(Mutex::new(EnhancementRunnerHandle::new_idle()));
-            app.manage(debug::DebugSidecar(Mutex::new(None)));
+            app.manage(debug::DebugSidecar::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

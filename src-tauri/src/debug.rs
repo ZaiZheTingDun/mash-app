@@ -1,10 +1,11 @@
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::adb;
 use crate::enhancement_runner::{
-    SERVANT_FACE_MATCH_CROP, SERVANT_FACE_TEMPLATE_SIZE, SERVANT_LIST_REGION,
+    EnhancementRunnerHandle, EnhancementRunnerState, SERVANT_FACE_MATCH_CROP,
+    SERVANT_FACE_TEMPLATE_SIZE, SERVANT_LIST_REGION,
 };
 use crate::runner::{self, RunnerHandle, RunnerState};
 use crate::screen::{
@@ -22,7 +23,13 @@ use crate::{
 // Debug: CV probe + coordinate visualization
 // ---------------------------------------------------------------------------
 
-pub struct DebugSidecar(pub Mutex<Option<SidecarClient>>);
+pub struct DebugSidecar(pub Arc<Mutex<Option<SidecarClient>>>);
+
+impl DebugSidecar {
+    pub fn new() -> Self {
+        Self(Arc::new(Mutex::new(None)))
+    }
+}
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,7 +75,7 @@ fn ensure_debug_sidecar(
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|| "<none>".into()),
         );
-        let client = SidecarClient::spawn(app, tdir.as_deref(), cfg.as_deref(), server)?;
+        let client = crate::spawn_configured_sidecar(app, server)?;
         eprintln!("[debug] sidecar ready");
         *guard = Some(client);
     }
@@ -116,14 +123,21 @@ fn ensure_debug_stream(
 /// Returns Err with a user-facing message when automation is currently
 /// running. Debug commands route through this so we don't end up with two
 /// scrcpy servers + sidecars touching the same device at the same time.
-fn require_automation_idle(handle_state: &Mutex<RunnerHandle>) -> Result<(), String> {
+fn require_automation_idle(
+    handle_state: &Mutex<RunnerHandle>,
+    enhancement_handle_state: &Mutex<EnhancementRunnerHandle>,
+) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
     let state = handle.state.lock().unwrap().clone();
     if matches!(state, RunnerState::Running) {
-        Err("自动化正在运行中，请先停止后再使用调试功能".into())
-    } else {
-        Ok(())
+        return Err("自动化正在运行中，请先停止后再使用调试功能".into());
     }
+    let handle = enhancement_handle_state.lock().unwrap();
+    let state = handle.state.lock().unwrap().clone();
+    if matches!(state, EnhancementRunnerState::Running) {
+        return Err("强化自动化正在运行中，请先停止后再使用调试功能".into());
+    }
+    Ok(())
 }
 
 fn cv_element_spec(
@@ -226,8 +240,9 @@ pub fn debug_capture(
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
 ) -> Result<DebugCaptureResult, String> {
-    require_automation_idle(&handle_state)?;
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
 
     let use_bluestack = *bluestack_state.lock().unwrap();
     let server = current_server(&server_state);
@@ -294,11 +309,12 @@ pub fn debug_find_element(
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     template_key: String,
     region: Option<NormRect>,
     threshold: Option<f64>,
 ) -> Result<ElementMatch, String> {
-    require_automation_idle(&handle_state)?;
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -381,10 +397,11 @@ pub fn debug_find_element_by_name(
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     screen: String,
     element: String,
 ) -> Result<ElementMatch, String> {
-    require_automation_idle(&handle_state)?;
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -428,8 +445,9 @@ pub fn debug_reload_sidecar(
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
 ) -> Result<(), String> {
-    require_automation_idle(&handle_state)?;
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
     {
         let mut guard = debug_state.0.lock().unwrap();
         guard.take();
@@ -461,9 +479,10 @@ pub fn debug_find_command_cards(
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     servant_ids: Vec<u32>,
 ) -> Result<Vec<CommandCardMatch>, String> {
-    require_automation_idle(&handle_state)?;
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -501,8 +520,9 @@ pub fn debug_find_noble_phantasms(
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
 ) -> Result<Vec<NoblePhantasmMatch>, String> {
-    require_automation_idle(&handle_state)?;
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -587,10 +607,11 @@ pub fn debug_find_enhancement_servant(
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     servant_id: u32,
     threshold: Option<f64>,
 ) -> Result<DebugEnhancementServantMatchResult, String> {
-    require_automation_idle(&handle_state)?;
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -740,8 +761,9 @@ pub fn debug_read_battle_scene(
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
 ) -> Result<DebugBattleSceneResult, String> {
-    require_automation_idle(&handle_state)?;
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -877,8 +899,9 @@ pub fn debug_find_attack_button(
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
 ) -> Result<DebugAttackButtonResult, String> {
-    require_automation_idle(&handle_state)?;
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -990,10 +1013,11 @@ pub fn debug_find_supports(
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     servant_id: u32,
     craft_essence_id: Option<u32>,
 ) -> Result<DebugFindSupportsResult, String> {
-    require_automation_idle(&handle_state)?;
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -1159,8 +1183,8 @@ pub fn debug_list_servant_assets(app: tauri::AppHandle) -> Vec<u32> {
 }
 
 /// Pre-warm the debug sidecar process so the first user interaction with the
-/// Debug page doesn't pay the 20-40s PyInstaller cold-boot cost. Safe to call
-/// at any time; idempotent. The frontend should invoke this on app startup
+/// Debug page doesn't pay the 20-40s PyInstaller cold-boot cost. Idempotent
+/// while automation is idle. The frontend should invoke this on app startup
 /// (or on Debug page mount) to move the cold-boot off the critical path.
 ///
 /// This intentionally does *not* start the scrcpy stream -- streaming would
@@ -1171,6 +1195,9 @@ pub fn warm_sidecar(
     app: tauri::AppHandle,
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
 ) -> Result<(), String> {
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
     ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))
 }

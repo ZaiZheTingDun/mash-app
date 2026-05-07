@@ -702,7 +702,8 @@ const DEFAULT_H: u32 = 1920;
 
 pub struct Runner {
     adb: Adb,
-    sidecar: SidecarClient,
+    sidecar: Option<SidecarClient>,
+    sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     config: RunConfig,
     scenes: Vec<BattleScene>,
     state: Arc<Mutex<RunnerState>>,
@@ -771,11 +772,13 @@ impl Runner {
         assets_dir: Option<PathBuf>,
         ce_assets_dir: Option<PathBuf>,
         server: Server,
+        sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         Self {
             adb,
-            sidecar,
+            sidecar: Some(sidecar),
+            sidecar_cache,
             config,
             scenes,
             state,
@@ -820,6 +823,10 @@ impl Runner {
                 message: message.into(),
             },
         );
+    }
+
+    fn sidecar(&mut self) -> &mut SidecarClient {
+        self.sidecar.as_mut().expect("runner sidecar missing")
     }
 
     fn is_cancelled(&self) -> bool {
@@ -906,7 +913,7 @@ impl Runner {
             // "screen unchanged" so we keep tapping rather than bailing.
             // A persistent CV error will surface on the main loop's
             // next iteration via the same call path.
-            let detected = self.sidecar.detect(None).unwrap_or(from_screen);
+            let detected = self.sidecar().detect(None).unwrap_or(from_screen);
             if detected != from_screen {
                 return true;
             }
@@ -935,7 +942,7 @@ impl Runner {
                 return false;
             }
             let found = self
-                .sidecar
+                .sidecar()
                 .find_element_by_name(None, BATTLE_SCREEN, ATTACK_BUTTON_ELEMENT)
                 .map(|m| m.found)
                 .unwrap_or(false);
@@ -969,7 +976,7 @@ impl Runner {
                 return;
             }
 
-            let screen = match self.sidecar.detect(None) {
+            let screen = match self.sidecar().detect(None) {
                 Ok(s) => s,
                 Err(e) => {
                     self.set_state(RunnerState::Error { message: e.clone() });
@@ -1180,7 +1187,10 @@ impl Runner {
 
         // OCR the current (class-filtered) screen and look for a row
         // whose name + NP both fuzzy-match the pinned servant.
-        let result = match self.sidecar.find_supports(None, &meta.name, &meta.np_names) {
+        let result = match self
+            .sidecar()
+            .find_supports(None, &meta.name, &meta.np_names)
+        {
             Ok(r) => r,
             Err(e) => {
                 self.fail_action("SupportSelect", "OCR 助战识别", e);
@@ -1322,10 +1332,12 @@ impl Runner {
     ) -> Option<&'a SupportRowMatch> {
         for row in rows {
             let region = Self::support_ce_search_region(row);
-            match self
-                .sidecar
-                .verify_support_ce(None, region, template_path, SUPPORT_CE_THRESHOLD)
-            {
+            match self.sidecar().verify_support_ce(
+                None,
+                region,
+                template_path,
+                SUPPORT_CE_THRESHOLD,
+            ) {
                 Ok((score, passed)) => {
                     eprintln!(
                         "[runner] support CE verify: score={:.3} threshold={:.2} -> {}",
@@ -1352,7 +1364,7 @@ impl Runner {
     /// errors degrade to `false` so a CV blip just means "keep scrolling"
     /// instead of triggering a refresh loop.
     fn support_scroll_bar_at_end(&mut self) -> bool {
-        match self.sidecar.find_element_by_name(
+        match self.sidecar().find_element_by_name(
             None,
             SUPPORT_SELECT_SCREEN,
             SUPPORT_SCROLL_END_ELEMENT,
@@ -1377,14 +1389,14 @@ impl Runner {
     /// projects don't regress; new setups should pin a servant via the
     /// team-builder support slot to engage the OCR-based flow above.
     fn legacy_pick_first_support(&mut self) {
-        if let Some(name) = self.config.support_servant_name.as_deref() {
+        if let Some(name) = self.config.support_servant_name.clone() {
             let region = NormRect {
                 x: 0.0,
                 y: 0.15,
                 w: 1.0,
                 h: 0.75,
             };
-            if let Ok(Some(pos)) = self.sidecar.find_element(None, name, region, 0.8) {
+            if let Ok(Some(pos)) = self.sidecar().find_element(None, &name, region, 0.8) {
                 self.emit("SupportSelect", &format!("找到助战从者: {name}"));
                 if !self.tap_at("SupportSelect", pos) {
                     return;
@@ -1434,7 +1446,7 @@ impl Runner {
                 h: 0.85,
             };
 
-            if let Ok(Some(pos)) = self.sidecar.find_element(None, &servant_key, region, 0.8) {
+            if let Ok(Some(pos)) = self.sidecar().find_element(None, &servant_key, region, 0.8) {
                 self.emit(
                     "ServantSelect",
                     &format!("找到从者 {}，点击选择", slot_cfg.servant_id),
@@ -1473,7 +1485,7 @@ impl Runner {
     fn handle_battle(&mut self) {
         // Check if the attack button is present (our turn to act)
         let attack_present = self
-            .sidecar
+            .sidecar()
             .find_element_by_name(None, BATTLE_SCREEN, ATTACK_BUTTON_ELEMENT)
             .map(|m| m.found)
             .unwrap_or(false);
@@ -1489,7 +1501,7 @@ impl Runner {
 
         // Read the current battle scene (m of n) from the BATTLE label HUD.
         let screen_scene = self
-            .sidecar
+            .sidecar()
             .read_battle_scene(None, BATTLE_SCENE_REGION)
             .unwrap_or(None);
         let scene_m = screen_scene.map(|(m, _)| m);
@@ -1591,11 +1603,12 @@ impl Runner {
             self.emit("Attack", "未找到从者资源目录，将无法按从者匹配指令卡");
         }
 
-        let cards = match self.sidecar.find_command_cards(
+        let assets_dir = self.assets_dir.clone();
+        let cards = match self.sidecar().find_command_cards(
             None,
             None,
             &candidate_ids,
-            self.assets_dir.as_deref(),
+            assets_dir.as_deref(),
         ) {
             Ok(c) => c,
             Err(err) => {
@@ -1604,7 +1617,7 @@ impl Runner {
             }
         };
 
-        let nps = match self.sidecar.find_noble_phantasms(None, None) {
+        let nps = match self.sidecar().find_noble_phantasms(None, None) {
             Ok(n) => n,
             Err(err) => {
                 self.fail_action("Attack", "识别宝具卡", err);
@@ -2004,6 +2017,24 @@ impl Runner {
             .iter()
             .find(|s| !self.servants_placed.contains(&s.slot_index))
             .cloned()
+    }
+}
+
+impl Drop for Runner {
+    fn drop(&mut self) {
+        let Some(mut sidecar) = self.sidecar.take() else {
+            return;
+        };
+        if let Err(err) = sidecar.stop_stream() {
+            eprintln!("[mash-cv] stop_stream before caching runner sidecar failed: {err}");
+        }
+        if let Some(cache) = &self.sidecar_cache {
+            let mut guard = cache.lock().unwrap();
+            if guard.is_none() {
+                *guard = Some(sidecar);
+                return;
+            }
+        }
     }
 }
 

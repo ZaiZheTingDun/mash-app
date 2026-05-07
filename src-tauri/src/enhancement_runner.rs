@@ -354,7 +354,8 @@ struct NamedOcr {
 
 pub struct EnhancementRunner {
     adb: Adb,
-    sidecar: SidecarClient,
+    sidecar: Option<SidecarClient>,
+    sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     app_handle: tauri::AppHandle,
     state: Arc<Mutex<EnhancementRunnerState>>,
     cancel: Arc<AtomicBool>,
@@ -375,10 +376,12 @@ impl EnhancementRunner {
         cancel: Arc<AtomicBool>,
         screen_size: (u32, u32),
         target: EnhancementTarget,
+        sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     ) -> Self {
         Self {
             adb,
-            sidecar,
+            sidecar: Some(sidecar),
+            sidecar_cache,
             app_handle,
             state,
             cancel,
@@ -521,6 +524,10 @@ impl EnhancementRunner {
         self.cancel.load(Ordering::Relaxed)
     }
 
+    fn sidecar(&mut self) -> &mut SidecarClient {
+        self.sidecar.as_mut().expect("enhancement sidecar missing")
+    }
+
     fn fail(&self, screen: &str, message: String) {
         self.set_state(EnhancementRunnerState::Error {
             message: message.clone(),
@@ -573,12 +580,12 @@ impl EnhancementRunner {
     }
 
     fn ocr_region(&mut self, region: NormRect) -> Result<OcrRegionResult, String> {
-        self.sidecar.ocr_region(None, region)
+        self.sidecar().ocr_region(None, region)
     }
 
     fn probe_template(&mut self, probe: TemplateProbe) -> TemplateProbeResult {
         match self
-            .sidecar
+            .sidecar()
             .find_element_by_name(None, probe.screen, probe.element)
         {
             Ok(result) => TemplateProbeResult::from_match(probe, result),
@@ -735,7 +742,7 @@ impl EnhancementRunner {
     }
 
     fn handle_servant_enhance(&mut self, ocr: &OcrRegionResult) {
-        let level = match self.sidecar.read_level_digits(None, LEVEL_DIGIT_REGION) {
+        let level = match self.sidecar().read_level_digits(None, LEVEL_DIGIT_REGION) {
             Ok(v) => v,
             Err(err) => {
                 self.fail("ServantEnhance", format!("模板读取等级失败: {err}"));
@@ -811,9 +818,10 @@ impl EnhancementRunner {
             "ServantSelect",
             &format!("查找从者头像 {}", self.target.name_jp),
         );
-        match self.sidecar.find_enhancement_servant_grid(
+        let face_template_paths = self.target.face_template_paths.clone();
+        match self.sidecar().find_enhancement_servant_grid(
             None,
-            &self.target.face_template_paths,
+            &face_template_paths,
             SERVANT_LIST_REGION,
             SERVANT_FACE_MATCH_CROP,
             Some(SERVANT_FACE_TEMPLATE_SIZE),
@@ -1143,6 +1151,24 @@ impl EnhancementRunner {
                 last_tap = Instant::now();
             }
             thread::sleep(Duration::from_millis(400));
+        }
+    }
+}
+
+impl Drop for EnhancementRunner {
+    fn drop(&mut self) {
+        let Some(mut sidecar) = self.sidecar.take() else {
+            return;
+        };
+        if let Err(err) = sidecar.stop_stream() {
+            eprintln!("[mash-cv] stop_stream before caching enhancement sidecar failed: {err}");
+        }
+        if let Some(cache) = &self.sidecar_cache {
+            let mut guard = cache.lock().unwrap();
+            if guard.is_none() {
+                *guard = Some(sidecar);
+                return;
+            }
         }
     }
 }
@@ -1530,8 +1556,8 @@ pub(crate) fn server_supported(server: Server) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_enhancement_route, normalize_text, parse_selected_count, scale_level_3_decision,
-        norm_rect_area, EnhancementRoute, EnhancementStatus, EnhancementTopScreen,
+        classify_enhancement_route, norm_rect_area, normalize_text, parse_selected_count,
+        scale_level_3_decision, EnhancementRoute, EnhancementStatus, EnhancementTopScreen,
         EnhancementVariant, ProbeSnapshot, ScaleLevel3Decision, ASCENSION_ENTRY_OCR_REGION,
         DIALOG_CLASSIFIER_REGION, FILTER_DIALOG_REGION,
     };
