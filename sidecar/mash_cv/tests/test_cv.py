@@ -1677,6 +1677,28 @@ class TestREPL:
         assert len(responses) == 1
         assert "error" in responses[0]
 
+    def test_ping_does_not_load_pyav(self):
+        input_text = json.dumps({"cmd": "ping"}) + "\n" + json.dumps({"cmd": "quit"}) + "\n"
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import json, sys; "
+                    "from mash_cv import main; "
+                    "main(); "
+                    "print(json.dumps({'avLoaded': 'av' in sys.modules}))"
+                ),
+            ],
+            input=input_text,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        lines = [l for l in proc.stdout.strip().splitlines() if l]
+        assert json.loads(lines[0]) == {"ok": True}
+        assert json.loads(lines[-1]) == {"avLoaded": False}
+
     def test_set_server_cn_round_trip(self):
         # ``set_server`` should be a fire-and-forget no-op for the
         # sidecar protocol — it returns ``{ok: true, server: "CN",

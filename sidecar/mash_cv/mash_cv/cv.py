@@ -73,12 +73,6 @@ from typing import TYPE_CHECKING, Any, Optional
 import cv2
 import numpy as np
 
-# Eagerly load PyAV on the main thread before any CV2-FFmpeg dylib conflicts.
-# In PyInstaller bundles, loading ``av`` from a background thread deadlocks in
-# the macOS Objective-C runtime because cv2 and av ship overlapping FFmpeg
-# dylibs and the class-registration path is not thread-safe.
-import av  # noqa: F401
-
 if TYPE_CHECKING:
     from mash_cv.stream import ScrcpyStream
 
@@ -93,9 +87,8 @@ templates: dict[str, np.ndarray] = {}
 templates_dir: Optional[str] = None
 config: dict = {"screens": {}}
 # Populated once start_stream succeeds. The stream module is imported lazily
-# inside _start_stream so tests that never touch the stream don't pay PyAV's
-# import cost (and so we don't pull ffmpeg into every subprocess that just
-# wants to load a template).
+# inside _start_stream so commands that never touch live video don't load
+# PyAV's FFmpeg stack.
 stream: Optional["ScrcpyStream"] = None
 
 DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}

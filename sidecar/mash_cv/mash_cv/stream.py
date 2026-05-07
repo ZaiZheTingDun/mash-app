@@ -25,6 +25,11 @@ from typing import Optional
 import cv2
 import numpy as np
 
+# Import PyAV when the stream module is loaded by _start_stream. That happens
+# on the sidecar main thread before the decoder thread starts, while keeping
+# non-stream commands from loading a second FFmpeg stack during cold start.
+import av
+
 SCRCPY_VERSION = "2.7"
 
 DEVICE_NAME_FIELD_LENGTH = 64
@@ -364,7 +369,6 @@ class ScrcpyStream:
         )
 
     def _decode_loop(self) -> None:
-        import av
         codec = av.CodecContext.create("h264", "r")
         first_frame_logged = False
         try:
