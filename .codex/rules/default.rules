@@ -1,2 +1,4 @@
 prefix_rule(pattern=["adb"], decision="allow")
 prefix_rule(pattern=["pnpm"], decision="allow")
+prefix_rule(pattern=["git", "add"], decision="allow")
+prefix_rule(pattern=["git", "commit"], decision="allow")
