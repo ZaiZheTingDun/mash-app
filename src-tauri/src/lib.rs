@@ -77,10 +77,11 @@ impl FromStr for Server {
 }
 
 // ---------------------------------------------------------------------------
-// scrcpy stream tunables. ``STREAM_MAX_SIZE = 0`` means "do not downscale";
-// the device transmits at native resolution. Bit rate is the H.264 budget.
+// scrcpy stream tunables. Keep the live frame below native emulator
+// resolution so PyAV decode + OpenCV matching stay responsive on M1-class
+// laptops. Bit rate is the H.264 budget.
 // ---------------------------------------------------------------------------
-pub(crate) const STREAM_MAX_SIZE: u32 = 0;
+pub(crate) const STREAM_MAX_SIZE: u32 = 1280;
 pub(crate) const STREAM_BIT_RATE: u32 = 8_000_000;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
