@@ -7,11 +7,42 @@
   font-weight: 400;
   color: #0f0f0f;
   background-color: #f6f6f6;
+  --fgo-bg-base: #f6f1e7;
+  --fgo-bg-soft: #ebe2cf;
+  --fgo-line: rgba(120, 92, 45, 0.16);
+  --fgo-gold: rgba(188, 143, 54, 0.34);
+  --fgo-blue: rgba(36, 92, 150, 0.2);
+  --fgo-silver: rgba(255, 255, 255, 0.46);
+  --fgo-star: rgba(54, 88, 122, 0.18);
+  --fgo-vignette: rgba(80, 52, 20, 0.13);
+  --fgo-surface: color-mix(in srgb, var(--fgo-bg-base) 78%, transparent);
+  --fgo-surface-strong: rgba(250, 247, 239, 0.86);
+  --fgo-surface-border: color-mix(in srgb, var(--fgo-line) 78%, rgba(255, 255, 255, 0.22));
+  --fgo-control-hover: rgba(31, 41, 55, 0.07);
+  --fgo-shadow: rgba(48, 31, 12, 0.2);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+}
+
+:root[data-theme="dark"] {
+  color: #edf6ff;
+  background-color: #07111f;
+  --fgo-bg-base: #07111f;
+  --fgo-bg-soft: #0d1d33;
+  --fgo-line: rgba(160, 190, 230, 0.12);
+  --fgo-gold: rgba(214, 169, 74, 0.28);
+  --fgo-blue: rgba(54, 132, 220, 0.22);
+  --fgo-silver: rgba(231, 241, 255, 0.2);
+  --fgo-star: rgba(196, 218, 250, 0.2);
+  --fgo-vignette: rgba(0, 0, 0, 0.43);
+  --fgo-surface: rgba(9, 22, 39, 0.74);
+  --fgo-surface-strong: rgba(13, 29, 51, 0.82);
+  --fgo-surface-border: rgba(160, 190, 230, 0.16);
+  --fgo-control-hover: rgba(231, 241, 255, 0.08);
+  --fgo-shadow: rgba(0, 0, 0, 0.34);
 }
 
 html,
@@ -28,11 +59,29 @@ body,
 .app-root {
   height: 100vh;
   width: 100%;
-  background-image: url("./assets/bg-atlas.png");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse at center, transparent 42%, var(--fgo-vignette) 100%),
+    linear-gradient(135deg, var(--fgo-bg-base), var(--fgo-bg-soft));
+}
+
+.app-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12px 18px, var(--fgo-star) 0 1px, transparent 1.4px),
+    radial-gradient(circle at 64px 56px, var(--fgo-silver) 0 0.8px, transparent 1.2px),
+    linear-gradient(45deg, transparent 48%, var(--fgo-line) 49%, var(--fgo-line) 51%, transparent 52%),
+    linear-gradient(-45deg, transparent 48%, var(--fgo-line) 49%, var(--fgo-line) 51%, transparent 52%);
+  background-size: 96px 96px, 128px 128px, 72px 72px, 72px 72px;
+  -webkit-mask-image: radial-gradient(circle at center, black 36%, transparent 82%);
+  mask-image: radial-gradient(circle at center, black 36%, transparent 82%);
+  opacity: 0.6;
 }
 
 .app-container {
@@ -40,6 +89,8 @@ body,
   min-height: 0;
   width: 100%;
   flex-direction: row;
+  position: relative;
+  z-index: 1;
 }
 
 /* ── Main Content ── */
@@ -106,15 +157,6 @@ body,
   height: 38px;
   min-width: min(360px, calc(100vw - 96px));
   padding: 0 44px;
-  background: linear-gradient(180deg, rgba(245, 249, 253, 0.96), rgba(215, 226, 234, 0.96));
-  border: 1px solid rgba(98, 111, 125, 0.5);
-  border-radius: 19px;
-  color: #1b2430;
-  cursor: pointer;
-  font-family: inherit;
-  filter: drop-shadow(0 2px 0 rgba(16, 28, 45, 0.3));
-  transition: filter 0.15s, transform 0.15s;
-  isolation: isolate;
 }
 
 .project-bar-title {
@@ -129,17 +171,6 @@ body,
 .project-bar-menu-icon {
   position: absolute;
   right: 28px;
-  color: #1b2430;
-}
-
-.project-bar-pill:hover {
-  filter: drop-shadow(0 2px 0 rgba(16, 28, 45, 0.35)) brightness(1.03);
-  transform: translateY(-1px);
-}
-
-.project-bar-pill:focus-visible {
-  outline: 2px solid var(--blue-9);
-  outline-offset: 2px;
 }
 
 .team-stage {
@@ -863,7 +894,9 @@ body,
   position: relative;
   border: 1px solid var(--gray-7);
   border-radius: var(--radius-3);
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--fgo-surface);
+  box-shadow: 0 14px 38px var(--fgo-shadow);
+  backdrop-filter: blur(14px);
   padding: 14px 116px 14px 14px;
   min-height: 84px;
 }
@@ -928,7 +961,7 @@ body,
   height: 36px;
   border: 1px solid var(--gray-7);
   border-radius: var(--radius-2);
-  background: #fff;
+  background: var(--gray-1);
   display: inline-grid;
   place-items: center;
   overflow: hidden;
@@ -1019,7 +1052,7 @@ body,
   appearance: none;
   font: inherit;
   border: 1px solid var(--gray-8);
-  background: #fff;
+  background: var(--gray-1);
   color: var(--gray-12);
   border-radius: var(--radius-2);
   cursor: pointer;
@@ -1095,7 +1128,7 @@ body,
 }
 
 .scene-block {
-  background: var(--gray-3);
+  background: var(--fgo-surface);
   border: 1px solid var(--gray-6);
   border-radius: var(--radius-3);
   padding: 20px;
@@ -1176,15 +1209,15 @@ body,
 }
 
 .action-row-servant {
-  background: rgba(59, 130, 246, 0.08);
+  background: color-mix(in srgb, var(--blue-4) 46%, transparent);
 }
 
 .action-row-equipment {
-  background: rgba(168, 85, 247, 0.08);
+  background: color-mix(in srgb, var(--purple-4) 46%, transparent);
 }
 
 .action-row-command-spell {
-  background: rgba(245, 158, 11, 0.08);
+  background: color-mix(in srgb, var(--amber-4) 46%, transparent);
 }
 
 .action-label {
@@ -1200,7 +1233,8 @@ body,
   padding: 6px 28px 6px 10px;
   border: 1px solid var(--gray-7);
   border-radius: var(--radius-2);
-  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E") no-repeat right 8px center;
+  background: var(--gray-1);
+  color: var(--gray-12);
   cursor: pointer;
   min-width: 0;
   transition: border-color 0.15s;
@@ -1330,8 +1364,12 @@ body,
   min-height: 28px;
   padding: 0 12px;
   box-sizing: border-box;
-  background: var(--gray-3);
-  border-top: 1px solid var(--gray-6);
+  position: relative;
+  z-index: 1;
+  background: var(--fgo-surface);
+  border-top: 1px solid var(--fgo-surface-border);
+  box-shadow: 0 -10px 28px var(--fgo-shadow);
+  backdrop-filter: blur(16px);
 }
 
 .status-dot {
@@ -1366,7 +1404,7 @@ body,
 }
 
 .status-trigger:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--fgo-control-hover);
 }
 
 .status-label {
@@ -1551,7 +1589,8 @@ body,
 
 /* Compact pill that lives next to the connection-status popover and
    replaces the now-removed sidebar shortcut to the CV debug page. */
-.status-debug-btn {
+.status-debug-btn,
+.status-theme-btn {
   appearance: none;
   border: none;
   background: none;
@@ -1566,12 +1605,14 @@ body,
   transition: background 0.12s, color 0.12s;
 }
 
-.status-debug-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
+.status-debug-btn:hover,
+.status-theme-btn:hover {
+  background: var(--fgo-control-hover);
   color: var(--gray-12);
 }
 
-.status-debug-btn:focus-visible {
+.status-debug-btn:focus-visible,
+.status-theme-btn:focus-visible {
   outline: 2px solid var(--blue-8);
   outline-offset: 1px;
 }
@@ -1615,7 +1656,8 @@ body,
   flex-shrink: 0;
   border: 1px solid var(--gray-6);
   border-radius: var(--radius-2);
-  background: #fff;
+  background: var(--fgo-surface);
+  backdrop-filter: blur(14px);
 }
 
 .debug-section-summary {
@@ -1634,7 +1676,7 @@ body,
 }
 
 .debug-section-summary:hover {
-  background: var(--gray-2);
+  background: var(--fgo-control-hover);
 }
 
 .debug-section-chevron {
@@ -1663,7 +1705,7 @@ body,
   padding: 6px 10px;
   border: 1px solid var(--gray-7);
   border-radius: var(--radius-2);
-  background: #fff;
+  background: var(--gray-1);
   color: var(--gray-12);
   min-width: 220px;
 }
@@ -1685,9 +1727,7 @@ body,
   padding: 6px 24px 6px 10px;
   border: 1px solid var(--gray-7);
   border-radius: var(--radius-2);
-  background: #fff
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='%23666'><path d='M0 0l5 6 5-6z'/></svg>")
-    no-repeat right 8px center / 8px 6px;
+  background: var(--gray-1);
   color: var(--gray-12);
   min-width: 140px;
   cursor: pointer;
@@ -1711,7 +1751,7 @@ body,
 .debug-reload-btn {
   appearance: none;
   border: 1px solid var(--gray-7);
-  background: #fff;
+  background: var(--gray-1);
   font: inherit;
   cursor: pointer;
   display: inline-flex;
@@ -1944,7 +1984,7 @@ body,
   flex-direction: column;
   gap: 2px;
   padding: 12px 14px;
-  background: #fff;
+  background: var(--fgo-surface);
   border: 1px solid var(--gray-6);
   border-radius: var(--radius-2);
 }
@@ -1959,7 +1999,7 @@ body,
 
 .debug-match-entry {
   padding: 10px 12px;
-  background: #fff;
+  background: var(--fgo-surface);
   border: 1px solid var(--gray-6);
   border-radius: var(--radius-2);
   display: flex;
@@ -1992,7 +2032,7 @@ body,
   max-height: 160px;
   overflow-y: auto;
   padding: 8px 10px;
-  background: #fff;
+  background: var(--gray-1);
   border: 1px solid var(--gray-6);
   border-radius: var(--radius-2);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -2030,7 +2070,7 @@ body,
 .debug-log-clear {
   appearance: none;
   border: 1px solid var(--gray-7);
-  background: #fff;
+  background: var(--gray-1);
   font: inherit;
   font-size: 11px;
   color: var(--gray-11);

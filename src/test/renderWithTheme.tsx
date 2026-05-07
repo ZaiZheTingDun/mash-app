@@ -15,7 +15,13 @@ export function renderWithTheme(
 ): RenderResult {
   return render(ui, {
     wrapper: ({ children }) => (
-      <Theme appearance="light" accentColor="blue" radius="medium">
+      <Theme
+        appearance="light"
+        accentColor="blue"
+        grayColor="slate"
+        panelBackground="translucent"
+        radius="medium"
+      >
         {children}
       </Theme>
     ),

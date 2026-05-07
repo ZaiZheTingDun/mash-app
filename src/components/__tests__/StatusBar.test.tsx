@@ -185,4 +185,22 @@ describe("StatusBar", () => {
       expect(trigger).not.toBeDisabled();
     });
   });
+
+  it("dispatches theme changes from the status bar toggle", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      return null;
+    });
+    const onThemeChange = vi.fn();
+    const user = userEvent.setup();
+    renderWithTheme(
+      <StatusBar theme="light" onThemeChange={onThemeChange} />
+    );
+
+    await user.click(screen.getByRole("button", { name: "切换深色模式" }));
+
+    expect(onThemeChange).toHaveBeenCalledWith("dark");
+  });
 });

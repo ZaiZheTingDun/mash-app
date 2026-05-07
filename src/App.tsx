@@ -16,6 +16,7 @@ import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
 import type { CraftEssence } from "./types/craftEssence";
 import type { Project } from "./types/project";
+import type { AppTheme } from "./types/theme";
 import "./App.css";
 
 // Linear flow: 队伍设置 → 指令设置 → 开始任务. Each forward step is
@@ -24,7 +25,12 @@ import "./App.css";
 // horizontal `StageNavigator` (queue/support/command tabs).
 type View = "team" | "command" | "battle" | "enhancement" | "debug";
 
-function App() {
+interface AppProps {
+  theme: AppTheme;
+  onThemeChange: (theme: AppTheme) => void;
+}
+
+function App({ theme, onThemeChange }: AppProps) {
   const [view, setView] = useState<View>("team");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -201,7 +207,7 @@ function App() {
   }, []);
 
   return (
-    <Flex direction="column" className="app-root">
+    <Flex direction="column" className="app-root" data-theme={theme}>
       <Flex className="app-container">
         <Box className="main-content">
           {view === "battle" ? (
@@ -311,7 +317,11 @@ function App() {
           )}
         </Box>
       </Flex>
-      <StatusBar onOpenDebug={handleOpenDebug} />
+      <StatusBar
+        onOpenDebug={handleOpenDebug}
+        theme={theme}
+        onThemeChange={onThemeChange}
+      />
     </Flex>
   );
 }

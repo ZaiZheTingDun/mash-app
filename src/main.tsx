@@ -1,8 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { Theme } from "@radix-ui/themes";
-import App from "./App";
-import { DebugCanvasWindow } from "./components/DebugCanvasWindow";
+import { AppThemeRoot } from "./AppThemeRoot";
 import "./App.css";
 
 // Tauri spawns secondary windows pointing at the same SPA bundle and
@@ -14,8 +12,6 @@ const isDebugCanvas = window.location.hash === "#debug-canvas";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <Theme appearance="light" accentColor="blue" radius="medium">
-      {isDebugCanvas ? <DebugCanvasWindow /> : <App />}
-    </Theme>
+    <AppThemeRoot isDebugCanvas={isDebugCanvas} />
   </React.StrictMode>,
 );

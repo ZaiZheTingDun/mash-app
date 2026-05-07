@@ -4,9 +4,12 @@ import {
   Link2Icon,
   DesktopIcon,
   MagnifyingGlassIcon,
+  MoonIcon,
+  SunIcon,
 } from "@radix-ui/react-icons";
 import { invoke, listen } from "../tauri";
 import { SERVER_LABELS, type Server } from "../types/server";
+import type { AppTheme } from "../types/theme";
 
 interface AdbStatus {
   connected: boolean;
@@ -24,9 +27,15 @@ interface StatusBarProps {
    * Optional so existing tests (and any callers that don't need the
    * shortcut) can still mount `<StatusBar />` with no props. */
   onOpenDebug?: () => void;
+  theme?: AppTheme;
+  onThemeChange?: (theme: AppTheme) => void;
 }
 
-export function StatusBar({ onOpenDebug }: StatusBarProps = {}) {
+export function StatusBar({
+  onOpenDebug,
+  theme,
+  onThemeChange,
+}: StatusBarProps = {}) {
   const [status, setStatus] = useState<AdbStatus>({ connected: false, deviceName: null });
   const [checking, setChecking] = useState(false);
   const [useBluestack, setUseBluestack] = useState(false);
@@ -105,6 +114,11 @@ export function StatusBar({ onOpenDebug }: StatusBarProps = {}) {
     });
   }, [server]);
 
+  const handleThemeToggle = useCallback(() => {
+    if (!theme || !onThemeChange) return;
+    onThemeChange(theme === "dark" ? "light" : "dark");
+  }, [theme, onThemeChange]);
+
   return (
     <Flex className="status-bar" align="center" justify="end" gap="2">
       {onOpenDebug && (
@@ -115,6 +129,21 @@ export function StatusBar({ onOpenDebug }: StatusBarProps = {}) {
         >
           <MagnifyingGlassIcon width={12} height={12} />
           <Text size="1">CV 调试</Text>
+        </button>
+      )}
+      {theme && onThemeChange && (
+        <button
+          type="button"
+          className="status-theme-btn"
+          aria-label={theme === "dark" ? "切换浅色模式" : "切换深色模式"}
+          onClick={handleThemeToggle}
+        >
+          {theme === "dark" ? (
+            <SunIcon width={12} height={12} />
+          ) : (
+            <MoonIcon width={12} height={12} />
+          )}
+          <Text size="1">{theme === "dark" ? "浅色" : "深色"}</Text>
         </button>
       )}
       <Popover.Root>

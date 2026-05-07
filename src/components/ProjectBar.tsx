@@ -52,7 +52,13 @@ export function ProjectBar({
     <Box className="project-bar">
       <DropdownMenu.Root>
         <DropdownMenu.Trigger>
-          <Button type="button" variant="surface" color="gray" className="project-bar-pill">
+          <Button
+            type="button"
+            size="3"
+            variant="surface"
+            color="gray"
+            className="project-bar-pill"
+          >
             <Text size="3" weight="bold" className="project-bar-title">
               {`～ ${triggerLabel} ～`}
             </Text>
