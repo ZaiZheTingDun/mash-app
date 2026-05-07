@@ -90,6 +90,10 @@ Variant detects and status elements:
 ## Notes
 
 - Level and selected material count still use OCR.
+- Hot OCR paths are bounded to narrow purpose-specific regions: dialog
+  classification reads the central dialog text area, and servant enhancement
+  reads only the ascension-entry button area after level digits indicate a
+  max-level servant.
 - Confirm dialogs, profile update dialogs, and ascension result fallback still
   use OCR until dedicated templates are added.
 - Updating `EnhancementScreen`, `EnhancementTopScreen`, `EnhancementVariant`,

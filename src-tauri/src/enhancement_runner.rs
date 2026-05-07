@@ -23,17 +23,23 @@ const LEVEL_DIGIT_REGION: NormRect = NormRect {
     w: 0.120,
     h: 0.075,
 };
-const SERVANT_ENHANCE_REGION: NormRect = NormRect {
-    x: 0.18,
-    y: 0.16,
-    w: 0.76,
-    h: 0.72,
-};
 const FILTER_DIALOG_REGION: NormRect = NormRect {
     x: 0.14,
     y: 0.10,
     w: 0.74,
     h: 0.80,
+};
+const DIALOG_CLASSIFIER_REGION: NormRect = NormRect {
+    x: 0.18,
+    y: 0.14,
+    w: 0.64,
+    h: 0.70,
+};
+const ASCENSION_ENTRY_OCR_REGION: NormRect = NormRect {
+    x: 0.66,
+    y: 0.71,
+    w: 0.30,
+    h: 0.14,
 };
 const MATERIAL_LIST_REGION: NormRect = NormRect {
     x: 0.00,
@@ -588,7 +594,7 @@ impl EnhancementRunner {
     }
 
     fn detect_screen(&mut self) -> Result<(EnhancementScreen, OcrRegionResult), String> {
-        let dialog = self.ocr_region(FILTER_DIALOG_REGION)?;
+        let dialog = self.ocr_region(DIALOG_CLASSIFIER_REGION)?;
         let dialog_text = normalize_text(&dialog.full_text);
         if dialog_text.contains("プロフィール") && dialog_text.contains("閉じる") {
             return Ok((EnhancementScreen::ProfileUpdateDialog, dialog));
@@ -667,7 +673,7 @@ impl EnhancementRunner {
         };
 
         let ocr = match screen {
-            EnhancementScreen::ServantEnhance => self.ocr_region(SERVANT_ENHANCE_REGION)?,
+            EnhancementScreen::ServantEnhance => self.ocr_region(ASCENSION_ENTRY_OCR_REGION)?,
             EnhancementScreen::ServantSelect => self.ocr_region(SERVANT_LIST_REGION)?,
             EnhancementScreen::MaterialSelect => {
                 let material_list = self.ocr_region(MATERIAL_LIST_REGION)?;
@@ -1383,6 +1389,11 @@ fn summarize_ocr(ocr: &OcrRegionResult) -> String {
     }
 }
 
+#[cfg(test)]
+fn norm_rect_area(rect: NormRect) -> f64 {
+    rect.w * rect.h
+}
+
 fn normalize_whitespace(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -1520,8 +1531,9 @@ pub(crate) fn server_supported(server: Server) -> bool {
 mod tests {
     use super::{
         classify_enhancement_route, normalize_text, parse_selected_count, scale_level_3_decision,
-        EnhancementRoute, EnhancementStatus, EnhancementTopScreen, EnhancementVariant,
-        ProbeSnapshot, ScaleLevel3Decision,
+        norm_rect_area, EnhancementRoute, EnhancementStatus, EnhancementTopScreen,
+        EnhancementVariant, ProbeSnapshot, ScaleLevel3Decision, ASCENSION_ENTRY_OCR_REGION,
+        DIALOG_CLASSIFIER_REGION, FILTER_DIALOG_REGION,
     };
 
     #[test]
@@ -1538,6 +1550,12 @@ mod tests {
     fn normalize_text_drops_spacing_and_punctuation() {
         assert_eq!(normalize_text(" Exp. UP "), "expup");
         assert_eq!(normalize_text("Lv. 80/90"), "lv80/90");
+    }
+
+    #[test]
+    fn hot_ocr_regions_stay_narrow() {
+        assert!(norm_rect_area(DIALOG_CLASSIFIER_REGION) < norm_rect_area(FILTER_DIALOG_REGION));
+        assert!(norm_rect_area(ASCENSION_ENTRY_OCR_REGION) < 0.05);
     }
 
     #[test]
