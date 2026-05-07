@@ -666,6 +666,7 @@ def _find_element_by_name(
 def _detect_screen(img: np.ndarray) -> dict:
     best_name = "Unknown"
     best_score = 0.0
+    best_priority = 0
     for screen_name, spec in config.get("screens", {}).items():
         det = spec.get("detect")
         if not det:
@@ -682,6 +683,7 @@ def _detect_screen(img: np.ndarray) -> dict:
         elif det.get("template"):
             keys = [str(det["template"])]
         threshold = float(det.get("threshold", 0.85))
+        priority = int(det.get("priority", 0))
         region = det.get("region", DEFAULT_REGION)
         screen_score = 0.0
         for key in keys:
@@ -693,9 +695,13 @@ def _detect_screen(img: np.ndarray) -> dict:
                 score = float(result.get("score", 0.0))
                 if score > screen_score:
                     screen_score = score
-        if screen_score > best_score:
+        if screen_score > 0.0 and (
+            priority > best_priority
+            or (priority == best_priority and screen_score > best_score)
+        ):
             best_score = screen_score
             best_name = screen_name
+            best_priority = priority
     return {"screen": best_name, "score": best_score}
 
 

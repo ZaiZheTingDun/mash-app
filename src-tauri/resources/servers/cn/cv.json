@@ -190,7 +190,8 @@
           "w": 0.167,
           "h": 0.141
         },
-        "threshold": 0.85
+        "threshold": 0.85,
+        "priority": 10
       },
       "variants": {
         "main": {

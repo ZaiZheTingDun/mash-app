@@ -127,6 +127,45 @@ class TestDetectScreen:
         result = mash_cv._detect_screen(img)
         assert result["screen"] == "Exact"
 
+    def test_priority_wins_over_higher_score(self):
+        """Higher-priority screens should win once their own threshold
+        passes, even if a lower-priority template scores slightly higher.
+
+        This covers FGO's attack-card page: the BATTLE label remains
+        visible and can score higher than the card-page speed button, but
+        the runner must dispatch the frame to ``Screen::Attack``.
+        """
+        exact = _gradient_patch(20)
+        weaker = exact.copy()
+        weaker[0, 0] = 250
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        img[10:30, 10:30] = cv2.merge([exact, exact, exact])
+
+        mash_cv.templates["battle"] = exact.copy()
+        mash_cv.templates["attack"] = weaker
+        mash_cv._set_config({
+            "screens": {
+                "Battle": {
+                    "detect": {
+                        "template": "battle",
+                        "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                        "threshold": 0.5,
+                    }
+                },
+                "Attack": {
+                    "detect": {
+                        "template": "attack",
+                        "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                        "threshold": 0.5,
+                        "priority": 10,
+                    }
+                },
+            }
+        })
+
+        result = mash_cv._detect_screen(img)
+        assert result["screen"] == "Attack"
+
     def test_templates_list_takes_best_variant(self):
         """A screen carrying multiple variant templates should match when
         *any* variant is present in the frame, and the reported score
