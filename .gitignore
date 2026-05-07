@@ -39,6 +39,5 @@ src-tauri/binaries/
 *.sln
 *.sw?
 
-
 # Screenshot examples
 screenshots/
