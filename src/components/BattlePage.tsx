@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Box, Flex, Text } from "@radix-ui/themes";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke, listen } from "../tauri";
 import { ChevronLeftIcon } from "@radix-ui/react-icons";
 import type { Project } from "../types/project";
 

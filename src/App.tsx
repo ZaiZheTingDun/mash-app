@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Box, Flex, Text, Spinner } from "@radix-ui/themes";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./tauri";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { ContentGrid } from "./components/ContentGrid";
 import { derivePartyLineup, derivePartyServants } from "./components/partyServants";

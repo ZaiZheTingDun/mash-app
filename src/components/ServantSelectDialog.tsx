@@ -7,7 +7,7 @@ import {
   ScrollArea,
   Box,
 } from "@radix-ui/themes";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "../tauri";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import type { Servant } from "../types/servant";
 

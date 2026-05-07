@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { Text } from "@radix-ui/themes";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "../tauri";
 import {
   Cross2Icon,
   PersonIcon,
@@ -178,7 +178,7 @@ function ServantInlineFace({
   );
 }
 
-function PreparationActionFaces({
+function PreparationActionSummary({
   action,
   partyServants,
   faces,
@@ -188,29 +188,44 @@ function PreparationActionFaces({
   faces: Record<string, string | null>;
 }) {
   const targetIndex = sourceIndex((action.target ?? "") as PrepSource);
+  let sourceFace: React.ReactNode;
+  let sourceText: string;
+  let actionText: string;
 
-  let source: React.ReactNode;
   if (action.type === "servant") {
     const src = sourceIndex((action.servant ?? "servant_1") as PrepSource) ?? 0;
     const servant = partyServants[src] ?? null;
-    source = (
+    sourceFace = (
       <ServantInlineFace
         servant={servant}
         index={src}
         faceSrc={servant ? faces[servant.variantKey] : null}
       />
     );
+    sourceText = servantLabel(src, servant);
+    actionText = `释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`;
   } else {
-    source = (
+    sourceFace = (
       <span className="battle-inline-square">
         {action.type === "equipment" ? "御主" : "令咒"}
       </span>
     );
+    sourceText = action.type === "equipment" ? "御主礼装" : "令咒";
+    actionText =
+      action.type === "equipment"
+        ? `释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`
+        : COMMAND_SPELL_LABELS[action.spell ?? ""] ?? "行动";
   }
 
   return (
-    <span className="battle-action-faces">
-      {source}
+    <span
+      className="battle-action-summary"
+      aria-label={actionSummary(action, partyServants)}
+    >
+      {sourceFace}
+      <Text size="2" weight="medium" className="battle-action-name">
+        {sourceText} {actionText}
+      </Text>
       {targetIndex != null && (
         <>
           <span className="battle-action-to">to</span>
@@ -223,6 +238,9 @@ function PreparationActionFaces({
                 : null
             }
           />
+          <Text size="2" weight="medium" className="battle-action-name">
+            {servantLabel(targetIndex, partyServants[targetIndex] ?? null)}
+          </Text>
         </>
       )}
     </span>
@@ -258,6 +276,27 @@ function ActionDeleteButton({ onClick }: { onClick: () => void }) {
       className="battle-action-delete"
       aria-label="删除行动"
       onClick={onClick}
+    >
+      <Cross2Icon width={13} height={13} />
+    </button>
+  );
+}
+
+function DraftCancelButton({
+  visible,
+  onClick,
+}: {
+  visible: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`battle-draft-cancel${visible ? "" : " placeholder"}`}
+      aria-label={visible ? "撤销添加行动" : undefined}
+      aria-hidden={visible ? undefined : true}
+      tabIndex={visible ? 0 : -1}
+      onClick={visible ? onClick : undefined}
     >
       <Cross2Icon width={13} height={13} />
     </button>
@@ -372,17 +411,18 @@ export function BattleSceneBlock({
                   )
                 }
               />
-              <PreparationActionFaces
+              <PreparationActionSummary
                 action={action}
                 partyServants={partyServants}
                 faces={faces}
               />
-              <Text size="2" weight="medium">
-                {actionSummary(action, partyServants)}
-              </Text>
             </div>
           ))}
           <div className="battle-add-row">
+            <DraftCancelButton
+              visible={prepDraft != null}
+              onClick={() => setPrepDraft(null)}
+            />
             {!prepDraft ? (
               <button
                 type="button"
@@ -547,6 +587,10 @@ export function BattleSceneBlock({
             </div>
           ))}
           <div className="battle-add-row">
+            <DraftCancelButton
+              visible={attackDraft != null}
+              onClick={() => setAttackDraft(null)}
+            />
             {!attackDraft ? (
               <button
                 type="button"

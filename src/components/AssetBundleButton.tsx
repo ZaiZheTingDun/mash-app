@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { Spinner, Text } from "@radix-ui/themes";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../tauri";
 
 interface AssetBundleImportResult {
   importedServants: boolean;

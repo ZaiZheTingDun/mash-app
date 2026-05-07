@@ -121,4 +121,45 @@ describe("BattleSceneBlock staged action editor", () => {
     const next = onChange.mock.calls[0][0] as BattleScene;
     expect(next.preparationActions).toEqual([]);
   });
+
+  it("renders targeted servant actions with the target face after to", () => {
+    const { container } = renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          preparationActions: [
+            {
+              type: "servant",
+              id: "sa_1",
+              servant: "servant_1",
+              skill: "skill_1",
+              target: "servant_2",
+            },
+          ],
+        })}
+        partyServants={PARTY}
+        onChange={vi.fn()}
+      />
+    );
+
+    const summary = container.querySelector(".battle-action-summary");
+    const children = Array.from(summary?.children ?? []);
+    expect(children[0]).toHaveClass("battle-inline-face");
+    expect(children[1]).toHaveTextContent("甲 释放 技能 1");
+    expect(children[2]).toHaveClass("battle-action-to");
+    expect(children[3]).toHaveClass("battle-inline-face");
+    expect(children[4]).toHaveTextContent("乙");
+  });
+
+  it("cancels an in-progress preparation action from the left-side delete control", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={vi.fn()} />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "撤销添加行动" }));
+
+    expect(screen.queryByRole("button", { name: "甲" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]).toBeInTheDocument();
+  });
 });

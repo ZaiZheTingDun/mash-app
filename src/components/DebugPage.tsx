@@ -6,8 +6,7 @@ import {
   ExternalLinkIcon,
   ReloadIcon,
 } from "@radix-ui/react-icons";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { emit, listen } from "@tauri-apps/api/event";
+import { emit, invoke, listen, convertFileSrc } from "../tauri";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { CvConfig } from "../types/cv";
 import type { DebugCanvasState } from "./DebugCanvas";

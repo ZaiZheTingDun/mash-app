@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Flex, Text } from "@radix-ui/themes";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../tauri";
 import { BattleSceneBlock } from "./BattleSceneBlock";
 import { deriveScenePartyServants } from "./partyServants";
 import {

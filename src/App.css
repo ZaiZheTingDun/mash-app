@@ -973,11 +973,21 @@ body,
   padding-left: 34px;
 }
 
-.battle-action-faces {
+.battle-add-row,
+.battle-action-summary {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
+  gap: 10px;
+  min-width: 0;
+}
+
+.battle-action-summary {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+}
+
+.battle-action-name {
+  min-width: 0;
 }
 
 .battle-action-to {
@@ -1038,6 +1048,30 @@ body,
 
 .battle-action-delete:hover {
   background: var(--red-3);
+}
+
+.battle-draft-cancel {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--red-10);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-1);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.12s;
+}
+
+.battle-draft-cancel:hover {
+  background: var(--red-3);
+}
+
+.battle-draft-cancel.placeholder {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .battle-add-trigger {

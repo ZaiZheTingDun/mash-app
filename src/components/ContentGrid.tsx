@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { PlusIcon, PersonIcon, Cross2Icon } from "@radix-ui/react-icons";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "../tauri";
 import type React from "react";
 import {
   DndContext,

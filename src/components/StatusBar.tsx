@@ -5,8 +5,7 @@ import {
   DesktopIcon,
   MagnifyingGlassIcon,
 } from "@radix-ui/react-icons";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke, listen } from "../tauri";
 import { SERVER_LABELS, type Server } from "../types/server";
 
 interface AdbStatus {

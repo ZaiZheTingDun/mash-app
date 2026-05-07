@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Flex, Text } from "@radix-ui/themes";
-import { listen, emit } from "@tauri-apps/api/event";
+import { listen, emit } from "../tauri";
 import { DebugCanvas, type DebugCanvasState } from "./DebugCanvas";
 
 const EMPTY_STATE: DebugCanvasState = {
