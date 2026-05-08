@@ -82,6 +82,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 templates: dict[str, np.ndarray] = {}
+static_template_keys: set[str] = set()
 # Last directory passed to ``_load_templates``. Used by ``_ensure_icon_cache``
 # to re-read RGBA icons with their alpha mask preserved.
 templates_dir: Optional[str] = None
@@ -92,6 +93,7 @@ config: dict = {"screens": {}}
 stream: Optional["ScrcpyStream"] = None
 
 DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
+STATIC_TEMPLATE_REFERENCE_WIDTH = 2560
 
 # ---------------------------------------------------------------------------
 # Command-card layout
@@ -227,10 +229,12 @@ def _match_template_region(
     tmpl: np.ndarray,
     region: dict,
     threshold: float,
+    template_key: Optional[str] = None,
 ) -> dict:
     """Find template region and return a normalized box."""
     if len(tmpl.shape) == 3:
         tmpl = cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
+    tmpl = _scale_static_template_for_image(tmpl, img, template_key)
 
     h, w = img.shape[:2]
     rx = int(region["x"] * w)
@@ -276,10 +280,12 @@ def _score_template_region(
     tmpl: np.ndarray,
     region: dict,
     threshold: float,
+    template_key: Optional[str] = None,
 ) -> dict:
     """Find the best template location and always return its normalized box."""
     if len(tmpl.shape) == 3:
         tmpl = cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
+    tmpl = _scale_static_template_for_image(tmpl, img, template_key)
 
     h, w = img.shape[:2]
     rx = max(0, int(round(region["x"] * w)))
@@ -339,6 +345,29 @@ def _resize_template(tmpl: np.ndarray, size: dict | None) -> np.ndarray:
     return cv2.resize(tmpl, (width, height), interpolation=interpolation)
 
 
+def _scale_static_template_for_image(
+    tmpl: np.ndarray,
+    img: np.ndarray,
+    template_key: Optional[str],
+) -> np.ndarray:
+    """Scale bundled 2560px-reference templates to the current frame width."""
+    if not template_key or template_key not in static_template_keys:
+        return tmpl
+    frame_w = int(img.shape[1])
+    if frame_w <= 0:
+        return tmpl
+    scale = frame_w / float(STATIC_TEMPLATE_REFERENCE_WIDTH)
+    if abs(scale - 1.0) < 0.02:
+        return tmpl
+    height, width = tmpl.shape[:2]
+    scaled_w = max(1, int(round(width * scale)))
+    scaled_h = max(1, int(round(height * scale)))
+    if scaled_w == width and scaled_h == height:
+        return tmpl
+    interpolation = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
+    return cv2.resize(tmpl, (scaled_w, scaled_h), interpolation=interpolation)
+
+
 SERVANT_GRID_ANCHOR_TEMPLATE = "text_servant_avatar_bottom_line"
 SERVANT_GRID_COLUMNS = 7
 SERVANT_GRID_COL_PITCH = 266.25 / 2560.0
@@ -394,6 +423,7 @@ def _detect_servant_grid_anchors(
 
     gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     tgray = tmpl if len(tmpl.shape) == 2 else cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
+    tgray = _scale_static_template_for_image(tgray, img, anchor_template_key)
     th, tw = tgray.shape[:2]
     if tw > gray_roi.shape[1] or th > gray_roi.shape[0]:
         return [], "region_smaller_than_anchor"
@@ -585,7 +615,7 @@ def _find_element(
     tmpl = templates.get(template_key)
     if tmpl is None:
         return {"found": False, "error": f"template not loaded: {template_key}"}
-    return _match_template_region(img, tmpl, region, threshold)
+    return _match_template_region(img, tmpl, region, threshold, template_key)
 
 
 def _named_targets(screen: dict) -> list[tuple[str, dict]]:
@@ -683,7 +713,7 @@ def _detect_screen(img: np.ndarray) -> dict:
             tmpl = templates.get(key)
             if tmpl is None:
                 continue
-            result = _match_template_region(img, tmpl, region, threshold)
+            result = _match_template_region(img, tmpl, region, threshold, key)
             if result.get("found"):
                 score = float(result.get("score", 0.0))
                 if score > screen_score:
@@ -991,6 +1021,7 @@ def _read_battle_scene(
     if label is None:
         return _wrap(None, None, fail="missing_label_template")
     diag["labelTemplateLoaded"] = True
+    label = _scale_static_template_for_image(label, img, "text_battle_label")
 
     if label.shape[0] > gray.shape[0] or label.shape[1] > gray.shape[1]:
         return _wrap(None, None, fail="region_smaller_than_label")
@@ -1024,6 +1055,7 @@ def _read_battle_scene(
         if tmpl is None:
             diag["missingDigitTemplates"].append(d)
             continue
+        tmpl = _scale_static_template_for_image(tmpl, img, f"digit_{d}")
         th, tw = tmpl.shape[:2]
         if tw > strip.shape[1] or th > strip.shape[0]:
             continue
@@ -2288,6 +2320,7 @@ def _verify_support_ce(
 def _load_templates(directory: str) -> dict:
     global templates_dir
     templates.clear()
+    static_template_keys.clear()
     _icon_color_sig.clear()
     count = 0
     if not os.path.isdir(directory):
@@ -2301,6 +2334,7 @@ def _load_templates(directory: str) -> dict:
             mat = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
             if mat is not None:
                 templates[key] = mat
+                static_template_keys.add(key)
                 count += 1
     templates_dir = directory
     return {"ok": True, "count": count}

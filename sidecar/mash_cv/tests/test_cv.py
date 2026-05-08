@@ -21,6 +21,7 @@ def _clear_state():
     mash_cv._icon_color_sig.clear()
     from mash_cv import cv as _cv_module
     _cv_module._ce_template_cache.clear()
+    _cv_module.static_template_keys.clear()
     _cv_module.templates_dir = None
     yield
     mash_cv.templates.clear()
@@ -28,6 +29,7 @@ def _clear_state():
     mash_cv._face_cache.clear()
     mash_cv._icon_color_sig.clear()
     _cv_module._ce_template_cache.clear()
+    _cv_module.static_template_keys.clear()
     _cv_module.templates_dir = None
 
 
@@ -460,6 +462,28 @@ class TestFindElement:
         assert result["region"]["w"] == pytest.approx(0.1)
         assert result["region"]["h"] == pytest.approx(0.1)
 
+    def test_loaded_static_template_scales_to_downsampled_frame(self, tmp_path):
+        source = np.tile(np.linspace(0, 255, 40, dtype=np.uint8), (40, 1))
+        template_path = tmp_path / "grad.png"
+        _save_image(source, str(template_path))
+        loaded = mash_cv._load_templates(str(tmp_path))
+        assert loaded["ok"] is True
+
+        patch = cv2.resize(source, (20, 20), interpolation=cv2.INTER_AREA)
+        patch_3ch = cv2.merge([patch, patch, patch])
+        img = _make_bgr_image(1280, 720, bgr=(200, 200, 200))
+        img[50:70, 100:120] = patch_3ch
+
+        result = mash_cv._find_element(
+            img,
+            "grad",
+            {"x": 90 / 1280, "y": 45 / 720, "w": 30 / 1280, "h": 30 / 720},
+            0.8,
+        )
+        assert result["found"] is True
+        assert result["region"]["w"] == pytest.approx(20 / 1280)
+        assert result["region"]["h"] == pytest.approx(20 / 720)
+
 
 # ── _find_element_by_name ───────────────────────────────────────────────
 
@@ -638,6 +662,18 @@ class TestReadBattleScene:
         img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle.png"))
         assert img is not None
         result = mash_cv._read_battle_scene(img, BATTLE_SCENE_REGION)
+        assert result == {"scene": 1, "total": 3}
+
+    def test_battle_screenshot_reads_one_of_three_when_downsampled(self):
+        self._load_real_templates()
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle.png"))
+        assert img is not None
+        downsampled = cv2.resize(
+            img,
+            (img.shape[1] // 2, img.shape[0] // 2),
+            interpolation=cv2.INTER_AREA,
+        )
+        result = mash_cv._read_battle_scene(downsampled, BATTLE_SCENE_REGION)
         assert result == {"scene": 1, "total": 3}
 
     def test_np_overlay_returns_none(self):
