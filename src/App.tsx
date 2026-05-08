@@ -12,6 +12,7 @@ import { StatusBar } from "./components/StatusBar";
 import { ProjectBar } from "./components/ProjectBar";
 import { SetupPage } from "./components/SetupPage";
 import { createInitialProjectSlots } from "./components/projectSlots";
+import { featureToggles } from "./featureToggles";
 import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
 import type { CraftEssence } from "./types/craftEssence";
@@ -203,10 +204,12 @@ function App({ theme, onThemeChange }: AppProps) {
   }, []);
 
   const handleOpenDebug = useCallback(() => {
+    if (!featureToggles.cvDebug) return;
     setView("debug");
   }, []);
 
   const handleOpenEnhancement = useCallback(() => {
+    if (!featureToggles.servantEnhancement) return;
     setView("enhancement");
   }, []);
 
@@ -241,9 +244,9 @@ function App({ theme, onThemeChange }: AppProps) {
               defaultProjectId={activeProjectId}
               onBack={handleBackToConfig}
             />
-          ) : view === "enhancement" ? (
+          ) : view === "enhancement" && featureToggles.servantEnhancement ? (
             <EnhancementPage servants={servants} onBack={handleBackToConfig} />
-          ) : view === "debug" ? (
+          ) : view === "debug" && featureToggles.cvDebug ? (
             <DebugPage
               onBack={handleBackToConfig}
               defaultCardServantIds={partyServantIds}
@@ -319,16 +322,18 @@ function App({ theme, onThemeChange }: AppProps) {
                   <Flex justify="between" align="center" className="page-footer" gap="3">
                     <Box />
                     <Flex align="center" gap="3">
-                      <Button
-                        type="button"
-                        variant="soft"
-                        color="gray"
-                        onClick={handleOpenEnhancement}
-                      >
-                        <Text size="2" weight="medium">
-                          强化从者
-                        </Text>
-                      </Button>
+                      {featureToggles.servantEnhancement && (
+                        <Button
+                          type="button"
+                          variant="soft"
+                          color="gray"
+                          onClick={handleOpenEnhancement}
+                        >
+                          <Text size="2" weight="medium">
+                            强化从者
+                          </Text>
+                        </Button>
+                      )}
                       <Button type="button" onClick={handleGotoCommand}>
                         <Text size="2" weight="bold">
                           指令设置
@@ -343,7 +348,7 @@ function App({ theme, onThemeChange }: AppProps) {
         </Box>
       </Flex>
       <StatusBar
-        onOpenDebug={handleOpenDebug}
+        onOpenDebug={featureToggles.cvDebug ? handleOpenDebug : undefined}
         theme={theme}
         onThemeChange={onThemeChange}
       />
