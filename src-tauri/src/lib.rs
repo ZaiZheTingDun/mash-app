@@ -1233,6 +1233,20 @@ fn take_or_spawn_sidecar(
     spawn_configured_sidecar(app, server)
 }
 
+fn input_size_for_taps(adb_size: Option<(u32, u32)>, stream_size: (u32, u32)) -> (u32, u32) {
+    let Some((adb_w, adb_h)) = adb_size else {
+        return stream_size;
+    };
+    let (stream_w, stream_h) = stream_size;
+    let adb_landscape = adb_w >= adb_h;
+    let stream_landscape = stream_w >= stream_h;
+    if adb_landscape == stream_landscape {
+        (adb_w, adb_h)
+    } else {
+        (adb_h, adb_w)
+    }
+}
+
 #[tauri::command]
 fn start_automation(
     app: tauri::AppHandle,
@@ -1287,7 +1301,14 @@ fn start_automation(
             STREAM_BIT_RATE,
         )
         .map_err(|e| format!("启动 scrcpy 视频流失败: {e}"))?;
-    let screen_size = Some((w, h));
+    let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
+    if input_size != (w, h) {
+        eprintln!(
+            "[runner] using adb input size {}x{} with stream frame {}x{}",
+            input_size.0, input_size.1, w, h
+        );
+    }
+    let screen_size = Some(input_size);
 
     let state = Arc::new(Mutex::new(RunnerState::Running));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -1401,6 +1422,13 @@ fn start_enhancement_automation(
             STREAM_BIT_RATE,
         )
         .map_err(|e| format!("启动 scrcpy 视频流失败: {e}"))?;
+    let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
+    if input_size != (w, h) {
+        eprintln!(
+            "[enhancement] using adb input size {}x{} with stream frame {}x{}",
+            input_size.0, input_size.1, w, h
+        );
+    }
 
     let state = Arc::new(Mutex::new(EnhancementRunnerState::Running));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -1414,7 +1442,7 @@ fn start_enhancement_automation(
         app,
         state,
         cancel,
-        (w, h),
+        input_size,
         target,
         Some(debug_state.0.clone()),
     );
@@ -1815,6 +1843,29 @@ mod tests {
     use std::collections::HashSet;
     use std::io::Cursor;
     use zip::write::SimpleFileOptions;
+
+    // --- input coordinate sizing --------------------------------------
+
+    #[test]
+    fn input_size_for_taps_uses_stream_when_adb_size_missing() {
+        assert_eq!(input_size_for_taps(None, (1280, 720)), (1280, 720));
+    }
+
+    #[test]
+    fn input_size_for_taps_prefers_adb_size_with_matching_orientation() {
+        assert_eq!(
+            input_size_for_taps(Some((2560, 1440)), (1280, 720)),
+            (2560, 1440)
+        );
+    }
+
+    #[test]
+    fn input_size_for_taps_swaps_adb_size_to_match_stream_orientation() {
+        assert_eq!(
+            input_size_for_taps(Some((1080, 1920)), (1280, 720)),
+            (1920, 1080)
+        );
+    }
 
     // --- default_project_slots -----------------------------------------
 
