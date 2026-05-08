@@ -29,3 +29,4 @@ uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
 unicode-normalization = "0.1.25"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+sha2 = "0.10"

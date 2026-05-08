@@ -10,7 +10,7 @@ import { EnhancementPage } from "./components/EnhancementPage";
 import { DebugPage } from "./components/DebugPage";
 import { StatusBar } from "./components/StatusBar";
 import { ProjectBar } from "./components/ProjectBar";
-import { AssetBundleButton } from "./components/AssetBundleButton";
+import { SetupPage } from "./components/SetupPage";
 import { createInitialProjectSlots } from "./components/projectSlots";
 import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
@@ -36,9 +36,9 @@ function App({ theme, onThemeChange }: AppProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
   const [craftEssences, setCraftEssences] = useState<CraftEssence[]>([]);
-  const [assetVersion, setAssetVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [setupReady, setSetupReady] = useState(false);
 
   // Load both static catalogs in parallel. The CE catalog is small (just
   // id/name) and shared across all projects, so caching it on the App
@@ -224,6 +224,14 @@ function App({ theme, onThemeChange }: AppProps) {
     setView("team");
   }, []);
 
+  if (!setupReady) {
+    return (
+      <Flex direction="column" className="app-root" data-theme={theme}>
+        <SetupPage onReady={() => setSetupReady(true)} />
+      </Flex>
+    );
+  }
+
   return (
     <Flex direction="column" className="app-root" data-theme={theme}>
       <Flex className="app-container">
@@ -299,7 +307,6 @@ function App({ theme, onThemeChange }: AppProps) {
                   <Box className="team-stage">
                     <Box className="team-stage-body">
                       <ContentGrid
-                        key={`assets-${assetVersion}`}
                         servants={servants}
                         craftEssences={craftEssences}
                         slots={slots}
@@ -310,9 +317,7 @@ function App({ theme, onThemeChange }: AppProps) {
                     </Box>
                   </Box>
                   <Flex justify="between" align="center" className="page-footer" gap="3">
-                    <AssetBundleButton
-                      onImported={() => setAssetVersion((prev) => prev + 1)}
-                    />
+                    <Box />
                     <Flex align="center" gap="3">
                       <Button
                         type="button"

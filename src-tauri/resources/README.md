@@ -6,6 +6,7 @@ These files ship with the app (declared in `tauri.conf.json` → `bundle.resourc
 
 ```
 resources/
+  runtime-manifest.json  # required mash-cv base/code versions + artifact URLs/SHA-256
   servers/
     jp/
       cv.json       # screen + element template mapping (see below)
@@ -38,6 +39,48 @@ up directly by the Rust runner.
 Legacy `text_turn_label.png` and `text_tan.png` files may still be present on
 disk from earlier versions; they are no longer referenced by code and can be
 safely deleted.
+
+## runtime-manifest.json
+
+`mash-cv` is distributed separately from the Tauri app bundle and split into a
+heavy runtime base plus a lightweight Python code package. The app reads
+`runtime-manifest.json` to decide which versions are required for the current
+app build and where users can download the matching zips.
+
+```json
+{
+  "mashCvRuntimeVersion": "2026.05.08-runtime1",
+  "mashCvCodeVersion": "2026.05.08-code1",
+  "platforms": {
+    "darwin-aarch64": {
+      "runtimeUrl": "https://cdn.example.com/mash-cv-runtime-darwin-aarch64-v2026.05.08-runtime1.zip",
+      "runtimeSha256": "...",
+      "codeUrl": "https://cdn.example.com/mash-cv-code-v2026.05.08-code1.zip",
+      "codeSha256": "..."
+    }
+  }
+}
+```
+
+Artifacts are installed manually through the app into:
+
+```text
+app_data_dir()/runtime/mash-cv/runtime/<mashCvRuntimeVersion>/mash-cv-runtime/
+app_data_dir()/runtime/mash-cv/code/<mashCvCodeVersion>/mash-cv-code/
+```
+
+The runtime zip must use `mash-cv-runtime/` as its archive root and contain
+`mash-cv-runtime/mash-cv` on macOS/Linux or `mash-cv-runtime/mash-cv.exe` on
+Windows. The code zip must use `mash-cv-code/` as its archive root and contain
+`mash-cv-code/mash_cv/`. The app checks the zip SHA-256 against the manifest
+before installing it through a staging directory, then writes separate
+`runtime-version.json` and `code-version.json` files.
+
+Only change `mashCvRuntimeVersion` when the heavy base changes: OCR models,
+PyInstaller dependencies, native dependencies, or runtime launcher/archive
+layout. Python-only sidecar source changes should only bump
+`mashCvCodeVersion`. UI/Rust-only fixes should leave both runtime versions
+unchanged so Tauri updater downloads stay small.
 
 ## scrcpy-server.jar
 
@@ -105,7 +148,7 @@ Elements are nested under their screen. The debug page (and runner) look them up
 
 1. Crop the region of interest from a real device screenshot at the same resolution used at runtime. Save as PNG under `resources/servers/<jp|cn>/templates/` (matching the server you captured the screenshot on).
 2. Reference the basename (no extension) from that server's `cv.json`.
-3. Restart `pnpm tauri dev` — the Rust side resolves the bundled resources at startup and passes them to the sidecar.
+3. Restart `pnpm tauri dev` — the Rust side resolves the bundled resources at startup and passes them to the installed sidecar runtime.
 
 ## Battle-scene OCR templates
 

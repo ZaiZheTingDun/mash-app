@@ -52,7 +52,7 @@
       "resources/servers/cn/cv.json",
       "resources/servers/cn/templates/*",
       "resources/scrcpy/scrcpy-server.jar",
-      "binaries/mash-cv/**/*"
+      "resources/runtime-manifest.json"
     ]
   }
 }

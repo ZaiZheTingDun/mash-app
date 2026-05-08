@@ -130,6 +130,62 @@ body,
   gap: 6px;
 }
 
+.runtime-import-block {
+  max-width: 340px;
+}
+
+.runtime-download-url {
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Setup Gate ── */
+
+.setup-page {
+  min-height: 100vh;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.setup-panel {
+  width: min(720px, 100%);
+  padding: 24px;
+  border: 1px solid var(--fgo-surface-border);
+  border-radius: var(--radius-3);
+  background: var(--fgo-surface-strong);
+  box-shadow: 0 18px 42px var(--fgo-shadow);
+}
+
+.setup-subtitle {
+  display: block;
+  margin-top: 6px;
+}
+
+.setup-requirement {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--fgo-surface-strong) 72%, transparent);
+}
+
+.setup-requirement.ready {
+  border-color: var(--green-7);
+}
+
+.setup-requirement.missing {
+  border-color: var(--amber-7);
+}
+
 /* ── Project Bar ── */
 
 .project-bar {

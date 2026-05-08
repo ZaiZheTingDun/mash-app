@@ -27,7 +27,6 @@ src-tauri/                        # Tauri / Rust backend
     cv.json                       # Screen / element template config
     templates/                    # PNG templates (buttons, anchors, digit_0..9, …)
     scrcpy/                       # Pinned scrcpy-server.jar for realtime streaming
-  binaries/mash-cv/               # PyInstaller --onedir output (checked-in sidecar bundle)
   capabilities/                   # Tauri permission capabilities
   tauri.conf.json                 # Tauri app configuration
   Cargo.toml                      # Rust dependencies
@@ -77,7 +76,7 @@ Sidecar commands (run from `sidecar/mash_cv/`):
 ```bash
 poetry install              # Install Python deps
 poetry run pytest           # Run the CV test suite
-bash build_sidecar.sh       # Rebuild the --onedir bundle into src-tauri/binaries/mash-cv/
+bash build_sidecar.sh       # Build runtime base zip + lightweight code zip artifacts
 ```
 
 ## Testing
@@ -170,7 +169,7 @@ The Rust backend is the single source of truth for all application state. The fr
 - Ensure icon files exist under `src-tauri/icons/` before running `pnpm tauri build` (the build will fail otherwise).
 - Test with `pnpm tauri dev` frequently; the Rust compiler catches many issues that TypeScript won't.
 - Vite is configured to ignore `src-tauri/` in its watcher — Rust changes trigger Tauri's own rebuild, not Vite's.
-- The `mash-cv` sidecar is shipped as a PyInstaller `--onedir` bundle under `src-tauri/binaries/mash-cv/` and declared via `bundle.resources` in `tauri.conf.json`. Rebuild it (`sidecar/mash_cv/build_sidecar.sh`) after changing Python code; stale bundles get picked up by Tauri before source edits take effect.
+- The `mash-cv` sidecar is shipped as independent artifacts, not inside the Tauri app bundle: a heavy PyInstaller `--onedir` runtime base zip plus a lightweight Python code zip. `sidecar/mash_cv/build_sidecar.sh` writes `dist/mash-cv-runtime-<platform>-v<runtimeVersion>.zip` and `dist/mash-cv-code-v<codeVersion>.zip`, then prints both SHA-256 values; publish those artifacts and update `src-tauri/resources/runtime-manifest.json`. The app installs them under `app_data_dir()/runtime/mash-cv/runtime/<version>/...` and `app_data_dir()/runtime/mash-cv/code/<version>/...`.
 
 ## Python Sidecar (`mash-cv`)
 

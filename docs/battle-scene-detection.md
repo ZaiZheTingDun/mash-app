@@ -412,8 +412,10 @@ strip clearly contains a different digit:
 
 4. Add the screenshot to `TestReadBattleScene` as a regression case so
    future template tweaks don't silently re-break it.
-5. Rebuild the sidecar bundle (`bash sidecar/mash_cv/build_sidecar.sh`)
-   so the new template ships in `src-tauri/binaries/mash-cv/`.
+5. No sidecar runtime rebuild is needed for template-only changes: the
+   templates live in the Tauri app resources and are passed to the installed
+   `mash-cv` runtime at startup. Rebuild the app bundle so the updated
+   `resources/servers/<jp|cn>/templates/` files ship with the app.
 
 Do **not** lower `BATTLE_DIGIT_THRESHOLD` to paper over a font
 mismatch — the threshold is what stops random texture matches from

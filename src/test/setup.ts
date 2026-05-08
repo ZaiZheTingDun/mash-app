@@ -79,6 +79,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "load_battle_scenes":
         return [];
       case "pick_asset_bundle":
+      case "pick_runtime_bundle":
         return null;
       case "import_asset_bundle":
         return {
@@ -87,6 +88,49 @@ vi.mock("@tauri-apps/api/core", () => ({
           servantFiles: 0,
           craftEssenceFiles: 0,
           installDir: "/tmp/mash-assets",
+        };
+      case "get_asset_bundle_status":
+        return {
+          installed: false,
+          importedServants: false,
+          importedCraftEssences: false,
+          servantFiles: 0,
+          craftEssenceFiles: 0,
+          installDir: "/tmp/mash-assets",
+        };
+      case "get_runtime_status":
+        return {
+          requiredRuntimeVersion: "2026.05.08-runtime1",
+          installedRuntimeVersion: null,
+          runtimeInstalled: false,
+          requiredCodeVersion: "2026.05.08-code1",
+          installedCodeVersion: null,
+          codeInstalled: false,
+          installed: false,
+          platform: "darwin-aarch64",
+          runtimeDownloadUrl:
+            "https://cdn.example.com/mash-cv-runtime-darwin-aarch64-v2026.05.08-runtime1.zip",
+          runtimeExpectedSha256:
+            "0000000000000000000000000000000000000000000000000000000000000000",
+          runtimeInstallDir: "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1",
+          executablePath:
+            "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
+          codeDownloadUrl:
+            "https://cdn.example.com/mash-cv-code-v2026.05.08-code1.zip",
+          codeExpectedSha256:
+            "0000000000000000000000000000000000000000000000000000000000000000",
+          codeInstallDir: "/tmp/runtime/mash-cv/code/2026.05.08-code1",
+          codePath: "/tmp/runtime/mash-cv/code/2026.05.08-code1/mash-cv-code",
+        };
+      case "import_runtime_bundle":
+        return {
+          installedKind: "runtime",
+          installedVersion: "2026.05.08-runtime1",
+          platform: "darwin-aarch64",
+          installDir: "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1",
+          executablePath:
+            "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
+          codePath: null,
         };
       case "check_adb":
         return { connected: false, deviceName: null };

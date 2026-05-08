@@ -1,0 +1,18 @@
+{
+  "mashCvRuntimeVersion": "2026.05.08-runtime1",
+  "mashCvCodeVersion": "2026.05.08-code1",
+  "platforms": {
+    "darwin-aarch64": {
+      "runtimeUrl": "https://cdn.example.com/mash-cv-runtime-darwin-aarch64-v2026.05.08-runtime1.zip",
+      "runtimeSha256": "572f0942d4ff26305452ea1134f02271ca05c40e843220125e8a41c6abb0a3d0",
+      "codeUrl": "https://cdn.example.com/mash-cv-code-v2026.05.08-code1.zip",
+      "codeSha256": "182c14c3ac56c72cecef76feb068dcb9d5c4bae9020a2def4d983c6be740f7d6"
+    },
+    "darwin-x86_64": {
+      "runtimeUrl": "https://cdn.example.com/mash-cv-runtime-darwin-x86_64-v2026.05.08-runtime1.zip",
+      "runtimeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "codeUrl": "https://cdn.example.com/mash-cv-code-v2026.05.08-code1.zip",
+      "codeSha256": "182c14c3ac56c72cecef76feb068dcb9d5c4bae9020a2def4d983c6be740f7d6"
+    }
+  }
+}

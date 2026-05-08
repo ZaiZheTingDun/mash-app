@@ -1703,6 +1703,10 @@ def _set_server(server: str) -> dict:
 def _ocr_models_dir() -> Optional[str]:
     """Resolve the directory holding the bundled Japanese OCR rec model.
 
+    ``MASH_CV_MODELS_DIR`` is set by the Tauri app when the lightweight
+    ``mash_cv`` code package runs on top of a separately installed runtime
+    base.
+
     The model files live under ``mash_cv/models/`` in the source tree and
     must be shipped via PyInstaller's ``--add-data mash_cv/models:mash_cv/models``
     so the same relative path resolves inside the bundled ``_internal/``.
@@ -1714,7 +1718,11 @@ def _ocr_models_dir() -> Optional[str]:
       2. ``<sys._MEIPASS>/mash_cv/models`` — fallback for --onefile or
          odd PyInstaller layouts where step 1 misses.
     """
-    candidates: list[str] = [os.path.join(os.path.dirname(__file__), "models")]
+    candidates: list[str] = []
+    env_models = os.environ.get("MASH_CV_MODELS_DIR")
+    if env_models:
+        candidates.append(env_models)
+    candidates.append(os.path.join(os.path.dirname(__file__), "models"))
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
         candidates.append(os.path.join(meipass, "mash_cv", "models"))

@@ -441,15 +441,39 @@ impl SidecarClient {
         server: crate::Server,
     ) -> Result<Self, String> {
         let exe = crate::resolve_sidecar_exe(app)
-            .ok_or_else(|| "failed to resolve sidecar resource_dir".to_string())?;
+            .ok_or_else(|| "无法解析 mash-cv runtime，请先安装 CV 运行时".to_string())?;
         if !exe.exists() {
             return Err(format!(
-                "未找到 mash-cv sidecar 可执行文件 ({}). 请在项目根目录执行 `cd sidecar/mash_cv && bash build_sidecar.sh` 构建 sidecar，再重新运行应用。",
+                "未找到 mash-cv runtime 可执行文件 ({}). 请先下载并安装当前版本需要的 CV 运行时。",
                 exe.display()
             ));
         }
+        let code_dir = crate::resolve_sidecar_code_dir(app)
+            .ok_or_else(|| "无法解析 mash-cv code runtime，请先安装 CV 代码包".to_string())?;
+        if !code_dir.join("mash_cv").is_dir() {
+            return Err(format!(
+                "未找到 mash-cv code 包 ({}). 请先下载并安装当前版本需要的 CV 代码包。",
+                code_dir.display()
+            ));
+        }
+        let models_dir = crate::resolve_sidecar_models_dir(app)
+            .ok_or_else(|| "无法解析 mash-cv OCR 模型目录，请先安装 CV runtime 包".to_string())?;
+        if !models_dir.is_dir() {
+            return Err(format!(
+                "未找到 mash-cv OCR 模型目录 ({}). 请先下载并安装当前版本需要的 CV runtime 包。",
+                models_dir.display()
+            ));
+        }
 
-        let cmd = app.shell().command(&exe);
+        let cmd = app
+            .shell()
+            .command(&exe)
+            .env("MASH_CV_CODE_DIR", code_dir.to_string_lossy().to_string())
+            .env(
+                "MASH_CV_MODELS_DIR",
+                models_dir.to_string_lossy().to_string(),
+            )
+            .env("PYTHONPATH", code_dir.to_string_lossy().to_string());
         let (mut rx, child) = cmd
             .spawn()
             .map_err(|e| format!("failed to spawn sidecar: {e}"))?;

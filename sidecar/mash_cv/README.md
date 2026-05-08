@@ -127,5 +127,37 @@ poetry run pytest -v
 ## Build
 
 ```bash
-./build_sidecar.sh
+MASH_CV_RUNTIME_VERSION=2026.05.08-runtime1 MASH_CV_CODE_VERSION=2026.05.08-code1 ./build_sidecar.sh
 ```
+
+The build script creates two artifacts:
+
+```text
+dist/mash-cv-runtime-<platform>-v<runtimeVersion>.zip
+dist/mash-cv-code-v<codeVersion>.zip
+```
+
+The runtime zip contains the PyInstaller `--onedir` launcher, native
+dependencies, and OCR models under archive root `mash-cv-runtime/`. The code
+zip contains the lightweight `mash_cv` Python package under archive root
+`mash-cv-code/`.
+
+The Tauri app installs them under:
+
+```text
+app_data_dir()/runtime/mash-cv/runtime/<runtimeVersion>/mash-cv-runtime/
+app_data_dir()/runtime/mash-cv/code/<codeVersion>/mash-cv-code/
+```
+
+After the script prints the artifact SHA-256 values, upload both zips to the
+release host/CDN and update `src-tauri/resources/runtime-manifest.json` with:
+
+- `mashCvRuntimeVersion`
+- `mashCvCodeVersion`
+- each platform's `runtimeUrl` / `runtimeSha256`
+- each platform's `codeUrl` / `codeSha256`
+
+The script no longer copies the sidecar into `src-tauri/binaries/`; `mash-cv`
+is distributed independently so normal Tauri app updates do not force users to
+download the large Python/OpenCV bundle again. Python-only sidecar fixes should
+only bump and publish the code zip.

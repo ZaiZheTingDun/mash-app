@@ -4,10 +4,11 @@ mod enhancement_runner;
 mod runner;
 mod screen;
 
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -1469,6 +1470,452 @@ fn get_enhancement_automation_status(
 }
 
 // ---------------------------------------------------------------------------
+// mash-cv runtime management
+// ---------------------------------------------------------------------------
+
+const RUNTIME_MANIFEST_JSON: &str = include_str!("../resources/runtime-manifest.json");
+const RUNTIME_DIR_NAME: &str = "mash-cv";
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeManifest {
+    mash_cv_runtime_version: String,
+    mash_cv_code_version: String,
+    platforms: HashMap<String, RuntimePlatformArtifact>,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct RuntimePlatformArtifact {
+    runtime_url: String,
+    runtime_sha256: String,
+    code_url: String,
+    code_sha256: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeVersionRecord {
+    version: String,
+    platform: String,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeStatus {
+    required_runtime_version: String,
+    installed_runtime_version: Option<String>,
+    runtime_installed: bool,
+    required_code_version: String,
+    installed_code_version: Option<String>,
+    code_installed: bool,
+    installed: bool,
+    platform: String,
+    runtime_download_url: Option<String>,
+    runtime_expected_sha256: Option<String>,
+    runtime_install_dir: String,
+    executable_path: String,
+    code_download_url: Option<String>,
+    code_expected_sha256: Option<String>,
+    code_install_dir: String,
+    code_path: String,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeInstallResult {
+    installed_kind: String,
+    installed_version: String,
+    platform: String,
+    install_dir: String,
+    executable_path: Option<String>,
+    code_path: Option<String>,
+}
+
+fn runtime_platform_key() -> String {
+    runtime_platform_key_from(std::env::consts::OS, std::env::consts::ARCH)
+}
+
+fn runtime_platform_key_from(os: &str, arch: &str) -> String {
+    let os = match os {
+        "macos" => "darwin",
+        other => other,
+    };
+    format!("{os}-{arch}")
+}
+
+fn runtime_exe_name() -> &'static str {
+    if cfg!(windows) {
+        "mash-cv.exe"
+    } else {
+        "mash-cv"
+    }
+}
+
+fn runtime_bundle_root() -> &'static str {
+    "mash-cv-runtime"
+}
+
+fn code_bundle_root() -> &'static str {
+    "mash-cv-code"
+}
+
+fn parse_runtime_manifest(contents: &str) -> Result<RuntimeManifest, String> {
+    serde_json::from_str(contents).map_err(|e| format!("解析 runtime manifest 失败: {e}"))
+}
+
+fn runtime_manifest(app: &tauri::AppHandle) -> Result<RuntimeManifest, String> {
+    let contents = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|base| base.join("resources").join("runtime-manifest.json"))
+        .and_then(|path| fs::read_to_string(path).ok())
+        .unwrap_or_else(|| RUNTIME_MANIFEST_JSON.to_string());
+    parse_runtime_manifest(&contents)
+}
+
+fn runtime_root_dir(app: &tauri::AppHandle) -> PathBuf {
+    let dir = app_data_dir(app).join("runtime").join(RUNTIME_DIR_NAME);
+    fs::create_dir_all(&dir).ok();
+    dir
+}
+
+fn runtime_base_root(runtime_root: &Path) -> PathBuf {
+    runtime_root.join("runtime")
+}
+
+fn runtime_code_root(runtime_root: &Path) -> PathBuf {
+    runtime_root.join("code")
+}
+
+fn runtime_version_path(runtime_root: &Path) -> PathBuf {
+    runtime_root.join("runtime").join("runtime-version.json")
+}
+
+fn code_version_path(runtime_root: &Path) -> PathBuf {
+    runtime_root.join("code").join("code-version.json")
+}
+
+fn runtime_version_dir(runtime_root: &Path, version: &str) -> PathBuf {
+    runtime_base_root(runtime_root).join(version)
+}
+
+fn code_version_dir(runtime_root: &Path, version: &str) -> PathBuf {
+    runtime_code_root(runtime_root).join(version)
+}
+
+fn runtime_executable_path(runtime_root: &Path, version: &str) -> PathBuf {
+    runtime_version_dir(runtime_root, version)
+        .join(runtime_bundle_root())
+        .join(runtime_exe_name())
+}
+
+fn read_runtime_version(runtime_root: &Path) -> Option<RuntimeVersionRecord> {
+    fs::read_to_string(runtime_version_path(runtime_root))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+}
+
+fn read_code_version(runtime_root: &Path) -> Option<RuntimeVersionRecord> {
+    fs::read_to_string(code_version_path(runtime_root))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+}
+
+fn runtime_code_path(runtime_root: &Path, version: &str) -> PathBuf {
+    code_version_dir(runtime_root, version).join(code_bundle_root())
+}
+
+fn runtime_models_path(runtime_root: &Path, version: &str) -> PathBuf {
+    runtime_version_dir(runtime_root, version)
+        .join(runtime_bundle_root())
+        .join("_internal")
+        .join("mash_cv")
+        .join("models")
+}
+
+fn runtime_status_from_manifest(
+    manifest: &RuntimeManifest,
+    runtime_root: &Path,
+    platform: &str,
+) -> RuntimeStatus {
+    let installed_runtime_version = read_runtime_version(runtime_root).map(|record| record.version);
+    let installed_code_version = read_code_version(runtime_root).map(|record| record.version);
+    let executable = runtime_executable_path(runtime_root, &manifest.mash_cv_runtime_version);
+    let code_path = runtime_code_path(runtime_root, &manifest.mash_cv_code_version);
+    let artifact = manifest.platforms.get(platform);
+    let runtime_installed = installed_runtime_version.as_deref()
+        == Some(manifest.mash_cv_runtime_version.as_str())
+        && executable.is_file();
+    let code_installed = installed_code_version.as_deref()
+        == Some(manifest.mash_cv_code_version.as_str())
+        && code_path.join("mash_cv").is_dir();
+
+    RuntimeStatus {
+        required_runtime_version: manifest.mash_cv_runtime_version.clone(),
+        installed_runtime_version,
+        runtime_installed,
+        required_code_version: manifest.mash_cv_code_version.clone(),
+        installed_code_version,
+        code_installed,
+        installed: runtime_installed && code_installed,
+        platform: platform.to_string(),
+        runtime_download_url: artifact.map(|item| item.runtime_url.clone()),
+        runtime_expected_sha256: artifact.map(|item| item.runtime_sha256.clone()),
+        runtime_install_dir: runtime_version_dir(runtime_root, &manifest.mash_cv_runtime_version)
+            .to_string_lossy()
+            .into_owned(),
+        executable_path: executable.to_string_lossy().into_owned(),
+        code_download_url: artifact.map(|item| item.code_url.clone()),
+        code_expected_sha256: artifact.map(|item| item.code_sha256.clone()),
+        code_install_dir: code_version_dir(runtime_root, &manifest.mash_cv_code_version)
+            .to_string_lossy()
+            .into_owned(),
+        code_path: code_path.to_string_lossy().into_owned(),
+    }
+}
+
+fn runtime_status_for_app(app: &tauri::AppHandle) -> Result<RuntimeStatus, String> {
+    let manifest = runtime_manifest(app)?;
+    let platform = runtime_platform_key();
+    let runtime_root = runtime_root_dir(app);
+    Ok(runtime_status_from_manifest(
+        &manifest,
+        &runtime_root,
+        &platform,
+    ))
+}
+
+fn sha256_file(path: &Path) -> Result<String, String> {
+    let mut file = fs::File::open(path).map_err(|e| format!("无法打开 runtime 压缩包: {e}"))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|e| format!("读取 runtime 压缩包失败: {e}"))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn zip_has_valid_root(relative: &Path, root: &str) -> bool {
+    relative.components().next().and_then(|part| match part {
+        std::path::Component::Normal(name) => name.to_str(),
+        _ => None,
+    }) == Some(root)
+}
+
+#[cfg(unix)]
+fn make_runtime_executable(path: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = fs::metadata(path)
+        .map_err(|e| format!("读取 runtime 可执行权限失败: {e}"))?
+        .permissions();
+    permissions.set_mode(permissions.mode() | 0o755);
+    fs::set_permissions(path, permissions).map_err(|e| format!("设置 runtime 可执行权限失败: {e}"))
+}
+
+#[cfg(not(unix))]
+fn make_runtime_executable(_path: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+fn extract_zip_with_root(zip_path: &Path, destination: &Path, root: &str) -> Result<(), String> {
+    let file = fs::File::open(zip_path).map_err(|e| format!("无法打开 runtime 压缩包: {e}"))?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|e| format!("无法读取 runtime zip 压缩包: {e}"))?;
+
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|e| format!("读取 runtime zip 条目失败: {e}"))?;
+        let Some(relative) = entry.enclosed_name().map(|p| p.to_path_buf()) else {
+            return Err("runtime zip 内包含非法路径".to_string());
+        };
+        if !zip_has_valid_root(&relative, root) {
+            return Err(format!("runtime zip 必须以 {root}/ 作为根目录"));
+        }
+
+        let output = destination.join(relative);
+        if entry.name().ends_with('/') {
+            fs::create_dir_all(&output).map_err(|e| format!("创建 runtime 目录失败: {e}"))?;
+            continue;
+        }
+        if let Some(parent) = output.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("创建 runtime 目录失败: {e}"))?;
+        }
+        let mut out =
+            fs::File::create(&output).map_err(|e| format!("写入 runtime 文件失败: {e}"))?;
+        io::copy(&mut entry, &mut out).map_err(|e| format!("解压 runtime 文件失败: {e}"))?;
+        out.flush()
+            .map_err(|e| format!("写入 runtime 文件失败: {e}"))?;
+    }
+
+    Ok(())
+}
+
+fn extract_runtime_zip(zip_path: &Path, destination: &Path) -> Result<(), String> {
+    extract_zip_with_root(zip_path, destination, runtime_bundle_root())?;
+    let exe = destination
+        .join(runtime_bundle_root())
+        .join(runtime_exe_name());
+    if !exe.is_file() {
+        return Err(format!(
+            "runtime zip 内未找到 {}/{}",
+            runtime_bundle_root(),
+            runtime_exe_name()
+        ));
+    }
+    make_runtime_executable(&exe)?;
+    Ok(())
+}
+
+fn extract_code_zip(zip_path: &Path, destination: &Path) -> Result<(), String> {
+    extract_zip_with_root(zip_path, destination, code_bundle_root())?;
+    let package = destination.join(code_bundle_root()).join("mash_cv");
+    if !package.is_dir() {
+        return Err(format!("code zip 内未找到 {}/mash_cv/", code_bundle_root()));
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RuntimeBundleKind {
+    Runtime,
+    Code,
+}
+
+fn import_runtime_bundle_from_zip_path(
+    zip_path: &Path,
+    manifest: &RuntimeManifest,
+    runtime_root: &Path,
+    platform: &str,
+) -> Result<RuntimeInstallResult, String> {
+    if !zip_path.is_file() {
+        return Err("选择的 runtime 压缩包不存在".to_string());
+    }
+    let artifact = manifest
+        .platforms
+        .get(platform)
+        .ok_or_else(|| format!("当前平台不支持独立 CV runtime: {platform}"))?;
+    let actual_sha = sha256_file(zip_path)?;
+    let kind = if actual_sha.eq_ignore_ascii_case(&artifact.runtime_sha256) {
+        RuntimeBundleKind::Runtime
+    } else if actual_sha.eq_ignore_ascii_case(&artifact.code_sha256) {
+        RuntimeBundleKind::Code
+    } else {
+        return Err(format!(
+            "runtime 压缩包 sha256 不匹配，期望 runtime={} 或 code={}，实际 {}",
+            artifact.runtime_sha256, artifact.code_sha256, actual_sha
+        ));
+    };
+
+    fs::create_dir_all(runtime_root).map_err(|e| format!("创建 runtime 目录失败: {e}"))?;
+    let (kind_name, version, target, version_path) = match kind {
+        RuntimeBundleKind::Runtime => (
+            "runtime",
+            manifest.mash_cv_runtime_version.as_str(),
+            runtime_version_dir(runtime_root, &manifest.mash_cv_runtime_version),
+            runtime_version_path(runtime_root),
+        ),
+        RuntimeBundleKind::Code => (
+            "code",
+            manifest.mash_cv_code_version.as_str(),
+            code_version_dir(runtime_root, &manifest.mash_cv_code_version),
+            code_version_path(runtime_root),
+        ),
+    };
+    let staging = runtime_root.join(format!(
+        ".install-{kind_name}-{version}-{}",
+        uuid::Uuid::new_v4()
+    ));
+    if staging.exists() {
+        fs::remove_dir_all(&staging).map_err(|e| format!("清理 runtime 临时目录失败: {e}"))?;
+    }
+    fs::create_dir_all(&staging).map_err(|e| format!("创建 runtime 临时目录失败: {e}"))?;
+
+    let extract_result = match kind {
+        RuntimeBundleKind::Runtime => extract_runtime_zip(zip_path, &staging),
+        RuntimeBundleKind::Code => extract_code_zip(zip_path, &staging),
+    };
+    if let Err(err) = extract_result {
+        fs::remove_dir_all(&staging).ok();
+        return Err(err);
+    }
+
+    if target.exists() {
+        fs::remove_dir_all(&target).map_err(|e| format!("替换旧 runtime 失败: {e}"))?;
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建 runtime 目录失败: {e}"))?;
+    }
+    fs::rename(&staging, &target).map_err(|e| format!("安装 runtime 失败: {e}"))?;
+
+    let record = RuntimeVersionRecord {
+        version: version.to_string(),
+        platform: platform.to_string(),
+    };
+    fs::write(
+        version_path,
+        serde_json::to_string_pretty(&record).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| format!("写入 runtime 版本记录失败: {e}"))?;
+
+    let exe = runtime_executable_path(runtime_root, &manifest.mash_cv_runtime_version);
+    let code_path = runtime_code_path(runtime_root, &manifest.mash_cv_code_version);
+    Ok(RuntimeInstallResult {
+        installed_kind: kind_name.to_string(),
+        installed_version: version.to_string(),
+        platform: platform.to_string(),
+        install_dir: target.to_string_lossy().into_owned(),
+        executable_path: matches!(kind, RuntimeBundleKind::Runtime)
+            .then(|| exe.to_string_lossy().into_owned()),
+        code_path: matches!(kind, RuntimeBundleKind::Code)
+            .then(|| code_path.to_string_lossy().into_owned()),
+    })
+}
+
+#[tauri::command]
+fn get_runtime_status(app: tauri::AppHandle) -> Result<RuntimeStatus, String> {
+    runtime_status_for_app(&app)
+}
+
+#[tauri::command]
+async fn pick_runtime_bundle(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("ZIP", &["zip"])
+        .set_title("选择 CV runtime 压缩包")
+        .blocking_pick_file();
+    let Some(path) = picked else {
+        return Ok(None);
+    };
+    let path = path.into_path().map_err(|e| e.to_string())?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+async fn import_runtime_bundle(
+    app: tauri::AppHandle,
+    zip_path: String,
+) -> Result<RuntimeInstallResult, String> {
+    let manifest = runtime_manifest(&app)?;
+    let platform = runtime_platform_key();
+    import_runtime_bundle_from_zip_path(
+        &PathBuf::from(zip_path),
+        &manifest,
+        &runtime_root_dir(&app),
+        &platform,
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Shared resource-path resolvers (used by both automation + debug paths)
 // ---------------------------------------------------------------------------
 
@@ -1567,22 +2014,47 @@ pub(crate) fn resolve_ce_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
     None
 }
 
-/// Resolve the bundled mash-cv sidecar executable path. The sidecar is shipped
-/// as a PyInstaller --onedir directory under `binaries/mash-cv/` (containing
-/// the executable and a sibling `_internal/` directory).
+/// Resolve the installed mash-cv runtime executable path. The sidecar is no
+/// longer bundled inside the app; users install the PyInstaller --onedir zip
+/// under `app_data_dir()/runtime/mash-cv/<version>/mash-cv/`.
 pub(crate) fn resolve_sidecar_exe(app: &tauri::AppHandle) -> Option<PathBuf> {
-    let base = app.path().resource_dir().ok()?;
-    let exe_name = if cfg!(windows) {
-        "mash-cv.exe"
-    } else {
-        "mash-cv"
-    };
-    Some(base.join("binaries").join("mash-cv").join(exe_name))
+    let manifest = runtime_manifest(app).ok()?;
+    Some(runtime_executable_path(
+        &runtime_root_dir(app),
+        &manifest.mash_cv_runtime_version,
+    ))
+}
+
+pub(crate) fn resolve_sidecar_code_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let manifest = runtime_manifest(app).ok()?;
+    Some(runtime_code_path(
+        &runtime_root_dir(app),
+        &manifest.mash_cv_code_version,
+    ))
+}
+
+pub(crate) fn resolve_sidecar_models_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let manifest = runtime_manifest(app).ok()?;
+    Some(runtime_models_path(
+        &runtime_root_dir(app),
+        &manifest.mash_cv_runtime_version,
+    ))
 }
 
 #[derive(serde::Serialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct AssetBundleImportResult {
+    imported_servants: bool,
+    imported_craft_essences: bool,
+    servant_files: u64,
+    craft_essence_files: u64,
+    install_dir: String,
+}
+
+#[derive(serde::Serialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AssetBundleStatus {
+    installed: bool,
     imported_servants: bool,
     imported_craft_essences: bool,
     servant_files: u64,
@@ -1738,6 +2210,51 @@ fn import_asset_bundle_from_zip_path(
     })
 }
 
+fn count_files_recursive(dir: &Path) -> Result<u64, String> {
+    if !dir.is_dir() {
+        return Ok(0);
+    }
+    let mut count = 0;
+    for entry in fs::read_dir(dir).map_err(|e| format!("读取素材目录失败: {e}"))? {
+        let entry = entry.map_err(|e| format!("读取素材目录失败: {e}"))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("读取素材类型失败: {e}"))?;
+        if file_type.is_dir() {
+            count += count_files_recursive(&entry.path())?;
+        } else if file_type.is_file() {
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
+fn asset_bundle_status_for_app(app: &tauri::AppHandle) -> Result<AssetBundleStatus, String> {
+    asset_bundle_status_from_root(&app_assets_dir(app))
+}
+
+fn asset_bundle_status_from_root(assets_root: &Path) -> Result<AssetBundleStatus, String> {
+    let servants = assets_root.join("servants");
+    let craft_essences = assets_root.join("ces");
+    let servant_files = count_files_recursive(&servants)?;
+    let craft_essence_files = count_files_recursive(&craft_essences)?;
+    let imported_servants = servant_files > 0;
+    let imported_craft_essences = craft_essence_files > 0;
+    Ok(AssetBundleStatus {
+        installed: imported_servants && imported_craft_essences,
+        imported_servants,
+        imported_craft_essences,
+        servant_files,
+        craft_essence_files,
+        install_dir: assets_root.to_string_lossy().into_owned(),
+    })
+}
+
+#[tauri::command]
+fn get_asset_bundle_status(app: tauri::AppHandle) -> Result<AssetBundleStatus, String> {
+    asset_bundle_status_for_app(&app)
+}
+
 #[tauri::command]
 async fn pick_asset_bundle(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let picked = app
@@ -1787,8 +2304,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_servants,
             get_craft_essences,
+            get_asset_bundle_status,
             pick_asset_bundle,
             import_asset_bundle,
+            get_runtime_status,
+            pick_runtime_bundle,
+            import_runtime_bundle,
             get_servant_portrait_path,
             get_servant_face_path,
             get_craft_essence_card_path,
@@ -2163,6 +2684,305 @@ mod tests {
         let err = import_asset_bundle_from_zip_path(&zip_path, &tmp.path().join("installed"))
             .expect_err("import should fail");
         assert!(err.contains("assets/servants") || err.contains("assets/ces"));
+    }
+
+    #[test]
+    fn asset_bundle_status_requires_servants_and_craft_essences() {
+        let tmp = tempfile::tempdir().unwrap();
+        let assets_root = tmp.path().join("assets");
+        let missing = asset_bundle_status_from_root(&assets_root).unwrap();
+        assert!(!missing.installed);
+        assert!(!missing.imported_servants);
+        assert!(!missing.imported_craft_essences);
+
+        fs::create_dir_all(assets_root.join("servants").join("1")).unwrap();
+        fs::write(
+            assets_root
+                .join("servants")
+                .join("1")
+                .join("face_servant_1.png"),
+            b"face",
+        )
+        .unwrap();
+        let partial = asset_bundle_status_from_root(&assets_root).unwrap();
+        assert!(!partial.installed);
+        assert!(partial.imported_servants);
+        assert!(!partial.imported_craft_essences);
+        assert_eq!(partial.servant_files, 1);
+
+        fs::create_dir_all(assets_root.join("ces").join("2")).unwrap();
+        fs::write(assets_root.join("ces").join("2").join("card_ce.png"), b"ce").unwrap();
+        let installed = asset_bundle_status_from_root(&assets_root).unwrap();
+        assert!(installed.installed);
+        assert_eq!(installed.servant_files, 1);
+        assert_eq!(installed.craft_essence_files, 1);
+    }
+
+    fn build_runtime_manifest(
+        runtime_version: &str,
+        code_version: &str,
+        platform: &str,
+        runtime_sha256: &str,
+        code_sha256: &str,
+    ) -> RuntimeManifest {
+        parse_runtime_manifest(&format!(
+            r#"{{
+                "mashCvRuntimeVersion": "{runtime_version}",
+                "mashCvCodeVersion": "{code_version}",
+                "platforms": {{
+                    "{platform}": {{
+                        "runtimeUrl": "https://cdn.example.com/runtime.zip",
+                        "runtimeSha256": "{runtime_sha256}",
+                        "codeUrl": "https://cdn.example.com/code.zip",
+                        "codeSha256": "{code_sha256}"
+                    }}
+                }}
+            }}"#
+        ))
+        .unwrap()
+    }
+
+    fn sha256_bytes(bytes: &[u8]) -> String {
+        format!("{:x}", Sha256::digest(bytes))
+    }
+
+    #[test]
+    fn runtime_manifest_selects_platform_artifact() {
+        let manifest = build_runtime_manifest(
+            "2026.05.08-runtime1",
+            "2026.05.08-code1",
+            "darwin-aarch64",
+            "runtime-sha",
+            "code-sha",
+        );
+        let artifact = manifest.platforms.get("darwin-aarch64").unwrap();
+        assert_eq!(manifest.mash_cv_runtime_version, "2026.05.08-runtime1");
+        assert_eq!(manifest.mash_cv_code_version, "2026.05.08-code1");
+        assert_eq!(artifact.runtime_url, "https://cdn.example.com/runtime.zip");
+        assert_eq!(artifact.runtime_sha256, "runtime-sha");
+        assert_eq!(artifact.code_url, "https://cdn.example.com/code.zip");
+        assert_eq!(artifact.code_sha256, "code-sha");
+        assert!(manifest.platforms.get("darwin-x86_64").is_none());
+    }
+
+    #[test]
+    fn runtime_platform_key_normalizes_macos_to_darwin() {
+        assert_eq!(
+            runtime_platform_key_from("macos", "aarch64"),
+            "darwin-aarch64"
+        );
+        assert_eq!(
+            runtime_platform_key_from("macos", "x86_64"),
+            "darwin-x86_64"
+        );
+        assert_eq!(runtime_platform_key_from("linux", "x86_64"), "linux-x86_64");
+    }
+
+    #[test]
+    fn runtime_status_reports_missing_matching_and_stale_versions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let platform = "darwin-aarch64";
+        let manifest = build_runtime_manifest("runtime-v2", "code-v2", platform, "abc", "def");
+
+        let missing = runtime_status_from_manifest(&manifest, tmp.path(), platform);
+        assert!(!missing.installed);
+        assert!(!missing.runtime_installed);
+        assert!(!missing.code_installed);
+        assert_eq!(missing.installed_runtime_version, None);
+        assert_eq!(missing.installed_code_version, None);
+
+        fs::create_dir_all(runtime_version_path(tmp.path()).parent().unwrap()).unwrap();
+        fs::write(
+            runtime_version_path(tmp.path()),
+            r#"{"version":"runtime-v1","platform":"darwin-aarch64"}"#,
+        )
+        .unwrap();
+        fs::create_dir_all(code_version_path(tmp.path()).parent().unwrap()).unwrap();
+        fs::write(
+            code_version_path(tmp.path()),
+            r#"{"version":"code-v1","platform":"darwin-aarch64"}"#,
+        )
+        .unwrap();
+        let stale = runtime_status_from_manifest(&manifest, tmp.path(), platform);
+        assert!(!stale.installed);
+        assert_eq!(
+            stale.installed_runtime_version.as_deref(),
+            Some("runtime-v1")
+        );
+        assert_eq!(stale.installed_code_version.as_deref(), Some("code-v1"));
+
+        let exe = runtime_executable_path(tmp.path(), "runtime-v2");
+        fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        fs::write(&exe, b"exe").unwrap();
+        let code_pkg = runtime_code_path(tmp.path(), "code-v2").join("mash_cv");
+        fs::create_dir_all(&code_pkg).unwrap();
+        fs::write(
+            runtime_version_path(tmp.path()),
+            r#"{"version":"runtime-v2","platform":"darwin-aarch64"}"#,
+        )
+        .unwrap();
+        fs::write(
+            code_version_path(tmp.path()),
+            r#"{"version":"code-v2","platform":"darwin-aarch64"}"#,
+        )
+        .unwrap();
+        let matching = runtime_status_from_manifest(&manifest, tmp.path(), platform);
+        assert!(matching.installed);
+        assert_eq!(
+            matching.installed_runtime_version.as_deref(),
+            Some("runtime-v2")
+        );
+        assert_eq!(matching.installed_code_version.as_deref(), Some("code-v2"));
+        assert!(matching.executable_path.ends_with(runtime_exe_name()));
+    }
+
+    #[test]
+    fn import_runtime_bundle_rejects_sha_mismatch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = tmp.path().join("runtime.zip");
+        fs::write(
+            &zip_path,
+            build_zip(&[("mash-cv-runtime/mash-cv", b"runtime executable")]),
+        )
+        .unwrap();
+        let manifest = build_runtime_manifest(
+            "runtime-v1",
+            "code-v1",
+            "darwin-aarch64",
+            "bad-runtime-sha",
+            "bad-code-sha",
+        );
+
+        let err = import_runtime_bundle_from_zip_path(
+            &zip_path,
+            &manifest,
+            &tmp.path().join("runtime"),
+            "darwin-aarch64",
+        )
+        .expect_err("import should fail");
+        assert!(err.contains("sha256 不匹配"));
+    }
+
+    #[test]
+    fn import_runtime_bundle_rejects_missing_executable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = tmp.path().join("runtime.zip");
+        let bytes = build_zip(&[("mash-cv-runtime/readme.txt", b"no exe")]);
+        fs::write(&zip_path, &bytes).unwrap();
+        let manifest = build_runtime_manifest(
+            "runtime-v1",
+            "code-v1",
+            "darwin-aarch64",
+            &sha256_bytes(&bytes),
+            "code-sha",
+        );
+
+        let err = import_runtime_bundle_from_zip_path(
+            &zip_path,
+            &manifest,
+            &tmp.path().join("runtime"),
+            "darwin-aarch64",
+        )
+        .expect_err("import should fail");
+        assert!(err.contains("未找到 mash-cv"));
+    }
+
+    #[test]
+    fn import_runtime_bundle_rejects_path_traversal_entries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = tmp.path().join("runtime.zip");
+        let bytes = build_zip(&[
+            ("mash-cv-runtime/mash-cv", b"runtime executable"),
+            ("../evil.txt", b"evil"),
+        ]);
+        fs::write(&zip_path, &bytes).unwrap();
+        let manifest = build_runtime_manifest(
+            "runtime-v1",
+            "code-v1",
+            "darwin-aarch64",
+            &sha256_bytes(&bytes),
+            "code-sha",
+        );
+
+        let err = import_runtime_bundle_from_zip_path(
+            &zip_path,
+            &manifest,
+            &tmp.path().join("runtime"),
+            "darwin-aarch64",
+        )
+        .expect_err("import should fail");
+        assert!(err.contains("非法路径"));
+        assert!(!tmp.path().join("evil.txt").exists());
+    }
+
+    #[test]
+    fn import_runtime_bundle_installs_version_record_and_executable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = tmp.path().join("runtime.zip");
+        let exe_entry = format!("mash-cv-runtime/{}", runtime_exe_name());
+        let bytes = build_zip(&[(exe_entry.as_str(), b"runtime executable")]);
+        fs::write(&zip_path, &bytes).unwrap();
+        let manifest = build_runtime_manifest(
+            "runtime-v1",
+            "code-v1",
+            "darwin-aarch64",
+            &sha256_bytes(&bytes),
+            "code-sha",
+        );
+        let runtime_root = tmp.path().join("runtime");
+
+        let result = import_runtime_bundle_from_zip_path(
+            &zip_path,
+            &manifest,
+            &runtime_root,
+            "darwin-aarch64",
+        )
+        .expect("import should work");
+
+        assert_eq!(result.installed_kind, "runtime");
+        assert_eq!(result.installed_version, "runtime-v1");
+        let exe = runtime_executable_path(&runtime_root, "runtime-v1");
+        assert!(exe.is_file());
+        let record = read_runtime_version(&runtime_root).unwrap();
+        assert_eq!(record.version, "runtime-v1");
+        assert_eq!(record.platform, "darwin-aarch64");
+    }
+
+    #[test]
+    fn import_runtime_bundle_installs_code_package() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = tmp.path().join("code.zip");
+        let bytes = build_zip(&[
+            ("mash-cv-code/mash_cv/__init__.py", b""),
+            ("mash-cv-code/mash_cv/cv.py", b"code"),
+        ]);
+        fs::write(&zip_path, &bytes).unwrap();
+        let manifest = build_runtime_manifest(
+            "runtime-v1",
+            "code-v1",
+            "darwin-aarch64",
+            "runtime-sha",
+            &sha256_bytes(&bytes),
+        );
+        let runtime_root = tmp.path().join("runtime");
+
+        let result = import_runtime_bundle_from_zip_path(
+            &zip_path,
+            &manifest,
+            &runtime_root,
+            "darwin-aarch64",
+        )
+        .expect("import should work");
+
+        assert_eq!(result.installed_kind, "code");
+        assert_eq!(result.installed_version, "code-v1");
+        assert!(runtime_code_path(&runtime_root, "code-v1")
+            .join("mash_cv")
+            .join("cv.py")
+            .is_file());
+        let record = read_code_version(&runtime_root).unwrap();
+        assert_eq!(record.version, "code-v1");
+        assert_eq!(record.platform, "darwin-aarch64");
     }
 
     #[test]

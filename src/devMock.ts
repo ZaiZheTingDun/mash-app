@@ -197,10 +197,43 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       }
       return null as T;
     case "pick_asset_bundle":
+    case "pick_runtime_bundle":
     case "get_servant_portrait_path":
     case "get_servant_face_path":
     case "get_craft_essence_card_path":
       return null as T;
+    case "get_runtime_status":
+      return {
+        requiredRuntimeVersion: "2026.05.08-runtime1",
+        installedRuntimeVersion: null,
+        runtimeInstalled: false,
+        requiredCodeVersion: "2026.05.08-code1",
+        installedCodeVersion: null,
+        codeInstalled: false,
+        installed: false,
+        platform: "darwin-aarch64",
+        runtimeDownloadUrl:
+          "https://cdn.example.com/mash-cv-runtime-darwin-aarch64-v2026.05.08-runtime1.zip",
+        runtimeExpectedSha256:
+          "0000000000000000000000000000000000000000000000000000000000000000",
+        runtimeInstallDir: "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1",
+        executablePath:
+          "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
+        codeDownloadUrl: "https://cdn.example.com/mash-cv-code-v2026.05.08-code1.zip",
+        codeExpectedSha256:
+          "0000000000000000000000000000000000000000000000000000000000000000",
+        codeInstallDir: "/dev/runtime/mash-cv/code/2026.05.08-code1",
+        codePath: "/dev/runtime/mash-cv/code/2026.05.08-code1/mash-cv-code",
+      } as T;
+    case "get_asset_bundle_status":
+      return {
+        installed: false,
+        importedServants: false,
+        importedCraftEssences: false,
+        servantFiles: 0,
+        craftEssenceFiles: 0,
+        installDir: "/dev/mash-assets",
+      } as T;
     case "import_asset_bundle":
       return {
         importedServants: false,
@@ -208,6 +241,16 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         servantFiles: 0,
         craftEssenceFiles: 0,
         installDir: "/dev/mash-assets",
+      } as T;
+    case "import_runtime_bundle":
+      return {
+        installedKind: "runtime",
+        installedVersion: "2026.05.08-runtime1",
+        platform: "darwin-aarch64",
+        installDir: "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1",
+        executablePath:
+          "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
+        codePath: null,
       } as T;
     case "start_automation":
     case "stop_automation":
