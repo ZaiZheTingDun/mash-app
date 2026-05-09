@@ -112,6 +112,30 @@
               "threshold": 0.85
             }
           }
+        },
+        "refreshConfirm": {
+          "detect": {
+            "template": "dialog_refresh_support",
+            "region": {
+              "x": 0.411,
+              "y": 0.142,
+              "w": 0.182,
+              "h": 0.089
+            },
+            "threshold": 0.85
+          },
+          "elements": {
+            "dialog_refresh_support": {
+              "template": "dialog_refresh_support",
+              "region": {
+                "x": 0.411,
+                "y": 0.142,
+                "w": 0.182,
+                "h": 0.089
+              },
+              "threshold": 0.85
+            }
+          }
         }
       }
     },
@@ -286,12 +310,12 @@
     },
     "APRecovery": {
       "detect": {
-        "template": "item_gold_apple",
+        "template": "items/label_item",
         "region": {
-          "x": 0.22,
-          "y": 0.33,
-          "w": 0.16,
-          "h": 0.24
+          "x": 0.244,
+          "y": 0.142,
+          "w": 0.095,
+          "h": 0.659
         },
         "threshold": 0.82
       },

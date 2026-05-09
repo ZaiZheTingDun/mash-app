@@ -350,15 +350,20 @@ class TestOcrRegion:
         result = mash_cv._load_templates(str(tmp_path))
         assert result["count"] == 1
 
-    def test_walks_subdirectories(self, tmp_path):
+    def test_loads_subdirectory_templates_by_configured_relative_key(self, tmp_path):
         sub = tmp_path / "sub"
         sub.mkdir()
         tmpl = np.zeros((10, 10), dtype=np.uint8)
         cv2.imwrite(str(sub / "deep.png"), tmpl)
 
         result = mash_cv._load_templates(str(tmp_path))
-        assert result["count"] == 1
-        assert "deep" in mash_cv.templates
+        assert result["count"] == 0
+        assert "deep" not in mash_cv.templates
+        assert "sub/deep" not in mash_cv.templates
+
+        loaded = mash_cv._get_template("sub/deep")
+        assert loaded is not None
+        assert "sub/deep" in mash_cv.templates
 
 
 # ── _load_config ────────────────────────────────────────────────────────
@@ -790,15 +795,18 @@ LEVEL_DIGIT_REGION = {"x": 0.345, "y": 0.626, "w": 0.12, "h": 0.075}
 
 
 @pytest.mark.skipif(
-    not os.path.isdir(_PROD_TEMPLATES_DIR),
-    reason="production templates dir not available",
+    not os.path.isdir(_PROD_TEMPLATES_DIR)
+    or not os.path.isfile(
+        os.path.join(_ROOT_SCREENSHOTS_DIR, "servant_enhancement_selected.png")
+    ),
+    reason="production templates or servant_enhancement_selected.png fixture not available",
 )
 class TestReadLevelDigits:
     def test_servant_enhancement_selected_reads_ninety_of_ninety(self):
         result = mash_cv._load_templates(_PROD_TEMPLATES_DIR)
         assert result["ok"] is True
         for digit in range(10):
-            assert f"digit_{digit}_v2" in mash_cv.templates
+            assert mash_cv._get_template(f"digit_v2/digit_{digit}_v2") is not None
 
         img = cv2.imread(
             os.path.join(_ROOT_SCREENSHOTS_DIR, "servant_enhancement_selected.png")

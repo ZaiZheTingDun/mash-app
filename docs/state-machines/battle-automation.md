@@ -64,6 +64,10 @@ their real screens:
   screen is actionable status.
 - `SupportSelect.variants.main.elements.support_scroll_end`: detects the bottom
   of the support list.
+- `SupportSelect.variants.refreshConfirm.detect` / `.elements.dialog_refresh_support`:
+  detects the JP refresh-confirm modal that appears after tapping the support
+  refresh button; the runner confirms it, then waits for the modal to vanish
+  before resuming OCR/scroll.
 - `Battle.variants.main.elements.battle_scene_anchor`: exposes the
   `text_battle_label` region to debug; full
   `BATTLE m/n` reading still uses `read_battle_scene`.
@@ -76,5 +80,10 @@ their real screens:
   condition where `Battle.variants.main.elements.attack_button` is found.
 - `waiting_for_battle` extends Unknown tolerance during loading and long attack
   animations.
+- `APRecovery` now anchors on `label_item` and scans the item-column template
+  region in priority order instead of tapping fixed rows. Top page scans
+  `彩/金/银`; after one downward swipe the runner scans `青铜/赤铜`. A missing
+  template match is treated as "数量不足" because the dimmed overlay suppresses
+  the template score.
 - Updating `Screen`, battle result handling, AP recovery behavior, or
   battle screen variant probes requires updating this document.

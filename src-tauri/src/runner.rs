@@ -245,11 +245,17 @@ const BATTLE_RESULT_CONTINUE_REPEAT: Point = Point::new(0.657, 0.809);
 /// `RunConfig::repeat_mission` is false. The runner finishes after.
 const BATTLE_RESULT_CONTINUE_STOP: Point = Point::new(0.348, 0.809);
 
-const AP_RECOVERY_ROW_1: Point = Point::new(0.500, 0.250);
-const AP_RECOVERY_ROW_2: Point = Point::new(0.500, 0.455);
-const AP_RECOVERY_ROW_3: Point = Point::new(0.500, 0.660);
-const AP_RECOVERY_SCROLL_FROM: Point = Point::new(0.780, 0.760);
-const AP_RECOVERY_SCROLL_TO: Point = Point::new(0.780, 0.300);
+const AP_RECOVERY_ITEMS_REGION: NormRect = NormRect {
+    x: 0.244,
+    y: 0.142,
+    w: 0.095,
+    h: 0.659,
+};
+const AP_RECOVERY_SCROLL_FROM: Point = Point::new(0.780, 0.166);
+const AP_RECOVERY_SCROLL_TO: Point = Point::new(0.780, 0.426);
+const AP_RECOVERY_CONFIRM_BUTTON: Point = Point::new(0.663, 0.795);
+const AP_RECOVERY_LIST_LABEL_TEMPLATE: &str = "items/label_item";
+const AP_RECOVERY_ITEM_THRESHOLD: f64 = 0.82;
 
 /// Cadence used by `tap_until_screen_changes` when dismissing post-battle
 /// result pages. Slow enough for the device to register each tap and for
@@ -569,6 +575,78 @@ fn tick_scene_state(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ApRecoveryPage {
+    Top,
+    Bottom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ApRecoveryTemplate {
+    item: ApRecoveryItem,
+    page: ApRecoveryPage,
+    label: &'static str,
+    template_key: &'static str,
+}
+
+fn ap_recovery_template(item: ApRecoveryItem) -> ApRecoveryTemplate {
+    match item {
+        // Frontend `Rainbow` maps to the premium Saint Quartz recovery option.
+        ApRecoveryItem::Rainbow => ApRecoveryTemplate {
+            item,
+            page: ApRecoveryPage::Top,
+            label: "彩苹果",
+            template_key: "items/item_saint_quartz",
+        },
+        ApRecoveryItem::Gold => ApRecoveryTemplate {
+            item,
+            page: ApRecoveryPage::Top,
+            label: "黄金苹果",
+            template_key: "items/item_apple_gold",
+        },
+        ApRecoveryItem::Silver => ApRecoveryTemplate {
+            item,
+            page: ApRecoveryPage::Top,
+            label: "白银苹果",
+            template_key: "items/item_apple_silver",
+        },
+        ApRecoveryItem::Bronze => ApRecoveryTemplate {
+            item,
+            page: ApRecoveryPage::Bottom,
+            label: "青铜苹果",
+            template_key: "items/item_apple_bronzed_cobalt",
+        },
+        ApRecoveryItem::Copper => ApRecoveryTemplate {
+            item,
+            page: ApRecoveryPage::Bottom,
+            label: "赤铜苹果",
+            template_key: "items/item_apple_bronze",
+        },
+    }
+}
+
+fn ap_recovery_candidates_for_page(
+    configured: &[ApRecoveryItem],
+    page: ApRecoveryPage,
+) -> Vec<ApRecoveryTemplate> {
+    [
+        ApRecoveryItem::Rainbow,
+        ApRecoveryItem::Gold,
+        ApRecoveryItem::Silver,
+        ApRecoveryItem::Bronze,
+        ApRecoveryItem::Copper,
+    ]
+    .into_iter()
+    .filter(|item| configured.contains(item))
+    .map(ap_recovery_template)
+    .filter(|template| template.page == page)
+    .collect()
+}
+
+fn is_unknown_element_error(err: &str, screen: &str, element: &str) -> bool {
+    err.contains(&format!("unknown element: {screen}.{element}"))
+}
+
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
@@ -588,11 +666,20 @@ const SUPPORT_SCROLL_SETTLE: Duration = Duration::from_millis(900);
 /// list refetch and re-render takes ~2.5s on slow devices; one extra second
 /// of buffer keeps us from OCRing a half-loaded list.
 const SUPPORT_REFRESH_SETTLE: Duration = Duration::from_secs(3);
+/// Small timeout for the refresh-confirm dialog to animate in after tapping
+/// the support refresh button.
+const SUPPORT_REFRESH_DIALOG_APPEAR_TIMEOUT: Duration = Duration::from_secs(2);
+/// Poll cadence while waiting for the refresh-confirm dialog to appear or
+/// disappear.
+const SUPPORT_REFRESH_DIALOG_POLL: Duration = Duration::from_millis(300);
 
 /// Refresh-friend-list button on the support-select screen, captured from
 /// a 2560x1440 landscape device. Calibrated alongside the class-tab strip
 /// (same row, x further right).
 const SUPPORT_REFRESH_BUTTON: Point = Point::new(0.726, 0.178);
+/// Confirm button inside the support refresh dialog.
+const SUPPORT_REFRESH_CONFIRM_BUTTON: Point = Point::new(0.650, 0.779);
+const SUPPORT_REFRESH_DIALOG_ELEMENT: &str = "dialog_refresh_support";
 
 /// Class-filter tab bar across the top of the support-select screen. All
 /// tabs share the same y. Order mirrors the FGO UI: all → saber → ...
@@ -1276,7 +1363,9 @@ impl Runner {
             // Refresh occasionally snaps the class filter back to "all";
             // re-tap the class tab on the next poll to be safe.
             self.support_class_tab_done = false;
-            thread::sleep(SUPPORT_REFRESH_SETTLE);
+            if !self.confirm_support_refresh_dialog_if_needed() {
+                return;
+            }
         } else {
             self.fail_action(
                 "SupportSelect",
@@ -1381,6 +1470,77 @@ impl Runner {
                 eprintln!("[runner] scroll-bar-end check failed (treating as not-at-bottom): {e}");
                 false
             }
+        }
+    }
+
+    /// After tapping the support-list refresh button, confirm the modal when
+    /// the server's cv.json defines one. Servers without a modal template
+    /// fall back to the legacy fixed settle delay.
+    fn confirm_support_refresh_dialog_if_needed(&mut self) -> bool {
+        let appear_deadline = std::time::Instant::now() + SUPPORT_REFRESH_DIALOG_APPEAR_TIMEOUT;
+        loop {
+            match self.sidecar().find_element_by_name(
+                None,
+                SUPPORT_SELECT_SCREEN,
+                SUPPORT_REFRESH_DIALOG_ELEMENT,
+            ) {
+                Ok(m) if m.found => break,
+                Ok(_) => {}
+                Err(e)
+                    if is_unknown_element_error(
+                        &e,
+                        SUPPORT_SELECT_SCREEN,
+                        SUPPORT_REFRESH_DIALOG_ELEMENT,
+                    ) =>
+                {
+                    thread::sleep(SUPPORT_REFRESH_SETTLE);
+                    return true;
+                }
+                Err(e) => {
+                    eprintln!("[runner] refresh dialog probe failed (treating as absent): {e}");
+                    break;
+                }
+            }
+            if std::time::Instant::now() >= appear_deadline {
+                thread::sleep(SUPPORT_REFRESH_SETTLE);
+                return true;
+            }
+            thread::sleep(SUPPORT_REFRESH_DIALOG_POLL);
+        }
+
+        self.emit("SupportSelect", "助战刷新需要确认，点击确定");
+        if !self.tap_at("SupportSelect", SUPPORT_REFRESH_CONFIRM_BUTTON) {
+            return false;
+        }
+
+        loop {
+            match self.sidecar().find_element_by_name(
+                None,
+                SUPPORT_SELECT_SCREEN,
+                SUPPORT_REFRESH_DIALOG_ELEMENT,
+            ) {
+                Ok(m) if !m.found => {
+                    thread::sleep(SUPPORT_REFRESH_DIALOG_POLL);
+                    return true;
+                }
+                Ok(_) => {}
+                Err(e)
+                    if is_unknown_element_error(
+                        &e,
+                        SUPPORT_SELECT_SCREEN,
+                        SUPPORT_REFRESH_DIALOG_ELEMENT,
+                    ) =>
+                {
+                    thread::sleep(SUPPORT_REFRESH_SETTLE);
+                    return true;
+                }
+                Err(e) => {
+                    eprintln!("[runner] refresh dialog disappearance probe failed: {e}");
+                    thread::sleep(SUPPORT_REFRESH_SETTLE);
+                    return true;
+                }
+            }
+            thread::sleep(SUPPORT_REFRESH_DIALOG_POLL);
         }
     }
 
@@ -1818,48 +1978,115 @@ impl Runner {
         }
     }
 
-    fn preferred_ap_recovery_item(&self) -> Option<ApRecoveryItem> {
-        [
-            ApRecoveryItem::Rainbow,
-            ApRecoveryItem::Gold,
-            ApRecoveryItem::Silver,
-            ApRecoveryItem::Bronze,
-            ApRecoveryItem::Copper,
-        ]
-        .into_iter()
-        .find(|item| self.config.ap_recovery_items.contains(item))
+    fn ap_recovery_candidates(&self, page: ApRecoveryPage) -> Vec<ApRecoveryTemplate> {
+        ap_recovery_candidates_for_page(&self.config.ap_recovery_items, page)
+    }
+
+    fn find_ap_recovery_item(&mut self, item: ApRecoveryTemplate) -> Result<Option<Point>, String> {
+        self.sidecar().find_element(
+            None,
+            item.template_key,
+            AP_RECOVERY_ITEMS_REGION,
+            AP_RECOVERY_ITEM_THRESHOLD,
+        )
+    }
+
+    fn ap_recovery_list_visible(&mut self) -> Result<bool, String> {
+        Ok(self
+            .sidecar()
+            .find_element(
+                None,
+                AP_RECOVERY_LIST_LABEL_TEMPLATE,
+                AP_RECOVERY_ITEMS_REGION,
+                0.8,
+            )?
+            .is_some())
     }
 
     fn handle_ap_recovery(&mut self) {
-        let Some(item) = self.preferred_ap_recovery_item() else {
+        if self.config.ap_recovery_items.is_empty() {
             self.emit("APRecovery", "行动力不足且未配置自动吃苹果，停止");
             self.set_state(RunnerState::Finished);
             return;
-        };
+        }
 
-        let (label, tap, needs_scroll) = match item {
-            ApRecoveryItem::Rainbow => ("彩苹果", AP_RECOVERY_ROW_1, false),
-            ApRecoveryItem::Gold => ("黄金苹果", AP_RECOVERY_ROW_2, false),
-            ApRecoveryItem::Silver => ("白银苹果", AP_RECOVERY_ROW_3, false),
-            ApRecoveryItem::Bronze => ("青铜苹果", AP_RECOVERY_ROW_2, true),
-            ApRecoveryItem::Copper => ("赤铜苹果", AP_RECOVERY_ROW_3, true),
-        };
-
-        self.emit("APRecovery", &format!("行动力不足，使用{label}"));
-        if needs_scroll {
-            if !self.swipe_at(
-                "APRecovery",
-                AP_RECOVERY_SCROLL_FROM,
-                AP_RECOVERY_SCROLL_TO,
-                350,
-            ) {
+        match self.ap_recovery_list_visible() {
+            Ok(true) => {}
+            Ok(false) => {
+                self.emit("APRecovery", "未定位到道具列表，等待重试…");
+                thread::sleep(ACTION_DELAY);
                 return;
             }
-            thread::sleep(ACTION_DELAY);
+            Err(err) => {
+                self.fail_action("APRecovery", "定位道具列表", err);
+                return;
+            }
         }
-        if self.tap_at("APRecovery", tap) {
-            thread::sleep(ACTION_DELAY);
+
+        for item in self.ap_recovery_candidates(ApRecoveryPage::Top) {
+            match self.find_ap_recovery_item(item) {
+                Ok(Some(point)) => {
+                    self.emit("APRecovery", &format!("行动力不足，使用{}", item.label));
+                    if !self.tap_at("APRecovery", point) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+                    if !self.tap_at("APRecovery", AP_RECOVERY_CONFIRM_BUTTON) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+                    return;
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    self.fail_action("APRecovery", &format!("识别{}", item.label), err);
+                    return;
+                }
+            }
         }
+
+        let bottom_items = self.ap_recovery_candidates(ApRecoveryPage::Bottom);
+        if bottom_items.is_empty() {
+            self.emit("APRecovery", "已配置苹果数量不足，停止");
+            self.set_state(RunnerState::Finished);
+            return;
+        }
+
+        self.emit("APRecovery", "上半页未找到可用道具，滚动到底部继续查找");
+        if !self.swipe_at(
+            "APRecovery",
+            AP_RECOVERY_SCROLL_FROM,
+            AP_RECOVERY_SCROLL_TO,
+            350,
+        ) {
+            return;
+        }
+        thread::sleep(ACTION_DELAY);
+
+        for item in bottom_items {
+            match self.find_ap_recovery_item(item) {
+                Ok(Some(point)) => {
+                    self.emit("APRecovery", &format!("行动力不足，使用{}", item.label));
+                    if !self.tap_at("APRecovery", point) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+                    if !self.tap_at("APRecovery", AP_RECOVERY_CONFIRM_BUTTON) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+                    return;
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    self.fail_action("APRecovery", &format!("识别{}", item.label), err);
+                    return;
+                }
+            }
+        }
+
+        self.emit("APRecovery", "所有已配置苹果数量不足，停止");
+        self.set_state(RunnerState::Finished);
     }
 
     // -- skill execution -----------------------------------------------------
@@ -2418,6 +2645,86 @@ mod tests {
             cfg.ap_recovery_items,
             vec![ApRecoveryItem::Gold, ApRecoveryItem::Bronze]
         );
+    }
+
+    #[test]
+    fn ap_recovery_template_maps_frontend_items_to_template_keys() {
+        assert_eq!(
+            ap_recovery_template(ApRecoveryItem::Rainbow),
+            ApRecoveryTemplate {
+                item: ApRecoveryItem::Rainbow,
+                page: ApRecoveryPage::Top,
+                label: "彩苹果",
+                template_key: "items/item_saint_quartz",
+            }
+        );
+        assert_eq!(
+            ap_recovery_template(ApRecoveryItem::Bronze),
+            ApRecoveryTemplate {
+                item: ApRecoveryItem::Bronze,
+                page: ApRecoveryPage::Bottom,
+                label: "青铜苹果",
+                template_key: "items/item_apple_bronzed_cobalt",
+            }
+        );
+        assert_eq!(
+            ap_recovery_template(ApRecoveryItem::Copper),
+            ApRecoveryTemplate {
+                item: ApRecoveryItem::Copper,
+                page: ApRecoveryPage::Bottom,
+                label: "赤铜苹果",
+                template_key: "items/item_apple_bronze",
+            }
+        );
+    }
+
+    #[test]
+    fn ap_recovery_candidates_for_page_preserves_priority_within_page() {
+        let top = ap_recovery_candidates_for_page(
+            &[
+                ApRecoveryItem::Silver,
+                ApRecoveryItem::Copper,
+                ApRecoveryItem::Gold,
+                ApRecoveryItem::Rainbow,
+            ],
+            ApRecoveryPage::Top,
+        );
+        assert_eq!(
+            top.iter().map(|item| item.item).collect::<Vec<_>>(),
+            vec![
+                ApRecoveryItem::Rainbow,
+                ApRecoveryItem::Gold,
+                ApRecoveryItem::Silver,
+            ]
+        );
+
+        let bottom = ap_recovery_candidates_for_page(
+            &[
+                ApRecoveryItem::Silver,
+                ApRecoveryItem::Copper,
+                ApRecoveryItem::Gold,
+                ApRecoveryItem::Bronze,
+            ],
+            ApRecoveryPage::Bottom,
+        );
+        assert_eq!(
+            bottom.iter().map(|item| item.item).collect::<Vec<_>>(),
+            vec![ApRecoveryItem::Bronze, ApRecoveryItem::Copper]
+        );
+    }
+
+    #[test]
+    fn unknown_element_error_helper_matches_exact_lookup() {
+        assert!(is_unknown_element_error(
+            "unknown element: SupportSelect.dialog_refresh_support",
+            "SupportSelect",
+            "dialog_refresh_support",
+        ));
+        assert!(!is_unknown_element_error(
+            "unknown element: SupportSelect.support_scroll_end",
+            "SupportSelect",
+            "dialog_refresh_support",
+        ));
     }
 
     // --- tick_scene_state -----------------------------------------------

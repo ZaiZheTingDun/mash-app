@@ -368,6 +368,37 @@ def _scale_static_template_for_image(
     return cv2.resize(tmpl, (scaled_w, scaled_h), interpolation=interpolation)
 
 
+def _template_path_for_key(template_key: str) -> Optional[str]:
+    if not templates_dir:
+        return None
+    key = str(template_key).replace("\\", "/").strip("/")
+    if not key or key.startswith(".") or "/../" in f"/{key}/":
+        return None
+    path = os.path.normpath(os.path.join(templates_dir, f"{key}.png"))
+    root = os.path.abspath(templates_dir)
+    full = os.path.abspath(path)
+    if os.path.commonpath([root, full]) != root:
+        return None
+    return full
+
+
+def _get_template(template_key: str) -> Optional[np.ndarray]:
+    tmpl = templates.get(template_key)
+    if tmpl is not None:
+        return tmpl
+    if "/" not in template_key and "\\" not in template_key:
+        return None
+    path = _template_path_for_key(template_key)
+    if not path or not os.path.isfile(path):
+        return None
+    mat = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    if mat is None:
+        return None
+    templates[template_key] = mat
+    static_template_keys.add(template_key)
+    return mat
+
+
 SERVANT_GRID_ANCHOR_TEMPLATE = "text_servant_avatar_bottom_line"
 SERVANT_GRID_COLUMNS = 7
 SERVANT_GRID_COL_PITCH = 266.25 / 2560.0
@@ -612,7 +643,7 @@ def _find_element(
     region: dict,
     threshold: float,
 ) -> dict:
-    tmpl = templates.get(template_key)
+    tmpl = _get_template(template_key)
     if tmpl is None:
         return {"found": False, "error": f"template not loaded: {template_key}"}
     return _match_template_region(img, tmpl, region, threshold, template_key)
@@ -710,7 +741,7 @@ def _detect_screen(img: np.ndarray) -> dict:
         region = det.get("region", DEFAULT_REGION)
         screen_score = 0.0
         for key in keys:
-            tmpl = templates.get(key)
+            tmpl = _get_template(key)
             if tmpl is None:
                 continue
             result = _match_template_region(img, tmpl, region, threshold, key)
@@ -755,7 +786,7 @@ BATTLE_DIGIT_COHESION_GAP_RATIO = 0.6
 BATTLE_DIGIT_SCORE_MARGIN = 0.08
 
 
-LEVEL_DIGIT_TEMPLATE_PREFIX = "digit_"
+LEVEL_DIGIT_TEMPLATE_PREFIX = "digit_v2/digit_"
 LEVEL_DIGIT_TEMPLATE_SUFFIX = "_v2"
 LEVEL_DIGIT_BRIGHT_THRESHOLD = 220
 LEVEL_DIGIT_MIN_COMPONENT_AREA = 80
@@ -771,7 +802,7 @@ def _load_digit_template_masks(prefix: str, suffix: str) -> tuple[list[tuple[int
     loaded: list[tuple[int, np.ndarray]] = []
     missing: list[int] = []
     for digit in range(10):
-        tmpl = templates.get(_digit_template_key(digit, prefix, suffix))
+        tmpl = _get_template(_digit_template_key(digit, prefix, suffix))
         if tmpl is None:
             missing.append(digit)
             continue
@@ -814,8 +845,8 @@ def _read_level_digits(
     Direct grayscale template matching is brittle because the bundled v2
     templates contain only the white digit body. This reader therefore
     thresholds the bright digit fill inside a tight ROI, segments components,
-    maps each component to ``digit_0_v2``..``digit_9_v2`` by binary IoU, and
-    splits the surviving digits at the slash gap.
+    maps each component to ``digit_v2/digit_0_v2``..``digit_v2/digit_9_v2``
+    by binary IoU, and splits the surviving digits at the slash gap.
     """
 
     diag: dict = {
@@ -2333,17 +2364,16 @@ def _load_templates(directory: str) -> dict:
     count = 0
     if not os.path.isdir(directory):
         return {"ok": False, "error": f"directory not found: {directory}"}
-    for root, _dirs, files in os.walk(directory):
-        for fname in files:
-            if not fname.lower().endswith(".png"):
-                continue
-            key = os.path.splitext(fname)[0]
-            path = os.path.join(root, fname)
-            mat = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-            if mat is not None:
-                templates[key] = mat
-                static_template_keys.add(key)
-                count += 1
+    for fname in os.listdir(directory):
+        path = os.path.join(directory, fname)
+        if not os.path.isfile(path) or not fname.lower().endswith(".png"):
+            continue
+        key = os.path.splitext(fname)[0]
+        mat = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+        if mat is not None:
+            templates[key] = mat
+            static_template_keys.add(key)
+            count += 1
     templates_dir = directory
     return {"ok": True, "count": count}
 
