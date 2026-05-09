@@ -2,10 +2,41 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+VERSIONS_FILE="${REPO_ROOT}/versions.toml"
 cd "$SCRIPT_DIR"
 
-RUNTIME_VERSION="${MASH_CV_RUNTIME_VERSION:-2026.05.08-runtime1}"
-CODE_VERSION="${MASH_CV_CODE_VERSION:-2026.05.08-code1}"
+read_toml_value() {
+  local section="$1"
+  local key="$2"
+  awk -v section="$section" -v key="$key" '
+    $0 ~ "^[[:space:]]*\\[" section "\\][[:space:]]*$" { in_section = 1; next }
+    $0 ~ "^[[:space:]]*\\[[^]]+\\][[:space:]]*$" { in_section = 0 }
+    in_section && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+      value = $0
+      sub(/^[^=]*=[[:space:]]*/, "", value)
+      sub(/[[:space:]]*(#.*)?$/, "", value)
+      gsub(/^"|"$/, "", value)
+      print value
+      exit
+    }
+  ' "$VERSIONS_FILE"
+}
+
+if [[ ! -f "$VERSIONS_FILE" ]]; then
+  echo "versions file not found: $VERSIONS_FILE" >&2
+  exit 1
+fi
+
+DEFAULT_RUNTIME_VERSION="$(read_toml_value "mash_cv" "runtime")"
+DEFAULT_CODE_VERSION="$(read_toml_value "mash_cv" "code")"
+if [[ -z "$DEFAULT_RUNTIME_VERSION" || -z "$DEFAULT_CODE_VERSION" ]]; then
+  echo "missing [mash_cv] runtime/code in $VERSIONS_FILE" >&2
+  exit 1
+fi
+
+RUNTIME_VERSION="${MASH_CV_RUNTIME_VERSION:-$DEFAULT_RUNTIME_VERSION}"
+CODE_VERSION="${MASH_CV_CODE_VERSION:-$DEFAULT_CODE_VERSION}"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
 case "$OS" in

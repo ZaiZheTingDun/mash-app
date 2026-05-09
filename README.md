@@ -81,8 +81,12 @@ Build a release runtime artifact before first distribution or after modifying `s
 
 ```bash
 cd sidecar/mash_cv
-MASH_CV_RUNTIME_VERSION=2026.05.08-runtime1 MASH_CV_CODE_VERSION=2026.05.08-code1 bash build_sidecar.sh
+bash build_sidecar.sh
 ```
+
+The default artifact versions come from `versions.toml` at the repo root.
+Environment variables `MASH_CV_RUNTIME_VERSION` and `MASH_CV_CODE_VERSION`
+remain available for one-off overrides.
 
 The script creates two zips:
 

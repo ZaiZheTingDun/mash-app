@@ -127,8 +127,12 @@ poetry run pytest -v
 ## Build
 
 ```bash
-MASH_CV_RUNTIME_VERSION=2026.05.08-runtime1 MASH_CV_CODE_VERSION=2026.05.08-code1 ./build_sidecar.sh
+./build_sidecar.sh
 ```
+
+`build_sidecar.sh` reads the default runtime/code versions from the repo-root
+`versions.toml`. Set `MASH_CV_RUNTIME_VERSION` or `MASH_CV_CODE_VERSION` only
+when you need a one-off override.
 
 The build script creates two artifacts:
 
