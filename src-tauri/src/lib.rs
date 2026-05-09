@@ -1710,6 +1710,84 @@ fn zip_has_valid_root(relative: &Path, root: &str) -> bool {
     }) == Some(root)
 }
 
+fn zip_entry_is_unix_symlink(entry: &zip::read::ZipFile<'_>) -> bool {
+    entry
+        .unix_mode()
+        .is_some_and(|mode| (mode & 0o170000) == 0o120000)
+}
+
+fn relative_target_stays_within_root(root: &Path, link_parent: &Path, target: &Path) -> bool {
+    if target.is_absolute() {
+        return false;
+    }
+
+    let Ok(stripped_parent) = link_parent.strip_prefix(root) else {
+        return false;
+    };
+
+    let mut parts: Vec<std::ffi::OsString> = stripped_parent
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(name) => Some(name.to_os_string()),
+            _ => None,
+        })
+        .collect();
+
+    for component in target.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::Normal(name) => parts.push(name.to_os_string()),
+            std::path::Component::ParentDir => {
+                if parts.pop().is_none() {
+                    return false;
+                }
+            }
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => return false,
+        }
+    }
+
+    true
+}
+
+#[cfg(unix)]
+fn extract_zip_symlink(
+    entry: &mut zip::read::ZipFile<'_>,
+    output: &Path,
+    destination: &Path,
+) -> Result<(), String> {
+    use std::os::unix::fs::symlink;
+
+    let mut target = String::new();
+    entry
+        .read_to_string(&mut target)
+        .map_err(|e| format!("读取 runtime 符号链接失败: {e}"))?;
+    let target = target.trim_end_matches('\0').trim();
+    if target.is_empty() {
+        return Err("runtime zip 内包含空符号链接目标".to_string());
+    }
+    let target_path = Path::new(target);
+    let Some(parent) = output.parent() else {
+        return Err("runtime 符号链接缺少父目录".to_string());
+    };
+    if !relative_target_stays_within_root(destination, parent, target_path) {
+        return Err("runtime zip 内包含越界符号链接".to_string());
+    }
+    symlink(target_path, output).map_err(|e| format!("创建 runtime 符号链接失败: {e}"))
+}
+
+#[cfg(not(unix))]
+fn extract_zip_symlink(
+    entry: &mut zip::read::ZipFile<'_>,
+    output: &Path,
+    _destination: &Path,
+) -> Result<(), String> {
+    let mut out = fs::File::create(output).map_err(|e| format!("写入 runtime 文件失败: {e}"))?;
+    io::copy(entry, &mut out).map_err(|e| format!("解压 runtime 文件失败: {e}"))?;
+    out.flush()
+        .map_err(|e| format!("写入 runtime 文件失败: {e}"))?;
+    Ok(())
+}
+
 #[cfg(unix)]
 fn make_runtime_executable(path: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
@@ -1748,6 +1826,10 @@ fn extract_zip_with_root(zip_path: &Path, destination: &Path, root: &str) -> Res
         }
         if let Some(parent) = output.parent() {
             fs::create_dir_all(parent).map_err(|e| format!("创建 runtime 目录失败: {e}"))?;
+        }
+        if zip_entry_is_unix_symlink(&entry) {
+            extract_zip_symlink(&mut entry, &output, destination)?;
+            continue;
         }
         let mut out =
             fs::File::create(&output).map_err(|e| format!("写入 runtime 文件失败: {e}"))?;
@@ -2598,11 +2680,32 @@ mod tests {
     }
 
     fn build_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        build_zip_with_options(
+            &entries
+                .iter()
+                .map(|(name, contents)| (*name, *contents, None))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    fn build_zip_with_options(entries: &[(&str, &[u8], Option<u32>)]) -> Vec<u8> {
         let mut cursor = Cursor::new(Vec::new());
         {
             let mut writer = zip::ZipWriter::new(&mut cursor);
-            let options = SimpleFileOptions::default();
-            for (name, contents) in entries {
+            for (name, contents, unix_permissions) in entries {
+                if unix_permissions.is_some_and(|mode| (mode & 0o170000) == 0o120000) {
+                    writer
+                        .add_symlink(
+                            name,
+                            String::from_utf8_lossy(contents),
+                            SimpleFileOptions::default(),
+                        )
+                        .unwrap();
+                    continue;
+                }
+                let options = unix_permissions.map_or(SimpleFileOptions::default(), |mode| {
+                    SimpleFileOptions::default().unix_permissions(mode)
+                });
                 writer.start_file(name, options).unwrap();
                 writer.write_all(contents).unwrap();
             }
@@ -2946,6 +3049,56 @@ mod tests {
         let record = read_runtime_version(&runtime_root).unwrap();
         assert_eq!(record.version, "runtime-v1");
         assert_eq!(record.platform, "darwin-aarch64");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn import_runtime_bundle_preserves_unix_symlinked_dylibs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = tmp.path().join("runtime.zip");
+        let exe_entry = format!("mash-cv-runtime/{}", runtime_exe_name());
+        let bytes = build_zip_with_options(&[
+            (exe_entry.as_str(), b"runtime executable", Some(0o755)),
+            (
+                "mash-cv-runtime/_internal/cv2/.dylibs/libavif.16.3.0.dylib",
+                b"real dylib bytes",
+                Some(0o644),
+            ),
+            (
+                "mash-cv-runtime/_internal/libavif.16.3.0.dylib",
+                b"cv2/.dylibs/libavif.16.3.0.dylib",
+                Some(0o120755),
+            ),
+        ]);
+        fs::write(&zip_path, &bytes).unwrap();
+        let manifest = build_runtime_manifest(
+            "runtime-v1",
+            "code-v1",
+            "darwin-aarch64",
+            &sha256_bytes(&bytes),
+            "code-sha",
+        );
+        let runtime_root = tmp.path().join("runtime");
+
+        import_runtime_bundle_from_zip_path(&zip_path, &manifest, &runtime_root, "darwin-aarch64")
+            .expect("import should work");
+
+        let link = runtime_version_dir(&runtime_root, "runtime-v1")
+            .join("mash-cv-runtime")
+            .join("_internal")
+            .join("libavif.16.3.0.dylib");
+        let meta = fs::symlink_metadata(&link).unwrap();
+        assert!(
+            meta.file_type().is_symlink(),
+            "expected symlink, got {:?}",
+            meta.file_type()
+        );
+        assert_eq!(
+            fs::read_link(&link).unwrap(),
+            PathBuf::from("cv2/.dylibs/libavif.16.3.0.dylib")
+        );
+        let target = link.parent().unwrap().join(fs::read_link(&link).unwrap());
+        assert!(target.is_file());
     }
 
     #[test]
