@@ -25,6 +25,7 @@ import type { Project } from "../types/project";
 interface ProjectBarProps {
   projects: Project[];
   activeProjectId: string | null;
+  disabled?: boolean;
   onProjectSelect: (id: string) => void;
   onCreateProject: (name: string) => void;
   onRenameProject: (id: string, name: string) => void;
@@ -46,6 +47,7 @@ type NameDialogMode = "create" | "rename" | "duplicate";
 export function ProjectBar({
   projects,
   activeProjectId,
+  disabled = false,
   onProjectSelect,
   onCreateProject,
   onRenameProject,
@@ -130,6 +132,7 @@ export function ProjectBar({
               variant="surface"
               color="gray"
               className="project-bar-pill"
+              disabled={disabled}
             >
               <Text size="3" weight="bold" className="project-bar-title">
                 {`～ ${triggerLabel} ～`}
@@ -148,6 +151,7 @@ export function ProjectBar({
                 return (
                   <DropdownMenu.Item
                     key={p.id}
+                    disabled={disabled}
                     onSelect={() => onProjectSelect(p.id)}
                   >
                     <Flex align="center" gap="2" justify="between" width="100%">
@@ -174,13 +178,14 @@ export function ProjectBar({
               color="gray"
               aria-label="队伍操作"
               className="project-action-button"
+              disabled={disabled}
             >
               <DotsHorizontalIcon width={16} height={16} />
             </IconButton>
           </DropdownMenu.Trigger>
           <DropdownMenu.Content>
             <DropdownMenu.Item
-              disabled={!activeProject}
+              disabled={disabled || !activeProject}
               onSelect={() => openNameDialog("rename")}
             >
               <Flex align="center" gap="2">
@@ -189,7 +194,7 @@ export function ProjectBar({
               </Flex>
             </DropdownMenu.Item>
             <DropdownMenu.Item
-              disabled={!activeProject}
+              disabled={disabled || !activeProject}
               onSelect={() => openNameDialog("duplicate")}
             >
               <Flex align="center" gap="2">
@@ -199,7 +204,7 @@ export function ProjectBar({
             </DropdownMenu.Item>
             <DropdownMenu.Item
               color="red"
-              disabled={!activeProject}
+              disabled={disabled || !activeProject}
               onSelect={() => setDeleteConfirmOpen(true)}
             >
               <Flex align="center" gap="2">
@@ -208,7 +213,7 @@ export function ProjectBar({
               </Flex>
             </DropdownMenu.Item>
             <DropdownMenu.Separator />
-            <DropdownMenu.Item onSelect={() => openNameDialog("create")}>
+            <DropdownMenu.Item disabled={disabled} onSelect={() => openNameDialog("create")}>
               <Flex align="center" gap="2">
                 <PlusIcon width={12} height={12} />
                 <Text size="2">新建队伍</Text>

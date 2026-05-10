@@ -203,4 +203,28 @@ describe("StatusBar", () => {
 
     expect(onThemeChange).toHaveBeenCalledWith("dark");
   });
+
+  it("opens and renders the shared operation log panel from the status bar", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      return null;
+    });
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    renderWithTheme(
+      <StatusBar
+        operationLogs={[{ time: "12:34:56", message: "队伍就绪，点击开始任务" }]}
+        operationLogOpen
+        onOperationLogOpenChange={onOpenChange}
+      />
+    );
+
+    expect(screen.getByText("队伍就绪，点击开始任务")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "关闭操作日志" }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });

@@ -19,6 +19,8 @@ interface LogEntry {
 interface EnhancementPageProps {
   servants: Servant[];
   onBack: () => void;
+  onAutomationStart?: () => void;
+  onLogEntry?: (message: string) => void;
 }
 
 function timestamp(): string {
@@ -28,7 +30,12 @@ function timestamp(): string {
     .join(":");
 }
 
-export function EnhancementPage({ servants, onBack }: EnhancementPageProps) {
+export function EnhancementPage({
+  servants,
+  onBack,
+  onAutomationStart,
+  onLogEntry,
+}: EnhancementPageProps) {
   const [selectedVariantKey, setSelectedVariantKey] = useState<string>(
     servants[0]?.variantKey ?? ""
   );
@@ -72,6 +79,7 @@ export function EnhancementPage({ servants, onBack }: EnhancementPageProps) {
     setLogs([]);
     setCurrentScreen("");
     setRunning(true);
+    onAutomationStart?.();
     invoke("start_enhancement_automation", {
       config: {
         targetServantId: selectedServant.id,
@@ -82,9 +90,10 @@ export function EnhancementPage({ servants, onBack }: EnhancementPageProps) {
         ...prev,
         { time: timestamp(), message: `启动失败: ${String(err)}` },
       ]);
+      onLogEntry?.(`启动失败: ${String(err)}`);
       setRunning(false);
     });
-  }, [selectedServant]);
+  }, [onAutomationStart, onLogEntry, selectedServant]);
 
   const handleStop = useCallback(() => {
     invoke("stop_enhancement_automation").catch(console.error);

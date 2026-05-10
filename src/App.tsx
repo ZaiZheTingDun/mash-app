@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
-import { invoke } from "./tauri";
+import { invoke, listen } from "./tauri";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { ContentGrid } from "./components/ContentGrid";
 import { derivePartyLineup, derivePartyServants } from "./components/partyServants";
@@ -26,6 +26,17 @@ import "./App.css";
 // horizontal `StageNavigator` (queue/support/command tabs).
 type View = "team" | "command" | "battle" | "enhancement" | "debug";
 
+interface AutomationEvent {
+  state: string;
+  currentScreen: string;
+  message: string;
+}
+
+export interface OperationLogEntry {
+  time: string;
+  message: string;
+}
+
 interface AppProps {
   theme: AppTheme;
   onThemeChange: (theme: AppTheme) => void;
@@ -40,6 +51,37 @@ function App({ theme, onThemeChange }: AppProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [setupReady, setSetupReady] = useState(false);
+  const [operationLogs, setOperationLogs] = useState<OperationLogEntry[]>([]);
+  const [operationLogOpen, setOperationLogOpen] = useState(false);
+
+  const appendOperationLog = useCallback((message: string) => {
+    const d = new Date();
+    const time = [d.getHours(), d.getMinutes(), d.getSeconds()]
+      .map((n) => String(n).padStart(2, "0"))
+      .join(":");
+    setOperationLogs((prev) => [...prev, { time, message }]);
+  }, []);
+
+  const handleAutomationStart = useCallback(() => {
+    setOperationLogs([]);
+    setOperationLogOpen(true);
+  }, []);
+
+  useEffect(() => {
+    const unlistenBattle = listen<AutomationEvent>("automation-status", (event) => {
+      appendOperationLog(event.payload.message);
+    });
+    const unlistenEnhancement = listen<AutomationEvent>(
+      "enhancement-automation-status",
+      (event) => {
+        appendOperationLog(event.payload.message);
+      }
+    );
+    return () => {
+      unlistenBattle.then((fn) => fn());
+      unlistenEnhancement.then((fn) => fn());
+    };
+  }, [appendOperationLog]);
 
   // Load both static catalogs in parallel. The CE catalog is small (just
   // id/name) and shared across all projects, so caching it on the App
@@ -241,11 +283,25 @@ function App({ theme, onThemeChange }: AppProps) {
         <Box className="main-content">
           {view === "battle" ? (
             <BattlePage
-              defaultProjectId={activeProjectId}
+              projects={projects}
+              activeProjectId={activeProjectId}
+              onProjectSelect={setActiveProjectId}
+              onCreateProject={handleCreateProject}
+              onRenameProject={handleRenameProject}
+              onDuplicateProject={handleDuplicateProject}
+              onDeleteProject={handleDeleteProject}
+              onUpdateProject={handleUpdateProject}
               onBack={handleBackToConfig}
+              onAutomationStart={handleAutomationStart}
+              onLogEntry={appendOperationLog}
             />
           ) : view === "enhancement" && featureToggles.servantEnhancement ? (
-            <EnhancementPage servants={servants} onBack={handleBackToConfig} />
+            <EnhancementPage
+              servants={servants}
+              onBack={handleBackToConfig}
+              onAutomationStart={handleAutomationStart}
+              onLogEntry={appendOperationLog}
+            />
           ) : view === "debug" && featureToggles.cvDebug ? (
             <DebugPage
               onBack={handleBackToConfig}
@@ -351,6 +407,9 @@ function App({ theme, onThemeChange }: AppProps) {
         onOpenDebug={featureToggles.cvDebug ? handleOpenDebug : undefined}
         theme={theme}
         onThemeChange={onThemeChange}
+        operationLogs={operationLogs}
+        operationLogOpen={operationLogOpen}
+        onOperationLogOpenChange={setOperationLogOpen}
       />
     </Flex>
   );
