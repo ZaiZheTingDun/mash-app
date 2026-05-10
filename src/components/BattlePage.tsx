@@ -13,8 +13,8 @@ import { ChevronLeftIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons";
 import { ProjectBar } from "./ProjectBar";
 import goldFruitImage from "../../src-tauri/resources/images/item_fruit_golden.png";
 import silverFruitImage from "../../src-tauri/resources/images/item_fruit_silver.png";
-import bronzeFruitImage from "../../src-tauri/resources/images/item_fruit_bronze.png";
-import copperFruitImage from "../../src-tauri/resources/images/item_fruit_bronzed_cobalt.png";
+import bronzeFruitImage from "../../src-tauri/resources/images/item_fruit_bronzed_cobalt.png";
+import copperFruitImage from "../../src-tauri/resources/images/item_fruit_bronze.png";
 import saintQuartzImage from "../../src-tauri/resources/images/item_saint_quartz.png";
 import type {
   BattleApRecoveryItem,
@@ -31,42 +31,36 @@ interface AutomationEvent {
 const AP_RECOVERY_OPTIONS: {
   value: BattleApRecoveryItem;
   label: string;
-  itemLabel: string;
   recoveryLabel: string;
   imageSrc: string;
 }[] = [
     {
       value: "gold",
-      label: "黄金",
-      itemLabel: "使用黄金苹果",
+      label: "黄金果实",
       recoveryLabel: "+100% 行动力",
       imageSrc: goldFruitImage,
     },
     {
       value: "silver",
-      label: "白银",
-      itemLabel: "使用白银苹果",
+      label: "白银果实",
       recoveryLabel: "+50% 行动力",
       imageSrc: silverFruitImage,
     },
     {
       value: "bronze",
-      label: "青铜",
-      itemLabel: "使用青铜苹果",
+      label: "青铜果实",
       recoveryLabel: "+40 行动力",
       imageSrc: bronzeFruitImage,
     },
     {
       value: "copper",
-      label: "黄铜",
-      itemLabel: "使用黄铜苹果",
+      label: "赤铜果实",
       recoveryLabel: "+10 行动力",
       imageSrc: copperFruitImage,
     },
     {
       value: "rainbow",
       label: "圣晶石",
-      itemLabel: "使用圣晶石",
       recoveryLabel: "+100% 行动力",
       imageSrc: saintQuartzImage,
     },
