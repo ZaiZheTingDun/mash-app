@@ -18,6 +18,15 @@ export interface ProjectSlot {
   craftEssenceId?: number | null;
 }
 
+export type BattleRepeatMode = "single" | "infinite" | "count";
+
+export type BattleApRecoveryItem =
+  | "gold"
+  | "silver"
+  | "bronze"
+  | "copper"
+  | "rainbow";
+
 export interface Project {
   id: string;
   name: string;
@@ -43,4 +52,7 @@ export interface Project {
    * `false`.
    */
   repeatMission?: boolean;
+  repeatMode?: BattleRepeatMode | null;
+  repeatCount?: number | null;
+  apRecoveryItems?: BattleApRecoveryItem[];
 }

@@ -134,6 +134,9 @@ function createProject(name: string): Project {
     supportServantId: null,
     supportServantVariantKey: null,
     repeatMission: false,
+    repeatMode: "single",
+    repeatCount: null,
+    apRecoveryItems: [],
     slots: createInitialProjectSlots(),
   };
 }

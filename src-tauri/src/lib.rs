@@ -22,7 +22,7 @@ use enhancement_runner::{
     server_supported as enhancement_server_supported, EnhancementConfig, EnhancementRunner,
     EnhancementRunnerHandle, EnhancementRunnerState, EnhancementTarget,
 };
-use runner::{RunConfig, RunnerHandle, RunnerState};
+use runner::{ApRecoveryItem, RunConfig, RunnerHandle, RunnerState};
 
 // ---------------------------------------------------------------------------
 // Server selection (global app setting). Drives which template/config bundle
@@ -213,6 +213,20 @@ fn default_project_slots() -> Vec<ProjectSlot> {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+pub enum ProjectRepeatMode {
+    Single,
+    Infinite,
+    Count,
+}
+
+impl Default for ProjectRepeatMode {
+    fn default() -> Self {
+        Self::Single
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Project {
     pub id: String,
     pub name: String,
@@ -237,6 +251,16 @@ pub struct Project {
     /// rows (no field) defaulting to `false` = single-run behaviour.
     #[serde(default)]
     pub repeat_mission: bool,
+    /// Three-way repeat selector persisted for the start page. `None`
+    /// indicates a legacy row and is normalized from `repeat_mission`.
+    #[serde(default)]
+    pub repeat_mode: Option<ProjectRepeatMode>,
+    /// Persisted run count used when `repeat_mode == Count`.
+    #[serde(default)]
+    pub repeat_count: Option<u32>,
+    /// Persisted AP recovery items in UI priority order.
+    #[serde(default)]
+    pub ap_recovery_items: Vec<ApRecoveryItem>,
 }
 
 pub(crate) fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
@@ -279,7 +303,27 @@ fn read_projects(app: &tauri::AppHandle) -> Vec<Project> {
     fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
+        .map(|projects: Vec<Project>| {
+            projects
+                .into_iter()
+                .map(normalize_project)
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default()
+}
+
+fn normalize_project(mut project: Project) -> Project {
+    let repeat_mode = match project.repeat_mode {
+        Some(mode) => mode,
+        None if project.repeat_mission => ProjectRepeatMode::Infinite,
+        None => ProjectRepeatMode::Single,
+    };
+    project.repeat_mission = !matches!(repeat_mode, ProjectRepeatMode::Single);
+    project.repeat_mode = Some(repeat_mode);
+    if !matches!(project.repeat_mode, Some(ProjectRepeatMode::Count)) {
+        project.repeat_count = None;
+    }
+    project
 }
 
 fn write_projects(app: &tauri::AppHandle, projects: &[Project]) -> Result<(), String> {
@@ -302,6 +346,9 @@ fn create_project(app: tauri::AppHandle, name: String) -> Result<Project, String
         support_servant_variant_key: None,
         slots: default_project_slots(),
         repeat_mission: false,
+        repeat_mode: Some(ProjectRepeatMode::Single),
+        repeat_count: None,
+        ap_recovery_items: Vec::new(),
     };
     let mut projects = read_projects(&app);
     projects.push(project.clone());
@@ -362,12 +409,12 @@ fn duplicate_project(
 #[tauri::command]
 fn update_project(app: tauri::AppHandle, project: Project) -> Result<Project, String> {
     let mut projects = read_projects(&app);
-    let Some(slot) = projects.iter_mut().find(|p| p.id == project.id) else {
+    let Some(index) = projects.iter().position(|item| item.id == project.id) else {
         return Err(format!("project not found: {}", project.id));
     };
-    *slot = project.clone();
+    projects[index] = normalize_project(project);
     write_projects(&app, &projects)?;
-    Ok(project)
+    Ok(projects[index].clone())
 }
 
 #[tauri::command]
@@ -2555,6 +2602,31 @@ mod tests {
         assert_eq!(project.slots.len(), 6);
         assert!(project.support_servant_id.is_none());
         assert_eq!(project.repeat_mission, false);
+        assert!(project.repeat_mode.is_none());
+        assert!(project.repeat_count.is_none());
+        assert!(project.ap_recovery_items.is_empty());
+    }
+
+    #[test]
+    fn normalize_project_migrates_legacy_repeat_flag_to_infinite_mode() {
+        let project = normalize_project(Project {
+            id: "abc".into(),
+            name: "Legacy".into(),
+            support_servant_id: None,
+            support_servant_variant_key: None,
+            slots: default_project_slots(),
+            repeat_mission: true,
+            repeat_mode: None,
+            repeat_count: Some(9),
+            ap_recovery_items: Vec::new(),
+        });
+
+        assert_eq!(project.repeat_mission, true);
+        assert!(matches!(
+            project.repeat_mode,
+            Some(ProjectRepeatMode::Infinite)
+        ));
+        assert_eq!(project.repeat_count, None);
     }
 
     #[test]

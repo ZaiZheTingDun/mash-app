@@ -595,7 +595,7 @@ fn ap_recovery_template(item: ApRecoveryItem) -> ApRecoveryTemplate {
         ApRecoveryItem::Rainbow => ApRecoveryTemplate {
             item,
             page: ApRecoveryPage::Top,
-            label: "彩苹果",
+            label: "圣晶石",
             template_key: "items/item_saint_quartz",
         },
         ApRecoveryItem::Gold => ApRecoveryTemplate {
@@ -630,11 +630,11 @@ fn ap_recovery_candidates_for_page(
     page: ApRecoveryPage,
 ) -> Vec<ApRecoveryTemplate> {
     [
-        ApRecoveryItem::Rainbow,
         ApRecoveryItem::Gold,
         ApRecoveryItem::Silver,
         ApRecoveryItem::Bronze,
         ApRecoveryItem::Copper,
+        ApRecoveryItem::Rainbow,
     ]
     .into_iter()
     .filter(|item| configured.contains(item))
@@ -2654,7 +2654,7 @@ mod tests {
             ApRecoveryTemplate {
                 item: ApRecoveryItem::Rainbow,
                 page: ApRecoveryPage::Top,
-                label: "彩苹果",
+                label: "圣晶石",
                 template_key: "items/item_saint_quartz",
             }
         );
@@ -2692,9 +2692,9 @@ mod tests {
         assert_eq!(
             top.iter().map(|item| item.item).collect::<Vec<_>>(),
             vec![
-                ApRecoveryItem::Rainbow,
                 ApRecoveryItem::Gold,
                 ApRecoveryItem::Silver,
+                ApRecoveryItem::Rainbow,
             ]
         );
 
