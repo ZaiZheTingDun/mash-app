@@ -134,11 +134,18 @@ poetry run pytest -v
 `versions.toml`. Set `MASH_CV_RUNTIME_VERSION` or `MASH_CV_CODE_VERSION` only
 when you need a one-off override.
 
-The build script creates two artifacts:
+By default, the build script creates two artifacts:
 
 ```text
 dist/mash-cv-runtime-<platform>-v<runtimeVersion>.zip
 dist/mash-cv-code-v<codeVersion>.zip
+```
+
+You can build either side independently:
+
+```bash
+./build_sidecar.sh --runtime-only
+./build_sidecar.sh --code-only
 ```
 
 The runtime zip contains the PyInstaller `--onedir` launcher, native
@@ -153,13 +160,17 @@ app_data_dir()/runtime/mash-cv/runtime/<runtimeVersion>/mash-cv-runtime/
 app_data_dir()/runtime/mash-cv/code/<codeVersion>/mash-cv-code/
 ```
 
-After the script prints the artifact SHA-256 values, upload both zips to the
-release host/CDN and update `src-tauri/resources/runtime-manifest.json` with:
+After the script prints the artifact SHA-256 values, upload the changed zip to
+the release host/CDN and update `src-tauri/resources/runtime-manifest.json` with:
 
 - `mashCvRuntimeVersion`
 - `mashCvCodeVersion`
 - each platform's `runtimeUrl` / `runtimeSha256`
 - each platform's `codeUrl` / `codeSha256`
+
+If only Python code changed, run `./build_sidecar.sh --code-only`, bump only
+`mashCvCodeVersion`, and update only each platform's `codeUrl` / `codeSha256`.
+Keep the existing runtime version, URL, and SHA unchanged.
 
 The script no longer copies the sidecar into `src-tauri/binaries/`; `mash-cv`
 is distributed independently so normal Tauri app updates do not force users to
