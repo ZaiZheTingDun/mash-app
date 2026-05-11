@@ -1273,6 +1273,7 @@ impl SidecarClient {
     /// frame will measure, not the raw display size.
     pub fn start_stream(
         &mut self,
+        adb_path: &Path,
         jar_path: &Path,
         serial: Option<&str>,
         max_size: u32,
@@ -1280,6 +1281,7 @@ impl SidecarClient {
     ) -> Result<(u32, u32), String> {
         let mut req = serde_json::json!({
             "cmd": "start_stream",
+            "adbPath": adb_path.to_string_lossy(),
             "jarPath": jar_path.to_string_lossy(),
             "maxSize": max_size,
             "bitRate": bit_rate,

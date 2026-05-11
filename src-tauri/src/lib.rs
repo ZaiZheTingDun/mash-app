@@ -1239,16 +1239,17 @@ fn set_server(
 }
 
 #[tauri::command]
-fn check_adb(state: tauri::State<'_, Mutex<bool>>) -> AdbStatus {
+fn check_adb(app: tauri::AppHandle, state: tauri::State<'_, Mutex<bool>>) -> AdbStatus {
     let use_bluestack = *state.lock().unwrap();
+    let adb_path = adb::resolve_adb_path(&app);
     if use_bluestack {
-        std::process::Command::new("adb")
+        std::process::Command::new(&adb_path)
             .args(["connect", "127.0.0.1:5555"])
             .output()
             .ok();
     }
 
-    let device_name = std::process::Command::new("adb")
+    let device_name = std::process::Command::new(&adb_path)
         .arg("devices")
         .output()
         .ok()
@@ -1329,7 +1330,7 @@ fn start_automation(
     let use_bluestack = *bluestack_state.lock().unwrap();
     let server = *server_state.lock().unwrap();
 
-    let mut adb_dev = adb::Adb::new(use_bluestack);
+    let mut adb_dev = adb::Adb::new(&app, use_bluestack);
     adb_dev.connect()?;
     let serial = adb_dev.serial().map(|s| s.to_string());
 
@@ -1343,6 +1344,7 @@ fn start_automation(
 
     let (w, h) = sidecar
         .start_stream(
+            adb_dev.path(),
             &jar_path,
             serial.as_deref(),
             STREAM_MAX_SIZE,
@@ -1451,7 +1453,7 @@ fn start_enhancement_automation(
         return Err("目标从者 id 与 variantKey 不匹配".into());
     }
 
-    let mut adb_dev = adb::Adb::new(use_bluestack);
+    let mut adb_dev = adb::Adb::new(&app, use_bluestack);
     adb_dev.connect()?;
     let serial = adb_dev.serial().map(|s| s.to_string());
 
@@ -1464,6 +1466,7 @@ fn start_enhancement_automation(
     let mut sidecar = take_or_spawn_sidecar(&app, &debug_state, server)?;
     let (w, h) = sidecar
         .start_stream(
+            adb_dev.path(),
             &jar_path,
             serial.as_deref(),
             STREAM_MAX_SIZE,

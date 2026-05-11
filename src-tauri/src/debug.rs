@@ -115,7 +115,8 @@ fn ensure_debug_stream(
         serial.unwrap_or("<auto>"),
         jar.display()
     );
-    let (w, h) = client.start_stream(&jar, serial, STREAM_MAX_SIZE, STREAM_BIT_RATE)?;
+    let adb_path = adb::resolve_adb_path(app);
+    let (w, h) = client.start_stream(&adb_path, &jar, serial, STREAM_MAX_SIZE, STREAM_BIT_RATE)?;
     eprintln!("[debug] scrcpy stream started: {w}x{h}");
     Ok(())
 }
@@ -248,7 +249,7 @@ pub fn debug_capture(
     let server = current_server(&server_state);
     eprintln!("[debug_capture] begin (use_bluestack={use_bluestack}, server={server})");
 
-    let mut adb_dev = adb::Adb::new(use_bluestack);
+    let mut adb_dev = adb::Adb::new(&app, use_bluestack);
     adb_dev.connect().map_err(|e| {
         eprintln!("[debug_capture] adb connect failed: {e}");
         e

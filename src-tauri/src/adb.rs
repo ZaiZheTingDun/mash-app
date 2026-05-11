@@ -1,14 +1,49 @@
 use std::path::PathBuf;
 use std::process::Command;
+use tauri::Manager;
 
 pub struct Adb {
+    adb_path: PathBuf,
     device: Option<String>,
     use_bluestack: bool,
 }
 
+#[cfg(windows)]
+fn adb_executable_name() -> &'static str {
+    "adb.exe"
+}
+
+#[cfg(not(windows))]
+fn adb_executable_name() -> &'static str {
+    "adb"
+}
+
+fn bundled_adb_candidates(resource_dir: PathBuf) -> [PathBuf; 2] {
+    [
+        resource_dir.join("adb").join(adb_executable_name()),
+        resource_dir
+            .join("resources")
+            .join("adb")
+            .join(adb_executable_name()),
+    ]
+}
+
+pub(crate) fn resolve_adb_path(app: &tauri::AppHandle) -> PathBuf {
+    app.path()
+        .resource_dir()
+        .ok()
+        .and_then(|dir| {
+            bundled_adb_candidates(dir)
+                .into_iter()
+                .find(|path| path.is_file())
+        })
+        .unwrap_or_else(|| PathBuf::from(adb_executable_name()))
+}
+
 impl Adb {
-    pub fn new(use_bluestack: bool) -> Self {
+    pub fn new(app: &tauri::AppHandle, use_bluestack: bool) -> Self {
         Self {
+            adb_path: resolve_adb_path(app),
             device: None,
             use_bluestack,
         }
@@ -17,6 +52,10 @@ impl Adb {
     /// Serial of the connected device (populated after `connect`).
     pub fn serial(&self) -> Option<&str> {
         self.device.as_deref()
+    }
+
+    pub fn path(&self) -> &std::path::Path {
+        &self.adb_path
     }
 
     fn base_args(&self) -> Vec<String> {
@@ -55,13 +94,13 @@ impl Adb {
     /// Detect and connect to a device. Must be called before other operations.
     pub fn connect(&mut self) -> Result<(), String> {
         if self.use_bluestack {
-            Command::new("adb")
+            Command::new(&self.adb_path)
                 .args(["connect", "127.0.0.1:5555"])
                 .output()
                 .ok();
         }
 
-        let output = Command::new("adb")
+        let output = Command::new(&self.adb_path)
             .arg("devices")
             .output()
             .map_err(|e| format!("failed to run adb: {e}"))?;
@@ -81,7 +120,7 @@ impl Adb {
     pub fn screen_size(&self) -> Option<(u32, u32)> {
         let mut args = self.base_args();
         args.extend(["shell".into(), "wm".into(), "size".into()]);
-        let output = Command::new("adb").args(&args).output().ok()?;
+        let output = Command::new(&self.adb_path).args(&args).output().ok()?;
         if !output.status.success() {
             return None;
         }
@@ -107,7 +146,7 @@ impl Adb {
         let mut args = self.base_args();
         args.extend(["exec-out".into(), "screencap".into(), "-p".into()]);
 
-        let output = Command::new("adb")
+        let output = Command::new(&self.adb_path)
             .args(&args)
             .output()
             .map_err(|e| format!("adb screencap failed: {e}"))?;
@@ -147,7 +186,7 @@ impl Adb {
             y.to_string(),
         ]);
 
-        let output = Command::new("adb")
+        let output = Command::new(&self.adb_path)
             .args(&args)
             .output()
             .map_err(|e| format!("adb tap failed: {e}"))?;
@@ -171,7 +210,7 @@ impl Adb {
             duration_ms.to_string(),
         ]);
 
-        let output = Command::new("adb")
+        let output = Command::new(&self.adb_path)
             .args(&args)
             .output()
             .map_err(|e| format!("adb swipe failed: {e}"))?;
@@ -180,5 +219,23 @@ impl Adb {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_adb_candidates_cover_dev_and_bundle_resource_layouts() {
+        let base = PathBuf::from("/app/resources");
+        assert_eq!(
+            bundled_adb_candidates(base.clone())[0],
+            base.join("adb/adb")
+        );
+        assert_eq!(
+            bundled_adb_candidates(base.clone())[1],
+            base.join("resources/adb/adb")
+        );
     }
 }

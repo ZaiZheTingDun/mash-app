@@ -53,6 +53,7 @@
       "resources/servers/cn/cv.json",
       "resources/servers/cn/templates/*",
       "resources/servers/cn/templates/items/*",
+      "resources/adb/*",
       "resources/scrcpy/scrcpy-server.jar",
       "resources/runtime-manifest.json"
     ]
