@@ -41,8 +41,12 @@ KEY_FRAME_FLAG = 1 << 62
 PTS_MASK = (1 << 62) - 1
 
 
-def _adb_base(serial: Optional[str]) -> list[str]:
-    return ["adb", "-s", serial] if serial else ["adb"]
+def _adb_base(adb_path: str, serial: Optional[str]) -> list[str]:
+    return [adb_path, "-s", serial] if serial else [adb_path]
+
+
+def _is_tcp_serial(serial: Optional[str]) -> bool:
+    return bool(serial and ":" in serial)
 
 
 def _clean_env() -> dict[str, str]:
@@ -74,6 +78,13 @@ def _run_adb(args: list[str], check: bool = True) -> subprocess.CompletedProcess
     return proc
 
 
+def _ensure_tcp_connected(adb_path: str, serial: Optional[str]) -> None:
+    if not _is_tcp_serial(serial):
+        return
+    _run_adb([adb_path, "connect", serial], check=False)
+    time.sleep(0.2)
+
+
 def _alloc_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
@@ -86,10 +97,12 @@ class ScrcpyStream:
     def __init__(
         self,
         jar_path: str,
+        adb_path: str = "adb",
         serial: Optional[str] = None,
         max_size: int = 0,
         bit_rate: int = 8_000_000,
     ) -> None:
+        self.adb_path = adb_path
         self.jar_path = jar_path
         self.serial = serial
         self.max_size = max_size
@@ -119,6 +132,7 @@ class ScrcpyStream:
 
         Returns the (width, height) reported by the device.
         """
+        _ensure_tcp_connected(self.adb_path, self.serial)
         self._push_jar()
         self.port = _alloc_free_port()
         self._adb_forward_add()
@@ -172,7 +186,8 @@ class ScrcpyStream:
 
         if self.port is not None:
             _run_adb(
-                _adb_base(self.serial) + ["forward", "--remove", f"tcp:{self.port}"],
+                _adb_base(self.adb_path, self.serial)
+                + ["forward", "--remove", f"tcp:{self.port}"],
                 check=False,
             )
             self.port = None
@@ -223,21 +238,31 @@ class ScrcpyStream:
 
     # -- internal ------------------------------------------------------------
 
+    def _run_adb(self, args: list[str], check: bool = True) -> subprocess.CompletedProcess:
+        try:
+            return _run_adb(args, check=check)
+        except RuntimeError as exc:
+            if _is_tcp_serial(self.serial) and "connect failed" in str(exc):
+                _ensure_tcp_connected(self.adb_path, self.serial)
+                return _run_adb(args, check=check)
+            raise
+
     def _push_jar(self) -> None:
-        _run_adb(
-            _adb_base(self.serial)
+        self._run_adb(
+            _adb_base(self.adb_path, self.serial)
             + ["push", self.jar_path, "/data/local/tmp/scrcpy-server.jar"]
         )
 
     def _adb_forward_add(self) -> None:
-        _run_adb(
-            _adb_base(self.serial)
+        self._run_adb(
+            _adb_base(self.adb_path, self.serial)
             + ["forward", f"tcp:{self.port}", f"localabstract:{self.socket_name}"]
         )
 
     def _spawn_server(self) -> None:
         env = _clean_env()
-        cmd = _adb_base(self.serial) + [
+        _ensure_tcp_connected(self.adb_path, self.serial)
+        cmd = _adb_base(self.adb_path, self.serial) + [
             "shell",
             "CLASSPATH=/data/local/tmp/scrcpy-server.jar",
             "app_process",

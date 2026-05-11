@@ -13,7 +13,7 @@ Lifecycle / streaming:
 → {"cmd":"load_templates","dir":"..."}              ← {"ok":true,"count":3}
 → {"cmd":"load_config","path":"..."}                ← {"ok":true,"screens":4}
 → {"cmd":"set_server","server":"JP"|"CN"}           ← {"ok":true,"server":"CN","ocrReset":true}
-→ {"cmd":"start_stream","jarPath":"...","serial":"...","maxSize":0,"bitRate":8000000}
+→ {"cmd":"start_stream","adbPath":"...","jarPath":"...","serial":"...","maxSize":0,"bitRate":8000000}
                                                     ← {"ok":true,"width":1080,"height":1920}
 → {"cmd":"stop_stream"}                             ← {"ok":true,"running":false}
 → {"cmd":"get_frame","quality":85,"waitSeconds":10} ← {"ok":true,"jpegB64":"...","width":w,"height":h}
@@ -2442,6 +2442,8 @@ def _start_stream(cmd: dict) -> dict:
     if not os.path.exists(jar_path):
         return {"ok": False, "error": f"jar not found: {jar_path}"}
 
+    adb_path = cmd.get("adbPath") or "adb"
+
     if stream is not None:
         try:
             stream.stop()
@@ -2459,6 +2461,7 @@ def _start_stream(cmd: dict) -> dict:
     bit_rate = int(cmd.get("bitRate", 8_000_000))
 
     new_stream = ScrcpyStream(
+        adb_path=adb_path,
         jar_path=jar_path,
         serial=serial,
         max_size=max_size,
