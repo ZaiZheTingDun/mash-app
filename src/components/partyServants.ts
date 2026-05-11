@@ -55,9 +55,18 @@ export function derivePartyLineup(
 }
 
 function parseServantPosition(value: string | null | undefined): number | null {
-  const match = value?.match(/^servant_([1-3])(?:_|$)/);
+  const match = value?.match(/^servant_([1-6])(?:_|$)/);
   if (!match) return null;
   return Number(match[1]) - 1;
+}
+
+function compactBackline(lineup: (Servant | null)[]) {
+  const backline = lineup.slice(3).filter((servant): servant is Servant =>
+    Boolean(servant)
+  );
+  for (let i = 3; i < lineup.length; i += 1) {
+    lineup[i] = backline[i - 3] ?? null;
+  }
 }
 
 function removeAt(lineup: (Servant | null)[], index: number) {
@@ -65,15 +74,18 @@ function removeAt(lineup: (Servant | null)[], index: number) {
   const replacementIndex = lineup.findIndex((servant, i) => i >= 3 && servant);
   lineup[index] = replacementIndex === -1 ? null : lineup[replacementIndex];
   if (replacementIndex !== -1) lineup[replacementIndex] = null;
+  compactBackline(lineup);
 }
 
 function withdrawToBack(lineup: (Servant | null)[], index: number) {
   if (index < 0 || index >= 3) return;
   const servant = lineup[index];
   if (!servant) return;
+  compactBackline(lineup);
   const replacementIndex = lineup.findIndex((candidate, i) => i >= 3 && candidate);
-  lineup[index] = replacementIndex === -1 ? null : lineup[replacementIndex];
-  if (replacementIndex !== -1) lineup[replacementIndex] = servant;
+  if (replacementIndex === -1) return;
+  lineup[index] = lineup[replacementIndex];
+  lineup[replacementIndex] = servant;
 }
 
 function applyRule(
@@ -99,14 +111,35 @@ export function deriveScenePartyServants(
   initialLineup: (Servant | null)[],
   scenes: BattleScene[]
 ): (Servant | null)[][] {
+  return deriveScenePartyLineups(initialLineup, scenes).map((lineup) =>
+    lineup.slice(0, 3)
+  );
+}
+
+export function deriveScenePartyLineups(
+  initialLineup: (Servant | null)[],
+  scenes: BattleScene[]
+): (Servant | null)[][] {
   const lineup = [...initialLineup];
-  const sceneParties: (Servant | null)[][] = [];
+  const sceneLineups: (Servant | null)[][] = [];
   const npUseCounts = new Map<number, number>();
 
   for (const scene of scenes) {
-    sceneParties.push(lineup.slice(0, 3));
+    sceneLineups.push([...lineup]);
 
     for (const action of scene.preparationActions ?? scene.servantActions) {
+      if (action.type === "equipment" && action.orderChange) {
+        const frontIndex = parseServantPosition(action.orderChange.front);
+        const backIndex = parseServantPosition(action.orderChange.back);
+        if (frontIndex != null && backIndex != null && frontIndex < 3 && backIndex >= 3) {
+          [lineup[frontIndex], lineup[backIndex]] = [
+            lineup[backIndex] ?? null,
+            lineup[frontIndex] ?? null,
+          ];
+        }
+        continue;
+      }
+
       if (action.type !== "servant") continue;
       const sourceIndex = parseServantPosition(action.servant);
       if (sourceIndex == null || !action.skill) continue;
@@ -140,5 +173,5 @@ export function deriveScenePartyServants(
     }
   }
 
-  return sceneParties;
+  return sceneLineups;
 }

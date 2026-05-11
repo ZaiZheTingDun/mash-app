@@ -34,6 +34,9 @@ const PARTY: (Servant | null)[] = [
   makeServant(1, "甲"),
   makeServant(2, "乙"),
   makeServant(3, "丙"),
+  makeServant(4, "丁"),
+  makeServant(5, "戊"),
+  makeServant(6, "己"),
 ];
 
 describe("BattleSceneBlock staged action editor", () => {
@@ -74,6 +77,59 @@ describe("BattleSceneBlock staged action editor", () => {
       target: "servant_2",
     });
     expect(next.servantActions).toEqual([]);
+  });
+
+  it("adds an equipment Order Change action from one front slot and one back slot", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithTheme(
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: /御主/ }));
+    await user.click(screen.getByRole("button", { name: "技能 2" }));
+    await user.click(screen.getByRole("button", { name: "Order Change" }));
+
+    expect(screen.getByRole("button", { name: "丁" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "乙" }));
+    await user.click(screen.getByRole("button", { name: "戊" }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const next = onChange.mock.calls[0][0] as BattleScene;
+    expect(next.preparationActions[0]).toMatchObject({
+      type: "equipment",
+      skill: "skill_2",
+      target: null,
+      orderChange: {
+        front: "servant_2",
+        back: "servant_5",
+      },
+    });
+  });
+
+  it("does not allow empty Order Change back slots to be selected", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene()}
+        partyServants={[PARTY[0], PARTY[1], PARTY[2], PARTY[3], null, null]}
+        onChange={onChange}
+      />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: /御主/ }));
+    await user.click(screen.getByRole("button", { name: "技能 2" }));
+    await user.click(screen.getByRole("button", { name: "Order Change" }));
+    await user.click(screen.getByRole("button", { name: "甲" }));
+
+    expect(screen.getByRole("button", { name: "从者 5" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "从者 5" }));
+
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("appends an attack priority row from servant and card choice", async () => {
@@ -148,6 +204,40 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(children[2]).toHaveClass("battle-action-to");
     expect(children[3]).toHaveClass("battle-inline-face");
     expect(children[4]).toHaveTextContent("乙");
+  });
+
+  it("renders Order Change actions with both servant faces", () => {
+    const { container } = renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          preparationActions: [
+            {
+              type: "equipment",
+              id: "eq_1",
+              skill: "skill_3",
+              target: null,
+              orderChange: {
+                front: "servant_1",
+                back: "servant_4",
+              },
+            },
+          ],
+        })}
+        partyServants={PARTY}
+        onChange={vi.fn()}
+      />
+    );
+
+    const summary = container.querySelector(".battle-action-summary");
+    const children = Array.from(summary?.children ?? []);
+    expect(children[0]).toHaveClass("battle-inline-square");
+    expect(children[1]).toHaveTextContent("御主礼装 释放 技能 3");
+    expect(children[2]).toHaveTextContent("Order Change");
+    expect(children[3]).toHaveClass("battle-inline-face");
+    expect(children[4]).toHaveTextContent("甲");
+    expect(children[5]).toHaveTextContent("↔");
+    expect(children[6]).toHaveClass("battle-inline-face");
+    expect(children[7]).toHaveTextContent("丁");
   });
 
   it("cancels an in-progress preparation action from the left-side delete control", async () => {

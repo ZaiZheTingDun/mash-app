@@ -217,6 +217,19 @@ const COMMAND_SPELL_OPTIONS: [Point; 2] = [Point::new(0.500, 0.460), Point::new(
 /// always confirms.
 const COMMAND_SPELL_CONFIRM: Point = Point::new(0.660, 0.600);
 
+/// In-battle Order Change servant slots, left to right on the change screen.
+/// Front-line slots are indices 0-2, back-line slots are 3-5.
+const ORDER_CHANGE_SLOTS: [Point; 6] = [
+    Point::new(0.107, 0.486),
+    Point::new(0.264, 0.486),
+    Point::new(0.420, 0.486),
+    Point::new(0.576, 0.486),
+    Point::new(0.732, 0.486),
+    Point::new(0.888, 0.486),
+];
+
+const ORDER_CHANGE_CONFIRM: Point = Point::new(0.500, 0.872);
+
 /// Settle time between taps in the Command Spell dialog stack. Each tap
 /// pops or pushes a full-screen modal (open dialog → confirmation →
 /// target picker), so we wait noticeably longer than `ACTION_DELAY`
@@ -777,6 +790,10 @@ const SKILL_POLL_INTERVAL: Duration = Duration::from_millis(300);
 /// to cover NP-length animations without hanging forever if something
 /// genuinely went wrong.
 const SKILL_WAIT_TIMEOUT: Duration = Duration::from_secs(45);
+/// Order Change opens as a semi-transparent overlay over Battle. The
+/// classifier often keeps returning `Battle`, so the runner waits for the
+/// overlay animation to settle and then taps the known panel coordinates.
+const ORDER_CHANGE_PANEL_SETTLE: Duration = Duration::from_millis(900);
 
 /// Maximum per-axis jitter (in physical pixels) added to every tap so
 /// repeated runs don't land on identical coordinates. Small enough to
@@ -2138,7 +2155,12 @@ impl Runner {
                         return;
                     }
                 }
-                Action::Equipment { skill, target, .. } => {
+                Action::Equipment {
+                    skill,
+                    target,
+                    order_change,
+                    ..
+                } => {
                     let Some(pos) = equipment_skill_position(skill.as_deref()) else {
                         continue;
                     };
@@ -2158,7 +2180,15 @@ impl Runner {
                     }
                     thread::sleep(ACTION_DELAY);
 
-                    if let Some(target_pos) = skill_target_position(target.as_deref()) {
+                    if let Some(change) = order_change {
+                        self.emit(
+                            "Battle",
+                            &format!("打开 Order Change: {}", skill.as_deref().unwrap_or("?")),
+                        );
+                        if !self.execute_order_change(change) {
+                            return;
+                        }
+                    } else if let Some(target_pos) = skill_target_position(target.as_deref()) {
                         self.emit(
                             "Battle",
                             &format!("选择目标: {}", target.as_deref().unwrap_or("?")),
@@ -2169,7 +2199,9 @@ impl Runner {
                         thread::sleep(ACTION_DELAY);
                     }
 
-                    self.skip_after_skill();
+                    if order_change.is_none() {
+                        self.skip_after_skill();
+                    }
 
                     if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
                         return;
@@ -2224,6 +2256,55 @@ impl Runner {
                 }
             }
         }
+    }
+
+    fn execute_order_change(&mut self, change: &crate::OrderChangeSelection) -> bool {
+        let Some(front_pos) = order_change_slot_position(change.front.as_deref(), 0..3) else {
+            self.emit(
+                "Battle",
+                &format!(
+                    "Order Change 前排目标无效: {}，跳过",
+                    change.front.as_deref().unwrap_or("?")
+                ),
+            );
+            return true;
+        };
+        let Some(back_pos) = order_change_slot_position(change.back.as_deref(), 3..6) else {
+            self.emit(
+                "Battle",
+                &format!(
+                    "Order Change 后排目标无效: {}，跳过",
+                    change.back.as_deref().unwrap_or("?")
+                ),
+            );
+            return true;
+        };
+
+        thread::sleep(ORDER_CHANGE_PANEL_SETTLE);
+        self.emit(
+            "Battle",
+            &format!(
+                "Order Change 选择从者: {} ↔ {}",
+                change.front.as_deref().unwrap_or("?"),
+                change.back.as_deref().unwrap_or("?")
+            ),
+        );
+        if !self.tap_at("Battle", front_pos) {
+            return false;
+        }
+        thread::sleep(ACTION_DELAY);
+
+        if !self.tap_at("Battle", back_pos) {
+            return false;
+        }
+        thread::sleep(ACTION_DELAY);
+
+        self.emit("Battle", "Order Change 点击进行更替");
+        if !self.tap_at("Battle", ORDER_CHANGE_CONFIRM) {
+            return false;
+        }
+        thread::sleep(ACTION_DELAY);
+        true
     }
 
     /// Tap the in-game "skip animation" button so the cut-in / buff
@@ -2307,6 +2388,18 @@ fn skill_target_position(target: Option<&str>) -> Option<Point> {
     let t = target?;
     let si = parse_index(t, "servant_")?;
     SKILL_TARGETS.get(si).copied()
+}
+
+fn order_change_slot_position(
+    target: Option<&str>,
+    allowed: std::ops::Range<usize>,
+) -> Option<Point> {
+    let t = target?;
+    let si = parse_index(t, "servant_")?;
+    if !allowed.contains(&si) {
+        return None;
+    }
+    ORDER_CHANGE_SLOTS.get(si).copied()
 }
 
 /// Enemy targets (enemy_1, enemy_2, enemy_3). Available for future use.
@@ -2872,6 +2965,24 @@ mod tests {
     }
 
     #[test]
+    fn order_change_slot_position_requires_one_front_and_one_back_range() {
+        let front = order_change_slot_position(Some("servant_1"), 0..3).unwrap();
+        assert_eq!(
+            (front.x, front.y),
+            (ORDER_CHANGE_SLOTS[0].x, ORDER_CHANGE_SLOTS[0].y)
+        );
+
+        let back = order_change_slot_position(Some("servant_4"), 3..6).unwrap();
+        assert_eq!(
+            (back.x, back.y),
+            (ORDER_CHANGE_SLOTS[3].x, ORDER_CHANGE_SLOTS[3].y)
+        );
+
+        assert!(order_change_slot_position(Some("servant_4"), 0..3).is_none());
+        assert!(order_change_slot_position(Some("servant_2"), 3..6).is_none());
+    }
+
+    #[test]
     fn scene_preparation_actions_preserves_configured_row_order() {
         let scene = BattleScene {
             id: "scene_1".into(),
@@ -2880,6 +2991,7 @@ mod tests {
                     id: "eq_1".into(),
                     skill: Some("skill_2".into()),
                     target: None,
+                    order_change: None,
                 },
                 Action::Servant {
                     id: "sa_1".into(),

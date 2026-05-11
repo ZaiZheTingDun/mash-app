@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Flex, IconButton, Text } from "@radix-ui/themes";
 import { invoke } from "../tauri";
 import { BattleSceneBlock } from "./BattleSceneBlock";
-import { deriveScenePartyServants } from "./partyServants";
+import { deriveScenePartyLineups } from "./partyServants";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -61,7 +61,7 @@ export function CommandEditor({ projectId, partyLineup }: CommandEditorProps) {
   );
   const [loaded, setLoaded] = useState(() => !projectId);
   const [activeIndex, setActiveIndex] = useState(0);
-  const scenePartyServants = deriveScenePartyServants(partyLineup, scenes);
+  const scenePartyLineups = deriveScenePartyLineups(partyLineup, scenes);
 
   useEffect(() => {
     if (!projectId) {
@@ -132,7 +132,7 @@ export function CommandEditor({ projectId, partyLineup }: CommandEditorProps) {
 
   if (!loaded) return null;
   const activeScene = scenes[activeIndex] ?? scenes[0] ?? createDefaultScene();
-  const activeParty = scenePartyServants[activeIndex] ?? partyLineup.slice(0, 3);
+  const activeParty = scenePartyLineups[activeIndex] ?? partyLineup;
 
   return (
     <Flex direction="column" className="command-editor">

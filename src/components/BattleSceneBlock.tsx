@@ -7,11 +7,13 @@ import {
   PersonIcon,
   PlusIcon,
 } from "@radix-ui/react-icons";
+import orderChangeIcon from "../../src-tauri/resources/images/icon_order_change.png";
 import type {
   AttackCard,
   BattleScene,
   CommandSpellAction,
   EquipmentAction,
+  OrderChangeSelection,
   PreparationAction,
   ServantAction,
 } from "../types/command";
@@ -25,10 +27,17 @@ interface BattleSceneBlockProps {
 
 type PrepSource = "equipment" | "commandSpell" | `servant_${1 | 2 | 3}`;
 type AttackSource = `servant_${1 | 2 | 3}`;
+type PartySlot = `servant_${1 | 2 | 3 | 4 | 5 | 6}`;
 type PrepDraft =
   | { step: "source" }
   | { step: "option"; source: PrepSource }
-  | { step: "target"; source: PrepSource; option: string };
+  | { step: "target"; source: PrepSource; option: string }
+  | {
+      step: "orderChange";
+      source: "equipment";
+      option: string;
+      front: PartySlot | null;
+    };
 type AttackDraft =
   | { step: "source" }
   | { step: "option"; source: AttackSource };
@@ -76,9 +85,24 @@ function servantLabel(index: number, servant: Servant | null): string {
   return servant?.name_cn || `从者 ${index + 1}`;
 }
 
-function sourceIndex(source: PrepSource | AttackSource): number | null {
-  const match = source.match(/^servant_([1-3])$/);
+function servantSlotIndex(source: string | null | undefined): number | null {
+  const match = source?.match(/^servant_([1-6])$/);
   return match ? Number(match[1]) - 1 : null;
+}
+
+function sourceIndex(source: PrepSource | AttackSource): number | null {
+  const index = servantSlotIndex(source);
+  return index != null && index < 3 ? index : null;
+}
+
+function orderChangeSummary(
+  orderChange: OrderChangeSelection,
+  partyServants: (Servant | null)[]
+): string | null {
+  const frontIndex = servantSlotIndex(orderChange.front);
+  const backIndex = servantSlotIndex(orderChange.back);
+  if (frontIndex == null || backIndex == null) return null;
+  return `${servantLabel(frontIndex, partyServants[frontIndex] ?? null)} ↔ ${servantLabel(backIndex, partyServants[backIndex] ?? null)}`;
 }
 
 function useServantFaces(partyServants: (Servant | null)[]) {
@@ -135,18 +159,23 @@ function ServantFaceButton({
   index,
   faceSrc,
   onClick,
+  disabled = false,
+  selected = false,
 }: {
   servant: Servant | null;
   index: number;
   faceSrc: string | null | undefined;
   onClick: () => void;
+  disabled?: boolean;
+  selected?: boolean;
 }) {
   const label = servantLabel(index, servant);
   return (
     <button
       type="button"
-      className="battle-face-btn"
+      className={`battle-face-btn${selected ? " selected" : ""}`}
       aria-label={label}
+      disabled={disabled}
       onClick={onClick}
     >
       {faceSrc ? (
@@ -188,6 +217,13 @@ function PreparationActionSummary({
   faces: Record<string, string | null>;
 }) {
   const targetIndex = sourceIndex((action.target ?? "") as PrepSource);
+  const orderChangeSlots =
+    action.type === "equipment" && action.orderChange
+      ? {
+          front: servantSlotIndex(action.orderChange.front),
+          back: servantSlotIndex(action.orderChange.back),
+        }
+      : null;
   let sourceFace: React.ReactNode;
   let sourceText: string;
   let actionText: string;
@@ -226,7 +262,37 @@ function PreparationActionSummary({
       <Text size="2" weight="medium" className="battle-action-name">
         {sourceText} {actionText}
       </Text>
-      {targetIndex != null && (
+      {orderChangeSlots?.front != null && orderChangeSlots.back != null ? (
+        <>
+          <span className="battle-action-to">Order Change</span>
+          <ServantInlineFace
+            servant={partyServants[orderChangeSlots.front] ?? null}
+            index={orderChangeSlots.front}
+            faceSrc={
+              partyServants[orderChangeSlots.front]
+                ? faces[partyServants[orderChangeSlots.front]!.variantKey]
+                : null
+            }
+          />
+          <Text size="2" weight="medium" className="battle-action-name">
+            {servantLabel(orderChangeSlots.front, partyServants[orderChangeSlots.front] ?? null)}
+          </Text>
+          <span className="battle-action-to">↔</span>
+          <ServantInlineFace
+            servant={partyServants[orderChangeSlots.back] ?? null}
+            index={orderChangeSlots.back}
+            faceSrc={
+              partyServants[orderChangeSlots.back]
+                ? faces[partyServants[orderChangeSlots.back]!.variantKey]
+                : null
+            }
+          />
+          <Text size="2" weight="medium" className="battle-action-name">
+            {servantLabel(orderChangeSlots.back, partyServants[orderChangeSlots.back] ?? null)}
+          </Text>
+        </>
+      ) : (
+        targetIndex != null && (
         <>
           <span className="battle-action-to">to</span>
           <ServantInlineFace
@@ -242,6 +308,7 @@ function PreparationActionSummary({
             {servantLabel(targetIndex, partyServants[targetIndex] ?? null)}
           </Text>
         </>
+        )
       )}
     </span>
   );
@@ -316,6 +383,12 @@ function actionSummary(
   }
 
   if (action.type === "equipment") {
+    if (action.orderChange) {
+      const summary = orderChangeSummary(action.orderChange, partyServants);
+      return summary
+        ? `御主礼装 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"} Order Change ${summary}`
+        : `御主礼装 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"} Order Change`;
+    }
     const target = sourceIndex((action.target ?? "") as PrepSource);
     return target == null
       ? `御主礼装 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`
@@ -368,6 +441,7 @@ export function BattleSceneBlock({
         id: createId("eq"),
         skill: draft.option,
         target,
+        orderChange: null,
       } satisfies EquipmentAction;
     } else if (draft.source === "commandSpell") {
       action = {
@@ -385,6 +459,25 @@ export function BattleSceneBlock({
         target,
       } satisfies ServantAction;
     }
+    updatePreparationActions([...preparationActions, action]);
+    setPrepDraft(null);
+  };
+
+  const finishOrderChangeAction = (
+    draft: Extract<PrepDraft, { step: "orderChange" }>,
+    back: PartySlot
+  ) => {
+    if (draft.front == null) return;
+    const action = {
+      type: "equipment",
+      id: createId("eq"),
+      skill: draft.option,
+      target: null,
+      orderChange: {
+        front: draft.front,
+        back,
+      },
+    } satisfies EquipmentAction;
     updatePreparationActions([...preparationActions, action]);
     setPrepDraft(null);
   };
@@ -542,7 +635,7 @@ export function BattleSceneBlock({
                       ))}
                 </div>
               </div>
-            ) : (
+            ) : prepDraft.step === "target" ? (
               <div className="battle-choice-row">
                 <button
                   type="button"
@@ -560,6 +653,55 @@ export function BattleSceneBlock({
                     onClick={() => finishPrepAction(prepDraft, `servant_${index + 1}`)}
                   />
                 ))}
+                {prepDraft.source === "equipment" && (
+                  <>
+                    <span className="battle-choice-separator" aria-hidden />
+                    <button
+                      type="button"
+                      className="battle-option-btn order-change"
+                      aria-label="Order Change"
+                      onClick={() =>
+                        setPrepDraft({
+                          step: "orderChange",
+                          source: "equipment",
+                          option: prepDraft.option,
+                          front: null,
+                        })
+                      }
+                    >
+                      <img src={orderChangeIcon} alt="" draggable={false} />
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="battle-choice-row order-change">
+                {Array.from({ length: 6 }, (_, index) => partyServants[index] ?? null).map((servant, index) => {
+                  const slot = `servant_${index + 1}` as PartySlot;
+                  const needsFront = prepDraft.front == null;
+                  const selectable = Boolean(servant) && (needsFront ? index < 3 : index >= 3);
+                  return (
+                    <ServantFaceButton
+                      key={index}
+                      servant={servant}
+                      index={index}
+                      faceSrc={servant ? faces[servant.variantKey] : null}
+                      disabled={!selectable}
+                      selected={prepDraft.front === slot}
+                      onClick={() => {
+                        if (!selectable) return;
+                        if (needsFront) {
+                          setPrepDraft({ ...prepDraft, front: slot });
+                        } else {
+                          finishOrderChangeAction(prepDraft, slot);
+                        }
+                      }}
+                    />
+                  );
+                })}
+                <Text size="2" weight="medium" className="battle-order-change-hint">
+                  {prepDraft.front == null ? "选择前排" : "选择后排"}
+                </Text>
               </div>
             )}
           </div>

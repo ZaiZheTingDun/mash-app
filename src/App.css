@@ -1173,6 +1173,17 @@ body,
   transform: translateY(-1px);
 }
 
+.battle-face-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+  transform: none;
+}
+
+.battle-face-btn.selected {
+  border-color: var(--blue-9);
+  box-shadow: 0 0 0 2px var(--blue-5);
+}
+
 .battle-square-btn.selected {
   border-color: var(--blue-8);
   background: var(--blue-3);
@@ -1190,6 +1201,28 @@ body,
   gap: 10px;
   min-width: 0;
   flex-wrap: wrap;
+}
+
+.battle-option-btn.order-change {
+  width: 52px;
+  min-width: 52px;
+  padding: 0;
+}
+
+.battle-option-btn.order-change img {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+  display: block;
+}
+
+.battle-choice-row.order-change {
+  flex-wrap: wrap;
+}
+
+.battle-order-change-hint {
+  color: var(--gray-11);
+  min-width: 70px;
 }
 
 .scene-block {

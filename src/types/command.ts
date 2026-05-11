@@ -6,11 +6,17 @@ export interface ServantAction {
   target: string | null;
 }
 
+export interface OrderChangeSelection {
+  front: string | null;
+  back: string | null;
+}
+
 export interface EquipmentAction {
   type: "equipment";
   id: string;
   skill: string | null;
   target: string | null;
+  orderChange?: OrderChangeSelection | null;
 }
 
 export type CommandSpell = "np_release" | "restore";

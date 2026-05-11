@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   derivePartyLineup,
   derivePartyServants,
+  deriveScenePartyLineups,
   deriveScenePartyServants,
 } from "../partyServants";
 import type { SlotItem } from "../ContentGrid";
@@ -70,7 +71,25 @@ const CHEN_GONG: Servant = {
   rarity: 2,
 };
 
-const SERVANTS: Servant[] = [MASH, ALTRIA, MERLIN, WAVER, ARASH, CHEN_GONG];
+const CHLOE: Servant = {
+  id: 388,
+  variantKey: "388",
+  name_cn: "克洛伊",
+  name_jp: "クロエ",
+  name_en: "Chloe",
+  class: "Archer",
+  rarity: 4,
+};
+
+const SERVANTS: Servant[] = [
+  MASH,
+  ALTRIA,
+  MERLIN,
+  WAVER,
+  ARASH,
+  CHEN_GONG,
+  CHLOE,
+];
 
 function makeSlots(
   layout: ReadonlyArray<{ type: "servant" | "support"; servant: Servant | null }>
@@ -212,6 +231,18 @@ describe("deriveScenePartyServants", () => {
     expect(lineups[1]).toEqual([ALTRIA, MERLIN, WAVER]);
   });
 
+  it("compacts the back line after a servant leaves and a substitute enters", () => {
+    const lineups = deriveScenePartyLineups(
+      [ARASH, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG],
+      [
+        makeScene({ attackPriority: [{ id: "atk_0", card: "servant_1_np" }] }),
+        makeScene({ id: "scene_2" }),
+      ]
+    );
+
+    expect(lineups[1]).toEqual([ALTRIA, MERLIN, WAVER, MASH, CHEN_GONG, null]);
+  });
+
   it("sacrifices Chen Gong's first non-self front-line ally", () => {
     const lineups = deriveScenePartyServants(
       [CHEN_GONG, MERLIN, WAVER, ALTRIA, MASH, null],
@@ -223,6 +254,44 @@ describe("deriveScenePartyServants", () => {
 
     expect(lineups[0]).toEqual([CHEN_GONG, MERLIN, WAVER]);
     expect(lineups[1]).toEqual([CHEN_GONG, ALTRIA, WAVER]);
+  });
+
+  it("keeps current back-line slot mapping after a servant withdraws to back", () => {
+    const lineups = deriveScenePartyLineups(
+      [CHLOE, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG],
+      [
+        makeScene({
+          preparationActions: [
+            {
+              type: "servant",
+              id: "sa_1",
+              servant: "servant_1",
+              skill: "skill_2",
+              target: null,
+            },
+          ],
+        }),
+        makeScene({
+          id: "scene_2",
+          preparationActions: [
+            {
+              type: "equipment",
+              id: "eq_1",
+              skill: "skill_3",
+              target: null,
+              orderChange: {
+                front: "servant_1",
+                back: "servant_4",
+              },
+            },
+          ],
+        }),
+        makeScene({ id: "scene_3" }),
+      ]
+    );
+
+    expect(lineups[1]).toEqual([ALTRIA, MERLIN, WAVER, CHLOE, MASH, CHEN_GONG]);
+    expect(lineups[2]).toEqual([CHLOE, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG]);
   });
 
   it("derives the full lineup with a pinned support before scene simulation", () => {
@@ -239,5 +308,31 @@ describe("deriveScenePartyServants", () => {
       MASH,
       ALTRIA,
     ]);
+  });
+
+  it("applies configured Order Change to later scene lineups", () => {
+    const lineups = deriveScenePartyLineups(
+      [ARASH, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG],
+      [
+        makeScene({
+          preparationActions: [
+            {
+              type: "equipment",
+              id: "eq_1",
+              skill: "skill_3",
+              target: null,
+              orderChange: {
+                front: "servant_2",
+                back: "servant_5",
+              },
+            },
+          ],
+        }),
+        makeScene({ id: "scene_2" }),
+      ]
+    );
+
+    expect(lineups[0]).toEqual([ARASH, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG]);
+    expect(lineups[1]).toEqual([ARASH, MASH, WAVER, ALTRIA, MERLIN, CHEN_GONG]);
   });
 });

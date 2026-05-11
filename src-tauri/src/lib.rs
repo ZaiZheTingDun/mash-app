@@ -101,6 +101,8 @@ pub enum Action {
         skill: Option<String>,
         #[serde(default)]
         target: Option<String>,
+        #[serde(rename = "orderChange", default)]
+        order_change: Option<OrderChangeSelection>,
     },
     #[serde(rename = "commandSpell")]
     CommandSpell {
@@ -109,6 +111,12 @@ pub enum Action {
         #[serde(default)]
         target: Option<String>,
     },
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct OrderChangeSelection {
+    pub front: Option<String>,
+    pub back: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -3484,6 +3492,36 @@ mod tests {
                 assert!(target.is_none());
             }
             _ => panic!("expected Action::CommandSpell"),
+        }
+    }
+
+    #[test]
+    fn action_equipment_order_change_round_trips() {
+        let json = serde_json::json!({
+            "type": "equipment",
+            "id": "eq_1",
+            "skill": "skill_3",
+            "target": null,
+            "orderChange": {
+                "front": "servant_1",
+                "back": "servant_4"
+            }
+        });
+        let action: Action = serde_json::from_value(json).unwrap();
+        match action {
+            Action::Equipment {
+                skill,
+                target,
+                order_change,
+                ..
+            } => {
+                assert_eq!(skill.as_deref(), Some("skill_3"));
+                assert!(target.is_none());
+                let order_change = order_change.unwrap();
+                assert_eq!(order_change.front.as_deref(), Some("servant_1"));
+                assert_eq!(order_change.back.as_deref(), Some("servant_4"));
+            }
+            _ => panic!("expected Action::Equipment"),
         }
     }
 

@@ -40,6 +40,7 @@ stateDiagram-v2
 
     Battle --> BattleAction: attack available
     BattleAction --> Battle: scene skills handled
+    BattleAction --> BattleAction: Order Change overlay handled
     BattleAction --> Attack: attack tapped
     Attack --> Battle: cards resolved
 
@@ -78,6 +79,13 @@ their real screens:
   latest `BATTLE m/n` read through `tick_scene_state` and gates skill execution.
 - `BattleAction` is a documentation-only status node for the actionable battle
   condition where `Battle.variants.main.elements.attack_button` is found.
+- In-battle Order Change is stored on an equipment action as
+  `orderChange.front` + `orderChange.back`. The runner taps the master skill,
+  lets the semi-transparent Battle overlay settle, selects exactly one
+  front-line slot (`servant_1..3`) and one back-line slot (`servant_4..6`),
+  confirms, then waits for the attack button before continuing. This overlay
+  is not the pre-battle `TeamChange` screen and is not detected through the
+  `Screen::TeamChange` route.
 - `waiting_for_battle` extends Unknown tolerance during loading and long attack
   animations.
 - `APRecovery` now anchors on `label_item` and scans the item-column template
