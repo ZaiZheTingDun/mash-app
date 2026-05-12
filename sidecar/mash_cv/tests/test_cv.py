@@ -1248,6 +1248,31 @@ class TestDecideNpReady:
 
 # ── _find_supports ──────────────────────────────────────────────────────
 
+def test_support_np_pairing_requires_distinct_lower_fragment():
+    from mash_cv.cv import _support_np_can_pair_with_name
+
+    name = {
+        "region": {"x": 0.28, "y": 0.20, "w": 0.12, "h": 0.04},
+        "yc": 0.22,
+    }
+    same_fragment_np = {
+        "region": dict(name["region"]),
+        "yc": 0.22,
+    }
+    upper_fragment_np = {
+        "region": {"x": 0.42, "y": 0.17, "w": 0.12, "h": 0.04},
+        "yc": 0.19,
+    }
+    lower_fragment_np = {
+        "region": {"x": 0.42, "y": 0.26, "w": 0.12, "h": 0.04},
+        "yc": 0.28,
+    }
+
+    assert _support_np_can_pair_with_name(name, same_fragment_np) is False
+    assert _support_np_can_pair_with_name(name, upper_fragment_np) is False
+    assert _support_np_can_pair_with_name(name, lower_fragment_np) is True
+
+
 _RAPIDOCR_AVAILABLE = True
 try:
     import rapidocr_onnxruntime  # noqa: F401

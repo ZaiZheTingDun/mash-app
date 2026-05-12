@@ -211,6 +211,11 @@ SUPPORT_LIST_REGION = {"x": 0.177, "y": 0.233, "w": 0.466, "h": 0.76}
 # are spaced ~0.28 apart. 0.10 leaves comfortable margin both ways.
 SUPPORT_ROW_PAIR_DY = 0.10
 
+# NP text sits on the lower line of a support row. This keeps servants whose
+# display name equals their NP name from pairing the same OCR fragment with
+# itself as both "name" and "NP".
+SUPPORT_NP_BELOW_NAME_MIN_DY = 0.005
+
 # Fuzzy-match thresholds for OCR'd Japanese. Game OCR is lossy (the model
 # occasionally substitutes look-alike kana / drops trailing characters), so
 # 0.65 lets through the typical 1-2 character error per name without
@@ -1863,6 +1868,21 @@ def _fuzzy_score(haystack: str, needle: str) -> float:
     return best
 
 
+def _support_np_can_pair_with_name(name_cand: dict, np_cand: dict) -> bool:
+    """Return whether an NP OCR fragment can belong to a name fragment's row."""
+    nr = name_cand["region"]
+    npr = np_cand["region"]
+    same_box = (
+        abs(nr["x"] - npr["x"]) < 1e-6
+        and abs(nr["y"] - npr["y"]) < 1e-6
+        and abs(nr["w"] - npr["w"]) < 1e-6
+        and abs(nr["h"] - npr["h"]) < 1e-6
+    )
+    if same_box:
+        return False
+    return np_cand["yc"] > name_cand["yc"] + SUPPORT_NP_BELOW_NAME_MIN_DY
+
+
 def _poly_to_norm_rect(box: Any, img_w: int, img_h: int) -> dict:
     """Convert a RapidOCR 4-point polygon to a normalized {x,y,w,h}."""
     pts = np.asarray(box, dtype=np.float32)
@@ -2135,6 +2155,8 @@ def _find_supports(
         best_score = -1.0
         for i, npc in enumerate(np_cands):
             if i in used_np:
+                continue
+            if not _support_np_can_pair_with_name(nc, npc):
                 continue
             dy = abs(npc["yc"] - nc["yc"])
             if dy > pair_dy:
