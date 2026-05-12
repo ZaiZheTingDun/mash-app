@@ -949,7 +949,7 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
         // the rows are real but their CE / NP cross-check was skipped.
         const why =
           diag.nameOnlyReason === "noNpExpected"
-            ? "宝具中文翻译未映射（CN servants.json 缺失）"
+            ? "目标宝具没有可用的 CN OCR 名称映射"
             : diag.nameOnlyReason === "noNpAboveThreshold"
               ? "OCR 未找到匹配的宝具文本（mooncell 译名与游戏内不一致）"
               : "回退到仅按名称识别";

@@ -73,6 +73,26 @@ their real screens:
   `text_battle_label` region to debug; full
   `BATTLE m/n` reading still uses `read_battle_scene`.
 
+## Support OCR Names
+
+Support selection loads the target servant metadata through
+`load_servant_metadata` before calling sidecar `find_supports`. On the CN
+server, Rust translates Atlas JP servant and Noble Phantasm names with
+`src-tauri/src/resources/servants.json` so OCR matches the text rendered
+by the CN client.
+
+When a servant or NP entry has a non-empty `name_cn_server`, that value is
+the OCR match target. `name_cn` remains the fallback. This handles CN
+server renames where the in-game support row no longer matches the wiki
+Chinese name. The mapper keeps `name_jp == name_cn` entries instead of
+treating them as untranslated placeholders, because legitimate names can
+be identical across JP/CN and can still be overridden by `name_cn_server`.
+
+The sidecar pairs support rows by layout, not by text alone: the NP match
+must be a distinct OCR fragment below the servant-name fragment in the
+same row. This prevents servants whose displayed name and NP text are the
+same from reusing the name line as a false NP match.
+
 ## Notes
 
 - `BattleSceneTick` is internal state, not a `Screen` enum variant. It maps the

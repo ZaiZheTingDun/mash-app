@@ -492,6 +492,8 @@ struct ServantInfo {
     #[serde(rename = "faceId")]
     face_id: Option<u32>,
     name_cn: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name_cn_server: Option<String>,
     name_jp: String,
     name_en: String,
     name_other: Option<String>,
@@ -529,6 +531,22 @@ fn load_enhancement_target(
     })
 }
 
+fn preferred_cn_name(value: &serde_json::Value) -> Option<String> {
+    value
+        .get("name_cn_server")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            value
+                .get("name_cn")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+        })
+        .map(str::to_string)
+}
+
 fn first_np_name(s: &serde_json::Value) -> Option<String> {
     let nps = s.get("noble_phantasms")?;
     let entry = if let Some(arr) = nps.as_array() {
@@ -536,13 +554,14 @@ fn first_np_name(s: &serde_json::Value) -> Option<String> {
     } else {
         nps.as_object()?.values().next()?
     };
-    entry
-        .get("name_cn")
-        .or_else(|| entry.get("name"))
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
+    preferred_cn_name(entry).or_else(|| {
+        entry
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    })
 }
 
 fn last_variant_np_name(variant: &serde_json::Value) -> Option<String> {
@@ -589,6 +608,12 @@ fn servants_data() -> &'static [ServantInfo] {
                 let result = (|| {
                     let id = s.get("id")?.as_u64()? as u32;
                     let name_cn = s.get("name_cn")?.as_str()?.to_string();
+                    let name_cn_server = s
+                        .get("name_cn_server")
+                        .and_then(|v| v.as_str())
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string());
                     let name_jp = s.get("name_jp")?.as_str()?.to_string();
                     let name_en = s.get("name_en")?.as_str()?.to_string();
                     let name_other = s
@@ -620,6 +645,7 @@ fn servants_data() -> &'static [ServantInfo] {
                                 variant_key: format!("{id}:{}", variant_idx + 1),
                                 face_id: variant_face_id(variant),
                                 name_cn: name_cn.clone(),
+                                name_cn_server: name_cn_server.clone(),
                                 name_jp: name_jp.clone(),
                                 name_en: name_en.clone(),
                                 name_other: name_other.clone(),
@@ -635,6 +661,7 @@ fn servants_data() -> &'static [ServantInfo] {
                             variant_key: id.to_string(),
                             face_id: None,
                             name_cn,
+                            name_cn_server,
                             name_jp,
                             name_en,
                             name_other,
@@ -892,16 +919,18 @@ fn normalize_jp_key(s: &str) -> String {
         .join("")
 }
 
-/// Process-wide `name_jp -> name_cn` map for every servant Noble
+/// Process-wide `name_jp -> CN OCR name` map for every servant Noble
 /// Phantasm we know about, built once from `resources/servants.json`.
 /// Handles both shapes the source file uses:
 ///   - flat list:           `noble_phantasms: [ {...}, ... ]`
 ///   - dict-of-variants:    `noble_phantasms: { "初始": [...], "奥特瑙斯": [...] }`
-/// Drops entries whose JP name is missing, blank, or whose CN
-/// counterpart is the same as the JP name (a common placeholder when
-/// the localizer hasn't filled in the translation). Used only when the
-/// active server is `Server::Cn` to translate Atlas JP NP names into
-/// the strings the OCR will actually see on a CN client.
+/// Prefer `name_cn_server` over `name_cn` because the CN client can
+/// display renamed terms that differ from the wiki-localized Chinese
+/// names. Keeps entries even when the CN value equals the JP value:
+/// some legitimate names are identical across both languages, and
+/// server-specific aliases can still override them. Used only when the
+/// active server is `Server::Cn` to translate Atlas JP NP names into the
+/// strings the OCR will actually see on a CN client.
 fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
     static INDEX: OnceLock<HashMap<String, String>> = OnceLock::new();
     INDEX.get_or_init(|| {
@@ -916,12 +945,8 @@ fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .trim();
-            let cn = entry
-                .get("name_cn")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .trim();
-            if jp.is_empty() || cn.is_empty() || jp == cn {
+            let cn = preferred_cn_name(entry).unwrap_or_default();
+            if jp.is_empty() || cn.is_empty() {
                 return;
             }
             let key = normalize_jp_key(jp);
@@ -953,18 +978,19 @@ fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
     })
 }
 
-/// Process-wide `name_jp -> name_cn` map for the servants themselves
+/// Process-wide `name_jp -> CN OCR name` map for the servants themselves
 /// (as opposed to their NPs). Built once from `servants_data()`. Same
-/// drop rule as the NP index: skip entries whose CN field is missing or
-/// identical to the JP one.
+/// preference and drop rules as the NP index: use `name_cn_server` when
+/// present, otherwise `name_cn`; skip only entries whose JP or CN field
+/// is missing.
 fn servant_jp_to_cn_index() -> &'static HashMap<String, String> {
     static INDEX: OnceLock<HashMap<String, String>> = OnceLock::new();
     INDEX.get_or_init(|| {
         let mut map: HashMap<String, String> = HashMap::new();
         for s in servants_data() {
             let jp = s.name_jp.trim();
-            let cn = s.name_cn.trim();
-            if jp.is_empty() || cn.is_empty() || jp == cn {
+            let cn = s.name_cn_server.as_deref().unwrap_or(&s.name_cn).trim();
+            if jp.is_empty() || cn.is_empty() {
                 continue;
             }
             let key = normalize_jp_key(jp);
@@ -1013,8 +1039,9 @@ fn localize_np_names(jp_names: &[String]) -> Vec<String> {
 /// committed under `src-tauri/assets/servants/`), pulls the top-level
 /// `name` field plus every entry of `noblePhantasms[].name`. When
 /// `server == Server::Cn`, both the servant name and every NP name are
-/// translated through `resources/servants.json` (`name_jp -> name_cn`).
-/// Unmapped NPs are dropped — when the resulting `np_names` list is
+/// translated through `resources/servants.json` (`name_jp -> CN OCR name`,
+/// where `name_cn_server` wins over `name_cn`). Unmapped NPs are dropped
+/// — when the resulting `np_names` list is
 /// empty the sidecar transparently falls back to name-only matching, so
 /// support detection still proceeds at lower precision.
 ///
@@ -3222,7 +3249,31 @@ mod tests {
     }
 
     #[test]
-    fn first_np_name_prefers_cn_then_legacy_name() {
+    fn preferred_cn_name_prefers_server_alias() {
+        let renamed = serde_json::json!({
+            "name_cn": "美杜莎",
+            "name_cn_server": "歌果",
+        });
+        assert_eq!(preferred_cn_name(&renamed).as_deref(), Some("歌果"));
+
+        let blank_alias = serde_json::json!({
+            "name_cn": "美杜莎",
+            "name_cn_server": "   ",
+        });
+        assert_eq!(preferred_cn_name(&blank_alias).as_deref(), Some("美杜莎"));
+    }
+
+    #[test]
+    fn first_np_name_prefers_server_cn_then_cn_then_legacy_name() {
+        let server = serde_json::json!({
+            "noble_phantasms": [{
+                "name_cn_server": "国服宝具名",
+                "name_cn": "普通中文宝具名",
+                "name": "Legacy"
+            }]
+        });
+        assert_eq!(first_np_name(&server).as_deref(), Some("国服宝具名"));
+
         let flat = serde_json::json!({
             "noble_phantasms": [{ "name_cn": "流星一条", "name": "Stella" }]
         });
@@ -3389,6 +3440,15 @@ mod tests {
     }
 
     #[test]
+    fn servant_jp_to_cn_index_prefers_cn_server_alias() {
+        let idx = servant_jp_to_cn_index();
+        assert_eq!(
+            idx.get(&normalize_jp_key("メドゥーサ")).map(|s| s.as_str()),
+            Some("歌果")
+        );
+    }
+
+    #[test]
     fn np_index_handles_both_shapes() {
         // Servant 1 uses the dict-of-variants `noble_phantasms`
         // shape; servant 2 uses the flat-list shape. Both must be
@@ -3409,6 +3469,19 @@ mod tests {
         // Sanity: index contains a non-trivial number of entries —
         // catches an outright build error in the parser.
         assert!(idx.len() > 100, "NP index too small: {}", idx.len());
+    }
+
+    #[test]
+    fn np_index_prefers_cn_server_alias_and_keeps_jp_equal_cn() {
+        let idx = np_jp_to_cn_index();
+        assert_eq!(
+            idx.get(&normalize_jp_key("始皇帝")).map(|s| s.as_str()),
+            Some("祖政")
+        );
+        assert_eq!(
+            idx.get(&normalize_jp_key("流星一条")).map(|s| s.as_str()),
+            Some("流星一条")
+        );
     }
 
     #[test]

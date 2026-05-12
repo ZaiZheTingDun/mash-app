@@ -3,6 +3,7 @@ export interface Servant {
   variantKey: string;
   faceId?: number | null;
   name_cn: string;
+  name_cn_server?: string;
   name_jp: string;
   name_en: string;
   name_other?: string;

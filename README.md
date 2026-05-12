@@ -118,6 +118,7 @@ The Tauri bundle intentionally excludes `mash-cv`; app updates remain small. Bum
 1. Connects to an Android device or BlueStacks emulator via ADB
 2. The `mash-cv` sidecar pushes `scrcpy-server.jar` to the device and opens a realtime H.264 stream, decoding frames with PyAV
 3. The Rust runner drives a state machine that asks the sidecar to identify the current screen (team confirm, support select, battle, …) and find UI elements via config-driven OpenCV template matching
-4. During battle, the sidecar also OCRs the turn number (anchor-bounded digit template matching) so the runner can schedule skills turn-by-turn
-5. Based on the detected screen, the runner issues tap/swipe commands over ADB
-6. The frontend displays real-time automation status and allows stopping at any time
+4. Support selection OCR uses servant metadata localized for the active server. For CN, `name_cn_server` in `servants.json` is preferred over `name_cn` when present, so renamed in-game servant/NP text is matched first.
+5. During battle, the sidecar also OCRs the turn number (anchor-bounded digit template matching) so the runner can schedule skills turn-by-turn
+6. Based on the detected screen, the runner issues tap/swipe commands over ADB
+7. The frontend displays real-time automation status and allows stopping at any time
