@@ -57,6 +57,10 @@ function getClassColor(cls: string): string {
   return "var(--gray-9)";
 }
 
+function displayCnName(servant: Servant): string {
+  return servant.name_cn_server?.trim() || servant.name_cn;
+}
+
 export function ServantSelectDialog({
   open,
   onOpenChange,
@@ -98,7 +102,9 @@ export function ServantSelectDialog({
     const q = search.toLowerCase().trim();
     return filteredPool.filter(
       (s) =>
+        displayCnName(s).toLowerCase().includes(q) ||
         s.name_cn.toLowerCase().includes(q) ||
+        (s.name_cn_server ?? "").toLowerCase().includes(q) ||
         s.name_en.toLowerCase().includes(q) ||
         s.name_jp.includes(q) ||
         (s.name_other ?? "").toLowerCase().includes(q) ||
@@ -354,7 +360,7 @@ export function ServantSelectDialog({
                       <Flex direction="column" align="start" gap="1" className="servant-option-text">
                         <Flex align="center" gap="2" wrap="wrap">
                           <Text size="2" weight="medium">
-                            {servant.name_cn}
+                            {displayCnName(servant)}
                           </Text>
                           <Box
                             className="servant-class-badge"

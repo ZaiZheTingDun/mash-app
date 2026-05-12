@@ -83,6 +83,29 @@ describe("ServantSelectDialog", () => {
     expect(screen.queryByText("斯卡哈")).not.toBeInTheDocument();
   });
 
+  it("filters and displays by server Chinese name when present", async () => {
+    const user = userEvent.setup();
+    setup({
+      servants: [
+        {
+          id: 1,
+          variantKey: "1",
+          name_cn: "旧中文名",
+          name_cn_server: "国服中文名",
+          name_jp: "サーヴァント",
+          name_en: "Servant",
+          class: "Shielder",
+          rarity: 4,
+          noblePhantasmName: "宝具",
+        },
+      ],
+    });
+
+    expect(screen.getByText("国服中文名")).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText("搜索从者名称..."), "国服");
+    expect(screen.getByText("国服中文名")).toBeInTheDocument();
+  });
+
   it("filters by English name (case-insensitive)", async () => {
     const user = userEvent.setup();
     setup();

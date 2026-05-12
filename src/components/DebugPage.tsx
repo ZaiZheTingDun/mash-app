@@ -17,11 +17,15 @@ import {
 import { emit, invoke, listen, convertFileSrc } from "../tauri";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { CvConfig } from "../types/cv";
+import type { CraftEssence } from "../types/craftEssence";
+import type { Servant } from "../types/servant";
 import type { DebugCanvasState } from "./DebugCanvas";
 import {
   DEBUG_CANVAS_REQUEST_EVENT,
   DEBUG_CANVAS_STATE_EVENT,
 } from "./DebugCanvasWindow";
+import { CraftEssenceSelectDialog } from "./CraftEssenceSelectDialog";
+import { ServantSelectDialog } from "./ServantSelectDialog";
 
 /**
  * Collapsible group used throughout the debug UI. Built on the native
@@ -340,6 +344,8 @@ interface LogEntry {
 
 interface DebugPageProps {
   onBack: () => void;
+  servants: Servant[];
+  craftEssences: CraftEssence[];
   /**
    * Front-line servant ids (party slots 0–2 + support, deduped) derived
    * from the currently active project. Used to seed the "候选从者 id"
@@ -351,6 +357,8 @@ interface DebugPageProps {
   defaultCardServantIds: number[];
 }
 
+type DebugServantPickerTarget = "card" | "support" | "enhancement";
+
 function timestamp(): string {
   const d = new Date();
   return [d.getHours(), d.getMinutes(), d.getSeconds()]
@@ -358,7 +366,12 @@ function timestamp(): string {
     .join(":");
 }
 
-export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
+export function DebugPage({
+  onBack,
+  servants,
+  craftEssences,
+  defaultCardServantIds,
+}: DebugPageProps) {
   const [capture, setCapture] = useState<DebugCaptureResult | null>(null);
   const [cacheBuster, setCacheBuster] = useState(0);
 
@@ -384,13 +397,13 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
   );
 
   const [availableServantIds, setAvailableServantIds] = useState<number[]>([]);
-  // Seed the candidate-id input with the active project's front-line
-  // team. The lazy initializer runs once on mount; users can still hand-
-  // edit afterwards (e.g. to test "全选"), and switching projects
-  // remounts the page via the view router so we'll re-seed naturally.
-  const [cardServantInput, setCardServantInput] = useState(() =>
-    defaultCardServantIds.join(", ")
-  );
+  // Seed the candidate list with the active project's front-line team.
+  // The lazy initializer runs once on mount; users can still add/remove
+  // names afterwards, and switching projects remounts the page via the
+  // view router so we'll re-seed naturally.
+  const [selectedCardServantIds, setSelectedCardServantIds] = useState<
+    number[]
+  >(() => defaultCardServantIds);
   const [commandCards, setCommandCards] = useState<CommandCardMatchDto[]>([]);
   const [findingCards, setFindingCards] = useState(false);
   const [noblePhantasms, setNoblePhantasms] = useState<NoblePhantasmMatchDto[]>(
@@ -403,20 +416,25 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
   const [attackButton, setAttackButton] =
     useState<AttackButtonResultDto | null>(null);
   const [findingAttackButton, setFindingAttackButton] = useState(false);
-  const [supportServantId, setSupportServantId] = useState<string>("");
-  const [supportCraftEssenceId, setSupportCraftEssenceId] = useState<string>("");
+  const [supportServantId, setSupportServantId] = useState<number | null>(null);
+  const [supportCraftEssenceId, setSupportCraftEssenceId] =
+    useState<number | null>(null);
   const [supportMetadata, setSupportMetadata] =
     useState<ServantMetadataDto | null>(null);
   const [supportResult, setSupportResult] =
     useState<FindSupportsResultDto | null>(null);
   const [findingSupports, setFindingSupports] = useState(false);
-  const [enhancementServantId, setEnhancementServantId] = useState<string>("");
+  const [enhancementServantId, setEnhancementServantId] =
+    useState<number | null>(null);
   const [enhancementServantThreshold, setEnhancementServantThreshold] =
     useState("0.85");
   const [enhancementServantResult, setEnhancementServantResult] =
     useState<EnhancementServantMatchResultDto | null>(null);
   const [findingEnhancementServant, setFindingEnhancementServant] =
     useState(false);
+  const [servantPickerTarget, setServantPickerTarget] =
+    useState<DebugServantPickerTarget | null>(null);
+  const [craftEssencePickerOpen, setCraftEssencePickerOpen] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const didShutdown = useRef(false);
   const [popoutOpen, setPopoutOpen] = useState(false);
@@ -449,6 +467,9 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
   const loadTemplateList = useCallback(async () => {
     try {
       const keys = await invoke<string[]>("debug_list_templates");
+      if (!Array.isArray(keys)) {
+        throw new Error("debug_list_templates 未返回数组");
+      }
       setTemplateKeys(keys);
       log(
         `已加载 ${keys.length} 个模板${keys.length > 0 ? ": " + keys.slice(0, 8).join(", ") + (keys.length > 8 ? " …" : "") : ""}`
@@ -461,6 +482,9 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
   const loadAvailableServantIds = useCallback(async () => {
     try {
       const ids = await invoke<number[]>("debug_list_servant_assets");
+      if (!Array.isArray(ids)) {
+        throw new Error("debug_list_servant_assets 未返回数组");
+      }
       setAvailableServantIds(ids);
       log(
         `已加载 ${ids.length} 个从者素材${ids.length > 0 ? ": " + ids.slice(0, 8).join(", ") + (ids.length > 8 ? " …" : "") : ""}`
@@ -682,29 +706,78 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
     log("已清除标注");
   }, [log]);
 
-  const parsedCardServantIds = useMemo<number[]>(() => {
-    const seen = new Set<number>();
-    const out: number[] = [];
-    for (const tok of cardServantInput.split(/[\s,，]+/)) {
-      const n = Number(tok.trim());
-      if (Number.isFinite(n) && n > 0 && !seen.has(n)) {
-        seen.add(n);
-        out.push(n);
+  const servantById = useMemo(() => {
+    const map = new Map<number, Servant>();
+    for (const servant of servants) {
+      if (!map.has(servant.id)) {
+        map.set(servant.id, servant);
       }
     }
-    return out;
-  }, [cardServantInput]);
+    return map;
+  }, [servants]);
+
+  const availableServantIdSet = useMemo(
+    () => new Set(availableServantIds),
+    [availableServantIds]
+  );
+
+  const availableServants = useMemo(() => {
+    if (availableServantIdSet.size === 0) return servants;
+    return servants.filter((servant) => availableServantIdSet.has(servant.id));
+  }, [availableServantIdSet, servants]);
+
+  const selectedSupportServant = supportServantId
+    ? servantById.get(supportServantId) ?? null
+    : null;
+  const selectedEnhancementServant = enhancementServantId
+    ? servantById.get(enhancementServantId) ?? null
+    : null;
+  const selectedSupportCraftEssence = supportCraftEssenceId
+    ? craftEssences.find((ce) => ce.id === supportCraftEssenceId) ?? null
+    : null;
+
+  const displayServantName = useCallback(
+    (id: number) => {
+      const servant = servantById.get(id);
+      if (!servant) return `#${id}`;
+      return servant.name_cn_server?.trim() || servant.name_cn;
+    },
+    [servantById]
+  );
+
+  const handleSelectDebugServant = useCallback(
+    (servant: Servant) => {
+      if (servantPickerTarget === "card") {
+        setSelectedCardServantIds((prev) =>
+          prev.includes(servant.id) ? prev : [...prev, servant.id]
+        );
+      } else if (servantPickerTarget === "support") {
+        setSupportServantId(servant.id);
+        setSupportMetadata(null);
+        setSupportResult(null);
+      } else if (servantPickerTarget === "enhancement") {
+        setEnhancementServantId(servant.id);
+        setEnhancementServantResult(null);
+      }
+      setServantPickerTarget(null);
+    },
+    [servantPickerTarget]
+  );
+
+  const handleRemoveCardServant = useCallback((id: number) => {
+    setSelectedCardServantIds((prev) => prev.filter((item) => item !== id));
+  }, []);
 
   const handleFindCommandCards = useCallback(async () => {
     if (!capture) return;
     setFindingCards(true);
     log(
-      `调用 debug_find_command_cards (servantIds=[${parsedCardServantIds.join(", ")}])`
+      `调用 debug_find_command_cards (servants=[${selectedCardServantIds.map(displayServantName).join(", ")}])`
     );
     try {
       const cards = await invoke<CommandCardMatchDto[]>(
         "debug_find_command_cards",
-        { servantIds: parsedCardServantIds }
+        { servantIds: selectedCardServantIds }
       );
       setCommandCards(cards);
       if (cards.length === 0) {
@@ -725,7 +798,7 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
     } finally {
       setFindingCards(false);
     }
-  }, [capture, parsedCardServantIds, log]);
+  }, [capture, selectedCardServantIds, displayServantName, log]);
 
   const handleFindNoblePhantasms = useCallback(async () => {
     if (!capture) return;
@@ -834,25 +907,8 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
   }, [capture, log]);
 
   const handleUseAllAvailableIds = useCallback(() => {
-    setCardServantInput(availableServantIds.join(", "));
+    setSelectedCardServantIds(availableServantIds);
   }, [availableServantIds]);
-
-  const parsedSupportServantId = useMemo<number | null>(() => {
-    const n = Number(supportServantId.trim());
-    return Number.isFinite(n) && n > 0 ? n : null;
-  }, [supportServantId]);
-
-  const parsedSupportCraftEssenceId = useMemo<number | null>(() => {
-    const raw = supportCraftEssenceId.trim();
-    if (!raw) return null;
-    const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  }, [supportCraftEssenceId]);
-
-  const parsedEnhancementServantId = useMemo<number | null>(() => {
-    const n = Number(enhancementServantId.trim());
-    return Number.isFinite(n) && n > 0 ? n : null;
-  }, [enhancementServantId]);
 
   const parsedEnhancementServantThreshold = useMemo<number>(() => {
     const n = Number(enhancementServantThreshold.trim());
@@ -860,16 +916,16 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
   }, [enhancementServantThreshold]);
 
   const handleFindEnhancementServant = useCallback(async () => {
-    if (!capture || parsedEnhancementServantId === null) return;
+    if (!capture || enhancementServantId === null) return;
     setFindingEnhancementServant(true);
     log(
-      `调用 debug_find_enhancement_servant (servantId=${parsedEnhancementServantId}, threshold=${parsedEnhancementServantThreshold})`
+      `调用 debug_find_enhancement_servant (servant=${displayServantName(enhancementServantId)}, threshold=${parsedEnhancementServantThreshold})`
     );
     try {
       const result = await invoke<EnhancementServantMatchResultDto>(
         "debug_find_enhancement_servant",
         {
-          servantId: parsedEnhancementServantId,
+          servantId: enhancementServantId,
           threshold: parsedEnhancementServantThreshold,
         }
       );
@@ -907,22 +963,23 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
     }
   }, [
     capture,
-    parsedEnhancementServantId,
+    enhancementServantId,
     parsedEnhancementServantThreshold,
+    displayServantName,
     log,
   ]);
 
   const handleFindSupports = useCallback(async () => {
-    if (!capture || parsedSupportServantId === null) return;
+    if (!capture || supportServantId === null) return;
     setFindingSupports(true);
-    log(`调用 debug_find_supports (servantId=${parsedSupportServantId})`);
+    log(`调用 debug_find_supports (servant=${displayServantName(supportServantId)})`);
     try {
       // Fetch metadata first so the log + side panel can show what we
       // actually fed the OCR detector (helpful when a row misses).
       let meta = supportMetadata;
-      if (!meta || meta.id !== parsedSupportServantId) {
+      if (!meta || meta.id !== supportServantId) {
         meta = await invoke<ServantMetadataDto>("get_servant_metadata", {
-          id: parsedSupportServantId,
+          id: supportServantId,
         });
         setSupportMetadata(meta);
         log(
@@ -932,8 +989,8 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
       const result = await invoke<FindSupportsResultDto>(
         "debug_find_supports",
         {
-          servantId: parsedSupportServantId,
-          craftEssenceId: parsedSupportCraftEssenceId,
+          servantId: supportServantId,
+          craftEssenceId: supportCraftEssenceId,
         }
       );
       setSupportResult(result);
@@ -994,9 +1051,10 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
     }
   }, [
     capture,
-    parsedSupportServantId,
-    parsedSupportCraftEssenceId,
+    supportServantId,
+    supportCraftEssenceId,
     supportMetadata,
+    displayServantName,
     log,
   ]);
 
@@ -1337,13 +1395,35 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
 
           <DebugSection title="指令卡 / 宝具卡识别">
             <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-              <TextField.Root
-                className="debug-text-field"
-                placeholder="候选从者 id (逗号分隔，可留空只定位卡槽)"
-                value={cardServantInput}
-                onChange={(e) => setCardServantInput(e.target.value)}
-                style={{ flex: 1, minWidth: 240 }}
-              />
+              <Flex align="center" gap="1" wrap="wrap" className="debug-servant-choice-list">
+                {selectedCardServantIds.length === 0 ? (
+                  <Text size="1" color="gray">
+                    未选择候选从者，可留空只定位卡槽
+                  </Text>
+                ) : (
+                  selectedCardServantIds.map((id) => (
+                    <Button
+                      key={`card-servant-${id}`}
+                      type="button"
+                      size="1"
+                      variant="soft"
+                      color="gray"
+                      onClick={() => handleRemoveCardServant(id)}
+                      title="点击移除"
+                    >
+                      {displayServantName(id)}
+                    </Button>
+                  ))
+                )}
+              </Flex>
+              <Button
+                type="button"
+                size="1"
+                variant="surface"
+                onClick={() => setServantPickerTarget("card")}
+              >
+                添加从者
+              </Button>
               <Button
                 type="button"
                 size="1"
@@ -1382,18 +1462,16 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
             }
           >
             <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-              <TextField.Root
-                className="debug-id-field"
-                list="debug-enhancement-servant-list"
-                placeholder="从者 id"
-                value={enhancementServantId}
-                onChange={(e) => setEnhancementServantId(e.target.value)}
-              />
-              <datalist id="debug-enhancement-servant-list">
-                {availableServantIds.map((id) => (
-                  <option key={`enhancement-id-${id}`} value={id} />
-                ))}
-              </datalist>
+              <Button
+                type="button"
+                size="1"
+                variant="surface"
+                onClick={() => setServantPickerTarget("enhancement")}
+              >
+                {selectedEnhancementServant
+                  ? displayServantName(selectedEnhancementServant.id)
+                  : "选择从者"}
+              </Button>
               <TextField.Root
                 className="debug-threshold-field"
                 type="number"
@@ -1410,7 +1488,7 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
                 disabled={
                   findingEnhancementServant ||
                   !capture ||
-                  parsedEnhancementServantId === null
+                  enhancementServantId === null
                 }
                 onClick={handleFindEnhancementServant}
               >
@@ -1479,30 +1557,43 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
             }
           >
             <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
-              <TextField.Root
-                className="debug-id-field"
-                list="debug-support-servant-list"
-                placeholder="助战从者 id"
-                value={supportServantId}
-                onChange={(e) => setSupportServantId(e.target.value)}
-              />
-              <datalist id="debug-support-servant-list">
-                {availableServantIds.map((id) => (
-                  <option key={`support-id-${id}`} value={id} />
-                ))}
-              </datalist>
-              <TextField.Root
-                className="debug-id-field"
-                placeholder="礼装 id (可选)"
-                value={supportCraftEssenceId}
-                onChange={(e) => setSupportCraftEssenceId(e.target.value)}
-                title="留空跳过礼装识别。提供后会按行运行 verify_support_ce 并叠加搜索框 + 分数。"
-              />
+              <Button
+                type="button"
+                size="1"
+                variant="surface"
+                onClick={() => setServantPickerTarget("support")}
+              >
+                {selectedSupportServant
+                  ? displayServantName(selectedSupportServant.id)
+                  : "选择助战从者"}
+              </Button>
+              <Button
+                type="button"
+                size="1"
+                variant="surface"
+                onClick={() => setCraftEssencePickerOpen(true)}
+                title="留空跳过礼装识别。选择后会按行运行 verify_support_ce 并叠加搜索框 + 分数。"
+              >
+                {selectedSupportCraftEssence
+                  ? selectedSupportCraftEssence.name
+                  : "选择礼装 (可选)"}
+              </Button>
+              {supportCraftEssenceId !== null && (
+                <Button
+                  type="button"
+                  size="1"
+                  variant="ghost"
+                  color="gray"
+                  onClick={() => setSupportCraftEssenceId(null)}
+                >
+                  清除礼装
+                </Button>
+              )}
               <Button
                 type="button"
                 size="1"
                 disabled={
-                  findingSupports || !capture || parsedSupportServantId === null
+                  findingSupports || !capture || supportServantId === null
                 }
                 onClick={handleFindSupports}
               >
@@ -2002,6 +2093,26 @@ export function DebugPage({ onBack, defaultCardServantIds }: DebugPageProps) {
           </DebugSection>
         </Flex>
       </Flex>
+      <ServantSelectDialog
+        open={servantPickerTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setServantPickerTarget(null);
+        }}
+        onSelect={handleSelectDebugServant}
+        servants={availableServants}
+        disabledIds={
+          servantPickerTarget === "card" ? selectedCardServantIds : undefined
+        }
+      />
+      <CraftEssenceSelectDialog
+        open={craftEssencePickerOpen}
+        onOpenChange={setCraftEssencePickerOpen}
+        onSelect={(ce) => {
+          setSupportCraftEssenceId(ce.id);
+          setSupportResult(null);
+        }}
+        craftEssences={craftEssences}
+      />
     </Flex>
   );
 }

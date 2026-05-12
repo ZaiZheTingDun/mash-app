@@ -305,6 +305,8 @@ function App({ theme, onThemeChange }: AppProps) {
           ) : view === "debug" && featureToggles.cvDebug ? (
             <DebugPage
               onBack={handleBackToConfig}
+              servants={servants}
+              craftEssences={craftEssences}
               defaultCardServantIds={partyServantIds}
             />
           ) : (

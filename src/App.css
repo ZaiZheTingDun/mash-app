@@ -2002,6 +2002,12 @@ body,
   min-width: 220px;
 }
 
+.debug-servant-choice-list {
+  min-width: 240px;
+  max-width: 100%;
+  flex: 1;
+}
+
 .debug-threshold-field {
   min-width: 72px;
   width: 72px;
