@@ -1,6 +1,6 @@
 import type { SlotItem } from "./ContentGrid";
 import type { Project } from "../types/project";
-import type { BattleScene } from "../types/command";
+import type { BattleScene, PreparationAction } from "../types/command";
 import type { Servant } from "../types/servant";
 import changeOrderRulesJson from "../../src-tauri/src/resources/change_order_servants.json";
 
@@ -107,6 +107,54 @@ function applyRule(
   withdrawToBack(lineup, sourceIndex);
 }
 
+function applyPreparationAction(
+  lineup: (Servant | null)[],
+  action: PreparationAction
+) {
+  if (action.type === "equipment" && action.orderChange) {
+    const frontIndex = parseServantPosition(action.orderChange.front);
+    const backIndex = parseServantPosition(action.orderChange.back);
+    if (
+      frontIndex != null &&
+      backIndex != null &&
+      frontIndex < 3 &&
+      backIndex >= 3 &&
+      lineup[frontIndex] &&
+      lineup[backIndex]
+    ) {
+      [lineup[frontIndex], lineup[backIndex]] = [
+        lineup[backIndex] ?? null,
+        lineup[frontIndex] ?? null,
+      ];
+    }
+    return;
+  }
+
+  if (action.type !== "servant") return;
+  const sourceIndex = parseServantPosition(action.servant);
+  if (sourceIndex == null || !action.skill) return;
+  const servant = lineup[sourceIndex];
+  if (!servant) return;
+  const rule = CHANGE_ORDER_RULES.find(
+    (r) =>
+      r.servantId === servant.id &&
+      r.trigger.type === "servantSkill" &&
+      r.trigger.skill === action.skill
+  );
+  if (rule) applyRule(lineup, sourceIndex, rule);
+}
+
+export function deriveLineupAfterPreparationActions(
+  initialLineup: (Servant | null)[],
+  actions: PreparationAction[]
+): (Servant | null)[] {
+  const lineup = [...initialLineup];
+  for (const action of actions) {
+    applyPreparationAction(lineup, action);
+  }
+  return lineup;
+}
+
 export function deriveScenePartyServants(
   initialLineup: (Servant | null)[],
   scenes: BattleScene[]
@@ -128,30 +176,7 @@ export function deriveScenePartyLineups(
     sceneLineups.push([...lineup]);
 
     for (const action of scene.preparationActions ?? scene.servantActions) {
-      if (action.type === "equipment" && action.orderChange) {
-        const frontIndex = parseServantPosition(action.orderChange.front);
-        const backIndex = parseServantPosition(action.orderChange.back);
-        if (frontIndex != null && backIndex != null && frontIndex < 3 && backIndex >= 3) {
-          [lineup[frontIndex], lineup[backIndex]] = [
-            lineup[backIndex] ?? null,
-            lineup[frontIndex] ?? null,
-          ];
-        }
-        continue;
-      }
-
-      if (action.type !== "servant") continue;
-      const sourceIndex = parseServantPosition(action.servant);
-      if (sourceIndex == null || !action.skill) continue;
-      const servant = lineup[sourceIndex];
-      if (!servant) continue;
-      const rule = CHANGE_ORDER_RULES.find(
-        (r) =>
-          r.servantId === servant.id &&
-          r.trigger.type === "servantSkill" &&
-          r.trigger.skill === action.skill
-      );
-      if (rule) applyRule(lineup, sourceIndex, rule);
+      applyPreparationAction(lineup, action);
     }
 
     for (const card of scene.attackPriority) {

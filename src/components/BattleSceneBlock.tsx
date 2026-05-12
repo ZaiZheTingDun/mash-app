@@ -8,6 +8,7 @@ import {
   PlusIcon,
 } from "@radix-ui/react-icons";
 import orderChangeIcon from "../../src-tauri/resources/images/icon_order_change.png";
+import { deriveLineupAfterPreparationActions } from "./partyServants";
 import type {
   AttackCard,
   BattleScene,
@@ -417,13 +418,34 @@ export function BattleSceneBlock({
   const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
   const [attackDraft, setAttackDraft] = useState<AttackDraft | null>(null);
   const faces = useServantFaces(partyServants);
-  const preparationActions =
-    scene.preparationActions ??
+  const preparationActions = useMemo(
+    () =>
+      scene.preparationActions ??
+      [
+        ...(scene.servantActions ?? []),
+        ...(scene.equipmentActions ?? []),
+        ...(scene.commandSpellActions ?? []),
+      ],
     [
-      ...(scene.servantActions ?? []),
-      ...(scene.equipmentActions ?? []),
-      ...(scene.commandSpellActions ?? []),
-    ];
+      scene.commandSpellActions,
+      scene.equipmentActions,
+      scene.preparationActions,
+      scene.servantActions,
+    ]
+  );
+  const preparationActionLineups = useMemo(() => {
+    const lineups: (Servant | null)[][] = [];
+    let lineup = partyServants;
+    for (const action of preparationActions) {
+      lineups.push(lineup);
+      lineup = deriveLineupAfterPreparationActions(lineup, [action]);
+    }
+    return lineups;
+  }, [partyServants, preparationActions]);
+  const currentPartyServants = useMemo(
+    () => deriveLineupAfterPreparationActions(partyServants, preparationActions),
+    [partyServants, preparationActions]
+  );
 
   const updatePreparationActions = (next: PreparationAction[]) => {
     onChange(emptyLegacyFields({ ...scene, preparationActions: next }));
@@ -506,7 +528,7 @@ export function BattleSceneBlock({
               />
               <PreparationActionSummary
                 action={action}
-                partyServants={partyServants}
+                partyServants={preparationActionLineups[index] ?? partyServants}
                 faces={faces}
               />
             </div>
@@ -531,7 +553,7 @@ export function BattleSceneBlock({
               </button>
             ) : prepDraft.step === "source" ? (
               <div className="battle-choice-row">
-                {partyServants.slice(0, 3).map((servant, index) => (
+                {currentPartyServants.slice(0, 3).map((servant, index) => (
                   <ServantFaceButton
                     key={index}
                     servant={servant}
@@ -568,12 +590,12 @@ export function BattleSceneBlock({
                 {prepDraft.source !== "equipment" &&
                   prepDraft.source !== "commandSpell" && (
                     <ServantFaceButton
-                      servant={partyServants[sourceIndex(prepDraft.source) ?? 0] ?? null}
+                      servant={currentPartyServants[sourceIndex(prepDraft.source) ?? 0] ?? null}
                       index={sourceIndex(prepDraft.source) ?? 0}
                       faceSrc={
-                        partyServants[sourceIndex(prepDraft.source) ?? 0]
+                        currentPartyServants[sourceIndex(prepDraft.source) ?? 0]
                           ? faces[
-                              partyServants[sourceIndex(prepDraft.source) ?? 0]!
+                              currentPartyServants[sourceIndex(prepDraft.source) ?? 0]!
                                 .variantKey
                             ]
                           : null
@@ -644,7 +666,7 @@ export function BattleSceneBlock({
                 >
                   无目标
                 </button>
-                {partyServants.slice(0, 3).map((servant, index) => (
+                {currentPartyServants.slice(0, 3).map((servant, index) => (
                   <ServantFaceButton
                     key={index}
                     servant={servant}
@@ -676,7 +698,7 @@ export function BattleSceneBlock({
               </div>
             ) : (
               <div className="battle-choice-row order-change">
-                {Array.from({ length: 6 }, (_, index) => partyServants[index] ?? null).map((servant, index) => {
+                {Array.from({ length: 6 }, (_, index) => currentPartyServants[index] ?? null).map((servant, index) => {
                   const slot = `servant_${index + 1}` as PartySlot;
                   const needsFront = prepDraft.front == null;
                   const selectable = Boolean(servant) && (needsFront ? index < 3 : index >= 3);
@@ -720,11 +742,11 @@ export function BattleSceneBlock({
               />
               <AttackActionFace
                 card={card}
-                partyServants={partyServants}
+                partyServants={currentPartyServants}
                 faces={faces}
               />
               <Text size="2" weight="medium">
-                {attackSummary(card, partyServants)}
+                {attackSummary(card, currentPartyServants)}
               </Text>
             </div>
           ))}
@@ -748,7 +770,7 @@ export function BattleSceneBlock({
               </button>
             ) : attackDraft.step === "source" ? (
               <div className="battle-choice-row">
-                {partyServants.slice(0, 3).map((servant, index) => (
+                {currentPartyServants.slice(0, 3).map((servant, index) => (
                   <ServantFaceButton
                     key={index}
                     servant={servant}
@@ -766,12 +788,12 @@ export function BattleSceneBlock({
             ) : (
               <div className="battle-choice-row">
                 <ServantFaceButton
-                  servant={partyServants[sourceIndex(attackDraft.source) ?? 0] ?? null}
+                  servant={currentPartyServants[sourceIndex(attackDraft.source) ?? 0] ?? null}
                   index={sourceIndex(attackDraft.source) ?? 0}
                   faceSrc={
-                    partyServants[sourceIndex(attackDraft.source) ?? 0]
+                    currentPartyServants[sourceIndex(attackDraft.source) ?? 0]
                       ? faces[
-                          partyServants[sourceIndex(attackDraft.source) ?? 0]!
+                          currentPartyServants[sourceIndex(attackDraft.source) ?? 0]!
                             .variantKey
                         ]
                       : null

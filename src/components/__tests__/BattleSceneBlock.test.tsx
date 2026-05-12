@@ -132,6 +132,71 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("uses the post-Order Change front line when adding later actions in the same scene", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          preparationActions: [
+            {
+              type: "equipment",
+              id: "eq_1",
+              skill: "skill_3",
+              target: null,
+              orderChange: {
+                front: "servant_1",
+                back: "servant_4",
+              },
+            },
+          ],
+        })}
+        partyServants={PARTY}
+        onChange={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+
+    expect(screen.getByRole("button", { name: "丁" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "乙" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "丙" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "甲" })).not.toBeInTheDocument();
+  });
+
+  it("uses the post-Order Change front line for attacks in the same scene", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          preparationActions: [
+            {
+              type: "equipment",
+              id: "eq_1",
+              skill: "skill_3",
+              target: null,
+              orderChange: {
+                front: "servant_1",
+                back: "servant_4",
+              },
+            },
+          ],
+        })}
+        partyServants={PARTY}
+        onChange={onChange}
+      />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[1]);
+    await user.click(screen.getByRole("button", { name: "丁" }));
+    await user.click(screen.getByRole("button", { name: "B" }));
+
+    const next = onChange.mock.calls[0][0] as BattleScene;
+    expect(next.attackPriority[0]).toMatchObject({
+      card: "servant_1_buster",
+    });
+  });
+
   it("appends an attack priority row from servant and card choice", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
