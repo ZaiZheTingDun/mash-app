@@ -57,6 +57,18 @@ pub struct RunConfig {
     /// first OCR match.
     #[serde(default)]
     pub support_craft_essence_id: Option<u32>,
+    /// Minimum NP level required for the chosen support row. `None`
+    /// disables the filter.
+    #[serde(default)]
+    pub support_noble_phantasm_level_min: Option<u32>,
+    /// Minimum owned skill levels, one entry per skill slot. `None`
+    /// means "任意".
+    #[serde(default = "default_support_skill_level_mins")]
+    pub support_skill_level_mins: [Option<u32>; 3],
+    /// Minimum append skill levels, one entry per append slot. `None`
+    /// means "任意".
+    #[serde(default = "default_support_append_skill_level_mins")]
+    pub support_append_skill_level_mins: [Option<u32>; 5],
     /// Servants to place into specific party slots.
     pub servant_selections: Vec<ServantSlotConfig>,
     /// Max scrolls before refreshing the support list.
@@ -75,6 +87,14 @@ pub struct RunConfig {
     /// insufficient-AP dialog. Empty means stop on that dialog.
     #[serde(default)]
     pub ap_recovery_items: Vec<ApRecoveryItem>,
+}
+
+fn default_support_skill_level_mins() -> [Option<u32>; 3] {
+    [None; 3]
+}
+
+fn default_support_append_skill_level_mins() -> [Option<u32>; 5] {
+    [None; 5]
 }
 
 // ---------------------------------------------------------------------------
@@ -738,6 +758,20 @@ pub const SUPPORT_CE_OFFSET_IN_ROW: NormRect = NormRect {
 /// CE typically scores 0.75+.
 pub const SUPPORT_CE_THRESHOLD: f64 = 0.70;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SupportLevelFilter {
+    Pass,
+    Fail,
+    WaitingForPanel,
+}
+
+#[derive(Debug, Default, Clone)]
+struct SupportLevelPanelProgress {
+    candidate_key: Option<String>,
+    owned_met: bool,
+    append_met: bool,
+}
+
 /// Pure helper: apply [`SUPPORT_CE_OFFSET_IN_ROW`] (a row-local rect) to
 /// `row` (an absolute row bbox) and return the absolute search window for
 /// the row's CE icon. Extracted from `Runner::support_ce_search_region`
@@ -750,6 +784,105 @@ pub fn ce_search_region(row: NormRect) -> NormRect {
         w: SUPPORT_CE_OFFSET_IN_ROW.w * row.w,
         h: SUPPORT_CE_OFFSET_IN_ROW.h * row.h,
     }
+}
+
+fn support_level_meets(actual: Option<u32>, required_min: Option<u32>) -> bool {
+    match required_min {
+        None => true,
+        Some(required) => actual.is_some_and(|level| level >= required),
+    }
+}
+
+fn support_levels_meet(actual: &[Option<u32>], required: &[Option<u32>]) -> bool {
+    required.iter().enumerate().all(|(index, required_min)| {
+        support_level_meets(actual.get(index).copied().flatten(), *required_min)
+    })
+}
+
+fn support_level_candidate_key(row: &SupportRowMatch) -> String {
+    format!(
+        "{}|{}|{:.3}",
+        row.name_text, row.np_matched_name, row.row_region.y
+    )
+}
+
+fn support_row_matches_level_requirements_with_progress(
+    server: Server,
+    config: &RunConfig,
+    row: &SupportRowMatch,
+    progress: &mut SupportLevelPanelProgress,
+) -> SupportLevelFilter {
+    let needs_np = config.support_noble_phantasm_level_min.is_some();
+    let needs_owned = config.support_skill_level_mins.iter().any(Option::is_some);
+    let needs_append = config
+        .support_append_skill_level_mins
+        .iter()
+        .any(Option::is_some);
+    if server != Server::Cn || (!needs_np && !needs_owned && !needs_append) {
+        return SupportLevelFilter::Pass;
+    }
+    if !support_level_meets(row.np_level, config.support_noble_phantasm_level_min) {
+        return SupportLevelFilter::Fail;
+    }
+    if !needs_owned && !needs_append {
+        return SupportLevelFilter::Pass;
+    }
+
+    let key = support_level_candidate_key(row);
+    if progress.candidate_key.as_deref() != Some(key.as_str()) {
+        progress.candidate_key = Some(key);
+        progress.owned_met = false;
+        progress.append_met = false;
+    }
+
+    match row.skill_panel.as_deref() {
+        Some("owned") if needs_owned => {
+            if !support_levels_meet(&row.skill_levels, &config.support_skill_level_mins) {
+                progress.owned_met = false;
+                return SupportLevelFilter::Fail;
+            }
+            progress.owned_met = true;
+        }
+        Some("append") if needs_append => {
+            if !support_levels_meet(
+                &row.append_skill_levels,
+                &config.support_append_skill_level_mins,
+            ) {
+                progress.append_met = false;
+                return SupportLevelFilter::Fail;
+            }
+            progress.append_met = true;
+        }
+        Some(_) | None => {}
+    }
+
+    if (!needs_owned || progress.owned_met) && (!needs_append || progress.append_met) {
+        SupportLevelFilter::Pass
+    } else {
+        SupportLevelFilter::WaitingForPanel
+    }
+}
+
+fn support_skill_diag_message(row: &SupportRowMatch) -> String {
+    if row.skill_level_diagnostics.is_empty() {
+        return String::new();
+    }
+    let parts: Vec<String> = row
+        .skill_level_diagnostics
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let level = item
+                .get("level")
+                .and_then(|v| v.as_u64())
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "-".into());
+            let score = item.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let source = item.get("source").and_then(|v| v.as_str()).unwrap_or("");
+            format!("{}:{}@{:.2}/{}", index + 1, level, score, source)
+        })
+        .collect();
+    format!(" skill [{}]", parts.join(" "))
 }
 
 /// Map an Atlas Academy `className` (already lowercased by
@@ -855,6 +988,10 @@ pub struct Runner {
     /// is "did it succeed" (`None` = template missing / no CE pinned →
     /// skip verification).
     support_ce_template: Option<Option<PathBuf>>,
+    /// Tracks visible skill-panel validation for the current support row.
+    /// Owned and append skills are shown on alternating panels, so a row can
+    /// only satisfy both groups across multiple OCR polls.
+    support_level_progress: SupportLevelPanelProgress,
     servants_placed: Vec<u32>,
     // Battle progress tracking
     battle: BattleState,
@@ -901,6 +1038,7 @@ impl Runner {
             support_class_tab_done: false,
             support_meta: None,
             support_ce_template: None,
+            support_level_progress: SupportLevelPanelProgress::default(),
             servants_placed: Vec::new(),
             battle: BattleState::new(),
             completed_mission_runs: 0,
@@ -1291,10 +1429,14 @@ impl Runner {
 
         // OCR the current (class-filtered) screen and look for a row
         // whose name + NP both fuzzy-match the pinned servant.
-        let result = match self
-            .sidecar()
-            .find_supports(None, &meta.name, &meta.np_names)
-        {
+        let include_support_details =
+            self.server == crate::Server::Cn && self.has_support_level_requirements();
+        let result = match self.sidecar().find_supports(
+            None,
+            &meta.name,
+            &meta.np_names,
+            include_support_details,
+        ) {
             Ok(r) => r,
             Err(e) => {
                 self.fail_action("SupportSelect", "OCR 助战识别", e);
@@ -1303,23 +1445,47 @@ impl Runner {
         };
 
         // `supports` is already sorted top-down by the sidecar. Default
-        // pick = first match, but if the user pinned a CE on the support
-        // slot we filter rows by CE-template score first and fall through
-        // to the scroll/refresh path when no row's CE matches.
+        // pick = first match, but optional CE / level filters can reject
+        // rows before we tap.
         let ce_template = self.resolve_support_ce_template();
-        let chosen = match (ce_template.as_deref(), result.supports.first()) {
-            (Some(template), _) if !result.supports.is_empty() => {
-                self.pick_support_row_with_ce(&result.supports, template)
+        let mut waiting_for_skill_panel = false;
+        let mut level_filter_missed = false;
+        let mut chosen_index: Option<usize> = None;
+        for (index, row) in result.supports.iter().enumerate() {
+            if let Some(template) = ce_template.as_deref() {
+                if !self.support_row_matches_ce(row, template) {
+                    continue;
+                }
             }
-            (_, first) => first,
-        };
+            match support_row_matches_level_requirements_with_progress(
+                self.server,
+                &self.config,
+                row,
+                &mut self.support_level_progress,
+            ) {
+                SupportLevelFilter::Pass => {
+                    chosen_index = Some(index);
+                    break;
+                }
+                SupportLevelFilter::WaitingForPanel => {
+                    waiting_for_skill_panel = true;
+                }
+                SupportLevelFilter::Fail => {
+                    level_filter_missed = true;
+                }
+            }
+        }
+        let chosen = chosen_index.and_then(|index| result.supports.get(index));
 
         if let Some(row) = chosen {
             self.emit(
                 "SupportSelect",
                 &format!(
-                    "找到助战 {} (name {:.2}, np {:.2})",
-                    meta.name, row.name_score, row.np_score,
+                    "找到助战 {} (name {:.2}, np {:.2}){}",
+                    meta.name,
+                    row.name_score,
+                    row.np_score,
+                    support_skill_diag_message(row),
                 ),
             );
             if !self.tap_at("SupportSelect", row.tap) {
@@ -1329,6 +1495,7 @@ impl Runner {
             self.support_scroll_count = 0;
             self.support_refresh_count = 0;
             self.support_class_tab_done = false;
+            self.support_level_progress = SupportLevelPanelProgress::default();
             thread::sleep(ACTION_DELAY);
             return;
         }
@@ -1339,6 +1506,14 @@ impl Runner {
         // (vs a name miss).
         if ce_template.is_some() && !result.supports.is_empty() {
             self.emit("SupportSelect", "找到从者但礼装不匹配，继续滚动…");
+        }
+        if waiting_for_skill_panel {
+            self.emit("SupportSelect", "找到从者，等待技能显示自动切换…");
+            thread::sleep(SUPPORT_SCROLL_SETTLE);
+            return;
+        }
+        if level_filter_missed {
+            self.emit("SupportSelect", "找到从者但技能/宝具等级不匹配，继续滚动…");
         }
 
         // No match in the visible viewport. The scroll-bar tail indicator
@@ -1362,6 +1537,7 @@ impl Runner {
                 return;
             }
             self.support_scroll_count += 1;
+            self.support_level_progress = SupportLevelPanelProgress::default();
             thread::sleep(SUPPORT_SCROLL_SETTLE);
         } else if self.support_refresh_count < SUPPORT_MAX_REFRESHES {
             self.emit(
@@ -1377,6 +1553,7 @@ impl Runner {
             }
             self.support_scroll_count = 0;
             self.support_refresh_count += 1;
+            self.support_level_progress = SupportLevelPanelProgress::default();
             // Refresh occasionally snaps the class filter back to "all";
             // re-tap the class tab on the next poll to be safe.
             self.support_class_tab_done = false;
@@ -1426,41 +1603,42 @@ impl Runner {
         ce_search_region(row.row_region)
     }
 
-    /// Iterate `rows` top-down and return the first whose CE icon scores
-    /// at or above `SUPPORT_CE_THRESHOLD` against `template_path`. A
-    /// transient verify error treats that row as "didn't pass" so the
-    /// caller will fall through to the scroll/refresh path instead of
-    /// hanging on a sidecar blip.
-    fn pick_support_row_with_ce<'a>(
-        &mut self,
-        rows: &'a [SupportRowMatch],
-        template_path: &Path,
-    ) -> Option<&'a SupportRowMatch> {
-        for row in rows {
-            let region = Self::support_ce_search_region(row);
-            match self.sidecar().verify_support_ce(
-                None,
-                region,
-                template_path,
-                SUPPORT_CE_THRESHOLD,
-            ) {
-                Ok((score, passed)) => {
-                    eprintln!(
-                        "[runner] support CE verify: score={:.3} threshold={:.2} -> {}",
-                        score,
-                        SUPPORT_CE_THRESHOLD,
-                        if passed { "PASS" } else { "skip" },
-                    );
-                    if passed {
-                        return Some(row);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("[runner] support CE verify failed (treating as skip): {e}");
-                }
+    /// Return true when a row's CE icon scores at or above
+    /// `SUPPORT_CE_THRESHOLD` against `template_path`.
+    fn support_row_matches_ce(&mut self, row: &SupportRowMatch, template_path: &Path) -> bool {
+        let region = Self::support_ce_search_region(row);
+        match self
+            .sidecar()
+            .verify_support_ce(None, region, template_path, SUPPORT_CE_THRESHOLD)
+        {
+            Ok((score, passed)) => {
+                eprintln!(
+                    "[runner] support CE verify: score={:.3} threshold={:.2} -> {}",
+                    score,
+                    SUPPORT_CE_THRESHOLD,
+                    if passed { "PASS" } else { "skip" },
+                );
+                passed
+            }
+            Err(e) => {
+                eprintln!("[runner] support CE verify failed (treating as skip): {e}");
+                false
             }
         }
-        None
+    }
+
+    fn has_support_level_requirements(&self) -> bool {
+        self.config.support_noble_phantasm_level_min.is_some()
+            || self
+                .config
+                .support_skill_level_mins
+                .iter()
+                .any(Option::is_some)
+            || self
+                .config
+                .support_append_skill_level_mins
+                .iter()
+                .any(Option::is_some)
     }
 
     /// Return true when the scroll-bar-end indicator is visible in the
@@ -2705,6 +2883,9 @@ mod tests {
         // Other defaults travel through the same path; sanity-check
         // them so legacy `projects.json` rows keep deserializing.
         assert!(cfg.support_servant_id.is_none());
+        assert!(cfg.support_noble_phantasm_level_min.is_none());
+        assert_eq!(cfg.support_skill_level_mins, [None; 3]);
+        assert_eq!(cfg.support_append_skill_level_mins, [None; 5]);
         assert_eq!(cfg.repeat_mission, false);
         assert_eq!(cfg.max_mission_runs, None);
         assert!(cfg.ap_recovery_items.is_empty());
@@ -2727,17 +2908,120 @@ mod tests {
     fn run_config_round_trips_support_servant_id_and_repeat_flag() {
         let mut payload = minimal_run_config_json();
         payload["supportServantId"] = serde_json::json!(284);
+        payload["supportNoblePhantasmLevelMin"] = serde_json::json!(2);
+        payload["supportSkillLevelMins"] = serde_json::json!([10, null, 9]);
+        payload["supportAppendSkillLevelMins"] = serde_json::json!([null, 10, null, null, 6]);
         payload["repeatMission"] = serde_json::json!(true);
         payload["maxMissionRuns"] = serde_json::json!(3);
         payload["apRecoveryItems"] = serde_json::json!(["gold", "bronze"]);
         let cfg: RunConfig = serde_json::from_value(payload).unwrap();
         assert_eq!(cfg.support_servant_id, Some(284));
+        assert_eq!(cfg.support_noble_phantasm_level_min, Some(2));
+        assert_eq!(cfg.support_skill_level_mins, [Some(10), None, Some(9)]);
+        assert_eq!(
+            cfg.support_append_skill_level_mins,
+            [None, Some(10), None, None, Some(6)]
+        );
         assert_eq!(cfg.repeat_mission, true);
         assert_eq!(cfg.max_mission_runs, Some(3));
         assert_eq!(
             cfg.ap_recovery_items,
             vec![ApRecoveryItem::Gold, ApRecoveryItem::Bronze]
         );
+    }
+
+    #[test]
+    fn support_level_meets_treats_none_requirement_as_any() {
+        assert!(support_level_meets(None, None));
+        assert!(support_level_meets(Some(1), None));
+        assert!(!support_level_meets(None, Some(1)));
+        assert!(!support_level_meets(Some(4), Some(5)));
+        assert!(support_level_meets(Some(5), Some(5)));
+        assert!(support_level_meets(Some(10), Some(5)));
+    }
+
+    fn support_row(
+        panel: Option<&str>,
+        skills: Vec<Option<u32>>,
+        append: Vec<Option<u32>>,
+    ) -> SupportRowMatch {
+        let region = NormRect {
+            x: 0.1,
+            y: 0.5,
+            w: 0.4,
+            h: 0.1,
+        };
+        SupportRowMatch {
+            row_region: region,
+            tap: Point::new(0.3, 0.55),
+            name_text: "哈贝特洛特".into(),
+            name_score: 1.0,
+            name_region: region,
+            np_text: "为你纺织的时光之轮等级5".into(),
+            np_score: 1.0,
+            np_region: region,
+            np_matched_name: "为你纺织的时光之轮".into(),
+            np_level: Some(5),
+            skill_panel: panel.map(str::to_string),
+            skill_levels: skills,
+            append_skill_levels: append,
+            skill_level_diagnostics: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn support_level_filter_accumulates_owned_and_append_panels() {
+        let mut payload = minimal_run_config_json();
+        payload["supportSkillLevelMins"] = serde_json::json!([10, null, 9]);
+        payload["supportAppendSkillLevelMins"] = serde_json::json!([null, 10, null, null, null]);
+        let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+        let mut progress = SupportLevelPanelProgress::default();
+
+        assert_eq!(
+            support_row_matches_level_requirements_with_progress(
+                Server::Cn,
+                &cfg,
+                &support_row(Some("owned"), vec![Some(10), Some(1), Some(9)], vec![]),
+                &mut progress,
+            ),
+            SupportLevelFilter::WaitingForPanel
+        );
+        assert!(progress.owned_met);
+        assert!(!progress.append_met);
+
+        assert_eq!(
+            support_row_matches_level_requirements_with_progress(
+                Server::Cn,
+                &cfg,
+                &support_row(
+                    Some("append"),
+                    vec![],
+                    vec![None, Some(10), None, None, None],
+                ),
+                &mut progress,
+            ),
+            SupportLevelFilter::Pass
+        );
+    }
+
+    #[test]
+    fn support_level_filter_fails_visible_panel_before_waiting_for_other_panel() {
+        let mut payload = minimal_run_config_json();
+        payload["supportSkillLevelMins"] = serde_json::json!([10, null, null]);
+        payload["supportAppendSkillLevelMins"] = serde_json::json!([null, 10, null, null, null]);
+        let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+        let mut progress = SupportLevelPanelProgress::default();
+
+        assert_eq!(
+            support_row_matches_level_requirements_with_progress(
+                Server::Cn,
+                &cfg,
+                &support_row(Some("owned"), vec![Some(9), Some(10), Some(10)], vec![]),
+                &mut progress,
+            ),
+            SupportLevelFilter::Fail
+        );
+        assert!(!progress.owned_met);
     }
 
     #[test]

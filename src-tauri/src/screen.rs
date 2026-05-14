@@ -217,6 +217,22 @@ pub struct SupportRowMatch {
     /// Which entry of the caller's ``expected_np_names`` list won the fuzzy
     /// match — useful when a servant has multiple candidate NPs.
     pub np_matched_name: String,
+    /// Parsed NP level shown at the end of the row. Present only when the
+    /// caller enables CN support-detail extraction.
+    #[serde(default)]
+    pub np_level: Option<u32>,
+    /// Current right-side skill panel kind: "owned" or "append".
+    #[serde(default)]
+    pub skill_panel: Option<String>,
+    /// Visible owned skill levels. Missing/unopened levels are `None`.
+    #[serde(default)]
+    pub skill_levels: Vec<Option<u32>>,
+    /// Visible append skill levels. Missing/unopened levels are `None`.
+    #[serde(default)]
+    pub append_skill_levels: Vec<Option<u32>>,
+    /// Per-slot skill recognition diagnostics returned by the sidecar.
+    #[serde(default)]
+    pub skill_level_diagnostics: Vec<serde_json::Value>,
 }
 
 /// One OCR fragment that fuzzy-matched the expected servant-name or NP-name
@@ -328,6 +344,12 @@ pub struct SupportDiagnostics {
     /// translation doesn't match the in-game text.
     #[serde(default)]
     pub name_only_reason: String,
+    #[serde(default)]
+    pub cv_file: String,
+    #[serde(default)]
+    pub cv_fingerprint: String,
+    #[serde(default)]
+    pub support_skill_contour_split: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -913,11 +935,13 @@ impl SidecarClient {
         image_path: Option<&Path>,
         expected_name: &str,
         expected_np_names: &[String],
+        include_support_details: bool,
     ) -> Result<FindSupportsResult, String> {
         let mut req = serde_json::json!({
             "cmd": "find_supports",
             "expectedName": expected_name,
             "expectedNpNames": expected_np_names,
+            "includeSupportDetails": include_support_details,
         });
         Self::add_image_path(&mut req, image_path);
 

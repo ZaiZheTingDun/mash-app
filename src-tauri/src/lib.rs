@@ -78,12 +78,26 @@ impl FromStr for Server {
 }
 
 // ---------------------------------------------------------------------------
-// scrcpy stream tunables. Keep the live frame below native emulator
-// resolution so PyAV decode + OpenCV matching stay responsive on M1-class
-// laptops. Bit rate is the H.264 budget.
+// scrcpy stream tunables. Use 1080p as the minimum supported CV input:
+// lower resolutions make support skill icons and two-digit levels too unstable.
+// Bit rate is the H.264 budget.
 // ---------------------------------------------------------------------------
-pub(crate) const STREAM_MAX_SIZE: u32 = 1280;
-pub(crate) const STREAM_BIT_RATE: u32 = 8_000_000;
+pub(crate) const STREAM_MAX_SIZE: u32 = 1920;
+pub(crate) const STREAM_MIN_LONG_SIDE: u32 = 1920;
+pub(crate) const STREAM_MIN_SHORT_SIDE: u32 = 1080;
+pub(crate) const STREAM_BIT_RATE: u32 = 12_000_000;
+
+pub(crate) fn stream_meets_minimum_resolution(width: u32, height: u32) -> bool {
+    let long = width.max(height);
+    let short = width.min(height);
+    long >= STREAM_MIN_LONG_SIDE && short >= STREAM_MIN_SHORT_SIDE
+}
+
+pub(crate) fn stream_resolution_error(width: u32, height: u32) -> String {
+    format!(
+        "当前视频流分辨率为 {width}x{height}，低于最低支持的 1920x1080。请将模拟器/设备分辨率调整到至少 1080p 后重试。"
+    )
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
@@ -219,6 +233,14 @@ fn default_project_slots() -> Vec<ProjectSlot> {
     ]
 }
 
+fn default_support_skill_level_mins() -> [Option<u32>; 3] {
+    [None; 3]
+}
+
+fn default_support_append_skill_level_mins() -> [Option<u32>; 5] {
+    [None; 5]
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum ProjectRepeatMode {
@@ -248,6 +270,17 @@ pub struct Project {
     pub support_servant_id: Option<u32>,
     #[serde(default)]
     pub support_servant_variant_key: Option<String>,
+    /// Optional support-search NP minimum level. `None` means "任意".
+    #[serde(default)]
+    pub support_noble_phantasm_level_min: Option<u32>,
+    /// Optional support-search owned skill minimum levels, one entry per
+    /// skill slot. `None` means "任意".
+    #[serde(default = "default_support_skill_level_mins")]
+    pub support_skill_level_mins: [Option<u32>; 3],
+    /// Optional support-search append skill minimum levels, one entry per
+    /// append slot. `None` means "任意".
+    #[serde(default = "default_support_append_skill_level_mins")]
+    pub support_append_skill_level_mins: [Option<u32>; 5],
     /// Team-builder grid layout (chosen servants + slot order). Persisted
     /// so the user's selections survive app restarts and project switches.
     /// Defaulted via `default_project_slots` for legacy rows.
@@ -352,6 +385,9 @@ fn create_project(app: tauri::AppHandle, name: String) -> Result<Project, String
         name,
         support_servant_id: None,
         support_servant_variant_key: None,
+        support_noble_phantasm_level_min: None,
+        support_skill_level_mins: default_support_skill_level_mins(),
+        support_append_skill_level_mins: default_support_append_skill_level_mins(),
         slots: default_project_slots(),
         repeat_mission: false,
         repeat_mode: Some(ProjectRepeatMode::Single),
@@ -1386,6 +1422,12 @@ fn start_automation(
             STREAM_BIT_RATE,
         )
         .map_err(|e| format!("启动 scrcpy 视频流失败: {e}"))?;
+    if !stream_meets_minimum_resolution(w, h) {
+        if let Err(err) = sidecar.stop_stream() {
+            eprintln!("[runner] stop unsupported-resolution stream failed: {err}");
+        }
+        return Err(stream_resolution_error(w, h));
+    }
     let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
     if input_size != (w, h) {
         eprintln!(
@@ -1508,6 +1550,12 @@ fn start_enhancement_automation(
             STREAM_BIT_RATE,
         )
         .map_err(|e| format!("启动 scrcpy 视频流失败: {e}"))?;
+    if !stream_meets_minimum_resolution(w, h) {
+        if let Err(err) = sidecar.stop_stream() {
+            eprintln!("[enhancement] stop unsupported-resolution stream failed: {err}");
+        }
+        return Err(stream_resolution_error(w, h));
+    }
     let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
     if input_size != (w, h) {
         eprintln!(
@@ -2092,6 +2140,18 @@ async fn import_runtime_bundle(
 /// setting hands the sidecar a different template set without touching
 /// any JP fixture.
 pub(crate) fn resolve_templates_dir(app: &tauri::AppHandle, server: Server) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    {
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("servers")
+            .join(server.dir_token())
+            .join("templates");
+        if dev.is_dir() {
+            return Some(dev);
+        }
+    }
+
     let base = app.path().resource_dir().ok()?;
     Some(
         base.join("resources")
@@ -2103,6 +2163,18 @@ pub(crate) fn resolve_templates_dir(app: &tauri::AppHandle, server: Server) -> O
 
 /// Resolve the bundled cv.json path for the given server.
 pub(crate) fn resolve_cv_config_path(app: &tauri::AppHandle, server: Server) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    {
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("servers")
+            .join(server.dir_token())
+            .join("cv.json");
+        if dev.is_file() {
+            return Some(dev);
+        }
+    }
+
     let base = app.path().resource_dir().ok()?;
     Some(
         base.join("resources")
@@ -2193,6 +2265,18 @@ pub(crate) fn resolve_sidecar_exe(app: &tauri::AppHandle) -> Option<PathBuf> {
 }
 
 pub(crate) fn resolve_sidecar_code_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    {
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .map(|root| root.join("sidecar").join("mash_cv"));
+        if let Some(dev) = dev {
+            if dev.join("mash_cv").is_dir() {
+                return Some(dev);
+            }
+        }
+    }
+
     let manifest = runtime_manifest(app).ok()?;
     Some(runtime_code_path(
         &runtime_root_dir(app),
@@ -2536,13 +2620,13 @@ mod tests {
 
     #[test]
     fn input_size_for_taps_uses_stream_when_adb_size_missing() {
-        assert_eq!(input_size_for_taps(None, (1280, 720)), (1280, 720));
+        assert_eq!(input_size_for_taps(None, (1920, 1080)), (1920, 1080));
     }
 
     #[test]
     fn input_size_for_taps_prefers_adb_size_with_matching_orientation() {
         assert_eq!(
-            input_size_for_taps(Some((2560, 1440)), (1280, 720)),
+            input_size_for_taps(Some((2560, 1440)), (1920, 1080)),
             (2560, 1440)
         );
     }
@@ -2550,9 +2634,17 @@ mod tests {
     #[test]
     fn input_size_for_taps_swaps_adb_size_to_match_stream_orientation() {
         assert_eq!(
-            input_size_for_taps(Some((1080, 1920)), (1280, 720)),
+            input_size_for_taps(Some((1080, 1920)), (1920, 1080)),
             (1920, 1080)
         );
+    }
+
+    #[test]
+    fn stream_minimum_resolution_requires_1080p_landscape_or_better() {
+        assert!(stream_meets_minimum_resolution(1920, 1080));
+        assert!(stream_meets_minimum_resolution(2560, 1440));
+        assert!(!stream_meets_minimum_resolution(1280, 720));
+        assert!(!stream_meets_minimum_resolution(1600, 900));
     }
 
     // --- default_project_slots -----------------------------------------
@@ -2639,6 +2731,9 @@ mod tests {
         let project: Project = serde_json::from_value(json).unwrap();
         assert_eq!(project.slots.len(), 6);
         assert!(project.support_servant_id.is_none());
+        assert!(project.support_noble_phantasm_level_min.is_none());
+        assert_eq!(project.support_skill_level_mins, [None; 3]);
+        assert_eq!(project.support_append_skill_level_mins, [None; 5]);
         assert_eq!(project.repeat_mission, false);
         assert!(project.repeat_mode.is_none());
         assert!(project.repeat_count.is_none());
@@ -2652,6 +2747,9 @@ mod tests {
             name: "Legacy".into(),
             support_servant_id: None,
             support_servant_variant_key: None,
+            support_noble_phantasm_level_min: None,
+            support_skill_level_mins: default_support_skill_level_mins(),
+            support_append_skill_level_mins: default_support_append_skill_level_mins(),
             slots: default_project_slots(),
             repeat_mission: true,
             repeat_mode: None,
