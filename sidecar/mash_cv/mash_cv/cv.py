@@ -63,8 +63,10 @@ stream frame is used):
 
 import base64
 import difflib
+import hashlib
 import json
 import os
+import re
 import sys
 import time
 import unicodedata
@@ -222,6 +224,51 @@ SUPPORT_NP_BELOW_NAME_MIN_DY = 0.005
 # admitting unrelated fragments.
 SUPPORT_NAME_THRESHOLD = 0.65
 SUPPORT_NP_THRESHOLD = 0.65
+
+# Right-side support-detail panel. These are absolute screen fractions from
+# CN 2560x1440 support screenshots; the UI scales proportionally.
+SUPPORT_SKILL_ICON_XS = [0.648, 0.682, 0.716, 0.750, 0.784]
+SUPPORT_SKILL_ICON_W = 0.029
+SUPPORT_SKILL_ICON_H = 0.056
+SUPPORT_SKILL_ICON_Y_IN_ROW = 1.12
+SUPPORT_SKILL_DIGIT_REGION = {"x": 0.00, "y": 0.45, "w": 0.55, "h": 0.55}
+SUPPORT_APPEND_LOCKED_MEAN_MAX = 82.0
+SUPPORT_PANEL_TEMPLATE_REGION = {"x": 0.635, "y": 0.55, "w": 0.15, "h": 0.55}
+SUPPORT_PANEL_TEMPLATE_MIN_DELTA = 0.08
+SUPPORT_PANEL_TEMPLATE_MIN_SCORE = 0.55
+SUPPORT_SKILL_SLOT_SEARCH = {"x": 0.63, "y": 0.02, "w": 0.17, "h": 0.16}
+SUPPORT_SKILL_SLOT_MIN_W = 0.020
+SUPPORT_SKILL_SLOT_MAX_W = 0.041
+SUPPORT_SKILL_SLOT_MIN_H = 0.040
+SUPPORT_SKILL_SLOT_MAX_H = 0.060
+SUPPORT_SKILL_SLOT_RIGHT_LIMIT = 0.795
+SUPPORT_SKILL_SLOT_EXPECTED_W = 0.027
+SUPPORT_SKILL_SLOT_MIN_PITCH = 0.027
+SUPPORT_SKILL_SLOT_MAX_PITCH = 0.038
+SUPPORT_SKILL_LEVEL_MIN_SCORE = 0.34
+SUPPORT_SKILL_LEVEL_TEN_MIN_SCORE = 0.56
+SUPPORT_SKILL_LEVEL_DEDICATED_MIN_SCORE = 0.62
+SUPPORT_SKILL_LEVEL_DEDICATED_MIN_MARGIN = 0.06
+SUPPORT_SKILL_LEVEL_ZERO_MIN_SCORE = 0.70
+SUPPORT_SKILL_LEVEL_GENERIC_MIN_MARGIN = 0.12
+SUPPORT_SKILL_LEVEL_ZERO_ROI = {"x": 0.323, "y": 0.431, "w": 0.431, "h": 0.569}
+SUPPORT_SKILL_LEVEL_DIGIT_ROI = {"x": 0.015, "y": 0.462, "w": 0.446, "h": 0.538}
+
+
+def _cv_code_fingerprint() -> str:
+    try:
+        with open(__file__, "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()[:12]
+    except OSError:
+        return "unknown"
+
+
+def _support_diagnostics_meta() -> dict:
+    return {
+        "cvFile": __file__,
+        "cvFingerprint": _cv_code_fingerprint(),
+        "supportSkillContourSplit": True,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -997,6 +1044,69 @@ def _read_level_digits(
     except ValueError:
         return _wrap(False, fail="parse_error")
     return _wrap(True, current, max_level, f"{current}/{max_level}")
+
+
+def _read_integer_digits(
+    img: np.ndarray,
+    region: dict,
+    *,
+    prefix: str = LEVEL_DIGIT_TEMPLATE_PREFIX,
+    suffix: str = LEVEL_DIGIT_TEMPLATE_SUFFIX,
+    bright_threshold: int = LEVEL_DIGIT_BRIGHT_THRESHOLD,
+    min_score: float = LEVEL_DIGIT_MIN_SCORE,
+) -> Optional[int]:
+    """Read a small integer from a tight digit ROI.
+
+    Used for support skill levels, where the game renders only ``1``..``10``
+    on top of the skill icon rather than a ``current/max`` pair.
+    """
+    refs, missing = _load_digit_template_masks(prefix, suffix)
+    if missing:
+        refs, missing = _load_digit_template_masks("digit_", "")
+        if missing:
+            return None
+    h, w = img.shape[:2]
+    rx = max(0, int(round(region["x"] * w)))
+    ry = max(0, int(round(region["y"] * h)))
+    rw = max(1, min(int(round(region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(region["h"] * h)), h - ry))
+    roi = img[ry : ry + rh, rx : rx + rw]
+    if roi.size == 0:
+        return None
+
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    mask = cv2.inRange(gray, int(bright_threshold), 255)
+    count, _labels, stats, _centroids = cv2.connectedComponentsWithStats(mask, 8)
+    candidates: list[dict] = []
+    for idx in range(1, count):
+        x, y, cw, ch, area = [int(v) for v in stats[idx]]
+        if area < max(16, int(rw * rh * 0.01)):
+            continue
+        if cw < 3 or ch < 8:
+            continue
+        glyph = mask[y : y + ch, x : x + cw]
+        digit, score = _classify_digit_glyph(glyph, refs)
+        if digit is None or score < min_score:
+            continue
+        candidates.append({"digit": int(digit), "score": float(score), "x": x, "w": cw})
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda c: -float(c["score"]))
+    kept: list[dict] = []
+    for cand in candidates:
+        cx = float(cand["x"]) + float(cand["w"]) / 2.0
+        if any(abs(cx - (float(k["x"]) + float(k["w"]) / 2.0)) < max(float(cand["w"]), float(k["w"])) * 0.6 for k in kept):
+            continue
+        kept.append(cand)
+    kept.sort(key=lambda c: int(c["x"]))
+    try:
+        value = int("".join(str(c["digit"]) for c in kept))
+    except ValueError:
+        return None
+    if value < 1 or value > 10:
+        return None
+    return value
 
 
 def _read_battle_scene(
@@ -1951,6 +2061,7 @@ def _find_supports(
     name_threshold: float,
     np_threshold: float,
     pair_dy: float,
+    include_support_details: bool = False,
 ) -> dict:
     """OCR the support-select list region and return matched support rows.
 
@@ -1985,6 +2096,7 @@ def _find_supports(
         # cross-check so the operator can spot bad data.
         "nameOnlyFallback": False,
         "nameOnlyReason": "",
+        **_support_diagnostics_meta(),
     }
     if h == 0 or w == 0:
         return {"supports": [], "diagnostics": diag}
@@ -2142,6 +2254,8 @@ def _find_supports(
                 }
             )
         rows.sort(key=lambda s: s["rowRegion"]["y"])
+        if include_support_details:
+            _support_add_details(img, rows, fragments)
         return {"supports": rows, "diagnostics": diag}
 
     # Greedy proximity pairing. Sort name candidates strongest-first so the
@@ -2208,7 +2322,410 @@ def _find_supports(
 
     # Stable order: top-down so the runner can pick "first visible match".
     supports.sort(key=lambda s: s["rowRegion"]["y"])
+    if include_support_details:
+        _support_add_details(img, supports, fragments)
     return {"supports": supports, "diagnostics": diag}
+
+
+def _support_parse_np_level_text(text: str) -> Optional[int]:
+    m = re.search(r"等级\s*([1-5])", text)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def _support_extract_np_level(fragments: list[dict], row_region: dict, np_text: str = "") -> Optional[int]:
+    from_np_text = _support_parse_np_level_text(np_text)
+    if from_np_text is not None:
+        return from_np_text
+    y0 = float(row_region["y"]) - 0.02
+    y1 = float(row_region["y"]) + float(row_region["h"]) + 0.04
+    for fragment in fragments:
+        region = fragment.get("region") or {}
+        yc = float(region.get("y", 0.0)) + float(region.get("h", 0.0)) / 2.0
+        if yc < y0 or yc > y1:
+            continue
+        text = str(fragment.get("text", ""))
+        level = _support_parse_np_level_text(text)
+        if level is not None:
+            return level
+    return None
+
+
+def _support_icon_region(row_region: dict, index: int) -> dict:
+    y = float(row_region["y"]) + float(row_region["h"]) * SUPPORT_SKILL_ICON_Y_IN_ROW
+    return {
+        "x": SUPPORT_SKILL_ICON_XS[index],
+        "y": y,
+        "w": SUPPORT_SKILL_ICON_W,
+        "h": SUPPORT_SKILL_ICON_H,
+    }
+
+
+def _support_crop(img: np.ndarray, region: dict) -> np.ndarray:
+    h, w = img.shape[:2]
+    rx = max(0, int(round(region["x"] * w)))
+    ry = max(0, int(round(region["y"] * h)))
+    rw = max(1, min(int(round(region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(region["h"] * h)), h - ry))
+    return img[ry : ry + rh, rx : rx + rw]
+
+
+def _support_icon_present(img: np.ndarray, region: dict) -> bool:
+    crop = _support_crop(img, region)
+    if crop.size == 0:
+        return False
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 70, 150)
+    edge_density = float((edges > 0).mean())
+    return edge_density > 0.055 or float(gray.mean()) < SUPPORT_APPEND_LOCKED_MEAN_MAX
+
+
+def _support_skill_digit_region(icon_region: dict) -> dict:
+    return {
+        "x": float(icon_region["x"]) + SUPPORT_SKILL_DIGIT_REGION["x"] * float(icon_region["w"]),
+        "y": float(icon_region["y"]) + SUPPORT_SKILL_DIGIT_REGION["y"] * float(icon_region["h"]),
+        "w": SUPPORT_SKILL_DIGIT_REGION["w"] * float(icon_region["w"]),
+        "h": SUPPORT_SKILL_DIGIT_REGION["h"] * float(icon_region["h"]),
+    }
+
+
+def _support_skill_search_region(row_region: dict) -> dict:
+    return {
+        "x": SUPPORT_SKILL_SLOT_SEARCH["x"],
+        "y": float(row_region["y"]) + SUPPORT_SKILL_SLOT_SEARCH["y"],
+        "w": SUPPORT_SKILL_SLOT_SEARCH["w"],
+        "h": SUPPORT_SKILL_SLOT_SEARCH["h"],
+    }
+
+
+def _support_find_skill_slots(img: np.ndarray, row_region: dict) -> list[dict]:
+    h, w = img.shape[:2]
+    search = _support_skill_search_region(row_region)
+    sx = max(0, int(round(search["x"] * w)))
+    sy = max(0, int(round(search["y"] * h)))
+    sw = max(1, min(int(round(search["w"] * w)), w - sx))
+    sh = max(1, min(int(round(search["h"] * h)), h - sy))
+    crop = img[sy : sy + sh, sx : sx + sw]
+    if crop.size == 0:
+        return []
+
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 60, 160)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    candidates: list[dict] = []
+    for contour in contours:
+        x, y, cw, ch = cv2.boundingRect(contour)
+        nx = (sx + x) / w
+        ny = (sy + y) / h
+        nw = cw / w
+        nh = ch / h
+        if nx + nw > SUPPORT_SKILL_SLOT_RIGHT_LIMIT:
+            continue
+        if (
+            nw > SUPPORT_SKILL_SLOT_MAX_W
+            and SUPPORT_SKILL_SLOT_MIN_H <= nh <= SUPPORT_SKILL_SLOT_MAX_H
+        ):
+            for slot_count in range(2, 6):
+                pitch = 0.0 if slot_count == 1 else (nw - SUPPORT_SKILL_SLOT_EXPECTED_W) / (slot_count - 1)
+                if SUPPORT_SKILL_SLOT_MIN_PITCH <= pitch <= SUPPORT_SKILL_SLOT_MAX_PITCH:
+                    for slot_idx in range(slot_count):
+                        candidates.append(
+                            {
+                                "x": float(nx + pitch * slot_idx),
+                                "y": float(ny),
+                                "w": SUPPORT_SKILL_SLOT_EXPECTED_W,
+                                "h": float(nh),
+                            }
+                        )
+                    break
+            continue
+        if not (SUPPORT_SKILL_SLOT_MIN_W <= nw <= SUPPORT_SKILL_SLOT_MAX_W):
+            continue
+        if not (SUPPORT_SKILL_SLOT_MIN_H <= nh <= SUPPORT_SKILL_SLOT_MAX_H):
+            continue
+        aspect = cw / max(1, ch)
+        if aspect < 0.75 or aspect > 1.35:
+            continue
+        candidates.append({"x": float(nx), "y": float(ny), "w": float(nw), "h": float(nh)})
+
+    candidates.sort(key=lambda r: (r["x"], r["y"]))
+    slots: list[dict] = []
+    for cand in candidates:
+        cx = cand["x"] + cand["w"] / 2.0
+        cy = cand["y"] + cand["h"] / 2.0
+        if any(
+            abs(cx - (slot["x"] + slot["w"] / 2.0)) < max(cand["w"], slot["w"]) * 0.65
+            and abs(cy - (slot["y"] + slot["h"] / 2.0)) < max(cand["h"], slot["h"]) * 0.65
+            for slot in slots
+        ):
+            continue
+        slots.append(cand)
+    return slots
+
+
+def _support_level_template_refs() -> list[tuple[int, np.ndarray]]:
+    refs: list[tuple[int, np.ndarray]] = []
+    for digit in range(1, 10):
+        tmpl = _get_template(_digit_template_key(digit, "digit_", ""))
+        if tmpl is None:
+            continue
+        _, mask = cv2.threshold(tmpl, 180, 255, cv2.THRESH_BINARY)
+        refs.append((digit, mask))
+    return refs
+
+
+def _support_dedicated_level_template_refs() -> list[tuple[int, np.ndarray]]:
+    refs: list[tuple[int, np.ndarray]] = []
+    for level in range(1, 10):
+        tmpl = _get_template(f"digit-type-3/{level}")
+        if tmpl is None:
+            continue
+        if len(tmpl.shape) == 3:
+            tmpl = cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
+        _, mask = cv2.threshold(tmpl, 180, 255, cv2.THRESH_BINARY)
+        refs.append((level, mask))
+    return refs
+
+
+def _support_dedicated_digit_template(digit: int) -> Optional[np.ndarray]:
+    tmpl = _get_template(f"digit-type-3/{digit}")
+    if tmpl is None:
+        return None
+    if len(tmpl.shape) == 3:
+        tmpl = cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
+    _, mask = cv2.threshold(tmpl, 180, 255, cv2.THRESH_BINARY)
+    return mask
+
+
+def _support_digit_template_mask(digit: int) -> Optional[np.ndarray]:
+    tmpl = _get_template(_digit_template_key(digit, "digit_", ""))
+    if tmpl is None:
+        return None
+    _, mask = cv2.threshold(tmpl, 180, 255, cv2.THRESH_BINARY)
+    return mask
+
+
+def _support_template_match_score(glyph: np.ndarray, ref: np.ndarray) -> float:
+    best_score = 0.0
+    for scale in np.linspace(0.35, 1.25, 19):
+        tw = max(3, int(round(ref.shape[1] * scale)))
+        th = max(6, int(round(ref.shape[0] * scale)))
+        if tw > glyph.shape[1] or th > glyph.shape[0]:
+            continue
+        resized = cv2.resize(ref, (tw, th), interpolation=cv2.INTER_AREA)
+        score = float(cv2.matchTemplate(glyph, resized, cv2.TM_CCOEFF_NORMED).max())
+        if score > best_score:
+            best_score = score
+    return best_score
+
+
+def _support_skill_level_glyph(
+    icon: np.ndarray, roi: dict = SUPPORT_SKILL_LEVEL_DIGIT_ROI
+) -> Optional[np.ndarray]:
+    if icon.size == 0:
+        return None
+    ih, iw = icon.shape[:2]
+    x0 = max(0, int(round(roi["x"] * iw)))
+    y0 = max(0, int(round(roi["y"] * ih)))
+    x1 = min(iw, int(round((roi["x"] + roi["w"]) * iw)))
+    y1 = min(ih, int(round((roi["y"] + roi["h"]) * ih)))
+    if x1 <= x0 or y1 <= y0:
+        return None
+    crop = icon[y0:y1, x0:x1]
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    mask = ((hsv[:, :, 1] < 95) & (hsv[:, :, 2] > 150)).astype("uint8") * 255
+    ys, xs = np.where(mask > 0)
+    if len(xs) == 0:
+        return None
+    return mask[
+        max(0, int(ys.min()) - 1) : min(mask.shape[0], int(ys.max()) + 2),
+        max(0, int(xs.min()) - 1) : min(mask.shape[1], int(xs.max()) + 2),
+    ]
+
+
+def _support_match_level_refs(
+    glyph: np.ndarray, refs: list[tuple[int, np.ndarray]]
+) -> tuple[Optional[int], float, float]:
+    best_level: Optional[int] = None
+    best_score = 0.0
+    second_score = 0.0
+    for level, ref in refs:
+        score = _support_template_match_score(glyph, ref)
+        if score > best_score:
+            second_score = best_score
+            best_level = level
+            best_score = score
+        elif score > second_score:
+            second_score = score
+    return best_level, float(best_score), float(second_score)
+
+
+def _support_ten_template_score(glyph: np.ndarray) -> float:
+    one = _support_digit_template_mask(1)
+    zero = _support_digit_template_mask(0)
+    if one is None or zero is None:
+        return 0.0
+    h = max(one.shape[0], zero.shape[0])
+    one = cv2.resize(one, (one.shape[1], h), interpolation=cv2.INTER_NEAREST)
+    zero = cv2.resize(zero, (zero.shape[1], h), interpolation=cv2.INTER_NEAREST)
+    best_score = 0.0
+    for gap in range(0, 11):
+        ref = np.concatenate([one, np.zeros((h, gap), dtype="uint8"), zero], axis=1)
+        best_score = max(best_score, _support_template_match_score(glyph, ref))
+    return best_score
+
+
+def _support_has_zero_component(mask: np.ndarray) -> bool:
+    count, _labels, stats, _centroids = cv2.connectedComponentsWithStats(mask, 8)
+    min_x = mask.shape[1] * 0.32
+    min_w = mask.shape[1] * 0.10
+    min_h = mask.shape[0] * 0.22
+    for idx in range(1, count):
+        x, _y, w, h, area = [int(v) for v in stats[idx]]
+        if x >= min_x and w >= min_w and h >= min_h and area >= 24:
+            return True
+    return False
+
+
+def _read_support_skill_level_info_from_icon(icon: np.ndarray) -> dict:
+    info = {"level": None, "score": 0.0, "source": ""}
+    if icon.size == 0:
+        return info
+
+    glyph = _support_skill_level_glyph(icon, SUPPORT_SKILL_LEVEL_DIGIT_ROI)
+    dedicated_refs = _support_dedicated_level_template_refs()
+
+    zero_ref = _support_dedicated_digit_template(0)
+    zero_glyph = _support_skill_level_glyph(icon, SUPPORT_SKILL_LEVEL_ZERO_ROI)
+    if zero_ref is not None and zero_glyph is not None and dedicated_refs and glyph is not None:
+        zero_score = _support_template_match_score(zero_glyph, zero_ref)
+        level, score, second_score = _support_match_level_refs(glyph, dedicated_refs)
+        if (
+            zero_score >= SUPPORT_SKILL_LEVEL_ZERO_MIN_SCORE
+            and level == 1
+            and score >= SUPPORT_SKILL_LEVEL_DEDICATED_MIN_SCORE
+            and score - second_score >= SUPPORT_SKILL_LEVEL_DEDICATED_MIN_MARGIN
+        ):
+            return {"level": 10, "score": float(zero_score), "source": "support_template10"}
+
+    if glyph is None:
+        return info
+
+    if dedicated_refs:
+        level, score, second_score = _support_match_level_refs(glyph, dedicated_refs)
+        if (
+            level is not None
+            and score >= SUPPORT_SKILL_LEVEL_DEDICATED_MIN_SCORE
+            and score - second_score >= SUPPORT_SKILL_LEVEL_DEDICATED_MIN_MARGIN
+        ):
+            return {"level": level, "score": float(score), "source": "support_template"}
+
+    ten_score = _support_ten_template_score(glyph)
+    if ten_score >= SUPPORT_SKILL_LEVEL_TEN_MIN_SCORE and _support_has_zero_component(glyph):
+        return {"level": 10, "score": float(ten_score), "source": "template10"}
+
+    best_digit, best_score, second_score = _support_match_level_refs(
+        glyph, _support_level_template_refs()
+    )
+    if (
+        best_digit is not None
+        and best_score >= SUPPORT_SKILL_LEVEL_MIN_SCORE
+        and best_score - second_score >= SUPPORT_SKILL_LEVEL_GENERIC_MIN_MARGIN
+    ):
+        return {"level": best_digit, "score": float(best_score), "source": "template"}
+    return {"level": None, "score": float(best_score), "source": "template"}
+
+
+def _read_support_skill_level_from_icon(icon: np.ndarray) -> Optional[int]:
+    value = _read_support_skill_level_info_from_icon(icon).get("level")
+    return int(value) if value is not None else None
+
+
+def _support_read_skill_level(img: np.ndarray, slot_region: dict) -> Optional[int]:
+    icon = _support_crop(img, slot_region)
+    return _read_support_skill_level_from_icon(icon)
+
+
+def _support_read_skill_level_info(img: np.ndarray, slot_region: dict) -> dict:
+    icon = _support_crop(img, slot_region)
+    info = _read_support_skill_level_info_from_icon(icon)
+    return {
+        "level": info["level"],
+        "score": info["score"],
+        "source": info["source"],
+        "region": dict(slot_region),
+    }
+
+
+def _support_panel_template_kind(img: np.ndarray, row_region: dict) -> Optional[str]:
+    owned = _get_template("support_skill_panel_owned")
+    append = _get_template("support_skill_panel_append")
+    if owned is None or append is None:
+        return None
+    region = {
+        "x": SUPPORT_PANEL_TEMPLATE_REGION["x"],
+        "y": float(row_region["y"]) + float(row_region["h"]) * SUPPORT_PANEL_TEMPLATE_REGION["y"],
+        "w": SUPPORT_PANEL_TEMPLATE_REGION["w"],
+        "h": float(row_region["h"]) * SUPPORT_PANEL_TEMPLATE_REGION["h"],
+    }
+    owned_score = _match_template_region(
+        img, owned, region, 0.0, "support_skill_panel_owned"
+    ).get("score", 0.0)
+    append_score = _match_template_region(
+        img, append, region, 0.0, "support_skill_panel_append"
+    ).get("score", 0.0)
+    if max(owned_score, append_score) < SUPPORT_PANEL_TEMPLATE_MIN_SCORE:
+        return None
+    if abs(float(owned_score) - float(append_score)) < SUPPORT_PANEL_TEMPLATE_MIN_DELTA:
+        return None
+    return "append" if append_score > owned_score else "owned"
+
+
+def _support_extract_skill_details(img: np.ndarray, row_region: dict) -> tuple[Optional[str], list[Optional[int]], list[Optional[int]]]:
+    panel, skill_levels, append_levels, _diagnostics = _support_extract_skill_details_with_diagnostics(img, row_region)
+    return panel, skill_levels, append_levels
+
+
+def _support_extract_skill_details_with_diagnostics(
+    img: np.ndarray, row_region: dict
+) -> tuple[Optional[str], list[Optional[int]], list[Optional[int]], list[dict]]:
+    slots = _support_find_skill_slots(img, row_region)
+    if len(slots) >= 5:
+        infos = [_support_read_skill_level_info(img, slot) for slot in slots[:5]]
+        levels = [info["level"] for info in infos]
+        return "append", [], levels, infos
+    if len(slots) >= 3:
+        infos = [_support_read_skill_level_info(img, slot) for slot in slots[:3]]
+        levels = [info["level"] for info in infos]
+        return "owned", levels, [], infos
+
+    icon_regions = [_support_icon_region(row_region, i) for i in range(5)]
+    present = [_support_icon_present(img, r) for r in icon_regions]
+    levels = [_read_integer_digits(img, _support_skill_digit_region(r)) for r in icon_regions]
+    diagnostics = [
+        {"level": level, "score": 0.0, "source": "legacy", "region": dict(region)}
+        for level, region in zip(levels, icon_regions)
+    ]
+    panel = "append" if any(present[3:]) else "owned"
+    if panel == "append":
+        return panel, [], levels, diagnostics
+    return panel, levels[:3], [], diagnostics[:3]
+
+
+def _support_add_details(img: np.ndarray, rows: list[dict], fragments: list[dict]) -> None:
+    for row in rows:
+        row_region = row.get("rowRegion") or {}
+        row["npLevel"] = _support_extract_np_level(
+            fragments, row_region, str(row.get("npText", ""))
+        )
+        panel, skill_levels, append_levels, skill_diagnostics = (
+            _support_extract_skill_details_with_diagnostics(img, row_region)
+        )
+        row["skillPanel"] = panel
+        row["skillLevels"] = skill_levels
+        row["appendSkillLevels"] = append_levels
+        row["skillLevelDiagnostics"] = skill_diagnostics
 
 
 # ---------------------------------------------------------------------------
@@ -2685,6 +3202,7 @@ def main() -> None:
                             "fragments": [],
                             "nameOnlyFallback": False,
                             "nameOnlyReason": "",
+                            **_support_diagnostics_meta(),
                         },
                         "error": err,
                     },
@@ -2700,6 +3218,7 @@ def main() -> None:
                         float(cmd.get("nameThreshold", SUPPORT_NAME_THRESHOLD)),
                         float(cmd.get("npThreshold", SUPPORT_NP_THRESHOLD)),
                         float(cmd.get("pairDy", SUPPORT_ROW_PAIR_DY)),
+                        bool(cmd.get("includeSupportDetails", False)),
                     ),
                 )
         elif action == "ocr_region":

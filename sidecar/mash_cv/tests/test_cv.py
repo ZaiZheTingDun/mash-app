@@ -612,6 +612,9 @@ _TEST_TEMPLATES_DIR = os.path.join(
 _TEST_SCREENSHOTS_DIR = os.path.join(
     os.path.dirname(__file__), "test_data", "screenshots"
 )
+_SUPPORT_FIXTURES_DIR = os.path.join(
+    os.path.dirname(__file__), "test_data", "support"
+)
 # Production templates (RGBA command_icon_*.png live here, not in the
 # pruned tests/test_data/templates/ copy). Resolved relative to repo root.
 # Templates moved under per-server folders during the CN-server work; the
@@ -1271,6 +1274,237 @@ def test_support_np_pairing_requires_distinct_lower_fragment():
     assert _support_np_can_pair_with_name(name, same_fragment_np) is False
     assert _support_np_can_pair_with_name(name, upper_fragment_np) is False
     assert _support_np_can_pair_with_name(name, lower_fragment_np) is True
+
+
+def test_support_detail_extracts_np_level_from_row_fragments():
+    from mash_cv.cv import _support_extract_np_level
+
+    row_region = {"x": 0.177, "y": 0.32, "w": 0.466, "h": 0.12}
+    assert _support_extract_np_level([], row_region, "为你纺织的时光之轮等级5") == 5
+
+    fragments = [
+        {
+            "text": "雷天日光・祸音星落火流锤 等级2",
+            "region": {"x": 0.25, "y": 0.39, "w": 0.25, "h": 0.04},
+        }
+    ]
+
+    assert _support_extract_np_level(fragments, row_region) == 2
+
+
+def test_support_skill_details_distinguish_owned_and_append_panels(monkeypatch):
+    import mash_cv.cv as cv
+
+    img = np.zeros((1440, 2560, 3), dtype=np.uint8)
+    row_region = {"x": 0.177, "y": 0.32, "w": 0.466, "h": 0.12}
+
+    owned_slots = [
+        {"x": 0.648, "y": 0.75, "w": 0.027, "h": 0.049},
+        {"x": 0.683, "y": 0.75, "w": 0.027, "h": 0.049},
+        {"x": 0.718, "y": 0.75, "w": 0.027, "h": 0.049},
+    ]
+    append_slots = [
+        {"x": 0.648, "y": 0.75, "w": 0.027, "h": 0.049},
+        {"x": 0.678, "y": 0.75, "w": 0.027, "h": 0.049},
+        {"x": 0.707, "y": 0.75, "w": 0.027, "h": 0.049},
+        {"x": 0.736, "y": 0.75, "w": 0.027, "h": 0.049},
+        {"x": 0.766, "y": 0.75, "w": 0.027, "h": 0.049},
+    ]
+
+    def fake_read(_img, region):
+        level = [10, 10, 9, None, None][
+            min(range(5), key=lambda i: abs(region["x"] - append_slots[i]["x"]))
+        ]
+        return {"level": level, "score": 1.0, "source": "test", "region": region}
+
+    monkeypatch.setattr(cv, "_support_find_skill_slots", lambda _img, _row: owned_slots)
+    monkeypatch.setattr(cv, "_support_read_skill_level_info", fake_read)
+    panel, skill_levels, append_levels = cv._support_extract_skill_details(img, row_region)
+    assert panel == "owned"
+    assert skill_levels == [10, 10, 9]
+    assert append_levels == []
+
+    monkeypatch.setattr(cv, "_support_find_skill_slots", lambda _img, _row: append_slots)
+    panel, skill_levels, append_levels = cv._support_extract_skill_details(img, row_region)
+    assert panel == "append"
+    assert skill_levels == []
+    assert append_levels == [10, 10, 9, None, None]
+
+
+@pytest.mark.skipif(
+    not os.path.isfile(
+        os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "skill.png"))
+    ),
+    reason="root skill.png fixture not available",
+)
+def test_support_skill_details_from_habetrot_screenshots(monkeypatch):
+    import mash_cv.cv as cv
+
+    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    cv._set_server("CN")
+    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+
+    def read(shot: str):
+        img = cv2.imread(os.path.join(root, shot))
+        assert img is not None
+        result = cv._find_supports(
+            img,
+            cv.SUPPORT_LIST_REGION,
+            "哈贝特洛特",
+            ["为你纺织的时光之轮"],
+            cv.SUPPORT_NAME_THRESHOLD,
+            cv.SUPPORT_NP_THRESHOLD,
+            cv.SUPPORT_ROW_PAIR_DY,
+            True,
+        )
+        assert len(result["supports"]) == 1
+        return result["supports"][0]
+
+    try:
+        owned = read("skill.png")
+        assert owned["npLevel"] == 5
+        assert owned["skillPanel"] == "owned"
+        assert owned["skillLevels"] == [1, 10, 1]
+
+        img = cv2.imread(os.path.join(root, "skill.png"))
+        assert img is not None
+        scaled = cv2.resize(img, (1920, 1080), interpolation=cv2.INTER_AREA)
+        result = cv._find_supports(
+            scaled,
+            cv.SUPPORT_LIST_REGION,
+            "哈贝特洛特",
+            ["为你纺织的时光之轮"],
+            cv.SUPPORT_NAME_THRESHOLD,
+            cv.SUPPORT_NP_THRESHOLD,
+            cv.SUPPORT_ROW_PAIR_DY,
+            True,
+        )
+        assert result["supports"][0]["skillLevels"] == [1, 10, 1]
+
+        row_region = result["supports"][0]["rowRegion"]
+        get_ocr = cv._get_ocr
+        monkeypatch.setattr(cv, "_get_ocr", lambda: None)
+        panel, skill_levels, append_levels = cv._support_extract_skill_details(scaled, row_region)
+        monkeypatch.setattr(cv, "_get_ocr", get_ocr)
+        assert panel == "owned"
+        assert skill_levels == [1, 10, 1]
+        assert append_levels == []
+
+        append = read("append_skill.png")
+        assert append["npLevel"] == 5
+        assert append["skillPanel"] == "append"
+        assert append["appendSkillLevels"] == [None, 4, None, None, None]
+    finally:
+        cv._set_server("JP")
+
+
+def test_support_skill_details_use_dedicated_digit_templates_for_non_ten_levels():
+    import mash_cv.cv as cv
+
+    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    cv._set_server("CN")
+    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "debug_2-10-1.png"))
+    assert img is not None
+
+    try:
+        result = cv._find_supports(
+            img,
+            cv.SUPPORT_LIST_REGION,
+            "哈贝特洛特",
+            ["为你纺织的时光之轮"],
+            cv.SUPPORT_NAME_THRESHOLD,
+            cv.SUPPORT_NP_THRESHOLD,
+            cv.SUPPORT_ROW_PAIR_DY,
+            True,
+        )
+        assert len(result["supports"]) == 1
+        row = result["supports"][0]
+        assert row["skillPanel"] == "owned"
+        assert row["skillLevels"] == [2, 10, 5]
+        assert row["appendSkillLevels"] == []
+        assert row["skillLevelDiagnostics"][0]["source"] == "support_template"
+        assert row["skillLevelDiagnostics"][1]["source"] == "support_template10"
+        assert row["skillLevelDiagnostics"][2]["source"] == "support_template"
+    finally:
+        cv._set_server("JP")
+
+
+def test_support_skill_details_do_not_treat_six_as_ten():
+    import mash_cv.cv as cv
+
+    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    cv._set_server("CN")
+    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "debug_3.png"))
+    assert img is not None
+
+    try:
+        result = cv._find_supports(
+            img,
+            cv.SUPPORT_LIST_REGION,
+            "哈贝特洛特",
+            ["为你纺织的时光之轮"],
+            cv.SUPPORT_NAME_THRESHOLD,
+            cv.SUPPORT_NP_THRESHOLD,
+            cv.SUPPORT_ROW_PAIR_DY,
+            True,
+        )
+        assert len(result["supports"]) == 1
+        row = result["supports"][0]
+        assert row["skillPanel"] == "owned"
+        assert row["skillLevels"] == [6, 10, 6]
+        assert row["appendSkillLevels"] == []
+    finally:
+        cv._set_server("JP")
+
+
+@pytest.mark.skipif(
+    not os.path.isfile(
+        os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug1.png"))
+    ),
+    reason="root debug1.png fixture not available",
+)
+def test_support_skill_details_split_merged_owned_skill_contours(monkeypatch):
+    import mash_cv.cv as cv
+
+    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    cv._set_server("CN")
+    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+
+    try:
+        for screenshot in ["debug1.png", "debug2.png"]:
+            path = os.path.join(root, screenshot)
+            if not os.path.isfile(path):
+                continue
+            img = cv2.imread(path)
+            assert img is not None
+            result = cv._find_supports(
+                img,
+                cv.SUPPORT_LIST_REGION,
+                "奥斯曼狄斯",
+                ["光辉之大复合神殿"],
+                cv.SUPPORT_NAME_THRESHOLD,
+                cv.SUPPORT_NP_THRESHOLD,
+                cv.SUPPORT_ROW_PAIR_DY,
+                True,
+            )
+            assert len(result["supports"]) == 1
+            row = result["supports"][0]
+            assert row["skillPanel"] == "owned"
+            assert row["skillLevels"] == [10, 10, 10]
+            assert row["appendSkillLevels"] == []
+
+            get_ocr = cv._get_ocr
+            monkeypatch.setattr(cv, "_get_ocr", lambda: None)
+            panel, skill_levels, append_levels = cv._support_extract_skill_details(img, row["rowRegion"])
+            monkeypatch.setattr(cv, "_get_ocr", get_ocr)
+            assert panel == "owned"
+            assert skill_levels == [10, 10, 10]
+            assert append_levels == []
+
+    finally:
+        cv._set_server("JP")
 
 
 _RAPIDOCR_AVAILABLE = True
