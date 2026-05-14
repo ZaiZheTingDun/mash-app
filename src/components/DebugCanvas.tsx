@@ -10,6 +10,17 @@ import type {
   RunnerCoordinatesDto,
 } from "./DebugPage";
 
+function supportPanelShortLabel(panel: "owned" | "append" | null | undefined) {
+  if (panel === "owned") return "持";
+  if (panel === "append") return "追";
+  return "";
+}
+
+function supportPanelLevels(levels: (number | null)[] | undefined) {
+  if (!levels || levels.length === 0) return "";
+  return levels.map((level) => (level == null ? "-" : String(level))).join("/");
+}
+
 /**
  * All overlay state the canvas renders. The host component owns the
  * data; this component is purely presentational so it can be reused by
@@ -429,6 +440,14 @@ export function DebugCanvas({
                 <span className="debug-overlay-label">
                   助战 {i + 1} · 名 {s.nameScore.toFixed(2)} · 宝{" "}
                   {s.npScore.toFixed(2)}
+                  {s.npLevel != null ? ` · 宝Lv${s.npLevel}` : ""}
+                  {s.skillPanel
+                    ? ` · ${supportPanelShortLabel(s.skillPanel)} ${
+                        s.skillPanel === "append"
+                          ? supportPanelLevels(s.appendSkillLevels)
+                          : supportPanelLevels(s.skillLevels)
+                      }`
+                    : ""}
                 </span>
               </Box>
             ))}

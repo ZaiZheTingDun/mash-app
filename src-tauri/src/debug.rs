@@ -101,8 +101,13 @@ fn ensure_debug_stream(
     // is live. We follow up with a zero-wait ``get_frame`` to make sure the
     // sidecar agrees (catches the case where the decoder thread died after
     // a successful ``start_stream`` returned).
-    if client.stream_size().is_some() && client.get_frame_jpeg(0.0).is_ok() {
-        return Ok(());
+    if let Some((w, h)) = client.stream_size() {
+        if crate::stream_meets_minimum_resolution(w, h) && client.get_frame_jpeg(0.0).is_ok() {
+            return Ok(());
+        }
+        if let Err(e) = client.stop_stream() {
+            eprintln!("[debug] stop low-resolution/stale stream failed: {e}");
+        }
     }
 
     let jar = resolve_scrcpy_jar(app).ok_or_else(|| "找不到 scrcpy-server.jar 资源".to_string())?;
@@ -118,6 +123,12 @@ fn ensure_debug_stream(
     let adb_path = adb::resolve_adb_path(app);
     let (w, h) = client.start_stream(&adb_path, &jar, serial, STREAM_MAX_SIZE, STREAM_BIT_RATE)?;
     eprintln!("[debug] scrcpy stream started: {w}x{h}");
+    if !crate::stream_meets_minimum_resolution(w, h) {
+        if let Err(e) = client.stop_stream() {
+            eprintln!("[debug] stop unsupported-resolution stream failed: {e}");
+        }
+        return Err(crate::stream_resolution_error(w, h));
+    }
     Ok(())
 }
 
@@ -363,22 +374,8 @@ pub fn debug_list_templates(
         return Vec::new();
     };
     let mut keys = Vec::new();
-    match fs::read_dir(&dir) {
-        Ok(entries) => {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| e.to_lowercase())
-                    == Some("png".to_string())
-                {
-                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                        keys.push(stem.to_string());
-                    }
-                }
-            }
-        }
+    match collect_template_keys(&dir, &dir, &mut keys) {
+        Ok(()) => {}
         Err(e) => {
             eprintln!("[debug_list_templates] cannot read {}: {e}", dir.display());
         }
@@ -390,6 +387,37 @@ pub fn debug_list_templates(
         dir.display()
     );
     keys
+}
+
+fn collect_template_keys(
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    keys: &mut Vec<String>,
+) -> std::io::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            collect_template_keys(root, &path, keys)?;
+            continue;
+        }
+        if path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("png"))
+            != Some(true)
+        {
+            continue;
+        }
+        let Ok(relative) = path.strip_prefix(root) else {
+            continue;
+        };
+        let mut key = relative.with_extension("").to_string_lossy().into_owned();
+        if std::path::MAIN_SEPARATOR != '/' {
+            key = key.replace(std::path::MAIN_SEPARATOR, "/");
+        }
+        keys.push(key);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1056,7 +1084,7 @@ pub fn debug_find_supports(
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
     let result: FindSupportsResult =
-        client.find_supports(Some(&image_path), &meta.name, &meta.np_names)?;
+        client.find_supports(Some(&image_path), &meta.name, &meta.np_names, true)?;
     eprintln!(
         "[debug_find_supports] {} match(es), {} name cand(s), {} np cand(s), {} fragment(s)",
         result.supports.len(),

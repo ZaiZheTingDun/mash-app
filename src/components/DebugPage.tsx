@@ -290,6 +290,16 @@ export interface SupportRowMatchDto {
   npScore: number;
   npRegion: NormRectDto;
   npMatchedName: string;
+  npLevel?: number | null;
+  skillPanel?: "owned" | "append" | null;
+  skillLevels?: (number | null)[];
+  appendSkillLevels?: (number | null)[];
+  skillLevelDiagnostics?: Array<{
+    level?: number | null;
+    score?: number;
+    source?: string;
+    region?: NormRectDto;
+  }>;
   /**
    * Per-row craft-essence verification, populated only when the user
    * supplies a CE id in the debug toolbar. Lets the overlay draw the
@@ -323,11 +333,39 @@ export interface SupportDiagnosticsDto {
   fragments?: SupportFragmentDto[];
   nameOnlyFallback?: boolean;
   nameOnlyReason?: string;
+  cvFile?: string;
+  cvFingerprint?: string;
+  supportSkillContourSplit?: boolean;
 }
 
 export interface FindSupportsResultDto {
   supports: SupportRowMatchDto[];
   diagnostics: SupportDiagnosticsDto;
+}
+
+function supportPanelLabel(panel: SupportRowMatchDto["skillPanel"]): string {
+  if (panel === "owned") return "持有技能";
+  if (panel === "append") return "追加技能";
+  return "技能面板未知";
+}
+
+function supportLevelList(levels: (number | null)[] | undefined): string {
+  if (!levels || levels.length === 0) return "未识别";
+  return levels.map((level) => (level == null ? "-" : String(level))).join("/");
+}
+
+function supportSkillDiagnosticsText(
+  diagnostics: SupportRowMatchDto["skillLevelDiagnostics"]
+): string {
+  if (!diagnostics || diagnostics.length === 0) return "";
+  return diagnostics
+    .map((item, index) => {
+      const level = item.level == null ? "-" : String(item.level);
+      const score =
+        typeof item.score === "number" ? item.score.toFixed(2) : "0.00";
+      return `${index + 1}:${level}@${score}${item.source ? `/${item.source}` : ""}`;
+    })
+    .join(" ");
 }
 
 interface ServantMetadataDto {
@@ -995,10 +1033,17 @@ export function DebugPage({
       );
       setSupportResult(result);
       const diag = result.diagnostics;
+      const cvInfo =
+        diag.cvFingerprint || diag.cvFile
+          ? ` · CV ${diag.cvFingerprint || "unknown"} split:${
+              diag.supportSkillContourSplit ? "on" : "off"
+            }`
+          : "";
       log(
         `识别到 ${result.supports.length} 行助战 | OCR ${diag.fragmentCount} 片段` +
           ` · 名称候选 ${diag.nameCandidates.length}` +
-          ` · 宝具候选 ${diag.npCandidates.length}`
+          ` · 宝具候选 ${diag.npCandidates.length}` +
+          cvInfo
       );
       if (diag.nameOnlyFallback) {
         // Surface the degraded path immediately instead of waiting for
@@ -1037,9 +1082,23 @@ export function DebugPage({
           const npPart = s.npText
             ? ` | 宝具='${s.npText}' (${s.npScore.toFixed(2)})`
             : ` | 宝具(未核对)`;
+          const npLevelPart =
+            s.npLevel != null ? ` | 宝具等级 ${s.npLevel}` : "";
+          const skillLevels =
+            s.skillPanel === "append"
+              ? supportLevelList(s.appendSkillLevels)
+              : supportLevelList(s.skillLevels);
+          const skillPart = s.skillPanel
+            ? ` | ${supportPanelLabel(s.skillPanel)} ${skillLevels}`
+            : "";
+          const skillDiag = supportSkillDiagnosticsText(s.skillLevelDiagnostics);
+          const skillDiagPart = skillDiag ? ` | 技能诊断 ${skillDiag}` : "";
           log(
             `  行 y=${s.rowRegion.y.toFixed(3)} | 名称='${s.nameText}' (${s.nameScore.toFixed(2)})` +
               npPart +
+              npLevelPart +
+              skillPart +
+              skillDiagPart +
               cePart
           );
         }
@@ -1113,10 +1172,10 @@ export function DebugPage({
 
   const handleReloadSidecar = useCallback(async () => {
     setReloading(true);
-    log("重新加载 sidecar…");
+    log("重启 sidecar 并重新加载模板/配置…");
     try {
       await invoke("debug_reload_sidecar");
-      log("sidecar 已重启，模板与 cv.json 已重新加载");
+      log("sidecar 已重启，模板、cv.json 与 CV 代码已重新读取");
       await loadConfig();
       await loadTemplateList();
     } catch (err) {
@@ -1242,10 +1301,10 @@ export function DebugPage({
           color="gray"
           disabled={reloading}
           onClick={handleReloadSidecar}
-          title="重新加载 sidecar, cv.json 和模板"
+          title="重启 sidecar，并重新加载 CV 代码、cv.json 和模板"
         >
           <ReloadIcon width={14} height={14} />
-          <Text size="1">{reloading ? "重载中…" : "重载模板/配置"}</Text>
+          <Text size="1">{reloading ? "重启中…" : "重启 CV/重载配置"}</Text>
         </Button>
       </Flex>
 
@@ -1995,7 +2054,21 @@ export function DebugPage({
                   <Text size="1" color="green">
                     宝: {s.npText} ({s.npScore.toFixed(2)})
                     {s.npMatchedName ? ` → ${s.npMatchedName}` : ""}
+                    {s.npLevel != null ? ` · 等级 ${s.npLevel}` : ""}
                   </Text>
+                  {s.skillPanel && (
+                    <Text size="1" color="blue">
+                      {supportPanelLabel(s.skillPanel)}：
+                      {s.skillPanel === "append"
+                        ? supportLevelList(s.appendSkillLevels)
+                        : supportLevelList(s.skillLevels)}
+                    </Text>
+                  )}
+                  {s.skillLevelDiagnostics && s.skillLevelDiagnostics.length > 0 && (
+                    <Text size="1" color="gray">
+                      技能诊断：{supportSkillDiagnosticsText(s.skillLevelDiagnostics)}
+                    </Text>
+                  )}
                   <Text size="1" color="gray">
                     行 y={s.rowRegion.y.toFixed(3)} h=
                     {s.rowRegion.h.toFixed(3)}
