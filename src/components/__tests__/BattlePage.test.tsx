@@ -114,6 +114,29 @@ describe("BattlePage", () => {
     expect(callbacks.onAutomationStart).toHaveBeenCalledTimes(1);
   });
 
+  it("passes support skill and NP level requirements to automation", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage({
+      ...PROJECT,
+      supportNoblePhantasmLevelMin: 2,
+      supportSkillLevelMins: [10, null, 9],
+      supportAppendSkillLevelMins: [null, 10, null, null, 6],
+    });
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("start_automation", {
+        config: expect.objectContaining({
+          supportNoblePhantasmLevelMin: 2,
+          supportSkillLevelMins: [10, null, 9],
+          supportAppendSkillLevelMins: [null, 10, null, null, 6],
+        }),
+      });
+    });
+  });
+
   it("persists count mode and repeat count from the inline stepper", async () => {
     const user = userEvent.setup();
     mockProjectCommands();

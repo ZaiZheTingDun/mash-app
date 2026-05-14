@@ -364,6 +364,65 @@ describe("ContentGrid", () => {
     expect(screen.getAllByText("SUPPORT")).toHaveLength(1);
   });
 
+  it("opens support skill settings and persists confirmed requirements", async () => {
+    const user = userEvent.setup();
+    const onUpdateActiveProject = vi.fn();
+
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={PROJECT}
+        onUpdateActiveProject={onUpdateActiveProject}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "技能/宝具设置" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("技能/宝具设置");
+
+    await user.click(screen.getByRole("radio", { name: "2" }));
+    await user.click(screen.getAllByRole("button", { name: "任意" })[0]);
+    await user.click(await screen.findByRole("radio", { name: "10" }));
+    await user.click(screen.getByRole("button", { name: "完成" }));
+    await user.click(screen.getByRole("button", { name: "确认" }));
+
+    expect(onUpdateActiveProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supportNoblePhantasmLevelMin: 2,
+        supportSkillLevelMins: [10, null, null],
+        supportAppendSkillLevelMins: [null, null, null, null, null],
+      })
+    );
+  });
+
+  it("renders configured support requirements and opens settings from the summary", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{
+          ...PROJECT,
+          supportNoblePhantasmLevelMin: 2,
+          supportSkillLevelMins: [10, null, 9],
+          supportAppendSkillLevelMins: [null, 10, null, null, null],
+        }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("宝具 >= 2")).toBeInTheDocument();
+    expect(screen.getByLabelText("持有技能 1 至少 10 级")).toBeInTheDocument();
+    expect(screen.getByLabelText("追加技能 2 至少 10 级")).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText("编辑技能宝具设置"));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("技能/宝具设置");
+  });
+
   // --- Rarity frame --------------------------------------------------
 
   it("tags the portrait frame class by servant rarity", () => {

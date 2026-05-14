@@ -343,6 +343,12 @@ body,
   min-height: var(--slot-band-height);
 }
 
+.slot-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ── Servant Portrait ──
  *
  * Each portrait card is octagonally chamfered (four diagonal cuts, one
@@ -609,6 +615,93 @@ body,
   border-radius: 0 0 0 4px;
   pointer-events: none;
   user-select: none;
+}
+
+.support-settings-button {
+  width: 100%;
+  min-width: 0;
+}
+
+.support-requirement-summary {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: calc(45.33% + 7px);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: var(--radius-2);
+  background: rgba(20, 20, 20, 0.42);
+  backdrop-filter: blur(8px);
+  color: white;
+  cursor: pointer;
+}
+
+.support-requirement-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.support-requirement-chip {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-2);
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  background: rgba(255, 236, 143, 0.92);
+  color: #121212;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.support-requirement-chip.append {
+  background: rgba(230, 238, 246, 0.9);
+}
+
+.support-requirement-chip.np {
+  margin-left: auto;
+  max-width: 74px;
+  font-size: 10px;
+}
+
+.support-settings-grid {
+  align-items: start;
+}
+
+.support-skill-level-button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--gray-8);
+  border-radius: var(--radius-2);
+  background: var(--amber-3);
+  color: var(--gray-12);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.support-skill-level-button.append {
+  background: var(--gray-3);
+}
+
+.support-skill-level-button:hover {
+  border-color: var(--blue-8);
+  background: var(--blue-3);
+}
+
+.support-level-picker {
+  flex-wrap: wrap;
 }
 
 /* ── Craft Essence Tile ── */

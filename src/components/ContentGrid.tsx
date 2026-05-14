@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { Box, Flex, Text } from "@radix-ui/themes";
+import {
+  Box,
+  Button,
+  Dialog,
+  Flex,
+  Grid,
+  SegmentedControl,
+  Text,
+} from "@radix-ui/themes";
 import { PlusIcon, PersonIcon, Cross2Icon } from "@radix-ui/react-icons";
 import { invoke, convertFileSrc } from "../tauri";
 import type React from "react";
@@ -22,7 +30,11 @@ import { ServantSelectDialog } from "./ServantSelectDialog";
 import { CraftEssenceSelectDialog } from "./CraftEssenceSelectDialog";
 import type { Servant } from "../types/servant";
 import type { CraftEssence } from "../types/craftEssence";
-import type { Project } from "../types/project";
+import type {
+  Project,
+  SupportAppendSkillLevelMins,
+  SupportSkillLevelMins,
+} from "../types/project";
 
 export interface SlotItem {
   id: string;
@@ -56,6 +68,281 @@ interface CraftEssenceOverlayProps {
   cardSrc: string | null | undefined;
   onSelect: () => void;
   onClear: () => void;
+}
+
+const EMPTY_SUPPORT_SKILL_LEVELS: SupportSkillLevelMins = [null, null, null];
+const EMPTY_SUPPORT_APPEND_SKILL_LEVELS: SupportAppendSkillLevelMins = [
+  null,
+  null,
+  null,
+  null,
+  null,
+];
+
+type SupportLevelKind = "skill" | "append";
+
+function normalizeSupportSkillLevels(
+  levels: Project["supportSkillLevelMins"],
+): SupportSkillLevelMins {
+  return [0, 1, 2].map((index) => levels?.[index] ?? null) as SupportSkillLevelMins;
+}
+
+function normalizeSupportAppendSkillLevels(
+  levels: Project["supportAppendSkillLevelMins"],
+): SupportAppendSkillLevelMins {
+  return [0, 1, 2, 3, 4].map((index) => levels?.[index] ?? null) as SupportAppendSkillLevelMins;
+}
+
+function hasConfiguredLevels(levels: readonly (number | null | undefined)[]) {
+  return levels.some((level) => level != null);
+}
+
+function supportLevelLabel(level: number | null | undefined) {
+  return level == null ? "任意" : String(level);
+}
+
+interface SupportRequirementSummaryProps {
+  npLevel: number | null | undefined;
+  skillLevels: SupportSkillLevelMins;
+  appendSkillLevels: SupportAppendSkillLevelMins;
+  onOpen: () => void;
+}
+
+function SupportRequirementSummary({
+  npLevel,
+  skillLevels,
+  appendSkillLevels,
+  onOpen,
+}: SupportRequirementSummaryProps) {
+  const showSkills = hasConfiguredLevels(skillLevels);
+  const showAppend = hasConfiguredLevels(appendSkillLevels);
+  const showNp = npLevel != null;
+  if (!showSkills && !showAppend && !showNp) return null;
+
+  return (
+    <button
+      type="button"
+      className="support-requirement-summary"
+      aria-label="编辑技能宝具设置"
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen();
+      }}
+    >
+      {(showSkills || showNp) && (
+        <span className="support-requirement-row">
+          {showSkills &&
+            skillLevels.map((level, index) =>
+              level == null ? null : (
+                <span
+                  key={`skill-${index}`}
+                  className="support-requirement-chip skill"
+                  aria-label={`持有技能 ${index + 1} 至少 ${level} 级`}
+                >
+                  {level}
+                </span>
+              )
+            )}
+          {showNp && (
+            <span className="support-requirement-chip np">
+              宝具 &gt;= {npLevel}
+            </span>
+          )}
+        </span>
+      )}
+      {showAppend && (
+        <span className="support-requirement-row">
+          {appendSkillLevels.map((level, index) =>
+            level == null ? null : (
+              <span
+                key={`append-${index}`}
+                className="support-requirement-chip append"
+                aria-label={`追加技能 ${index + 1} 至少 ${level} 级`}
+              >
+                {level}
+              </span>
+            )
+          )}
+        </span>
+      )}
+    </button>
+  );
+}
+
+interface SupportSettingsDialogProps {
+  open: boolean;
+  project: Project | null;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (next: {
+    npLevel: number | null;
+    skillLevels: SupportSkillLevelMins;
+    appendSkillLevels: SupportAppendSkillLevelMins;
+  }) => void;
+}
+
+function SupportSettingsDialog({
+  open,
+  project,
+  onOpenChange,
+  onConfirm,
+}: SupportSettingsDialogProps) {
+  const [npLevel, setNpLevel] = useState<number | null>(
+    () => project?.supportNoblePhantasmLevelMin ?? null,
+  );
+  const [skillLevels, setSkillLevels] = useState<SupportSkillLevelMins>(() =>
+    normalizeSupportSkillLevels(project?.supportSkillLevelMins),
+  );
+  const [appendSkillLevels, setAppendSkillLevels] =
+    useState<SupportAppendSkillLevelMins>(() =>
+      normalizeSupportAppendSkillLevels(project?.supportAppendSkillLevelMins),
+    );
+  const [levelPicker, setLevelPicker] =
+    useState<{ kind: SupportLevelKind; index: number } | null>(null);
+
+  const currentPickerLevel =
+    levelPicker?.kind === "skill"
+      ? skillLevels[levelPicker.index]
+      : levelPicker?.kind === "append"
+        ? appendSkillLevels[levelPicker.index]
+        : null;
+
+  const setPickedLevel = (value: string) => {
+    if (!levelPicker) return;
+    const nextLevel = value === "any" ? null : Number(value);
+    if (levelPicker.kind === "skill") {
+      setSkillLevels((prev) => {
+        const next = [...prev] as SupportSkillLevelMins;
+        next[levelPicker.index] = nextLevel;
+        return next;
+      });
+    } else {
+      setAppendSkillLevels((prev) => {
+        const next = [...prev] as SupportAppendSkillLevelMins;
+        next[levelPicker.index] = nextLevel;
+        return next;
+      });
+    }
+  };
+
+  const reset = () => {
+    setNpLevel(null);
+    setSkillLevels([...EMPTY_SUPPORT_SKILL_LEVELS] as SupportSkillLevelMins);
+    setAppendSkillLevels(
+      [...EMPTY_SUPPORT_APPEND_SKILL_LEVELS] as SupportAppendSkillLevelMins,
+    );
+  };
+
+  return (
+    <>
+      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+        <Dialog.Content maxWidth="560px">
+        <Dialog.Title>技能/宝具设置</Dialog.Title>
+        <Flex direction="column" gap="5">
+          <Flex align="center" justify="between" gap="4" wrap="wrap">
+            <Text size="2" weight="medium">宝具等级</Text>
+            <SegmentedControl.Root
+              value={npLevel == null ? "any" : String(npLevel)}
+              onValueChange={(value) =>
+                setNpLevel(value === "any" ? null : Number(value))
+              }
+            >
+              <SegmentedControl.Item value="any">任意</SegmentedControl.Item>
+              {[1, 2, 3, 4, 5].map((level) => (
+                <SegmentedControl.Item key={level} value={String(level)}>
+                  {level}
+                </SegmentedControl.Item>
+              ))}
+            </SegmentedControl.Root>
+          </Flex>
+
+          <Grid columns="2" gap="5" className="support-settings-grid">
+            <Box>
+              <Text as="div" size="2" weight="medium" mb="2">持有技能</Text>
+              <Flex gap="2" wrap="wrap">
+                {skillLevels.map((level, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    className="support-skill-level-button owned"
+                    onClick={() => setLevelPicker({ kind: "skill", index })}
+                  >
+                    {supportLevelLabel(level)}
+                  </button>
+                ))}
+              </Flex>
+            </Box>
+            <Box>
+              <Text as="div" size="2" weight="medium" mb="2">追加技能</Text>
+              <Flex gap="2" wrap="wrap">
+                {appendSkillLevels.map((level, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    className="support-skill-level-button append"
+                    onClick={() => setLevelPicker({ kind: "append", index })}
+                  >
+                    {supportLevelLabel(level)}
+                  </button>
+                ))}
+              </Flex>
+            </Box>
+          </Grid>
+
+          <Flex justify="between" gap="3" align="center">
+            <Button type="button" variant="soft" color="gray" onClick={reset}>
+              重置
+            </Button>
+            <Flex gap="2">
+              <Dialog.Close>
+                <Button type="button" variant="soft" color="gray">取消</Button>
+              </Dialog.Close>
+              <Button
+                type="button"
+                onClick={() => {
+                  onConfirm({ npLevel, skillLevels, appendSkillLevels });
+                  onOpenChange(false);
+                }}
+              >
+                确认
+              </Button>
+            </Flex>
+          </Flex>
+        </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      <Dialog.Root
+        open={levelPicker != null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setLevelPicker(null);
+        }}
+      >
+        <Dialog.Content maxWidth="420px">
+          <Dialog.Title>
+            {levelPicker?.kind === "append" ? "追加技能" : "持有技能"}
+            {levelPicker ? ` ${levelPicker.index + 1}` : ""}
+          </Dialog.Title>
+          <SegmentedControl.Root
+            value={currentPickerLevel == null ? "any" : String(currentPickerLevel)}
+            onValueChange={setPickedLevel}
+            className="support-level-picker"
+          >
+            <SegmentedControl.Item value="any">任意</SegmentedControl.Item>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => (
+              <SegmentedControl.Item key={level} value={String(level)}>
+                {level}
+              </SegmentedControl.Item>
+            ))}
+          </SegmentedControl.Root>
+          <Flex justify="end" mt="4">
+            <Dialog.Close>
+              <Button type="button">完成</Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+    </>
+  );
 }
 
 /**
@@ -282,9 +569,13 @@ interface SortableSlotProps {
   slot: SlotItem;
   portraitSrc: string | null | undefined;
   ceCardSrc: string | null | undefined;
+  supportNpLevel: number | null | undefined;
+  supportSkillLevels: SupportSkillLevelMins;
+  supportAppendSkillLevels: SupportAppendSkillLevelMins;
   onSelect: () => void;
   onCeSelect: () => void;
   onCeClear: () => void;
+  onSupportSettingsOpen: () => void;
 }
 
 /**
@@ -325,9 +616,13 @@ function SortableSlot({
   slot,
   portraitSrc,
   ceCardSrc,
+  supportNpLevel,
+  supportSkillLevels,
+  supportAppendSkillLevels,
   onSelect,
   onCeSelect,
   onCeClear,
+  onSupportSettingsOpen,
 }: SortableSlotProps) {
   const {
     attributes,
@@ -413,6 +708,14 @@ function SortableSlot({
           {isSupport && (
             <span className="support-corner-badge">SUPPORT</span>
           )}
+          {isSupport && (
+            <SupportRequirementSummary
+              npLevel={supportNpLevel}
+              skillLevels={supportSkillLevels}
+              appendSkillLevels={supportAppendSkillLevels}
+              onOpen={onSupportSettingsOpen}
+            />
+          )}
           <CraftEssenceOverlay
             craftEssence={slot.craftEssence}
             cardSrc={ceCardSrc}
@@ -420,7 +723,23 @@ function SortableSlot({
             onClear={onCeClear}
           />
         </div>
-        <div className="slot-footer" />
+        <div className="slot-footer">
+          {isSupport && (
+            <Button
+              type="button"
+              size="1"
+              variant="surface"
+              color="gray"
+              className="support-settings-button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSupportSettingsOpen();
+              }}
+            >
+              技能/宝具设置
+            </Button>
+          )}
+        </div>
       </Flex>
     </div>
   );
@@ -438,6 +757,7 @@ export function ContentGrid({
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
   const [ceDialogOpen, setCeDialogOpen] = useState(false);
   const [activeCeSlotId, setActiveCeSlotId] = useState<string | null>(null);
+  const [supportSettingsOpen, setSupportSettingsOpen] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -550,6 +870,26 @@ export function ContentGrid({
   const leftSlots = displaySlots.slice(0, 3);
   const rightSlots = displaySlots.slice(3, 6);
   const slotIds = displaySlots.map((s) => s.id);
+  const supportSkillLevels = normalizeSupportSkillLevels(
+    activeProject?.supportSkillLevelMins,
+  );
+  const supportAppendSkillLevels = normalizeSupportAppendSkillLevels(
+    activeProject?.supportAppendSkillLevelMins,
+  );
+
+  const handleSupportSettingsConfirm = (next: {
+    npLevel: number | null;
+    skillLevels: SupportSkillLevelMins;
+    appendSkillLevels: SupportAppendSkillLevelMins;
+  }) => {
+    if (!activeProject) return;
+    void onUpdateActiveProject({
+      ...activeProject,
+      supportNoblePhantasmLevelMin: next.npLevel,
+      supportSkillLevelMins: next.skillLevels,
+      supportAppendSkillLevelMins: next.appendSkillLevels,
+    });
+  };
 
   const renderSlot = (slot: SlotItem) => (
     <SortableSlot
@@ -557,9 +897,13 @@ export function ContentGrid({
       slot={slot}
       portraitSrc={slot.servant ? portraitMap[slot.servant.variantKey] : null}
       ceCardSrc={slot.craftEssence ? ceCardMap[slot.craftEssence.id] : null}
+      supportNpLevel={activeProject?.supportNoblePhantasmLevelMin ?? null}
+      supportSkillLevels={supportSkillLevels}
+      supportAppendSkillLevels={supportAppendSkillLevels}
       onSelect={() => handleSlotClick(slot)}
       onCeSelect={() => handleCeSlotClick(slot.id)}
       onCeClear={() => handleCeClear(slot.id)}
+      onSupportSettingsOpen={() => setSupportSettingsOpen(true)}
     />
   );
 
@@ -592,6 +936,15 @@ export function ContentGrid({
         onSelect={handleCeSelect}
         craftEssences={craftEssences}
       />
+
+      {supportSettingsOpen && (
+        <SupportSettingsDialog
+          open={supportSettingsOpen}
+          project={activeProject}
+          onOpenChange={setSupportSettingsOpen}
+          onConfirm={handleSupportSettingsConfirm}
+        />
+      )}
     </>
   );
 }

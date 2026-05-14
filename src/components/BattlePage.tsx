@@ -205,6 +205,12 @@ export function BattlePage({
       supportServantName: null,
       supportServantId: selectedProject.supportServantId ?? null,
       supportCraftEssenceId: supportSlot?.craftEssenceId ?? null,
+      supportNoblePhantasmLevelMin:
+        selectedProject.supportNoblePhantasmLevelMin ?? null,
+      supportSkillLevelMins:
+        selectedProject.supportSkillLevelMins ?? [null, null, null],
+      supportAppendSkillLevelMins:
+        selectedProject.supportAppendSkillLevelMins ?? [null, null, null, null, null],
       servantSelections: [],
       maxSupportScrolls: 3,
       repeatMission: latestDraft.repeatMode === "infinite",

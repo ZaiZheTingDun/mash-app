@@ -20,6 +20,20 @@ export interface ProjectSlot {
 
 export type BattleRepeatMode = "single" | "infinite" | "count";
 
+export type SupportSkillLevelMins = [
+  number | null,
+  number | null,
+  number | null,
+];
+
+export type SupportAppendSkillLevelMins = [
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+];
+
 export type BattleApRecoveryItem =
   | "gold"
   | "silver"
@@ -38,6 +52,9 @@ export interface Project {
    */
   supportServantId?: number | null;
   supportServantVariantKey?: string | null;
+  supportNoblePhantasmLevelMin?: number | null;
+  supportSkillLevelMins?: SupportSkillLevelMins;
+  supportAppendSkillLevelMins?: SupportAppendSkillLevelMins;
   /**
    * Team-builder grid layout (5 servant slots + 1 support slot, in
    * arrangement order). Persisted on the backend so selections and
