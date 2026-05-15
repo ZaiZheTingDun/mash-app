@@ -783,10 +783,15 @@ pub const SUPPORT_CE_OFFSET_IN_ROW: NormRect = NormRect {
 /// CE typically scores 0.75+.
 pub const SUPPORT_CE_THRESHOLD: f64 = 0.70;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum SupportLevelFilter {
     Pass,
-    Fail,
+    /// The visible panel produced an OCR'd level that's below the
+    /// configured minimum. The payload is a short human-readable reason
+    /// (e.g. `"持有技能 2 ≥ 10（实际 8）"`) so the runner can surface
+    /// *which* requirement failed in the UI log instead of just a
+    /// generic "等级不匹配".
+    Fail(String),
     WaitingForPanel,
 }
 
@@ -824,10 +829,30 @@ fn support_level_meets(actual: Option<u32>, required_min: Option<u32>) -> bool {
     }
 }
 
-fn support_levels_meet(actual: &[Option<u32>], required: &[Option<u32>]) -> bool {
-    required.iter().enumerate().all(|(index, required_min)| {
-        support_level_meets(actual.get(index).copied().flatten(), *required_min)
+/// Find the first slot whose configured minimum isn't satisfied by the
+/// OCR'd value, returning `(slot_index, actual_level, required_min)`
+/// for the caller to format. Slots whose `required` is `None` are
+/// skipped entirely. Returns `None` when every required slot meets its
+/// minimum.
+fn support_first_level_mismatch(
+    actual: &[Option<u32>],
+    required: &[Option<u32>],
+) -> Option<(usize, Option<u32>, u32)> {
+    required.iter().enumerate().find_map(|(index, required_min)| {
+        let min = (*required_min)?;
+        let actual_level = actual.get(index).copied().flatten();
+        if actual_level.is_some_and(|level| level >= min) {
+            None
+        } else {
+            Some((index, actual_level, min))
+        }
     })
+}
+
+/// Format an OCR'd level for log output. `None` becomes a plain `-` so
+/// "the value wasn't read" reads distinctly from "the value was zero".
+fn format_actual_level(actual: Option<u32>) -> String {
+    actual.map(|v| v.to_string()).unwrap_or_else(|| "-".into())
 }
 
 fn support_level_candidate_key(row: &SupportRowMatch) -> String {
@@ -852,8 +877,14 @@ fn support_row_matches_level_requirements_with_progress(
     if server != Server::Cn || (!needs_np && !needs_owned && !needs_append) {
         return SupportLevelFilter::Pass;
     }
-    if !support_level_meets(row.np_level, config.support_noble_phantasm_level_min) {
-        return SupportLevelFilter::Fail;
+    if let Some(min) = config.support_noble_phantasm_level_min {
+        if !row.np_level.is_some_and(|level| level >= min) {
+            return SupportLevelFilter::Fail(format!(
+                "宝具 ≥ {}（实际 {}）",
+                min,
+                format_actual_level(row.np_level),
+            ));
+        }
     }
     if !needs_owned && !needs_append {
         return SupportLevelFilter::Pass;
@@ -869,19 +900,32 @@ fn support_row_matches_level_requirements_with_progress(
 
     match row.skill_panel.as_deref() {
         Some("owned") if needs_owned => {
-            if !support_levels_meet(&row.skill_levels, &config.support_skill_level_mins) {
+            if let Some((index, actual, min)) = support_first_level_mismatch(
+                &row.skill_levels,
+                &config.support_skill_level_mins,
+            ) {
                 progress.owned_met = false;
-                return SupportLevelFilter::Fail;
+                return SupportLevelFilter::Fail(format!(
+                    "持有技能 {} ≥ {}（实际 {}）",
+                    index + 1,
+                    min,
+                    format_actual_level(actual),
+                ));
             }
             progress.owned_met = true;
         }
         Some("append") if needs_append => {
-            if !support_levels_meet(
+            if let Some((index, actual, min)) = support_first_level_mismatch(
                 &row.append_skill_levels,
                 &config.support_append_skill_level_mins,
             ) {
                 progress.append_met = false;
-                return SupportLevelFilter::Fail;
+                return SupportLevelFilter::Fail(format!(
+                    "追加技能 {} ≥ {}（实际 {}）",
+                    index + 1,
+                    min,
+                    format_actual_level(actual),
+                ));
             }
             progress.append_met = true;
         }
@@ -1481,7 +1525,11 @@ impl Runner {
         // rows before we tap.
         let ce_template = self.resolve_support_ce_template();
         let mut waiting_for_skill_panel = false;
-        let mut level_filter_missed = false;
+        // Distinct mismatch reasons across the visible candidates, in
+        // first-seen order. Same servant from multiple friends often
+        // means the same gap (e.g. "持有技能 2 ≥ 10（实际 8）"); dedup
+        // keeps the log readable.
+        let mut level_filter_reasons: Vec<String> = Vec::new();
         let mut chosen_index: Option<usize> = None;
         for (index, row) in result.supports.iter().enumerate() {
             if let Some(template) = ce_template.as_deref() {
@@ -1502,8 +1550,10 @@ impl Runner {
                 SupportLevelFilter::WaitingForPanel => {
                     waiting_for_skill_panel = true;
                 }
-                SupportLevelFilter::Fail => {
-                    level_filter_missed = true;
+                SupportLevelFilter::Fail(reason) => {
+                    if !level_filter_reasons.contains(&reason) {
+                        level_filter_reasons.push(reason);
+                    }
                 }
             }
         }
@@ -1575,8 +1625,14 @@ impl Runner {
             // through to the scroll/refresh branch below.
             self.support_level_progress = SupportLevelPanelProgress::default();
         }
-        if level_filter_missed {
-            self.emit("SupportSelect", "找到从者但技能/宝具等级不匹配，继续滚动…");
+        if !level_filter_reasons.is_empty() {
+            self.emit(
+                "SupportSelect",
+                &format!(
+                    "找到从者但等级不匹配（{}），继续滚动…",
+                    level_filter_reasons.join("；"),
+                ),
+            );
         }
 
         // No match in the visible viewport. The scroll-bar tail indicator
@@ -3129,9 +3185,68 @@ mod tests {
                 &support_row(Some("owned"), vec![Some(9), Some(10), Some(10)], vec![]),
                 &mut progress,
             ),
-            SupportLevelFilter::Fail
+            SupportLevelFilter::Fail("持有技能 1 ≥ 10（实际 9）".into())
         );
         assert!(!progress.owned_met);
+    }
+
+    #[test]
+    fn support_level_filter_reports_first_mismatch_per_panel() {
+        // The Fail payload is what the runner surfaces in the UI log,
+        // so pin the format down: NP / 持有 / 追加 each get their own
+        // labelled reason, with the offending slot index (1-based)
+        // and the OCR'd actual value (or `-` when not detected).
+        let mut payload = minimal_run_config_json();
+        payload["supportNoblePhantasmLevelMin"] = serde_json::json!(5);
+        payload["supportSkillLevelMins"] = serde_json::json!([10, 10, 10]);
+        payload["supportAppendSkillLevelMins"] = serde_json::json!([null, 10, null, null, null]);
+        let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+
+        // NP miss is checked before the panel branch is even consulted,
+        // so a row whose owned panel would otherwise pass still fails
+        // early with an NP reason.
+        let mut progress = SupportLevelPanelProgress::default();
+        let mut np_low = support_row(Some("owned"), vec![Some(10), Some(10), Some(10)], vec![]);
+        np_low.np_level = Some(3);
+        assert_eq!(
+            support_row_matches_level_requirements_with_progress(
+                Server::Cn,
+                &cfg,
+                &np_low,
+                &mut progress,
+            ),
+            SupportLevelFilter::Fail("宝具 ≥ 5（实际 3）".into())
+        );
+
+        // Owned miss reports the first failing slot — slot 2 here —
+        // even though slot 3 also fails downstream.
+        let mut progress = SupportLevelPanelProgress::default();
+        assert_eq!(
+            support_row_matches_level_requirements_with_progress(
+                Server::Cn,
+                &cfg,
+                &support_row(Some("owned"), vec![Some(10), Some(8), Some(7)], vec![]),
+                &mut progress,
+            ),
+            SupportLevelFilter::Fail("持有技能 2 ≥ 10（实际 8）".into())
+        );
+
+        // Append miss with `None` value ⇒ formatted as `-` so
+        // "skill icon never OCR'd" reads distinctly from "level 0".
+        let mut progress = SupportLevelPanelProgress::default();
+        assert_eq!(
+            support_row_matches_level_requirements_with_progress(
+                Server::Cn,
+                &cfg,
+                &support_row(
+                    Some("append"),
+                    vec![],
+                    vec![None, None, None, None, None],
+                ),
+                &mut progress,
+            ),
+            SupportLevelFilter::Fail("追加技能 2 ≥ 10（实际 -）".into())
+        );
     }
 
     #[test]
