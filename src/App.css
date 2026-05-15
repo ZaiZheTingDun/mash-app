@@ -641,15 +641,20 @@ body,
   z-index: 2;
 }
 
+/* The summary itself is the grid container — a 2-row × 5-column layout
+ * where row 1 holds [skill1, skill2, skill3, NP (span 2)] and row 2
+ * holds [append1..append5]. Source order does the placement: as long
+ * as row 1 always renders all 4 of its chips (with `-` placeholders
+ * where unset), the NP chip lands on cols 4-5 and append chips fall
+ * cleanly onto row 2. */
 .support-requirement-summary {
   position: absolute;
   left: 7px;
   right: 7px;
   bottom: calc(var(--ce-overlay-height-in-portrait) + 6px);
   z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: 2px;
   padding: 4px;
   border: 1px solid rgba(255, 255, 255, 0.42);
@@ -660,16 +665,8 @@ body,
   cursor: pointer;
 }
 
-.support-requirement-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-}
-
 .support-requirement-chip {
-  width: 16px;
-  min-width: 16px;
+  min-width: 0;
   height: 16px;
   padding: 0;
   display: inline-flex;
@@ -689,8 +686,8 @@ body,
   background: rgba(230, 238, 246, 0.9);
 }
 
-/* Placeholder slot for skills the user hasn't set a minimum for. We
- * still want the slot to occupy its grid position so the configured
+/* Placeholder slot for skills/NP the user hasn't set a minimum for.
+ * We still want the slot to occupy its grid position so the configured
  * chips read as "skill 1 / 2 / 3" rather than ambiguously left-aligned,
  * but the placeholder shouldn't compete visually with real values. */
 .support-requirement-chip.unset {
@@ -700,10 +697,7 @@ body,
 }
 
 .support-requirement-chip.np {
-  width: auto;
-  margin-left: auto;
-  min-width: 38px;
-  max-width: 42px;
+  grid-column: span 2;
   padding: 0 2px;
   font-size: 8px;
 }

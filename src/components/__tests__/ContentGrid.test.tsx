@@ -451,12 +451,43 @@ describe("ContentGrid", () => {
     expect(screen.getByLabelText("持有技能 1 任意等级")).toBeInTheDocument();
     expect(screen.getByLabelText("持有技能 2 任意等级")).toBeInTheDocument();
     expect(screen.getByLabelText("持有技能 3 至少 5 级")).toBeInTheDocument();
+    // Row 1 is rendered (owned skills are set), so the NP slot in
+    // cols 4-5 also emits a placeholder even though NP itself isn't
+    // configured — keeps the grid stable.
+    expect(screen.getByLabelText("宝具任意等级")).toBeInTheDocument();
 
     expect(screen.getByLabelText("追加技能 1 任意等级")).toBeInTheDocument();
     expect(screen.getByLabelText("追加技能 2 至少 7 级")).toBeInTheDocument();
     expect(screen.getByLabelText("追加技能 3 任意等级")).toBeInTheDocument();
     expect(screen.getByLabelText("追加技能 4 任意等级")).toBeInTheDocument();
     expect(screen.getByLabelText("追加技能 5 任意等级")).toBeInTheDocument();
+  });
+
+  it("renders owned-skill placeholders alongside NP when only NP is configured", () => {
+    // With only NP set, row 1 still renders all 3 owned-skill slots as
+    // dashes so the NP chip stays anchored at cols 4-5 instead of
+    // sliding to the left of the grid.
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{
+          ...PROJECT,
+          supportNoblePhantasmLevelMin: 5,
+        }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText("宝具至少 5 级")).toBeInTheDocument();
+    expect(screen.getByLabelText("持有技能 1 任意等级")).toBeInTheDocument();
+    expect(screen.getByLabelText("持有技能 2 任意等级")).toBeInTheDocument();
+    expect(screen.getByLabelText("持有技能 3 任意等级")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("追加技能 1 任意等级"),
+    ).not.toBeInTheDocument();
   });
 
   it("hides the entire append row when no append skill is configured", () => {

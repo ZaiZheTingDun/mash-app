@@ -145,6 +145,30 @@ function renderSkillChips(
   });
 }
 
+function renderNpChip(npLevel: number | null | undefined) {
+  const isUnset = npLevel == null;
+  return (
+    <span
+      className={`support-requirement-chip np${isUnset ? " unset" : ""}`}
+      aria-label={isUnset ? "宝具任意等级" : `宝具至少 ${npLevel} 级`}
+    >
+      {isUnset ? "宝具 -" : `宝具 ${npLevel}`}
+    </span>
+  );
+}
+
+/**
+ * Compact 2×5 grid summary of the configured support requirements,
+ * pinned over the support portrait. Layout:
+ *
+ *   row 1: [skill 1 | skill 2 | skill 3 | NP (span 2)            ]
+ *   row 2: [append 1 | append 2 | append 3 | append 4 | append 5 ]
+ *
+ * Row 1 renders whenever any owned skill or NP is set; row 2 renders
+ * whenever any append skill is set. Within a rendered row every slot
+ * is always emitted (configured or `-` placeholder) so chips keep
+ * their positional meaning and the NP chip stays anchored at cols 4-5.
+ */
 function SupportRequirementSummary({
   npLevel,
   skillLevels,
@@ -156,6 +180,8 @@ function SupportRequirementSummary({
   const showNp = npLevel != null;
   if (!showSkills && !showAppend && !showNp) return null;
 
+  const showRow1 = showSkills || showNp;
+
   return (
     <button
       type="button"
@@ -166,21 +192,13 @@ function SupportRequirementSummary({
         onOpen();
       }}
     >
-      {(showSkills || showNp) && (
-        <span className="support-requirement-row">
-          {showSkills && renderSkillChips(skillLevels, "skill", "持有技能")}
-          {showNp && (
-            <span className="support-requirement-chip np">
-              {`宝具 ${npLevel}`}
-            </span>
-          )}
-        </span>
+      {showRow1 && (
+        <>
+          {renderSkillChips(skillLevels, "skill", "持有技能")}
+          {renderNpChip(npLevel)}
+        </>
       )}
-      {showAppend && (
-        <span className="support-requirement-row">
-          {renderSkillChips(appendSkillLevels, "append", "追加技能")}
-        </span>
-      )}
+      {showAppend && renderSkillChips(appendSkillLevels, "append", "追加技能")}
     </button>
   );
 }
