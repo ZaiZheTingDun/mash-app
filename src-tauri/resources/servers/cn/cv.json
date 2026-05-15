@@ -112,6 +112,30 @@
               "threshold": 0.85
             }
           }
+        },
+        "refreshConfirm": {
+          "detect": {
+            "template": "dialog_refresh_support",
+            "region": {
+              "x": 0.423,
+              "y": 0.144,
+              "w": 0.157,
+              "h": 0.093
+            },
+            "threshold": 0.85
+          },
+          "elements": {
+            "dialog_refresh_support": {
+              "template": "dialog_refresh_support",
+              "region": {
+                "x": 0.423,
+                "y": 0.144,
+                "w": 0.157,
+                "h": 0.093
+              },
+              "threshold": 0.85
+            }
+          }
         }
       }
     },
