@@ -709,6 +709,11 @@ const SUPPORT_REFRESH_DIALOG_APPEAR_TIMEOUT: Duration = Duration::from_secs(2);
 /// Poll cadence while waiting for the refresh-confirm dialog to appear or
 /// disappear.
 const SUPPORT_REFRESH_DIALOG_POLL: Duration = Duration::from_millis(300);
+/// Extra pause after the refresh-confirm dialog is first seen, before we tap
+/// the confirm button. The detect template can match while the modal is
+/// still mid-fade-in and the button hit-area isn't fully interactive yet;
+/// this short settle keeps taps from being eaten by the animation.
+const SUPPORT_REFRESH_DIALOG_CONFIRM_SETTLE: Duration = Duration::from_millis(500);
 
 /// Refresh-friend-list button on the support-select screen, captured from
 /// a 2560x1440 landscape device. Calibrated alongside the class-tab strip
@@ -1821,6 +1826,8 @@ impl Runner {
             }
             thread::sleep(SUPPORT_REFRESH_DIALOG_POLL);
         }
+
+        thread::sleep(SUPPORT_REFRESH_DIALOG_CONFIRM_SETTLE);
 
         self.emit("SupportSelect", "助战刷新需要确认，点击确定");
         if !self.tap_at("SupportSelect", SUPPORT_REFRESH_CONFIRM_BUTTON) {
