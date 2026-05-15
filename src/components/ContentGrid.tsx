@@ -4,13 +4,15 @@ import {
   Button,
   Dialog,
   Flex,
-  Grid,
-  SegmentedControl,
   Text,
 } from "@radix-ui/themes";
 import { PlusIcon, PersonIcon, Cross2Icon } from "@radix-ui/react-icons";
 import { invoke, convertFileSrc } from "../tauri";
 import type React from "react";
+import {
+  ThresholdLevelPicker,
+  ThresholdLevelLegend,
+} from "./ThresholdLevelPicker";
 import {
   DndContext,
   closestCenter,
@@ -79,7 +81,10 @@ const EMPTY_SUPPORT_APPEND_SKILL_LEVELS: SupportAppendSkillLevelMins = [
   null,
 ];
 
-type SupportLevelKind = "skill" | "append";
+type SupportLevelKind = "np" | "skill" | "append";
+type SupportLevelPickerState =
+  | { kind: "np" }
+  | { kind: "skill" | "append"; index: number };
 
 function normalizeSupportSkillLevels(
   levels: Project["supportSkillLevelMins"],
@@ -101,11 +106,43 @@ function supportLevelLabel(level: number | null | undefined) {
   return level == null ? "任意" : String(level);
 }
 
+function supportLevelPickerTitle(kind: SupportLevelKind | undefined) {
+  if (kind === "np") return "宝具等级";
+  return kind === "append" ? "追加技能等级" : "持有技能等级";
+}
+
 interface SupportRequirementSummaryProps {
   npLevel: number | null | undefined;
   skillLevels: SupportSkillLevelMins;
   appendSkillLevels: SupportAppendSkillLevelMins;
   onOpen: () => void;
+}
+
+/**
+ * Render the chip stack for a single skill row. We always render a slot
+ * for every position in the row (3 owned, 5 append) so positional
+ * meaning is preserved — without this, configuring only "skill 3 ≥ 5"
+ * would render a lone chip aligned to the left of the row, looking as
+ * if it were skill 1. Unset slots show a dimmed `-` placeholder.
+ */
+function renderSkillChips(
+  levels: readonly (number | null)[],
+  variant: "skill" | "append",
+  labelPrefix: string,
+) {
+  return levels.map((level, index) => {
+    const slotLabel = `${labelPrefix} ${index + 1}`;
+    const isUnset = level == null;
+    return (
+      <span
+        key={`${variant}-${index}`}
+        className={`support-requirement-chip ${variant}${isUnset ? " unset" : ""}`}
+        aria-label={isUnset ? `${slotLabel} 任意等级` : `${slotLabel} 至少 ${level} 级`}
+      >
+        {isUnset ? "-" : level}
+      </span>
+    );
+  });
 }
 
 function SupportRequirementSummary({
@@ -131,38 +168,17 @@ function SupportRequirementSummary({
     >
       {(showSkills || showNp) && (
         <span className="support-requirement-row">
-          {showSkills &&
-            skillLevels.map((level, index) =>
-              level == null ? null : (
-                <span
-                  key={`skill-${index}`}
-                  className="support-requirement-chip skill"
-                  aria-label={`持有技能 ${index + 1} 至少 ${level} 级`}
-                >
-                  {level}
-                </span>
-              )
-            )}
+          {showSkills && renderSkillChips(skillLevels, "skill", "持有技能")}
           {showNp && (
             <span className="support-requirement-chip np">
-              宝具 &gt;= {npLevel}
+              {`宝具 ${npLevel}`}
             </span>
           )}
         </span>
       )}
       {showAppend && (
         <span className="support-requirement-row">
-          {appendSkillLevels.map((level, index) =>
-            level == null ? null : (
-              <span
-                key={`append-${index}`}
-                className="support-requirement-chip append"
-                aria-label={`追加技能 ${index + 1} 至少 ${level} 级`}
-              >
-                {level}
-              </span>
-            )
-          )}
+          {renderSkillChips(appendSkillLevels, "append", "追加技能")}
         </span>
       )}
     </button>
@@ -197,31 +213,38 @@ function SupportSettingsDialog({
       normalizeSupportAppendSkillLevels(project?.supportAppendSkillLevelMins),
     );
   const [levelPicker, setLevelPicker] =
-    useState<{ kind: SupportLevelKind; index: number } | null>(null);
+    useState<SupportLevelPickerState | null>(null);
+  const [pickerDraftLevel, setPickerDraftLevel] = useState<number | null>(null);
 
-  const currentPickerLevel =
-    levelPicker?.kind === "skill"
-      ? skillLevels[levelPicker.index]
-      : levelPicker?.kind === "append"
-        ? appendSkillLevels[levelPicker.index]
-        : null;
+  const openLevelPicker = (nextPicker: SupportLevelPickerState) => {
+    const nextLevel =
+      nextPicker.kind === "np"
+        ? npLevel
+        : nextPicker.kind === "skill"
+          ? skillLevels[nextPicker.index]
+          : appendSkillLevels[nextPicker.index];
+    setLevelPicker(nextPicker);
+    setPickerDraftLevel(nextLevel);
+  };
 
-  const setPickedLevel = (value: string) => {
+  const confirmPickedLevel = () => {
     if (!levelPicker) return;
-    const nextLevel = value === "any" ? null : Number(value);
-    if (levelPicker.kind === "skill") {
+    if (levelPicker.kind === "np") {
+      setNpLevel(pickerDraftLevel);
+    } else if (levelPicker.kind === "skill") {
       setSkillLevels((prev) => {
         const next = [...prev] as SupportSkillLevelMins;
-        next[levelPicker.index] = nextLevel;
+        next[levelPicker.index] = pickerDraftLevel;
         return next;
       });
     } else {
       setAppendSkillLevels((prev) => {
         const next = [...prev] as SupportAppendSkillLevelMins;
-        next[levelPicker.index] = nextLevel;
+        next[levelPicker.index] = pickerDraftLevel;
         return next;
       });
     }
+    setLevelPicker(null);
   };
 
   const reset = () => {
@@ -236,108 +259,121 @@ function SupportSettingsDialog({
     <>
       <Dialog.Root open={open} onOpenChange={onOpenChange}>
         <Dialog.Content maxWidth="560px">
-        <Dialog.Title>技能/宝具设置</Dialog.Title>
-        <Flex direction="column" gap="5">
-          <Flex align="center" justify="between" gap="4" wrap="wrap">
-            <Text size="2" weight="medium">宝具等级</Text>
-            <SegmentedControl.Root
-              value={npLevel == null ? "any" : String(npLevel)}
-              onValueChange={(value) =>
-                setNpLevel(value === "any" ? null : Number(value))
-              }
-            >
-              <SegmentedControl.Item value="any">任意</SegmentedControl.Item>
-              {[1, 2, 3, 4, 5].map((level) => (
-                <SegmentedControl.Item key={level} value={String(level)}>
-                  {level}
-                </SegmentedControl.Item>
-              ))}
-            </SegmentedControl.Root>
-          </Flex>
+          <Dialog.Title>技能/宝具设置</Dialog.Title>
+          <Flex direction="column" gap="5">
+            <Flex gap="5">
+              <Box>
+                <Text as="div" size="2" weight="medium" mb="2">宝具等级</Text>
+                <button
+                  type="button"
+                  data-kind="np"
+                  aria-label="宝具等级"
+                  className="support-skill-level-button"
+                  onClick={() => openLevelPicker({ kind: "np" })}
+                >
+                  {supportLevelLabel(npLevel)}
+                </button>
+              </Box>
+              <Box>
+                <Text as="div" size="2" weight="medium" mb="2">持有技能</Text>
+                <Flex gap="2" wrap="wrap">
+                  {skillLevels.map((level, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      data-kind="skill"
+                      aria-label={`持有技能 ${index + 1}`}
+                      className="support-skill-level-button"
+                      onClick={() => openLevelPicker({ kind: "skill", index })}
+                    >
+                      {supportLevelLabel(level)}
+                    </button>
+                  ))}
+                </Flex>
+              </Box>
+              <Box>
+                <Text as="div" size="2" weight="medium" mb="2">追加技能</Text>
+                <Flex gap="2" wrap="wrap">
+                  {appendSkillLevels.map((level, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      data-kind="append"
+                      aria-label={`追加技能 ${index + 1}`}
+                      className="support-skill-level-button"
+                      onClick={() => openLevelPicker({ kind: "append", index })}
+                    >
+                      {supportLevelLabel(level)}
+                    </button>
+                  ))}
+                </Flex>
+              </Box>
+            </Flex>
 
-          <Grid columns="2" gap="5" className="support-settings-grid">
-            <Box>
-              <Text as="div" size="2" weight="medium" mb="2">持有技能</Text>
-              <Flex gap="2" wrap="wrap">
-                {skillLevels.map((level, index) => (
-                  <button
-                    key={index}
-                    type="button"
-                    className="support-skill-level-button owned"
-                    onClick={() => setLevelPicker({ kind: "skill", index })}
-                  >
-                    {supportLevelLabel(level)}
-                  </button>
-                ))}
-              </Flex>
-            </Box>
-            <Box>
-              <Text as="div" size="2" weight="medium" mb="2">追加技能</Text>
-              <Flex gap="2" wrap="wrap">
-                {appendSkillLevels.map((level, index) => (
-                  <button
-                    key={index}
-                    type="button"
-                    className="support-skill-level-button append"
-                    onClick={() => setLevelPicker({ kind: "append", index })}
-                  >
-                    {supportLevelLabel(level)}
-                  </button>
-                ))}
-              </Flex>
-            </Box>
-          </Grid>
-
-          <Flex justify="between" gap="3" align="center">
-            <Button type="button" variant="soft" color="gray" onClick={reset}>
-              重置
-            </Button>
-            <Flex gap="2">
-              <Dialog.Close>
-                <Button type="button" variant="soft" color="gray">取消</Button>
-              </Dialog.Close>
-              <Button
-                type="button"
-                onClick={() => {
-                  onConfirm({ npLevel, skillLevels, appendSkillLevels });
-                  onOpenChange(false);
-                }}
-              >
-                确认
+            <Flex justify="between" gap="3" align="center">
+              <Button type="button" variant="soft" color="gray" onClick={reset}>
+                重置
               </Button>
+              <Flex gap="2">
+                <Dialog.Close>
+                  <Button type="button" variant="soft" color="gray">取消</Button>
+                </Dialog.Close>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    onConfirm({ npLevel, skillLevels, appendSkillLevels });
+                    onOpenChange(false);
+                  }}
+                >
+                  确认
+                </Button>
+              </Flex>
             </Flex>
           </Flex>
-        </Flex>
         </Dialog.Content>
       </Dialog.Root>
 
       <Dialog.Root
         open={levelPicker != null}
         onOpenChange={(nextOpen) => {
-          if (!nextOpen) setLevelPicker(null);
+          if (!nextOpen) {
+            setLevelPicker(null);
+            setPickerDraftLevel(null);
+          }
         }}
       >
-        <Dialog.Content maxWidth="420px">
+        <Dialog.Content
+          maxWidth={levelPicker?.kind === "np" ? "440px" : "680px"}
+          className="support-level-dialog"
+        >
           <Dialog.Title>
-            {levelPicker?.kind === "append" ? "追加技能" : "持有技能"}
-            {levelPicker ? ` ${levelPicker.index + 1}` : ""}
+            {supportLevelPickerTitle(levelPicker?.kind)}
           </Dialog.Title>
-          <SegmentedControl.Root
-            value={currentPickerLevel == null ? "any" : String(currentPickerLevel)}
-            onValueChange={setPickedLevel}
-            className="support-level-picker"
-          >
-            <SegmentedControl.Item value="any">任意</SegmentedControl.Item>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => (
-              <SegmentedControl.Item key={level} value={String(level)}>
-                {level}
-              </SegmentedControl.Item>
-            ))}
-          </SegmentedControl.Root>
-          <Flex justify="end" mt="4">
+          <ThresholdLevelPicker
+            value={pickerDraftLevel}
+            maxLevel={levelPicker?.kind === "np" ? 5 : 10}
+            ariaLabel={levelPicker?.kind === "np" ? "宝具等级选择" : "技能等级选择"}
+            onChange={setPickerDraftLevel}
+          />
+          <ThresholdLevelLegend
+            value={pickerDraftLevel}
+            maxLevel={levelPicker?.kind === "np" ? 5 : 10}
+          />
+
+          <Flex justify="end" gap="3" mt="4">
             <Dialog.Close>
-              <Button type="button">完成</Button>
+              <Button
+                type="button"
+                variant="surface"
+                color="gray"
+                aria-label="取消等级选择"
+              >
+                取消
+              </Button>
             </Dialog.Close>
+            <Button type="button" onClick={confirmPickedLevel}>
+              确认
+            </Button>
           </Flex>
         </Dialog.Content>
       </Dialog.Root>
@@ -605,8 +641,9 @@ function rarityFrameClass(rarity: number): string {
  *        - the top-right `SUPPORT` badge on the support slot,
  *        - a `.ce-overlay` strip pinned to the bottom edge that covers
  *          the lower slice of the portrait (replaces the standalone CE
- *          tile that used to sit below this card).
- *   3. `.slot-footer` — empty reserved band (future: name/HP/etc).
+ *          tile that used to sit below this card),
+ *        - on the support slot, either the requirement-summary chips
+ *          or the "技能/宝具设置" button as an overlay above the CE strip.
  *
  * Empty / empty-support states keep the same skeleton so the card
  * height matches a filled card; only the middle portrait region swaps
@@ -643,6 +680,10 @@ function SortableSlot({
   const { servant } = slot;
   const isSupport = slot.type === "support";
   const rarityClass = servant ? rarityFrameClass(servant.rarity) : "";
+  const hasSupportRequirements =
+    supportNpLevel != null ||
+    hasConfiguredLevels(supportSkillLevels) ||
+    hasConfiguredLevels(supportAppendSkillLevels);
 
   return (
     <div
@@ -708,7 +749,7 @@ function SortableSlot({
           {isSupport && (
             <span className="support-corner-badge">SUPPORT</span>
           )}
-          {isSupport && (
+          {isSupport && hasSupportRequirements && (
             <SupportRequirementSummary
               npLevel={supportNpLevel}
               skillLevels={supportSkillLevels}
@@ -716,21 +757,13 @@ function SortableSlot({
               onOpen={onSupportSettingsOpen}
             />
           )}
-          <CraftEssenceOverlay
-            craftEssence={slot.craftEssence}
-            cardSrc={ceCardSrc}
-            onSelect={onCeSelect}
-            onClear={onCeClear}
-          />
-        </div>
-        <div className="slot-footer">
-          {isSupport && (
+          {isSupport && !hasSupportRequirements && (
             <Button
               type="button"
               size="1"
               variant="surface"
               color="gray"
-              className="support-settings-button"
+              className="support-settings-button support-settings-overlay-button"
               onClick={(event) => {
                 event.stopPropagation();
                 onSupportSettingsOpen();
@@ -739,6 +772,12 @@ function SortableSlot({
               技能/宝具设置
             </Button>
           )}
+          <CraftEssenceOverlay
+            craftEssence={slot.craftEssence}
+            cardSrc={ceCardSrc}
+            onSelect={onCeSelect}
+            onClear={onCeClear}
+          />
         </div>
       </Flex>
     </div>
@@ -858,13 +897,13 @@ export function ContentGrid({
   const disabledIds: number[] | undefined =
     activeSlot && activeSlot.type !== "support"
       ? slots
-          .filter(
-            (s) =>
-              s.type !== "support" &&
-              s.id !== activeSlotId &&
-              s.servant != null
-          )
-          .map((s) => s.servant!.id)
+        .filter(
+          (s) =>
+            s.type !== "support" &&
+            s.id !== activeSlotId &&
+            s.servant != null
+        )
+        .map((s) => s.servant!.id)
       : undefined;
 
   const leftSlots = displaySlots.slice(0, 3);

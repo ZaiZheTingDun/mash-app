@@ -382,10 +382,12 @@ describe("ContentGrid", () => {
     await user.click(screen.getByRole("button", { name: "技能/宝具设置" }));
     expect(await screen.findByRole("dialog")).toHaveTextContent("技能/宝具设置");
 
-    await user.click(screen.getByRole("radio", { name: "2" }));
-    await user.click(screen.getAllByRole("button", { name: "任意" })[0]);
+    await user.click(screen.getByRole("button", { name: "宝具等级" }));
+    await user.click(await screen.findByRole("radio", { name: "2" }));
+    await user.click(screen.getByRole("button", { name: "确认" }));
+    await user.click(screen.getByRole("button", { name: "持有技能 1" }));
     await user.click(await screen.findByRole("radio", { name: "10" }));
-    await user.click(screen.getByRole("button", { name: "完成" }));
+    await user.click(screen.getByRole("button", { name: "确认" }));
     await user.click(screen.getByRole("button", { name: "确认" }));
 
     expect(onUpdateActiveProject).toHaveBeenCalledWith(
@@ -415,12 +417,156 @@ describe("ContentGrid", () => {
       />
     );
 
-    expect(screen.getByText("宝具 >= 2")).toBeInTheDocument();
+    expect(screen.getByText("宝具 2")).toBeInTheDocument();
     expect(screen.getByLabelText("持有技能 1 至少 10 级")).toBeInTheDocument();
     expect(screen.getByLabelText("追加技能 2 至少 10 级")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "技能/宝具设置" })
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByLabelText("编辑技能宝具设置"));
     expect(await screen.findByRole("dialog")).toHaveTextContent("技能/宝具设置");
+  });
+
+  it("renders placeholder slots for unconfigured skills so configured chips keep their position", () => {
+    // Only the 3rd owned skill and 2nd append skill are configured;
+    // the rendered chip rows must still show all 3 owned + 5 append
+    // slots (with `-` placeholders) so the user can tell which slot
+    // each value belongs to.
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{
+          ...PROJECT,
+          supportSkillLevelMins: [null, null, 5],
+          supportAppendSkillLevelMins: [null, 7, null, null, null],
+        }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText("持有技能 1 任意等级")).toBeInTheDocument();
+    expect(screen.getByLabelText("持有技能 2 任意等级")).toBeInTheDocument();
+    expect(screen.getByLabelText("持有技能 3 至少 5 级")).toBeInTheDocument();
+
+    expect(screen.getByLabelText("追加技能 1 任意等级")).toBeInTheDocument();
+    expect(screen.getByLabelText("追加技能 2 至少 7 级")).toBeInTheDocument();
+    expect(screen.getByLabelText("追加技能 3 任意等级")).toBeInTheDocument();
+    expect(screen.getByLabelText("追加技能 4 任意等级")).toBeInTheDocument();
+    expect(screen.getByLabelText("追加技能 5 任意等级")).toBeInTheDocument();
+  });
+
+  it("hides the entire append row when no append skill is configured", () => {
+    // NP / owned skills set, append untouched: the append row should
+    // not render any placeholder chips since there's nothing real to
+    // align against in that row.
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{
+          ...PROJECT,
+          supportNoblePhantasmLevelMin: 4,
+          supportSkillLevelMins: [10, null, null],
+        }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText("持有技能 1 至少 10 级")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("追加技能 1 任意等级"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("styles skill level picker options by requirement threshold", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{
+          ...PROJECT,
+          supportSkillLevelMins: [5, null, null],
+        }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByLabelText("编辑技能宝具设置"));
+    await user.click(screen.getByRole("button", { name: "持有技能 1" }));
+
+    const picker = await screen.findByRole("radiogroup", { name: "技能等级选择" });
+    const pickerScope = within(picker);
+    expect(pickerScope.getByRole("radio", { name: "4" })).toHaveClass("hint");
+    expect(pickerScope.getByRole("radio", { name: "5" })).toHaveClass("current");
+    expect(pickerScope.getByRole("radio", { name: "6" })).toHaveClass("meets");
+  });
+
+  it("uses threshold picker styling for noble phantasm levels", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{
+          ...PROJECT,
+          supportNoblePhantasmLevelMin: 3,
+        }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByLabelText("编辑技能宝具设置"));
+    await user.click(screen.getByRole("button", { name: "宝具等级" }));
+    const npPicker = await screen.findByRole("radiogroup", {
+      name: "宝具等级选择",
+    });
+    const pickerScope = within(npPicker);
+    expect(pickerScope.queryByRole("radio", { name: "6" })).not.toBeInTheDocument();
+    expect(pickerScope.getByRole("radio", { name: "2" })).toHaveClass("hint");
+    expect(pickerScope.getByRole("radio", { name: "3" })).toHaveClass("current");
+    expect(pickerScope.getByRole("radio", { name: "4" })).toHaveClass("meets");
+  });
+
+  it("does not apply level picker changes when cancelled", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{
+          ...PROJECT,
+          supportNoblePhantasmLevelMin: 3,
+          supportSkillLevelMins: [5, null, null],
+        }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByLabelText("编辑技能宝具设置"));
+    const npButton = screen.getByRole("button", { name: "宝具等级" });
+    await user.click(npButton);
+    await user.click(await screen.findByRole("radio", { name: "4" }));
+    await user.click(screen.getByRole("button", { name: "取消等级选择" }));
+    expect(npButton).toHaveTextContent("3");
+
+    const skillButton = screen.getByRole("button", { name: "持有技能 1" });
+    await user.click(skillButton);
+    await user.click(await screen.findByRole("radio", { name: "7" }));
+    await user.click(screen.getByRole("button", { name: "取消等级选择" }));
+    expect(skillButton).toHaveTextContent("5");
   });
 
   // --- Rarity frame --------------------------------------------------
