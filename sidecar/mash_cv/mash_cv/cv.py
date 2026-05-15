@@ -227,24 +227,9 @@ SUPPORT_NP_THRESHOLD = 0.65
 
 # Right-side support-detail panel. These are absolute screen fractions from
 # CN 2560x1440 support screenshots; the UI scales proportionally.
-SUPPORT_SKILL_ICON_XS = [0.648, 0.682, 0.716, 0.750, 0.784]
-SUPPORT_SKILL_ICON_W = 0.029
-SUPPORT_SKILL_ICON_H = 0.056
-SUPPORT_SKILL_ICON_Y_IN_ROW = 1.12
-SUPPORT_SKILL_DIGIT_REGION = {"x": 0.00, "y": 0.45, "w": 0.55, "h": 0.55}
-SUPPORT_APPEND_LOCKED_MEAN_MAX = 82.0
 SUPPORT_PANEL_TEMPLATE_REGION = {"x": 0.635, "y": 0.55, "w": 0.15, "h": 0.55}
 SUPPORT_PANEL_TEMPLATE_MIN_DELTA = 0.08
 SUPPORT_PANEL_TEMPLATE_MIN_SCORE = 0.55
-SUPPORT_SKILL_SLOT_SEARCH = {"x": 0.63, "y": 0.02, "w": 0.17, "h": 0.16}
-SUPPORT_SKILL_SLOT_MIN_W = 0.020
-SUPPORT_SKILL_SLOT_MAX_W = 0.041
-SUPPORT_SKILL_SLOT_MIN_H = 0.040
-SUPPORT_SKILL_SLOT_MAX_H = 0.060
-SUPPORT_SKILL_SLOT_RIGHT_LIMIT = 0.795
-SUPPORT_SKILL_SLOT_EXPECTED_W = 0.027
-SUPPORT_SKILL_SLOT_MIN_PITCH = 0.027
-SUPPORT_SKILL_SLOT_MAX_PITCH = 0.038
 SUPPORT_SKILL_LEVEL_MIN_SCORE = 0.34
 SUPPORT_SKILL_LEVEL_TEN_MIN_SCORE = 0.56
 SUPPORT_SKILL_LEVEL_DEDICATED_MIN_SCORE = 0.62
@@ -252,7 +237,87 @@ SUPPORT_SKILL_LEVEL_DEDICATED_MIN_MARGIN = 0.06
 SUPPORT_SKILL_LEVEL_ZERO_MIN_SCORE = 0.70
 SUPPORT_SKILL_LEVEL_GENERIC_MIN_MARGIN = 0.12
 SUPPORT_SKILL_LEVEL_ZERO_ROI = {"x": 0.323, "y": 0.431, "w": 0.431, "h": 0.569}
+SUPPORT_SKILL_LEVEL_ZERO_WIDE_ROI = {"x": 0.25, "y": 0.431, "w": 0.55, "h": 0.569}
 SUPPORT_SKILL_LEVEL_DIGIT_ROI = {"x": 0.015, "y": 0.462, "w": 0.446, "h": 0.538}
+SUPPORT_NAME_ONLY_ROW_H = 0.083
+
+# Score-badge anchor — replaces the old contour-based skill-icon detector.
+# The "分值 +N" badge always lives in this narrow vertical strip on the
+# right side of every visible support row; the strip excludes the colored
+# rarity cards / handshake icon to its left and right.
+SUPPORT_SCORE_STRIP_REGION = {"x": 0.796, "y": 0.232, "w": 0.060, "h": 0.768}
+
+# The badge is rendered as a compact saturated mid-blue rounded square
+# with stacked "分值" / "+N" text. Pure grayscale Canny on the strip
+# can't distinguish it from the also-rounded "X分钟前" /
+# "友情点 +25" labels nearby (their outlines have similar aspects), so
+# we first threshold the strip in HSV to keep only the badge's blue
+# pixels, then run findContours on the binary mask. The threshold is
+# wide enough to cover both the dark-blue active state and the slightly
+# washed-out variant seen at smaller event-CE values like "+0" / "+2".
+SUPPORT_SCORE_HSV_LOW = (95, 80, 110)
+SUPPORT_SCORE_HSV_HIGH = (130, 255, 255)
+
+# Geometric bounds for the badge bounding box (image-normalised). The
+# badge measures ~68x68 px @ 1920w and ~90x90 px @ 2560w across all
+# checked-in fixtures, with aspect very close to 1.0; the slightly
+# wider window here tolerates the 1-2 px morphology drift introduced
+# by the closing kernel and partial occlusions at the strip's top/
+# bottom edges.
+SUPPORT_SCORE_BBOX_MIN_W = 0.025
+SUPPORT_SCORE_BBOX_MAX_W = 0.045
+SUPPORT_SCORE_BBOX_MIN_H = 0.045
+SUPPORT_SCORE_BBOX_MAX_H = 0.080
+SUPPORT_SCORE_BBOX_MIN_ASPECT = 0.45
+SUPPORT_SCORE_BBOX_MAX_ASPECT = 1.40
+
+# Per-row NMS y-distance — rows are pitched ~0.28 apart in the list,
+# so 0.05 collapses any duplicate masks (which only ever occur from
+# morphology-induced contour splits at the same row).
+SUPPORT_SCORE_NMS_DY = 0.05
+
+# Vertical search window for matching a badge anchor to an OCR-detected
+# row. The OCR row centres on the servant-name / NP-name text band at
+# the *top* of the support card, while the badge lives in the lower
+# half (alongside the skill icons), so the anchor centre y typically
+# sits ~0.13 below the OCR row centre. We accept any anchor whose
+# centre y lies in [row.y - 0.03, row.y + row.h + 0.18] — that fully
+# spans the card while leaving > 0.05 of clearance to the next row
+# (rows are pitched ~0.28 apart).
+SUPPORT_SCORE_ROW_MATCH_ABOVE_DY = 0.03
+SUPPORT_SCORE_ROW_MATCH_BELOW_DY = 0.18
+
+# x/y-offsets from the badge centre to each skill-icon centre, for the
+# two panel layouts. Empirically derived by running Canny + bbox
+# detection on the visible skill icons of every checked-in support
+# fixture (debug_2-10-1, debug_3, error_*, debug_1_skill_5_10_4,
+# debug_2_append_5_skill) and averaging the (icon_cx - anchor_cx,
+# icon_cy - anchor_cy) deltas. Owned skills are pitched ~0.0355 apart
+# (matching the 3-icon row), append skills are pitched ~0.0295 apart
+# (matching the denser 5-icon row).
+SUPPORT_SCORE_TO_SKILL_OFFSETS_OWNED = [-0.155, -0.120, -0.084]
+SUPPORT_SCORE_TO_SKILL_OFFSETS_APPEND = [-0.155, -0.125, -0.096, -0.067, -0.037]
+SUPPORT_SCORE_TO_SKILL_DY = 0.008
+SUPPORT_SCORE_SLOT_W = 0.029
+SUPPORT_SCORE_SLOT_H = 0.056
+
+# Anchor-driven panel detection — discriminates owned (3 icons) from
+# append (5 icons) by sampling the slot position that ONLY exists in
+# the append layout (-0.037 from the badge centre, the rightmost append
+# icon, sitting just left of the badge). On an append row this slot
+# holds a saturated coloured icon; on an owned row it falls on the
+# desaturated panel background between the rightmost owned icon and
+# the badge. Empirically the mean HSV saturation in this slot stays
+# below ~70 for every checked-in owned fixture and above ~110 for
+# every checked-in append fixture, so a 90 threshold separates them
+# robustly without hitting locked-icon edge cases (locked icons keep
+# their saturated frame even when the inner art is greyed out).
+SUPPORT_SCORE_PANEL_PROBE_DX = -0.037
+SUPPORT_SCORE_PANEL_PROBE_DY = 0.008
+SUPPORT_SCORE_PANEL_PROBE_W = 0.024
+SUPPORT_SCORE_PANEL_PROBE_H = 0.044
+SUPPORT_SCORE_PANEL_APPEND_MIN_SAT = 90.0
+SUPPORT_SCORE_PANEL_OWNED_MAX_SAT = 70.0
 
 
 def _cv_code_fingerprint() -> str:
@@ -2234,11 +2299,11 @@ def _find_supports(
                 "x": float(row_x),
                 "y": float(nr["y"]),
                 "w": float(row_w),
-                "h": float(nr["h"]),
+                "h": float(max(nr["h"], SUPPORT_NAME_ONLY_ROW_H)),
             }
             tap = {
                 "x": float(row_x + row_w / 2.0),
-                "y": float(nr["y"] + nr["h"] / 2.0),
+                "y": float(nr["y"] + row_region["h"] / 2.0),
             }
             rows.append(
                 {
@@ -2352,16 +2417,6 @@ def _support_extract_np_level(fragments: list[dict], row_region: dict, np_text: 
     return None
 
 
-def _support_icon_region(row_region: dict, index: int) -> dict:
-    y = float(row_region["y"]) + float(row_region["h"]) * SUPPORT_SKILL_ICON_Y_IN_ROW
-    return {
-        "x": SUPPORT_SKILL_ICON_XS[index],
-        "y": y,
-        "w": SUPPORT_SKILL_ICON_W,
-        "h": SUPPORT_SKILL_ICON_H,
-    }
-
-
 def _support_crop(img: np.ndarray, region: dict) -> np.ndarray:
     h, w = img.shape[:2]
     rx = max(0, int(round(region["x"] * w)))
@@ -2371,97 +2426,174 @@ def _support_crop(img: np.ndarray, region: dict) -> np.ndarray:
     return img[ry : ry + rh, rx : rx + rw]
 
 
-def _support_icon_present(img: np.ndarray, region: dict) -> bool:
-    crop = _support_crop(img, region)
-    if crop.size == 0:
-        return False
-    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 70, 150)
-    edge_density = float((edges > 0).mean())
-    return edge_density > 0.055 or float(gray.mean()) < SUPPORT_APPEND_LOCKED_MEAN_MAX
+def _support_find_score_anchors(img: np.ndarray) -> list[dict]:
+    """Locate every "分值 +N" badge inside ``SUPPORT_SCORE_STRIP_REGION``.
 
+    Returns one normalized bbox per visible support row. The badge is a
+    saturated mid-blue compact rounded square with stacked "分值"/"+N"
+    text; we threshold the strip in HSV (``SUPPORT_SCORE_HSV_*``),
+    morphologically close the mask to fuse the badge's interior text
+    with its background, then run ``findContours`` and keep only
+    contours whose bbox passes the geometric filter. Per-row duplicates
+    are collapsed by y-NMS (``SUPPORT_SCORE_NMS_DY``).
 
-def _support_skill_digit_region(icon_region: dict) -> dict:
-    return {
-        "x": float(icon_region["x"]) + SUPPORT_SKILL_DIGIT_REGION["x"] * float(icon_region["w"]),
-        "y": float(icon_region["y"]) + SUPPORT_SKILL_DIGIT_REGION["y"] * float(icon_region["h"]),
-        "w": SUPPORT_SKILL_DIGIT_REGION["w"] * float(icon_region["w"]),
-        "h": SUPPORT_SKILL_DIGIT_REGION["h"] * float(icon_region["h"]),
-    }
-
-
-def _support_skill_search_region(row_region: dict) -> dict:
-    return {
-        "x": SUPPORT_SKILL_SLOT_SEARCH["x"],
-        "y": float(row_region["y"]) + SUPPORT_SKILL_SLOT_SEARCH["y"],
-        "w": SUPPORT_SKILL_SLOT_SEARCH["w"],
-        "h": SUPPORT_SKILL_SLOT_SEARCH["h"],
-    }
-
-
-def _support_find_skill_slots(img: np.ndarray, row_region: dict) -> list[dict]:
+    Pure grayscale Canny is unreliable here: the "X分钟前" /
+    "友情点 +25" labels nearby produce stronger edges and overlap the
+    score badge in the strip, while the badge's own outline is too low
+    contrast against the support card background to be picked up
+    consistently across resolutions.
+    """
     h, w = img.shape[:2]
-    search = _support_skill_search_region(row_region)
-    sx = max(0, int(round(search["x"] * w)))
-    sy = max(0, int(round(search["y"] * h)))
-    sw = max(1, min(int(round(search["w"] * w)), w - sx))
-    sh = max(1, min(int(round(search["h"] * h)), h - sy))
+    if h == 0 or w == 0:
+        return []
+    strip = SUPPORT_SCORE_STRIP_REGION
+    sx = max(0, int(round(strip["x"] * w)))
+    sy = max(0, int(round(strip["y"] * h)))
+    sw = max(1, min(int(round(strip["w"] * w)), w - sx))
+    sh = max(1, min(int(round(strip["h"] * h)), h - sy))
     crop = img[sy : sy + sh, sx : sx + sw]
     if crop.size == 0:
         return []
 
-    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 60, 160)
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    bgr = crop if crop.ndim == 3 else cv2.cvtColor(crop, cv2.COLOR_GRAY2BGR)
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(
+        hsv, np.array(SUPPORT_SCORE_HSV_LOW), np.array(SUPPORT_SCORE_HSV_HIGH)
+    )
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
     candidates: list[dict] = []
     for contour in contours:
         x, y, cw, ch = cv2.boundingRect(contour)
-        nx = (sx + x) / w
-        ny = (sy + y) / h
         nw = cw / w
         nh = ch / h
-        if nx + nw > SUPPORT_SKILL_SLOT_RIGHT_LIMIT:
+        if not (SUPPORT_SCORE_BBOX_MIN_W <= nw <= SUPPORT_SCORE_BBOX_MAX_W):
             continue
-        if (
-            nw > SUPPORT_SKILL_SLOT_MAX_W
-            and SUPPORT_SKILL_SLOT_MIN_H <= nh <= SUPPORT_SKILL_SLOT_MAX_H
-        ):
-            for slot_count in range(2, 6):
-                pitch = 0.0 if slot_count == 1 else (nw - SUPPORT_SKILL_SLOT_EXPECTED_W) / (slot_count - 1)
-                if SUPPORT_SKILL_SLOT_MIN_PITCH <= pitch <= SUPPORT_SKILL_SLOT_MAX_PITCH:
-                    for slot_idx in range(slot_count):
-                        candidates.append(
-                            {
-                                "x": float(nx + pitch * slot_idx),
-                                "y": float(ny),
-                                "w": SUPPORT_SKILL_SLOT_EXPECTED_W,
-                                "h": float(nh),
-                            }
-                        )
-                    break
-            continue
-        if not (SUPPORT_SKILL_SLOT_MIN_W <= nw <= SUPPORT_SKILL_SLOT_MAX_W):
-            continue
-        if not (SUPPORT_SKILL_SLOT_MIN_H <= nh <= SUPPORT_SKILL_SLOT_MAX_H):
+        if not (SUPPORT_SCORE_BBOX_MIN_H <= nh <= SUPPORT_SCORE_BBOX_MAX_H):
             continue
         aspect = cw / max(1, ch)
-        if aspect < 0.75 or aspect > 1.35:
+        if not (SUPPORT_SCORE_BBOX_MIN_ASPECT <= aspect <= SUPPORT_SCORE_BBOX_MAX_ASPECT):
             continue
-        candidates.append({"x": float(nx), "y": float(ny), "w": float(nw), "h": float(nh)})
+        candidates.append(
+            {
+                "x": (sx + x) / w,
+                "y": (sy + y) / h,
+                "w": nw,
+                "h": nh,
+            }
+        )
 
-    candidates.sort(key=lambda r: (r["x"], r["y"]))
-    slots: list[dict] = []
+    candidates.sort(key=lambda c: (c["y"], c["x"]))
+    anchors: list[dict] = []
     for cand in candidates:
-        cx = cand["x"] + cand["w"] / 2.0
         cy = cand["y"] + cand["h"] / 2.0
         if any(
-            abs(cx - (slot["x"] + slot["w"] / 2.0)) < max(cand["w"], slot["w"]) * 0.65
-            and abs(cy - (slot["y"] + slot["h"] / 2.0)) < max(cand["h"], slot["h"]) * 0.65
-            for slot in slots
+            abs(cy - (a["y"] + a["h"] / 2.0)) < SUPPORT_SCORE_NMS_DY for a in anchors
         ):
             continue
-        slots.append(cand)
-    return slots
+        anchors.append(cand)
+    return anchors
+
+
+def _pick_score_anchor_for_row(
+    anchors: list[dict], row_region: dict
+) -> Optional[dict]:
+    if not anchors:
+        return None
+    row_top = float(row_region["y"])
+    row_h = float(row_region["h"])
+    y_min = row_top - SUPPORT_SCORE_ROW_MATCH_ABOVE_DY
+    y_max = row_top + row_h + SUPPORT_SCORE_ROW_MATCH_BELOW_DY
+    row_cy = row_top + row_h / 2.0
+    best: Optional[dict] = None
+    best_dist = float("inf")
+    for anchor in anchors:
+        anchor_cy = float(anchor["y"]) + float(anchor["h"]) / 2.0
+        if anchor_cy < y_min or anchor_cy > y_max:
+            continue
+        dist = abs(anchor_cy - row_cy)
+        if dist < best_dist:
+            best = anchor
+            best_dist = dist
+    return best
+
+
+def _support_skill_slots_from_anchor(anchor: dict, panel: Optional[str]) -> list[dict]:
+    offsets = (
+        SUPPORT_SCORE_TO_SKILL_OFFSETS_APPEND
+        if panel == "append"
+        else SUPPORT_SCORE_TO_SKILL_OFFSETS_OWNED
+    )
+    ax = float(anchor["x"]) + float(anchor["w"]) / 2.0
+    ay = float(anchor["y"]) + float(anchor["h"]) / 2.0
+    return [
+        {
+            "x": ax + dx - SUPPORT_SCORE_SLOT_W / 2.0,
+            "y": ay + SUPPORT_SCORE_TO_SKILL_DY - SUPPORT_SCORE_SLOT_H / 2.0,
+            "w": SUPPORT_SCORE_SLOT_W,
+            "h": SUPPORT_SCORE_SLOT_H,
+        }
+        for dx in offsets
+    ]
+
+
+def _support_panel_kind_from_anchor(
+    img: np.ndarray, anchor: dict
+) -> Optional[str]:
+    """Return ``"append"``/``"owned"``/``None`` by sampling the
+    append-only slot beside the score badge.
+
+    The slot at ``SUPPORT_SCORE_PANEL_PROBE_DX`` (-0.037) only carries
+    a coloured icon on append rows; on owned rows the same coordinates
+    fall on the desaturated panel background. Mean saturation cleanly
+    separates the two on every checked-in support fixture, so we use it
+    as the primary panel signal — the legacy ``support_skill_panel_*``
+    template lookup ran on a tiny ROI that frequently failed the
+    ``th > roi.h`` size check at 1080p, leaving panel kind as ``None``.
+    """
+    h, w = img.shape[:2]
+    if h == 0 or w == 0:
+        return None
+    ax = float(anchor["x"]) + float(anchor["w"]) / 2.0
+    ay = float(anchor["y"]) + float(anchor["h"]) / 2.0
+    cx = ax + SUPPORT_SCORE_PANEL_PROBE_DX
+    cy = ay + SUPPORT_SCORE_PANEL_PROBE_DY
+    pw = SUPPORT_SCORE_PANEL_PROBE_W
+    ph = SUPPORT_SCORE_PANEL_PROBE_H
+    x0 = max(0, int(round((cx - pw / 2.0) * w)))
+    y0 = max(0, int(round((cy - ph / 2.0) * h)))
+    x1 = min(w, int(round((cx + pw / 2.0) * w)))
+    y1 = min(h, int(round((cy + ph / 2.0) * h)))
+    if x1 <= x0 or y1 <= y0:
+        return None
+    crop = img[y0:y1, x0:x1]
+    if crop.size == 0 or crop.ndim != 3:
+        return None
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    sat_mean = float(hsv[:, :, 1].mean())
+    if sat_mean >= SUPPORT_SCORE_PANEL_APPEND_MIN_SAT:
+        return "append"
+    if sat_mean <= SUPPORT_SCORE_PANEL_OWNED_MAX_SAT:
+        return "owned"
+    return None
+
+
+def _support_find_skill_slots(img: np.ndarray, row_region: dict) -> list[dict]:
+    """Derive skill-icon slot rectangles for ``row_region`` by anchoring
+    on the row's "分值 +N" badge. Returns ``[]`` when no anchor matches
+    the row — callers should treat that as "skills not recognised"
+    rather than falling back to fixed coordinates.
+    """
+    anchors = _support_find_score_anchors(img)
+    anchor = _pick_score_anchor_for_row(anchors, row_region)
+    if anchor is None:
+        return []
+    panel = _support_panel_kind_from_anchor(img, anchor)
+    if panel is None:
+        panel = _support_panel_template_kind(img, row_region)
+    return _support_skill_slots_from_anchor(anchor, panel)
 
 
 def _support_level_template_refs() -> list[tuple[int, np.ndarray]]:
@@ -2597,9 +2729,19 @@ def _read_support_skill_level_info_from_icon(icon: np.ndarray) -> dict:
     dedicated_refs = _support_dedicated_level_template_refs()
 
     zero_ref = _support_dedicated_digit_template(0)
-    zero_glyph = _support_skill_level_glyph(icon, SUPPORT_SKILL_LEVEL_ZERO_ROI)
-    if zero_ref is not None and zero_glyph is not None and dedicated_refs and glyph is not None:
-        zero_score = _support_template_match_score(zero_glyph, zero_ref)
+    zero_glyphs = [
+        _support_skill_level_glyph(icon, SUPPORT_SKILL_LEVEL_ZERO_ROI),
+        _support_skill_level_glyph(icon, SUPPORT_SKILL_LEVEL_ZERO_WIDE_ROI),
+    ]
+    if zero_ref is not None and dedicated_refs and glyph is not None:
+        zero_score = max(
+            (
+                _support_template_match_score(zero_glyph, zero_ref)
+                for zero_glyph in zero_glyphs
+                if zero_glyph is not None
+            ),
+            default=0.0,
+        )
         level, score, second_score = _support_match_level_refs(glyph, dedicated_refs)
         if (
             zero_score >= SUPPORT_SKILL_LEVEL_ZERO_MIN_SCORE
@@ -2691,26 +2833,24 @@ def _support_extract_skill_details_with_diagnostics(
     img: np.ndarray, row_region: dict
 ) -> tuple[Optional[str], list[Optional[int]], list[Optional[int]], list[dict]]:
     slots = _support_find_skill_slots(img, row_region)
-    if len(slots) >= 5:
-        infos = [_support_read_skill_level_info(img, slot) for slot in slots[:5]]
-        levels = [info["level"] for info in infos]
-        return "append", [], levels, infos
-    if len(slots) >= 3:
-        infos = [_support_read_skill_level_info(img, slot) for slot in slots[:3]]
-        levels = [info["level"] for info in infos]
-        return "owned", levels, [], infos
+    if not slots:
+        return None, [], [], []
+    # ``_support_find_skill_slots`` already resolved the panel kind via
+    # ``_support_panel_kind_from_anchor`` and emitted the matching
+    # number of slots (3 owned / 5 append), so the slot count is the
+    # source of truth here — that keeps panel and slot count from ever
+    # disagreeing while still letting tests monkey-patch the slot
+    # finder to inject canned slot lists.
+    panel = "append" if len(slots) == 5 else "owned"
 
-    icon_regions = [_support_icon_region(row_region, i) for i in range(5)]
-    present = [_support_icon_present(img, r) for r in icon_regions]
-    levels = [_read_integer_digits(img, _support_skill_digit_region(r)) for r in icon_regions]
-    diagnostics = [
-        {"level": level, "score": 0.0, "source": "legacy", "region": dict(region)}
-        for level, region in zip(levels, icon_regions)
-    ]
-    panel = "append" if any(present[3:]) else "owned"
+    expected = 5 if panel == "append" else 3
+    infos = [_support_read_skill_level_info(img, slot) for slot in slots[:expected]]
+    while len(infos) < expected:
+        infos.append({"level": None, "score": 0.0, "source": "missing", "region": {}})
+    levels = [info["level"] for info in infos]
     if panel == "append":
-        return panel, [], levels, diagnostics
-    return panel, levels[:3], [], diagnostics[:3]
+        return "append", [], levels, infos
+    return "owned", levels, [], infos
 
 
 def _support_add_details(img: np.ndarray, rows: list[dict], fragments: list[dict]) -> None:

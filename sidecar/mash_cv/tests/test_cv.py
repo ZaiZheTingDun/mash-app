@@ -1459,6 +1459,200 @@ def test_support_skill_details_do_not_treat_six_as_ten():
         cv._set_server("JP")
 
 
+def test_support_skill_details_read_wide_slot_ten():
+    import mash_cv.cv as cv
+
+    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    cv._set_server("CN")
+    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "error_6_10_1.png"))
+    assert img is not None
+
+    try:
+        result = cv._find_supports(
+            img,
+            cv.SUPPORT_LIST_REGION,
+            "莱妮丝",
+            ["混元一阵"],
+            cv.SUPPORT_NAME_THRESHOLD,
+            cv.SUPPORT_NP_THRESHOLD,
+            cv.SUPPORT_ROW_PAIR_DY,
+            True,
+        )
+        assert len(result["supports"]) == 1
+        row = result["supports"][0]
+        assert row["skillPanel"] == "owned"
+        assert row["skillLevels"] == [6, 10, 10]
+    finally:
+        cv._set_server("JP")
+
+
+def test_support_skill_details_use_full_row_for_name_only_fallback():
+    import mash_cv.cv as cv
+
+    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    cv._set_server("CN")
+    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "error_10_10_1.png"))
+    assert img is not None
+
+    try:
+        result = cv._find_supports(
+            img,
+            cv.SUPPORT_LIST_REGION,
+            "伊什塔尔",
+            ["山脉震撼明星之薪"],
+            cv.SUPPORT_NAME_THRESHOLD,
+            cv.SUPPORT_NP_THRESHOLD,
+            cv.SUPPORT_ROW_PAIR_DY,
+            True,
+        )
+        assert len(result["supports"]) == 1
+        row = result["supports"][0]
+        assert result["diagnostics"]["nameOnlyFallback"] is True
+        assert row["skillPanel"] == "owned"
+        assert row["skillLevels"] == [10, 10, 10]
+    finally:
+        cv._set_server("JP")
+
+
+def test_support_skill_details_classifies_short_owned_panel():
+    import mash_cv.cv as cv
+
+    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    cv._set_server("CN")
+    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "error_2_no_skill.png"))
+    assert img is not None
+
+    try:
+        result = cv._find_supports(
+            img,
+            cv.SUPPORT_LIST_REGION,
+            "哈贝特洛特",
+            ["为你纺织的时光之轮"],
+            cv.SUPPORT_NAME_THRESHOLD,
+            cv.SUPPORT_NP_THRESHOLD,
+            cv.SUPPORT_ROW_PAIR_DY,
+            True,
+        )
+        assert len(result["supports"]) == 1
+        row = result["supports"][0]
+        assert row["skillPanel"] == "owned"
+        assert row["skillLevels"] == [1, 10, 1]
+    finally:
+        cv._set_server("JP")
+
+
+def test_support_skill_details_owned_three_skills_from_score_anchor():
+    """Pins the new score-anchor pipeline against the debug_1 fixture.
+
+    The previous fixed-x icon detector misidentified the small NP-grade
+    triangle next to each icon as a fourth icon, so this servant came
+    back with garbage skill levels. The score-anchor approach derives
+    the three icon centres from the badge to its right via
+    SUPPORT_SCORE_TO_SKILL_OFFSETS_OWNED, which makes the [5, 10, 4]
+    read deterministic regardless of NP-grade arrows.
+    """
+    import mash_cv.cv as cv
+
+    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    cv._set_server("CN")
+    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "debug_1_skill_5_10_4.png"))
+    assert img is not None
+
+    try:
+        result = cv._find_supports(
+            img,
+            cv.SUPPORT_LIST_REGION,
+            "伊斯坎达尔",
+            ["王之军势"],
+            cv.SUPPORT_NAME_THRESHOLD,
+            cv.SUPPORT_NP_THRESHOLD,
+            cv.SUPPORT_ROW_PAIR_DY,
+            True,
+        )
+        assert len(result["supports"]) == 1
+        row = result["supports"][0]
+        assert row["skillPanel"] == "owned"
+        assert row["skillLevels"] == [5, 10, 4]
+        assert row["appendSkillLevels"] == []
+    finally:
+        cv._set_server("JP")
+
+
+def test_support_skill_details_append_five_skills_from_score_anchor():
+    """Pins the append-panel branch against the debug_2 fixture.
+
+    Iori's append row shows five icons of [1, 10, 10, 10, 10]. The
+    score-anchor pipeline must (a) classify the row as `append` and
+    (b) lay out five slots using the denser 0.029-pitch
+    SUPPORT_SCORE_TO_SKILL_OFFSETS_APPEND offsets so the leftmost icon
+    isn't read as the rarity card to its left.
+    """
+    import mash_cv.cv as cv
+
+    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    cv._set_server("CN")
+    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "debug_2_append_5_skill.png"))
+    assert img is not None
+
+    try:
+        result = cv._find_supports(
+            img,
+            cv.SUPPORT_LIST_REGION,
+            "宫本伊织",
+            ["秘剑·比翼闪耀"],
+            cv.SUPPORT_NAME_THRESHOLD,
+            cv.SUPPORT_NP_THRESHOLD,
+            cv.SUPPORT_ROW_PAIR_DY,
+            True,
+        )
+        assert len(result["supports"]) == 1
+        row = result["supports"][0]
+        assert row["skillPanel"] == "append"
+        assert row["skillLevels"] == []
+        assert row["appendSkillLevels"] == [1, 10, 10, 10, 10]
+    finally:
+        cv._set_server("JP")
+
+
+def test_support_find_score_anchors_locates_one_per_visible_row():
+    """Anchor-helper smoke test: every fixture has either two or three
+    visible support rows and the helper must surface a badge anchor for
+    each, sitting inside the score strip with a roughly square bbox.
+    """
+    import mash_cv.cv as cv
+
+    cases = [
+        ("debug_1_skill_5_10_4.png", 2),
+        ("debug_2_append_5_skill.png", 2),
+        ("debug_2-10-1.png", 2),
+        ("debug_3.png", 2),
+        ("error_10_10_1.png", 2),
+        ("error_2_no_skill.png", 2),
+    ]
+    for fixture, min_anchors in cases:
+        img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, fixture))
+        assert img is not None, fixture
+        anchors = cv._support_find_score_anchors(img)
+        assert len(anchors) >= min_anchors, (fixture, anchors)
+        for anchor in anchors:
+            cx = anchor["x"] + anchor["w"] / 2.0
+            strip = cv.SUPPORT_SCORE_STRIP_REGION
+            assert strip["x"] <= cx <= strip["x"] + strip["w"], (fixture, anchor)
+            assert cv.SUPPORT_SCORE_BBOX_MIN_W <= anchor["w"] <= cv.SUPPORT_SCORE_BBOX_MAX_W
+            assert cv.SUPPORT_SCORE_BBOX_MIN_H <= anchor["h"] <= cv.SUPPORT_SCORE_BBOX_MAX_H
+            aspect = anchor["w"] / anchor["h"]
+            assert (
+                cv.SUPPORT_SCORE_BBOX_MIN_ASPECT
+                <= aspect
+                <= cv.SUPPORT_SCORE_BBOX_MAX_ASPECT
+            )
+
+
 @pytest.mark.skipif(
     not os.path.isfile(
         os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug1.png"))
