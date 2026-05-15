@@ -93,6 +93,32 @@ must be a distinct OCR fragment below the servant-name fragment in the
 same row. This prevents servants whose displayed name and NP text are the
 same from reusing the name line as a false NP match.
 
+## Support Skill / NP Level Filter (CN)
+
+When the active project sets any of `supportNoblePhantasmLevelMin`,
+`supportSkillLevelMins`, or `supportAppendSkillLevelMins`, the runner
+runs the OCR'd row through `support_row_matches_level_requirements_with_progress`
+before tapping it. The function returns:
+
+- `Pass` — name + NP + every required level meets its threshold.
+- `Fail` — at least one level is below the configured minimum (with the
+  panel that's currently visible). The runner moves on to the next row.
+- `WaitingForPanel` — the visible panel matches its slice of the
+  requirements, but the *other* panel (owned vs append) hasn't been
+  observed for this candidate yet.
+
+Owned and append skill icons share the same row strip; the game decides
+which panel is shown via the "技能显示切换" toggle (a 3-state cycle:
+固定持有 / 固定追加 / 间隔切换). The runner can't tell which mode the
+user has the toggle locked into — and "固定" modes never auto-flip — so
+on `WaitingForPanel` it actively taps `SUPPORT_SKILL_PANEL_TOGGLE_BUTTON`
+and re-OCRs after a short settle. `SupportLevelPanelProgress.panel_toggle_taps`
+caps this at `SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS` per candidate; once
+the cap is hit, the runner falls through to the scroll/refresh branch
+so a row that genuinely can't be verified doesn't trap the loop. The
+counter resets implicitly whenever `support_level_candidate_key`
+changes (i.e. when the runner moves to a different row).
+
 ## Notes
 
 - `BattleSceneTick` is internal state, not a `Screen` enum variant. It maps the

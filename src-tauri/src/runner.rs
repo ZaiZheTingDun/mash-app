@@ -505,6 +505,10 @@ pub fn debug_coordinates() -> DebugCoordinates {
                     label: "Refresh".into(),
                     point: SUPPORT_REFRESH_BUTTON,
                 },
+                LabeledPoint {
+                    label: "Skill Panel Toggle".into(),
+                    point: SUPPORT_SKILL_PANEL_TOGGLE_BUTTON,
+                },
             ],
             regions: Vec::new(),
         },
@@ -714,6 +718,27 @@ const SUPPORT_REFRESH_BUTTON: Point = Point::new(0.726, 0.178);
 const SUPPORT_REFRESH_CONFIRM_BUTTON: Point = Point::new(0.650, 0.779);
 const SUPPORT_REFRESH_DIALOG_ELEMENT: &str = "dialog_refresh_support";
 
+/// "技能显示切换" toggle on the support-select screen — the button that
+/// cycles which skill panel (owned vs append) is shown for every support
+/// row. Three-state cycle: 固定持有 → 固定追加 → 间隔切换 → … The runner
+/// can't tell which mode the user has the game in (the icon variants
+/// don't ship as templates), but we don't need to: each tap advances
+/// the cycle, so worst case 3 taps will surface every panel layout.
+/// Sits immediately to the left of `SUPPORT_REFRESH_BUTTON` in the same
+/// settings row, so it shares y with the class-tab strip.
+const SUPPORT_SKILL_PANEL_TOGGLE_BUTTON: Point = Point::new(0.658, 0.178);
+/// Settle time after tapping the panel toggle: long enough for the
+/// support-list rows to redraw their skill icons before the next OCR
+/// pass. Shorter than `SUPPORT_SCROLL_SETTLE` because no list reflow
+/// happens — only the per-row icon swap.
+const SUPPORT_SKILL_PANEL_TOGGLE_SETTLE: Duration = Duration::from_millis(800);
+/// Cap on how many times we'll tap the toggle for a single candidate
+/// row before giving up on it. The cycle is length 3 plus we may need
+/// to ride out the auto-switching mode's flip, so 3 attempts is the
+/// minimum that's guaranteed to expose every panel layout in every
+/// starting state.
+const SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS: u32 = 3;
+
 /// Class-filter tab bar across the top of the support-select screen. All
 /// tabs share the same y. Order mirrors the FGO UI: all → saber → ...
 /// → berserker → extra → mix. Lookup happens via `class_tab_for` which
@@ -770,6 +795,12 @@ struct SupportLevelPanelProgress {
     candidate_key: Option<String>,
     owned_met: bool,
     append_met: bool,
+    /// How many times we've tapped the "技能显示切换" button while still
+    /// trying to verify this candidate's skill panels. Bounded by
+    /// [`SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS`]; exceeding it makes the
+    /// runner give up on this row and continue scrolling. Reset
+    /// implicitly whenever `candidate_key` rolls over.
+    panel_toggle_taps: u32,
 }
 
 /// Pure helper: apply [`SUPPORT_CE_OFFSET_IN_ROW`] (a row-local rect) to
@@ -833,6 +864,7 @@ fn support_row_matches_level_requirements_with_progress(
         progress.candidate_key = Some(key);
         progress.owned_met = false;
         progress.append_met = false;
+        progress.panel_toggle_taps = 0;
     }
 
     match row.skill_panel.as_deref() {
@@ -1508,9 +1540,40 @@ impl Runner {
             self.emit("SupportSelect", "找到从者但礼装不匹配，继续滚动…");
         }
         if waiting_for_skill_panel {
-            self.emit("SupportSelect", "找到从者，等待技能显示自动切换…");
-            thread::sleep(SUPPORT_SCROLL_SETTLE);
-            return;
+            // The candidate's name + NP match but we still need the
+            // *other* skill panel to confirm its level requirements.
+            // We can't rely on the game auto-flipping panels (the user
+            // may have the toggle locked on 固定持有 or 固定追加), so
+            // actively tap "技能显示切换" until both panels have been
+            // observed. Cap at MAX_TOGGLE_TAPS so a row that genuinely
+            // can't be verified (e.g. icon rendering bug) eventually
+            // releases us back to the scroll branch.
+            if self.support_level_progress.panel_toggle_taps
+                < SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS
+            {
+                self.support_level_progress.panel_toggle_taps += 1;
+                self.emit(
+                    "SupportSelect",
+                    &format!(
+                        "找到从者，主动点击技能显示切换 ({}/{})",
+                        self.support_level_progress.panel_toggle_taps,
+                        SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS,
+                    ),
+                );
+                if !self.tap_at("SupportSelect", SUPPORT_SKILL_PANEL_TOGGLE_BUTTON) {
+                    return;
+                }
+                thread::sleep(SUPPORT_SKILL_PANEL_TOGGLE_SETTLE);
+                return;
+            }
+            self.emit(
+                "SupportSelect",
+                "切换面板已达上限，跳过该助战，继续滚动列表…",
+            );
+            // Drop the per-candidate accumulator so the next visible
+            // candidate (after scroll/refresh) starts fresh, then fall
+            // through to the scroll/refresh branch below.
+            self.support_level_progress = SupportLevelPanelProgress::default();
         }
         if level_filter_missed {
             self.emit("SupportSelect", "找到从者但技能/宝具等级不匹配，继续滚动…");
@@ -2967,6 +3030,53 @@ mod tests {
             append_skill_levels: append,
             skill_level_diagnostics: Vec::new(),
         }
+    }
+
+    #[test]
+    fn support_level_progress_resets_panel_toggle_taps_on_new_candidate() {
+        // The runner increments `panel_toggle_taps` outside the matcher,
+        // but the matcher owns the lifecycle: whenever it sees a new
+        // `candidate_key` it must also reset the tap counter so the
+        // budget only applies to the current row. Across calls that
+        // keep the same key the counter must be left untouched.
+        let mut payload = minimal_run_config_json();
+        payload["supportSkillLevelMins"] = serde_json::json!([10, null, null]);
+        payload["supportAppendSkillLevelMins"] = serde_json::json!([null, 10, null, null, null]);
+        let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+        let mut progress = SupportLevelPanelProgress::default();
+
+        // First call: row A on the owned panel — owned passes, still
+        // need append → WaitingForPanel; tap counter untouched.
+        support_row_matches_level_requirements_with_progress(
+            Server::Cn,
+            &cfg,
+            &support_row(Some("owned"), vec![Some(10), None, None], vec![]),
+            &mut progress,
+        );
+        assert!(progress.owned_met);
+        progress.panel_toggle_taps = 2;
+
+        // Second call: row A again, same panel — matcher must not
+        // clobber the counter the runner just incremented.
+        support_row_matches_level_requirements_with_progress(
+            Server::Cn,
+            &cfg,
+            &support_row(Some("owned"), vec![Some(10), None, None], vec![]),
+            &mut progress,
+        );
+        assert_eq!(progress.panel_toggle_taps, 2);
+
+        // Third call: row B (different y → different candidate_key) —
+        // matcher resets the whole accumulator, including tap counter.
+        let mut row_b = support_row(Some("owned"), vec![Some(10), None, None], vec![]);
+        row_b.row_region.y = 0.62;
+        support_row_matches_level_requirements_with_progress(
+            Server::Cn,
+            &cfg,
+            &row_b,
+            &mut progress,
+        );
+        assert_eq!(progress.panel_toggle_taps, 0);
     }
 
     #[test]
