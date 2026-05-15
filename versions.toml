@@ -1,5 +1,5 @@
 [app]
-version = "0.1.2"
+version = "0.2.0"
 
 [mash_cv]
 runtime = "2026.05.08-runtime1"
