@@ -2616,6 +2616,40 @@ mod tests {
     use std::io::Cursor;
     use zip::write::SimpleFileOptions;
 
+    #[test]
+    fn tauri_bundle_resources_cover_template_subdirectories() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let config_path = manifest_dir.join("tauri.conf.json");
+        let config: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+        let resources: HashSet<String> = config["bundle"]["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item.as_str().unwrap().to_string())
+            .collect();
+
+        for server in ["jp", "cn"] {
+            let templates_dir = manifest_dir
+                .join("resources")
+                .join("servers")
+                .join(server)
+                .join("templates");
+            for entry in fs::read_dir(&templates_dir).unwrap() {
+                let entry = entry.unwrap();
+                if !entry.file_type().unwrap().is_dir() {
+                    continue;
+                }
+                let dir_name = entry.file_name().to_string_lossy().into_owned();
+                let glob = format!("resources/servers/{server}/templates/{dir_name}/*");
+                assert!(
+                    resources.contains(&glob),
+                    "missing Tauri bundle resource glob for {glob}"
+                );
+            }
+        }
+    }
+
     // --- input coordinate sizing --------------------------------------
 
     #[test]

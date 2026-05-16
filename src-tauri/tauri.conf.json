@@ -52,9 +52,11 @@
     "resources": [
       "resources/servers/jp/cv.json",
       "resources/servers/jp/templates/*",
+      "resources/servers/jp/templates/digit_v2/*",
       "resources/servers/jp/templates/items/*",
       "resources/servers/cn/cv.json",
       "resources/servers/cn/templates/*",
+      "resources/servers/cn/templates/digit-type-3/*",
       "resources/servers/cn/templates/items/*",
       "resources/adb/*",
       "resources/scrcpy/scrcpy-server.jar",
