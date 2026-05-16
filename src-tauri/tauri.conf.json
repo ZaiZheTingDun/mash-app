@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "mash",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "identifier": "com.mash.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -61,6 +61,15 @@
       "resources/adb/*",
       "resources/scrcpy/scrcpy-server.jar",
       "resources/runtime-manifest.json"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVGODc4MTM2NzI2OTM1NDQKUldSRU5XbHlOb0dINzFpNWk5TnBIQUJzKzN5YXBkZU51VEhLUksyTzg3N2hDOUljSTZVRTcwZ0YK",
+      "endpoints": [
+        "https://mash.xiaotongx.com/mash/releases/stable/latest.json"
+      ]
+    }
   }
 }

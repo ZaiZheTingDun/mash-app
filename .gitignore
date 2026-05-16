@@ -41,3 +41,6 @@ src-tauri/binaries/
 
 # Screenshot examples
 screenshots/
+
+# Mise
+.mise.toml

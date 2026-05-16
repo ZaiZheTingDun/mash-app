@@ -1,6 +1,6 @@
 [package]
 name = "mash"
-version = "0.2.1"
+version = "0.2.2"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -30,3 +30,6 @@ base64 = "0.22"
 unicode-normalization = "0.1.25"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 sha2 = "0.10"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"

@@ -843,15 +843,18 @@ fn support_first_level_mismatch(
     actual: &[Option<u32>],
     required: &[Option<u32>],
 ) -> Option<(usize, Option<u32>, u32)> {
-    required.iter().enumerate().find_map(|(index, required_min)| {
-        let min = (*required_min)?;
-        let actual_level = actual.get(index).copied().flatten();
-        if actual_level.is_some_and(|level| level >= min) {
-            None
-        } else {
-            Some((index, actual_level, min))
-        }
-    })
+    required
+        .iter()
+        .enumerate()
+        .find_map(|(index, required_min)| {
+            let min = (*required_min)?;
+            let actual_level = actual.get(index).copied().flatten();
+            if actual_level.is_some_and(|level| level >= min) {
+                None
+            } else {
+                Some((index, actual_level, min))
+            }
+        })
 }
 
 /// Format an OCR'd level for log output. `None` becomes a plain `-` so
@@ -905,10 +908,9 @@ fn support_row_matches_level_requirements_with_progress(
 
     match row.skill_panel.as_deref() {
         Some("owned") if needs_owned => {
-            if let Some((index, actual, min)) = support_first_level_mismatch(
-                &row.skill_levels,
-                &config.support_skill_level_mins,
-            ) {
+            if let Some((index, actual, min)) =
+                support_first_level_mismatch(&row.skill_levels, &config.support_skill_level_mins)
+            {
                 progress.owned_met = false;
                 return SupportLevelFilter::Fail(format!(
                     "持有技能 {} ≥ {}（实际 {}）",
@@ -1603,9 +1605,7 @@ impl Runner {
             // observed. Cap at MAX_TOGGLE_TAPS so a row that genuinely
             // can't be verified (e.g. icon rendering bug) eventually
             // releases us back to the scroll branch.
-            if self.support_level_progress.panel_toggle_taps
-                < SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS
-            {
+            if self.support_level_progress.panel_toggle_taps < SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS {
                 self.support_level_progress.panel_toggle_taps += 1;
                 self.emit(
                     "SupportSelect",
@@ -3245,11 +3245,7 @@ mod tests {
             support_row_matches_level_requirements_with_progress(
                 Server::Cn,
                 &cfg,
-                &support_row(
-                    Some("append"),
-                    vec![],
-                    vec![None, None, None, None, None],
-                ),
+                &support_row(Some("append"), vec![], vec![None, None, None, None, None],),
                 &mut progress,
             ),
             SupportLevelFilter::Fail("追加技能 2 ≥ 10（实际 -）".into())
