@@ -1,0 +1,97 @@
+name: Release CV Code
+
+on:
+  push:
+    tags:
+      - "cv-code/*"
+
+permissions:
+  contents: read
+
+jobs:
+  release-cv-code:
+    name: Release mash-cv code
+    runs-on: macos-15
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      RELEASE_BASE_URL: ${{ secrets.RELEASE_BASE_URL }}
+      R2_PREFIX: mash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install AWS CLI
+        run: brew install awscli
+
+      - name: Build code artifact
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          CODE_VERSION="${TAG#cv-code/}"
+          if [[ -z "$CODE_VERSION" || "$CODE_VERSION" == "$TAG" ]]; then
+            echo "Unexpected tag: $TAG" >&2
+            exit 1
+          fi
+          if [[ ! "$CODE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)*$ ]]; then
+            echo "CV code tag must look like cv-code/x.y.z; got $TAG" >&2
+            exit 1
+          fi
+
+          cd sidecar/mash_cv
+          MASH_CV_CODE_VERSION="$CODE_VERSION" ./build_sidecar.sh --code-only
+
+          ARTIFACT="mash-cv-code-v${CODE_VERSION}.zip"
+          SHA256="$(shasum -a 256 "dist/${ARTIFACT}" | awk '{print $1}')"
+          OBJECT_KEY="${R2_PREFIX}/runtime/mash-cv/code/${ARTIFACT}"
+          URL="${RELEASE_BASE_URL%/}/${OBJECT_KEY}"
+
+          echo "code_version=${CODE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "artifact=${ARTIFACT}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "object_key=${OBJECT_KEY}" >> "$GITHUB_OUTPUT"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to R2
+        run: |
+          aws s3 cp \
+            "sidecar/mash_cv/dist/${{ steps.build.outputs.artifact }}" \
+            "s3://${R2_BUCKET}/${{ steps.build.outputs.object_key }}" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --cache-control "public, max-age=31536000, immutable"
+
+      - name: Validate public artifact
+        run: |
+          curl --fail --location --silent --show-error --head \
+            "${{ steps.build.outputs.url }}" >/dev/null
+
+      - name: Write summary
+        run: |
+          {
+            echo "## mash-cv code release"
+            echo ""
+            echo "- Version: \`${{ steps.build.outputs.code_version }}\`"
+            echo "- Artifact: \`${{ steps.build.outputs.artifact }}\`"
+            echo "- URL: ${{ steps.build.outputs.url }}"
+            echo "- SHA-256: \`${{ steps.build.outputs.sha256 }}\`"
+            echo ""
+            echo "Update \`src-tauri/resources/runtime-manifest.json\` with:"
+            echo ""
+            echo "\`\`\`json"
+            echo "\"codeUrl\": \"${{ steps.build.outputs.url }}\","
+            echo "\"codeSha256\": \"${{ steps.build.outputs.sha256 }}\""
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
