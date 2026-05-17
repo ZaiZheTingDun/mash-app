@@ -162,7 +162,8 @@ echo "  size:   $ARTIFACT_SIZE"
 echo "  target: s3://$R2_BUCKET/$OBJECT_KEY"
 echo "  url:    $RUNTIME_URL"
 aws_s3_cp "$DIST_PATH" "s3://$R2_BUCKET/$OBJECT_KEY" \
-  --cache-control "$LONG_CACHE_CONTROL"
+  --cache-control "$LONG_CACHE_CONTROL" \
+  --progress
 
 echo "Validating public runtime URL"
 curl --fail --location --silent --show-error --head "$RUNTIME_URL" >/dev/null
