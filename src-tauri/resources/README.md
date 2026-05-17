@@ -45,17 +45,18 @@ safely deleted.
 `mash-cv` is distributed separately from the Tauri app bundle and split into a
 heavy runtime base plus a lightweight Python code package. The app reads
 `runtime-manifest.json` to decide which versions are required for the current
-app build and where users can download the matching zips.
+app build and where users can download the matching zips. See
+`docs/distribution.md` for the R2 object layout and release commands.
 
 ```json
 {
-  "mashCvRuntimeVersion": "2026.05.08-runtime1",
-  "mashCvCodeVersion": "2026.05.08-code1",
+  "mashCvRuntimeVersion": "0.2.2",
+  "mashCvCodeVersion": "0.2.2",
   "platforms": {
     "darwin-aarch64": {
-      "runtimeUrl": "https://cdn.example.com/mash-cv-runtime-darwin-aarch64-v2026.05.08-runtime1.zip",
+      "runtimeUrl": "https://cdn.example.com/mash/runtime/mash-cv/runtime/darwin-aarch64/mash-cv-runtime-darwin-aarch64-v0.2.2.zip",
       "runtimeSha256": "...",
-      "codeUrl": "https://cdn.example.com/mash-cv-code-v2026.05.08-code1.zip",
+      "codeUrl": "https://cdn.example.com/mash/runtime/mash-cv/code/mash-cv-code-v0.2.2.zip",
       "codeSha256": "..."
     }
   }

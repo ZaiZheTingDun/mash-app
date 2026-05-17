@@ -68,34 +68,39 @@ pnpm lint
 
 ### CV Runtime
 
-The automation runtime depends on the `mash-cv` sidecar for screen recognition and the scrcpy H.264 stream. `mash-cv` is **not** bundled into the Tauri app. The main app ships only the small UI/Rust/resources bundle and expects two separately installed artifacts:
+The automation runtime depends on the `mash-cv` sidecar for screen recognition and the scrcpy H.264 stream. `mash-cv` is **not** bundled into the Tauri app. The main app ships only the UI/Rust/resources bundle and reads `src-tauri/resources/runtime-manifest.json` to decide which external CV packages are required.
 
 ```text
 app_data_dir()/runtime/mash-cv/runtime/<runtimeVersion>/mash-cv-runtime/
 app_data_dir()/runtime/mash-cv/code/<codeVersion>/mash-cv-code/
 ```
 
-The runtime base contains the heavy PyInstaller/native dependency tree and OCR models. The code package contains the lightweight `mash_cv/*.py` source. The required versions and download metadata live in `src-tauri/resources/runtime-manifest.json`. If either artifact is missing or stale, the app shows an “安装 CV 包” button near the automation entry points. Users manually download the zips listed in the manifest and import them through that button.
+The runtime base contains the heavy PyInstaller/native dependency tree and OCR models. The code package contains the lightweight `mash_cv/*.py` source. If either artifact is missing or stale, the app shows an “安装 CV 包” button near the automation entry points.
 
-Build a release runtime artifact before first distribution or after modifying `sidecar/mash_cv/`:
+Version numbers are managed in `versions.toml` and use `x.x.x` format. Distribution details, R2 object layout, tag conventions, and release troubleshooting are documented in [docs/distribution.md](docs/distribution.md).
+
+Build local sidecar artifacts for testing:
 
 ```bash
 cd sidecar/mash_cv
 bash build_sidecar.sh
 ```
 
-The default artifact versions come from `versions.toml` at the repo root.
-Environment variables `MASH_CV_RUNTIME_VERSION` and `MASH_CV_CODE_VERSION`
-remain available for one-off overrides.
+Release entry points:
 
-The script creates two zips:
+```bash
+# App updater release: bump versions, commit, and tag vX.Y.Z
+scripts/bump-app-version.sh 0.2.2
 
-- `dist/mash-cv-runtime-<platform>-v<runtimeVersion>.zip` with archive root `mash-cv-runtime/`
-- `dist/mash-cv-code-v<codeVersion>.zip` with archive root `mash-cv-code/`
+# CV code release: push tag, GitHub Actions uploads to R2
+git tag cv-code/0.2.2
+git push origin cv-code/0.2.2
 
-Upload both to your release host/CDN and copy the final URLs + sha256 values into `runtime-manifest.json`.
+# CV runtime release: build, upload to R2, update manifest, commit, and tag
+R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-cv-runtime.sh 0.2.2
+```
 
-Running `--onedir` (instead of `--onefile`) avoids re-extracting dylibs on every launch, cutting warm-start time to well under a second after the runtime is installed.
+Running the sidecar as PyInstaller `--onedir` avoids re-extracting dylibs on every launch, cutting warm-start time to well under a second after the runtime is installed.
 
 Run the sidecar tests (no Rust/Node required):
 
@@ -111,7 +116,7 @@ poetry run pytest
 pnpm tauri build
 ```
 
-The Tauri bundle intentionally excludes `mash-cv`; app updates remain small. Bump `mashCvCodeVersion` for Python-only sidecar changes. Bump `mashCvRuntimeVersion` only when OCR models, PyInstaller dependencies, native dependencies, or the runtime launcher/archive layout changes.
+The Tauri bundle intentionally excludes `mash-cv`; app updates remain small. Bump `mashCvCodeVersion` for Python-only sidecar changes. Bump `mashCvRuntimeVersion` only when OCR models, PyInstaller dependencies, native dependencies, or the runtime launcher/archive layout changes. See [docs/distribution.md](docs/distribution.md) for the release flow.
 
 ## How It Works
 
