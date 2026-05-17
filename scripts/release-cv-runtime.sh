@@ -2,6 +2,8 @@
 set -euo pipefail
 
 AWS_PROFILE="${AWS_PROFILE:-mash}"
+AWS_CLI_CONNECT_TIMEOUT="${AWS_CLI_CONNECT_TIMEOUT:-300}"
+AWS_CLI_READ_TIMEOUT="${AWS_CLI_READ_TIMEOUT:-300}"
 R2_PREFIX="${R2_PREFIX:-mash}"
 LONG_CACHE_CONTROL="${LONG_CACHE_CONTROL:-public, max-age=31536000, immutable}"
 PLATFORM=""
@@ -26,6 +28,10 @@ Required environment:
 
 Optional environment:
   AWS_PROFILE       AWS CLI profile to use (default: mash; set to empty to use AWS env credentials)
+  AWS_CLI_CONNECT_TIMEOUT
+                    AWS CLI connect timeout in seconds (default: 300)
+  AWS_CLI_READ_TIMEOUT
+                    AWS CLI socket read timeout in seconds (default: 300)
   R2_PREFIX         Object key prefix (default: mash)
 
 The worktree must be clean before running this script.
@@ -59,9 +65,16 @@ detect_platform() {
 
 aws_s3_cp() {
   if [[ -n "${AWS_PROFILE:-}" ]]; then
-    aws s3 cp "$@" --profile "$AWS_PROFILE" --endpoint-url "$R2_ENDPOINT"
+    aws s3 cp "$@" \
+      --profile "$AWS_PROFILE" \
+      --endpoint-url "$R2_ENDPOINT" \
+      --cli-connect-timeout "$AWS_CLI_CONNECT_TIMEOUT" \
+      --cli-read-timeout "$AWS_CLI_READ_TIMEOUT"
   else
-    aws s3 cp "$@" --endpoint-url "$R2_ENDPOINT"
+    aws s3 cp "$@" \
+      --endpoint-url "$R2_ENDPOINT" \
+      --cli-connect-timeout "$AWS_CLI_CONNECT_TIMEOUT" \
+      --cli-read-timeout "$AWS_CLI_READ_TIMEOUT"
   fi
 }
 
