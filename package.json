@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "tauri",
+    "templates:diff": "node scripts/diff-server-templates.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

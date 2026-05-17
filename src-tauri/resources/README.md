@@ -150,6 +150,16 @@ Elements are nested under their screen. The debug page (and runner) look them up
 2. Reference the basename (no extension) from that server's `cv.json`.
 3. Restart `pnpm tauri dev` — the Rust side resolves the bundled resources at startup and passes them to the installed sidecar runtime.
 
+To compare template coverage across servers and spot missing files:
+
+```bash
+pnpm templates:diff
+pnpm templates:diff -- --check
+```
+
+The comparison uses each file's relative path under `templates/`, so nested
+folders such as `items/` and `digit_v2/` are checked independently.
+
 ## Battle-scene OCR templates
 
 During battle the sidecar's `read_battle_scene` command recognizes the
