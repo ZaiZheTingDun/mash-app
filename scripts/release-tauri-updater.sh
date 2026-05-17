@@ -20,7 +20,7 @@ Required environment:
   RELEASE_BASE_URL  Public CDN base URL, e.g. https://cdn.example.com
 
 Optional environment:
-  AWS_PROFILE       AWS CLI profile to use (default: mash)
+  AWS_PROFILE       AWS CLI profile to use (default: mash; set to empty to use AWS env credentials)
   R2_PREFIX         Object key prefix (default: mash)
   RELEASE_CHANNEL   Mutable channel directory (default: stable)
   TAURI_TARGET      Tauri updater platform key (default: darwin-aarch64)
@@ -53,6 +53,14 @@ require_cmd find
 require_cmd git
 require_cmd node
 require_cmd pnpm
+
+aws_s3_cp() {
+  if [[ -n "${AWS_PROFILE:-}" ]]; then
+    aws s3 cp "$@" --profile "$AWS_PROFILE" --endpoint-url "$R2_ENDPOINT"
+  else
+    aws s3 cp "$@" --endpoint-url "$R2_ENDPOINT"
+  fi
+}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -136,24 +144,16 @@ JSON.parse(fs.readFileSync(out, "utf8"));
 NODE
 
 echo "Uploading immutable artifacts"
-aws s3 cp "$ARTIFACT_FILE" "s3://$R2_BUCKET/$ARTIFACT_KEY" \
-  --profile "$AWS_PROFILE" \
-  --endpoint-url "$R2_ENDPOINT" \
+aws_s3_cp "$ARTIFACT_FILE" "s3://$R2_BUCKET/$ARTIFACT_KEY" \
   --cache-control "$LONG_CACHE_CONTROL"
-aws s3 cp "$SIG_FILE" "s3://$R2_BUCKET/$SIG_KEY" \
-  --profile "$AWS_PROFILE" \
-  --endpoint-url "$R2_ENDPOINT" \
+aws_s3_cp "$SIG_FILE" "s3://$R2_BUCKET/$SIG_KEY" \
   --cache-control "$LONG_CACHE_CONTROL"
-aws s3 cp "$LATEST_JSON" "s3://$R2_BUCKET/$VERSION_LATEST_KEY" \
-  --profile "$AWS_PROFILE" \
-  --endpoint-url "$R2_ENDPOINT" \
+aws_s3_cp "$LATEST_JSON" "s3://$R2_BUCKET/$VERSION_LATEST_KEY" \
   --cache-control "$LONG_CACHE_CONTROL" \
   --content-type "application/json"
 
 echo "Publishing channel latest.json"
-aws s3 cp "$LATEST_JSON" "s3://$R2_BUCKET/$CHANNEL_LATEST_KEY" \
-  --profile "$AWS_PROFILE" \
-  --endpoint-url "$R2_ENDPOINT" \
+aws_s3_cp "$LATEST_JSON" "s3://$R2_BUCKET/$CHANNEL_LATEST_KEY" \
   --cache-control "$LATEST_CACHE_CONTROL" \
   --content-type "application/json"
 
