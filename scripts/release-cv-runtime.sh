@@ -65,6 +65,14 @@ aws_s3_cp() {
   fi
 }
 
+file_size_bytes() {
+  if stat -f%z "$1" >/dev/null 2>&1; then
+    stat -f%z "$1"
+  else
+    stat -c%s "$1"
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --platform)
@@ -98,10 +106,13 @@ VERSION="${1:-}"
 [[ -n "${RELEASE_BASE_URL:-}" ]] || fail "RELEASE_BASE_URL is required"
 
 require_cmd aws
+require_cmd awk
 require_cmd curl
+require_cmd date
 require_cmd git
 require_cmd node
 require_cmd shasum
+require_cmd stat
 require_cmd uname
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -155,14 +166,23 @@ NODE
 [[ -f "$DIST_PATH" ]] || fail "runtime artifact not found: $DIST_PATH"
 RUNTIME_SHA256="$(shasum -a 256 "$DIST_PATH" | awk '{print $1}')"
 ARTIFACT_SIZE="$(du -h "$DIST_PATH" | awk '{print $1}')"
+ARTIFACT_BYTES="$(file_size_bytes "$DIST_PATH")"
 
 echo "Uploading runtime artifact"
 echo "  file:   $ARTIFACT"
 echo "  size:   $ARTIFACT_SIZE"
 echo "  target: s3://$R2_BUCKET/$OBJECT_KEY"
 echo "  url:    $RUNTIME_URL"
+UPLOAD_STARTED_AT="$(date +%s)"
 aws_s3_cp "$DIST_PATH" "s3://$R2_BUCKET/$OBJECT_KEY" \
   --cache-control "$LONG_CACHE_CONTROL"
+UPLOAD_FINISHED_AT="$(date +%s)"
+UPLOAD_SECONDS="$((UPLOAD_FINISHED_AT - UPLOAD_STARTED_AT))"
+if [[ "$UPLOAD_SECONDS" -lt 1 ]]; then
+  UPLOAD_SECONDS=1
+fi
+UPLOAD_SPEED="$(awk -v bytes="$ARTIFACT_BYTES" -v seconds="$UPLOAD_SECONDS" 'BEGIN { printf "%.2f MiB/s", bytes / seconds / 1024 / 1024 }')"
+echo "Upload completed in ${UPLOAD_SECONDS}s (${UPLOAD_SPEED})"
 
 echo "Validating public runtime URL"
 curl --fail --location --silent --show-error --head "$RUNTIME_URL" >/dev/null
