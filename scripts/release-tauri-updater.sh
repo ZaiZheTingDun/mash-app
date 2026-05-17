@@ -95,7 +95,7 @@ rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"
 
 echo "Building Tauri release for $TAG ($TAURI_TARGET)"
-pnpm tauri build
+pnpm tauri build --bundles app
 
 BUNDLE_DIR="$REPO_ROOT/src-tauri/target/release/bundle"
 [[ -d "$BUNDLE_DIR" ]] || fail "bundle directory not found: $BUNDLE_DIR"
