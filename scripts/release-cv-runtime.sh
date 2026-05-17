@@ -154,8 +154,13 @@ NODE
 
 [[ -f "$DIST_PATH" ]] || fail "runtime artifact not found: $DIST_PATH"
 RUNTIME_SHA256="$(shasum -a 256 "$DIST_PATH" | awk '{print $1}')"
+ARTIFACT_SIZE="$(du -h "$DIST_PATH" | awk '{print $1}')"
 
 echo "Uploading runtime artifact"
+echo "  file:   $ARTIFACT"
+echo "  size:   $ARTIFACT_SIZE"
+echo "  target: s3://$R2_BUCKET/$OBJECT_KEY"
+echo "  url:    $RUNTIME_URL"
 aws_s3_cp "$DIST_PATH" "s3://$R2_BUCKET/$OBJECT_KEY" \
   --cache-control "$LONG_CACHE_CONTROL"
 
