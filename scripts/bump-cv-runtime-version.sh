@@ -1,19 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+AWS_PROFILE="${AWS_PROFILE:-mash}"
+R2_PREFIX="${R2_PREFIX:-mash}"
+LONG_CACHE_CONTROL="${LONG_CACHE_CONTROL:-public, max-age=31536000, immutable}"
 PLATFORM=""
 
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/bump-cv-runtime-version.sh [--platform <platform>] <runtime-version>
+  R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/bump-cv-runtime-version.sh [--platform <platform>] <runtime-version>
 
-Updates [mash_cv].runtime in versions.toml, commits the change, and tags the
-current HEAD as cv-runtime/<platform>/<runtime-version>.
+Updates [mash_cv].runtime in versions.toml, builds the mash-cv runtime zip,
+uploads it to R2, updates src-tauri/resources/runtime-manifest.json, commits
+the change, and tags HEAD as cv-runtime/<platform>/<runtime-version>.
 
 Examples:
   scripts/bump-cv-runtime-version.sh 2026.05.17-runtime2
   scripts/bump-cv-runtime-version.sh --platform darwin-aarch64 2026.05.17-runtime2
+
+Required environment:
+  R2_ENDPOINT       Cloudflare R2 S3 endpoint, e.g. https://<accountid>.r2.cloudflarestorage.com
+  R2_BUCKET         R2 bucket name
+  RELEASE_BASE_URL  Public CDN base URL, e.g. https://cdn.example.com
+
+Optional environment:
+  AWS_PROFILE       AWS CLI profile to use (default: mash; set to empty to use AWS env credentials)
+  R2_PREFIX         Object key prefix (default: mash)
 
 The worktree must be clean before running this script.
 EOF
@@ -44,6 +57,14 @@ detect_platform() {
   echo "${platform_os}-${platform_arch}"
 }
 
+aws_s3_cp() {
+  if [[ -n "${AWS_PROFILE:-}" ]]; then
+    aws s3 cp "$@" --profile "$AWS_PROFILE" --endpoint-url "$R2_ENDPOINT"
+  else
+    aws s3 cp "$@" --endpoint-url "$R2_ENDPOINT"
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --platform)
@@ -72,8 +93,15 @@ VERSION="${1:-}"
 [[ $# -eq 1 ]] || fail "expected exactly one runtime version"
 [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-runtime[0-9]+$ ]] || fail "runtime version must look like 2026.05.17-runtime2; got $VERSION"
 
+[[ -n "${R2_ENDPOINT:-}" ]] || fail "R2_ENDPOINT is required"
+[[ -n "${R2_BUCKET:-}" ]] || fail "R2_BUCKET is required"
+[[ -n "${RELEASE_BASE_URL:-}" ]] || fail "RELEASE_BASE_URL is required"
+
+require_cmd aws
+require_cmd curl
 require_cmd git
 require_cmd node
+require_cmd shasum
 require_cmd uname
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -86,10 +114,17 @@ fi
 [[ "$PLATFORM" =~ ^[A-Za-z0-9._-]+-[A-Za-z0-9._-]+$ ]] || fail "invalid platform: $PLATFORM"
 
 TAG="cv-runtime/$PLATFORM/$VERSION"
+ARTIFACT="mash-cv-runtime-${PLATFORM}-v${VERSION}.zip"
+DIST_PATH="$REPO_ROOT/sidecar/mash_cv/dist/$ARTIFACT"
+R2_PREFIX="${R2_PREFIX#/}"
+R2_PREFIX="${R2_PREFIX%/}"
+RELEASE_BASE_URL="${RELEASE_BASE_URL%/}"
+OBJECT_KEY="$R2_PREFIX/runtime/mash-cv/runtime/$PLATFORM/$ARTIFACT"
+RUNTIME_URL="$RELEASE_BASE_URL/$OBJECT_KEY"
 
 if [[ -n "$(git status --porcelain)" ]]; then
   git status --short
-  fail "worktree must be clean before bumping the CV runtime version"
+  fail "worktree must be clean before publishing the CV runtime"
 fi
 
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
@@ -112,13 +147,50 @@ if (next === original) {
 fs.writeFileSync(path, next);
 NODE
 
-UPDATED_VERSION="$(
-  node -e 'const fs = require("fs"); const text = fs.readFileSync("versions.toml", "utf8"); const m = text.match(/\[mash_cv\][\s\S]*?\nruntime\s*=\s*"([^"]+)"/); process.stdout.write(m?.[1] || "");'
-)"
-[[ "$UPDATED_VERSION" == "$VERSION" ]] || fail "versions.toml runtime mismatch: $UPDATED_VERSION"
+(
+  cd sidecar/mash_cv
+  MASH_CV_RUNTIME_VERSION="$VERSION" ./build_sidecar.sh --runtime-only
+)
 
-git add versions.toml
-git commit -m "Bump mash-cv runtime to $VERSION"
+[[ -f "$DIST_PATH" ]] || fail "runtime artifact not found: $DIST_PATH"
+RUNTIME_SHA256="$(shasum -a 256 "$DIST_PATH" | awk '{print $1}')"
+
+echo "Uploading runtime artifact"
+aws_s3_cp "$DIST_PATH" "s3://$R2_BUCKET/$OBJECT_KEY" \
+  --cache-control "$LONG_CACHE_CONTROL"
+
+echo "Validating public runtime URL"
+curl --fail --location --silent --show-error --head "$RUNTIME_URL" >/dev/null
+
+node - "$VERSION" "$PLATFORM" "$RUNTIME_URL" "$RUNTIME_SHA256" <<'NODE'
+const fs = require("fs");
+const [version, platform, runtimeUrl, runtimeSha256] = process.argv.slice(2);
+const path = "src-tauri/resources/runtime-manifest.json";
+const manifest = JSON.parse(fs.readFileSync(path, "utf8"));
+manifest.mashCvRuntimeVersion = version;
+manifest.platforms ??= {};
+manifest.platforms[platform] ??= {};
+manifest.platforms[platform].runtimeUrl = runtimeUrl;
+manifest.platforms[platform].runtimeSha256 = runtimeSha256;
+fs.writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+
+const reread = JSON.parse(fs.readFileSync(path, "utf8"));
+if (reread.mashCvRuntimeVersion !== version) {
+  throw new Error("runtime manifest version did not update");
+}
+if (reread.platforms?.[platform]?.runtimeUrl !== runtimeUrl) {
+  throw new Error("runtime manifest URL did not update");
+}
+if (reread.platforms?.[platform]?.runtimeSha256 !== runtimeSha256) {
+  throw new Error("runtime manifest sha did not update");
+}
+NODE
+
+git add versions.toml src-tauri/resources/runtime-manifest.json
+git commit -m "Release mash-cv runtime $VERSION"
 git tag "$TAG"
 
-echo "Created commit and tag $TAG"
+echo "Released mash-cv runtime $VERSION"
+echo "  tag:     $TAG"
+echo "  artifact: $RUNTIME_URL"
+echo "  sha256:   $RUNTIME_SHA256"
