@@ -9,15 +9,15 @@ PLATFORM=""
 usage() {
   cat <<'EOF'
 Usage:
-  R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/bump-cv-runtime-version.sh [--platform <platform>] <runtime-version>
+  R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-cv-runtime.sh [--platform <platform>] <runtime-version>
 
 Updates [mash_cv].runtime in versions.toml, builds the mash-cv runtime zip,
 uploads it to R2, updates src-tauri/resources/runtime-manifest.json, commits
 the change, and tags HEAD as cv-runtime/<platform>/<runtime-version>.
 
 Examples:
-  scripts/bump-cv-runtime-version.sh 2026.05.17-runtime2
-  scripts/bump-cv-runtime-version.sh --platform darwin-aarch64 2026.05.17-runtime2
+  scripts/release-cv-runtime.sh 0.2.2
+  scripts/release-cv-runtime.sh --platform darwin-aarch64 0.2.2
 
 Required environment:
   R2_ENDPOINT       Cloudflare R2 S3 endpoint, e.g. https://<accountid>.r2.cloudflarestorage.com
@@ -91,7 +91,7 @@ VERSION="${1:-}"
   exit 1
 }
 [[ $# -eq 1 ]] || fail "expected exactly one runtime version"
-[[ "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-runtime[0-9]+$ ]] || fail "runtime version must look like 2026.05.17-runtime2; got $VERSION"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "runtime version must look like x.y.z; got $VERSION"
 
 [[ -n "${R2_ENDPOINT:-}" ]] || fail "R2_ENDPOINT is required"
 [[ -n "${R2_BUCKET:-}" ]] || fail "R2_BUCKET is required"
