@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
+import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { invoke, listen } from "./tauri";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { ContentGrid } from "./components/ContentGrid";
@@ -42,6 +43,13 @@ interface AppProps {
   onThemeChange: (theme: AppTheme) => void;
 }
 
+function localDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function App({ theme, onThemeChange }: AppProps) {
   const [view, setView] = useState<View>("team");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -53,6 +61,10 @@ function App({ theme, onThemeChange }: AppProps) {
   const [setupReady, setSetupReady] = useState(false);
   const [operationLogs, setOperationLogs] = useState<OperationLogEntry[]>([]);
   const [operationLogOpen, setOperationLogOpen] = useState(false);
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
+  const [updateProgressText, setUpdateProgressText] = useState<string | null>(null);
 
   const appendOperationLog = useCallback((message: string) => {
     const d = new Date();
@@ -66,6 +78,67 @@ function App({ theme, onThemeChange }: AppProps) {
     setOperationLogs([]);
     setOperationLogOpen(true);
   }, []);
+
+  const checkForUpdates = useCallback(async (manual: boolean) => {
+    setUpdateChecking(true);
+    setUpdateProgressText(null);
+    if (manual) {
+      setOperationLogOpen(true);
+    }
+    appendOperationLog("正在检查更新…");
+    try {
+      const update = await check();
+      if (update) {
+        setAvailableUpdate(update);
+        setOperationLogOpen(true);
+        appendOperationLog(
+          `发现新版本 ${update.version}（当前 ${update.currentVersion}）`
+        );
+      } else {
+        setAvailableUpdate(null);
+        appendOperationLog("当前已是最新版本");
+      }
+    } catch (err) {
+      appendOperationLog(`检查更新失败: ${String(err)}`);
+    } finally {
+      setUpdateChecking(false);
+    }
+  }, [appendOperationLog]);
+
+  const handleInstallUpdate = useCallback(async () => {
+    if (!availableUpdate || updateInstalling) return;
+    setUpdateInstalling(true);
+    setOperationLogOpen(true);
+    setUpdateProgressText("准备下载");
+    appendOperationLog(`开始下载更新 ${availableUpdate.version}…`);
+
+    let downloaded = 0;
+    const formatProgress = (event: DownloadEvent) => {
+      if (event.event === "Started") {
+        downloaded = 0;
+        const total = event.data.contentLength;
+        setUpdateProgressText(total ? `0 / ${(total / 1024 / 1024).toFixed(1)} MB` : "开始下载");
+        return;
+      }
+      if (event.event === "Progress") {
+        downloaded += event.data.chunkLength;
+        setUpdateProgressText(`${(downloaded / 1024 / 1024).toFixed(1)} MB`);
+        return;
+      }
+      setUpdateProgressText("正在安装");
+    };
+
+    try {
+      await availableUpdate.downloadAndInstall(formatProgress);
+      appendOperationLog("更新已安装，重启软件后生效");
+      setAvailableUpdate(null);
+      setUpdateProgressText(null);
+    } catch (err) {
+      appendOperationLog(`安装更新失败: ${String(err)}`);
+    } finally {
+      setUpdateInstalling(false);
+    }
+  }, [appendOperationLog, availableUpdate, updateInstalling]);
 
   useEffect(() => {
     const unlistenBattle = listen<AutomationEvent>("automation-status", (event) => {
@@ -82,6 +155,32 @@ function App({ theme, onThemeChange }: AppProps) {
       unlistenEnhancement.then((fn) => fn());
     };
   }, [appendOperationLog]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const today = localDateKey(new Date());
+    invoke<boolean>("should_check_updates_today", { today })
+      .then((shouldCheck) => {
+        if (!shouldCheck || cancelled) return;
+        return checkForUpdates(false).finally(() => {
+          if (!cancelled) {
+            void invoke("mark_update_checked_today", { date: today });
+          }
+        });
+      })
+      .catch((err) => {
+        console.error("daily update check failed", err);
+      });
+
+    const unlistenMenu = listen("updater-check-requested", () => {
+      void checkForUpdates(true);
+    });
+
+    return () => {
+      cancelled = true;
+      unlistenMenu.then((fn) => fn());
+    };
+  }, [checkForUpdates]);
 
   // Load both static catalogs in parallel. The CE catalog is small (just
   // id/name) and shared across all projects, so caching it on the App
@@ -412,6 +511,11 @@ function App({ theme, onThemeChange }: AppProps) {
         operationLogs={operationLogs}
         operationLogOpen={operationLogOpen}
         onOperationLogOpenChange={setOperationLogOpen}
+        updateAvailable={availableUpdate != null}
+        updateChecking={updateChecking}
+        updateInstalling={updateInstalling}
+        updateProgressText={updateProgressText}
+        onInstallUpdate={handleInstallUpdate}
       />
     </Flex>
   );

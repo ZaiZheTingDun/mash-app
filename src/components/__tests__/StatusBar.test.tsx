@@ -227,4 +227,26 @@ describe("StatusBar", () => {
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  it("shows the update action in the operation log header when an update is available", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      return null;
+    });
+    const onInstallUpdate = vi.fn();
+    const user = userEvent.setup();
+    renderWithTheme(
+      <StatusBar
+        operationLogOpen
+        updateAvailable
+        onInstallUpdate={onInstallUpdate}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "更新" }));
+
+    expect(onInstallUpdate).toHaveBeenCalledTimes(1);
+  });
 });

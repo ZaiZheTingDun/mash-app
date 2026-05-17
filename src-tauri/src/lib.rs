@@ -14,7 +14,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock};
-use tauri::Manager;
+#[cfg(desktop)]
+use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 use zip::ZipArchive;
 
@@ -23,6 +25,11 @@ use enhancement_runner::{
     EnhancementRunnerHandle, EnhancementRunnerState, EnhancementTarget,
 };
 use runner::{ApRecoveryItem, RunConfig, RunnerHandle, RunnerState};
+
+#[cfg(desktop)]
+const CHECK_FOR_UPDATE_MENU_ID: &str = "check-for-update";
+#[cfg(desktop)]
+const CHECK_FOR_UPDATE_EVENT: &str = "updater-check-requested";
 
 // ---------------------------------------------------------------------------
 // Server selection (global app setting). Drives which template/config bundle
@@ -1203,6 +1210,14 @@ fn server_settings_path(app: &tauri::AppHandle) -> PathBuf {
     dir.join("server_settings.json")
 }
 
+fn update_check_settings_path(app: &tauri::AppHandle) -> PathBuf {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| PathBuf::from("."));
+    dir.join("update_check_settings.json")
+}
+
 fn load_server_setting(app: &tauri::AppHandle) -> Server {
     let path = server_settings_path(app);
     fs::read_to_string(&path)
@@ -1215,6 +1230,13 @@ fn load_server_setting(app: &tauri::AppHandle) -> Server {
         })
         .and_then(|s| Server::from_str(&s).ok())
         .unwrap_or_default()
+}
+
+fn load_last_update_check_date(app: &tauri::AppHandle) -> Option<String> {
+    let path = update_check_settings_path(app);
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<String>(&text).ok())
 }
 
 fn parse_first_ready_device(output: &str) -> Option<String> {
@@ -1306,6 +1328,147 @@ fn set_server(
         guard.take();
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+fn should_check_updates_today(app: tauri::AppHandle, today: String) -> Result<bool, String> {
+    Ok(load_last_update_check_date(&app).as_deref() != Some(today.as_str()))
+}
+
+#[tauri::command]
+fn mark_update_checked_today(app: tauri::AppHandle, date: String) -> Result<(), String> {
+    let path = update_check_settings_path(&app);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let body = serde_json::to_string(&date).map_err(|e| e.to_string())?;
+    fs::write(path, body).map_err(|e| e.to_string())
+}
+
+#[cfg(desktop)]
+fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
+    let handle = app.handle();
+    let pkg_info = handle.package_info();
+    let config = handle.config();
+    let about_metadata = AboutMetadata {
+        name: Some(pkg_info.name.clone()),
+        version: Some(pkg_info.version.to_string()),
+        copyright: config.bundle.copyright.clone(),
+        authors: config.bundle.publisher.clone().map(|p| vec![p]),
+        ..Default::default()
+    };
+
+    let window_menu = Submenu::with_id_and_items(
+        handle,
+        "window",
+        "Window",
+        true,
+        &[
+            &PredefinedMenuItem::minimize(handle, None)?,
+            &PredefinedMenuItem::maximize(handle, None)?,
+            #[cfg(target_os = "macos")]
+            &PredefinedMenuItem::separator(handle)?,
+            &PredefinedMenuItem::close_window(handle, None)?,
+        ],
+    )?;
+
+    let help_menu = Submenu::with_id_and_items(
+        handle,
+        "help",
+        "Help",
+        true,
+        &[
+            #[cfg(not(target_os = "macos"))]
+            &PredefinedMenuItem::about(handle, None, Some(about_metadata.clone()))?,
+            #[cfg(not(target_os = "macos"))]
+            &PredefinedMenuItem::separator(handle)?,
+            #[cfg(not(target_os = "macos"))]
+            &MenuItem::with_id(
+                handle,
+                CHECK_FOR_UPDATE_MENU_ID,
+                "Check for Update...",
+                true,
+                None::<&str>,
+            )?,
+        ],
+    )?;
+
+    let menu = Menu::with_items(
+        handle,
+        &[
+            #[cfg(target_os = "macos")]
+            &Submenu::with_items(
+                handle,
+                pkg_info.name.clone(),
+                true,
+                &[
+                    &PredefinedMenuItem::about(handle, None, Some(about_metadata))?,
+                    &MenuItem::with_id(
+                        handle,
+                        CHECK_FOR_UPDATE_MENU_ID,
+                        "Check for Update...",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::services(handle, None)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::hide(handle, None)?,
+                    &PredefinedMenuItem::hide_others(handle, None)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::quit(handle, None)?,
+                ],
+            )?,
+            #[cfg(not(any(
+                target_os = "linux",
+                target_os = "dragonfly",
+                target_os = "freebsd",
+                target_os = "netbsd",
+                target_os = "openbsd"
+            )))]
+            &Submenu::with_items(
+                handle,
+                "File",
+                true,
+                &[
+                    &PredefinedMenuItem::close_window(handle, None)?,
+                    #[cfg(not(target_os = "macos"))]
+                    &PredefinedMenuItem::quit(handle, None)?,
+                ],
+            )?,
+            &Submenu::with_items(
+                handle,
+                "Edit",
+                true,
+                &[
+                    &PredefinedMenuItem::undo(handle, None)?,
+                    &PredefinedMenuItem::redo(handle, None)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::cut(handle, None)?,
+                    &PredefinedMenuItem::copy(handle, None)?,
+                    &PredefinedMenuItem::paste(handle, None)?,
+                    &PredefinedMenuItem::select_all(handle, None)?,
+                ],
+            )?,
+            #[cfg(target_os = "macos")]
+            &Submenu::with_items(
+                handle,
+                "View",
+                true,
+                &[&PredefinedMenuItem::fullscreen(handle, None)?],
+            )?,
+            &window_menu,
+            &help_menu,
+        ],
+    )?;
+
+    app.set_menu(menu)?;
+    app.on_menu_event(|app, event| {
+        if event.id() == CHECK_FOR_UPDATE_MENU_ID {
+            let _ = app.emit(CHECK_FOR_UPDATE_EVENT, ());
+        }
+    });
     Ok(())
 }
 
@@ -2545,6 +2708,8 @@ pub fn run() {
         .setup(|app| {
             let use_bluestack = load_bluestack_setting(&app.handle());
             let server = load_server_setting(&app.handle());
+            #[cfg(desktop)]
+            configure_app_menu(app)?;
             refresh_asset_protocol_scope(&app.handle())?;
             app.manage(Mutex::new(use_bluestack));
             app.manage(Mutex::new(server));
@@ -2577,6 +2742,8 @@ pub fn run() {
             set_use_bluestack,
             get_server,
             set_server,
+            should_check_updates_today,
+            mark_update_checked_today,
             start_automation,
             stop_automation,
             stop_automation_after_current,

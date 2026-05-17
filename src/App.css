@@ -2080,6 +2080,7 @@ body,
    replaces the now-removed sidebar shortcut to the CV debug page. */
 .status-log-btn,
 .status-debug-btn,
+.status-update-btn,
 .status-theme-btn {
   appearance: none;
   border: none;
@@ -2096,6 +2097,7 @@ body,
 }
 
 .status-debug-btn:hover,
+.status-update-btn:hover:not(:disabled),
 .status-log-btn:hover,
 .status-log-btn[aria-pressed="true"],
 .status-theme-btn:hover {
@@ -2105,9 +2107,20 @@ body,
 
 .status-debug-btn:focus-visible,
 .status-log-btn:focus-visible,
+.status-update-btn:focus-visible,
 .status-theme-btn:focus-visible {
   outline: 2px solid var(--blue-8);
   outline-offset: 1px;
+}
+
+.status-update-btn {
+  color: var(--blue-11);
+  background: color-mix(in srgb, var(--blue-9) 16%, transparent);
+}
+
+.status-update-btn:disabled {
+  cursor: default;
+  opacity: 0.72;
 }
 
 /* ── Debug Page ── */

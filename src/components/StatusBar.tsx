@@ -39,6 +39,11 @@ interface StatusBarProps {
   operationLogs?: OperationLogEntry[];
   operationLogOpen?: boolean;
   onOperationLogOpenChange?: (open: boolean) => void;
+  updateAvailable?: boolean;
+  updateChecking?: boolean;
+  updateInstalling?: boolean;
+  updateProgressText?: string | null;
+  onInstallUpdate?: () => void;
 }
 
 export function StatusBar({
@@ -48,6 +53,11 @@ export function StatusBar({
   operationLogs = [],
   operationLogOpen = false,
   onOperationLogOpenChange,
+  updateAvailable = false,
+  updateChecking = false,
+  updateInstalling = false,
+  updateProgressText,
+  onInstallUpdate,
 }: StatusBarProps = {}) {
   const [status, setStatus] = useState<AdbStatus>({ connected: false, deviceName: null });
   const [checking, setChecking] = useState(false);
@@ -183,6 +193,23 @@ export function StatusBar({
         </button>
 
         <Flex align="center" justify="end" gap="2">
+          {updateAvailable && (
+            <button
+              type="button"
+              className="status-update-btn"
+              disabled={updateInstalling || updateChecking}
+              onClick={onInstallUpdate}
+            >
+              {updateInstalling || updateChecking ? <Spinner size="1" /> : null}
+              <Text size="1">
+                {updateInstalling
+                  ? updateProgressText ?? "更新中…"
+                  : updateChecking
+                    ? "检测中…"
+                    : "更新"}
+              </Text>
+            </button>
+          )}
           {onOpenDebug && (
             <button
               type="button"

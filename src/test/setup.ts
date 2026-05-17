@@ -138,6 +138,10 @@ vi.mock("@tauri-apps/api/core", () => ({
         return false;
       case "get_server":
         return "JP";
+      case "should_check_updates_today":
+        return false;
+      case "mark_update_checked_today":
+        return null;
       // Default to "no portrait on disk" so component tests render
       // the placeholder branch unless they explicitly opt in. Tests
       // that want a real `<img>` should `vi.mocked(invoke).mockImpl(...)`.
@@ -154,6 +158,10 @@ vi.mock("@tauri-apps/api/core", () => ({
   // string that the component can hand to `<img src>` so assertions
   // can target it.
   convertFileSrc: (path: string) => `asset://${path}`,
+}));
+
+vi.mock("@tauri-apps/plugin-updater", () => ({
+  check: vi.fn(async () => null),
 }));
 
 // Reset DOM + mock state between tests so one component leaking state
