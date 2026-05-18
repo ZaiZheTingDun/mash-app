@@ -73,9 +73,18 @@ jobs:
             --endpoint-url "$R2_ENDPOINT" \
             --cache-control "public, max-age=31536000, immutable"
 
+      - name: Validate R2 object
+        run: |
+          aws s3api head-object \
+            --bucket "$R2_BUCKET" \
+            --key "${{ steps.build.outputs.object_key }}" \
+            --endpoint-url "$R2_ENDPOINT" >/dev/null
+
       - name: Validate public artifact
         run: |
-          curl --fail --location --silent --show-error --head \
+          curl --fail --location --silent --show-error \
+            --range 0-0 \
+            --user-agent "mash-release/1.0" \
             "${{ steps.build.outputs.url }}" >/dev/null
 
       - name: Write summary
