@@ -321,6 +321,110 @@ pub(crate) fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
     dir
 }
 
+fn dir_has_entries(path: &Path) -> bool {
+    fs::read_dir(path)
+        .ok()
+        .and_then(|mut entries| entries.next())
+        .is_some()
+}
+
+fn legacy_app_data_candidates(current: &Path) -> Vec<PathBuf> {
+    let Some(parent) = current.parent() else {
+        return Vec::new();
+    };
+    ["com.mash.app", "mash"]
+        .into_iter()
+        .map(|name| parent.join(name))
+        .filter(|path| path != current)
+        .collect()
+}
+
+#[cfg(unix)]
+fn copy_symlink(src: &Path, dst: &Path) -> Result<(), String> {
+    use std::os::unix::fs::symlink;
+
+    let target = fs::read_link(src).map_err(|e| format!("read symlink failed: {e}"))?;
+    symlink(target, dst).map_err(|e| format!("create symlink failed: {e}"))
+}
+
+#[cfg(not(unix))]
+fn copy_symlink(src: &Path, dst: &Path) -> Result<(), String> {
+    fs::copy(src, dst)
+        .map(|_| ())
+        .map_err(|e| format!("copy symlink target failed: {e}"))
+}
+
+fn copy_dir_contents_preserving_links(src: &Path, dst: &Path) -> Result<(), String> {
+    fs::create_dir_all(dst).map_err(|e| format!("create destination dir failed: {e}"))?;
+    for entry in fs::read_dir(src).map_err(|e| format!("read source dir failed: {e}"))? {
+        let entry = entry.map_err(|e| format!("read source entry failed: {e}"))?;
+        let entry_src = entry.path();
+        let entry_dst = dst.join(entry.file_name());
+        let metadata = fs::symlink_metadata(&entry_src)
+            .map_err(|e| format!("read source metadata failed: {e}"))?;
+        if metadata.file_type().is_symlink() {
+            copy_symlink(&entry_src, &entry_dst)?;
+        } else if metadata.is_dir() {
+            copy_dir_contents_preserving_links(&entry_src, &entry_dst)?;
+        } else if metadata.is_file() {
+            if let Some(parent) = entry_dst.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("create destination dir failed: {e}"))?;
+            }
+            fs::copy(&entry_src, &entry_dst).map_err(|e| format!("copy file failed: {e}"))?;
+            fs::set_permissions(&entry_dst, metadata.permissions())
+                .map_err(|e| format!("set file permissions failed: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
+fn migrate_legacy_app_data_dir(
+    current: &Path,
+    candidates: &[PathBuf],
+) -> Result<Option<PathBuf>, String> {
+    fs::create_dir_all(current).map_err(|e| format!("create app data dir failed: {e}"))?;
+    if dir_has_entries(current) {
+        return Ok(None);
+    }
+
+    let Some(source) = candidates
+        .iter()
+        .find(|path| path.is_dir() && dir_has_entries(path))
+    else {
+        return Ok(None);
+    };
+
+    copy_dir_contents_preserving_links(source, current)?;
+    fs::write(
+        current.join("identifier-migration.json"),
+        serde_json::json!({
+            "from": source.to_string_lossy(),
+            "to": current.to_string_lossy(),
+        })
+        .to_string(),
+    )
+    .map_err(|e| format!("write migration marker failed: {e}"))?;
+    Ok(Some(source.clone()))
+}
+
+fn migrate_legacy_app_data(app: &tauri::AppHandle) {
+    let current = app_data_dir(app);
+    match migrate_legacy_app_data_dir(&current, &legacy_app_data_candidates(&current)) {
+        Ok(Some(source)) => {
+            eprintln!(
+                "[app-data-migration] migrated legacy app data from {} to {}",
+                source.display(),
+                current.display()
+            );
+        }
+        Ok(None) => {}
+        Err(err) => {
+            eprintln!("[app-data-migration] skipped: {err}");
+        }
+    }
+}
+
 fn app_assets_dir(app: &tauri::AppHandle) -> PathBuf {
     let dir = app_data_dir(app).join("assets");
     fs::create_dir_all(&dir).ok();
@@ -2885,6 +2989,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            migrate_legacy_app_data(&app.handle());
             let use_bluestack = load_bluestack_setting(&app.handle());
             let server = load_server_setting(&app.handle());
             #[cfg(desktop)]
@@ -3027,6 +3132,84 @@ mod tests {
         assert!(stream_meets_minimum_resolution(2560, 1440));
         assert!(!stream_meets_minimum_resolution(1280, 720));
         assert!(!stream_meets_minimum_resolution(1600, 900));
+    }
+
+    // --- app data identifier migration --------------------------------
+
+    #[test]
+    fn migrate_legacy_app_data_copies_old_identifier_when_current_is_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let legacy = tmp.path().join("com.mash.app");
+        let current = tmp.path().join("com.xiaotongx.mash");
+        fs::create_dir_all(legacy.join("runtime/mash-cv/code/code-v1")).unwrap();
+        fs::write(legacy.join("projects.json"), b"[]").unwrap();
+        fs::write(
+            legacy.join("runtime/mash-cv/code/code-v1/code-version.json"),
+            br#"{"version":"code-v1","platform":"darwin-aarch64"}"#,
+        )
+        .unwrap();
+
+        let migrated = migrate_legacy_app_data_dir(&current, &[legacy.clone()]).unwrap();
+
+        assert_eq!(migrated.as_deref(), Some(legacy.as_path()));
+        assert!(current.join("projects.json").is_file());
+        assert!(current
+            .join("runtime/mash-cv/code/code-v1/code-version.json")
+            .is_file());
+        assert!(current.join("identifier-migration.json").is_file());
+    }
+
+    #[test]
+    fn migrate_legacy_app_data_skips_when_current_has_data() {
+        let tmp = tempfile::tempdir().unwrap();
+        let legacy = tmp.path().join("com.mash.app");
+        let current = tmp.path().join("com.xiaotongx.mash");
+        fs::create_dir_all(&legacy).unwrap();
+        fs::create_dir_all(&current).unwrap();
+        fs::write(legacy.join("projects.json"), b"[]").unwrap();
+        fs::write(current.join("projects.json"), br#"[{"id":"new"}]"#).unwrap();
+
+        let migrated = migrate_legacy_app_data_dir(&current, &[legacy]).unwrap();
+
+        assert_eq!(migrated, None);
+        assert_eq!(
+            fs::read_to_string(current.join("projects.json")).unwrap(),
+            r#"[{"id":"new"}]"#
+        );
+        assert!(!current.join("identifier-migration.json").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn migrate_legacy_app_data_preserves_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let legacy = tmp.path().join("com.mash.app");
+        let current = tmp.path().join("com.xiaotongx.mash");
+        fs::create_dir_all(legacy.join("runtime/mash-cv/runtime/runtime-v1/lib")).unwrap();
+        fs::write(
+            legacy.join("runtime/mash-cv/runtime/runtime-v1/lib/real.dylib"),
+            b"lib",
+        )
+        .unwrap();
+        symlink(
+            "real.dylib",
+            legacy.join("runtime/mash-cv/runtime/runtime-v1/lib/link.dylib"),
+        )
+        .unwrap();
+
+        migrate_legacy_app_data_dir(&current, &[legacy]).unwrap();
+
+        let migrated_link = current.join("runtime/mash-cv/runtime/runtime-v1/lib/link.dylib");
+        assert!(fs::symlink_metadata(&migrated_link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(
+            fs::read_link(migrated_link).unwrap(),
+            PathBuf::from("real.dylib")
+        );
     }
 
     // --- default_project_slots -----------------------------------------
