@@ -2,5 +2,5 @@
 version = "0.2.2"
 
 [mash_cv]
-runtime = "2026.05.08-runtime1"
+runtime = "0.0.1"
 code = "0.2.1"
