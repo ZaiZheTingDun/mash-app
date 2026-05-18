@@ -1,6 +1,6 @@
 {
   "mashCvRuntimeVersion": "0.0.1",
-  "mashCvCodeVersion": "0.2.1",
+  "mashCvCodeVersion": "0.2.2",
   "platforms": {
     "darwin-aarch64": {
       "runtimeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/runtime/darwin-aarch64/mash-cv-runtime-darwin-aarch64-v0.0.1.zip",
