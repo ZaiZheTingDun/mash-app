@@ -84,11 +84,18 @@ The CV code package contains the lightweight Python source. It is the high-frequ
 Release flow:
 
 ```bash
+scripts/bump-cv-code-version.sh 0.2.2
 git tag cv-code/0.2.2
 git push origin cv-code/0.2.2
 ```
 
-Pushing a `cv-code/*` tag triggers `.github/workflows/release-cv-code.yml`, which builds:
+Pushing a `cv-code/*` tag triggers `.github/workflows/release-cv-code.yml`, which calls `scripts/release-cv-code.sh`. The same release script can also be run locally:
+
+```bash
+R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-cv-code.sh 0.2.2
+```
+
+The script builds:
 
 ```text
 sidecar/mash_cv/dist/mash-cv-code-v0.2.2.zip

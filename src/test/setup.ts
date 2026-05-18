@@ -2,6 +2,27 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 
+// Radix Checkbox can emit React's generic act() warning from internal provider
+// updates under Vitest/React 18. The app behaviour is covered by user-event
+// assertions; keeping this warning would make CI logs effectively unreadable.
+const originalConsoleError = console.error.bind(console);
+function installConsoleErrorFilter() {
+  vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+    const message = String(args[0] ?? "");
+    const stack = args.map((arg) => String(arg)).join("\n");
+    if (
+      message.includes(
+        "When testing, code that causes React state updates should be wrapped into act"
+      ) &&
+      stack.includes("CheckboxProvider")
+    ) {
+      return;
+    }
+    originalConsoleError(...args);
+  });
+}
+installConsoleErrorFilter();
+
 // jsdom doesn't implement matchMedia or ResizeObserver, both of which
 // Radix UI Themes touches during dialog rendering. Stub them with
 // no-op implementations so component tests can mount Radix components
@@ -191,4 +212,5 @@ vi.mock("@tauri-apps/plugin-updater", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  installConsoleErrorFilter();
 });

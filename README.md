@@ -93,8 +93,12 @@ Release entry points:
 scripts/bump-app-version.sh 0.2.2
 
 # CV code release: push tag, GitHub Actions uploads to R2
+scripts/bump-cv-code-version.sh 0.2.2
 git tag cv-code/0.2.2
 git push origin cv-code/0.2.2
+
+# CV code release from the local machine
+R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-cv-code.sh 0.2.2
 
 # CV runtime release: build, upload to R2, update manifest, commit, and tag
 R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-cv-runtime.sh 0.2.2
