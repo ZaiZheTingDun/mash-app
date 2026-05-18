@@ -51,7 +51,7 @@ jobs:
             exit 1
           fi
 
-          AWS_PROFILE="" scripts/release-mash-cv-code.sh "$CODE_VERSION"
+          AWS_PROFILE="" scripts/release-cv-code.sh "$CODE_VERSION"
 
       - name: Write summary
         run: |

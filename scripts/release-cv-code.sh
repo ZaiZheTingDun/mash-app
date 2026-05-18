@@ -8,7 +8,7 @@ LONG_CACHE_CONTROL="${LONG_CACHE_CONTROL:-public, max-age=31536000, immutable}"
 usage() {
   cat <<'EOF'
 Usage:
-  R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-mash-cv-code.sh x.y.z
+  R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-cv-code.sh x.y.z
 
 Builds the mash-cv code zip, uploads it to R2, validates the R2 object and
 public URL, and prints the URL + SHA-256.
