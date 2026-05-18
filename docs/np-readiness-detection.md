@@ -180,7 +180,7 @@ bundles) and to the TypeScript `NoblePhantasmMatchDto`. The DebugPage
 log line surfaces it for at-a-glance diagnosis:
 
 ```
-识别到 2/3 张宝具卡 · 阈值 3.5% | NP1:无(1.0%) NP2:有(5.8%) NP3:有(9.9%)
+Detected 2/3 NP cards · threshold 3.5% | NP1:no(1.0%) NP2:yes(5.8%) NP3:yes(9.9%)
 ```
 
 ## Where the slot rectangles come from

@@ -75,7 +75,7 @@ app_data_dir()/runtime/mash-cv/runtime/<runtimeVersion>/mash-cv-runtime/
 app_data_dir()/runtime/mash-cv/code/<codeVersion>/mash-cv-code/
 ```
 
-The runtime base contains the heavy PyInstaller/native dependency tree and OCR models. The code package contains the lightweight `mash_cv/*.py` source. If either artifact is missing or stale, the app shows an “安装 CV 包” button near the automation entry points.
+The runtime base contains the heavy PyInstaller/native dependency tree and OCR models. The code package contains the lightweight `mash_cv/*.py` source. If either artifact is missing or stale, the app shows a CV package install button near the automation entry points.
 
 Version numbers are managed in `versions.toml` and use `x.x.x` format. Distribution details, R2 object layout, tag conventions, and release troubleshooting are documented in [docs/distribution.md](docs/distribution.md).
 

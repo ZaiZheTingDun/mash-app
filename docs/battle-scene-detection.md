@@ -105,7 +105,7 @@ score. The label glyphs differ between servers:
 | Server | Template content |
 |---|---|
 | JP | `BATTLE` (gold Latin word) |
-| CN | `战斗场次` ("battle scene", four CN characters) |
+| CN | battle-scene label (four CN characters in the game UI) |
 
 Both live under `src-tauri/resources/servers/<server>/templates/text_battle_label.png`
 and are loaded into the per-server template bundle at startup, so the
@@ -300,7 +300,7 @@ The full transition table is pinned by the `tick_scene_state_*` tests in
 Combined, this means a CV-read failure looks exactly like:
 
 ```
-12:14:18 场景未变更，按默认顺序补位 ← read_battle_scene returned None
+12:14:18 scene unchanged; using next default block <- read_battle_scene returned None
 ```
 
 — even when the screen has clearly changed. The runner is being
@@ -388,7 +388,7 @@ are still byte-identical to the JP set — they may or may not match
 above the 0.80 threshold against the CN font. Quests with `m` or `n`
 in `{0, 1, 4..9}` can still misread.
 
-When the runner reports `场景未变更，按默认顺序补位` on a frame whose
+When the runner reports `scene unchanged; using next default block` on a frame whose
 strip clearly contains a different digit:
 
 1. Save the raw screenshot under

@@ -1,23 +1,23 @@
-# 强化自动化模板状态机
+# Enhancement Automation Template State Machine
 
-强化自动化使用独立于战斗流程的模板状态机。战斗流程仍使用现有 `cv.json` screen detection；本设计只复用 sidecar 的 `find_element`/`find_element_full` 模板匹配能力，不改变 IPC wire protocol。
+Enhancement automation uses a template state machine that is separate from the battle flow. The battle flow still uses the existing `cv.json` screen detection; this design only reuses the sidecar `find_element` / `find_element_full` template matching capability and does not change the IPC wire protocol.
 
-## 识别模型
+## Recognition Model
 
-状态由三层组成：
+State has three layers:
 
-- `screen`: `Main`、`Enhancement`、`ServantEnhancement`、`Ascension`
-- `variant`: `Main`、`ServantSelect`、`MaterialSelect`
-- `status`: `MenuOpen`、`FilterDialogOpen`、`NotReady` 等由 variant 内的 element probe 指示
+- `screen`: `Main`, `Enhancement`, `ServantEnhancement`, `Ascension`
+- `variant`: `Main`, `ServantSelect`, `MaterialSelect`
+- `status`: `MenuOpen`, `FilterDialogOpen`, `NotReady`, and similar statuses indicated by element probes inside a variant
 
-每个 screen 先用唯一 anchor 模板确认，再用 variant detect 判断 view，并用 variant 内的 element probe 判断 status。所有搜索区域来自临时 `rois.json` 里的 `paddedRoi`，当前已收束到 `src-tauri/resources/servers/jp/cv.json` 的 `screens.*.detect` 和 `screens.*.variants` 中。
+Each screen is first confirmed by a unique anchor template, then its view is identified by variant detection, and status is identified by element probes inside the variant. Search regions originally came from temporary `rois.json` `paddedRoi` entries and have since been folded into `src-tauri/resources/servers/jp/cv.json` under `screens.*.detect` and `screens.*.variants`.
 
-默认阈值：
+Default thresholds:
 
-- screen anchor: `0.85`
-- variant detect 和 element status/button probe: `0.80`
+- Screen anchor: `0.85`
+- Variant detection and element status/button probes: `0.80`
 
-## 模板映射
+## Template Mapping
 
 Screen anchors:
 
@@ -36,7 +36,7 @@ Variant detects and status elements:
 - `Ascension / Main`: `text_ascension_main_variant`
 - `Ascension / ServantSelect`: `text_enhancement_ascension_servant_select`
 - `Ascension / Main / NotReady status`: `enhancement_ascension_not_ready`
-- 最大显示数量确认: `button_scale_level_3`
+- Max display density confirmation: `button_scale_level_3`
 
 Action button probes:
 
@@ -44,37 +44,37 @@ Action button probes:
 - `Main / Main / menu open status` -> tap `button_enhancement`
 - `AscensionResult` fallback return -> tap `button_enhancement_ascension_to_servant` when present
 
-## 跳转行为
+## Transitions
 
-- `Main / Main / menu collapsed status`: 点击 `button_menu`，进入 menu open status
-- `Main / Main / menu open status`: 点击 `button_enhancement`，进入 `Enhancement`
-- `Enhancement / Main`: 点击从者强化入口坐标，进入 `ServantEnhancement`
-- `ServantEnhancement / Main`: 读取等级 OCR；未满级进素材页，满级且有灵基再临入口则进入 `Ascension`
-- `ServantEnhancement / ServantSelect`: 先确认 `button_scale_level_3`；未命中则点击密度切换按钮，最多点击 3 次直到命中；之后用头像模板匹配目标从者
-- `ServantEnhancement / MaterialSelect`: 使用 OCR 确认当前列表只包含经验值素材；确认 `button_scale_level_3` 后拖选/点选 20 个素材
-- `ServantEnhancement / MaterialSelect / FilterDialogOpen status`: 确认 `dialog_filter_setting` 和 `text_filter_setting_type`，再用现有 OCR 找到经验值素材筛选项并点击
-- `Ascension / Main`: 点击右下强化按钮并走现有二次确认
-- `Ascension / Main / NotReady status`: 停止自动化并提示材料或状态不可执行，避免继续点击右下强化按钮
+- `Main / Main / menu collapsed status`: tap `button_menu` and enter menu-open status.
+- `Main / Main / menu open status`: tap `button_enhancement` and enter `Enhancement`.
+- `Enhancement / Main`: tap the servant enhancement entry coordinate and enter `ServantEnhancement`.
+- `ServantEnhancement / Main`: read the level via OCR. If the servant is not max-level, enter material selection; if it is max-level and the ascension entry is available, enter `Ascension`.
+- `ServantEnhancement / ServantSelect`: first confirm `button_scale_level_3`. If it is missing, tap the density toggle button up to 3 times until it appears. Then match the target servant by portrait template.
+- `ServantEnhancement / MaterialSelect`: use OCR to confirm the current list contains only EXP materials. After confirming `button_scale_level_3`, drag-select or tap-select 20 materials.
+- `ServantEnhancement / MaterialSelect / FilterDialogOpen status`: confirm `dialog_filter_setting` and `text_filter_setting_type`, then use the existing OCR path to find and tap the EXP material filter option.
+- `Ascension / Main`: tap the lower-right enhancement button and follow the existing second-confirmation flow.
+- `Ascension / Main / NotReady status`: stop automation and report that materials or state are not executable, avoiding repeated taps on the lower-right enhancement button.
 
-## 缺省与待补模板
+## Fallbacks And Missing Templates
 
-这些能力仍保留 OCR 或兼容坐标兜底：
+These capabilities still keep OCR or compatible coordinate fallbacks:
 
-- 等级 `Lv. current/max` 读取
-- 素材已选数量 `0/20` 读取
-- 强化/灵基再临二次确认弹窗
-- 资料更新弹窗
-- 灵基再临结果页返回
+- Level `Lv. current/max` reading
+- Selected material count `0/20` reading
+- Enhancement / ascension second-confirmation dialog
+- Data update dialog
+- Return from ascension result screen
 
-需要补模板才能完全去 OCR/完全证明状态：
+Templates needed to remove OCR or fully prove state:
 
-- 强化/灵基再临二次确认弹窗唯一模板
-- 资料更新弹窗唯一模板
-- 灵基再临结果页“返回从者强化”完整状态模板
-- 等级数字或满级状态模板
-- 素材已选数量模板
-- 经验值筛选三态确认模板：当前 `text_filter_setting_type` 只是“種別”标签，不能证明中间经验值项激活且左右两项未激活
+- Unique template for the enhancement / ascension second-confirmation dialog
+- Unique template for the data update dialog
+- Complete return-to-servant-enhancement state template for the ascension result page
+- Level digits or max-level state template
+- Selected material count template
+- Three-state EXP filter confirmation templates: current `text_filter_setting_type` is only the filter type label and does not prove that the middle EXP option is active while the left/right options are inactive
 
-## 命名约定
+## Naming
 
-代码内部使用 English enum 名称：`MaterialSelect`，不使用 `select_material`。文档中将“main main 变体”写作 `Main screen / Main variant`。本轮不重命名已有 PNG 文件，避免无关资源 churn；后续新增模板建议继续使用 `screen_*`、`text_*`、`button_*`、`dialog_*` 前缀。
+Code uses English enum names such as `MaterialSelect`; it does not use names like `select_material`. Documentation refers to the nested base view as `Main screen / Main variant`. Existing PNG filenames are not renamed to avoid unrelated asset churn. New templates should continue using the `screen_*`, `text_*`, `button_*`, and `dialog_*` prefixes.

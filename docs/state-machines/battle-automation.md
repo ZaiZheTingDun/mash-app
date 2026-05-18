@@ -108,9 +108,9 @@ before tapping it. The function returns:
   observed for this candidate yet.
 
 Owned and append skill icons share the same row strip; the game decides
-which panel is shown via the "技能显示切换" toggle (a 3-state cycle:
-固定持有 / 固定追加 / 间隔切换). The runner can't tell which mode the
-user has the toggle locked into — and "固定" modes never auto-flip — so
+which panel is shown via the skill-display toggle (a 3-state cycle:
+fixed owned / fixed append / interval switching). The runner can't tell which mode the
+user has the toggle locked into — and fixed modes never auto-flip — so
 on `WaitingForPanel` it actively taps `SUPPORT_SKILL_PANEL_TOGGLE_BUTTON`
 and re-OCRs after a short settle. `SupportLevelPanelProgress.panel_toggle_taps`
 caps this at `SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS` per candidate; once
@@ -136,8 +136,8 @@ changes (i.e. when the runner moves to a different row).
   animations.
 - `APRecovery` now anchors on `label_item` and scans the item-column template
   region in priority order instead of tapping fixed rows. Top page scans
-  `彩/金/银`; after one downward swipe the runner scans `青铜/赤铜`. A missing
-  template match is treated as "数量不足" because the dimmed overlay suppresses
+  rainbow / gold / silver items; after one downward swipe the runner scans bronze items. A missing
+  template match is treated as "insufficient quantity" because the dimmed overlay suppresses
   the template score.
 - Updating `Screen`, battle result handling, AP recovery behavior, or
   battle screen variant probes requires updating this document.

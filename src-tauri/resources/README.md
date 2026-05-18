@@ -24,7 +24,7 @@ resources/
 ```
 
 The sidecar loads the bundle for whichever server is currently active (set
-via the `服务器` selector in the status bar; persisted in
+via the server selector in the status bar; persisted in
 `server_settings.json`). JP is the default and ships fully populated; the
 CN bundle exists so the app can boot when CN is selected, but the PNG set
 will be incomplete until CN templates are captured — `find_element` calls
