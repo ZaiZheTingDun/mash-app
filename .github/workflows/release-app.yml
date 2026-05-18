@@ -3,7 +3,7 @@ name: Release App
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "disable"
 
 permissions:
   contents: read
