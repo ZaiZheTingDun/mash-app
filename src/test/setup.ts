@@ -132,6 +132,28 @@ vi.mock("@tauri-apps/api/core", () => ({
             "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
           codePath: null,
         };
+      case "download_runtime_bundles":
+        return {
+          installed: [
+            {
+              installedKind: "runtime",
+              installedVersion: "2026.05.08-runtime1",
+              platform: "darwin-aarch64",
+              installDir: "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1",
+              executablePath:
+                "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
+              codePath: null,
+            },
+            {
+              installedKind: "code",
+              installedVersion: "2026.05.08-code1",
+              platform: "darwin-aarch64",
+              installDir: "/tmp/runtime/mash-cv/code/2026.05.08-code1",
+              executablePath: null,
+              codePath: "/tmp/runtime/mash-cv/code/2026.05.08-code1/mash-cv-code",
+            },
+          ],
+        };
       case "check_adb":
         return { connected: false, deviceName: null };
       case "get_use_bluestack":

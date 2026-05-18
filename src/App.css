@@ -134,6 +134,46 @@ body,
   max-width: 340px;
 }
 
+.runtime-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.link-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--blue-11);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link-button:disabled {
+  color: var(--gray-9);
+  cursor: not-allowed;
+}
+
+.runtime-manual-upload {
+  font-size: 12px;
+}
+
+.runtime-download-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.runtime-progress-bar {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--blue-9);
+}
+
 .runtime-download-url {
   max-width: 340px;
   overflow: hidden;

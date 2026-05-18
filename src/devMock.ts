@@ -255,6 +255,28 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
           "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
         codePath: null,
       } as T;
+    case "download_runtime_bundles":
+      return {
+        installed: [
+          {
+            installedKind: "runtime",
+            installedVersion: "2026.05.08-runtime1",
+            platform: "darwin-aarch64",
+            installDir: "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1",
+            executablePath:
+              "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
+            codePath: null,
+          },
+          {
+            installedKind: "code",
+            installedVersion: "2026.05.08-code1",
+            platform: "darwin-aarch64",
+            installDir: "/dev/runtime/mash-cv/code/2026.05.08-code1",
+            executablePath: null,
+            codePath: "/dev/runtime/mash-cv/code/2026.05.08-code1/mash-cv-code",
+          },
+        ],
+      } as T;
     case "start_automation":
     case "stop_automation":
     case "stop_automation_after_current":

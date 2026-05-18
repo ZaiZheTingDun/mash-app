@@ -25,3 +25,16 @@ export interface RuntimeInstallResult {
   executablePath: string | null;
   codePath: string | null;
 }
+
+export interface RuntimeDownloadProgress {
+  kind: "runtime" | "code";
+  phase: "connecting" | "downloading" | "downloaded" | "installing" | "installed";
+  downloadedBytes: number;
+  totalBytes: number | null;
+  bytesPerSecond: number | null;
+  etaSeconds: number | null;
+}
+
+export interface RuntimeDownloadInstallResult {
+  installed: RuntimeInstallResult[];
+}
