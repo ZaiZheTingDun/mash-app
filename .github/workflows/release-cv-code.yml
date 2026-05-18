@@ -35,8 +35,8 @@ jobs:
       - name: Install AWS CLI
         run: brew install awscli
 
-      - name: Build code artifact
-        id: build
+      - name: Publish CV code release to R2
+        id: release
         shell: bash
         run: |
           set -euo pipefail
@@ -51,56 +51,22 @@ jobs:
             exit 1
           fi
 
-          cd sidecar/mash_cv
-          MASH_CV_CODE_VERSION="$CODE_VERSION" ./build_sidecar.sh --code-only
-
-          ARTIFACT="mash-cv-code-v${CODE_VERSION}.zip"
-          SHA256="$(shasum -a 256 "dist/${ARTIFACT}" | awk '{print $1}')"
-          OBJECT_KEY="${R2_PREFIX}/runtime/mash-cv/code/${ARTIFACT}"
-          URL="${RELEASE_BASE_URL%/}/${OBJECT_KEY}"
-
-          echo "code_version=${CODE_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "artifact=${ARTIFACT}" >> "$GITHUB_OUTPUT"
-          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
-          echo "object_key=${OBJECT_KEY}" >> "$GITHUB_OUTPUT"
-          echo "url=${URL}" >> "$GITHUB_OUTPUT"
-
-      - name: Upload to R2
-        run: |
-          aws s3 cp \
-            "sidecar/mash_cv/dist/${{ steps.build.outputs.artifact }}" \
-            "s3://${R2_BUCKET}/${{ steps.build.outputs.object_key }}" \
-            --endpoint-url "$R2_ENDPOINT" \
-            --cache-control "public, max-age=31536000, immutable"
-
-      - name: Validate R2 object
-        run: |
-          aws s3api head-object \
-            --bucket "$R2_BUCKET" \
-            --key "${{ steps.build.outputs.object_key }}" \
-            --endpoint-url "$R2_ENDPOINT" >/dev/null
-
-      - name: Validate public artifact
-        run: |
-          curl --fail --location --silent --show-error \
-            --range 0-0 \
-            --user-agent "mash-release/1.0" \
-            "${{ steps.build.outputs.url }}" >/dev/null
+          AWS_PROFILE="" scripts/release-mash-cv-code.sh "$CODE_VERSION"
 
       - name: Write summary
         run: |
           {
             echo "## mash-cv code release"
             echo ""
-            echo "- Version: \`${{ steps.build.outputs.code_version }}\`"
-            echo "- Artifact: \`${{ steps.build.outputs.artifact }}\`"
-            echo "- URL: ${{ steps.build.outputs.url }}"
-            echo "- SHA-256: \`${{ steps.build.outputs.sha256 }}\`"
+            echo "- Version: \`${{ steps.release.outputs.code_version }}\`"
+            echo "- Artifact: \`${{ steps.release.outputs.artifact }}\`"
+            echo "- URL: ${{ steps.release.outputs.url }}"
+            echo "- SHA-256: \`${{ steps.release.outputs.sha256 }}\`"
             echo ""
             echo "Update \`src-tauri/resources/runtime-manifest.json\` with:"
             echo ""
             echo "\`\`\`json"
-            echo "\"codeUrl\": \"${{ steps.build.outputs.url }}\","
-            echo "\"codeSha256\": \"${{ steps.build.outputs.sha256 }}\""
+            echo "\"codeUrl\": \"${{ steps.release.outputs.url }}\","
+            echo "\"codeSha256\": \"${{ steps.release.outputs.sha256 }}\""
             echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
