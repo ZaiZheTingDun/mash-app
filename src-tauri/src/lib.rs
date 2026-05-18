@@ -321,11 +321,23 @@ pub(crate) fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
     dir
 }
 
-fn dir_has_entries(path: &Path) -> bool {
-    fs::read_dir(path)
-        .ok()
-        .and_then(|mut entries| entries.next())
-        .is_some()
+fn dir_has_data(path: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(path) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let entry_path = entry.path();
+        let Ok(metadata) = fs::symlink_metadata(&entry_path) else {
+            continue;
+        };
+        if metadata.is_file() || metadata.file_type().is_symlink() {
+            return true;
+        }
+        if metadata.is_dir() && dir_has_data(&entry_path) {
+            return true;
+        }
+    }
+    false
 }
 
 fn legacy_app_data_candidates(current: &Path) -> Vec<PathBuf> {
@@ -384,13 +396,13 @@ fn migrate_legacy_app_data_dir(
     candidates: &[PathBuf],
 ) -> Result<Option<PathBuf>, String> {
     fs::create_dir_all(current).map_err(|e| format!("create app data dir failed: {e}"))?;
-    if dir_has_entries(current) {
+    if dir_has_data(current) {
         return Ok(None);
     }
 
     let Some(source) = candidates
         .iter()
-        .find(|path| path.is_dir() && dir_has_entries(path))
+        .find(|path| path.is_dir() && dir_has_data(path))
     else {
         return Ok(None);
     };
@@ -408,21 +420,29 @@ fn migrate_legacy_app_data_dir(
     Ok(Some(source.clone()))
 }
 
-fn migrate_legacy_app_data(app: &tauri::AppHandle) {
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StartupMigrationStatus {
+    migrated: bool,
+    from: Option<String>,
+    to: String,
+}
+
+fn migrate_legacy_app_data(app: &tauri::AppHandle) -> Result<StartupMigrationStatus, String> {
     let current = app_data_dir(app);
-    match migrate_legacy_app_data_dir(&current, &legacy_app_data_candidates(&current)) {
-        Ok(Some(source)) => {
-            eprintln!(
-                "[app-data-migration] migrated legacy app data from {} to {}",
-                source.display(),
-                current.display()
-            );
-        }
-        Ok(None) => {}
-        Err(err) => {
-            eprintln!("[app-data-migration] skipped: {err}");
-        }
+    let source = migrate_legacy_app_data_dir(&current, &legacy_app_data_candidates(&current))?;
+    if let Some(source) = &source {
+        eprintln!(
+            "[app-data-migration] migrated legacy app data from {} to {}",
+            source.display(),
+            current.display()
+        );
     }
+    Ok(StartupMigrationStatus {
+        migrated: source.is_some(),
+        from: source.map(|path| path.to_string_lossy().into_owned()),
+        to: current.to_string_lossy().into_owned(),
+    })
 }
 
 fn app_assets_dir(app: &tauri::AppHandle) -> PathBuf {
@@ -1385,6 +1405,24 @@ fn set_use_bluestack(
 #[tauri::command]
 fn get_server(state: tauri::State<'_, Mutex<Server>>) -> Server {
     *state.lock().unwrap()
+}
+
+#[tauri::command]
+async fn run_startup_migration(
+    app: tauri::AppHandle,
+    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    server_state: tauri::State<'_, Mutex<Server>>,
+) -> Result<StartupMigrationStatus, String> {
+    let migration_app = app.clone();
+    let status =
+        tauri::async_runtime::spawn_blocking(move || migrate_legacy_app_data(&migration_app))
+            .await
+            .map_err(|e| format!("startup migration task failed: {e}"))??;
+    if status.migrated {
+        *bluestack_state.lock().unwrap() = load_bluestack_setting(&app);
+        *server_state.lock().unwrap() = load_server_setting(&app);
+    }
+    Ok(status)
 }
 
 #[tauri::command]
@@ -2989,7 +3027,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            migrate_legacy_app_data(&app.handle());
             let use_bluestack = load_bluestack_setting(&app.handle());
             let server = load_server_setting(&app.handle());
             #[cfg(desktop)]
@@ -3023,6 +3060,7 @@ pub fn run() {
             update_project,
             delete_project,
             check_adb,
+            run_startup_migration,
             get_use_bluestack,
             set_use_bluestack,
             get_server,
@@ -3177,6 +3215,23 @@ mod tests {
             r#"[{"id":"new"}]"#
         );
         assert!(!current.join("identifier-migration.json").exists());
+    }
+
+    #[test]
+    fn migrate_legacy_app_data_allows_empty_current_scaffolding() {
+        let tmp = tempfile::tempdir().unwrap();
+        let legacy = tmp.path().join("com.mash.app");
+        let current = tmp.path().join("com.xiaotongx.mash");
+        fs::create_dir_all(&current).unwrap();
+        fs::create_dir_all(current.join("assets")).unwrap();
+        fs::create_dir_all(legacy.join("runtime")).unwrap();
+        fs::write(legacy.join("projects.json"), b"[]").unwrap();
+
+        let migrated = migrate_legacy_app_data_dir(&current, &[legacy.clone()]).unwrap();
+
+        assert_eq!(migrated.as_deref(), Some(legacy.as_path()));
+        assert!(current.join("assets").is_dir());
+        assert!(current.join("projects.json").is_file());
     }
 
     #[cfg(unix)]

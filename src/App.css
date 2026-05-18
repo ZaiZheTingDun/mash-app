@@ -54,6 +54,25 @@ body,
   overflow: hidden;
 }
 
+.startup-migration-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 24px;
+  background: var(--color-background);
+}
+
+.startup-migration-message {
+  width: min(100%, 420px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
 /* ── App Layout ── */
 
 .app-root {

@@ -143,6 +143,8 @@ function createProject(name: string): Project {
 
 export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Promise<T> {
   switch (cmd) {
+    case "run_startup_migration":
+      return { migrated: false, from: null, to: "/dev/mash-app-data" } as T;
     case "get_servants":
       return clone(servants) as T;
     case "get_craft_essences":

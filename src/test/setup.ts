@@ -94,6 +94,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(async (cmd: string) => {
     switch (cmd) {
+      case "run_startup_migration":
+        return { migrated: false, from: null, to: "/tmp/mash-app-data" };
       case "get_servants":
       case "get_craft_essences":
       case "list_projects":
