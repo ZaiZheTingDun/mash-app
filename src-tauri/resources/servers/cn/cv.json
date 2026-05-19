@@ -279,7 +279,10 @@
     },
     "BattleResultBond": {
       "detect": {
-        "template": "text_battle_result_bond",
+        "templates": [
+          "text_battle_result_bond",
+          "text_battle_result_bond_level_up"
+        ],
         "region": {
           "x": 0.072,
           "y": 0.21,

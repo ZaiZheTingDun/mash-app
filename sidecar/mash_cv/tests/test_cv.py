@@ -289,6 +289,36 @@ class TestDetectScreen:
         assert "text_battle_result_friend_request" in keys
         assert "text_battle_result_friend_request_dark" in keys
 
+    @pytest.mark.parametrize("server", ["cn", "jp"])
+    def test_battle_result_bond_level_up_template_is_bundled(self, server):
+        """Bond level-up overlays hide the normal bond label, so each
+        server must treat both labels as BattleResultBond alternatives."""
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", server, "templates"
+        )
+        cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", server, "cv.json"
+        )
+        if not (os.path.isdir(templates_dir) and os.path.isfile(cv_json)):
+            pytest.skip(f"{server} server resources not available in this checkout")
+
+        normal_path = os.path.join(templates_dir, "text_battle_result_bond.png")
+        level_up_path = os.path.join(
+            templates_dir, "text_battle_result_bond_level_up.png"
+        )
+        assert os.path.isfile(normal_path), normal_path
+        assert os.path.isfile(level_up_path), level_up_path
+
+        with open(cv_json, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        detect = cfg["screens"]["BattleResultBond"]["detect"]
+        keys = detect.get("templates") or [detect.get("template")]
+        assert "text_battle_result_bond" in keys
+        assert "text_battle_result_bond_level_up" in keys
+
 
 # ── _load_templates ─────────────────────────────────────────────────────
 

@@ -72,6 +72,9 @@ their real screens:
 - `Battle.variants.main.elements.battle_scene_anchor`: exposes the
   `text_battle_label` region to debug; full
   `BATTLE m/n` reading still uses `read_battle_scene`.
+- `BattleResultBond.detect`: treats the normal bond-points label
+  (`text_battle_result_bond`) and the bond-level-up overlay label
+  (`text_battle_result_bond_level_up`) as the same result screen.
 
 ## Support OCR Names
 
@@ -125,6 +128,8 @@ changes (i.e. when the runner moves to a different row).
   latest `BATTLE m/n` read through `tick_scene_state` and gates skill execution.
 - `BattleAction` is a documentation-only status node for the actionable battle
   condition where `Battle.variants.main.elements.attack_button` is found.
+- `BattleResultBond` covers both ordinary bond-points settlement and the
+  bond-level-up overlay. Both routes use the same next-button tap target.
 - In-battle Order Change is stored on an equipment action as
   `orderChange.front` + `orderChange.back`. The runner taps the master skill,
   lets the semi-transparent Battle overlay settle, selects exactly one
