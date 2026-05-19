@@ -1180,7 +1180,7 @@ def _read_crit_digits(
     *,
     prefix: str = "digit-type-crit/",
     suffix: str = "",
-    min_score: float = 0.62,
+    min_score: float = 0.58,
 ) -> Optional[int]:
     """Read a command-card critical percentage from a tight card ROI."""
     template_refs: list[tuple[int, np.ndarray, Optional[np.ndarray]]] = []
