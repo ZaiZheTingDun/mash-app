@@ -967,7 +967,7 @@ class TestFindCommandCards:
             assert c["suit"] in ("a", "b", "q")
             assert -1.0 <= c["iconScore"] <= 1.0
             assert c["iconScore"] > 0.5
-            for key in ("cardRegion", "iconRegion", "faceRegion", "critRegion"):
+            for key in ("cardRegion", "iconRegion", "faceRegion"):
                 box = c[key]
                 assert 0.0 <= box["x"] < 1.0
                 assert 0.0 <= box["y"] < 1.0
@@ -977,11 +977,27 @@ class TestFindCommandCards:
             card = c["cardRegion"]
             icon = c["iconRegion"]
             face = c["faceRegion"]
-            crit = c["critRegion"]
-            for child in (icon, face, crit):
+            assert face["y"] < icon["y"]
+            for child in (icon, face):
                 assert child["x"] >= card["x"] - 1e-6
                 assert child["x"] + child["w"] <= card["x"] + card["w"] + 1e-6
-            assert crit["y"] < face["y"] < icon["y"]
+
+            # Three per-digit crit ROIs (hundreds, tens, ones), each
+            # sitting strictly above the face region and inside the slot.
+            crit_regions = c["critDigitRegions"]
+            assert len(crit_regions) == 3
+            prev_right = card["x"] - 1e-6
+            for crit in crit_regions:
+                assert 0.0 <= crit["x"] < 1.0
+                assert 0.0 <= crit["y"] < 1.0
+                assert 0.0 < crit["w"] <= 1.0
+                assert 0.0 < crit["h"] <= 1.0
+                assert crit["x"] >= card["x"] - 1e-6
+                assert crit["x"] + crit["w"] <= card["x"] + card["w"] + 1e-6
+                assert crit["y"] < face["y"]
+                # Slots are laid out left-to-right and non-overlapping.
+                assert crit["x"] >= prev_right - 1e-6
+                prev_right = crit["x"] + crit["w"]
             assert "servantId" not in c
 
     def test_servant_identification_skipped_without_assets_dir(self):
@@ -1119,6 +1135,24 @@ class TestFindCommandCards:
         assert [c.get("servantId") for c in cards] == [315, 211, 211, 284, 284]
         assert [c.get("critChance") for c in cards] == [20, 70, 70, 30, 60]
 
+        # Per-digit reads are surfaced for the debug log even when the
+        # hundreds slot is empty: 3 reads per card, each with the schema
+        # {"digit": int | None, "score": float, "kept": bool}.
+        for card, expected in zip(cards, [20, 70, 70, 30, 60]):
+            reads = card.get("critDigitReads")
+            assert reads is not None and len(reads) == 3, card
+            for r in reads:
+                assert set(r.keys()) >= {"digit", "score", "kept"}
+                assert isinstance(r["score"], float) and r["score"] >= 0.0
+                if r["digit"] is not None:
+                    assert 0 <= r["digit"] <= 9
+            # Hundreds slot is always empty for 2-digit values; tens +
+            # ones must both clear the threshold and match the digits of
+            # the assembled crit value.
+            assert reads[0]["kept"] is False, card
+            assert reads[1]["kept"] is True and reads[1]["digit"] == expected // 10, card
+            assert reads[2]["kept"] is True and reads[2]["digit"] == 0, card
+
     @pytest.mark.skipif(
         not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
         reason="production CN templates dir not available",
@@ -1157,7 +1191,18 @@ class TestFindCommandCards:
             [315, 211, 284],
             _PROD_SERVANTS_DIR,
         )
-        assert [c.get("critChance") for c in result["cards"]] == [50, None, None, 100, 70]
+        cards = result["cards"]
+        assert [c.get("critChance") for c in cards] == [50, None, None, 100, 70]
+
+        # The "100" card must show three kept digits (1/0/0); the two
+        # support cards in the middle have no crit value rendered, so
+        # every per-slot read should fall below the threshold (kept=False).
+        reads_100 = cards[3]["critDigitReads"]
+        assert [r["digit"] for r in reads_100] == [1, 0, 0]
+        assert all(r["kept"] for r in reads_100)
+        for empty_idx in (1, 2):
+            reads_empty = cards[empty_idx]["critDigitReads"]
+            assert all(not r["kept"] for r in reads_empty), reads_empty
 
     def test_face_template_caching(self, tmp_path):
         # Build a minimal assets dir with a synthetic 256x256 face.

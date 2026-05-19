@@ -127,7 +127,22 @@ COMMAND_CARD_SUITS = ("a", "b", "q")
 # when sampling subregions.
 COMMAND_CARD_Y_WOBBLE_SCREEN = 0.012
 COMMAND_CARD_SUBREGION_X_OFFSETS: tuple[float, ...] = (0.0, 0.0, 0.0, 0.001, 0.005)
-COMMAND_CARD_CRIT_REGION = {"x": 0.23, "y": 0.09, "w": 0.418, "h": 0.118}
+# The crit percentage is rendered right-aligned with each digit pinned to a
+# fixed slot-relative x position. Reading each digit inside its own tight
+# ROI is much more robust than scanning the whole strip — neighbouring
+# digits, the trailing "%" glyph, and the gold "暴击星" subtitle below can
+# no longer collide via NMS, and an empty hundreds slot just falls through
+# to the 2-digit interpretation at validation time. Slot order is
+# (hundreds, tens, ones); only "100" populates the narrow hundreds slot.
+COMMAND_CARD_CRIT_DIGIT_REGIONS: tuple[dict, ...] = (
+    {"x": 0.23, "y": 0.09, "w": 0.08, "h": 0.118},
+    {"x": 0.311, "y": 0.09, "w": 0.117, "h": 0.118},
+    {"x": 0.428, "y": 0.09, "w": 0.105, "h": 0.118},
+)
+# Valid crit chances: 10, 20, ..., 100. Always multiples of 10, so the
+# ones slot is always "0" in a real reading and the hundreds slot is
+# only ever "1" (or empty). This set is used to reject false-positive
+# combinations of per-slot reads.
 COMMAND_CARD_VALID_CRIT_CHANCES = frozenset(range(10, 101, 10))
 COMMAND_CARD_FACE_REGION = {"x": 0.211, "y": 0.266, "w": 0.578, "h": 0.306}
 COMMAND_CARD_SUIT_REGION = {"x": 0.211, "y": 0.59, "w": 0.578, "h": 0.306}
@@ -1175,27 +1190,44 @@ def _read_integer_digits(
     return value
 
 
-def _read_crit_digits(
-    img: np.ndarray,
-    region: dict,
-    *,
-    prefix: str = "digit-type-crit/",
-    suffix: str = "",
-    min_score: float = 0.58,
-) -> Optional[int]:
-    """Read a command-card critical percentage from a tight card ROI."""
-    template_refs: list[tuple[int, np.ndarray, Optional[np.ndarray]]] = []
+def _load_crit_digit_templates(
+    prefix: str, suffix: str
+) -> Optional[list[tuple[int, np.ndarray, Optional[np.ndarray]]]]:
+    """Load all 10 crit-digit templates with their alpha-derived masks.
+
+    Returns ``None`` if any digit template is missing — callers should treat
+    that as "crit detection unavailable" rather than as a 0-confidence read.
+    """
+    refs: list[tuple[int, np.ndarray, Optional[np.ndarray]]] = []
     for digit in range(10):
-        tmpl = _get_template(_digit_template_key(digit, prefix, suffix))
+        key = _digit_template_key(digit, prefix, suffix)
+        tmpl = _get_template(key)
         if tmpl is None:
             return None
-        mask = None
-        path = _template_path_for_key(_digit_template_key(digit, prefix, suffix))
+        mask: Optional[np.ndarray] = None
+        path = _template_path_for_key(key)
         if path:
             raw = cv2.imread(path, cv2.IMREAD_UNCHANGED)
             if raw is not None and raw.ndim == 3 and raw.shape[2] == 4:
                 mask = (raw[:, :, 3] > 32).astype(np.uint8) * 255
-        template_refs.append((digit, tmpl, mask))
+        refs.append((digit, tmpl, mask))
+    return refs
+
+
+def _best_crit_digit_in_region(
+    img: np.ndarray,
+    region: dict,
+    template_refs: list[tuple[int, np.ndarray, Optional[np.ndarray]]],
+) -> tuple[Optional[int], float]:
+    """Best-matching digit (0..9) inside ``region`` and its raw score.
+
+    Each slot region is sized to fit a single digit glyph plus a small
+    margin, so we don't need NMS — we just pick the single best score
+    across all (digit, scale) combinations. Returns ``(None, 0.0)`` only
+    when the ROI is empty or no template can fit at any scale; otherwise
+    returns ``(digit, score)`` and leaves threshold decisions to the
+    caller so the raw signal can be surfaced in debug logs.
+    """
     h, w = img.shape[:2]
     rx = max(0, int(round(region["x"] * w)))
     ry = max(0, int(round(region["y"] * h)))
@@ -1203,10 +1235,11 @@ def _read_crit_digits(
     rh = max(1, min(int(round(region["h"] * h)), h - ry))
     roi = img[ry : ry + rh, rx : rx + rw]
     if roi.size == 0:
-        return None
-
+        return None, 0.0
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    candidates: list[dict] = []
+
+    best_digit: Optional[int] = None
+    best_score = -1.0
     for digit, tmpl, mask in template_refs:
         for scale in (1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8):
             tw = max(1, int(round(tmpl.shape[1] * scale)))
@@ -1218,45 +1251,83 @@ def _read_crit_digits(
             if mask is not None:
                 resized_mask = cv2.resize(mask, (tw, th), interpolation=cv2.INTER_AREA)
                 resized_mask = (resized_mask > 32).astype(np.uint8) * 255
-            res = cv2.matchTemplate(gray, resized, cv2.TM_CCOEFF_NORMED, mask=resized_mask)
-            _min_val, max_val, _min_loc, max_loc = cv2.minMaxLoc(res)
-            score = float(max_val)
-            if not np.isfinite(score) or score < min_score:
-                continue
-            candidates.append(
-                {
-                    "digit": int(digit),
-                    "score": score,
-                    "x": int(max_loc[0]),
-                    "y": int(max_loc[1]),
-                    "w": tw,
-                    "h": th,
-                }
+            res = cv2.matchTemplate(
+                gray, resized, cv2.TM_CCOEFF_NORMED, mask=resized_mask
             )
+            _min_val, max_val, _min_loc, _max_loc = cv2.minMaxLoc(res)
+            score = float(max_val)
+            if not np.isfinite(score):
+                continue
+            if score > best_score:
+                best_score = score
+                best_digit = int(digit)
+    if best_digit is None:
+        return None, 0.0
+    return best_digit, max(0.0, best_score)
 
-    if not candidates:
-        return None
-    candidates.sort(key=lambda c: -float(c["score"]))
-    kept: list[dict] = []
-    for cand in candidates:
-        cx = float(cand["x"]) + float(cand["w"]) / 2.0
-        cy = float(cand["y"]) + float(cand["h"]) / 2.0
-        if any(
-            abs(cx - (float(k["x"]) + float(k["w"]) / 2.0)) < max(float(cand["w"]), float(k["w"])) * 0.65
-            and abs(cy - (float(k["y"]) + float(k["h"]) / 2.0)) < max(float(cand["h"]), float(k["h"])) * 0.65
-            for k in kept
-        ):
-            continue
-        kept.append(cand)
-    kept.sort(key=lambda c: int(c["x"]))
-    for length in range(min(3, len(kept)), 0, -1):
-        try:
-            value = int("".join(str(c["digit"]) for c in kept[:length]))
-        except ValueError:
-            continue
-        if value in COMMAND_CARD_VALID_CRIT_CHANCES:
-            return value
-    return None
+
+def _read_crit_digits(
+    img: np.ndarray,
+    slot_regions: list[dict],
+    *,
+    prefix: str = "digit-type-crit/",
+    suffix: str = "",
+    min_score: float = 0.58,
+) -> tuple[Optional[int], list[dict]]:
+    """Read a command-card critical percentage by examining each digit slot
+    independently.
+
+    ``slot_regions`` is the per-card pixel-relative (hundreds, tens, ones)
+    triple. Each slot ROI is small enough that whichever digit is rendered
+    inside it dominates template matching, so we don't need to NMS across
+    a wide strip. The combined value is validated against
+    :data:`COMMAND_CARD_VALID_CRIT_CHANCES` — a 3-digit read that isn't
+    100 (e.g. a spurious hundreds-slot hit on top of "70") is rejected,
+    and we fall back to the 2-digit reading.
+
+    Returns ``(value, reads)`` where ``reads`` is a per-slot list of
+    ``{"digit": int | None, "score": float, "kept": bool}`` so callers
+    can surface the raw recognition signal in debug logs even when the
+    final assembled value is rejected. ``digit`` is the best-scoring
+    template (always set when the slot ROI is non-empty);
+    ``kept`` indicates whether it passed ``min_score`` and contributed
+    to the assembled value.
+    """
+    empty_reads = [{"digit": None, "score": 0.0, "kept": False} for _ in slot_regions]
+    if len(slot_regions) != 3:
+        return None, empty_reads
+    template_refs = _load_crit_digit_templates(prefix, suffix)
+    if template_refs is None:
+        return None, empty_reads
+
+    reads: list[dict] = []
+    kept_digits: list[Optional[int]] = []
+    for region in slot_regions:
+        digit, score = _best_crit_digit_in_region(img, region, template_refs)
+        passed = digit is not None and score >= min_score
+        reads.append(
+            {
+                "digit": digit,
+                "score": float(score),
+                "kept": bool(passed),
+            }
+        )
+        kept_digits.append(digit if passed else None)
+
+    value: Optional[int] = None
+    # Prefer the 3-digit reading when every slot is confidently filled
+    # (only valid combination is "100").
+    if all(d is not None for d in kept_digits):
+        candidate = kept_digits[0] * 100 + kept_digits[1] * 10 + kept_digits[2]
+        if candidate in COMMAND_CARD_VALID_CRIT_CHANCES:
+            value = candidate
+    # Otherwise fall back to the 2-digit reading from the tens + ones
+    # slots — the hundreds slot is empty for any value below 100.
+    if value is None and kept_digits[1] is not None and kept_digits[2] is not None:
+        candidate = kept_digits[1] * 10 + kept_digits[2]
+        if candidate in COMMAND_CARD_VALID_CRIT_CHANCES:
+            value = candidate
+    return value, reads
 
 
 def _read_battle_scene(
@@ -1929,19 +2000,26 @@ def _find_command_cards(
         face_bbox = _command_card_face_region_bbox(slot_px, w, h, subregion_x_offset)
         record["faceRegion"] = _norm_rect_from_pixels(face_bbox, w, h)
 
-        crit_bbox = _relative_region_bbox(
-            slot_px,
-            COMMAND_CARD_CRIT_REGION,
-            img_w=w,
-            img_h=h,
-            pad_y_screen=COMMAND_CARD_Y_WOBBLE_SCREEN,
-            offset_x_screen=subregion_x_offset,
-        )
-        crit_region = _norm_rect_from_pixels(crit_bbox, w, h)
-        record["critRegion"] = crit_region
-        crit = _read_crit_digits(img, crit_region)
-        if crit is not None:
-            record["critChance"] = int(crit)
+        crit_digit_regions = [
+            _norm_rect_from_pixels(
+                _relative_region_bbox(
+                    slot_px,
+                    digit_rel,
+                    img_w=w,
+                    img_h=h,
+                    pad_y_screen=COMMAND_CARD_Y_WOBBLE_SCREEN,
+                    offset_x_screen=subregion_x_offset,
+                ),
+                w,
+                h,
+            )
+            for digit_rel in COMMAND_CARD_CRIT_DIGIT_REGIONS
+        ]
+        record["critDigitRegions"] = crit_digit_regions
+        crit_value, crit_reads = _read_crit_digits(img, crit_digit_regions)
+        record["critDigitReads"] = crit_reads
+        if crit_value is not None:
+            record["critChance"] = int(crit_value)
 
         if can_identify:
             ident = _identify_servant_in_slot(

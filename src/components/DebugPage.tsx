@@ -132,7 +132,8 @@ export interface CommandCardMatchDto {
   y: number;
   cardRegion: NormRectDto;
   faceRegion: NormRectDto;
-  critRegion?: NormRectDto;
+  critDigitRegions?: NormRectDto[];
+  critDigitReads?: CritDigitReadDto[];
   suit?: "a" | "b" | "q";
   iconScore?: number;
   iconRegion?: NormRectDto;
@@ -140,6 +141,12 @@ export interface CommandCardMatchDto {
   ascension?: number;
   faceScore?: number;
   critChance?: number;
+}
+
+export interface CritDigitReadDto {
+  digit: number | null;
+  score: number;
+  kept: boolean;
 }
 
 export interface NoblePhantasmMatchDto {
@@ -1830,6 +1837,23 @@ export function DebugPage({
                       ? ` · 暴击 ${c.critChance}%`
                       : ""}
                   </Text>
+                  {c.critDigitReads && c.critDigitReads.length > 0 && (
+                    <Text size="1" color="gray">
+                      暴击位{" "}
+                      {c.critDigitReads
+                        .map((r) => {
+                          const glyph =
+                            r.digit !== null && r.digit !== undefined
+                              ? String(r.digit)
+                              : "-";
+                          const score = r.score.toFixed(2);
+                          return r.kept
+                            ? `${glyph}@${score}`
+                            : `(${glyph}@${score})`;
+                        })
+                        .join(" · ")}
+                    </Text>
+                  )}
                 </Box>
               ))}
             </Box>

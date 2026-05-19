@@ -2362,6 +2362,39 @@ body,
   background: rgba(255, 170, 0, 0.08);
 }
 
+.debug-overlay-crit {
+  border-width: 2px;
+  border-style: solid;
+}
+
+.debug-overlay-crit-kept {
+  border-color: var(--crimson-9);
+  background: rgba(220, 50, 90, 0.14);
+}
+
+.debug-overlay-crit-miss {
+  border-color: var(--gray-9);
+  background: rgba(120, 120, 120, 0.08);
+  border-style: dashed;
+}
+
+/* Per-digit score labels sit BELOW the box (the rendered crit
+ * percentage glyph occupies the space directly above), centered on
+ * the box itself rather than left-anchored like the standard
+ * overlay label. */
+.debug-overlay-crit-label {
+  top: 100%;
+  left: 50%;
+  transform: translate(-50%, 2px);
+  font-size: 10px;
+  padding: 1px 4px;
+  background: var(--crimson-9);
+}
+
+.debug-overlay-crit-miss > .debug-overlay-crit-label {
+  background: var(--gray-9);
+}
+
 .debug-overlay-np-ready {
   border: 2px solid var(--green-9);
   background: rgba(0, 200, 80, 0.1);

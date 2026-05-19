@@ -137,6 +137,23 @@ pub struct FindEnhancementServantGridResult {
     pub diagnostics: ServantGridDiagnostics,
 }
 
+/// Per-digit recognition signal for one crit-percentage slot. Surfaced
+/// for the debug UI so an empty / sub-threshold / valid-but-discarded
+/// read can be told apart from a genuinely missing crit value.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CritDigitRead {
+    /// Best-scoring digit template (0..9) for this slot, or ``None``
+    /// when the slot ROI was empty or no template fit at any scale.
+    #[serde(default)]
+    pub digit: Option<u32>,
+    /// Raw TM_CCOEFF_NORMED score of ``digit`` regardless of threshold.
+    pub score: f64,
+    /// Whether ``digit`` cleared the per-slot acceptance threshold and
+    /// contributed to the assembled crit value.
+    pub kept: bool,
+}
+
 /// One detected command-card slot on the attack screen.
 ///
 /// The five slot bboxes are fixed positions (configured in the Python
@@ -157,9 +174,18 @@ pub struct CommandCardMatch {
     pub card_region: NormRect,
     /// Upper-portion of the slot used as the face-template search area.
     pub face_region: NormRect,
-    /// Slot-relative critical percentage region.
+    /// Per-digit ROIs (hundreds, tens, ones) where the slot-relative crit
+    /// percentage is OCR'd. Each digit is matched inside its own tight
+    /// region rather than across a single wide strip — see
+    /// ``COMMAND_CARD_CRIT_DIGIT_REGIONS`` in the sidecar.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub crit_region: Option<NormRect>,
+    pub crit_digit_regions: Option<Vec<NormRect>>,
+    /// Per-slot recognition signal for the crit digits. Surfaced even
+    /// when ``crit_chance`` is ``None`` so the debug UI can show why
+    /// (which slot fell below threshold or assembled to an invalid
+    /// non-multiple-of-10 value).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crit_digit_reads: Option<Vec<CritDigitRead>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     /// Suit code: ``"a"`` (Arts), ``"b"`` (Buster), or ``"q"`` (Quick).
     pub suit: Option<String>,

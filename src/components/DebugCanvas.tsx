@@ -166,19 +166,38 @@ export function DebugCanvas({
               />
             );
           }
-          if (c.critRegion) {
-            overlays.push(
-              <Box
-                key={`card-crit-${c.slot}`}
-                className="debug-overlay-box debug-overlay-icon"
-                style={{
-                  left: `${c.critRegion.x * 100}%`,
-                  top: `${c.critRegion.y * 100}%`,
-                  width: `${c.critRegion.w * 100}%`,
-                  height: `${c.critRegion.h * 100}%`,
-                }}
-              />
-            );
+          if (c.critDigitRegions) {
+            c.critDigitRegions.forEach((r, idx) => {
+              const read = c.critDigitReads?.[idx];
+              const glyph =
+                read && read.digit !== null && read.digit !== undefined
+                  ? String(read.digit)
+                  : "-";
+              const label = read
+                ? `${glyph}@${read.score.toFixed(2)}`
+                : undefined;
+              const kept = read?.kept ?? false;
+              overlays.push(
+                <Box
+                  key={`card-crit-${c.slot}-${idx}`}
+                  className={`debug-overlay-box debug-overlay-crit ${
+                    kept ? "debug-overlay-crit-kept" : "debug-overlay-crit-miss"
+                  }`}
+                  style={{
+                    left: `${r.x * 100}%`,
+                    top: `${r.y * 100}%`,
+                    width: `${r.w * 100}%`,
+                    height: `${r.h * 100}%`,
+                  }}
+                >
+                  {label && (
+                    <span className="debug-overlay-label debug-overlay-crit-label">
+                      {label}
+                    </span>
+                  )}
+                </Box>
+              );
+            });
           }
           return overlays;
         })}
