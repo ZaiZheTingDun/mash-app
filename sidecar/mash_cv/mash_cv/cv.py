@@ -128,6 +128,7 @@ COMMAND_CARD_SUITS = ("a", "b", "q")
 COMMAND_CARD_Y_WOBBLE_SCREEN = 0.012
 COMMAND_CARD_SUBREGION_X_OFFSETS: tuple[float, ...] = (0.0, 0.0, 0.0, 0.001, 0.005)
 COMMAND_CARD_CRIT_REGION = {"x": 0.23, "y": 0.09, "w": 0.418, "h": 0.118}
+COMMAND_CARD_VALID_CRIT_CHANCES = frozenset(range(10, 101, 10))
 COMMAND_CARD_FACE_REGION = {"x": 0.211, "y": 0.266, "w": 0.578, "h": 0.306}
 COMMAND_CARD_SUIT_REGION = {"x": 0.211, "y": 0.59, "w": 0.578, "h": 0.306}
 
@@ -1253,7 +1254,7 @@ def _read_crit_digits(
             value = int("".join(str(c["digit"]) for c in kept[:length]))
         except ValueError:
             continue
-        if 0 <= value <= 100:
+        if value in COMMAND_CARD_VALID_CRIT_CHANCES:
             return value
     return None
 
