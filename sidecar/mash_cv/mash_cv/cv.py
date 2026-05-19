@@ -1180,7 +1180,7 @@ def _read_crit_digits(
     *,
     prefix: str = "digit-type-crit/",
     suffix: str = "",
-    min_score: float = 0.72,
+    min_score: float = 0.62,
 ) -> Optional[int]:
     """Read a command-card critical percentage from a tight card ROI."""
     template_refs: list[tuple[int, np.ndarray, Optional[np.ndarray]]] = []
@@ -1195,7 +1195,6 @@ def _read_crit_digits(
             if raw is not None and raw.ndim == 3 and raw.shape[2] == 4:
                 mask = (raw[:, :, 3] > 32).astype(np.uint8) * 255
         template_refs.append((digit, tmpl, mask))
-
     h, w = img.shape[:2]
     rx = max(0, int(round(region["x"] * w)))
     ry = max(0, int(round(region["y"] * h)))
@@ -1208,7 +1207,7 @@ def _read_crit_digits(
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     candidates: list[dict] = []
     for digit, tmpl, mask in template_refs:
-        for scale in (1.2, 1.1, 1.0, 0.9, 0.8):
+        for scale in (1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8):
             tw = max(1, int(round(tmpl.shape[1] * scale)))
             th = max(1, int(round(tmpl.shape[0] * scale)))
             if tw > rw or th > rh:
@@ -1249,13 +1248,14 @@ def _read_crit_digits(
             continue
         kept.append(cand)
     kept.sort(key=lambda c: int(c["x"]))
-    try:
-        value = int("".join(str(c["digit"]) for c in kept))
-    except ValueError:
-        return None
-    if value < 0 or value > 100:
-        return None
-    return value
+    for length in range(min(3, len(kept)), 0, -1):
+        try:
+            value = int("".join(str(c["digit"]) for c in kept[:length]))
+        except ValueError:
+            continue
+        if 0 <= value <= 100:
+            return value
+    return None
 
 
 def _read_battle_scene(

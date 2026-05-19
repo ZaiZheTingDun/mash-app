@@ -1119,6 +1119,26 @@ class TestFindCommandCards:
         assert [c.get("servantId") for c in cards] == [315, 211, 211, 284, 284]
         assert [c.get("critChance") for c in cards] == [20, 70, 70, 30, 60]
 
+    @pytest.mark.skipif(
+        not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
+        reason="production CN templates dir not available",
+    )
+    def test_reads_cn_command_card_mixed_crit_chances(self):
+        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+        assert result["ok"] is True
+        img = cv2.imread(
+            os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command_cn_mixed_crit.png")
+        )
+        assert img is not None, "battle_command_cn_mixed_crit.png fixture missing"
+
+        result = mash_cv._find_command_cards(
+            img,
+            list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS),
+            [315, 211, 284],
+            _PROD_SERVANTS_DIR,
+        )
+        assert [c.get("critChance") for c in result["cards"]] == [30, 10, 20, 10, 40]
+
     def test_face_template_caching(self, tmp_path):
         # Build a minimal assets dir with a synthetic 256x256 face.
         sid = 12345
