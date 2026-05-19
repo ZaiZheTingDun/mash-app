@@ -157,6 +157,9 @@ pub struct CommandCardMatch {
     pub card_region: NormRect,
     /// Upper-portion of the slot used as the face-template search area.
     pub face_region: NormRect,
+    /// Slot-relative critical percentage region.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crit_region: Option<NormRect>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     /// Suit code: ``"a"`` (Arts), ``"b"`` (Buster), or ``"q"`` (Quick).
     pub suit: Option<String>,
@@ -170,6 +173,8 @@ pub struct CommandCardMatch {
     pub ascension: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub face_score: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crit_chance: Option<u32>,
 }
 
 /// Result of NP-readiness detection for a single Noble Phantasm card slot.

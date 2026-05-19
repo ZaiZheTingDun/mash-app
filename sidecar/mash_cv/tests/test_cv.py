@@ -967,24 +967,21 @@ class TestFindCommandCards:
             assert c["suit"] in ("a", "b", "q")
             assert -1.0 <= c["iconScore"] <= 1.0
             assert c["iconScore"] > 0.5
-            for key in ("cardRegion", "iconRegion", "faceRegion"):
+            for key in ("cardRegion", "iconRegion", "faceRegion", "critRegion"):
                 box = c[key]
                 assert 0.0 <= box["x"] < 1.0
                 assert 0.0 <= box["y"] < 1.0
                 assert 0.0 < box["w"] <= 1.0
                 assert 0.0 < box["h"] <= 1.0
-            # The color-sample bbox covers the lower half of the slot.
+            # The sample bboxes sit inside the calibrated command-card slot.
             card = c["cardRegion"]
             icon = c["iconRegion"]
-            assert icon["x"] == pytest.approx(card["x"], abs=1e-6)
-            assert icon["w"] == pytest.approx(card["w"], abs=1e-6)
-            assert icon["y"] >= card["y"] + card["h"] / 2 - 1e-6
-            # Face search bbox sits in the upper portion of the card.
-            assert c["faceRegion"]["y"] >= card["y"] - 1e-6
-            assert (
-                c["faceRegion"]["y"] + c["faceRegion"]["h"]
-                <= card["y"] + card["h"] + 1e-6
-            )
+            face = c["faceRegion"]
+            crit = c["critRegion"]
+            for child in (icon, face, crit):
+                assert child["x"] >= card["x"] - 1e-6
+                assert child["x"] + child["w"] <= card["x"] + card["w"] + 1e-6
+            assert crit["y"] < face["y"] < icon["y"]
             assert "servantId" not in c
 
     def test_servant_identification_skipped_without_assets_dir(self):
@@ -1070,6 +1067,57 @@ class TestFindCommandCards:
         slot1 = cards[1]
         if "servantId" in slot1:
             assert slot1["servantId"] == 37, slot1
+
+    @pytest.mark.skipif(
+        not os.path.isdir(_PROD_CN_TEMPLATES_DIR)
+        or not os.path.isdir(_PROD_SERVANTS_DIR),
+        reason="production CN templates or servants assets dir not available",
+    )
+    def test_identifies_cn_no_np_attack_screen_from_real_assets(self):
+        """Regression for a CN attack screen where transparent portrait
+        corners used to suppress Arash/Habetrot face scores."""
+        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+        assert result["ok"] is True
+        img = cv2.imread(
+            os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command_cn_no_np.jpg")
+        )
+        assert img is not None, "battle_command_cn_no_np.jpg fixture missing"
+
+        result = mash_cv._find_command_cards(
+            img,
+            list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS),
+            [16, 315, 284],
+            _PROD_SERVANTS_DIR,
+        )
+        cards = result["cards"]
+        assert len(cards) == 5
+        assert [c.get("suit") for c in cards] == ["a", "q", "a", "q", "q"]
+        assert [c.get("servantId") for c in cards] == [16, 315, 284, 284, 16]
+        assert min(c.get("faceScore", 0.0) for c in cards) > 0.6
+
+    @pytest.mark.skipif(
+        not os.path.isdir(_PROD_CN_TEMPLATES_DIR)
+        or not os.path.isdir(_PROD_SERVANTS_DIR),
+        reason="production CN templates or servants assets dir not available",
+    )
+    def test_reads_cn_command_card_crit_chances(self):
+        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+        assert result["ok"] is True
+        img = cv2.imread(
+            os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command_cn_crit.jpg")
+        )
+        assert img is not None, "battle_command_cn_crit.jpg fixture missing"
+
+        result = mash_cv._find_command_cards(
+            img,
+            list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS),
+            [315, 211, 284],
+            _PROD_SERVANTS_DIR,
+        )
+        cards = result["cards"]
+        assert [c.get("suit") for c in cards] == ["q", "b", "b", "a", "a"]
+        assert [c.get("servantId") for c in cards] == [315, 211, 211, 284, 284]
+        assert [c.get("critChance") for c in cards] == [20, 70, 70, 30, 60]
 
     def test_face_template_caching(self, tmp_path):
         # Build a minimal assets dir with a synthetic 256x256 face.
@@ -1208,6 +1256,22 @@ class TestFindNoblePhantasms:
         assert slots[0]["edgeThreshold"] == pytest.approx(thr)
         assert slots[0]["edgeFrac"] < thr <= slots[1]["edgeFrac"]
 
+    def test_cn_no_np_enemy_ui_is_not_detected_as_ready(self):
+        """Enemy HP/class UI can sit under the fixed NP slots and has high
+        edge density, but lacks the bright NP-card frame/backing."""
+        img = cv2.imread(
+            os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command_cn_no_np.jpg")
+        )
+        assert img is not None, "battle_command_cn_no_np.jpg fixture missing"
+
+        result = mash_cv._find_noble_phantasms(
+            img, list(mash_cv.DEFAULT_NP_CARD_SLOTS)
+        )
+        slots = result["slots"]
+        assert len(slots) == 3
+        assert [s["ready"] for s in slots] == [False, False, False]
+        assert max(s["edgeFrac"] for s in slots) > mash_cv.NP_READY_EDGE_HIGH
+
 
 class TestDecideNpReady:
     """Pure-logic coverage for the adaptive readiness decision so we can
@@ -1244,6 +1308,15 @@ class TestDecideNpReady:
             [0.058, 0.096, 0.120], [82.0, 84.0, 90.0]
         )
         assert flags == [True, True, True]
+        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_HIGH)
+
+    def test_bright_card_signal_is_required_in_adaptive_mode(self):
+        flags, thr = mash_cv._decide_np_ready(
+            [0.132, 0.074, 0.127],
+            [49.0, 49.0, 49.0],
+            [0.002, 0.002, 0.0],
+        )
+        assert flags == [False, False, False]
         assert thr == pytest.approx(mash_cv.NP_READY_EDGE_HIGH)
 
     def test_all_empty_low_resolution_stays_empty(self):

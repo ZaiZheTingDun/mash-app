@@ -132,12 +132,14 @@ export interface CommandCardMatchDto {
   y: number;
   cardRegion: NormRectDto;
   faceRegion: NormRectDto;
+  critRegion?: NormRectDto;
   suit?: "a" | "b" | "q";
   iconScore?: number;
   iconRegion?: NormRectDto;
   servantId?: number;
   ascension?: number;
   faceScore?: number;
+  critChance?: number;
 }
 
 export interface NoblePhantasmMatchDto {
@@ -1824,6 +1826,9 @@ export function DebugPage({
                   )}
                   <Text size="1" color="gray">
                     中心 ({c.x.toFixed(3)}, {c.y.toFixed(3)})
+                    {c.critChance !== undefined
+                      ? ` · 暴击 ${c.critChance}%`
+                      : ""}
                   </Text>
                 </Box>
               ))}

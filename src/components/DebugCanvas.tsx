@@ -166,6 +166,20 @@ export function DebugCanvas({
               />
             );
           }
+          if (c.critRegion) {
+            overlays.push(
+              <Box
+                key={`card-crit-${c.slot}`}
+                className="debug-overlay-box debug-overlay-icon"
+                style={{
+                  left: `${c.critRegion.x * 100}%`,
+                  top: `${c.critRegion.y * 100}%`,
+                  width: `${c.critRegion.w * 100}%`,
+                  height: `${c.critRegion.h * 100}%`,
+                }}
+              />
+            );
+          }
           return overlays;
         })}
         {noblePhantasms.map((s) => (

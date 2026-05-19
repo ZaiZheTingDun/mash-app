@@ -110,40 +110,38 @@ STATIC_TEMPLATE_REFERENCE_WIDTH = 2560
 # Override at runtime by passing ``cardRegions`` in the ``find_command_cards``
 # command if a future device reports different coordinates.
 DEFAULT_COMMAND_CARD_SLOTS: tuple[dict, ...] = (
-    {"x": 0.011, "y": 0.483, "w": 0.189, "h": 0.408},
-    {"x": 0.206, "y": 0.491, "w": 0.189, "h": 0.408},
-    {"x": 0.411, "y": 0.489, "w": 0.189, "h": 0.408},
-    {"x": 0.607, "y": 0.499, "w": 0.189, "h": 0.408},
-    {"x": 0.814, "y": 0.489, "w": 0.189, "h": 0.408},
+    {"x": 0.0, "y": 0.46, "w": 0.2, "h": 0.4},
+    {"x": 0.2, "y": 0.46, "w": 0.2, "h": 0.4},
+    {"x": 0.4, "y": 0.46, "w": 0.2, "h": 0.4},
+    {"x": 0.6, "y": 0.46, "w": 0.2, "h": 0.4},
+    {"x": 0.8, "y": 0.46, "w": 0.2, "h": 0.4},
 )
 
 # Suits we consider for each slot. Ordering only matters as a deterministic
 # tie-breaker if two suits score identically (extremely unlikely).
 COMMAND_CARD_SUITS = ("a", "b", "q")
 
+# Card subregions are expressed relative to each command-card slot. The
+# base slot y is calibrated to the highest animation position; live cards
+# can bob downward by ~0.011 screen-height, so y-only padding is applied
+# when sampling subregions.
+COMMAND_CARD_Y_WOBBLE_SCREEN = 0.012
+COMMAND_CARD_SUBREGION_X_OFFSETS: tuple[float, ...] = (0.0, 0.0, 0.0, 0.001, 0.005)
+COMMAND_CARD_CRIT_REGION = {"x": 0.23, "y": 0.09, "w": 0.418, "h": 0.118}
+COMMAND_CARD_FACE_REGION = {"x": 0.211, "y": 0.266, "w": 0.578, "h": 0.306}
+COMMAND_CARD_SUIT_REGION = {"x": 0.211, "y": 0.59, "w": 0.578, "h": 0.306}
+
 # Suit classification works by color, not template-matching. The three
 # icon templates share the same X-shape and only differ by hue + a small
 # embedded letter, so masked grayscale TM_CCOEFF_NORMED scores them
 # nearly identically (and finds the X at noisy positions). Instead we
-# compute a saturation-weighted mean BGR over the lower portion of each
-# slot (where the colored suit ribbon + icon dominate, away from the
-# muted face circle) and pick the suit whose pre-computed template-color
-# signature has the highest cosine similarity.
-SUIT_SAMPLE_REL_Y = 0.5  # start sampling at 50% down the slot
-SUIT_SAMPLE_REL_H = 0.5  # ... continue through the bottom edge
-
-# Face-template search window expressed as a fraction of the slot bbox.
-# The suit-icon overlay sits in the lower ~35% of the card, so confining
-# the face search to the upper portion both avoids spurious matches and
-# halves the matchTemplate work per candidate servant.
-FACE_SEARCH_REL_Y = 0.0
-FACE_SEARCH_REL_H = 0.65
-FACE_SEARCH_REL_X = 0.0
-FACE_SEARCH_REL_W = 1.0
+# compute a saturation-weighted mean BGR over the calibrated suit region
+# and pick the suit whose pre-computed template-color signature has the
+# highest cosine similarity.
 
 # Resize the source face PNG to this fraction of the slot width before
-# template-matching. The on-screen face circle takes up roughly the full
-# card width minus the rounded border.
+# template-matching. The search region stays broad because these source
+# assets are full card portraits, not crops of COMMAND_CARD_FACE_REGION.
 FACE_RESIZE_CARD_REL = 0.9
 
 # Crop the source face PNG to its top portion before matching. The bottom
@@ -187,6 +185,8 @@ NP_EMPTY_EDGE_HINT = 0.03           # Slot below this is treated as empty baseli
 NP_READY_BASELINE_RATIO = 2.0       # Slot must exceed baseline * ratio to count.
 NP_READY_STD_BGR = 60.0             # Color-variance backstop: dense art always > this,
                                     # empty backgrounds we've seen sit < 50.
+NP_READY_BRIGHT_MIN = 0.08          # Ready NP cards have a bright card frame / backing;
+                                    # enemy UI in the same band can be edgy but not bright.
 NP_CANNY_LOW = 80
 NP_CANNY_HIGH = 160
 
@@ -1174,6 +1174,90 @@ def _read_integer_digits(
     return value
 
 
+def _read_crit_digits(
+    img: np.ndarray,
+    region: dict,
+    *,
+    prefix: str = "digit-type-crit/",
+    suffix: str = "",
+    min_score: float = 0.72,
+) -> Optional[int]:
+    """Read a command-card critical percentage from a tight card ROI."""
+    template_refs: list[tuple[int, np.ndarray, Optional[np.ndarray]]] = []
+    for digit in range(10):
+        tmpl = _get_template(_digit_template_key(digit, prefix, suffix))
+        if tmpl is None:
+            return None
+        mask = None
+        path = _template_path_for_key(_digit_template_key(digit, prefix, suffix))
+        if path:
+            raw = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+            if raw is not None and raw.ndim == 3 and raw.shape[2] == 4:
+                mask = (raw[:, :, 3] > 32).astype(np.uint8) * 255
+        template_refs.append((digit, tmpl, mask))
+
+    h, w = img.shape[:2]
+    rx = max(0, int(round(region["x"] * w)))
+    ry = max(0, int(round(region["y"] * h)))
+    rw = max(1, min(int(round(region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(region["h"] * h)), h - ry))
+    roi = img[ry : ry + rh, rx : rx + rw]
+    if roi.size == 0:
+        return None
+
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    candidates: list[dict] = []
+    for digit, tmpl, mask in template_refs:
+        for scale in (1.2, 1.1, 1.0, 0.9, 0.8):
+            tw = max(1, int(round(tmpl.shape[1] * scale)))
+            th = max(1, int(round(tmpl.shape[0] * scale)))
+            if tw > rw or th > rh:
+                continue
+            resized = cv2.resize(tmpl, (tw, th), interpolation=cv2.INTER_AREA)
+            resized_mask = None
+            if mask is not None:
+                resized_mask = cv2.resize(mask, (tw, th), interpolation=cv2.INTER_AREA)
+                resized_mask = (resized_mask > 32).astype(np.uint8) * 255
+            res = cv2.matchTemplate(gray, resized, cv2.TM_CCOEFF_NORMED, mask=resized_mask)
+            _min_val, max_val, _min_loc, max_loc = cv2.minMaxLoc(res)
+            score = float(max_val)
+            if not np.isfinite(score) or score < min_score:
+                continue
+            candidates.append(
+                {
+                    "digit": int(digit),
+                    "score": score,
+                    "x": int(max_loc[0]),
+                    "y": int(max_loc[1]),
+                    "w": tw,
+                    "h": th,
+                }
+            )
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda c: -float(c["score"]))
+    kept: list[dict] = []
+    for cand in candidates:
+        cx = float(cand["x"]) + float(cand["w"]) / 2.0
+        cy = float(cand["y"]) + float(cand["h"]) / 2.0
+        if any(
+            abs(cx - (float(k["x"]) + float(k["w"]) / 2.0)) < max(float(cand["w"]), float(k["w"])) * 0.65
+            and abs(cy - (float(k["y"]) + float(k["h"]) / 2.0)) < max(float(cand["h"]), float(k["h"])) * 0.65
+            for k in kept
+        ):
+            continue
+        kept.append(cand)
+    kept.sort(key=lambda c: int(c["x"]))
+    try:
+        value = int("".join(str(c["digit"]) for c in kept))
+    except ValueError:
+        return None
+    if value < 0 or value > 100:
+        return None
+    return value
+
+
 def _read_battle_scene(
     img: np.ndarray, region: dict, debug: bool = False
 ) -> dict:
@@ -1414,7 +1498,7 @@ def _read_battle_scene(
 # cost upfront. Resized variants are cached separately because the on-screen
 # face size is derived from the icon match and varies slightly between
 # devices.
-_face_cache: dict[tuple[str, int], np.ndarray] = {}
+_face_cache: dict[tuple[str, int], tuple[np.ndarray, Optional[np.ndarray]]] = {}
 
 # Per-suit BGR signature: mean color of the opaque template pixels.
 # Populated by ``_ensure_icon_color_sigs`` from the RGBA icon PNGs and
@@ -1480,13 +1564,17 @@ def _list_servant_face_files(assets_dir: str, servant_id: int) -> list[str]:
     return out
 
 
-def _load_face_template(path: str, target_w: int) -> Optional[np.ndarray]:
-    """Load, top-crop, and grayscale-resize a servant face PNG.
+def _load_face_template_pair(
+    path: str,
+    target_w: int,
+) -> Optional[tuple[np.ndarray, Optional[np.ndarray]]]:
+    """Load, top-crop, and grayscale-resize a servant face PNG plus mask.
 
-    The result is the upper :data:`FACE_CROP_REL_H` fraction of the source
-    portrait, scaled so its width is ``target_w`` while preserving the
-    crop's aspect ratio (so the returned shape is ``(target_w *
-    FACE_CROP_REL_H, target_w)``). Cached per ``(path, target_w)`` pair.
+    The template is the upper :data:`FACE_CROP_REL_H` fraction of the
+    source portrait, scaled so its width is ``target_w``. Transparent
+    source pixels are returned as an OpenCV match mask instead of being
+    composited into black corners, which otherwise suppresses scores for
+    portraits with large transparent areas.
     """
     key = (path, target_w)
     cached = _face_cache.get(key)
@@ -1497,25 +1585,45 @@ def _load_face_template(path: str, target_w: int) -> Optional[np.ndarray]:
     if img is None:
         return None
     if img.ndim == 3 and img.shape[2] == 4:
-        # Composite onto a black background so transparent corners don't
-        # bleed into the matched score (the in-game card has dark blue bg
-        # behind the face circle, but black is close enough for matching).
-        bgr = img[:, :, :3]
-        alpha = img[:, :, 3:4].astype(np.float32) / 255.0
-        composed = (bgr.astype(np.float32) * alpha).astype(np.uint8)
-        gray = cv2.cvtColor(composed, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(img[:, :, :3], cv2.COLOR_BGR2GRAY)
+        mask: Optional[np.ndarray] = img[:, :, 3]
     elif img.ndim == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        mask = None
     else:
         gray = img
+        mask = None
 
     crop_h = max(1, int(round(gray.shape[0] * FACE_CROP_REL_H)))
     gray = gray[:crop_h, :]
+    if mask is not None:
+        mask = mask[:crop_h, :]
 
     if target_w > 0 and gray.shape[1] != target_w:
         target_h = max(1, int(round(target_w * gray.shape[0] / gray.shape[1])))
         gray = cv2.resize(gray, (target_w, target_h), interpolation=cv2.INTER_AREA)
-    _face_cache[key] = gray
+        if mask is not None:
+            mask = cv2.resize(mask, (target_w, target_h), interpolation=cv2.INTER_AREA)
+
+    if mask is not None:
+        mask = (mask > 32).astype(np.uint8) * 255
+        if not mask.any() or mask.all():
+            mask = None
+
+    _face_cache[key] = (gray, mask)
+    return gray, mask
+
+
+def _load_face_template(path: str, target_w: int) -> Optional[np.ndarray]:
+    """Load, top-crop, and grayscale-resize a servant face PNG.
+
+    Kept as a thin compatibility wrapper for tests and callers that only
+    need the grayscale template.
+    """
+    pair = _load_face_template_pair(path, target_w)
+    if pair is None:
+        return None
+    gray, _ = pair
     return gray
 
 
@@ -1531,21 +1639,63 @@ def _slot_to_pixels(
     return sx, sy, sw, sh
 
 
-def _suit_sample_bbox(
-    slot_px: tuple[int, int, int, int]
+def _relative_region_bbox(
+    slot_px: tuple[int, int, int, int],
+    rel: dict,
+    *,
+    img_w: int,
+    img_h: int,
+    pad_y_screen: float = 0.0,
+    offset_x_screen: float = 0.0,
 ) -> tuple[int, int, int, int]:
-    """Crop the slot bbox down to the lower portion sampled for the suit
-    color signature."""
+    """Convert a slot-relative subregion to clipped image pixels."""
     sx, sy, sw, sh = slot_px
-    by = sy + int(round(sh * SUIT_SAMPLE_REL_Y))
-    bh = max(1, int(round(sh * SUIT_SAMPLE_REL_H)))
-    bh = min(bh, sy + sh - by)
-    return sx, by, sw, bh
+    pad_y = int(round(pad_y_screen * img_h))
+    offset_x = int(round(offset_x_screen * img_w))
+    x = sx + int(round(float(rel["x"]) * sw)) + offset_x
+    y = sy + int(round(float(rel["y"]) * sh)) - pad_y
+    width = max(1, int(round(float(rel["w"]) * sw)))
+    height = max(1, int(round(float(rel["h"]) * sh))) + pad_y * 2
+    x = max(0, min(x, img_w - 1))
+    y = max(0, min(y, img_h - 1))
+    width = max(1, min(width, img_w - x))
+    height = max(1, min(height, img_h - y))
+    return x, y, width, height
+
+
+def _norm_rect_from_pixels(
+    bbox: tuple[int, int, int, int], img_w: int, img_h: int
+) -> dict:
+    x, y, width, height = bbox
+    return {
+        "x": x / img_w,
+        "y": y / img_h,
+        "w": width / img_w,
+        "h": height / img_h,
+    }
+
+
+def _suit_sample_bbox(
+    slot_px: tuple[int, int, int, int],
+    img_w: int,
+    img_h: int,
+    offset_x_screen: float = 0.0,
+) -> tuple[int, int, int, int]:
+    """Crop the slot bbox down to the calibrated suit-color sample."""
+    return _relative_region_bbox(
+        slot_px,
+        COMMAND_CARD_SUIT_REGION,
+        img_w=img_w,
+        img_h=img_h,
+        pad_y_screen=COMMAND_CARD_Y_WOBBLE_SCREEN,
+        offset_x_screen=offset_x_screen,
+    )
 
 
 def _classify_suit_in_slot(
     bgr_img: np.ndarray,
     slot_px: tuple[int, int, int, int],
+    offset_x_screen: float = 0.0,
 ) -> Optional[tuple[str, float, tuple[int, int, int, int]]]:
     """Identify the suit by color signature.
 
@@ -1563,7 +1713,12 @@ def _classify_suit_in_slot(
     if not _icon_color_sig:
         return None
 
-    sample_bbox = _suit_sample_bbox(slot_px)
+    sample_bbox = _suit_sample_bbox(
+        slot_px,
+        bgr_img.shape[1],
+        bgr_img.shape[0],
+        offset_x_screen,
+    )
     sx, by, sw, bh = sample_bbox
     roi = bgr_img[by : by + bh, sx : sx + sw]
     if roi.size == 0:
@@ -1600,16 +1755,44 @@ def _classify_suit_in_slot(
 
 
 def _face_search_bbox(
-    slot_px: tuple[int, int, int, int]
+    slot_px: tuple[int, int, int, int],
+    img_w: Optional[int] = None,
+    img_h: Optional[int] = None,
 ) -> tuple[int, int, int, int]:
-    """Crop the slot bbox down to the upper portion where the face circle
-    lives (the suit icon overlay sits in the lower ~35%)."""
+    """Crop the slot bbox down to the broad portrait-template search area."""
+    if img_w is None:
+        img_w = slot_px[0] + slot_px[2]
+    if img_h is None:
+        img_h = slot_px[1] + slot_px[3]
     sx, sy, sw, sh = slot_px
-    fx = sx + int(round(FACE_SEARCH_REL_X * sw))
-    fy = sy + int(round(FACE_SEARCH_REL_Y * sh))
-    fw = max(1, int(round(FACE_SEARCH_REL_W * sw)))
-    fh = max(1, int(round(FACE_SEARCH_REL_H * sh)))
-    return fx, fy, fw, fh
+    pad_y = int(round(COMMAND_CARD_Y_WOBBLE_SCREEN * img_h))
+    fx = sx
+    fy = max(0, sy - pad_y)
+    fw = sw
+    fh = max(1, int(round(sh * 0.65)) + pad_y * 2)
+    return (
+        max(0, min(fx, img_w - 1)),
+        max(0, min(fy, img_h - 1)),
+        max(1, min(fw, img_w - fx)),
+        max(1, min(fh, img_h - fy)),
+    )
+
+
+def _command_card_face_region_bbox(
+    slot_px: tuple[int, int, int, int],
+    img_w: int,
+    img_h: int,
+    offset_x_screen: float = 0.0,
+) -> tuple[int, int, int, int]:
+    """Return the calibrated visual face region for debug overlays."""
+    return _relative_region_bbox(
+        slot_px,
+        COMMAND_CARD_FACE_REGION,
+        img_w=img_w,
+        img_h=img_h,
+        pad_y_screen=COMMAND_CARD_Y_WOBBLE_SCREEN,
+        offset_x_screen=offset_x_screen,
+    )
 
 
 def _identify_servant_in_slot(
@@ -1622,7 +1805,7 @@ def _identify_servant_in_slot(
     """Match every candidate face PNG inside the slot's face-search bbox
     and return the best ``{"servantId":..,"ascension":..,"faceScore":..}``
     above threshold, or ``None`` if nothing matched."""
-    fx, fy, fw, fh = _face_search_bbox(slot_px)
+    fx, fy, fw, fh = _face_search_bbox(slot_px, gray_img.shape[1], gray_img.shape[0])
     roi = gray_img[fy : fy + fh, fx : fx + fw]
     if roi.size == 0:
         return None
@@ -1636,12 +1819,17 @@ def _identify_servant_in_slot(
     best: Optional[dict] = None
     for sid in servant_ids:
         for path in _list_servant_face_files(assets_dir, sid):
-            tmpl = _load_face_template(path, target)
-            if tmpl is None or tmpl.shape[0] > roi.shape[0] or tmpl.shape[1] > roi.shape[1]:
+            pair = _load_face_template_pair(path, target)
+            if pair is None:
                 continue
-            res = cv2.matchTemplate(roi, tmpl, cv2.TM_CCOEFF_NORMED)
+            tmpl, mask = pair
+            if tmpl.shape[0] > roi.shape[0] or tmpl.shape[1] > roi.shape[1]:
+                continue
+            res = cv2.matchTemplate(roi, tmpl, cv2.TM_CCOEFF_NORMED, mask=mask)
             _, mv, _, _ = cv2.minMaxLoc(res)
             score = float(mv)
+            if not np.isfinite(score):
+                continue
             if score < threshold:
                 continue
             if best is None or score > best["faceScore"]:
@@ -1702,6 +1890,11 @@ def _find_command_cards(
     for slot, region in enumerate(card_regions):
         slot_px = _slot_to_pixels(region, w, h)
         sx, sy, sw, sh = slot_px
+        subregion_x_offset = (
+            COMMAND_CARD_SUBREGION_X_OFFSETS[slot]
+            if slot < len(COMMAND_CARD_SUBREGION_X_OFFSETS)
+            else 0.0
+        )
 
         record: dict = {
             "slot": slot,
@@ -1716,7 +1909,7 @@ def _find_command_cards(
             },
         }
 
-        suit_match = _classify_suit_in_slot(img, slot_px)
+        suit_match = _classify_suit_in_slot(img, slot_px, subregion_x_offset)
         if suit_match is not None:
             suit, sscore, sample_bbox = suit_match
             bx, by, bw, bh = sample_bbox
@@ -1732,13 +1925,22 @@ def _find_command_cards(
                 "h": bh / h,
             }
 
-        fx, fy, fw, fh = _face_search_bbox(slot_px)
-        record["faceRegion"] = {
-            "x": fx / w,
-            "y": fy / h,
-            "w": fw / w,
-            "h": fh / h,
-        }
+        face_bbox = _command_card_face_region_bbox(slot_px, w, h, subregion_x_offset)
+        record["faceRegion"] = _norm_rect_from_pixels(face_bbox, w, h)
+
+        crit_bbox = _relative_region_bbox(
+            slot_px,
+            COMMAND_CARD_CRIT_REGION,
+            img_w=w,
+            img_h=h,
+            pad_y_screen=COMMAND_CARD_Y_WOBBLE_SCREEN,
+            offset_x_screen=subregion_x_offset,
+        )
+        crit_region = _norm_rect_from_pixels(crit_bbox, w, h)
+        record["critRegion"] = crit_region
+        crit = _read_crit_digits(img, crit_region)
+        if crit is not None:
+            record["critChance"] = int(crit)
 
         if can_identify:
             ident = _identify_servant_in_slot(
@@ -1757,6 +1959,7 @@ def _find_command_cards(
 def _decide_np_ready(
     edge_fracs: list[float],
     std_bgrs: list[float],
+    bright_fracs: Optional[list[float]] = None,
     edge_threshold: float | None = None,
 ) -> tuple[list[bool], float]:
     """Decide ready/empty for each NP slot from its edge + color signals.
@@ -1779,11 +1982,11 @@ def _decide_np_ready(
         all-busy-background) use the conservative absolute cutoff
         ``NP_READY_EDGE_HIGH``.
 
-    A high color-variance signal (``stdBgr >= NP_READY_STD_BGR``) also
-    marks a slot ready independent of edge density. This catches dark-
-    art ready cards in scenes where no slot is clearly empty to anchor
-    the baseline; both fixtures we have show ready slots clear ~80
-    while empty slots sit < 50.
+    A high color-variance signal (``stdBgr >= NP_READY_STD_BGR``) can
+    also satisfy the edge/texture side of the decision. In the adaptive
+    path, the slot must additionally contain enough very bright pixels
+    from the NP card frame/backing; otherwise busy enemy UI in the same
+    upper band can look edgy enough to exceed the cutoff.
 
     Returns ``(ready_flags, edge_threshold_used)`` so callers can echo
     the active threshold back to the debug UI for visibility.
@@ -1793,6 +1996,8 @@ def _decide_np_ready(
 
     if not edge_fracs:
         return ([], NP_READY_EDGE_HIGH)
+    if bright_fracs is None:
+        bright_fracs = [1.0 for _ in edge_fracs]
 
     baseline = min(edge_fracs)
     if baseline < NP_EMPTY_EDGE_HINT:
@@ -1801,8 +2006,9 @@ def _decide_np_ready(
         edge_thr = NP_READY_EDGE_HIGH
 
     flags = [
-        (e >= edge_thr) or (s >= NP_READY_STD_BGR)
-        for e, s in zip(edge_fracs, std_bgrs)
+        ((e >= edge_thr) or (s >= NP_READY_STD_BGR))
+        and (b >= NP_READY_BRIGHT_MIN)
+        for e, s, b in zip(edge_fracs, std_bgrs, bright_fracs)
     ]
     return (flags, edge_thr)
 
@@ -1831,26 +2037,31 @@ def _find_noble_phantasms(
     if h == 0 or w == 0 or not np_regions:
         return {"slots": [], "edgeThreshold": NP_READY_EDGE_HIGH}
 
-    measurements: list[tuple[int, int, int, int, float, float]] = []
+    measurements: list[tuple[int, int, int, int, float, float, float]] = []
     for region in np_regions:
         sx, sy, sw, sh = _slot_to_pixels(region, w, h)
         roi = img[sy : sy + sh, sx : sx + sw]
         if roi.size == 0:
             edge_frac = 0.0
             std_bgr = 0.0
+            bright_frac = 0.0
         else:
             gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
             edges = cv2.Canny(gray, NP_CANNY_LOW, NP_CANNY_HIGH)
             edge_frac = float((edges > 0).mean())
             std_bgr = float(roi.std())
-        measurements.append((sx, sy, sw, sh, edge_frac, std_bgr))
+            bright_frac = float((gray > 200).mean())
+        measurements.append((sx, sy, sw, sh, edge_frac, std_bgr, bright_frac))
 
     edge_fracs = [m[4] for m in measurements]
     std_bgrs = [m[5] for m in measurements]
-    ready_flags, edge_thr = _decide_np_ready(edge_fracs, std_bgrs, edge_threshold)
+    bright_fracs = [m[6] for m in measurements]
+    ready_flags, edge_thr = _decide_np_ready(
+        edge_fracs, std_bgrs, bright_fracs, edge_threshold
+    )
 
     slots: list[dict] = []
-    for slot, ((sx, sy, sw, sh, edge_frac, std_bgr), ready) in enumerate(
+    for slot, ((sx, sy, sw, sh, edge_frac, std_bgr, _bright_frac), ready) in enumerate(
         zip(measurements, ready_flags)
     ):
         slots.append({
