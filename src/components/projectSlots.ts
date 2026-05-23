@@ -13,6 +13,7 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceMlbRequired: true,
     },
     {
       id: "slot-1",
@@ -20,6 +21,7 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceMlbRequired: true,
     },
     {
       id: "slot-2",
@@ -27,6 +29,7 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceMlbRequired: true,
     },
     {
       id: "slot-3",
@@ -34,6 +37,7 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceMlbRequired: true,
     },
     {
       id: "slot-4",
@@ -41,6 +45,7 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceMlbRequired: true,
     },
     {
       id: "slot-5",
@@ -48,6 +53,7 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceMlbRequired: true,
     },
   ];
 }

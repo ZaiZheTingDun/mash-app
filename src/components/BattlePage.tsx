@@ -217,6 +217,14 @@ export function BattlePage({
       supportSlotIndex:
         supportSlot != null ? selectedProject.slots?.indexOf(supportSlot) ?? null : null,
       supportCraftEssenceId: supportSlot?.craftEssenceId ?? null,
+      supportCraftEssenceMlbRequired:
+        supportSlot?.craftEssenceMlbRequired ?? true,
+      supportGrandMode: selectedProject.supportGrandMode ?? false,
+      supportGrandCraftEssenceIds:
+        selectedProject.supportGrandCraftEssenceIds ?? [null, null, null],
+      supportGrandCraftEssenceMlbRequired:
+        selectedProject.supportGrandCraftEssenceMlbRequired ?? [true, true, true],
+      supportGrandBondCeMode: selectedProject.supportGrandBondCeMode ?? "any",
       supportNoblePhantasmLevelMin:
         selectedProject.supportNoblePhantasmLevelMin ?? null,
       supportSkillLevelMins:

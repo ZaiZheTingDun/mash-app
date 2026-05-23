@@ -426,6 +426,20 @@ export function DebugCanvas({
             >
               <span className="debug-overlay-label">助战列表</span>
             </Box>
+            {supportResult.diagnostics.supportRowAnchorSearchRegion ? (
+              <Box
+                key="support-row-anchor-search-region"
+                className="debug-overlay-box debug-overlay-support-anchor-search"
+                style={{
+                  left: `${supportResult.diagnostics.supportRowAnchorSearchRegion.x * 100}%`,
+                  top: `${supportResult.diagnostics.supportRowAnchorSearchRegion.y * 100}%`,
+                  width: `${supportResult.diagnostics.supportRowAnchorSearchRegion.w * 100}%`,
+                  height: `${supportResult.diagnostics.supportRowAnchorSearchRegion.h * 100}%`,
+                }}
+              >
+                <span className="debug-overlay-label">确认搜索</span>
+              </Box>
+            ) : null}
             {supportResult.diagnostics.nameCandidates.map((c, i) => (
               <Box
                 key={`support-name-cand-${i}`}
@@ -498,6 +512,23 @@ export function DebugCanvas({
               </Box>
             ))}
             {supportResult.supports.map((s, i) =>
+              s.scoreAnchor ? (
+                <Box
+                  key={`support-score-anchor-${i}`}
+                  className="debug-overlay-box debug-overlay-support-score-anchor"
+                  style={{
+                    left: `${s.scoreAnchor.x * 100}%`,
+                    top: `${s.scoreAnchor.y * 100}%`,
+                    width: `${s.scoreAnchor.w * 100}%`,
+                    height: `${s.scoreAnchor.h * 100}%`,
+                  }}
+                  title={`row anchor (${s.scoreAnchor.x.toFixed(3)}, ${s.scoreAnchor.y.toFixed(3)}, ${s.scoreAnchor.w.toFixed(3)}, ${s.scoreAnchor.h.toFixed(3)})`}
+                >
+                  <span className="debug-overlay-label">确认 {i + 1}</span>
+                </Box>
+              ) : null
+            )}
+            {supportResult.supports.map((s, i) =>
               s.ce ? (
                 <Box
                   key={`support-ce-${i}`}
@@ -522,6 +553,55 @@ export function DebugCanvas({
                 </Box>
               ) : null
             )}
+            {supportResult.supports.flatMap((s, rowIndex) =>
+              (s.grandCes ?? []).map((ce, ceIndex) => (
+                <Box
+                  key={`support-grand-ce-${rowIndex}-${ceIndex}`}
+                  className="debug-overlay-box debug-overlay-support-ce"
+                  style={{
+                    left: `${ce.region.x * 100}%`,
+                    top: `${ce.region.y * 100}%`,
+                    width: `${ce.region.w * 100}%`,
+                    height: `${ce.region.h * 100}%`,
+                    outline: `2px solid ${ce.passed ? "#3fb950" : "#f85149"}`,
+                  }}
+                  title={
+                    ce.error
+                      ? `Grand CE ${ceIndex + 1} verify error: ${ce.error}`
+                      : `Grand CE ${ceIndex + 1} score ${ce.score.toFixed(3)} (threshold ${ce.threshold.toFixed(2)})`
+                  }
+                >
+                  <span className="debug-overlay-label">
+                    冠{ceIndex + 1} {ce.score.toFixed(2)}/
+                    {ce.threshold.toFixed(2)} {ce.passed ? "✓" : "✗"}
+                  </span>
+                </Box>
+              ))
+            )}
+            {supportResult.supports.flatMap((s, rowIndex) => {
+              const checks = [
+                ...(s.ce?.iconChecks ?? []),
+                ...(s.grandCes ?? []).flatMap((ce) => ce.iconChecks ?? []),
+              ];
+              return checks.map((check, checkIndex) => (
+                <Box
+                  key={`support-ce-icon-${rowIndex}-${checkIndex}-${check.kind}`}
+                  className="debug-overlay-box debug-overlay-support-ce"
+                  style={{
+                    left: `${check.region.x * 100}%`,
+                    top: `${check.region.y * 100}%`,
+                    width: `${check.region.w * 100}%`,
+                    height: `${check.region.h * 100}%`,
+                    outline: `2px dashed ${check.passed ? "#3fb950" : "#f85149"}`,
+                  }}
+                  title={`${check.kind} ${check.templateKey} ${check.score.toFixed(3)} / ${check.threshold.toFixed(2)}`}
+                >
+                  <span className="debug-overlay-label">
+                    {check.kind} {check.score.toFixed(2)} {check.passed ? "✓" : "✗"}
+                  </span>
+                </Box>
+              ));
+            })}
           </>
         )}
         {showCoordOverlay &&

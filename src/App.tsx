@@ -245,6 +245,7 @@ function App({ theme, onThemeChange }: AppProps) {
         s.craftEssenceId != null
           ? (craftEssences.find((c) => c.id === s.craftEssenceId) ?? null)
           : null,
+      craftEssenceMlbRequired: s.craftEssenceMlbRequired ?? true,
     }));
   }, [activeProject, servants, craftEssences]);
 
@@ -260,6 +261,7 @@ function App({ theme, onThemeChange }: AppProps) {
         servantId: s.servant?.id ?? null,
         servantVariantKey: s.servant?.variantKey ?? null,
         craftEssenceId: s.craftEssence?.id ?? null,
+        craftEssenceMlbRequired: s.craftEssenceMlbRequired ?? true,
       }));
       void handleUpdateProject({ ...activeProject, slots: projectSlots });
     },

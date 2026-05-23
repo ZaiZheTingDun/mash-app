@@ -16,9 +16,11 @@ import {
 } from "@radix-ui/react-icons";
 import { emit, invoke, listen, convertFileSrc } from "../tauri";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { LogicalSize } from "@tauri-apps/api/dpi";
 import type { CvConfig } from "../types/cv";
 import type { CraftEssence } from "../types/craftEssence";
 import type { Servant } from "../types/servant";
+import type { SupportGrandBondCeMode } from "../types/project";
 import type { DebugCanvasState } from "./DebugCanvas";
 import {
   DEBUG_CANVAS_REQUEST_EVENT,
@@ -285,7 +287,18 @@ export interface SupportCeInfoDto {
   score: number;
   passed: boolean;
   threshold: number;
+  iconChecks?: SupportCeIconCheckDto[];
   templatePath?: string;
+  error?: string;
+}
+
+export interface SupportCeIconCheckDto {
+  kind: string;
+  templateKey: string;
+  region: NormRectDto;
+  score: number;
+  passed: boolean;
+  threshold: number;
   error?: string;
 }
 
@@ -298,6 +311,7 @@ export interface SupportRowMatchDto {
   npText: string;
   npScore: number;
   npRegion: NormRectDto;
+  scoreAnchor?: NormRectDto | null;
   npMatchedName: string;
   npLevel?: number | null;
   skillPanel?: "owned" | "append" | null;
@@ -316,6 +330,7 @@ export interface SupportRowMatchDto {
    * `SUPPORT_CE_THRESHOLD` can be calibrated against real captures.
    */
   ce?: SupportCeInfoDto;
+  grandCes?: SupportCeInfoDto[];
 }
 
 export interface SupportCandidateDto {
@@ -345,6 +360,7 @@ export interface SupportDiagnosticsDto {
   cvFile?: string;
   cvFingerprint?: string;
   supportSkillContourSplit?: boolean;
+  supportRowAnchorSearchRegion?: NormRectDto | null;
 }
 
 export interface FindSupportsResultDto {
@@ -405,6 +421,27 @@ interface DebugPageProps {
 }
 
 type DebugServantPickerTarget = "card" | "support" | "enhancement";
+const DEBUG_CANVAS_POPOUT_WIDTH = 1280;
+const DEBUG_CANVAS_POPOUT_HEIGHT = 900;
+const DEBUG_PREFS_STORAGE_KEY = "mash.debugPagePrefs.v1";
+
+interface DebugPagePrefs {
+  selectedScreen?: string;
+  selectedElement?: string;
+  rawTemplateInput?: string;
+  threshold?: number;
+  selectedCardServantIds?: number[];
+  supportServantId?: number | null;
+  supportCraftEssenceId?: number | null;
+  supportCraftEssenceMlbRequired?: boolean;
+  supportGrandCraftEssenceIds?: [number | null, number | null, number | null];
+  supportGrandCraftEssenceMlbRequired?: [boolean, boolean, boolean];
+  supportGrandBondCeMode?: SupportGrandBondCeMode;
+  enhancementServantId?: number | null;
+  enhancementServantThreshold?: string;
+  showCoordOverlay?: boolean;
+  visibleCoordGroups?: string[];
+}
 
 function timestamp(): string {
   const d = new Date();
@@ -413,21 +450,71 @@ function timestamp(): string {
     .join(":");
 }
 
+function readDebugPrefs(): DebugPagePrefs {
+  try {
+    const raw = window.localStorage.getItem(DEBUG_PREFS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as DebugPagePrefs;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeDebugPrefs(prefs: DebugPagePrefs) {
+  try {
+    window.localStorage.setItem(DEBUG_PREFS_STORAGE_KEY, JSON.stringify(prefs));
+  } catch {
+    // Debug preferences are best-effort; private mode/quota errors should
+    // never break the page.
+  }
+}
+
+function asNumberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function asGrandCeIds(value: unknown): [number | null, number | null, number | null] {
+  if (!Array.isArray(value)) return [null, null, null];
+  return [
+    asNumberOrNull(value[0]),
+    asNumberOrNull(value[1]),
+    asNumberOrNull(value[2]),
+  ];
+}
+
+function asGrandMlbRequired(value: unknown): [boolean, boolean, boolean] {
+  if (!Array.isArray(value)) return [true, true, true];
+  return [value[0] !== false, value[1] !== false, value[2] !== false];
+}
+
 export function DebugPage({
   onBack,
   servants,
   craftEssences,
   defaultCardServantIds,
 }: DebugPageProps) {
+  const initialPrefs = useMemo(() => readDebugPrefs(), []);
   const [capture, setCapture] = useState<DebugCaptureResult | null>(null);
   const [cacheBuster, setCacheBuster] = useState(0);
 
   const [cvConfig, setCvConfig] = useState<CvConfig | null>(null);
   const [templateKeys, setTemplateKeys] = useState<string[]>([]);
-  const [selectedScreen, setSelectedScreen] = useState<string>("");
-  const [selectedElement, setSelectedElement] = useState<string>("");
-  const [rawTemplateInput, setRawTemplateInput] = useState("");
-  const [threshold, setThreshold] = useState(0.8);
+  const [selectedScreen, setSelectedScreen] = useState<string>(
+    initialPrefs.selectedScreen ?? ""
+  );
+  const [selectedElement, setSelectedElement] = useState<string>(
+    initialPrefs.selectedElement ?? ""
+  );
+  const [rawTemplateInput, setRawTemplateInput] = useState(
+    initialPrefs.rawTemplateInput ?? ""
+  );
+  const [threshold, setThreshold] = useState(
+    typeof initialPrefs.threshold === "number" &&
+      Number.isFinite(initialPrefs.threshold)
+      ? Math.max(0, Math.min(1, initialPrefs.threshold))
+      : 0.8
+  );
 
   const [probes, setProbes] = useState<ProbeResult[]>([]);
   const [capturing, setCapturing] = useState(false);
@@ -438,9 +525,11 @@ export function DebugPage({
   const [coordinates, setCoordinates] = useState<RunnerCoordinatesDto | null>(
     null
   );
-  const [showCoordOverlay, setShowCoordOverlay] = useState(false);
+  const [showCoordOverlay, setShowCoordOverlay] = useState(
+    initialPrefs.showCoordOverlay === true
+  );
   const [visibleCoordGroups, setVisibleCoordGroups] = useState<Set<string>>(
-    new Set()
+    () => new Set(initialPrefs.visibleCoordGroups ?? [])
   );
 
   const [availableServantIds, setAvailableServantIds] = useState<number[]>([]);
@@ -450,7 +539,13 @@ export function DebugPage({
   // view router so we'll re-seed naturally.
   const [selectedCardServantIds, setSelectedCardServantIds] = useState<
     number[]
-  >(() => defaultCardServantIds);
+  >(() =>
+    Array.isArray(initialPrefs.selectedCardServantIds)
+      ? initialPrefs.selectedCardServantIds.filter(
+          (id): id is number => typeof id === "number" && Number.isFinite(id)
+        )
+      : defaultCardServantIds
+  );
   const [commandCards, setCommandCards] = useState<CommandCardMatchDto[]>([]);
   const [findingCards, setFindingCards] = useState(false);
   const [noblePhantasms, setNoblePhantasms] = useState<NoblePhantasmMatchDto[]>(
@@ -463,18 +558,34 @@ export function DebugPage({
   const [attackButton, setAttackButton] =
     useState<AttackButtonResultDto | null>(null);
   const [findingAttackButton, setFindingAttackButton] = useState(false);
-  const [supportServantId, setSupportServantId] = useState<number | null>(null);
+  const [supportServantId, setSupportServantId] = useState<number | null>(
+    asNumberOrNull(initialPrefs.supportServantId)
+  );
   const [supportCraftEssenceId, setSupportCraftEssenceId] =
-    useState<number | null>(null);
+    useState<number | null>(asNumberOrNull(initialPrefs.supportCraftEssenceId));
+  const [supportCraftEssenceMlbRequired, setSupportCraftEssenceMlbRequired] =
+    useState(initialPrefs.supportCraftEssenceMlbRequired !== false);
+  const [supportGrandCraftEssenceIds, setSupportGrandCraftEssenceIds] =
+    useState<[number | null, number | null, number | null]>(() =>
+      asGrandCeIds(initialPrefs.supportGrandCraftEssenceIds)
+    );
+  const [
+    supportGrandCraftEssenceMlbRequired,
+    setSupportGrandCraftEssenceMlbRequired,
+  ] = useState<[boolean, boolean, boolean]>(() =>
+    asGrandMlbRequired(initialPrefs.supportGrandCraftEssenceMlbRequired)
+  );
+  const [supportGrandBondCeMode, setSupportGrandBondCeMode] =
+    useState<SupportGrandBondCeMode>(initialPrefs.supportGrandBondCeMode ?? "any");
   const [supportMetadata, setSupportMetadata] =
     useState<ServantMetadataDto | null>(null);
   const [supportResult, setSupportResult] =
     useState<FindSupportsResultDto | null>(null);
   const [findingSupports, setFindingSupports] = useState(false);
   const [enhancementServantId, setEnhancementServantId] =
-    useState<number | null>(null);
+    useState<number | null>(asNumberOrNull(initialPrefs.enhancementServantId));
   const [enhancementServantThreshold, setEnhancementServantThreshold] =
-    useState("0.85");
+    useState(initialPrefs.enhancementServantThreshold ?? "0.85");
   const [enhancementServantResult, setEnhancementServantResult] =
     useState<EnhancementServantMatchResultDto | null>(null);
   const [findingEnhancementServant, setFindingEnhancementServant] =
@@ -482,6 +593,9 @@ export function DebugPage({
   const [servantPickerTarget, setServantPickerTarget] =
     useState<DebugServantPickerTarget | null>(null);
   const [craftEssencePickerOpen, setCraftEssencePickerOpen] = useState(false);
+  const [craftEssencePickerTarget, setCraftEssencePickerTarget] = useState<
+    "single" | 0 | 1 | 2 | null
+  >(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const didShutdown = useRef(false);
   const [popoutOpen, setPopoutOpen] = useState(false);
@@ -503,13 +617,15 @@ export function DebugPage({
       setCvConfig(cfg);
       const screenNames = Object.keys(cfg.screens || {});
       log(`已加载 cv.json，screens: ${screenNames.join(", ") || "(空)"}`);
-      if (screenNames.length > 0 && !selectedScreen) {
-        setSelectedScreen(screenNames[0]);
-      }
+      setSelectedScreen((current) =>
+        screenNames.length > 0 && !screenNames.includes(current)
+          ? screenNames[0]
+          : current
+      );
     } catch (err) {
       log(`读取 cv.json 失败: ${err}`, "error");
     }
-  }, [log, selectedScreen]);
+  }, [log]);
 
   const loadTemplateList = useCallback(async () => {
     try {
@@ -562,6 +678,47 @@ export function DebugPage({
     loadCoordinates();
     loadAvailableServantIds();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const visibleCoordGroupIds = useMemo(
+    () => Array.from(visibleCoordGroups),
+    [visibleCoordGroups]
+  );
+
+  useEffect(() => {
+    writeDebugPrefs({
+      selectedScreen,
+      selectedElement,
+      rawTemplateInput,
+      threshold,
+      selectedCardServantIds,
+      supportServantId,
+      supportCraftEssenceId,
+      supportCraftEssenceMlbRequired,
+      supportGrandCraftEssenceIds,
+      supportGrandCraftEssenceMlbRequired,
+      supportGrandBondCeMode,
+      enhancementServantId,
+      enhancementServantThreshold,
+      showCoordOverlay,
+      visibleCoordGroups: visibleCoordGroupIds,
+    });
+  }, [
+    selectedScreen,
+    selectedElement,
+    rawTemplateInput,
+    threshold,
+    selectedCardServantIds,
+    supportServantId,
+    supportCraftEssenceId,
+    supportCraftEssenceMlbRequired,
+    supportGrandCraftEssenceIds,
+    supportGrandCraftEssenceMlbRequired,
+    supportGrandBondCeMode,
+    enhancementServantId,
+    enhancementServantThreshold,
+    showCoordOverlay,
+    visibleCoordGroupIds,
+  ]);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -782,6 +939,9 @@ export function DebugPage({
   const selectedSupportCraftEssence = supportCraftEssenceId
     ? craftEssences.find((ce) => ce.id === supportCraftEssenceId) ?? null
     : null;
+  const selectedSupportGrandCraftEssences = supportGrandCraftEssenceIds.map((id) =>
+    id == null ? null : craftEssences.find((ce) => ce.id === id) ?? null
+  );
 
   const displayServantName = useCallback(
     (id: number) => {
@@ -1038,6 +1198,10 @@ export function DebugPage({
         {
           servantId: supportServantId,
           craftEssenceId: supportCraftEssenceId,
+          grandCraftEssenceIds: supportGrandCraftEssenceIds,
+          craftEssenceMlbRequired: supportCraftEssenceMlbRequired,
+          grandCraftEssenceMlbRequired: supportGrandCraftEssenceMlbRequired,
+          grandBondCeMode: supportGrandBondCeMode,
         }
       );
       setSupportResult(result);
@@ -1102,13 +1266,27 @@ export function DebugPage({
             : "";
           const skillDiag = supportSkillDiagnosticsText(s.skillLevelDiagnostics);
           const skillDiagPart = skillDiag ? ` | 技能诊断 ${skillDiag}` : "";
+          const scoreAnchorPart = s.scoreAnchor
+            ? ` | 确认锚点 (${s.scoreAnchor.x.toFixed(3)}, ${s.scoreAnchor.y.toFixed(3)})`
+            : " | 确认锚点未识别";
+          const iconCheckPart = [
+            ...(s.ce?.iconChecks ?? []),
+            ...(s.grandCes ?? []).flatMap((ce) => ce.iconChecks ?? []),
+          ]
+            .map(
+              (check) =>
+                `${check.kind} ${check.score.toFixed(2)}/${check.threshold.toFixed(2)} ${check.passed ? "✓" : "✗"}`
+            )
+            .join(" · ");
           log(
             `  行 y=${s.rowRegion.y.toFixed(3)} | 名称='${s.nameText}' (${s.nameScore.toFixed(2)})` +
               npPart +
               npLevelPart +
               skillPart +
               skillDiagPart +
-              cePart
+              scoreAnchorPart +
+              cePart +
+              (iconCheckPart ? ` | 图标 ${iconCheckPart}` : "")
           );
         }
       }
@@ -1121,6 +1299,10 @@ export function DebugPage({
     capture,
     supportServantId,
     supportCraftEssenceId,
+    supportGrandCraftEssenceIds,
+    supportCraftEssenceMlbRequired,
+    supportGrandCraftEssenceMlbRequired,
+    supportGrandBondCeMode,
     supportMetadata,
     displayServantName,
     log,
@@ -1138,6 +1320,9 @@ export function DebugPage({
     try {
       const existing = await WebviewWindow.getByLabel("debug-canvas");
       if (existing) {
+        await existing.setSize(
+          new LogicalSize(DEBUG_CANVAS_POPOUT_WIDTH, DEBUG_CANVAS_POPOUT_HEIGHT)
+        );
         await existing.show();
         await existing.setFocus();
         log("已聚焦弹出画面");
@@ -1146,8 +1331,8 @@ export function DebugPage({
       const win = new WebviewWindow("debug-canvas", {
         url: "index.html#debug-canvas",
         title: "调试画面",
-        width: 1280,
-        height: 720,
+        width: DEBUG_CANVAS_POPOUT_WIDTH,
+        height: DEBUG_CANVAS_POPOUT_HEIGHT,
         resizable: true,
       });
       // Wait for the OS to finish creating the webview before
@@ -1639,7 +1824,10 @@ export function DebugPage({
                 type="button"
                 size="1"
                 variant="surface"
-                onClick={() => setCraftEssencePickerOpen(true)}
+                onClick={() => {
+                  setCraftEssencePickerTarget("single");
+                  setCraftEssencePickerOpen(true);
+                }}
                 title="留空跳过礼装识别。选择后会按行运行 verify_support_ce 并叠加搜索框 + 分数。"
               >
                 {selectedSupportCraftEssence
@@ -1652,9 +1840,86 @@ export function DebugPage({
                   size="1"
                   variant="ghost"
                   color="gray"
-                  onClick={() => setSupportCraftEssenceId(null)}
+                  onClick={() => {
+                    setSupportCraftEssenceId(null);
+                    setSupportCraftEssenceMlbRequired(true);
+                  }}
                 >
                   清除礼装
+                </Button>
+              )}
+              <label className="debug-coord-toggle">
+                <Checkbox
+                  checked={supportCraftEssenceMlbRequired}
+                  onCheckedChange={(checked) =>
+                    setSupportCraftEssenceMlbRequired(checked === true)
+                  }
+                />
+                <Text size="1">满破</Text>
+              </label>
+              {[0, 1, 2].map((index) => {
+                const ce = selectedSupportGrandCraftEssences[index];
+                return (
+                  <Flex key={index} align="center" gap="1">
+                    <Button
+                      type="button"
+                      size="1"
+                      variant="surface"
+                      onClick={() => {
+                        setCraftEssencePickerTarget(index as 0 | 1 | 2);
+                        setCraftEssencePickerOpen(true);
+                      }}
+                      title="冠位战右侧三张礼装按位置匹配；留空的位置不校验。"
+                    >
+                      {ce ? `冠${index + 1}: ${ce.name}` : `冠位礼装 ${index + 1}`}
+                    </Button>
+                    <label className="debug-coord-toggle">
+                      <Checkbox
+                        checked={supportGrandCraftEssenceMlbRequired[index]}
+                        onCheckedChange={(checked) => {
+                          setSupportGrandCraftEssenceMlbRequired((prev) => {
+                            const next = [...prev] as [boolean, boolean, boolean];
+                            next[index] = checked === true;
+                            return next;
+                          });
+                        }}
+                      />
+                      <Text size="1">满破</Text>
+                    </label>
+                  </Flex>
+                );
+              })}
+              <Flex gap="1" align="center">
+                <Text size="1" color="gray">
+                  冠2牵绊
+                </Text>
+                <Select.Root
+                  value={supportGrandBondCeMode}
+                  onValueChange={(value) =>
+                    setSupportGrandBondCeMode(value as SupportGrandBondCeMode)
+                  }
+                >
+                  <Select.Trigger aria-label="Debug 冠位第二礼装牵绊形态" />
+                  <Select.Content>
+                    <Select.Item value="any">任意</Select.Item>
+                    <Select.Item value="bond">原始</Select.Item>
+                    <Select.Item value="bondNp">连接</Select.Item>
+                  </Select.Content>
+                </Select.Root>
+              </Flex>
+              {supportGrandCraftEssenceIds.some((id) => id != null) && (
+                <Button
+                  type="button"
+                  size="1"
+                  variant="ghost"
+                  color="gray"
+                  onClick={() => {
+                    setSupportGrandCraftEssenceIds([null, null, null]);
+                    setSupportGrandCraftEssenceMlbRequired([true, true, true]);
+                    setSupportGrandBondCeMode("any");
+                  }}
+                >
+                  清除冠位礼装
                 </Button>
               )}
               <Button
@@ -2102,17 +2367,54 @@ export function DebugPage({
                     行 y={s.rowRegion.y.toFixed(3)} h=
                     {s.rowRegion.h.toFixed(3)}
                   </Text>
+                  <Text size="1" color={s.scoreAnchor ? "green" : "amber"}>
+                    确认锚点：
+                    {s.scoreAnchor
+                      ? `(${s.scoreAnchor.x.toFixed(3)}, ${s.scoreAnchor.y.toFixed(3)}, ${s.scoreAnchor.w.toFixed(3)}, ${s.scoreAnchor.h.toFixed(3)})`
+                      : "未识别"}
+                  </Text>
                   {s.ce && (
-                    <Text
-                      size="1"
-                      color={s.ce.passed ? "green" : "red"}
-                    >
-                      礼装 {s.ce.score.toFixed(3)} /{" "}
-                      {s.ce.threshold.toFixed(2)}{" "}
-                      {s.ce.passed ? "✓ 匹配" : "✗ 未达阈值"}
-                      {s.ce.error ? ` · ${s.ce.error}` : ""}
-                    </Text>
+                    <>
+                      <Text
+                        size="1"
+                        color={s.ce.passed ? "green" : "red"}
+                      >
+                        礼装 {s.ce.score.toFixed(3)} /{" "}
+                        {s.ce.threshold.toFixed(2)}{" "}
+                        {s.ce.passed ? "✓ 匹配" : "✗ 未达阈值"}
+                        {s.ce.error ? ` · ${s.ce.error}` : ""}
+                      </Text>
+                      {(s.ce.iconChecks ?? []).map((check) => (
+                        <Text
+                          key={`ce-icon-${check.kind}-${check.templateKey}`}
+                          size="1"
+                          color={check.passed ? "green" : "red"}
+                        >
+                          图标 {check.kind}: {check.score.toFixed(3)} /{" "}
+                          {check.threshold.toFixed(2)}{" "}
+                          {check.passed ? "✓" : "✗"}
+                          {check.error ? ` · ${check.error}` : ""}
+                        </Text>
+                      ))}
+                    </>
                   )}
+                  {(s.grandCes ?? []).map((ce, ceIndex) => (
+                    <Text
+                      key={`grand-ce-side-${i}-${ceIndex}`}
+                      size="1"
+                      color={ce.passed ? "green" : "red"}
+                    >
+                      冠{ceIndex + 1} {ce.score.toFixed(3)} /{" "}
+                      {ce.threshold.toFixed(2)}{" "}
+                      {ce.passed ? "✓" : "✗"}
+                      {(ce.iconChecks ?? [])
+                        .map(
+                          (check) =>
+                            ` · ${check.kind} ${check.score.toFixed(2)}${check.passed ? "✓" : "✗"}`
+                        )
+                        .join("")}
+                    </Text>
+                  ))}
                 </Box>
               ))}
               {supportResult && supportResult.supports.length === 0 && (
@@ -2208,12 +2510,46 @@ export function DebugPage({
       />
       <CraftEssenceSelectDialog
         open={craftEssencePickerOpen}
-        onOpenChange={setCraftEssencePickerOpen}
+        onOpenChange={(open) => {
+          setCraftEssencePickerOpen(open);
+          if (!open) setCraftEssencePickerTarget(null);
+        }}
         onSelect={(ce) => {
-          setSupportCraftEssenceId(ce.id);
+          if (craftEssencePickerTarget === "single") {
+            setSupportCraftEssenceId(ce.id);
+          } else if (craftEssencePickerTarget != null) {
+            setSupportGrandCraftEssenceIds((prev) => {
+              const next = [...prev] as [number | null, number | null, number | null];
+              next[craftEssencePickerTarget] = ce.id;
+              return next;
+            });
+          }
           setSupportResult(null);
         }}
         craftEssences={craftEssences}
+        mlbRequired={
+          craftEssencePickerTarget === "single"
+            ? supportCraftEssenceMlbRequired
+            : craftEssencePickerTarget != null
+              ? supportGrandCraftEssenceMlbRequired[craftEssencePickerTarget]
+              : true
+        }
+        onMlbRequiredChange={
+          craftEssencePickerTarget === "single"
+            ? setSupportCraftEssenceMlbRequired
+            : craftEssencePickerTarget != null
+              ? (required) =>
+                  setSupportGrandCraftEssenceMlbRequired((prev) => {
+                    const next = [...prev] as [boolean, boolean, boolean];
+                    next[craftEssencePickerTarget] = required;
+                    return next;
+                  })
+              : undefined
+        }
+        grandBondCeMode={supportGrandBondCeMode}
+        onGrandBondCeModeChange={
+          craftEssencePickerTarget === 1 ? setSupportGrandBondCeMode : undefined
+        }
       />
     </Flex>
   );

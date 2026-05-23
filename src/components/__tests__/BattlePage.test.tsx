@@ -137,6 +137,27 @@ describe("BattlePage", () => {
     });
   });
 
+  it("passes grand support craft essence requirements to automation", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage({
+      ...PROJECT,
+      supportGrandMode: true,
+      supportGrandCraftEssenceIds: [1001, null, 1003],
+    });
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("start_automation", {
+        config: expect.objectContaining({
+          supportGrandMode: true,
+          supportGrandCraftEssenceIds: [1001, null, 1003],
+        }),
+      });
+    });
+  });
+
   it("persists count mode and repeat count from the inline stepper", async () => {
     const user = userEvent.setup();
     mockProjectCommands();

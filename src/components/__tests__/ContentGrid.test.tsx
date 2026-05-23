@@ -428,6 +428,69 @@ describe("ContentGrid", () => {
     expect(await screen.findByRole("dialog")).toHaveTextContent("技能/宝具设置");
   });
 
+  it("toggles grand support mode from the support slot", async () => {
+    const user = userEvent.setup();
+    const onUpdateActiveProject = vi.fn();
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={PROJECT}
+        onUpdateActiveProject={onUpdateActiveProject}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "开启冠位模式" }));
+
+    expect(onUpdateActiveProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supportGrandMode: true,
+        supportGrandCraftEssenceIds: [null, null, null],
+      })
+    );
+  });
+
+  it("renders and persists three grand support craft essence slots", async () => {
+    const user = userEvent.setup();
+    const onUpdateActiveProject = vi.fn();
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{
+          ...PROJECT,
+          supportGrandMode: true,
+          supportGrandCraftEssenceIds: [1, null, 2],
+        }}
+        onUpdateActiveProject={onUpdateActiveProject}
+      />
+    );
+
+    expect(screen.getByLabelText("冠位礼装 1：Kaleidoscope")).toBeInTheDocument();
+    expect(screen.getByLabelText("选择冠位礼装 2")).toBeInTheDocument();
+    expect(screen.getByLabelText("冠位礼装 3：Black Grail")).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText("选择冠位礼装 2"));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByText("Black Grail"));
+    expect(onUpdateActiveProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supportGrandCraftEssenceIds: [1, 2, 2],
+      })
+    );
+
+    await user.click(screen.getByRole("button", { name: "清除冠位礼装 1" }));
+    expect(onUpdateActiveProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supportGrandCraftEssenceIds: [null, null, 2],
+      })
+    );
+  });
+
   it("renders placeholder slots for unconfigured skills so configured chips keep their position", () => {
     // Only the 3rd owned skill and 2nd append skill are configured;
     // the rendered chip rows must still show all 3 owned + 5 append

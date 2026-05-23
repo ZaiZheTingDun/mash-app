@@ -84,6 +84,13 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 templates: dict[str, np.ndarray] = {}
+# Per-template alpha mask. Only populated for templates whose source PNG has a
+# non-fully-opaque alpha channel (e.g. ``icon_mlb_mark``, ``icon_grand_bond_ce``,
+# ``icon_grand_bond_ce_np``). When present, ``_score_template_region`` passes
+# the mask to ``cv2.matchTemplate`` so transparent corners no longer count as
+# black pixels — that mismatch otherwise sinks the MLB-star score whenever the
+# star sits on a busy / non-dark background (e.g. character art).
+template_masks: dict[str, np.ndarray] = {}
 static_template_keys: set[str] = set()
 # Last directory passed to ``_load_templates``. Used by ``_ensure_icon_cache``
 # to re-read RGBA icons with their alpha mask preserved.
@@ -274,18 +281,38 @@ SUPPORT_SCORE_STRIP_REGION = {"x": 0.796, "y": 0.232, "w": 0.060, "h": 0.768}
 SUPPORT_SCORE_HSV_LOW = (95, 80, 110)
 SUPPORT_SCORE_HSV_HIGH = (130, 255, 255)
 
-# Geometric bounds for the badge bounding box (image-normalised). The
-# badge measures ~68x68 px @ 1920w and ~90x90 px @ 2560w across all
-# checked-in fixtures, with aspect very close to 1.0; the slightly
-# wider window here tolerates the 1-2 px morphology drift introduced
-# by the closing kernel and partial occlusions at the strip's top/
-# bottom edges.
+SUPPORT_SCORE_ANCHOR_X = 0.799
+SUPPORT_SCORE_ANCHOR_W = 0.0355
+SUPPORT_SCORE_ANCHOR_H = 0.063
 SUPPORT_SCORE_BBOX_MIN_W = 0.025
 SUPPORT_SCORE_BBOX_MAX_W = 0.045
 SUPPORT_SCORE_BBOX_MIN_H = 0.045
 SUPPORT_SCORE_BBOX_MAX_H = 0.080
 SUPPORT_SCORE_BBOX_MIN_ASPECT = 0.45
 SUPPORT_SCORE_BBOX_MAX_ASPECT = 1.40
+SUPPORT_SCORE_SCAN_X = 0.799
+SUPPORT_SCORE_SCAN_W = 0.0355
+SUPPORT_SCORE_SCAN_MIN_BLUE_FRACTION = 0.22
+SUPPORT_SCORE_SCAN_MIN_RUN_ROWS = 4
+SUPPORT_ROW_ANCHOR_REGION = {"x": 0.846, "y": 0.242, "w": 0.079, "h": 0.758}
+SUPPORT_ROW_ANCHOR_X = 0.846
+SUPPORT_ROW_ANCHOR_W = 0.079
+SUPPORT_ROW_ANCHOR_MIN_W = 0.055
+SUPPORT_ROW_ANCHOR_MIN_H = 0.080
+SUPPORT_ROW_ANCHOR_MIN_AREA = 3500.0
+SUPPORT_CONFIRM_BUTTON_MIN_W = 0.055
+SUPPORT_CONFIRM_BUTTON_MAX_W = 0.085
+SUPPORT_CONFIRM_BUTTON_MIN_H = 0.038
+SUPPORT_CONFIRM_BUTTON_MAX_H = 0.082
+SUPPORT_CONFIRM_BUTTON_MIN_ASPECT = 1.5
+SUPPORT_CONFIRM_BUTTON_MAX_ASPECT = 3.5
+SUPPORT_CONFIRM_BUTTON_MIN_AREA = 1800.0
+SUPPORT_CONFIRM_BUTTON_TEMPLATE = "button_support_form_confirm"
+SUPPORT_CONFIRM_BUTTON_TEMPLATE_THRESHOLD = 0.70
+SUPPORT_CONFIRM_BUTTON_TO_ROW_TOP_DY = 0.116
+SUPPORT_CONFIRM_BUTTON_ROW_MATCH_TOLERANCE = 0.035
+SUPPORT_PANEL_ANCHOR_TO_SCORE_TOP_DY = 0.1667
+SUPPORT_BUTTON_ANCHOR_TO_SCORE_TOP_DY = 0.147
 
 # Per-row NMS y-distance — rows are pitched ~0.28 apart in the list,
 # so 0.05 collapses any duplicate masks (which only ever occur from
@@ -349,6 +376,7 @@ def _support_diagnostics_meta() -> dict:
         "cvFile": __file__,
         "cvFingerprint": _cv_code_fingerprint(),
         "supportSkillContourSplit": True,
+        "supportRowAnchorSearchRegion": dict(SUPPORT_ROW_ANCHOR_REGION),
     }
 
 
@@ -419,6 +447,15 @@ def _score_template_region(
     if len(tmpl.shape) == 3:
         tmpl = cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
     tmpl = _scale_static_template_for_image(tmpl, img, template_key)
+    mask = template_masks.get(template_key) if template_key else None
+    if mask is not None:
+        mask = _scale_static_template_for_image(mask, img, template_key)
+        # Defensive: if the rescaled mask diverges in shape from the rescaled
+        # template (rounding mismatch), fall back to no-mask matching rather
+        # than throw — the bug only suppresses the alpha-aware boost on that
+        # frame, it does not corrupt scoring.
+        if mask.shape[:2] != tmpl.shape[:2]:
+            mask = None
 
     h, w = img.shape[:2]
     rx = max(0, int(round(region["x"] * w)))
@@ -435,7 +472,17 @@ def _score_template_region(
     if tw > gray_roi.shape[1] or th > gray_roi.shape[0]:
         return {"found": False, "score": 0.0, "region": None, "x": 0.0, "y": 0.0}
 
-    result = cv2.matchTemplate(gray_roi, tmpl, cv2.TM_CCOEFF_NORMED)
+    if mask is not None:
+        result = cv2.matchTemplate(
+            gray_roi, tmpl, cv2.TM_CCOEFF_NORMED, mask=mask
+        )
+        # matchTemplate emits NaN/inf at positions where the masked region
+        # has zero variance; ignore those instead of letting them dominate
+        # ``minMaxLoc``.
+        if not np.isfinite(result).all():
+            result = np.where(np.isfinite(result), result, -1.0)
+    else:
+        result = cv2.matchTemplate(gray_roi, tmpl, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
     score = float(max_val)
     left = rx + max_loc[0]
@@ -524,12 +571,14 @@ def _get_template(template_key: str) -> Optional[np.ndarray]:
     path = _template_path_for_key(template_key)
     if not path or not os.path.isfile(path):
         return None
-    mat = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-    if mat is None:
+    gray, mask = _read_template_png(path)
+    if gray is None:
         return None
-    templates[template_key] = mat
+    templates[template_key] = gray
+    if mask is not None:
+        template_masks[template_key] = mask
     static_template_keys.add(template_key)
-    return mat
+    return gray
 
 
 SERVANT_GRID_ANCHOR_TEMPLATE = "text_servant_avatar_bottom_line"
@@ -546,6 +595,14 @@ SERVANT_GRID_DEFAULT_REGION = {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747}
 
 def _norm_rect_from_px(x: float, y: float, width: float, height: float, img_w: int, img_h: int) -> dict:
     return {"x": x / img_w, "y": y / img_h, "w": width / img_w, "h": height / img_h}
+
+
+def _clamp_norm_rect(region: dict) -> dict:
+    x = max(0.0, min(1.0, float(region.get("x", 0.0))))
+    y = max(0.0, min(1.0, float(region.get("y", 0.0))))
+    w = max(0.0, min(float(region.get("w", 0.0)), 1.0 - x))
+    h = max(0.0, min(float(region.get("h", 0.0)), 1.0 - y))
+    return {"x": x, "y": y, "w": w, "h": h}
 
 
 def _nms_candidates(candidates: list[dict], overlap_w: float, overlap_h: float) -> list[dict]:
@@ -2609,6 +2666,7 @@ def _find_supports(
                 }
             )
         rows.sort(key=lambda s: s["rowRegion"]["y"])
+        _support_attach_score_anchors(img, rows)
         if include_support_details:
             _support_add_details(img, rows, fragments)
         return {"supports": rows, "diagnostics": diag}
@@ -2677,6 +2735,7 @@ def _find_supports(
 
     # Stable order: top-down so the runner can pick "first visible match".
     supports.sort(key=lambda s: s["rowRegion"]["y"])
+    _support_attach_score_anchors(img, supports)
     if include_support_details:
         _support_add_details(img, supports, fragments)
     return {"supports": supports, "diagnostics": diag}
@@ -2721,11 +2780,13 @@ def _support_find_score_anchors(img: np.ndarray) -> list[dict]:
 
     Returns one normalized bbox per visible support row. The badge is a
     saturated mid-blue compact rounded square with stacked "分值"/"+N"
-    text; we threshold the strip in HSV (``SUPPORT_SCORE_HSV_*``),
-    morphologically close the mask to fuse the badge's interior text
-    with its background, then run ``findContours`` and keep only
-    contours whose bbox passes the geometric filter. Per-row duplicates
-    are collapsed by y-NMS (``SUPPORT_SCORE_NMS_DY``).
+    text; we threshold a fixed x-range in HSV (``SUPPORT_SCORE_HSV_*``)
+    and scan rows from top to bottom. The first row with enough blue
+    pixels starts the button body; x/w/h are fixed to the known
+    score-button column. This avoids contour fragmentation when Grand
+    rows expose only part of the blue body or when "+N/+N" text below the
+    button adds separate blue-shadow fragments. Per-row duplicates are
+    collapsed by y-NMS (``SUPPORT_SCORE_NMS_DY``).
 
     Pure grayscale Canny is unreliable here: the "X分钟前" /
     "友情点 +25" labels nearby produce stronger edges and overlap the
@@ -2737,9 +2798,9 @@ def _support_find_score_anchors(img: np.ndarray) -> list[dict]:
     if h == 0 or w == 0:
         return []
     strip = SUPPORT_SCORE_STRIP_REGION
-    sx = max(0, int(round(strip["x"] * w)))
+    sx = max(0, int(round(SUPPORT_SCORE_SCAN_X * w)))
     sy = max(0, int(round(strip["y"] * h)))
-    sw = max(1, min(int(round(strip["w"] * w)), w - sx))
+    sw = max(1, min(int(round(SUPPORT_SCORE_SCAN_W * w)), w - sx))
     sh = max(1, min(int(round(strip["h"] * h)), h - sy))
     crop = img[sy : sy + sh, sx : sx + sw]
     if crop.size == 0:
@@ -2752,26 +2813,27 @@ def _support_find_score_anchors(img: np.ndarray) -> list[dict]:
     )
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     candidates: list[dict] = []
-    for contour in contours:
-        x, y, cw, ch = cv2.boundingRect(contour)
-        nw = cw / w
-        nh = ch / h
-        if not (SUPPORT_SCORE_BBOX_MIN_W <= nw <= SUPPORT_SCORE_BBOX_MAX_W):
+    min_blue = max(1, int(round(sw * SUPPORT_SCORE_SCAN_MIN_BLUE_FRACTION)))
+    min_run = max(1, SUPPORT_SCORE_SCAN_MIN_RUN_ROWS)
+    row_counts = np.count_nonzero(mask, axis=1)
+    y = 0
+    while y < len(row_counts):
+        if row_counts[y] < min_blue:
+            y += 1
             continue
-        if not (SUPPORT_SCORE_BBOX_MIN_H <= nh <= SUPPORT_SCORE_BBOX_MAX_H):
-            continue
-        aspect = cw / max(1, ch)
-        if not (SUPPORT_SCORE_BBOX_MIN_ASPECT <= aspect <= SUPPORT_SCORE_BBOX_MAX_ASPECT):
+        start = y
+        while y < len(row_counts) and row_counts[y] >= min_blue:
+            y += 1
+        if y - start < min_run:
             continue
         candidates.append(
             {
-                "x": (sx + x) / w,
-                "y": (sy + y) / h,
-                "w": nw,
-                "h": nh,
+                "x": SUPPORT_SCORE_ANCHOR_X,
+                "y": (sy + start) / h,
+                "w": SUPPORT_SCORE_ANCHOR_W,
+                "h": SUPPORT_SCORE_ANCHOR_H,
             }
         )
 
@@ -2797,17 +2859,240 @@ def _pick_score_anchor_for_row(
     y_min = row_top - SUPPORT_SCORE_ROW_MATCH_ABOVE_DY
     y_max = row_top + row_h + SUPPORT_SCORE_ROW_MATCH_BELOW_DY
     row_cy = row_top + row_h / 2.0
-    best: Optional[dict] = None
-    best_dist = float("inf")
+    in_window: list[dict] = []
     for anchor in anchors:
         anchor_cy = float(anchor["y"]) + float(anchor["h"]) / 2.0
-        if anchor_cy < y_min or anchor_cy > y_max:
-            continue
+        if y_min <= anchor_cy <= y_max:
+            in_window.append(anchor)
+    if not in_window:
+        return None
+    candidates = (
+        [a for a in in_window if a.get("source") == "buttonTemplate"]
+        or [a for a in in_window if a.get("source") == "button"]
+        or in_window
+    )
+    best: Optional[dict] = None
+    best_dist = float("inf")
+    for anchor in candidates:
+        anchor_cy = float(anchor["y"]) + float(anchor["h"]) / 2.0
         dist = abs(anchor_cy - row_cy)
         if dist < best_dist:
             best = anchor
             best_dist = dist
     return best
+
+
+def _pick_confirm_button_anchor_for_row(
+    anchors: list[dict], row_region: dict
+) -> Optional[dict]:
+    if not anchors:
+        return None
+    expected_y = float(row_region["y"]) - SUPPORT_CONFIRM_BUTTON_TO_ROW_TOP_DY
+    best: Optional[dict] = None
+    best_dist = SUPPORT_CONFIRM_BUTTON_ROW_MATCH_TOLERANCE
+    for anchor in anchors:
+        dist = abs(float(anchor["y"]) - expected_y)
+        if dist <= best_dist:
+            best = anchor
+            best_dist = dist
+    return best
+
+
+def _support_find_confirm_button_template_anchors(img: np.ndarray) -> list[dict]:
+    """Locate the right-side "助战编队确认" buttons by template match."""
+    tmpl = _get_template(SUPPORT_CONFIRM_BUTTON_TEMPLATE)
+    if tmpl is None:
+        return []
+    h, w = img.shape[:2]
+    if h == 0 or w == 0:
+        return []
+    tmpl = _scale_static_template_for_image(tmpl, img, SUPPORT_CONFIRM_BUTTON_TEMPLATE)
+    region = SUPPORT_ROW_ANCHOR_REGION
+    sx = max(0, int(round(region["x"] * w)))
+    sy = max(0, int(round(region["y"] * h)))
+    sw = max(1, min(int(round(region["w"] * w)), w - sx))
+    sh = max(1, min(int(round(region["h"] * h)), h - sy))
+    crop = img[sy : sy + sh, sx : sx + sw]
+    if crop.size == 0:
+        return []
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
+    th, tw = tmpl.shape[:2]
+    if tw > gray.shape[1] or th > gray.shape[0]:
+        return []
+
+    result = cv2.matchTemplate(gray, tmpl, cv2.TM_CCOEFF_NORMED)
+    candidates: list[dict] = []
+    while True:
+        _, max_val, _, max_loc = cv2.minMaxLoc(result)
+        score = float(max_val)
+        if score < SUPPORT_CONFIRM_BUTTON_TEMPLATE_THRESHOLD:
+            break
+        x, y = max_loc
+        candidates.append(
+            {
+                "x": (sx + x) / w,
+                "y": (sy + y) / h,
+                "w": tw / w,
+                "h": th / h,
+                "source": "buttonTemplate",
+                "score": score,
+            }
+        )
+
+        x0 = max(0, x - tw // 2)
+        y0 = max(0, y - th // 2)
+        x1 = min(result.shape[1], x + tw // 2)
+        y1 = min(result.shape[0], y + th // 2)
+        result[y0:y1, x0:x1] = -1.0
+
+    candidates.sort(key=lambda c: (c["y"], c["x"]))
+    return _dedupe_support_anchors(candidates)
+
+
+def _support_find_confirm_button_shape_anchors(img: np.ndarray) -> list[dict]:
+    """Locate the right-side "助战编队确认" button rectangles by shape."""
+    h, w = img.shape[:2]
+    if h == 0 or w == 0:
+        return []
+    region = SUPPORT_ROW_ANCHOR_REGION
+    sx = max(0, int(round(region["x"] * w)))
+    sy = max(0, int(round(region["y"] * h)))
+    sw = max(1, min(int(round(region["w"] * w)), w - sx))
+    sh = max(1, min(int(round(region["h"] * h)), h - sy))
+    crop = img[sy : sy + sh, sx : sx + sw]
+    if crop.size == 0:
+        return []
+
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
+    edges = cv2.Canny(cv2.GaussianBlur(gray, (3, 3), 0), 50, 150)
+    edges = cv2.dilate(
+        edges, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)), iterations=1
+    )
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    candidates: list[dict] = []
+    for contour in contours:
+        x, y, cw, ch = cv2.boundingRect(contour)
+        nw = cw / w
+        nh = ch / h
+        aspect = cw / max(1, ch)
+        if not (SUPPORT_CONFIRM_BUTTON_MIN_W <= nw <= SUPPORT_CONFIRM_BUTTON_MAX_W):
+            continue
+        if not (SUPPORT_CONFIRM_BUTTON_MIN_H <= nh <= SUPPORT_CONFIRM_BUTTON_MAX_H):
+            continue
+        if not (
+            SUPPORT_CONFIRM_BUTTON_MIN_ASPECT
+            <= aspect
+            <= SUPPORT_CONFIRM_BUTTON_MAX_ASPECT
+        ):
+            continue
+        if cv2.contourArea(contour) < SUPPORT_CONFIRM_BUTTON_MIN_AREA:
+            continue
+        candidates.append(
+            {
+                "x": (sx + x) / w,
+                "y": (sy + y) / h,
+                "w": nw,
+                "h": nh,
+                "source": "button",
+            }
+        )
+
+    candidates.sort(key=lambda c: (c["y"], c["x"]))
+    return _dedupe_support_anchors(candidates)
+
+
+def _support_find_confirm_button_anchors(img: np.ndarray) -> list[dict]:
+    anchors = _support_find_confirm_button_template_anchors(img)
+    if anchors:
+        return anchors
+    return _support_find_confirm_button_shape_anchors(img)
+
+
+def _dedupe_support_anchors(candidates: list[dict]) -> list[dict]:
+    anchors: list[dict] = []
+    for cand in candidates:
+        cy = cand["y"] + cand["h"] / 2.0
+        duplicate_index = next(
+            (
+                index
+                for index, anchor in enumerate(anchors)
+                if abs(cy - (anchor["y"] + anchor["h"] / 2.0))
+                < SUPPORT_SCORE_NMS_DY
+            ),
+            None,
+        )
+        if duplicate_index is not None:
+            current_source = anchors[duplicate_index].get("source")
+            cand_source = cand.get("source")
+            if cand_source == "buttonTemplate" or (
+                cand_source == "button"
+                and current_source not in {"buttonTemplate", "button"}
+            ):
+                anchors[duplicate_index] = cand
+            continue
+        anchors.append(cand)
+    return anchors
+
+
+def _support_find_panel_anchors(img: np.ndarray) -> list[dict]:
+    """Locate the right-side support row panels as a fallback.
+
+    These panels are more stable than the score badge in Grand support
+    mode: no overflowing numeric text, and their x column is fixed. The
+    contour only provides the row's top edge; x/w/h are fixed from the
+    known panel column so downstream geometry stays deterministic.
+    """
+    h, w = img.shape[:2]
+    if h == 0 or w == 0:
+        return []
+    region = SUPPORT_ROW_ANCHOR_REGION
+    sx = max(0, int(round(region["x"] * w)))
+    sy = max(0, int(round(region["y"] * h)))
+    sw = max(1, min(int(round(region["w"] * w)), w - sx))
+    sh = max(1, min(int(round(region["h"] * h)), h - sy))
+    crop = img[sy : sy + sh, sx : sx + sw]
+    if crop.size == 0:
+        return []
+
+    bgr = crop if crop.ndim == 3 else cv2.cvtColor(crop, cv2.COLOR_GRAY2BGR)
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(
+        hsv, np.array(SUPPORT_SCORE_HSV_LOW), np.array(SUPPORT_SCORE_HSV_HIGH)
+    )
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    candidates: list[dict] = []
+    for contour in contours:
+        x, y, cw, ch = cv2.boundingRect(contour)
+        nw = cw / w
+        nh = ch / h
+        if nw < SUPPORT_ROW_ANCHOR_MIN_W or nh < SUPPORT_ROW_ANCHOR_MIN_H:
+            continue
+        if cv2.contourArea(contour) < SUPPORT_ROW_ANCHOR_MIN_AREA:
+            continue
+        candidates.append(
+            {
+                "x": SUPPORT_ROW_ANCHOR_X,
+                "y": (sy + y) / h,
+                "w": SUPPORT_ROW_ANCHOR_W,
+                "h": nh,
+                "source": "panel",
+            }
+        )
+
+    candidates.sort(key=lambda c: (c["y"], c["x"]))
+    return _dedupe_support_anchors(candidates)
+
+
+def _support_find_row_anchors(img: np.ndarray) -> list[dict]:
+    buttons = _support_find_confirm_button_anchors(img)
+    panels = _support_find_panel_anchors(img)
+    return _dedupe_support_anchors(
+        sorted(buttons + panels, key=lambda c: (c["y"], c["x"]))
+    )
 
 
 def _support_skill_slots_from_anchor(anchor: dict, panel: Optional[str]) -> list[dict]:
@@ -2827,6 +3112,20 @@ def _support_skill_slots_from_anchor(anchor: dict, panel: Optional[str]) -> list
         }
         for dx in offsets
     ]
+
+
+def _support_score_anchor_from_row_anchor(anchor: dict) -> dict:
+    dy = (
+        SUPPORT_BUTTON_ANCHOR_TO_SCORE_TOP_DY
+        if anchor.get("source") in {"buttonTemplate", "button"}
+        else SUPPORT_PANEL_ANCHOR_TO_SCORE_TOP_DY
+    )
+    return {
+        "x": SUPPORT_SCORE_ANCHOR_X,
+        "y": float(anchor["y"]) + dy,
+        "w": SUPPORT_SCORE_ANCHOR_W,
+        "h": SUPPORT_SCORE_ANCHOR_H,
+    }
 
 
 def _support_panel_kind_from_anchor(
@@ -2872,18 +3171,36 @@ def _support_panel_kind_from_anchor(
 
 def _support_find_skill_slots(img: np.ndarray, row_region: dict) -> list[dict]:
     """Derive skill-icon slot rectangles for ``row_region`` by anchoring
-    on the row's "分值 +N" badge. Returns ``[]`` when no anchor matches
-    the row — callers should treat that as "skills not recognised"
-    rather than falling back to fixed coordinates.
+    on the row's right-side "助战编队确认" button, then projecting the
+    fixed score-badge / skill-icon coordinates from that button top.
+    Returns ``[]`` when no anchor matches the row — callers should treat
+    that as "skills not recognised" rather than falling back to fixed
+    coordinates.
     """
-    anchors = _support_find_score_anchors(img)
-    anchor = _pick_score_anchor_for_row(anchors, row_region)
-    if anchor is None:
+    anchors = _support_find_confirm_button_anchors(img)
+    row_anchor = _pick_confirm_button_anchor_for_row(anchors, row_region)
+    if row_anchor is None:
         return []
+    anchor = _support_score_anchor_from_row_anchor(row_anchor)
     panel = _support_panel_kind_from_anchor(img, anchor)
     if panel is None:
         panel = _support_panel_template_kind(img, row_region)
     return _support_skill_slots_from_anchor(anchor, panel)
+
+
+def _support_attach_score_anchors(img: np.ndarray, rows: list[dict]) -> None:
+    # Public row anchors are deliberately stricter than the internal skill
+    # anchors: a row is considered complete for Grand-support CE matching
+    # only when its "助战编队确认" button is visible. Skill OCR can still
+    # fall back to the larger right-side panel via `_support_find_row_anchors`.
+    anchors = _support_find_confirm_button_anchors(img)
+    if not anchors:
+        return
+    for row in rows:
+        row_region = row.get("rowRegion") or {}
+        anchor = _pick_confirm_button_anchor_for_row(anchors, row_region)
+        if anchor is not None:
+            row["scoreAnchor"] = anchor
 
 
 def _support_level_template_refs() -> list[tuple[int, np.ndarray]]:
@@ -3195,6 +3512,35 @@ CE_TEMPLATE_RIGHT_CROP = 0
 # (315/90 = 3.500).
 CE_ICON_W_FRAC = 315.0 / 2560.0
 CE_ICON_H_FRAC = 90.0 / 1440.0
+CE_MLB_ICON_TEMPLATE = "icon_mlb_mark"
+CE_GRAND_BOND_TEMPLATE = "icon_grand_bond_ce"
+CE_GRAND_BOND_NP_TEMPLATE = "icon_grand_bond_ce_np"
+CE_DECORATION_ICON_THRESHOLD = 0.70
+
+# In Grand Saber rows the bond / bondNp slot renders the CE artwork at the
+# asset's native ~2.2:1 aspect ratio centered inside the wider 3.45:1 slot
+# rect (~317×92 px at 2560-wide). The side margins (~57 px each, ≈18% of
+# the slot width) carry decorative overlays — the orb / throne icon at the
+# left and the MLB star at the right. Including those margins in the
+# artwork search drives ``cv2.matchTemplate`` against bright outliers that
+# don't exist in ``card_ce.png`` and the correlation collapses to ~0.05
+# even when the asset and the on-screen thumbnail come from the same
+# source image. ``_verify_support_ce`` therefore insets the artwork-search
+# rect by this fraction on each side when bond / bondNp mode is active.
+# Icon checks still fan out from the original (wider) region so the
+# decoration overlays remain inside their search windows.
+BOND_CE_ARTWORK_INSET_FRAC = 0.18
+
+# Even after the inset, the bond CE artwork match runs over a narrower
+# search area with the dim, low-feature dark-sky backgrounds typical of
+# bond CEs. Empirically the *correct* asset on Iori's row scores ~0.71
+# while the next-best competitor sits around ~0.69, so the standard 0.70
+# threshold can flip with sub-pixel rendering jitter even when the right
+# CE is on screen. Relax the artwork threshold to 0.65 only for bond
+# slots; the decoration-icon check (≥0.97 on a hit) still carries the
+# main confidence signal, and 0.65 leaves a comfortable headroom above
+# the typical right-asset score.
+BOND_CE_ARTWORK_THRESHOLD = 0.65
 
 
 def _load_ce_template(
@@ -3255,6 +3601,8 @@ def _verify_support_ce(
     region: dict,
     template_path: str,
     threshold: float,
+    mlb_required: bool = False,
+    grand_bond_ce_mode: str | None = None,
 ) -> dict:
     """Score a row's CE icon against ``template_path``.
 
@@ -3269,15 +3617,41 @@ def _verify_support_ce(
     """
     h, w = img.shape[:2]
     if h == 0 or w == 0:
-        return {"score": 0.0, "passed": False, "error": "empty image"}
+        return {"score": 0.0, "passed": False, "error": "empty image", "iconChecks": []}
 
-    rx = max(0, int(round(region["x"] * w)))
-    ry = max(0, int(round(region["y"] * h)))
-    rw = max(1, min(int(round(region["w"] * w)), w - rx))
-    rh = max(1, min(int(round(region["h"] * h)), h - ry))
+    mode = (grand_bond_ce_mode or "any").strip()
+    bond_mode_active = mode in ("bond", "bondNp")
+
+    # Bond CE thumbnails in Grand Saber rows render the artwork at its
+    # native ~2.2:1 aspect ratio centered within the wider 3.45:1 slot
+    # rect; the side margins carry decorative overlays (the orb / throne
+    # icon at the left, the MLB star at the right). Including those
+    # margins in the artwork search drives ``cv2.matchTemplate`` against
+    # large bright outliers that aren't in ``card_ce.png`` and the
+    # correlation collapses (~0.05 even when the asset and the on-screen
+    # thumbnail come from the same source image — see
+    # ``src-tauri/assets/ces/1972/card_ce.png`` vs Iori's slot 1). For
+    # bond rows we therefore inset the artwork-search rect on each side
+    # so the search box matches the asset's aspect ratio. Icon checks
+    # below still receive the *original* (wider) ``region`` so the
+    # decoration overlays remain inside their search windows.
+    if bond_mode_active:
+        artwork_region = {
+            "x": float(region["x"]) + float(region["w"]) * BOND_CE_ARTWORK_INSET_FRAC,
+            "y": float(region["y"]),
+            "w": float(region["w"]) * (1.0 - 2.0 * BOND_CE_ARTWORK_INSET_FRAC),
+            "h": float(region["h"]),
+        }
+    else:
+        artwork_region = region
+
+    rx = max(0, int(round(artwork_region["x"] * w)))
+    ry = max(0, int(round(artwork_region["y"] * h)))
+    rw = max(1, min(int(round(artwork_region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(artwork_region["h"] * h)), h - ry))
     crop = img[ry : ry + rh, rx : rx + rw]
     if crop.size == 0:
-        return {"score": 0.0, "passed": False, "error": "empty crop"}
+        return {"score": 0.0, "passed": False, "error": "empty crop", "iconChecks": []}
 
     crop_gray = (
         cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
@@ -3291,7 +3665,12 @@ def _verify_support_ce(
     target_h = max(8, int(round(CE_ICON_H_FRAC * h)))
     tmpl = _load_ce_template(template_path, target_w, target_h)
     if tmpl is None:
-        return {"score": 0.0, "passed": False, "error": "template not readable"}
+        return {
+            "score": 0.0,
+            "passed": False,
+            "error": "template not readable",
+            "iconChecks": [],
+        }
 
     # If the search window is too small for the icon (caller misconfigured
     # SUPPORT_CE_OFFSET_IN_ROW), shrink the template proportionally so
@@ -3312,12 +3691,110 @@ def _verify_support_ce(
         )
 
     if tmpl.shape[0] > crop_gray.shape[0] or tmpl.shape[1] > crop_gray.shape[1]:
-        return {"score": 0.0, "passed": False, "error": "template larger than crop"}
+        return {
+            "score": 0.0,
+            "passed": False,
+            "error": "template larger than crop",
+            "iconChecks": [],
+        }
 
     res = cv2.matchTemplate(crop_gray, tmpl, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, _ = cv2.minMaxLoc(res)
     score = float(max_val)
-    return {"score": score, "passed": score >= threshold}
+    icon_checks: list[dict] = []
+    # Relax the artwork threshold for bond slots only; see the
+    # ``BOND_CE_ARTWORK_THRESHOLD`` comment for the rationale. Take the
+    # ``min`` so callers passing an *already* lower threshold (tests,
+    # tuning runs) keep their tighter constraint.
+    effective_threshold = (
+        min(float(threshold), BOND_CE_ARTWORK_THRESHOLD)
+        if bond_mode_active
+        else float(threshold)
+    )
+    ce_passed = score >= effective_threshold
+
+    if mlb_required:
+        icon_checks.append(
+            _verify_ce_decoration_icon(
+                img,
+                region,
+                CE_MLB_ICON_TEMPLATE,
+                "mlb",
+                {"x": 0.55, "y": 0.30, "w": 0.45, "h": 0.70},
+            )
+        )
+
+    if mode == "bond":
+        icon_checks.append(
+            _verify_ce_decoration_icon(
+                img,
+                region,
+                CE_GRAND_BOND_TEMPLATE,
+                "grandBond",
+                {"x": -0.05, "y": -0.35, "w": 0.58, "h": 1.05},
+            )
+        )
+    elif mode == "bondNp":
+        icon_checks.append(
+            _verify_ce_decoration_icon(
+                img,
+                region,
+                CE_GRAND_BOND_NP_TEMPLATE,
+                "grandBondNp",
+                {"x": -0.08, "y": -0.45, "w": 0.66, "h": 1.20},
+            )
+        )
+
+    passed = ce_passed and all(check.get("passed") is True for check in icon_checks)
+    return {
+        "score": score,
+        "passed": passed,
+        "threshold": effective_threshold,
+        "iconChecks": icon_checks,
+    }
+
+
+def _verify_ce_decoration_icon(
+    img: np.ndarray,
+    ce_region: dict,
+    template_key: str,
+    kind: str,
+    rel_region: dict,
+) -> dict:
+    """Match an optional CE decoration icon inside a CE-relative search box."""
+    abs_region = {
+        "x": float(ce_region["x"]) + float(rel_region["x"]) * float(ce_region["w"]),
+        "y": float(ce_region["y"]) + float(rel_region["y"]) * float(ce_region["h"]),
+        "w": float(rel_region["w"]) * float(ce_region["w"]),
+        "h": float(rel_region["h"]) * float(ce_region["h"]),
+    }
+    abs_region = _clamp_norm_rect(abs_region)
+    tmpl = _get_template(template_key)
+    if tmpl is None:
+        return {
+            "kind": kind,
+            "templateKey": template_key,
+            "region": abs_region,
+            "score": 0.0,
+            "passed": False,
+            "threshold": CE_DECORATION_ICON_THRESHOLD,
+            "error": "template not loaded",
+        }
+    match = _score_template_region(
+        img,
+        tmpl,
+        abs_region,
+        CE_DECORATION_ICON_THRESHOLD,
+        template_key,
+    )
+    return {
+        "kind": kind,
+        "templateKey": template_key,
+        "region": match.get("region") or abs_region,
+        "score": float(match.get("score", 0.0)),
+        "passed": bool(match.get("found", False)),
+        "threshold": CE_DECORATION_ICON_THRESHOLD,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -3328,6 +3805,7 @@ def _verify_support_ce(
 def _load_templates(directory: str) -> dict:
     global templates_dir
     templates.clear()
+    template_masks.clear()
     static_template_keys.clear()
     _icon_color_sig.clear()
     count = 0
@@ -3338,13 +3816,48 @@ def _load_templates(directory: str) -> dict:
         if not os.path.isfile(path) or not fname.lower().endswith(".png"):
             continue
         key = os.path.splitext(fname)[0]
-        mat = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-        if mat is not None:
-            templates[key] = mat
-            static_template_keys.add(key)
-            count += 1
+        gray, mask = _read_template_png(path)
+        if gray is None:
+            continue
+        templates[key] = gray
+        if mask is not None:
+            template_masks[key] = mask
+        static_template_keys.add(key)
+        count += 1
     templates_dir = directory
     return {"ok": True, "count": count}
+
+
+def _read_template_png(
+    path: str,
+) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    """Load a template PNG into a (grayscale, alpha_mask) pair.
+
+    The mask is returned only when the PNG's alpha channel has at least one
+    non-fully-opaque pixel — fully opaque alpha is equivalent to no mask, so
+    we save the memory and let callers run the cheaper unmasked path. The
+    grayscale matrix is BGR→GRAY of the colour channels (alpha is **not**
+    pre-multiplied into the gray, since pre-multiplication onto black is
+    exactly the bug we are working around — the transparent corners would
+    otherwise be baked into the template and dragged the score down for any
+    on-screen instance whose surroundings were not also black).
+    """
+    raw = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    if raw is None:
+        return None, None
+    if raw.ndim == 2:
+        return raw, None
+    if raw.ndim != 3:
+        return None, None
+    if raw.shape[2] == 4:
+        bgr = raw[:, :, :3]
+        alpha = raw[:, :, 3]
+        gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        mask = alpha if (alpha < 255).any() else None
+        return gray, mask
+    if raw.shape[2] == 3:
+        return cv2.cvtColor(raw, cv2.COLOR_BGR2GRAY), None
+    return None, None
 
 
 def _load_config(path: str) -> dict:
@@ -3693,6 +4206,8 @@ def main() -> None:
                     cmd.get("region", DEFAULT_REGION),
                     template_path,
                     float(cmd.get("threshold", 0.7)),
+                    bool(cmd.get("mlbRequired", False)),
+                    cmd.get("grandBondCeMode"),
                 ),
             )
         elif action == "find_region":

@@ -11,7 +11,8 @@ use crate::runner::{self, RunnerHandle, RunnerState};
 use crate::screen::{
     CommandCardMatch, ElementMatch, FindEnhancementServantGridResult, FindSupportsResult,
     NoblePhantasmMatch, NormRect, Point, ServantGridAnchor, ServantGridCell, ServantGridFaceMatch,
-    SidecarClient, SupportDiagnostics, SupportRowMatch,
+    SidecarClient, SupportCeIconCheck, SupportDiagnostics, SupportRowMatch,
+    SupportCeVerificationOptions,
 };
 use crate::{
     app_data_dir, load_servant_metadata, resolve_ce_assets_dir, resolve_cv_config_path,
@@ -980,6 +981,8 @@ pub struct DebugSupportCeInfo {
     pub region: NormRect,
     pub score: f64,
     pub passed: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub icon_checks: Vec<SupportCeIconCheck>,
     /// Threshold the runner would have applied. Returned alongside the
     /// score so the debug UI doesn't have to mirror the constant.
     pub threshold: f64,
@@ -1002,6 +1005,8 @@ pub struct DebugSupportRow {
     /// pre-CE behaviour so the overlay stays backwards-compatible.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ce: Option<DebugSupportCeInfo>,
+    #[serde(rename = "grandCes", skip_serializing_if = "Vec::is_empty")]
+    pub grand_ces: Vec<DebugSupportCeInfo>,
 }
 
 #[derive(serde::Serialize, Clone, Debug)]
@@ -1025,6 +1030,10 @@ fn ce_search_region(row: &SupportRowMatch) -> NormRect {
     }
 }
 
+fn grand_ce_search_region(row: &SupportRowMatch, slot: usize) -> Option<NormRect> {
+    runner::grand_ce_search_region(row, slot)
+}
+
 /// Run the OCR-based support-row detector against the most recent debug
 /// screenshot. Loads the servant's metadata (name + every Noble Phantasm
 /// name) from ``assets/servants/{servant_id}/servant.json`` and returns
@@ -1045,6 +1054,10 @@ pub fn debug_find_supports(
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     servant_id: u32,
     craft_essence_id: Option<u32>,
+    grand_craft_essence_ids: Option<[Option<u32>; 3]>,
+    craft_essence_mlb_required: Option<bool>,
+    grand_craft_essence_mlb_required: Option<[bool; 3]>,
+    grand_bond_ce_mode: Option<String>,
 ) -> Result<DebugFindSupportsResult, String> {
     require_automation_idle(&handle_state, &enhancement_handle_state)?;
 
@@ -1056,8 +1069,8 @@ pub fn debug_find_supports(
     let server = current_server(&server_state);
     let meta = load_servant_metadata(&app, servant_id, server)?;
     eprintln!(
-        "[debug_find_supports] servant_id={servant_id} server={server} name={:?} np_names={:?} ce={:?}",
-        meta.name, meta.np_names, craft_essence_id
+        "[debug_find_supports] servant_id={servant_id} server={server} name={:?} np_names={:?} ce={:?} grand={:?}",
+        meta.name, meta.np_names, craft_essence_id, grand_craft_essence_ids
     );
 
     ensure_debug_sidecar(&app, &debug_state, server)?;
@@ -1077,6 +1090,13 @@ pub fn debug_find_supports(
             );
             None
         }
+    });
+    let grand_ce_template_paths: [Option<PathBuf>; 3] = std::array::from_fn(|index| {
+        grand_craft_essence_ids
+            .and_then(|ids| ids[index])
+            .and_then(|id| {
+                resolve_ce_assets_dir(&app).map(|dir| dir.join(id.to_string()).join("card_ce.png"))
+            })
     });
 
     let mut guard = debug_state.0.lock().unwrap();
@@ -1098,7 +1118,14 @@ pub fn debug_find_supports(
         .map(|p| p.to_string_lossy().to_string());
 
     let mut supports: Vec<DebugSupportRow> = Vec::with_capacity(result.supports.len());
-    for row in result.supports {
+    for (row_index, row) in result.supports.into_iter().enumerate() {
+        if row.score_anchor.is_none() {
+            eprintln!(
+                "[debug_find_supports] row {} y={:.3} support row anchor missing",
+                row_index + 1,
+                row.row_region.y
+            );
+        }
         let ce = match ce_template.as_deref() {
             Some(template) => {
                 let region = ce_search_region(&row);
@@ -1107,20 +1134,30 @@ pub fn debug_find_supports(
                     region,
                     template,
                     runner::SUPPORT_CE_THRESHOLD,
+                    SupportCeVerificationOptions {
+                        mlb_required: craft_essence_mlb_required.unwrap_or(true),
+                        grand_bond_ce_mode: None,
+                    },
                 ) {
-                    Ok((score, passed)) => {
+                    Ok(result) => {
+                        let effective_threshold = if result.threshold > 0.0 {
+                            result.threshold
+                        } else {
+                            runner::SUPPORT_CE_THRESHOLD
+                        };
                         eprintln!(
                             "[debug_find_supports] row y={:.3} CE score={:.3} threshold={:.2} -> {}",
                             row.row_region.y,
-                            score,
-                            runner::SUPPORT_CE_THRESHOLD,
-                            if passed { "PASS" } else { "skip" },
+                            result.score,
+                            effective_threshold,
+                            if result.passed { "PASS" } else { "skip" },
                         );
                         DebugSupportCeInfo {
                             region,
-                            score,
-                            passed,
-                            threshold: runner::SUPPORT_CE_THRESHOLD,
+                            score: result.score,
+                            passed: result.passed,
+                            icon_checks: result.icon_checks,
+                            threshold: effective_threshold,
                             template_path: template_path_str.clone(),
                             error: None,
                         }
@@ -1134,6 +1171,7 @@ pub fn debug_find_supports(
                             region,
                             score: 0.0,
                             passed: false,
+                            icon_checks: Vec::new(),
                             threshold: runner::SUPPORT_CE_THRESHOLD,
                             template_path: template_path_str.clone(),
                             error: Some(e),
@@ -1144,7 +1182,75 @@ pub fn debug_find_supports(
             }
             None => None,
         };
-        supports.push(DebugSupportRow { row, ce });
+        let mut grand_ces = Vec::new();
+        for (index, template_path) in grand_ce_template_paths.iter().enumerate() {
+            let Some(template_path) = template_path.as_deref() else {
+                continue;
+            };
+            let Some(region) = grand_ce_search_region(&row, index) else {
+                continue;
+            };
+            let template_path_str = Some(template_path.to_string_lossy().to_string());
+            let info = if template_path.is_file() {
+                match client.verify_support_ce(
+                    Some(&image_path),
+                    region,
+                    template_path,
+                    runner::SUPPORT_CE_THRESHOLD,
+                    SupportCeVerificationOptions {
+                        mlb_required: grand_craft_essence_mlb_required
+                            .unwrap_or([true; 3])[index],
+                        grand_bond_ce_mode: if index == 1 {
+                            grand_bond_ce_mode.clone().filter(|mode| mode != "any")
+                        } else {
+                            None
+                        },
+                    },
+                ) {
+                    Ok(result) => {
+                        let effective_threshold = if result.threshold > 0.0 {
+                            result.threshold
+                        } else {
+                            runner::SUPPORT_CE_THRESHOLD
+                        };
+                        DebugSupportCeInfo {
+                            region,
+                            score: result.score,
+                            passed: result.passed,
+                            icon_checks: result.icon_checks,
+                            threshold: effective_threshold,
+                            template_path: template_path_str,
+                            error: result.error,
+                        }
+                    }
+                    Err(e) => DebugSupportCeInfo {
+                        region,
+                        score: 0.0,
+                        passed: false,
+                        icon_checks: Vec::new(),
+                        threshold: runner::SUPPORT_CE_THRESHOLD,
+                        template_path: template_path_str,
+                        error: Some(e),
+                    },
+                }
+            } else {
+                eprintln!(
+                    "[debug_find_supports] grand CE template missing: {}",
+                    template_path.display()
+                );
+                DebugSupportCeInfo {
+                    region,
+                    score: 0.0,
+                    passed: false,
+                    icon_checks: Vec::new(),
+                    threshold: runner::SUPPORT_CE_THRESHOLD,
+                    template_path: template_path_str,
+                    error: Some("礼装模板不存在".into()),
+                }
+            };
+            grand_ces.push(info);
+        }
+        supports.push(DebugSupportRow { row, ce, grand_ces });
     }
 
     Ok(DebugFindSupportsResult {

@@ -34,6 +34,9 @@ import type { Servant } from "../types/servant";
 import type { CraftEssence } from "../types/craftEssence";
 import type {
   Project,
+  SupportGrandBondCeMode,
+  SupportGrandCraftEssenceIds,
+  SupportGrandCraftEssenceMlbRequired,
   SupportAppendSkillLevelMins,
   SupportSkillLevelMins,
 } from "../types/project";
@@ -47,8 +50,9 @@ export interface SlotItem {
    * only consumed by the runner for the support slot today (party-slot
    * CEs are stored for future auto-equip work). Renders as a small
    * picker tile beneath each servant slot.
-   */
+  */
   craftEssence: CraftEssence | null;
+  craftEssenceMlbRequired?: boolean;
 }
 
 interface ContentGridProps {
@@ -68,8 +72,22 @@ interface ContentGridProps {
 interface CraftEssenceOverlayProps {
   craftEssence: CraftEssence | null;
   cardSrc: string | null | undefined;
+  mlbRequired: boolean;
+  mlbIconSrc: string | null | undefined;
   onSelect: () => void;
   onClear: () => void;
+}
+
+interface GrandCraftEssenceOverlayProps {
+  craftEssences: (CraftEssence | null)[];
+  cardSrcs: (string | null | undefined)[];
+  mlbRequired: SupportGrandCraftEssenceMlbRequired;
+  mlbIconSrc: string | null | undefined;
+  grandBondCeMode: SupportGrandBondCeMode;
+  bondIconSrc: string | null | undefined;
+  bondNpIconSrc: string | null | undefined;
+  onSelect: (index: number) => void;
+  onClear: (index: number) => void;
 }
 
 const EMPTY_SUPPORT_SKILL_LEVELS: SupportSkillLevelMins = [null, null, null];
@@ -80,7 +98,6 @@ const EMPTY_SUPPORT_APPEND_SKILL_LEVELS: SupportAppendSkillLevelMins = [
   null,
   null,
 ];
-
 type SupportLevelKind = "np" | "skill" | "append";
 type SupportLevelPickerState =
   | { kind: "np" }
@@ -100,6 +117,18 @@ function normalizeSupportAppendSkillLevels(
 
 function hasConfiguredLevels(levels: readonly (number | null | undefined)[]) {
   return levels.some((level) => level != null);
+}
+
+function normalizeSupportGrandCraftEssenceIds(
+  ids: Project["supportGrandCraftEssenceIds"],
+): SupportGrandCraftEssenceIds {
+  return [0, 1, 2].map((index) => ids?.[index] ?? null) as SupportGrandCraftEssenceIds;
+}
+
+function normalizeSupportGrandCraftEssenceMlbRequired(
+  values: Project["supportGrandCraftEssenceMlbRequired"],
+): SupportGrandCraftEssenceMlbRequired {
+  return [0, 1, 2].map((index) => values?.[index] ?? true) as SupportGrandCraftEssenceMlbRequired;
 }
 
 function supportLevelLabel(level: number | null | undefined) {
@@ -419,6 +448,8 @@ function SupportSettingsDialog({
 function CraftEssenceOverlay({
   craftEssence,
   cardSrc,
+  mlbRequired,
+  mlbIconSrc,
   onSelect,
   onClear,
 }: CraftEssenceOverlayProps) {
@@ -479,6 +510,111 @@ function CraftEssenceOverlay({
           <Cross2Icon width={11} height={11} />
         </button>
       )}
+      {craftEssence && mlbRequired && (
+        mlbIconSrc ? (
+          <img
+            className="ce-condition-icon ce-condition-icon-mlb"
+            src={mlbIconSrc}
+            alt="满破"
+            draggable={false}
+          />
+        ) : (
+          <span className="ce-condition-badge ce-condition-icon-mlb">满</span>
+        )
+      )}
+    </div>
+  );
+}
+
+function GrandCraftEssenceOverlay({
+  craftEssences,
+  cardSrcs,
+  mlbRequired,
+  mlbIconSrc,
+  grandBondCeMode,
+  bondIconSrc,
+  bondNpIconSrc,
+  onSelect,
+  onClear,
+}: GrandCraftEssenceOverlayProps) {
+  const bondSrc = grandBondCeMode === "bond" ? bondIconSrc : bondNpIconSrc;
+  const bondLabel = grandBondCeMode === "bond" ? "原始牵绊" : "冠位连接牵绊";
+  return (
+    <div className="grand-ce-overlay" aria-label="冠位礼装设置">
+      {craftEssences.map((craftEssence, index) => (
+        <div
+          key={index}
+          className={`grand-ce-slot${craftEssence ? " filled" : " empty"}`}
+          role="button"
+          tabIndex={0}
+          aria-label={
+            craftEssence
+              ? `冠位礼装 ${index + 1}：${craftEssence.name}`
+              : `选择冠位礼装 ${index + 1}`
+          }
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelect(index);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              onSelect(index);
+            }
+          }}
+        >
+          {craftEssence && cardSrcs[index] ? (
+            <img
+              className="grand-ce-slot-img"
+              src={cardSrcs[index] ?? undefined}
+              alt={craftEssence.name}
+              draggable={false}
+            />
+          ) : (
+            <span className="grand-ce-slot-scrim">
+              {craftEssence ? craftEssence.name : index + 1}
+            </span>
+          )}
+          {craftEssence && (
+            <button
+              type="button"
+              className="grand-ce-slot-clear"
+              aria-label={`清除冠位礼装 ${index + 1}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onClear(index);
+              }}
+            >
+              <Cross2Icon width={10} height={10} />
+            </button>
+          )}
+          {craftEssence && mlbRequired[index] && (
+            mlbIconSrc ? (
+              <img
+                className="ce-condition-icon ce-condition-icon-mlb"
+                src={mlbIconSrc}
+                alt="满破"
+                draggable={false}
+              />
+            ) : (
+              <span className="ce-condition-badge ce-condition-icon-mlb">满</span>
+            )
+          )}
+          {craftEssence && index === 1 && grandBondCeMode !== "any" && (
+            bondSrc ? (
+              <img
+                className="ce-condition-icon ce-condition-icon-bond"
+                src={bondSrc}
+                alt={bondLabel}
+                draggable={false}
+              />
+            ) : (
+              <span className="ce-condition-badge ce-condition-icon-bond">绊</span>
+            )
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -619,16 +755,64 @@ function useCeCards(ceIds: number[]): Record<number, string | null | undefined> 
   return useAssetPaths("get_craft_essence_card_path", "craftEssenceId", ceIds);
 }
 
+function useTemplateIcons(keys: string[]): Record<string, string | null | undefined> {
+  const [cache, setCache] = useState<Record<string, string | null>>({});
+  const key = keys
+    .filter((item, index, arr) => arr.indexOf(item) === index)
+    .sort()
+    .join(",");
+
+  useEffect(() => {
+    const parsed = key ? key.split(",").filter(Boolean) : [];
+    const missing = parsed.filter((item) => !(item in cache));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map((templateKey) =>
+        invoke<string | null>("get_template_asset_path", { templateKey })
+          .then((path) => [templateKey, path ? convertFileSrc(path) : null] as const)
+          .catch(() => [templateKey, null] as const)
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      setCache((prev) => {
+        const next = { ...prev };
+        for (const [templateKey, src] of results) {
+          next[templateKey] = src;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return cache;
+}
+
 interface SortableSlotProps {
   slot: SlotItem;
   portraitSrc: string | null | undefined;
   ceCardSrc: string | null | undefined;
+  supportGrandMode: boolean;
+  supportGrandCraftEssences: (CraftEssence | null)[];
+  supportGrandCeCardSrcs: (string | null | undefined)[];
+  supportGrandCeMlbRequired: SupportGrandCraftEssenceMlbRequired;
+  supportGrandBondCeMode: SupportGrandBondCeMode;
+  mlbIconSrc: string | null | undefined;
+  bondIconSrc: string | null | undefined;
+  bondNpIconSrc: string | null | undefined;
   supportNpLevel: number | null | undefined;
   supportSkillLevels: SupportSkillLevelMins;
   supportAppendSkillLevels: SupportAppendSkillLevelMins;
   onSelect: () => void;
   onCeSelect: () => void;
   onCeClear: () => void;
+  onGrandModeToggle: () => void;
+  onGrandCeSelect: (index: number) => void;
+  onGrandCeClear: (index: number) => void;
   onSupportSettingsOpen: () => void;
 }
 
@@ -671,12 +855,23 @@ function SortableSlot({
   slot,
   portraitSrc,
   ceCardSrc,
+  supportGrandMode,
+  supportGrandCraftEssences,
+  supportGrandCeCardSrcs,
+  supportGrandCeMlbRequired,
+  supportGrandBondCeMode,
+  mlbIconSrc,
+  bondIconSrc,
+  bondNpIconSrc,
   supportNpLevel,
   supportSkillLevels,
   supportAppendSkillLevels,
   onSelect,
   onCeSelect,
   onCeClear,
+  onGrandModeToggle,
+  onGrandCeSelect,
+  onGrandCeClear,
   onSupportSettingsOpen,
 }: SortableSlotProps) {
   const {
@@ -767,6 +962,20 @@ function SortableSlot({
           {isSupport && (
             <span className="support-corner-badge">SUPPORT</span>
           )}
+          {isSupport && (
+            <button
+              type="button"
+              className={`support-grand-toggle${supportGrandMode ? " active" : ""}`}
+              aria-pressed={supportGrandMode}
+              aria-label={supportGrandMode ? "关闭冠位模式" : "开启冠位模式"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onGrandModeToggle();
+              }}
+            >
+              冠位
+            </button>
+          )}
           {isSupport && hasSupportRequirements && (
             <SupportRequirementSummary
               npLevel={supportNpLevel}
@@ -790,12 +999,28 @@ function SortableSlot({
               技能/宝具设置
             </Button>
           )}
-          <CraftEssenceOverlay
-            craftEssence={slot.craftEssence}
-            cardSrc={ceCardSrc}
-            onSelect={onCeSelect}
-            onClear={onCeClear}
-          />
+          {isSupport && supportGrandMode ? (
+            <GrandCraftEssenceOverlay
+              craftEssences={supportGrandCraftEssences}
+              cardSrcs={supportGrandCeCardSrcs}
+              mlbRequired={supportGrandCeMlbRequired}
+              mlbIconSrc={mlbIconSrc}
+              grandBondCeMode={supportGrandBondCeMode}
+              bondIconSrc={bondIconSrc}
+              bondNpIconSrc={bondNpIconSrc}
+              onSelect={onGrandCeSelect}
+              onClear={onGrandCeClear}
+            />
+          ) : (
+            <CraftEssenceOverlay
+              craftEssence={slot.craftEssence}
+              cardSrc={ceCardSrc}
+              mlbRequired={isSupport ? slot.craftEssenceMlbRequired ?? true : false}
+              mlbIconSrc={mlbIconSrc}
+              onSelect={onCeSelect}
+              onClear={onCeClear}
+            />
+          )}
         </div>
       </Flex>
     </div>
@@ -813,7 +1038,9 @@ export function ContentGrid({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
   const [ceDialogOpen, setCeDialogOpen] = useState(false);
-  const [activeCeSlotId, setActiveCeSlotId] = useState<string | null>(null);
+  const [activeCeTarget, setActiveCeTarget] = useState<
+    { type: "slot"; slotId: string } | { type: "grand"; index: number } | null
+  >(null);
   const [supportSettingsOpen, setSupportSettingsOpen] = useState(false);
 
   const sensors = useSensors(
@@ -845,10 +1072,17 @@ export function ContentGrid({
   );
 
   const ceCardMap = useCeCards(
-    displaySlots
-      .map((s) => s.craftEssence?.id)
+    [
+      ...displaySlots.map((s) => s.craftEssence?.id),
+      ...(activeProject?.supportGrandCraftEssenceIds ?? []),
+    ]
       .filter((id): id is number => id != null)
   );
+  const templateIconMap = useTemplateIcons([
+    "icon_mlb_mark",
+    "icon_grand_bond_ce",
+    "icon_grand_bond_ce_np",
+  ]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -865,23 +1099,122 @@ export function ContentGrid({
   };
 
   const handleCeSlotClick = (slotId: string) => {
-    setActiveCeSlotId(slotId);
+    setActiveCeTarget({ type: "slot", slotId });
+    setCeDialogOpen(true);
+  };
+
+  const supportGrandCeIds = normalizeSupportGrandCraftEssenceIds(
+    activeProject?.supportGrandCraftEssenceIds,
+  );
+  const supportGrandCraftEssences = supportGrandCeIds.map((id) =>
+    id == null ? null : craftEssences.find((ce) => ce.id === id) ?? null
+  );
+  const supportGrandCeCardSrcs = supportGrandCeIds.map((id) =>
+    id == null ? null : ceCardMap[id]
+  );
+  const supportGrandCeMlbRequired = normalizeSupportGrandCraftEssenceMlbRequired(
+    activeProject?.supportGrandCraftEssenceMlbRequired,
+  );
+  const supportGrandBondCeMode = activeProject?.supportGrandBondCeMode ?? "any";
+
+  const handleGrandModeToggle = () => {
+    if (!activeProject) return;
+    void onUpdateActiveProject({
+      ...activeProject,
+      supportGrandMode: !(activeProject.supportGrandMode ?? false),
+      supportGrandCraftEssenceIds: supportGrandCeIds,
+      supportGrandCraftEssenceMlbRequired: supportGrandCeMlbRequired,
+      supportGrandBondCeMode,
+    });
+  };
+
+  const handleGrandCeSlotClick = (index: number) => {
+    setActiveCeTarget({ type: "grand", index });
     setCeDialogOpen(true);
   };
 
   const handleCeSelect = (ce: CraftEssence) => {
-    if (!activeCeSlotId) return;
-    onSlotsChange(
-      slots.map((s) =>
-        s.id === activeCeSlotId ? { ...s, craftEssence: ce } : s
-      )
-    );
+    if (!activeCeTarget) return;
+    if (activeCeTarget.type === "slot") {
+      onSlotsChange(
+        slots.map((s) =>
+          s.id === activeCeTarget.slotId
+            ? {
+                ...s,
+                craftEssence: ce,
+                craftEssenceMlbRequired: s.craftEssenceMlbRequired ?? true,
+              }
+            : s
+        )
+      );
+      return;
+    }
+    if (!activeProject) return;
+    const nextIds = [...supportGrandCeIds] as SupportGrandCraftEssenceIds;
+    nextIds[activeCeTarget.index] = ce.id;
+    void onUpdateActiveProject({
+      ...activeProject,
+      supportGrandCraftEssenceIds: nextIds,
+      supportGrandCraftEssenceMlbRequired: supportGrandCeMlbRequired,
+      supportGrandBondCeMode,
+    });
   };
 
   const handleCeClear = (slotId: string) => {
     onSlotsChange(
-      slots.map((s) => (s.id === slotId ? { ...s, craftEssence: null } : s))
+      slots.map((s) =>
+        s.id === slotId
+          ? { ...s, craftEssence: null, craftEssenceMlbRequired: true }
+          : s
+      )
     );
+  };
+
+  const handleGrandCeClear = (index: number) => {
+    if (!activeProject) return;
+    const nextIds = [...supportGrandCeIds] as SupportGrandCraftEssenceIds;
+    const nextMlb = [...supportGrandCeMlbRequired] as SupportGrandCraftEssenceMlbRequired;
+    nextIds[index] = null;
+    nextMlb[index] = true;
+    void onUpdateActiveProject({
+      ...activeProject,
+      supportGrandCraftEssenceIds: nextIds,
+      supportGrandCraftEssenceMlbRequired: nextMlb,
+      supportGrandBondCeMode: index === 1 ? "any" : supportGrandBondCeMode,
+    });
+  };
+
+  const handleCeMlbRequiredChange = (required: boolean) => {
+    if (!activeCeTarget) return;
+    if (activeCeTarget.type === "slot") {
+      onSlotsChange(
+        slots.map((s) =>
+          s.id === activeCeTarget.slotId
+            ? { ...s, craftEssenceMlbRequired: required }
+            : s
+        )
+      );
+      return;
+    }
+    if (!activeProject) return;
+    const nextMlb = [...supportGrandCeMlbRequired] as SupportGrandCraftEssenceMlbRequired;
+    nextMlb[activeCeTarget.index] = required;
+    void onUpdateActiveProject({
+      ...activeProject,
+      supportGrandCraftEssenceIds: supportGrandCeIds,
+      supportGrandCraftEssenceMlbRequired: nextMlb,
+      supportGrandBondCeMode,
+    });
+  };
+
+  const handleGrandBondCeModeChange = (mode: SupportGrandBondCeMode) => {
+    if (!activeProject) return;
+    void onUpdateActiveProject({
+      ...activeProject,
+      supportGrandCraftEssenceIds: supportGrandCeIds,
+      supportGrandCraftEssenceMlbRequired: supportGrandCeMlbRequired,
+      supportGrandBondCeMode: mode,
+    });
   };
 
   const handleSelect = (servant: Servant) => {
@@ -912,6 +1245,18 @@ export function ContentGrid({
   // can re-open the dialog on a filled slot without that slot's own
   // servant disappearing from the list).
   const activeSlot = slots.find((s) => s.id === activeSlotId);
+  const activeCeSlot =
+    activeCeTarget?.type === "slot"
+      ? slots.find((s) => s.id === activeCeTarget.slotId)
+      : null;
+  const activeCeTargetMlbRequired =
+    activeCeTarget?.type === "grand"
+      ? supportGrandCeMlbRequired[activeCeTarget.index]
+      : activeCeSlot?.craftEssenceMlbRequired ?? true;
+  const showCeMlbOption =
+    activeCeTarget?.type === "grand" || activeCeSlot?.type === "support";
+  const showGrandBondOption =
+    activeCeTarget?.type === "grand" && activeCeTarget.index === 1;
   const disabledIds: number[] | undefined =
     activeSlot && activeSlot.type !== "support"
       ? slots
@@ -954,12 +1299,23 @@ export function ContentGrid({
       slot={slot}
       portraitSrc={slot.servant ? portraitMap[slot.servant.variantKey] : null}
       ceCardSrc={slot.craftEssence ? ceCardMap[slot.craftEssence.id] : null}
+      supportGrandMode={activeProject?.supportGrandMode ?? false}
+      supportGrandCraftEssences={supportGrandCraftEssences}
+      supportGrandCeCardSrcs={supportGrandCeCardSrcs}
+      supportGrandCeMlbRequired={supportGrandCeMlbRequired}
+      supportGrandBondCeMode={supportGrandBondCeMode}
+      mlbIconSrc={templateIconMap.icon_mlb_mark}
+      bondIconSrc={templateIconMap.icon_grand_bond_ce}
+      bondNpIconSrc={templateIconMap.icon_grand_bond_ce_np}
       supportNpLevel={activeProject?.supportNoblePhantasmLevelMin ?? null}
       supportSkillLevels={supportSkillLevels}
       supportAppendSkillLevels={supportAppendSkillLevels}
       onSelect={() => handleSlotClick(slot)}
       onCeSelect={() => handleCeSlotClick(slot.id)}
       onCeClear={() => handleCeClear(slot.id)}
+      onGrandModeToggle={handleGrandModeToggle}
+      onGrandCeSelect={handleGrandCeSlotClick}
+      onGrandCeClear={handleGrandCeClear}
       onSupportSettingsOpen={() => setSupportSettingsOpen(true)}
     />
   );
@@ -989,9 +1345,18 @@ export function ContentGrid({
 
       <CraftEssenceSelectDialog
         open={ceDialogOpen}
-        onOpenChange={setCeDialogOpen}
+        onOpenChange={(open) => {
+          setCeDialogOpen(open);
+          if (!open) setActiveCeTarget(null);
+        }}
         onSelect={handleCeSelect}
         craftEssences={craftEssences}
+        mlbRequired={activeCeTargetMlbRequired}
+        onMlbRequiredChange={showCeMlbOption ? handleCeMlbRequiredChange : undefined}
+        grandBondCeMode={supportGrandBondCeMode}
+        onGrandBondCeModeChange={
+          showGrandBondOption ? handleGrandBondCeModeChange : undefined
+        }
       />
 
       {supportSettingsOpen && (

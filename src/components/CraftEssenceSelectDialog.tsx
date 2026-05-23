@@ -1,18 +1,25 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import {
+  Checkbox,
   Dialog,
   Flex,
+  Select,
   Text,
   TextField,
 } from "@radix-ui/themes";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import type { CraftEssence } from "../types/craftEssence";
+import type { SupportGrandBondCeMode } from "../types/project";
 
 interface CraftEssenceSelectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (ce: CraftEssence) => void;
   craftEssences: CraftEssence[];
+  mlbRequired?: boolean;
+  onMlbRequiredChange?: (required: boolean) => void;
+  grandBondCeMode?: SupportGrandBondCeMode;
+  onGrandBondCeModeChange?: (mode: SupportGrandBondCeMode) => void;
 }
 
 const ROW_HEIGHT = 40;
@@ -37,6 +44,10 @@ export function CraftEssenceSelectDialog({
   onOpenChange,
   onSelect,
   craftEssences,
+  mlbRequired,
+  onMlbRequiredChange,
+  grandBondCeMode,
+  onGrandBondCeModeChange,
 }: CraftEssenceSelectDialogProps) {
   const [search, setSearch] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -167,6 +178,38 @@ export function CraftEssenceSelectDialog({
           <Text size="1" color="gray" mt="2">
             共 {filtered.length} 项，输入名称以精确查找
           </Text>
+        )}
+
+        {onMlbRequiredChange && (
+          <Flex gap="3" align="center" wrap="wrap" mt="3">
+            <label className="ce-select-option">
+              <Checkbox
+                checked={mlbRequired ?? true}
+                onCheckedChange={(checked) => onMlbRequiredChange(checked === true)}
+              />
+              <Text size="2">满破礼装</Text>
+            </label>
+            {onGrandBondCeModeChange && (
+              <Flex gap="2" align="center">
+                <Text size="2" color="gray">
+                  牵绊形态
+                </Text>
+                <Select.Root
+                  value={grandBondCeMode ?? "any"}
+                  onValueChange={(value) =>
+                    onGrandBondCeModeChange(value as SupportGrandBondCeMode)
+                  }
+                >
+                  <Select.Trigger aria-label="冠位牵绊礼装形态" />
+                  <Select.Content>
+                    <Select.Item value="any">任意</Select.Item>
+                    <Select.Item value="bond">原始牵绊</Select.Item>
+                    <Select.Item value="bondNp">冠位连接牵绊</Select.Item>
+                  </Select.Content>
+                </Select.Root>
+              </Flex>
+            )}
+          </Flex>
         )}
 
         <div

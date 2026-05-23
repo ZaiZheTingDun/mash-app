@@ -96,6 +96,20 @@ must be a distinct OCR fragment below the servant-name fragment in the
 same row. This prevents servants whose displayed name and NP text are the
 same from reusing the name line as a false NP match.
 
+## Support Craft Essence Filter
+
+When a support CE is configured, the runner first matches the row's CE
+art against `assets/ces/{id}/card_ce.png`. If the slot's MLB requirement
+is enabled (default), the same `verify_support_ce` call also requires
+`icon_mlb_mark` in the CE's lower-right area.
+
+Grand support mode replaces the single CE check with three positional CE
+checks. Unconfigured Grand slots are skipped. Each configured slot can
+require MLB independently. The second Grand slot can additionally require
+one of the Grand bond icons: `icon_grand_bond_ce` for the original bond
+CE, or `icon_grand_bond_ce_np` for the Grand-linked bond CE. Enabled CE
+art and icon checks must all pass before the row can be selected.
+
 ## Support Skill / NP Level Filter (CN)
 
 When the active project sets any of `supportNoblePhantasmLevelMin`,

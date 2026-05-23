@@ -373,6 +373,12 @@ pub struct ProjectSlot {
     /// the support-select screen, party slots store it for future use.
     #[serde(default)]
     pub craft_essence_id: Option<u32>,
+    #[serde(default = "default_true")]
+    pub craft_essence_mlb_required: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Default 6-slot layout used both when creating a fresh project and when
@@ -384,6 +390,7 @@ fn default_project_slots() -> Vec<ProjectSlot> {
         servant_id: None,
         servant_variant_key: None,
         craft_essence_id: None,
+        craft_essence_mlb_required: true,
     };
     vec![
         new_slot("slot-0", "servant"),
@@ -401,6 +408,28 @@ fn default_support_skill_level_mins() -> [Option<u32>; 3] {
 
 fn default_support_append_skill_level_mins() -> [Option<u32>; 5] {
     [None; 5]
+}
+
+fn default_support_grand_craft_essence_ids() -> [Option<u32>; 3] {
+    [None; 3]
+}
+
+fn default_support_grand_craft_essence_mlb_required() -> [bool; 3] {
+    [true; 3]
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SupportGrandBondCeMode {
+    Any,
+    Bond,
+    BondNp,
+}
+
+impl Default for SupportGrandBondCeMode {
+    fn default() -> Self {
+        Self::Any
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -436,6 +465,14 @@ pub struct Project {
     pub support_servant_id: Option<u32>,
     #[serde(default)]
     pub support_servant_variant_key: Option<String>,
+    #[serde(default)]
+    pub support_grand_mode: bool,
+    #[serde(default = "default_support_grand_craft_essence_ids")]
+    pub support_grand_craft_essence_ids: [Option<u32>; 3],
+    #[serde(default = "default_support_grand_craft_essence_mlb_required")]
+    pub support_grand_craft_essence_mlb_required: [bool; 3],
+    #[serde(default)]
+    pub support_grand_bond_ce_mode: SupportGrandBondCeMode,
     /// Optional support-search NP minimum level. `None` means "任意".
     #[serde(default)]
     pub support_noble_phantasm_level_min: Option<u32>,
@@ -686,6 +723,11 @@ fn create_project(
         advanced_mode: advanced_mode.unwrap_or(false),
         support_servant_id: None,
         support_servant_variant_key: None,
+        support_grand_mode: false,
+        support_grand_craft_essence_ids: default_support_grand_craft_essence_ids(),
+        support_grand_craft_essence_mlb_required:
+            default_support_grand_craft_essence_mlb_required(),
+        support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
         support_noble_phantasm_level_min: None,
         support_skill_level_mins: default_support_skill_level_mins(),
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
@@ -1282,6 +1324,28 @@ fn get_craft_essence_card_path(
     Ok(pick_ce_card_in(&root, craft_essence_id).map(|p| p.to_string_lossy().into_owned()))
 }
 
+#[tauri::command]
+fn get_template_asset_path(
+    app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
+    template_key: String,
+) -> Result<Option<String>, String> {
+    let key = template_key.replace('\\', "/");
+    if key.is_empty() || key.starts_with('.') || key.contains("/../") {
+        return Err("invalid template key".into());
+    }
+    let server = *server_state.lock().unwrap();
+    let Some(root) = resolve_templates_dir(&app, server) else {
+        return Ok(None);
+    };
+    let path = root.join(format!("{key}.png"));
+    if path.is_file() {
+        Ok(Some(path.to_string_lossy().into_owned()))
+    } else {
+        Ok(None)
+    }
+}
+
 /// Subset of `assets/servants/{id}/servant.json` needed by the OCR-based
 /// support detector: the servant's primary name and every Noble Phantasm
 /// name. The frontend uses this to seed `find_supports` from a chosen
@@ -1376,7 +1440,9 @@ fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
 /// (as opposed to their NPs). Built once from `servants_data()`. Same
 /// preference and drop rules as the NP index: use `name_cn_server` when
 /// present, otherwise `name_cn`; skip only entries whose JP or CN field
-/// is missing.
+/// is missing. This is only a fallback for data without a stable servant
+/// id; id-aware lookups must use `localize_servant_name_by_id` because
+/// several servants share the same JP display name.
 fn servant_jp_to_cn_index() -> &'static HashMap<String, String> {
     static INDEX: OnceLock<HashMap<String, String>> = OnceLock::new();
     INDEX.get_or_init(|| {
@@ -1395,6 +1461,27 @@ fn servant_jp_to_cn_index() -> &'static HashMap<String, String> {
         }
         map
     })
+}
+
+fn servant_id_to_cn_index() -> &'static HashMap<u32, String> {
+    static INDEX: OnceLock<HashMap<u32, String>> = OnceLock::new();
+    INDEX.get_or_init(|| {
+        let mut map: HashMap<u32, String> = HashMap::new();
+        for s in servants_data() {
+            let cn = s.name_cn_server.as_deref().unwrap_or(&s.name_cn).trim();
+            if !cn.is_empty() {
+                map.entry(s.id).or_insert_with(|| cn.to_string());
+            }
+        }
+        map
+    })
+}
+
+fn localize_servant_name_by_id(id: u32, jp: &str) -> String {
+    servant_id_to_cn_index()
+        .get(&id)
+        .cloned()
+        .unwrap_or_else(|| localize_servant_name(jp))
 }
 
 /// Translate one Atlas JP servant name into the string the CN client
@@ -1495,7 +1582,7 @@ pub(crate) fn load_servant_metadata(
     let (name, np_names) = match server {
         Server::Jp => (name_jp, np_names_jp),
         Server::Cn => {
-            let cn_name = localize_servant_name(&name_jp);
+            let cn_name = localize_servant_name_by_id(id, &name_jp);
             let cn_nps = localize_np_names(&np_names_jp);
             let dropped = np_names_jp.len().saturating_sub(cn_nps.len());
             if dropped > 0 {
@@ -3296,6 +3383,7 @@ pub fn run() {
             get_servant_portrait_path,
             get_servant_face_path,
             get_craft_essence_card_path,
+            get_template_asset_path,
             save_battle_scenes,
             load_battle_scenes,
             save_advanced_battle_scenes,
@@ -3549,6 +3637,7 @@ mod tests {
         assert_eq!(slot.kind, "servant");
         assert_eq!(slot.servant_id, Some(284));
         assert!(slot.craft_essence_id.is_none());
+        assert_eq!(slot.craft_essence_mlb_required, true);
     }
 
     #[test]
@@ -3561,10 +3650,12 @@ mod tests {
         });
         let slot: ProjectSlot = serde_json::from_value(json.clone()).unwrap();
         assert_eq!(slot.craft_essence_id, Some(1485));
+        assert_eq!(slot.craft_essence_mlb_required, true);
 
         // Camel-case rename round-trips on serialize too.
         let serialized = serde_json::to_value(&slot).unwrap();
         assert_eq!(serialized["craftEssenceId"], serde_json::json!(1485));
+        assert_eq!(serialized["craftEssenceMlbRequired"], serde_json::json!(true));
         assert_eq!(serialized["servantId"], serde_json::json!(284));
         assert_eq!(serialized["type"], serde_json::json!("support"));
     }
@@ -3581,6 +3672,7 @@ mod tests {
         let slot: ProjectSlot = serde_json::from_value(json).unwrap();
         assert!(slot.servant_id.is_none());
         assert!(slot.craft_essence_id.is_none());
+        assert_eq!(slot.craft_essence_mlb_required, true);
     }
 
     // --- Project (top-level legacy JSON) -------------------------------
@@ -3598,6 +3690,10 @@ mod tests {
         assert_eq!(project.slots.len(), 6);
         assert_eq!(project.advanced_mode, false);
         assert!(project.support_servant_id.is_none());
+        assert_eq!(project.support_grand_mode, false);
+        assert_eq!(project.support_grand_craft_essence_ids, [None; 3]);
+        assert_eq!(project.support_grand_craft_essence_mlb_required, [true; 3]);
+        assert_eq!(project.support_grand_bond_ce_mode, SupportGrandBondCeMode::Any);
         assert!(project.support_noble_phantasm_level_min.is_none());
         assert_eq!(project.support_skill_level_mins, [None; 3]);
         assert_eq!(project.support_append_skill_level_mins, [None; 5]);
@@ -3615,6 +3711,11 @@ mod tests {
             advanced_mode: false,
             support_servant_id: None,
             support_servant_variant_key: None,
+            support_grand_mode: false,
+            support_grand_craft_essence_ids: default_support_grand_craft_essence_ids(),
+            support_grand_craft_essence_mlb_required:
+                default_support_grand_craft_essence_mlb_required(),
+            support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
             support_noble_phantasm_level_min: None,
             support_skill_level_mins: default_support_skill_level_mins(),
             support_append_skill_level_mins: default_support_append_skill_level_mins(),
@@ -4412,6 +4513,14 @@ mod tests {
             idx.get(&normalize_jp_key("メドゥーサ")).map(|s| s.as_str()),
             Some("歌果")
         );
+    }
+
+    #[test]
+    fn servant_id_cn_index_keeps_same_jp_names_distinct() {
+        let idx = servant_id_to_cn_index();
+        assert_eq!(idx.get(&23).map(|s| s.as_str()), Some("歌果"));
+        assert_eq!(idx.get(&384).map(|s| s.as_str()), Some("美杜莎"));
+        assert_eq!(localize_servant_name_by_id(384, "メドゥーサ"), "美杜莎");
     }
 
     #[test]

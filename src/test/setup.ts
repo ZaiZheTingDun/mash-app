@@ -193,6 +193,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "get_servant_portrait_path":
       case "get_servant_face_path":
       case "get_craft_essence_card_path":
+      case "get_template_asset_path":
         return null;
       default:
         return null;

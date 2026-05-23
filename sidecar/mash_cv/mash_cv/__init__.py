@@ -38,6 +38,7 @@ from mash_cv.cv import (
     _slot_to_pixels,
     _suit_sample_bbox,
     main,
+    template_masks,
     templates,
 )
 
@@ -92,5 +93,6 @@ __all__ = [
     "_slot_to_pixels",
     "_suit_sample_bbox",
     "main",
+    "template_masks",
     "templates",
 ]

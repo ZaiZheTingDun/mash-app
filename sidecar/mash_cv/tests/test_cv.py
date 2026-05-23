@@ -661,6 +661,9 @@ _PROD_TEMPLATES_DIR = os.path.normpath(
 # Per-server production templates. Used by tests that exercise CN-specific
 # behaviour (different label glyphs / digit fonts) and need the real
 # bundle rather than the pruned tests/test_data/ copy.
+_REPO_ROOT = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..")
+)
 _PROD_CN_TEMPLATES_DIR = os.path.normpath(
     os.path.join(
         os.path.dirname(__file__),
@@ -1841,6 +1844,26 @@ def test_support_find_score_anchors_locates_one_per_visible_row():
             )
 
 
+def test_support_find_confirm_button_anchors_prefers_cn_template():
+    import mash_cv.cv as cv
+
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    tmpl = cv._get_template(cv.SUPPORT_CONFIRM_BUTTON_TEMPLATE)
+    assert tmpl is not None
+
+    img = np.full((1440, 2560, 3), 96, dtype=np.uint8)
+    for x, y in [(2178, 666), (2178, 1066)]:
+        h, w = tmpl.shape[:2]
+        img[y : y + h, x : x + w] = cv2.cvtColor(tmpl, cv2.COLOR_GRAY2BGR)
+
+    anchors = cv._support_find_confirm_button_anchors(img)
+    assert len(anchors) == 2
+    assert all(anchor["source"] == "buttonTemplate" for anchor in anchors)
+    assert anchors[0]["score"] >= cv.SUPPORT_CONFIRM_BUTTON_TEMPLATE_THRESHOLD
+    assert anchors[0]["x"] == pytest.approx(2178 / 2560)
+    assert anchors[0]["y"] == pytest.approx(666 / 1440)
+
+
 @pytest.mark.skipif(
     not os.path.isfile(
         os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug1.png"))
@@ -2216,6 +2239,44 @@ class TestVerifySupportCE:
         assert result["passed"] is True, result
         assert result["score"] > 0.95, result
 
+    def test_requires_mlb_icon_when_requested(self, tmp_path):
+        import mash_cv.cv as cv
+        from mash_cv.cv import _verify_support_ce
+
+        img_w, img_h = 2560, 1440
+        target_w, target_h = _ce_target_pixel_size(img_w, img_h)
+
+        tmpl_path = str(tmp_path / "card_ce.png")
+        icon_bgr = _build_template_png(tmpl_path, target_w, target_h)
+
+        img = _make_bgr_image(img_w, img_h, bgr=(40, 40, 40))
+        py, px = 600, 400
+        img[py : py + target_h, px : px + target_w] = icon_bgr
+        region = {
+            "x": (px - 20) / img_w,
+            "y": (py - 20) / img_h,
+            "w": (target_w + 60) / img_w,
+            "h": (target_h + 60) / img_h,
+        }
+
+        mlb = np.zeros((16, 16), dtype=np.uint8)
+        cv2.rectangle(mlb, (2, 2), (13, 13), 255, 2)
+        cv.templates[cv.CE_MLB_ICON_TEMPLATE] = mlb
+        try:
+            missing = _verify_support_ce(img, region, tmpl_path, 0.7, True)
+            assert missing["passed"] is False, missing
+            assert missing["iconChecks"][0]["kind"] == "mlb"
+
+            img[
+                py + target_h - 18 : py + target_h - 2,
+                px + target_w - 18 : px + target_w - 2,
+            ] = cv2.cvtColor(mlb, cv2.COLOR_GRAY2BGR)
+            found = _verify_support_ce(img, region, tmpl_path, 0.7, True)
+            assert found["passed"] is True, found
+            assert found["iconChecks"][0]["passed"] is True
+        finally:
+            cv.templates.pop(cv.CE_MLB_ICON_TEMPLATE, None)
+
     def test_fails_when_template_mismatched(self, tmp_path):
         from mash_cv.cv import _verify_support_ce
 
@@ -2280,6 +2341,502 @@ class TestLoadCETemplate:
         # ensures any future refactor that drops the crop is caught.
         assert CE_TEMPLATE_TOP_CROP > 0
         assert CE_TEMPLATE_BOTTOM_CROP > 0
+
+
+# ── Grand-Bond / Grand-Bond-NP decoration icons ─────────────────────────
+#
+# The Grand-Saber support layout shows three CE strips per row, with the
+# middle slot reserved for a "Grand Bond CE". When the runner is told to
+# require a specific bond-CE flavour it asks the sidecar to verify the
+# small decoration icon overlay (the gem orb for ``bond``, the
+# orange sword/throne for ``bondNp``) at a fixed offset inside that
+# slot. The bundled icon templates must therefore be sized so that
+# ``cv2.matchTemplate`` lands above the 0.70 decoration threshold on real
+# 2560-wide captures — historically the orb was extracted at 74×74 and
+# the bondNp sword at 97×105 from a higher-DPI source, which dropped the
+# CCOEFF score to ~0.01–0.4 and made the runner skip every row.
+
+
+@pytest.mark.skipif(
+    not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
+    reason="CN production templates dir not available",
+)
+class TestGrandBondDecorationIcons:
+    """Regression on the bundled CN templates against a real Grand-Saber
+    support-select capture (``grand_support_bond.png``)."""
+
+    FIXTURE = os.path.join(_TEST_SCREENSHOTS_DIR, "grand_support_bond.png")
+
+    # Mirror the runner constants. Kept inline so a calibration drift
+    # surfaces here instead of silently in the runner.
+    SUPPORT_GRAND_CE_X = 0.172
+    SUPPORT_GRAND_CE_W = 0.124
+    SUPPORT_GRAND_CE_H = 0.064
+    SUPPORT_GRAND_CE_THIRD_CENTER_FROM_BUTTON_TOP_Y = 0.180
+
+    BOND_REL = {"x": -0.05, "y": -0.35, "w": 0.58, "h": 1.05}
+    BOND_NP_REL = {"x": -0.08, "y": -0.45, "w": 0.66, "h": 1.20}
+
+    @classmethod
+    def _slot_region(cls, button_y_norm: float, slot: int) -> dict:
+        third_center_y = button_y_norm + cls.SUPPORT_GRAND_CE_THIRD_CENTER_FROM_BUTTON_TOP_Y
+        center_y = third_center_y - (2 - slot) * cls.SUPPORT_GRAND_CE_H
+        return {
+            "x": cls.SUPPORT_GRAND_CE_X,
+            "y": center_y - cls.SUPPORT_GRAND_CE_H / 2.0,
+            "w": cls.SUPPORT_GRAND_CE_W,
+            "h": cls.SUPPORT_GRAND_CE_H,
+        }
+
+    @pytest.fixture(autouse=True)
+    def _load_cn_templates(self):
+        from mash_cv.cv import (
+            CE_GRAND_BOND_TEMPLATE,
+            CE_GRAND_BOND_NP_TEMPLATE,
+        )
+
+        mash_cv.templates.clear()
+        mash_cv.template_masks.clear()
+        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+        assert result["ok"], result
+        # The decoration icons must actually be present — a missing PNG
+        # would silently zero out the score and look like a calibration
+        # bug from the outside.
+        assert CE_GRAND_BOND_TEMPLATE in mash_cv.templates
+        assert CE_GRAND_BOND_NP_TEMPLATE in mash_cv.templates
+        yield
+        mash_cv.templates.clear()
+        mash_cv.template_masks.clear()
+
+    def test_bond_orb_matches_in_top_row_slot1(self):
+        """Top (partial) row of the fixture has its CE-1 slot decorated
+        with the Grand-Bond orb. With a correctly sized template the
+        decoration check returns ``passed=True`` at ~0.88."""
+        from mash_cv.cv import (
+            CE_GRAND_BOND_TEMPLATE,
+            _verify_ce_decoration_icon,
+        )
+
+        img = cv2.imread(self.FIXTURE, cv2.IMREAD_COLOR)
+        assert img is not None, f"missing fixture: {self.FIXTURE}"
+        # The top row's confirm button is just off-screen above the
+        # capture. Pin its expected y from the visible layout: rows are
+        # spaced ~0.278 apart vertically, and the second visible row
+        # (Iori) has its button at y≈0.435.
+        ce1 = self._slot_region(button_y_norm=0.157, slot=1)
+        result = _verify_ce_decoration_icon(
+            img,
+            ce1,
+            CE_GRAND_BOND_TEMPLATE,
+            "grandBond",
+            self.BOND_REL,
+        )
+        assert result["passed"] is True, result
+        assert result["score"] > 0.80, result
+
+    def test_bondnp_sword_matches_in_iori_slot1(self):
+        """Iori's CE-1 slot in the fixture is decorated with the
+        Grand-Bond-NP orange sword/throne. The fix's load-bearing
+        regression: at the old 97×105 template size this scored ~0.01."""
+        from mash_cv.cv import (
+            CE_GRAND_BOND_NP_TEMPLATE,
+            _verify_ce_decoration_icon,
+        )
+
+        img = cv2.imread(self.FIXTURE, cv2.IMREAD_COLOR)
+        assert img is not None
+        # 助战编队确认 button OCR-anchor: y≈0.435 for the second visible row.
+        ce1 = self._slot_region(button_y_norm=0.435, slot=1)
+        result = _verify_ce_decoration_icon(
+            img,
+            ce1,
+            CE_GRAND_BOND_NP_TEMPLATE,
+            "grandBondNp",
+            self.BOND_NP_REL,
+        )
+        assert result["passed"] is True, result
+        assert result["score"] > 0.80, result
+
+    def test_bond_orb_does_not_match_iori_slot1(self):
+        """Iori's slot-1 has the bondNp sword, *not* the bond orb. The
+        orb decoration check must fail there — exercising the negative
+        side stops a future template change from passing the orb check
+        on every CE slot."""
+        from mash_cv.cv import (
+            CE_GRAND_BOND_TEMPLATE,
+            _verify_ce_decoration_icon,
+        )
+
+        img = cv2.imread(self.FIXTURE, cv2.IMREAD_COLOR)
+        assert img is not None
+        ce1 = self._slot_region(button_y_norm=0.435, slot=1)
+        result = _verify_ce_decoration_icon(
+            img,
+            ce1,
+            CE_GRAND_BOND_TEMPLATE,
+            "grandBond",
+            self.BOND_REL,
+        )
+        assert result["passed"] is False, result
+        assert result["score"] < 0.50, result
+
+    def test_decoration_icon_template_sizes_track_2560_reference(self):
+        """Bundled decoration-icon PNGs must be sized to the on-screen
+        pixel size at the 2560-wide reference resolution. Anything
+        materially larger would put the template out of scale with the
+        runner's frames and drop the CCOEFF score below threshold —
+        which is exactly the bug this regression guards against."""
+        from mash_cv.cv import (
+            CE_GRAND_BOND_TEMPLATE,
+            CE_GRAND_BOND_NP_TEMPLATE,
+            CE_MLB_ICON_TEMPLATE,
+        )
+
+        # Allow a small ± slack so the test doesn't pin pixel-perfect
+        # crops; the goal is to catch templates that are ~50–100% too
+        # big (the historic failure mode), not to enforce a single
+        # canonical crop.
+        for key, max_dim in (
+            (CE_GRAND_BOND_TEMPLATE, 60),
+            (CE_GRAND_BOND_NP_TEMPLATE, 60),
+            (CE_MLB_ICON_TEMPLATE, 60),
+        ):
+            tmpl = mash_cv.templates[key]
+            h, w = tmpl.shape[:2]
+            assert max(h, w) <= max_dim, (
+                f"{key} template ({w}x{h}) exceeds the on-screen "
+                f"footprint at 2560-wide frames; resize to ≤{max_dim}px."
+            )
+
+    def test_decoration_icon_alpha_masks_loaded(self):
+        """``_load_templates`` must register an alpha mask for every
+        decoration icon whose source PNG has transparent corners. The
+        MLB-star template in particular has the largest transparent-area
+        ratio of the three; without a mask the transparent corners are
+        composited onto black and ``cv2.matchTemplate`` only matches
+        when the on-screen surroundings are also dark (clean dark-blue
+        bond panels) — it collapses on character-art backgrounds."""
+        from mash_cv.cv import (
+            CE_GRAND_BOND_TEMPLATE,
+            CE_GRAND_BOND_NP_TEMPLATE,
+            CE_MLB_ICON_TEMPLATE,
+        )
+
+        for key in (
+            CE_GRAND_BOND_TEMPLATE,
+            CE_GRAND_BOND_NP_TEMPLATE,
+            CE_MLB_ICON_TEMPLATE,
+        ):
+            assert key in mash_cv.template_masks, (
+                f"{key} should have an alpha mask loaded — its source "
+                "PNG has transparent corners that must be excluded from "
+                "matchTemplate to score correctly on busy backgrounds."
+            )
+            mask = mash_cv.template_masks[key]
+            tmpl = mash_cv.templates[key]
+            assert mask.shape == tmpl.shape[:2], (
+                f"{key} mask shape {mask.shape} must match template "
+                f"shape {tmpl.shape[:2]} so cv2.matchTemplate accepts it."
+            )
+            # A mask whose pixels are all 255 wouldn't have been
+            # registered (we drop fully-opaque masks to keep the
+            # match path cheap), so by being here we know there is at
+            # least one transparent pixel — assert it explicitly to
+            # document the invariant.
+            assert (mask < 255).any(), (
+                f"{key} mask was registered but every pixel is opaque; "
+                "the loader should not store no-op masks."
+            )
+
+    def test_mlb_icon_score_survives_busy_background(self):
+        """Slot 2 of Iori's row in the fixture has a fully-limit-broken
+        CE whose MLB star sits on top of Mash's pink hair — i.e. a
+        bright, busy character-art background rather than the clean
+        dark-blue panel behind a Grand-Bond CE. The pre-mask code path
+        scored ~0.39 here (because the transparent corners of the MLB
+        template were composited onto black, mismatching the pink hair
+        behind them) and the runner therefore reported "满破图标不匹配"
+        on a row that *is* MLB'd. With alpha-aware matching the score
+        must comfortably clear the 0.70 decoration threshold."""
+        from mash_cv.cv import (
+            CE_MLB_ICON_TEMPLATE,
+            _verify_ce_decoration_icon,
+        )
+
+        img = cv2.imread(self.FIXTURE, cv2.IMREAD_COLOR)
+        assert img is not None
+        ce2 = self._slot_region(button_y_norm=0.435, slot=2)
+        result = _verify_ce_decoration_icon(
+            img,
+            ce2,
+            CE_MLB_ICON_TEMPLATE,
+            "mlb",
+            {"x": 0.55, "y": 0.30, "w": 0.45, "h": 0.70},
+        )
+        assert result["passed"] is True, result
+        assert result["score"] > 0.80, result
+
+        # Slot 0 has *no* MLB star (regular non-MLB CE). The masked
+        # match must still reject it — otherwise we have made the check
+        # too permissive and would silently pass non-MLB rows.
+        ce0 = self._slot_region(button_y_norm=0.435, slot=0)
+        absent = _verify_ce_decoration_icon(
+            img,
+            ce0,
+            CE_MLB_ICON_TEMPLATE,
+            "mlb",
+            {"x": 0.55, "y": 0.30, "w": 0.45, "h": 0.70},
+        )
+        assert absent["passed"] is False, absent
+        assert absent["score"] < 0.65, absent
+
+    def test_bond_mode_uses_narrow_artwork_search_region(self, tmp_path):
+        """In a Grand Saber bond row the on-screen thumbnail renders the
+        CE artwork at the asset's native ~2.2:1 aspect ratio centered
+        within the wider 3.45:1 slot rect; the side margins carry the
+        orb / throne icon (left) and the MLB star (right). When the
+        runner naively searches over the full slot rect those bright
+        decoration overlays dominate ``cv2.matchTemplate`` and the
+        correlation collapses (~0.05 even when the asset and the
+        on-screen thumbnail come from the same source image —
+        Iori's ``card_ce.png`` of CE 1972 hits 0.06 against slot 1
+        without this fix).
+
+        ``_verify_support_ce`` therefore insets the artwork-search rect
+        by ``BOND_CE_ARTWORK_INSET_FRAC`` on each side when bond /
+        bondNp mode is active, so the search box matches the asset's
+        aspect ratio and excludes the decoration overlays. We verify
+        the geometry (and the discrimination it produces) using a
+        fully synthetic fixture: a dark gradient patch flanked by
+        saturated decorative blocks that mimic the throne + MLB
+        layout, and an asset whose 16/16-cropped middle band is
+        identical to the on-screen artwork so the match should
+        succeed exactly when (and only when) the inset excludes the
+        bright margins."""
+        from mash_cv.cv import _verify_support_ce, BOND_CE_ARTWORK_INSET_FRAC
+
+        H, W = 1440, 2560
+        img = np.full((H, W, 3), 8, dtype=np.uint8)  # global dim background
+        sx, sy, sw, sh = 440, 746, 317, 92  # bond slot rect (matches fixture)
+        # Width of the inner artwork band that lines up with the
+        # asset's native aspect (150 / 68 * 92 ≈ 203). We compose the
+        # band first, then derive the asset directly from the same
+        # pixels so we sidestep alignment quirks of synthetic art.
+        art_w = round(92 * 150 / 68)  # 203
+        margin = (sw - art_w) // 2   # 57 px each side
+
+        # Build the inner artwork: a horizontal gradient + a localised
+        # bright "moon" blob so cv2.matchTemplate has texture to lock
+        # onto — uniform dark sky scores poorly even when aligned.
+        art = np.zeros((sh, art_w, 3), dtype=np.uint8)
+        for i in range(sh):
+            art[i, :] = (10 + (i * 15) // sh, 30 + (i * 12) // sh, 20)
+        cv2.circle(art, (art_w // 2 - 35, 20), 9, (240, 240, 240), -1)
+        cv2.circle(art, (art_w - 30, sh - 25), 4, (200, 200, 200), -1)
+        # Stamp it into the slot.
+        img[sy : sy + sh, sx + margin : sx + margin + art_w] = art
+
+        # Throne icon overlay (left margin, saturated orange) — only
+        # touches the side strip the inset should exclude.
+        cv2.rectangle(
+            img,
+            (sx, sy + 5),
+            (sx + margin - 1, sy + sh - 5),
+            (40, 140, 255),
+            thickness=-1,
+        )
+        # MLB star overlay (right margin, saturated yellow):
+        cv2.rectangle(
+            img,
+            (sx + sw - margin + 1, sy + 5),
+            (sx + sw, sy + sh - 5),
+            (60, 240, 250),
+            thickness=-1,
+        )
+
+        # Build the matching ``card_ce.png`` at native 150x68 with the
+        # 16/16 frame border that ``_load_ce_template`` crops. The
+        # middle 150x36 band is the same artwork, downsampled, so the
+        # cropped+stretched template aligns with the on-screen render.
+        asset = np.full((68, 150, 3), 0, dtype=np.uint8)
+        inner = cv2.resize(art, (150, 36), interpolation=cv2.INTER_AREA)
+        asset[16:52, :] = inner
+        asset_path = tmp_path / "card_ce.png"
+        cv2.imwrite(str(asset_path), asset)
+
+        slot_region = {
+            "x": sx / W,
+            "y": sy / H,
+            "w": sw / W,
+            "h": sh / H,
+        }
+
+        plain = _verify_support_ce(img, slot_region, str(asset_path), 0.7)
+        bond = _verify_support_ce(
+            img, slot_region, str(asset_path), 0.7, grand_bond_ce_mode="bondNp"
+        )
+
+        # The decoration overlays should pull the un-inset score below
+        # the inset score by a wide margin. We don't pin an exact
+        # number because the gradient / blob choices are arbitrary;
+        # the invariant is: bond mode helps a lot.
+        assert bond["score"] > plain["score"] + 0.30, (
+            "bond mode should raise the artwork score by inset-excluding "
+            f"the decoration overlays. plain={plain['score']:.3f}, "
+            f"bond={bond['score']:.3f}"
+        )
+        # The inset constant is the load-bearing geometry — pin it so
+        # an accidental tweak (e.g. setting it to 0.10 because slot
+        # width changed in some other server) is caught loudly.
+        assert 0.15 <= BOND_CE_ARTWORK_INSET_FRAC <= 0.20
+
+    def test_bond_mode_relaxes_artwork_threshold(self, tmp_path):
+        """Bond CE artwork matches sit closer to the threshold than
+        regular CEs (right-asset score ~0.71 vs next-best ~0.69 on
+        Iori's row), so the runner-side ``SUPPORT_CE_THRESHOLD`` (0.70)
+        can flip the verdict on sub-pixel rendering jitter.
+        ``_verify_support_ce`` therefore relaxes the artwork threshold
+        to ``BOND_CE_ARTWORK_THRESHOLD`` (0.65) for bond / bondNp slots
+        only and surfaces the effective threshold in the response so
+        the runner log and the debug overlay can display the value
+        actually applied."""
+        from mash_cv.cv import (
+            _verify_support_ce,
+            BOND_CE_ARTWORK_THRESHOLD,
+        )
+
+        # Pin the relaxed-threshold constant so future tuning is loud.
+        assert 0.60 <= BOND_CE_ARTWORK_THRESHOLD <= 0.70
+        assert BOND_CE_ARTWORK_THRESHOLD == 0.65
+
+        # Build a 1px-grad asset whose match score against itself sits
+        # just below the runner-side 0.70 threshold but above the
+        # relaxed bond threshold. We need a slot that *contains* the
+        # asset's pattern (so the score is high) but with enough
+        # decoration noise around it that the score lands in the
+        # 0.65-0.70 band — exactly the case the relaxation is for.
+        H, W = 1440, 2560
+        img = np.full((H, W, 3), 8, dtype=np.uint8)
+        sx, sy, sw, sh = 440, 746, 317, 92
+        art_w = round(92 * 150 / 68)
+        margin = (sw - art_w) // 2
+        # Subtler, lower-contrast artwork than the previous test so the
+        # match score lands below 0.70 even with bond-mode narrowing.
+        rng = np.random.default_rng(seed=42)
+        art = rng.integers(20, 35, size=(sh, art_w, 3), dtype=np.uint8)
+        cv2.circle(art, (art_w // 2, sh // 2), 4, (110, 110, 110), -1)
+        img[sy : sy + sh, sx + margin : sx + margin + art_w] = art
+        # Decoration overlays still sit in the side margins so the
+        # narrowing logic kicks in normally; we keep them subtle so
+        # the score stays in the relaxation band rather than jumping
+        # well above 0.70.
+        cv2.rectangle(
+            img,
+            (sx, sy + 5),
+            (sx + margin - 1, sy + sh - 5),
+            (60, 130, 200),
+            thickness=-1,
+        )
+        cv2.rectangle(
+            img,
+            (sx + sw - margin + 1, sy + 5),
+            (sx + sw, sy + sh - 5),
+            (90, 200, 220),
+            thickness=-1,
+        )
+        # Mildly perturb the asset relative to the on-screen rendering
+        # (50% blend with the asset's own mean) so the self-match score
+        # drops into the relaxation band.
+        asset = np.full((68, 150, 3), 0, dtype=np.uint8)
+        inner = cv2.resize(art, (150, 36), interpolation=cv2.INTER_AREA)
+        # Drop contrast so the cropped + force-stretched template no
+        # longer self-matches at near-1.0; 0.65–0.69 is the band the
+        # relaxation should rescue.
+        blended = cv2.addWeighted(
+            inner, 0.50, np.full_like(inner, int(inner.mean())), 0.50, 0
+        )
+        asset[16:52, :] = blended
+        asset_path = tmp_path / "card_ce.png"
+        cv2.imwrite(str(asset_path), asset)
+
+        slot_region = {"x": sx / W, "y": sy / H, "w": sw / W, "h": sh / H}
+        # The runner-side threshold the test uses; the sidecar should
+        # ignore it for bond rows in favour of the relaxed value.
+        runner_threshold = 0.70
+        bond = _verify_support_ce(
+            img, slot_region, str(asset_path), runner_threshold,
+            grand_bond_ce_mode="bondNp",
+        )
+        # The response carries the *effective* threshold the sidecar
+        # actually compared against — the runner reads this so its log
+        # and the debug overlay don't contradict the verdict.
+        assert "threshold" in bond, bond
+        assert bond["threshold"] == BOND_CE_ARTWORK_THRESHOLD, bond
+
+        # Non-bond rows continue to receive the unmodified runner
+        # threshold so we don't accidentally relax regular CE matches.
+        plain = _verify_support_ce(
+            img, slot_region, str(asset_path), runner_threshold,
+        )
+        assert plain["threshold"] == runner_threshold, plain
+
+        # If the caller passes a tighter threshold than the relaxation
+        # constant, the sidecar must respect it — the relaxation is
+        # only meant to *relax*, not to override stricter callers.
+        strict = _verify_support_ce(
+            img, slot_region, str(asset_path), 0.30,
+            grand_bond_ce_mode="bondNp",
+        )
+        assert strict["threshold"] == 0.30, strict
+
+    @pytest.mark.skipif(
+        not os.path.isfile(
+            os.path.join(_REPO_ROOT, "src-tauri/assets/ces/1972/card_ce.png")
+        ),
+        reason="Iori's bond CE asset (1972) is gitignored locally; skip when absent",
+    )
+    def test_iori_bond_ce_matches_real_asset_on_grand_row(self):
+        """Regression for the user-reported failure: ``Iori's bond
+        slot`` on ``grand_support_bond.png`` scored 0.059 when
+        verified against ``src-tauri/assets/ces/1972/card_ce.png``,
+        even though the slot thumbnail and the asset come from the
+        same source artwork (a dark sky with a crescent moon). After
+        the bond-aware narrow-region fix the same call should pass
+        the row, and a wrong CE asset on the same slot must still
+        fail."""
+        from mash_cv.cv import _verify_support_ce
+
+        img = cv2.imread(self.FIXTURE, cv2.IMREAD_COLOR)
+        assert img is not None
+        ce1 = self._slot_region(button_y_norm=0.435, slot=1)
+
+        right_asset = os.path.join(
+            _REPO_ROOT, "src-tauri/assets/ces/1972/card_ce.png"
+        )
+        result = _verify_support_ce(
+            img, ce1, right_asset, 0.7, mlb_required=False, grand_bond_ce_mode="bondNp"
+        )
+        assert result["score"] >= 0.70, (
+            "Iori's bond CE (1972) should match slot 1 with the bond-aware "
+            "narrow-region search. Got: " + repr(result)
+        )
+
+        # Discrimination: a CE that isn't on screen must stay below
+        # the threshold even with the same narrow search.
+        candidates = [
+            "src-tauri/assets/ces/910/card_ce.png",
+            "src-tauri/assets/ces/48/card_ce.png",
+        ]
+        for rel in candidates:
+            wrong = os.path.join(_REPO_ROOT, rel)
+            if not os.path.isfile(wrong):
+                continue
+            wrong_result = _verify_support_ce(
+                img, ce1, wrong, 0.7, mlb_required=False, grand_bond_ce_mode="bondNp"
+            )
+            assert wrong_result["score"] < 0.70, (
+                f"wrong asset {rel} unexpectedly passed slot 1: " + repr(wrong_result)
+            )
 
 
 # ── _set_server ─────────────────────────────────────────────────────────

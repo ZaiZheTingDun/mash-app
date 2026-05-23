@@ -16,6 +16,7 @@ export interface ProjectSlot {
    * CEs are stored for future use.
    */
   craftEssenceId?: number | null;
+  craftEssenceMlbRequired?: boolean;
 }
 
 export type BattleRepeatMode = "single" | "infinite" | "count";
@@ -33,6 +34,15 @@ export type SupportAppendSkillLevelMins = [
   number | null,
   number | null,
 ];
+
+export type SupportGrandCraftEssenceIds = [
+  number | null,
+  number | null,
+  number | null,
+];
+
+export type SupportGrandCraftEssenceMlbRequired = [boolean, boolean, boolean];
+export type SupportGrandBondCeMode = "any" | "bond" | "bondNp";
 
 export type BattleApRecoveryItem =
   | "gold"
@@ -53,6 +63,10 @@ export interface Project {
    */
   supportServantId?: number | null;
   supportServantVariantKey?: string | null;
+  supportGrandMode?: boolean;
+  supportGrandCraftEssenceIds?: SupportGrandCraftEssenceIds;
+  supportGrandCraftEssenceMlbRequired?: SupportGrandCraftEssenceMlbRequired;
+  supportGrandBondCeMode?: SupportGrandBondCeMode;
   supportNoblePhantasmLevelMin?: number | null;
   supportSkillLevelMins?: SupportSkillLevelMins;
   supportAppendSkillLevelMins?: SupportAppendSkillLevelMins;

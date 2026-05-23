@@ -1,6 +1,7 @@
 use crate::adb::Adb;
 use crate::screen::{
     CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient, SupportRowMatch,
+    SupportCeVerificationOptions,
 };
 use crate::{
     load_servant_metadata, servant_np_card, Action, AdvancedBattleScene,
@@ -66,6 +67,16 @@ pub struct RunConfig {
     /// first OCR match.
     #[serde(default)]
     pub support_craft_essence_id: Option<u32>,
+    #[serde(default = "default_true")]
+    pub support_craft_essence_mlb_required: bool,
+    #[serde(default)]
+    pub support_grand_mode: bool,
+    #[serde(default = "default_support_grand_craft_essence_ids")]
+    pub support_grand_craft_essence_ids: [Option<u32>; 3],
+    #[serde(default = "default_support_grand_craft_essence_mlb_required")]
+    pub support_grand_craft_essence_mlb_required: [bool; 3],
+    #[serde(default)]
+    pub support_grand_bond_ce_mode: SupportGrandBondCeMode,
     /// Minimum NP level required for the chosen support row. `None`
     /// disables the filter.
     #[serde(default)]
@@ -102,8 +113,34 @@ fn default_support_skill_level_mins() -> [Option<u32>; 3] {
     [None; 3]
 }
 
+fn default_true() -> bool {
+    true
+}
+
 fn default_support_append_skill_level_mins() -> [Option<u32>; 5] {
     [None; 5]
+}
+
+fn default_support_grand_craft_essence_ids() -> [Option<u32>; 3] {
+    [None; 3]
+}
+
+fn default_support_grand_craft_essence_mlb_required() -> [bool; 3] {
+    [true; 3]
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SupportGrandBondCeMode {
+    Any,
+    Bond,
+    BondNp,
+}
+
+impl Default for SupportGrandBondCeMode {
+    fn default() -> Self {
+        Self::Any
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -806,6 +843,16 @@ pub const SUPPORT_CE_OFFSET_IN_ROW: NormRect = NormRect {
     w: 0.35,
     h: 3.45,
 };
+/// Grand support rows show three CE strips in a fixed left-side column.
+/// Their vertical position tracks the right-side "助战编队确认" panel in
+/// Grand support rows. The panel's top edge is cleaner than the score
+/// badge because it has no overflowing numeric text.
+pub const SUPPORT_GRAND_CE_X: f64 = 0.172;
+pub const SUPPORT_GRAND_CE_W: f64 = 0.124;
+pub const SUPPORT_GRAND_CE_H: f64 = 0.064;
+pub const SUPPORT_GRAND_CE_GAP: f64 = 0.000;
+pub const SUPPORT_GRAND_CE_THIRD_CENTER_FROM_BUTTON_TOP_Y: f64 = 0.180;
+pub const SUPPORT_GRAND_CE_THIRD_CENTER_FROM_PANEL_TOP_Y: f64 = 0.220;
 /// Minimum `TM_CCOEFF_NORMED` score to accept a row's CE icon as the
 /// pinned CE. Conservative on purpose — the CE icons share a lot of dark
 /// background pixels so even mismatched CEs score ~0.4-0.5; the matched
@@ -849,6 +896,39 @@ pub fn ce_search_region(row: NormRect) -> NormRect {
         w: SUPPORT_CE_OFFSET_IN_ROW.w * row.w,
         h: SUPPORT_CE_OFFSET_IN_ROW.h * row.h,
     }
+}
+
+fn grand_ce_search_region_from_third_center(third_center_y: f64, slot: usize) -> Option<NormRect> {
+    if slot >= 3 {
+        return None;
+    }
+    let pitch = SUPPORT_GRAND_CE_H + SUPPORT_GRAND_CE_GAP;
+    let center_y = third_center_y - (2 - slot) as f64 * pitch;
+    Some(NormRect {
+        x: SUPPORT_GRAND_CE_X,
+        y: center_y - SUPPORT_GRAND_CE_H / 2.0,
+        w: SUPPORT_GRAND_CE_W,
+        h: SUPPORT_GRAND_CE_H,
+    })
+}
+
+pub fn grand_ce_search_region(row: &SupportRowMatch, slot: usize) -> Option<NormRect> {
+    let third_center_y = row
+        .score_anchor
+        .as_ref()
+        .map(|anchor| {
+            let offset = if anchor.h <= 0.075 {
+                SUPPORT_GRAND_CE_THIRD_CENTER_FROM_BUTTON_TOP_Y
+            } else {
+                SUPPORT_GRAND_CE_THIRD_CENTER_FROM_PANEL_TOP_Y
+            };
+            anchor.y + offset
+        })
+        .unwrap_or_else(|| {
+            let r = row.row_region;
+            r.y + r.h + 0.13
+        });
+    grand_ce_search_region_from_third_center(third_center_y, slot)
 }
 
 fn support_level_meets(actual: Option<u32>, required_min: Option<u32>) -> bool {
@@ -1098,6 +1178,7 @@ pub struct Runner {
     /// is "did it succeed" (`None` = template missing / no CE pinned →
     /// skip verification).
     support_ce_template: Option<Option<PathBuf>>,
+    support_grand_ce_templates: Option<[Option<PathBuf>; 3]>,
     /// Tracks visible skill-panel validation for the current support row.
     /// Owned and append skills are shown on alternating panels, so a row can
     /// only satisfy both groups across multiple OCR polls.
@@ -1152,6 +1233,7 @@ impl Runner {
             support_class_tab_done: false,
             support_meta: None,
             support_ce_template: None,
+            support_grand_ce_templates: None,
             support_level_progress: SupportLevelPanelProgress::default(),
             servants_placed: Vec::new(),
             battle: BattleState::new(),
@@ -1565,8 +1647,9 @@ impl Runner {
         // `supports` is already sorted top-down by the sidecar. Default
         // pick = first match, but optional CE / level filters can reject
         // rows before we tap.
-        let ce_template = self.resolve_support_ce_template();
+        let ce_filter_enabled = self.support_ce_filter_enabled();
         let mut waiting_for_skill_panel = false;
+        let mut ce_filter_reasons: Vec<String> = Vec::new();
         // Distinct mismatch reasons across the visible candidates, in
         // first-seen order. Same servant from multiple friends often
         // means the same gap (e.g. "持有技能 2 ≥ 10（实际 8）"); dedup
@@ -1574,10 +1657,11 @@ impl Runner {
         let mut level_filter_reasons: Vec<String> = Vec::new();
         let mut chosen_index: Option<usize> = None;
         for (index, row) in result.supports.iter().enumerate() {
-            if let Some(template) = ce_template.as_deref() {
-                if !self.support_row_matches_ce(row, template) {
-                    continue;
+            if let Some(reason) = self.support_row_ce_mismatch(row) {
+                if !ce_filter_reasons.contains(&reason) {
+                    ce_filter_reasons.push(reason);
                 }
+                continue;
             }
             match support_row_matches_level_requirements_with_progress(
                 self.server,
@@ -1628,8 +1712,13 @@ impl Runner {
         // emit a distinct message before falling through to the
         // scroll/refresh branch so the user knows it's a CE filter miss
         // (vs a name miss).
-        if ce_template.is_some() && !result.supports.is_empty() {
-            self.emit("SupportSelect", "找到从者但礼装不匹配，继续滚动…");
+        if ce_filter_enabled && !result.supports.is_empty() {
+            let reason = if ce_filter_reasons.is_empty() {
+                "礼装不匹配".to_string()
+            } else {
+                ce_filter_reasons.join("；")
+            };
+            self.emit("SupportSelect", &format!("找到从者但{reason}，继续滚动…"));
         }
         if waiting_for_skill_panel {
             // The candidate's name + NP match but we still need the
@@ -1736,21 +1825,52 @@ impl Runner {
         if let Some(cached) = &self.support_ce_template {
             return cached.clone();
         }
-        let resolved = self.config.support_craft_essence_id.and_then(|ce_id| {
-            let dir = self.ce_assets_dir.as_ref()?;
-            let path = dir.join(ce_id.to_string()).join("card_ce.png");
-            if path.is_file() {
-                Some(path)
-            } else {
-                eprintln!(
-                    "[runner] support CE template missing: {} (skipping CE filter)",
-                    path.display()
-                );
-                None
-            }
-        });
+        let resolved = if self.config.support_grand_mode {
+            None
+        } else {
+            self.config
+                .support_craft_essence_id
+                .and_then(|ce_id| self.resolve_ce_template_path(ce_id))
+        };
         self.support_ce_template = Some(resolved.clone());
         resolved
+    }
+
+    fn resolve_support_grand_ce_templates(&mut self) -> [Option<PathBuf>; 3] {
+        if let Some(cached) = &self.support_grand_ce_templates {
+            return cached.clone();
+        }
+        let resolved = std::array::from_fn(|index| {
+            self.config.support_grand_craft_essence_ids[index]
+                .and_then(|ce_id| self.resolve_ce_template_path(ce_id))
+        });
+        self.support_grand_ce_templates = Some(resolved.clone());
+        resolved
+    }
+
+    fn resolve_ce_template_path(&self, ce_id: u32) -> Option<PathBuf> {
+        let dir = self.ce_assets_dir.as_ref()?;
+        let path = dir.join(ce_id.to_string()).join("card_ce.png");
+        if path.is_file() {
+            Some(path)
+        } else {
+            eprintln!(
+                "[runner] support CE template missing: {} (skipping CE filter)",
+                path.display()
+            );
+            None
+        }
+    }
+
+    fn support_ce_filter_enabled(&self) -> bool {
+        if self.config.support_grand_mode {
+            self.config
+                .support_grand_craft_essence_ids
+                .iter()
+                .any(Option::is_some)
+        } else {
+            self.config.support_craft_essence_id.is_some()
+        }
     }
 
     /// Compute the absolute search window for a row's CE icon by
@@ -1762,26 +1882,123 @@ impl Runner {
         ce_search_region(row.row_region)
     }
 
+    fn support_grand_ce_search_region(row: &SupportRowMatch, slot: usize) -> Option<NormRect> {
+        grand_ce_search_region(row, slot)
+    }
+
     /// Return true when a row's CE icon scores at or above
     /// `SUPPORT_CE_THRESHOLD` against `template_path`.
     fn support_row_matches_ce(&mut self, row: &SupportRowMatch, template_path: &Path) -> bool {
         let region = Self::support_ce_search_region(row);
+        self.support_row_region_ce_mismatch(
+            region,
+            template_path,
+            "礼装",
+            SupportCeVerificationOptions {
+                mlb_required: self.config.support_craft_essence_mlb_required,
+                grand_bond_ce_mode: None,
+            },
+        )
+        .is_none()
+    }
+
+    fn support_row_region_ce_mismatch(
+        &mut self,
+        region: NormRect,
+        template_path: &Path,
+        label: &str,
+        options: SupportCeVerificationOptions,
+    ) -> Option<String> {
         match self
             .sidecar()
-            .verify_support_ce(None, region, template_path, SUPPORT_CE_THRESHOLD)
+            .verify_support_ce(None, region, template_path, SUPPORT_CE_THRESHOLD, options)
         {
-            Ok((score, passed)) => {
+            Ok(result) => {
+                let effective_threshold = if result.threshold > 0.0 {
+                    result.threshold
+                } else {
+                    SUPPORT_CE_THRESHOLD
+                };
                 eprintln!(
-                    "[runner] support CE verify: score={:.3} threshold={:.2} -> {}",
-                    score,
-                    SUPPORT_CE_THRESHOLD,
-                    if passed { "PASS" } else { "skip" },
+                    "[runner] {label} verify: score={:.3} threshold={:.2} -> {}",
+                    result.score,
+                    effective_threshold,
+                    if result.passed { "PASS" } else { "skip" },
                 );
-                passed
+                for check in &result.icon_checks {
+                    eprintln!(
+                        "[runner] {label} {} icon: score={:.3} threshold={:.2} -> {}",
+                        check.kind,
+                        check.score,
+                        check.threshold,
+                        if check.passed { "PASS" } else { "skip" },
+                    );
+                }
+                if result.passed {
+                    None
+                } else if let Some(check) = result.icon_checks.iter().find(|check| !check.passed) {
+                    // Surface decoration-icon failures with a more actionable
+                    // message when present; if the artwork also failed but
+                    // the icon failed too, the icon miss is the cleaner
+                    // root cause to surface to the operator.
+                    let kind = match check.kind.as_str() {
+                        "mlb" => "满破图标",
+                        "grandBond" => "原始牵绊图标",
+                        "grandBondNp" => "冠位连接牵绊图标",
+                        other => other,
+                    };
+                    Some(format!("{label} {kind}不匹配"))
+                } else {
+                    Some(format!("{label} 不匹配"))
+                }
             }
             Err(e) => {
                 eprintln!("[runner] support CE verify failed (treating as skip): {e}");
-                false
+                Some(format!("{label} 校验失败"))
+            }
+        }
+    }
+
+    fn support_row_ce_mismatch(&mut self, row: &SupportRowMatch) -> Option<String> {
+        if self.config.support_grand_mode {
+            let templates = self.resolve_support_grand_ce_templates();
+            if templates.iter().any(Option::is_some) && row.score_anchor.is_none() {
+                return Some("确认按钮未完整显示".into());
+            }
+            for (index, template) in templates.iter().enumerate() {
+                let Some(template) = template.as_deref() else {
+                    continue;
+                };
+                let Some(region) = Self::support_grand_ce_search_region(row, index) else {
+                    return Some(format!("冠位礼装 {} 区域无效", index + 1));
+                };
+                if let Some(reason) = self.support_row_region_ce_mismatch(
+                    region,
+                    template,
+                    &format!("冠位礼装 {}", index + 1),
+                    SupportCeVerificationOptions {
+                        mlb_required: self.config.support_grand_craft_essence_mlb_required[index],
+                        grand_bond_ce_mode: if index == 1 {
+                            match self.config.support_grand_bond_ce_mode {
+                                SupportGrandBondCeMode::Any => None,
+                                SupportGrandBondCeMode::Bond => Some("bond".to_string()),
+                                SupportGrandBondCeMode::BondNp => Some("bondNp".to_string()),
+                            }
+                        } else {
+                            None
+                        },
+                    },
+                ) {
+                    return Some(reason);
+                }
+            }
+            None
+        } else {
+            let template = self.resolve_support_ce_template()?;
+            if self.support_row_matches_ce(row, &template) {
+                None
+            } else {
+                Some("礼装不匹配".into())
             }
         }
     }
@@ -4254,6 +4471,37 @@ mod tests {
         );
     }
 
+    #[test]
+    fn grand_ce_search_region_anchors_to_confirm_button() {
+        let region = NormRect {
+            x: 0.30,
+            y: 0.40,
+            w: 0.50,
+            h: 0.10,
+        };
+        let mut row = support_row(None, vec![], vec![]);
+        row.row_region = region;
+        row.score_anchor = Some(NormRect {
+            x: 0.80,
+            y: 0.60,
+            w: 0.04,
+            h: 0.06,
+        });
+        let first = grand_ce_search_region(&row, 0).unwrap();
+        let second = grand_ce_search_region(&row, 1).unwrap();
+        let third = grand_ce_search_region(&row, 2).unwrap();
+
+        assert!(first.y < second.y);
+        assert!(second.y < third.y);
+        approx(first.x, SUPPORT_GRAND_CE_X);
+        approx(first.w, SUPPORT_GRAND_CE_W);
+        approx(
+            third.y + third.h / 2.0,
+            0.60 + SUPPORT_GRAND_CE_THIRD_CENTER_FROM_BUTTON_TOP_Y,
+        );
+        assert!(grand_ce_search_region(&row, 3).is_none());
+    }
+
     // --- RunConfig serde -----------------------------------------------
 
     /// Build the smallest valid RunConfig JSON (omitting all
@@ -4273,6 +4521,11 @@ mod tests {
     fn run_config_defaults_support_ce_to_none_when_field_missing() {
         let cfg: RunConfig = serde_json::from_value(minimal_run_config_json()).unwrap();
         assert!(cfg.support_craft_essence_id.is_none());
+        assert_eq!(cfg.support_craft_essence_mlb_required, true);
+        assert_eq!(cfg.support_grand_mode, false);
+        assert_eq!(cfg.support_grand_craft_essence_ids, [None; 3]);
+        assert_eq!(cfg.support_grand_craft_essence_mlb_required, [true; 3]);
+        assert_eq!(cfg.support_grand_bond_ce_mode, SupportGrandBondCeMode::Any);
         // Other defaults travel through the same path; sanity-check
         // them so legacy `projects.json` rows keep deserializing.
         assert!(cfg.support_servant_id.is_none());
@@ -4290,15 +4543,43 @@ mod tests {
         let mut payload = minimal_run_config_json();
         payload["supportCraftEssenceId"] = serde_json::json!(1485);
         payload["supportSlotIndex"] = serde_json::json!(5);
+        payload["supportGrandMode"] = serde_json::json!(true);
+        payload["supportGrandCraftEssenceIds"] = serde_json::json!([1001, null, 1003]);
+        payload["supportCraftEssenceMlbRequired"] = serde_json::json!(false);
+        payload["supportGrandCraftEssenceMlbRequired"] =
+            serde_json::json!([true, false, true]);
+        payload["supportGrandBondCeMode"] = serde_json::json!("bondNp");
         let cfg: RunConfig = serde_json::from_value(payload).unwrap();
         assert_eq!(cfg.support_craft_essence_id, Some(1485));
+        assert_eq!(cfg.support_craft_essence_mlb_required, false);
         assert_eq!(cfg.support_slot_index, Some(5));
+        assert_eq!(cfg.support_grand_mode, true);
+        assert_eq!(
+            cfg.support_grand_craft_essence_ids,
+            [Some(1001), None, Some(1003)]
+        );
+        assert_eq!(
+            cfg.support_grand_craft_essence_mlb_required,
+            [true, false, true]
+        );
+        assert_eq!(cfg.support_grand_bond_ce_mode, SupportGrandBondCeMode::BondNp);
 
         // Re-serialize and confirm the field round-trips under the
         // camelCase rename rule applied to the whole struct.
         let json = serde_json::to_value(&cfg).unwrap();
         assert_eq!(json["supportCraftEssenceId"], serde_json::json!(1485));
         assert_eq!(json["supportSlotIndex"], serde_json::json!(5));
+        assert_eq!(json["supportGrandMode"], serde_json::json!(true));
+        assert_eq!(
+            json["supportGrandCraftEssenceIds"],
+            serde_json::json!([1001, null, 1003])
+        );
+        assert_eq!(json["supportCraftEssenceMlbRequired"], serde_json::json!(false));
+        assert_eq!(
+            json["supportGrandCraftEssenceMlbRequired"],
+            serde_json::json!([true, false, true])
+        );
+        assert_eq!(json["supportGrandBondCeMode"], serde_json::json!("bondNp"));
     }
 
     #[test]
@@ -4631,6 +4912,7 @@ mod tests {
             np_text: "为你纺织的时光之轮等级5".into(),
             np_score: 1.0,
             np_region: region,
+            score_anchor: None,
             np_matched_name: "为你纺织的时光之轮".into(),
             np_level: Some(5),
             skill_panel: panel.map(str::to_string),

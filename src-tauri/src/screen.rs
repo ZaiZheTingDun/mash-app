@@ -37,6 +37,50 @@ pub struct NormRect {
     pub h: f64,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportCeVerificationOptions {
+    #[serde(default)]
+    pub mlb_required: bool,
+    #[serde(default)]
+    pub grand_bond_ce_mode: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportCeIconCheck {
+    pub kind: String,
+    pub template_key: String,
+    pub region: NormRect,
+    pub score: f64,
+    pub passed: bool,
+    pub threshold: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportCeVerificationResult {
+    pub score: f64,
+    pub passed: bool,
+    /// Threshold the sidecar actually compared `score` against. Equals
+    /// the runner's `SUPPORT_CE_THRESHOLD` for normal rows, but is
+    /// relaxed (currently to 0.65) for Grand-Saber bond / bondNp slots
+    /// because bond-CE artwork matches sit closer to the threshold —
+    /// see `BOND_CE_ARTWORK_THRESHOLD` in `sidecar/mash_cv/mash_cv/cv.py`.
+    /// Surfacing this lets the runner log and the debug overlay display
+    /// the threshold that was actually applied instead of the static
+    /// `SUPPORT_CE_THRESHOLD`, which would otherwise contradict the
+    /// `passed` verdict for bond rows scoring 0.65–0.70.
+    #[serde(default)]
+    pub threshold: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(default)]
+    pub icon_checks: Vec<SupportCeIconCheck>,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ElementMatch {
@@ -245,6 +289,11 @@ pub struct SupportRowMatch {
     pub np_text: String,
     pub np_score: f64,
     pub np_region: NormRect,
+    /// Optional right-side support-row anchor bbox. In Grand support mode
+    /// this is the "助战编队确认" panel; runners use it for row-relative
+    /// regions whose vertical placement is more stable than OCR text bboxes.
+    #[serde(default)]
+    pub score_anchor: Option<NormRect>,
     /// Which entry of the caller's ``expected_np_names`` list won the fuzzy
     /// match — useful when a servant has multiple candidate NPs.
     pub np_matched_name: String,
@@ -381,6 +430,8 @@ pub struct SupportDiagnostics {
     pub cv_fingerprint: String,
     #[serde(default)]
     pub support_skill_contour_split: bool,
+    #[serde(default)]
+    pub support_row_anchor_search_region: Option<NormRect>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1054,7 +1105,8 @@ impl SidecarClient {
         region: NormRect,
         template_path: &Path,
         threshold: f64,
-    ) -> Result<(f64, bool), String> {
+        options: SupportCeVerificationOptions,
+    ) -> Result<SupportCeVerificationResult, String> {
         let mut req = serde_json::json!({
             "cmd": "verify_support_ce",
             "region": {
@@ -1065,18 +1117,16 @@ impl SidecarClient {
             },
             "templatePath": template_path.to_string_lossy(),
             "threshold": threshold,
+            "mlbRequired": options.mlb_required,
+            "grandBondCeMode": options.grand_bond_ce_mode,
         });
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
             return Err(err.to_string());
         }
-        let score = resp.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let passed = resp
-            .get("passed")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        Ok((score, passed))
+        serde_json::from_value::<SupportCeVerificationResult>(resp)
+            .map_err(|e| format!("invalid verify_support_ce response: {e}"))
     }
 
     /// Search for an arbitrary grayscale template file within a region.

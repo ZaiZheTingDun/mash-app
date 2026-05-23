@@ -94,6 +94,10 @@ let projects: Project[] = [
     advancedMode: false,
     supportServantId: 4,
     supportServantVariantKey: "4:1",
+    supportGrandMode: false,
+    supportGrandCraftEssenceIds: [null, null, null],
+    supportGrandCraftEssenceMlbRequired: [true, true, true],
+    supportGrandBondCeMode: "any",
     repeatMission: true,
     slots: createInitialProjectSlots().map((slot, index) => {
       const servant = [servants[1], servants[2], null, servants[4], servants[5], null][index];
@@ -137,6 +141,10 @@ function createProject(name: string, advancedMode = false): Project {
     advancedMode,
     supportServantId: null,
     supportServantVariantKey: null,
+    supportGrandMode: false,
+    supportGrandCraftEssenceIds: [null, null, null],
+    supportGrandCraftEssenceMlbRequired: [true, true, true],
+    supportGrandBondCeMode: "any",
     repeatMission: false,
     repeatMode: "single",
     repeatCount: null,
@@ -226,6 +234,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "get_servant_portrait_path":
     case "get_servant_face_path":
     case "get_craft_essence_card_path":
+    case "get_template_asset_path":
       return null as T;
     case "get_runtime_status":
       return {

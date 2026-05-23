@@ -708,6 +708,28 @@ body,
   z-index: 2;
 }
 
+.support-grand-toggle {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.support-grand-toggle.active {
+  background: var(--amber-9);
+  border-color: var(--amber-10);
+  color: var(--amber-contrast);
+}
+
 /* The summary itself is the grid container — a 2-row × 5-column layout
  * where row 1 holds [skill1, skill2, skill3, NP (span 2)] and row 2
  * holds [append1..append5]. Source order does the placement: as long
@@ -1070,6 +1092,122 @@ body,
 
 .ce-overlay-clear:hover {
   background: rgba(0, 0, 0, 0.8);
+}
+
+.ce-condition-icon,
+.ce-condition-badge {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.75));
+}
+
+.ce-condition-icon-mlb {
+  right: 2px;
+  bottom: 2px;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.ce-condition-icon-bond {
+  left: 2px;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.ce-condition-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.grand-ce-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.grand-ce-slot {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: var(--ce-card-aspect);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 3px;
+  background: rgba(40, 40, 40, 0.62);
+  cursor: pointer;
+}
+
+.grand-ce-slot:hover {
+  filter: brightness(1.08);
+}
+
+.grand-ce-slot-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.grand-ce-slot-scrim {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.grand-ce-slot-clear {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.grand-ce-slot:hover .grand-ce-slot-clear,
+.grand-ce-slot-clear:focus-visible {
+  opacity: 1;
+}
+
+.ce-select-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ── Servant Select Dialog ── */
@@ -2714,6 +2852,24 @@ body,
 
 .debug-overlay-support-tap {
   background: var(--green-9);
+}
+
+.debug-overlay-support-anchor-search {
+  border: 2px dashed var(--green-8);
+  background: rgba(0, 200, 80, 0.04);
+}
+
+.debug-overlay-support-anchor-search > .debug-overlay-label {
+  background: var(--green-8);
+}
+
+.debug-overlay-support-score-anchor {
+  border: 2px solid var(--green-11);
+  background: rgba(0, 200, 80, 0.08);
+}
+
+.debug-overlay-support-score-anchor > .debug-overlay-label {
+  background: var(--green-11);
 }
 
 .debug-coord-toggle {
