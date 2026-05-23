@@ -296,8 +296,8 @@ function App({ theme, onThemeChange }: AppProps) {
   // sidebar now reduced to action buttons, the picker moves to the
   // `<ProjectBar/>` ribbon above the team grid and the mutations live
   // here so both `App` and `ProjectBar` mutate the same lifted state.
-  const handleCreateProject = useCallback((name: string) => {
-    invoke<Project>("create_project", { name })
+  const handleCreateProject = useCallback((name: string, advancedMode = false) => {
+    invoke<Project>("create_project", { name, advancedMode })
       .then((p) => {
         setProjects((prev) => [...prev, p]);
         setActiveProjectId(p.id);
@@ -444,6 +444,7 @@ function App({ theme, onThemeChange }: AppProps) {
                     key={activeProjectId ?? "no-project"}
                     projectId={activeProjectId}
                     partyLineup={partyLineup}
+                    advancedMode={activeProject?.advancedMode === true}
                   />
                   <Flex justify="between" align="center" className="page-footer">
                     <Button

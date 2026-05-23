@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   Flex,
   IconButton,
+  Switch,
   Text,
   TextField,
 } from "@radix-ui/themes";
@@ -27,7 +28,7 @@ interface ProjectBarProps {
   activeProjectId: string | null;
   disabled?: boolean;
   onProjectSelect: (id: string) => void;
-  onCreateProject: (name: string) => void;
+  onCreateProject: (name: string, advancedMode?: boolean) => void;
   onRenameProject: (id: string, name: string) => void;
   onDuplicateProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
@@ -56,6 +57,7 @@ export function ProjectBar({
 }: ProjectBarProps) {
   const [nameDialogMode, setNameDialogMode] = useState<NameDialogMode | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [draftAdvancedMode, setDraftAdvancedMode] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const activeProject =
@@ -74,6 +76,7 @@ export function ProjectBar({
       } else {
         setDraftName(`队伍 ${projects.length + 1}`);
       }
+      setDraftAdvancedMode(false);
     },
     [activeProject, projects.length]
   );
@@ -83,7 +86,7 @@ export function ProjectBar({
       event.preventDefault();
       if (!nameDialogMode || !trimmedDraftName) return;
       if (nameDialogMode === "create") {
-        onCreateProject(trimmedDraftName);
+        onCreateProject(trimmedDraftName, draftAdvancedMode);
       } else if (nameDialogMode === "rename" && activeProject) {
         onRenameProject(activeProject.id, trimmedDraftName);
       } else if (nameDialogMode === "duplicate" && activeProject) {
@@ -93,6 +96,7 @@ export function ProjectBar({
     },
     [
       activeProject,
+      draftAdvancedMode,
       nameDialogMode,
       onCreateProject,
       onDuplicateProject,
@@ -244,6 +248,24 @@ export function ProjectBar({
                   autoFocus
                 />
               </label>
+              {nameDialogMode === "create" && (
+                <label className="project-mode-toggle">
+                  <Flex align="center" justify="between" gap="3">
+                    <Box>
+                      <Text as="div" size="2" weight="medium">
+                        高级模式
+                      </Text>
+                      <Text as="div" size="1" color="gray">
+                        使用条件和行动规则配置指令
+                      </Text>
+                    </Box>
+                    <Switch
+                      checked={draftAdvancedMode}
+                      onCheckedChange={setDraftAdvancedMode}
+                    />
+                  </Flex>
+                </label>
+              )}
               <Flex justify="end" gap="2">
                 <Dialog.Close>
                   <Button type="button" variant="soft" color="gray">

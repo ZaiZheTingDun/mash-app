@@ -259,6 +259,14 @@ body,
   width: min(420px, calc(100vw - 48px));
 }
 
+.project-mode-toggle {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  background: var(--gray-2);
+}
+
 .project-bar-pill {
   position: relative;
   display: grid;
@@ -1475,6 +1483,259 @@ body,
 .battle-order-change-hint {
   color: var(--gray-11);
   min-width: 70px;
+}
+
+/* ── Advanced Command Editor ── */
+
+.advanced-strategy-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.advanced-strategy-section {
+  padding-right: 116px;
+}
+
+.advanced-phase {
+  padding-right: 14px;
+}
+
+.advanced-rule-add {
+  min-height: 64px;
+  padding: 4px 0;
+}
+
+.advanced-rule-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 44px 12px 12px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--fgo-surface-strong) 82%, transparent);
+}
+
+.advanced-rule-delete {
+  left: auto;
+  right: 8px;
+  top: 12px;
+  opacity: 1;
+}
+
+.advanced-inline-delete {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--red-10);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-1);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.12s;
+}
+
+.advanced-inline-delete:hover {
+  background: var(--red-3);
+}
+
+.advanced-delete-spacer {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
+.advanced-rule-section,
+.advanced-choice-column,
+.advanced-group-list,
+.advanced-condition-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.advanced-condition-row {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.advanced-action-row {
+  padding-left: 0;
+}
+
+.battle-option-btn:disabled {
+  cursor: default;
+  opacity: 0.72;
+  transform: none;
+}
+
+.advanced-condition-group {
+  padding: 10px;
+  border: 1px solid var(--gray-5);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+}
+
+.advanced-face-chip {
+  appearance: none;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 1px solid var(--gray-8);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+  color: var(--gray-12);
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  font-weight: 700;
+}
+
+.advanced-face-chip.dim {
+  filter: grayscale(1);
+  opacity: 0.42;
+}
+
+.advanced-face-chip.selected,
+.battle-option-btn.selected {
+  border-color: var(--blue-9);
+  background: var(--blue-3);
+  box-shadow: 0 0 0 2px var(--blue-5);
+}
+
+.advanced-face-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.advanced-card-row,
+.advanced-card-editor,
+.advanced-attack-picker,
+.advanced-attack-source,
+.advanced-main-output-grid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.advanced-main-output-grid {
+  align-items: flex-start;
+  min-height: 62px;
+}
+
+.advanced-main-output-trigger {
+  min-width: 138px;
+}
+
+.advanced-main-output-summary {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--gray-12);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  text-align: left;
+}
+
+.advanced-np-card-select {
+  height: 30px;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+  color: var(--gray-12);
+  padding: 0 8px;
+}
+
+.advanced-card-editor {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.advanced-command-card {
+  appearance: none;
+  position: relative;
+  width: 82px;
+  height: 122px;
+  padding: 10px 7px 9px;
+  border: 1px solid var(--gray-10);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gray-12);
+  cursor: pointer;
+  display: grid;
+  place-items: start center;
+  gap: 8px;
+  font-weight: 700;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gray-12) 12%, transparent);
+}
+
+.advanced-command-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--gray-1) 18%, transparent), color-mix(in srgb, var(--gray-1) 18%, transparent)),
+    var(--command-card-bg);
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+}
+
+.advanced-command-card.unset::before {
+  filter: grayscale(1);
+  opacity: 0.76;
+}
+
+.advanced-command-card-face {
+  position: relative;
+  z-index: 1;
+  width: 42px;
+  height: 42px;
+  border: 1px solid color-mix(in srgb, var(--gray-12) 72%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--gray-1) 62%, transparent);
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  font-size: 11px;
+}
+
+.advanced-command-card-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.advanced-card-editor label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--gray-11);
+}
+
+.advanced-card-editor select {
+  height: 30px;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+  color: var(--gray-12);
 }
 
 .scene-block {

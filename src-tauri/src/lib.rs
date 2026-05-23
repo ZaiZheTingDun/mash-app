@@ -187,6 +187,160 @@ impl BattleScene {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedNpSlotCondition {
+    pub servant: String,
+    pub ready: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedNpConditionGroup {
+    pub id: String,
+    #[serde(default)]
+    pub slots: Vec<AdvancedNpSlotCondition>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedCommandCardCondition {
+    pub slot: u32,
+    pub servant: String,
+    pub suit: String,
+    #[serde(default)]
+    pub min_crit_chance: Option<u32>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedCommandConditionGroup {
+    pub id: String,
+    #[serde(default)]
+    pub cards: Vec<AdvancedCommandCardCondition>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(tag = "type")]
+pub enum AdvancedAction {
+    #[serde(rename = "servant")]
+    Servant {
+        id: String,
+        servant: Option<String>,
+        skill: Option<String>,
+        target: Option<String>,
+    },
+    #[serde(rename = "equipment")]
+    Equipment {
+        id: String,
+        skill: Option<String>,
+        #[serde(default)]
+        target: Option<String>,
+        #[serde(rename = "orderChange", default)]
+        order_change: Option<OrderChangeSelection>,
+    },
+    #[serde(rename = "commandSpell")]
+    CommandSpell {
+        id: String,
+        spell: Option<String>,
+        #[serde(default)]
+        target: Option<String>,
+    },
+    #[serde(rename = "attack")]
+    Attack { id: String, card: Option<String> },
+}
+
+impl AdvancedAction {
+    pub(crate) fn as_preparation_action(&self) -> Option<Action> {
+        match self {
+            Self::Servant {
+                id,
+                servant,
+                skill,
+                target,
+            } => Some(Action::Servant {
+                id: id.clone(),
+                servant: servant.clone(),
+                skill: skill.clone(),
+                target: target.clone(),
+            }),
+            Self::Equipment {
+                id,
+                skill,
+                target,
+                order_change,
+            } => Some(Action::Equipment {
+                id: id.clone(),
+                skill: skill.clone(),
+                target: target.clone(),
+                order_change: order_change.clone(),
+            }),
+            Self::CommandSpell { id, spell, target } => Some(Action::CommandSpell {
+                id: id.clone(),
+                spell: spell.clone(),
+                target: target.clone(),
+            }),
+            Self::Attack { .. } => None,
+        }
+    }
+
+    pub(crate) fn as_attack_card(&self) -> Option<AttackCard> {
+        match self {
+            Self::Attack { id, card } => Some(AttackCard {
+                id: id.clone(),
+                card: card.clone(),
+            }),
+            _ => None,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedRule {
+    pub id: String,
+    #[serde(default)]
+    pub np_condition_groups: Vec<AdvancedNpConditionGroup>,
+    #[serde(default)]
+    pub command_condition_groups: Vec<AdvancedCommandConditionGroup>,
+    #[serde(default)]
+    pub actions: Vec<AdvancedAction>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum AdvancedOutputType {
+    Np,
+    Critical,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedMainOutput {
+    #[serde(default)]
+    pub servant: Option<String>,
+    #[serde(default)]
+    pub output_type: Option<AdvancedOutputType>,
+    #[serde(rename = "npCard", default)]
+    pub np_card: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedBattleScene {
+    pub id: String,
+    #[serde(default)]
+    pub main_output: Option<AdvancedMainOutput>,
+    #[serde(default)]
+    pub command_conditions: Vec<AdvancedCommandCardCondition>,
+    #[serde(default)]
+    pub control_actions: Vec<Action>,
+    #[serde(default)]
+    pub startup_actions: Vec<Action>,
+    #[serde(default)]
+    pub rules: Vec<AdvancedRule>,
+}
+
 // ---------------------------------------------------------------------------
 // Project system
 // ---------------------------------------------------------------------------
@@ -268,6 +422,10 @@ impl Default for ProjectRepeatMode {
 pub struct Project {
     pub id: String,
     pub name: String,
+    /// Advanced teams use rule-based battle configuration stored separately
+    /// from the legacy preparation/attack scene list.
+    #[serde(default)]
+    pub advanced_mode: bool,
     /// Pinned support-select servant id. The runner's `handle_support_select`
     /// reads this through `RunConfig::support_servant_id` to drive the OCR
     /// detector. `None` means the user hasn't pinned anyone yet, in which
@@ -461,6 +619,12 @@ fn project_battle_scenes_path(app: &tauri::AppHandle, project_id: &str) -> PathB
     dir.join("battle_scenes.json")
 }
 
+fn project_advanced_battle_scenes_path(app: &tauri::AppHandle, project_id: &str) -> PathBuf {
+    let dir = app_data_dir(app).join("projects").join(project_id);
+    fs::create_dir_all(&dir).ok();
+    dir.join("advanced_battle_scenes.json")
+}
+
 /// Legacy filename used before the per-scene rename. Kept around so
 /// `load_battle_scenes` can migrate any pre-existing project data on
 /// first launch after the rename.
@@ -511,10 +675,15 @@ fn list_projects(app: tauri::AppHandle) -> Vec<Project> {
 }
 
 #[tauri::command]
-fn create_project(app: tauri::AppHandle, name: String) -> Result<Project, String> {
+fn create_project(
+    app: tauri::AppHandle,
+    name: String,
+    advanced_mode: Option<bool>,
+) -> Result<Project, String> {
     let project = Project {
         id: uuid::Uuid::new_v4().to_string(),
         name,
+        advanced_mode: advanced_mode.unwrap_or(false),
         support_servant_id: None,
         support_servant_variant_key: None,
         support_noble_phantasm_level_min: None,
@@ -652,6 +821,29 @@ fn load_battle_scenes(app: tauri::AppHandle, project_id: String) -> Vec<BattleSc
     Vec::new()
 }
 
+#[tauri::command]
+fn save_advanced_battle_scenes(
+    app: tauri::AppHandle,
+    project_id: String,
+    scenes: Vec<AdvancedBattleScene>,
+) -> Result<(), String> {
+    let path = project_advanced_battle_scenes_path(&app, &project_id);
+    let json = serde_json::to_string_pretty(&scenes).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn load_advanced_battle_scenes(
+    app: tauri::AppHandle,
+    project_id: String,
+) -> Vec<AdvancedBattleScene> {
+    let path = project_advanced_battle_scenes_path(&app, &project_id);
+    fs::read_to_string(&path)
+        .ok()
+        .and_then(|contents| serde_json::from_str::<Vec<AdvancedBattleScene>>(&contents).ok())
+        .unwrap_or_default()
+}
+
 #[derive(serde::Serialize, Clone)]
 struct ServantInfo {
     id: u32,
@@ -669,6 +861,8 @@ struct ServantInfo {
     rarity: u32,
     #[serde(rename = "noblePhantasmName")]
     noble_phantasm_name: Option<String>,
+    #[serde(rename = "noblePhantasmCard")]
+    noble_phantasm_card: Option<String>,
 }
 
 fn load_enhancement_target(
@@ -730,6 +924,28 @@ fn first_np_name(s: &serde_json::Value) -> Option<String> {
             .filter(|s| !s.is_empty())
             .map(str::to_string)
     })
+}
+
+fn normalize_np_card(card: &str) -> Option<String> {
+    match card.trim().to_ascii_lowercase().as_str() {
+        "buster" => Some("buster".into()),
+        "arts" => Some("arts".into()),
+        "quick" => Some("quick".into()),
+        _ => None,
+    }
+}
+
+fn first_np_card(s: &serde_json::Value) -> Option<String> {
+    let nps = s.get("noble_phantasms")?;
+    let entry = if let Some(arr) = nps.as_array() {
+        arr.first()?
+    } else {
+        nps.as_object()?.values().next()?.as_array()?.first()?
+    };
+    entry
+        .get("card")
+        .and_then(|v| v.as_str())
+        .and_then(normalize_np_card)
 }
 
 fn last_variant_np_name(variant: &serde_json::Value) -> Option<String> {
@@ -803,6 +1019,7 @@ fn servants_data() -> &'static [ServantInfo] {
                     };
 
                     let base_np = first_np_name(s);
+                    let base_np_card = first_np_card(s);
                     let variants = variants_by_id.get(&id);
                     let infos: Vec<ServantInfo> = if let Some(variants) = variants {
                         variants
@@ -821,6 +1038,7 @@ fn servants_data() -> &'static [ServantInfo] {
                                 rarity,
                                 noble_phantasm_name: last_variant_np_name(variant)
                                     .or_else(|| base_np.clone()),
+                                noble_phantasm_card: base_np_card.clone(),
                             })
                             .collect()
                     } else {
@@ -836,6 +1054,7 @@ fn servants_data() -> &'static [ServantInfo] {
                             class,
                             rarity,
                             noble_phantasm_name: base_np,
+                            noble_phantasm_card: base_np_card,
                         }]
                     };
                     Some(infos)
@@ -851,6 +1070,13 @@ fn servants_data() -> &'static [ServantInfo] {
             })
             .collect()
     })
+}
+
+pub(crate) fn servant_np_card(id: u32) -> Option<String> {
+    servants_data()
+        .iter()
+        .find(|servant| servant.id == id)
+        .and_then(|servant| servant.noble_phantasm_card.clone())
 }
 
 #[tauri::command]
@@ -1702,7 +1928,23 @@ fn start_automation(
         }
     }
 
-    let scenes = load_battle_scenes(app.clone(), config.project_id.clone());
+    let project = read_projects(&app)
+        .into_iter()
+        .find(|project| project.id == config.project_id);
+    let advanced_mode = project
+        .as_ref()
+        .map(|project| project.advanced_mode)
+        .unwrap_or(false);
+    let scenes = if advanced_mode {
+        Vec::new()
+    } else {
+        load_battle_scenes(app.clone(), config.project_id.clone())
+    };
+    let advanced_scenes = if advanced_mode {
+        load_advanced_battle_scenes(app.clone(), config.project_id.clone())
+    } else {
+        Vec::new()
+    };
 
     let use_bluestack = *bluestack_state.lock().unwrap();
     let server = *server_state.lock().unwrap();
@@ -1759,6 +2001,8 @@ fn start_automation(
         sidecar,
         config,
         scenes,
+        advanced_mode,
+        advanced_scenes,
         app,
         state,
         cancel,
@@ -3054,6 +3298,8 @@ pub fn run() {
             get_craft_essence_card_path,
             save_battle_scenes,
             load_battle_scenes,
+            save_advanced_battle_scenes,
+            load_advanced_battle_scenes,
             list_projects,
             create_project,
             duplicate_project,
@@ -3350,6 +3596,7 @@ mod tests {
         });
         let project: Project = serde_json::from_value(json).unwrap();
         assert_eq!(project.slots.len(), 6);
+        assert_eq!(project.advanced_mode, false);
         assert!(project.support_servant_id.is_none());
         assert!(project.support_noble_phantasm_level_min.is_none());
         assert_eq!(project.support_skill_level_mins, [None; 3]);
@@ -3365,6 +3612,7 @@ mod tests {
         let project = normalize_project(Project {
             id: "abc".into(),
             name: "Legacy".into(),
+            advanced_mode: false,
             support_servant_id: None,
             support_servant_variant_key: None,
             support_noble_phantasm_level_min: None,
@@ -4399,5 +4647,84 @@ mod tests {
             }
             _ => panic!("expected Action::CommandSpell"),
         }
+    }
+
+    #[test]
+    fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
+        let scene = AdvancedBattleScene {
+            id: "advanced_scene_1".into(),
+            main_output: Some(AdvancedMainOutput {
+                servant: Some("servant_1".into()),
+                output_type: Some(AdvancedOutputType::Np),
+                np_card: Some("arts".into()),
+            }),
+            command_conditions: vec![AdvancedCommandCardCondition {
+                slot: 0,
+                servant: "servant_1".into(),
+                suit: "buster".into(),
+                min_crit_chance: Some(80),
+            }],
+            control_actions: vec![Action::Servant {
+                id: "sa_control".into(),
+                servant: Some("servant_1".into()),
+                skill: Some("skill_1".into()),
+                target: None,
+            }],
+            startup_actions: vec![Action::Equipment {
+                id: "eq_start".into(),
+                skill: Some("skill_2".into()),
+                target: None,
+                order_change: None,
+            }],
+            rules: vec![AdvancedRule {
+                id: "rule_1".into(),
+                np_condition_groups: vec![AdvancedNpConditionGroup {
+                    id: "np_group_1".into(),
+                    slots: vec![AdvancedNpSlotCondition {
+                        servant: "servant_1".into(),
+                        ready: true,
+                    }],
+                }],
+                command_condition_groups: vec![AdvancedCommandConditionGroup {
+                    id: "cmd_group_1".into(),
+                    cards: vec![AdvancedCommandCardCondition {
+                        slot: 0,
+                        servant: "servant_1".into(),
+                        suit: "buster".into(),
+                        min_crit_chance: Some(80),
+                    }],
+                }],
+                actions: vec![
+                    AdvancedAction::Servant {
+                        id: "sa_1".into(),
+                        servant: Some("servant_1".into()),
+                        skill: Some("skill_1".into()),
+                        target: None,
+                    },
+                    AdvancedAction::Attack {
+                        id: "atk_1".into(),
+                        card: Some("servant_1_buster".into()),
+                    },
+                ],
+            }],
+        };
+
+        let json = serde_json::to_value(&scene).unwrap();
+        assert_eq!(
+            json["rules"][0]["npConditionGroups"][0]["slots"][0]["ready"],
+            true
+        );
+        assert_eq!(
+            json["rules"][0]["commandConditionGroups"][0]["cards"][0]["minCritChance"],
+            serde_json::json!(80)
+        );
+        assert_eq!(
+            json["rules"][0]["actions"][1]["type"],
+            serde_json::json!("attack")
+        );
+
+        let parsed: AdvancedBattleScene = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.rules.len(), 1);
+        assert_eq!(parsed.rules[0].actions.len(), 2);
     }
 }

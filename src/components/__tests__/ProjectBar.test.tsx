@@ -11,6 +11,7 @@ function makeProject(id: string, name: string): Project {
   return {
     id,
     name,
+    advancedMode: false,
     supportServantId: null,
     slots: createInitialProjectSlots(),
     repeatMission: false,
@@ -88,7 +89,20 @@ describe("ProjectBar", () => {
     await user.type(input, "周回队伍");
     await user.click(screen.getByRole("button", { name: "新建" }));
 
-    expect(onCreateProject).toHaveBeenCalledWith("周回队伍");
+    expect(onCreateProject).toHaveBeenCalledWith("周回队伍", false);
+  });
+
+  it("creates an advanced project when the advanced toggle is enabled", async () => {
+    const user = userEvent.setup();
+    const onCreateProject = vi.fn();
+    renderProjectBar({ onCreateProject });
+
+    await user.click(screen.getByRole("button", { name: /队伍操作/ }));
+    await user.click(await screen.findByRole("menuitem", { name: /新建队伍/ }));
+    await user.click(await screen.findByRole("switch", { name: /高级模式/ }));
+    await user.click(screen.getByRole("button", { name: "新建" }));
+
+    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true);
   });
 
   it("renames the active project from the action menu", async () => {

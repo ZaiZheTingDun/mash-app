@@ -44,6 +44,7 @@ export type BattleApRecoveryItem =
 export interface Project {
   id: string;
   name: string;
+  advancedMode?: boolean;
   /**
    * Servant id pinned for the support-select screen. Mirrors the Rust
    * `Project::support_servant_id` field. `null`/`undefined` means the user

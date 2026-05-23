@@ -10,4 +10,5 @@ export interface Servant {
   class: string;
   rarity: number;
   noblePhantasmName?: string | null;
+  noblePhantasmCard?: "buster" | "arts" | "quick" | null;
 }

@@ -2,11 +2,15 @@ use crate::adb::Adb;
 use crate::screen::{
     CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient, SupportRowMatch,
 };
-use crate::{load_servant_metadata, Action, AttackCard, BattleScene, ServantMetadata, Server};
-use std::collections::HashSet;
+use crate::{
+    load_servant_metadata, servant_np_card, Action, AdvancedBattleScene,
+    AdvancedCommandCardCondition, AdvancedOutputType, AdvancedRule, AttackCard, BattleScene,
+    ServantMetadata, Server,
+};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use tauri::Emitter;
@@ -49,6 +53,11 @@ pub struct RunConfig {
     /// behaviour (tap top of the list).
     #[serde(default)]
     pub support_servant_id: Option<u32>,
+    /// Actual 0-based team-builder slot index of the pinned support.
+    /// The support can sit in front or back line, and Order Change needs
+    /// the full 1-6 position map to stay accurate after a swap.
+    #[serde(default)]
+    pub support_slot_index: Option<u32>,
     /// Craft-essence id pinned via the team-builder support CE slot.
     /// When `Some`, `handle_support_select` runs `verify_support_ce`
     /// against each OCR-detected row and picks the first row whose CE
@@ -171,6 +180,10 @@ const EQUIPMENT_SKILLS: [Point; 3] = [
 
 /// Attack button position on the battle screen.
 pub const ATTACK_BUTTON: Point = Point::new(0.887, 0.844);
+
+/// Return button on the attack-card screen, used after advanced-mode card
+/// inspection when the runner needs to go back to Battle and run skills.
+const ATTACK_SCREEN_RETURN: Point = Point::new(0.938, 0.947);
 
 /// Tap target that, when pressed during a skill / NP animation, makes the
 /// game skip ahead to the next actionable frame. Same physical button
@@ -541,6 +554,13 @@ struct BattleState {
     scene_config_used: bool,
     /// Set after clicking start on TeamConfirm; tolerates longer Unknown streaks
     waiting_for_battle: bool,
+    /// Set after tapping the selected command cards. The attack-card screen
+    /// can remain detectable for a short moment before the animation takes
+    /// over; this prevents submitting another set of picks in that window.
+    attack_submitted: bool,
+    advanced_startup_done: HashSet<usize>,
+    advanced_control_indices: HashMap<usize, usize>,
+    advanced_startup_control_indices: HashMap<usize, usize>,
 }
 
 impl BattleState {
@@ -551,6 +571,10 @@ impl BattleState {
             executed_scene_index: None,
             scene_config_used: false,
             waiting_for_battle: false,
+            attack_submitted: false,
+            advanced_startup_done: HashSet::new(),
+            advanced_control_indices: HashMap::new(),
+            advanced_startup_control_indices: HashMap::new(),
         }
     }
 }
@@ -1006,6 +1030,7 @@ const SKILL_POLL_INTERVAL: Duration = Duration::from_millis(300);
 /// to cover NP-length animations without hanging forever if something
 /// genuinely went wrong.
 const SKILL_WAIT_TIMEOUT: Duration = Duration::from_secs(45);
+const COMMAND_CARD_COUNT: usize = 5;
 /// Order Change opens as a semi-transparent overlay over Battle. The
 /// classifier often keeps returning `Battle`, so the runner waits for the
 /// overlay animation to settle and then taps the known panel coordinates.
@@ -1026,6 +1051,8 @@ pub struct Runner {
     sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     config: RunConfig,
     scenes: Vec<BattleScene>,
+    advanced_mode: bool,
+    advanced_scenes: Vec<AdvancedBattleScene>,
     state: Arc<Mutex<RunnerState>>,
     cancel: Arc<AtomicBool>,
     stop_after_current: Arc<AtomicBool>,
@@ -1088,6 +1115,8 @@ impl Runner {
         sidecar: SidecarClient,
         config: RunConfig,
         scenes: Vec<BattleScene>,
+        advanced_mode: bool,
+        advanced_scenes: Vec<AdvancedBattleScene>,
         app_handle: tauri::AppHandle,
         state: Arc<Mutex<RunnerState>>,
         cancel: Arc<AtomicBool>,
@@ -1105,6 +1134,8 @@ impl Runner {
             sidecar_cache,
             config,
             scenes,
+            advanced_mode,
+            advanced_scenes,
             state,
             cancel,
             stop_after_current,
@@ -1344,7 +1375,11 @@ impl Runner {
                 }
                 Screen::Attack => {
                     unknown_count = 0;
-                    self.handle_attack();
+                    if self.battle.attack_submitted {
+                        self.emit("Attack", "已提交本轮选卡，等待攻击动画");
+                    } else {
+                        self.handle_attack();
+                    }
                 }
                 Screen::BattleResultBond => {
                     unknown_count = 0;
@@ -1979,6 +2014,7 @@ impl Runner {
         // Attack button is back -- the prior NP / attack cinematic (if
         // any) has finished. Drop back to the short Unknown tolerance.
         self.battle.waiting_for_battle = false;
+        self.battle.attack_submitted = false;
 
         // Read the current battle scene (m of n) from the BATTLE label HUD.
         let screen_scene = self
@@ -2015,7 +2051,14 @@ impl Runner {
                     scene_str,
                 ),
             );
-            if let Some(scene_cfg) = self.scenes.get(self.battle.current_scene_index).cloned() {
+            if self.advanced_mode {
+                self.battle.scene_config_used = self
+                    .advanced_scenes
+                    .get(self.battle.current_scene_index)
+                    .is_some();
+            } else if let Some(scene_cfg) =
+                self.scenes.get(self.battle.current_scene_index).cloned()
+            {
                 self.execute_scene_skills(&scene_cfg);
                 self.battle.scene_config_used = true;
             } else {
@@ -2045,33 +2088,166 @@ impl Runner {
     /// front-line slot is assumed to be the support (its id parsed out of
     /// ``support_servant_name`` when the user pinned a specific servant).
     fn build_party_ids(&self) -> [Option<u32>; 3] {
-        let mut ids: [Option<u32>; 3] = [None, None, None];
+        let full = self.build_full_party_ids();
+        [full[0], full[1], full[2]]
+    }
+
+    fn build_full_party_ids(&self) -> [Option<u32>; 6] {
+        let mut full: [Option<u32>; 6] = [None, None, None, None, None, None];
         for sel in &self.config.servant_selections {
             let slot = sel.slot_index as usize;
-            if slot < 3 {
-                ids[slot] = Some(sel.servant_id);
+            if slot < 6 {
+                full[slot] = Some(sel.servant_id);
             }
         }
 
-        if let Some(support_id) = self
-            .config
-            .support_servant_name
-            .as_deref()
-            .and_then(parse_servant_name_id)
-        {
-            for slot in ids.iter_mut() {
-                if slot.is_none() {
-                    *slot = Some(support_id);
-                    break;
+        let support_id = self.config.support_servant_id.or_else(|| {
+            self.config
+                .support_servant_name
+                .as_deref()
+                .and_then(parse_servant_name_id)
+        });
+        if let Some(support_id) = support_id {
+            if let Some(slot) = self
+                .config
+                .support_slot_index
+                .and_then(|slot| usize::try_from(slot).ok())
+                .filter(|slot| *slot < full.len())
+            {
+                full[slot] = Some(support_id);
+            } else {
+                for slot in full.iter_mut().take(3) {
+                    if slot.is_none() {
+                        *slot = Some(support_id);
+                        break;
+                    }
                 }
             }
         }
-        ids
+        full
+    }
+
+    fn advanced_party_ids_after_control_and_startup(
+        &self,
+        scene: &AdvancedBattleScene,
+        control_count: usize,
+    ) -> [Option<u32>; 3] {
+        self.advanced_party_ids_after_actions(
+            scene
+                .control_actions
+                .iter()
+                .take(control_count)
+                .chain(scene.startup_actions.iter()),
+        )
+    }
+
+    fn advanced_party_ids_after_control(
+        &self,
+        scene: &AdvancedBattleScene,
+        control_count: usize,
+    ) -> [Option<u32>; 3] {
+        self.advanced_party_ids_after_actions(scene.control_actions.iter().take(control_count))
+    }
+
+    fn advanced_party_ids_after_startup_flow(
+        &self,
+        scene: &AdvancedBattleScene,
+        control_count: usize,
+        startup_control_count: usize,
+    ) -> [Option<u32>; 3] {
+        let actions = advanced_startup_flow_actions(scene, control_count, startup_control_count);
+        self.advanced_party_ids_after_actions(actions.iter())
+    }
+
+    fn advanced_party_ids_after_actions<'a>(
+        &self,
+        actions: impl Iterator<Item = &'a Action>,
+    ) -> [Option<u32>; 3] {
+        let mut ids = self.build_full_party_ids();
+        for action in actions {
+            if action_frontline_available(&ids, action) {
+                apply_party_lineup_change(&mut ids, action);
+            }
+        }
+        [ids[0], ids[1], ids[2]]
+    }
+
+    fn advanced_actions_and_party_after(
+        &self,
+        already_executed: impl Iterator<Item = Action>,
+        pending: impl Iterator<Item = Action>,
+    ) -> (Vec<Action>, [Option<u32>; 3]) {
+        let mut ids = self.build_full_party_ids();
+        for action in already_executed {
+            if action_frontline_available(&ids, &action) {
+                apply_party_lineup_change(&mut ids, &action);
+            }
+        }
+
+        let mut actions = Vec::new();
+        for action in pending {
+            if !action_frontline_available(&ids, &action) {
+                self.emit(
+                    "Battle",
+                    &format!("跳过行动：{} 不在前排", action_frontline_label(&action)),
+                );
+                continue;
+            }
+            apply_party_lineup_change(&mut ids, &action);
+            actions.push(action);
+        }
+        (actions, [ids[0], ids[1], ids[2]])
     }
 
     fn handle_attack(&mut self) {
-        let party_ids = self.build_party_ids();
+        if self.advanced_mode {
+            let party_ids = self
+                .advanced_scenes
+                .get(self.battle.current_scene_index)
+                .filter(|scene| scene.rules.is_empty() || uses_advanced_strategy_flow(scene))
+                .map(|scene| self.advanced_current_party_ids(scene))
+                .unwrap_or_else(|| self.build_party_ids());
+            let Some((cards, nps)) = self.read_attack_state(&party_ids) else {
+                return;
+            };
+            self.handle_advanced_attack(cards, nps, party_ids);
+            return;
+        }
 
+        let party_ids = self.build_party_ids();
+        let Some((cards, nps)) = self.read_attack_state(&party_ids) else {
+            return;
+        };
+        self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, None);
+    }
+
+    fn advanced_current_party_ids(&self, scene: &AdvancedBattleScene) -> [Option<u32>; 3] {
+        let scene_index = self.battle.current_scene_index;
+        let executed_control_count = *self
+            .battle
+            .advanced_control_indices
+            .get(&scene_index)
+            .unwrap_or(&0);
+        if self.battle.advanced_startup_done.contains(&scene_index) {
+            let startup_control_count = *self
+                .battle
+                .advanced_startup_control_indices
+                .get(&scene_index)
+                .unwrap_or(&executed_control_count);
+            self.advanced_party_ids_after_startup_flow(
+                scene,
+                executed_control_count,
+                startup_control_count,
+            )
+        } else {
+            self.advanced_party_ids_after_control(scene, executed_control_count)
+        }
+    }
+
+    fn read_attack_state(
+        &mut self,
+        party_ids: &[Option<u32>; 3],
+    ) -> Option<(Vec<CommandCardMatch>, Vec<NoblePhantasmMatch>)> {
         // Unique candidate set, stable by party position.
         let mut candidate_ids: Vec<u32> = Vec::with_capacity(3);
         for id in party_ids.iter().flatten() {
@@ -2079,41 +2255,62 @@ impl Runner {
                 candidate_ids.push(*id);
             }
         }
+        self.emit("Attack", &format!("指令卡候选从者: {:?}", candidate_ids));
 
         if self.assets_dir.is_none() {
             self.emit("Attack", "未找到从者资源目录，将无法按从者匹配指令卡");
         }
 
         let assets_dir = self.assets_dir.clone();
-        let cards = match self.sidecar().find_command_cards(
-            None,
-            None,
-            &candidate_ids,
-            assets_dir.as_deref(),
-        ) {
-            Ok(c) => c,
-            Err(err) => {
-                self.fail_action("Attack", "识别指令卡", err);
-                return;
+        let cards = loop {
+            let cards = match self.sidecar().find_command_cards(
+                None,
+                None,
+                &candidate_ids,
+                assets_dir.as_deref(),
+            ) {
+                Ok(c) => c,
+                Err(err) => {
+                    self.fail_action("Attack", "识别指令卡", err);
+                    return None;
+                }
+            };
+            if !should_retry_command_card_owner_detection(&cards, &candidate_ids) {
+                break cards;
             }
+            if self.is_cancelled() {
+                return None;
+            }
+            self.emit("Attack", "指令卡从者未识别，等待卡面稳定后重试");
+            thread::sleep(ACTION_DELAY);
         };
 
         let nps = match self.sidecar().find_noble_phantasms(None, None) {
             Ok(n) => n,
             Err(err) => {
                 self.fail_action("Attack", "识别宝具卡", err);
-                return;
+                return None;
             }
         };
 
         let card_summary: Vec<String> = cards
             .iter()
             .map(|c| {
+                let owner = c
+                    .servant_id
+                    .and_then(|id| {
+                        party_ids
+                            .iter()
+                            .position(|party_id| *party_id == Some(id))
+                            .map(|index| format!("S{}:{id}", index + 1))
+                            .or_else(|| Some(format!("?:{id}")))
+                    })
+                    .unwrap_or_else(|| "未识别".into());
                 format!(
-                    "C{}={}{}",
+                    "C{}={}/{}",
                     c.slot + 1,
                     c.suit.as_deref().unwrap_or("?"),
-                    c.servant_id.map(|id| format!("/{id}")).unwrap_or_default(),
+                    owner,
                 )
             })
             .collect();
@@ -2129,11 +2326,30 @@ impl Runner {
             self.emit("Attack", &format!("宝具就绪: {}", ready.join(" ")));
         }
 
+        Some((cards, nps))
+    }
+
+    fn pick_and_tap_attack_cards(
+        &mut self,
+        cards: &[CommandCardMatch],
+        nps: &[NoblePhantasmMatch],
+        party_ids: &[Option<u32>; 3],
+        attack_priority_override: Option<&[AttackCard]>,
+    ) {
         let mut used_card_slots: HashSet<u32> = HashSet::new();
         let mut used_np_slots: HashSet<u32> = HashSet::new();
         let mut picks: Vec<Pick> = Vec::with_capacity(3);
 
-        if self.battle.scene_config_used {
+        if let Some(priority) = attack_priority_override {
+            picks = pick_by_priority(
+                priority,
+                cards,
+                nps,
+                party_ids,
+                &mut used_card_slots,
+                &mut used_np_slots,
+            );
+        } else if self.battle.scene_config_used {
             if let Some(scene_cfg) = self.scenes.get(self.battle.current_scene_index) {
                 picks = pick_by_priority(
                     &scene_cfg.attack_priority,
@@ -2154,6 +2370,16 @@ impl Runner {
 
         if picks.is_empty() {
             self.emit("Attack", "未能选出任何卡，跳过");
+            self.battle.scene_config_used = false;
+            return;
+        }
+
+        self.tap_picks("Attack", &picks);
+    }
+
+    fn tap_picks(&mut self, screen: &str, picks: &[Pick]) {
+        if picks.is_empty() {
+            self.emit(screen, "未能选出任何卡，跳过");
             self.battle.scene_config_used = false;
             return;
         }
@@ -2196,8 +2422,8 @@ impl Runner {
                     *point,
                 ),
             };
-            self.emit("Attack", &msg);
-            if !self.tap_at("Attack", point) {
+            self.emit(screen, &msg);
+            if !self.tap_at(screen, point) {
                 return;
             }
             thread::sleep(ACTION_DELAY);
@@ -2209,9 +2435,358 @@ impl Runner {
         // the loop to use the longer Unknown tolerance until handle_battle
         // sees a real Battle frame again.
         self.battle.waiting_for_battle = true;
+        self.battle.attack_submitted = true;
 
         // Reset for next cycle
         self.battle.scene_config_used = false;
+    }
+
+    fn handle_advanced_attack(
+        &mut self,
+        cards: Vec<CommandCardMatch>,
+        nps: Vec<NoblePhantasmMatch>,
+        party_ids: [Option<u32>; 3],
+    ) {
+        let Some(scene) = self
+            .advanced_scenes
+            .get(self.battle.current_scene_index)
+            .cloned()
+        else {
+            self.emit("Attack", "无高级指令配置，按默认顺序补位");
+            self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, None);
+            return;
+        };
+
+        if scene.rules.is_empty() || uses_advanced_strategy_flow(&scene) {
+            let scene_index = self.battle.current_scene_index;
+            let executed_control_count = *self
+                .battle
+                .advanced_control_indices
+                .get(&scene_index)
+                .unwrap_or(&0);
+            let current_party_ids = if self.battle.advanced_startup_done.contains(&scene_index) {
+                self.advanced_party_ids_after_control_and_startup(&scene, executed_control_count)
+            } else {
+                self.advanced_party_ids_after_control(&scene, executed_control_count)
+            };
+            let (cards, nps, party_ids) = if current_party_ids != party_ids {
+                let Some((cards, nps)) = self.read_attack_state(&current_party_ids) else {
+                    return;
+                };
+                (cards, nps, current_party_ids)
+            } else {
+                (cards, nps, party_ids)
+            };
+
+            if !self.battle.advanced_startup_done.contains(&scene_index) {
+                if !advanced_startup_conditions_match(&scene, &cards, &party_ids) {
+                    let control_index = executed_control_count;
+                    if let Some(control_action) = scene.control_actions.get(control_index).cloned()
+                    {
+                        self.emit(
+                            "Attack",
+                            &format!("启动条件未满足，执行控制行动 {}", control_index + 1),
+                        );
+                        if !self.tap_at("Attack", ATTACK_SCREEN_RETURN) {
+                            return;
+                        }
+                        thread::sleep(ACTION_DELAY);
+                        if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                            return;
+                        }
+                        let control_scene = BattleScene {
+                            id: format!("{}_control_{}", scene.id, control_index + 1),
+                            preparation_actions: vec![control_action],
+                            servant_actions: Vec::new(),
+                            equipment_actions: Vec::new(),
+                            command_spell_actions: Vec::new(),
+                            attack_priority: Vec::new(),
+                        };
+                        self.execute_scene_skills(&control_scene);
+                        self.battle
+                            .advanced_control_indices
+                            .insert(scene_index, control_index + 1);
+
+                        self.emit("Battle", "控制行动完成，返回指令卡攻击");
+                        if !self.tap_at("Battle", ATTACK_BUTTON) {
+                            return;
+                        }
+                        thread::sleep(ACTION_DELAY);
+                        let control_party_ids =
+                            self.advanced_party_ids_after_control(&scene, control_index + 1);
+                        let Some((next_cards, _next_nps)) =
+                            self.read_attack_state(&control_party_ids)
+                        else {
+                            return;
+                        };
+                        let picks = choose_advanced_auto_picks(
+                            &scene,
+                            &next_cards,
+                            &[],
+                            &control_party_ids,
+                        );
+                        self.tap_picks("Attack", &picks);
+                        return;
+                    }
+
+                    self.emit("Attack", "启动条件未满足，按自动优先级攻击且不释放宝具");
+                    let picks = choose_advanced_auto_picks(&scene, &cards, &[], &party_ids);
+                    self.tap_picks("Attack", &picks);
+                    return;
+                }
+
+                self.emit("Attack", "启动条件满足，进入启动阶段");
+                let next_control_count = if executed_control_count < scene.control_actions.len() {
+                    executed_control_count + 1
+                } else {
+                    executed_control_count
+                };
+                if executed_control_count < scene.control_actions.len() {
+                    self.emit(
+                        "Attack",
+                        &format!("启动阶段执行本回合控制行动 {next_control_count}"),
+                    );
+                }
+                let pending_actions = scene
+                    .control_actions
+                    .iter()
+                    .skip(executed_control_count)
+                    .take(next_control_count.saturating_sub(executed_control_count))
+                    .chain(scene.startup_actions.iter())
+                    .cloned();
+                let (startup_actions, startup_party_ids) = self.advanced_actions_and_party_after(
+                    scene
+                        .control_actions
+                        .iter()
+                        .take(executed_control_count)
+                        .cloned(),
+                    pending_actions,
+                );
+                self.battle
+                    .advanced_control_indices
+                    .insert(scene_index, next_control_count);
+                self.battle
+                    .advanced_startup_control_indices
+                    .insert(scene_index, next_control_count);
+                self.battle.advanced_startup_done.insert(scene_index);
+                if !startup_actions.is_empty() {
+                    if !self.tap_at("Attack", ATTACK_SCREEN_RETURN) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+                    if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                        return;
+                    }
+                    let prep_scene = BattleScene {
+                        id: scene.id.clone(),
+                        preparation_actions: startup_actions,
+                        servant_actions: Vec::new(),
+                        equipment_actions: Vec::new(),
+                        command_spell_actions: Vec::new(),
+                        attack_priority: Vec::new(),
+                    };
+                    self.execute_scene_skills(&prep_scene);
+
+                    self.emit("Battle", "启动阶段完成，进入自动战斗");
+                    if !self.tap_at("Battle", ATTACK_BUTTON) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+                    let Some((next_cards, next_nps)) = self.read_attack_state(&startup_party_ids)
+                    else {
+                        return;
+                    };
+                    let picks = choose_advanced_auto_picks(
+                        &scene,
+                        &next_cards,
+                        &next_nps,
+                        &startup_party_ids,
+                    );
+                    self.tap_picks("Attack", &picks);
+                    return;
+                }
+
+                let picks = choose_advanced_auto_picks(&scene, &cards, &nps, &startup_party_ids);
+                self.tap_picks("Attack", &picks);
+                return;
+            }
+
+            let executed_control_count = *self
+                .battle
+                .advanced_control_indices
+                .get(&self.battle.current_scene_index)
+                .unwrap_or(&0);
+            let startup_control_count = *self
+                .battle
+                .advanced_startup_control_indices
+                .get(&self.battle.current_scene_index)
+                .unwrap_or(&executed_control_count);
+            if executed_control_count < scene.control_actions.len() {
+                let active_actions = advanced_startup_flow_actions(
+                    &scene,
+                    executed_control_count,
+                    startup_control_count,
+                );
+                let (control_actions, control_party_ids) = self.advanced_actions_and_party_after(
+                    active_actions.into_iter(),
+                    scene
+                        .control_actions
+                        .iter()
+                        .skip(executed_control_count)
+                        .take(1)
+                        .cloned(),
+                );
+                let next_control_count = executed_control_count + 1;
+                self.battle
+                    .advanced_control_indices
+                    .insert(self.battle.current_scene_index, next_control_count);
+
+                if !control_actions.is_empty() {
+                    self.emit(
+                        "Attack",
+                        &format!("自动战斗执行本回合控制行动 {next_control_count}"),
+                    );
+                    if !self.tap_at("Attack", ATTACK_SCREEN_RETURN) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+                    if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                        return;
+                    }
+                    let control_scene = BattleScene {
+                        id: format!("{}_auto_control_{}", scene.id, next_control_count),
+                        preparation_actions: control_actions,
+                        servant_actions: Vec::new(),
+                        equipment_actions: Vec::new(),
+                        command_spell_actions: Vec::new(),
+                        attack_priority: Vec::new(),
+                    };
+                    self.execute_scene_skills(&control_scene);
+
+                    self.emit("Battle", "控制行动完成，返回指令卡攻击");
+                    if !self.tap_at("Battle", ATTACK_BUTTON) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+                    let Some((next_cards, next_nps)) = self.read_attack_state(&control_party_ids)
+                    else {
+                        return;
+                    };
+                    let picks = choose_advanced_auto_picks(
+                        &scene,
+                        &next_cards,
+                        &next_nps,
+                        &control_party_ids,
+                    );
+                    self.tap_picks("Attack", &picks);
+                    return;
+                }
+
+                let picks = choose_advanced_auto_picks(&scene, &cards, &nps, &control_party_ids);
+                self.tap_picks("Attack", &picks);
+                return;
+            }
+            let active_party_ids = self.advanced_party_ids_after_startup_flow(
+                &scene,
+                executed_control_count,
+                startup_control_count,
+            );
+            let picks = choose_advanced_auto_picks(&scene, &cards, &nps, &active_party_ids);
+            self.tap_picks("Attack", &picks);
+            return;
+        }
+
+        let mut cards = cards;
+        let mut nps = nps;
+        let mut next_rule_index = 0usize;
+        let mut guard = 0usize;
+        while next_rule_index < scene.rules.len() && guard <= scene.rules.len() {
+            guard += 1;
+            let Some((rule_index, rule)) = scene
+                .rules
+                .iter()
+                .enumerate()
+                .skip(next_rule_index)
+                .find(|(_, rule)| advanced_rule_matches(rule, &cards, &nps, &party_ids))
+                .map(|(index, rule)| (index, rule.clone()))
+            else {
+                break;
+            };
+
+            let prep_actions: Vec<Action> = rule
+                .actions
+                .iter()
+                .filter_map(|action| action.as_preparation_action())
+                .collect();
+            let attack_priority: Vec<AttackCard> = rule
+                .actions
+                .iter()
+                .filter_map(|action| action.as_attack_card())
+                .collect();
+
+            if !prep_actions.is_empty() {
+                self.emit(
+                    "Attack",
+                    &format!("高级规则 {} 命中，返回执行准备行动", rule_index + 1),
+                );
+                if !self.tap_at("Attack", ATTACK_SCREEN_RETURN) {
+                    return;
+                }
+                thread::sleep(ACTION_DELAY);
+                if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                    return;
+                }
+                let prep_scene = BattleScene {
+                    id: rule.id.clone(),
+                    preparation_actions: prep_actions,
+                    servant_actions: Vec::new(),
+                    equipment_actions: Vec::new(),
+                    command_spell_actions: Vec::new(),
+                    attack_priority: Vec::new(),
+                };
+                self.execute_scene_skills(&prep_scene);
+
+                self.emit("Battle", "高级规则准备行动完成，重新进入指令卡");
+                if !self.tap_at("Battle", ATTACK_BUTTON) {
+                    return;
+                }
+                thread::sleep(ACTION_DELAY);
+                let Some((next_cards, next_nps)) = self.read_attack_state(&party_ids) else {
+                    return;
+                };
+                cards = next_cards;
+                nps = next_nps;
+                if !attack_priority.is_empty() {
+                    self.emit(
+                        "Attack",
+                        &format!("高级规则 {} 准备后执行攻击", rule_index + 1),
+                    );
+                    self.pick_and_tap_attack_cards(
+                        &cards,
+                        &nps,
+                        &party_ids,
+                        Some(&attack_priority),
+                    );
+                    return;
+                }
+                next_rule_index = rule_index + 1;
+                continue;
+            }
+
+            if !attack_priority.is_empty() {
+                self.emit(
+                    "Attack",
+                    &format!("高级规则 {} 命中，执行攻击", rule_index + 1),
+                );
+                self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, Some(&attack_priority));
+                return;
+            }
+
+            next_rule_index = rule_index + 1;
+        }
+
+        self.emit("Attack", "无高级规则命中攻击，按默认顺序补位");
+        self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, None);
     }
 
     // -- battle-result screen handlers ---------------------------------------
@@ -2660,6 +3235,255 @@ fn parse_index(s: &str, prefix: &str) -> Option<usize> {
         .map(|n| n.saturating_sub(1))
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ChangeOrderRule {
+    servant_id: u32,
+    trigger: ChangeOrderTrigger,
+    effect: ChangeOrderEffect,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum ChangeOrderTrigger {
+    AttackCard {
+        #[serde(rename = "card")]
+        _card: String,
+        #[serde(default)]
+        #[serde(rename = "activationUseCount")]
+        _activation_use_count: Option<u32>,
+    },
+    ServantSkill {
+        skill: String,
+    },
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum ChangeOrderEffect {
+    RemoveSelf,
+    RemoveFirstAlly,
+    WithdrawSelfToBack,
+}
+
+fn change_order_rules() -> &'static [ChangeOrderRule] {
+    static RULES: OnceLock<Vec<ChangeOrderRule>> = OnceLock::new();
+    RULES
+        .get_or_init(|| {
+            serde_json::from_str(include_str!("resources/change_order_servants.json"))
+                .unwrap_or_default()
+        })
+        .as_slice()
+}
+
+fn compact_backline(ids: &mut [Option<u32>; 6]) {
+    let backline: Vec<Option<u32>> = ids[3..]
+        .iter()
+        .copied()
+        .filter(|slot| slot.is_some())
+        .collect();
+    for slot in 3..6 {
+        ids[slot] = backline.get(slot - 3).copied().flatten();
+    }
+}
+
+fn remove_party_slot(ids: &mut [Option<u32>; 6], index: usize) {
+    if index >= 3 || ids[index].is_none() {
+        return;
+    }
+    let replacement = (3..6).find(|slot| ids[*slot].is_some());
+    ids[index] = replacement.and_then(|slot| ids[slot]);
+    if let Some(slot) = replacement {
+        ids[slot] = None;
+    }
+    compact_backline(ids);
+}
+
+fn withdraw_party_slot_to_back(ids: &mut [Option<u32>; 6], index: usize) {
+    if index >= 3 {
+        return;
+    }
+    let Some(servant_id) = ids[index] else {
+        return;
+    };
+    compact_backline(ids);
+    let Some(replacement) = (3..6).find(|slot| ids[*slot].is_some()) else {
+        return;
+    };
+    ids[index] = ids[replacement];
+    ids[replacement] = Some(servant_id);
+}
+
+fn apply_change_order_effect(
+    ids: &mut [Option<u32>; 6],
+    source_index: usize,
+    effect: &ChangeOrderEffect,
+) {
+    match effect {
+        ChangeOrderEffect::RemoveSelf => remove_party_slot(ids, source_index),
+        ChangeOrderEffect::RemoveFirstAlly => {
+            if let Some(target) =
+                (0..3).find(|index| *index != source_index && ids[*index].is_some())
+            {
+                remove_party_slot(ids, target);
+            }
+        }
+        ChangeOrderEffect::WithdrawSelfToBack => withdraw_party_slot_to_back(ids, source_index),
+    }
+}
+
+fn apply_party_lineup_change(ids: &mut [Option<u32>; 6], action: &Action) {
+    if let Action::Equipment {
+        order_change: Some(order_change),
+        ..
+    } = action
+    {
+        let Some(front) = order_change
+            .front
+            .as_deref()
+            .and_then(|value| parse_index(value, "servant_"))
+        else {
+            return;
+        };
+        let Some(back) = order_change
+            .back
+            .as_deref()
+            .and_then(|value| parse_index(value, "servant_"))
+        else {
+            return;
+        };
+        if front < 3 && back < 6 && ids[front].is_some() && ids[back].is_some() {
+            ids.swap(front, back);
+        }
+        return;
+    }
+
+    let Action::Servant { servant, skill, .. } = action else {
+        return;
+    };
+    let Some(source_index) = servant
+        .as_deref()
+        .and_then(|value| parse_index(value, "servant_"))
+        .filter(|index| *index < 3)
+    else {
+        return;
+    };
+    let (Some(servant_id), Some(skill)) = (ids[source_index], skill.as_deref()) else {
+        return;
+    };
+    for rule in change_order_rules() {
+        if rule.servant_id != servant_id {
+            continue;
+        }
+        if let ChangeOrderTrigger::ServantSkill {
+            skill: trigger_skill,
+        } = &rule.trigger
+        {
+            if trigger_skill == skill {
+                apply_change_order_effect(ids, source_index, &rule.effect);
+                return;
+            }
+        }
+    }
+}
+
+fn front_slot_has_servant(ids: &[Option<u32>; 6], value: Option<&str>) -> bool {
+    let Some(index) = value.and_then(|value| parse_index(value, "servant_")) else {
+        return false;
+    };
+    index < 3 && ids[index].is_some()
+}
+
+fn optional_front_target_available(ids: &[Option<u32>; 6], value: Option<&str>) -> bool {
+    match value {
+        Some(target) => front_slot_has_servant(ids, Some(target)),
+        None => true,
+    }
+}
+
+fn action_frontline_available(ids: &[Option<u32>; 6], action: &Action) -> bool {
+    match action {
+        Action::Servant {
+            servant, target, ..
+        } => {
+            front_slot_has_servant(ids, servant.as_deref())
+                && optional_front_target_available(ids, target.as_deref())
+        }
+        Action::Equipment {
+            target,
+            order_change: Some(order_change),
+            ..
+        } => {
+            let front = order_change
+                .front
+                .as_deref()
+                .and_then(|value| parse_index(value, "servant_"));
+            let back = order_change
+                .back
+                .as_deref()
+                .and_then(|value| parse_index(value, "servant_"));
+            matches!((front, back), (Some(front), Some(back)) if front < 3 && back < 6 && ids[front].is_some() && ids[back].is_some())
+                && optional_front_target_available(ids, target.as_deref())
+        }
+        Action::Equipment { target, .. } | Action::CommandSpell { target, .. } => {
+            optional_front_target_available(ids, target.as_deref())
+        }
+    }
+}
+
+fn action_frontline_label(action: &Action) -> String {
+    match action {
+        Action::Servant {
+            servant, target, ..
+        } => servant
+            .as_deref()
+            .or(target.as_deref())
+            .unwrap_or("从者")
+            .to_string(),
+        Action::Equipment {
+            target,
+            order_change: Some(order_change),
+            ..
+        } => order_change
+            .front
+            .as_deref()
+            .or(order_change.back.as_deref())
+            .or(target.as_deref())
+            .unwrap_or("从者")
+            .to_string(),
+        Action::Equipment { target, .. } | Action::CommandSpell { target, .. } => {
+            target.as_deref().unwrap_or("从者").to_string()
+        }
+    }
+}
+
+fn advanced_startup_flow_actions(
+    scene: &AdvancedBattleScene,
+    control_count: usize,
+    startup_control_count: usize,
+) -> Vec<Action> {
+    let control_count = control_count.min(scene.control_actions.len());
+    let startup_control_count = startup_control_count.min(control_count);
+    let mut actions = Vec::new();
+    actions.extend(
+        scene
+            .control_actions
+            .iter()
+            .take(startup_control_count)
+            .cloned(),
+    );
+    actions.extend(scene.startup_actions.iter().cloned());
+    actions.extend(
+        scene
+            .control_actions
+            .iter()
+            .skip(startup_control_count)
+            .take(control_count.saturating_sub(startup_control_count))
+            .cloned(),
+    );
+    actions
+}
+
 fn skill_position(servant: Option<&str>, skill: Option<&str>) -> Option<Point> {
     let si = parse_index(servant?, "servant_")?;
     let ki = parse_index(skill?, "skill_")?;
@@ -2790,6 +3614,130 @@ fn suit_code(suit: &str) -> Option<&'static str> {
     }
 }
 
+fn advanced_rule_matches(
+    rule: &AdvancedRule,
+    cards: &[CommandCardMatch],
+    nps: &[NoblePhantasmMatch],
+    party_ids: &[Option<u32>; 3],
+) -> bool {
+    let np_matches = if rule.np_condition_groups.is_empty() {
+        true
+    } else {
+        rule.np_condition_groups.iter().any(|group| {
+            group
+                .slots
+                .iter()
+                .all(|slot| np_condition_matches(slot, nps))
+        })
+    };
+    let command_matches = if rule.command_condition_groups.is_empty() {
+        true
+    } else {
+        rule.command_condition_groups.iter().any(|group| {
+            group
+                .cards
+                .iter()
+                .all(|condition| command_condition_matches(condition, cards, party_ids))
+        })
+    };
+    np_matches && command_matches
+}
+
+fn should_retry_command_card_owner_detection(
+    cards: &[CommandCardMatch],
+    candidate_ids: &[u32],
+) -> bool {
+    !candidate_ids.is_empty()
+        && (cards.len() < COMMAND_CARD_COUNT || cards.iter().any(|card| card.servant_id.is_none()))
+}
+
+fn np_condition_matches(
+    condition: &crate::AdvancedNpSlotCondition,
+    nps: &[NoblePhantasmMatch],
+) -> bool {
+    let Some(index) = parse_index(&condition.servant, "servant_") else {
+        return false;
+    };
+    nps.iter()
+        .find(|np| np.slot as usize == index)
+        .map(|np| np.ready == condition.ready)
+        .unwrap_or(false)
+}
+
+fn command_condition_matches(
+    condition: &AdvancedCommandCardCondition,
+    cards: &[CommandCardMatch],
+    party_ids: &[Option<u32>; 3],
+) -> bool {
+    let Some(card) = cards.iter().find(|card| card.slot == condition.slot) else {
+        return false;
+    };
+
+    if condition.servant != "any" {
+        let Some(index) = parse_index(&condition.servant, "servant_") else {
+            return false;
+        };
+        let Some(expected_id) = party_ids.get(index).copied().flatten() else {
+            return false;
+        };
+        if card.servant_id != Some(expected_id) {
+            return false;
+        }
+    }
+
+    if condition.suit != "any" {
+        let Some(expected_suit) = suit_code(&condition.suit) else {
+            return false;
+        };
+        if card.suit.as_deref() != Some(expected_suit) {
+            return false;
+        }
+    }
+
+    if let Some(min_crit) = condition.min_crit_chance {
+        if card.crit_chance.unwrap_or(0) < min_crit {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn command_condition_matches_card(
+    condition: &AdvancedCommandCardCondition,
+    card: &CommandCardMatch,
+    party_ids: &[Option<u32>; 3],
+) -> bool {
+    if condition.servant != "any" {
+        let Some(index) = parse_index(&condition.servant, "servant_") else {
+            return false;
+        };
+        let Some(expected_id) = party_ids.get(index).copied().flatten() else {
+            return false;
+        };
+        if card.servant_id != Some(expected_id) {
+            return false;
+        }
+    }
+
+    if condition.suit != "any" {
+        let Some(expected_suit) = suit_code(&condition.suit) else {
+            return false;
+        };
+        if card.suit.as_deref() != Some(expected_suit) {
+            return false;
+        }
+    }
+
+    if let Some(min_crit) = condition.min_crit_chance {
+        if card.crit_chance.unwrap_or(0) < min_crit {
+            return false;
+        }
+    }
+
+    true
+}
+
 /// Walk `priority` in order, picking matching cards / NPs until 3 are chosen
 /// or the list is exhausted. Cards / NPs already picked are tracked in
 /// `used_card_slots` / `used_np_slots` and will not be re-selected.
@@ -2912,6 +3860,281 @@ fn fill_remaining(
     }
 }
 
+fn advanced_startup_conditions_match(
+    scene: &AdvancedBattleScene,
+    cards: &[CommandCardMatch],
+    party_ids: &[Option<u32>; 3],
+) -> bool {
+    let active: Vec<&AdvancedCommandCardCondition> = scene
+        .command_conditions
+        .iter()
+        .filter(|condition| condition.servant != "any" || condition.suit != "any")
+        .collect();
+    if active.is_empty() {
+        return true;
+    }
+    let mut used_slots = HashSet::new();
+    startup_conditions_match_from(0, &active, cards, party_ids, &mut used_slots)
+}
+
+fn startup_conditions_match_from(
+    condition_index: usize,
+    conditions: &[&AdvancedCommandCardCondition],
+    cards: &[CommandCardMatch],
+    party_ids: &[Option<u32>; 3],
+    used_slots: &mut HashSet<u32>,
+) -> bool {
+    if condition_index >= conditions.len() {
+        return true;
+    }
+
+    let condition = conditions[condition_index];
+    for card in cards {
+        if used_slots.contains(&card.slot) {
+            continue;
+        }
+        if !command_condition_matches_card(condition, card, party_ids) {
+            continue;
+        }
+        used_slots.insert(card.slot);
+        if startup_conditions_match_from(
+            condition_index + 1,
+            conditions,
+            cards,
+            party_ids,
+            used_slots,
+        ) {
+            return true;
+        }
+        used_slots.remove(&card.slot);
+    }
+    false
+}
+
+fn uses_advanced_strategy_flow(scene: &AdvancedBattleScene) -> bool {
+    scene.main_output.is_some()
+        || !scene.command_conditions.is_empty()
+        || !scene.control_actions.is_empty()
+        || !scene.startup_actions.is_empty()
+}
+
+#[derive(Clone)]
+struct AdvancedPickCandidate {
+    pick: Pick,
+    servant_index: Option<usize>,
+    color: Option<String>,
+    original_order: u32,
+    is_np: bool,
+}
+
+fn main_output_index(scene: &AdvancedBattleScene) -> Option<usize> {
+    scene
+        .main_output
+        .as_ref()
+        .and_then(|main| main.servant.as_deref())
+        .and_then(|value| parse_index(value, "servant_"))
+        .filter(|index| *index < 3)
+}
+
+fn main_np_color(
+    scene: &AdvancedBattleScene,
+    party_ids: &[Option<u32>; 3],
+) -> Option<&'static str> {
+    let main = scene.main_output.as_ref()?;
+    if let Some(card) = main.np_card.as_deref().filter(|card| *card != "auto") {
+        return suit_code(card);
+    }
+    let index = main_output_index(scene)?;
+    let servant_id = party_ids.get(index).copied().flatten()?;
+    servant_np_card_code(servant_id)
+}
+
+fn candidate_color_counts(candidates: &[&AdvancedPickCandidate]) -> (usize, usize, usize) {
+    let b = candidates
+        .iter()
+        .filter(|c| c.color.as_deref() == Some("b"))
+        .count();
+    let a = candidates
+        .iter()
+        .filter(|c| c.color.as_deref() == Some("a"))
+        .count();
+    let q = candidates
+        .iter()
+        .filter(|c| c.color.as_deref() == Some("q"))
+        .count();
+    (b, a, q)
+}
+
+fn servant_np_card_code(id: u32) -> Option<&'static str> {
+    servant_np_card(id).and_then(|card| suit_code(&card))
+}
+
+fn score_advanced_combo(
+    scene: &AdvancedBattleScene,
+    combo: &[&AdvancedPickCandidate],
+    main_index: Option<usize>,
+) -> i32 {
+    let mut score = 0;
+    let np_count = combo.iter().filter(|c| c.is_np).count();
+    let main_count = combo
+        .iter()
+        .filter(|c| c.servant_index.is_some() && c.servant_index == main_index)
+        .count();
+    let (buster, arts, quick) = candidate_color_counts(combo);
+
+    score += (np_count as i32) * 10_000;
+    score += (main_count as i32) * 300;
+    if main_count == 3 && buster == 1 && arts == 1 && quick == 1 {
+        score += 2_000;
+    }
+
+    match scene
+        .main_output
+        .as_ref()
+        .and_then(|main| main.output_type.as_ref())
+    {
+        Some(AdvancedOutputType::Np) => {
+            if arts == 3 {
+                score += 1_200;
+            }
+            score += (arts as i32) * 220;
+            score += combo
+                .iter()
+                .filter(|c| c.color.as_deref() == Some("a") && c.servant_index == main_index)
+                .count() as i32
+                * 120;
+        }
+        Some(AdvancedOutputType::Critical) => {
+            if buster == 1 && quick == 2 {
+                score += 1_200;
+            }
+            score += (quick as i32) * 220;
+            score += (buster as i32) * 80;
+            score += combo
+                .iter()
+                .filter(|c| c.color.as_deref() == Some("q") && c.servant_index == main_index)
+                .count() as i32
+                * 120;
+        }
+        None => {}
+    }
+
+    score
+}
+
+fn sort_advanced_picks(scene: &AdvancedBattleScene, picks: &mut Vec<AdvancedPickCandidate>) {
+    match scene
+        .main_output
+        .as_ref()
+        .and_then(|main| main.output_type.as_ref())
+    {
+        Some(AdvancedOutputType::Critical) => picks.sort_by_key(|candidate| {
+            (
+                if candidate.is_np { 0 } else { 1 },
+                match candidate.color.as_deref() {
+                    Some("b") => 1,
+                    Some("q") => 2,
+                    Some("a") => 3,
+                    _ => 4,
+                },
+                candidate.original_order,
+            )
+        }),
+        _ => picks.sort_by_key(|candidate| {
+            (
+                match candidate.color.as_deref() {
+                    Some("a") => 2,
+                    _ => 1,
+                },
+                candidate.original_order,
+            )
+        }),
+    }
+}
+
+fn choose_advanced_auto_picks(
+    scene: &AdvancedBattleScene,
+    cards: &[CommandCardMatch],
+    nps: &[NoblePhantasmMatch],
+    party_ids: &[Option<u32>; 3],
+) -> Vec<Pick> {
+    let main_index = main_output_index(scene);
+    let main_np_color = main_np_color(scene, party_ids);
+    let mut candidates: Vec<AdvancedPickCandidate> = Vec::new();
+
+    for np in nps.iter().filter(|np| np.ready) {
+        let servant_index = Some(np.slot as usize).filter(|index| *index < 3);
+        let color = if servant_index == main_index {
+            main_np_color.map(str::to_string)
+        } else {
+            servant_index
+                .and_then(|index| party_ids.get(index).copied().flatten())
+                .and_then(servant_np_card_code)
+                .map(str::to_string)
+        };
+        candidates.push(AdvancedPickCandidate {
+            pick: Pick::Np {
+                slot: np.slot,
+                point: rect_center(&np.card_region),
+                from_priority: "自动宝具".into(),
+            },
+            servant_index,
+            color,
+            original_order: np.slot,
+            is_np: true,
+        });
+    }
+
+    for card in cards {
+        let servant_index = card
+            .servant_id
+            .and_then(|id| party_ids.iter().position(|party_id| *party_id == Some(id)));
+        candidates.push(AdvancedPickCandidate {
+            pick: Pick::Card {
+                slot: card.slot,
+                point: Point::new(card.x, card.y),
+                servant_id: card.servant_id,
+                suit: card.suit.clone(),
+                from_priority: Some("自动策略".into()),
+            },
+            servant_index,
+            color: card.suit.clone(),
+            original_order: 10 + card.slot,
+            is_np: false,
+        });
+    }
+
+    if candidates.len() <= 3 {
+        let mut selected = candidates;
+        sort_advanced_picks(scene, &mut selected);
+        return selected
+            .into_iter()
+            .map(|candidate| candidate.pick)
+            .collect();
+    }
+
+    let mut best_score = i32::MIN;
+    let mut best: Vec<AdvancedPickCandidate> = Vec::new();
+    for i in 0..candidates.len() {
+        for j in (i + 1)..candidates.len() {
+            for k in (j + 1)..candidates.len() {
+                let combo = vec![&candidates[i], &candidates[j], &candidates[k]];
+                let score = score_advanced_combo(scene, &combo, main_index);
+                if score > best_score {
+                    best_score = score;
+                    best = vec![
+                        candidates[i].clone(),
+                        candidates[j].clone(),
+                        candidates[k].clone(),
+                    ];
+                }
+            }
+        }
+    }
+    sort_advanced_picks(scene, &mut best);
+    best.into_iter().map(|candidate| candidate.pick).collect()
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -2929,6 +4152,50 @@ mod tests {
             "expected ≈{b}, got {a} (diff {})",
             (a - b).abs()
         );
+    }
+
+    fn rect() -> NormRect {
+        NormRect {
+            x: 0.0,
+            y: 0.0,
+            w: 0.1,
+            h: 0.1,
+        }
+    }
+
+    fn command_card(
+        slot: u32,
+        servant_id: Option<u32>,
+        suit: Option<&str>,
+        crit: Option<u32>,
+    ) -> CommandCardMatch {
+        CommandCardMatch {
+            slot,
+            x: 0.0,
+            y: 0.0,
+            card_region: rect(),
+            face_region: rect(),
+            crit_digit_regions: None,
+            crit_digit_reads: None,
+            suit: suit.map(str::to_string),
+            icon_score: None,
+            icon_region: None,
+            servant_id,
+            ascension: None,
+            face_score: None,
+            crit_chance: crit,
+        }
+    }
+
+    fn np_slot(slot: u32, ready: bool) -> NoblePhantasmMatch {
+        NoblePhantasmMatch {
+            slot,
+            card_region: rect(),
+            ready,
+            edge_frac: 0.0,
+            std_bgr: 0.0,
+            edge_threshold: 0.0,
+        }
     }
 
     #[test]
@@ -3009,6 +4276,7 @@ mod tests {
         // Other defaults travel through the same path; sanity-check
         // them so legacy `projects.json` rows keep deserializing.
         assert!(cfg.support_servant_id.is_none());
+        assert!(cfg.support_slot_index.is_none());
         assert!(cfg.support_noble_phantasm_level_min.is_none());
         assert_eq!(cfg.support_skill_level_mins, [None; 3]);
         assert_eq!(cfg.support_append_skill_level_mins, [None; 5]);
@@ -3021,13 +4289,290 @@ mod tests {
     fn run_config_round_trips_support_craft_essence_id() {
         let mut payload = minimal_run_config_json();
         payload["supportCraftEssenceId"] = serde_json::json!(1485);
+        payload["supportSlotIndex"] = serde_json::json!(5);
         let cfg: RunConfig = serde_json::from_value(payload).unwrap();
         assert_eq!(cfg.support_craft_essence_id, Some(1485));
+        assert_eq!(cfg.support_slot_index, Some(5));
 
         // Re-serialize and confirm the field round-trips under the
         // camelCase rename rule applied to the whole struct.
         let json = serde_json::to_value(&cfg).unwrap();
         assert_eq!(json["supportCraftEssenceId"], serde_json::json!(1485));
+        assert_eq!(json["supportSlotIndex"], serde_json::json!(5));
+    }
+
+    #[test]
+    fn advanced_rule_matches_np_and_command_groups_with_and_between_types() {
+        let rule = AdvancedRule {
+            id: "rule".into(),
+            np_condition_groups: vec![
+                crate::AdvancedNpConditionGroup {
+                    id: "np1".into(),
+                    slots: vec![crate::AdvancedNpSlotCondition {
+                        servant: "servant_1".into(),
+                        ready: false,
+                    }],
+                },
+                crate::AdvancedNpConditionGroup {
+                    id: "np2".into(),
+                    slots: vec![crate::AdvancedNpSlotCondition {
+                        servant: "servant_2".into(),
+                        ready: true,
+                    }],
+                },
+            ],
+            command_condition_groups: vec![crate::AdvancedCommandConditionGroup {
+                id: "cmd".into(),
+                cards: vec![AdvancedCommandCardCondition {
+                    slot: 0,
+                    servant: "servant_1".into(),
+                    suit: "buster".into(),
+                    min_crit_chance: Some(80),
+                }],
+            }],
+            actions: vec![],
+        };
+        let cards = vec![command_card(0, Some(11), Some("b"), Some(80))];
+        let nps = vec![np_slot(0, true), np_slot(1, true), np_slot(2, false)];
+        let party_ids = [Some(11), Some(22), Some(33)];
+
+        assert!(advanced_rule_matches(&rule, &cards, &nps, &party_ids));
+    }
+
+    #[test]
+    fn advanced_rule_rejects_when_command_group_misses_even_if_np_matches() {
+        let rule = AdvancedRule {
+            id: "rule".into(),
+            np_condition_groups: vec![crate::AdvancedNpConditionGroup {
+                id: "np".into(),
+                slots: vec![crate::AdvancedNpSlotCondition {
+                    servant: "servant_1".into(),
+                    ready: true,
+                }],
+            }],
+            command_condition_groups: vec![crate::AdvancedCommandConditionGroup {
+                id: "cmd".into(),
+                cards: vec![AdvancedCommandCardCondition {
+                    slot: 0,
+                    servant: "servant_1".into(),
+                    suit: "arts".into(),
+                    min_crit_chance: Some(90),
+                }],
+            }],
+            actions: vec![],
+        };
+        let cards = vec![command_card(0, Some(11), Some("a"), Some(80))];
+        let nps = vec![np_slot(0, true)];
+        let party_ids = [Some(11), None, None];
+
+        assert!(!advanced_rule_matches(&rule, &cards, &nps, &party_ids));
+    }
+
+    #[test]
+    fn advanced_startup_conditions_match_only_configured_command_cards() {
+        let scene = AdvancedBattleScene {
+            id: "advanced_scene_1".into(),
+            main_output: None,
+            command_conditions: vec![
+                AdvancedCommandCardCondition {
+                    slot: 0,
+                    servant: "servant_1".into(),
+                    suit: "buster".into(),
+                    min_crit_chance: None,
+                },
+                AdvancedCommandCardCondition {
+                    slot: 1,
+                    servant: "any".into(),
+                    suit: "any".into(),
+                    min_crit_chance: None,
+                },
+            ],
+            control_actions: Vec::new(),
+            startup_actions: Vec::new(),
+            rules: Vec::new(),
+        };
+        let cards = vec![
+            command_card(0, Some(10), Some("b"), None),
+            command_card(1, Some(20), Some("a"), None),
+        ];
+        let party_ids = [Some(10), Some(20), Some(30)];
+
+        assert!(advanced_startup_conditions_match(
+            &scene, &cards, &party_ids
+        ));
+    }
+
+    #[test]
+    fn advanced_startup_conditions_match_duplicate_servant_cards_in_any_slots() {
+        let scene = AdvancedBattleScene {
+            id: "advanced_scene_1".into(),
+            main_output: None,
+            command_conditions: vec![
+                AdvancedCommandCardCondition {
+                    slot: 0,
+                    servant: "servant_1".into(),
+                    suit: "any".into(),
+                    min_crit_chance: None,
+                },
+                AdvancedCommandCardCondition {
+                    slot: 1,
+                    servant: "servant_1".into(),
+                    suit: "any".into(),
+                    min_crit_chance: None,
+                },
+            ],
+            control_actions: Vec::new(),
+            startup_actions: Vec::new(),
+            rules: Vec::new(),
+        };
+        let cards = vec![
+            command_card(0, Some(20), Some("a"), None),
+            command_card(1, Some(10), Some("a"), None),
+            command_card(2, Some(30), Some("b"), None),
+            command_card(3, Some(10), Some("q"), None),
+            command_card(4, Some(20), Some("q"), None),
+        ];
+        let party_ids = [Some(10), Some(20), Some(30)];
+
+        assert!(advanced_startup_conditions_match(
+            &scene, &cards, &party_ids
+        ));
+    }
+
+    #[test]
+    fn command_card_owner_detection_retries_until_all_five_cards_have_owners() {
+        let cards = vec![
+            command_card(0, None, Some("a"), None),
+            command_card(1, None, Some("q"), None),
+        ];
+        assert!(should_retry_command_card_owner_detection(&cards, &[10, 20]));
+
+        let partial_owner = vec![
+            command_card(0, None, Some("a"), None),
+            command_card(1, Some(10), Some("q"), None),
+            command_card(2, Some(20), Some("b"), None),
+            command_card(3, Some(10), Some("a"), None),
+            command_card(4, Some(20), Some("q"), None),
+        ];
+        assert!(should_retry_command_card_owner_detection(
+            &partial_owner,
+            &[10, 20]
+        ));
+
+        let complete = vec![
+            command_card(0, Some(10), Some("a"), None),
+            command_card(1, Some(10), Some("q"), None),
+            command_card(2, Some(20), Some("b"), None),
+            command_card(3, Some(10), Some("a"), None),
+            command_card(4, Some(20), Some("q"), None),
+        ];
+        assert!(!should_retry_command_card_owner_detection(
+            &complete,
+            &[10, 20]
+        ));
+        assert!(!should_retry_command_card_owner_detection(&cards, &[]));
+        assert!(should_retry_command_card_owner_detection(&[], &[10]));
+    }
+
+    #[test]
+    fn party_lineup_change_swaps_support_from_configured_back_slot() {
+        let mut ids = [Some(8), Some(434), Some(384), Some(11), Some(22), Some(999)];
+        let action = Action::Equipment {
+            id: "a1".into(),
+            skill: Some("skill_3".into()),
+            target: None,
+            order_change: Some(crate::OrderChangeSelection {
+                front: Some("servant_2".into()),
+                back: Some("servant_6".into()),
+            }),
+        };
+
+        apply_party_lineup_change(&mut ids, &action);
+
+        assert_eq!(
+            ids,
+            [Some(8), Some(999), Some(384), Some(11), Some(22), Some(434)]
+        );
+    }
+
+    #[test]
+    fn party_lineup_change_applies_servant_skill_withdraw_rule() {
+        let mut ids = [Some(388), Some(434), Some(384), Some(11), Some(22), None];
+        let action = Action::Servant {
+            id: "a1".into(),
+            servant: Some("servant_1".into()),
+            skill: Some("skill_2".into()),
+            target: None,
+        };
+
+        apply_party_lineup_change(&mut ids, &action);
+
+        assert_eq!(
+            ids,
+            [Some(11), Some(434), Some(384), Some(388), Some(22), None]
+        );
+    }
+
+    #[test]
+    fn action_frontline_available_rejects_source_out_of_frontline() {
+        let ids = [Some(8), Some(434), Some(384), Some(11), Some(22), None];
+        let action = Action::Servant {
+            id: "a1".into(),
+            servant: Some("servant_4".into()),
+            skill: Some("skill_1".into()),
+            target: None,
+        };
+
+        assert!(!action_frontline_available(&ids, &action));
+    }
+
+    #[test]
+    fn action_frontline_available_rejects_missing_frontline_target() {
+        let ids = [Some(8), None, Some(384), Some(11), Some(22), None];
+        let action = Action::Servant {
+            id: "a1".into(),
+            servant: Some("servant_1".into()),
+            skill: Some("skill_1".into()),
+            target: Some("servant_2".into()),
+        };
+
+        assert!(!action_frontline_available(&ids, &action));
+    }
+
+    #[test]
+    fn advanced_auto_np_output_prefers_ready_np_and_arts_cards() {
+        let scene = AdvancedBattleScene {
+            id: "advanced_scene_1".into(),
+            main_output: Some(crate::AdvancedMainOutput {
+                servant: Some("servant_1".into()),
+                output_type: Some(AdvancedOutputType::Np),
+                np_card: Some("arts".into()),
+            }),
+            command_conditions: Vec::new(),
+            control_actions: Vec::new(),
+            startup_actions: Vec::new(),
+            rules: Vec::new(),
+        };
+        let cards = vec![
+            command_card(0, Some(10), Some("b"), None),
+            command_card(1, Some(10), Some("a"), None),
+            command_card(2, Some(20), Some("a"), None),
+            command_card(3, Some(30), Some("q"), None),
+            command_card(4, Some(30), Some("b"), None),
+        ];
+        let nps = vec![np_slot(0, true), np_slot(1, false), np_slot(2, false)];
+        let picks =
+            choose_advanced_auto_picks(&scene, &cards, &nps, &[Some(10), Some(20), Some(30)]);
+
+        assert!(picks
+            .iter()
+            .any(|pick| matches!(pick, Pick::Np { slot: 0, .. })));
+        assert!(picks
+            .iter()
+            .any(|pick| matches!(pick, Pick::Card { slot: 1, .. })));
+        assert!(picks
+            .iter()
+            .any(|pick| matches!(pick, Pick::Card { slot: 2, .. })));
     }
 
     #[test]

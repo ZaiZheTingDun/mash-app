@@ -71,7 +71,7 @@ interface BattlePageProps {
   projects: Project[];
   activeProjectId: string | null;
   onProjectSelect: (id: string) => void;
-  onCreateProject: (name: string) => void;
+  onCreateProject: (name: string, advancedMode?: boolean) => void;
   onRenameProject: (id: string, name: string) => void;
   onDuplicateProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
@@ -196,6 +196,16 @@ export function BattlePage({
     onAutomationStart?.();
 
     const supportSlot = selectedProject.slots?.find((slot) => slot.type === "support");
+    const servantSelections =
+      selectedProject.slots
+        ?.map((slot, slotIndex) =>
+          slot.type === "servant" && slot.servantId != null
+            ? { slotIndex, servantId: slot.servantId }
+            : null
+        )
+        .filter((selection): selection is { slotIndex: number; servantId: number } =>
+          selection != null
+        ) ?? [];
     const maxMissionRuns =
       latestDraft.repeatMode === "count" ? latestDraft.repeatCount : null;
     const config = {
@@ -204,6 +214,8 @@ export function BattlePage({
       supportClassFilter: null,
       supportServantName: null,
       supportServantId: selectedProject.supportServantId ?? null,
+      supportSlotIndex:
+        supportSlot != null ? selectedProject.slots?.indexOf(supportSlot) ?? null : null,
       supportCraftEssenceId: supportSlot?.craftEssenceId ?? null,
       supportNoblePhantasmLevelMin:
         selectedProject.supportNoblePhantasmLevelMin ?? null,
@@ -211,7 +223,7 @@ export function BattlePage({
         selectedProject.supportSkillLevelMins ?? [null, null, null],
       supportAppendSkillLevelMins:
         selectedProject.supportAppendSkillLevelMins ?? [null, null, null, null, null],
-      servantSelections: [],
+      servantSelections,
       maxSupportScrolls: 3,
       repeatMission: latestDraft.repeatMode === "infinite",
       maxMissionRuns,

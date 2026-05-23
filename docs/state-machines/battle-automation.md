@@ -137,6 +137,24 @@ changes (i.e. when the runner moves to a different row).
   confirms, then waits for the attack button before continuing. This overlay
   is not the pre-battle `TeamChange` screen and is not detected through the
   `Screen::TeamChange` route.
+- Advanced-mode teams store battle scenes in `advanced_battle_scenes.json`.
+  The current strategy UI uses a three-stage flow. First, the runner enters
+  the attack-card screen and treats the scene as "waiting for startup": it
+  checks the configured five command-card startup conditions. If they do not
+  match, it optionally taps the bottom-right attack-screen return button and executes one `controlActions` entry per
+  turn in configured order, then re-enters the attack-card screen and attacks
+  with the automatic priority strategy while passing an empty NP list so no
+  Noble Phantasm is released. Once all control actions have been consumed,
+  later non-matching turns keep using the same no-NP automatic attack. When
+  the startup condition matches, the runner taps the bottom-right return button,
+  executes `startupActions`, reapplies explicit Order Change effects to the
+  active front-line id map, then re-enters the attack-card screen. From that
+  point the scene is in automatic battle mode: ready NPs and command cards are
+  scored together with the configured main-output servant, output type, and
+  NP color (`npCard`, or the servant resource's `noblePhantasmCard` when set
+  to automatic). Legacy advanced `rules` are still supported: when a scene has
+  rule entries, the older rule evaluator runs instead of the three-stage
+  strategy flow.
 - `waiting_for_battle` extends Unknown tolerance during loading and long attack
   animations.
 - `APRecovery` now anchors on `label_item` and scans the item-column template

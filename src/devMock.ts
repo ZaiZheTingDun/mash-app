@@ -1,5 +1,5 @@
 import { createInitialProjectSlots } from "./components/projectSlots";
-import type { BattleScene } from "./types/command";
+import type { AdvancedBattleScene, BattleScene } from "./types/command";
 import type { CraftEssence } from "./types/craftEssence";
 import type { Project } from "./types/project";
 import type { Servant } from "./types/servant";
@@ -91,6 +91,7 @@ let projects: Project[] = [
   {
     id: "dev-project-1",
     name: "模拟队伍",
+    advancedMode: false,
     supportServantId: 4,
     supportServantVariantKey: "4:1",
     repeatMission: true,
@@ -122,15 +123,18 @@ const battleScenesByProject = new Map<string, BattleScene[]>([
   ],
 ]);
 
+const advancedBattleScenesByProject = new Map<string, AdvancedBattleScene[]>();
+
 function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
-function createProject(name: string): Project {
+function createProject(name: string, advancedMode = false): Project {
   const id = `dev-project-${nextProjectNumber++}`;
   return {
     id,
     name,
+    advancedMode,
     supportServantId: null,
     supportServantVariantKey: null,
     repeatMission: false,
@@ -152,7 +156,10 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "list_projects":
       return clone(projects) as T;
     case "create_project": {
-      const project = createProject(String(args.name ?? `模拟队伍 ${nextProjectNumber}`));
+      const project = createProject(
+        String(args.name ?? `模拟队伍 ${nextProjectNumber}`),
+        args.advancedMode === true
+      );
       projects = [...projects, project];
       return clone(project) as T;
     }
@@ -171,6 +178,10 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         project.id,
         clone(battleScenesByProject.get(source.id) ?? [])
       );
+      advancedBattleScenesByProject.set(
+        project.id,
+        clone(advancedBattleScenesByProject.get(source.id) ?? [])
+      );
       return clone(project) as T;
     }
     case "update_project": {
@@ -181,11 +192,20 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "delete_project":
       projects = projects.filter((project) => project.id !== args.id);
       battleScenesByProject.delete(String(args.id));
+      advancedBattleScenesByProject.delete(String(args.id));
       return null as T;
     case "load_battle_scenes":
       return clone(battleScenesByProject.get(String(args.projectId)) ?? []) as T;
     case "save_battle_scenes":
       battleScenesByProject.set(String(args.projectId), clone(args.scenes as BattleScene[]));
+      return null as T;
+    case "load_advanced_battle_scenes":
+      return clone(advancedBattleScenesByProject.get(String(args.projectId)) ?? []) as T;
+    case "save_advanced_battle_scenes":
+      advancedBattleScenesByProject.set(
+        String(args.projectId),
+        clone(args.scenes as AdvancedBattleScene[])
+      );
       return null as T;
     case "check_adb":
       return { connected: false, deviceName: null } as T;

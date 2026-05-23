@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Flex, IconButton, Text } from "@radix-ui/themes";
 import { invoke } from "../tauri";
+import { AdvancedCommandEditor } from "./AdvancedCommandEditor";
 import { BattleSceneBlock } from "./BattleSceneBlock";
 import { deriveScenePartyLineups } from "./partyServants";
 import {
@@ -15,6 +16,7 @@ import type { Servant } from "../types/servant";
 interface CommandEditorProps {
   projectId: string | null;
   partyLineup: (Servant | null)[];
+  advancedMode?: boolean;
 }
 
 let nextSceneId = 1;
@@ -55,7 +57,11 @@ function normalizeScene(scene: BattleScene): BattleScene {
   };
 }
 
-export function CommandEditor({ projectId, partyLineup }: CommandEditorProps) {
+export function CommandEditor({
+  projectId,
+  partyLineup,
+  advancedMode = false,
+}: CommandEditorProps) {
   const [scenes, setScenes] = useState<BattleScene[]>(() =>
     projectId ? [] : [createDefaultScene()]
   );
@@ -64,7 +70,7 @@ export function CommandEditor({ projectId, partyLineup }: CommandEditorProps) {
   const scenePartyLineups = deriveScenePartyLineups(partyLineup, scenes);
 
   useEffect(() => {
-    if (!projectId) {
+    if (advancedMode || !projectId) {
       return;
     }
     let cancelled = false;
@@ -87,7 +93,7 @@ export function CommandEditor({ projectId, partyLineup }: CommandEditorProps) {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [advancedMode, projectId]);
 
   const saveScenes = useCallback(
     (updated: BattleScene[]) => {
@@ -129,6 +135,10 @@ export function CommandEditor({ projectId, partyLineup }: CommandEditorProps) {
       return next;
     });
   }, [saveScenes]);
+
+  if (advancedMode) {
+    return <AdvancedCommandEditor projectId={projectId} partyLineup={partyLineup} />;
+  }
 
   if (!loaded) return null;
   const activeScene = scenes[activeIndex] ?? scenes[0] ?? createDefaultScene();
