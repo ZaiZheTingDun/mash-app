@@ -40,6 +40,9 @@ import type {
   SupportAppendSkillLevelMins,
   SupportSkillLevelMins,
 } from "../types/project";
+import mlbIconSrc from "../../src-tauri/resources/images/icon_mlb_mark.png";
+import grandBondIconSrc from "../../src-tauri/resources/images/icon_grand_bond_ce.png";
+import grandBondNpIconSrc from "../../src-tauri/resources/images/icon_grand_bond_ce_np.png";
 
 export interface SlotItem {
   id: string;
@@ -537,84 +540,96 @@ function GrandCraftEssenceOverlay({
   onSelect,
   onClear,
 }: GrandCraftEssenceOverlayProps) {
+  const [failedCardSrcs, setFailedCardSrcs] = useState<Record<number, string>>({});
   const bondSrc = grandBondCeMode === "bond" ? bondIconSrc : bondNpIconSrc;
   const bondLabel = grandBondCeMode === "bond" ? "原始牵绊" : "冠位连接牵绊";
   return (
     <div className="grand-ce-overlay" aria-label="冠位礼装设置">
-      {craftEssences.map((craftEssence, index) => (
-        <div
-          key={index}
-          className={`grand-ce-slot${craftEssence ? " filled" : " empty"}`}
-          role="button"
-          tabIndex={0}
-          aria-label={
-            craftEssence
-              ? `冠位礼装 ${index + 1}：${craftEssence.name}`
-              : `选择冠位礼装 ${index + 1}`
-          }
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelect(index);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
+      {craftEssences.map((craftEssence, index) => {
+        const cardSrc = cardSrcs[index];
+        const showCardImage =
+          craftEssence != null && cardSrc != null && failedCardSrcs[index] !== cardSrc;
+        return (
+          <div
+            key={index}
+            className={`grand-ce-slot${craftEssence ? " filled" : " empty"}`}
+            role="button"
+            tabIndex={0}
+            aria-label={
+              craftEssence
+                ? `冠位礼装 ${index + 1}：${craftEssence.name}`
+                : `选择冠位礼装 ${index + 1}`
+            }
+            onClick={(event) => {
               event.stopPropagation();
               onSelect(index);
-            }
-          }}
-        >
-          {craftEssence && cardSrcs[index] ? (
-            <img
-              className="grand-ce-slot-img"
-              src={cardSrcs[index] ?? undefined}
-              alt={craftEssence.name}
-              draggable={false}
-            />
-          ) : (
-            <span className="grand-ce-slot-scrim">
-              {craftEssence ? craftEssence.name : index + 1}
-            </span>
-          )}
-          {craftEssence && (
-            <button
-              type="button"
-              className="grand-ce-slot-clear"
-              aria-label={`清除冠位礼装 ${index + 1}`}
-              onClick={(event) => {
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
                 event.stopPropagation();
-                onClear(index);
-              }}
-            >
-              <Cross2Icon width={10} height={10} />
-            </button>
-          )}
-          {craftEssence && mlbRequired[index] && (
-            mlbIconSrc ? (
+                onSelect(index);
+              }
+            }}
+          >
+            {showCardImage ? (
               <img
-                className="ce-condition-icon ce-condition-icon-mlb"
-                src={mlbIconSrc}
-                alt="满破"
+                className="grand-ce-slot-img"
+                src={cardSrc}
+                alt={craftEssence.name}
                 draggable={false}
+                onError={() => {
+                  setFailedCardSrcs((prev) => ({ ...prev, [index]: cardSrc }));
+                }}
               />
             ) : (
-              <span className="ce-condition-badge ce-condition-icon-mlb">满</span>
-            )
-          )}
-          {craftEssence && index === 1 && grandBondCeMode !== "any" && (
-            bondSrc ? (
-              <img
-                className="ce-condition-icon ce-condition-icon-bond"
-                src={bondSrc}
-                alt={bondLabel}
-                draggable={false}
-              />
-            ) : (
-              <span className="ce-condition-badge ce-condition-icon-bond">绊</span>
-            )
-          )}
-        </div>
-      ))}
+              <span className="grand-ce-slot-scrim">
+                <span className="grand-ce-slot-index">{index + 1}</span>
+                <span className="grand-ce-slot-label">
+                  {craftEssence ? craftEssence.name : "选择礼装"}
+                </span>
+              </span>
+            )}
+            {craftEssence && (
+              <button
+                type="button"
+                className="grand-ce-slot-clear"
+                aria-label={`清除冠位礼装 ${index + 1}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onClear(index);
+                }}
+              >
+                <Cross2Icon width={10} height={10} />
+              </button>
+            )}
+            {craftEssence && mlbRequired[index] && (
+              mlbIconSrc ? (
+                <img
+                  className="ce-condition-icon ce-condition-icon-mlb"
+                  src={mlbIconSrc}
+                  alt="满破"
+                  draggable={false}
+                />
+              ) : (
+                <span className="ce-condition-badge ce-condition-icon-mlb">满</span>
+              )
+            )}
+            {craftEssence && index === 1 && grandBondCeMode !== "any" && (
+              bondSrc ? (
+                <img
+                  className="ce-condition-icon ce-condition-icon-bond"
+                  src={bondSrc}
+                  alt={bondLabel}
+                  draggable={false}
+                />
+              ) : (
+                <span className="ce-condition-badge ce-condition-icon-bond">绊</span>
+              )
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -755,43 +770,6 @@ function useCeCards(ceIds: number[]): Record<number, string | null | undefined> 
   return useAssetPaths("get_craft_essence_card_path", "craftEssenceId", ceIds);
 }
 
-function useTemplateIcons(keys: string[]): Record<string, string | null | undefined> {
-  const [cache, setCache] = useState<Record<string, string | null>>({});
-  const key = keys
-    .filter((item, index, arr) => arr.indexOf(item) === index)
-    .sort()
-    .join(",");
-
-  useEffect(() => {
-    const parsed = key ? key.split(",").filter(Boolean) : [];
-    const missing = parsed.filter((item) => !(item in cache));
-    if (missing.length === 0) return;
-    let cancelled = false;
-    Promise.all(
-      missing.map((templateKey) =>
-        invoke<string | null>("get_template_asset_path", { templateKey })
-          .then((path) => [templateKey, path ? convertFileSrc(path) : null] as const)
-          .catch(() => [templateKey, null] as const)
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      setCache((prev) => {
-        const next = { ...prev };
-        for (const [templateKey, src] of results) {
-          next[templateKey] = src;
-        }
-        return next;
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-
-  return cache;
-}
-
 interface SortableSlotProps {
   slot: SlotItem;
   portraitSrc: string | null | undefined;
@@ -909,7 +887,7 @@ function SortableSlot({
       <Flex direction="column" className="slot-card">
         <div className="slot-header" />
         <div
-          className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}${rarityClass ? ` ${rarityClass}` : ""}`}
+          className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}${isSupport && supportGrandMode ? " grand-support" : ""}${rarityClass ? ` ${rarityClass}` : ""}`}
           onClick={onSelect}
         >
           {servant ? (
@@ -1078,12 +1056,6 @@ export function ContentGrid({
     ]
       .filter((id): id is number => id != null)
   );
-  const templateIconMap = useTemplateIcons([
-    "icon_mlb_mark",
-    "icon_grand_bond_ce",
-    "icon_grand_bond_ce_np",
-  ]);
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -1304,9 +1276,9 @@ export function ContentGrid({
       supportGrandCeCardSrcs={supportGrandCeCardSrcs}
       supportGrandCeMlbRequired={supportGrandCeMlbRequired}
       supportGrandBondCeMode={supportGrandBondCeMode}
-      mlbIconSrc={templateIconMap.icon_mlb_mark}
-      bondIconSrc={templateIconMap.icon_grand_bond_ce}
-      bondNpIconSrc={templateIconMap.icon_grand_bond_ce_np}
+      mlbIconSrc={mlbIconSrc}
+      bondIconSrc={grandBondIconSrc}
+      bondNpIconSrc={grandBondNpIconSrc}
       supportNpLevel={activeProject?.supportNoblePhantasmLevelMin ?? null}
       supportSkillLevels={supportSkillLevels}
       supportAppendSkillLevels={supportAppendSkillLevels}

@@ -366,6 +366,7 @@ body,
    * Keep this in lockstep with `--ce-card-aspect` and
    * `--portrait-aspect`. */
   --ce-overlay-height-in-portrait: 18.14%;
+  --grand-ce-strip-height-in-portrait: 9.2%;
   /* How far to pull the inner-loop chamfer endpoints inward along
    * their edge (beyond the natural `(C, F)` / `(F, C)` position).
    * Without this pull-in, the diagonal frame would be √2 times
@@ -708,6 +709,10 @@ body,
   z-index: 2;
 }
 
+.servant-portrait.grand-support .support-settings-overlay-button {
+  bottom: calc(var(--grand-ce-strip-height-in-portrait) * 3 + 16px);
+}
+
 .support-grand-toggle {
   position: absolute;
   top: 8px;
@@ -752,6 +757,10 @@ body,
   backdrop-filter: blur(8px);
   color: white;
   cursor: pointer;
+}
+
+.servant-portrait.grand-support .support-requirement-summary {
+  bottom: calc(var(--grand-ce-strip-height-in-portrait) * 3 + 16px);
 }
 
 .support-requirement-chip {
@@ -1105,16 +1114,16 @@ body,
 .ce-condition-icon-mlb {
   right: 2px;
   bottom: 2px;
-  width: 18px;
-  height: 18px;
+  width: 12px;
+  height: 12px;
   object-fit: contain;
 }
 
 .ce-condition-icon-bond {
   left: 2px;
   top: 2px;
-  width: 20px;
-  height: 20px;
+  width: 14px;
+  height: 14px;
   object-fit: contain;
 }
 
@@ -1137,7 +1146,7 @@ body,
   bottom: 0;
   z-index: 3;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr;
   gap: 3px;
   padding: 3px;
   background: rgba(0, 0, 0, 0.45);
@@ -1146,7 +1155,7 @@ body,
 .grand-ce-slot {
   position: relative;
   min-width: 0;
-  aspect-ratio: var(--ce-card-aspect);
+  aspect-ratio: 4.4 / 1;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.38);
   border-radius: 3px;
@@ -1164,21 +1173,41 @@ body,
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
 }
 
 .grand-ce-slot-scrim {
   position: absolute;
   inset: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 4px;
   align-items: center;
-  justify-content: center;
-  padding: 2px;
+  padding: 2px 6px 2px 4px;
+  background: rgba(20, 20, 20, 0.68);
   color: rgba(255, 255, 255, 0.8);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1.1;
-  text-align: center;
+}
+
+.grand-ce-slot-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.grand-ce-slot-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .grand-ce-slot-clear {

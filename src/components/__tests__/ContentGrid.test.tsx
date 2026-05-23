@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../test/renderWithTheme";
@@ -489,6 +489,44 @@ describe("ContentGrid", () => {
         supportGrandCraftEssenceIds: [null, null, 2],
       })
     );
+  });
+
+  it("stacks grand support craft essences and falls back when card art fails", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd, args) => {
+      if (cmd === "get_craft_essence_card_path") {
+        const { craftEssenceId } = (args ?? {}) as { craftEssenceId?: number };
+        return craftEssenceId ? `/abs/ces/${craftEssenceId}/card_ce.png` : null;
+      }
+      return null;
+    });
+
+    const { container } = renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{
+          ...PROJECT,
+          supportGrandMode: true,
+          supportGrandCraftEssenceIds: [1, null, 2],
+        }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    const supportPortrait = container.querySelector(
+      ".servant-portrait.support.grand-support",
+    );
+    expect(supportPortrait).toBeInTheDocument();
+    expect(
+      supportPortrait?.querySelectorAll(".grand-ce-overlay .grand-ce-slot"),
+    ).toHaveLength(3);
+
+    const image = await screen.findByAltText("Kaleidoscope");
+    fireEvent.error(image);
+
+    expect(screen.getByText("Kaleidoscope")).toBeInTheDocument();
   });
 
   it("renders placeholder slots for unconfigured skills so configured chips keep their position", () => {
