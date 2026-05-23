@@ -65,6 +65,11 @@ their real screens:
   screen is actionable status.
 - `SupportSelect.variants.main.elements.support_scroll_end`: detects the bottom
   of the support list.
+- `SupportSelect.variants.main.elements.grand_servant_support_bottom_line`:
+  CN-only status probe for Grand support lists. Grand servants are ordered
+  before ordinary servants; when this avatar-frame marker is no longer visible
+  in Grand support mode, the runner treats the Grand section as exhausted and
+  refreshes instead of scrolling through ordinary supports.
 - `SupportSelect.variants.refreshConfirm.detect` / `.elements.dialog_refresh_support`:
   detects the JP refresh-confirm modal that appears after tapping the support
   refresh button; the runner confirms it, then waits for the modal to vanish
@@ -109,6 +114,14 @@ require MLB independently. The second Grand slot can additionally require
 one of the Grand bond icons: `icon_grand_bond_ce` for the original bond
 CE, or `icon_grand_bond_ce_np` for the Grand-linked bond CE. Enabled CE
 art and icon checks must all pass before the row can be selected.
+
+On CN Grand support lists, the runner also watches
+`grand_servant_support_bottom_line` in the fixed left avatar-frame column.
+If no matching support row was selected and that marker is absent from the
+current viewport, the runner stops scanning that refreshed list immediately:
+the remaining visible rows are ordinary supports, so it refreshes instead of
+continuing to the scroll-bar bottom. Server bundles without this probe keep
+the older scroll-to-bottom behavior.
 
 ## Support Skill / NP Level Filter (CN)
 

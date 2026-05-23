@@ -1,7 +1,7 @@
 use crate::adb::Adb;
 use crate::screen::{
-    CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient, SupportRowMatch,
-    SupportCeVerificationOptions,
+    CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
+    SupportCeVerificationOptions, SupportRowMatch,
 };
 use crate::{
     load_servant_metadata, servant_np_card, Action, AdvancedBattleScene,
@@ -231,6 +231,7 @@ const BATTLE_SCREEN: &str = "Battle";
 const SUPPORT_SELECT_SCREEN: &str = "SupportSelect";
 pub const ATTACK_BUTTON_ELEMENT: &str = "attack_button";
 const SUPPORT_SCROLL_END_ELEMENT: &str = "support_scroll_end";
+const SUPPORT_GRAND_SERVANT_BOTTOM_LINE_ELEMENT: &str = "grand_servant_support_bottom_line";
 
 /// Region of the top-right `BATTLE m/n` HUD strip. The CV sidecar
 /// anchors on the gold `BATTLE` label inside this region and reads
@@ -756,7 +757,7 @@ const ACTION_DELAY: Duration = Duration::from_millis(300);
 /// this many refreshes (each preceded by a full scroll cycle) without
 /// finding the pinned servant, the runner aborts with an error so the user
 /// isn't stuck looping forever on a servant that simply isn't available.
-const SUPPORT_MAX_REFRESHES: u32 = 3;
+const SUPPORT_MAX_REFRESHES: u32 = 99;
 /// Settle time after the support-list scroll swipe completes; long enough
 /// for momentum scrolling to come to rest before the next OCR pass.
 const SUPPORT_SCROLL_SETTLE: Duration = Duration::from_millis(900);
@@ -1764,10 +1765,14 @@ impl Runner {
             );
         }
 
-        // No match in the visible viewport. The scroll-bar tail indicator
-        // is the source of truth for "have we reached the bottom of the
-        // friend list" — keep swiping until it shows up, then refresh.
-        if !self.support_scroll_bar_at_end() {
+        // No match in the visible viewport. Normal support scans use the
+        // scroll-bar tail indicator as the source of truth. Grand support
+        // scans can stop earlier: Grand rows are listed before ordinary
+        // rows, and the CN avatar-frame bottom-line template disappears
+        // once the visible page has moved past the Grand section.
+        let grand_section_exhausted = self.config.support_grand_mode
+            && self.support_grand_servant_section_visible() == Some(false);
+        if !grand_section_exhausted && !self.support_scroll_bar_at_end() {
             self.emit(
                 "SupportSelect",
                 &format!(
@@ -1788,10 +1793,15 @@ impl Runner {
             self.support_level_progress = SupportLevelPanelProgress::default();
             thread::sleep(SUPPORT_SCROLL_SETTLE);
         } else if self.support_refresh_count < SUPPORT_MAX_REFRESHES {
+            let reason = if grand_section_exhausted {
+                "冠位助战已扫完"
+            } else {
+                "已到底部"
+            };
             self.emit(
                 "SupportSelect",
                 &format!(
-                    "已到底部，刷新助战列表 ({}/{})",
+                    "{reason}，刷新助战列表 ({}/{})",
                     self.support_refresh_count + 1,
                     SUPPORT_MAX_REFRESHES,
                 ),
@@ -1909,10 +1919,13 @@ impl Runner {
         label: &str,
         options: SupportCeVerificationOptions,
     ) -> Option<String> {
-        match self
-            .sidecar()
-            .verify_support_ce(None, region, template_path, SUPPORT_CE_THRESHOLD, options)
-        {
+        match self.sidecar().verify_support_ce(
+            None,
+            region,
+            template_path,
+            SUPPORT_CE_THRESHOLD,
+            options,
+        ) {
             Ok(result) => {
                 let effective_threshold = if result.threshold > 0.0 {
                     result.threshold
@@ -2040,6 +2053,49 @@ impl Runner {
             Err(e) => {
                 eprintln!("[runner] scroll-bar-end check failed (treating as not-at-bottom): {e}");
                 false
+            }
+        }
+    }
+
+    /// In Grand support mode, return whether the current viewport still
+    /// contains at least one Grand-servant avatar frame. `None` means the
+    /// active server bundle doesn't define the probe, so callers should keep
+    /// the legacy scroll-to-bottom behavior.
+    fn support_grand_servant_section_visible(&mut self) -> Option<bool> {
+        match self.sidecar().find_element_by_name(
+            None,
+            SUPPORT_SELECT_SCREEN,
+            SUPPORT_GRAND_SERVANT_BOTTOM_LINE_ELEMENT,
+        ) {
+            Ok(m) => {
+                eprintln!(
+                    "[runner] grand-servant frame-bottom score={:.3} -> {}",
+                    m.score,
+                    if m.found {
+                        "grand-visible"
+                    } else {
+                        "grand-exhausted"
+                    },
+                );
+                Some(m.found)
+            }
+            Err(e)
+                if is_unknown_element_error(
+                    &e,
+                    SUPPORT_SELECT_SCREEN,
+                    SUPPORT_GRAND_SERVANT_BOTTOM_LINE_ELEMENT,
+                ) =>
+            {
+                eprintln!(
+                    "[runner] grand-servant frame-bottom probe unavailable; using scroll-bar end"
+                );
+                None
+            }
+            Err(e) => {
+                eprintln!(
+                    "[runner] grand-servant frame-bottom check failed (keeping scroll path): {e}"
+                );
+                Some(true)
             }
         }
     }
@@ -4546,8 +4602,7 @@ mod tests {
         payload["supportGrandMode"] = serde_json::json!(true);
         payload["supportGrandCraftEssenceIds"] = serde_json::json!([1001, null, 1003]);
         payload["supportCraftEssenceMlbRequired"] = serde_json::json!(false);
-        payload["supportGrandCraftEssenceMlbRequired"] =
-            serde_json::json!([true, false, true]);
+        payload["supportGrandCraftEssenceMlbRequired"] = serde_json::json!([true, false, true]);
         payload["supportGrandBondCeMode"] = serde_json::json!("bondNp");
         let cfg: RunConfig = serde_json::from_value(payload).unwrap();
         assert_eq!(cfg.support_craft_essence_id, Some(1485));
@@ -4562,7 +4617,10 @@ mod tests {
             cfg.support_grand_craft_essence_mlb_required,
             [true, false, true]
         );
-        assert_eq!(cfg.support_grand_bond_ce_mode, SupportGrandBondCeMode::BondNp);
+        assert_eq!(
+            cfg.support_grand_bond_ce_mode,
+            SupportGrandBondCeMode::BondNp
+        );
 
         // Re-serialize and confirm the field round-trips under the
         // camelCase rename rule applied to the whole struct.
@@ -4574,7 +4632,10 @@ mod tests {
             json["supportGrandCraftEssenceIds"],
             serde_json::json!([1001, null, 1003])
         );
-        assert_eq!(json["supportCraftEssenceMlbRequired"], serde_json::json!(false));
+        assert_eq!(
+            json["supportCraftEssenceMlbRequired"],
+            serde_json::json!(false)
+        );
         assert_eq!(
             json["supportGrandCraftEssenceMlbRequired"],
             serde_json::json!([true, false, true])
