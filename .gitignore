@@ -40,7 +40,7 @@ src-tauri/binaries/
 *.sw?
 
 # Screenshot examples
-screenshots/
+.screenshots/
 
 # Mise
 .mise.toml
