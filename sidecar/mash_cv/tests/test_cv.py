@@ -2690,6 +2690,56 @@ class TestGrandBondDecorationIcons:
         # width changed in some other server) is caught loudly.
         assert 0.15 <= BOND_CE_ARTWORK_INSET_FRAC <= 0.20
 
+    def test_bond_mode_falls_back_to_full_artwork_region(self, tmp_path):
+        """Some Grand-link CE thumbnails already match the full slot region.
+        Bond mode must not force the narrow-region score when the full region
+        is the one aligned with the asset; the link icon check is still what
+        distinguishes the connected row."""
+        from mash_cv.cv import _verify_support_ce, CE_GRAND_BOND_NP_TEMPLATE
+
+        H, W = 1440, 2560
+        img = np.full((H, W, 3), 8, dtype=np.uint8)
+        sx, sy, sw, sh = 440, 746, 317, 92
+
+        rng = np.random.default_rng(seed=8)
+        full_art = rng.integers(20, 210, size=(sh, sw, 3), dtype=np.uint8)
+        # Make the center strip deliberately different; an inset-only search
+        # would score poorly even though the full thumbnail is correct.
+        full_art[:, 70:245] = rng.integers(0, 60, size=(sh, 175, 3), dtype=np.uint8)
+        img[sy : sy + sh, sx : sx + sw] = full_art
+
+        asset = np.full((68, 150, 3), 0, dtype=np.uint8)
+        asset[16:52, :] = cv2.resize(full_art, (150, 36), interpolation=cv2.INTER_AREA)
+        asset_path = tmp_path / "card_ce.png"
+        cv2.imwrite(str(asset_path), asset)
+
+        # Synthetic Grand-link marker inside the bondNp search window.
+        from mash_cv import cv
+
+        marker = np.zeros((18, 18), dtype=np.uint8)
+        cv2.line(marker, (2, 2), (15, 15), 255, 3)
+        cv2.line(marker, (15, 2), (2, 15), 255, 3)
+        cv.templates[CE_GRAND_BOND_NP_TEMPLATE] = marker
+        marker_bgr = cv2.cvtColor(marker, cv2.COLOR_GRAY2BGR)
+        img[sy + 2 : sy + 20, sx + 2 : sx + 20] = marker_bgr
+
+        slot_region = {"x": sx / W, "y": sy / H, "w": sw / W, "h": sh / H}
+        plain = _verify_support_ce(img, slot_region, str(asset_path), 0.7)
+        bond = _verify_support_ce(
+            img,
+            slot_region,
+            str(asset_path),
+            0.7,
+            mlb_required=False,
+            grand_bond_ce_mode="bondNp",
+        )
+
+        assert plain["score"] >= 0.70, plain
+        assert bond["score"] == pytest.approx(plain["score"], abs=1e-6), bond
+        assert bond["passed"] is True, bond
+        assert bond["iconChecks"][0]["kind"] == "grandBondNp"
+        assert bond["iconChecks"][0]["passed"] is True
+
     def test_bond_mode_relaxes_artwork_threshold(self, tmp_path):
         """Bond CE artwork matches sit closer to the threshold than
         regular CEs (right-asset score ~0.71 vs next-best ~0.69 on

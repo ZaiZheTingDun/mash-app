@@ -3525,10 +3525,12 @@ CE_DECORATION_ICON_THRESHOLD = 0.70
 # artwork search drives ``cv2.matchTemplate`` against bright outliers that
 # don't exist in ``card_ce.png`` and the correlation collapses to ~0.05
 # even when the asset and the on-screen thumbnail come from the same
-# source image. ``_verify_support_ce`` therefore insets the artwork-search
-# rect by this fraction on each side when bond / bondNp mode is active.
-# Icon checks still fan out from the original (wider) region so the
-# decoration overlays remain inside their search windows.
+# source image. ``_verify_support_ce`` therefore tries this inset artwork
+# search when bond / bondNp mode is active. Some Grand-link rows already
+# align with the full slot, so bond mode scores both the inset and full
+# artwork regions and keeps the higher score. Icon checks still fan out
+# from the original (wider) region so the decoration overlays remain
+# inside their search windows.
 BOND_CE_ARTWORK_INSET_FRAC = 0.18
 
 # Even after the inset, the bond CE artwork match runs over a narrower
@@ -3622,7 +3624,7 @@ def _verify_support_ce(
     mode = (grand_bond_ce_mode or "any").strip()
     bond_mode_active = mode in ("bond", "bondNp")
 
-    # Bond CE thumbnails in Grand Saber rows render the artwork at its
+    # Bond CE thumbnails in some Grand Saber rows render the artwork at its
     # native ~2.2:1 aspect ratio centered within the wider 3.45:1 slot
     # rect; the side margins carry decorative overlays (the orb / throne
     # icon at the left, the MLB star at the right). Including those
@@ -3631,31 +3633,22 @@ def _verify_support_ce(
     # correlation collapses (~0.05 even when the asset and the on-screen
     # thumbnail come from the same source image — see
     # ``src-tauri/assets/ces/1972/card_ce.png`` vs Iori's slot 1). For
-    # bond rows we therefore inset the artwork-search rect on each side
-    # so the search box matches the asset's aspect ratio. Icon checks
-    # below still receive the *original* (wider) ``region`` so the
-    # decoration overlays remain inside their search windows.
+    # bond rows we therefore also try an inset artwork-search rect on each
+    # side so the search box matches the asset's aspect ratio. Other Grand
+    # link rows already align with the full slot; scoring both regions and
+    # taking the max keeps both layouts working. Icon checks below still
+    # receive the *original* (wider) ``region`` so the decoration overlays
+    # remain inside their search windows.
     if bond_mode_active:
-        artwork_region = {
+        inset_artwork_region = {
             "x": float(region["x"]) + float(region["w"]) * BOND_CE_ARTWORK_INSET_FRAC,
             "y": float(region["y"]),
             "w": float(region["w"]) * (1.0 - 2.0 * BOND_CE_ARTWORK_INSET_FRAC),
             "h": float(region["h"]),
         }
+        artwork_regions = [inset_artwork_region, region]
     else:
-        artwork_region = region
-
-    rx = max(0, int(round(artwork_region["x"] * w)))
-    ry = max(0, int(round(artwork_region["y"] * h)))
-    rw = max(1, min(int(round(artwork_region["w"] * w)), w - rx))
-    rh = max(1, min(int(round(artwork_region["h"] * h)), h - ry))
-    crop = img[ry : ry + rh, rx : rx + rw]
-    if crop.size == 0:
-        return {"score": 0.0, "passed": False, "error": "empty crop", "iconChecks": []}
-
-    crop_gray = (
-        cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
-    )
+        artwork_regions = [region]
 
     # Resize the template to match the on-screen icon's pixel size in the
     # **full** screenshot (not the crop), since the crop is sliced at
@@ -3672,35 +3665,65 @@ def _verify_support_ce(
             "iconChecks": [],
         }
 
-    # If the search window is too small for the icon (caller misconfigured
-    # SUPPORT_CE_OFFSET_IN_ROW), shrink the template proportionally so
-    # matchTemplate can still run instead of failing outright. The score
-    # will be lower in that case, surfacing the bad calibration.
-    if (
-        tmpl.shape[0] > crop_gray.shape[0]
-        or tmpl.shape[1] > crop_gray.shape[1]
-    ):
-        scale = min(
-            crop_gray.shape[0] / tmpl.shape[0],
-            crop_gray.shape[1] / tmpl.shape[1],
+    best_score: float | None = None
+    last_error = "empty crop"
+    for artwork_region in artwork_regions:
+        rx = max(0, int(round(float(artwork_region["x"]) * w)))
+        ry = max(0, int(round(float(artwork_region["y"]) * h)))
+        rw = max(1, min(int(round(float(artwork_region["w"]) * w)), w - rx))
+        rh = max(1, min(int(round(float(artwork_region["h"]) * h)), h - ry))
+        crop = img[ry : ry + rh, rx : rx + rw]
+        if crop.size == 0:
+            continue
+
+        crop_gray = (
+            cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
         )
-        new_w = max(8, int(round(tmpl.shape[1] * scale)))
-        new_h = max(8, int(round(tmpl.shape[0] * scale)))
-        tmpl = cv2.resize(
-            tmpl, (new_w, new_h), interpolation=cv2.INTER_AREA
+        attempt_tmpl = tmpl
+
+        # If the search window is too small for the icon (caller misconfigured
+        # SUPPORT_CE_OFFSET_IN_ROW), shrink the template proportionally so
+        # matchTemplate can still run instead of failing outright. The score
+        # will be lower in that case, surfacing the bad calibration.
+        if (
+            attempt_tmpl.shape[0] > crop_gray.shape[0]
+            or attempt_tmpl.shape[1] > crop_gray.shape[1]
+        ):
+            scale = min(
+                crop_gray.shape[0] / attempt_tmpl.shape[0],
+                crop_gray.shape[1] / attempt_tmpl.shape[1],
+            )
+            new_w = max(8, int(round(attempt_tmpl.shape[1] * scale)))
+            new_h = max(8, int(round(attempt_tmpl.shape[0] * scale)))
+            attempt_tmpl = cv2.resize(
+                attempt_tmpl, (new_w, new_h), interpolation=cv2.INTER_AREA
+            )
+
+        if (
+            attempt_tmpl.shape[0] > crop_gray.shape[0]
+            or attempt_tmpl.shape[1] > crop_gray.shape[1]
+        ):
+            last_error = "template larger than crop"
+            continue
+
+        res = cv2.matchTemplate(crop_gray, attempt_tmpl, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, _ = cv2.minMaxLoc(res)
+        score_candidate = float(max_val)
+        best_score = (
+            score_candidate
+            if best_score is None
+            else max(best_score, score_candidate)
         )
 
-    if tmpl.shape[0] > crop_gray.shape[0] or tmpl.shape[1] > crop_gray.shape[1]:
+    if best_score is None:
         return {
             "score": 0.0,
             "passed": False,
-            "error": "template larger than crop",
+            "error": last_error,
             "iconChecks": [],
         }
 
-    res = cv2.matchTemplate(crop_gray, tmpl, cv2.TM_CCOEFF_NORMED)
-    _, max_val, _, _ = cv2.minMaxLoc(res)
-    score = float(max_val)
+    score = best_score
     icon_checks: list[dict] = []
     # Relax the artwork threshold for bond slots only; see the
     # ``BOND_CE_ARTWORK_THRESHOLD`` comment for the rationale. Take the
