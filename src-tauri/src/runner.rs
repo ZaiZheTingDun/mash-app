@@ -47,6 +47,7 @@ pub struct GrandServantConfig {
 
 #[derive(Debug, Clone)]
 struct GrandServantRuntimeConfig {
+    slot_index: usize,
     servant_id: u32,
     np_card: String,
     priority: String,
@@ -259,6 +260,10 @@ const SUPPORT_SELECT_SCREEN: &str = "SupportSelect";
 pub const ATTACK_BUTTON_ELEMENT: &str = "attack_button";
 const SUPPORT_SCROLL_END_ELEMENT: &str = "support_scroll_end";
 const SUPPORT_GRAND_SERVANT_BOTTOM_LINE_ELEMENT: &str = "grand_servant_support_bottom_line";
+/// Party servant auto-placement is reserved for a later implementation.
+/// Keep the config shape intact, but do not enter ServantSelect from
+/// TeamConfirm yet.
+const ENABLE_PARTY_SERVANT_AUTO_PLACEMENT: bool = false;
 
 /// Region of the top-right `BATTLE m/n` HUD strip. The CV sidecar
 /// anchors on the gold `BATTLE` label inside this region and reads
@@ -626,6 +631,7 @@ struct BattleState {
     advanced_startup_done: HashSet<usize>,
     advanced_control_indices: HashMap<usize, usize>,
     advanced_startup_control_indices: HashMap<usize, usize>,
+    advanced_auto_order_changes: HashMap<usize, Action>,
 }
 
 impl BattleState {
@@ -640,6 +646,7 @@ impl BattleState {
             advanced_startup_done: HashSet::new(),
             advanced_control_indices: HashMap::new(),
             advanced_startup_control_indices: HashMap::new(),
+            advanced_auto_order_changes: HashMap::new(),
         }
     }
 }
@@ -773,6 +780,26 @@ fn is_unknown_element_error(err: &str, screen: &str, element: &str) -> bool {
     err.contains(&format!("unknown element: {screen}.{element}"))
 }
 
+fn support_grand_section_exhausted_after_probe(
+    visible: Option<bool>,
+    seen: &mut bool,
+    consecutive_misses: &mut u8,
+) -> bool {
+    match visible {
+        Some(true) => {
+            *seen = true;
+            *consecutive_misses = 0;
+            false
+        }
+        Some(false) if *seen => {
+            *consecutive_misses = consecutive_misses.saturating_add(1);
+            *consecutive_misses >= 2
+        }
+        Some(false) => false,
+        None => false,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
@@ -798,6 +825,8 @@ const SUPPORT_REFRESH_DIALOG_APPEAR_TIMEOUT: Duration = Duration::from_secs(2);
 /// Poll cadence while waiting for the refresh-confirm dialog to appear or
 /// disappear.
 const SUPPORT_REFRESH_DIALOG_POLL: Duration = Duration::from_millis(300);
+/// Maximum wait for the refresh-confirm dialog to close after tapping OK.
+const SUPPORT_REFRESH_DIALOG_DISMISS_TIMEOUT: Duration = Duration::from_secs(8);
 /// Extra pause after the refresh-confirm dialog is first seen, before we tap
 /// the confirm button. The detect template can match while the modal is
 /// still mid-fade-in and the button hit-area isn't fully interactive yet;
@@ -1207,6 +1236,13 @@ pub struct Runner {
     /// skip verification).
     support_ce_template: Option<Option<PathBuf>>,
     support_grand_ce_templates: Option<[Option<PathBuf>; 3]>,
+    /// Whether the current refreshed support list has ever shown the Grand
+    /// avatar-frame probe. A missing probe before this flips true is not
+    /// enough to conclude the Grand section is exhausted, because first-page
+    /// template probes can be transiently stale while the list settles.
+    support_grand_section_seen: bool,
+    /// Consecutive Grand avatar-frame misses after the section was seen.
+    support_grand_section_misses: u8,
     /// Tracks visible skill-panel validation for the current support row.
     /// Owned and append skills are shown on alternating panels, so a row can
     /// only satisfy both groups across multiple OCR polls.
@@ -1262,6 +1298,8 @@ impl Runner {
             support_meta: None,
             support_ce_template: None,
             support_grand_ce_templates: None,
+            support_grand_section_seen: false,
+            support_grand_section_misses: 0,
             support_level_progress: SupportLevelPanelProgress::default(),
             servants_placed: Vec::new(),
             battle: BattleState::new(),
@@ -1730,6 +1768,8 @@ impl Runner {
             self.support_selected = true;
             self.support_scroll_count = 0;
             self.support_refresh_count = 0;
+            self.support_grand_section_seen = false;
+            self.support_grand_section_misses = 0;
             self.support_class_tab_done = false;
             self.support_level_progress = SupportLevelPanelProgress::default();
             thread::sleep(ACTION_DELAY);
@@ -1797,8 +1837,8 @@ impl Runner {
         // scans can stop earlier: Grand rows are listed before ordinary
         // rows, and the CN avatar-frame bottom-line template disappears
         // once the visible page has moved past the Grand section.
-        let grand_section_exhausted = self.config.support_grand_mode
-            && self.support_grand_servant_section_visible() == Some(false);
+        let grand_section_exhausted =
+            self.config.support_grand_mode && self.update_support_grand_section_exhausted();
         if !grand_section_exhausted && !self.support_scroll_bar_at_end() {
             self.emit(
                 "SupportSelect",
@@ -1838,6 +1878,8 @@ impl Runner {
             }
             self.support_scroll_count = 0;
             self.support_refresh_count += 1;
+            self.support_grand_section_seen = false;
+            self.support_grand_section_misses = 0;
             self.support_level_progress = SupportLevelPanelProgress::default();
             // Refresh occasionally snaps the class filter back to "all";
             // re-tap the class tab on the next poll to be safe.
@@ -2088,6 +2130,15 @@ impl Runner {
     /// contains at least one Grand-servant avatar frame. `None` means the
     /// active server bundle doesn't define the probe, so callers should keep
     /// the legacy scroll-to-bottom behavior.
+    fn update_support_grand_section_exhausted(&mut self) -> bool {
+        let visible = self.support_grand_servant_section_visible();
+        support_grand_section_exhausted_after_probe(
+            visible,
+            &mut self.support_grand_section_seen,
+            &mut self.support_grand_section_misses,
+        )
+    }
+
     fn support_grand_servant_section_visible(&mut self) -> Option<bool> {
         match self.sidecar().find_element_by_name(
             None,
@@ -2133,6 +2184,9 @@ impl Runner {
     fn confirm_support_refresh_dialog_if_needed(&mut self) -> bool {
         let appear_deadline = std::time::Instant::now() + SUPPORT_REFRESH_DIALOG_APPEAR_TIMEOUT;
         loop {
+            if self.is_cancelled() {
+                return false;
+            }
             match self.sidecar().find_element_by_name(
                 None,
                 SUPPORT_SELECT_SCREEN,
@@ -2163,13 +2217,20 @@ impl Runner {
         }
 
         thread::sleep(SUPPORT_REFRESH_DIALOG_CONFIRM_SETTLE);
+        if self.is_cancelled() {
+            return false;
+        }
 
         self.emit("SupportSelect", "助战刷新需要确认，点击确定");
         if !self.tap_at("SupportSelect", SUPPORT_REFRESH_CONFIRM_BUTTON) {
             return false;
         }
 
+        let dismiss_deadline = std::time::Instant::now() + SUPPORT_REFRESH_DIALOG_DISMISS_TIMEOUT;
         loop {
+            if self.is_cancelled() {
+                return false;
+            }
             match self.sidecar().find_element_by_name(
                 None,
                 SUPPORT_SELECT_SCREEN,
@@ -2195,6 +2256,10 @@ impl Runner {
                     thread::sleep(SUPPORT_REFRESH_SETTLE);
                     return true;
                 }
+            }
+            if std::time::Instant::now() >= dismiss_deadline {
+                self.emit("SupportSelect", "等待助战刷新确认关闭超时");
+                return false;
             }
             thread::sleep(SUPPORT_REFRESH_DIALOG_POLL);
         }
@@ -2440,6 +2505,7 @@ impl Runner {
                     return None;
                 }
                 Some(GrandServantRuntimeConfig {
+                    slot_index: slot,
                     servant_id,
                     np_card: config.np_card.clone(),
                     priority: config.priority.clone(),
@@ -2454,13 +2520,27 @@ impl Runner {
         scene: &AdvancedBattleScene,
         control_count: usize,
     ) -> [Option<u32>; 3] {
-        self.advanced_party_ids_after_actions(
-            scene
-                .control_actions
-                .iter()
-                .take(control_count)
-                .chain(scene.startup_actions.iter()),
-        )
+        let mut ids = self.build_full_party_ids();
+        for action in scene.control_actions.iter().take(control_count) {
+            if action_frontline_available(&ids, action) {
+                apply_party_lineup_change(&mut ids, action);
+            }
+        }
+        if let Some(action) = self
+            .battle
+            .advanced_auto_order_changes
+            .get(&self.battle.current_scene_index)
+        {
+            if action_frontline_available(&ids, action) {
+                apply_party_lineup_change(&mut ids, action);
+            }
+        }
+        for action in &scene.startup_actions {
+            if action_frontline_available(&ids, action) {
+                apply_party_lineup_change(&mut ids, action);
+            }
+        }
+        [ids[0], ids[1], ids[2]]
     }
 
     fn advanced_party_ids_after_control(
@@ -2477,7 +2557,14 @@ impl Runner {
         control_count: usize,
         startup_control_count: usize,
     ) -> [Option<u32>; 3] {
-        let actions = advanced_startup_flow_actions(scene, control_count, startup_control_count);
+        let actions = advanced_startup_flow_actions(
+            scene,
+            control_count,
+            startup_control_count,
+            self.battle
+                .advanced_auto_order_changes
+                .get(&self.battle.current_scene_index),
+        );
         self.advanced_party_ids_after_actions(actions.iter())
     }
 
@@ -2802,6 +2889,107 @@ impl Runner {
             };
 
             if !self.battle.advanced_startup_done.contains(&scene_index) {
+                if scene.grand_auto_order_change == Some(true) {
+                    let auto_order_change =
+                        grand_auto_order_change_action(&cards, &party_ids, &grand_servants);
+                    let original_ids = self.build_full_party_ids();
+                    let mut ids = original_ids;
+                    let mut startup_actions = Vec::new();
+                    if let Some(action) = auto_order_change.clone() {
+                        self.emit("Attack", "启动条件：自动将后排主冠位换至前排");
+                        if action_frontline_available(&ids, &action) {
+                            apply_party_lineup_change(&mut ids, &action);
+                            startup_actions.push(action.clone());
+                            self.battle
+                                .advanced_auto_order_changes
+                                .insert(scene_index, action);
+                        } else {
+                            self.emit("Battle", "跳过自动换位：目标不在可交换位置");
+                        }
+                    } else {
+                        self.emit(
+                            "Attack",
+                            "启动条件：主冠位不需要或无法自动换位，直接进入启动阶段",
+                        );
+                    }
+                    for action in scene.startup_actions.iter().cloned() {
+                        let Some(resolved_action) =
+                            resolve_action_to_current_positions(&ids, &original_ids, &action)
+                        else {
+                            self.emit(
+                                "Battle",
+                                &format!(
+                                    "跳过行动：{} 不在当前可用位置",
+                                    action_frontline_label(&action)
+                                ),
+                            );
+                            continue;
+                        };
+                        if !action_frontline_available(&ids, &resolved_action) {
+                            self.emit(
+                                "Battle",
+                                &format!("跳过行动：{} 不在前排", action_frontline_label(&action)),
+                            );
+                            continue;
+                        }
+                        apply_party_lineup_change(&mut ids, &resolved_action);
+                        startup_actions.push(resolved_action);
+                    }
+                    let startup_party_ids = [ids[0], ids[1], ids[2]];
+                    self.battle
+                        .advanced_startup_control_indices
+                        .insert(scene_index, executed_control_count);
+                    self.battle.advanced_startup_done.insert(scene_index);
+                    if !startup_actions.is_empty() {
+                        if !self.tap_at("Attack", ATTACK_SCREEN_RETURN) {
+                            return;
+                        }
+                        thread::sleep(ACTION_DELAY);
+                        if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                            return;
+                        }
+                        let prep_scene = BattleScene {
+                            id: scene.id.clone(),
+                            preparation_actions: startup_actions,
+                            servant_actions: Vec::new(),
+                            equipment_actions: Vec::new(),
+                            command_spell_actions: Vec::new(),
+                            attack_priority: Vec::new(),
+                        };
+                        self.execute_scene_skills(&prep_scene);
+
+                        self.emit("Battle", "启动阶段完成，进入自动战斗");
+                        if !self.tap_at("Battle", ATTACK_BUTTON) {
+                            return;
+                        }
+                        thread::sleep(ACTION_DELAY);
+                        let Some((next_cards, next_nps)) =
+                            self.read_attack_state(&startup_party_ids)
+                        else {
+                            return;
+                        };
+                        let picks = choose_advanced_auto_picks(
+                            &scene,
+                            &next_cards,
+                            &next_nps,
+                            &startup_party_ids,
+                            &grand_servants,
+                        );
+                        self.tap_picks("Attack", &picks);
+                        return;
+                    }
+
+                    let picks = choose_advanced_auto_picks(
+                        &scene,
+                        &cards,
+                        &nps,
+                        &startup_party_ids,
+                        &grand_servants,
+                    );
+                    self.tap_picks("Attack", &picks);
+                    return;
+                }
+
                 if !advanced_startup_conditions_match(&scene, &cards, &party_ids) {
                     let control_index = executed_control_count;
                     if let Some(control_action) = scene.control_actions.get(control_index).cloned()
@@ -2963,6 +3151,9 @@ impl Runner {
                     &scene,
                     executed_control_count,
                     startup_control_count,
+                    self.battle
+                        .advanced_auto_order_changes
+                        .get(&self.battle.current_scene_index),
                 );
                 let (control_actions, control_party_ids) = self.advanced_actions_and_party_after(
                     active_actions.into_iter(),
@@ -3549,6 +3740,9 @@ impl Runner {
     // -- utilities -----------------------------------------------------------
 
     fn next_unfilled_slot(&self) -> Option<ServantSlotConfig> {
+        if !ENABLE_PARTY_SERVANT_AUTO_PLACEMENT {
+            return None;
+        }
         self.config
             .servant_selections
             .iter()
@@ -3737,6 +3931,48 @@ fn apply_party_lineup_change(ids: &mut [Option<u32>; 6], action: &Action) {
     }
 }
 
+fn front_slot_with_most_cards(
+    cards: &[CommandCardMatch],
+    party_ids: &[Option<u32>; 3],
+) -> Option<usize> {
+    let mut counts = [0usize; 3];
+    for card in cards {
+        let Some(servant_id) = card.servant_id else {
+            continue;
+        };
+        if let Some(index) = party_ids
+            .iter()
+            .position(|party_id| *party_id == Some(servant_id))
+        {
+            counts[index] += 1;
+        }
+    }
+    (0..3)
+        .filter(|index| party_ids[*index].is_some())
+        .max_by_key(|index| (counts[*index], std::cmp::Reverse(*index)))
+}
+
+fn grand_auto_order_change_action(
+    cards: &[CommandCardMatch],
+    party_ids: &[Option<u32>; 3],
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> Option<Action> {
+    let main = grand_servants.first()?;
+    if !(3..6).contains(&main.slot_index) {
+        return None;
+    }
+    let front_index = front_slot_with_most_cards(cards, party_ids)?;
+    Some(Action::Equipment {
+        id: "auto_grand_order_change".into(),
+        skill: Some("skill_3".into()),
+        target: None,
+        order_change: Some(crate::OrderChangeSelection {
+            front: Some(format!("servant_{}", front_index + 1)),
+            back: Some(format!("servant_{}", main.slot_index + 1)),
+        }),
+    })
+}
+
 fn front_slot_has_servant(ids: &[Option<u32>; 6], value: Option<&str>) -> bool {
     let Some(index) = value.and_then(|value| parse_index(value, "servant_")) else {
         return false;
@@ -3781,6 +4017,138 @@ fn action_frontline_available(ids: &[Option<u32>; 6], action: &Action) -> bool {
     }
 }
 
+fn current_slot_for_original_selection(
+    ids: &[Option<u32>; 6],
+    original_ids: &[Option<u32>; 6],
+    value: &str,
+    allowed: std::ops::Range<usize>,
+) -> Option<String> {
+    let original_index = parse_index(value, "servant_")?;
+    let servant_id = original_ids.get(original_index).copied().flatten()?;
+    let current_index = ids
+        .iter()
+        .position(|current_id| *current_id == Some(servant_id))?;
+    if !allowed.contains(&current_index) {
+        return None;
+    }
+    Some(format!("servant_{}", current_index + 1))
+}
+
+fn resolve_required_slot_to_current_position(
+    ids: &[Option<u32>; 6],
+    original_ids: &[Option<u32>; 6],
+    value: Option<&str>,
+    allowed: std::ops::Range<usize>,
+) -> Option<Option<String>> {
+    Some(Some(current_slot_for_original_selection(
+        ids,
+        original_ids,
+        value?,
+        allowed,
+    )?))
+}
+
+fn resolve_optional_slot_to_current_position(
+    ids: &[Option<u32>; 6],
+    original_ids: &[Option<u32>; 6],
+    value: Option<&str>,
+) -> Option<Option<String>> {
+    match value {
+        Some(value) => Some(Some(current_slot_for_original_selection(
+            ids,
+            original_ids,
+            value,
+            0..3,
+        )?)),
+        None => Some(None),
+    }
+}
+
+fn resolve_action_to_current_positions(
+    ids: &[Option<u32>; 6],
+    original_ids: &[Option<u32>; 6],
+    action: &Action,
+) -> Option<Action> {
+    match action {
+        Action::Servant {
+            id,
+            servant,
+            target,
+            ..
+        } => Some(Action::Servant {
+            id: id.clone(),
+            servant: resolve_required_slot_to_current_position(
+                ids,
+                original_ids,
+                servant.as_deref(),
+                0..3,
+            )?,
+            skill: match action {
+                Action::Servant { skill, .. } => skill.clone(),
+                _ => None,
+            },
+            target: resolve_optional_slot_to_current_position(
+                ids,
+                original_ids,
+                target.as_deref(),
+            )?,
+        }),
+        Action::Equipment {
+            id,
+            skill,
+            target,
+            order_change: Some(order_change),
+            ..
+        } => Some(Action::Equipment {
+            id: id.clone(),
+            skill: skill.clone(),
+            target: resolve_optional_slot_to_current_position(
+                ids,
+                original_ids,
+                target.as_deref(),
+            )?,
+            order_change: Some(crate::OrderChangeSelection {
+                front: resolve_required_slot_to_current_position(
+                    ids,
+                    original_ids,
+                    order_change.front.as_deref(),
+                    0..3,
+                )?,
+                back: resolve_required_slot_to_current_position(
+                    ids,
+                    original_ids,
+                    order_change.back.as_deref(),
+                    3..6,
+                )?,
+            }),
+        }),
+        Action::Equipment {
+            id,
+            skill,
+            target,
+            order_change: None,
+        } => Some(Action::Equipment {
+            id: id.clone(),
+            skill: skill.clone(),
+            target: resolve_optional_slot_to_current_position(
+                ids,
+                original_ids,
+                target.as_deref(),
+            )?,
+            order_change: None,
+        }),
+        Action::CommandSpell { id, spell, target } => Some(Action::CommandSpell {
+            id: id.clone(),
+            spell: spell.clone(),
+            target: resolve_optional_slot_to_current_position(
+                ids,
+                original_ids,
+                target.as_deref(),
+            )?,
+        }),
+    }
+}
+
 fn action_frontline_label(action: &Action) -> String {
     match action {
         Action::Servant {
@@ -3811,6 +4179,7 @@ fn advanced_startup_flow_actions(
     scene: &AdvancedBattleScene,
     control_count: usize,
     startup_control_count: usize,
+    auto_order_change: Option<&Action>,
 ) -> Vec<Action> {
     let control_count = control_count.min(scene.control_actions.len());
     let startup_control_count = startup_control_count.min(control_count);
@@ -3822,6 +4191,9 @@ fn advanced_startup_flow_actions(
             .take(startup_control_count)
             .cloned(),
     );
+    if let Some(action) = auto_order_change {
+        actions.push(action.clone());
+    }
     actions.extend(scene.startup_actions.iter().cloned());
     actions.extend(
         scene
@@ -4263,6 +4635,7 @@ fn startup_conditions_match_from(
 
 fn uses_advanced_strategy_flow(scene: &AdvancedBattleScene) -> bool {
     scene.main_output.is_some()
+        || scene.grand_auto_order_change == Some(true)
         || !scene.command_conditions.is_empty()
         || !scene.control_actions.is_empty()
         || !scene.startup_actions.is_empty()
@@ -4856,6 +5229,7 @@ mod tests {
         AdvancedBattleScene {
             id: "advanced_scene_1".into(),
             main_output: None,
+            grand_auto_order_change: None,
             command_conditions: Vec::new(),
             control_actions: Vec::new(),
             startup_actions: Vec::new(),
@@ -4864,7 +5238,17 @@ mod tests {
     }
 
     fn grand_config(servant_id: u32, np_card: &str, priority: &str) -> GrandServantRuntimeConfig {
+        grand_config_at(0, servant_id, np_card, priority)
+    }
+
+    fn grand_config_at(
+        slot_index: usize,
+        servant_id: u32,
+        np_card: &str,
+        priority: &str,
+    ) -> GrandServantRuntimeConfig {
         GrandServantRuntimeConfig {
+            slot_index,
             servant_id,
             np_card: np_card.into(),
             priority: priority.into(),
@@ -5141,6 +5525,7 @@ mod tests {
         let scene = AdvancedBattleScene {
             id: "advanced_scene_1".into(),
             main_output: None,
+            grand_auto_order_change: None,
             command_conditions: vec![
                 AdvancedCommandCardCondition {
                     slot: 0,
@@ -5175,6 +5560,7 @@ mod tests {
         let scene = AdvancedBattleScene {
             id: "advanced_scene_1".into(),
             main_output: None,
+            grand_auto_order_change: None,
             command_conditions: vec![
                 AdvancedCommandCardCondition {
                     slot: 0,
@@ -5240,6 +5626,106 @@ mod tests {
         ));
         assert!(!should_retry_command_card_owner_detection(&cards, &[]));
         assert!(should_retry_command_card_owner_detection(&[], &[10]));
+    }
+
+    #[test]
+    fn grand_auto_order_change_targets_front_servant_with_most_cards() {
+        let cards = vec![
+            command_card(0, Some(20), Some("a"), None),
+            command_card(1, Some(10), Some("q"), None),
+            command_card(2, Some(20), Some("b"), None),
+            command_card(3, Some(30), Some("a"), None),
+            command_card(4, Some(10), Some("b"), None),
+        ];
+        let action = grand_auto_order_change_action(
+            &cards,
+            &[Some(10), Some(20), Some(30)],
+            &[grand_config_at(4, 99, "buster", "damage")],
+        )
+        .unwrap();
+
+        match action {
+            Action::Equipment {
+                skill,
+                order_change: Some(order_change),
+                ..
+            } => {
+                assert_eq!(skill.as_deref(), Some("skill_3"));
+                assert_eq!(order_change.front.as_deref(), Some("servant_1"));
+                assert_eq!(order_change.back.as_deref(), Some("servant_5"));
+            }
+            _ => panic!("expected auto Order Change action"),
+        }
+    }
+
+    #[test]
+    fn grand_auto_order_change_skips_when_main_grand_is_frontline() {
+        let cards = vec![command_card(0, Some(99), Some("a"), None)];
+        assert!(grand_auto_order_change_action(
+            &cards,
+            &[Some(99), Some(20), Some(30)],
+            &[grand_config_at(0, 99, "buster", "damage")],
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn startup_action_selected_slot_resolves_to_current_position_after_auto_order_change() {
+        let original_ids = [Some(10), Some(20), Some(30), Some(99), None, None];
+        let changed_ids = [Some(99), Some(20), Some(30), Some(10), None, None];
+        let swapped_out_source = Action::Servant {
+            id: "a1".into(),
+            servant: Some("servant_1".into()),
+            skill: Some("skill_1".into()),
+            target: None,
+        };
+        let main_grand_source = Action::Servant {
+            id: "a4".into(),
+            servant: Some("servant_4".into()),
+            skill: Some("skill_1".into()),
+            target: Some("servant_2".into()),
+        };
+        let unchanged_source = Action::Servant {
+            id: "a2".into(),
+            servant: Some("servant_2".into()),
+            skill: Some("skill_1".into()),
+            target: None,
+        };
+        let swapped_target = Action::Equipment {
+            id: "a3".into(),
+            skill: Some("skill_1".into()),
+            target: Some("servant_1".into()),
+            order_change: None,
+        };
+
+        assert!(resolve_action_to_current_positions(
+            &changed_ids,
+            &original_ids,
+            &swapped_out_source
+        )
+        .is_none());
+        let resolved =
+            resolve_action_to_current_positions(&changed_ids, &original_ids, &main_grand_source)
+                .unwrap();
+        match resolved {
+            Action::Servant {
+                servant, target, ..
+            } => {
+                assert_eq!(servant.as_deref(), Some("servant_1"));
+                assert_eq!(target.as_deref(), Some("servant_2"));
+            }
+            _ => panic!("expected servant action"),
+        }
+        assert!(resolve_action_to_current_positions(
+            &changed_ids,
+            &original_ids,
+            &unchanged_source
+        )
+        .is_some());
+        assert!(
+            resolve_action_to_current_positions(&changed_ids, &original_ids, &swapped_target)
+                .is_none()
+        );
     }
 
     #[test]
@@ -5316,6 +5802,7 @@ mod tests {
                 output_type: Some(AdvancedOutputType::Np),
                 np_card: Some("arts".into()),
             }),
+            grand_auto_order_change: None,
             command_conditions: Vec::new(),
             control_actions: Vec::new(),
             startup_actions: Vec::new(),
@@ -5951,5 +6438,53 @@ mod tests {
                 needs_exec: false,
             }
         );
+    }
+
+    #[test]
+    fn grand_support_section_requires_seen_then_two_misses_before_exhausted() {
+        let mut seen = false;
+        let mut misses = 0;
+
+        assert!(!support_grand_section_exhausted_after_probe(
+            Some(false),
+            &mut seen,
+            &mut misses
+        ));
+        assert!(!seen);
+        assert_eq!(misses, 0);
+
+        assert!(!support_grand_section_exhausted_after_probe(
+            Some(true),
+            &mut seen,
+            &mut misses
+        ));
+        assert!(seen);
+        assert_eq!(misses, 0);
+
+        assert!(!support_grand_section_exhausted_after_probe(
+            Some(false),
+            &mut seen,
+            &mut misses
+        ));
+        assert_eq!(misses, 1);
+        assert!(support_grand_section_exhausted_after_probe(
+            Some(false),
+            &mut seen,
+            &mut misses
+        ));
+    }
+
+    #[test]
+    fn grand_support_section_ignores_unavailable_probe() {
+        let mut seen = true;
+        let mut misses = 1;
+
+        assert!(!support_grand_section_exhausted_after_probe(
+            None,
+            &mut seen,
+            &mut misses
+        ));
+        assert!(seen);
+        assert_eq!(misses, 1);
     }
 }

@@ -34,8 +34,8 @@ stateDiagram-v2
     TeamConfirm --> SupportSelect: start quest
     SupportSelect --> TeamChange: support chosen
     SupportSelect --> SupportSelect: refresh or scroll
-    TeamChange --> ServantSelect: choose member
-    ServantSelect --> TeamChange: member placed
+    TeamChange --> ServantSelect: choose member (currently disabled)
+    ServantSelect --> TeamChange: member placed (currently disabled)
     TeamChange --> Battle: party confirmed
 
     Battle --> BattleAction: attack available
@@ -56,6 +56,11 @@ stateDiagram-v2
     APRecovery --> TeamConfirm: recovered
 ```
 
+Party servant auto-placement is intentionally disabled for now. The runner
+still accepts `servantSelections` in `RunConfig`, but `TeamConfirm` ignores
+them until that feature is adapted; it proceeds directly to starting the
+quest once the support and existing team state are ready.
+
 ## Template Probes
 
 Battle-specific template probes live in `cv.json` under
@@ -67,9 +72,10 @@ their real screens:
   of the support list.
 - `SupportSelect.variants.main.elements.grand_servant_support_bottom_line`:
   CN-only status probe for Grand support lists. Grand servants are ordered
-  before ordinary servants; when this avatar-frame marker is no longer visible
-  in Grand support mode, the runner treats the Grand section as exhausted and
-  refreshes instead of scrolling through ordinary supports.
+  before ordinary servants; after this avatar-frame marker has been seen in
+  the current refreshed list, two consecutive misses mean the runner treats
+  the Grand section as exhausted and refreshes instead of scrolling through
+  ordinary supports.
 - `SupportSelect.variants.refreshConfirm.detect` / `.elements.dialog_refresh_support`:
   detects the JP refresh-confirm modal that appears after tapping the support
   refresh button; the runner confirms it, then waits for the modal to vanish
@@ -117,11 +123,13 @@ art and icon checks must all pass before the row can be selected.
 
 On CN Grand support lists, the runner also watches
 `grand_servant_support_bottom_line` in the fixed left avatar-frame column.
-If no matching support row was selected and that marker is absent from the
-current viewport, the runner stops scanning that refreshed list immediately:
-the remaining visible rows are ordinary supports, so it refreshes instead of
-continuing to the scroll-bar bottom. Server bundles without this probe keep
-the older scroll-to-bottom behavior.
+If no matching support row was selected, the runner first needs to see that
+marker in the current refreshed list. Once seen, two consecutive missing
+probes mean the remaining visible rows are ordinary supports, so it refreshes
+instead of continuing to the scroll-bar bottom. If the marker was never seen,
+the runner keeps the older scroll-to-bottom behavior for that refreshed list.
+Server bundles without this probe also keep the older scroll-to-bottom
+behavior.
 
 ## Support Skill / NP Level Filter (CN)
 
@@ -167,8 +175,17 @@ changes (i.e. when the runner moves to a different row).
 - Advanced-mode teams store battle scenes in `advanced_battle_scenes.json`.
   The current strategy UI uses a three-stage flow. First, the runner enters
   the attack-card screen and treats the scene as "waiting for startup": it
-  checks the configured five command-card startup conditions. If they do not
-  match, it optionally taps the bottom-right attack-screen return button and executes one `controlActions` entry per
+  checks the configured five command-card startup conditions, unless the scene
+  enables Grand auto Order Change as its startup condition. In that Grand mode,
+  the runner counts the current front line's recognized command cards, chooses
+  the front servant with the highest count (leftmost on ties), uses Mystic Code
+  `skill_3` to swap that servant with the back-line main Grand servant, then
+  treats startup as satisfied and continues into `startupActions`. Those startup
+  actions are resolved by the originally selected servant identity: a configured
+  back-line main Grand action is rewritten to its current front-line slot, while
+  an action whose selected servant was moved to the back line is skipped. If ordinary
+  command-card startup conditions do not match, it optionally taps the
+  bottom-right attack-screen return button and executes one `controlActions` entry per
   turn in configured order, then re-enters the attack-card screen and attacks
   with the automatic priority strategy while passing an empty NP list so no
   Noble Phantasm is released. Once all control actions have been consumed,
