@@ -2515,34 +2515,6 @@ impl Runner {
             .collect()
     }
 
-    fn advanced_party_ids_after_control_and_startup(
-        &self,
-        scene: &AdvancedBattleScene,
-        control_count: usize,
-    ) -> [Option<u32>; 3] {
-        let mut ids = self.build_full_party_ids();
-        for action in scene.control_actions.iter().take(control_count) {
-            if action_frontline_available(&ids, action) {
-                apply_party_lineup_change(&mut ids, action);
-            }
-        }
-        if let Some(action) = self
-            .battle
-            .advanced_auto_order_changes
-            .get(&self.battle.current_scene_index)
-        {
-            if action_frontline_available(&ids, action) {
-                apply_party_lineup_change(&mut ids, action);
-            }
-        }
-        for action in &scene.startup_actions {
-            if action_frontline_available(&ids, action) {
-                apply_party_lineup_change(&mut ids, action);
-            }
-        }
-        [ids[0], ids[1], ids[2]]
-    }
-
     fn advanced_party_ids_after_control(
         &self,
         scene: &AdvancedBattleScene,
@@ -2875,7 +2847,16 @@ impl Runner {
                 .get(&scene_index)
                 .unwrap_or(&0);
             let current_party_ids = if self.battle.advanced_startup_done.contains(&scene_index) {
-                self.advanced_party_ids_after_control_and_startup(&scene, executed_control_count)
+                let startup_control_count = *self
+                    .battle
+                    .advanced_startup_control_indices
+                    .get(&scene_index)
+                    .unwrap_or(&executed_control_count);
+                self.advanced_party_ids_after_startup_flow(
+                    &scene,
+                    executed_control_count,
+                    startup_control_count,
+                )
             } else {
                 self.advanced_party_ids_after_control(&scene, executed_control_count)
             };
@@ -2912,7 +2893,26 @@ impl Runner {
                             "启动条件：主冠位不需要或无法自动换位，直接进入启动阶段",
                         );
                     }
-                    for action in scene.startup_actions.iter().cloned() {
+                    let next_control_count = if executed_control_count < scene.control_actions.len()
+                    {
+                        executed_control_count + 1
+                    } else {
+                        executed_control_count
+                    };
+                    if executed_control_count < scene.control_actions.len() {
+                        self.emit(
+                            "Attack",
+                            &format!("启动阶段执行本回合控制行动 {next_control_count}"),
+                        );
+                    }
+                    let pending_actions = scene
+                        .control_actions
+                        .iter()
+                        .skip(executed_control_count)
+                        .take(next_control_count.saturating_sub(executed_control_count))
+                        .chain(scene.startup_actions.iter())
+                        .cloned();
+                    for action in pending_actions {
                         let Some(resolved_action) =
                             resolve_action_to_current_positions(&ids, &original_ids, &action)
                         else {
@@ -2937,8 +2937,11 @@ impl Runner {
                     }
                     let startup_party_ids = [ids[0], ids[1], ids[2]];
                     self.battle
+                        .advanced_control_indices
+                        .insert(scene_index, next_control_count);
+                    self.battle
                         .advanced_startup_control_indices
-                        .insert(scene_index, executed_control_count);
+                        .insert(scene_index, next_control_count);
                     self.battle.advanced_startup_done.insert(scene_index);
                     if !startup_actions.is_empty() {
                         if !self.tap_at("Attack", ATTACK_SCREEN_RETURN) {
@@ -4184,6 +4187,9 @@ fn advanced_startup_flow_actions(
     let control_count = control_count.min(scene.control_actions.len());
     let startup_control_count = startup_control_count.min(control_count);
     let mut actions = Vec::new();
+    if let Some(action) = auto_order_change {
+        actions.push(action.clone());
+    }
     actions.extend(
         scene
             .control_actions
@@ -4191,9 +4197,6 @@ fn advanced_startup_flow_actions(
             .take(startup_control_count)
             .cloned(),
     );
-    if let Some(action) = auto_order_change {
-        actions.push(action.clone());
-    }
     actions.extend(scene.startup_actions.iter().cloned());
     actions.extend(
         scene
@@ -5726,6 +5729,58 @@ mod tests {
             resolve_action_to_current_positions(&changed_ids, &original_ids, &swapped_target)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn auto_order_change_startup_flow_replays_control_after_swap() {
+        let auto_order_change = Action::Equipment {
+            id: "auto_oc".into(),
+            skill: Some("skill_3".into()),
+            target: None,
+            order_change: Some(crate::OrderChangeSelection {
+                front: Some("servant_1".into()),
+                back: Some("servant_4".into()),
+            }),
+        };
+        let first_control = Action::Equipment {
+            id: "control_1".into(),
+            skill: Some("skill_1".into()),
+            target: Some("servant_1".into()),
+            order_change: None,
+        };
+        let second_control = Action::Equipment {
+            id: "control_2".into(),
+            skill: Some("skill_2".into()),
+            target: Some("servant_2".into()),
+            order_change: None,
+        };
+        let startup = Action::Servant {
+            id: "startup_1".into(),
+            servant: Some("servant_1".into()),
+            skill: Some("skill_1".into()),
+            target: None,
+        };
+        let scene = AdvancedBattleScene {
+            id: "advanced_scene_1".into(),
+            main_output: None,
+            grand_auto_order_change: Some(true),
+            command_conditions: Vec::new(),
+            control_actions: vec![first_control, second_control],
+            startup_actions: vec![startup],
+            rules: Vec::new(),
+        };
+
+        let actions = advanced_startup_flow_actions(&scene, 2, 1, Some(&auto_order_change));
+        let ids: Vec<&str> = actions
+            .iter()
+            .map(|action| match action {
+                Action::Servant { id, .. }
+                | Action::Equipment { id, .. }
+                | Action::CommandSpell { id, .. } => id.as_str(),
+            })
+            .collect();
+
+        assert_eq!(ids, vec!["auto_oc", "control_1", "startup_1", "control_2"]);
     }
 
     #[test]

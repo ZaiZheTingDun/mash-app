@@ -180,7 +180,9 @@ changes (i.e. when the runner moves to a different row).
   the runner counts the current front line's recognized command cards, chooses
   the front servant with the highest count (leftmost on ties), uses Mystic Code
   `skill_3` to swap that servant with the back-line main Grand servant, then
-  treats startup as satisfied and continues into `startupActions`. Those startup
+  treats startup as satisfied. It still executes the current turn's next
+  `controlActions` entry before `startupActions`, so the first post-swap turn
+  consumes the same per-turn control slot as ordinary startup matching. Those
   actions are resolved by the originally selected servant identity: a configured
   back-line main Grand action is rewritten to its current front-line slot, while
   an action whose selected servant was moved to the back line is skipped. If ordinary

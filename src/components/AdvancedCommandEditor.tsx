@@ -816,16 +816,27 @@ function AdvancedStrategyEditor({
               </button>
             </div>
           ) : (
-            <div className="advanced-card-row">
-              {commandConditions.map((card) => (
-                <AdvancedCommandCardButton
-                  key={card.slot}
-                  card={card}
-                  partyLineup={partyLineup}
-                  faces={faces}
-                  onClick={() => setEditingCardSlot(card.slot)}
-                />
-              ))}
+            <div className="advanced-manual-startup-condition">
+              <div className="advanced-card-row">
+                {commandConditions.map((card) => (
+                  <AdvancedCommandCardButton
+                    key={card.slot}
+                    card={card}
+                    partyLineup={partyLineup}
+                    faces={faces}
+                    onClick={() => setEditingCardSlot(card.slot)}
+                  />
+                ))}
+              </div>
+              {mainGrandSlot != null && grandAutoOrderChange === false && (
+                <button
+                  type="button"
+                  className="battle-option-btn"
+                  onClick={() => onChange({ ...scene, grandAutoOrderChange: true })}
+                >
+                  改为自动换位
+                </button>
+              )}
             </div>
           )}
         </div>

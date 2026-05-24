@@ -372,6 +372,7 @@ describe("CommandEditor pagination", () => {
     await user.click(await screen.findByRole("button", { name: "否" }));
 
     expect(screen.getByRole("button", { name: "设置指令卡 1，ANYANY" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "改为自动换位" })).toBeInTheDocument();
     expect(screen.getByText("控制栏")).toBeInTheDocument();
     expect(screen.getByText("启动阶段")).toBeInTheDocument();
     await waitFor(() => {
@@ -380,6 +381,22 @@ describe("CommandEditor pagination", () => {
         expect.objectContaining({
           scenes: expect.arrayContaining([
             expect.objectContaining({ grandAutoOrderChange: false }),
+          ]),
+        })
+      );
+    });
+
+    await user.click(screen.getByRole("button", { name: "改为自动换位" }));
+
+    expect(
+      screen.getByText(/第一回合会自动将 丁 和前排指令卡最多的从者交换。/)
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "save_advanced_battle_scenes",
+        expect.objectContaining({
+          scenes: expect.arrayContaining([
+            expect.objectContaining({ grandAutoOrderChange: true }),
           ]),
         })
       );

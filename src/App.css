@@ -1638,7 +1638,6 @@ body,
 
 .battle-action-row.committed {
   position: relative;
-  padding-left: 34px;
 }
 
 .battle-add-row,
@@ -2015,6 +2014,7 @@ body,
 }
 
 .advanced-card-row,
+.advanced-manual-startup-condition,
 .advanced-card-editor,
 .advanced-attack-picker,
 .advanced-attack-source,
