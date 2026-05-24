@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Dialog, Flex, IconButton, Text, Button } from "@radix-ui/themes";
+import { Dialog, Flex, Text, Button } from "@radix-ui/themes";
 import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
   Cross2Icon,
   PersonIcon,
   PlusIcon,
-  TrashIcon,
 } from "@radix-ui/react-icons";
 import { convertFileSrc, invoke } from "../tauri";
 import { deriveLineupAfterPreparationActions } from "./partyServants";
@@ -1226,11 +1223,13 @@ export function AdvancedCommandEditor({
   grandServants = [],
   onGrandServantsChange,
 }: AdvancedCommandEditorProps) {
-  const [scenes, setScenes] = useState<AdvancedBattleScene[]>(() =>
-    projectId ? [] : [createDefaultScene()]
-  );
+  // Coronation mode is single-scene by design — the runner only ever
+  // executes one battle. We still persist as an array on disk so the
+  // backend schema (`save_advanced_battle_scenes`) stays compatible
+  // with existing project files; older multi-scene drafts collapse to
+  // the first scene.
+  const [scene, setScene] = useState<AdvancedBattleScene>(() => createDefaultScene());
   const [loaded, setLoaded] = useState(() => !projectId);
-  const [activeIndex, setActiveIndex] = useState(0);
   const faces = useServantFaces(partyLineup);
 
   useEffect(() => {
@@ -1239,13 +1238,12 @@ export function AdvancedCommandEditor({
     invoke<AdvancedBattleScene[]>("load_advanced_battle_scenes", { projectId })
       .then((saved) => {
         if (cancelled) return;
-        setScenes(saved.length > 0 ? saved.map(normalizeScene) : [createDefaultScene()]);
-        setActiveIndex(0);
+        const first = saved.length > 0 ? normalizeScene(saved[0]) : createDefaultScene();
+        setScene(first);
       })
       .catch(() => {
         if (cancelled) return;
-        setScenes([createDefaultScene()]);
-        setActiveIndex(0);
+        setScene(createDefaultScene());
       })
       .finally(() => {
         if (!cancelled) setLoaded(true);
@@ -1255,99 +1253,30 @@ export function AdvancedCommandEditor({
     };
   }, [projectId]);
 
-  const saveScenes = useCallback(
-    (updated: AdvancedBattleScene[]) => {
+  const handleSceneChange = useCallback(
+    (updatedScene: AdvancedBattleScene) => {
+      setScene(updatedScene);
       if (!projectId) return;
-      invoke("save_advanced_battle_scenes", { projectId, scenes: updated }).catch(console.error);
+      invoke("save_advanced_battle_scenes", {
+        projectId,
+        scenes: [updatedScene],
+      }).catch(console.error);
     },
     [projectId]
   );
 
-  const handleSceneChange = useCallback(
-    (sceneId: string, updatedScene: AdvancedBattleScene) => {
-      setScenes((prev) => {
-        const next = prev.map((scene) => (scene.id === sceneId ? updatedScene : scene));
-        saveScenes(next);
-        return next;
-      });
-    },
-    [saveScenes]
-  );
-
-  const handleAddScene = useCallback(() => {
-    setScenes((prev) => {
-      const next = [...prev, createDefaultScene()];
-      saveScenes(next);
-      setActiveIndex(next.length - 1);
-      return next;
-    });
-  }, [saveScenes]);
-
-  const handleDeleteScene = useCallback(
-    (sceneId: string) => {
-      setScenes((prev) => {
-        const next = prev.filter((scene) => scene.id !== sceneId);
-        const fallback = next.length > 0 ? next : [createDefaultScene()];
-        saveScenes(next);
-        setActiveIndex((current) => Math.min(current, fallback.length - 1));
-        return fallback;
-      });
-    },
-    [saveScenes]
-  );
-
   if (!loaded) return null;
-  const activeScene = scenes[activeIndex] ?? scenes[0] ?? createDefaultScene();
 
   return (
     <Flex direction="column" className="command-editor advanced-command-editor">
-      <Flex align="center" justify="center" gap="3" className="battle-scene-nav">
-        <IconButton
-          type="button"
-          variant="surface"
-          color="gray"
-          aria-label="上一场战斗"
-          disabled={activeIndex === 0}
-          onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}
-        >
-          <ChevronLeftIcon width={18} height={18} />
-        </IconButton>
-        <Text size="4" weight="bold">
-          Battle {activeIndex + 1} / {scenes.length}
-        </Text>
-        <IconButton
-          type="button"
-          variant="surface"
-          color="gray"
-          aria-label="下一场战斗"
-          disabled={activeIndex >= scenes.length - 1}
-          onClick={() => setActiveIndex((index) => Math.min(scenes.length - 1, index + 1))}
-        >
-          <ChevronRightIcon width={18} height={18} />
-        </IconButton>
-        <IconButton type="button" variant="surface" color="gray" aria-label="添加 Battle" onClick={handleAddScene}>
-          <PlusIcon width={16} height={16} />
-        </IconButton>
-        {scenes.length > 1 && (
-          <IconButton
-            type="button"
-            variant="surface"
-            color="red"
-            aria-label="删除当前 Battle"
-            onClick={() => handleDeleteScene(activeScene.id)}
-          >
-            <TrashIcon width={16} height={16} />
-          </IconButton>
-        )}
-      </Flex>
       <div className="command-scroll-region">
         <AdvancedStrategyEditor
-          scene={activeScene}
+          scene={scene}
           partyLineup={partyLineup}
           faces={faces}
           grandServants={grandServants}
           onGrandServantsChange={onGrandServantsChange}
-          onChange={(updated) => handleSceneChange(activeScene.id, updated)}
+          onChange={handleSceneChange}
         />
       </div>
     </Flex>

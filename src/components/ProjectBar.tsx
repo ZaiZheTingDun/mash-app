@@ -253,10 +253,10 @@ export function ProjectBar({
                   <Flex align="center" justify="between" gap="3">
                     <Box>
                       <Text as="div" size="2" weight="medium">
-                        高级模式
+                        冠位戴冠战模式
                       </Text>
                       <Text as="div" size="1" color="gray">
-                        使用条件和行动规则配置指令
+                        单场战斗，按冠位从者策略自动出卡
                       </Text>
                     </Box>
                     <Switch
