@@ -447,6 +447,11 @@ function App({ theme, onThemeChange }: AppProps) {
                     projectId={activeProjectId}
                     partyLineup={partyLineup}
                     advancedMode={activeProject?.advancedMode === true}
+                    grandServants={activeProject?.grandServants ?? []}
+                    onGrandServantsChange={(grandServants) => {
+                      if (!activeProject) return;
+                      void handleUpdateProject({ ...activeProject, grandServants });
+                    }}
                   />
                   <Flex justify="between" align="center" className="page-footer">
                     <Button

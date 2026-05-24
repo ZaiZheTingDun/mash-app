@@ -13,13 +13,13 @@ import { deriveLineupAfterPreparationActions } from "./partyServants";
 import type {
   AdvancedBattleScene,
   AdvancedCommandCardCondition,
-  AdvancedOutputType,
   CommandSpellAction,
   EquipmentAction,
   OrderChangeSelection,
   PreparationAction,
   ServantAction,
 } from "../types/command";
+import type { GrandCardPriority, GrandNpCard, GrandServantConfig } from "../types/project";
 import type { Servant } from "../types/servant";
 import orderChangeIcon from "../../src-tauri/resources/images/icon_order_change.png";
 import commandBgArts from "../../src-tauri/resources/images/command_bg/command_bg_a.png";
@@ -29,11 +29,13 @@ import commandBgQuick from "../../src-tauri/resources/images/command_bg/command_
 interface AdvancedCommandEditorProps {
   projectId: string | null;
   partyLineup: (Servant | null)[];
+  grandServants?: GrandServantConfig[];
+  onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
 }
 
-type FrontServant = "servant_1" | "servant_2" | "servant_3";
-type PrepSource = "equipment" | "commandSpell" | FrontServant;
 type PartySlot = `servant_${1 | 2 | 3 | 4 | 5 | 6}`;
+type FrontServant = Extract<PartySlot, "servant_1" | "servant_2" | "servant_3">;
+type PrepSource = "equipment" | "commandSpell" | PartySlot;
 type PrepDraft =
   | { step: "source" }
   | { step: "option"; source: PrepSource }
@@ -49,16 +51,6 @@ const SKILL_LABELS: Record<string, string> = {
 const COMMAND_SPELL_LABELS: Record<string, string> = {
   np_release: "宝具解放",
   restore: "灵基修复",
-};
-const OUTPUT_LABELS: Record<AdvancedOutputType, string> = {
-  np: "宝具输出",
-  critical: "暴击输出",
-};
-const NP_CARD_LABELS: Record<"auto" | "buster" | "arts" | "quick", string> = {
-  auto: "自动",
-  buster: "红",
-  arts: "蓝",
-  quick: "绿",
 };
 const EMPTY_STARTUP_ACTIONS: PreparationAction[] = [];
 const COMMAND_BG_BY_SUIT: Record<Exclude<AdvancedCommandCardCondition["suit"], "any">, string> = {
@@ -77,6 +69,7 @@ function createDefaultScene(): AdvancedBattleScene {
   return {
     id: `advanced_scene_${nextAdvancedSceneId++}_${Date.now()}`,
     mainOutput: { servant: null, outputType: null, npCard: "auto" },
+    grandAutoOrderChange: null,
     commandConditions: [0, 1, 2, 3, 4].map(defaultCommandCard),
     controlActions: [],
     startupActions: [],
@@ -90,6 +83,7 @@ function normalizeScene(scene: AdvancedBattleScene): AdvancedBattleScene {
     mainOutput: scene.mainOutput
       ? { npCard: "auto", ...scene.mainOutput }
       : { servant: null, outputType: null, npCard: "auto" },
+    grandAutoOrderChange: scene.grandAutoOrderChange ?? null,
     commandConditions:
       scene.commandConditions && scene.commandConditions.length === 5
         ? scene.commandConditions.map((card) => ({ ...card, minCritChance: null }))
@@ -118,9 +112,61 @@ function servantSlotIndex(source: string | null | undefined): number | null {
   return match ? Number(match[1]) - 1 : null;
 }
 
-function frontServantIndex(source: string | null | undefined): number | null {
-  const index = servantSlotIndex(source);
-  return index != null && index < 3 ? index : null;
+function mainGrandBackSlot(grandServants: GrandServantConfig[]): number | null {
+  const slotIndex = grandServants[0]?.slotIndex;
+  return Number.isInteger(slotIndex) && slotIndex >= 3 && slotIndex < 6 ? slotIndex : null;
+}
+
+function normalizeGrandServants(values: GrandServantConfig[] | undefined): GrandServantConfig[] {
+  const seen = new Set<number>();
+  return (values ?? [])
+    .filter((item) => Number.isInteger(item.slotIndex) && item.slotIndex >= 0 && item.slotIndex < 6)
+    .filter((item) => {
+      if (seen.has(item.slotIndex)) return false;
+      seen.add(item.slotIndex);
+      return true;
+    })
+    .slice(0, 2)
+    .map((item) => ({
+      slotIndex: item.slotIndex,
+      npCard: item.npCard ?? "auto",
+      priority: item.priority ?? "damage",
+    }));
+}
+
+function cardColorLabel(card: Servant["noblePhantasmCard"] | undefined): string | null {
+  switch (card) {
+    case "buster":
+      return "红";
+    case "arts":
+      return "蓝";
+    case "quick":
+      return "绿";
+    default:
+      return null;
+  }
+}
+
+function npCardLabel(card: GrandNpCard | undefined, inferredCard?: Servant["noblePhantasmCard"]): string {
+  switch (card) {
+    case "buster":
+      return "红";
+    case "arts":
+      return "蓝";
+    case "quick":
+      return "绿";
+    default:
+      return cardColorLabel(inferredCard) ? `自动${cardColorLabel(inferredCard)}` : "自动";
+  }
+}
+
+function autoNpOptionLabel(servant: Servant | null): string {
+  const label = cardColorLabel(servant?.noblePhantasmCard);
+  return label ? `自动读取（${label}）` : "自动读取";
+}
+
+function priorityLabel(priority: GrandCardPriority | undefined): string {
+  return priority === "np" ? "NP" : "伤害";
 }
 
 function prepSummary(action: PreparationAction, partyLineup: (Servant | null)[]): string {
@@ -232,22 +278,6 @@ function FaceChip({
   );
 }
 
-function FaceChipPreview({
-  servant,
-  index,
-  src,
-}: {
-  servant: Servant | null;
-  index: number;
-  src: string | null | undefined;
-}) {
-  return (
-    <span className="advanced-face-chip selected" aria-label={servantLabel(index, servant)}>
-      {src ? <img src={src} alt="" draggable={false} /> : <span>{index + 1}</span>}
-    </span>
-  );
-}
-
 function AdvancedInlineFace({
   servant,
   index,
@@ -264,6 +294,162 @@ function AdvancedInlineFace({
   );
 }
 
+function GrandOutputSettings({
+  partyLineup,
+  faces,
+  grandServants,
+  onChange,
+}: {
+  partyLineup: (Servant | null)[];
+  faces: Record<string, string | null>;
+  grandServants: GrandServantConfig[];
+  onChange?: (grandServants: GrandServantConfig[]) => void;
+}) {
+  const [settingsIndex, setSettingsIndex] = useState<number | null>(null);
+  const normalized = normalizeGrandServants(grandServants);
+  const selectedSlots = new Set(normalized.map((item) => item.slotIndex));
+  const settings = settingsIndex == null ? null : normalized[settingsIndex] ?? null;
+  const settingsServant = settings == null ? null : partyLineup[settings.slotIndex] ?? null;
+
+  const persist = (next: GrandServantConfig[]) => {
+    onChange?.(normalizeGrandServants(next));
+  };
+  const addGrandServant = (slotIndex: number) => {
+    if (normalized.length >= 2 || selectedSlots.has(slotIndex) || partyLineup[slotIndex] == null) {
+      return;
+    }
+    persist([...normalized, { slotIndex, npCard: "auto", priority: "damage" }]);
+  };
+  const removeGrandServant = (index: number) => {
+    persist(normalized.filter((_, itemIndex) => itemIndex !== index));
+    setSettingsIndex(null);
+  };
+  const updateGrandServant = (
+    index: number,
+    patch: Partial<Pick<GrandServantConfig, "npCard" | "priority">>,
+  ) => {
+    persist(normalized.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+  };
+  const moveToMain = (index: number) => {
+    if (index <= 0) return;
+    const next = [...normalized];
+    const [item] = next.splice(index, 1);
+    next.unshift(item);
+    persist(next);
+    setSettingsIndex(0);
+  };
+
+  return (
+    <>
+      <div className="advanced-grand-output">
+        <div className="advanced-grand-output-row">
+          <Text size="2" weight="medium" className="advanced-grand-output-label">冠位</Text>
+          <div className="advanced-grand-output-slots">
+            {normalized.map((config, index) => {
+              const servant = partyLineup[config.slotIndex] ?? null;
+              return (
+                <button
+                  key={`${config.slotIndex}-${index}`}
+                  type="button"
+                  className="grand-servant-tile"
+                  aria-label={`${index === 0 ? "主" : "副"}冠位${servant ? `：${servant.name_cn}` : ""}`}
+                  onClick={() => setSettingsIndex(index)}
+                >
+                  <span className="grand-role-badge">{index === 0 ? "主" : "副"}</span>
+                  {servant && faces[servant.variantKey] ? (
+                    <img src={faces[servant.variantKey] ?? undefined} alt={servant.name_cn} draggable={false} />
+                  ) : (
+                    <span className="grand-servant-placeholder">{servant?.name_cn ?? "未选择"}</span>
+                  )}
+                  <span className="grand-np-badge">{npCardLabel(config.npCard, servant?.noblePhantasmCard)}</span>
+                  <span className="grand-priority-badge">{priorityLabel(config.priority)}</span>
+                </button>
+              );
+            })}
+            {normalized.length < 2 && <div className="grand-servant-empty">选择冠位从者</div>}
+          </div>
+        </div>
+        <div className="advanced-grand-output-row">
+          <Text size="2" weight="medium" className="advanced-grand-output-label">辅助</Text>
+          <div className="battle-choice-row">
+            {partyLineup.slice(0, 6).map((servant, index) => (
+              <FaceChip
+                key={index}
+                servant={servant}
+                index={index}
+                src={servant ? faces[servant.variantKey] : null}
+                selected={selectedSlots.has(index)}
+                disabled={servant == null || selectedSlots.has(index) || normalized.length >= 2}
+                onClick={() => addGrandServant(index)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <Dialog.Root
+        open={settings != null}
+        onOpenChange={(open) => {
+          if (!open) setSettingsIndex(null);
+        }}
+      >
+        <Dialog.Content maxWidth="420px">
+          <Dialog.Title>冠位从者设置</Dialog.Title>
+          {settings && settingsIndex != null && (
+            <Flex direction="column" gap="4">
+              <label className="grand-setting-field">
+                <Text size="2" weight="medium">宝具颜色</Text>
+                <select
+                  value={settings.npCard ?? "auto"}
+                  onChange={(event) =>
+                    updateGrandServant(settingsIndex, {
+                      npCard: event.target.value as GrandNpCard,
+                    })
+                  }
+                >
+                  <option value="auto">{autoNpOptionLabel(settingsServant)}</option>
+                  <option value="buster">红卡</option>
+                  <option value="arts">蓝卡</option>
+                  <option value="quick">绿卡</option>
+                </select>
+              </label>
+              <label className="grand-setting-field">
+                <Text size="2" weight="medium">出卡策略</Text>
+                <select
+                  value={settings.priority ?? "damage"}
+                  onChange={(event) =>
+                    updateGrandServant(settingsIndex, {
+                      priority: event.target.value as GrandCardPriority,
+                    })
+                  }
+                >
+                  <option value="damage">伤害优先</option>
+                  <option value="np">NP 优先</option>
+                </select>
+              </label>
+              <Flex justify="between" gap="3">
+                <Button type="button" variant="soft" color="red" onClick={() => removeGrandServant(settingsIndex)}>
+                  移除
+                </Button>
+                <Flex gap="3">
+                  {settingsIndex > 0 && (
+                    <Button type="button" variant="soft" onClick={() => moveToMain(settingsIndex)}>
+                      设为主
+                    </Button>
+                  )}
+                  <Dialog.Close>
+                    <Button type="button">完成</Button>
+                  </Dialog.Close>
+                </Flex>
+              </Flex>
+            </Flex>
+          )}
+        </Dialog.Content>
+      </Dialog.Root>
+    </>
+  );
+}
+
 function AdvancedPreparationActionSummary({
   action,
   partyLineup,
@@ -273,7 +459,7 @@ function AdvancedPreparationActionSummary({
   partyLineup: (Servant | null)[];
   faces: Record<string, string | null>;
 }) {
-  const targetIndex = frontServantIndex(action.target);
+  const targetIndex = servantSlotIndex(action.target);
   const orderChangeSlots =
     action.type === "equipment" && action.orderChange
       ? {
@@ -287,7 +473,7 @@ function AdvancedPreparationActionSummary({
   let actionText: string;
 
   if (action.type === "servant") {
-    const source = frontServantIndex(action.servant) ?? 0;
+    const source = servantSlotIndex(action.servant) ?? 0;
     const servant = partyLineup[source] ?? null;
     sourceFace = (
       <AdvancedInlineFace
@@ -406,18 +592,30 @@ function AdvancedStrategyEditor({
   scene,
   partyLineup,
   faces,
+  grandServants,
+  onGrandServantsChange,
   onChange,
 }: {
   scene: AdvancedBattleScene;
   partyLineup: (Servant | null)[];
   faces: Record<string, string | null>;
+  grandServants: GrandServantConfig[];
+  onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
   onChange: (scene: AdvancedBattleScene) => void;
 }) {
-  const [mainOutputStep, setMainOutputStep] = useState<"servant" | "type" | null>(null);
   const [editingCardSlot, setEditingCardSlot] = useState<number | null>(null);
   const [controlDraft, setControlDraft] = useState<PrepDraft | null>(null);
   const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
-  const mainOutput = scene.mainOutput ?? { servant: null, outputType: null, npCard: "auto" };
+  const grandAutoOrderChange = scene.grandAutoOrderChange ?? null;
+  const mainGrandSlot = mainGrandBackSlot(grandServants);
+  const mainGrandServant = mainGrandSlot == null ? null : partyLineup[mainGrandSlot] ?? null;
+  const startupSelectableSlots = useMemo(() => {
+    const slots = [0, 1, 2];
+    if (mainGrandSlot != null && grandAutoOrderChange === true) {
+      slots.push(mainGrandSlot);
+    }
+    return slots;
+  }, [grandAutoOrderChange, mainGrandSlot]);
   const commandConditions = scene.commandConditions ?? [0, 1, 2, 3, 4].map(defaultCommandCard);
   const controlActions = scene.controlActions ?? EMPTY_STARTUP_ACTIONS;
   const startupActions = scene.startupActions ?? EMPTY_STARTUP_ACTIONS;
@@ -567,139 +765,12 @@ function AdvancedStrategyEditor({
         <div className="battle-phase-label">主力输出</div>
         <div className="advanced-main-output-grid">
           <span className="advanced-delete-spacer" aria-hidden />
-          {mainOutputStep == null && (!mainOutput.servant || !mainOutput.outputType) ? (
-            <button
-              type="button"
-              className="battle-option-btn advanced-main-output-trigger"
-              onClick={() => setMainOutputStep("servant")}
-            >
-              设置主力输出
-            </button>
-          ) : mainOutputStep === "servant" ? (
-            <div className="battle-choice-row">
-              {[0, 1, 2].map((index) => {
-                const servant = partyLineup[index] ?? null;
-                const value = `servant_${index + 1}` as FrontServant;
-                return (
-                  <FaceChip
-                    key={value}
-                    servant={servant}
-                    index={index}
-                    src={servant ? faces[servant.variantKey] : null}
-                    selected={mainOutput.servant === value}
-                    onClick={() => {
-                      onChange({
-                        ...scene,
-                        mainOutput: { servant: value, outputType: null, npCard: mainOutput.npCard ?? "auto" },
-                      });
-                      setMainOutputStep("type");
-                    }}
-                  />
-                );
-              })}
-            </div>
-          ) : mainOutputStep === "type" && mainOutput.servant ? (
-            <div className="battle-choice-row">
-              {(() => {
-                const selectedIndex = servantSlotIndex(mainOutput.servant) ?? 0;
-                const selectedServant = partyLineup[selectedIndex] ?? null;
-                return (
-                  <FaceChip
-                    servant={selectedServant}
-                    index={selectedIndex}
-                    src={selectedServant ? faces[selectedServant.variantKey] : null}
-                    selected
-                    onClick={() => setMainOutputStep("servant")}
-                  />
-                );
-              })()}
-              {(["np", "critical"] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  className={`battle-option-btn${
-                    mainOutput.outputType === type ? " selected" : ""
-                  }`}
-                  onClick={() => {
-                    onChange({
-                      ...scene,
-                      mainOutput: { ...mainOutput, outputType: type },
-                    });
-                    setMainOutputStep(null);
-                  }}
-                >
-                  {OUTPUT_LABELS[type]}
-                </button>
-              ))}
-            </div>
-          ) : mainOutput.servant && mainOutput.outputType ? (
-            <div
-              role="button"
-              tabIndex={0}
-              className="advanced-main-output-summary"
-              onClick={() => setMainOutputStep("servant")}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  setMainOutputStep("servant");
-                }
-              }}
-            >
-              {(() => {
-                const selectedIndex = servantSlotIndex(mainOutput.servant) ?? 0;
-                const selectedServant = partyLineup[selectedIndex] ?? null;
-                return (
-                  <FaceChipPreview
-                    servant={selectedServant}
-                    index={selectedIndex}
-                    src={selectedServant ? faces[selectedServant.variantKey] : null}
-                  />
-                );
-              })()}
-              <Text size="2" weight="medium">
-                {OUTPUT_LABELS[mainOutput.outputType]}
-              </Text>
-              {mainOutput.outputType === "np" && (
-                <select
-                  className="advanced-np-card-select"
-                  aria-label="宝具色卡"
-                  value={mainOutput.npCard ?? "auto"}
-                  onClick={(event) => event.stopPropagation()}
-                  onChange={(event) =>
-                    onChange({
-                      ...scene,
-                      mainOutput: {
-                        ...mainOutput,
-                        npCard: event.target.value as "auto" | "buster" | "arts" | "quick",
-                      },
-                    })
-                  }
-                >
-                  {(["auto", "buster", "arts", "quick"] as const).map((value) => {
-                    const selectedIndex = servantSlotIndex(mainOutput.servant) ?? 0;
-                    const inferred = partyLineup[selectedIndex]?.noblePhantasmCard;
-                    const label =
-                      value === "auto" && inferred
-                        ? `自动（${NP_CARD_LABELS[inferred]}）`
-                        : NP_CARD_LABELS[value];
-                    return (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    );
-                  })}
-                </select>
-              )}
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="battle-option-btn advanced-main-output-trigger"
-              onClick={() => setMainOutputStep("servant")}
-            >
-              设置主力输出
-            </button>
-          )}
+          <GrandOutputSettings
+            partyLineup={partyLineup}
+            faces={faces}
+            grandServants={grandServants}
+            onChange={onGrandServantsChange}
+          />
         </div>
       </section>
 
@@ -707,17 +778,56 @@ function AdvancedStrategyEditor({
         <div className="battle-phase-label">启动条件</div>
         <div className="advanced-condition-row">
           <span className="advanced-delete-spacer" aria-hidden />
-          <div className="advanced-card-row">
-            {commandConditions.map((card) => (
-              <AdvancedCommandCardButton
-                key={card.slot}
-                card={card}
-                partyLineup={partyLineup}
-                faces={faces}
-                onClick={() => setEditingCardSlot(card.slot)}
-              />
-            ))}
-          </div>
+          {mainGrandSlot != null && grandAutoOrderChange == null ? (
+            <div className="advanced-grand-order-choice">
+              <Text size="2" weight="medium">
+                主冠位从者配置在后排，是否自动换位至前排？
+              </Text>
+              <div className="battle-choice-row">
+                <button
+                  type="button"
+                  className="battle-option-btn"
+                  onClick={() => onChange({ ...scene, grandAutoOrderChange: true })}
+                >
+                  是
+                </button>
+                <button
+                  type="button"
+                  className="battle-option-btn"
+                  onClick={() => onChange({ ...scene, grandAutoOrderChange: false })}
+                >
+                  否
+                </button>
+              </div>
+            </div>
+          ) : mainGrandSlot != null && grandAutoOrderChange === true ? (
+            <div className="advanced-grand-order-note">
+              <Text size="2" weight="medium">
+                第一回合会自动将
+                {mainGrandServant ? ` ${mainGrandServant.name_cn} ` : "主冠位从者"}
+                和前排指令卡最多的从者交换。
+              </Text>
+              <button
+                type="button"
+                className="battle-option-btn"
+                onClick={() => onChange({ ...scene, grandAutoOrderChange: false })}
+              >
+                改为配置指令卡
+              </button>
+            </div>
+          ) : (
+            <div className="advanced-card-row">
+              {commandConditions.map((card) => (
+                <AdvancedCommandCardButton
+                  key={card.slot}
+                  card={card}
+                  partyLineup={partyLineup}
+                  faces={faces}
+                  onClick={() => setEditingCardSlot(card.slot)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -916,7 +1026,7 @@ function AdvancedStrategyEditor({
               <span className="advanced-delete-spacer" aria-hidden />
               {prepDraft.step === "source" ? (
                 <>
-                  {[0, 1, 2].map((index) => {
+                  {startupSelectableSlots.map((index) => {
                     const servant = currentPartyLineup[index] ?? null;
                     return (
                       <FaceChip
@@ -927,7 +1037,7 @@ function AdvancedStrategyEditor({
                         onClick={() =>
                           setPrepDraft({
                             step: "option",
-                            source: `servant_${index + 1}` as FrontServant,
+                            source: `servant_${index + 1}` as PartySlot,
                           })
                         }
                       />
@@ -969,7 +1079,7 @@ function AdvancedStrategyEditor({
                   <button type="button" className="battle-option-btn" onClick={() => finishPrepAction(prepDraft, null)}>
                     无目标
                   </button>
-                  {[0, 1, 2].map((index) => {
+                  {startupSelectableSlots.map((index) => {
                     const servant = currentPartyLineup[index] ?? null;
                     return (
                       <FaceChip
@@ -1007,7 +1117,11 @@ function AdvancedStrategyEditor({
                   {Array.from({ length: 6 }, (_, index) => currentPartyLineup[index] ?? null).map((servant, index) => {
                     const slot = `servant_${index + 1}` as PartySlot;
                     const needsFront = prepDraft.front == null;
-                    const selectable = Boolean(servant) && (needsFront ? index < 3 : index >= 3);
+                    const selectable =
+                      Boolean(servant) &&
+                      (needsFront
+                        ? index < 3 || (grandAutoOrderChange === true && index === mainGrandSlot)
+                        : index >= 3);
                     return (
                       <FaceChip
                         key={index}
@@ -1098,6 +1212,8 @@ function AdvancedStrategyEditor({
 export function AdvancedCommandEditor({
   projectId,
   partyLineup,
+  grandServants = [],
+  onGrandServantsChange,
 }: AdvancedCommandEditorProps) {
   const [scenes, setScenes] = useState<AdvancedBattleScene[]>(() =>
     projectId ? [] : [createDefaultScene()]
@@ -1218,6 +1334,8 @@ export function AdvancedCommandEditor({
           scene={activeScene}
           partyLineup={partyLineup}
           faces={faces}
+          grandServants={grandServants}
+          onGrandServantsChange={onGrandServantsChange}
           onChange={(updated) => handleSceneChange(activeScene.id, updated)}
         />
       </div>

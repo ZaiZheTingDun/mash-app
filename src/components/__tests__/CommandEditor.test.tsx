@@ -7,7 +7,11 @@ import { CommandEditor } from "../CommandEditor";
 import type { AdvancedBattleScene, BattleScene } from "../../types/command";
 import type { Servant } from "../../types/servant";
 
-function makeServant(id: number, name_cn: string): Servant {
+function makeServant(
+  id: number,
+  name_cn: string,
+  noblePhantasmCard?: Servant["noblePhantasmCard"],
+): Servant {
   return {
     id,
     variantKey: String(id),
@@ -16,6 +20,7 @@ function makeServant(id: number, name_cn: string): Servant {
     name_en: name_cn,
     class: "saber",
     rarity: 5,
+    noblePhantasmCard,
   };
 }
 
@@ -105,7 +110,41 @@ describe("CommandEditor pagination", () => {
     });
   });
 
-  it("saves advanced strategy settings to the advanced scene file", async () => {
+  it("configures grand servants from the advanced main output section", async () => {
+    const user = userEvent.setup();
+    const onGrandServantsChange = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        onGrandServantsChange={onGrandServantsChange}
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    await screen.findByText("主力输出");
+    await user.click(screen.getByRole("button", { name: "甲" }));
+
+    expect(onGrandServantsChange).toHaveBeenCalledWith([
+      { slotIndex: 0, npCard: "auto", priority: "damage" },
+    ]);
+  });
+
+  it("shows inferred NP color for automatic grand servant settings", async () => {
     const user = userEvent.setup();
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "load_advanced_battle_scenes") {
@@ -121,39 +160,20 @@ describe("CommandEditor pagination", () => {
       <CommandEditor
         projectId="project_1"
         advancedMode
+        grandServants={[{ slotIndex: 0, npCard: "auto", priority: "damage" }]}
         partyLineup={[
-          makeServant(1, "甲"),
+          makeServant(1, "甲", "buster"),
           makeServant(2, "乙"),
           makeServant(3, "丙"),
         ]}
       />
     );
 
-    await screen.findByText("主力输出");
-    await user.click(screen.getByRole("button", { name: "设置主力输出" }));
-    await user.click(screen.getByRole("button", { name: "甲" }));
-    await user.click(screen.getByRole("button", { name: "宝具输出" }));
+    expect(await screen.findByText("自动红")).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
-        "save_advanced_battle_scenes",
-        expect.objectContaining({
-          projectId: "project_1",
-          scenes: expect.arrayContaining([
-            expect.objectContaining({
-              mainOutput: expect.objectContaining({
-                servant: "servant_1",
-                outputType: "np",
-              }),
-              commandConditions: expect.any(Array),
-              controlActions: expect.any(Array),
-              startupActions: expect.any(Array),
-              rules: [],
-            }),
-          ]),
-        })
-      );
-    });
+    await user.click(screen.getByRole("button", { name: "主冠位：甲" }));
+
+    expect(screen.getByRole("option", { name: "自动读取（红）" })).toBeInTheDocument();
   });
 
   it("uses post-Order Change lineup in advanced startup actions", async () => {
@@ -213,6 +233,156 @@ describe("CommandEditor pagination", () => {
 
     await user.click(screen.getByRole("button", { name: "添加启动行动" }));
 
-    expect(screen.getByRole("button", { name: "丁" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "丁" }).length).toBeGreaterThan(0);
+  });
+
+  it("shows startup action targets for backline grand servants", async () => {
+    const advancedScene: AdvancedBattleScene = {
+      id: "advanced_scene_1",
+      mainOutput: { servant: null, outputType: null },
+      grandAutoOrderChange: true,
+      commandConditions: [
+        { slot: 0, servant: "any", suit: "any", minCritChance: null },
+        { slot: 1, servant: "any", suit: "any", minCritChance: null },
+        { slot: 2, servant: "any", suit: "any", minCritChance: null },
+        { slot: 3, servant: "any", suit: "any", minCritChance: null },
+        { slot: 4, servant: "any", suit: "any", minCritChance: null },
+      ],
+      startupActions: [
+        {
+          type: "equipment",
+          id: "eq_1",
+          skill: "skill_1",
+          target: "servant_4",
+          orderChange: null,
+        },
+      ],
+      rules: [],
+    };
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [advancedScene];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        grandServants={[{ slotIndex: 3, npCard: "auto", priority: "damage" }]}
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+          makeServant(4, "丁"),
+          makeServant(5, "戊"),
+          makeServant(6, "己"),
+        ]}
+      />
+    );
+
+    expect(await screen.findByText("御主礼装 释放 技能 1")).toBeInTheDocument();
+    expect(screen.getByText("to")).toBeInTheDocument();
+    expect(screen.getAllByText("丁").length).toBeGreaterThan(0);
+  });
+
+  it("shows grand auto order change choice inside startup conditions", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        grandServants={[{ slotIndex: 4, npCard: "auto", priority: "damage" }]}
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+          makeServant(4, "丁"),
+          makeServant(5, "戊"),
+          makeServant(6, "己"),
+        ]}
+      />
+    );
+
+    expect(
+      await screen.findByText("主冠位从者配置在后排，是否自动换位至前排？")
+    ).toBeInTheDocument();
+    expect(screen.getByText("控制栏")).toBeInTheDocument();
+    expect(screen.getByText("启动阶段")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "是" }));
+
+    expect(
+      screen.getByText(/第一回合会自动将 戊 和前排指令卡最多的从者交换。/)
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "save_advanced_battle_scenes",
+        expect.objectContaining({
+          scenes: expect.arrayContaining([
+            expect.objectContaining({ grandAutoOrderChange: true }),
+          ]),
+        })
+      );
+    });
+  });
+
+  it("keeps manual startup card conditions when grand auto order change is declined", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        grandServants={[{ slotIndex: 3, npCard: "auto", priority: "damage" }]}
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+          makeServant(4, "丁"),
+          makeServant(5, "戊"),
+          makeServant(6, "己"),
+        ]}
+      />
+    );
+
+    await user.click(await screen.findByRole("button", { name: "否" }));
+
+    expect(screen.getByRole("button", { name: "设置指令卡 1，ANYANY" })).toBeInTheDocument();
+    expect(screen.getByText("控制栏")).toBeInTheDocument();
+    expect(screen.getByText("启动阶段")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "save_advanced_battle_scenes",
+        expect.objectContaining({
+          scenes: expect.arrayContaining([
+            expect.objectContaining({ grandAutoOrderChange: false }),
+          ]),
+        })
+      );
+    });
   });
 });

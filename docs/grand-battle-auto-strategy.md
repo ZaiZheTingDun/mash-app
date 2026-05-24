@@ -7,6 +7,8 @@ enables advanced mode and configures `grandServants`.
 
 - `grandServants[0]` is the main output servant.
 - `grandServants[1]`, when present, is the deputy output servant.
+- The user configures these roles in the advanced command editor's main-output
+  section, not on the team lineup page.
 - Each Grand servant stores:
   - `slotIndex`: project team slot, resolved to the current front-line servant id.
   - `npCard`: `auto`, `buster`, `arts`, or `quick`.
@@ -18,6 +20,32 @@ enables advanced mode and configures `grandServants`.
 If `npCard` is `auto`, the runner uses the servant resource's
 `noblePhantasmCard` value. If the configured Grand servant is not currently in
 the front line, that role is ignored for the current turn.
+
+## Startup Order Change
+
+When the main Grand servant is configured in a back-line slot, an advanced
+scene can set `grandAutoOrderChange` as its startup condition. This setting is
+per scene and does not change the configured control actions or startup actions.
+
+On the first attack-card screen for that scene, the runner:
+
+1. Counts recognized command cards owned by each current front-line servant.
+2. Selects the front-line servant with the highest count; ties use the leftmost
+   servant.
+3. Uses Mystic Code `skill_3` to Order Change that front-line servant with the
+   back-line main Grand servant.
+4. Re-reads the attack-card screen, treats startup as satisfied, then executes
+   the scene's configured startup actions.
+
+Startup actions configured against the back-line main Grand servant are resolved
+by servant identity at runtime, then rewritten to that servant's current
+front-line position. Actions configured against a servant that was moved out of
+the front line are skipped instead of being applied to the new occupant of that
+position.
+
+If the main Grand servant is already in the front line, cannot be located, or
+the swap target cannot be resolved, the runner skips the automatic swap without
+failing the battle loop.
 
 ## Chain Priority
 

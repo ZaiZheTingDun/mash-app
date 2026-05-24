@@ -17,7 +17,6 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
-  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -35,11 +34,7 @@ import type { Servant } from "../types/servant";
 import type { CraftEssence } from "../types/craftEssence";
 import type {
   Project,
-  ProjectSlot,
   SupportGrandBondCeMode,
-  GrandCardPriority,
-  GrandNpCard,
-  GrandServantConfig,
   SupportGrandCraftEssenceIds,
   SupportGrandCraftEssenceMlbRequired,
   SupportAppendSkillLevelMins,
@@ -61,17 +56,6 @@ export interface SlotItem {
   */
   craftEssence: CraftEssence | null;
   craftEssenceMlbRequired?: boolean;
-}
-
-function slotItemsToProjectSlots(slots: SlotItem[]): ProjectSlot[] {
-  return slots.map((slot) => ({
-    id: slot.id,
-    type: slot.type,
-    servantId: slot.servant?.id ?? null,
-    servantVariantKey: slot.servant?.variantKey ?? null,
-    craftEssenceId: slot.craftEssence?.id ?? null,
-    craftEssenceMlbRequired: slot.craftEssenceMlbRequired ?? true,
-  }));
 }
 
 interface ContentGridProps {
@@ -148,40 +132,6 @@ function normalizeSupportGrandCraftEssenceMlbRequired(
   values: Project["supportGrandCraftEssenceMlbRequired"],
 ): SupportGrandCraftEssenceMlbRequired {
   return [0, 1, 2].map((index) => values?.[index] ?? true) as SupportGrandCraftEssenceMlbRequired;
-}
-
-function normalizeGrandServants(values: Project["grandServants"]): GrandServantConfig[] {
-  const seen = new Set<number>();
-  return (values ?? [])
-    .filter((item) => Number.isInteger(item.slotIndex) && item.slotIndex >= 0 && item.slotIndex < 6)
-    .filter((item) => {
-      if (seen.has(item.slotIndex)) return false;
-      seen.add(item.slotIndex);
-      return true;
-    })
-    .slice(0, 2)
-    .map((item) => ({
-      slotIndex: item.slotIndex,
-      npCard: item.npCard ?? "auto",
-      priority: item.priority ?? "damage",
-    }));
-}
-
-function npCardLabel(card: GrandNpCard | undefined) {
-  switch (card) {
-    case "buster":
-      return "红";
-    case "arts":
-      return "蓝";
-    case "quick":
-      return "绿";
-    default:
-      return "自动";
-  }
-}
-
-function priorityLabel(priority: GrandCardPriority | undefined) {
-  return priority === "np" ? "NP" : "伤害";
 }
 
 function supportLevelLabel(level: number | null | undefined) {
@@ -825,7 +775,6 @@ interface SortableSlotProps {
   portraitSrc: string | null | undefined;
   ceCardSrc: string | null | undefined;
   supportGrandMode: boolean;
-  grandSelected?: boolean;
   supportGrandCraftEssences: (CraftEssence | null)[];
   supportGrandCeCardSrcs: (string | null | undefined)[];
   supportGrandCeMlbRequired: SupportGrandCraftEssenceMlbRequired;
@@ -843,140 +792,6 @@ interface SortableSlotProps {
   onGrandCeSelect: (index: number) => void;
   onGrandCeClear: (index: number) => void;
   onSupportSettingsOpen: () => void;
-}
-
-interface GrandServantRowProps {
-  grandServants: GrandServantConfig[];
-  displaySlots: SlotItem[];
-  portraitMap: Record<string, string | null | undefined>;
-  onConfigure: (index: number) => void;
-  onRemove: (index: number) => void;
-}
-
-function GrandDropZone({
-  grandServants,
-  displaySlots,
-  portraitMap,
-  onConfigure,
-  onRemove,
-}: GrandServantRowProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: "grand-row-dropzone" });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`grand-servant-row${isOver ? " drag-over" : ""}`}
-      aria-label="冠位从者"
-    >
-      <div className="grand-row-title">冠位</div>
-      <SortableContext
-        items={grandServants.map((_, index) => `grand-${index}`)}
-        strategy={rectSortingStrategy}
-      >
-        <div className="grand-servant-slots">
-          {grandServants.map((config, index) => {
-            const slot = displaySlots[config.slotIndex];
-            return (
-              <GrandServantTile
-                key={`${config.slotIndex}-${index}`}
-                id={`grand-${index}`}
-                roleLabel={index === 0 ? "主" : "副"}
-                slot={slot}
-                config={config}
-                portraitSrc={slot?.servant ? portraitMap[slot.servant.variantKey] : null}
-                onConfigure={() => onConfigure(index)}
-                onRemove={() => onRemove(index)}
-              />
-            );
-          })}
-          {grandServants.length < 2 && (
-            <div className="grand-servant-empty">
-              拖入冠位从者
-            </div>
-          )}
-        </div>
-      </SortableContext>
-    </div>
-  );
-}
-
-interface GrandServantTileProps {
-  id: string;
-  roleLabel: string;
-  slot: SlotItem | undefined;
-  config: GrandServantConfig;
-  portraitSrc: string | null | undefined;
-  onConfigure: () => void;
-  onRemove: () => void;
-}
-
-function GrandServantTile({
-  id,
-  roleLabel,
-  slot,
-  config,
-  portraitSrc,
-  onConfigure,
-  onRemove,
-}: GrandServantTileProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.45 : 1,
-  };
-  const servant = slot?.servant ?? null;
-
-  return (
-    <button
-      ref={setNodeRef}
-      type="button"
-      className="grand-servant-tile"
-      style={style}
-      onClick={onConfigure}
-      aria-label={`${roleLabel}冠位${servant ? `：${servant.name_cn}` : ""}`}
-      {...attributes}
-      {...listeners}
-    >
-      <span className="grand-role-badge">{roleLabel}</span>
-      {servant && portraitSrc ? (
-        <img src={portraitSrc} alt={servant.name_cn} draggable={false} />
-      ) : (
-        <span className="grand-servant-placeholder">
-          {servant?.name_cn ?? "未选择"}
-        </span>
-      )}
-      <span className="grand-np-badge">{npCardLabel(config.npCard)}</span>
-      <span className="grand-priority-badge">{priorityLabel(config.priority)}</span>
-      <span
-        role="button"
-        tabIndex={0}
-        className="grand-servant-remove"
-        aria-label={`移除${roleLabel}冠位`}
-        onClick={(event) => {
-          event.stopPropagation();
-          onRemove();
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            event.stopPropagation();
-            onRemove();
-          }
-        }}
-      >
-        <Cross2Icon width={10} height={10} />
-      </span>
-    </button>
-  );
 }
 
 /**
@@ -1019,7 +834,6 @@ function SortableSlot({
   portraitSrc,
   ceCardSrc,
   supportGrandMode,
-  grandSelected = false,
   supportGrandCraftEssences,
   supportGrandCeCardSrcs,
   supportGrandCeMlbRequired,
@@ -1045,7 +859,7 @@ function SortableSlot({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: slot.id, disabled: grandSelected });
+  } = useSortable({ id: slot.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -1073,7 +887,7 @@ function SortableSlot({
       <Flex direction="column" className="slot-card">
         <div className="slot-header" />
         <div
-          className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}${isSupport && supportGrandMode ? " grand-support" : ""}${grandSelected ? " grand-selected" : ""}${rarityClass ? ` ${rarityClass}` : ""}`}
+          className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}${isSupport && supportGrandMode ? " grand-support" : ""}${rarityClass ? ` ${rarityClass}` : ""}`}
           onClick={onSelect}
         >
           {servant ? (
@@ -1206,7 +1020,6 @@ export function ContentGrid({
     { type: "slot"; slotId: string } | { type: "grand"; index: number } | null
   >(null);
   const [supportSettingsOpen, setSupportSettingsOpen] = useState(false);
-  const [grandSettingsIndex, setGrandSettingsIndex] = useState<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -1244,76 +1057,13 @@ export function ContentGrid({
       .filter((id): id is number => id != null)
   );
 
-  const grandServants = normalizeGrandServants(activeProject?.grandServants);
-  const grandSlotIndexes = new Set(grandServants.map((item) => item.slotIndex));
-  const persistGrandServants = (nextGrandServants: GrandServantConfig[]) => {
-    if (!activeProject) return;
-    void onUpdateActiveProject({
-      ...activeProject,
-      grandServants: nextGrandServants,
-    });
-  };
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const activeId = String(active.id);
-    const overId = String(over.id);
-    if (activeId.startsWith("grand-")) {
-      const oldIndex = Number(activeId.replace("grand-", ""));
-      const newIndex = overId.startsWith("grand-")
-        ? Number(overId.replace("grand-", ""))
-        : oldIndex;
-      if (
-        Number.isInteger(oldIndex) &&
-        Number.isInteger(newIndex) &&
-        oldIndex !== newIndex &&
-        oldIndex >= 0 &&
-        newIndex >= 0 &&
-        oldIndex < grandServants.length &&
-        newIndex < grandServants.length
-      ) {
-        persistGrandServants(arrayMove(grandServants, oldIndex, newIndex));
-      }
-      return;
-    }
-
-    if (overId === "grand-row-dropzone" || overId.startsWith("grand-")) {
-      const slotIndex = displaySlots.findIndex((slot) => slot.id === activeId);
-      if (
-        slotIndex >= 0 &&
-        grandServants.length < 2 &&
-        !grandSlotIndexes.has(slotIndex) &&
-        displaySlots[slotIndex]?.servant != null
-      ) {
-        persistGrandServants([
-          ...grandServants,
-          { slotIndex, npCard: "auto", priority: "damage" },
-        ]);
-      }
-      return;
-    }
-
     const oldIndex = slots.findIndex((s) => s.id === active.id);
     const newIndex = slots.findIndex((s) => s.id === over.id);
-    const nextSlots = arrayMove(slots, oldIndex, newIndex);
-    if (activeProject && grandServants.length > 0) {
-      const remapped = grandServants
-        .map((config) => {
-          const slotId = slots[config.slotIndex]?.id;
-          const nextIndex = nextSlots.findIndex((slot) => slot.id === slotId);
-          return nextIndex >= 0 ? { ...config, slotIndex: nextIndex } : null;
-        })
-        .filter((config): config is GrandServantConfig => config != null);
-      void onUpdateActiveProject({
-        ...activeProject,
-        slots: slotItemsToProjectSlots(nextSlots),
-        grandServants: remapped,
-      });
-      return;
-    }
-    onSlotsChange(nextSlots);
+    onSlotsChange(arrayMove(slots, oldIndex, newIndex));
   };
 
   const handleSlotClick = (slot: SlotItem) => {
@@ -1440,23 +1190,6 @@ export function ContentGrid({
     });
   };
 
-  const handleGrandServantRemove = (index: number) => {
-    persistGrandServants(grandServants.filter((_, itemIndex) => itemIndex !== index));
-    if (grandSettingsIndex === index) {
-      setGrandSettingsIndex(null);
-    }
-  };
-
-  const handleGrandServantSettingChange = (
-    index: number,
-    patch: Partial<Pick<GrandServantConfig, "npCard" | "priority">>,
-  ) => {
-    const next = grandServants.map((item, itemIndex) =>
-      itemIndex === index ? { ...item, ...patch } : item
-    );
-    persistGrandServants(next);
-  };
-
   const handleSelect = (servant: Servant) => {
     const target = slots.find((s) => s.id === activeSlotId);
     if (!target) return;
@@ -1540,7 +1273,6 @@ export function ContentGrid({
       portraitSrc={slot.servant ? portraitMap[slot.servant.variantKey] : null}
       ceCardSrc={slot.craftEssence ? ceCardMap[slot.craftEssence.id] : null}
       supportGrandMode={activeProject?.supportGrandMode ?? false}
-      grandSelected={activeProject?.advancedMode === true && grandSlotIndexes.has(displaySlots.indexOf(slot))}
       supportGrandCraftEssences={supportGrandCraftEssences}
       supportGrandCeCardSrcs={supportGrandCeCardSrcs}
       supportGrandCeMlbRequired={supportGrandCeMlbRequired}
@@ -1568,30 +1300,12 @@ export function ContentGrid({
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        {activeProject?.advancedMode === true ? (
-          <Box className="grand-team-layout">
-            <GrandDropZone
-              grandServants={grandServants}
-              displaySlots={displaySlots}
-              portraitMap={portraitMap}
-              onConfigure={setGrandSettingsIndex}
-              onRemove={handleGrandServantRemove}
-            />
-            <div className="grand-row-title">辅助</div>
-            <SortableContext items={slotIds} strategy={rectSortingStrategy}>
-              <Box className="content-unified-grid grand-support-grid">
-                {displaySlots.map(renderSlot)}
-              </Box>
-            </SortableContext>
+        <SortableContext items={slotIds} strategy={rectSortingStrategy}>
+          <Box className="content-unified-grid">
+            {leftSlots.map(renderSlot)}
+            {rightSlots.map(renderSlot)}
           </Box>
-        ) : (
-          <SortableContext items={slotIds} strategy={rectSortingStrategy}>
-            <Box className="content-unified-grid">
-              {leftSlots.map(renderSlot)}
-              {rightSlots.map(renderSlot)}
-            </Box>
-          </SortableContext>
-        )}
+        </SortableContext>
       </DndContext>
 
       <ServantSelectDialog
@@ -1617,56 +1331,6 @@ export function ContentGrid({
           showGrandBondOption ? handleGrandBondCeModeChange : undefined
         }
       />
-
-      <Dialog.Root
-        open={grandSettingsIndex != null}
-        onOpenChange={(open) => {
-          if (!open) setGrandSettingsIndex(null);
-        }}
-      >
-        <Dialog.Content maxWidth="420px">
-          <Dialog.Title>冠位从者设置</Dialog.Title>
-          {grandSettingsIndex != null && grandServants[grandSettingsIndex] && (
-            <Flex direction="column" gap="4">
-              <label className="grand-setting-field">
-                <Text size="2" weight="medium">宝具颜色</Text>
-                <select
-                  value={grandServants[grandSettingsIndex].npCard ?? "auto"}
-                  onChange={(event) =>
-                    handleGrandServantSettingChange(grandSettingsIndex, {
-                      npCard: event.target.value as GrandNpCard,
-                    })
-                  }
-                >
-                  <option value="auto">自动读取</option>
-                  <option value="buster">红卡</option>
-                  <option value="arts">蓝卡</option>
-                  <option value="quick">绿卡</option>
-                </select>
-              </label>
-              <label className="grand-setting-field">
-                <Text size="2" weight="medium">出卡策略</Text>
-                <select
-                  value={grandServants[grandSettingsIndex].priority ?? "damage"}
-                  onChange={(event) =>
-                    handleGrandServantSettingChange(grandSettingsIndex, {
-                      priority: event.target.value as GrandCardPriority,
-                    })
-                  }
-                >
-                  <option value="damage">伤害优先</option>
-                  <option value="np">NP 优先</option>
-                </select>
-              </label>
-              <Flex justify="end">
-                <Dialog.Close>
-                  <Button type="button">完成</Button>
-                </Dialog.Close>
-              </Flex>
-            </Flex>
-          )}
-        </Dialog.Content>
-      </Dialog.Root>
 
       {supportSettingsOpen && (
         <SupportSettingsDialog

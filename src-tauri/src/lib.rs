@@ -332,6 +332,8 @@ pub struct AdvancedBattleScene {
     #[serde(default)]
     pub main_output: Option<AdvancedMainOutput>,
     #[serde(default)]
+    pub grand_auto_order_change: Option<bool>,
+    #[serde(default)]
     pub command_conditions: Vec<AdvancedCommandCardCondition>,
     #[serde(default)]
     pub control_actions: Vec<Action>,
@@ -4796,6 +4798,7 @@ mod tests {
                 output_type: Some(AdvancedOutputType::Np),
                 np_card: Some("arts".into()),
             }),
+            grand_auto_order_change: Some(true),
             command_conditions: vec![AdvancedCommandCardCondition {
                 slot: 0,
                 servant: "servant_1".into(),
@@ -4862,6 +4865,7 @@ mod tests {
         );
 
         let parsed: AdvancedBattleScene = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.grand_auto_order_change, Some(true));
         assert_eq!(parsed.rules.len(), 1);
         assert_eq!(parsed.rules[0].actions.len(), 2);
     }

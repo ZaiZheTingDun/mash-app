@@ -95,6 +95,7 @@ export interface AdvancedMainOutput {
 export interface AdvancedBattleScene {
   id: string;
   mainOutput?: AdvancedMainOutput | null;
+  grandAutoOrderChange?: boolean | null;
   commandConditions?: AdvancedCommandCardCondition[];
   controlActions?: PreparationAction[];
   startupActions?: PreparationAction[];
