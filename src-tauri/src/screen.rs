@@ -502,7 +502,7 @@ impl FromStr for Screen {
             "Attack" => Self::Attack,
             "BattleResultLoot" => Self::BattleResultLoot,
             "BattleResultExp" => Self::BattleResultExp,
-            "BattleResultBond" => Self::BattleResultBond,
+            "BattleResultBond" | "BattleResultBondLevelUp" => Self::BattleResultBond,
             "BattleResultContinue" => Self::BattleResultContinue,
             "BattleResultFriendRequest" => Self::BattleResultFriendRequest,
             "APRecovery" => Self::APRecovery,
@@ -1530,5 +1530,13 @@ mod tests {
     fn ap_recovery_screen_round_trips_display_name() {
         assert_eq!(Screen::APRecovery.to_string(), "APRecovery");
         assert_eq!("APRecovery".parse::<Screen>().unwrap(), Screen::APRecovery);
+    }
+
+    #[test]
+    fn bond_level_up_screen_routes_to_bond_handler() {
+        assert_eq!(
+            "BattleResultBondLevelUp".parse::<Screen>().unwrap(),
+            Screen::BattleResultBond
+        );
     }
 }

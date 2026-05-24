@@ -292,7 +292,7 @@ class TestDetectScreen:
     @pytest.mark.parametrize("server", ["cn", "jp"])
     def test_battle_result_bond_level_up_template_is_bundled(self, server):
         """Bond level-up overlays hide the normal bond label, so each
-        server must treat both labels as BattleResultBond alternatives."""
+        server must ship a separate screen with its own search region."""
         repo_root = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "..")
         )
@@ -314,10 +314,50 @@ class TestDetectScreen:
 
         with open(cv_json, "r", encoding="utf-8") as f:
             cfg = json.load(f)
-        detect = cfg["screens"]["BattleResultBond"]["detect"]
-        keys = detect.get("templates") or [detect.get("template")]
-        assert "text_battle_result_bond" in keys
-        assert "text_battle_result_bond_level_up" in keys
+        bond_detect = cfg["screens"]["BattleResultBond"]["detect"]
+        bond_keys = bond_detect.get("templates") or [bond_detect.get("template")]
+        assert "text_battle_result_bond" in bond_keys
+
+        level_up_detect = cfg["screens"]["BattleResultBondLevelUp"]["detect"]
+        level_up_keys = level_up_detect.get("templates") or [
+            level_up_detect.get("template")
+        ]
+        assert "text_battle_result_bond_level_up" in level_up_keys
+        assert level_up_detect["priority"] > 0
+
+    def test_cn_battle_result_bond_level_up_detects_real_capture(self):
+        """The level-up overlay leaves the battle HUD visible, so the
+        dedicated result screen must beat the base Battle screen."""
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "templates"
+        )
+        cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "cv.json"
+        )
+        screenshot = os.path.join(
+            os.path.dirname(__file__),
+            "test_data",
+            "screenshots",
+            "battle_result_bond_level_up_cn.jpg",
+        )
+        if not (
+            os.path.isdir(templates_dir)
+            and os.path.isfile(cv_json)
+            and os.path.isfile(screenshot)
+        ):
+            pytest.skip("CN production resources or fixture not available")
+
+        mash_cv._load_templates(templates_dir)
+        mash_cv._load_config(cv_json)
+        img = cv2.imread(screenshot)
+        assert img is not None
+
+        result = mash_cv._detect_screen(img)
+        assert result["screen"] == "BattleResultBondLevelUp"
+        assert result["score"] >= 0.85
 
 
 # ── _load_templates ─────────────────────────────────────────────────────

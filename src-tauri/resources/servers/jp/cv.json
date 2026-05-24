@@ -276,10 +276,7 @@
     },
     "BattleResultBond": {
       "detect": {
-        "templates": [
-          "text_battle_result_bond",
-          "text_battle_result_bond_level_up"
-        ],
+        "template": "text_battle_result_bond",
         "region": {
           "x": 0.072,
           "y": 0.21,
@@ -287,6 +284,24 @@
           "h": 0.1
         },
         "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
+      }
+    },
+    "BattleResultBondLevelUp": {
+      "detect": {
+        "template": "text_battle_result_bond_level_up",
+        "region": {
+          "x": 0.25,
+          "y": 0.37,
+          "w": 0.55,
+          "h": 0.15
+        },
+        "threshold": 0.85,
+        "priority": 10
       },
       "variants": {
         "main": {
