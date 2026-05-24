@@ -292,4 +292,19 @@ describe("BattlePage", () => {
       expect(stopAfterCurrentButton).toBeDisabled();
     });
   });
+
+  it("marks automation stopped immediately when stop is requested", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    const callbacks = renderBattlePage(PROJECT);
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(screen.getByRole("button", { name: "停止" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("stop_automation");
+      expect(callbacks.onLogEntry).toHaveBeenCalledWith("已请求停止自动化");
+      expect(screen.getByRole("button", { name: "返回" })).not.toBeDisabled();
+    });
+  });
 });

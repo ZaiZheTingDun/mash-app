@@ -282,8 +282,14 @@ export function BattlePage({
   }, [apRecoveryItems, selectedProject, startAutomation, validateGrandServants]);
 
   const handleStop = useCallback(() => {
-    invoke("stop_automation").catch(console.error);
-  }, []);
+    invoke("stop_automation")
+      .then(() => {
+        setRunning(false);
+        setStopAfterCurrentRequested(false);
+        onLogEntry?.("已请求停止自动化");
+      })
+      .catch(console.error);
+  }, [onLogEntry]);
 
   const handleStopAfterCurrent = useCallback(() => {
     invoke("stop_automation_after_current")
