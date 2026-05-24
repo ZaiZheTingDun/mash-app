@@ -52,10 +52,11 @@ failing the battle loop.
 The picker chooses three attacks by the following chain priority:
 
 1. Main servant three-card chain.
-2. Deputy servant three-card chain.
-3. Same-color chain containing the main servant.
-4. Same-color chain containing the deputy servant.
-5. Fallback output ordering.
+2. Any combo that fires the main servant's ready Noble Phantasm.
+3. Deputy servant three-card chain.
+4. Same-color chain containing the main servant.
+5. Same-color chain containing the deputy servant.
+6. Fallback output ordering.
 
 Within a same-servant three-card chain:
 
@@ -64,6 +65,14 @@ Within a same-servant three-card chain:
 3. Ordinary brave chain.
 
 The main servant always outranks the deputy at the same chain class.
+
+The "main NP ready" tier sits between main and deputy three-card chains
+because the tier-3 same-color chain "containing main" exists to *charge*
+a future NP, so once the main NP is already ready it should fire even
+when its color cannot form a same-color chain with the current hand
+(e.g. a buster main NP in a hand of mostly arts cards). This bump only
+applies to the main output's NP; a ready deputy NP on its own does not
+displace a main same-color chain.
 
 ## Attack Order
 

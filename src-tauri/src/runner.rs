@@ -4853,6 +4853,19 @@ fn combo_has_role(
         .any(|candidate| candidate.servant_id == Some(config.servant_id))
 }
 
+fn combo_has_role_np(
+    combo: &[&AdvancedPickCandidate],
+    role: GrandRole,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> bool {
+    let Some(config) = grand_config_for_role(role, grand_servants) else {
+        return false;
+    };
+    combo
+        .iter()
+        .any(|candidate| candidate.is_np && candidate.servant_id == Some(config.servant_id))
+}
+
 fn combo_is_exquisite(combo: &[&AdvancedPickCandidate]) -> bool {
     candidate_color_counts(combo) == (1, 1, 1)
 }
@@ -4868,16 +4881,31 @@ fn grand_combo_tier(
     combo: &[&AdvancedPickCandidate],
     grand_servants: &[GrandServantRuntimeConfig],
 ) -> (i32, Option<GrandRole>) {
-    for (base, role) in [(5_000, GrandRole::Main), (4_000, GrandRole::Deputy)] {
-        if combo_same_role_servant(combo, role, grand_servants) {
-            if combo_is_exquisite(combo) {
-                return (base + 300, Some(role));
-            }
-            if combo_same_color(combo) {
-                return (base + 200, Some(role));
-            }
-            return (base + 100, Some(role));
+    if combo_same_role_servant(combo, GrandRole::Main, grand_servants) {
+        if combo_is_exquisite(combo) {
+            return (5_300, Some(GrandRole::Main));
         }
+        if combo_same_color(combo) {
+            return (5_200, Some(GrandRole::Main));
+        }
+        return (5_100, Some(GrandRole::Main));
+    }
+    // A ready main-output NP outranks both the deputy three-card chain and the
+    // tier-3 same-color chain that merely "contains the main servant". Those
+    // tier-3 combos exist to charge a future NP, so once the NP is already
+    // ready we should prefer firing it even if its color doesn't fit a
+    // same-color chain in the current hand.
+    if combo_has_role_np(combo, GrandRole::Main, grand_servants) {
+        return (4_500, Some(GrandRole::Main));
+    }
+    if combo_same_role_servant(combo, GrandRole::Deputy, grand_servants) {
+        if combo_is_exquisite(combo) {
+            return (4_300, Some(GrandRole::Deputy));
+        }
+        if combo_same_color(combo) {
+            return (4_200, Some(GrandRole::Deputy));
+        }
+        return (4_100, Some(GrandRole::Deputy));
     }
     if combo_same_color(combo) && combo_has_role(combo, GrandRole::Main, grand_servants) {
         return (3_000, Some(GrandRole::Main));
@@ -5955,6 +5983,116 @@ mod tests {
         );
 
         assert_eq!(pick_labels(&picks), vec!["NP1", "NP0", "C0"]);
+    }
+
+    /// Reproduces the real-world Iori (id 405, buster NP) hand:
+    /// front [405, 7, 8] with hand [a/8, a/405, a/8, b/7, a/7] and NP1
+    /// (slot 0) ready. The hand can form a tier-3 "same-color arts +
+    /// has main 405" combo, but main NP is buster and only 1 buster
+    /// card is available, so the NP cannot fit any same-color chain.
+    /// Pre-fix the picker chose the all-arts combo and let the ready
+    /// main NP rot. With the new "main NP ready" tier, the picker must
+    /// include NP0 in the final picks.
+    #[test]
+    fn grand_auto_fires_ready_main_np_when_color_does_not_fit_same_color_chain() {
+        let scene = empty_advanced_scene();
+        let cards = vec![
+            command_card(0, Some(8), Some("a"), None),
+            command_card(1, Some(405), Some("a"), None),
+            command_card(2, Some(8), Some("a"), None),
+            command_card(3, Some(7), Some("b"), None),
+            command_card(4, Some(7), Some("a"), None),
+        ];
+        let nps = vec![np_slot(0, true), np_slot(1, false), np_slot(2, false)];
+        let grands = vec![grand_config(405, "buster", "damage")];
+        let picks = choose_advanced_auto_picks(
+            &scene,
+            &cards,
+            &nps,
+            &[Some(405), Some(7), Some(8)],
+            &grands,
+        );
+
+        assert!(
+            picks
+                .iter()
+                .any(|pick| matches!(pick, Pick::Np { slot: 0, .. })),
+            "picker dropped the ready main NP: {:?}",
+            pick_labels(&picks)
+        );
+    }
+
+    /// A ready main NP must outrank a deputy three-card same-color
+    /// chain, even though tier-4 deputy chains used to score above any
+    /// non-main combo. Front party: [10 (main), 20 (deputy), 30].
+    /// Hand contains a clean three-arts deputy chain plus the main NP
+    /// alone with no support cards from main, so the ONLY way to fire
+    /// the main NP is to give up the deputy chain.
+    #[test]
+    fn grand_auto_main_np_outranks_deputy_three_card_chain() {
+        let scene = empty_advanced_scene();
+        let cards = vec![
+            command_card(0, Some(20), Some("a"), None),
+            command_card(1, Some(20), Some("a"), None),
+            command_card(2, Some(20), Some("a"), None),
+            command_card(3, Some(30), Some("b"), None),
+            command_card(4, Some(30), Some("q"), None),
+        ];
+        let nps = vec![np_slot(0, true), np_slot(1, false), np_slot(2, false)];
+        let grands = vec![
+            grand_config(10, "buster", "damage"),
+            grand_config_at(1, 20, "arts", "np"),
+        ];
+        let picks = choose_advanced_auto_picks(
+            &scene,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &grands,
+        );
+
+        assert!(
+            picks
+                .iter()
+                .any(|pick| matches!(pick, Pick::Np { slot: 0, .. })),
+            "main NP was not fired: {:?}",
+            pick_labels(&picks)
+        );
+    }
+
+    /// A ready DEPUTY NP, on its own, must NOT outrank a main same-
+    /// color chain (tier 3). Only the main NP gets the priority bump,
+    /// because the user expectation of "fire NP instead of charging
+    /// it" is specifically about the main output.
+    #[test]
+    fn grand_auto_deputy_ready_np_does_not_outrank_main_same_color_chain() {
+        let scene = empty_advanced_scene();
+        let cards = vec![
+            command_card(0, Some(10), Some("a"), None),
+            command_card(1, Some(10), Some("a"), None),
+            command_card(2, Some(30), Some("a"), None),
+            command_card(3, Some(30), Some("b"), None),
+            command_card(4, Some(30), Some("q"), None),
+        ];
+        let nps = vec![np_slot(0, false), np_slot(1, true), np_slot(2, false)];
+        let grands = vec![
+            grand_config(10, "arts", "np"),
+            grand_config_at(1, 20, "buster", "damage"),
+        ];
+        let picks = choose_advanced_auto_picks(
+            &scene,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &grands,
+        );
+
+        let labels = pick_labels(&picks);
+        assert!(
+            !labels.iter().any(|label| label == "NP1"),
+            "deputy NP should not displace main same-color chain: {:?}",
+            labels
+        );
     }
 
     #[test]
