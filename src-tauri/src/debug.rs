@@ -11,8 +11,8 @@ use crate::runner::{self, RunnerHandle, RunnerState};
 use crate::screen::{
     CommandCardMatch, ElementMatch, FindEnhancementServantGridResult, FindSupportsResult,
     NoblePhantasmMatch, NormRect, Point, ServantGridAnchor, ServantGridCell, ServantGridFaceMatch,
-    SidecarClient, SupportCeIconCheck, SupportDiagnostics, SupportRowMatch,
-    SupportCeVerificationOptions,
+    SidecarClient, SupportCeIconCheck, SupportCeVerificationOptions, SupportDiagnostics,
+    SupportRowMatch,
 };
 use crate::{
     app_data_dir, load_servant_metadata, resolve_ce_assets_dir, resolve_cv_config_path,
@@ -1198,8 +1198,7 @@ pub fn debug_find_supports(
                     template_path,
                     runner::SUPPORT_CE_THRESHOLD,
                     SupportCeVerificationOptions {
-                        mlb_required: grand_craft_essence_mlb_required
-                            .unwrap_or([true; 3])[index],
+                        mlb_required: grand_craft_essence_mlb_required.unwrap_or([true; 3])[index],
                         grand_bond_ce_mode: if index == 1 {
                             grand_bond_ce_mode.clone().filter(|mode| mode != "any")
                         } else {

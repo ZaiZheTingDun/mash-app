@@ -158,6 +158,23 @@ describe("BattlePage", () => {
     });
   });
 
+  it("blocks grand battle start until at least one grand servant is selected", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    const callbacks = renderBattlePage({
+      ...PROJECT,
+      advancedMode: true,
+      grandServants: [],
+    });
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    expect(screen.getByText("无法开始战斗")).toBeInTheDocument();
+    expect(screen.getByText("戴冠战需要选择 1 到 2 名冠位从者")).toBeInTheDocument();
+    expect(callbacks.onAutomationStart).not.toHaveBeenCalled();
+    expect(vi.mocked(invoke).mock.calls.some(([cmd]) => cmd === "start_automation")).toBe(false);
+  });
+
   it("persists count mode and repeat count from the inline stepper", async () => {
     const user = userEvent.setup();
     mockProjectCommands();

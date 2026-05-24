@@ -176,12 +176,24 @@ changes (i.e. when the runner moves to a different row).
   the startup condition matches, the runner taps the bottom-right return button,
   executes `startupActions`, reapplies explicit Order Change effects to the
   active front-line id map, then re-enters the attack-card screen. From that
-  point the scene is in automatic battle mode: ready NPs and command cards are
-  scored together with the configured main-output servant, output type, and
-  NP color (`npCard`, or the servant resource's `noblePhantasmCard` when set
-  to automatic). Legacy advanced `rules` are still supported: when a scene has
-  rule entries, the older rule evaluator runs instead of the three-stage
-  strategy flow.
+  point the scene is in automatic battle mode. In ordinary advanced scenes,
+  ready NPs and command cards are scored together with the configured
+  main-output servant, output type, and NP color (`npCard`, or the servant
+  resource's `noblePhantasmCard` when set to automatic). In Grand battle mode,
+  the project stores one or two `grandServants`; the first is the main output
+  and the second is the deputy. The automatic picker prefers main-servant
+  three-card chains first, then deputy chains, with exquisite B/A/Q chains
+  ahead of same-color force/quick/skill chains and ordinary brave chains.
+  Same-color chains that include the main output outrank same-color chains
+  that include the deputy. Exquisite damage-priority chains place the target
+  NP last; NP-priority chains place a red command card before a non-red target
+  NP when available. Same-color chains with a target NP place the NP first
+  because command-card position performance does not apply to NPs. If no chain
+  is available, the picker can place deputy or auxiliary ready NPs before the
+  target NP for overcharge, then keeps output servant command cards later so
+  they receive the second/third-card performance bonus. Legacy advanced `rules`
+  are still supported: when a scene has rule entries, the older rule evaluator
+  runs instead of the three-stage strategy flow.
 - `waiting_for_battle` extends Unknown tolerance during loading and long attack
   animations.
 - `APRecovery` now anchors on `label_item` and scans the item-column template

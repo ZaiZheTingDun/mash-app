@@ -43,6 +43,14 @@ export type SupportGrandCraftEssenceIds = [
 
 export type SupportGrandCraftEssenceMlbRequired = [boolean, boolean, boolean];
 export type SupportGrandBondCeMode = "any" | "bond" | "bondNp";
+export type GrandNpCard = "auto" | "buster" | "arts" | "quick";
+export type GrandCardPriority = "damage" | "np";
+
+export interface GrandServantConfig {
+  slotIndex: number;
+  npCard?: GrandNpCard;
+  priority?: GrandCardPriority;
+}
 
 export type BattleApRecoveryItem =
   | "gold"
@@ -67,6 +75,7 @@ export interface Project {
   supportGrandCraftEssenceIds?: SupportGrandCraftEssenceIds;
   supportGrandCraftEssenceMlbRequired?: SupportGrandCraftEssenceMlbRequired;
   supportGrandBondCeMode?: SupportGrandBondCeMode;
+  grandServants?: GrandServantConfig[];
   supportNoblePhantasmLevelMin?: number | null;
   supportSkillLevelMins?: SupportSkillLevelMins;
   supportAppendSkillLevelMins?: SupportAppendSkillLevelMins;

@@ -446,6 +446,24 @@ impl Default for ProjectRepeatMode {
     }
 }
 
+fn default_grand_np_card() -> String {
+    "auto".into()
+}
+
+fn default_grand_card_priority() -> String {
+    "damage".into()
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GrandServantConfig {
+    pub slot_index: u32,
+    #[serde(default = "default_grand_np_card")]
+    pub np_card: String,
+    #[serde(default = "default_grand_card_priority")]
+    pub priority: String,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
@@ -473,6 +491,8 @@ pub struct Project {
     pub support_grand_craft_essence_mlb_required: [bool; 3],
     #[serde(default)]
     pub support_grand_bond_ce_mode: SupportGrandBondCeMode,
+    #[serde(default)]
+    pub grand_servants: Vec<GrandServantConfig>,
     /// Optional support-search NP minimum level. `None` means "任意".
     #[serde(default)]
     pub support_noble_phantasm_level_min: Option<u32>,
@@ -725,9 +745,10 @@ fn create_project(
         support_servant_variant_key: None,
         support_grand_mode: false,
         support_grand_craft_essence_ids: default_support_grand_craft_essence_ids(),
-        support_grand_craft_essence_mlb_required:
-            default_support_grand_craft_essence_mlb_required(),
+        support_grand_craft_essence_mlb_required: default_support_grand_craft_essence_mlb_required(
+        ),
         support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
+        grand_servants: Vec::new(),
         support_noble_phantasm_level_min: None,
         support_skill_level_mins: default_support_skill_level_mins(),
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
@@ -3655,7 +3676,10 @@ mod tests {
         // Camel-case rename round-trips on serialize too.
         let serialized = serde_json::to_value(&slot).unwrap();
         assert_eq!(serialized["craftEssenceId"], serde_json::json!(1485));
-        assert_eq!(serialized["craftEssenceMlbRequired"], serde_json::json!(true));
+        assert_eq!(
+            serialized["craftEssenceMlbRequired"],
+            serde_json::json!(true)
+        );
         assert_eq!(serialized["servantId"], serde_json::json!(284));
         assert_eq!(serialized["type"], serde_json::json!("support"));
     }
@@ -3693,7 +3717,11 @@ mod tests {
         assert_eq!(project.support_grand_mode, false);
         assert_eq!(project.support_grand_craft_essence_ids, [None; 3]);
         assert_eq!(project.support_grand_craft_essence_mlb_required, [true; 3]);
-        assert_eq!(project.support_grand_bond_ce_mode, SupportGrandBondCeMode::Any);
+        assert_eq!(
+            project.support_grand_bond_ce_mode,
+            SupportGrandBondCeMode::Any
+        );
+        assert!(project.grand_servants.is_empty());
         assert!(project.support_noble_phantasm_level_min.is_none());
         assert_eq!(project.support_skill_level_mins, [None; 3]);
         assert_eq!(project.support_append_skill_level_mins, [None; 5]);
@@ -3716,6 +3744,7 @@ mod tests {
             support_grand_craft_essence_mlb_required:
                 default_support_grand_craft_essence_mlb_required(),
             support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
+            grand_servants: Vec::new(),
             support_noble_phantasm_level_min: None,
             support_skill_level_mins: default_support_skill_level_mins(),
             support_append_skill_level_mins: default_support_append_skill_level_mins(),

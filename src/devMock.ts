@@ -98,6 +98,7 @@ let projects: Project[] = [
     supportGrandCraftEssenceIds: [null, null, null],
     supportGrandCraftEssenceMlbRequired: [true, true, true],
     supportGrandBondCeMode: "any",
+    grandServants: [],
     repeatMission: true,
     slots: createInitialProjectSlots().map((slot, index) => {
       const servant = [servants[1], servants[2], null, servants[4], servants[5], null][index];
@@ -145,6 +146,7 @@ function createProject(name: string, advancedMode = false): Project {
     supportGrandCraftEssenceIds: [null, null, null],
     supportGrandCraftEssenceMlbRequired: [true, true, true],
     supportGrandBondCeMode: "any",
+    grandServants: [],
     repeatMission: false,
     repeatMode: "single",
     repeatCount: null,

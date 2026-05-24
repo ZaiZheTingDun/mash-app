@@ -136,6 +136,7 @@ export function BattlePage({
   const [rainbowConfirmOpen, setRainbowConfirmOpen] = useState(false);
   const [stopAfterCurrentRequested, setStopAfterCurrentRequested] = useState(false);
   const [draft, setDraft] = useState<BattleProjectDraft | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
   const draftRef = useRef<BattleProjectDraft | null>(null);
 
   useEffect(() => {
@@ -173,6 +174,24 @@ export function BattlePage({
     [onUpdateProject]
   );
 
+  const validateGrandServants = useCallback(() => {
+    if (selectedProject?.advancedMode !== true) return true;
+    const seen = new Set<number>();
+    const grandCount = (selectedProject.grandServants ?? []).filter((item) => {
+      if (!Number.isInteger(item.slotIndex) || item.slotIndex < 0 || item.slotIndex >= 6) {
+        return false;
+      }
+      if (seen.has(item.slotIndex)) return false;
+      seen.add(item.slotIndex);
+      return true;
+    }).length;
+    if (grandCount < 1 || grandCount > 2) {
+      setStartError("戴冠战需要选择 1 到 2 名冠位从者");
+      return false;
+    }
+    return true;
+  }, [selectedProject]);
+
   const updateSelectedProject = useCallback(
     (updater: (project: Project) => Project) => {
       if (!selectedProject) return;
@@ -187,6 +206,7 @@ export function BattlePage({
 
   const startAutomation = useCallback(() => {
     if (!selectedProject) return;
+    if (!validateGrandServants()) return;
     const latestDraft =
       draftRef.current?.projectId === selectedProject.id
         ? draftRef.current
@@ -225,6 +245,7 @@ export function BattlePage({
       supportGrandCraftEssenceMlbRequired:
         selectedProject.supportGrandCraftEssenceMlbRequired ?? [true, true, true],
       supportGrandBondCeMode: selectedProject.supportGrandBondCeMode ?? "any",
+      grandServants: selectedProject.grandServants ?? [],
       supportNoblePhantasmLevelMin:
         selectedProject.supportNoblePhantasmLevelMin ?? null,
       supportSkillLevelMins:
@@ -247,16 +268,18 @@ export function BattlePage({
     onAutomationStart,
     onLogEntry,
     selectedProject,
+    validateGrandServants,
   ]);
 
   const handleStart = useCallback(() => {
     if (!selectedProject) return;
+    if (!validateGrandServants()) return;
     if (apRecoveryItems.includes("rainbow")) {
       setRainbowConfirmOpen(true);
       return;
     }
     startAutomation();
-  }, [apRecoveryItems, selectedProject, startAutomation]);
+  }, [apRecoveryItems, selectedProject, startAutomation, validateGrandServants]);
 
   const handleStop = useCallback(() => {
     invoke("stop_automation").catch(console.error);
@@ -535,6 +558,24 @@ export function BattlePage({
                 }}
               >
                 确认开始
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+
+      <AlertDialog.Root open={startError != null} onOpenChange={(open) => {
+        if (!open) setStartError(null);
+      }}>
+        <AlertDialog.Content maxWidth="420px">
+          <AlertDialog.Title>无法开始战斗</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            {startError}
+          </AlertDialog.Description>
+          <Flex justify="end" gap="3" mt="4">
+            <AlertDialog.Action>
+              <Button type="button" onClick={() => setStartError(null)}>
+                知道了
               </Button>
             </AlertDialog.Action>
           </Flex>
