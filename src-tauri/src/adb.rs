@@ -274,25 +274,58 @@ impl Adb {
     }
 }
 
-/// Number of MOVE events between DOWN and the final settle. More steps
-/// = smoother visual motion but more per-`input` process overhead. Six
-/// is a balance that keeps the chained shell command around ~600 chars
-/// and gives noticeably smoother scroll-handler updates than a single
-/// MOVE jump.
-const SETTLE_SWIPE_MOVE_STEPS: u32 = 6;
+/// Target wall-clock interval between adjacent MOVE events during the
+/// active swipe phase, in milliseconds. The on-screen list view re-
+/// renders on each MOVE event it receives, so this interval is what
+/// caps the perceived frame rate of the scroll animation — a 67-ms
+/// interval (the previous fixed 6-step shape over a 400-ms swipe)
+/// drops the active phase to ~15 Hz, which reads as visibly choppy on
+/// 60–120 Hz displays. 20 ms ≈ 50 Hz lifts the animation past the
+/// perceptual smoothness threshold on the displays this app targets,
+/// while staying loose enough that the per-step `input motionevent`
+/// spawn overhead (≈5 ms on real devices, up to ~150 ms on slow
+/// emulators) doesn't routinely dominate the realized swipe time.
+const SETTLE_SWIPE_TARGET_STEP_MS: u32 = 20;
+
+/// Minimum number of MOVE events, regardless of swipe duration. A
+/// few-event swipe is what `input swipe` already does and it lets
+/// Android extrapolate a fling, which is exactly the behaviour
+/// `swipe_with_settle` exists to avoid.
+const SETTLE_SWIPE_MIN_STEPS: u32 = 4;
+
+/// Upper bound on MOVE event count so a pathologically long swipe (or
+/// a slow emulator where each `input motionevent` invocation already
+/// adds 100+ ms of overhead) can't blow the realized swipe time past
+/// the planned `swipe_ms` by an order of magnitude. 30 events over a
+/// 600-ms swipe is ≈50 Hz; anything denser is below the noise floor
+/// of `input motionevent` jitter anyway.
+const SETTLE_SWIPE_MAX_STEPS: u32 = 30;
+
+/// Pick how many MOVE events to emit for a swipe of `swipe_ms` ms so
+/// the on-device event cadence approaches
+/// `SETTLE_SWIPE_TARGET_STEP_MS` between adjacent events. Exposed for
+/// unit tests so they can derive the expected script shape from the
+/// same formula instead of duplicating it.
+fn settle_swipe_move_steps(swipe_ms: u32) -> u32 {
+    let target = swipe_ms.saturating_div(SETTLE_SWIPE_TARGET_STEP_MS).max(1);
+    target.clamp(SETTLE_SWIPE_MIN_STEPS, SETTLE_SWIPE_MAX_STEPS)
+}
 
 /// Build the chained `adb shell` script that emits the
 /// DOWN → MOVE×N → MOVE(settle) → UP sequence for `swipe_with_settle`.
 ///
 /// Extracted as a pure function so unit tests can assert the exact
-/// command shape without needing a real ADB device.
+/// command shape without needing a real ADB device. Step count scales
+/// with `swipe_ms` via `settle_swipe_move_steps` so a short swipe gets
+/// the minimum smoothing budget and a long swipe spreads MOVE events
+/// across the full duration at ~50 Hz instead of clumping them.
 fn build_settle_swipe_script(
     from: (u32, u32),
     to: (u32, u32),
     swipe_ms: u32,
     settle_ms: u32,
 ) -> String {
-    let steps = SETTLE_SWIPE_MOVE_STEPS;
+    let steps = settle_swipe_move_steps(swipe_ms);
     let step_sleep_s = (swipe_ms as f64 / steps as f64) / 1000.0;
     let settle_s = settle_ms as f64 / 1000.0;
 
@@ -374,40 +407,91 @@ mod tests {
 
     #[test]
     fn settle_swipe_script_interpolates_intermediate_moves() {
-        // 6 MOVE steps for a vertical swipe from y=1500 to y=432 should
-        // land at evenly spaced y values: 1322, 1144, 966, 788, 610, 432.
-        let script = build_settle_swipe_script((540, 1500), (540, 432), 600, 400);
-        for expected_y in [1322u32, 1144, 966, 788, 610, 432] {
+        // 600-ms swipe → 30 evenly-spaced MOVE steps from y=1500 to
+        // y=500 → step size of (1500 - 500) / 30 ≈ 33.33 px.
+        // Sample a handful of the interpolated y values along the
+        // way; the exact rounded pixel positions are derived from
+        // the same step count the production code picks, so any
+        // future tuning of `settle_swipe_move_steps` only needs to
+        // keep the linear-interp contract intact.
+        let swipe_ms = 600u32;
+        let steps = settle_swipe_move_steps(swipe_ms);
+        let script = build_settle_swipe_script((540, 1500), (540, 500), swipe_ms, 400);
+        // First, midpoint, and last MOVE positions — these pin the
+        // start/middle/end of the interpolation without depending on
+        // the exact step count.
+        for &i in &[1, steps / 2, steps] {
+            let t = i as f64 / steps as f64;
+            let expected_y = (1500.0 + (500.0 - 1500.0) * t).round() as u32;
             assert!(
                 script.contains(&format!("MOVE 540 {expected_y}")),
-                "expected interpolated MOVE at y={expected_y}, got: {script}"
+                "expected interpolated MOVE at y={expected_y} (step {i}/{steps}), got: {script}"
             );
         }
     }
 
     #[test]
     fn settle_swipe_script_uses_per_step_sleep_proportional_to_swipe_ms() {
-        // 600 ms across 6 steps = 100 ms = 0.100 s per step.
-        let script = build_settle_swipe_script((540, 1500), (540, 432), 600, 400);
-        let per_step_count = script.matches("sleep 0.100").count();
-        // One sleep before each of the 6 interpolated MOVEs (the
-        // settle sleep is "sleep 0.400" so it doesn't match).
+        // `swipe_ms / steps` ≈ target step interval. 600 ms across
+        // 30 steps = 20 ms = 0.020 s per step (matches the target
+        // cadence — see `SETTLE_SWIPE_TARGET_STEP_MS`).
+        let swipe_ms = 600u32;
+        let steps = settle_swipe_move_steps(swipe_ms);
+        let per_step_ms = swipe_ms as f64 / steps as f64;
+        let script = build_settle_swipe_script((540, 1500), (540, 500), swipe_ms, 400);
+        let needle = format!("sleep {per_step_ms_s:.3}", per_step_ms_s = per_step_ms / 1000.0);
+        let count = script.matches(&needle).count();
         assert_eq!(
-            per_step_count, 6,
-            "expected 6 'sleep 0.100' segments (one per interpolated MOVE), got: {script}"
+            count, steps as usize,
+            "expected {steps} '{needle}' segments (one per interpolated MOVE), got: {script}"
         );
     }
 
     #[test]
     fn settle_swipe_script_handles_diagonal_swipe() {
-        // Diagonal motion must also interpolate both axes. 6 steps
-        // from (100, 200) to (700, 800) → x deltas of 100 px/step.
-        let script = build_settle_swipe_script((100, 200), (700, 800), 600, 300);
-        for (expected_x, expected_y) in [(200u32, 300u32), (400, 500), (700, 800)] {
+        // Diagonal motion must interpolate both axes — sample the
+        // first, midpoint, and final positions for a 600 px × 600 px
+        // diagonal from (100,200) to (700,800).
+        let swipe_ms = 600u32;
+        let steps = settle_swipe_move_steps(swipe_ms);
+        let script = build_settle_swipe_script((100, 200), (700, 800), swipe_ms, 300);
+        for &i in &[1, steps / 2, steps] {
+            let t = i as f64 / steps as f64;
+            let expected_x = (100.0 + 600.0 * t).round() as u32;
+            let expected_y = (200.0 + 600.0 * t).round() as u32;
             assert!(
                 script.contains(&format!("MOVE {expected_x} {expected_y}")),
-                "expected MOVE at ({expected_x},{expected_y}), got: {script}"
+                "expected MOVE at ({expected_x},{expected_y}) for step {i}/{steps}, got: {script}"
             );
         }
+    }
+
+    #[test]
+    fn settle_swipe_move_steps_targets_50hz_within_bounds() {
+        // Short swipes get the minimum step floor so even a 100-ms
+        // swipe is broken into a handful of MOVE events instead of
+        // landing in a single jump (which is what `input swipe` does
+        // and is exactly what triggers Android's fling extrapolation).
+        assert_eq!(
+            settle_swipe_move_steps(0),
+            SETTLE_SWIPE_MIN_STEPS,
+            "zero-length swipe must still emit the minimum steps"
+        );
+        assert_eq!(
+            settle_swipe_move_steps(50),
+            SETTLE_SWIPE_MIN_STEPS,
+            "swipe under {} ms must clamp to the {}-step floor",
+            SETTLE_SWIPE_MIN_STEPS * SETTLE_SWIPE_TARGET_STEP_MS,
+            SETTLE_SWIPE_MIN_STEPS
+        );
+        // Typical scroll swipes (400–600 ms) target ~50 Hz, so step
+        // count scales linearly with `swipe_ms` in this range.
+        assert_eq!(settle_swipe_move_steps(400), 20);
+        assert_eq!(settle_swipe_move_steps(600), 30);
+        // Long swipes are capped so we don't pile on hundreds of
+        // events when a planned 2-second swipe meets a slow emulator
+        // whose per-`input` overhead already paces events at ~10 Hz.
+        assert_eq!(settle_swipe_move_steps(2000), SETTLE_SWIPE_MAX_STEPS);
+        assert_eq!(settle_swipe_move_steps(u32::MAX), SETTLE_SWIPE_MAX_STEPS);
     }
 }
