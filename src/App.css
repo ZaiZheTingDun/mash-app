@@ -3144,6 +3144,25 @@ body,
   background: var(--green-11);
 }
 
+.debug-overlay-support-grand-badge.hit {
+  border: 2px solid var(--amber-11);
+  background: rgba(245, 200, 60, 0.18);
+}
+
+.debug-overlay-support-grand-badge.hit > .debug-overlay-label {
+  background: var(--amber-11);
+  color: #1a1300;
+}
+
+.debug-overlay-support-grand-badge.miss {
+  border: 2px dashed var(--gray-9);
+  background: rgba(120, 120, 120, 0.08);
+}
+
+.debug-overlay-support-grand-badge.miss > .debug-overlay-label {
+  background: var(--gray-9);
+}
+
 .debug-coord-toggle {
   display: inline-flex;
   align-items: center;

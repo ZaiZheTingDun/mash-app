@@ -21,6 +21,19 @@ function supportPanelLevels(levels: (number | null)[] | undefined) {
   return levels.map((level) => (level == null ? "-" : String(level))).join("/");
 }
 
+// Mirror of `SUPPORT_GRAND_BADGE_*` in
+// `sidecar/mash_cv/mash_cv/cv.py`. The sidecar template-matches the
+// "冠位从者" ribbon inside this rectangle (one per confirm-button
+// anchor) and surfaces a single overall `isGrandSectionVisible` flag;
+// the overlay shows the exact rectangles the sidecar probed so an
+// operator can immediately see misalignment (e.g. ribbon shifted by a
+// resolution change) instead of guessing from a single bool. Keep
+// these in sync with the Python constants when calibrating.
+const SUPPORT_GRAND_BADGE_DX = -0.811;
+const SUPPORT_GRAND_BADGE_DY = 0.201;
+const SUPPORT_GRAND_BADGE_W = 0.123;
+const SUPPORT_GRAND_BADGE_H = 0.019;
+
 /**
  * All overlay state the canvas renders. The host component owns the
  * data; this component is purely presentational so it can be reused by
@@ -528,6 +541,44 @@ export function DebugCanvas({
                 </Box>
               ) : null
             )}
+            {/* "冠位从者" ribbon ROIs — one per confirm-button anchor.
+               Colour mirrors the overall isGrandSectionVisible flag the
+               sidecar returned (green=hit, gray=miss). When the active
+               server bundle doesn't ship the template the flag is
+               null/undefined and we hide the overlay entirely. */}
+            {supportResult.diagnostics.isGrandSectionVisible != null &&
+              (supportResult.diagnostics.confirmButtonAnchors ?? []).map(
+                (anchor, i) => {
+                  const badgeX = anchor.x + SUPPORT_GRAND_BADGE_DX;
+                  const badgeY = anchor.y + SUPPORT_GRAND_BADGE_DY;
+                  const visible =
+                    supportResult.diagnostics.isGrandSectionVisible === true;
+                  return (
+                    <Box
+                      key={`support-grand-badge-${i}`}
+                      className={`debug-overlay-box debug-overlay-support-grand-badge${
+                        visible ? " hit" : " miss"
+                      }`}
+                      style={{
+                        left: `${badgeX * 100}%`,
+                        top: `${badgeY * 100}%`,
+                        width: `${SUPPORT_GRAND_BADGE_W * 100}%`,
+                        height: `${SUPPORT_GRAND_BADGE_H * 100}%`,
+                      }}
+                      title={
+                        `grand-badge ROI for anchor #${i + 1}` +
+                        ` (${badgeX.toFixed(3)}, ${badgeY.toFixed(3)},` +
+                        ` ${SUPPORT_GRAND_BADGE_W.toFixed(3)},` +
+                        ` ${SUPPORT_GRAND_BADGE_H.toFixed(3)})`
+                      }
+                    >
+                      <span className="debug-overlay-label">
+                        冠 {visible ? "✓" : "✗"}
+                      </span>
+                    </Box>
+                  );
+                }
+              )}
             {supportResult.supports.map((s, i) =>
               s.ce ? (
                 <Box

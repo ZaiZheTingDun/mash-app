@@ -1220,6 +1220,24 @@ export function DebugPage({
           ` · 宝具候选 ${diag.npCandidates.length}` +
           cvInfo
       );
+      // Surface the "冠位从者" ribbon probe — info level on a hit
+      // so it lines up with the runner's user-facing operation log,
+      // muted-gray otherwise. `null`/`undefined` means the active
+      // server bundle didn't ship the template (e.g. JP), so we
+      // skip the line instead of pretending we know.
+      if (diag.isGrandSectionVisible === true) {
+        log(
+          `识别到冠位从者：助战编队确认按钮 ${
+            (diag.confirmButtonAnchors ?? []).length
+          } 个，其中至少一行命中冠位 ROI`
+        );
+      } else if (diag.isGrandSectionVisible === false) {
+        log(
+          `未识别到冠位从者（${
+            (diag.confirmButtonAnchors ?? []).length
+          } 个助战编队确认按钮均未命中冠位 ROI）`
+        );
+      }
       if (diag.nameOnlyFallback) {
         // Surface the degraded path immediately instead of waiting for
         // the user to expand the diagnostics panel — when this fires
@@ -2329,6 +2347,23 @@ export function DebugPage({
                     {supportResult.diagnostics.nameCandidates.length} ·
                     宝具候选 {supportResult.diagnostics.npCandidates.length}
                   </Text>
+                  {supportResult.diagnostics.isGrandSectionVisible != null && (
+                    <Text
+                      size="1"
+                      color={
+                        supportResult.diagnostics.isGrandSectionVisible
+                          ? "amber"
+                          : "gray"
+                      }
+                    >
+                      冠位段：
+                      {supportResult.diagnostics.isGrandSectionVisible
+                        ? "✓ 已识别"
+                        : "✗ 未识别"}
+                      （{(supportResult.diagnostics.confirmButtonAnchors ?? []).length}{" "}
+                      个 ROI 探测）
+                    </Text>
+                  )}
                 </Box>
               )}
               {supportResult?.supports.map((s, i) => (

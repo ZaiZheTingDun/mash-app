@@ -126,6 +126,91 @@ describe("DebugCanvas", () => {
     expect(container.querySelectorAll(".debug-coord-dot").length).toBe(0);
   });
 
+  it("draws one Grand-badge ROI per confirm-button anchor and tags hit/miss state", () => {
+    // Two confirm buttons visible, sidecar says at least one ROI hit
+    // the ribbon → two amber-bordered hit boxes labelled "冠 ✓".
+    const { container: hitContainer } = renderWithTheme(
+      <DebugCanvas
+        {...makeState({
+          imageSrc: "tauri://localhost/fake.png?t=5",
+          supportResult: {
+            supports: [],
+            diagnostics: {
+              listRegion: { x: 0, y: 0, w: 1, h: 1 },
+              nameCandidates: [],
+              npCandidates: [],
+              fragmentCount: 0,
+              confirmButtonAnchors: [
+                { x: 0.85, y: 0.43, w: 0.07, h: 0.06 },
+                { x: 0.85, y: 0.71, w: 0.07, h: 0.06 },
+              ],
+              isGrandSectionVisible: true,
+            },
+          },
+        })}
+      />
+    );
+    const hits = hitContainer.querySelectorAll(
+      ".debug-overlay-support-grand-badge.hit"
+    );
+    expect(hits.length).toBe(2);
+    expect(hitContainer.textContent?.includes("冠 ✓")).toBe(true);
+
+    // Same anchors but the sidecar reports no ROI hit → both rendered
+    // with the .miss styling and labelled "冠 ✗".
+    const { container: missContainer } = renderWithTheme(
+      <DebugCanvas
+        {...makeState({
+          imageSrc: "tauri://localhost/fake.png?t=6",
+          supportResult: {
+            supports: [],
+            diagnostics: {
+              listRegion: { x: 0, y: 0, w: 1, h: 1 },
+              nameCandidates: [],
+              npCandidates: [],
+              fragmentCount: 0,
+              confirmButtonAnchors: [
+                { x: 0.85, y: 0.43, w: 0.07, h: 0.06 },
+              ],
+              isGrandSectionVisible: false,
+            },
+          },
+        })}
+      />
+    );
+    expect(
+      missContainer.querySelectorAll(".debug-overlay-support-grand-badge.miss")
+        .length
+    ).toBe(1);
+    expect(missContainer.textContent?.includes("冠 ✗")).toBe(true);
+
+    // `null` (template not loaded) suppresses the overlay entirely
+    // so the operator isn't shown an ambiguous box on JP captures.
+    const { container: nullContainer } = renderWithTheme(
+      <DebugCanvas
+        {...makeState({
+          imageSrc: "tauri://localhost/fake.png?t=7",
+          supportResult: {
+            supports: [],
+            diagnostics: {
+              listRegion: { x: 0, y: 0, w: 1, h: 1 },
+              nameCandidates: [],
+              npCandidates: [],
+              fragmentCount: 0,
+              confirmButtonAnchors: [
+                { x: 0.85, y: 0.43, w: 0.07, h: 0.06 },
+              ],
+              isGrandSectionVisible: null,
+            },
+          },
+        })}
+      />
+    );
+    expect(
+      nullContainer.querySelector(".debug-overlay-support-grand-badge")
+    ).toBeNull();
+  });
+
   it("renders coord overlays only for groups in visibleCoordGroups", () => {
     const { container } = renderWithTheme(
       <DebugCanvas
