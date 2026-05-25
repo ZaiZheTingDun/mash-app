@@ -112,52 +112,27 @@ their real screens:
   interprets as a *fling* once it crosses the per-device threshold
   (≈100–300 px/s on most modern devices) — so even when the runner's
   intended Δ was correct, the list kept scrolling after lift-off and
-  overshot. Every implementation of `TouchBackend::swipe_with_settle`
-  therefore holds contact at the destination long enough that the
-  velocity tracker's sliding window sees ~0 px/s right before UP, so
-  the system never enters fling mode.
+  overshot. `TouchBackend::swipe_with_settle` therefore holds contact
+  at the destination long enough that the velocity tracker's sliding
+  window sees ~0 px/s right before UP, so the system never enters
+  fling mode.
 
-  The backend is selected at runner construction time from the
-  `MASH_TOUCH_BACKEND` env var (`auto`, `minitouch`, `adb-input`, or
-  `sendevent`). `auto` (default) tries minitouch and silently falls
-  back to adb-input on bring-up failure. Concrete backends:
-  - **`minitouch`** (`touch/minitouch.rs`). Pushes a bundled native
-    binary to `/data/local/tmp/minitouch`, forwards an `adb` port to
-    its abstract socket, and streams events over TCP using minitouch's
-    `d / m / u / w / c` protocol. Each command is processed in
-    <1 ms, so a smooth ~30-MOVE swipe over 600 ms followed by a
-    `SUPPORT_SCROLL_SETTLE_MS` hold lands in ~1 s total. Pushed
-    binaries live under `src-tauri/resources/minitouch/<abi>/minitouch`;
-    see that folder's `README.md` for sourcing instructions. The
-    backend's `Drop` impl kills the device-side process and removes
-    the port forward when the runner ends.
-  - **`adb-input`** (`touch/adb_input.rs`). Wraps the legacy
-    `Adb::tap` / `Adb::swipe` / `Adb::swipe_with_settle` paths. The
-    last one drives the same DOWN / MOVE / settle / UP shape via
-    chained `input motionevent` commands in a single `adb shell`
-    invocation; slower (~5 s/scroll at the velocity-bound MOVE pace)
-    and choppier (each `input` invocation spawns a fresh JVM, capping
-    cadence around 15–20 fps) but works without any bundled native
-    binary, so it's the universal fallback.
-  - **`sendevent`** (`touch/sendevent.rs`). Raw evdev injection via
-    `adb shell sendevent /dev/input/event*`. At bring-up it runs
-    `getevent -pl`, parses the dump, picks the first device that
-    advertises `ABS_MT_POSITION_X/Y` + `ABS_MT_TRACKING_ID` (i.e. a
-    Type B multi-touch screen), and records its coordinate ranges.
-    Gestures are emitted as chained `sendevent <type> <code>
-    <value>; sleep 0.016; ...` shell scripts in a single `adb shell`
-    invocation, so the only ADB overhead per gesture is one
-    round-trip; on the device side each `sendevent` is a 1–5 ms
-    `open + write + close` on the event node. Comparable smoothness
-    to `minitouch` but without needing a pushed native binary —
-    handy on cloud / corporate devices where pushing executables
-    isn't allowed. Falls back to `adb-input` if `getevent -pl`
-    doesn't expose a Type B touchscreen (legacy resistive panels,
-    non-evdev touch drivers).
+  The only implementation today is **`adb-input`** (`touch/adb_input.rs`),
+  which wraps `Adb::tap` / `Adb::swipe` / `Adb::swipe_with_settle`.
+  `swipe_with_settle` drives the DOWN / MOVE / settle / UP shape via
+  chained `input motionevent` commands in a single `adb shell`
+  invocation; it's slow (~5 s/scroll at the velocity-bound MOVE pace)
+  and choppy (each `input` invocation spawns a fresh JVM, capping
+  cadence around 15–20 fps) but works without any device-side setup,
+  which makes it the safe default. The trait indirection stays so a
+  faster transport (minitouch, raw `sendevent`, native helper, …) can
+  be added without changing runner call sites — earlier prototypes of
+  both lived under `touch/` and were removed once `adb-input` proved
+  reliable enough.
 
   Each scroll emits a debug-level operation log entry tagged with the
   backend that actually fired
-  (`滚动助战列表: 按钮 y=[…] (n=…) Δ=… swipe=…→… (Xms+Yms settle) [minitouch]`),
+  (`滚动助战列表: 按钮 y=[…] (n=…) Δ=… swipe=…→… (Xms+Yms settle) [adb-input]`),
   so an operator can tell at a glance which gesture path produced the
   scroll they're triaging. Debug-level entries are hidden by default
   behind the status-bar "显示调试" toggle.

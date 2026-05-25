@@ -1,5 +1,5 @@
 use crate::adb::Adb;
-use crate::touch::{self, TouchBackend, TouchBackendKind};
+use crate::touch::{self, TouchBackend};
 use crate::screen::{
     CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
     SupportCeVerificationOptions, SupportRowMatch,
@@ -1449,11 +1449,10 @@ pub struct Runner {
     completed_mission_runs: u32,
     battle_result_continue_handled: bool,
     /// Pluggable touch-injection backend (see `touch::TouchBackend`).
-    /// Picked at runner construction time via `MASH_TOUCH_BACKEND` env
-    /// var — `auto` (default) tries `minitouch` and silently falls back
-    /// to `adb-input` on bring-up failure. The runner doesn't care
-    /// which concrete backend is in use; it just calls `tap` / `swipe`
-    /// / `swipe_with_settle` against the trait.
+    /// Currently always `adb-input`; the trait indirection is kept so
+    /// faster transports can be added later without changing the
+    /// runner's call sites. The runner just calls `tap` / `swipe` /
+    /// `swipe_with_settle` against the trait.
     touch: Box<dyn TouchBackend>,
 }
 
@@ -1476,7 +1475,7 @@ impl Runner {
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
-        let touch = build_touch_backend(&app_handle, &adb, (screen_w, screen_h));
+        let touch = build_touch_backend(&adb);
         Self {
             adb,
             touch,
@@ -2365,10 +2364,10 @@ impl Runner {
             swipe_ms,
             SUPPORT_SCROLL_SETTLE_MS,
         );
-        // The active touch backend (minitouch / adb-input / sendevent
-        // …) is selected at runner construction time; tag the log line
-        // with its name so an operator can tell at a glance which
-        // backend produced the gesture they're triaging.
+        // Tag the debug line with the active touch backend's name so
+        // an operator can tell at a glance which backend produced the
+        // gesture they're triaging — useful when we add more
+        // backends behind the `TouchBackend` trait again.
         self.emit_debug(
             "SupportSelect",
             &format!("{scroll_msg} [{}]", self.touch.name()),
@@ -4037,52 +4036,22 @@ impl Runner {
     }
 }
 
-/// Resolve `<resources>/minitouch/` so the touch factory can find
-/// per-ABI binaries. Looks in the production bundle path first, then
-/// the dev-mode `CARGO_MANIFEST_DIR/resources/minitouch/`. Returns the
-/// first existing path so dev (`pnpm tauri dev`) and release
-/// (`pnpm tauri build`) layouts both work without per-config code.
-fn minitouch_binary_dir(app_handle: &tauri::AppHandle) -> Option<PathBuf> {
-    use tauri::Manager;
-    if let Ok(base) = app_handle.path().resource_dir() {
-        let bundled = base.join("resources").join("minitouch");
-        if bundled.is_dir() {
-            return Some(bundled);
-        }
-    }
-    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("resources")
-        .join("minitouch");
-    if dev.is_dir() {
-        return Some(dev);
-    }
-    None
-}
-
-/// Build the appropriate `TouchBackend` for this runner. Picks the
-/// backend from the `MASH_TOUCH_BACKEND` env var (see
-/// `TouchBackendKind::from_env`), resolves the minitouch resources
-/// dir, and delegates to `touch::build` which handles auto-fallback.
-fn build_touch_backend(
-    app_handle: &tauri::AppHandle,
-    adb: &Adb,
-    screen: (u32, u32),
-) -> Box<dyn TouchBackend> {
-    let kind = TouchBackendKind::from_env();
-    // Use a "no such directory" path as the resources_dir fallback so
-    // the minitouch bring-up fails cleanly with "binary not found"
-    // (handled by the factory) when the bundle doesn't ship the dir.
-    let dir = minitouch_binary_dir(app_handle).unwrap_or_else(|| PathBuf::from("/dev/null"));
-    let backend = touch::build(kind, adb, &dir, screen);
+/// Build the runner's `TouchBackend`. Today there's only one
+/// implementation, but the indirection through the trait makes adding
+/// a faster transport (minitouch / sendevent / native helper) a
+/// localized change later.
+fn build_touch_backend(adb: &Adb) -> Box<dyn TouchBackend> {
+    let backend = touch::build(adb);
     eprintln!("[touch] backend selected: {}", backend.name());
     backend
 }
 
 impl Drop for Runner {
     fn drop(&mut self) {
-        // The touch backend's own Drop handles its cleanup (kill
-        // minitouch child, remove forwarded port, etc.). We don't need
-        // to do anything extra here for it.
+        // The touch backend's own Drop handles its cleanup. Today the
+        // adb-input backend has nothing to clean up, but the trait
+        // contract still lets a future backend (e.g. minitouch /
+        // sendevent / native helper) release resources here.
 
         let Some(mut sidecar) = self.sidecar.take() else {
             return;
