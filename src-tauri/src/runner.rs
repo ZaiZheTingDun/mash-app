@@ -796,25 +796,42 @@ fn is_unknown_element_error(err: &str, screen: &str, element: &str) -> bool {
     err.contains(&format!("unknown element: {screen}.{element}"))
 }
 
-/// Compute the y-delta a support-list scroll swipe should travel so the
-/// *lowest* visible "助战编队确认" button ends up at the same screen y
-/// the *highest* visible button currently occupies. The bottom row of
-/// the previous page becomes the top row of the next page — exactly
-/// the behavior an operator expects when the previously visible last
-/// card was only half on screen: the half-card becomes a fully visible
-/// top card instead of being scrolled past.
+/// Compute the y-delta a support-list scroll swipe should travel so
+/// the *lowest visible row* on the current page ends up at the same
+/// screen y the *topmost visible row* currently occupies. The bottom
+/// row of the previous page becomes the top row of the next page.
 ///
 /// Buttons sit at a fixed offset within each row card and rows are
 /// pitched a constant amount apart, so `bottom_y - top_y` equals
-/// `(N - 1) * row_pitch` for the N visible cards. After the swipe,
-/// every old card moves up by that delta, so old card N-1 lands where
-/// old card 0 was — i.e. at the top of the visible list.
+/// `(N - 1) * row_pitch` for the N detected confirm-button anchors.
+/// If every visible row had a detected button, scrolling by that raw
+/// delta would land row N-1 exactly where row 0 was.
 ///
-/// The empty-anchor branch falls back to the legacy fixed delta so the
-/// runner still makes progress when the template / shape detector
-/// glitches on a frame; the single-anchor branch (where `bottom_y ==
-/// top_y` would yield a zero delta) is handled the same way through
-/// the min clamp.
+/// The real world is messier: it's common for a row to be physically
+/// visible on screen (its card content is rendered) while its confirm
+/// button has been clipped off the bottom edge, so the CV pass only
+/// sees `N - 1` buttons even though the user sees `N` rows. Treating
+/// that case as "N - 1 rows total" would undershoot by one row pitch
+/// and leave the previous bottom row sitting in the middle instead
+/// of the top of the next page (see [debug2/debug1 comparison in PR
+/// history]). We detect that condition by asking: if there were
+/// another row directly below the last detected button, would more
+/// than half its content fit on screen? If yes, we treat the
+/// undetected partial row as the real bottom-of-page target and
+/// extend the delta by one row pitch.
+///
+/// Edge cases:
+/// - Empty anchors → fall back to the legacy fixed delta so the
+///   runner still makes progress when the template / shape detector
+///   glitches on a single frame.
+/// - Single anchor (or two near-duplicates that survived NMS) →
+///   `raw < SUPPORT_SCROLL_MIN_DELTA`; same fallback so we don't
+///   swipe in place forever.
+/// - Genuinely two buttons at the end of the list (the partial-row
+///   check fails because `bottom_y` is already near the screen
+///   bottom) → keep the raw `(N - 1) * pitch` delta. Overshoot here
+///   is anyway harmless because the `support_scroll_end` element
+///   detects end-of-list separately and stops the loop.
 fn scroll_support_list_delta(confirm_button_anchors: &[NormRect]) -> f64 {
     if confirm_button_anchors.is_empty() {
         return SUPPORT_SCROLL_FALLBACK_DELTA;
@@ -832,7 +849,28 @@ fn scroll_support_list_delta(confirm_button_anchors: &[NormRect]) -> f64 {
     if raw < SUPPORT_SCROLL_MIN_DELTA {
         return SUPPORT_SCROLL_FALLBACK_DELTA;
     }
-    raw.min(SUPPORT_SCROLL_MAX_DELTA)
+    // `raw == (n - 1) * pitch`. Need at least 2 anchors to estimate a
+    // per-row pitch; the single-anchor case took the MIN_DELTA branch
+    // above, so `n >= 2` here.
+    let n = confirm_button_anchors.len();
+    let pitch = raw / (n - 1) as f64;
+    // Where the *next* row's button would sit if it existed. If the
+    // row's center (≈ button y) is still on screen (`< 1.0`) but the
+    // button itself was off the CV pass's matching window — i.e.
+    // `bottom_y + pitch >= 1.0` is *not* a hard requirement, we just
+    // need enough of the row content to be visible that the operator
+    // perceives it as "the last visible row". `pitch * 0.5` puts the
+    // threshold at "more than half the row card is visible", which
+    // empirically separates the cut-off-button case from genuine
+    // end-of-list pages.
+    let next_button_y = bottom_y + pitch;
+    let has_partial_row_below = next_button_y - pitch * 0.5 < 1.0;
+    let effective_delta = if has_partial_row_below {
+        raw + pitch
+    } else {
+        raw
+    };
+    effective_delta.min(SUPPORT_SCROLL_MAX_DELTA)
 }
 
 /// Pick the active-motion (MOVE-phase) duration in ms for a settle
@@ -6997,12 +7035,50 @@ mod tests {
     }
 
     #[test]
-    fn scroll_delta_handles_two_visible_buttons() {
-        // Two visible cards → delta is exactly one row pitch, so the
-        // old second card becomes the new top card.
-        let anchors = vec![anchor_at_y(0.30), anchor_at_y(0.58)];
+    fn scroll_delta_handles_two_visible_buttons_at_end_of_list() {
+        // Two visible cards near the bottom of the screen: there's no
+        // room for a partial row below the lower button, so we treat
+        // this as a genuine end-of-list page and scroll exactly one
+        // pitch — the old second card becomes the new top card.
+        let anchors = vec![anchor_at_y(0.62), anchor_at_y(0.92)];
         let delta = scroll_support_list_delta(&anchors);
-        assert!((delta - 0.28).abs() < 1e-9);
+        assert!((delta - 0.30).abs() < 1e-9, "got {delta}");
+    }
+
+    #[test]
+    fn scroll_delta_extrapolates_when_third_row_button_is_clipped_offscreen() {
+        // Canonical CN BlueStacks fixture: 3 servant cards are physically
+        // visible on screen but only 2 confirm-button anchors are
+        // detected because the third row's button has been clipped off
+        // the bottom edge. Anchors at y=0.462 and y=0.740 with row
+        // pitch ≈ 0.278 — the third row's button would be at y=1.018,
+        // i.e. just barely off-screen, while its card content is still
+        // ~88% visible. We must scroll 2 pitches (≈0.556) so the
+        // partial bottom row becomes the new top row, not the middle
+        // row.
+        //
+        // This is the case shown in the debug2/debug1 PR thread where
+        // the previous `(n - 1) * pitch` formula undershot by exactly
+        // one row.
+        let anchors = vec![anchor_at_y(0.462), anchor_at_y(0.740)];
+        let delta = scroll_support_list_delta(&anchors);
+        assert!(
+            (delta - 0.556).abs() < 1e-6,
+            "expected 2-pitch extrapolation (~0.556), got {delta}"
+        );
+    }
+
+    #[test]
+    fn scroll_delta_does_not_extrapolate_when_only_a_sliver_fits_below() {
+        // Two buttons, bottom one near the screen edge: there's < half
+        // a row's worth of space below `bottom_y`, so we should NOT
+        // assume a partial third row exists. Falls into the
+        // end-of-list bucket.
+        let anchors = vec![anchor_at_y(0.55), anchor_at_y(0.90)];
+        let pitch = 0.35;
+        // bottom_y + pitch/2 = 0.90 + 0.175 = 1.075 > 1.0 → no partial.
+        let delta = scroll_support_list_delta(&anchors);
+        assert!((delta - pitch).abs() < 1e-9, "got {delta}");
     }
 
     #[test]

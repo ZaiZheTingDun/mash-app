@@ -85,13 +85,22 @@ their real screens:
   the runner sets the swipe delta to `bottom_anchor.y - top_anchor.y`,
   clamped to `[SUPPORT_SCROLL_MIN_DELTA, SUPPORT_SCROLL_MAX_DELTA]`.
   Because confirm buttons sit at a fixed offset within each row card and
-  rows are pitched a constant amount apart, that delta is exactly
-  `(N - 1) * row_pitch` for the N visible cards, so the bottom row of the
-  previous page lands at the same screen y the top row used to occupy —
-  i.e. the old bottom row becomes the new top row. When only a single
-  anchor (or no anchors) is visible — rare, usually a one-row list or a
-  template/shape detector glitch — the runner falls back to
-  `SUPPORT_SCROLL_FALLBACK_DELTA` so it still makes forward progress.
+  rows are pitched a constant amount apart, that raw delta is exactly
+  `(N - 1) * row_pitch` for the N visible cards. The runner then adds
+  one extra pitch when a partial row sits below the lowest detected
+  button (`bottom_y + pitch / 2 < 1.0` — i.e. more than half of the
+  next row's card content would fit on screen). That extrapolation
+  covers the common BlueStacks/CN layout where 3 servant cards are
+  physically visible but the third row's confirm button is clipped
+  off the bottom edge, so the CV pass only returns 2 anchors —
+  without it, the swipe would undershoot by one row and leave the
+  half-visible row in the middle of the next page instead of at the
+  top. End-of-list pages (bottom button already near the screen
+  edge) bypass the extrapolation and scroll the raw `(N - 1) *
+  pitch` instead. When only a single anchor (or no anchors) is
+  visible — usually a template/shape detector glitch — the runner
+  falls back to `SUPPORT_SCROLL_FALLBACK_DELTA` so it still makes
+  forward progress.
 - Support-list scroll gestures go through the pluggable
   **`TouchBackend`** trait (`src-tauri/src/touch/`) rather than calling
   `adb shell input swipe` directly. A plain linear swipe lifts off at
