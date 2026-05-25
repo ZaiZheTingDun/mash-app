@@ -329,7 +329,19 @@ SUPPORT_BUTTON_ANCHOR_TO_SCORE_TOP_DY = 0.147
 # ``tests/test_data/screenshots/grand_support_bond.png`` (1440×2560,
 # CN client). The y-pitch between rows is rigid because the list
 # uses fixed row heights, so the same delta lands on every row.
-SUPPORT_GRAND_BADGE_TEMPLATE = "text_grand_servant_support_bottom_line"
+#
+# Multiple ribbon templates ship for visual variants of the same
+# badge — the base "冠位从者" text plus the bright gold-with-side-
+# flourish version that decorates fully-bonded / featured Grand
+# rows. Both occupy the same on-screen rectangle, so we share the
+# offsets/W/H and just template-match each variant separately,
+# taking the per-anchor max as the row's score. Adding a new
+# variant is "drop a PNG in templates/ and append the stem here";
+# missing files are skipped silently at probe time.
+SUPPORT_GRAND_BADGE_TEMPLATES = (
+    "text_grand_servant_support_bottom_line",
+    "text_grand_servant_support_bottom_line_2",
+)
 SUPPORT_GRAND_BADGE_DX = -0.811
 SUPPORT_GRAND_BADGE_DY = 0.201
 SUPPORT_GRAND_BADGE_W = 0.123
@@ -2556,6 +2568,16 @@ def _find_supports(
         # ``None`` when the active server bundle doesn't ship the
         # ribbon template (callers fall back to scroll-bar-end).
         "isGrandSectionVisible": None,
+        # Per-anchor ribbon match scores aligned 1-1 with
+        # ``confirmButtonAnchors``. Each entry is the
+        # TM_CCOEFF_NORMED max within that anchor's badge ROI, or
+        # ``None`` when the ROI clipped past the frame edge / the
+        # template is unavailable. Compare against
+        # ``SUPPORT_GRAND_BADGE_MATCH_THRESHOLD`` (currently 0.65) to
+        # classify each row independently — the aggregate
+        # ``isGrandSectionVisible`` is just ``any(score >= threshold)``
+        # and loses the per-row breakdown the debug overlay needs.
+        "grandRibbonAnchorScores": [],
         **_support_diagnostics_meta(),
     }
     if h == 0 or w == 0:
@@ -2574,9 +2596,11 @@ def _find_supports(
         }
         for a in confirm_anchors
     ]
-    diag["isGrandSectionVisible"] = _support_grand_badge_visible_near_buttons(
-        img, confirm_anchors
+    grand_scores = _support_grand_badge_scores_per_anchor(img, confirm_anchors)
+    diag["isGrandSectionVisible"] = _support_grand_section_visible_from_scores(
+        grand_scores
     )
+    diag["grandRibbonAnchorScores"] = grand_scores or []
 
     rx = max(0, int(round(list_region["x"] * w)))
     ry = max(0, int(round(list_region["y"] * h)))
@@ -3160,54 +3184,67 @@ def _support_find_row_anchors(img: np.ndarray) -> list[dict]:
     )
 
 
-def _support_grand_badge_visible_near_buttons(
+def _support_grand_badge_scores_per_anchor(
     img: np.ndarray, button_anchors: list[dict]
-) -> Optional[bool]:
-    """Return ``True`` iff at least one supplied confirm-button anchor
-    has a "冠位从者" ribbon at the expected fixed offset; ``False``
-    when anchors exist but none match; ``None`` when the active server
-    bundle doesn't ship the badge template (so callers can fall back
-    to a different "section exhausted" signal instead of treating the
-    absence as "no Grand visible").
+) -> Optional[list[Optional[float]]]:
+    """Per-anchor "冠位从者" ribbon match scores, aligned 1-1 with
+    ``button_anchors``.
 
-    The probe template-matches inside a tight ROI of width
-    ``SUPPORT_GRAND_BADGE_W + 2*SUPPORT_GRAND_BADGE_ROI_PAD_X`` per
-    anchor, so the total cost is O(rows visible) and bounded
-    well under a millisecond even on 1440p frames.
+    Returns ``None`` when the active server bundle ships *zero*
+    variants of the ribbon template (so callers can treat that as
+    "no probe available" instead of "no Grand visible"). Otherwise
+    returns a list with one entry per anchor:
 
-    The template ship is captured at a single reference resolution
-    (currently 2560×1440 CN), but devices stream the support list at
-    whatever the scrcpy max-size negotiated — typically 1920×1080.
-    To stay resolution-independent we rescale the template to the
-    expected normalized badge size (``SUPPORT_GRAND_BADGE_W`` ×
-    ``SUPPORT_GRAND_BADGE_H``) in *this frame's* pixel grid before
-    matching. Without that step, a 314×28-px template against a
-    282×47-px ROI on a 1920-wide frame fails the size guard and
-    silently turns every Grand row into a "miss".
+    - ``float`` (max TM_CCOEFF_NORMED score across all ribbon
+      variants within the per-anchor ROI) when the probe ran.
+      Compare against ``SUPPORT_GRAND_BADGE_MATCH_THRESHOLD`` to
+      classify the row.
+    - ``None`` when every variant's ROI for that anchor clipped past
+      the frame edge — happens to the first/last visible row when
+      only a sliver is on screen. Distinguishing "couldn't probe"
+      from "probed and missed" lets the debug overlay grey those
+      rows out instead of colouring them as misses.
+
+    Multiple ribbon variants ship for the same badge (plain text and
+    a bright gold-with-flourish version that decorates highlighted
+    Grand rows). All variants occupy the same on-screen rectangle,
+    so the function probes each row once and keeps the best score
+    across variants — meaning a row that matches *either* art style
+    flips to a hit.
+
+    The templates ship at one reference resolution (currently
+    2560×1440 CN) but scrcpy streams at whatever max-size the device
+    negotiated — typically 1920×1080. To stay resolution-independent
+    we resize each variant to the expected normalized badge size
+    (``SUPPORT_GRAND_BADGE_W`` × ``SUPPORT_GRAND_BADGE_H``) in *this
+    frame's* pixel grid before matching. See ``AGENTS.md``.
     """
-    template = templates.get(SUPPORT_GRAND_BADGE_TEMPLATE)
-    if template is None:
+    raw_variants = [
+        templates.get(name) for name in SUPPORT_GRAND_BADGE_TEMPLATES
+    ]
+    variants = [t for t in raw_variants if t is not None]
+    if not variants:
         return None
-    if not button_anchors:
-        return False
     h, w = img.shape[:2]
-    if h == 0 or w == 0:
-        return False
+    scores: list[Optional[float]] = [None] * len(button_anchors)
+    if h == 0 or w == 0 or not button_anchors:
+        return scores
     target_tw = max(1, int(round(SUPPORT_GRAND_BADGE_W * w)))
     target_th = max(1, int(round(SUPPORT_GRAND_BADGE_H * h)))
     if target_tw <= 1 or target_th <= 1:
-        return False
+        return scores
     # INTER_AREA is the cheapest downscaler that preserves the
     # ribbon's gold-text edges (which is what TM_CCOEFF_NORMED keys
     # on). Upscaling would happen only on absurdly large captures
     # (≥3840 wide) where the cv stream is already non-standard, so
     # the same kernel is fine for both directions.
-    scaled_template = cv2.resize(
-        template, (target_tw, target_th), interpolation=cv2.INTER_AREA
-    )
+    scaled_variants = [
+        cv2.resize(t, (target_tw, target_th), interpolation=cv2.INTER_AREA)
+        for t in variants
+    ]
     pad_x_px = int(round(SUPPORT_GRAND_BADGE_ROI_PAD_X * w))
     pad_y_px = int(round(SUPPORT_GRAND_BADGE_ROI_PAD_Y * h))
-    for anchor in button_anchors:
+    for i, anchor in enumerate(button_anchors):
         try:
             ax = float(anchor["x"])
             ay = float(anchor["y"])
@@ -3223,10 +3260,6 @@ def _support_grand_badge_visible_near_buttons(
         x1 = min(w, badge_left_px + target_tw + pad_x_px)
         y1 = min(h, badge_top_px + target_th + pad_y_px)
         if x1 - x0 < target_tw or y1 - y0 < target_th:
-            # ROI clipped past the frame edge — happens when a row's
-            # button is detected but the ribbon would render off-screen
-            # (e.g. the very first row scrolled into a partial state).
-            # Skip rather than synthesizing a false negative.
             continue
         roi = img[y0:y1, x0:x1]
         if roi.size == 0:
@@ -3236,10 +3269,33 @@ def _support_grand_badge_visible_near_buttons(
         # a type-mismatch assert.
         if roi.ndim == 3:
             roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        result = cv2.matchTemplate(roi, scaled_template, cv2.TM_CCOEFF_NORMED)
-        if float(result.max()) >= SUPPORT_GRAND_BADGE_MATCH_THRESHOLD:
-            return True
-    return False
+        # Match each ribbon variant against the same ROI and keep
+        # the best score — the bright-gold "highlighted" art and the
+        # plain text art are mutually exclusive per row, so taking
+        # max() is exactly what we want for the per-row classifier.
+        best: Optional[float] = None
+        for tmpl in scaled_variants:
+            result = cv2.matchTemplate(roi, tmpl, cv2.TM_CCOEFF_NORMED)
+            score = float(result.max())
+            if best is None or score > best:
+                best = score
+        scores[i] = best
+    return scores
+
+
+def _support_grand_section_visible_from_scores(
+    scores: Optional[list[Optional[float]]],
+) -> Optional[bool]:
+    """Aggregate the per-anchor scores into the runner's "is the Grand
+    section still on screen?" bool. ``None`` flows through (template
+    missing). When the template is loaded but no anchor cleared the
+    threshold, returns ``False`` — that's the runner's "section
+    exhausted" signal and is what lets it stop scrolling early."""
+    if scores is None:
+        return None
+    return any(
+        s is not None and s >= SUPPORT_GRAND_BADGE_MATCH_THRESHOLD for s in scores
+    )
 
 
 def _support_skill_slots_from_anchor(anchor: dict, panel: Optional[str]) -> list[dict]:

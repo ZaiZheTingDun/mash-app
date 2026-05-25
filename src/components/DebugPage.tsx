@@ -363,6 +363,14 @@ export interface SupportDiagnosticsDto {
   supportRowAnchorSearchRegion?: NormRectDto | null;
   confirmButtonAnchors?: NormRectDto[];
   isGrandSectionVisible?: boolean | null;
+  // Per-anchor "冠位从者" ribbon match scores aligned 1-1 with
+  // `confirmButtonAnchors`. Each entry is the sidecar's
+  // TM_CCOEFF_NORMED max within that row's badge ROI, or `null`
+  // when the ROI clipped past the frame edge / the template wasn't
+  // loaded. The debug overlay colours each row's box from its own
+  // score so a non-Grand row in a partly-Grand list doesn't get
+  // false-positively painted as Grand by the aggregate flag.
+  grandRibbonAnchorScores?: (number | null)[];
 }
 
 export interface FindSupportsResultDto {
@@ -1224,18 +1232,33 @@ export function DebugPage({
       // so it lines up with the runner's user-facing operation log,
       // muted-gray otherwise. `null`/`undefined` means the active
       // server bundle didn't ship the template (e.g. JP), so we
-      // skip the line instead of pretending we know.
+      // skip the line instead of pretending we know. Include the
+      // per-anchor scores so a partly-Grand list ("row 1 是冠位, row
+      // 2 不是") is obvious from the log alone — the aggregate flag
+      // alone reads as "everything matched" on those frames.
+      const grandScores = diag.grandRibbonAnchorScores ?? [];
+      const grandThreshold = 0.65;
+      const formatGrandScores = () =>
+        grandScores.length === 0
+          ? ""
+          : ` [${grandScores
+              .map((s, idx) => {
+                if (s == null) return `#${idx + 1}=n/a`;
+                const tick = s >= grandThreshold ? "✓" : "✗";
+                return `#${idx + 1}=${s.toFixed(2)}${tick}`;
+              })
+              .join(", ")}]`;
       if (diag.isGrandSectionVisible === true) {
         log(
           `识别到冠位从者：助战编队确认按钮 ${
             (diag.confirmButtonAnchors ?? []).length
-          } 个，其中至少一行命中冠位 ROI`
+          } 个，其中至少一行命中冠位 ROI${formatGrandScores()}`
         );
       } else if (diag.isGrandSectionVisible === false) {
         log(
           `未识别到冠位从者（${
             (diag.confirmButtonAnchors ?? []).length
-          } 个助战编队确认按钮均未命中冠位 ROI）`
+          } 个助战编队确认按钮均未命中冠位 ROI）${formatGrandScores()}`
         );
       }
       if (diag.nameOnlyFallback) {
@@ -2360,8 +2383,23 @@ export function DebugPage({
                       {supportResult.diagnostics.isGrandSectionVisible
                         ? "✓ 已识别"
                         : "✗ 未识别"}
-                      （{(supportResult.diagnostics.confirmButtonAnchors ?? []).length}{" "}
-                      个 ROI 探测）
+                      （
+                      {(
+                        supportResult.diagnostics.grandRibbonAnchorScores ?? []
+                      )
+                        .map((s, idx) => {
+                          if (s == null) return `#${idx + 1}=n/a`;
+                          const tick = s >= 0.65 ? "✓" : "✗";
+                          return `#${idx + 1}=${s.toFixed(2)}${tick}`;
+                        })
+                        .join("  ") ||
+                        `${
+                          (
+                            supportResult.diagnostics.confirmButtonAnchors ??
+                            []
+                          ).length
+                        } 个 ROI`}
+                      ）
                     </Text>
                   )}
                 </Box>

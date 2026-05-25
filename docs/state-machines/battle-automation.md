@@ -71,20 +71,26 @@ their real screens:
 - `SupportSelect.variants.main.elements.support_scroll_end`: detects the bottom
   of the support list.
 - "冠位从者" ribbon probe (CN-only, surfaced as
-  `FindSupportsResult.diagnostics.isGrandSectionVisible`). Grand servants are
-  ordered before ordinary servants, so the runner needs to know when the
-  Grand section has scrolled off-screen. The sidecar template-matches the
-  gold-on-blue ribbon (`text_grand_servant_support_bottom_line` PNG) inside
-  a tight ROI at a fixed offset to the left of every detected
-  `confirm_button_anchors` entry — if any anchor's ROI clears the match
-  threshold, the section is still visible. After the first visible ribbon
-  has been seen in the current refreshed list, two consecutive misses mean
-  the runner treats the Grand section as exhausted and refreshes instead of
-  scrolling through ordinary supports. The earlier implementation scanned
-  the entire avatar column for the ribbon, which kept false-matching other
-  gold-on-blue chrome (登录顺序 button, score banners) and either kept the
-  runner scrolling past an exhausted section or stopped scrolling too
-  early.
+  `FindSupportsResult.diagnostics.isGrandSectionVisible` plus the per-row
+  `diagnostics.grandRibbonAnchorScores` aligned 1-1 with
+  `confirmButtonAnchors`). Grand servants are ordered before ordinary
+  servants, so the runner needs to know when the Grand section has
+  scrolled off-screen. The sidecar template-matches the gold-on-blue
+  ribbon (`text_grand_servant_support_bottom_line` PNG) inside a tight
+  ROI at a fixed offset to the left of every detected
+  `confirm_button_anchors` entry. Each anchor records its own
+  TM_CCOEFF_NORMED score; the aggregate flag is `any(score ≥ threshold)`.
+  After the first visible ribbon has been seen in the current refreshed
+  list, two consecutive misses mean the runner treats the Grand section
+  as exhausted and refreshes instead of scrolling through ordinary
+  supports. Per-anchor scores are required by the debug overlay — a
+  partly-Grand list ("row 1 is Grand, row 2 is ordinary") would
+  otherwise paint both rows green from the single aggregate bool and
+  hide the false positive. The earlier implementation scanned the
+  entire avatar column for the ribbon, which kept false-matching other
+  gold-on-blue chrome (登录顺序 button, score banners) and either kept
+  the runner scrolling past an exhausted section or stopped scrolling
+  too early.
 - `SupportSelect.variants.refreshConfirm.detect` / `.elements.dialog_refresh_support`:
   detects the JP refresh-confirm modal that appears after tapping the support
   refresh button; the runner confirms it, then waits for the modal to vanish

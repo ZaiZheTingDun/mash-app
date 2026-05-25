@@ -24,15 +24,21 @@ function supportPanelLevels(levels: (number | null)[] | undefined) {
 // Mirror of `SUPPORT_GRAND_BADGE_*` in
 // `sidecar/mash_cv/mash_cv/cv.py`. The sidecar template-matches the
 // "冠位从者" ribbon inside this rectangle (one per confirm-button
-// anchor) and surfaces a single overall `isGrandSectionVisible` flag;
-// the overlay shows the exact rectangles the sidecar probed so an
-// operator can immediately see misalignment (e.g. ribbon shifted by a
-// resolution change) instead of guessing from a single bool. Keep
-// these in sync with the Python constants when calibrating.
+// anchor) and surfaces a per-anchor score in
+// `diagnostics.grandRibbonAnchorScores`; the overlay shows the exact
+// rectangles the sidecar probed *coloured by that row's individual
+// score* so an operator can see which rows are Grand and which
+// aren't — a single global `isGrandSectionVisible` bool would draw
+// non-Grand rows green any time at least one Grand row was visible,
+// which was the false-positive the operator reported. Keep these in
+// sync with the Python constants when calibrating.
 const SUPPORT_GRAND_BADGE_DX = -0.811;
 const SUPPORT_GRAND_BADGE_DY = 0.201;
 const SUPPORT_GRAND_BADGE_W = 0.123;
 const SUPPORT_GRAND_BADGE_H = 0.019;
+// Matches `SUPPORT_GRAND_BADGE_MATCH_THRESHOLD` in the sidecar — the
+// overlay classifies a per-anchor score as a hit iff it clears this.
+const SUPPORT_GRAND_BADGE_MATCH_THRESHOLD = 0.65;
 
 /**
  * All overlay state the canvas renders. The host component owns the
@@ -542,22 +548,35 @@ export function DebugCanvas({
               ) : null
             )}
             {/* "冠位从者" ribbon ROIs — one per confirm-button anchor.
-               Colour mirrors the overall isGrandSectionVisible flag the
-               sidecar returned (green=hit, gray=miss). When the active
-               server bundle doesn't ship the template the flag is
+               Colour mirrors *that row's individual* score from
+               `grandRibbonAnchorScores` (green when the row's score
+               clears the sidecar threshold, gray otherwise). When the
+               score is null the ROI clipped past the frame edge — we
+               still draw a placeholder so the operator can see why
+               that row isn't classified. When the active server
+               bundle doesn't ship the template the aggregate flag is
                null/undefined and we hide the overlay entirely. */}
             {supportResult.diagnostics.isGrandSectionVisible != null &&
               (supportResult.diagnostics.confirmButtonAnchors ?? []).map(
                 (anchor, i) => {
                   const badgeX = anchor.x + SUPPORT_GRAND_BADGE_DX;
                   const badgeY = anchor.y + SUPPORT_GRAND_BADGE_DY;
-                  const visible =
-                    supportResult.diagnostics.isGrandSectionVisible === true;
+                  // Per-anchor score may be missing (older sidecar,
+                  // ROI clipped) — fall back to the global flag so
+                  // the overlay still classifies *something* in
+                  // partial situations rather than greying every box.
+                  const score =
+                    supportResult.diagnostics.grandRibbonAnchorScores?.[i] ??
+                    null;
+                  const hit =
+                    score == null
+                      ? false
+                      : score >= SUPPORT_GRAND_BADGE_MATCH_THRESHOLD;
                   return (
                     <Box
                       key={`support-grand-badge-${i}`}
                       className={`debug-overlay-box debug-overlay-support-grand-badge${
-                        visible ? " hit" : " miss"
+                        hit ? " hit" : " miss"
                       }`}
                       style={{
                         left: `${badgeX * 100}%`,
@@ -569,11 +588,15 @@ export function DebugCanvas({
                         `grand-badge ROI for anchor #${i + 1}` +
                         ` (${badgeX.toFixed(3)}, ${badgeY.toFixed(3)},` +
                         ` ${SUPPORT_GRAND_BADGE_W.toFixed(3)},` +
-                        ` ${SUPPORT_GRAND_BADGE_H.toFixed(3)})`
+                        ` ${SUPPORT_GRAND_BADGE_H.toFixed(3)})` +
+                        (score == null
+                          ? ` score=n/a`
+                          : ` score=${score.toFixed(3)} (threshold ${SUPPORT_GRAND_BADGE_MATCH_THRESHOLD.toFixed(2)})`)
                       }
                     >
                       <span className="debug-overlay-label">
-                        冠 {visible ? "✓" : "✗"}
+                        冠 {hit ? "✓" : "✗"}
+                        {score != null ? ` ${score.toFixed(2)}` : ""}
                       </span>
                     </Box>
                   );

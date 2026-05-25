@@ -1968,42 +1968,35 @@ def test_find_supports_confirm_button_anchors_empty_when_no_buttons(monkeypatch)
     assert result["diagnostics"]["confirmButtonAnchors"] == []
 
 
-def test_grand_badge_visible_returns_none_when_template_missing(monkeypatch):
-    """The probe must return ``None`` (rather than a misleading
-    ``False``) when the active server bundle hasn't loaded the
-    "冠位从者" ribbon template — that's the runner's signal to fall
-    back to scroll-bar-end instead of treating "no badge anchor" as
-    "section exhausted"."""
+def test_grand_badge_scores_returns_none_when_all_variants_missing(monkeypatch):
+    """The probe must return ``None`` (rather than a misleading empty
+    list) when the active server bundle hasn't loaded *any* of the
+    "冠位从者" ribbon template variants — that's the runner's signal
+    to fall back to scroll-bar-end instead of treating "no badge
+    anchor" as "section exhausted". Loading at least one variant
+    must keep the probe live."""
     import mash_cv.cv as cv
 
     monkeypatch.setattr(cv, "templates", {})
     img = np.full((1440, 2560, 3), 96, dtype=np.uint8)
     anchors = [{"x": 0.85, "y": 0.43, "w": 0.07, "h": 0.06}]
-    assert cv._support_grand_badge_visible_near_buttons(img, anchors) is None
-
-
-def test_grand_badge_visible_returns_false_when_no_anchors():
-    """No confirm-button anchors → nothing to probe → ``False`` so
-    the runner records a "section exhausted" miss for this poll
-    (matches the old global-region scan's behaviour on a list that
-    only shows ordinary supports)."""
-    import mash_cv.cv as cv
-
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
-    img = np.full((1440, 2560, 3), 96, dtype=np.uint8)
-    assert cv._support_grand_badge_visible_near_buttons(img, []) is False
+    assert cv._support_grand_badge_scores_per_anchor(img, anchors) is None
+    assert cv._support_grand_section_visible_from_scores(None) is None
 
 
 @pytest.mark.skipif(
     not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
     reason="CN production templates dir not available",
 )
-def test_grand_badge_visible_hits_on_real_grand_support_capture():
-    """End-to-end: with the CN templates loaded and a real Grand
-    support-select capture, the per-anchor probe must say "Grand
-    visible". The fixture has three Grand rows (top one partial),
-    so at least one badge sits in the ribbon ROI of every detected
-    button anchor."""
+def test_grand_badge_scores_takes_max_across_template_variants():
+    """Multiple ribbon templates ship for visual variants of the
+    badge (plain text and the bright gold-with-flourish version
+    that decorates highlighted Grand rows). The probe must take
+    the per-anchor *max* across all loaded variants — a row that
+    matches *either* art style should flip to a hit. The bright
+    variant scores noticeably higher on captures where the row's
+    avatar uses the highlighted art, and dropping its contribution
+    would push borderline matches under the 0.65 threshold."""
     import mash_cv.cv as cv
 
     fixture = os.path.join(_TEST_SCREENSHOTS_DIR, "grand_support_bond.png")
@@ -2014,14 +2007,80 @@ def test_grand_badge_visible_hits_on_real_grand_support_capture():
     img = cv2.imread(fixture, cv2.IMREAD_COLOR)
     anchors = cv._support_find_confirm_button_anchors(img)
     assert len(anchors) >= 2, anchors
-    assert cv._support_grand_badge_visible_near_buttons(img, anchors) is True
+
+    full_scores = cv._support_grand_badge_scores_per_anchor(img, anchors)
+    assert full_scores is not None and all(s is not None for s in full_scores)
+
+    # Drop variants one at a time and confirm the multi-variant
+    # result is at least as high as either single-variant subset —
+    # i.e. the function genuinely keeps the best variant per row,
+    # not a fixed first/last entry.
+    for keep in cv.SUPPORT_GRAND_BADGE_TEMPLATES:
+        single = {keep: cv.templates[keep]}
+        original = dict(cv.templates)
+        try:
+            cv.templates.clear()
+            cv.templates.update(single)
+            single_scores = cv._support_grand_badge_scores_per_anchor(
+                img, anchors
+            )
+        finally:
+            cv.templates.clear()
+            cv.templates.update(original)
+        assert single_scores is not None
+        for full, sub in zip(full_scores, single_scores):
+            assert full is not None and sub is not None
+            assert full >= sub - 1e-6, (keep, full, sub)
+
+
+def test_grand_badge_scores_empty_when_no_anchors():
+    """No confirm-button anchors → nothing to probe → empty list, and
+    the aggregator must downgrade that to ``False`` so the runner
+    records a "section exhausted" miss for this poll."""
+    import mash_cv.cv as cv
+
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    img = np.full((1440, 2560, 3), 96, dtype=np.uint8)
+    scores = cv._support_grand_badge_scores_per_anchor(img, [])
+    assert scores == []
+    assert cv._support_grand_section_visible_from_scores(scores) is False
 
 
 @pytest.mark.skipif(
     not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
     reason="CN production templates dir not available",
 )
-def test_grand_badge_visible_hits_on_1920x1080_downscale():
+def test_grand_badge_scores_hit_on_real_grand_support_capture():
+    """End-to-end: with the CN templates loaded and a real Grand
+    support-select capture, at least one per-anchor score must clear
+    the threshold. The fixture has three Grand rows (top one
+    partial), so every detected button anchor should score high
+    enough to flip its row to a hit."""
+    import mash_cv.cv as cv
+
+    fixture = os.path.join(_TEST_SCREENSHOTS_DIR, "grand_support_bond.png")
+    if not os.path.isfile(fixture):
+        pytest.skip("grand_support_bond.png fixture not available")
+
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    img = cv2.imread(fixture, cv2.IMREAD_COLOR)
+    anchors = cv._support_find_confirm_button_anchors(img)
+    assert len(anchors) >= 2, anchors
+    scores = cv._support_grand_badge_scores_per_anchor(img, anchors)
+    assert scores is not None and len(scores) == len(anchors)
+    hits = [
+        s is not None and s >= cv.SUPPORT_GRAND_BADGE_MATCH_THRESHOLD
+        for s in scores
+    ]
+    assert any(hits), scores
+    assert cv._support_grand_section_visible_from_scores(scores) is True
+
+
+@pytest.mark.skipif(
+    not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
+    reason="CN production templates dir not available",
+)
+def test_grand_badge_scores_hit_on_1920x1080_downscale():
     """Regression: the ribbon template (314×28 px, extracted from a
     2560×1440 source) is wider than the per-anchor ROI on a 1920×1080
     capture (the resolution scrcpy negotiates on most BlueStacks /
@@ -2041,26 +2100,21 @@ def test_grand_badge_visible_hits_on_1920x1080_downscale():
     src = cv2.imread(fixture, cv2.IMREAD_COLOR)
     downscaled = cv2.resize(src, (1920, 1080), interpolation=cv2.INTER_AREA)
     anchors = cv._support_find_confirm_button_anchors(downscaled)
-    # The downscaled frame keeps the original layout, so the same
-    # rows / anchors should resolve at the new resolution.
     assert len(anchors) >= 2, anchors
-    assert (
-        cv._support_grand_badge_visible_near_buttons(downscaled, anchors)
-        is True
-    )
+    scores = cv._support_grand_badge_scores_per_anchor(downscaled, anchors)
+    assert scores is not None and len(scores) == len(anchors)
+    assert cv._support_grand_section_visible_from_scores(scores) is True
 
 
 @pytest.mark.skipif(
     not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
     reason="CN production templates dir not available",
 )
-def test_grand_badge_visible_misses_on_ordinary_support_capture():
+def test_grand_badge_scores_miss_on_ordinary_support_capture():
     """And the negative case: a regular non-Grand support-select page
-    must NOT trip the per-anchor probe. ``support_select.png`` has
-    several confirm-button anchors but no Grand rows; the global max
-    template-match score on this fixture is ~0.56 — well under the
-    0.65 threshold — and the only positions clearing it sit outside
-    every projected ribbon ROI."""
+    must NOT clear the per-anchor threshold. Every per-anchor score
+    on this fixture sits well under 0.65; the aggregator must report
+    ``False`` so the operator's overlay shows ✗ on every row."""
     import mash_cv.cv as cv
 
     fixture = os.path.join(_TEST_SCREENSHOTS_DIR, "support_select.png")
@@ -2070,19 +2124,23 @@ def test_grand_badge_visible_misses_on_ordinary_support_capture():
     cv._load_templates(_PROD_CN_TEMPLATES_DIR)
     img = cv2.imread(fixture, cv2.IMREAD_COLOR)
     anchors = cv._support_find_confirm_button_anchors(img)
-    assert cv._support_grand_badge_visible_near_buttons(img, anchors) is False
+    scores = cv._support_grand_badge_scores_per_anchor(img, anchors)
+    assert scores is not None
+    for s in scores:
+        if s is not None:
+            assert s < cv.SUPPORT_GRAND_BADGE_MATCH_THRESHOLD, scores
+    assert cv._support_grand_section_visible_from_scores(scores) is False
 
 
 @pytest.mark.skipif(
     not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
     reason="CN production templates dir not available",
 )
-def test_find_supports_surfaces_grand_section_visible_diagnostic(monkeypatch):
-    """`_find_supports` must publish ``isGrandSectionVisible`` in
-    diagnostics whenever the CN templates are loaded — the runner
-    consumes this exact field to decide whether the Grand section
-    has scrolled off-screen, so any silent rename here desyncs the
-    Rust/Python boundary."""
+def test_find_supports_surfaces_grand_section_diagnostics(monkeypatch):
+    """`_find_supports` must publish both ``isGrandSectionVisible``
+    (the runner's aggregate signal) and ``grandRibbonAnchorScores``
+    (the debug overlay's per-row breakdown). Pin both fields — the
+    Rust serde / TS DTO mirror them by exact name."""
     import mash_cv.cv as cv
 
     fixture = os.path.join(_TEST_SCREENSHOTS_DIR, "grand_support_bond.png")
@@ -2101,7 +2159,18 @@ def test_find_supports_surfaces_grand_section_visible_diagnostic(monkeypatch):
         cv.SUPPORT_NP_THRESHOLD,
         cv.SUPPORT_ROW_PAIR_DY,
     )
-    assert result["diagnostics"]["isGrandSectionVisible"] is True
+    diag = result["diagnostics"]
+    assert diag["isGrandSectionVisible"] is True
+    anchors = diag["confirmButtonAnchors"]
+    scores = diag["grandRibbonAnchorScores"]
+    assert len(scores) == len(anchors), (scores, anchors)
+    # At least one row must clear the threshold (the fixture is the
+    # Grand-section capture). Per-row hits drive the overlay colour.
+    hits = [
+        s is not None and s >= cv.SUPPORT_GRAND_BADGE_MATCH_THRESHOLD
+        for s in scores
+    ]
+    assert any(hits), scores
 
 
 @pytest.mark.skipif(

@@ -450,6 +450,18 @@ pub struct SupportDiagnostics {
     /// back to the scroll-bar end indicator.
     #[serde(default)]
     pub is_grand_section_visible: Option<bool>,
+    /// Per-anchor TM_CCOEFF_NORMED scores for the "冠位从者" ribbon
+    /// probe, aligned 1-1 with `confirm_button_anchors`. Each entry
+    /// is the max score within that row's badge ROI, or `None` when
+    /// the ROI clipped past the frame edge / the template is
+    /// unavailable. The debug overlay colours each row's box based
+    /// on whether its score cleared the sidecar's match threshold
+    /// (currently 0.65) — the aggregate `is_grand_section_visible`
+    /// just collapses these to an "any hit" bool and loses the
+    /// per-row breakdown the operator needs to spot a non-Grand row
+    /// drawn green by a single global flag.
+    #[serde(default)]
+    pub grand_ribbon_anchor_scores: Vec<Option<f64>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

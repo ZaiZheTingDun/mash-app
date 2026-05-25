@@ -126,10 +126,12 @@ describe("DebugCanvas", () => {
     expect(container.querySelectorAll(".debug-coord-dot").length).toBe(0);
   });
 
-  it("draws one Grand-badge ROI per confirm-button anchor and tags hit/miss state", () => {
-    // Two confirm buttons visible, sidecar says at least one ROI hit
-    // the ribbon → two amber-bordered hit boxes labelled "冠 ✓".
-    const { container: hitContainer } = renderWithTheme(
+  it("colors each Grand-badge ROI by its own per-anchor score, not the aggregate flag", () => {
+    // Mixed list: row 0 scored 0.71 (Grand), row 1 scored 0.31 (not
+    // Grand). Aggregate flag is true because at least one row hit,
+    // but the overlay must render row 1 as a miss — otherwise the
+    // operator gets a false-positive 冠 ✓ over a non-Grand row.
+    const { container: mixedContainer } = renderWithTheme(
       <DebugCanvas
         {...makeState({
           imageSrc: "tauri://localhost/fake.png?t=5",
@@ -145,19 +147,29 @@ describe("DebugCanvas", () => {
                 { x: 0.85, y: 0.71, w: 0.07, h: 0.06 },
               ],
               isGrandSectionVisible: true,
+              grandRibbonAnchorScores: [0.71, 0.31],
             },
           },
         })}
       />
     );
-    const hits = hitContainer.querySelectorAll(
-      ".debug-overlay-support-grand-badge.hit"
-    );
-    expect(hits.length).toBe(2);
-    expect(hitContainer.textContent?.includes("冠 ✓")).toBe(true);
+    expect(
+      mixedContainer.querySelectorAll(
+        ".debug-overlay-support-grand-badge.hit"
+      ).length
+    ).toBe(1);
+    expect(
+      mixedContainer.querySelectorAll(
+        ".debug-overlay-support-grand-badge.miss"
+      ).length
+    ).toBe(1);
+    // Labels must include the numeric score so operator can spot
+    // borderline matches sliding under the threshold over time.
+    expect(mixedContainer.textContent).toContain("冠 ✓ 0.71");
+    expect(mixedContainer.textContent).toContain("冠 ✗ 0.31");
 
-    // Same anchors but the sidecar reports no ROI hit → both rendered
-    // with the .miss styling and labelled "冠 ✗".
+    // All-miss list: aggregate flag false, every row's score below
+    // threshold → every box rendered with .miss.
     const { container: missContainer } = renderWithTheme(
       <DebugCanvas
         {...makeState({
@@ -173,6 +185,7 @@ describe("DebugCanvas", () => {
                 { x: 0.85, y: 0.43, w: 0.07, h: 0.06 },
               ],
               isGrandSectionVisible: false,
+              grandRibbonAnchorScores: [0.12],
             },
           },
         })}
@@ -182,7 +195,7 @@ describe("DebugCanvas", () => {
       missContainer.querySelectorAll(".debug-overlay-support-grand-badge.miss")
         .length
     ).toBe(1);
-    expect(missContainer.textContent?.includes("冠 ✗")).toBe(true);
+    expect(missContainer.textContent).toContain("冠 ✗ 0.12");
 
     // `null` (template not loaded) suppresses the overlay entirely
     // so the operator isn't shown an ambiguous box on JP captures.
@@ -201,6 +214,7 @@ describe("DebugCanvas", () => {
                 { x: 0.85, y: 0.43, w: 0.07, h: 0.06 },
               ],
               isGrandSectionVisible: null,
+              grandRibbonAnchorScores: [],
             },
           },
         })}
