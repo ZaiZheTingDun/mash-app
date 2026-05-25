@@ -1,28 +1,25 @@
-//! Minitouch client for low-latency, smooth touch injection.
+//! `minitouch` backend.
 //!
-//! [DeviceFarmer/minitouch] is a small native server that lives on the
+//! [DeviceFarmer/minitouch] is a tiny native server that lives on the
 //! Android device, listens on an abstract Unix socket, and streams
-//! touch events directly into `/dev/input/event*`. Compared to
+//! touch events directly to `/dev/input/event*`. Compared to
 //! `adb shell input motionevent` (which spawns a fresh JVM per event,
-//! ~30–80 ms each), minitouch processes commands in under a millisecond
-//! — so a swipe with 60+ MOVE events at 16 ms intervals (visually
-//! indistinguishable from real finger motion) is feasible, whereas the
-//! same gesture over `input motionevent` would take 2–5 seconds and
-//! look choppy.
+//! ~30–80 ms each), minitouch processes commands in well under a
+//! millisecond — so a swipe with 60+ MOVE events at 16 ms intervals
+//! (visually indistinguishable from real finger motion) is feasible,
+//! whereas the same gesture over `input motionevent` would take 2–5
+//! seconds and look choppy.
 //!
-//! This module owns the device-side minitouch process for the lifetime
-//! of a `Runner`: on `start` it pushes the bundled binary,
-//! `chmod 755`s it, spawns `adb shell /data/local/tmp/minitouch`, sets
-//! up an `adb forward` to its abstract socket, and connects via TCP.
-//! On `Drop` it kills the child (which SIGHUPs the device-side
-//! process) and removes the forward.
+//! Bring-up: on `start` we push the bundled binary, `chmod 755` it,
+//! spawn `adb shell /data/local/tmp/minitouch`, set up an `adb forward`
+//! to its abstract socket, and connect via TCP. The TCP connection is
+//! kept open for the lifetime of the backend, so per-swipe latency
+//! is just the local TCP write + the device-side event injection.
 //!
-//! Currently only the swipe path is wired up — taps and drags still
-//! use `Adb::tap` / `Adb::swipe`. The minitouch binary is bundled per
-//! ABI under `src-tauri/resources/minitouch/<abi>/minitouch`; the only
-//! ABI bundled today is `arm64-v8a` (modern emulators, real phones).
-//! Missing-binary cases are returned as errors so callers can fall
-//! back to the ADB-based swipe.
+//! Per-ABI binaries live under
+//! `src-tauri/resources/minitouch/<abi>/minitouch`. Missing-ABI cases
+//! return an error from `start`, which the factory in `touch::build`
+//! turns into an auto-fallback to `AdbInputBackend`.
 //!
 //! [DeviceFarmer/minitouch]: https://github.com/DeviceFarmer/minitouch
 
@@ -35,6 +32,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::adb::Adb;
+use crate::touch::TouchBackend;
 
 /// Where on the device we push the minitouch binary. Under
 /// `/data/local/tmp` because that path is writable by `shell` on every
@@ -47,21 +45,36 @@ const DEVICE_BINARY_PATH: &str = "/data/local/tmp/minitouch";
 const MINITOUCH_ABSTRACT_SOCKET: &str = "minitouch";
 
 /// Max time we'll wait for the device-side minitouch to start listening
-/// on its abstract socket after we spawn it. 2s is generous — startup
+/// on its abstract socket after we spawn it. 2 s is generous — startup
 /// is usually <100ms — but we want a clean error message if e.g. the
 /// binary is for the wrong ABI and crashed immediately.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Pressure value sent with every touch event. minitouch normalizes
 /// against the value advertised in the banner; 50 is a safe middle
-/// (Android scroll handlers don't care about pressure beyond "not zero").
+/// (Android scroll handlers don't care about pressure beyond
+/// "not zero").
 const TOUCH_PRESSURE: u32 = 50;
 
-/// Connected handle to a running device-side minitouch. Dropping this
-/// kills the device-side process and removes the local port forward.
-pub struct Minitouch {
+/// Briefest "press, release" we can issue. Some Android scroll
+/// handlers debounce on the order of 50–80 ms, so an absolutely
+/// instantaneous DOWN-UP can be missed. 30 ms keeps the gesture
+/// well clear of that floor while still feeling instant to the
+/// operator.
+const TAP_DURATION_MS: u32 = 30;
+
+/// Default per-step duration for the active phase of a `swipe` /
+/// `swipe_with_settle`. ~60 fps cadence; small enough that motion
+/// looks continuous, large enough to not flood the device-side event
+/// queue.
+const MOVE_STEP_MS: u32 = 16;
+
+pub struct MinitouchBackend {
+    /// Cloned for `forward_remove` on Drop. Cheap (3 fields, none of
+    /// them allocate per call).
+    adb: Adb,
     /// Local TCP port that `adb forward` mapped to the device-side
-    /// abstract socket. Kept so `Drop` can remove the forward.
+    /// abstract socket.
     local_port: u16,
     /// The `adb shell /data/local/tmp/minitouch` child process. Owned
     /// here purely so we can `kill()` it on drop — killing the adb
@@ -70,34 +83,43 @@ pub struct Minitouch {
     /// Open TCP stream to the forwarded port. Writes go straight into
     /// minitouch's command stream.
     stream: TcpStream,
-    /// Maximum X coordinate minitouch accepts (from the banner). Used
-    /// to scale our normalized `[0.0, 1.0]` coords up to device pixels.
+    /// Device screen dimensions (in physical pixels) — used to scale
+    /// the trait's pixel coords into minitouch's banner coordinate
+    /// system, which is in `[0, max_x] × [0, max_y]` and may use a
+    /// wholly different scale (often `32767 × 32767` for the touch
+    /// digitizer regardless of display resolution).
+    screen_w: u32,
+    screen_h: u32,
+    /// Maximum X coordinate minitouch accepts (from the banner).
     max_x: u32,
     /// Maximum Y coordinate minitouch accepts (from the banner).
     max_y: u32,
     /// Maximum pressure value minitouch accepts (from the banner).
-    /// Currently informational only — we always send `TOUCH_PRESSURE`,
-    /// which is well under typical maxes (usually 100+).
+    /// Currently informational only — we always send `TOUCH_PRESSURE`.
     #[allow(dead_code)]
     max_pressure: u32,
 }
 
-impl Minitouch {
+impl MinitouchBackend {
     /// Push, spawn, forward, connect — the full bring-up sequence.
     ///
     /// `binary_dir` should be a directory containing per-ABI
-    /// subfolders (e.g. `arm64-v8a/minitouch`). The caller is expected
-    /// to pass the runtime-resolved resources path; we don't reach for
-    /// Tauri's `AppHandle` here so this module stays unit-testable.
-    pub fn start(adb: &Adb, binary_dir: &Path) -> Result<Self, String> {
+    /// subfolders (e.g. `arm64-v8a/minitouch`). Tauri resolves this
+    /// from the bundle / dev manifest in `Runner::new`; we don't
+    /// reach for `AppHandle` here so the module stays unit-testable.
+    pub fn start(
+        adb: Adb,
+        binary_dir: &Path,
+        screen: (u32, u32),
+    ) -> Result<Self, String> {
         let abi = adb
             .getprop("ro.product.cpu.abi")
             .map_err(|e| format!("failed to detect device ABI: {e}"))?;
         let local_binary = resolve_binary_path(binary_dir, &abi)?;
 
-        // Best-effort: kill any minitouch leftover from a previous run.
-        // Failures here are fine — usually it means there was nothing
-        // to kill in the first place.
+        // Best-effort: kill any minitouch leftover from a previous
+        // run. Failures here are fine — usually it means there was
+        // nothing to kill in the first place.
         let _ = adb.shell_run(&format!("pkill -f {DEVICE_BINARY_PATH}"));
 
         adb.push_file(&local_binary, DEVICE_BINARY_PATH)
@@ -109,8 +131,8 @@ impl Minitouch {
             .shell_spawn(DEVICE_BINARY_PATH)
             .map_err(|e| format!("failed to spawn minitouch: {e}"))?;
 
-        // Use tcp:0 so adb assigns a free port — avoids collisions if
-        // the user already has another minitouch instance forwarded.
+        // tcp:0 → adb picks a free port; avoids collisions if the
+        // user already has another minitouch instance forwarded.
         let local_port = adb
             .forward_tcp_to_abstract(0, MINITOUCH_ABSTRACT_SOCKET)
             .map_err(|e| format!("failed to forward minitouch port: {e}"))?;
@@ -121,82 +143,110 @@ impl Minitouch {
             .map_err(|e| format!("failed to read minitouch banner: {e}"))?;
 
         Ok(Self {
+            adb,
             local_port,
             child,
             stream,
+            screen_w: screen.0,
+            screen_h: screen.1,
             max_x,
             max_y,
             max_pressure,
         })
     }
 
-    /// Drive a "press, drag, hold, release" gesture in normalized
-    /// screen coordinates. `swipe_ms` is the active-motion duration;
-    /// `settle_ms` is the hold-at-destination delay before lift-off
-    /// (which is what suppresses Android's fling response).
-    ///
-    /// All timing inside the gesture is server-side (minitouch's `w`
-    /// command), so the local TCP write is essentially instantaneous —
-    /// motion smoothness is bounded only by minitouch's event injection
-    /// rate, not by our network or process overhead.
-    pub fn swipe_with_settle(
-        &mut self,
-        from: (f64, f64),
-        to: (f64, f64),
-        swipe_ms: u32,
-        settle_ms: u32,
-    ) -> Result<(), String> {
-        let script = build_swipe_script(
-            from,
-            to,
-            swipe_ms,
-            settle_ms,
-            self.max_x,
-            self.max_y,
-            TOUCH_PRESSURE,
-        );
+    /// Write a pre-built minitouch command script to the open stream
+    /// and flush. Centralized so `tap` / `swipe` / `swipe_with_settle`
+    /// share the error-mapping path.
+    fn send(&mut self, script: &str) -> Result<(), String> {
         self.stream
             .write_all(script.as_bytes())
             .map_err(|e| format!("minitouch write failed: {e}"))?;
         self.stream
             .flush()
-            .map_err(|e| format!("minitouch flush failed: {e}"))?;
-        Ok(())
+            .map_err(|e| format!("minitouch flush failed: {e}"))
+    }
+
+    /// Convert a pixel point in the device's display resolution to
+    /// minitouch's banner coordinate system.
+    fn to_mt(&self, px: u32, py: u32) -> (u32, u32) {
+        pixel_to_minitouch(
+            px,
+            py,
+            (self.screen_w, self.screen_h),
+            (self.max_x, self.max_y),
+        )
     }
 }
 
-impl Drop for Minitouch {
+impl TouchBackend for MinitouchBackend {
+    fn tap(&mut self, x: u32, y: u32) -> Result<(), String> {
+        let (mtx, mty) = self.to_mt(x, y);
+        let script = build_tap_script(mtx, mty, TOUCH_PRESSURE, TAP_DURATION_MS);
+        self.send(&script)
+    }
+
+    fn swipe(
+        &mut self,
+        from: (u32, u32),
+        to: (u32, u32),
+        duration_ms: u32,
+    ) -> Result<(), String> {
+        let from_mt = self.to_mt(from.0, from.1);
+        let to_mt = self.to_mt(to.0, to.1);
+        let script = build_swipe_script(
+            from_mt,
+            to_mt,
+            duration_ms,
+            /* settle_ms */ 0,
+            TOUCH_PRESSURE,
+        );
+        self.send(&script)
+    }
+
+    fn swipe_with_settle(
+        &mut self,
+        from: (u32, u32),
+        to: (u32, u32),
+        swipe_ms: u32,
+        settle_ms: u32,
+    ) -> Result<(), String> {
+        let from_mt = self.to_mt(from.0, from.1);
+        let to_mt = self.to_mt(to.0, to.1);
+        let script = build_swipe_script(from_mt, to_mt, swipe_ms, settle_ms, TOUCH_PRESSURE);
+        self.send(&script)
+    }
+
+    fn name(&self) -> &'static str {
+        "minitouch"
+    }
+}
+
+impl Drop for MinitouchBackend {
     fn drop(&mut self) {
         // Best-effort cleanup; nothing here is allowed to panic since
         // we may be unwinding. The order matters: closing the TCP
         // stream first lets minitouch shut down gracefully when its
-        // socket EOFs, but if it lingers, killing the adb shell child
-        // is the hard backstop.
+        // socket EOFs, killing the adb-shell child is the hard
+        // backstop, and removing the port forward last keeps
+        // `adb forward --list` tidy between runs.
         let _ = self.stream.shutdown(std::net::Shutdown::Both);
         let _ = self.child.kill();
         let _ = self.child.wait();
-        // Remove the port forward last — adb still cleans these up at
-        // server shutdown if we forget, but leaving them around bloats
-        // `adb forward --list` between runs.
-        // We don't have an `Adb` handle here; the runner removes the
-        // forward via `adb.forward_remove` after dropping us. (Storing
-        // `Adb` here would force `Runner` to wrap it in Arc just for
-        // this one path, which isn't worth it.)
-        let _ = self.local_port; // Suppress unused-field warning when port-removal lives in Runner.
+        if let Err(err) = self.adb.forward_remove(self.local_port) {
+            eprintln!(
+                "[minitouch] failed to remove tcp:{} forward: {err}",
+                self.local_port
+            );
+        }
     }
 }
 
-impl Minitouch {
-    /// Local TCP port the runner used `adb forward` to set up. The
-    /// runner reads this in its own `Drop` to call `forward_remove`.
-    pub fn local_port(&self) -> u16 {
-        self.local_port
-    }
-}
+// --- pure helpers --------------------------------------------------
 
-/// Resolve `<binary_dir>/<abi>/minitouch`, returning a clear error if
-/// the per-ABI binary is missing. Kept separate from `start()` so unit
-/// tests can exercise the path logic without an ADB device.
+/// Resolve `<binary_dir>/<abi>/minitouch`, returning a clear error
+/// if the per-ABI binary is missing. Kept separate from `start()`
+/// so unit tests can exercise the path logic without an ADB device.
 fn resolve_binary_path(binary_dir: &Path, abi: &str) -> Result<PathBuf, String> {
     let path = binary_dir.join(abi).join("minitouch");
     if !path.is_file() {
@@ -289,62 +339,88 @@ fn parse_banner_caret_line(rest: &str) -> Result<(u32, u32, u32), String> {
     Ok((max_x, max_y, max_pressure))
 }
 
+/// Convert a display-pixel coordinate into a minitouch banner
+/// coordinate. The display and digitizer ranges are independent on
+/// most Android devices (e.g. 1080 × 1920 display + 32767 × 32767
+/// digitizer), so we always scale rather than passing through.
+fn pixel_to_minitouch(
+    px: u32,
+    py: u32,
+    screen: (u32, u32),
+    max: (u32, u32),
+) -> (u32, u32) {
+    let nx = if screen.0 == 0 { 0.0 } else { px as f64 / screen.0 as f64 };
+    let ny = if screen.1 == 0 { 0.0 } else { py as f64 / screen.1 as f64 };
+    let mtx = (nx.clamp(0.0, 1.0) * max.0 as f64).round() as u32;
+    let mty = (ny.clamp(0.0, 1.0) * max.1 as f64).round() as u32;
+    (mtx, mty)
+}
+
 /// Number of intermediate MOVE events for the active swipe phase. At
-/// ~60 fps cadence (`swipe_ms / 16`), a 555 ms swipe gets ~35 events —
-/// well into "looks like a finger" territory. We cap this so a long
-/// swipe doesn't generate megabytes of commands, but the cap is far
-/// above any realistic swipe length.
+/// ~60 fps cadence (`swipe_ms / MOVE_STEP_MS`), a 555 ms swipe gets
+/// ~35 events — well into "looks like a finger" territory. We cap
+/// the count so a long swipe doesn't generate megabytes of commands,
+/// but the cap is far above any realistic swipe length.
 fn pick_step_count(swipe_ms: u32) -> u32 {
-    let raw = (swipe_ms / 16).max(1);
+    let raw = (swipe_ms / MOVE_STEP_MS).max(1);
     raw.min(120)
 }
 
-/// Build the full text protocol payload for a settle swipe. Pure
-/// function so unit tests can pin the command shape without needing a
-/// minitouch device.
-///
-/// All MOVE / DOWN / UP coords are scaled from the input `[0.0, 1.0]`
-/// normalized range up to `[0, max_x]` × `[0, max_y]`, matching
-/// minitouch's reported banner.
+/// Build a "tap" command sequence: DOWN, brief wait, UP. minitouch
+/// supports an `input motionevent`-style tap directly, but the
+/// pattern below works on every minitouch version and gives us a
+/// knob (`hold_ms`) to tune if a particular UI insists on a longer
+/// press.
+fn build_tap_script(x: u32, y: u32, pressure: u32, hold_ms: u32) -> String {
+    let mut s = String::new();
+    let _ = writeln!(s, "d 0 {x} {y} {pressure}");
+    let _ = writeln!(s, "c");
+    let _ = writeln!(s, "w {hold_ms}");
+    let _ = writeln!(s, "u 0");
+    let _ = writeln!(s, "c");
+    s
+}
+
+/// Build the full text protocol payload for a swipe. `settle_ms = 0`
+/// turns this into a fling-allowed swipe with no settle phase;
+/// non-zero values produce the "press, drag, hold, release" pattern
+/// that suppresses fling.
 fn build_swipe_script(
-    from: (f64, f64),
-    to: (f64, f64),
+    from: (u32, u32),
+    to: (u32, u32),
     swipe_ms: u32,
     settle_ms: u32,
-    max_x: u32,
-    max_y: u32,
     pressure: u32,
 ) -> String {
     let steps = pick_step_count(swipe_ms);
     let step_ms = (swipe_ms / steps).max(1);
 
-    let map_x = |nx: f64| (nx.clamp(0.0, 1.0) * max_x as f64).round() as u32;
-    let map_y = |ny: f64| (ny.clamp(0.0, 1.0) * max_y as f64).round() as u32;
-
-    let (x0, y0) = (map_x(from.0), map_y(from.1));
     let mut script = String::new();
-    let _ = writeln!(script, "d 0 {x0} {y0} {pressure}");
+    let _ = writeln!(script, "d 0 {} {} {pressure}", from.0, from.1);
     let _ = writeln!(script, "c");
 
     for i in 1..=steps {
         let t = i as f64 / steps as f64;
-        let x = from.0 + (to.0 - from.0) * t;
-        let y = from.1 + (to.1 - from.1) * t;
+        let x = (from.0 as f64 + (to.0 as f64 - from.0 as f64) * t).round() as u32;
+        let y = (from.1 as f64 + (to.1 as f64 - from.1 as f64) * t).round() as u32;
         let _ = writeln!(script, "w {step_ms}");
-        let _ = writeln!(script, "m 0 {} {} {pressure}", map_x(x), map_y(y));
+        let _ = writeln!(script, "m 0 {x} {y} {pressure}");
         let _ = writeln!(script, "c");
     }
 
-    // Settle: hold the contact at `to` long enough that Android's
-    // velocity tracker computes ~0 px/s on lift-off and skips fling.
-    // The trailing MOVE-at-`to` after the wait gives the tracker an
-    // explicit zero-velocity sample right before UP, which is more
-    // robust across Android versions than relying on "no events" to
-    // be interpreted as zero velocity.
-    let (xn, yn) = (map_x(to.0), map_y(to.1));
-    let _ = writeln!(script, "w {settle_ms}");
-    let _ = writeln!(script, "m 0 {xn} {yn} {pressure}");
-    let _ = writeln!(script, "c");
+    if settle_ms > 0 {
+        // Settle: hold the contact at `to` long enough that
+        // Android's velocity tracker computes ~0 px/s on lift-off
+        // and skips fling. The trailing MOVE-at-`to` after the wait
+        // gives the tracker an explicit zero-velocity sample right
+        // before UP, which is more robust across Android versions
+        // than relying on "no events" being interpreted as zero
+        // velocity.
+        let _ = writeln!(script, "w {settle_ms}");
+        let _ = writeln!(script, "m 0 {} {} {pressure}", to.0, to.1);
+        let _ = writeln!(script, "c");
+    }
+
     let _ = writeln!(script, "u 0");
     let _ = writeln!(script, "c");
     script
@@ -369,14 +445,8 @@ mod tests {
     fn resolve_binary_path_errors_on_missing_abi() {
         let dir = tempfile::tempdir().unwrap();
         let err = resolve_binary_path(dir.path(), "x86_64").unwrap_err();
-        assert!(
-            err.contains("x86_64"),
-            "expected error to mention missing ABI, got: {err}"
-        );
-        assert!(
-            err.contains("minitouch"),
-            "expected error to mention the missing file name, got: {err}"
-        );
+        assert!(err.contains("x86_64"));
+        assert!(err.contains("minitouch"));
     }
 
     #[test]
@@ -392,81 +462,94 @@ mod tests {
     }
 
     #[test]
-    fn swipe_script_starts_with_down_at_from_in_device_coords() {
-        // from=(0.5, 0.78), max=(32767, 32767) → ~16384, 25558
-        let script = build_swipe_script((0.5, 0.78), (0.5, 0.22), 400, 300, 32767, 32767, 50);
+    fn pixel_to_minitouch_scales_proportionally() {
+        // 1080×1920 display, 32767×32767 digitizer:
+        //   nx = 540/1080 = 0.5    → 16384
+        //   ny = 1498/1920 ≈ 0.7802 → 25565
+        let (x, y) = pixel_to_minitouch(540, 1498, (1080, 1920), (32767, 32767));
+        assert_eq!((x, y), (16384, 25565));
+    }
+
+    #[test]
+    fn pixel_to_minitouch_clamps_to_max_range() {
+        // Pixel coords outside the screen rect (jitter overflow, etc.)
+        // must not blow past the digitizer max — clamp instead of
+        // overflowing u32.
+        let (x, y) = pixel_to_minitouch(9999, 9999, (1080, 1920), (32767, 32767));
+        assert_eq!((x, y), (32767, 32767));
+    }
+
+    #[test]
+    fn pixel_to_minitouch_handles_zero_screen_dim() {
+        // Defensive: a bogus 0-sized screen must not divide by zero.
+        let (x, y) = pixel_to_minitouch(500, 500, (0, 0), (32767, 32767));
+        assert_eq!((x, y), (0, 0));
+    }
+
+    #[test]
+    fn tap_script_emits_down_wait_up_commit_cycle() {
+        let s = build_tap_script(540, 1500, 50, 30);
+        let lines: Vec<&str> = s.lines().collect();
+        assert_eq!(lines, ["d 0 540 1500 50", "c", "w 30", "u 0", "c"]);
+    }
+
+    #[test]
+    fn swipe_script_with_settle_starts_with_down_at_from() {
+        let script = build_swipe_script((100, 200), (900, 800), 400, 300, 50);
         let first_line = script.lines().next().unwrap();
-        assert_eq!(first_line, "d 0 16384 25558 50");
-        // Always followed by a commit so minitouch starts processing
-        // immediately rather than waiting for the next event.
+        assert_eq!(first_line, "d 0 100 200 50");
         assert_eq!(script.lines().nth(1).unwrap(), "c");
     }
 
     #[test]
-    fn swipe_script_ends_with_settle_move_then_up() {
-        let script = build_swipe_script((0.5, 0.78), (0.5, 0.22), 400, 300, 32767, 32767, 50);
+    fn swipe_script_with_settle_ends_with_settle_then_up() {
+        let script = build_swipe_script((100, 200), (900, 800), 400, 300, 50);
         let lines: Vec<&str> = script.lines().collect();
-        // …w <settle>; m 0 to_x to_y 50; c; u 0; c
         let n = lines.len();
+        // …; w <settle>; m 0 to_x to_y P; c; u 0; c
         assert_eq!(lines[n - 5], "w 300");
-        assert_eq!(lines[n - 4], "m 0 16384 7209 50");
+        assert_eq!(lines[n - 4], "m 0 900 800 50");
         assert_eq!(lines[n - 3], "c");
         assert_eq!(lines[n - 2], "u 0");
         assert_eq!(lines[n - 1], "c");
     }
 
     #[test]
-    fn swipe_script_clamps_normalized_coords_into_valid_range() {
-        // A misdetection might produce normalized coords outside
-        // [0, 1]; we clamp so the output is always a valid device
-        // pixel rather than wrapping or panicking on the u32 cast.
-        let script = build_swipe_script((1.5, -0.2), (0.5, 0.5), 100, 100, 1000, 2000, 50);
-        let first_line = script.lines().next().unwrap();
-        // 1.5 → clamped to 1.0 → 1000; -0.2 → 0.0 → 0
-        assert_eq!(first_line, "d 0 1000 0 50");
+    fn swipe_script_without_settle_skips_settle_phase() {
+        let script = build_swipe_script((100, 200), (900, 800), 400, 0, 50);
+        // No `w 0` at the tail; the gesture ends with the final
+        // interpolated MOVE → u 0 → c.
+        let lines: Vec<&str> = script.lines().collect();
+        let n = lines.len();
+        assert_eq!(lines[n - 2], "u 0");
+        // Two before the UP should be the commit of the final
+        // interpolation MOVE, not a settle move.
+        assert_eq!(lines[n - 3], "c");
+        // The text "w 0" must NOT appear — we omit the settle entirely
+        // when settle_ms is zero.
+        assert!(!script.contains("\nw 0\n"));
     }
 
     #[test]
     fn swipe_script_step_count_scales_with_duration() {
-        // 16ms cadence → 60-frame swipe (~60fps) at 960ms,
-        // ~25-frame at 400ms, ~3-frame at 50ms.
         assert_eq!(pick_step_count(960), 60);
         assert_eq!(pick_step_count(400), 25);
         assert_eq!(pick_step_count(50), 3);
     }
 
     #[test]
-    fn swipe_script_step_count_capped_at_120() {
-        // Pathologically long swipes can't generate megabytes of
-        // command bytes. 120 frames * ~30 chars/frame ≈ 4KB cap.
-        assert_eq!(pick_step_count(5_000), 120);
+    fn swipe_script_step_count_capped_and_floored() {
         assert_eq!(pick_step_count(60_000), 120);
-    }
-
-    #[test]
-    fn swipe_script_step_count_floored_at_one() {
-        // A 0-ms or sub-step swipe still needs at least one MOVE event
-        // between DOWN and the settle phase so the gesture is
-        // recognized as motion (not a long-press).
         assert_eq!(pick_step_count(0), 1);
-        assert_eq!(pick_step_count(8), 1);
     }
 
     #[test]
     fn swipe_script_emits_one_move_per_step_plus_settle_move() {
-        // 400ms swipe → 25 interpolation MOVEs + 1 settle MOVE.
-        let script = build_swipe_script((0.5, 0.78), (0.5, 0.22), 400, 300, 1000, 1000, 50);
+        let script = build_swipe_script((100, 200), (900, 800), 400, 300, 50);
         let move_count = script.lines().filter(|l| l.starts_with("m 0 ")).count();
         assert_eq!(move_count, 25 + 1);
     }
 
-    /// Banner parsing should accept the exact format minitouch emits
-    /// at startup. Concrete sample captured from an arm64-v8a build:
-    /// ```
-    /// v 1
-    /// ^ 10 32767 32767 100
-    /// $ 1234
-    /// ```
     #[test]
     fn read_banner_parses_realistic_payload() {
         let (mut server, client) = pipe_streams();
@@ -480,9 +563,6 @@ mod tests {
         assert_eq!((max_x, max_y, max_p), (32767, 32767, 100));
     }
 
-    // Helper: build a back-to-back TcpStream pair via a local loopback
-    // listener. Lets us drive read_banner with controlled input
-    // without needing a real device.
     fn pipe_streams() -> (TcpStream, TcpStream) {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -490,5 +570,4 @@ mod tests {
         let (server, _addr) = listener.accept().unwrap();
         (server, client)
     }
-
 }

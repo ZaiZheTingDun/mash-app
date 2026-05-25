@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use tauri::Manager;
 
+#[derive(Clone)]
 pub struct Adb {
     adb_path: PathBuf,
     device: Option<String>,

@@ -1,9 +1,9 @@
 mod adb;
 mod debug;
 mod enhancement_runner;
-mod minitouch;
 mod runner;
 mod screen;
+mod touch;
 
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;

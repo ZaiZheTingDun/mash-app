@@ -1,5 +1,5 @@
 use crate::adb::Adb;
-use crate::minitouch::Minitouch;
+use crate::touch::{self, TouchBackend, TouchBackendKind};
 use crate::screen::{
     CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
     SupportCeVerificationOptions, SupportRowMatch,
@@ -1399,14 +1399,13 @@ pub struct Runner {
     battle: BattleState,
     completed_mission_runs: u32,
     battle_result_continue_handled: bool,
-    /// Lazily-started minitouch client, used for low-latency smooth
-    /// swipes (currently only the support-list scroll). Boots on first
-    /// use; falls back to `Adb::swipe_with_settle` on push / spawn /
-    /// connect failure so the rest of the runner still works without
-    /// the minitouch binary bundled. `Option<Result<_, _>>` lets us
-    /// remember "already tried, failed permanently" between scrolls so
-    /// we don't re-attempt the bring-up on every poll.
-    minitouch: Option<Result<Minitouch, ()>>,
+    /// Pluggable touch-injection backend (see `touch::TouchBackend`).
+    /// Picked at runner construction time via `MASH_TOUCH_BACKEND` env
+    /// var — `auto` (default) tries `minitouch` and silently falls back
+    /// to `adb-input` on bring-up failure. The runner doesn't care
+    /// which concrete backend is in use; it just calls `tap` / `swipe`
+    /// / `swipe_with_settle` against the trait.
+    touch: Box<dyn TouchBackend>,
 }
 
 impl Runner {
@@ -1428,8 +1427,10 @@ impl Runner {
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
+        let touch = build_touch_backend(&app_handle, &adb, (screen_w, screen_h));
         Self {
             adb,
+            touch,
             sidecar: Some(sidecar),
             sidecar_cache,
             config,
@@ -1460,7 +1461,6 @@ impl Runner {
             battle: BattleState::new(),
             completed_mission_runs: 0,
             battle_result_continue_handled: false,
-            minitouch: None,
         }
     }
 
@@ -1519,14 +1519,14 @@ impl Runner {
         self.emit(screen, &message);
     }
 
-    fn tap_at(&self, screen: &str, point: Point) -> bool {
+    fn tap_at(&mut self, screen: &str, point: Point) -> bool {
         let (px, py) = point.to_physical(self.screen_w, self.screen_h);
         let (jx, jy) = jitter_offset();
         // Saturate at the screen edges so a near-edge button still
         // registers even if the jitter would push it off-screen.
         let tap_x = (px as i32 + jx).clamp(0, self.screen_w.saturating_sub(1) as i32) as u32;
         let tap_y = (py as i32 + jy).clamp(0, self.screen_h.saturating_sub(1) as i32) as u32;
-        match self.adb.tap(tap_x, tap_y) {
+        match self.touch.tap(tap_x, tap_y) {
             Ok(()) => true,
             Err(err) => {
                 self.fail_action(screen, "点击", err);
@@ -1535,10 +1535,10 @@ impl Runner {
         }
     }
 
-    fn swipe_at(&self, screen: &str, from: Point, to: Point, duration_ms: u32) -> bool {
+    fn swipe_at(&mut self, screen: &str, from: Point, to: Point, duration_ms: u32) -> bool {
         let from_px = from.to_physical(self.screen_w, self.screen_h);
         let to_px = to.to_physical(self.screen_w, self.screen_h);
-        match self.adb.swipe(from_px, to_px, duration_ms) {
+        match self.touch.swipe(from_px, to_px, duration_ms) {
             Ok(()) => true,
             Err(err) => {
                 self.fail_action(screen, "滑动", err);
@@ -1547,69 +1547,12 @@ impl Runner {
         }
     }
 
-    /// Resolve the bundled minitouch binary root directory
-    /// (`<resources>/minitouch/`).
-    ///
-    /// Looks in two locations, in this order:
-    ///   1. `<resource_dir>/resources/minitouch/` (production bundle)
-    ///   2. `<CARGO_MANIFEST_DIR>/resources/minitouch/` (dev-mode)
-    ///
-    /// Returns the first existing path so we don't need different code
-    /// paths for `pnpm tauri dev` vs `pnpm tauri build`.
-    fn minitouch_binary_dir(&self) -> Option<PathBuf> {
-        use tauri::Manager;
-        if let Ok(base) = self.app_handle.path().resource_dir() {
-            let bundled = base.join("resources").join("minitouch");
-            if bundled.is_dir() {
-                return Some(bundled);
-            }
-        }
-        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("minitouch");
-        if dev.is_dir() {
-            return Some(dev);
-        }
-        None
-    }
-
-    /// Lazy-start the minitouch client on first use; cache the
-    /// `Result` so repeated failures don't retry the whole bring-up
-    /// path (which can take a few hundred ms for the push + spawn +
-    /// forward + connect dance). Returns `Some(&mut Minitouch)` on a
-    /// healthy connection, `None` if we already gave up.
-    fn minitouch_handle(&mut self) -> Option<&mut Minitouch> {
-        if self.minitouch.is_none() {
-            let attempt = self
-                .minitouch_binary_dir()
-                .ok_or_else(|| {
-                    "minitouch resource directory unavailable (Tauri resource_dir() failed)"
-                        .to_string()
-                })
-                .and_then(|dir| Minitouch::start(&self.adb, &dir));
-            match attempt {
-                Ok(mt) => {
-                    eprintln!("[minitouch] started, local port = {}", mt.local_port());
-                    self.minitouch = Some(Ok(mt));
-                }
-                Err(err) => {
-                    eprintln!("[minitouch] bring-up failed, falling back to adb swipe: {err}");
-                    self.minitouch = Some(Err(()));
-                }
-            }
-        }
-        match self.minitouch {
-            Some(Ok(ref mut mt)) => Some(mt),
-            _ => None,
-        }
-    }
-
-    /// "Press, drag, hold, release" swipe (see `Adb::swipe_with_settle`).
-    /// Use this for any swipe whose precise stopping position matters —
-    /// the settle window prevents Android's fling momentum from
+    /// "Press, drag, hold, release" swipe via the active `TouchBackend`.
+    /// Use this for any swipe whose precise stopping position matters
+    /// — the settle window prevents Android's fling momentum from
     /// continuing the scroll past the lift-off coordinate.
     fn swipe_with_settle_at(
-        &self,
+        &mut self,
         screen: &str,
         from: Point,
         to: Point,
@@ -1618,7 +1561,7 @@ impl Runner {
     ) -> bool {
         let from_px = from.to_physical(self.screen_w, self.screen_h);
         let to_px = to.to_physical(self.screen_w, self.screen_h);
-        match self.adb.swipe_with_settle(from_px, to_px, swipe_ms, settle_ms) {
+        match self.touch.swipe_with_settle(from_px, to_px, swipe_ms, settle_ms) {
             Ok(()) => true,
             Err(err) => {
                 self.fail_action(screen, "滑动", err);
@@ -2365,12 +2308,6 @@ impl Runner {
         let from_y = SUPPORT_SCROLL_FROM_Y;
         let to_y = (from_y - delta).max(0.05);
         let swipe_ms = scroll_support_list_duration_ms(delta);
-
-        // Try minitouch first — its sub-millisecond event injection lets
-        // a Δ≈0.555 swipe land in ~1 s with ~30 smooth MOVE events, vs.
-        // the 5+ s choppy `input motionevent` chain. Fall back to the
-        // ADB settle-swipe if minitouch isn't available (binary not
-        // bundled for this ABI, etc.).
         let scroll_msg = format_scroll_debug(
             confirm_button_anchors,
             delta,
@@ -2379,41 +2316,14 @@ impl Runner {
             swipe_ms,
             SUPPORT_SCROLL_SETTLE_MS,
         );
-        if let Some(mt) = self.minitouch_handle() {
-            let result = mt.swipe_with_settle(
-                (0.50, from_y),
-                (0.50, to_y),
-                swipe_ms,
-                SUPPORT_SCROLL_SETTLE_MS,
-            );
-            match result {
-                Ok(()) => {
-                    self.emit_debug(
-                        "SupportSelect",
-                        &format!("{scroll_msg} [minitouch]"),
-                    );
-                    // Block until the settle + UP have actually landed
-                    // on the device, otherwise the caller's "look at
-                    // the new frame" check would race the swipe.
-                    let total = Duration::from_millis(
-                        (swipe_ms + SUPPORT_SCROLL_SETTLE_MS + 150) as u64,
-                    );
-                    thread::sleep(total);
-                    return true;
-                }
-                Err(err) => {
-                    eprintln!(
-                        "[minitouch] swipe failed, marking client dead and falling back: {err}"
-                    );
-                    // The TCP connection is probably broken; drop the
-                    // client so the next scroll either retries the
-                    // bring-up or stays on the fallback.
-                    self.minitouch = Some(Err(()));
-                }
-            }
-        }
-
-        self.emit_debug("SupportSelect", &scroll_msg);
+        // The active touch backend (minitouch / adb-input / sendevent
+        // …) is selected at runner construction time; tag the log line
+        // with its name so an operator can tell at a glance which
+        // backend produced the gesture they're triaging.
+        self.emit_debug(
+            "SupportSelect",
+            &format!("{scroll_msg} [{}]", self.touch.name()),
+        );
         self.swipe_with_settle_at(
             "SupportSelect",
             Point::new(0.50, from_y),
@@ -4059,7 +3969,7 @@ impl Runner {
     /// and is safe to tap whether or not an animation is currently
     /// playing -- on a normal Battle frame this region is the turn-counter
     /// pill which has no interactive effect.
-    fn skip_after_skill(&self) {
+    fn skip_after_skill(&mut self) {
         let _ = self.tap_at("Battle", SKIP_ANIMATION_BUTTON);
         thread::sleep(ACTION_DELAY);
     }
@@ -4078,18 +3988,52 @@ impl Runner {
     }
 }
 
+/// Resolve `<resources>/minitouch/` so the touch factory can find
+/// per-ABI binaries. Looks in the production bundle path first, then
+/// the dev-mode `CARGO_MANIFEST_DIR/resources/minitouch/`. Returns the
+/// first existing path so dev (`pnpm tauri dev`) and release
+/// (`pnpm tauri build`) layouts both work without per-config code.
+fn minitouch_binary_dir(app_handle: &tauri::AppHandle) -> Option<PathBuf> {
+    use tauri::Manager;
+    if let Ok(base) = app_handle.path().resource_dir() {
+        let bundled = base.join("resources").join("minitouch");
+        if bundled.is_dir() {
+            return Some(bundled);
+        }
+    }
+    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("resources")
+        .join("minitouch");
+    if dev.is_dir() {
+        return Some(dev);
+    }
+    None
+}
+
+/// Build the appropriate `TouchBackend` for this runner. Picks the
+/// backend from the `MASH_TOUCH_BACKEND` env var (see
+/// `TouchBackendKind::from_env`), resolves the minitouch resources
+/// dir, and delegates to `touch::build` which handles auto-fallback.
+fn build_touch_backend(
+    app_handle: &tauri::AppHandle,
+    adb: &Adb,
+    screen: (u32, u32),
+) -> Box<dyn TouchBackend> {
+    let kind = TouchBackendKind::from_env();
+    // Use a "no such directory" path as the resources_dir fallback so
+    // the minitouch bring-up fails cleanly with "binary not found"
+    // (handled by the factory) when the bundle doesn't ship the dir.
+    let dir = minitouch_binary_dir(app_handle).unwrap_or_else(|| PathBuf::from("/dev/null"));
+    let backend = touch::build(kind, adb, &dir, screen);
+    eprintln!("[touch] backend selected: {}", backend.name());
+    backend
+}
+
 impl Drop for Runner {
     fn drop(&mut self) {
-        // Tear down minitouch (if any) before everything else: kills the
-        // device-side process and removes the ADB port forward so the
-        // next Runner starts clean.
-        if let Some(Ok(mt)) = self.minitouch.take() {
-            let port = mt.local_port();
-            drop(mt); // Minitouch::Drop kills the child + closes TCP.
-            if let Err(err) = self.adb.forward_remove(port) {
-                eprintln!("[minitouch] failed to remove tcp:{port} forward: {err}");
-            }
-        }
+        // The touch backend's own Drop handles its cleanup (kill
+        // minitouch child, remove forwarded port, etc.). We don't need
+        // to do anything extra here for it.
 
         let Some(mut sidecar) = self.sidecar.take() else {
             return;
