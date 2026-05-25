@@ -953,9 +953,18 @@ const ACTION_DELAY: Duration = Duration::from_millis(300);
 /// finding the pinned servant, the runner aborts with an error so the user
 /// isn't stuck looping forever on a servant that simply isn't available.
 const SUPPORT_MAX_REFRESHES: u32 = 99;
-/// Settle time after the support-list scroll swipe completes; long enough
-/// for momentum scrolling to come to rest before the next OCR pass.
-const SUPPORT_SCROLL_SETTLE: Duration = Duration::from_millis(900);
+/// Settle time after the support-list scroll swipe completes, before
+/// the next OCR pass. The settle hold *inside* `swipe_with_settle`
+/// already lifts the finger at near-zero velocity (see
+/// `SUPPORT_SCROLL_SETTLE_MS`), so the list isn't bouncing or flinging
+/// when we wake up — this is just the buffer for the row cards to
+/// re-render at their new positions. Empirically the redraw completes
+/// in well under 300 ms on real devices; 450 ms keeps comfortable
+/// headroom for slower emulators / a low-end CPU without pinning the
+/// runner at the old "wait nearly a second between every scroll"
+/// cadence (was 900 ms before the fling-avoiding settle gesture made
+/// the longer wait redundant).
+const SUPPORT_SCROLL_SETTLE: Duration = Duration::from_millis(450);
 /// The y from which the scroll swipe starts (finger-down point). Sits in
 /// the lower half of the list so the symmetric `to` point can always
 /// stay above it for an "up" swipe even at `SUPPORT_SCROLL_MAX_DELTA`.
@@ -1007,9 +1016,13 @@ const SUPPORT_SCROLL_MAX_DURATION_MS: u32 = 2000;
 /// settle-style support-list scroll. Must exceed Android's velocity
 /// tracker sliding window (~100 ms on most devices) so the tracker
 /// sees a stretch of "no motion" right before UP and reports ~0 px/s.
-/// 400 ms is comfortably above the threshold while only adding a small
-/// constant tax on top of the active-motion duration.
-const SUPPORT_SCROLL_SETTLE_MS: u32 = 400;
+/// 250 ms gives ~2.5× the velocity-tracker window on modern Android
+/// (the window shortened from ~100 ms on older versions to ~80 ms on
+/// 12+), comfortably above the fling threshold while shaving 150 ms
+/// off each scroll cycle vs. the original 400 ms — empirically the
+/// list still stops dead at the lift point on the devices we've
+/// tested. Bump back up if a future device leaks a fling.
+const SUPPORT_SCROLL_SETTLE_MS: u32 = 250;
 /// Settle time after tapping the "refresh friend list" button. The friend
 /// list refetch and re-render takes ~2.5s on slow devices; one extra second
 /// of buffer keeps us from OCRing a half-loaded list.
