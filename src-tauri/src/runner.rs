@@ -865,12 +865,15 @@ fn scroll_support_list_delta(confirm_button_anchors: &[NormRect]) -> f64 {
     // end-of-list pages.
     let next_button_y = bottom_y + pitch;
     let has_partial_row_below = next_button_y - pitch * 0.5 < 1.0;
-    let effective_delta = if has_partial_row_below {
+    let geometric_delta = if has_partial_row_below {
         raw + pitch
     } else {
         raw
     };
-    effective_delta.min(SUPPORT_SCROLL_MAX_DELTA)
+    // Push the swipe a hair past the geometric target so the
+    // previous-page bottom row is unambiguously off-screen rather than
+    // leaving a sliver of it visible above the new top row.
+    (geometric_delta + SUPPORT_SCROLL_OVERSHOOT).min(SUPPORT_SCROLL_MAX_DELTA)
 }
 
 /// Pick the active-motion (MOVE-phase) duration in ms for a settle
@@ -971,6 +974,14 @@ const SUPPORT_SCROLL_MAX_DELTA: f64 = 0.65;
 /// were detected so we still make progress on devices / resolutions
 /// where the template / shape detector misses the button column.
 const SUPPORT_SCROLL_FALLBACK_DELTA: f64 = 0.40;
+/// Small extra scroll past the "geometric" target — `(N - 1) * pitch`
+/// (or `N * pitch` with the partial-row extrapolation) brings the
+/// new top row's button to the same y the old top button was at,
+/// but operators reported a thin sliver of the previous row still
+/// peeking above the new top row. This pushes the swipe a bit
+/// further so the previous row is unambiguously off-screen. Roughly
+/// `0.04 * 1440 ≈ 58 px` on the canonical BlueStacks CN resolution.
+const SUPPORT_SCROLL_OVERSHOOT: f64 = 0.04;
 /// Target finger velocity for the support-list swipe, in normalized
 /// units (fraction of screen height) per second. Kept low so the
 /// gesture's lift-off velocity stays under Android's fling threshold
@@ -7015,34 +7026,42 @@ mod tests {
     }
 
     #[test]
-    fn scroll_delta_moves_last_row_to_first_row_position() {
+    fn scroll_delta_moves_last_row_just_past_first_row_position() {
         // Three visible cards (button tops at 0.364, 0.642, 0.919) is the
-        // canonical CN debug fixture geometry: row pitch ≈ 0.278, so the
-        // computed delta should shift the bottom button to exactly where
-        // the top button currently sits, making the old bottom card the
-        // new top card.
+        // canonical CN debug fixture geometry: row pitch ≈ 0.278. The
+        // geometric delta `(N - 1) * pitch = 0.555` would put the
+        // bottom button exactly where the top button was; the runner
+        // adds `SUPPORT_SCROLL_OVERSHOOT` so the previous-page bottom
+        // row is unambiguously off-screen rather than leaving a thin
+        // tail visible above the new top row.
         let anchors = vec![
             anchor_at_y(0.364),
             anchor_at_y(0.642),
             anchor_at_y(0.919),
         ];
         let delta = scroll_support_list_delta(&anchors);
-        assert!((delta - (0.919 - 0.364)).abs() < 1e-9);
-        // After scrolling, the old last button lands at the old top
-        // button's y — i.e. the old bottom row becomes the new top row.
+        let geometric = 0.919 - 0.364;
+        assert!((delta - (geometric + SUPPORT_SCROLL_OVERSHOOT)).abs() < 1e-9);
+        // After scrolling, the old last button lands a hair *above*
+        // where the old top button used to sit — by exactly the
+        // overshoot amount.
         let new_position_of_last_button = 0.919 - delta;
-        assert!((new_position_of_last_button - 0.364).abs() < 1e-9);
+        assert!((new_position_of_last_button - (0.364 - SUPPORT_SCROLL_OVERSHOOT)).abs() < 1e-9);
     }
 
     #[test]
     fn scroll_delta_handles_two_visible_buttons_at_end_of_list() {
         // Two visible cards near the bottom of the screen: there's no
         // room for a partial row below the lower button, so we treat
-        // this as a genuine end-of-list page and scroll exactly one
-        // pitch — the old second card becomes the new top card.
+        // this as a genuine end-of-list page and scroll one pitch
+        // (plus the standard overshoot) so the old second card becomes
+        // the new top card.
         let anchors = vec![anchor_at_y(0.62), anchor_at_y(0.92)];
         let delta = scroll_support_list_delta(&anchors);
-        assert!((delta - 0.30).abs() < 1e-9, "got {delta}");
+        assert!(
+            (delta - (0.30 + SUPPORT_SCROLL_OVERSHOOT)).abs() < 1e-9,
+            "got {delta}"
+        );
     }
 
     #[test]
@@ -7053,18 +7072,19 @@ mod tests {
         // the bottom edge. Anchors at y=0.462 and y=0.740 with row
         // pitch ≈ 0.278 — the third row's button would be at y=1.018,
         // i.e. just barely off-screen, while its card content is still
-        // ~88% visible. We must scroll 2 pitches (≈0.556) so the
-        // partial bottom row becomes the new top row, not the middle
-        // row.
+        // ~88% visible. We must scroll 2 pitches (≈0.556) plus a small
+        // overshoot so the partial bottom row becomes the new top row
+        // with no sliver of the previous row peeking above it.
         //
         // This is the case shown in the debug2/debug1 PR thread where
         // the previous `(n - 1) * pitch` formula undershot by exactly
         // one row.
         let anchors = vec![anchor_at_y(0.462), anchor_at_y(0.740)];
         let delta = scroll_support_list_delta(&anchors);
+        let two_pitches = 2.0 * (0.740 - 0.462);
         assert!(
-            (delta - 0.556).abs() < 1e-6,
-            "expected 2-pitch extrapolation (~0.556), got {delta}"
+            (delta - (two_pitches + SUPPORT_SCROLL_OVERSHOOT)).abs() < 1e-6,
+            "expected 2-pitch extrapolation + overshoot, got {delta}"
         );
     }
 
@@ -7073,12 +7093,16 @@ mod tests {
         // Two buttons, bottom one near the screen edge: there's < half
         // a row's worth of space below `bottom_y`, so we should NOT
         // assume a partial third row exists. Falls into the
-        // end-of-list bucket.
+        // end-of-list bucket and gets the standard overshoot on top of
+        // the raw 1-pitch delta.
         let anchors = vec![anchor_at_y(0.55), anchor_at_y(0.90)];
         let pitch = 0.35;
         // bottom_y + pitch/2 = 0.90 + 0.175 = 1.075 > 1.0 → no partial.
         let delta = scroll_support_list_delta(&anchors);
-        assert!((delta - pitch).abs() < 1e-9, "got {delta}");
+        assert!(
+            (delta - (pitch + SUPPORT_SCROLL_OVERSHOOT)).abs() < 1e-9,
+            "got {delta}"
+        );
     }
 
     #[test]

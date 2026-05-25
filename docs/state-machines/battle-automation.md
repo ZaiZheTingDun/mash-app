@@ -97,7 +97,11 @@ their real screens:
   half-visible row in the middle of the next page instead of at the
   top. End-of-list pages (bottom button already near the screen
   edge) bypass the extrapolation and scroll the raw `(N - 1) *
-  pitch` instead. When only a single anchor (or no anchors) is
+  pitch` instead. On top of either path, the runner adds a small
+  `SUPPORT_SCROLL_OVERSHOOT` (`0.04` normalized ≈ 58 px on a 1440-tall
+  screen) so the previous-page bottom row is unambiguously off-screen
+  rather than leaving a thin sliver of it visible above the new top
+  row. When only a single anchor (or no anchors) is
   visible — usually a template/shape detector glitch — the runner
   falls back to `SUPPORT_SCROLL_FALLBACK_DELTA` so it still makes
   forward progress.
