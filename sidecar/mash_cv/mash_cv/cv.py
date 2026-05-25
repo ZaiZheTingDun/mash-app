@@ -3174,6 +3174,16 @@ def _support_grand_badge_visible_near_buttons(
     ``SUPPORT_GRAND_BADGE_W + 2*SUPPORT_GRAND_BADGE_ROI_PAD_X`` per
     anchor, so the total cost is O(rows visible) and bounded
     well under a millisecond even on 1440p frames.
+
+    The template ship is captured at a single reference resolution
+    (currently 2560×1440 CN), but devices stream the support list at
+    whatever the scrcpy max-size negotiated — typically 1920×1080.
+    To stay resolution-independent we rescale the template to the
+    expected normalized badge size (``SUPPORT_GRAND_BADGE_W`` ×
+    ``SUPPORT_GRAND_BADGE_H``) in *this frame's* pixel grid before
+    matching. Without that step, a 314×28-px template against a
+    282×47-px ROI on a 1920-wide frame fails the size guard and
+    silently turns every Grand row into a "miss".
     """
     template = templates.get(SUPPORT_GRAND_BADGE_TEMPLATE)
     if template is None:
@@ -3183,9 +3193,18 @@ def _support_grand_badge_visible_near_buttons(
     h, w = img.shape[:2]
     if h == 0 or w == 0:
         return False
-    th, tw = template.shape[:2]
-    if th == 0 or tw == 0:
+    target_tw = max(1, int(round(SUPPORT_GRAND_BADGE_W * w)))
+    target_th = max(1, int(round(SUPPORT_GRAND_BADGE_H * h)))
+    if target_tw <= 1 or target_th <= 1:
         return False
+    # INTER_AREA is the cheapest downscaler that preserves the
+    # ribbon's gold-text edges (which is what TM_CCOEFF_NORMED keys
+    # on). Upscaling would happen only on absurdly large captures
+    # (≥3840 wide) where the cv stream is already non-standard, so
+    # the same kernel is fine for both directions.
+    scaled_template = cv2.resize(
+        template, (target_tw, target_th), interpolation=cv2.INTER_AREA
+    )
     pad_x_px = int(round(SUPPORT_GRAND_BADGE_ROI_PAD_X * w))
     pad_y_px = int(round(SUPPORT_GRAND_BADGE_ROI_PAD_Y * h))
     for anchor in button_anchors:
@@ -3201,9 +3220,9 @@ def _support_grand_badge_visible_near_buttons(
         badge_top_px = int(round((ay + SUPPORT_GRAND_BADGE_DY) * h))
         x0 = max(0, badge_left_px - pad_x_px)
         y0 = max(0, badge_top_px - pad_y_px)
-        x1 = min(w, badge_left_px + tw + pad_x_px)
-        y1 = min(h, badge_top_px + th + pad_y_px)
-        if x1 - x0 < tw or y1 - y0 < th:
+        x1 = min(w, badge_left_px + target_tw + pad_x_px)
+        y1 = min(h, badge_top_px + target_th + pad_y_px)
+        if x1 - x0 < target_tw or y1 - y0 < target_th:
             # ROI clipped past the frame edge — happens when a row's
             # button is detected but the ribbon would render off-screen
             # (e.g. the very first row scrolled into a partial state).
@@ -3217,7 +3236,7 @@ def _support_grand_badge_visible_near_buttons(
         # a type-mismatch assert.
         if roi.ndim == 3:
             roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        result = cv2.matchTemplate(roi, template, cv2.TM_CCOEFF_NORMED)
+        result = cv2.matchTemplate(roi, scaled_template, cv2.TM_CCOEFF_NORMED)
         if float(result.max()) >= SUPPORT_GRAND_BADGE_MATCH_THRESHOLD:
             return True
     return False

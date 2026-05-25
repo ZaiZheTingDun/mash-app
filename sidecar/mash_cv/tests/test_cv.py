@@ -2021,6 +2021,39 @@ def test_grand_badge_visible_hits_on_real_grand_support_capture():
     not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
     reason="CN production templates dir not available",
 )
+def test_grand_badge_visible_hits_on_1920x1080_downscale():
+    """Regression: the ribbon template (314×28 px, extracted from a
+    2560×1440 source) is wider than the per-anchor ROI on a 1920×1080
+    capture (the resolution scrcpy negotiates on most BlueStacks /
+    Pixel devices). Before the resize fix, every anchor's ROI was
+    tripped by the "ROI too small" guard and the function returned
+    ``False`` even when a Grand row was clearly visible — operators
+    saw 冠 ✗ over a perfectly aligned overlay box. Pin the
+    1920×1080-aware behaviour so a regression on the rescale path
+    fails this test before it reaches a live device."""
+    import mash_cv.cv as cv
+
+    fixture = os.path.join(_TEST_SCREENSHOTS_DIR, "grand_support_bond.png")
+    if not os.path.isfile(fixture):
+        pytest.skip("grand_support_bond.png fixture not available")
+
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    src = cv2.imread(fixture, cv2.IMREAD_COLOR)
+    downscaled = cv2.resize(src, (1920, 1080), interpolation=cv2.INTER_AREA)
+    anchors = cv._support_find_confirm_button_anchors(downscaled)
+    # The downscaled frame keeps the original layout, so the same
+    # rows / anchors should resolve at the new resolution.
+    assert len(anchors) >= 2, anchors
+    assert (
+        cv._support_grand_badge_visible_near_buttons(downscaled, anchors)
+        is True
+    )
+
+
+@pytest.mark.skipif(
+    not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
+    reason="CN production templates dir not available",
+)
 def test_grand_badge_visible_misses_on_ordinary_support_capture():
     """And the negative case: a regular non-Grand support-select page
     must NOT trip the per-anchor probe. ``support_select.png`` has
