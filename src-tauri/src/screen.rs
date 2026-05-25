@@ -439,6 +439,17 @@ pub struct SupportDiagnostics {
     /// the bottom row off-screen).
     #[serde(default)]
     pub confirm_button_anchors: Vec<NormRect>,
+    /// Whether at least one Grand servant ("冠位从者") row is currently
+    /// visible. The sidecar probes for the gold-on-blue ribbon at a
+    /// fixed offset next to each `confirm_button_anchors` entry rather
+    /// than scanning the whole avatar column, which used to false-match
+    /// other gold-on-blue chrome and either kept the runner scrolling
+    /// past an exhausted Grand section or stopped scrolling too early
+    /// on a still-full one. `None` means the active server's template
+    /// bundle doesn't ship the ribbon (e.g. JP), so callers should fall
+    /// back to the scroll-bar end indicator.
+    #[serde(default)]
+    pub is_grand_section_visible: Option<bool>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

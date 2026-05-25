@@ -110,16 +110,6 @@
                 "h": 0.096
               },
               "threshold": 0.85
-            },
-            "grand_servant_support_bottom_line": {
-              "template": "text_grand_servant_support_bottom_line",
-              "region": {
-                "x": 0.035,
-                "y": 0.225,
-                "w": 0.145,
-                "h": 0.725
-              },
-              "threshold": 0.75
             }
           }
         },

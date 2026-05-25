@@ -70,12 +70,21 @@ their real screens:
   screen is actionable status.
 - `SupportSelect.variants.main.elements.support_scroll_end`: detects the bottom
   of the support list.
-- `SupportSelect.variants.main.elements.grand_servant_support_bottom_line`:
-  CN-only status probe for Grand support lists. Grand servants are ordered
-  before ordinary servants; after this avatar-frame marker has been seen in
-  the current refreshed list, two consecutive misses mean the runner treats
-  the Grand section as exhausted and refreshes instead of scrolling through
-  ordinary supports.
+- "冠位从者" ribbon probe (CN-only, surfaced as
+  `FindSupportsResult.diagnostics.isGrandSectionVisible`). Grand servants are
+  ordered before ordinary servants, so the runner needs to know when the
+  Grand section has scrolled off-screen. The sidecar template-matches the
+  gold-on-blue ribbon (`text_grand_servant_support_bottom_line` PNG) inside
+  a tight ROI at a fixed offset to the left of every detected
+  `confirm_button_anchors` entry — if any anchor's ROI clears the match
+  threshold, the section is still visible. After the first visible ribbon
+  has been seen in the current refreshed list, two consecutive misses mean
+  the runner treats the Grand section as exhausted and refreshes instead of
+  scrolling through ordinary supports. The earlier implementation scanned
+  the entire avatar column for the ribbon, which kept false-matching other
+  gold-on-blue chrome (登录顺序 button, score banners) and either kept the
+  runner scrolling past an exhausted section or stopped scrolling too
+  early.
 - `SupportSelect.variants.refreshConfirm.detect` / `.elements.dialog_refresh_support`:
   detects the JP refresh-confirm modal that appears after tapping the support
   refresh button; the runner confirms it, then waits for the modal to vanish
@@ -193,11 +202,13 @@ one of the Grand bond icons: `icon_grand_bond_ce` for the original bond
 CE, or `icon_grand_bond_ce_np` for the Grand-linked bond CE. Enabled CE
 art and icon checks must all pass before the row can be selected.
 
-On CN Grand support lists, the runner also watches
-`grand_servant_support_bottom_line` in the fixed left avatar-frame column.
-If no matching support row was selected, the runner first needs to see that
-marker in the current refreshed list. Once seen, two consecutive missing
-probes mean the remaining visible rows are ordinary supports, so it refreshes
+On CN Grand support lists, the runner also watches the per-anchor
+"冠位从者" ribbon probe surfaced as
+`SupportDiagnostics.isGrandSectionVisible` (see the Template Probes
+section). If no matching support row was selected, the runner first needs
+to see at least one visible ribbon in the current refreshed list. Once
+seen, two consecutive missing probes mean the remaining visible rows are
+ordinary supports, so it refreshes
 instead of continuing to the scroll-bar bottom. If the marker was never seen,
 the runner keeps the older scroll-to-bottom behavior for that refreshed list.
 Server bundles without this probe also keep the older scroll-to-bottom

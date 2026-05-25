@@ -362,6 +362,7 @@ export interface SupportDiagnosticsDto {
   supportSkillContourSplit?: boolean;
   supportRowAnchorSearchRegion?: NormRectDto | null;
   confirmButtonAnchors?: NormRectDto[];
+  isGrandSectionVisible?: boolean | null;
 }
 
 export interface FindSupportsResultDto {

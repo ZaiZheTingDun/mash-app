@@ -1968,6 +1968,109 @@ def test_find_supports_confirm_button_anchors_empty_when_no_buttons(monkeypatch)
     assert result["diagnostics"]["confirmButtonAnchors"] == []
 
 
+def test_grand_badge_visible_returns_none_when_template_missing(monkeypatch):
+    """The probe must return ``None`` (rather than a misleading
+    ``False``) when the active server bundle hasn't loaded the
+    "冠位从者" ribbon template — that's the runner's signal to fall
+    back to scroll-bar-end instead of treating "no badge anchor" as
+    "section exhausted"."""
+    import mash_cv.cv as cv
+
+    monkeypatch.setattr(cv, "templates", {})
+    img = np.full((1440, 2560, 3), 96, dtype=np.uint8)
+    anchors = [{"x": 0.85, "y": 0.43, "w": 0.07, "h": 0.06}]
+    assert cv._support_grand_badge_visible_near_buttons(img, anchors) is None
+
+
+def test_grand_badge_visible_returns_false_when_no_anchors():
+    """No confirm-button anchors → nothing to probe → ``False`` so
+    the runner records a "section exhausted" miss for this poll
+    (matches the old global-region scan's behaviour on a list that
+    only shows ordinary supports)."""
+    import mash_cv.cv as cv
+
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    img = np.full((1440, 2560, 3), 96, dtype=np.uint8)
+    assert cv._support_grand_badge_visible_near_buttons(img, []) is False
+
+
+@pytest.mark.skipif(
+    not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
+    reason="CN production templates dir not available",
+)
+def test_grand_badge_visible_hits_on_real_grand_support_capture():
+    """End-to-end: with the CN templates loaded and a real Grand
+    support-select capture, the per-anchor probe must say "Grand
+    visible". The fixture has three Grand rows (top one partial),
+    so at least one badge sits in the ribbon ROI of every detected
+    button anchor."""
+    import mash_cv.cv as cv
+
+    fixture = os.path.join(_TEST_SCREENSHOTS_DIR, "grand_support_bond.png")
+    if not os.path.isfile(fixture):
+        pytest.skip("grand_support_bond.png fixture not available")
+
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    img = cv2.imread(fixture, cv2.IMREAD_COLOR)
+    anchors = cv._support_find_confirm_button_anchors(img)
+    assert len(anchors) >= 2, anchors
+    assert cv._support_grand_badge_visible_near_buttons(img, anchors) is True
+
+
+@pytest.mark.skipif(
+    not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
+    reason="CN production templates dir not available",
+)
+def test_grand_badge_visible_misses_on_ordinary_support_capture():
+    """And the negative case: a regular non-Grand support-select page
+    must NOT trip the per-anchor probe. ``support_select.png`` has
+    several confirm-button anchors but no Grand rows; the global max
+    template-match score on this fixture is ~0.56 — well under the
+    0.65 threshold — and the only positions clearing it sit outside
+    every projected ribbon ROI."""
+    import mash_cv.cv as cv
+
+    fixture = os.path.join(_TEST_SCREENSHOTS_DIR, "support_select.png")
+    if not os.path.isfile(fixture):
+        pytest.skip("support_select.png fixture not available")
+
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    img = cv2.imread(fixture, cv2.IMREAD_COLOR)
+    anchors = cv._support_find_confirm_button_anchors(img)
+    assert cv._support_grand_badge_visible_near_buttons(img, anchors) is False
+
+
+@pytest.mark.skipif(
+    not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
+    reason="CN production templates dir not available",
+)
+def test_find_supports_surfaces_grand_section_visible_diagnostic(monkeypatch):
+    """`_find_supports` must publish ``isGrandSectionVisible`` in
+    diagnostics whenever the CN templates are loaded — the runner
+    consumes this exact field to decide whether the Grand section
+    has scrolled off-screen, so any silent rename here desyncs the
+    Rust/Python boundary."""
+    import mash_cv.cv as cv
+
+    fixture = os.path.join(_TEST_SCREENSHOTS_DIR, "grand_support_bond.png")
+    if not os.path.isfile(fixture):
+        pytest.skip("grand_support_bond.png fixture not available")
+
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    img = cv2.imread(fixture, cv2.IMREAD_COLOR)
+    monkeypatch.setattr(cv, "_get_ocr", lambda: None)
+    result = cv._find_supports(
+        img,
+        cv.SUPPORT_LIST_REGION,
+        "アルトリア・キャスター",
+        ["きみをいだく希望の星"],
+        cv.SUPPORT_NAME_THRESHOLD,
+        cv.SUPPORT_NP_THRESHOLD,
+        cv.SUPPORT_ROW_PAIR_DY,
+    )
+    assert result["diagnostics"]["isGrandSectionVisible"] is True
+
+
 @pytest.mark.skipif(
     not os.path.isfile(
         os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug1.png"))

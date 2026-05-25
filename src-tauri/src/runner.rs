@@ -275,7 +275,6 @@ const BATTLE_SCREEN: &str = "Battle";
 const SUPPORT_SELECT_SCREEN: &str = "SupportSelect";
 pub const ATTACK_BUTTON_ELEMENT: &str = "attack_button";
 const SUPPORT_SCROLL_END_ELEMENT: &str = "support_scroll_end";
-const SUPPORT_GRAND_SERVANT_BOTTOM_LINE_ELEMENT: &str = "grand_servant_support_bottom_line";
 /// Party servant auto-placement is reserved for a later implementation.
 /// Keep the config shape intact, but do not enter ServantSelect from
 /// TeamConfirm yet.
@@ -2076,10 +2075,14 @@ impl Runner {
         // No match in the visible viewport. Normal support scans use the
         // scroll-bar tail indicator as the source of truth. Grand support
         // scans can stop earlier: Grand rows are listed before ordinary
-        // rows, and the CN avatar-frame bottom-line template disappears
-        // once the visible page has moved past the Grand section.
-        let grand_section_exhausted =
-            self.config.support_grand_mode && self.update_support_grand_section_exhausted();
+        // rows, and the per-anchor "冠位从者" ribbon probe (run by the
+        // sidecar inside `find_supports` and surfaced via
+        // `diagnostics.is_grand_section_visible`) goes false once the
+        // visible page has scrolled past the Grand section.
+        let grand_section_exhausted = self.config.support_grand_mode
+            && self.update_support_grand_section_exhausted(
+                result.diagnostics.is_grand_section_visible,
+            );
         if !grand_section_exhausted && !self.support_scroll_bar_at_end() {
             self.emit(
                 "SupportSelect",
@@ -2408,56 +2411,23 @@ impl Runner {
         }
     }
 
-    /// In Grand support mode, return whether the current viewport still
-    /// contains at least one Grand-servant avatar frame. `None` means the
-    /// active server bundle doesn't define the probe, so callers should keep
-    /// the legacy scroll-to-bottom behavior.
-    fn update_support_grand_section_exhausted(&mut self) -> bool {
-        let visible = self.support_grand_servant_section_visible();
+    /// In Grand support mode, given the sidecar's per-frame "is at
+    /// least one Grand row visible?" probe (from
+    /// `SupportDiagnostics::is_grand_section_visible`), update the
+    /// rolling miss counter and return whether the Grand section has
+    /// been exhausted. `None` from the sidecar means the active
+    /// server bundle doesn't ship the ribbon template, so callers
+    /// fall back to scroll-bar-end via the helper's existing logic.
+    fn update_support_grand_section_exhausted(&mut self, visible: Option<bool>) -> bool {
+        eprintln!(
+            "[runner] grand-servant ribbon visible={:?} (seen={}, misses={})",
+            visible, self.support_grand_section_seen, self.support_grand_section_misses,
+        );
         support_grand_section_exhausted_after_probe(
             visible,
             &mut self.support_grand_section_seen,
             &mut self.support_grand_section_misses,
         )
-    }
-
-    fn support_grand_servant_section_visible(&mut self) -> Option<bool> {
-        match self.sidecar().find_element_by_name(
-            None,
-            SUPPORT_SELECT_SCREEN,
-            SUPPORT_GRAND_SERVANT_BOTTOM_LINE_ELEMENT,
-        ) {
-            Ok(m) => {
-                eprintln!(
-                    "[runner] grand-servant frame-bottom score={:.3} -> {}",
-                    m.score,
-                    if m.found {
-                        "grand-visible"
-                    } else {
-                        "grand-exhausted"
-                    },
-                );
-                Some(m.found)
-            }
-            Err(e)
-                if is_unknown_element_error(
-                    &e,
-                    SUPPORT_SELECT_SCREEN,
-                    SUPPORT_GRAND_SERVANT_BOTTOM_LINE_ELEMENT,
-                ) =>
-            {
-                eprintln!(
-                    "[runner] grand-servant frame-bottom probe unavailable; using scroll-bar end"
-                );
-                None
-            }
-            Err(e) => {
-                eprintln!(
-                    "[runner] grand-servant frame-bottom check failed (keeping scroll path): {e}"
-                );
-                Some(true)
-            }
-        }
     }
 
     /// After tapping the support-list refresh button, confirm the modal when

@@ -314,6 +314,41 @@ SUPPORT_CONFIRM_BUTTON_ROW_MATCH_TOLERANCE = 0.035
 SUPPORT_PANEL_ANCHOR_TO_SCORE_TOP_DY = 0.1667
 SUPPORT_BUTTON_ANCHOR_TO_SCORE_TOP_DY = 0.147
 
+# Bottom-left "冠位从者" ribbon overlaid on each Grand servant's
+# avatar portrait. Its position is rigidly fixed relative to the
+# row's right-side "助战编队确认" button, so probing each detected
+# confirm-button anchor at the offsets below is both cheaper and
+# more selective than the original "scan the whole avatar column"
+# approach — which kept false-matching other gold-on-blue UI
+# elements (登录顺序 button, scoreboard chrome, etc.) and either
+# kept the runner scrolling in an exhausted Grand section or stopped
+# scrolling too early on a still-full one.
+#
+# Offsets are top-left → top-left, measured in normalized space from
+# the confirm-button bbox to the ribbon bbox on
+# ``tests/test_data/screenshots/grand_support_bond.png`` (1440×2560,
+# CN client). The y-pitch between rows is rigid because the list
+# uses fixed row heights, so the same delta lands on every row.
+SUPPORT_GRAND_BADGE_TEMPLATE = "text_grand_servant_support_bottom_line"
+SUPPORT_GRAND_BADGE_DX = -0.811
+SUPPORT_GRAND_BADGE_DY = 0.201
+SUPPORT_GRAND_BADGE_W = 0.123
+SUPPORT_GRAND_BADGE_H = 0.019
+# Small slack so per-frame jitter and minor source-resolution drift
+# don't drop a real match. Empirically the badge top-left stayed
+# within ±5 px on the fixtures we have, but 0.012 (≈18 px at 1440p
+# height / 30 px at 2560 width) keeps headroom without enlarging the
+# ROI enough to start picking up neighbouring UI.
+SUPPORT_GRAND_BADGE_ROI_PAD_X = 0.012
+SUPPORT_GRAND_BADGE_ROI_PAD_Y = 0.012
+# Grand row matches landed at 0.72–1.00 in the test fixture; the
+# next-best non-row match peaked at 0.62 and sat outside any
+# confirm-button anchor's projected ribbon ROI anyway. 0.65 gives
+# clean separation while still allowing for a partial overlay
+# (e.g. the bond-CE gem icon clipping the ribbon's right edge on
+# rows whose 等级 number is wide).
+SUPPORT_GRAND_BADGE_MATCH_THRESHOLD = 0.65
+
 # Per-row NMS y-distance — rows are pitched ~0.28 apart in the list,
 # so 0.05 collapses any duplicate masks (which only ever occur from
 # morphology-induced contour splits at the same row).
@@ -2515,6 +2550,12 @@ def _find_supports(
         # and pushing the bottom-row button off-screen on layouts
         # where rows are pitched tighter than the default delta).
         "confirmButtonAnchors": [],
+        # Whether at least one Grand servant ("冠位从者") row is
+        # currently visible — derived by probing the fixed-offset
+        # ribbon position next to each detected confirm-button anchor.
+        # ``None`` when the active server bundle doesn't ship the
+        # ribbon template (callers fall back to scroll-bar-end).
+        "isGrandSectionVisible": None,
         **_support_diagnostics_meta(),
     }
     if h == 0 or w == 0:
@@ -2533,6 +2574,9 @@ def _find_supports(
         }
         for a in confirm_anchors
     ]
+    diag["isGrandSectionVisible"] = _support_grand_badge_visible_near_buttons(
+        img, confirm_anchors
+    )
 
     rx = max(0, int(round(list_region["x"] * w)))
     ry = max(0, int(round(list_region["y"] * h)))
@@ -3114,6 +3158,69 @@ def _support_find_row_anchors(img: np.ndarray) -> list[dict]:
     return _dedupe_support_anchors(
         sorted(buttons + panels, key=lambda c: (c["y"], c["x"]))
     )
+
+
+def _support_grand_badge_visible_near_buttons(
+    img: np.ndarray, button_anchors: list[dict]
+) -> Optional[bool]:
+    """Return ``True`` iff at least one supplied confirm-button anchor
+    has a "冠位从者" ribbon at the expected fixed offset; ``False``
+    when anchors exist but none match; ``None`` when the active server
+    bundle doesn't ship the badge template (so callers can fall back
+    to a different "section exhausted" signal instead of treating the
+    absence as "no Grand visible").
+
+    The probe template-matches inside a tight ROI of width
+    ``SUPPORT_GRAND_BADGE_W + 2*SUPPORT_GRAND_BADGE_ROI_PAD_X`` per
+    anchor, so the total cost is O(rows visible) and bounded
+    well under a millisecond even on 1440p frames.
+    """
+    template = templates.get(SUPPORT_GRAND_BADGE_TEMPLATE)
+    if template is None:
+        return None
+    if not button_anchors:
+        return False
+    h, w = img.shape[:2]
+    if h == 0 or w == 0:
+        return False
+    th, tw = template.shape[:2]
+    if th == 0 or tw == 0:
+        return False
+    pad_x_px = int(round(SUPPORT_GRAND_BADGE_ROI_PAD_X * w))
+    pad_y_px = int(round(SUPPORT_GRAND_BADGE_ROI_PAD_Y * h))
+    for anchor in button_anchors:
+        try:
+            ax = float(anchor["x"])
+            ay = float(anchor["y"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        # Top-left of the expected badge in pixels, then expanded by
+        # the slack pad in each direction so matchTemplate has room
+        # to slide and absorb minor frame-to-frame jitter.
+        badge_left_px = int(round((ax + SUPPORT_GRAND_BADGE_DX) * w))
+        badge_top_px = int(round((ay + SUPPORT_GRAND_BADGE_DY) * h))
+        x0 = max(0, badge_left_px - pad_x_px)
+        y0 = max(0, badge_top_px - pad_y_px)
+        x1 = min(w, badge_left_px + tw + pad_x_px)
+        y1 = min(h, badge_top_px + th + pad_y_px)
+        if x1 - x0 < tw or y1 - y0 < th:
+            # ROI clipped past the frame edge — happens when a row's
+            # button is detected but the ribbon would render off-screen
+            # (e.g. the very first row scrolled into a partial state).
+            # Skip rather than synthesizing a false negative.
+            continue
+        roi = img[y0:y1, x0:x1]
+        if roi.size == 0:
+            continue
+        # Templates are stored grayscale (see ``_load_templates``), so
+        # match the ROI's channel count or matchTemplate refuses with
+        # a type-mismatch assert.
+        if roi.ndim == 3:
+            roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        result = cv2.matchTemplate(roi, template, cv2.TM_CCOEFF_NORMED)
+        if float(result.max()) >= SUPPORT_GRAND_BADGE_MATCH_THRESHOLD:
+            return True
+    return False
 
 
 def _support_skill_slots_from_anchor(anchor: dict, panel: Optional[str]) -> list[dict]:
