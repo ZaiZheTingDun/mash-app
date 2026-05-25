@@ -97,29 +97,13 @@ their real screens:
   before resuming OCR/scroll.
 - Support-list scroll distance is adaptive. The sidecar surfaces every visible
   `button_support_form_confirm` anchor in `FindSupportsResult.diagnostics.confirmButtonAnchors`;
-  the runner sets the swipe delta to `bottom_anchor.y - top_anchor.y`,
-  clamped to `[SUPPORT_SCROLL_MIN_DELTA, SUPPORT_SCROLL_MAX_DELTA]`.
-  Because confirm buttons sit at a fixed offset within each row card and
-  rows are pitched a constant amount apart, that raw delta is exactly
-  `(N - 1) * row_pitch` for the N visible cards. The runner then adds
-  one extra pitch when a partial row sits below the lowest detected
-  button (`bottom_y + pitch / 2 < 1.0` — i.e. more than half of the
-  next row's card content would fit on screen). That extrapolation
-  covers the common BlueStacks/CN layout where 3 servant cards are
-  physically visible but the third row's confirm button is clipped
-  off the bottom edge, so the CV pass only returns 2 anchors —
-  without it, the swipe would undershoot by one row and leave the
-  half-visible row in the middle of the next page instead of at the
-  top. End-of-list pages (bottom button already near the screen
-  edge) bypass the extrapolation and scroll the raw `(N - 1) *
-  pitch` instead. On top of either path, the runner adds a small
-  `SUPPORT_SCROLL_OVERSHOOT` (`0.04` normalized ≈ 58 px on a 1440-tall
-  screen) so the previous-page bottom row is unambiguously off-screen
-  rather than leaving a thin sliver of it visible above the new top
-  row. When only a single anchor (or no anchors) is
-  visible — usually a template/shape detector glitch — the runner
-  falls back to `SUPPORT_SCROLL_FALLBACK_DELTA` so it still makes
-  forward progress.
+  the runner sets the swipe delta from the last detected anchor to the
+  first-row target y: `last_anchor.y - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y`,
+  clamped to `[SUPPORT_SCROLL_MIN_DELTA, SUPPORT_SCROLL_MAX_DELTA]`. It does
+  not extrapolate hidden/partial rows from row pitch, because that can skip a
+  servant that is already partly visible at the bottom. When no anchors are
+  visible — usually a template/shape detector glitch — the runner falls back to
+  `SUPPORT_SCROLL_FALLBACK_DELTA` so it still makes forward progress.
 - Support-list scroll gestures go through the pluggable
   **`TouchBackend`** trait (`src-tauri/src/touch/`) rather than calling
   `adb shell input swipe` directly. A plain linear swipe lifts off at
@@ -136,14 +120,18 @@ their real screens:
   which wraps `Adb::tap` / `Adb::swipe` / `Adb::swipe_with_settle`.
   `swipe_with_settle` drives the DOWN / MOVE / settle / UP shape via
   chained `input motionevent` commands in a single `adb shell`
-  invocation; it's slow (~5 s/scroll at the velocity-bound MOVE pace)
-  and choppy (each `input` invocation spawns a fresh JVM, capping
-  cadence around 15–20 fps) but works without any device-side setup,
-  which makes it the safe default. The trait indirection stays so a
-  faster transport (minitouch, raw `sendevent`, native helper, …) can
-  be added without changing runner call sites — earlier prototypes of
-  both lived under `touch/` and were removed once `adb-input` proved
-  reliable enough.
+  invocation. The MOVE event count is picked by
+  `settle_swipe_move_steps(swipe_ms)` to target ~20 ms between events
+  (≈50 Hz), clamped to `[4, 30]` so a short swipe still gets a few
+  events and a long one doesn't pile on hundreds. On real devices
+  each `input motionevent` runs in <10 ms (measured), so the full
+  scroll cycle — active MOVE phase (~280 ms at the current 2.0
+  norm/s velocity), settle hold (250 ms), post-swipe wait for the
+  list to redraw (450 ms) — finishes in roughly 1 s. The trait
+  indirection stays so a faster transport (minitouch, raw
+  `sendevent`, native helper, …) can be added without changing
+  runner call sites; earlier prototypes of both lived under `touch/`
+  and were removed once `adb-input` proved fast and reliable enough.
 
   Each scroll emits a debug-level operation log entry tagged with the
   backend that actually fired

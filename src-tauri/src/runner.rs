@@ -797,82 +797,22 @@ fn is_unknown_element_error(err: &str, screen: &str, element: &str) -> bool {
 
 /// Compute the y-delta a support-list scroll swipe should travel so
 /// the *lowest visible row* on the current page ends up at the same
-/// screen y the *topmost visible row* currently occupies. The bottom
-/// row of the previous page becomes the top row of the next page.
-///
-/// Buttons sit at a fixed offset within each row card and rows are
-/// pitched a constant amount apart, so `bottom_y - top_y` equals
-/// `(N - 1) * row_pitch` for the N detected confirm-button anchors.
-/// If every visible row had a detected button, scrolling by that raw
-/// delta would land row N-1 exactly where row 0 was.
-///
-/// The real world is messier: it's common for a row to be physically
-/// visible on screen (its card content is rendered) while its confirm
-/// button has been clipped off the bottom edge, so the CV pass only
-/// sees `N - 1` buttons even though the user sees `N` rows. Treating
-/// that case as "N - 1 rows total" would undershoot by one row pitch
-/// and leave the previous bottom row sitting in the middle instead
-/// of the top of the next page (see [debug2/debug1 comparison in PR
-/// history]). We detect that condition by asking: if there were
-/// another row directly below the last detected button, would more
-/// than half its content fit on screen? If yes, we treat the
-/// undetected partial row as the real bottom-of-page target and
-/// extend the delta by one row pitch.
-///
-/// Edge cases:
-/// - Empty anchors → fall back to the legacy fixed delta so the
-///   runner still makes progress when the template / shape detector
-///   glitches on a single frame.
-/// - Single anchor (or two near-duplicates that survived NMS) →
-///   `raw < SUPPORT_SCROLL_MIN_DELTA`; same fallback so we don't
-///   swipe in place forever.
-/// - Genuinely two buttons at the end of the list (the partial-row
-///   check fails because `bottom_y` is already near the screen
-///   bottom) → keep the raw `(N - 1) * pitch` delta. Overshoot here
-///   is anyway harmless because the `support_scroll_end` element
-///   detects end-of-list separately and stops the loop.
+/// Compute the support-list scroll distance from the last visible
+/// confirm-button anchor only. The goal is simple and observable:
+/// move the bottom-most detected button to the first-row button y
+/// (`SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y`). We deliberately do not
+/// extrapolate hidden/partial rows from the visible row pitch because
+/// that can skip a servant that is only partially visible at the bottom.
 fn scroll_support_list_delta(confirm_button_anchors: &[NormRect]) -> f64 {
-    if confirm_button_anchors.is_empty() {
+    let Some(bottom_y) = confirm_button_anchors
+        .iter()
+        .map(|anchor| anchor.y)
+        .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+    else {
         return SUPPORT_SCROLL_FALLBACK_DELTA;
-    }
-    let (top_y, bottom_y) =
-        confirm_button_anchors
-            .iter()
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), a| {
-                (lo.min(a.y), hi.max(a.y))
-            });
-    let raw = bottom_y - top_y;
-    // Single anchor (or two near-duplicates that survived NMS): raw is
-    // ~0; fall back to the fixed delta so we still make progress
-    // instead of swiping in place forever.
-    if raw < SUPPORT_SCROLL_MIN_DELTA {
-        return SUPPORT_SCROLL_FALLBACK_DELTA;
-    }
-    // `raw == (n - 1) * pitch`. Need at least 2 anchors to estimate a
-    // per-row pitch; the single-anchor case took the MIN_DELTA branch
-    // above, so `n >= 2` here.
-    let n = confirm_button_anchors.len();
-    let pitch = raw / (n - 1) as f64;
-    // Where the *next* row's button would sit if it existed. If the
-    // row's center (≈ button y) is still on screen (`< 1.0`) but the
-    // button itself was off the CV pass's matching window — i.e.
-    // `bottom_y + pitch >= 1.0` is *not* a hard requirement, we just
-    // need enough of the row content to be visible that the operator
-    // perceives it as "the last visible row". `pitch * 0.5` puts the
-    // threshold at "more than half the row card is visible", which
-    // empirically separates the cut-off-button case from genuine
-    // end-of-list pages.
-    let next_button_y = bottom_y + pitch;
-    let has_partial_row_below = next_button_y - pitch * 0.5 < 1.0;
-    let geometric_delta = if has_partial_row_below {
-        raw + pitch
-    } else {
-        raw
     };
-    // Push the swipe a hair past the geometric target so the
-    // previous-page bottom row is unambiguously off-screen rather than
-    // leaving a sliver of it visible above the new top row.
-    (geometric_delta + SUPPORT_SCROLL_OVERSHOOT).min(SUPPORT_SCROLL_MAX_DELTA)
+    (bottom_y - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y)
+        .clamp(SUPPORT_SCROLL_MIN_DELTA, SUPPORT_SCROLL_MAX_DELTA)
 }
 
 /// Pick the active-motion (MOVE-phase) duration in ms for a settle
@@ -969,45 +909,38 @@ const SUPPORT_SCROLL_SETTLE: Duration = Duration::from_millis(450);
 /// the lower half of the list so the symmetric `to` point can always
 /// stay above it for an "up" swipe even at `SUPPORT_SCROLL_MAX_DELTA`.
 const SUPPORT_SCROLL_FROM_Y: f64 = 0.78;
-/// Minimum scroll delta. Guarantees forward progress when only a single
-/// confirm-button anchor was detected (so the "bottom - top" delta is
-/// zero) or two anchors were detected so close together that the
-/// computed delta would be near zero.
+/// Target y for the bottom-most detected support confirm button after
+/// a scroll. This is the first-row button position on the support list.
+const SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y: f64 = 0.30;
+/// Minimum scroll delta. Guarantees forward progress when the bottom-most
+/// detected confirm button is already near the first-row target.
 const SUPPORT_SCROLL_MIN_DELTA: f64 = 0.10;
 /// Maximum scroll delta. Caps the swipe so a bogus anchor near the very
-/// bottom of the screen (or an unusually tall card pitch) can't fling
-/// the list past several pages in one go.
+/// bottom of the screen can't fling the list past several pages in one go.
 const SUPPORT_SCROLL_MAX_DELTA: f64 = 0.65;
 /// Legacy fixed scroll delta — used only when no confirm-button anchors
 /// were detected so we still make progress on devices / resolutions
 /// where the template / shape detector misses the button column.
 const SUPPORT_SCROLL_FALLBACK_DELTA: f64 = 0.40;
-/// Small extra scroll past the "geometric" target — `(N - 1) * pitch`
-/// (or `N * pitch` with the partial-row extrapolation) brings the
-/// new top row's button to the same y the old top button was at,
-/// but operators reported a thin sliver of the previous row still
-/// peeking above the new top row. This pushes the swipe a bit
-/// further so the previous row is unambiguously off-screen. Roughly
-/// `0.04 * 1440 ≈ 58 px` on the canonical BlueStacks CN resolution.
-const SUPPORT_SCROLL_OVERSHOOT: f64 = 0.04;
-/// Target finger velocity for the support-list swipe, in normalized
-/// units (fraction of screen height) per second. Kept low so the
-/// gesture's lift-off velocity stays under Android's fling threshold
-/// — otherwise the list keeps scrolling on momentum after the swipe
-/// ends and we overshoot by half a page or more. `0.85 normalized/s`
-/// translates to ~920 px/s on 1080p which is well inside the
-/// non-fling regime on every device we've tested.
-/// Normalized screen units per second for the *active* motion phase of
-/// a settle swipe. The fling-protection settle hold means lift-off
-/// velocity is decoupled from this constant, so we can pick a value
-/// that's about visual smoothness rather than fling avoidance.
-/// 1.0 norm/s ≈ a full-screen swipe per second; for the canonical
-/// Δ≈0.555 support-list scroll that's ~555 ms of motion + the settle
-/// hold ≈ ~1 s total.
-const SUPPORT_SCROLL_VELOCITY: f64 = 1.0;
+/// Normalized screen units (fraction of screen height) per second
+/// for the *active* motion phase of the settle swipe. The
+/// fling-protection settle hold (see `SUPPORT_SCROLL_SETTLE_MS`)
+/// decouples lift-off velocity from this constant, so we can pick a
+/// value purely for visual / cycle-time reasons — it does NOT need
+/// to stay under Android's per-device fling threshold the way a
+/// plain `input swipe` would.
+///
+/// 2.0 norm/s ≈ two full screen heights per second; for the
+/// canonical Δ≈0.555 support-list scroll that's ~278 ms of motion +
+/// the ~250 ms settle hold ≈ ~530 ms total active gesture. The 50 Hz
+/// MOVE cadence is preserved at this velocity because
+/// `settle_swipe_move_steps` scales the step count with `swipe_ms`
+/// (≈14 MOVE events at 278 ms), so the active phase stays visibly
+/// smooth instead of degenerating into a few jumpy steps.
+const SUPPORT_SCROLL_VELOCITY: f64 = 2.0;
 /// Lower bound on the swipe duration so a tiny min-delta scroll still
 /// reads as a deliberate gesture to the touch dispatcher.
-const SUPPORT_SCROLL_MIN_DURATION_MS: u32 = 400;
+const SUPPORT_SCROLL_MIN_DURATION_MS: u32 = 250;
 /// Upper bound on the swipe duration so a pathologically large delta
 /// can't stall the runner with a multi-second swipe.
 const SUPPORT_SCROLL_MAX_DURATION_MS: u32 = 2000;
@@ -2364,14 +2297,11 @@ impl Runner {
                 .any(Option::is_some)
     }
 
-    /// Scroll the support list by an adaptive distance so the bottom
-    /// visible row of the current page becomes the top visible row of
-    /// the next page. See `scroll_support_list_delta` for the math; the
-    /// short version is `delta = bottom_button.y - top_button.y`, i.e.
-    /// `(N - 1) * row_pitch` for the N visible cards. This guarantees
-    /// the row whose confirm button sits at the bottom of the current
-    /// view (often only partially visible) becomes fully visible at the
-    /// top of the next view, instead of being scrolled past.
+    /// Scroll the support list by an adaptive distance so the last
+    /// visible confirm-button anchor lands near the first-row confirm
+    /// position. See `scroll_support_list_delta` for the math; the short
+    /// version is `delta = last_button.y - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y`.
+    /// This avoids guessing about clipped rows below the viewport.
     ///
     /// When no anchors are visible (rare — usually means the template
     /// detector glitched on this frame) we fall back to a single fixed
@@ -6991,92 +6921,55 @@ mod tests {
     }
 
     #[test]
-    fn scroll_delta_moves_last_row_just_past_first_row_position() {
-        // Three visible cards (button tops at 0.364, 0.642, 0.919) is the
-        // canonical CN debug fixture geometry: row pitch ≈ 0.278. The
-        // geometric delta `(N - 1) * pitch = 0.555` would put the
-        // bottom button exactly where the top button was; the runner
-        // adds `SUPPORT_SCROLL_OVERSHOOT` so the previous-page bottom
-        // row is unambiguously off-screen rather than leaving a thin
-        // tail visible above the new top row.
+    fn scroll_delta_moves_last_anchor_to_first_row_target() {
         let anchors = vec![
             anchor_at_y(0.364),
             anchor_at_y(0.642),
             anchor_at_y(0.919),
         ];
         let delta = scroll_support_list_delta(&anchors);
-        let geometric = 0.919 - 0.364;
-        assert!((delta - (geometric + SUPPORT_SCROLL_OVERSHOOT)).abs() < 1e-9);
-        // After scrolling, the old last button lands a hair *above*
-        // where the old top button used to sit — by exactly the
-        // overshoot amount.
+        assert!((delta - (0.919 - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y)).abs() < 1e-9);
         let new_position_of_last_button = 0.919 - delta;
-        assert!((new_position_of_last_button - (0.364 - SUPPORT_SCROLL_OVERSHOOT)).abs() < 1e-9);
+        assert!(
+            (new_position_of_last_button - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y).abs() < 1e-9
+        );
     }
 
     #[test]
-    fn scroll_delta_handles_two_visible_buttons_at_end_of_list() {
-        // Two visible cards near the bottom of the screen: there's no
-        // room for a partial row below the lower button, so we treat
-        // this as a genuine end-of-list page and scroll one pitch
-        // (plus the standard overshoot) so the old second card becomes
-        // the new top card.
+    fn scroll_delta_uses_last_anchor_even_with_two_visible_buttons() {
         let anchors = vec![anchor_at_y(0.62), anchor_at_y(0.92)];
         let delta = scroll_support_list_delta(&anchors);
         assert!(
-            (delta - (0.30 + SUPPORT_SCROLL_OVERSHOOT)).abs() < 1e-9,
+            (delta - (0.92 - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y)).abs() < 1e-9,
             "got {delta}"
         );
     }
 
     #[test]
-    fn scroll_delta_extrapolates_when_third_row_button_is_clipped_offscreen() {
-        // Canonical CN BlueStacks fixture: 3 servant cards are physically
-        // visible on screen but only 2 confirm-button anchors are
-        // detected because the third row's button has been clipped off
-        // the bottom edge. Anchors at y=0.462 and y=0.740 with row
-        // pitch ≈ 0.278 — the third row's button would be at y=1.018,
-        // i.e. just barely off-screen, while its card content is still
-        // ~88% visible. We must scroll 2 pitches (≈0.556) plus a small
-        // overshoot so the partial bottom row becomes the new top row
-        // with no sliver of the previous row peeking above it.
-        //
-        // This is the case shown in the debug2/debug1 PR thread where
-        // the previous `(n - 1) * pitch` formula undershot by exactly
-        // one row.
+    fn scroll_delta_does_not_extrapolate_clipped_offscreen_buttons() {
         let anchors = vec![anchor_at_y(0.462), anchor_at_y(0.740)];
         let delta = scroll_support_list_delta(&anchors);
-        let two_pitches = 2.0 * (0.740 - 0.462);
         assert!(
-            (delta - (two_pitches + SUPPORT_SCROLL_OVERSHOOT)).abs() < 1e-6,
-            "expected 2-pitch extrapolation + overshoot, got {delta}"
-        );
-    }
-
-    #[test]
-    fn scroll_delta_does_not_extrapolate_when_only_a_sliver_fits_below() {
-        // Two buttons, bottom one near the screen edge: there's < half
-        // a row's worth of space below `bottom_y`, so we should NOT
-        // assume a partial third row exists. Falls into the
-        // end-of-list bucket and gets the standard overshoot on top of
-        // the raw 1-pitch delta.
-        let anchors = vec![anchor_at_y(0.55), anchor_at_y(0.90)];
-        let pitch = 0.35;
-        // bottom_y + pitch/2 = 0.90 + 0.175 = 1.075 > 1.0 → no partial.
-        let delta = scroll_support_list_delta(&anchors);
-        assert!(
-            (delta - (pitch + SUPPORT_SCROLL_OVERSHOOT)).abs() < 1e-9,
+            (delta - (0.740 - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y)).abs() < 1e-9,
             "got {delta}"
         );
     }
 
     #[test]
-    fn scroll_delta_falls_back_when_only_one_button_visible() {
-        // Single button → `bottom - top = 0`; we'd swipe in place
-        // forever, so fall back to the fixed legacy delta instead.
+    fn scroll_delta_uses_last_anchor_near_screen_edge() {
+        let anchors = vec![anchor_at_y(0.55), anchor_at_y(0.90)];
+        let delta = scroll_support_list_delta(&anchors);
+        assert!(
+            (delta - (0.90 - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y)).abs() < 1e-9,
+            "got {delta}"
+        );
+    }
+
+    #[test]
+    fn scroll_delta_uses_single_visible_button() {
         let anchors = vec![anchor_at_y(0.50)];
         let delta = scroll_support_list_delta(&anchors);
-        assert!((delta - SUPPORT_SCROLL_FALLBACK_DELTA).abs() < 1e-9);
+        assert!((delta - (0.50 - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y)).abs() < 1e-9);
     }
 
     #[test]
