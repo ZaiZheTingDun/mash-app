@@ -267,6 +267,26 @@ impl Adb {
         Ok(())
     }
 
+    /// Run a one-shot shell command and return its stdout as a UTF-8
+    /// string. Used by callers that need to parse output, e.g. the
+    /// sendevent backend reading `getevent -pl`.
+    pub fn shell_capture(&self, command: &str) -> Result<String, String> {
+        let mut args = self.base_args();
+        args.extend(["shell".into(), command.into()]);
+        let output = Command::new(&self.adb_path)
+            .args(&args)
+            .output()
+            .map_err(|e| format!("adb shell `{command}` failed: {e}"))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!(
+                "adb shell `{command}` exited with: {} ({stderr})",
+                output.status
+            ));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+
     /// Run a one-shot shell command (e.g. `chmod 755 /data/local/tmp/foo`).
     pub fn shell_run(&self, command: &str) -> Result<(), String> {
         let mut args = self.base_args();

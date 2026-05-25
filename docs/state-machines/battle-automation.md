@@ -126,11 +126,21 @@ their real screens:
     and choppier (each `input` invocation spawns a fresh JVM, capping
     cadence around 15–20 fps) but works without any bundled native
     binary, so it's the universal fallback.
-  - **`sendevent`** (`touch/sendevent.rs`). Reserved slot for raw
-    evdev injection via `adb shell sendevent /dev/input/event*`.
-    Today a stub that errors on bring-up and triggers the
-    auto-fallback to `adb-input`; intended to land once we have a
-    proven cross-device evdev probe.
+  - **`sendevent`** (`touch/sendevent.rs`). Raw evdev injection via
+    `adb shell sendevent /dev/input/event*`. At bring-up it runs
+    `getevent -pl`, parses the dump, picks the first device that
+    advertises `ABS_MT_POSITION_X/Y` + `ABS_MT_TRACKING_ID` (i.e. a
+    Type B multi-touch screen), and records its coordinate ranges.
+    Gestures are emitted as chained `sendevent <type> <code>
+    <value>; sleep 0.016; ...` shell scripts in a single `adb shell`
+    invocation, so the only ADB overhead per gesture is one
+    round-trip; on the device side each `sendevent` is a 1–5 ms
+    `open + write + close` on the event node. Comparable smoothness
+    to `minitouch` but without needing a pushed native binary —
+    handy on cloud / corporate devices where pushing executables
+    isn't allowed. Falls back to `adb-input` if `getevent -pl`
+    doesn't expose a Type B touchscreen (legacy resistive panels,
+    non-evdev touch drivers).
 
   Each scroll emits a debug-level operation log entry tagged with the
   backend that actually fired

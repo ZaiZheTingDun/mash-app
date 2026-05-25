@@ -140,7 +140,7 @@ pub fn build(
         TouchBackendKind::Minitouch => {
             try_minitouch_or_adb(adb, resources_dir, screen, /* warn_on_fallback */ true)
         }
-        TouchBackendKind::Sendevent => match sendevent::SendeventBackend::start(adb.clone()) {
+        TouchBackendKind::Sendevent => match sendevent::SendeventBackend::start(adb.clone(), screen) {
             Ok(be) => Box::new(be),
             Err(e) => {
                 eprintln!("[touch] sendevent bring-up failed ({e}), falling back to adb-input");
