@@ -1904,6 +1904,70 @@ def test_support_find_confirm_button_anchors_prefers_cn_template():
     assert anchors[0]["y"] == pytest.approx(666 / 1440)
 
 
+def test_find_supports_diagnostics_include_confirm_button_anchors(monkeypatch):
+    """`_find_supports` must surface every confirm-button anchor it
+    detected in `diagnostics.confirmButtonAnchors`, even when the OCR
+    layer returns no matches. The runner relies on this list to size
+    its scroll swipe so the lowest visible button lands near the top
+    of the next view — without it the runner falls back to a fixed
+    delta that can push the bottom row off-screen.
+    """
+    import mash_cv.cv as cv
+
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    tmpl = cv._get_template(cv.SUPPORT_CONFIRM_BUTTON_TEMPLATE)
+    assert tmpl is not None
+
+    img = np.full((1440, 2560, 3), 96, dtype=np.uint8)
+    stamp_positions = [(2178, 666), (2178, 1066)]
+    for x, y in stamp_positions:
+        h, w = tmpl.shape[:2]
+        img[y : y + h, x : x + w] = cv2.cvtColor(tmpl, cv2.COLOR_GRAY2BGR)
+
+    # Force OCR off so we exercise the no-rows path (this is the path
+    # the runner hits while scrolling for a yet-unseen servant).
+    monkeypatch.setattr(cv, "_get_ocr", lambda: None)
+
+    result = cv._find_supports(
+        img,
+        cv.SUPPORT_LIST_REGION,
+        "アルトリア・キャスター",
+        ["きみをいだく希望の星"],
+        cv.SUPPORT_NAME_THRESHOLD,
+        cv.SUPPORT_NP_THRESHOLD,
+        cv.SUPPORT_ROW_PAIR_DY,
+    )
+
+    assert result["supports"] == []
+    anchors = result["diagnostics"]["confirmButtonAnchors"]
+    assert len(anchors) == 2
+    # Sidecar reports anchors top-to-bottom.
+    assert anchors[0]["y"] == pytest.approx(666 / 1440, abs=1e-6)
+    assert anchors[1]["y"] == pytest.approx(1066 / 1440, abs=1e-6)
+    assert anchors[0]["x"] == pytest.approx(2178 / 2560, abs=1e-6)
+
+
+def test_find_supports_confirm_button_anchors_empty_when_no_buttons(monkeypatch):
+    import mash_cv.cv as cv
+
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    img = np.full((1440, 2560, 3), 96, dtype=np.uint8)
+
+    monkeypatch.setattr(cv, "_get_ocr", lambda: None)
+
+    result = cv._find_supports(
+        img,
+        cv.SUPPORT_LIST_REGION,
+        "アルトリア・キャスター",
+        ["きみをいだく希望の星"],
+        cv.SUPPORT_NAME_THRESHOLD,
+        cv.SUPPORT_NP_THRESHOLD,
+        cv.SUPPORT_ROW_PAIR_DY,
+    )
+
+    assert result["diagnostics"]["confirmButtonAnchors"] == []
+
+
 @pytest.mark.skipif(
     not os.path.isfile(
         os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug1.png"))

@@ -1,4 +1,5 @@
 use crate::adb::Adb;
+use crate::minitouch::Minitouch;
 use crate::screen::{
     CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
     SupportCeVerificationOptions, SupportRowMatch,
@@ -184,12 +185,27 @@ pub enum RunnerState {
     Error { message: String },
 }
 
+/// Severity of an automation status log entry. `Info` is the normal,
+/// user-facing channel — every action the runner takes, every screen it
+/// transitions through. `Debug` is reserved for technical diagnostics
+/// the operator usually doesn't need to see (e.g. raw CV anchor
+/// coordinates, computed swipe distances) but that are valuable when
+/// triaging a bug report. The frontend filters out `Debug` entries by
+/// default and exposes a toggle for power users.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LogLevel {
+    Info,
+    Debug,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationEvent {
     pub state: String,
     pub current_screen: String,
     pub message: String,
+    pub level: LogLevel,
 }
 
 /// Handle stored in Tauri managed state to control / observe the runner.
@@ -780,6 +796,91 @@ fn is_unknown_element_error(err: &str, screen: &str, element: &str) -> bool {
     err.contains(&format!("unknown element: {screen}.{element}"))
 }
 
+/// Compute the y-delta a support-list scroll swipe should travel so the
+/// *lowest* visible "助战编队确认" button ends up at the same screen y
+/// the *highest* visible button currently occupies. The bottom row of
+/// the previous page becomes the top row of the next page — exactly
+/// the behavior an operator expects when the previously visible last
+/// card was only half on screen: the half-card becomes a fully visible
+/// top card instead of being scrolled past.
+///
+/// Buttons sit at a fixed offset within each row card and rows are
+/// pitched a constant amount apart, so `bottom_y - top_y` equals
+/// `(N - 1) * row_pitch` for the N visible cards. After the swipe,
+/// every old card moves up by that delta, so old card N-1 lands where
+/// old card 0 was — i.e. at the top of the visible list.
+///
+/// The empty-anchor branch falls back to the legacy fixed delta so the
+/// runner still makes progress when the template / shape detector
+/// glitches on a frame; the single-anchor branch (where `bottom_y ==
+/// top_y` would yield a zero delta) is handled the same way through
+/// the min clamp.
+fn scroll_support_list_delta(confirm_button_anchors: &[NormRect]) -> f64 {
+    if confirm_button_anchors.is_empty() {
+        return SUPPORT_SCROLL_FALLBACK_DELTA;
+    }
+    let (top_y, bottom_y) =
+        confirm_button_anchors
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), a| {
+                (lo.min(a.y), hi.max(a.y))
+            });
+    let raw = bottom_y - top_y;
+    // Single anchor (or two near-duplicates that survived NMS): raw is
+    // ~0; fall back to the fixed delta so we still make progress
+    // instead of swiping in place forever.
+    if raw < SUPPORT_SCROLL_MIN_DELTA {
+        return SUPPORT_SCROLL_FALLBACK_DELTA;
+    }
+    raw.min(SUPPORT_SCROLL_MAX_DELTA)
+}
+
+/// Pick the active-motion (MOVE-phase) duration in ms for a settle
+/// swipe. The actual lift-off velocity is governed by the trailing
+/// `SUPPORT_SCROLL_SETTLE_MS` hold inside `Adb::swipe_with_settle`, so
+/// here we only need to pick a duration that produces visually smooth
+/// motion (not too jumpy on long deltas, not too long on tiny ones).
+/// `SUPPORT_SCROLL_VELOCITY` is interpreted as normalized screen units
+/// per second of *active* motion; with no fling to worry about, we can
+/// run this much faster than the old all-linear swipe needed to. The
+/// total realized swipe time is roughly
+/// `scroll_support_list_duration_ms(delta) + SUPPORT_SCROLL_SETTLE_MS`
+/// plus per-event ADB overhead.
+fn scroll_support_list_duration_ms(delta: f64) -> u32 {
+    let raw_ms = (delta.abs() / SUPPORT_SCROLL_VELOCITY * 1000.0).round();
+    let raw_ms = raw_ms.clamp(0.0, u32::MAX as f64) as u32;
+    raw_ms.clamp(SUPPORT_SCROLL_MIN_DURATION_MS, SUPPORT_SCROLL_MAX_DURATION_MS)
+}
+
+/// Render a one-line, human-readable summary of a support-list scroll
+/// decision for the debug log. Kept compact (single line, three digits
+/// of precision) so the operation-log panel stays readable when many
+/// scrolls scroll past in a row.
+fn format_scroll_debug(
+    confirm_button_anchors: &[NormRect],
+    delta: f64,
+    from_y: f64,
+    to_y: f64,
+    swipe_ms: u32,
+    settle_ms: u32,
+) -> String {
+    let mut anchor_ys: Vec<f64> = confirm_button_anchors.iter().map(|a| a.y).collect();
+    anchor_ys.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let anchor_list = if anchor_ys.is_empty() {
+        "无".to_string()
+    } else {
+        anchor_ys
+            .iter()
+            .map(|y| format!("{y:.3}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    format!(
+        "滚动助战列表: 按钮 y=[{anchor_list}] (n={}) Δ={delta:.3} swipe={from_y:.2}→{to_y:.2} ({swipe_ms}ms+{settle_ms}ms settle)",
+        confirm_button_anchors.len(),
+    )
+}
+
 fn support_grand_section_exhausted_after_probe(
     visible: Option<bool>,
     seen: &mut bool,
@@ -815,6 +916,52 @@ const SUPPORT_MAX_REFRESHES: u32 = 99;
 /// Settle time after the support-list scroll swipe completes; long enough
 /// for momentum scrolling to come to rest before the next OCR pass.
 const SUPPORT_SCROLL_SETTLE: Duration = Duration::from_millis(900);
+/// The y from which the scroll swipe starts (finger-down point). Sits in
+/// the lower half of the list so the symmetric `to` point can always
+/// stay above it for an "up" swipe even at `SUPPORT_SCROLL_MAX_DELTA`.
+const SUPPORT_SCROLL_FROM_Y: f64 = 0.78;
+/// Minimum scroll delta. Guarantees forward progress when only a single
+/// confirm-button anchor was detected (so the "bottom - top" delta is
+/// zero) or two anchors were detected so close together that the
+/// computed delta would be near zero.
+const SUPPORT_SCROLL_MIN_DELTA: f64 = 0.10;
+/// Maximum scroll delta. Caps the swipe so a bogus anchor near the very
+/// bottom of the screen (or an unusually tall card pitch) can't fling
+/// the list past several pages in one go.
+const SUPPORT_SCROLL_MAX_DELTA: f64 = 0.65;
+/// Legacy fixed scroll delta — used only when no confirm-button anchors
+/// were detected so we still make progress on devices / resolutions
+/// where the template / shape detector misses the button column.
+const SUPPORT_SCROLL_FALLBACK_DELTA: f64 = 0.40;
+/// Target finger velocity for the support-list swipe, in normalized
+/// units (fraction of screen height) per second. Kept low so the
+/// gesture's lift-off velocity stays under Android's fling threshold
+/// — otherwise the list keeps scrolling on momentum after the swipe
+/// ends and we overshoot by half a page or more. `0.85 normalized/s`
+/// translates to ~920 px/s on 1080p which is well inside the
+/// non-fling regime on every device we've tested.
+/// Normalized screen units per second for the *active* motion phase of
+/// a settle swipe. The fling-protection settle hold means lift-off
+/// velocity is decoupled from this constant, so we can pick a value
+/// that's about visual smoothness rather than fling avoidance.
+/// 1.0 norm/s ≈ a full-screen swipe per second; for the canonical
+/// Δ≈0.555 support-list scroll that's ~555 ms of motion + the settle
+/// hold ≈ ~1 s total.
+const SUPPORT_SCROLL_VELOCITY: f64 = 1.0;
+/// Lower bound on the swipe duration so a tiny min-delta scroll still
+/// reads as a deliberate gesture to the touch dispatcher.
+const SUPPORT_SCROLL_MIN_DURATION_MS: u32 = 400;
+/// Upper bound on the swipe duration so a pathologically large delta
+/// can't stall the runner with a multi-second swipe.
+const SUPPORT_SCROLL_MAX_DURATION_MS: u32 = 2000;
+
+/// How long the finger holds at the destination before lifting off in a
+/// settle-style support-list scroll. Must exceed Android's velocity
+/// tracker sliding window (~100 ms on most devices) so the tracker
+/// sees a stretch of "no motion" right before UP and reports ~0 px/s.
+/// 400 ms is comfortably above the threshold while only adding a small
+/// constant tax on top of the active-motion duration.
+const SUPPORT_SCROLL_SETTLE_MS: u32 = 400;
 /// Settle time after tapping the "refresh friend list" button. The friend
 /// list refetch and re-render takes ~2.5s on slow devices; one extra second
 /// of buffer keeps us from OCRing a half-loaded list.
@@ -1252,6 +1399,14 @@ pub struct Runner {
     battle: BattleState,
     completed_mission_runs: u32,
     battle_result_continue_handled: bool,
+    /// Lazily-started minitouch client, used for low-latency smooth
+    /// swipes (currently only the support-list scroll). Boots on first
+    /// use; falls back to `Adb::swipe_with_settle` on push / spawn /
+    /// connect failure so the rest of the runner still works without
+    /// the minitouch binary bundled. `Option<Result<_, _>>` lets us
+    /// remember "already tried, failed permanently" between scrolls so
+    /// we don't re-attempt the bring-up on every poll.
+    minitouch: Option<Result<Minitouch, ()>>,
 }
 
 impl Runner {
@@ -1305,6 +1460,7 @@ impl Runner {
             battle: BattleState::new(),
             completed_mission_runs: 0,
             battle_result_continue_handled: false,
+            minitouch: None,
         }
     }
 
@@ -1315,6 +1471,19 @@ impl Runner {
     }
 
     fn emit(&self, screen: &str, message: &str) {
+        self.emit_with_level(screen, message, LogLevel::Info);
+    }
+
+    /// Like [`emit`] but at `LogLevel::Debug`. Use for technical
+    /// diagnostics that the user doesn't normally want to see — they
+    /// stay hidden behind the operation-log "显示调试" toggle in the
+    /// status bar. Keep these messages compact (a single line) since
+    /// the panel doesn't wrap long entries gracefully.
+    fn emit_debug(&self, screen: &str, message: &str) {
+        self.emit_with_level(screen, message, LogLevel::Debug);
+    }
+
+    fn emit_with_level(&self, screen: &str, message: &str, level: LogLevel) {
         let state_str = {
             let s = self.state.lock().unwrap();
             format!("{:?}", *s)
@@ -1325,6 +1494,7 @@ impl Runner {
                 state: state_str,
                 current_screen: screen.into(),
                 message: message.into(),
+                level,
             },
         );
     }
@@ -1369,6 +1539,86 @@ impl Runner {
         let from_px = from.to_physical(self.screen_w, self.screen_h);
         let to_px = to.to_physical(self.screen_w, self.screen_h);
         match self.adb.swipe(from_px, to_px, duration_ms) {
+            Ok(()) => true,
+            Err(err) => {
+                self.fail_action(screen, "滑动", err);
+                false
+            }
+        }
+    }
+
+    /// Resolve the bundled minitouch binary root directory
+    /// (`<resources>/minitouch/`).
+    ///
+    /// Looks in two locations, in this order:
+    ///   1. `<resource_dir>/resources/minitouch/` (production bundle)
+    ///   2. `<CARGO_MANIFEST_DIR>/resources/minitouch/` (dev-mode)
+    ///
+    /// Returns the first existing path so we don't need different code
+    /// paths for `pnpm tauri dev` vs `pnpm tauri build`.
+    fn minitouch_binary_dir(&self) -> Option<PathBuf> {
+        use tauri::Manager;
+        if let Ok(base) = self.app_handle.path().resource_dir() {
+            let bundled = base.join("resources").join("minitouch");
+            if bundled.is_dir() {
+                return Some(bundled);
+            }
+        }
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("minitouch");
+        if dev.is_dir() {
+            return Some(dev);
+        }
+        None
+    }
+
+    /// Lazy-start the minitouch client on first use; cache the
+    /// `Result` so repeated failures don't retry the whole bring-up
+    /// path (which can take a few hundred ms for the push + spawn +
+    /// forward + connect dance). Returns `Some(&mut Minitouch)` on a
+    /// healthy connection, `None` if we already gave up.
+    fn minitouch_handle(&mut self) -> Option<&mut Minitouch> {
+        if self.minitouch.is_none() {
+            let attempt = self
+                .minitouch_binary_dir()
+                .ok_or_else(|| {
+                    "minitouch resource directory unavailable (Tauri resource_dir() failed)"
+                        .to_string()
+                })
+                .and_then(|dir| Minitouch::start(&self.adb, &dir));
+            match attempt {
+                Ok(mt) => {
+                    eprintln!("[minitouch] started, local port = {}", mt.local_port());
+                    self.minitouch = Some(Ok(mt));
+                }
+                Err(err) => {
+                    eprintln!("[minitouch] bring-up failed, falling back to adb swipe: {err}");
+                    self.minitouch = Some(Err(()));
+                }
+            }
+        }
+        match self.minitouch {
+            Some(Ok(ref mut mt)) => Some(mt),
+            _ => None,
+        }
+    }
+
+    /// "Press, drag, hold, release" swipe (see `Adb::swipe_with_settle`).
+    /// Use this for any swipe whose precise stopping position matters —
+    /// the settle window prevents Android's fling momentum from
+    /// continuing the scroll past the lift-off coordinate.
+    fn swipe_with_settle_at(
+        &self,
+        screen: &str,
+        from: Point,
+        to: Point,
+        swipe_ms: u32,
+        settle_ms: u32,
+    ) -> bool {
+        let from_px = from.to_physical(self.screen_w, self.screen_h);
+        let to_px = to.to_physical(self.screen_w, self.screen_h);
+        match self.adb.swipe_with_settle(from_px, to_px, swipe_ms, settle_ms) {
             Ok(()) => true,
             Err(err) => {
                 self.fail_action(screen, "滑动", err);
@@ -1848,12 +2098,7 @@ impl Runner {
                     self.support_scroll_count + 1,
                 ),
             );
-            if !self.swipe_at(
-                "SupportSelect",
-                Point::new(0.50, 0.70),
-                Point::new(0.50, 0.30),
-                300,
-            ) {
+            if !self.scroll_support_list(&result.diagnostics.confirm_button_anchors) {
                 return;
             }
             self.support_scroll_count += 1;
@@ -2097,6 +2342,85 @@ impl Runner {
                 .support_append_skill_level_mins
                 .iter()
                 .any(Option::is_some)
+    }
+
+    /// Scroll the support list by an adaptive distance so the bottom
+    /// visible row of the current page becomes the top visible row of
+    /// the next page. See `scroll_support_list_delta` for the math; the
+    /// short version is `delta = bottom_button.y - top_button.y`, i.e.
+    /// `(N - 1) * row_pitch` for the N visible cards. This guarantees
+    /// the row whose confirm button sits at the bottom of the current
+    /// view (often only partially visible) becomes fully visible at the
+    /// top of the next view, instead of being scrolled past.
+    ///
+    /// When no anchors are visible (rare — usually means the template
+    /// detector glitched on this frame) we fall back to a single fixed
+    /// delta so the runner still makes progress.
+    ///
+    /// Emits a debug-level log entry with the detected anchor positions
+    /// and the chosen delta so the operator can inspect what the runner
+    /// "saw" when triaging a "scrolled past my servant" bug report.
+    fn scroll_support_list(&mut self, confirm_button_anchors: &[NormRect]) -> bool {
+        let delta = scroll_support_list_delta(confirm_button_anchors);
+        let from_y = SUPPORT_SCROLL_FROM_Y;
+        let to_y = (from_y - delta).max(0.05);
+        let swipe_ms = scroll_support_list_duration_ms(delta);
+
+        // Try minitouch first — its sub-millisecond event injection lets
+        // a Δ≈0.555 swipe land in ~1 s with ~30 smooth MOVE events, vs.
+        // the 5+ s choppy `input motionevent` chain. Fall back to the
+        // ADB settle-swipe if minitouch isn't available (binary not
+        // bundled for this ABI, etc.).
+        let scroll_msg = format_scroll_debug(
+            confirm_button_anchors,
+            delta,
+            from_y,
+            to_y,
+            swipe_ms,
+            SUPPORT_SCROLL_SETTLE_MS,
+        );
+        if let Some(mt) = self.minitouch_handle() {
+            let result = mt.swipe_with_settle(
+                (0.50, from_y),
+                (0.50, to_y),
+                swipe_ms,
+                SUPPORT_SCROLL_SETTLE_MS,
+            );
+            match result {
+                Ok(()) => {
+                    self.emit_debug(
+                        "SupportSelect",
+                        &format!("{scroll_msg} [minitouch]"),
+                    );
+                    // Block until the settle + UP have actually landed
+                    // on the device, otherwise the caller's "look at
+                    // the new frame" check would race the swipe.
+                    let total = Duration::from_millis(
+                        (swipe_ms + SUPPORT_SCROLL_SETTLE_MS + 150) as u64,
+                    );
+                    thread::sleep(total);
+                    return true;
+                }
+                Err(err) => {
+                    eprintln!(
+                        "[minitouch] swipe failed, marking client dead and falling back: {err}"
+                    );
+                    // The TCP connection is probably broken; drop the
+                    // client so the next scroll either retries the
+                    // bring-up or stays on the fallback.
+                    self.minitouch = Some(Err(()));
+                }
+            }
+        }
+
+        self.emit_debug("SupportSelect", &scroll_msg);
+        self.swipe_with_settle_at(
+            "SupportSelect",
+            Point::new(0.50, from_y),
+            Point::new(0.50, to_y),
+            swipe_ms,
+            SUPPORT_SCROLL_SETTLE_MS,
+        )
     }
 
     /// Return true when the scroll-bar-end indicator is visible in the
@@ -3756,6 +4080,17 @@ impl Runner {
 
 impl Drop for Runner {
     fn drop(&mut self) {
+        // Tear down minitouch (if any) before everything else: kills the
+        // device-side process and removes the ADB port forward so the
+        // next Runner starts clean.
+        if let Some(Ok(mt)) = self.minitouch.take() {
+            let port = mt.local_port();
+            drop(mt); // Minitouch::Drop kills the child + closes TCP.
+            if let Err(err) = self.adb.forward_remove(port) {
+                eprintln!("[minitouch] failed to remove tcp:{port} forward: {err}");
+            }
+        }
+
         let Some(mut sidecar) = self.sidecar.take() else {
             return;
         };
@@ -6679,5 +7014,155 @@ mod tests {
         ));
         assert!(seen);
         assert_eq!(misses, 1);
+    }
+
+    fn anchor_at_y(y: f64) -> NormRect {
+        NormRect {
+            x: 0.846,
+            y,
+            w: 0.079,
+            h: 0.05,
+        }
+    }
+
+    #[test]
+    fn scroll_delta_falls_back_to_fixed_when_no_anchors() {
+        assert!(
+            (scroll_support_list_delta(&[]) - SUPPORT_SCROLL_FALLBACK_DELTA).abs() < 1e-9
+        );
+    }
+
+    #[test]
+    fn scroll_delta_moves_last_row_to_first_row_position() {
+        // Three visible cards (button tops at 0.364, 0.642, 0.919) is the
+        // canonical CN debug fixture geometry: row pitch ≈ 0.278, so the
+        // computed delta should shift the bottom button to exactly where
+        // the top button currently sits, making the old bottom card the
+        // new top card.
+        let anchors = vec![
+            anchor_at_y(0.364),
+            anchor_at_y(0.642),
+            anchor_at_y(0.919),
+        ];
+        let delta = scroll_support_list_delta(&anchors);
+        assert!((delta - (0.919 - 0.364)).abs() < 1e-9);
+        // After scrolling, the old last button lands at the old top
+        // button's y — i.e. the old bottom row becomes the new top row.
+        let new_position_of_last_button = 0.919 - delta;
+        assert!((new_position_of_last_button - 0.364).abs() < 1e-9);
+    }
+
+    #[test]
+    fn scroll_delta_handles_two_visible_buttons() {
+        // Two visible cards → delta is exactly one row pitch, so the
+        // old second card becomes the new top card.
+        let anchors = vec![anchor_at_y(0.30), anchor_at_y(0.58)];
+        let delta = scroll_support_list_delta(&anchors);
+        assert!((delta - 0.28).abs() < 1e-9);
+    }
+
+    #[test]
+    fn scroll_delta_falls_back_when_only_one_button_visible() {
+        // Single button → `bottom - top = 0`; we'd swipe in place
+        // forever, so fall back to the fixed legacy delta instead.
+        let anchors = vec![anchor_at_y(0.50)];
+        let delta = scroll_support_list_delta(&anchors);
+        assert!((delta - SUPPORT_SCROLL_FALLBACK_DELTA).abs() < 1e-9);
+    }
+
+    #[test]
+    fn scroll_delta_clamps_unusually_large_distance() {
+        // Pathological case: 4+ visible cards with the bottom button
+        // way down at y=0.99. Even though the raw delta would be 0.71,
+        // the clamp keeps the swipe inside `SUPPORT_SCROLL_MAX_DELTA`
+        // so a misdetection can't fling the list past the bottom.
+        let anchors = vec![
+            anchor_at_y(0.28),
+            anchor_at_y(0.50),
+            anchor_at_y(0.72),
+            anchor_at_y(0.99),
+        ];
+        let delta = scroll_support_list_delta(&anchors);
+        assert!((delta - SUPPORT_SCROLL_MAX_DELTA).abs() < 1e-9);
+    }
+
+    #[test]
+    fn scroll_delta_independent_of_anchor_input_order() {
+        // Runner must not depend on sidecar returning anchors sorted.
+        let sorted = vec![anchor_at_y(0.30), anchor_at_y(0.55), anchor_at_y(0.80)];
+        let shuffled = vec![anchor_at_y(0.80), anchor_at_y(0.30), anchor_at_y(0.55)];
+        let from_sorted = scroll_support_list_delta(&sorted);
+        let from_shuffled = scroll_support_list_delta(&shuffled);
+        assert!((from_sorted - from_shuffled).abs() < 1e-9);
+    }
+
+    #[test]
+    fn format_scroll_debug_lists_sorted_anchor_positions() {
+        // The shuffled-input case is intentional: the message must be
+        // human-readable regardless of detector order so an operator
+        // reading the debug log can quickly eyeball whether the row
+        // pitch looks right.
+        let anchors = vec![anchor_at_y(0.80), anchor_at_y(0.30), anchor_at_y(0.55)];
+        let msg = format_scroll_debug(&anchors, 0.500, 0.78, 0.28, 588, 400);
+        assert!(
+            msg.contains("0.300, 0.550, 0.800"),
+            "expected sorted anchor list in message, got: {msg}"
+        );
+        assert!(msg.contains("Δ=0.500"));
+        assert!(msg.contains("n=3"));
+        assert!(msg.contains("swipe=0.78→0.28"));
+        assert!(msg.contains("(588ms+400ms settle)"));
+    }
+
+    #[test]
+    fn format_scroll_debug_handles_empty_anchors() {
+        let msg = format_scroll_debug(
+            &[],
+            SUPPORT_SCROLL_FALLBACK_DELTA,
+            0.78,
+            0.38,
+            SUPPORT_SCROLL_MIN_DURATION_MS,
+            SUPPORT_SCROLL_SETTLE_MS,
+        );
+        assert!(msg.contains("无"), "empty anchors should render as 无, got: {msg}");
+        assert!(msg.contains("n=0"));
+    }
+
+    #[test]
+    fn scroll_duration_scales_linearly_with_delta_within_bounds() {
+        // Mid-range delta: duration should equal `delta / velocity * 1000`,
+        // i.e. the velocity-matched value, neither clamped to the min
+        // nor the max.
+        let delta = 0.556;
+        let expected = (delta / SUPPORT_SCROLL_VELOCITY * 1000.0).round() as u32;
+        assert!(expected > SUPPORT_SCROLL_MIN_DURATION_MS);
+        assert!(expected < SUPPORT_SCROLL_MAX_DURATION_MS);
+        assert_eq!(scroll_support_list_duration_ms(delta), expected);
+    }
+
+    #[test]
+    fn scroll_duration_clamped_at_minimum_for_tiny_deltas() {
+        // A near-zero delta would compute a duration of just a few ms,
+        // which the OS touch dispatcher may reject as too fast. The min
+        // clamp keeps every swipe a deliberate gesture.
+        assert_eq!(
+            scroll_support_list_duration_ms(0.01),
+            SUPPORT_SCROLL_MIN_DURATION_MS
+        );
+        assert_eq!(
+            scroll_support_list_duration_ms(0.0),
+            SUPPORT_SCROLL_MIN_DURATION_MS
+        );
+    }
+
+    #[test]
+    fn scroll_duration_clamped_at_maximum_for_pathological_deltas() {
+        // A pathological delta (e.g. detector returning an anchor near
+        // y=1.0 on a misaligned frame) must not stall the runner with a
+        // multi-second swipe.
+        assert_eq!(
+            scroll_support_list_duration_ms(5.0),
+            SUPPORT_SCROLL_MAX_DURATION_MS
+        );
     }
 }

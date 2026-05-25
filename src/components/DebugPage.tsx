@@ -361,6 +361,7 @@ export interface SupportDiagnosticsDto {
   cvFingerprint?: string;
   supportSkillContourSplit?: boolean;
   supportRowAnchorSearchRegion?: NormRectDto | null;
+  confirmButtonAnchors?: NormRectDto[];
 }
 
 export interface FindSupportsResultDto {

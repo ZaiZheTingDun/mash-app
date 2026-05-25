@@ -2446,6 +2446,20 @@ body,
   word-break: break-all;
 }
 
+.operation-log-entry--debug .operation-log-time,
+.operation-log-entry--debug .operation-log-msg {
+  color: var(--gray-9);
+}
+
+.operation-log-debug-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gray-11);
+  cursor: pointer;
+  user-select: none;
+}
+
 .status-dot {
   width: 8px;
   height: 8px;

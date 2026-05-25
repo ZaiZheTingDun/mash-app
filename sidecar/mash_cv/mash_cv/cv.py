@@ -2508,10 +2508,31 @@ def _find_supports(
         # cross-check so the operator can spot bad data.
         "nameOnlyFallback": False,
         "nameOnlyReason": "",
+        # Every "助战编队确认" button currently visible on the page,
+        # top-to-bottom. Surfaced so the runner can size its scroll
+        # swipe so the lowest visible button ends up near the top of
+        # the next view (avoids the fixed-distance swipe overshooting
+        # and pushing the bottom-row button off-screen on layouts
+        # where rows are pitched tighter than the default delta).
+        "confirmButtonAnchors": [],
         **_support_diagnostics_meta(),
     }
     if h == 0 or w == 0:
         return {"supports": [], "diagnostics": diag}
+
+    # Detect confirm-button anchors up front so they're always reported
+    # in diagnostics (even on the "no name match" paths the runner uses
+    # to decide whether and how far to scroll).
+    confirm_anchors = _support_find_confirm_button_anchors(img)
+    diag["confirmButtonAnchors"] = [
+        {
+            "x": float(a["x"]),
+            "y": float(a["y"]),
+            "w": float(a["w"]),
+            "h": float(a["h"]),
+        }
+        for a in confirm_anchors
+    ]
 
     rx = max(0, int(round(list_region["x"] * w)))
     ry = max(0, int(round(list_region["y"] * h)))
@@ -2666,7 +2687,7 @@ def _find_supports(
                 }
             )
         rows.sort(key=lambda s: s["rowRegion"]["y"])
-        _support_attach_score_anchors(img, rows)
+        _support_attach_score_anchors(img, rows, confirm_anchors)
         if include_support_details:
             _support_add_details(img, rows, fragments)
         return {"supports": rows, "diagnostics": diag}
@@ -2735,7 +2756,7 @@ def _find_supports(
 
     # Stable order: top-down so the runner can pick "first visible match".
     supports.sort(key=lambda s: s["rowRegion"]["y"])
-    _support_attach_score_anchors(img, supports)
+    _support_attach_score_anchors(img, supports, confirm_anchors)
     if include_support_details:
         _support_add_details(img, supports, fragments)
     return {"supports": supports, "diagnostics": diag}
@@ -3188,12 +3209,17 @@ def _support_find_skill_slots(img: np.ndarray, row_region: dict) -> list[dict]:
     return _support_skill_slots_from_anchor(anchor, panel)
 
 
-def _support_attach_score_anchors(img: np.ndarray, rows: list[dict]) -> None:
+def _support_attach_score_anchors(
+    img: np.ndarray,
+    rows: list[dict],
+    anchors: Optional[list[dict]] = None,
+) -> None:
     # Public row anchors are deliberately stricter than the internal skill
     # anchors: a row is considered complete for Grand-support CE matching
     # only when its "助战编队确认" button is visible. Skill OCR can still
     # fall back to the larger right-side panel via `_support_find_row_anchors`.
-    anchors = _support_find_confirm_button_anchors(img)
+    if anchors is None:
+        anchors = _support_find_confirm_button_anchors(img)
     if not anchors:
         return
     for row in rows:

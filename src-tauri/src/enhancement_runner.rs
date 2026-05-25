@@ -1,4 +1,5 @@
 use crate::adb::Adb;
+use crate::runner::LogLevel;
 use crate::screen::{ElementMatch, NormRect, OcrFragment, OcrRegionResult, Point, SidecarClient};
 use crate::Server;
 use std::path::PathBuf;
@@ -254,6 +255,7 @@ pub struct EnhancementAutomationEvent {
     pub state: String,
     pub current_screen: String,
     pub message: String,
+    pub level: LogLevel,
 }
 
 pub struct EnhancementRunnerHandle {
@@ -506,6 +508,18 @@ impl EnhancementRunner {
     }
 
     fn emit(&self, screen: &str, message: &str) {
+        self.emit_with_level(screen, message, LogLevel::Info);
+    }
+
+    /// Debug-level counterpart to [`emit`]; see `Runner::emit_debug` for
+    /// the full rationale. Use sparingly for technical diagnostics that
+    /// don't belong in the user-facing operation log.
+    #[allow(dead_code)]
+    fn emit_debug(&self, screen: &str, message: &str) {
+        self.emit_with_level(screen, message, LogLevel::Debug);
+    }
+
+    fn emit_with_level(&self, screen: &str, message: &str, level: LogLevel) {
         let state_str = {
             let s = self.state.lock().unwrap();
             format!("{:?}", *s)
@@ -516,6 +530,7 @@ impl EnhancementRunner {
                 state: state_str,
                 current_screen: screen.to_string(),
                 message: message.to_string(),
+                level,
             },
         );
     }

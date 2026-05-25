@@ -215,7 +215,9 @@ describe("StatusBar", () => {
     const user = userEvent.setup();
     renderWithTheme(
       <StatusBar
-        operationLogs={[{ time: "12:34:56", message: "队伍就绪，点击开始任务" }]}
+        operationLogs={[
+          { time: "12:34:56", message: "队伍就绪，点击开始任务", level: "info" },
+        ]}
         operationLogOpen
         onOperationLogOpenChange={onOpenChange}
       />
@@ -226,6 +228,37 @@ describe("StatusBar", () => {
     await user.click(screen.getByRole("button", { name: "关闭操作日志" }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("hides debug-level entries by default and reveals them via the toggle", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(
+      <StatusBar
+        operationLogs={[
+          { time: "12:34:56", message: "用户可见消息", level: "info" },
+          { time: "12:34:57", message: "调试诊断输出", level: "debug" },
+        ]}
+        operationLogOpen
+      />
+    );
+
+    // Info entry is always visible; debug entry hidden by default.
+    expect(screen.getByText("用户可见消息")).toBeInTheDocument();
+    expect(screen.queryByText("调试诊断输出")).not.toBeInTheDocument();
+
+    // Trigger label counts info entries only — the debug entry must
+    // not inflate the user-visible badge.
+    expect(screen.getByText("操作日志 (1)")).toBeInTheDocument();
+
+    // Flip the toggle: the debug entry should now appear.
+    await user.click(screen.getByRole("checkbox", { name: /显示调试/ }));
+    expect(screen.getByText("调试诊断输出")).toBeInTheDocument();
   });
 
   it("shows the update action in the operation log header when an update is available", async () => {

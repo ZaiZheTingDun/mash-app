@@ -21,6 +21,8 @@ resources/
       templates/    # CN PNG templates (placeholder; fill in once you have them)
   scrcpy/
     scrcpy-server.jar   # pinned scrcpy server, pushed to device for streaming
+  minitouch/
+    <abi>/minitouch     # native touch-injection server (optional; see minitouch/README.md)
 ```
 
 The sidecar loads the bundle for whichever server is currently active (set
@@ -109,6 +111,19 @@ echo "scrcpy-server.jar OK ($EXPECTED)"
 ```
 
 Expected SHA-256 (v2.7): `a23c5659f36c260f105c022d27bcb3eafffa26070e7baa9eda66d01377a1adba`.
+
+## minitouch
+
+Optional native touch-injection server used by the support-list scroll
+to avoid Android's fling-momentum overshoot. Per-ABI binaries live
+under `minitouch/<abi>/minitouch` (currently only `arm64-v8a/`). See
+[`minitouch/README.md`](./minitouch/README.md) for sourcing
+instructions and the bundle-config opt-in that ships the binary into
+production builds.
+
+Missing binaries are non-fatal — the runner falls back to a chained
+`adb shell input motionevent` settle swipe (slower, choppier, but
+still fling-free) so the rest of automation keeps working.
 
 ## cv.json schema
 

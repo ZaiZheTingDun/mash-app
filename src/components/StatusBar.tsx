@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Box, Flex, Text, Popover, Button, Spinner, Checkbox, Select, IconButton } from "@radix-ui/themes";
 import {
   HamburgerMenuIcon,
@@ -13,9 +13,12 @@ import { invoke, listen } from "../tauri";
 import { SERVER_LABELS, type Server } from "../types/server";
 import type { AppTheme } from "../types/theme";
 
+type LogLevel = "info" | "debug";
+
 interface OperationLogEntry {
   time: string;
   message: string;
+  level: LogLevel;
 }
 
 interface AdbStatus {
@@ -71,8 +74,27 @@ export function StatusBar({
   // selector until it exits.
   const [battleRunnerRunning, setBattleRunnerRunning] = useState(false);
   const [enhancementRunnerRunning, setEnhancementRunnerRunning] = useState(false);
+  // Debug entries (CV anchor positions, swipe distances, …) are
+  // hidden by default to keep the operation log readable during a
+  // normal run; flip this toggle to surface them for triage.
+  const [showDebugLogs, setShowDebugLogs] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const runnerRunning = battleRunnerRunning || enhancementRunnerRunning;
+
+  const visibleOperationLogs = useMemo(
+    () =>
+      showDebugLogs
+        ? operationLogs
+        : operationLogs.filter((entry) => entry.level !== "debug"),
+    [operationLogs, showDebugLogs],
+  );
+  // Show the count of user-facing (info) entries even when debug is on;
+  // the trigger label is meant to track "what the runner is doing", not
+  // raw event volume.
+  const infoLogCount = useMemo(
+    () => operationLogs.filter((entry) => entry.level !== "debug").length,
+    [operationLogs],
+  );
 
   useEffect(() => {
     invoke<boolean>("get_use_bluestack").then(setUseBluestack).catch(() => {});
@@ -146,7 +168,7 @@ export function StatusBar({
   useEffect(() => {
     if (!operationLogOpen) return;
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [operationLogs, operationLogOpen]);
+  }, [visibleOperationLogs, operationLogOpen]);
 
   return (
     <>
@@ -154,23 +176,40 @@ export function StatusBar({
         <Box className="operation-log-panel">
           <Flex align="center" justify="between" className="operation-log-header">
             <Text size="1" weight="bold">操作日志</Text>
-            <IconButton
-              variant="ghost"
-              color="gray"
-              aria-label="关闭操作日志"
-              onClick={() => onOperationLogOpenChange?.(false)}
-            >
-              <Cross1Icon width={15} height={15} />
-            </IconButton>
+            <Flex align="center" gap="2">
+              <label className="operation-log-debug-toggle">
+                <Checkbox
+                  size="1"
+                  checked={showDebugLogs}
+                  onCheckedChange={(checked) => setShowDebugLogs(checked === true)}
+                />
+                <Text size="1">显示调试</Text>
+              </label>
+              <IconButton
+                variant="ghost"
+                color="gray"
+                aria-label="关闭操作日志"
+                onClick={() => onOperationLogOpenChange?.(false)}
+              >
+                <Cross1Icon width={15} height={15} />
+              </IconButton>
+            </Flex>
           </Flex>
           <Box className="operation-log-list">
-            {operationLogs.length === 0 && (
+            {visibleOperationLogs.length === 0 && (
               <Text size="2" className="operation-log-placeholder">
-                等待启动…
+                {operationLogs.length === 0 ? "等待启动…" : "没有可见日志（开启显示调试查看更多）"}
               </Text>
             )}
-            {operationLogs.map((entry, index) => (
-              <div key={index} className="operation-log-entry">
+            {visibleOperationLogs.map((entry, index) => (
+              <div
+                key={index}
+                className={
+                  entry.level === "debug"
+                    ? "operation-log-entry operation-log-entry--debug"
+                    : "operation-log-entry"
+                }
+              >
                 <span className="operation-log-time">{entry.time}</span>
                 <span className="operation-log-msg">{entry.message}</span>
               </div>
@@ -188,7 +227,7 @@ export function StatusBar({
         >
           <HamburgerMenuIcon width={14} height={14} />
           <Text size="1">
-            操作日志{operationLogs.length > 0 ? ` (${operationLogs.length})` : ""}
+            操作日志{infoLogCount > 0 ? ` (${infoLogCount})` : ""}
           </Text>
         </button>
 

@@ -432,6 +432,13 @@ pub struct SupportDiagnostics {
     pub support_skill_contour_split: bool,
     #[serde(default)]
     pub support_row_anchor_search_region: Option<NormRect>,
+    /// Every "助战编队确认" button bbox currently visible on the support
+    /// list, top-to-bottom. Used by the runner to size its scroll swipe
+    /// so the lowest visible button lands near the top of the next view
+    /// (avoids the legacy fixed-distance swipe overshooting and pushing
+    /// the bottom row off-screen).
+    #[serde(default)]
+    pub confirm_button_anchors: Vec<NormRect>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

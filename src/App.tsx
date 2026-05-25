@@ -27,15 +27,25 @@ import "./App.css";
 // horizontal `StageNavigator` (queue/support/command tabs).
 type View = "team" | "command" | "battle" | "enhancement" | "debug";
 
+/// Severity of an entry in the runner operation log. Mirrors the Rust
+/// `LogLevel` enum: `info` is what the user normally sees, `debug` is
+/// technical diagnostic output kept behind the "显示调试" toggle in the
+/// status bar so the operation log stays readable during a normal run.
+export type LogLevel = "info" | "debug";
+
 interface AutomationEvent {
   state: string;
   currentScreen: string;
   message: string;
+  // Optional for backwards compatibility with older backends that don't
+  // emit a level; treat missing as "info".
+  level?: LogLevel;
 }
 
 export interface OperationLogEntry {
   time: string;
   message: string;
+  level: LogLevel;
 }
 
 interface AppProps {
@@ -66,13 +76,16 @@ function App({ theme, onThemeChange }: AppProps) {
   const [updateInstalling, setUpdateInstalling] = useState(false);
   const [updateProgressText, setUpdateProgressText] = useState<string | null>(null);
 
-  const appendOperationLog = useCallback((message: string) => {
-    const d = new Date();
-    const time = [d.getHours(), d.getMinutes(), d.getSeconds()]
-      .map((n) => String(n).padStart(2, "0"))
-      .join(":");
-    setOperationLogs((prev) => [...prev, { time, message }]);
-  }, []);
+  const appendOperationLog = useCallback(
+    (message: string, level: LogLevel = "info") => {
+      const d = new Date();
+      const time = [d.getHours(), d.getMinutes(), d.getSeconds()]
+        .map((n) => String(n).padStart(2, "0"))
+        .join(":");
+      setOperationLogs((prev) => [...prev, { time, message, level }]);
+    },
+    [],
+  );
 
   const handleAutomationStart = useCallback(() => {
     setOperationLogs([]);
@@ -142,12 +155,12 @@ function App({ theme, onThemeChange }: AppProps) {
 
   useEffect(() => {
     const unlistenBattle = listen<AutomationEvent>("automation-status", (event) => {
-      appendOperationLog(event.payload.message);
+      appendOperationLog(event.payload.message, event.payload.level ?? "info");
     });
     const unlistenEnhancement = listen<AutomationEvent>(
       "enhancement-automation-status",
       (event) => {
-        appendOperationLog(event.payload.message);
+        appendOperationLog(event.payload.message, event.payload.level ?? "info");
       }
     );
     return () => {

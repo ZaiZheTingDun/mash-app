@@ -1,6 +1,7 @@
 mod adb;
 mod debug;
 mod enhancement_runner;
+mod minitouch;
 mod runner;
 mod screen;
 

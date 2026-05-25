@@ -80,6 +80,71 @@ their real screens:
   detects the JP refresh-confirm modal that appears after tapping the support
   refresh button; the runner confirms it, then waits for the modal to vanish
   before resuming OCR/scroll.
+- Support-list scroll distance is adaptive. The sidecar surfaces every visible
+  `button_support_form_confirm` anchor in `FindSupportsResult.diagnostics.confirmButtonAnchors`;
+  the runner sets the swipe delta to `bottom_anchor.y - top_anchor.y`,
+  clamped to `[SUPPORT_SCROLL_MIN_DELTA, SUPPORT_SCROLL_MAX_DELTA]`.
+  Because confirm buttons sit at a fixed offset within each row card and
+  rows are pitched a constant amount apart, that delta is exactly
+  `(N - 1) * row_pitch` for the N visible cards, so the bottom row of the
+  previous page lands at the same screen y the top row used to occupy —
+  i.e. the old bottom row becomes the new top row. When only a single
+  anchor (or no anchors) is visible — rare, usually a one-row list or a
+  template/shape detector glitch — the runner falls back to
+  `SUPPORT_SCROLL_FALLBACK_DELTA` so it still makes forward progress.
+- Support-list scroll gestures use a **two-tier settle swipe** rather
+  than `adb shell input swipe`. A plain linear swipe lifts off at the
+  average swipe velocity, which Android's `VelocityTracker` interprets
+  as a *fling* once it crosses the per-device threshold (≈100–300 px/s
+  on most modern devices) — so even when the runner's intended Δ was
+  correct, the list kept scrolling after lift-off and overshot. The
+  fix is to keep contact at the destination long enough that the
+  velocity tracker's sliding window sees ~0 px/s right before UP, so
+  the system never enters fling mode.
+  - **Primary path** — `Minitouch` (`src-tauri/src/minitouch.rs`).
+    Pushes a bundled native binary to `/data/local/tmp/minitouch`,
+    forwards an `adb` port to its abstract socket, and streams events
+    over TCP using minitouch's `d / m / u / w / c` protocol. Each
+    command is processed in <1 ms, so a smooth ~30-MOVE swipe over
+    600 ms followed by a `SUPPORT_SCROLL_SETTLE_MS` hold lands in
+    ~1 s total. Pushed binaries live under
+    `src-tauri/resources/minitouch/<abi>/minitouch`; see that folder's
+    `README.md` for sourcing instructions. Bring-up happens lazily on
+    the first scroll of a run; the per-`Runner` minitouch instance is
+    dropped (killing the device-side process + removing the port
+    forward) when the run ends.
+  - **Fallback path** — `Adb::swipe_with_settle`. Drives the same
+    DOWN / MOVE / settle / UP shape via chained `input motionevent`
+    commands in a single `adb shell` invocation. Slower (~5 s/scroll
+    at the velocity-bound MOVE pace) and choppier (each `input`
+    invocation spawns a fresh JVM, capping cadence around 15–20 fps)
+    but works without any bundled native binary. Engaged whenever
+    minitouch bring-up fails (missing binary for the device's ABI,
+    push permission denied, etc.) or a runtime minitouch swipe call
+    errors out.
+
+  Each scroll emits a debug-level operation log entry
+  (`滚动助战列表: 按钮 y=[…] (n=…) Δ=… swipe=…→… (Xms+Yms settle) [minitouch]`)
+  so the operator can verify what the runner "saw" when triaging a
+  "scrolled past my servant" bug. The trailing `[minitouch]` tag is
+  present only when the minitouch path actually fired; the fallback
+  path emits the same line without the tag, making it obvious at a
+  glance which gesture path produced each scroll. Debug-level entries
+  are hidden by default behind the status-bar "显示调试" toggle.
+
+## Operation log levels
+
+`AutomationEvent.level` (and the matching `EnhancementAutomationEvent.level`)
+classifies each runner status emit as `info` or `debug`. The `Runner::emit`
+helper defaults to `info` — the existing user-facing operation log entries
+("找到助战 …", "刷新助战列表 …", "{action}失败: …"). `Runner::emit_debug`
+sends technical diagnostics (CV anchor positions, swipe distances) that
+the frontend filters out of the operation log panel by default. The
+status-bar "显示调试" checkbox flips the filter so both levels render —
+debug entries are styled dimmer and don't count toward the
+"操作日志 (N)" trigger badge. Add new debug-level emits via `emit_debug`
+when the message is only useful for triage; reserve `emit` for events
+the operator should always see.
 - `Battle.variants.main.elements.battle_scene_anchor`: exposes the
   `text_battle_label` region to debug; full
   `BATTLE m/n` reading still uses `read_battle_scene`.
