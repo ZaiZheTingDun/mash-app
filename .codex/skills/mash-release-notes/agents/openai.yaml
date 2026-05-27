@@ -1,0 +1,6 @@
+interface:
+  display_name: "Mash Release Notes"
+  short_description: "Write user-facing Mash update notes"
+  default_prompt: "Use $mash-release-notes to draft a user-facing Mash update document from these changes."
+policy:
+  allow_implicit_invocation: true
