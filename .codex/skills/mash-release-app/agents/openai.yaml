@@ -1,0 +1,6 @@
+interface:
+  display_name: "Mash App Release"
+  short_description: "Publish Mash app and CV artifacts"
+  default_prompt: "Use $mash-release-app to publish the full Mash desktop app release."
+policy:
+  allow_implicit_invocation: true
