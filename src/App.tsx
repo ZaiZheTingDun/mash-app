@@ -461,9 +461,14 @@ function App({ theme, onThemeChange }: AppProps) {
                     partyLineup={partyLineup}
                     advancedMode={activeProject?.advancedMode === true}
                     grandServants={activeProject?.grandServants ?? []}
+                    grandCardStrategy={activeProject?.grandCardStrategy}
                     onGrandServantsChange={(grandServants) => {
                       if (!activeProject) return;
                       void handleUpdateProject({ ...activeProject, grandServants });
+                    }}
+                    onGrandCardStrategyChange={(grandCardStrategy) => {
+                      if (!activeProject) return;
+                      void handleUpdateProject({ ...activeProject, grandCardStrategy });
                     }}
                   />
                   <Flex justify="between" align="center" className="page-footer">

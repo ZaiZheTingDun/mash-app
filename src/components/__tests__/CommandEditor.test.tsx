@@ -176,6 +176,54 @@ describe("CommandEditor pagination", () => {
     expect(screen.getByRole("option", { name: "自动读取（红）" })).toBeInTheDocument();
   });
 
+  it("keeps grand card strategy collapsed at the bottom and saves reordered priority", async () => {
+    const user = userEvent.setup();
+    const onGrandCardStrategyChange = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        grandServants={[{ slotIndex: 0, npCard: "auto", priority: "damage" }]}
+        onGrandCardStrategyChange={onGrandCardStrategyChange}
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    const strategyToggle = await screen.findByRole("button", { name: /冠位出牌优先级/ });
+    expect(strategyToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("启动阶段").compareDocumentPosition(strategyToggle)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+
+    await user.click(strategyToggle);
+    await user.click(screen.getByRole("button", { name: "上移主冠位宝具已就绪" }));
+
+    expect(onGrandCardStrategyChange).toHaveBeenCalledWith({
+      chainPriority: [
+        "mainReadyNp",
+        "mainBraveChain",
+        "deputyBraveChain",
+        "mainColorChain",
+        "deputyColorChain",
+        "fallback",
+      ],
+    });
+  });
+
   it("uses post-Order Change lineup in advanced startup actions", async () => {
     const user = userEvent.setup();
     const advancedScene: AdvancedBattleScene = {

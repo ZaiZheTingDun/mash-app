@@ -11,7 +11,7 @@ import {
   TrashIcon,
 } from "@radix-ui/react-icons";
 import type { BattleScene, AttackCard } from "../types/command";
-import type { GrandServantConfig } from "../types/project";
+import type { GrandCardStrategy, GrandServantConfig } from "../types/project";
 import type { Servant } from "../types/servant";
 
 interface CommandEditorProps {
@@ -19,7 +19,9 @@ interface CommandEditorProps {
   partyLineup: (Servant | null)[];
   advancedMode?: boolean;
   grandServants?: GrandServantConfig[];
+  grandCardStrategy?: GrandCardStrategy;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
+  onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
 }
 
 let nextSceneId = 1;
@@ -65,7 +67,9 @@ export function CommandEditor({
   partyLineup,
   advancedMode = false,
   grandServants = [],
+  grandCardStrategy,
   onGrandServantsChange,
+  onGrandCardStrategyChange,
 }: CommandEditorProps) {
   const [scenes, setScenes] = useState<BattleScene[]>(() =>
     projectId ? [] : [createDefaultScene()]
@@ -147,7 +151,9 @@ export function CommandEditor({
         projectId={projectId}
         partyLineup={partyLineup}
         grandServants={grandServants}
+        grandCardStrategy={grandCardStrategy}
         onGrandServantsChange={onGrandServantsChange}
+        onGrandCardStrategyChange={onGrandCardStrategyChange}
       />
     );
   }

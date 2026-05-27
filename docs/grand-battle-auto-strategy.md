@@ -16,6 +16,9 @@ enables advanced mode and configures `grandServants`.
 - Ready Noble Phantasms and recognized command cards are scored together.
 - Hand-written advanced `rules` still take precedence. This strategy only runs
   for the automatic advanced flow.
+- The project-level `grandCardStrategy.chainPriority` list can reorder the
+  automatic chain tiers. Missing or incomplete configs use the default order
+  below.
 
 If `npCard` is `auto`, the runner uses the servant resource's
 `noblePhantasmCard` value. If the configured Grand servant is not currently in
@@ -49,7 +52,7 @@ failing the battle loop.
 
 ## Chain Priority
 
-The picker chooses three attacks by the following chain priority:
+By default, the picker chooses three attacks by the following chain priority:
 
 1. Main servant three-card chain.
 2. Any combo that fires the main servant's ready Noble Phantasm.

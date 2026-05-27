@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Dialog, Flex, Text, Button } from "@radix-ui/themes";
 import {
+  ChevronDownIcon,
+  ChevronUpIcon,
   Cross2Icon,
   PersonIcon,
   PlusIcon,
@@ -16,7 +18,13 @@ import type {
   PreparationAction,
   ServantAction,
 } from "../types/command";
-import type { GrandCardPriority, GrandNpCard, GrandServantConfig } from "../types/project";
+import type {
+  GrandCardPriority,
+  GrandCardStrategy,
+  GrandChainPriorityItem,
+  GrandNpCard,
+  GrandServantConfig,
+} from "../types/project";
 import type { Servant } from "../types/servant";
 import orderChangeIcon from "../../src-tauri/resources/images/icon_order_change.png";
 import commandBgArts from "../../src-tauri/resources/images/command_bg/command_bg_a.png";
@@ -27,7 +35,9 @@ interface AdvancedCommandEditorProps {
   projectId: string | null;
   partyLineup: (Servant | null)[];
   grandServants?: GrandServantConfig[];
+  grandCardStrategy?: GrandCardStrategy;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
+  onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
 }
 
 type PartySlot = `servant_${1 | 2 | 3 | 4 | 5 | 6}`;
@@ -54,6 +64,22 @@ const COMMAND_BG_BY_SUIT: Record<Exclude<AdvancedCommandCardCondition["suit"], "
   arts: commandBgArts,
   buster: commandBgBuster,
   quick: commandBgQuick,
+};
+const DEFAULT_GRAND_CHAIN_PRIORITY: GrandChainPriorityItem[] = [
+  "mainBraveChain",
+  "mainReadyNp",
+  "deputyBraveChain",
+  "mainColorChain",
+  "deputyColorChain",
+  "fallback",
+];
+const GRAND_CHAIN_PRIORITY_LABELS: Record<GrandChainPriorityItem, string> = {
+  mainBraveChain: "主冠位三卡链",
+  mainReadyNp: "主冠位宝具已就绪",
+  deputyBraveChain: "副冠位三卡链",
+  mainColorChain: "包含主冠位的同色链",
+  deputyColorChain: "包含副冠位的同色链",
+  fallback: "兜底输出排序",
 };
 
 let nextAdvancedSceneId = 1;
@@ -129,6 +155,21 @@ function normalizeGrandServants(values: GrandServantConfig[] | undefined): Grand
       npCard: item.npCard ?? "auto",
       priority: item.priority ?? "damage",
     }));
+}
+
+function normalizeGrandCardStrategy(strategy: GrandCardStrategy | undefined): GrandCardStrategy {
+  const configured = strategy?.chainPriority ?? [];
+  const priority = configured.filter(
+    (item, index): item is GrandChainPriorityItem =>
+      DEFAULT_GRAND_CHAIN_PRIORITY.includes(item as GrandChainPriorityItem) &&
+      configured.indexOf(item) === index
+  );
+  for (const item of DEFAULT_GRAND_CHAIN_PRIORITY) {
+    if (!priority.includes(item)) {
+      priority.push(item);
+    }
+  }
+  return { chainPriority: priority };
 }
 
 function cardColorLabel(card: Servant["noblePhantasmCard"] | undefined): string | null {
@@ -585,19 +626,103 @@ function AdvancedCommandCardButton({
   );
 }
 
+function GrandCardStrategyPanel({
+  strategy,
+  onChange,
+}: {
+  strategy?: GrandCardStrategy;
+  onChange?: (strategy: GrandCardStrategy) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const normalized = normalizeGrandCardStrategy(strategy);
+  const priority = normalized.chainPriority ?? DEFAULT_GRAND_CHAIN_PRIORITY;
+  const firstPriority = priority[0] ?? "mainBraveChain";
+
+  const moveItem = (index: number, delta: -1 | 1) => {
+    const nextIndex = index + delta;
+    if (nextIndex < 0 || nextIndex >= priority.length) return;
+    const next = [...priority];
+    const [item] = next.splice(index, 1);
+    next.splice(nextIndex, 0, item);
+    onChange?.({ chainPriority: next });
+  };
+
+  const reset = () => {
+    onChange?.({ chainPriority: [...DEFAULT_GRAND_CHAIN_PRIORITY] });
+  };
+
+  return (
+    <section className="battle-phase advanced-strategy-section grand-card-strategy-section">
+      <button
+        type="button"
+        className="grand-strategy-summary"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="grand-strategy-chevron" aria-hidden>
+          {open ? <ChevronUpIcon width={16} height={16} /> : <ChevronDownIcon width={16} height={16} />}
+        </span>
+        <span className="grand-strategy-title">冠位出牌优先级</span>
+        <span className="grand-strategy-current">{GRAND_CHAIN_PRIORITY_LABELS[firstPriority]}</span>
+      </button>
+      {open && (
+        <div className="grand-strategy-body">
+          <div className="grand-strategy-list">
+            {priority.map((item, index) => (
+              <div className="grand-strategy-item" key={item}>
+                <span className="grand-strategy-rank">{index + 1}</span>
+                <Text size="2" weight="medium" className="grand-strategy-label">
+                  {GRAND_CHAIN_PRIORITY_LABELS[item]}
+                </Text>
+                <div className="grand-strategy-actions">
+                  <button
+                    type="button"
+                    className="grand-strategy-move"
+                    aria-label={`上移${GRAND_CHAIN_PRIORITY_LABELS[item]}`}
+                    disabled={index === 0}
+                    onClick={() => moveItem(index, -1)}
+                  >
+                    <ChevronUpIcon width={15} height={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className="grand-strategy-move"
+                    aria-label={`下移${GRAND_CHAIN_PRIORITY_LABELS[item]}`}
+                    disabled={index === priority.length - 1}
+                    onClick={() => moveItem(index, 1)}
+                  >
+                    <ChevronDownIcon width={15} height={15} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Button type="button" variant="soft" color="gray" onClick={reset}>
+            恢复默认
+          </Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function AdvancedStrategyEditor({
   scene,
   partyLineup,
   faces,
   grandServants,
+  grandCardStrategy,
   onGrandServantsChange,
+  onGrandCardStrategyChange,
   onChange,
 }: {
   scene: AdvancedBattleScene;
   partyLineup: (Servant | null)[];
   faces: Record<string, string | null>;
   grandServants: GrandServantConfig[];
+  grandCardStrategy?: GrandCardStrategy;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
+  onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
   onChange: (scene: AdvancedBattleScene) => void;
 }) {
   const [editingCardSlot, setEditingCardSlot] = useState<number | null>(null);
@@ -1158,6 +1283,11 @@ function AdvancedStrategyEditor({
         </div>
       </section>
 
+      <GrandCardStrategyPanel
+        strategy={grandCardStrategy}
+        onChange={onGrandCardStrategyChange}
+      />
+
       <Dialog.Root
         open={editingCardSlot != null && editingCard != null}
         onOpenChange={(open) => {
@@ -1221,7 +1351,9 @@ export function AdvancedCommandEditor({
   projectId,
   partyLineup,
   grandServants = [],
+  grandCardStrategy,
   onGrandServantsChange,
+  onGrandCardStrategyChange,
 }: AdvancedCommandEditorProps) {
   // Coronation mode is single-scene by design — the runner only ever
   // executes one battle. We still persist as an array on disk so the
@@ -1275,7 +1407,9 @@ export function AdvancedCommandEditor({
           partyLineup={partyLineup}
           faces={faces}
           grandServants={grandServants}
+          grandCardStrategy={grandCardStrategy}
           onGrandServantsChange={onGrandServantsChange}
+          onGrandCardStrategyChange={onGrandCardStrategyChange}
           onChange={handleSceneChange}
         />
       </div>

@@ -19,6 +19,7 @@ import saintQuartzImage from "../../src-tauri/resources/images/item_saint_quartz
 import type {
   BattleApRecoveryItem,
   BattleRepeatMode,
+  GrandChainPriorityItem,
   Project,
 } from "../types/project";
 
@@ -66,6 +67,14 @@ const AP_RECOVERY_OPTIONS: {
     },
   ];
 const EMPTY_AP_RECOVERY_ITEMS: BattleApRecoveryItem[] = [];
+const DEFAULT_GRAND_CHAIN_PRIORITY: GrandChainPriorityItem[] = [
+  "mainBraveChain",
+  "mainReadyNp",
+  "deputyBraveChain",
+  "mainColorChain",
+  "deputyColorChain",
+  "fallback",
+];
 
 interface BattlePageProps {
   projects: Project[];
@@ -246,6 +255,9 @@ export function BattlePage({
         selectedProject.supportGrandCraftEssenceMlbRequired ?? [true, true, true],
       supportGrandBondCeMode: selectedProject.supportGrandBondCeMode ?? "any",
       grandServants: selectedProject.grandServants ?? [],
+      grandCardStrategy: selectedProject.grandCardStrategy ?? {
+        chainPriority: DEFAULT_GRAND_CHAIN_PRIORITY,
+      },
       supportNoblePhantasmLevelMin:
         selectedProject.supportNoblePhantasmLevelMin ?? null,
       supportSkillLevelMins:

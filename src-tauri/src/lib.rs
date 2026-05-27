@@ -457,6 +457,43 @@ fn default_grand_card_priority() -> String {
     "damage".into()
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GrandChainPriorityItem {
+    MainBraveChain,
+    MainReadyNp,
+    DeputyBraveChain,
+    MainColorChain,
+    DeputyColorChain,
+    Fallback,
+}
+
+fn default_grand_chain_priority() -> Vec<GrandChainPriorityItem> {
+    vec![
+        GrandChainPriorityItem::MainBraveChain,
+        GrandChainPriorityItem::MainReadyNp,
+        GrandChainPriorityItem::DeputyBraveChain,
+        GrandChainPriorityItem::MainColorChain,
+        GrandChainPriorityItem::DeputyColorChain,
+        GrandChainPriorityItem::Fallback,
+    ]
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GrandCardStrategy {
+    #[serde(default = "default_grand_chain_priority")]
+    pub chain_priority: Vec<GrandChainPriorityItem>,
+}
+
+impl Default for GrandCardStrategy {
+    fn default() -> Self {
+        Self {
+            chain_priority: default_grand_chain_priority(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GrandServantConfig {
@@ -496,6 +533,8 @@ pub struct Project {
     pub support_grand_bond_ce_mode: SupportGrandBondCeMode,
     #[serde(default)]
     pub grand_servants: Vec<GrandServantConfig>,
+    #[serde(default)]
+    pub grand_card_strategy: GrandCardStrategy,
     /// Optional support-search NP minimum level. `None` means "任意".
     #[serde(default)]
     pub support_noble_phantasm_level_min: Option<u32>,
@@ -752,6 +791,7 @@ fn create_project(
         ),
         support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
         grand_servants: Vec::new(),
+        grand_card_strategy: GrandCardStrategy::default(),
         support_noble_phantasm_level_min: None,
         support_skill_level_mins: default_support_skill_level_mins(),
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
@@ -3725,6 +3765,10 @@ mod tests {
             SupportGrandBondCeMode::Any
         );
         assert!(project.grand_servants.is_empty());
+        assert_eq!(
+            project.grand_card_strategy.chain_priority,
+            default_grand_chain_priority()
+        );
         assert!(project.support_noble_phantasm_level_min.is_none());
         assert_eq!(project.support_skill_level_mins, [None; 3]);
         assert_eq!(project.support_append_skill_level_mins, [None; 5]);
@@ -3748,6 +3792,7 @@ mod tests {
                 default_support_grand_craft_essence_mlb_required(),
             support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
             grand_servants: Vec::new(),
+            grand_card_strategy: GrandCardStrategy::default(),
             support_noble_phantasm_level_min: None,
             support_skill_level_mins: default_support_skill_level_mins(),
             support_append_skill_level_mins: default_support_append_skill_level_mins(),
