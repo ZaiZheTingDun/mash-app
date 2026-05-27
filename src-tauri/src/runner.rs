@@ -6074,6 +6074,36 @@ mod tests {
     }
 
     #[test]
+    fn party_lineup_change_removes_habetrot_after_third_skill() {
+        let mut ids = [Some(315), Some(434), Some(384), Some(11), Some(22), None];
+        let action = Action::Servant {
+            id: "a1".into(),
+            servant: Some("servant_1".into()),
+            skill: Some("skill_3".into()),
+            target: None,
+        };
+
+        apply_party_lineup_change(&mut ids, &action);
+
+        assert_eq!(ids, [Some(11), Some(434), Some(384), Some(22), None, None]);
+    }
+
+    #[test]
+    fn party_lineup_change_removes_ultimate_elisabeth_after_third_skill() {
+        let mut ids = [Some(8), Some(458), Some(384), Some(11), Some(22), None];
+        let action = Action::Servant {
+            id: "a1".into(),
+            servant: Some("servant_2".into()),
+            skill: Some("skill_3".into()),
+            target: None,
+        };
+
+        apply_party_lineup_change(&mut ids, &action);
+
+        assert_eq!(ids, [Some(8), Some(11), Some(384), Some(22), None, None]);
+    }
+
+    #[test]
     fn action_frontline_available_rejects_source_out_of_frontline() {
         let ids = [Some(8), Some(434), Some(384), Some(11), Some(22), None];
         let action = Action::Servant {

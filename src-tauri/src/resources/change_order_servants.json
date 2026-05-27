@@ -36,6 +36,18 @@
     "source": "noble_phantasms.effects: 自身即死效果"
   },
   {
+    "servantId": 315,
+    "nameCn": "哈贝特洛特",
+    "trigger": {
+      "type": "servantSkill",
+      "skill": "skill_3"
+    },
+    "effect": {
+      "type": "removeSelf"
+    },
+    "source": "skills[3].effects: 回合结束时即死"
+  },
+  {
     "servantId": 388,
     "nameCn": "克洛伊·冯·爱因兹贝伦",
     "trigger": {
@@ -82,6 +94,18 @@
       "type": "removeSelf"
     },
     "source": "noble_phantasms.effects: 自身即死效果"
+  },
+  {
+    "servantId": 458,
+    "nameCn": "终结之伊丽莎白",
+    "trigger": {
+      "type": "servantSkill",
+      "skill": "skill_3"
+    },
+    "effect": {
+      "type": "removeSelf"
+    },
+    "source": "skills[3].effects: HP变为1，自焚状态"
   },
   {
     "servantId": 463,

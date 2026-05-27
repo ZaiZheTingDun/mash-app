@@ -71,6 +71,16 @@ const CHEN_GONG: Servant = {
   rarity: 2,
 };
 
+const HABETROT: Servant = {
+  id: 315,
+  variantKey: "315",
+  name_cn: "哈贝特洛特",
+  name_jp: "ハベトロット",
+  name_en: "Habetrot",
+  class: "Rider",
+  rarity: 4,
+};
+
 const CHLOE: Servant = {
   id: 388,
   variantKey: "388",
@@ -81,6 +91,16 @@ const CHLOE: Servant = {
   rarity: 4,
 };
 
+const ULTIMATE_ELISABETH: Servant = {
+  id: 458,
+  variantKey: "458",
+  name_cn: "终结之伊丽莎白",
+  name_jp: "終わりのエリザベート",
+  name_en: "Ultimate Elisabeth",
+  class: "Avenger",
+  rarity: 4,
+};
+
 const SERVANTS: Servant[] = [
   MASH,
   ALTRIA,
@@ -88,7 +108,9 @@ const SERVANTS: Servant[] = [
   WAVER,
   ARASH,
   CHEN_GONG,
+  HABETROT,
   CHLOE,
+  ULTIMATE_ELISABETH,
 ];
 
 function makeSlots(
@@ -292,6 +314,59 @@ describe("deriveScenePartyServants", () => {
 
     expect(lineups[1]).toEqual([ALTRIA, MERLIN, WAVER, CHLOE, MASH, CHEN_GONG]);
     expect(lineups[2]).toEqual([CHLOE, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG]);
+  });
+
+  it("replaces Habetrot after using her third skill", () => {
+    const lineups = deriveScenePartyLineups(
+      [HABETROT, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG],
+      [
+        makeScene({
+          preparationActions: [
+            {
+              type: "servant",
+              id: "sa_1",
+              servant: "servant_1",
+              skill: "skill_3",
+              target: null,
+            },
+          ],
+        }),
+        makeScene({ id: "scene_2" }),
+      ]
+    );
+
+    expect(lineups[0]).toEqual([HABETROT, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG]);
+    expect(lineups[1]).toEqual([ALTRIA, MERLIN, WAVER, MASH, CHEN_GONG, null]);
+  });
+
+  it("replaces Ultimate Elisabeth after using her third skill", () => {
+    const lineups = deriveScenePartyLineups(
+      [MERLIN, ULTIMATE_ELISABETH, WAVER, ALTRIA, MASH, CHEN_GONG],
+      [
+        makeScene({
+          preparationActions: [
+            {
+              type: "servant",
+              id: "sa_1",
+              servant: "servant_2",
+              skill: "skill_3",
+              target: null,
+            },
+          ],
+        }),
+        makeScene({ id: "scene_2" }),
+      ]
+    );
+
+    expect(lineups[0]).toEqual([
+      MERLIN,
+      ULTIMATE_ELISABETH,
+      WAVER,
+      ALTRIA,
+      MASH,
+      CHEN_GONG,
+    ]);
+    expect(lineups[1]).toEqual([MERLIN, ALTRIA, WAVER, MASH, CHEN_GONG, null]);
   });
 
   it("derives the full lineup with a pinned support before scene simulation", () => {
