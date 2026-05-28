@@ -161,6 +161,10 @@ the operator should always see.
   separate center-dialog region for the bond-level-up overlay label
   (`text_battle_result_bond_level_up`); Rust routes it to the same
   `BattleResultBond` handler.
+- `BattleResultExpLevelUp.detect`: detects the CN equipment / skill level-up
+  overlay (`text_battle_result_equip_level_up`) and routes to the same
+  `BattleResultExp` handler. It has elevated priority because the overlay
+  leaves the battle HUD visible and can otherwise be classified as `Battle`.
 
 ## Support OCR Names
 
@@ -243,6 +247,9 @@ changes (i.e. when the runner moves to a different row).
 - `BattleResultBond` covers ordinary bond-points settlement. The separate
   `BattleResultBondLevelUp` CV screen covers the bond-level-up overlay and
   routes to the same next-button tap target.
+- `BattleResultExp` covers ordinary master / servant EXP settlement. The
+  separate `BattleResultExpLevelUp` CV screen covers the equipment / skill
+  level-up overlay and routes to the same next-button tap target.
 - In-battle Order Change is stored on an equipment action as
   `orderChange.front` + `orderChange.back`. The runner taps the master skill,
   lets the semi-transparent Battle overlay settle, selects exactly one

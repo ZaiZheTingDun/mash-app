@@ -531,7 +531,7 @@ impl FromStr for Screen {
             "Battle" => Self::Battle,
             "Attack" => Self::Attack,
             "BattleResultLoot" => Self::BattleResultLoot,
-            "BattleResultExp" => Self::BattleResultExp,
+            "BattleResultExp" | "BattleResultExpLevelUp" => Self::BattleResultExp,
             "BattleResultBond" | "BattleResultBondLevelUp" => Self::BattleResultBond,
             "BattleResultContinue" => Self::BattleResultContinue,
             "BattleResultFriendRequest" => Self::BattleResultFriendRequest,
@@ -1567,6 +1567,14 @@ mod tests {
         assert_eq!(
             "BattleResultBondLevelUp".parse::<Screen>().unwrap(),
             Screen::BattleResultBond
+        );
+    }
+
+    #[test]
+    fn exp_level_up_screen_routes_to_exp_handler() {
+        assert_eq!(
+            "BattleResultExpLevelUp".parse::<Screen>().unwrap(),
+            Screen::BattleResultExp
         );
     }
 }
