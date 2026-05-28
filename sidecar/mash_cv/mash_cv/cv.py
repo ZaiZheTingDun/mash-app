@@ -248,11 +248,6 @@ SUPPORT_NP_BELOW_NAME_MIN_DY = 0.005
 SUPPORT_NAME_THRESHOLD = 0.65
 SUPPORT_NP_THRESHOLD = 0.65
 
-# Right-side support-detail panel. These are absolute screen fractions from
-# CN 2560x1440 support screenshots; the UI scales proportionally.
-SUPPORT_PANEL_TEMPLATE_REGION = {"x": 0.635, "y": 0.55, "w": 0.15, "h": 0.55}
-SUPPORT_PANEL_TEMPLATE_MIN_DELTA = 0.08
-SUPPORT_PANEL_TEMPLATE_MIN_SCORE = 0.55
 SUPPORT_SKILL_LEVEL_MIN_SCORE = 0.34
 SUPPORT_SKILL_LEVEL_TEN_MIN_SCORE = 0.56
 SUPPORT_SKILL_LEVEL_DEDICATED_MIN_SCORE = 0.62
@@ -3340,10 +3335,7 @@ def _support_panel_kind_from_anchor(
     The slot at ``SUPPORT_SCORE_PANEL_PROBE_DX`` (-0.037) only carries
     a coloured icon on append rows; on owned rows the same coordinates
     fall on the desaturated panel background. Mean saturation cleanly
-    separates the two on every checked-in support fixture, so we use it
-    as the primary panel signal — the legacy ``support_skill_panel_*``
-    template lookup ran on a tiny ROI that frequently failed the
-    ``th > roi.h`` size check at 1080p, leaving panel kind as ``None``.
+    separates the two on every checked-in support fixture.
     """
     h, w = img.shape[:2]
     if h == 0 or w == 0:
@@ -3386,8 +3378,6 @@ def _support_find_skill_slots(img: np.ndarray, row_region: dict) -> list[dict]:
         return []
     anchor = _support_score_anchor_from_row_anchor(row_anchor)
     panel = _support_panel_kind_from_anchor(img, anchor)
-    if panel is None:
-        panel = _support_panel_template_kind(img, row_region)
     return _support_skill_slots_from_anchor(anchor, panel)
 
 
@@ -3613,30 +3603,6 @@ def _support_read_skill_level_info(img: np.ndarray, slot_region: dict) -> dict:
         "source": info["source"],
         "region": dict(slot_region),
     }
-
-
-def _support_panel_template_kind(img: np.ndarray, row_region: dict) -> Optional[str]:
-    owned = _get_template("support_skill_panel_owned")
-    append = _get_template("support_skill_panel_append")
-    if owned is None or append is None:
-        return None
-    region = {
-        "x": SUPPORT_PANEL_TEMPLATE_REGION["x"],
-        "y": float(row_region["y"]) + float(row_region["h"]) * SUPPORT_PANEL_TEMPLATE_REGION["y"],
-        "w": SUPPORT_PANEL_TEMPLATE_REGION["w"],
-        "h": float(row_region["h"]) * SUPPORT_PANEL_TEMPLATE_REGION["h"],
-    }
-    owned_score = _match_template_region(
-        img, owned, region, 0.0, "support_skill_panel_owned"
-    ).get("score", 0.0)
-    append_score = _match_template_region(
-        img, append, region, 0.0, "support_skill_panel_append"
-    ).get("score", 0.0)
-    if max(owned_score, append_score) < SUPPORT_PANEL_TEMPLATE_MIN_SCORE:
-        return None
-    if abs(float(owned_score) - float(append_score)) < SUPPORT_PANEL_TEMPLATE_MIN_DELTA:
-        return None
-    return "append" if append_score > owned_score else "owned"
 
 
 def _support_extract_skill_details(img: np.ndarray, row_region: dict) -> tuple[Optional[str], list[Optional[int]], list[Optional[int]]]:
