@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppThemeRoot } from "../AppThemeRoot";
@@ -16,30 +16,19 @@ describe("AppThemeRoot", () => {
     vi.mocked(invoke).mockClear();
   });
 
-  it("shows the startup migration page until migration finishes", async () => {
-    let resolveMigration:
-      | ((status: { migrated: boolean; from: string | null; to: string }) => void)
-      | undefined;
+  it("loads the app immediately while startup migration runs in the background", () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === "run_startup_migration") {
-        return new Promise((resolve) => {
-          resolveMigration = resolve;
-        });
+        return new Promise(() => {});
       }
       return Promise.resolve(null);
     });
 
     render(<AppThemeRoot isDebugCanvas={false} />);
 
-    expect(screen.getByText("正在从 com.mash.app 迁移数据...")).toBeInTheDocument();
-    expect(screen.getByText("该操作只会进行一次。")).toBeInTheDocument();
-    expect(screen.queryByText("主界面已加载")).not.toBeInTheDocument();
-
-    await act(async () => {
-      resolveMigration?.({ migrated: true, from: "/old", to: "/new" });
-    });
-
-    expect(await screen.findByText("主界面已加载")).toBeInTheDocument();
+    expect(screen.getByText("主界面已加载")).toBeInTheDocument();
+    expect(screen.queryByText("正在从 com.mash.app 迁移数据...")).not.toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("run_startup_migration");
   });
 
   it("skips startup migration for the debug canvas window", () => {
