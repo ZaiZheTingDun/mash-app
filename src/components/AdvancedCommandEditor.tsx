@@ -36,6 +36,7 @@ interface AdvancedCommandEditorProps {
   partyLineup: (Servant | null)[];
   grandServants?: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
+  grandCardPriorityEnabled?: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
   onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
 }
@@ -712,6 +713,7 @@ function AdvancedStrategyEditor({
   faces,
   grandServants,
   grandCardStrategy,
+  grandCardPriorityEnabled,
   onGrandServantsChange,
   onGrandCardStrategyChange,
   onChange,
@@ -721,6 +723,7 @@ function AdvancedStrategyEditor({
   faces: Record<string, string | null>;
   grandServants: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
+  grandCardPriorityEnabled: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
   onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
   onChange: (scene: AdvancedBattleScene) => void;
@@ -1283,10 +1286,12 @@ function AdvancedStrategyEditor({
         </div>
       </section>
 
-      <GrandCardStrategyPanel
-        strategy={grandCardStrategy}
-        onChange={onGrandCardStrategyChange}
-      />
+      {grandCardPriorityEnabled && (
+        <GrandCardStrategyPanel
+          strategy={grandCardStrategy}
+          onChange={onGrandCardStrategyChange}
+        />
+      )}
 
       <Dialog.Root
         open={editingCardSlot != null && editingCard != null}
@@ -1352,6 +1357,7 @@ export function AdvancedCommandEditor({
   partyLineup,
   grandServants = [],
   grandCardStrategy,
+  grandCardPriorityEnabled = false,
   onGrandServantsChange,
   onGrandCardStrategyChange,
 }: AdvancedCommandEditorProps) {
@@ -1408,6 +1414,7 @@ export function AdvancedCommandEditor({
           faces={faces}
           grandServants={grandServants}
           grandCardStrategy={grandCardStrategy}
+          grandCardPriorityEnabled={grandCardPriorityEnabled}
           onGrandServantsChange={onGrandServantsChange}
           onGrandCardStrategyChange={onGrandCardStrategyChange}
           onChange={handleSceneChange}

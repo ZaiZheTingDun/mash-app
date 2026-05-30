@@ -6,6 +6,7 @@ describe("feature toggles", () => {
     expect(createFeatureToggles({ DEV: true })).toEqual({
       servantEnhancement: true,
       cvDebug: true,
+      grandCardPriority: true,
     });
   });
 
@@ -13,6 +14,7 @@ describe("feature toggles", () => {
     expect(createFeatureToggles({ DEV: false })).toEqual({
       servantEnhancement: false,
       cvDebug: false,
+      grandCardPriority: false,
     });
   });
 
@@ -22,10 +24,12 @@ describe("feature toggles", () => {
         DEV: false,
         VITE_FEATURE_SERVANT_ENHANCEMENT: "true",
         VITE_FEATURE_CV_DEBUG: "1",
+        VITE_FEATURE_GRAND_CARD_PRIORITY: "on",
       })
     ).toEqual({
       servantEnhancement: true,
       cvDebug: true,
+      grandCardPriority: true,
     });
   });
 });

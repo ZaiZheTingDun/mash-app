@@ -462,14 +462,19 @@ function App({ theme, onThemeChange }: AppProps) {
                     advancedMode={activeProject?.advancedMode === true}
                     grandServants={activeProject?.grandServants ?? []}
                     grandCardStrategy={activeProject?.grandCardStrategy}
+                    grandCardPriorityEnabled={featureToggles.grandCardPriority}
                     onGrandServantsChange={(grandServants) => {
                       if (!activeProject) return;
                       void handleUpdateProject({ ...activeProject, grandServants });
                     }}
-                    onGrandCardStrategyChange={(grandCardStrategy) => {
-                      if (!activeProject) return;
-                      void handleUpdateProject({ ...activeProject, grandCardStrategy });
-                    }}
+                    onGrandCardStrategyChange={
+                      featureToggles.grandCardPriority
+                        ? (grandCardStrategy) => {
+                            if (!activeProject) return;
+                            void handleUpdateProject({ ...activeProject, grandCardStrategy });
+                          }
+                        : undefined
+                    }
                   />
                   <Flex justify="between" align="center" className="page-footer">
                     <Button

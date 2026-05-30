@@ -194,6 +194,7 @@ describe("CommandEditor pagination", () => {
         projectId="project_1"
         advancedMode
         grandServants={[{ slotIndex: 0, npCard: "auto", priority: "damage" }]}
+        grandCardPriorityEnabled
         onGrandCardStrategyChange={onGrandCardStrategyChange}
         partyLineup={[
           makeServant(1, "甲"),
@@ -222,6 +223,36 @@ describe("CommandEditor pagination", () => {
         "fallback",
       ],
     });
+  });
+
+  it("hides grand card strategy when the feature toggle is disabled", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        grandServants={[{ slotIndex: 0, npCard: "auto", priority: "damage" }]}
+        grandCardPriorityEnabled={false}
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    await screen.findByText("启动阶段");
+
+    expect(screen.queryByRole("button", { name: /冠位出牌优先级/ })).not.toBeInTheDocument();
   });
 
   it("uses post-Order Change lineup in advanced startup actions", async () => {

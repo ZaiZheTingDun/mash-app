@@ -20,6 +20,7 @@ interface CommandEditorProps {
   advancedMode?: boolean;
   grandServants?: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
+  grandCardPriorityEnabled?: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
   onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
 }
@@ -79,6 +80,7 @@ export function CommandEditor({
   advancedMode = false,
   grandServants = [],
   grandCardStrategy,
+  grandCardPriorityEnabled = false,
   onGrandServantsChange,
   onGrandCardStrategyChange,
 }: CommandEditorProps) {
@@ -163,6 +165,7 @@ export function CommandEditor({
         partyLineup={partyLineup}
         grandServants={grandServants}
         grandCardStrategy={grandCardStrategy}
+        grandCardPriorityEnabled={grandCardPriorityEnabled}
         onGrandServantsChange={onGrandServantsChange}
         onGrandCardStrategyChange={onGrandCardStrategyChange}
       />
