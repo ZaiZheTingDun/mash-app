@@ -1689,6 +1689,37 @@ body,
   transition: opacity 0.12s, background 0.12s;
 }
 
+.battle-action-clear {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--red-10);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-1);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  opacity: 0;
+  flex: 0 0 auto;
+  transition: opacity 0.12s, background 0.12s;
+}
+
+.battle-action-row:hover .battle-action-clear,
+.battle-action-clear:focus-visible {
+  opacity: 1;
+}
+
+.battle-action-clear:hover {
+  background: var(--red-3);
+}
+
+.battle-action-delete-placeholder {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
 .battle-action-row:hover .battle-action-delete,
 .battle-action-delete:focus-visible {
   opacity: 1;
@@ -1734,6 +1765,30 @@ body,
   text-align: left;
 }
 
+.battle-attack-slot-label {
+  color: var(--gray-10);
+  font-size: 12px;
+  font-weight: 700;
+  width: 64px;
+  flex: 0 0 auto;
+}
+
+.battle-attack-edit {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--gray-12);
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.battle-attack-edit:hover {
+  color: var(--blue-11);
+}
+
 .battle-plus-box,
 .battle-face-btn,
 .battle-square-btn,
@@ -1749,6 +1804,11 @@ body,
   place-items: center;
   flex: 0 0 auto;
   transition: background 0.12s, border-color 0.12s, transform 0.12s;
+}
+
+.battle-choice-row.inline {
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 .battle-plus-box {

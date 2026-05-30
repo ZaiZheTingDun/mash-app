@@ -25,13 +25,17 @@ interface CommandEditorProps {
 }
 
 let nextSceneId = 1;
+const FIXED_ATTACK_CARD_COUNT = 3;
 
 function createSceneId(): string {
   return `scene_${nextSceneId++}_${Date.now()}`;
 }
 
 function createDefaultAttackPriority(): AttackCard[] {
-  return [];
+  return Array.from({ length: FIXED_ATTACK_CARD_COUNT }, (_, index) => ({
+    id: `atk_fixed_${index + 1}_${Date.now()}`,
+    card: null,
+  }));
 }
 
 function createDefaultScene(): BattleScene {
@@ -46,6 +50,13 @@ function createDefaultScene(): BattleScene {
 }
 
 function normalizeScene(scene: BattleScene): BattleScene {
+  const attackPriority = [...(scene.attackPriority ?? [])];
+  while (attackPriority.length < FIXED_ATTACK_CARD_COUNT) {
+    attackPriority.push({
+      id: `atk_fixed_${attackPriority.length + 1}_${Date.now()}`,
+      card: null,
+    });
+  }
   return {
     ...scene,
     preparationActions:
@@ -58,7 +69,7 @@ function normalizeScene(scene: BattleScene): BattleScene {
     servantActions: [],
     equipmentActions: [],
     commandSpellActions: [],
-    attackPriority: scene.attackPriority ?? [],
+    attackPriority,
   };
 }
 

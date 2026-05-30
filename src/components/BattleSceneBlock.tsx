@@ -40,8 +40,10 @@ type PrepDraft =
       front: PartySlot | null;
     };
 type AttackDraft =
-  | { step: "source" }
-  | { step: "option"; source: AttackSource };
+  | { step: "source"; targetIndex: number | null }
+  | { step: "option"; source: AttackSource; targetIndex: number | null };
+
+const FIXED_ATTACK_CARD_COUNT = 3;
 
 const SKILLS = ["skill_1", "skill_2", "skill_3"] as const;
 const SKILL_LABELS: Record<string, string> = {
@@ -60,6 +62,7 @@ const ATTACK_OPTIONS = [
   { value: "buster", label: "B" },
   { value: "arts", label: "A" },
   { value: "quick", label: "Q" },
+  { value: "all", label: "ALL" },
 ] as const;
 
 const CARD_LABELS: Record<string, string> = {
@@ -67,7 +70,19 @@ const CARD_LABELS: Record<string, string> = {
   buster: "红卡攻击",
   arts: "蓝卡攻击",
   quick: "绿卡攻击",
+  all: "任意指令卡",
 };
+
+function normalizeAttackPriority(priority: AttackCard[]): AttackCard[] {
+  const next = [...priority];
+  while (next.length < FIXED_ATTACK_CARD_COUNT) {
+    next.push({
+      id: createId(`atk_fixed_${next.length + 1}`),
+      card: null,
+    });
+  }
+  return next;
+}
 
 function createId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -350,6 +365,19 @@ function ActionDeleteButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+function ActionClearButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="battle-action-clear"
+      aria-label="清除指令卡"
+      onClick={onClick}
+    >
+      <Cross2Icon width={13} height={13} />
+    </button>
+  );
+}
+
 function DraftCancelButton({
   visible,
   onClick,
@@ -403,11 +431,15 @@ function actionSummary(
 }
 
 function attackSummary(card: AttackCard, partyServants: (Servant | null)[]): string {
-  const match = card.card?.match(/^servant_([1-3])_(np|buster|arts|quick)$/);
+  const match = card.card?.match(/^servant_([1-3])_(np|buster|arts|quick|all)$/);
   if (!match) return "未设置攻击";
   const index = Number(match[1]) - 1;
   const kind = match[2];
   return `${servantLabel(index, partyServants[index] ?? null)} ${CARD_LABELS[kind]}`;
+}
+
+function attackSlotLabel(index: number): string {
+  return index < FIXED_ATTACK_CARD_COUNT ? `指令卡${["一", "二", "三"][index]}` : "";
 }
 
 export function BattleSceneBlock({
@@ -445,6 +477,10 @@ export function BattleSceneBlock({
   const currentPartyServants = useMemo(
     () => deriveLineupAfterPreparationActions(partyServants, preparationActions),
     [partyServants, preparationActions]
+  );
+  const attackPriority = useMemo(
+    () => normalizeAttackPriority(scene.attackPriority ?? []),
+    [scene.attackPriority]
   );
 
   const updatePreparationActions = (next: PreparationAction[]) => {
@@ -505,12 +541,83 @@ export function BattleSceneBlock({
   };
 
   const finishAttackAction = (source: AttackSource, option: string) => {
-    updateAttackPriority([
-      ...scene.attackPriority,
-      { id: createId("atk"), card: `${source}_${option}` },
-    ]);
+    const next = [...attackPriority];
+    const card = `${source}_${option}`;
+    if (attackDraft?.targetIndex != null) {
+      next[attackDraft.targetIndex] = {
+        ...(next[attackDraft.targetIndex] ?? { id: createId("atk") }),
+        card,
+      };
+    } else {
+      next.push({ id: createId("atk"), card });
+    }
+    updateAttackPriority(next);
     setAttackDraft(null);
   };
+
+  const clearAttackAction = (index: number) => {
+    const next = [...attackPriority];
+    if (!next[index]) return;
+    next[index] = { ...next[index], card: null };
+    updateAttackPriority(next);
+    if (attackDraft?.targetIndex === index) {
+      setAttackDraft(null);
+    }
+  };
+
+  const renderAttackDraft = (draft: AttackDraft) =>
+    draft.step === "source" ? (
+      <div className="battle-choice-row inline">
+        {currentPartyServants.slice(0, 3).map((servant, index) => (
+          <ServantFaceButton
+            key={index}
+            servant={servant}
+            index={index}
+            faceSrc={servant ? faces[servant.variantKey] : null}
+            onClick={() =>
+              setAttackDraft({
+                step: "option",
+                source: `servant_${index + 1}` as AttackSource,
+                targetIndex: draft.targetIndex,
+              })
+            }
+          />
+        ))}
+      </div>
+    ) : (
+      <div className="battle-choice-row inline">
+        <ServantFaceButton
+          servant={currentPartyServants[sourceIndex(draft.source) ?? 0] ?? null}
+          index={sourceIndex(draft.source) ?? 0}
+          faceSrc={
+            currentPartyServants[sourceIndex(draft.source) ?? 0]
+              ? faces[
+                  currentPartyServants[sourceIndex(draft.source) ?? 0]!
+                    .variantKey
+                ]
+              : null
+          }
+          onClick={() =>
+            setAttackDraft({
+              step: "source",
+              targetIndex: draft.targetIndex,
+            })
+          }
+        />
+        <div className="battle-option-group">
+          {ATTACK_OPTIONS.map((option) => (
+            <button
+              type="button"
+              key={option.value}
+              className="battle-option-btn"
+              onClick={() => finishAttackAction(draft.source, option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
 
   return (
     <div className="battle-scene-editor">
@@ -733,33 +840,62 @@ export function BattleSceneBlock({
       <section className="battle-phase">
         <div className="battle-phase-label">攻击阶段</div>
         <div className="battle-action-list">
-          {scene.attackPriority.map((card, index) => (
-            <div className="battle-action-row committed" key={card.id}>
-              <ActionDeleteButton
-                onClick={() =>
-                  updateAttackPriority(scene.attackPriority.filter((_, i) => i !== index))
-                }
-              />
-              <AttackActionFace
-                card={card}
-                partyServants={currentPartyServants}
-                faces={faces}
-              />
-              <Text size="2" weight="medium">
-                {attackSummary(card, currentPartyServants)}
-              </Text>
-            </div>
-          ))}
+          {attackPriority.map((card, index) => {
+            const rowDraft = attackDraft?.targetIndex === index ? attackDraft : null;
+            return (
+              <div className="battle-action-row committed" key={card.id}>
+                {index >= FIXED_ATTACK_CARD_COUNT ? (
+                  <>
+                    <ActionDeleteButton
+                      onClick={() =>
+                        updateAttackPriority(attackPriority.filter((_, i) => i !== index))
+                      }
+                    />
+                    <span className="battle-action-delete-placeholder" aria-hidden />
+                  </>
+                ) : (
+                  card.card ? (
+                    <ActionClearButton onClick={() => clearAttackAction(index)} />
+                  ) : (
+                    <span className="battle-action-delete-placeholder" aria-hidden />
+                  )
+                )}
+                {index < FIXED_ATTACK_CARD_COUNT && (
+                  <span className="battle-attack-slot-label">{attackSlotLabel(index)}</span>
+                )}
+                {rowDraft ? (
+                  renderAttackDraft(rowDraft)
+                ) : (
+                  <>
+                    <AttackActionFace
+                      card={card}
+                      partyServants={currentPartyServants}
+                      faces={faces}
+                    />
+                    <button
+                      type="button"
+                      className="battle-attack-edit"
+                      onClick={() => setAttackDraft({ step: "source", targetIndex: index })}
+                    >
+                      <Text size="2" weight="medium">
+                        {attackSummary(card, currentPartyServants)}
+                      </Text>
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })}
           <div className="battle-add-row">
             <DraftCancelButton
-              visible={attackDraft != null}
+              visible={attackDraft?.targetIndex === null}
               onClick={() => setAttackDraft(null)}
             />
-            {!attackDraft ? (
+            {attackDraft?.targetIndex !== null ? (
               <button
                 type="button"
                 className="battle-add-trigger"
-                onClick={() => setAttackDraft({ step: "source" })}
+                onClick={() => setAttackDraft({ step: "source", targetIndex: null })}
               >
                 <span className="battle-plus-box">
                   <PlusIcon width={16} height={16} />
@@ -768,53 +904,21 @@ export function BattleSceneBlock({
                   添加一项新的行动
                 </Text>
               </button>
-            ) : attackDraft.step === "source" ? (
-              <div className="battle-choice-row">
-                {currentPartyServants.slice(0, 3).map((servant, index) => (
-                  <ServantFaceButton
-                    key={index}
-                    servant={servant}
-                    index={index}
-                    faceSrc={servant ? faces[servant.variantKey] : null}
-                    onClick={() =>
-                      setAttackDraft({
-                        step: "option",
-                        source: `servant_${index + 1}` as AttackSource,
-                      })
-                    }
-                  />
-                ))}
-              </div>
+            ) : !attackDraft ? (
+              <button
+                type="button"
+                className="battle-add-trigger"
+                onClick={() => setAttackDraft({ step: "source", targetIndex: null })}
+              >
+                <span className="battle-plus-box">
+                  <PlusIcon width={16} height={16} />
+                </span>
+                <Text size="2" weight="medium">
+                  添加一项新的行动
+                </Text>
+              </button>
             ) : (
-              <div className="battle-choice-row">
-                <ServantFaceButton
-                  servant={currentPartyServants[sourceIndex(attackDraft.source) ?? 0] ?? null}
-                  index={sourceIndex(attackDraft.source) ?? 0}
-                  faceSrc={
-                    currentPartyServants[sourceIndex(attackDraft.source) ?? 0]
-                      ? faces[
-                          currentPartyServants[sourceIndex(attackDraft.source) ?? 0]!
-                            .variantKey
-                        ]
-                      : null
-                  }
-                  onClick={() => setAttackDraft({ step: "source" })}
-                />
-                <div className="battle-option-group">
-                  {ATTACK_OPTIONS.map((option) => (
-                    <button
-                      type="button"
-                      key={option.value}
-                      className="battle-option-btn"
-                      onClick={() =>
-                        finishAttackAction(attackDraft.source, option.value)
-                      }
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              renderAttackDraft(attackDraft)
             )}
           </div>
         </div>

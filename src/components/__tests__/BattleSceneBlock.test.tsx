@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import { BattleSceneBlock } from "../BattleSceneBlock";
@@ -187,33 +187,154 @@ describe("BattleSceneBlock staged action editor", () => {
       />
     );
 
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[1]);
+    await user.click(screen.getAllByRole("button", { name: "未设置攻击" })[0]);
     await user.click(screen.getByRole("button", { name: "丁" }));
     await user.click(screen.getByRole("button", { name: "B" }));
 
     const next = onChange.mock.calls[0][0] as BattleScene;
+    expect(next.attackPriority).toHaveLength(3);
     expect(next.attackPriority[0]).toMatchObject({
       card: "servant_1_buster",
     });
   });
 
-  it("appends an attack priority row from servant and card choice", async () => {
+  it("shows three fixed attack chain rows for an empty scene", () => {
+    renderWithTheme(
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={vi.fn()} />
+    );
+
+    expect(screen.getByText("指令卡一")).toBeInTheDocument();
+    expect(screen.getByText("指令卡二")).toBeInTheDocument();
+    expect(screen.getByText("指令卡三")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "未设置攻击" })).toHaveLength(3);
+    expect(screen.queryAllByRole("button", { name: "清除指令卡" })).toHaveLength(0);
+  });
+
+  it("updates a fixed attack chain row from servant and card choice", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     renderWithTheme(
       <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
     );
 
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[1]);
+    await user.click(screen.getAllByRole("button", { name: "未设置攻击" })[0]);
     await user.click(screen.getByRole("button", { name: "甲" }));
     await user.click(screen.getByRole("button", { name: "B" }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
     const next = onChange.mock.calls[0][0] as BattleScene;
-    expect(next.attackPriority).toHaveLength(1);
+    expect(next.attackPriority).toHaveLength(3);
     expect(next.attackPriority[0]).toMatchObject({
       card: "servant_1_buster",
     });
+    expect(next.attackPriority[1].card).toBeNull();
+    expect(next.attackPriority[2].card).toBeNull();
+  });
+
+  it("supports setting a fixed attack chain row to any command card", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithTheme(
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: "未设置攻击" })[1]);
+
+    expect(screen.getByRole("button", { name: "甲" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /添加一项新的行动/ })).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: "甲" }));
+    await user.click(screen.getByRole("button", { name: "ALL" }));
+
+    const next = onChange.mock.calls[0][0] as BattleScene;
+    expect(next.attackPriority[1]).toMatchObject({
+      card: "servant_1_all",
+    });
+  });
+
+  it("clears a fixed attack chain row without removing it", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          attackPriority: [
+            { id: "atk_1", card: "servant_1_buster" },
+            { id: "atk_2", card: null },
+            { id: "atk_3", card: null },
+          ],
+        })}
+        partyServants={PARTY}
+        onChange={onChange}
+      />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: "清除指令卡" })[0]);
+
+    const next = onChange.mock.calls[0][0] as BattleScene;
+    expect(next.attackPriority).toHaveLength(3);
+    expect(next.attackPriority[0].card).toBeNull();
+  });
+
+  it("appends and removes fallback attack priority rows after the fixed chain", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          attackPriority: [
+            { id: "atk_1", card: null },
+            { id: "atk_2", card: null },
+            { id: "atk_3", card: null },
+          ],
+        })}
+        partyServants={PARTY}
+        onChange={onChange}
+      />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[1]);
+    await user.click(screen.getByRole("button", { name: "甲" }));
+    await user.click(screen.getByRole("button", { name: "B" }));
+
+    const appended = onChange.mock.calls[0][0] as BattleScene;
+    expect(appended.attackPriority).toHaveLength(4);
+    expect(appended.attackPriority[3]).toMatchObject({
+      card: "servant_1_buster",
+    });
+
+    onChange.mockClear();
+    cleanup();
+    renderWithTheme(
+      <BattleSceneBlock scene={appended} partyServants={PARTY} onChange={onChange} />
+    );
+    await user.click(screen.getByRole("button", { name: "删除行动" }));
+
+    const removed = onChange.mock.calls[0][0] as BattleScene;
+    expect(removed.attackPriority).toHaveLength(3);
+  });
+
+  it("pads legacy attack priority while preserving fallback rows", () => {
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          attackPriority: [
+            { id: "atk_1", card: "servant_1_np" },
+            { id: "atk_2", card: "servant_2_buster" },
+            { id: "atk_3", card: "servant_3_arts" },
+            { id: "atk_4", card: "servant_1_quick" },
+          ],
+        })}
+        partyServants={PARTY}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("指令卡一")).toBeInTheDocument();
+    expect(screen.getByText("指令卡二")).toBeInTheDocument();
+    expect(screen.getByText("指令卡三")).toBeInTheDocument();
+    expect(screen.queryByText("备用 1")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "甲 绿卡攻击" })).toBeInTheDocument();
   });
 
   it("removes an existing preparation row through its hover delete button", async () => {
