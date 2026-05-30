@@ -257,6 +257,27 @@ changes (i.e. when the runner moves to a different row).
   confirms, then waits for the attack button before continuing. This overlay
   is not the pre-battle `TeamChange` screen and is not detected through the
   `Screen::TeamChange` route.
+- In normal mode, `battle_scenes.json` stores attack selection in
+  `attackPriority`. The first three rows are the intended card chain order
+  (first, second, third card); rows after that are fallback priorities. The
+  runner walks the list in order and skips entries whose NP is not ready or
+  whose matching command card did not appear, so a configured `Buster / NP /
+  Buster` chain remains `Buster, NP, Buster` when two Buster cards are
+  visible. Empty fixed chain rows inherit the previous non-NP fixed row, so
+  `NP / All / empty` chooses NP plus two command cards when available; NP rows
+  are never inherited because one NP slot can only be used once per turn. It
+  does not regroup duplicate colors ahead of the NP. Fallback rows after the
+  first three repeat while they can still match before the next fallback row is
+  considered. Before command-card recognition, normal mode applies already
+  executed scene preparation actions such as Order Change to the front-line
+  servant id map, and applies previous scenes' configured NP attack rows that
+  trigger `change_order_servants.json` retreat/removal rules, then passes the
+  current front line to `find_command_cards`. Current-scene NP rows are not
+  applied until the scene is past, so the runner does not remove a servant
+  before selecting that servant's NP.
+  A normal-mode attack entry may also use `servant_{i}_all`, which matches the
+  leftmost unused command card owned by that front-line servant regardless of
+  B/A/Q color.
 - Advanced-mode teams store battle scenes in `advanced_battle_scenes.json`.
   The current strategy UI uses a three-stage flow. First, the runner enters
   the attack-card screen and treats the scene as "waiting for startup": it

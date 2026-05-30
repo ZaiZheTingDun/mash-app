@@ -2739,6 +2739,15 @@ impl Runner {
         full
     }
 
+    fn normal_current_party_ids(&self) -> [Option<u32>; 3] {
+        normal_current_party_ids_from(
+            self.build_full_party_ids(),
+            &self.scenes,
+            self.battle.current_scene_index,
+            self.battle.executed_scene_index,
+        )
+    }
+
     fn grand_servant_runtime_configs(&self) -> Vec<GrandServantRuntimeConfig> {
         let full = self.build_full_party_ids();
         let mut seen = HashSet::new();
@@ -2842,7 +2851,7 @@ impl Runner {
             return;
         }
 
-        let party_ids = self.build_party_ids();
+        let party_ids = self.normal_current_party_ids();
         let Some((cards, nps)) = self.read_attack_state(&party_ids) else {
             return;
         };
@@ -2977,17 +2986,20 @@ impl Runner {
                 &mut used_card_slots,
                 &mut used_np_slots,
             );
-        } else if self.battle.scene_config_used {
-            if let Some(scene_cfg) = self.scenes.get(self.battle.current_scene_index) {
-                picks = pick_by_priority(
-                    &scene_cfg.attack_priority,
-                    &cards,
-                    &nps,
-                    &party_ids,
-                    &mut used_card_slots,
-                    &mut used_np_slots,
-                );
-            }
+        } else if let Some(priority) = attack_priority_for_current_scene(
+            self.advanced_mode,
+            self.battle.scene_config_used,
+            &self.scenes,
+            self.battle.current_scene_index,
+        ) {
+            picks = pick_by_priority(
+                priority,
+                cards,
+                nps,
+                party_ids,
+                &mut used_card_slots,
+                &mut used_np_slots,
+            );
         } else {
             self.emit("Attack", "场景未变更，按默认顺序补位");
         }
@@ -4066,10 +4078,10 @@ struct ChangeOrderRule {
 enum ChangeOrderTrigger {
     AttackCard {
         #[serde(rename = "card")]
-        _card: String,
+        card: String,
         #[serde(default)]
         #[serde(rename = "activationUseCount")]
-        _activation_use_count: Option<u32>,
+        activation_use_count: Option<u32>,
     },
     ServantSkill {
         skill: String,
@@ -4198,6 +4210,46 @@ fn apply_party_lineup_change(ids: &mut [Option<u32>; 6], action: &Action) {
         } = &rule.trigger
         {
             if trigger_skill == skill {
+                apply_change_order_effect(ids, source_index, &rule.effect);
+                return;
+            }
+        }
+    }
+}
+
+fn apply_attack_card_lineup_change(
+    ids: &mut [Option<u32>; 6],
+    card: &AttackCard,
+    np_use_counts: &mut HashMap<u32, u32>,
+) {
+    let Some(source_index) = card
+        .card
+        .as_deref()
+        .and_then(|value| value.strip_suffix("_np"))
+        .and_then(|value| parse_index(value, "servant_"))
+        .filter(|index| *index < 3)
+    else {
+        return;
+    };
+    let Some(servant_id) = ids[source_index] else {
+        return;
+    };
+    let next_count = np_use_counts.get(&servant_id).copied().unwrap_or(0) + 1;
+    np_use_counts.insert(servant_id, next_count);
+
+    for rule in change_order_rules() {
+        if rule.servant_id != servant_id {
+            continue;
+        }
+        if let ChangeOrderTrigger::AttackCard {
+            card: trigger_card,
+            activation_use_count,
+        } = &rule.trigger
+        {
+            let count_matches = activation_use_count
+                .map(|count| count == next_count)
+                .unwrap_or(true);
+            if trigger_card == "np" && count_matches {
                 apply_change_order_effect(ids, source_index, &rule.effect);
                 return;
             }
@@ -4507,6 +4559,46 @@ fn scene_preparation_actions(scene: &BattleScene) -> std::slice::Iter<'_, Action
     scene.preparation_actions.iter()
 }
 
+fn attack_priority_for_current_scene<'a>(
+    advanced_mode: bool,
+    scene_config_used: bool,
+    scenes: &'a [BattleScene],
+    current_scene_index: usize,
+) -> Option<&'a [AttackCard]> {
+    if advanced_mode && !scene_config_used {
+        return None;
+    }
+    scenes
+        .get(current_scene_index)
+        .map(|scene| scene.attack_priority.as_slice())
+}
+
+fn normal_current_party_ids_from(
+    mut ids: [Option<u32>; 6],
+    scenes: &[BattleScene],
+    current_scene_index: usize,
+    executed_scene_index: Option<usize>,
+) -> [Option<u32>; 3] {
+    let mut np_use_counts: HashMap<u32, u32> = HashMap::new();
+    for (index, scene) in scenes.iter().enumerate() {
+        let should_apply = index < current_scene_index || executed_scene_index == Some(index);
+        if !should_apply {
+            continue;
+        }
+        for action in scene_preparation_actions(scene) {
+            if action_frontline_available(&ids, action) {
+                apply_party_lineup_change(&mut ids, action);
+            }
+        }
+        if index < current_scene_index {
+            for card in &scene.attack_priority {
+                apply_attack_card_lineup_change(&mut ids, card, &mut np_use_counts);
+            }
+        }
+    }
+    [ids[0], ids[1], ids[2]]
+}
+
 /// Skill targets are always allies (servant_1, servant_2, servant_3).
 fn skill_target_position(target: Option<&str>) -> Option<Point> {
     let t = target?;
@@ -4734,9 +4826,13 @@ fn command_condition_matches_card(
     true
 }
 
-/// Walk `priority` in order, picking matching cards / NPs until 3 are chosen
-/// or the list is exhausted. Cards / NPs already picked are tracked in
-/// `used_card_slots` / `used_np_slots` and will not be re-selected.
+/// Walk the first three priority rows as fixed chain slots, then walk
+/// remaining rows as fallback priorities. Empty fixed slots inherit the
+/// previous non-NP fixed slot, so a partial ``NP, All, empty`` chain still
+/// tries to fill the third card from the ``All`` rule. Fallback rows are
+/// repeated while they can still match, before moving to the next priority.
+/// Cards / NPs already picked are tracked in `used_card_slots` /
+/// `used_np_slots` and will not be re-selected.
 fn pick_by_priority(
     priority: &[AttackCard],
     cards: &[CommandCardMatch],
@@ -4746,87 +4842,133 @@ fn pick_by_priority(
     used_np_slots: &mut HashSet<u32>,
 ) -> Vec<Pick> {
     let mut picks: Vec<Pick> = Vec::with_capacity(3);
+    let mut inherited_fixed_card: Option<String> = None;
 
-    for entry in priority {
+    for entry in priority.iter().take(3) {
         if picks.len() >= 3 {
             break;
         }
+        let card_str = entry.card.as_deref().or(inherited_fixed_card.as_deref());
+        if let Some(card_str) = card_str {
+            if let Some(pick) = pick_one_priority(
+                card_str,
+                cards,
+                nps,
+                party_ids,
+                used_card_slots,
+                used_np_slots,
+            ) {
+                picks.push(pick);
+            }
+        }
+        if let Some(card) = entry.card.as_deref() {
+            if !priority_card_is_np(card) && parse_priority_card(card).is_some() {
+                inherited_fixed_card = Some(card.to_string());
+            }
+        }
+    }
+
+    for entry in priority.iter().skip(3) {
         let Some(card_str) = entry.card.as_deref() else {
             continue;
         };
-
-        // Expect ``servant_{i}_{suit|np}``; bail on anything else.
-        let rest = match card_str.strip_prefix("servant_") {
-            Some(r) => r,
-            None => continue,
-        };
-        let (idx_str, kind) = match rest.split_once('_') {
-            Some(p) => p,
-            None => continue,
-        };
-        let Ok(field_pos) = idx_str.parse::<usize>() else {
-            continue;
-        };
-        if !(1..=3).contains(&field_pos) {
-            continue;
-        }
-
-        if kind == "np" {
-            let np_slot = (field_pos - 1) as u32;
-            if used_np_slots.contains(&np_slot) {
-                continue;
+        while picks.len() < 3 {
+            let Some(pick) = pick_one_priority(
+                card_str,
+                cards,
+                nps,
+                party_ids,
+                used_card_slots,
+                used_np_slots,
+            ) else {
+                break;
+            };
+            picks.push(pick);
+            if priority_card_is_np(card_str) {
+                break;
             }
-            if let Some(np) = nps.iter().find(|n| n.slot == np_slot) {
-                if np.ready {
-                    used_np_slots.insert(np_slot);
-                    picks.push(Pick::Np {
-                        slot: np_slot,
-                        point: rect_center(&np.card_region),
-                        from_priority: card_str.to_string(),
-                    });
-                }
-            }
-            continue;
-        }
-
-        let Some(wanted_suit) = suit_code(kind) else {
-            continue;
-        };
-        let Some(wanted_id) = party_ids[field_pos - 1] else {
-            // No known servant at that field position — can't match by face.
-            continue;
-        };
-
-        // Leftmost-by-slot scan among unused cards owned by this servant
-        // with the desired suit.
-        let mut best: Option<&CommandCardMatch> = None;
-        for c in cards {
-            if used_card_slots.contains(&c.slot) {
-                continue;
-            }
-            if c.servant_id != Some(wanted_id) {
-                continue;
-            }
-            if c.suit.as_deref() != Some(wanted_suit) {
-                continue;
-            }
-            if best.map_or(true, |b| c.slot < b.slot) {
-                best = Some(c);
-            }
-        }
-        if let Some(c) = best {
-            used_card_slots.insert(c.slot);
-            picks.push(Pick::Card {
-                slot: c.slot,
-                point: Point::new(c.x, c.y),
-                servant_id: c.servant_id,
-                suit: c.suit.clone(),
-                from_priority: Some(card_str.to_string()),
-            });
         }
     }
 
     picks
+}
+
+fn parse_priority_card(card_str: &str) -> Option<(usize, &str)> {
+    let rest = card_str.strip_prefix("servant_")?;
+    let (idx_str, kind) = rest.split_once('_')?;
+    let field_pos = idx_str.parse::<usize>().ok()?;
+    if !(1..=3).contains(&field_pos) {
+        return None;
+    }
+    Some((field_pos, kind))
+}
+
+fn priority_card_is_np(card_str: &str) -> bool {
+    parse_priority_card(card_str)
+        .map(|(_, kind)| kind == "np")
+        .unwrap_or(false)
+}
+
+fn pick_one_priority(
+    card_str: &str,
+    cards: &[CommandCardMatch],
+    nps: &[NoblePhantasmMatch],
+    party_ids: &[Option<u32>; 3],
+    used_card_slots: &mut HashSet<u32>,
+    used_np_slots: &mut HashSet<u32>,
+) -> Option<Pick> {
+    let (field_pos, kind) = parse_priority_card(card_str)?;
+
+    if kind == "np" {
+        let np_slot = (field_pos - 1) as u32;
+        if used_np_slots.contains(&np_slot) {
+            return None;
+        }
+        let np = nps.iter().find(|n| n.slot == np_slot && n.ready)?;
+        used_np_slots.insert(np_slot);
+        return Some(Pick::Np {
+            slot: np_slot,
+            point: rect_center(&np.card_region),
+            from_priority: card_str.to_string(),
+        });
+    }
+
+    let wanted_id = party_ids[field_pos - 1]?;
+    let wanted_suit = if kind == "all" {
+        None
+    } else {
+        Some(suit_code(kind)?)
+    };
+
+    let mut best: Option<&CommandCardMatch> = None;
+    for c in cards {
+        if used_card_slots.contains(&c.slot) {
+            continue;
+        }
+        if c.servant_id != Some(wanted_id) {
+            continue;
+        }
+        if let Some(wanted_suit) = wanted_suit {
+            if c.suit.as_deref() != Some(wanted_suit) {
+                continue;
+            }
+        } else if c.suit.is_none() {
+            continue;
+        }
+        if best.map_or(true, |b| c.slot < b.slot) {
+            best = Some(c);
+        }
+    }
+
+    let c = best?;
+    used_card_slots.insert(c.slot);
+    Some(Pick::Card {
+        slot: c.slot,
+        point: Point::new(c.x, c.y),
+        servant_id: c.servant_id,
+        suit: c.suit.clone(),
+        from_priority: Some(card_str.to_string()),
+    })
 }
 
 /// After the priority walk, top picks up to 3 by choosing the leftmost
@@ -5978,6 +6120,316 @@ mod tests {
         ));
         assert!(!should_retry_command_card_owner_detection(&cards, &[]));
         assert!(should_retry_command_card_owner_detection(&[], &[10]));
+    }
+
+    #[test]
+    fn normal_priority_skips_missing_chain_card_then_uses_fallbacks() {
+        let priority = vec![
+            AttackCard {
+                id: "chain_1".into(),
+                card: Some("servant_1_buster".into()),
+            },
+            AttackCard {
+                id: "chain_2".into(),
+                card: Some("servant_1_np".into()),
+            },
+            AttackCard {
+                id: "chain_3".into(),
+                card: Some("servant_1_arts".into()),
+            },
+            AttackCard {
+                id: "fallback_1".into(),
+                card: Some("servant_2_quick".into()),
+            },
+        ];
+        let cards = vec![
+            command_card(0, Some(10), Some("a"), None),
+            command_card(1, Some(20), Some("q"), None),
+        ];
+        let nps = vec![np_slot(0, true)];
+        let mut used_cards = HashSet::new();
+        let mut used_nps = HashSet::new();
+
+        let picks = pick_by_priority(
+            &priority,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &mut used_cards,
+            &mut used_nps,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["NP0", "C0", "C1"]);
+    }
+
+    #[test]
+    fn normal_priority_preserves_chain_order_between_duplicate_card_colors_and_np() {
+        let priority = vec![
+            AttackCard {
+                id: "chain_1".into(),
+                card: Some("servant_1_buster".into()),
+            },
+            AttackCard {
+                id: "chain_2".into(),
+                card: Some("servant_1_np".into()),
+            },
+            AttackCard {
+                id: "chain_3".into(),
+                card: Some("servant_1_buster".into()),
+            },
+        ];
+        let cards = vec![
+            command_card(0, Some(10), Some("b"), None),
+            command_card(1, Some(10), Some("b"), None),
+        ];
+        let nps = vec![np_slot(0, true)];
+        let mut used_cards = HashSet::new();
+        let mut used_nps = HashSet::new();
+
+        let picks = pick_by_priority(
+            &priority,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &mut used_cards,
+            &mut used_nps,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["C0", "NP0", "C1"]);
+    }
+
+    #[test]
+    fn normal_priority_all_matches_any_suit_for_servant() {
+        let priority = vec![AttackCard {
+            id: "chain_1".into(),
+            card: Some("servant_1_all".into()),
+        }];
+        let cards = vec![
+            command_card(0, Some(20), Some("b"), None),
+            command_card(1, Some(10), Some("q"), None),
+            command_card(2, Some(10), Some("a"), None),
+        ];
+        let mut used_cards = HashSet::new();
+        let mut used_nps = HashSet::new();
+
+        let picks = pick_by_priority(
+            &priority,
+            &cards,
+            &[],
+            &[Some(10), Some(20), Some(30)],
+            &mut used_cards,
+            &mut used_nps,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["C1"]);
+    }
+
+    #[test]
+    fn normal_priority_empty_fixed_slot_inherits_previous_non_np_rule() {
+        let priority = vec![
+            AttackCard {
+                id: "chain_1".into(),
+                card: Some("servant_1_np".into()),
+            },
+            AttackCard {
+                id: "chain_2".into(),
+                card: Some("servant_1_all".into()),
+            },
+            AttackCard {
+                id: "chain_3".into(),
+                card: None,
+            },
+        ];
+        let cards = vec![
+            command_card(0, Some(10), Some("b"), None),
+            command_card(1, Some(20), Some("b"), None),
+            command_card(2, Some(10), Some("a"), None),
+            command_card(3, Some(20), Some("a"), None),
+            command_card(4, Some(10), Some("q"), None),
+        ];
+        let nps = vec![np_slot(0, true)];
+        let mut used_cards = HashSet::new();
+        let mut used_nps = HashSet::new();
+
+        let picks = pick_by_priority(
+            &priority,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &mut used_cards,
+            &mut used_nps,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["NP0", "C0", "C2"]);
+    }
+
+    #[test]
+    fn normal_fallback_priority_repeats_before_next_fallback() {
+        let priority = vec![
+            AttackCard {
+                id: "chain_1".into(),
+                card: Some("servant_1_buster".into()),
+            },
+            AttackCard {
+                id: "chain_2".into(),
+                card: Some("servant_1_np".into()),
+            },
+            AttackCard {
+                id: "chain_3".into(),
+                card: Some("servant_1_arts".into()),
+            },
+            AttackCard {
+                id: "fallback_1".into(),
+                card: Some("servant_1_all".into()),
+            },
+            AttackCard {
+                id: "fallback_2".into(),
+                card: Some("servant_2_all".into()),
+            },
+        ];
+        let cards = vec![
+            command_card(0, Some(20), Some("b"), None),
+            command_card(1, Some(10), Some("a"), None),
+            command_card(2, Some(10), Some("q"), None),
+            command_card(3, Some(20), Some("b"), None),
+            command_card(4, Some(10), Some("q"), None),
+        ];
+        let nps = vec![np_slot(0, false)];
+        let mut used_cards = HashSet::new();
+        let mut used_nps = HashSet::new();
+
+        let picks = pick_by_priority(
+            &priority,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &mut used_cards,
+            &mut used_nps,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["C1", "C2", "C4"]);
+    }
+
+    #[test]
+    fn normal_attack_priority_is_used_even_when_scene_was_not_reexecuted() {
+        let scene = BattleScene {
+            id: "scene_1".into(),
+            preparation_actions: vec![],
+            servant_actions: vec![],
+            equipment_actions: vec![],
+            command_spell_actions: vec![],
+            attack_priority: vec![AttackCard {
+                id: "chain_1".into(),
+                card: Some("servant_1_all".into()),
+            }],
+        };
+
+        let scenes = [scene];
+        let priority = attack_priority_for_current_scene(false, false, &scenes, 0).unwrap();
+
+        assert_eq!(priority[0].card.as_deref(), Some("servant_1_all"));
+    }
+
+    #[test]
+    fn advanced_attack_priority_still_requires_scene_config_used() {
+        let scene = BattleScene {
+            id: "scene_1".into(),
+            preparation_actions: vec![],
+            servant_actions: vec![],
+            equipment_actions: vec![],
+            command_spell_actions: vec![],
+            attack_priority: vec![AttackCard {
+                id: "chain_1".into(),
+                card: Some("servant_1_all".into()),
+            }],
+        };
+
+        assert!(attack_priority_for_current_scene(true, false, &[scene], 0).is_none());
+    }
+
+    #[test]
+    fn normal_current_party_ids_apply_executed_order_change_before_attack() {
+        let scene = BattleScene {
+            id: "scene_1".into(),
+            preparation_actions: vec![Action::Equipment {
+                id: "eq_1".into(),
+                skill: Some("skill_3".into()),
+                target: None,
+                order_change: Some(crate::OrderChangeSelection {
+                    front: Some("servant_1".into()),
+                    back: Some("servant_4".into()),
+                }),
+            }],
+            servant_actions: vec![],
+            equipment_actions: vec![],
+            command_spell_actions: vec![],
+            attack_priority: vec![],
+        };
+
+        let party_ids = normal_current_party_ids_from(
+            [Some(10), Some(20), Some(30), Some(40), None, None],
+            &[scene],
+            0,
+            Some(0),
+        );
+
+        assert_eq!(party_ids, [Some(40), Some(20), Some(30)]);
+    }
+
+    #[test]
+    fn normal_current_party_ids_apply_previous_scene_np_retreat_before_attack() {
+        let scene_1 = BattleScene {
+            id: "scene_1".into(),
+            preparation_actions: vec![],
+            servant_actions: vec![],
+            equipment_actions: vec![],
+            command_spell_actions: vec![],
+            attack_priority: vec![AttackCard {
+                id: "atk_1".into(),
+                card: Some("servant_2_np".into()),
+            }],
+        };
+        let scene_2 = BattleScene {
+            id: "scene_2".into(),
+            preparation_actions: vec![],
+            servant_actions: vec![],
+            equipment_actions: vec![],
+            command_spell_actions: vec![],
+            attack_priority: vec![],
+        };
+
+        let party_ids = normal_current_party_ids_from(
+            [Some(284), Some(16), Some(315), Some(211), None, None],
+            &[scene_1, scene_2],
+            1,
+            Some(1),
+        );
+
+        assert_eq!(party_ids, [Some(284), Some(211), Some(315)]);
+    }
+
+    #[test]
+    fn normal_current_party_ids_do_not_apply_current_scene_np_before_attack() {
+        let scene = BattleScene {
+            id: "scene_1".into(),
+            preparation_actions: vec![],
+            servant_actions: vec![],
+            equipment_actions: vec![],
+            command_spell_actions: vec![],
+            attack_priority: vec![AttackCard {
+                id: "atk_1".into(),
+                card: Some("servant_2_np".into()),
+            }],
+        };
+
+        let party_ids = normal_current_party_ids_from(
+            [Some(284), Some(16), Some(315), Some(211), None, None],
+            &[scene],
+            0,
+            Some(0),
+        );
+
+        assert_eq!(party_ids, [Some(284), Some(16), Some(315)]);
     }
 
     #[test]
