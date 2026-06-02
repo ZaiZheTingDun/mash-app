@@ -46,6 +46,7 @@ function createDefaultScene(): BattleScene {
     servantActions: [],
     equipmentActions: [],
     commandSpellActions: [],
+    enemyTarget: null,
     attackPriority: createDefaultAttackPriority(),
   };
 }
@@ -70,6 +71,7 @@ function normalizeScene(scene: BattleScene): BattleScene {
     servantActions: [],
     equipmentActions: [],
     commandSpellActions: [],
+    enemyTarget: scene.enemyTarget ?? null,
     attackPriority,
   };
 }

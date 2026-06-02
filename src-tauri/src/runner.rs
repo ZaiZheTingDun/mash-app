@@ -337,11 +337,15 @@ const SKILL_TARGETS: [Point; 3] = [
     Point::new(0.744, 0.474),
 ];
 
-/// Enemy target positions for attack targeting (enemy_1, enemy_2, enemy_3)
-const ENEMY_TARGETS: [Point; 3] = [
-    Point::new(0.035, 0.060),
-    Point::new(0.230, 0.060),
-    Point::new(0.425, 0.060),
+/// Enemy target positions for attack targeting (enemy_1..enemy_6).
+/// Coordinates are normalized from 2560x1440 screenshots.
+const ENEMY_TARGETS: [Point; 6] = [
+    Point::new(0.11015625, 0.04583333333333333),
+    Point::new(0.26640625, 0.04583333333333333),
+    Point::new(0.42265625, 0.04583333333333333),
+    Point::new(0.033203125, 0.18263888888888888),
+    Point::new(0.189453125, 0.18263888888888888),
+    Point::new(0.345703125, 0.18263888888888888),
 ];
 
 /// Command card positions on the attack screen (5 cards left to right)
@@ -2687,6 +2691,12 @@ impl Runner {
             self.emit("Battle", "场景未变更，直接攻击");
         }
 
+        if !self.advanced_mode {
+            if let Some(scene_cfg) = self.scenes.get(self.battle.current_scene_index).cloned() {
+                self.select_enemy_target(scene_cfg.enemy_target.as_deref());
+            }
+        }
+
         // Click the attack button
         self.emit("Battle", "点击攻击按钮");
         if !self.tap_at("Battle", ATTACK_BUTTON) {
@@ -3216,6 +3226,7 @@ impl Runner {
                             servant_actions: Vec::new(),
                             equipment_actions: Vec::new(),
                             command_spell_actions: Vec::new(),
+                            enemy_target: None,
                             attack_priority: Vec::new(),
                         };
                         self.execute_scene_skills(&prep_scene);
@@ -3275,6 +3286,7 @@ impl Runner {
                             servant_actions: Vec::new(),
                             equipment_actions: Vec::new(),
                             command_spell_actions: Vec::new(),
+                            enemy_target: None,
                             attack_priority: Vec::new(),
                         };
                         self.execute_scene_skills(&control_scene);
@@ -3367,6 +3379,7 @@ impl Runner {
                         servant_actions: Vec::new(),
                         equipment_actions: Vec::new(),
                         command_spell_actions: Vec::new(),
+                        enemy_target: None,
                         attack_priority: Vec::new(),
                     };
                     self.execute_scene_skills(&prep_scene);
@@ -3455,6 +3468,7 @@ impl Runner {
                         servant_actions: Vec::new(),
                         equipment_actions: Vec::new(),
                         command_spell_actions: Vec::new(),
+                        enemy_target: None,
                         attack_priority: Vec::new(),
                     };
                     self.execute_scene_skills(&control_scene);
@@ -3554,6 +3568,7 @@ impl Runner {
                     servant_actions: Vec::new(),
                     equipment_actions: Vec::new(),
                     command_spell_actions: Vec::new(),
+                    enemy_target: None,
                     attack_priority: Vec::new(),
                 };
                 self.execute_scene_skills(&prep_scene);
@@ -4006,6 +4021,21 @@ impl Runner {
     fn skip_after_skill(&mut self) {
         let _ = self.tap_at("Battle", SKIP_ANIMATION_BUTTON);
         thread::sleep(ACTION_DELAY);
+    }
+
+    fn select_enemy_target(&mut self, target: Option<&str>) {
+        let Some(point) = enemy_target_position(target) else {
+            return;
+        };
+        self.emit(
+            "Battle",
+            &format!("选择敌方目标: {}", target.unwrap_or("?")),
+        );
+        if !self.tap_at("Battle", point) {
+            return;
+        }
+        thread::sleep(ACTION_DELAY);
+        self.skip_after_skill();
     }
 
     // -- utilities -----------------------------------------------------------
@@ -4651,8 +4681,7 @@ fn order_change_slot_position(
     ORDER_CHANGE_SLOTS.get(si).copied()
 }
 
-/// Enemy targets (enemy_1, enemy_2, enemy_3). Available for future use.
-#[allow(dead_code)]
+/// Enemy targets (enemy_1..enemy_6).
 fn enemy_target_position(target: Option<&str>) -> Option<Point> {
     let t = target?;
     let ei = parse_index(t, "enemy_")?;
@@ -6351,6 +6380,7 @@ mod tests {
             servant_actions: vec![],
             equipment_actions: vec![],
             command_spell_actions: vec![],
+            enemy_target: None,
             attack_priority: vec![AttackCard {
                 id: "chain_1".into(),
                 card: Some("servant_1_all".into()),
@@ -6371,6 +6401,7 @@ mod tests {
             servant_actions: vec![],
             equipment_actions: vec![],
             command_spell_actions: vec![],
+            enemy_target: None,
             attack_priority: vec![AttackCard {
                 id: "chain_1".into(),
                 card: Some("servant_1_all".into()),
@@ -6396,6 +6427,7 @@ mod tests {
             servant_actions: vec![],
             equipment_actions: vec![],
             command_spell_actions: vec![],
+            enemy_target: None,
             attack_priority: vec![],
         };
 
@@ -6417,6 +6449,7 @@ mod tests {
             servant_actions: vec![],
             equipment_actions: vec![],
             command_spell_actions: vec![],
+            enemy_target: None,
             attack_priority: vec![AttackCard {
                 id: "atk_1".into(),
                 card: Some("servant_2_np".into()),
@@ -6428,6 +6461,7 @@ mod tests {
             servant_actions: vec![],
             equipment_actions: vec![],
             command_spell_actions: vec![],
+            enemy_target: None,
             attack_priority: vec![],
         };
 
@@ -6449,6 +6483,7 @@ mod tests {
             servant_actions: vec![],
             equipment_actions: vec![],
             command_spell_actions: vec![],
+            enemy_target: None,
             attack_priority: vec![AttackCard {
                 id: "atk_1".into(),
                 card: Some("servant_2_np".into()),
@@ -6478,6 +6513,7 @@ mod tests {
             servant_actions: vec![],
             equipment_actions: vec![],
             command_spell_actions: vec![],
+            enemy_target: None,
             attack_priority: vec![],
         };
         let scene_2 = BattleScene {
@@ -6486,6 +6522,7 @@ mod tests {
             servant_actions: vec![],
             equipment_actions: vec![],
             command_spell_actions: vec![],
+            enemy_target: None,
             attack_priority: vec![],
         };
 
@@ -7498,6 +7535,44 @@ mod tests {
     }
 
     #[test]
+    fn enemy_target_position_maps_six_2k_reference_points() {
+        let expected = [
+            (282.0 / 2560.0, 66.0 / 1440.0),
+            (682.0 / 2560.0, 66.0 / 1440.0),
+            (1082.0 / 2560.0, 66.0 / 1440.0),
+            (85.0 / 2560.0, 263.0 / 1440.0),
+            (485.0 / 2560.0, 263.0 / 1440.0),
+            (885.0 / 2560.0, 263.0 / 1440.0),
+        ];
+
+        for (index, (x, y)) in expected.into_iter().enumerate() {
+            let point = enemy_target_position(Some(&format!("enemy_{}", index + 1))).unwrap();
+            assert!((point.x - x).abs() < f64::EPSILON);
+            assert!((point.y - y).abs() < f64::EPSILON);
+        }
+
+        assert!(enemy_target_position(None).is_none());
+        assert!(enemy_target_position(Some("enemy_7")).is_none());
+        assert!(enemy_target_position(Some("servant_1")).is_none());
+    }
+
+    #[test]
+    fn debug_coordinates_include_all_enemy_targets() {
+        let coords = debug_coordinates();
+        let group = coords
+            .groups
+            .iter()
+            .find(|group| group.id == "enemyTargets")
+            .expect("enemy target coordinate group");
+
+        let labels: Vec<&str> = group.points.iter().map(|point| point.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            vec!["Enemy1", "Enemy2", "Enemy3", "Enemy4", "Enemy5", "Enemy6"]
+        );
+    }
+
+    #[test]
     fn scene_preparation_actions_preserves_configured_row_order() {
         let scene = BattleScene {
             id: "scene_1".into(),
@@ -7523,6 +7598,7 @@ mod tests {
             servant_actions: vec![],
             equipment_actions: vec![],
             command_spell_actions: vec![],
+            enemy_target: None,
             attack_priority: vec![],
         };
 

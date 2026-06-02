@@ -44,6 +44,7 @@ export interface BattleScene {
   servantActions: ServantAction[];
   equipmentActions: EquipmentAction[];
   commandSpellActions: CommandSpellAction[];
+  enemyTarget?: string | null;
   attackPriority: AttackCard[];
 }
 

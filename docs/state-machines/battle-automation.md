@@ -39,7 +39,7 @@ stateDiagram-v2
     TeamChange --> Battle: party confirmed
 
     Battle --> BattleAction: attack available
-    BattleAction --> Battle: scene skills handled
+    BattleAction --> Battle: scene skills and optional enemy target handled
     BattleAction --> BattleAction: Order Change overlay handled
     BattleAction --> Attack: attack tapped
     Attack --> Battle: cards resolved
@@ -258,8 +258,13 @@ changes (i.e. when the runner moves to a different row).
   is not the pre-battle `TeamChange` screen and is not detected through the
   `Screen::TeamChange` route.
 - In normal mode, `battle_scenes.json` stores attack selection in
-  `attackPriority`. The first three rows are the intended card chain order
-  (first, second, third card); rows after that are fallback priorities. The
+  `attackPriority` and optional pre-attack enemy targeting in `enemyTarget`.
+  When `enemyTarget` is set to `enemy_1..6`, the runner taps that enemy on the
+  Battle screen after preparation actions have settled and before tapping the
+  attack button, then taps the normal animation-skip point once to dismiss any
+  already-selected target popup. The first three `attackPriority` rows are the
+  intended card chain order (first, second, third card); rows after that are
+  fallback priorities. The
   runner walks the list in order and skips entries whose NP is not ready or
   whose matching command card did not appear, so a configured `Buster / NP /
   Buster` chain remains `Buster, NP, Buster` when two Buster cards are

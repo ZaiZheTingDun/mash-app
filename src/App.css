@@ -1872,6 +1872,89 @@ body,
   background: var(--blue-3);
 }
 
+.battle-enemy-target-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.battle-enemy-target-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 23px);
+  grid-template-rows: repeat(2, 39px);
+  column-gap: 7px;
+  row-gap: 2px;
+  align-items: center;
+}
+
+.battle-enemy-target {
+  appearance: none;
+  border: 1px solid var(--gray-8);
+  background: var(--gray-1);
+  color: var(--gray-11);
+  width: 34px;
+  height: 34px;
+  min-width: 0;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transform: rotate(45deg);
+  border-radius: var(--radius-1);
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+.battle-enemy-target:nth-child(1) {
+  grid-column: 2 / span 2;
+  grid-row: 1;
+}
+
+.battle-enemy-target:nth-child(2) {
+  grid-column: 4 / span 2;
+  grid-row: 1;
+}
+
+.battle-enemy-target:nth-child(3) {
+  grid-column: 6 / span 2;
+  grid-row: 1;
+}
+
+.battle-enemy-target:nth-child(4) {
+  grid-column: 1 / span 2;
+  grid-row: 2;
+}
+
+.battle-enemy-target:nth-child(5) {
+  grid-column: 3 / span 2;
+  grid-row: 2;
+}
+
+.battle-enemy-target:nth-child(6) {
+  grid-column: 5 / span 2;
+  grid-row: 2;
+}
+
+.battle-enemy-target span {
+  transform: rotate(-45deg);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.battle-enemy-target:hover {
+  border-color: var(--blue-8);
+  background: var(--blue-3);
+  color: var(--blue-12);
+}
+
+.battle-enemy-target.selected {
+  border-color: var(--blue-9);
+  background: var(--blue-4);
+  color: var(--blue-12);
+  box-shadow: 0 0 0 2px var(--blue-5);
+}
+
 .battle-choice-separator {
   width: 1px;
   height: 46px;

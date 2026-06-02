@@ -32,6 +32,7 @@ interface BattleSceneBlockProps {
 type PrepSource = "equipment" | "commandSpell" | `servant_${1 | 2 | 3}`;
 type AttackSource = `servant_${1 | 2 | 3}`;
 type PartySlot = `servant_${1 | 2 | 3 | 4 | 5 | 6}`;
+type EnemyTarget = `enemy_${1 | 2 | 3 | 4 | 5 | 6}`;
 type PrepDraft =
   | { step: "source" }
   | { step: "option"; source: PrepSource }
@@ -66,6 +67,15 @@ const ATTACK_OPTIONS = [
   { value: "arts", label: "A" },
   { value: "quick", label: "Q" },
   { value: "all", label: "ALL" },
+] as const;
+
+const ENEMY_TARGETS = [
+  { value: "enemy_1", label: "敌人 1", text: "1" },
+  { value: "enemy_2", label: "敌人 2", text: "2" },
+  { value: "enemy_3", label: "敌人 3", text: "3" },
+  { value: "enemy_4", label: "敌人 4", text: "4" },
+  { value: "enemy_5", label: "敌人 5", text: "5" },
+  { value: "enemy_6", label: "敌人 6", text: "6" },
 ] as const;
 
 const CARD_LABELS: Record<string, string> = {
@@ -508,6 +518,10 @@ export function BattleSceneBlock({
     onChange(emptyLegacyFields({ ...scene, attackPriority: next }));
   };
 
+  const updateEnemyTarget = (enemyTarget: EnemyTarget | null) => {
+    onChange(emptyLegacyFields({ ...scene, enemyTarget }));
+  };
+
   const finishPrepAction = (draft: Extract<PrepDraft, { step: "target" }>, target: string | null) => {
     let action: PreparationAction;
     if (draft.source === "equipment") {
@@ -853,6 +867,38 @@ export function BattleSceneBlock({
                 </Text>
               </div>
             )}
+          </div>
+        </div>
+      </section>
+
+      <section className="battle-phase">
+        <div className="battle-phase-label">敌方目标选择</div>
+        <div className="battle-action-list">
+          <div className="battle-action-row committed">
+            <span className="battle-action-delete-placeholder" aria-hidden />
+            <div
+              className="battle-enemy-target-row"
+              role="group"
+              aria-label="敌方目标选择"
+            >
+              <div className="battle-enemy-target-grid">
+                {ENEMY_TARGETS.map((target) => (
+                  <button
+                    type="button"
+                    key={target.value}
+                    aria-label={target.label}
+                    className={`battle-enemy-target${scene.enemyTarget === target.value ? " selected" : ""}`}
+                    onClick={() =>
+                      updateEnemyTarget(
+                        scene.enemyTarget === target.value ? null : target.value
+                      )
+                    }
+                  >
+                    <span>{target.text}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>

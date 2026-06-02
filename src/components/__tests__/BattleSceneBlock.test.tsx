@@ -42,6 +42,45 @@ const ARASH = makeServant(16, "阿拉什");
 const HABETROT = makeServant(315, "哈贝特洛特");
 
 describe("BattleSceneBlock staged action editor", () => {
+  it("shows enemy target selection as unset by default", () => {
+    renderWithTheme(
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={vi.fn()} />
+    );
+
+    expect(screen.getByText("敌方目标选择")).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "敌方目标选择" })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "未选择" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /敌人/ })).toHaveLength(6);
+  });
+
+  it("updates and toggles off the enemy target", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const { rerender } = renderWithTheme(
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
+    );
+
+    await user.click(screen.getByRole("button", { name: "敌人 5" }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect((onChange.mock.calls[0][0] as BattleScene).enemyTarget).toBe(
+      "enemy_5"
+    );
+
+    rerender(
+      <BattleSceneBlock
+        scene={makeScene({ enemyTarget: "enemy_5" })}
+        partyServants={PARTY}
+        onChange={onChange}
+      />
+    );
+    await user.click(screen.getByRole("button", { name: "敌人 5" }));
+
+    expect((onChange.mock.calls[1][0] as BattleScene).enemyTarget).toBeNull();
+  });
+
   it("shows the preparation source picker when the add row is clicked", async () => {
     const user = userEvent.setup();
     renderWithTheme(

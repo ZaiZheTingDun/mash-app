@@ -167,6 +167,8 @@ pub struct BattleScene {
     /// this field was added deserialize with an empty list.
     #[serde(rename = "commandSpellActions", default, skip_serializing)]
     pub command_spell_actions: Vec<Action>,
+    #[serde(rename = "enemyTarget", default)]
+    pub enemy_target: Option<String>,
     #[serde(rename = "attackPriority")]
     pub attack_priority: Vec<AttackCard>,
 }
@@ -4812,6 +4814,7 @@ mod tests {
             servant_actions: vec![],
             equipment_actions: vec![],
             command_spell_actions: vec![],
+            enemy_target: None,
             attack_priority: vec![],
         };
         let json = serde_json::to_value(&scene).unwrap();
@@ -4833,6 +4836,20 @@ mod tests {
             }
             _ => panic!("expected Action::CommandSpell"),
         }
+    }
+
+    #[test]
+    fn battle_scene_defaults_missing_enemy_target_to_none() {
+        let json = serde_json::json!({
+            "id": "scene_1",
+            "preparationActions": [],
+            "attackPriority": []
+        });
+
+        let scene: BattleScene = serde_json::from_value(json).unwrap();
+
+        assert_eq!(scene.id, "scene_1");
+        assert!(scene.enemy_target.is_none());
     }
 
     #[test]
