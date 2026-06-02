@@ -4071,6 +4071,16 @@ struct ChangeOrderRule {
     servant_id: u32,
     trigger: ChangeOrderTrigger,
     effect: ChangeOrderEffect,
+    #[serde(default)]
+    timing: ChangeOrderTiming,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum ChangeOrderTiming {
+    #[default]
+    Immediate,
+    EndOfTurn,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -4163,6 +4173,18 @@ fn apply_change_order_effect(
 }
 
 fn apply_party_lineup_change(ids: &mut [Option<u32>; 6], action: &Action) {
+    apply_party_lineup_change_at(ids, action, ChangeOrderTiming::Immediate);
+}
+
+fn apply_party_lineup_change_at(
+    ids: &mut [Option<u32>; 6],
+    action: &Action,
+    timing: ChangeOrderTiming,
+) {
+    if timing == ChangeOrderTiming::EndOfTurn && !matches!(action, Action::Servant { .. }) {
+        return;
+    }
+
     if let Action::Equipment {
         order_change: Some(order_change),
         ..
@@ -4205,6 +4227,9 @@ fn apply_party_lineup_change(ids: &mut [Option<u32>; 6], action: &Action) {
         if rule.servant_id != servant_id {
             continue;
         }
+        if rule.timing != timing {
+            continue;
+        }
         if let ChangeOrderTrigger::ServantSkill {
             skill: trigger_skill,
         } = &rule.trigger
@@ -4239,6 +4264,9 @@ fn apply_attack_card_lineup_change(
 
     for rule in change_order_rules() {
         if rule.servant_id != servant_id {
+            continue;
+        }
+        if rule.timing != ChangeOrderTiming::Immediate {
             continue;
         }
         if let ChangeOrderTrigger::AttackCard {
@@ -4593,6 +4621,11 @@ fn normal_current_party_ids_from(
         if index < current_scene_index {
             for card in &scene.attack_priority {
                 apply_attack_card_lineup_change(&mut ids, card, &mut np_use_counts);
+            }
+            for action in scene_preparation_actions(scene) {
+                if action_frontline_available(&ids, action) {
+                    apply_party_lineup_change_at(&mut ids, action, ChangeOrderTiming::EndOfTurn);
+                }
             }
         }
     }
@@ -6433,6 +6466,40 @@ mod tests {
     }
 
     #[test]
+    fn normal_current_party_ids_apply_previous_scene_end_of_turn_skill_exit() {
+        let scene_1 = BattleScene {
+            id: "scene_1".into(),
+            preparation_actions: vec![Action::Servant {
+                id: "sa_1".into(),
+                servant: Some("servant_1".into()),
+                skill: Some("skill_3".into()),
+                target: None,
+            }],
+            servant_actions: vec![],
+            equipment_actions: vec![],
+            command_spell_actions: vec![],
+            attack_priority: vec![],
+        };
+        let scene_2 = BattleScene {
+            id: "scene_2".into(),
+            preparation_actions: vec![],
+            servant_actions: vec![],
+            equipment_actions: vec![],
+            command_spell_actions: vec![],
+            attack_priority: vec![],
+        };
+
+        let party_ids = normal_current_party_ids_from(
+            [Some(315), Some(434), Some(384), Some(11), Some(22), None],
+            &[scene_1, scene_2],
+            1,
+            Some(1),
+        );
+
+        assert_eq!(party_ids, [Some(11), Some(434), Some(384)]);
+    }
+
+    #[test]
     fn grand_auto_order_change_targets_front_servant_with_most_cards() {
         let cards = vec![
             command_card(0, Some(20), Some("a"), None),
@@ -6606,7 +6673,7 @@ mod tests {
     }
 
     #[test]
-    fn party_lineup_change_applies_servant_skill_withdraw_rule() {
+    fn party_lineup_change_does_not_apply_end_of_turn_skill_by_default() {
         let mut ids = [Some(388), Some(434), Some(384), Some(11), Some(22), None];
         let action = Action::Servant {
             id: "a1".into(),
@@ -6619,12 +6686,30 @@ mod tests {
 
         assert_eq!(
             ids,
+            [Some(388), Some(434), Some(384), Some(11), Some(22), None]
+        );
+    }
+
+    #[test]
+    fn party_lineup_change_applies_end_of_turn_servant_skill_withdraw_rule() {
+        let mut ids = [Some(388), Some(434), Some(384), Some(11), Some(22), None];
+        let action = Action::Servant {
+            id: "a1".into(),
+            servant: Some("servant_1".into()),
+            skill: Some("skill_2".into()),
+            target: None,
+        };
+
+        apply_party_lineup_change_at(&mut ids, &action, ChangeOrderTiming::EndOfTurn);
+
+        assert_eq!(
+            ids,
             [Some(11), Some(434), Some(384), Some(388), Some(22), None]
         );
     }
 
     #[test]
-    fn party_lineup_change_removes_habetrot_after_third_skill() {
+    fn party_lineup_change_removes_habetrot_at_end_of_turn_after_third_skill() {
         let mut ids = [Some(315), Some(434), Some(384), Some(11), Some(22), None];
         let action = Action::Servant {
             id: "a1".into(),
@@ -6633,13 +6718,13 @@ mod tests {
             target: None,
         };
 
-        apply_party_lineup_change(&mut ids, &action);
+        apply_party_lineup_change_at(&mut ids, &action, ChangeOrderTiming::EndOfTurn);
 
         assert_eq!(ids, [Some(11), Some(434), Some(384), Some(22), None, None]);
     }
 
     #[test]
-    fn party_lineup_change_removes_ultimate_elisabeth_after_third_skill() {
+    fn party_lineup_change_removes_ultimate_elisabeth_at_end_of_turn_after_third_skill() {
         let mut ids = [Some(8), Some(458), Some(384), Some(11), Some(22), None];
         let action = Action::Servant {
             id: "a1".into(),
@@ -6648,7 +6733,7 @@ mod tests {
             target: None,
         };
 
-        apply_party_lineup_change(&mut ids, &action);
+        apply_party_lineup_change_at(&mut ids, &action, ChangeOrderTiming::EndOfTurn);
 
         assert_eq!(ids, [Some(8), Some(11), Some(384), Some(22), None, None]);
     }

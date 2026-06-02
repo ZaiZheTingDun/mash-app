@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  deriveLineupAfterPreparationActions,
   derivePartyLineup,
   derivePartyServants,
   deriveScenePartyLineups,
@@ -240,6 +241,23 @@ describe("derivePartyServants", () => {
 });
 
 describe("deriveScenePartyServants", () => {
+  it("keeps end-of-turn skill exits out of same-turn preparation lineups", () => {
+    const lineup = deriveLineupAfterPreparationActions(
+      [HABETROT, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG],
+      [
+        {
+          type: "servant",
+          id: "sa_1",
+          servant: "servant_1",
+          skill: "skill_3",
+          target: null,
+        },
+      ]
+    );
+
+    expect(lineup).toEqual([HABETROT, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG]);
+  });
+
   it("replaces Arash with the first back-line servant after an NP scene", () => {
     const lineups = deriveScenePartyServants(
       [ARASH, MERLIN, WAVER, ALTRIA, MASH, null],

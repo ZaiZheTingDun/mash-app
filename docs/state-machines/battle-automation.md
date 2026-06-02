@@ -269,12 +269,14 @@ changes (i.e. when the runner moves to a different row).
   does not regroup duplicate colors ahead of the NP. Fallback rows after the
   first three repeat while they can still match before the next fallback row is
   considered. Before command-card recognition, normal mode applies already
-  executed scene preparation actions such as Order Change to the front-line
-  servant id map, and applies previous scenes' configured NP attack rows that
-  trigger `change_order_servants.json` retreat/removal rules, then passes the
-  current front line to `find_command_cards`. Current-scene NP rows are not
+  executed current-scene preparation actions whose `change_order_servants.json`
+  timing is `immediate` (for example Order Change) to the front-line servant id
+  map. For previous scenes, it also applies configured NP attack rows that
+  trigger `immediate` retreat/removal rules, then applies preparation-action
+  rules whose timing is `endOfTurn` (for example skill-based end-of-turn
+  retreat/death). Current-scene NP rows and `endOfTurn` skill exits are not
   applied until the scene is past, so the runner does not remove a servant
-  before selecting that servant's NP.
+  before selecting that servant's NP or remaining same-turn cards.
   A normal-mode attack entry may also use `servant_{i}_all`, which matches the
   leftmost unused command card owned by that front-line servant regardless of
   B/A/Q color.

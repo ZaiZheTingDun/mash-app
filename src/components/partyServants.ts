@@ -13,6 +13,7 @@ type ChangeOrderRule = {
     | { type: "removeSelf" }
     | { type: "removeFirstAlly" }
     | { type: "withdrawSelfToBack" };
+  timing?: "immediate" | "endOfTurn";
 };
 
 const CHANGE_ORDER_RULES = changeOrderRulesJson as ChangeOrderRule[];
@@ -109,8 +110,11 @@ function applyRule(
 
 function applyPreparationAction(
   lineup: (Servant | null)[],
-  action: PreparationAction
+  action: PreparationAction,
+  timing: ChangeOrderRule["timing"] = "immediate"
 ) {
+  if (timing === "endOfTurn" && action.type !== "servant") return;
+
   if (action.type === "equipment" && action.orderChange) {
     const frontIndex = parseServantPosition(action.orderChange.front);
     const backIndex = parseServantPosition(action.orderChange.back);
@@ -139,7 +143,31 @@ function applyPreparationAction(
     (r) =>
       r.servantId === servant.id &&
       r.trigger.type === "servantSkill" &&
-      r.trigger.skill === action.skill
+      r.trigger.skill === action.skill &&
+      (r.timing ?? "immediate") === timing
+  );
+  if (rule) applyRule(lineup, sourceIndex, rule);
+}
+
+function applyAttackCard(
+  lineup: (Servant | null)[],
+  card: string | null | undefined,
+  npUseCounts: Map<number, number>
+) {
+  const sourceIndex = parseServantPosition(card);
+  if (sourceIndex == null || !card?.endsWith("_np")) return;
+  const servant = lineup[sourceIndex];
+  if (!servant) return;
+  const nextCount = (npUseCounts.get(servant.id) ?? 0) + 1;
+  npUseCounts.set(servant.id, nextCount);
+  const rule = CHANGE_ORDER_RULES.find(
+    (r) =>
+      r.servantId === servant.id &&
+      r.trigger.type === "attackCard" &&
+      r.trigger.card === "np" &&
+      (r.timing ?? "immediate") === "immediate" &&
+      (r.trigger.activationUseCount == null ||
+        r.trigger.activationUseCount === nextCount)
   );
   if (rule) applyRule(lineup, sourceIndex, rule);
 }
@@ -151,6 +179,18 @@ export function deriveLineupAfterPreparationActions(
   const lineup = [...initialLineup];
   for (const action of actions) {
     applyPreparationAction(lineup, action);
+  }
+  return lineup;
+}
+
+export function deriveLineupAfterAttackCards(
+  initialLineup: (Servant | null)[],
+  cards: ReadonlyArray<{ card: string | null | undefined }>
+): (Servant | null)[] {
+  const lineup = [...initialLineup];
+  const npUseCounts = new Map<number, number>();
+  for (const card of cards) {
+    applyAttackCard(lineup, card.card, npUseCounts);
   }
   return lineup;
 }
@@ -176,25 +216,15 @@ export function deriveScenePartyLineups(
     sceneLineups.push([...lineup]);
 
     for (const action of scene.preparationActions ?? scene.servantActions) {
-      applyPreparationAction(lineup, action);
+      applyPreparationAction(lineup, action, "immediate");
     }
 
     for (const card of scene.attackPriority) {
-      const sourceIndex = parseServantPosition(card.card);
-      if (sourceIndex == null || !card.card?.endsWith("_np")) continue;
-      const servant = lineup[sourceIndex];
-      if (!servant) continue;
-      const nextCount = (npUseCounts.get(servant.id) ?? 0) + 1;
-      npUseCounts.set(servant.id, nextCount);
-      const rule = CHANGE_ORDER_RULES.find(
-        (r) =>
-          r.servantId === servant.id &&
-          r.trigger.type === "attackCard" &&
-          r.trigger.card === "np" &&
-          (r.trigger.activationUseCount == null ||
-            r.trigger.activationUseCount === nextCount)
-      );
-      if (rule) applyRule(lineup, sourceIndex, rule);
+      applyAttackCard(lineup, card.card, npUseCounts);
+    }
+
+    for (const action of scene.preparationActions ?? scene.servantActions) {
+      applyPreparationAction(lineup, action, "endOfTurn");
     }
   }
 

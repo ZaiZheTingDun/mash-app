@@ -38,6 +38,8 @@ const PARTY: (Servant | null)[] = [
   makeServant(5, "戊"),
   makeServant(6, "己"),
 ];
+const ARASH = makeServant(16, "阿拉什");
+const HABETROT = makeServant(315, "哈贝特洛特");
 
 describe("BattleSceneBlock staged action editor", () => {
   it("shows the preparation source picker when the add row is clicked", async () => {
@@ -198,6 +200,34 @@ describe("BattleSceneBlock staged action editor", () => {
     });
   });
 
+  it("keeps end-of-turn skill exits available for attacks in the same scene", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          preparationActions: [
+            {
+              type: "servant",
+              id: "sa_1",
+              servant: "servant_1",
+              skill: "skill_3",
+              target: null,
+            },
+          ],
+        })}
+        partyServants={[HABETROT, PARTY[1], PARTY[2], PARTY[3], PARTY[4], PARTY[5]]}
+        onChange={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: "未设置攻击" })[0]);
+
+    expect(screen.getByRole("button", { name: "哈贝特洛特" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "乙" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "丙" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "丁" })).not.toBeInTheDocument();
+  });
+
   it("shows three fixed attack chain rows for an empty scene", () => {
     renderWithTheme(
       <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={vi.fn()} />
@@ -249,6 +279,41 @@ describe("BattleSceneBlock staged action editor", () => {
     const next = onChange.mock.calls[0][0] as BattleScene;
     expect(next.attackPriority[1]).toMatchObject({
       card: "servant_1_all",
+    });
+  });
+
+  it("uses the post-NP replacement lineup when setting later attack rows", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          attackPriority: [
+            { id: "atk_1", card: "servant_1_np" },
+            { id: "atk_2", card: null },
+            { id: "atk_3", card: null },
+          ],
+        })}
+        partyServants={[ARASH, PARTY[1], PARTY[2], PARTY[3], PARTY[4], PARTY[5]]}
+        onChange={onChange}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "阿拉什 宝具" })).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("button", { name: "未设置攻击" })[0]);
+
+    expect(screen.getByRole("button", { name: "丁" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "乙" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "丙" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "阿拉什" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "丁" }));
+    await user.click(screen.getByRole("button", { name: "B" }));
+
+    const next = onChange.mock.calls[0][0] as BattleScene;
+    expect(next.attackPriority[1]).toMatchObject({
+      card: "servant_1_buster",
     });
   });
 

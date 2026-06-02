@@ -8,7 +8,10 @@ import {
   PlusIcon,
 } from "@radix-ui/react-icons";
 import orderChangeIcon from "../../src-tauri/resources/images/icon_order_change.png";
-import { deriveLineupAfterPreparationActions } from "./partyServants";
+import {
+  deriveLineupAfterAttackCards,
+  deriveLineupAfterPreparationActions,
+} from "./partyServants";
 import type {
   AttackCard,
   BattleScene,
@@ -482,6 +485,20 @@ export function BattleSceneBlock({
     () => normalizeAttackPriority(scene.attackPriority ?? []),
     [scene.attackPriority]
   );
+  const attackActionLineups = useMemo(
+    () =>
+      attackPriority.map((_, index) =>
+        deriveLineupAfterAttackCards(
+          currentPartyServants,
+          attackPriority.slice(0, index)
+        )
+      ),
+    [attackPriority, currentPartyServants]
+  );
+  const currentAttackPartyServants = useMemo(
+    () => deriveLineupAfterAttackCards(currentPartyServants, attackPriority),
+    [attackPriority, currentPartyServants]
+  );
 
   const updatePreparationActions = (next: PreparationAction[]) => {
     onChange(emptyLegacyFields({ ...scene, preparationActions: next }));
@@ -565,10 +582,13 @@ export function BattleSceneBlock({
     }
   };
 
-  const renderAttackDraft = (draft: AttackDraft) =>
+  const renderAttackDraft = (
+    draft: AttackDraft,
+    draftPartyServants: (Servant | null)[]
+  ) =>
     draft.step === "source" ? (
       <div className="battle-choice-row inline">
-        {currentPartyServants.slice(0, 3).map((servant, index) => (
+        {draftPartyServants.slice(0, 3).map((servant, index) => (
           <ServantFaceButton
             key={index}
             servant={servant}
@@ -587,12 +607,12 @@ export function BattleSceneBlock({
     ) : (
       <div className="battle-choice-row inline">
         <ServantFaceButton
-          servant={currentPartyServants[sourceIndex(draft.source) ?? 0] ?? null}
+          servant={draftPartyServants[sourceIndex(draft.source) ?? 0] ?? null}
           index={sourceIndex(draft.source) ?? 0}
           faceSrc={
-            currentPartyServants[sourceIndex(draft.source) ?? 0]
+            draftPartyServants[sourceIndex(draft.source) ?? 0]
               ? faces[
-                  currentPartyServants[sourceIndex(draft.source) ?? 0]!
+                  draftPartyServants[sourceIndex(draft.source) ?? 0]!
                     .variantKey
                 ]
               : null
@@ -842,6 +862,8 @@ export function BattleSceneBlock({
         <div className="battle-action-list">
           {attackPriority.map((card, index) => {
             const rowDraft = attackDraft?.targetIndex === index ? attackDraft : null;
+            const attackPartyServants =
+              attackActionLineups[index] ?? currentPartyServants;
             return (
               <div className="battle-action-row committed" key={card.id}>
                 {index >= FIXED_ATTACK_CARD_COUNT ? (
@@ -864,12 +886,12 @@ export function BattleSceneBlock({
                   <span className="battle-attack-slot-label">{attackSlotLabel(index)}</span>
                 )}
                 {rowDraft ? (
-                  renderAttackDraft(rowDraft)
+                  renderAttackDraft(rowDraft, attackPartyServants)
                 ) : (
                   <>
                     <AttackActionFace
                       card={card}
-                      partyServants={currentPartyServants}
+                      partyServants={attackPartyServants}
                       faces={faces}
                     />
                     <button
@@ -878,7 +900,7 @@ export function BattleSceneBlock({
                       onClick={() => setAttackDraft({ step: "source", targetIndex: index })}
                     >
                       <Text size="2" weight="medium">
-                        {attackSummary(card, currentPartyServants)}
+                        {attackSummary(card, attackPartyServants)}
                       </Text>
                     </button>
                   </>
@@ -918,7 +940,7 @@ export function BattleSceneBlock({
                 </Text>
               </button>
             ) : (
-              renderAttackDraft(attackDraft)
+              renderAttackDraft(attackDraft, currentAttackPartyServants)
             )}
           </div>
         </div>
