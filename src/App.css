@@ -1684,8 +1684,7 @@ body,
   place-items: center;
   cursor: pointer;
   opacity: 0;
-  position: absolute;
-  left: 0;
+  flex: 0 0 auto;
   transition: opacity 0.12s, background 0.12s;
 }
 

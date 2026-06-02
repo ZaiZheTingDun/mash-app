@@ -867,14 +867,11 @@ export function BattleSceneBlock({
             return (
               <div className="battle-action-row committed" key={card.id}>
                 {index >= FIXED_ATTACK_CARD_COUNT ? (
-                  <>
-                    <ActionDeleteButton
-                      onClick={() =>
-                        updateAttackPriority(attackPriority.filter((_, i) => i !== index))
-                      }
-                    />
-                    <span className="battle-action-delete-placeholder" aria-hidden />
-                  </>
+                  <ActionDeleteButton
+                    onClick={() =>
+                      updateAttackPriority(attackPriority.filter((_, i) => i !== index))
+                    }
+                  />
                 ) : (
                   card.card ? (
                     <ActionClearButton onClick={() => clearAttackAction(index)} />
