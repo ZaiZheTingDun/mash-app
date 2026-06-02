@@ -1109,17 +1109,10 @@ class TestFindCommandCards:
         capture. The on-screen team is アーラシュ (id=16) + 諸葛孔明
         (id=37) + モルガン (id=309), drawn 1 own + 4 support cards. With
         the project's three ids fed in as candidates, the matcher
-        identifies アーラシュ at slot 0 and the four モルガン support
-        cards at slots 2/3/4 (slot 4 is reused by the support card
-        layout) — pinning these saves us from silently regressing the
-        face-cropping / threshold code paths.
-
-        Slot 1 (諸葛孔明) is currently a borderline miss — its best
-        ascension template scores ≈0.497 in this fixture, just under
-        the 0.50 threshold, and is documented as a known limitation
-        below. The assertion is intentionally loose ("it's slot 1's id
-        if anything matched") so the test stays green if a future
-        template re-crop pushes that score over the line.
+        identifies アーラシュ at slot 0, 諸葛孔明 at slot 1, and the
+        three モルガン support cards at slots 2/3/4 — pinning these
+        saves us from silently regressing the face-cropping / threshold
+        code paths.
         """
         self._load()
         img = cv2.imread(
@@ -1143,23 +1136,8 @@ class TestFindCommandCards:
         for c in cards:
             assert c.get("iconScore", 0.0) > 0.95
 
-        # Slots 0, 2, 3, 4 must all clear the 0.50 face threshold against
-        # their respective candidates.
-        assert cards[0].get("servantId") == 16, cards[0]
-        for slot_idx in (2, 3, 4):
-            assert cards[slot_idx].get("servantId") == 309, cards[slot_idx]
-            # Morgan support cards score comfortably above threshold; pin
-            # a floor well below the observed ~0.67 so the test stays
-            # robust against minor template tweaks.
-            assert cards[slot_idx]["faceScore"] > 0.55, cards[slot_idx]
-
-        # Slot 1 is the borderline 諸葛孔明 case. Either it didn't
-        # clear the threshold (current state, no servantId set) or a
-        # future template push it through — in which case it must be
-        # id=37, not a wrong match against 16/309.
-        slot1 = cards[1]
-        if "servantId" in slot1:
-            assert slot1["servantId"] == 37, slot1
+        assert [c.get("servantId") for c in cards] == [16, 37, 309, 309, 309]
+        assert min(c.get("faceScore", 0.0) for c in cards) > 0.8
 
     @pytest.mark.skipif(
         not os.path.isdir(_PROD_CN_TEMPLATES_DIR)
@@ -1187,6 +1165,37 @@ class TestFindCommandCards:
         assert [c.get("suit") for c in cards] == ["a", "q", "a", "q", "q"]
         assert [c.get("servantId") for c in cards] == [16, 315, 284, 284, 16]
         assert min(c.get("faceScore", 0.0) for c in cards) > 0.6
+
+    @pytest.mark.skipif(
+        not os.path.isdir(_PROD_CN_TEMPLATES_DIR)
+        or not os.path.isdir(_PROD_SERVANTS_DIR),
+        reason="production CN templates or servants assets dir not available",
+    )
+    def test_identifies_merlin_card_with_top_buff_occlusion(self):
+        """Regression for Merlin's command card when the upper portrait is
+        covered by buff icons and NP/card text. The fallback crop matches
+        the middle face band instead of lowering the global threshold."""
+        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+        assert result["ok"] is True
+        img = cv2.imread(
+            os.path.join(
+                _TEST_SCREENSHOTS_DIR, "battle_command_cn_merlin_buff.png"
+            )
+        )
+        assert img is not None, "battle_command_cn_merlin_buff.png fixture missing"
+
+        result = mash_cv._find_command_cards(
+            img,
+            list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS),
+            [37, 150, 309],
+            _PROD_SERVANTS_DIR,
+        )
+        cards = result["cards"]
+        assert len(cards) == 5
+        assert [c.get("suit") for c in cards] == ["q", "a", "q", "a", "a"]
+        assert [c.get("servantId") for c in cards] == [37, 37, 150, 309, 37]
+        assert cards[2]["ascension"] == 500840
+        assert cards[2]["faceScore"] > 0.8
 
     @pytest.mark.skipif(
         not os.path.isdir(_PROD_CN_TEMPLATES_DIR)

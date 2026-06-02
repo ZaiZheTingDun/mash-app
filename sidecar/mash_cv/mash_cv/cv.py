@@ -166,6 +166,7 @@ COMMAND_CARD_SUIT_REGION = {"x": 0.211, "y": 0.59, "w": 0.578, "h": 0.306}
 # template-matching. The search region stays broad because these source
 # assets are full card portraits, not crops of COMMAND_CARD_FACE_REGION.
 FACE_RESIZE_CARD_REL = 0.9
+FACE_FALLBACK_RESIZE_CARD_REL = 0.95
 
 # Crop the source face PNG to its top portion before matching. The bottom
 # of the on-screen face circle is occluded by the suit icon overlay and
@@ -173,6 +174,8 @@ FACE_RESIZE_CARD_REL = 0.9
 # source portrait drives the score down. Keep only the upper N%, which is
 # the part that's reliably visible on every card.
 FACE_CROP_REL_H = 0.5
+FACE_FALLBACK_CROP_REL_Y0 = 0.2
+FACE_FALLBACK_CROP_REL_Y1 = 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -1669,7 +1672,9 @@ def _read_battle_scene(
 # cost upfront. Resized variants are cached separately because the on-screen
 # face size is derived from the icon match and varies slightly between
 # devices.
-_face_cache: dict[tuple[str, int], tuple[np.ndarray, Optional[np.ndarray]]] = {}
+_face_cache: dict[
+    tuple[str, int, float, float], tuple[np.ndarray, Optional[np.ndarray]]
+] = {}
 
 # Per-suit BGR signature: mean color of the opaque template pixels.
 # Populated by ``_ensure_icon_color_sigs`` from the RGBA icon PNGs and
@@ -1738,16 +1743,20 @@ def _list_servant_face_files(assets_dir: str, servant_id: int) -> list[str]:
 def _load_face_template_pair(
     path: str,
     target_w: int,
+    crop_y0_rel: float = 0.0,
+    crop_y1_rel: float = FACE_CROP_REL_H,
 ) -> Optional[tuple[np.ndarray, Optional[np.ndarray]]]:
     """Load, top-crop, and grayscale-resize a servant face PNG plus mask.
 
-    The template is the upper :data:`FACE_CROP_REL_H` fraction of the
-    source portrait, scaled so its width is ``target_w``. Transparent
-    source pixels are returned as an OpenCV match mask instead of being
-    composited into black corners, which otherwise suppresses scores for
-    portraits with large transparent areas.
+    The template is cropped vertically by ``crop_y0_rel..crop_y1_rel`` of
+    the source portrait, then scaled so its width is ``target_w``.
+    Transparent source pixels are returned as an OpenCV match mask instead
+    of being composited into black corners, which otherwise suppresses
+    scores for portraits with large transparent areas.
     """
-    key = (path, target_w)
+    crop_y0_rel = max(0.0, min(crop_y0_rel, 0.99))
+    crop_y1_rel = max(crop_y0_rel + 0.01, min(crop_y1_rel, 1.0))
+    key = (path, target_w, crop_y0_rel, crop_y1_rel)
     cached = _face_cache.get(key)
     if cached is not None:
         return cached
@@ -1765,10 +1774,11 @@ def _load_face_template_pair(
         gray = img
         mask = None
 
-    crop_h = max(1, int(round(gray.shape[0] * FACE_CROP_REL_H)))
-    gray = gray[:crop_h, :]
+    crop_y0 = max(0, min(gray.shape[0] - 1, int(round(gray.shape[0] * crop_y0_rel))))
+    crop_y1 = max(crop_y0 + 1, min(gray.shape[0], int(round(gray.shape[0] * crop_y1_rel))))
+    gray = gray[crop_y0:crop_y1, :]
     if mask is not None:
-        mask = mask[:crop_h, :]
+        mask = mask[crop_y0:crop_y1, :]
 
     if target_w > 0 and gray.shape[1] != target_w:
         target_h = max(1, int(round(target_w * gray.shape[0] / gray.shape[1])))
@@ -1981,37 +1991,52 @@ def _identify_servant_in_slot(
     if roi.size == 0:
         return None
 
-    # Face template size is driven by the slot width, not the cropped face
-    # bbox — the face circle scales with the card, not with our search crop.
-    target = int(round(slot_px[2] * FACE_RESIZE_CARD_REL))
-    if target < 16:
-        return None
+    def match_candidate_templates(
+        resize_rel: float,
+        crop_y0_rel: float,
+        crop_y1_rel: float,
+    ) -> Optional[dict]:
+        target_w = int(round(slot_px[2] * resize_rel))
+        if target_w < 16:
+            return None
 
-    best: Optional[dict] = None
-    for sid in servant_ids:
-        for path in _list_servant_face_files(assets_dir, sid):
-            pair = _load_face_template_pair(path, target)
-            if pair is None:
-                continue
-            tmpl, mask = pair
-            if tmpl.shape[0] > roi.shape[0] or tmpl.shape[1] > roi.shape[1]:
-                continue
-            res = cv2.matchTemplate(roi, tmpl, cv2.TM_CCOEFF_NORMED, mask=mask)
-            _, mv, _, _ = cv2.minMaxLoc(res)
-            score = float(mv)
-            if not np.isfinite(score):
-                continue
-            if score < threshold:
-                continue
-            if best is None or score > best["faceScore"]:
-                ascension = _ascension_from_filename(os.path.basename(path))
-                best = {
-                    "servantId": int(sid),
-                    "ascension": ascension,
-                    "faceScore": score,
-                    "facePath": path,
-                }
-    return best
+        best: Optional[dict] = None
+        for sid in servant_ids:
+            for path in _list_servant_face_files(assets_dir, sid):
+                pair = _load_face_template_pair(path, target_w, crop_y0_rel, crop_y1_rel)
+                if pair is None:
+                    continue
+                tmpl, mask = pair
+                if tmpl.shape[0] > roi.shape[0] or tmpl.shape[1] > roi.shape[1]:
+                    continue
+                res = cv2.matchTemplate(roi, tmpl, cv2.TM_CCOEFF_NORMED, mask=mask)
+                _, mv, _, _ = cv2.minMaxLoc(res)
+                score = float(mv)
+                if not np.isfinite(score):
+                    continue
+                if best is None or score > best["faceScore"]:
+                    ascension = _ascension_from_filename(os.path.basename(path))
+                    best = {
+                        "servantId": int(sid),
+                        "ascension": ascension,
+                        "faceScore": score,
+                        "facePath": path,
+                    }
+        return best
+
+    best = match_candidate_templates(FACE_RESIZE_CARD_REL, 0.0, FACE_CROP_REL_H)
+    if best is not None and best["faceScore"] >= threshold:
+        return best
+
+    fallback = match_candidate_templates(
+        FACE_FALLBACK_RESIZE_CARD_REL,
+        FACE_FALLBACK_CROP_REL_Y0,
+        FACE_FALLBACK_CROP_REL_Y1,
+    )
+    if fallback is not None and fallback["faceScore"] >= threshold:
+        return fallback
+
+    return None
 
 
 def _ascension_from_filename(name: str) -> Optional[int]:
