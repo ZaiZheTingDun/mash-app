@@ -418,6 +418,11 @@ const BATTLE_RESULT_CONTINUE_REPEAT: Point = Point::new(0.657, 0.809);
 /// "Close / Stop" button on the final continue page — taps this when
 /// `RunConfig::repeat_mission` is false. The runner finishes after.
 const BATTLE_RESULT_CONTINUE_STOP: Point = Point::new(0.348, 0.809);
+/// Generic skip/close target for transient battle-result popups that can
+/// obscure the settlement page and make screen detection return Unknown.
+/// Same physical position as the battle animation-skip button, but kept as
+/// a separate semantic constant so result-popup behavior can be tuned alone.
+const BATTLE_RESULT_POPUP_SKIP: Point = Point::new(0.685, 0.095);
 
 const AP_RECOVERY_ITEMS_REGION: NormRect = NormRect {
     x: 0.244,
@@ -442,6 +447,17 @@ const BATTLE_RESULT_TAP_INTERVAL: Duration = Duration::from_millis(300);
 /// longest measured bond / EXP animation (~5 s for a multi-servant
 /// level-up cascade).
 const BATTLE_RESULT_TAP_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn is_battle_result_screen(screen: Screen) -> bool {
+    matches!(
+        screen,
+        Screen::BattleResultBond
+            | Screen::BattleResultExp
+            | Screen::BattleResultLoot
+            | Screen::BattleResultFriendRequest
+            | Screen::BattleResultContinue
+    )
+}
 
 // ---------------------------------------------------------------------------
 // Debug: expose coordinate constants for visualization
@@ -1721,6 +1737,7 @@ impl Runner {
         self.emit("", "自动化已启动");
 
         let mut unknown_count: u32 = 0;
+        let mut last_detected_screen = Screen::Unknown;
 
         loop {
             if self.is_cancelled() {
@@ -1745,22 +1762,27 @@ impl Runner {
             match screen {
                 Screen::TeamConfirm => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     self.handle_team_confirm();
                 }
                 Screen::TeamChange => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     self.handle_team_change();
                 }
                 Screen::SupportSelect => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     self.handle_support_select();
                 }
                 Screen::ServantSelect => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     self.handle_servant_select();
                 }
                 Screen::Battle => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     // NOTE: do NOT clear `waiting_for_battle` here. The
                     // screen classifier briefly returns Battle between
                     // taps and the NP cinematic, and clearing the flag
@@ -1772,6 +1794,7 @@ impl Runner {
                 }
                 Screen::Attack => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     if self.battle.attack_submitted {
                         self.emit("Attack", "已提交本轮选卡，等待攻击动画");
                     } else {
@@ -1780,26 +1803,32 @@ impl Runner {
                 }
                 Screen::BattleResultBond => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     self.handle_battle_result_bond();
                 }
                 Screen::BattleResultExp => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     self.handle_battle_result_exp();
                 }
                 Screen::BattleResultLoot => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     self.handle_battle_result_loot();
                 }
                 Screen::BattleResultFriendRequest => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     self.handle_battle_result_friend_request();
                 }
                 Screen::BattleResultContinue => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     self.handle_battle_result_continue();
                 }
                 Screen::APRecovery => {
                     unknown_count = 0;
+                    last_detected_screen = screen;
                     self.handle_ap_recovery();
                 }
                 Screen::Unknown => {
@@ -1820,6 +1849,15 @@ impl Runner {
                         "Unknown",
                         &format!("等待识别画面… ({unknown_count}/{timeout})"),
                     );
+                    if is_battle_result_screen(last_detected_screen) {
+                        self.emit_debug(
+                            "Unknown",
+                            "结算页可能被弹窗遮挡，尝试点击跳过区域",
+                        );
+                        if self.tap_at("Unknown", BATTLE_RESULT_POPUP_SKIP) {
+                            thread::sleep(ACTION_DELAY);
+                        }
+                    }
                 }
             }
 
@@ -5841,6 +5879,21 @@ mod tests {
                 Pick::Np { slot, .. } => format!("NP{slot}"),
             })
             .collect()
+    }
+
+    #[test]
+    fn battle_result_popup_skip_only_applies_to_result_screens() {
+        assert!(is_battle_result_screen(Screen::BattleResultBond));
+        assert!(is_battle_result_screen(Screen::BattleResultExp));
+        assert!(is_battle_result_screen(Screen::BattleResultLoot));
+        assert!(is_battle_result_screen(Screen::BattleResultFriendRequest));
+        assert!(is_battle_result_screen(Screen::BattleResultContinue));
+
+        assert!(!is_battle_result_screen(Screen::Battle));
+        assert!(!is_battle_result_screen(Screen::Attack));
+        assert!(!is_battle_result_screen(Screen::SupportSelect));
+        assert!(!is_battle_result_screen(Screen::APRecovery));
+        assert!(!is_battle_result_screen(Screen::Unknown));
     }
 
     #[test]
