@@ -393,6 +393,38 @@ class TestDetectScreen:
         assert result["screen"] == "BattleResultExpLevelUp"
         assert result["score"] >= 0.85
 
+    def test_cn_battle_result_loot_event_detects_real_capture(self):
+        """CN events can insert a rewards page after the normal loot page.
+
+        It uses a different label position, so it has its own CV screen and
+        Rust maps that screen back to the normal BattleResultLoot handler.
+        """
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "templates"
+        )
+        cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "cv.json"
+        )
+        screenshot = os.path.join(repo_root, ".screenshots", "cn", "loot_new.png")
+        if not (
+            os.path.isdir(templates_dir)
+            and os.path.isfile(cv_json)
+            and os.path.isfile(screenshot)
+        ):
+            pytest.skip("CN production resources or loot_new fixture not available")
+
+        mash_cv._load_templates(templates_dir)
+        mash_cv._load_config(cv_json)
+        img = cv2.imread(screenshot)
+        assert img is not None
+
+        result = mash_cv._detect_screen(img)
+        assert result["screen"] == "BattleResultLootEvent"
+        assert result["score"] >= 0.85
+
 
 # ── _load_templates ─────────────────────────────────────────────────────
 

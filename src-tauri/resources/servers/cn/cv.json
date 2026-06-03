@@ -240,6 +240,23 @@
         }
       }
     },
+    "BattleResultLootEvent": {
+      "detect": {
+        "template": "text_battle_result_loot_event",
+        "region": {
+          "x": 0.153,
+          "y": 0.688,
+          "w": 0.218,
+          "h": 0.084
+        },
+        "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
+      }
+    },
     "BattleResultFriendRequest": {
       "detect": {
         "templates": [

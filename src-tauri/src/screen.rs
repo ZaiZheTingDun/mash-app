@@ -545,7 +545,7 @@ impl FromStr for Screen {
             "ServantSelect" => Self::ServantSelect,
             "Battle" => Self::Battle,
             "Attack" => Self::Attack,
-            "BattleResultLoot" => Self::BattleResultLoot,
+            "BattleResultLoot" | "BattleResultLootEvent" => Self::BattleResultLoot,
             "BattleResultExp" | "BattleResultExpLevelUp" => Self::BattleResultExp,
             "BattleResultBond" | "BattleResultBondLevelUp" => Self::BattleResultBond,
             "BattleResultContinue" => Self::BattleResultContinue,
@@ -1590,6 +1590,14 @@ mod tests {
         assert_eq!(
             "BattleResultExpLevelUp".parse::<Screen>().unwrap(),
             Screen::BattleResultExp
+        );
+    }
+
+    #[test]
+    fn loot_event_screen_routes_to_loot_handler() {
+        assert_eq!(
+            "BattleResultLootEvent".parse::<Screen>().unwrap(),
+            Screen::BattleResultLoot
         );
     }
 }
