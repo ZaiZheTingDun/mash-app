@@ -8,6 +8,7 @@ import type {
   NoblePhantasmMatchDto,
   ProbeResult,
   RunnerCoordinatesDto,
+  SupportCeArtworkCheckDto,
 } from "./DebugPage";
 
 function supportPanelShortLabel(panel: "owned" | "append" | null | undefined) {
@@ -19,6 +20,18 @@ function supportPanelShortLabel(panel: "owned" | "append" | null | undefined) {
 function supportPanelLevels(levels: (number | null)[] | undefined) {
   if (!levels || levels.length === 0) return "";
   return levels.map((level) => (level == null ? "-" : String(level))).join("/");
+}
+
+function supportCeArtworkChecksTitle(
+  checks: SupportCeArtworkCheckDto[] | undefined
+) {
+  if (!checks || checks.length === 0) return "";
+  return checks
+    .map((check) => {
+      const marker = check.selected ? "*" : check.passed ? "✓" : "✗";
+      return `${check.regionKind}:${check.variant} ${check.score.toFixed(3)}/${check.threshold.toFixed(2)}${marker}`;
+    })
+    .join(" · ");
 }
 
 // Mirror of `SUPPORT_GRAND_BADGE_*` in
@@ -617,7 +630,7 @@ export function DebugCanvas({
                   title={
                     s.ce.error
                       ? `CE verify error: ${s.ce.error}`
-                      : `CE score ${s.ce.score.toFixed(3)} (threshold ${s.ce.threshold.toFixed(2)})`
+                      : `CE score ${s.ce.score.toFixed(3)} (threshold ${s.ce.threshold.toFixed(2)})${supportCeArtworkChecksTitle(s.ce.artworkChecks) ? ` | variants ${supportCeArtworkChecksTitle(s.ce.artworkChecks)}` : ""}`
                   }
                 >
                   <span className="debug-overlay-label">
@@ -642,7 +655,7 @@ export function DebugCanvas({
                   title={
                     ce.error
                       ? `Grand CE ${ceIndex + 1} verify error: ${ce.error}`
-                      : `Grand CE ${ceIndex + 1} score ${ce.score.toFixed(3)} (threshold ${ce.threshold.toFixed(2)})`
+                      : `Grand CE ${ceIndex + 1} score ${ce.score.toFixed(3)} (threshold ${ce.threshold.toFixed(2)})${supportCeArtworkChecksTitle(ce.artworkChecks) ? ` | variants ${supportCeArtworkChecksTitle(ce.artworkChecks)}` : ""}`
                   }
                 >
                   <span className="debug-overlay-label">

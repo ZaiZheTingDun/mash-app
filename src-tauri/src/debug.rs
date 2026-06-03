@@ -11,8 +11,8 @@ use crate::runner::{self, RunnerHandle, RunnerState};
 use crate::screen::{
     CommandCardMatch, ElementMatch, FindEnhancementServantGridResult, FindSupportsResult,
     NoblePhantasmMatch, NormRect, Point, ServantGridAnchor, ServantGridCell, ServantGridFaceMatch,
-    SidecarClient, SupportCeIconCheck, SupportCeVerificationOptions, SupportDiagnostics,
-    SupportRowMatch,
+    SidecarClient, SupportCeArtworkCheck, SupportCeIconCheck, SupportCeVerificationOptions,
+    SupportDiagnostics, SupportRowMatch,
 };
 use crate::{
     app_data_dir, load_servant_metadata, resolve_ce_assets_dir, resolve_cv_config_path,
@@ -982,6 +982,8 @@ pub struct DebugSupportCeInfo {
     pub score: f64,
     pub passed: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artwork_checks: Vec<SupportCeArtworkCheck>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub icon_checks: Vec<SupportCeIconCheck>,
     /// Threshold the runner would have applied. Returned alongside the
     /// score so the debug UI doesn't have to mirror the constant.
@@ -993,6 +995,26 @@ pub struct DebugSupportCeInfo {
     /// Sidecar error message when verification failed before scoring.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+fn format_ce_artwork_checks(checks: &[SupportCeArtworkCheck]) -> String {
+    checks
+        .iter()
+        .map(|check| {
+            let marker = if check.selected {
+                "*"
+            } else if check.passed {
+                "✓"
+            } else {
+                "✗"
+            };
+            format!(
+                "{}:{} {:.3}/{:.2}{}",
+                check.region_kind, check.variant, check.score, check.threshold, marker
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
 }
 
 #[derive(serde::Serialize, Clone, Debug)]
@@ -1152,10 +1174,18 @@ pub fn debug_find_supports(
                             effective_threshold,
                             if result.passed { "PASS" } else { "skip" },
                         );
+                        if !result.artwork_checks.is_empty() {
+                            eprintln!(
+                                "[debug_find_supports] row y={:.3} CE variants: {}",
+                                row.row_region.y,
+                                format_ce_artwork_checks(&result.artwork_checks),
+                            );
+                        }
                         DebugSupportCeInfo {
                             region,
                             score: result.score,
                             passed: result.passed,
+                            artwork_checks: result.artwork_checks,
                             icon_checks: result.icon_checks,
                             threshold: effective_threshold,
                             template_path: template_path_str.clone(),
@@ -1171,6 +1201,7 @@ pub fn debug_find_supports(
                             region,
                             score: 0.0,
                             passed: false,
+                            artwork_checks: Vec::new(),
                             icon_checks: Vec::new(),
                             threshold: runner::SUPPORT_CE_THRESHOLD,
                             template_path: template_path_str.clone(),
@@ -1212,10 +1243,19 @@ pub fn debug_find_supports(
                         } else {
                             runner::SUPPORT_CE_THRESHOLD
                         };
+                        if !result.artwork_checks.is_empty() {
+                            eprintln!(
+                                "[debug_find_supports] row y={:.3} Grand CE {} variants: {}",
+                                row.row_region.y,
+                                index + 1,
+                                format_ce_artwork_checks(&result.artwork_checks),
+                            );
+                        }
                         DebugSupportCeInfo {
                             region,
                             score: result.score,
                             passed: result.passed,
+                            artwork_checks: result.artwork_checks,
                             icon_checks: result.icon_checks,
                             threshold: effective_threshold,
                             template_path: template_path_str,
@@ -1226,6 +1266,7 @@ pub fn debug_find_supports(
                         region,
                         score: 0.0,
                         passed: false,
+                        artwork_checks: Vec::new(),
                         icon_checks: Vec::new(),
                         threshold: runner::SUPPORT_CE_THRESHOLD,
                         template_path: template_path_str,
@@ -1241,6 +1282,7 @@ pub fn debug_find_supports(
                     region,
                     score: 0.0,
                     passed: false,
+                    artwork_checks: Vec::new(),
                     icon_checks: Vec::new(),
                     threshold: runner::SUPPORT_CE_THRESHOLD,
                     template_path: template_path_str,

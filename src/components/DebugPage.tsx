@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Fragment, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Box,
   Button,
@@ -287,8 +287,19 @@ export interface SupportCeInfoDto {
   score: number;
   passed: boolean;
   threshold: number;
+  artworkChecks?: SupportCeArtworkCheckDto[];
   iconChecks?: SupportCeIconCheckDto[];
   templatePath?: string;
+  error?: string;
+}
+
+export interface SupportCeArtworkCheckDto {
+  variant: string;
+  regionKind: string;
+  score: number;
+  threshold: number;
+  passed: boolean;
+  selected: boolean;
   error?: string;
 }
 
@@ -401,6 +412,18 @@ function supportSkillDiagnosticsText(
       return `${index + 1}:${level}@${score}${item.source ? `/${item.source}` : ""}`;
     })
     .join(" ");
+}
+
+function supportCeArtworkChecksText(
+  checks: SupportCeArtworkCheckDto[] | undefined
+): string {
+  if (!checks || checks.length === 0) return "";
+  return checks
+    .map((check) => {
+      const marker = check.selected ? "*" : check.passed ? "✓" : "✗";
+      return `${check.regionKind}:${check.variant} ${check.score.toFixed(2)}/${check.threshold.toFixed(2)}${marker}`;
+    })
+    .join(" · ");
 }
 
 interface ServantMetadataDto {
@@ -1295,6 +1318,14 @@ export function DebugPage({
           const cePart = s.ce
             ? ` | 礼装 ${s.ce.score.toFixed(2)}/${s.ce.threshold.toFixed(2)} ${s.ce.passed ? "✓" : "✗"}`
             : "";
+          const ceArtworkPart = supportCeArtworkChecksText(s.ce?.artworkChecks);
+          const grandArtworkPart = (s.grandCes ?? [])
+            .map((ce, index) => {
+              const text = supportCeArtworkChecksText(ce.artworkChecks);
+              return text ? `冠${index + 1} ${text}` : "";
+            })
+            .filter(Boolean)
+            .join(" | ");
           const npPart = s.npText
             ? ` | 宝具='${s.npText}' (${s.npScore.toFixed(2)})`
             : ` | 宝具(未核对)`;
@@ -1329,6 +1360,8 @@ export function DebugPage({
               skillDiagPart +
               scoreAnchorPart +
               cePart +
+              (ceArtworkPart ? ` | 礼装variants ${ceArtworkPart}` : "") +
+              (grandArtworkPart ? ` | 冠位variants ${grandArtworkPart}` : "") +
               (iconCheckPart ? ` | 图标 ${iconCheckPart}` : "")
           );
         }
@@ -2459,6 +2492,19 @@ export function DebugPage({
                         {s.ce.passed ? "✓ 匹配" : "✗ 未达阈值"}
                         {s.ce.error ? ` · ${s.ce.error}` : ""}
                       </Text>
+                      {(s.ce.artworkChecks ?? []).map((check) => (
+                        <Text
+                          key={`ce-artwork-${check.regionKind}-${check.variant}`}
+                          size="1"
+                          color={check.passed ? "green" : "red"}
+                        >
+                          区域 {check.regionKind}:{check.variant}:{" "}
+                          {check.score.toFixed(3)} /{" "}
+                          {check.threshold.toFixed(2)}{" "}
+                          {check.selected ? "*" : check.passed ? "✓" : "✗"}
+                          {check.error ? ` · ${check.error}` : ""}
+                        </Text>
+                      ))}
                       {(s.ce.iconChecks ?? []).map((check) => (
                         <Text
                           key={`ce-icon-${check.kind}-${check.templateKey}`}
@@ -2474,21 +2520,35 @@ export function DebugPage({
                     </>
                   )}
                   {(s.grandCes ?? []).map((ce, ceIndex) => (
-                    <Text
-                      key={`grand-ce-side-${i}-${ceIndex}`}
-                      size="1"
-                      color={ce.passed ? "green" : "red"}
-                    >
-                      冠{ceIndex + 1} {ce.score.toFixed(3)} /{" "}
-                      {ce.threshold.toFixed(2)}{" "}
-                      {ce.passed ? "✓" : "✗"}
-                      {(ce.iconChecks ?? [])
-                        .map(
-                          (check) =>
-                            ` · ${check.kind} ${check.score.toFixed(2)}${check.passed ? "✓" : "✗"}`
-                        )
-                        .join("")}
-                    </Text>
+                    <Fragment key={`grand-ce-side-${i}-${ceIndex}`}>
+                      <Text
+                        size="1"
+                        color={ce.passed ? "green" : "red"}
+                      >
+                        冠{ceIndex + 1} {ce.score.toFixed(3)} /{" "}
+                        {ce.threshold.toFixed(2)}{" "}
+                        {ce.passed ? "✓" : "✗"}
+                        {(ce.iconChecks ?? [])
+                          .map(
+                            (check) =>
+                              ` · ${check.kind} ${check.score.toFixed(2)}${check.passed ? "✓" : "✗"}`
+                          )
+                          .join("")}
+                      </Text>
+                      {(ce.artworkChecks ?? []).map((check) => (
+                        <Text
+                          key={`grand-ce-artwork-${ceIndex}-${check.regionKind}-${check.variant}`}
+                          size="1"
+                          color={check.passed ? "green" : "red"}
+                        >
+                          冠{ceIndex + 1} 区域 {check.regionKind}:{check.variant}:{" "}
+                          {check.score.toFixed(3)} /{" "}
+                          {check.threshold.toFixed(2)}{" "}
+                          {check.selected ? "*" : check.passed ? "✓" : "✗"}
+                          {check.error ? ` · ${check.error}` : ""}
+                        </Text>
+                      ))}
+                    </Fragment>
                   ))}
                 </Box>
               ))}

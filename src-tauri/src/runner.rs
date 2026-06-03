@@ -1,9 +1,9 @@
 use crate::adb::Adb;
-use crate::touch::{self, TouchBackend};
 use crate::screen::{
     CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
-    SupportCeVerificationOptions, SupportRowMatch,
+    SupportCeArtworkCheck, SupportCeVerificationOptions, SupportRowMatch,
 };
+use crate::touch::{self, TouchBackend};
 use crate::{
     load_servant_metadata, servant_np_card, Action, AdvancedBattleScene,
     AdvancedCommandCardCondition, AdvancedOutputType, AdvancedRule, AttackCard, BattleScene,
@@ -1099,6 +1099,26 @@ pub const SUPPORT_GRAND_CE_THIRD_CENTER_FROM_PANEL_TOP_Y: f64 = 0.220;
 /// background pixels so even mismatched CEs score ~0.4-0.5; the matched
 /// CE typically scores 0.75+.
 pub const SUPPORT_CE_THRESHOLD: f64 = 0.70;
+
+fn format_ce_artwork_checks(checks: &[SupportCeArtworkCheck]) -> String {
+    checks
+        .iter()
+        .map(|check| {
+            let marker = if check.selected {
+                "*"
+            } else if check.passed {
+                "✓"
+            } else {
+                "✗"
+            };
+            format!(
+                "{}:{} {:.3}/{:.2}{}",
+                check.region_kind, check.variant, check.score, check.threshold, marker
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SupportLevelFilter {
@@ -2248,6 +2268,12 @@ impl Runner {
                     effective_threshold,
                     if result.passed { "PASS" } else { "skip" },
                 );
+                if !result.artwork_checks.is_empty() {
+                    eprintln!(
+                        "[runner] {label} variants: {}",
+                        format_ce_artwork_checks(&result.artwork_checks),
+                    );
+                }
                 for check in &result.icon_checks {
                     eprintln!(
                         "[runner] {label} {} icon: score={:.3} threshold={:.2} -> {}",

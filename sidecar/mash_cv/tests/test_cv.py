@@ -2591,6 +2591,96 @@ class TestVerifySupportCE:
         assert result["passed"] is True, result
         assert result["score"] > 0.95, result
 
+    def test_passes_when_event_bonus_badge_obscures_lower_left(self, tmp_path):
+        from mash_cv.cv import _load_ce_template, _verify_support_ce
+
+        img_w, img_h = 2560, 1440
+        target_w, target_h = _ce_target_pixel_size(img_w, img_h)
+
+        tmpl_path = str(tmp_path / "card_ce.png")
+        icon_bgr = _build_template_png(tmpl_path, target_w, target_h)
+
+        img = _make_bgr_image(img_w, img_h, bgr=(40, 40, 40))
+        py, px = 600, 400
+        img[py : py + target_h, px : px + target_w] = icon_bgr
+
+        # Simulate an event bonus badge covering the lower-left of the CE strip.
+        badge_w = int(round(target_w * 0.65))
+        badge_h = int(round(target_h * 0.62))
+        img[py + target_h - badge_h : py + target_h, px : px + badge_w] = (0, 0, 255)
+
+        region = {
+            "x": px / img_w,
+            "y": py / img_h,
+            "w": target_w / img_w,
+            "h": target_h / img_h,
+        }
+
+        full_tmpl = _load_ce_template(tmpl_path, target_w, target_h)
+        assert full_tmpl is not None
+        crop_gray = cv2.cvtColor(
+            img[py : py + target_h, px : px + target_w], cv2.COLOR_BGR2GRAY
+        )
+        full_score = float(
+            cv2.minMaxLoc(
+                cv2.matchTemplate(crop_gray, full_tmpl, cv2.TM_CCOEFF_NORMED)
+            )[1]
+        )
+        assert full_score < 0.7
+
+        result = _verify_support_ce(img, region, tmpl_path, 0.7)
+        assert result["passed"] is True, result
+        assert result["score"] >= 0.7, result
+        assert result["threshold"] > 0.7, result
+        checks = result["artworkChecks"]
+        assert {check["variant"] for check in checks} == {
+            "full",
+            "noLeft30",
+            "noBottom35",
+            "noLeft30Bottom35",
+        }
+        selected = [check for check in checks if check["selected"]]
+        assert len(selected) == 1
+        assert selected[0]["threshold"] == result["threshold"]
+        assert selected[0]["score"] == result["score"]
+
+    def test_rejects_occlusion_variant_when_full_score_is_too_low(self, tmp_path):
+        from mash_cv.cv import CE_OCCLUSION_SAFE_MIN_FULL_SCORE, _verify_support_ce
+
+        img_w, img_h = 2560, 1440
+        target_w, target_h = _ce_target_pixel_size(img_w, img_h)
+
+        tmpl_path = str(tmp_path / "card_ce.png")
+        icon_bgr = _build_template_png(tmpl_path, target_w, target_h)
+
+        img = _make_bgr_image(img_w, img_h, bgr=(40, 40, 40))
+        py, px = 600, 400
+        img[py : py + target_h, px : px + target_w] = icon_bgr
+
+        # This is too much damage to trust a small clean crop by itself:
+        # the best occlusion-safe variant passes its raised threshold, but
+        # the full artwork score must still clear the 0.60 sanity gate.
+        badge_w = int(round(target_w * 0.85))
+        badge_h = int(round(target_h * 0.62))
+        img[py + target_h - badge_h : py + target_h, px : px + badge_w] = (0, 0, 255)
+
+        region = {
+            "x": px / img_w,
+            "y": py / img_h,
+            "w": target_w / img_w,
+            "h": target_h / img_h,
+        }
+
+        result = _verify_support_ce(img, region, tmpl_path, 0.7)
+        checks = result["artworkChecks"]
+        full = next(check for check in checks if check["variant"] == "full")
+        selected = next(check for check in checks if check["selected"])
+
+        assert full["score"] < CE_OCCLUSION_SAFE_MIN_FULL_SCORE
+        assert selected["variant"] != "full"
+        assert selected["passed"] is True
+        assert result["passed"] is False, result
+
     def test_requires_mlb_icon_when_requested(self, tmp_path):
         import mash_cv.cv as cv
         from mash_cv.cv import _verify_support_ce

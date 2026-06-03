@@ -3716,6 +3716,17 @@ CE_GRAND_BOND_TEMPLATE = "icon_grand_bond_ce"
 CE_GRAND_BOND_NP_TEMPLATE = "icon_grand_bond_ce_np"
 CE_DECORATION_ICON_THRESHOLD = 0.70
 
+# Event bonus badges sit over the lower-left corner of the support CE strip.
+# A full-strip CCOEFF match can drop just below threshold even when the
+# correct CE is visible (for example 0.66 / 0.70). Keep the conservative
+# threshold for the full strip, but require higher scores from the smaller
+# occlusion-safe crops because less artwork means higher false-positive risk.
+CE_OCCLUSION_SAFE_LEFT_CROP_FRAC = 0.30
+CE_OCCLUSION_SAFE_BOTTOM_CROP_FRAC = 0.35
+CE_OCCLUSION_SAFE_SINGLE_CROP_THRESHOLD_BONUS = 0.04
+CE_OCCLUSION_SAFE_DOUBLE_CROP_THRESHOLD_BONUS = 0.08
+CE_OCCLUSION_SAFE_MIN_FULL_SCORE = 0.60
+
 # In Grand Saber rows the bond / bondNp slot renders the CE artwork at the
 # asset's native ~2.2:1 aspect ratio centered inside the wider 3.45:1 slot
 # rect (~317×92 px at 2560-wide). The side margins (~57 px each, ≈18% of
@@ -3797,6 +3808,42 @@ def _load_ce_template(
     return gray
 
 
+def _ce_artwork_match_templates(tmpl: np.ndarray) -> list[tuple[str, np.ndarray, float]]:
+    """Return full and occlusion-safe CE artwork templates.
+
+    The full template stays first for the normal path. Later variants crop
+    the template to regions that avoid the event-bonus badge in the lower-left
+    corner, while staying large enough to preserve CE-specific artwork. Each
+    variant carries a threshold bonus so smaller regions must score higher.
+    """
+    h, w = tmpl.shape[:2]
+    variants = [("full", tmpl, 0.0)]
+
+    x0 = int(round(w * CE_OCCLUSION_SAFE_LEFT_CROP_FRAC))
+    y1 = int(round(h * (1.0 - CE_OCCLUSION_SAFE_BOTTOM_CROP_FRAC)))
+    min_w = max(8, int(round(w * 0.45)))
+    min_h = max(8, int(round(h * 0.45)))
+
+    if w - x0 >= min_w:
+        variants.append(
+            ("noLeft30", tmpl[:, x0:], CE_OCCLUSION_SAFE_SINGLE_CROP_THRESHOLD_BONUS)
+        )
+    if y1 >= min_h:
+        variants.append(
+            ("noBottom35", tmpl[:y1, :], CE_OCCLUSION_SAFE_SINGLE_CROP_THRESHOLD_BONUS)
+        )
+    if w - x0 >= min_w and y1 >= min_h:
+        variants.append(
+            (
+                "noLeft30Bottom35",
+                tmpl[:y1, x0:],
+                CE_OCCLUSION_SAFE_DOUBLE_CROP_THRESHOLD_BONUS,
+            )
+        )
+
+    return variants
+
+
 def _verify_support_ce(
     img: np.ndarray,
     region: dict,
@@ -3864,9 +3911,27 @@ def _verify_support_ce(
             "iconChecks": [],
         }
 
+    # Relax the base artwork threshold for bond slots only; see the
+    # ``BOND_CE_ARTWORK_THRESHOLD`` comment for the rationale. Take the
+    # ``min`` so callers passing an *already* lower threshold (tests,
+    # tuning runs) keep their tighter constraint. Occlusion-safe crops add
+    # a per-candidate bonus on top of this base threshold.
+    effective_base_threshold = (
+        min(float(threshold), BOND_CE_ARTWORK_THRESHOLD)
+        if bond_mode_active
+        else float(threshold)
+    )
+
+    artwork_checks: list[dict] = []
     best_score: float | None = None
+    best_threshold = effective_base_threshold
+    best_margin: float | None = None
+    best_check_index: int | None = None
     last_error = "empty crop"
-    for artwork_region in artwork_regions:
+    for artwork_region_index, artwork_region in enumerate(artwork_regions):
+        region_kind = (
+            "inset" if bond_mode_active and artwork_region_index == 0 else "full"
+        )
         rx = max(0, int(round(float(artwork_region["x"]) * w)))
         ry = max(0, int(round(float(artwork_region["y"]) * h)))
         rw = max(1, min(int(round(float(artwork_region["w"]) * w)), w - rx))
@@ -3878,41 +3943,67 @@ def _verify_support_ce(
         crop_gray = (
             cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
         )
-        attempt_tmpl = tmpl
 
-        # If the search window is too small for the icon (caller misconfigured
-        # SUPPORT_CE_OFFSET_IN_ROW), shrink the template proportionally so
-        # matchTemplate can still run instead of failing outright. The score
-        # will be lower in that case, surfacing the bad calibration.
-        if (
-            attempt_tmpl.shape[0] > crop_gray.shape[0]
-            or attempt_tmpl.shape[1] > crop_gray.shape[1]
-        ):
-            scale = min(
-                crop_gray.shape[0] / attempt_tmpl.shape[0],
-                crop_gray.shape[1] / attempt_tmpl.shape[1],
+        for variant, base_tmpl, threshold_bonus in _ce_artwork_match_templates(tmpl):
+            attempt_tmpl = base_tmpl
+            attempt_threshold = min(1.0, effective_base_threshold + threshold_bonus)
+
+            # If the search window is too small for the icon (caller misconfigured
+            # SUPPORT_CE_OFFSET_IN_ROW), shrink the template proportionally so
+            # matchTemplate can still run instead of failing outright. The score
+            # will be lower in that case, surfacing the bad calibration.
+            if (
+                attempt_tmpl.shape[0] > crop_gray.shape[0]
+                or attempt_tmpl.shape[1] > crop_gray.shape[1]
+            ):
+                scale = min(
+                    crop_gray.shape[0] / attempt_tmpl.shape[0],
+                    crop_gray.shape[1] / attempt_tmpl.shape[1],
+                )
+                new_w = max(8, int(round(attempt_tmpl.shape[1] * scale)))
+                new_h = max(8, int(round(attempt_tmpl.shape[0] * scale)))
+                attempt_tmpl = cv2.resize(
+                    attempt_tmpl, (new_w, new_h), interpolation=cv2.INTER_AREA
+                )
+
+            if (
+                attempt_tmpl.shape[0] > crop_gray.shape[0]
+                or attempt_tmpl.shape[1] > crop_gray.shape[1]
+            ):
+                last_error = "template larger than crop"
+                artwork_checks.append(
+                    {
+                        "variant": variant,
+                        "regionKind": region_kind,
+                        "score": 0.0,
+                        "threshold": attempt_threshold,
+                        "passed": False,
+                        "selected": False,
+                        "error": last_error,
+                    }
+                )
+                continue
+
+            res = cv2.matchTemplate(crop_gray, attempt_tmpl, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, _ = cv2.minMaxLoc(res)
+            score_candidate = float(max_val)
+            margin = score_candidate - attempt_threshold
+            check_index = len(artwork_checks)
+            artwork_checks.append(
+                {
+                    "variant": variant,
+                    "regionKind": region_kind,
+                    "score": score_candidate,
+                    "threshold": attempt_threshold,
+                    "passed": score_candidate >= attempt_threshold,
+                    "selected": False,
+                }
             )
-            new_w = max(8, int(round(attempt_tmpl.shape[1] * scale)))
-            new_h = max(8, int(round(attempt_tmpl.shape[0] * scale)))
-            attempt_tmpl = cv2.resize(
-                attempt_tmpl, (new_w, new_h), interpolation=cv2.INTER_AREA
-            )
-
-        if (
-            attempt_tmpl.shape[0] > crop_gray.shape[0]
-            or attempt_tmpl.shape[1] > crop_gray.shape[1]
-        ):
-            last_error = "template larger than crop"
-            continue
-
-        res = cv2.matchTemplate(crop_gray, attempt_tmpl, cv2.TM_CCOEFF_NORMED)
-        _, max_val, _, _ = cv2.minMaxLoc(res)
-        score_candidate = float(max_val)
-        best_score = (
-            score_candidate
-            if best_score is None
-            else max(best_score, score_candidate)
-        )
+            if best_margin is None or margin > best_margin:
+                best_score = score_candidate
+                best_threshold = attempt_threshold
+                best_margin = margin
+                best_check_index = check_index
 
     if best_score is None:
         return {
@@ -3920,20 +4011,31 @@ def _verify_support_ce(
             "passed": False,
             "error": last_error,
             "iconChecks": [],
+            "artworkChecks": artwork_checks,
         }
 
     score = best_score
-    icon_checks: list[dict] = []
-    # Relax the artwork threshold for bond slots only; see the
-    # ``BOND_CE_ARTWORK_THRESHOLD`` comment for the rationale. Take the
-    # ``min`` so callers passing an *already* lower threshold (tests,
-    # tuning runs) keep their tighter constraint.
-    effective_threshold = (
-        min(float(threshold), BOND_CE_ARTWORK_THRESHOLD)
-        if bond_mode_active
-        else float(threshold)
+    if best_check_index is not None:
+        artwork_checks[best_check_index]["selected"] = True
+    selected_check = (
+        artwork_checks[best_check_index] if best_check_index is not None else None
     )
-    ce_passed = score >= effective_threshold
+    icon_checks: list[dict] = []
+    effective_threshold = best_threshold
+    full_gate_passed = True
+    if selected_check is not None and selected_check.get("variant") != "full":
+        selected_region_kind = selected_check.get("regionKind")
+        selected_full_score = next(
+            (
+                float(check["score"])
+                for check in artwork_checks
+                if check.get("variant") == "full"
+                and check.get("regionKind") == selected_region_kind
+            ),
+            0.0,
+        )
+        full_gate_passed = selected_full_score >= CE_OCCLUSION_SAFE_MIN_FULL_SCORE
+    ce_passed = score >= effective_threshold and full_gate_passed
 
     if mlb_required:
         icon_checks.append(
@@ -3973,6 +4075,7 @@ def _verify_support_ce(
         "passed": passed,
         "threshold": effective_threshold,
         "iconChecks": icon_checks,
+        "artworkChecks": artwork_checks,
     }
 
 

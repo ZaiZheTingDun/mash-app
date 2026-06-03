@@ -61,6 +61,19 @@ pub struct SupportCeIconCheck {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SupportCeArtworkCheck {
+    pub variant: String,
+    pub region_kind: String,
+    pub score: f64,
+    pub threshold: f64,
+    pub passed: bool,
+    pub selected: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SupportCeVerificationResult {
     pub score: f64,
     pub passed: bool,
@@ -79,6 +92,8 @@ pub struct SupportCeVerificationResult {
     pub error: Option<String>,
     #[serde(default)]
     pub icon_checks: Vec<SupportCeIconCheck>,
+    #[serde(default)]
+    pub artwork_checks: Vec<SupportCeArtworkCheck>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
