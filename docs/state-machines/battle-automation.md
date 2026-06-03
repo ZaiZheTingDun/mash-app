@@ -165,6 +165,16 @@ the operator should always see.
   overlay (`text_battle_result_equip_level_up`) and routes to the same
   `BattleResultExp` handler. It has elevated priority because the overlay
   leaves the battle HUD visible and can otherwise be classified as `Battle`.
+- `BattleResultLootEvent.detect`: detects the CN event rewards page that can
+  appear after the normal loot page (`text_battle_result_loot_event`) and
+  routes to the same `BattleResultLoot` handler, so the runner taps the
+  existing loot "Next" coordinate.
+- During the battle-result chain, an unrecognized frame (`Unknown`) can be a
+  transient popup covering the settlement page. If the last recognized screen
+  was a battle-result screen, the runner repeatedly taps
+  `BATTLE_RESULT_POPUP_SKIP` while waiting for detection to recover. The
+  coordinate intentionally matches the battle animation-skip position but uses
+  a separate constant so result-popup behavior can be tuned independently.
 
 ## Support OCR Names
 
