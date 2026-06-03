@@ -1202,8 +1202,16 @@ fn get_servants() -> &'static [ServantInfo] {
 pub struct CraftEssenceInfo {
     pub id: u32,
     pub name: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub name_aliases: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name_link: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct CraftEssenceTranslationFix {
+    id: u32,
+    name: String,
 }
 
 fn craft_essences_data() -> &'static [CraftEssenceInfo] {
@@ -1212,17 +1220,38 @@ fn craft_essences_data() -> &'static [CraftEssenceInfo] {
         let raw: Vec<serde_json::Value> =
             serde_json::from_str(include_str!("resources/craft_essences.json"))
                 .expect("invalid craft_essences.json");
+        let translation_fixes: HashMap<u32, String> = serde_json::from_str::<
+            Vec<CraftEssenceTranslationFix>,
+        >(include_str!(
+            "resources/craft_essence_translation_fixes.json"
+        ))
+        .expect("invalid craft_essence_translation_fixes.json")
+        .into_iter()
+        .map(|fix| (fix.id, fix.name))
+        .collect();
         raw.iter()
             .enumerate()
             .filter_map(|(idx, ce)| {
                 let result = (|| {
                     let id = ce.get("id")?.as_u64()? as u32;
-                    let name = ce.get("name")?.as_str()?.to_string();
+                    let raw_name = ce.get("name")?.as_str()?.to_string();
+                    let fixed_name = translation_fixes.get(&id);
+                    let name = fixed_name.cloned().unwrap_or_else(|| raw_name.clone());
+                    let name_aliases = if fixed_name.is_some() && raw_name != name {
+                        vec![raw_name]
+                    } else {
+                        Vec::new()
+                    };
                     let name_link = ce
                         .get("name_link")
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string());
-                    Some(CraftEssenceInfo { id, name, name_link })
+                    Some(CraftEssenceInfo {
+                        id,
+                        name,
+                        name_aliases,
+                        name_link,
+                    })
                 })();
                 if result.is_none() {
                     let id_hint = ce.get("id").and_then(|v| v.as_u64());
@@ -4501,6 +4530,21 @@ mod tests {
                 ce.id
             );
         }
+    }
+
+    #[test]
+    fn craft_essences_data_applies_translation_fixes_with_aliases() {
+        let ces = craft_essences_data();
+        let ce_2234 = ces.iter().find(|ce| ce.id == 2234).unwrap();
+        let ce_2236 = ces.iter().find(|ce| ce.id == 2236).unwrap();
+        let ce_2237 = ces.iter().find(|ce| ce.id == 2237).unwrap();
+
+        assert_eq!(ce_2234.name, "心愿之味");
+        assert_eq!(ce_2234.name_aliases, vec!["心意的滋味"]);
+        assert_eq!(ce_2236.name, "悠久的特洛伊");
+        assert!(ce_2236.name_aliases.is_empty());
+        assert_eq!(ce_2237.name, "去往大海");
+        assert_eq!(ce_2237.name_aliases, vec!["向着大海"]);
     }
 
     #[test]

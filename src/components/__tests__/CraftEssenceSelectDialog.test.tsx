@@ -60,6 +60,23 @@ describe("CraftEssenceSelectDialog", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("matches translation aliases while displaying the fixed CE name", async () => {
+    const user = userEvent.setup();
+    setup({
+      craftEssences: [
+        { id: 2234, name: "心愿之味", nameAliases: ["心意的滋味"] },
+        { id: 2237, name: "去往大海", nameAliases: ["向着大海"] },
+      ],
+    });
+
+    const search = screen.getByPlaceholderText("搜索礼装名称...");
+    await user.type(search, "心意的滋味");
+
+    expect(screen.getByText("心愿之味")).toBeInTheDocument();
+    expect(screen.queryByText("心意的滋味")).not.toBeInTheDocument();
+    expect(screen.queryByText("去往大海")).not.toBeInTheDocument();
+  });
+
   it("shows the empty-state message when no CE matches the query", async () => {
     const user = userEvent.setup();
     setup();

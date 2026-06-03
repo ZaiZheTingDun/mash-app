@@ -8,5 +8,6 @@
 export interface CraftEssence {
   id: number;
   name: string;
+  nameAliases?: string[];
   nameLink?: string;
 }

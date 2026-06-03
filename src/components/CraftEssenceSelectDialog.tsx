@@ -27,6 +27,12 @@ const OVERSCAN = 4;
 const VIEWPORT_H = 420;
 const NARROW_HINT_THRESHOLD = 200;
 
+function craftEssenceSearchText(ce: CraftEssence) {
+  return [ce.name, ...(ce.nameAliases ?? []), ce.nameLink ?? ""]
+    .join(" ")
+    .toLowerCase();
+}
+
 /**
  * Picker for craft essences. Modeled after `ServantSelectDialog` but
  * simpler: the bundled `craft_essences.json` only carries `id` + `name`
@@ -57,7 +63,7 @@ export function CraftEssenceSelectDialog({
   const filtered = useMemo(() => {
     if (!search.trim()) return craftEssences;
     const q = search.toLowerCase().trim();
-    return craftEssences.filter((ce) => ce.name.toLowerCase().includes(q));
+    return craftEssences.filter((ce) => craftEssenceSearchText(ce).includes(q));
   }, [craftEssences, search]);
 
   // Clamp at read-time rather than via a setState-in-effect (which the
