@@ -1647,8 +1647,6 @@ body,
 .battle-inline-face,
 .battle-inline-square {
   position: relative;
-  width: 36px;
-  height: 36px;
   border: 1px solid var(--gray-7);
   border-radius: var(--radius-2);
   background: var(--gray-1);
@@ -1659,11 +1657,23 @@ body,
   flex: 0 0 auto;
 }
 
-.battle-inline-face img {
+.battle-inline-face img,
+.battle-inline-square img,
+.battle-actor-icon img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.battle-actor-icon {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  color: inherit;
 }
 
 .battle-inline-square {
@@ -1818,8 +1828,6 @@ body,
 
 .battle-face-btn {
   position: relative;
-  width: 52px;
-  height: 52px;
   padding: 0;
   overflow: hidden;
   font-size: 13px;
@@ -1835,24 +1843,13 @@ body,
 
 .battle-support-badge {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  bottom: -1px; /* Overlap the border so the badge appears "attached" to the corner of the face button. */
+  right: -1px;
   z-index: 2;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 3px;
-  border: 1px solid rgba(255, 255, 255, 0.82);
-  border-radius: 999px;
-  background: var(--orange-9);
-  color: white;
-  display: inline-grid;
-  place-items: center;
   font-size: 9px;
-  font-weight: 800;
   line-height: 1;
   pointer-events: none;
   user-select: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
 }
 
 .battle-square-btn {

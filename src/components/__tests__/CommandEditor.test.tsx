@@ -110,6 +110,49 @@ describe("CommandEditor pagination", () => {
     });
   });
 
+  it("renders advanced equipment actions with a square actor icon", async () => {
+    const scene: AdvancedBattleScene = {
+      id: "advanced_1",
+      startupActions: [
+        {
+          type: "equipment",
+          id: "eq_1",
+          skill: "skill_1",
+          target: null,
+        },
+      ],
+      rules: [],
+    };
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [scene];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    const { container } = renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    expect(await screen.findByText("御主礼装 释放 技能 1")).toBeInTheDocument();
+    const summary = container.querySelector(".battle-action-summary");
+    const icon = summary?.firstElementChild;
+    expect(icon).toHaveClass("battle-inline-square");
+    expect(icon).toHaveAccessibleName("御主礼装");
+    expect(icon?.querySelector(".battle-support-badge")).toBeNull();
+  });
+
   it("configures grand servants from the advanced main output section", async () => {
     const user = userEvent.setup();
     const onGrandServantsChange = vi.fn();

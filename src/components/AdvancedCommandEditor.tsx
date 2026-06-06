@@ -4,10 +4,11 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   Cross2Icon,
-  PersonIcon,
   PlusIcon,
 } from "@radix-ui/react-icons";
 import { convertFileSrc, invoke } from "../tauri";
+import { BattleActorIcon } from "./BattleActorIcon";
+import { battleActorLabel, servantLabel } from "./battleActorLabels";
 import {
   deriveMembersAfterPreparationActions,
   partyMembersToServants,
@@ -131,10 +132,6 @@ function defaultCommandCard(slot: number): AdvancedCommandCardCondition {
     suit: "any",
     minCritChance: null,
   };
-}
-
-function servantLabel(index: number, servant: Servant | null): string {
-  return servant?.name_cn || `从者 ${index + 1}`;
 }
 
 function servantSlotIndex(source: string | null | undefined): number | null {
@@ -320,12 +317,14 @@ function FaceChip({
       disabled={disabled}
       onClick={onClick}
     >
-      {src ? <img src={src} alt="" draggable={false} /> : <span>{index + 1}</span>}
-      {isSupport && (
-        <span className="battle-support-badge advanced-support-badge" aria-hidden>
-          助
-        </span>
-      )}
+      <BattleActorIcon
+        kind="servant"
+        src={src}
+        label={servantLabel(index, servant)}
+        isSupport={isSupport}
+        size="button"
+        className="advanced-face-chip-icon"
+      />
     </button>
   );
 }
@@ -342,14 +341,13 @@ function AdvancedInlineFace({
   isSupport?: boolean;
 }) {
   return (
-    <span className="battle-inline-face" aria-label={servantLabel(index, servant)}>
-      {src ? <img src={src} alt="" draggable={false} /> : <PersonIcon width={18} height={18} />}
-      {isSupport && (
-        <span className="battle-support-badge" aria-hidden>
-          助
-        </span>
-      )}
-    </span>
+    <BattleActorIcon
+      kind="servant"
+      src={src}
+      label={servantLabel(index, servant)}
+      isSupport={isSupport}
+      size="inline"
+    />
   );
 }
 
@@ -549,10 +547,9 @@ function AdvancedPreparationActionSummary({
     sourceText = servantLabel(source, servant);
     actionText = `释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`;
   } else {
+    const kind = action.type === "equipment" ? "equipment" : "commandSpell";
     sourceFace = (
-      <span className="battle-inline-square">
-        {action.type === "equipment" ? "御主" : "令咒"}
-      </span>
+      <BattleActorIcon kind={kind} label={battleActorLabel({ kind })} size="inline" />
     );
     sourceText = action.type === "equipment" ? "御主礼装" : "令咒";
     actionText =
@@ -648,14 +645,14 @@ function AdvancedCommandCardButton({
       onClick={onClick}
     >
       {!unset && servantIndex != null && (
-        <span className="advanced-command-card-face">
-          {faceSrc ? <img src={faceSrc} alt="" draggable={false} /> : <span>{servantIndex + 1}</span>}
-          {member?.isSupport && (
-            <span className="battle-support-badge advanced-card-support-badge" aria-hidden>
-              助
-            </span>
-          )}
-        </span>
+        <BattleActorIcon
+          kind="servant"
+          src={faceSrc}
+          label={servantLabel(servantIndex, servant)}
+          isSupport={member?.isSupport ?? false}
+          size="button"
+          className="advanced-command-card-face"
+        />
       )}
     </button>
   );

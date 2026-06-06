@@ -564,6 +564,32 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(children[7]).toHaveTextContent("丁");
   });
 
+  it("renders command spell actions with a square actor icon", () => {
+    const { container } = renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          preparationActions: [
+            {
+              type: "commandSpell",
+              id: "cs_1",
+              spell: "restore",
+              target: null,
+            },
+          ],
+        })}
+        partyServants={PARTY}
+        onChange={vi.fn()}
+      />
+    );
+
+    const summary = container.querySelector(".battle-action-summary");
+    const children = Array.from(summary?.children ?? []);
+    expect(children[0]).toHaveClass("battle-inline-square");
+    expect(children[0]).toHaveAccessibleName("令咒");
+    expect(children[0].querySelector(".battle-support-badge")).toBeNull();
+    expect(children[1]).toHaveTextContent("令咒 灵基修复");
+  });
+
   it("cancels an in-progress preparation action from the left-side delete control", async () => {
     const user = userEvent.setup();
     renderWithTheme(

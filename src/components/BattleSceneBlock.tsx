@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
-import { Text } from "@radix-ui/themes";
+import { Button, Text } from "@radix-ui/themes";
 import { invoke, convertFileSrc } from "../tauri";
 import {
   Cross2Icon,
-  PersonIcon,
   PlusIcon,
 } from "@radix-ui/react-icons";
 import orderChangeIcon from "../../src-tauri/resources/images/icon_order_change.png";
+import { BattleActorIcon } from "./BattleActorIcon";
+import { battleActorLabel, servantLabel } from "./battleActorLabels";
 import {
   deriveMembersAfterAttackCards,
   deriveMembersAfterPreparationActions,
@@ -42,11 +43,11 @@ type PrepDraft =
   | { step: "option"; source: PrepSource }
   | { step: "target"; source: PrepSource; option: string }
   | {
-      step: "orderChange";
-      source: "equipment";
-      option: string;
-      front: PartySlot | null;
-    };
+    step: "orderChange";
+    source: "equipment";
+    option: string;
+    front: PartySlot | null;
+  };
 type AttackDraft =
   | { step: "source"; targetIndex: number | null }
   | { step: "option"; source: AttackSource; targetIndex: number | null };
@@ -112,10 +113,6 @@ function emptyLegacyFields(scene: BattleScene): BattleScene {
     equipmentActions: [],
     commandSpellActions: [],
   };
-}
-
-function servantLabel(index: number, servant: Servant | null): string {
-  return servant?.name_cn || `从者 ${index + 1}`;
 }
 
 function servantSlotIndex(source: string | null | undefined): number | null {
@@ -206,24 +203,16 @@ function ServantFaceButton({
 }) {
   const label = servantLabel(index, servant);
   return (
-    <button
+    <Button
       type="button"
       className={`battle-face-btn${selected ? " selected" : ""}`}
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
+      size="4"
     >
-      {faceSrc ? (
-        <img src={faceSrc} alt="" draggable={false} />
-      ) : (
-        <PersonIcon width={24} height={24} aria-hidden />
-      )}
-      {isSupport && (
-        <span className="battle-support-badge" aria-hidden>
-          助
-        </span>
-      )}
-    </button>
+      <BattleActorIcon kind="servant" src={faceSrc} label={label} isSupport={isSupport} size="button" />
+    </Button>
   );
 }
 
@@ -239,18 +228,13 @@ function ServantInlineFace({
   isSupport?: boolean;
 }) {
   return (
-    <span className="battle-inline-face" aria-label={servantLabel(index, servant)}>
-      {faceSrc ? (
-        <img src={faceSrc} alt="" draggable={false} />
-      ) : (
-        <PersonIcon width={18} height={18} aria-hidden />
-      )}
-      {isSupport && (
-        <span className="battle-support-badge" aria-hidden>
-          助
-        </span>
-      )}
-    </span>
+    <BattleActorIcon
+      kind="servant"
+      src={faceSrc}
+      label={servantLabel(index, servant)}
+      isSupport={isSupport}
+      size="inline"
+    />
   );
 }
 
@@ -268,9 +252,9 @@ function PreparationActionSummary({
   const orderChangeSlots =
     action.type === "equipment" && action.orderChange
       ? {
-          front: servantSlotIndex(action.orderChange.front),
-          back: servantSlotIndex(action.orderChange.back),
-        }
+        front: servantSlotIndex(action.orderChange.front),
+        back: servantSlotIndex(action.orderChange.back),
+      }
       : null;
   let sourceFace: React.ReactNode;
   let sourceText: string;
@@ -291,10 +275,9 @@ function PreparationActionSummary({
     sourceText = servantLabel(src, servant);
     actionText = `释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`;
   } else {
+    const kind = action.type === "equipment" ? "equipment" : "commandSpell";
     sourceFace = (
-      <span className="battle-inline-square">
-        {action.type === "equipment" ? "御主" : "令咒"}
-      </span>
+      <BattleActorIcon kind={kind} label={battleActorLabel({ kind })} size="inline" />
     );
     sourceText = action.type === "equipment" ? "御主礼装" : "令咒";
     actionText =
@@ -345,22 +328,22 @@ function PreparationActionSummary({
         </>
       ) : (
         targetIndex != null && (
-        <>
-          <span className="battle-action-to">to</span>
-          <ServantInlineFace
-            servant={partyServants[targetIndex] ?? null}
-            index={targetIndex}
-            faceSrc={
-              partyServants[targetIndex]
-                ? faces[partyServants[targetIndex]!.variantKey]
-                : null
-            }
-            isSupport={partyMembers[targetIndex]?.isSupport ?? false}
-          />
-          <Text size="2" weight="medium" className="battle-action-name">
-            {servantLabel(targetIndex, partyServants[targetIndex] ?? null)}
-          </Text>
-        </>
+          <>
+            <span className="battle-action-to">to</span>
+            <ServantInlineFace
+              servant={partyServants[targetIndex] ?? null}
+              index={targetIndex}
+              faceSrc={
+                partyServants[targetIndex]
+                  ? faces[partyServants[targetIndex]!.variantKey]
+                  : null
+              }
+              isSupport={partyMembers[targetIndex]?.isSupport ?? false}
+            />
+            <Text size="2" weight="medium" className="battle-action-name">
+              {servantLabel(targetIndex, partyServants[targetIndex] ?? null)}
+            </Text>
+          </>
         )
       )}
     </span>
@@ -806,37 +789,37 @@ export function BattleSceneBlock({
                 <div className="battle-option-group">
                   {prepDraft.source === "commandSpell"
                     ? Object.entries(COMMAND_SPELL_LABELS).map(([value, label]) => (
-                        <button
-                          type="button"
-                          key={value}
-                          className="battle-option-btn"
-                          onClick={() =>
-                            setPrepDraft({
-                              step: "target",
-                              source: prepDraft.source,
-                              option: value,
-                            })
-                          }
-                        >
-                          {label}
-                        </button>
-                      ))
+                      <button
+                        type="button"
+                        key={value}
+                        className="battle-option-btn"
+                        onClick={() =>
+                          setPrepDraft({
+                            step: "target",
+                            source: prepDraft.source,
+                            option: value,
+                          })
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))
                     : SKILLS.map((skill) => (
-                        <button
-                          type="button"
-                          key={skill}
-                          className="battle-option-btn"
-                          onClick={() =>
-                            setPrepDraft({
-                              step: "target",
-                              source: prepDraft.source,
-                              option: skill,
-                            })
-                          }
-                        >
-                          {SKILL_LABELS[skill]}
-                        </button>
-                      ))}
+                      <button
+                        type="button"
+                        key={skill}
+                        className="battle-option-btn"
+                        onClick={() =>
+                          setPrepDraft({
+                            step: "target",
+                            source: prepDraft.source,
+                            option: skill,
+                          })
+                        }
+                      >
+                        {SKILL_LABELS[skill]}
+                      </button>
+                    ))}
                 </div>
               </div>
             ) : prepDraft.step === "target" ? (
