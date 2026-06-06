@@ -4,6 +4,11 @@ import type { BattleScene, PreparationAction } from "../types/command";
 import type { Servant } from "../types/servant";
 import changeOrderRulesJson from "../../src-tauri/src/resources/change_order_servants.json";
 
+export interface PartyMember {
+  servant: Servant | null;
+  isSupport: boolean;
+}
+
 type ChangeOrderRule = {
   servantId: number;
   trigger:
@@ -18,6 +23,39 @@ type ChangeOrderRule = {
 
 const CHANGE_ORDER_RULES = changeOrderRulesJson as ChangeOrderRule[];
 
+export function toPartyMembers(lineup: (Servant | null)[]): PartyMember[] {
+  return lineup.map((servant) => ({ servant, isSupport: false }));
+}
+
+export function partyMembersToServants(members: PartyMember[]): (Servant | null)[] {
+  return members.map((member) => member.servant);
+}
+
+/**
+ * Derive the full party from the team-builder slots.
+ *
+ * The display order of `slots` is authoritative, including the support
+ * slot. The returned `PartyMember` keeps the support-slot identity with
+ * that party entry so UI badges can distinguish a borrowed servant from
+ * an owned copy of the same servant.
+ */
+export function derivePartyMembers(
+  slots: SlotItem[],
+  activeProject: Project | null,
+  servants: Servant[]
+): PartyMember[] {
+  const supportPinned =
+    activeProject?.supportServantId != null
+      ? (servants.find((s) => s.variantKey === activeProject.supportServantVariantKey) ??
+        servants.find((s) => s.id === activeProject.supportServantId) ??
+        null)
+      : null;
+  return slots.map((slot) => ({
+    servant: slot.type === "support" ? supportPinned : slot.servant,
+    isSupport: slot.type === "support",
+  }));
+}
+
 /**
  * Derive the front-line party (positions 1-3) from the team-builder slots.
  *
@@ -27,11 +65,6 @@ const CHANGE_ORDER_RULES = changeOrderRulesJson as ChangeOrderRule[];
  * contributes the project's pinned support servant
  * (`Project.supportServantId`); the per-slot `servantId` for support is
  * always null and must not be read here.
- *
- * The previous implementation filtered the support slot out before
- * slicing, which silently shifted later slots forward and made the
- * command editor label position 3 with the 4th servant whenever the user
- * had dragged support to position 3.
  */
 export function derivePartyServants(
   slots: SlotItem[],
@@ -46,13 +79,7 @@ export function derivePartyLineup(
   activeProject: Project | null,
   servants: Servant[]
 ): (Servant | null)[] {
-  const supportPinned =
-    activeProject?.supportServantId != null
-      ? (servants.find((s) => s.variantKey === activeProject.supportServantVariantKey) ??
-        servants.find((s) => s.id === activeProject.supportServantId) ??
-        null)
-      : null;
-  return slots.map((s) => (s.type === "support" ? supportPinned : s.servant));
+  return partyMembersToServants(derivePartyMembers(slots, activeProject, servants));
 }
 
 function parseServantPosition(value: string | null | undefined): number | null {
@@ -61,55 +88,60 @@ function parseServantPosition(value: string | null | undefined): number | null {
   return Number(match[1]) - 1;
 }
 
-function compactBackline(lineup: (Servant | null)[]) {
-  const backline = lineup.slice(3).filter((servant): servant is Servant =>
-    Boolean(servant)
-  );
-  for (let i = 3; i < lineup.length; i += 1) {
-    lineup[i] = backline[i - 3] ?? null;
+function compactBackline(members: PartyMember[]) {
+  const backline = members
+    .slice(3)
+    .filter((member) => Boolean(member.servant));
+  for (let i = 3; i < members.length; i += 1) {
+    members[i] = backline[i - 3] ?? { servant: null, isSupport: false };
   }
 }
 
-function removeAt(lineup: (Servant | null)[], index: number) {
-  if (index < 0 || index >= 3 || !lineup[index]) return;
-  const replacementIndex = lineup.findIndex((servant, i) => i >= 3 && servant);
-  lineup[index] = replacementIndex === -1 ? null : lineup[replacementIndex];
-  if (replacementIndex !== -1) lineup[replacementIndex] = null;
-  compactBackline(lineup);
+function removeAt(members: PartyMember[], index: number) {
+  if (index < 0 || index >= 3 || !members[index]?.servant) return;
+  const replacementIndex = members.findIndex((member, i) => i >= 3 && member.servant);
+  members[index] =
+    replacementIndex === -1
+      ? { servant: null, isSupport: false }
+      : { ...members[replacementIndex] };
+  if (replacementIndex !== -1) {
+    members[replacementIndex] = { servant: null, isSupport: false };
+  }
+  compactBackline(members);
 }
 
-function withdrawToBack(lineup: (Servant | null)[], index: number) {
+function withdrawToBack(members: PartyMember[], index: number) {
   if (index < 0 || index >= 3) return;
-  const servant = lineup[index];
-  if (!servant) return;
-  compactBackline(lineup);
-  const replacementIndex = lineup.findIndex((candidate, i) => i >= 3 && candidate);
+  const member = members[index];
+  if (!member?.servant) return;
+  compactBackline(members);
+  const replacementIndex = members.findIndex((candidate, i) => i >= 3 && candidate.servant);
   if (replacementIndex === -1) return;
-  lineup[index] = lineup[replacementIndex];
-  lineup[replacementIndex] = servant;
+  members[index] = { ...members[replacementIndex] };
+  members[replacementIndex] = { ...member };
 }
 
 function applyRule(
-  lineup: (Servant | null)[],
+  members: PartyMember[],
   sourceIndex: number,
   rule: ChangeOrderRule
 ) {
   if (rule.effect.type === "removeSelf") {
-    removeAt(lineup, sourceIndex);
+    removeAt(members, sourceIndex);
     return;
   }
 
   if (rule.effect.type === "removeFirstAlly") {
-    const targetIndex = [0, 1, 2].find((i) => i !== sourceIndex && lineup[i]);
-    if (targetIndex != null) removeAt(lineup, targetIndex);
+    const targetIndex = [0, 1, 2].find((i) => i !== sourceIndex && members[i]?.servant);
+    if (targetIndex != null) removeAt(members, targetIndex);
     return;
   }
 
-  withdrawToBack(lineup, sourceIndex);
+  withdrawToBack(members, sourceIndex);
 }
 
 function applyPreparationAction(
-  lineup: (Servant | null)[],
+  members: PartyMember[],
   action: PreparationAction,
   timing: ChangeOrderRule["timing"] = "immediate"
 ) {
@@ -123,12 +155,12 @@ function applyPreparationAction(
       backIndex != null &&
       frontIndex < 3 &&
       backIndex >= 3 &&
-      lineup[frontIndex] &&
-      lineup[backIndex]
+      members[frontIndex]?.servant &&
+      members[backIndex]?.servant
     ) {
-      [lineup[frontIndex], lineup[backIndex]] = [
-        lineup[backIndex] ?? null,
-        lineup[frontIndex] ?? null,
+      [members[frontIndex], members[backIndex]] = [
+        { ...members[backIndex] },
+        { ...members[frontIndex] },
       ];
     }
     return;
@@ -137,7 +169,7 @@ function applyPreparationAction(
   if (action.type !== "servant") return;
   const sourceIndex = parseServantPosition(action.servant);
   if (sourceIndex == null || !action.skill) return;
-  const servant = lineup[sourceIndex];
+  const servant = members[sourceIndex]?.servant;
   if (!servant) return;
   const rule = CHANGE_ORDER_RULES.find(
     (r) =>
@@ -146,17 +178,17 @@ function applyPreparationAction(
       r.trigger.skill === action.skill &&
       (r.timing ?? "immediate") === timing
   );
-  if (rule) applyRule(lineup, sourceIndex, rule);
+  if (rule) applyRule(members, sourceIndex, rule);
 }
 
 function applyAttackCard(
-  lineup: (Servant | null)[],
+  members: PartyMember[],
   card: string | null | undefined,
   npUseCounts: Map<number, number>
 ) {
   const sourceIndex = parseServantPosition(card);
   if (sourceIndex == null || !card?.endsWith("_np")) return;
-  const servant = lineup[sourceIndex];
+  const servant = members[sourceIndex]?.servant;
   if (!servant) return;
   const nextCount = (npUseCounts.get(servant.id) ?? 0) + 1;
   npUseCounts.set(servant.id, nextCount);
@@ -169,30 +201,48 @@ function applyAttackCard(
       (r.trigger.activationUseCount == null ||
         r.trigger.activationUseCount === nextCount)
   );
-  if (rule) applyRule(lineup, sourceIndex, rule);
+  if (rule) applyRule(members, sourceIndex, rule);
+}
+
+export function deriveMembersAfterPreparationActions(
+  initialMembers: PartyMember[],
+  actions: PreparationAction[]
+): PartyMember[] {
+  const members = initialMembers.map((member) => ({ ...member }));
+  for (const action of actions) {
+    applyPreparationAction(members, action);
+  }
+  return members;
+}
+
+export function deriveMembersAfterAttackCards(
+  initialMembers: PartyMember[],
+  cards: ReadonlyArray<{ card: string | null | undefined }>
+): PartyMember[] {
+  const members = initialMembers.map((member) => ({ ...member }));
+  const npUseCounts = new Map<number, number>();
+  for (const card of cards) {
+    applyAttackCard(members, card.card, npUseCounts);
+  }
+  return members;
 }
 
 export function deriveLineupAfterPreparationActions(
   initialLineup: (Servant | null)[],
   actions: PreparationAction[]
 ): (Servant | null)[] {
-  const lineup = [...initialLineup];
-  for (const action of actions) {
-    applyPreparationAction(lineup, action);
-  }
-  return lineup;
+  return partyMembersToServants(
+    deriveMembersAfterPreparationActions(toPartyMembers(initialLineup), actions)
+  );
 }
 
 export function deriveLineupAfterAttackCards(
   initialLineup: (Servant | null)[],
   cards: ReadonlyArray<{ card: string | null | undefined }>
 ): (Servant | null)[] {
-  const lineup = [...initialLineup];
-  const npUseCounts = new Map<number, number>();
-  for (const card of cards) {
-    applyAttackCard(lineup, card.card, npUseCounts);
-  }
-  return lineup;
+  return partyMembersToServants(
+    deriveMembersAfterAttackCards(toPartyMembers(initialLineup), cards)
+  );
 }
 
 export function deriveScenePartyServants(
@@ -208,25 +258,34 @@ export function deriveScenePartyLineups(
   initialLineup: (Servant | null)[],
   scenes: BattleScene[]
 ): (Servant | null)[][] {
-  const lineup = [...initialLineup];
-  const sceneLineups: (Servant | null)[][] = [];
+  return deriveScenePartyMembers(toPartyMembers(initialLineup), scenes).map(
+    partyMembersToServants
+  );
+}
+
+export function deriveScenePartyMembers(
+  initialMembers: PartyMember[],
+  scenes: BattleScene[]
+): PartyMember[][] {
+  const members = initialMembers.map((member) => ({ ...member }));
+  const sceneMembers: PartyMember[][] = [];
   const npUseCounts = new Map<number, number>();
 
   for (const scene of scenes) {
-    sceneLineups.push([...lineup]);
+    sceneMembers.push(members.map((member) => ({ ...member })));
 
     for (const action of scene.preparationActions ?? scene.servantActions) {
-      applyPreparationAction(lineup, action, "immediate");
+      applyPreparationAction(members, action, "immediate");
     }
 
     for (const card of scene.attackPriority) {
-      applyAttackCard(lineup, card.card, npUseCounts);
+      applyAttackCard(members, card.card, npUseCounts);
     }
 
     for (const action of scene.preparationActions ?? scene.servantActions) {
-      applyPreparationAction(lineup, action, "endOfTurn");
+      applyPreparationAction(members, action, "endOfTurn");
     }
   }
 
-  return sceneLineups;
+  return sceneMembers;
 }

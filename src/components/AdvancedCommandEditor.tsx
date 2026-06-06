@@ -8,7 +8,12 @@ import {
   PlusIcon,
 } from "@radix-ui/react-icons";
 import { convertFileSrc, invoke } from "../tauri";
-import { deriveLineupAfterPreparationActions } from "./partyServants";
+import {
+  deriveMembersAfterPreparationActions,
+  partyMembersToServants,
+  toPartyMembers,
+  type PartyMember,
+} from "./partyServants";
 import type {
   AdvancedBattleScene,
   AdvancedCommandCardCondition,
@@ -34,6 +39,7 @@ import commandBgQuick from "../../src-tauri/resources/images/command_bg/command_
 interface AdvancedCommandEditorProps {
   projectId: string | null;
   partyLineup: (Servant | null)[];
+  partyMembers?: PartyMember[];
   grandServants?: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
   grandCardPriorityEnabled?: boolean;
@@ -294,6 +300,7 @@ function FaceChip({
   active = true,
   selected = false,
   disabled = false,
+  isSupport = false,
   onClick,
 }: {
   servant: Servant | null;
@@ -302,6 +309,7 @@ function FaceChip({
   active?: boolean;
   selected?: boolean;
   disabled?: boolean;
+  isSupport?: boolean;
   onClick?: () => void;
 }) {
   return (
@@ -313,6 +321,11 @@ function FaceChip({
       onClick={onClick}
     >
       {src ? <img src={src} alt="" draggable={false} /> : <span>{index + 1}</span>}
+      {isSupport && (
+        <span className="battle-support-badge advanced-support-badge" aria-hidden>
+          助
+        </span>
+      )}
     </button>
   );
 }
@@ -321,30 +334,38 @@ function AdvancedInlineFace({
   servant,
   index,
   src,
+  isSupport = false,
 }: {
   servant: Servant | null;
   index: number;
   src: string | null | undefined;
+  isSupport?: boolean;
 }) {
   return (
     <span className="battle-inline-face" aria-label={servantLabel(index, servant)}>
       {src ? <img src={src} alt="" draggable={false} /> : <PersonIcon width={18} height={18} />}
+      {isSupport && (
+        <span className="battle-support-badge" aria-hidden>
+          助
+        </span>
+      )}
     </span>
   );
 }
 
 function GrandOutputSettings({
-  partyLineup,
+  partyMembers,
   faces,
   grandServants,
   onChange,
 }: {
-  partyLineup: (Servant | null)[];
+  partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   grandServants: GrandServantConfig[];
   onChange?: (grandServants: GrandServantConfig[]) => void;
 }) {
   const [settingsIndex, setSettingsIndex] = useState<number | null>(null);
+  const partyLineup = partyMembersToServants(partyMembers);
   const normalized = normalizeGrandServants(grandServants);
   const selectedSlots = new Set(normalized.map((item) => item.slotIndex));
   const settings = settingsIndex == null ? null : normalized[settingsIndex] ?? null;
@@ -419,6 +440,7 @@ function GrandOutputSettings({
                 src={servant ? faces[servant.variantKey] : null}
                 selected={selectedSlots.has(index)}
                 disabled={servant == null || selectedSlots.has(index) || normalized.length >= 2}
+                isSupport={partyMembers[index]?.isSupport ?? false}
                 onClick={() => addGrandServant(index)}
               />
             ))}
@@ -491,13 +513,14 @@ function GrandOutputSettings({
 
 function AdvancedPreparationActionSummary({
   action,
-  partyLineup,
+  partyMembers,
   faces,
 }: {
   action: PreparationAction;
-  partyLineup: (Servant | null)[];
+  partyMembers: PartyMember[];
   faces: Record<string, string | null>;
 }) {
+  const partyLineup = partyMembersToServants(partyMembers);
   const targetIndex = servantSlotIndex(action.target);
   const orderChangeSlots =
     action.type === "equipment" && action.orderChange
@@ -513,12 +536,14 @@ function AdvancedPreparationActionSummary({
 
   if (action.type === "servant") {
     const source = servantSlotIndex(action.servant) ?? 0;
-    const servant = partyLineup[source] ?? null;
+    const member = partyMembers[source] ?? { servant: null, isSupport: false };
+    const servant = member.servant;
     sourceFace = (
       <AdvancedInlineFace
         servant={servant}
         index={source}
         src={servant ? faces[servant.variantKey] : null}
+        isSupport={member.isSupport}
       />
     );
     sourceText = servantLabel(source, servant);
@@ -553,6 +578,7 @@ function AdvancedPreparationActionSummary({
                 ? faces[partyLineup[orderChangeSlots.front]!.variantKey]
                 : null
             }
+            isSupport={partyMembers[orderChangeSlots.front]?.isSupport ?? false}
           />
           <Text size="2" weight="medium" className="battle-action-name">
             {servantLabel(orderChangeSlots.front, partyLineup[orderChangeSlots.front] ?? null)}
@@ -566,6 +592,7 @@ function AdvancedPreparationActionSummary({
                 ? faces[partyLineup[orderChangeSlots.back]!.variantKey]
                 : null
             }
+            isSupport={partyMembers[orderChangeSlots.back]?.isSupport ?? false}
           />
           <Text size="2" weight="medium" className="battle-action-name">
             {servantLabel(orderChangeSlots.back, partyLineup[orderChangeSlots.back] ?? null)}
@@ -579,6 +606,7 @@ function AdvancedPreparationActionSummary({
               servant={partyLineup[targetIndex] ?? null}
               index={targetIndex}
               src={partyLineup[targetIndex] ? faces[partyLineup[targetIndex]!.variantKey] : null}
+              isSupport={partyMembers[targetIndex]?.isSupport ?? false}
             />
             <Text size="2" weight="medium" className="battle-action-name">
               {servantLabel(targetIndex, partyLineup[targetIndex] ?? null)}
@@ -592,17 +620,18 @@ function AdvancedPreparationActionSummary({
 
 function AdvancedCommandCardButton({
   card,
-  partyLineup,
+  partyMembers,
   faces,
   onClick,
 }: {
   card: AdvancedCommandCardCondition;
-  partyLineup: (Servant | null)[];
+  partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   onClick: () => void;
 }) {
   const servantIndex = servantSlotIndex(card.servant);
-  const servant = servantIndex == null ? null : partyLineup[servantIndex] ?? null;
+  const member = servantIndex == null ? null : partyMembers[servantIndex] ?? null;
+  const servant = member?.servant ?? null;
   const faceSrc = servant ? faces[servant.variantKey] : null;
   const unset = card.servant === "any" && card.suit === "any";
   const grayscale = card.suit === "any";
@@ -621,6 +650,11 @@ function AdvancedCommandCardButton({
       {!unset && servantIndex != null && (
         <span className="advanced-command-card-face">
           {faceSrc ? <img src={faceSrc} alt="" draggable={false} /> : <span>{servantIndex + 1}</span>}
+          {member?.isSupport && (
+            <span className="battle-support-badge advanced-card-support-badge" aria-hidden>
+              助
+            </span>
+          )}
         </span>
       )}
     </button>
@@ -709,7 +743,7 @@ function GrandCardStrategyPanel({
 
 function AdvancedStrategyEditor({
   scene,
-  partyLineup,
+  partyMembers,
   faces,
   grandServants,
   grandCardStrategy,
@@ -719,7 +753,7 @@ function AdvancedStrategyEditor({
   onChange,
 }: {
   scene: AdvancedBattleScene;
-  partyLineup: (Servant | null)[];
+  partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   grandServants: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
@@ -731,6 +765,7 @@ function AdvancedStrategyEditor({
   const [editingCardSlot, setEditingCardSlot] = useState<number | null>(null);
   const [controlDraft, setControlDraft] = useState<PrepDraft | null>(null);
   const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
+  const partyLineup = useMemo(() => partyMembersToServants(partyMembers), [partyMembers]);
   const grandAutoOrderChange = scene.grandAutoOrderChange ?? null;
   const mainGrandSlot = mainGrandBackSlot(grandServants);
   const mainGrandServant = mainGrandSlot == null ? null : partyLineup[mainGrandSlot] ?? null;
@@ -745,30 +780,30 @@ function AdvancedStrategyEditor({
   const controlActions = scene.controlActions ?? EMPTY_STARTUP_ACTIONS;
   const startupActions = scene.startupActions ?? EMPTY_STARTUP_ACTIONS;
   const controlActionLineups = useMemo(() => {
-    const lineups: (Servant | null)[][] = [];
-    let lineup = partyLineup;
+    const lineups: PartyMember[][] = [];
+    let lineup = partyMembers;
     for (const action of controlActions) {
       lineups.push(lineup);
-      lineup = deriveLineupAfterPreparationActions(lineup, [action]);
+      lineup = deriveMembersAfterPreparationActions(lineup, [action]);
     }
     return lineups;
-  }, [partyLineup, controlActions]);
-  const postControlLineup = useMemo(
-    () => deriveLineupAfterPreparationActions(partyLineup, controlActions),
-    [partyLineup, controlActions]
+  }, [partyMembers, controlActions]);
+  const postControlMembers = useMemo(
+    () => deriveMembersAfterPreparationActions(partyMembers, controlActions),
+    [partyMembers, controlActions]
   );
   const startupActionLineups = useMemo(() => {
-    const lineups: (Servant | null)[][] = [];
-    let lineup = postControlLineup;
+    const lineups: PartyMember[][] = [];
+    let lineup = postControlMembers;
     for (const action of startupActions) {
       lineups.push(lineup);
-      lineup = deriveLineupAfterPreparationActions(lineup, [action]);
+      lineup = deriveMembersAfterPreparationActions(lineup, [action]);
     }
     return lineups;
-  }, [postControlLineup, startupActions]);
-  const currentPartyLineup = useMemo(
-    () => deriveLineupAfterPreparationActions(postControlLineup, startupActions),
-    [postControlLineup, startupActions]
+  }, [postControlMembers, startupActions]);
+  const currentPartyMembers = useMemo(
+    () => deriveMembersAfterPreparationActions(postControlMembers, startupActions),
+    [postControlMembers, startupActions]
   );
   const editingCard =
     editingCardSlot == null
@@ -891,7 +926,7 @@ function AdvancedStrategyEditor({
         <div className="advanced-main-output-grid">
           <span className="advanced-delete-spacer" aria-hidden />
           <GrandOutputSettings
-            partyLineup={partyLineup}
+            partyMembers={partyMembers}
             faces={faces}
             grandServants={grandServants}
             onChange={onGrandServantsChange}
@@ -947,7 +982,7 @@ function AdvancedStrategyEditor({
                   <AdvancedCommandCardButton
                     key={card.slot}
                     card={card}
-                    partyLineup={partyLineup}
+                    partyMembers={partyMembers}
                     faces={faces}
                     onClick={() => setEditingCardSlot(card.slot)}
                   />
@@ -982,7 +1017,7 @@ function AdvancedStrategyEditor({
               </button>
               <AdvancedPreparationActionSummary
                 action={action}
-                partyLineup={controlActionLineups[index] ?? partyLineup}
+                partyMembers={controlActionLineups[index] ?? partyMembers}
                 faces={faces}
               />
             </div>
@@ -1004,22 +1039,26 @@ function AdvancedStrategyEditor({
               <span className="advanced-delete-spacer" aria-hidden />
               {controlDraft.step === "source" ? (
                 <>
-                  {deriveLineupAfterPreparationActions(partyLineup, controlActions)
+                  {postControlMembers
                     .slice(0, 3)
-                    .map((servant, index) => (
-                      <FaceChip
-                        key={index}
-                        servant={servant}
-                        index={index}
-                        src={servant ? faces[servant.variantKey] : null}
-                        onClick={() =>
-                          setControlDraft({
-                            step: "option",
-                            source: `servant_${index + 1}` as FrontServant,
-                          })
-                        }
-                      />
-                    ))}
+                    .map((member, index) => {
+                      const servant = member.servant;
+                      return (
+                        <FaceChip
+                          key={index}
+                          servant={servant}
+                          index={index}
+                          src={servant ? faces[servant.variantKey] : null}
+                          isSupport={member.isSupport}
+                          onClick={() =>
+                            setControlDraft({
+                              step: "option",
+                              source: `servant_${index + 1}` as FrontServant,
+                            })
+                          }
+                        />
+                      );
+                    })}
                   <button type="button" className="battle-option-btn" onClick={() => setControlDraft({ step: "option", source: "equipment" })}>
                     御主礼装
                   </button>
@@ -1056,17 +1095,21 @@ function AdvancedStrategyEditor({
                   <button type="button" className="battle-option-btn" onClick={() => finishControlAction(controlDraft, null)}>
                     无目标
                   </button>
-                  {deriveLineupAfterPreparationActions(partyLineup, controlActions)
+                  {postControlMembers
                     .slice(0, 3)
-                    .map((servant, index) => (
-                      <FaceChip
-                        key={index}
-                        servant={servant}
-                        index={index}
-                        src={servant ? faces[servant.variantKey] : null}
-                        onClick={() => finishControlAction(controlDraft, `servant_${index + 1}`)}
-                      />
-                    ))}
+                    .map((member, index) => {
+                      const servant = member.servant;
+                      return (
+                        <FaceChip
+                          key={index}
+                          servant={servant}
+                          index={index}
+                          src={servant ? faces[servant.variantKey] : null}
+                          isSupport={member.isSupport}
+                          onClick={() => finishControlAction(controlDraft, `servant_${index + 1}`)}
+                        />
+                      );
+                    })}
                   {controlDraft.source === "equipment" && (
                     <>
                       <span className="battle-choice-separator" aria-hidden />
@@ -1092,8 +1135,9 @@ function AdvancedStrategyEditor({
                 <>
                   {Array.from(
                     { length: 6 },
-                    (_, index) => deriveLineupAfterPreparationActions(partyLineup, controlActions)[index] ?? null
-                  ).map((servant, index) => {
+                    (_, index) => postControlMembers[index] ?? { servant: null, isSupport: false }
+                  ).map((member, index) => {
+                    const servant = member.servant;
                     const slot = `servant_${index + 1}` as PartySlot;
                     const needsFront = controlDraft.front == null;
                     const selectable = Boolean(servant) && (needsFront ? index < 3 : index >= 3);
@@ -1104,6 +1148,7 @@ function AdvancedStrategyEditor({
                         index={index}
                         src={servant ? faces[servant.variantKey] : null}
                         active={selectable || controlDraft.front === slot}
+                        isSupport={member.isSupport}
                         onClick={() => {
                           if (!selectable) return;
                           if (needsFront) {
@@ -1140,7 +1185,7 @@ function AdvancedStrategyEditor({
               </button>
               <AdvancedPreparationActionSummary
                 action={action}
-                partyLineup={startupActionLineups[index] ?? partyLineup}
+                partyMembers={startupActionLineups[index] ?? partyMembers}
                 faces={faces}
               />
             </div>
@@ -1163,13 +1208,15 @@ function AdvancedStrategyEditor({
               {prepDraft.step === "source" ? (
                 <>
                   {startupSelectableSlots.map((index) => {
-                    const servant = currentPartyLineup[index] ?? null;
+                    const member = currentPartyMembers[index] ?? { servant: null, isSupport: false };
+                    const servant = member.servant;
                     return (
                       <FaceChip
                         key={index}
                         servant={servant}
                         index={index}
                         src={servant ? faces[servant.variantKey] : null}
+                        isSupport={member.isSupport}
                         onClick={() =>
                           setPrepDraft({
                             step: "option",
@@ -1216,13 +1263,15 @@ function AdvancedStrategyEditor({
                     无目标
                   </button>
                   {startupSelectableSlots.map((index) => {
-                    const servant = currentPartyLineup[index] ?? null;
+                    const member = currentPartyMembers[index] ?? { servant: null, isSupport: false };
+                    const servant = member.servant;
                     return (
                       <FaceChip
                         key={index}
                         servant={servant}
                         index={index}
                         src={servant ? faces[servant.variantKey] : null}
+                        isSupport={member.isSupport}
                         onClick={() => finishPrepAction(prepDraft, `servant_${index + 1}`)}
                       />
                     );
@@ -1250,7 +1299,11 @@ function AdvancedStrategyEditor({
                 </>
               ) : (
                 <>
-                  {Array.from({ length: 6 }, (_, index) => currentPartyLineup[index] ?? null).map((servant, index) => {
+                  {Array.from(
+                    { length: 6 },
+                    (_, index) => currentPartyMembers[index] ?? { servant: null, isSupport: false }
+                  ).map((member, index) => {
+                    const servant = member.servant;
                     const slot = `servant_${index + 1}` as PartySlot;
                     const needsFront = prepDraft.front == null;
                     const selectable =
@@ -1265,6 +1318,7 @@ function AdvancedStrategyEditor({
                         index={index}
                         src={servant ? faces[servant.variantKey] : null}
                         active={selectable || prepDraft.front === slot}
+                        isSupport={member.isSupport}
                         onClick={() => {
                           if (!selectable) return;
                           if (needsFront) {
@@ -1355,6 +1409,7 @@ function AdvancedStrategyEditor({
 export function AdvancedCommandEditor({
   projectId,
   partyLineup,
+  partyMembers,
   grandServants = [],
   grandCardStrategy,
   grandCardPriorityEnabled = false,
@@ -1368,7 +1423,15 @@ export function AdvancedCommandEditor({
   // the first scene.
   const [scene, setScene] = useState<AdvancedBattleScene>(() => createDefaultScene());
   const [loaded, setLoaded] = useState(() => !projectId);
-  const faces = useServantFaces(partyLineup);
+  const initialPartyMembers = useMemo(
+    () => partyMembers ?? toPartyMembers(partyLineup),
+    [partyMembers, partyLineup]
+  );
+  const initialPartyLineup = useMemo(
+    () => partyMembersToServants(initialPartyMembers),
+    [initialPartyMembers]
+  );
+  const faces = useServantFaces(initialPartyLineup);
 
   useEffect(() => {
     if (!projectId) return;
@@ -1410,7 +1473,7 @@ export function AdvancedCommandEditor({
       <div className="command-scroll-region">
         <AdvancedStrategyEditor
           scene={scene}
-          partyLineup={partyLineup}
+          partyMembers={initialPartyMembers}
           faces={faces}
           grandServants={grandServants}
           grandCardStrategy={grandCardStrategy}

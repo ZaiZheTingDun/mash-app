@@ -150,6 +150,40 @@ describe("BattleSceneBlock staged action editor", () => {
     });
   });
 
+  it("marks the support servant avatar in the Order Change picker", async () => {
+    const user = userEvent.setup();
+    const lineupWithSupportInBackline = [
+      PARTY[0],
+      PARTY[1],
+      PARTY[2],
+      PARTY[0],
+      PARTY[3],
+      PARTY[4],
+    ];
+    const { container } = renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene()}
+        partyServants={lineupWithSupportInBackline}
+        partyMembers={lineupWithSupportInBackline.map((servant, index) => ({
+          servant,
+          isSupport: index === 3,
+        }))}
+        onChange={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: /御主/ }));
+    await user.click(screen.getByRole("button", { name: "技能 2" }));
+    await user.click(screen.getByRole("button", { name: "Order Change" }));
+
+    const altriaButtons = screen.getAllByRole("button", { name: "甲" });
+    expect(altriaButtons).toHaveLength(2);
+    expect(altriaButtons[0].querySelector(".battle-support-badge")).toBeNull();
+    expect(altriaButtons[1].querySelector(".battle-support-badge")).not.toBeNull();
+    expect(container.querySelectorAll(".battle-support-badge")).toHaveLength(1);
+  });
+
   it("does not allow empty Order Change back slots to be selected", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

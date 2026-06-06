@@ -9,8 +9,11 @@ import {
 } from "@radix-ui/react-icons";
 import orderChangeIcon from "../../src-tauri/resources/images/icon_order_change.png";
 import {
-  deriveLineupAfterAttackCards,
-  deriveLineupAfterPreparationActions,
+  deriveMembersAfterAttackCards,
+  deriveMembersAfterPreparationActions,
+  partyMembersToServants,
+  toPartyMembers,
+  type PartyMember,
 } from "./partyServants";
 import type {
   AttackCard,
@@ -26,6 +29,7 @@ import type { Servant } from "../types/servant";
 interface BattleSceneBlockProps {
   scene: BattleScene;
   partyServants: (Servant | null)[];
+  partyMembers?: PartyMember[];
   onChange: (updated: BattleScene) => void;
 }
 
@@ -190,6 +194,7 @@ function ServantFaceButton({
   onClick,
   disabled = false,
   selected = false,
+  isSupport = false,
 }: {
   servant: Servant | null;
   index: number;
@@ -197,6 +202,7 @@ function ServantFaceButton({
   onClick: () => void;
   disabled?: boolean;
   selected?: boolean;
+  isSupport?: boolean;
 }) {
   const label = servantLabel(index, servant);
   return (
@@ -212,6 +218,11 @@ function ServantFaceButton({
       ) : (
         <PersonIcon width={24} height={24} aria-hidden />
       )}
+      {isSupport && (
+        <span className="battle-support-badge" aria-hidden>
+          助
+        </span>
+      )}
     </button>
   );
 }
@@ -220,10 +231,12 @@ function ServantInlineFace({
   servant,
   index,
   faceSrc,
+  isSupport = false,
 }: {
   servant: Servant | null;
   index: number;
   faceSrc: string | null | undefined;
+  isSupport?: boolean;
 }) {
   return (
     <span className="battle-inline-face" aria-label={servantLabel(index, servant)}>
@@ -232,19 +245,25 @@ function ServantInlineFace({
       ) : (
         <PersonIcon width={18} height={18} aria-hidden />
       )}
+      {isSupport && (
+        <span className="battle-support-badge" aria-hidden>
+          助
+        </span>
+      )}
     </span>
   );
 }
 
 function PreparationActionSummary({
   action,
-  partyServants,
+  partyMembers,
   faces,
 }: {
   action: PreparationAction;
-  partyServants: (Servant | null)[];
+  partyMembers: PartyMember[];
   faces: Record<string, string | null>;
 }) {
+  const partyServants = partyMembersToServants(partyMembers);
   const targetIndex = sourceIndex((action.target ?? "") as PrepSource);
   const orderChangeSlots =
     action.type === "equipment" && action.orderChange
@@ -259,12 +278,14 @@ function PreparationActionSummary({
 
   if (action.type === "servant") {
     const src = sourceIndex((action.servant ?? "servant_1") as PrepSource) ?? 0;
-    const servant = partyServants[src] ?? null;
+    const member = partyMembers[src] ?? { servant: null, isSupport: false };
+    const servant = member.servant;
     sourceFace = (
       <ServantInlineFace
         servant={servant}
         index={src}
         faceSrc={servant ? faces[servant.variantKey] : null}
+        isSupport={member.isSupport}
       />
     );
     sourceText = servantLabel(src, servant);
@@ -302,6 +323,7 @@ function PreparationActionSummary({
                 ? faces[partyServants[orderChangeSlots.front]!.variantKey]
                 : null
             }
+            isSupport={partyMembers[orderChangeSlots.front]?.isSupport ?? false}
           />
           <Text size="2" weight="medium" className="battle-action-name">
             {servantLabel(orderChangeSlots.front, partyServants[orderChangeSlots.front] ?? null)}
@@ -315,6 +337,7 @@ function PreparationActionSummary({
                 ? faces[partyServants[orderChangeSlots.back]!.variantKey]
                 : null
             }
+            isSupport={partyMembers[orderChangeSlots.back]?.isSupport ?? false}
           />
           <Text size="2" weight="medium" className="battle-action-name">
             {servantLabel(orderChangeSlots.back, partyServants[orderChangeSlots.back] ?? null)}
@@ -332,6 +355,7 @@ function PreparationActionSummary({
                 ? faces[partyServants[targetIndex]!.variantKey]
                 : null
             }
+            isSupport={partyMembers[targetIndex]?.isSupport ?? false}
           />
           <Text size="2" weight="medium" className="battle-action-name">
             {servantLabel(targetIndex, partyServants[targetIndex] ?? null)}
@@ -345,22 +369,24 @@ function PreparationActionSummary({
 
 function AttackActionFace({
   card,
-  partyServants,
+  partyMembers,
   faces,
 }: {
   card: AttackCard;
-  partyServants: (Servant | null)[];
+  partyMembers: PartyMember[];
   faces: Record<string, string | null>;
 }) {
   const match = card.card?.match(/^servant_([1-3])_/);
   if (!match) return null;
   const index = Number(match[1]) - 1;
-  const servant = partyServants[index] ?? null;
+  const member = partyMembers[index] ?? { servant: null, isSupport: false };
+  const servant = member.servant;
   return (
     <ServantInlineFace
       servant={servant}
       index={index}
       faceSrc={servant ? faces[servant.variantKey] : null}
+      isSupport={member.isSupport}
     />
   );
 }
@@ -458,11 +484,17 @@ function attackSlotLabel(index: number): string {
 export function BattleSceneBlock({
   scene,
   partyServants,
+  partyMembers,
   onChange,
 }: BattleSceneBlockProps) {
   const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
   const [attackDraft, setAttackDraft] = useState<AttackDraft | null>(null);
-  const faces = useServantFaces(partyServants);
+  const initialPartyMembers = useMemo(
+    () => partyMembers ?? toPartyMembers(partyServants),
+    [partyMembers, partyServants]
+  );
+  const initialPartyServants = partyMembersToServants(initialPartyMembers);
+  const faces = useServantFaces(initialPartyServants);
   const preparationActions = useMemo(
     () =>
       scene.preparationActions ??
@@ -479,17 +511,17 @@ export function BattleSceneBlock({
     ]
   );
   const preparationActionLineups = useMemo(() => {
-    const lineups: (Servant | null)[][] = [];
-    let lineup = partyServants;
+    const lineups: PartyMember[][] = [];
+    let lineup = initialPartyMembers;
     for (const action of preparationActions) {
       lineups.push(lineup);
-      lineup = deriveLineupAfterPreparationActions(lineup, [action]);
+      lineup = deriveMembersAfterPreparationActions(lineup, [action]);
     }
     return lineups;
-  }, [partyServants, preparationActions]);
-  const currentPartyServants = useMemo(
-    () => deriveLineupAfterPreparationActions(partyServants, preparationActions),
-    [partyServants, preparationActions]
+  }, [initialPartyMembers, preparationActions]);
+  const currentPartyMembers = useMemo(
+    () => deriveMembersAfterPreparationActions(initialPartyMembers, preparationActions),
+    [initialPartyMembers, preparationActions]
   );
   const attackPriority = useMemo(
     () => normalizeAttackPriority(scene.attackPriority ?? []),
@@ -498,18 +530,17 @@ export function BattleSceneBlock({
   const attackActionLineups = useMemo(
     () =>
       attackPriority.map((_, index) =>
-        deriveLineupAfterAttackCards(
-          currentPartyServants,
+        deriveMembersAfterAttackCards(
+          currentPartyMembers,
           attackPriority.slice(0, index)
         )
       ),
-    [attackPriority, currentPartyServants]
+    [attackPriority, currentPartyMembers]
   );
-  const currentAttackPartyServants = useMemo(
-    () => deriveLineupAfterAttackCards(currentPartyServants, attackPriority),
-    [attackPriority, currentPartyServants]
+  const currentAttackPartyMembers = useMemo(
+    () => deriveMembersAfterAttackCards(currentPartyMembers, attackPriority),
+    [attackPriority, currentPartyMembers]
   );
-
   const updatePreparationActions = (next: PreparationAction[]) => {
     onChange(emptyLegacyFields({ ...scene, preparationActions: next }));
   };
@@ -598,46 +629,51 @@ export function BattleSceneBlock({
 
   const renderAttackDraft = (
     draft: AttackDraft,
-    draftPartyServants: (Servant | null)[]
+    draftPartyMembers: PartyMember[]
   ) =>
     draft.step === "source" ? (
       <div className="battle-choice-row inline">
-        {draftPartyServants.slice(0, 3).map((servant, index) => (
-          <ServantFaceButton
-            key={index}
-            servant={servant}
-            index={index}
-            faceSrc={servant ? faces[servant.variantKey] : null}
-            onClick={() =>
-              setAttackDraft({
-                step: "option",
-                source: `servant_${index + 1}` as AttackSource,
-                targetIndex: draft.targetIndex,
-              })
-            }
-          />
-        ))}
+        {draftPartyMembers.slice(0, 3).map((member, index) => {
+          const servant = member.servant;
+          return (
+            <ServantFaceButton
+              key={index}
+              servant={servant}
+              index={index}
+              faceSrc={servant ? faces[servant.variantKey] : null}
+              isSupport={member.isSupport}
+              onClick={() =>
+                setAttackDraft({
+                  step: "option",
+                  source: `servant_${index + 1}` as AttackSource,
+                  targetIndex: draft.targetIndex,
+                })
+              }
+            />
+          );
+        })}
       </div>
     ) : (
       <div className="battle-choice-row inline">
-        <ServantFaceButton
-          servant={draftPartyServants[sourceIndex(draft.source) ?? 0] ?? null}
-          index={sourceIndex(draft.source) ?? 0}
-          faceSrc={
-            draftPartyServants[sourceIndex(draft.source) ?? 0]
-              ? faces[
-                  draftPartyServants[sourceIndex(draft.source) ?? 0]!
-                    .variantKey
-                ]
-              : null
-          }
-          onClick={() =>
-            setAttackDraft({
-              step: "source",
-              targetIndex: draft.targetIndex,
-            })
-          }
-        />
+        {(() => {
+          const index = sourceIndex(draft.source) ?? 0;
+          const member = draftPartyMembers[index] ?? { servant: null, isSupport: false };
+          const servant = member.servant;
+          return (
+            <ServantFaceButton
+              servant={servant}
+              index={index}
+              faceSrc={servant ? faces[servant.variantKey] : null}
+              isSupport={member.isSupport}
+              onClick={() =>
+                setAttackDraft({
+                  step: "source",
+                  targetIndex: draft.targetIndex,
+                })
+              }
+            />
+          );
+        })()}
         <div className="battle-option-group">
           {ATTACK_OPTIONS.map((option) => (
             <button
@@ -669,7 +705,7 @@ export function BattleSceneBlock({
               />
               <PreparationActionSummary
                 action={action}
-                partyServants={preparationActionLineups[index] ?? partyServants}
+                partyMembers={preparationActionLineups[index] ?? initialPartyMembers}
                 faces={faces}
               />
             </div>
@@ -694,20 +730,24 @@ export function BattleSceneBlock({
               </button>
             ) : prepDraft.step === "source" ? (
               <div className="battle-choice-row">
-                {currentPartyServants.slice(0, 3).map((servant, index) => (
-                  <ServantFaceButton
-                    key={index}
-                    servant={servant}
-                    index={index}
-                    faceSrc={servant ? faces[servant.variantKey] : null}
-                    onClick={() =>
-                      setPrepDraft({
-                        step: "option",
-                        source: `servant_${index + 1}` as PrepSource,
-                      })
-                    }
-                  />
-                ))}
+                {currentPartyMembers.slice(0, 3).map((member, index) => {
+                  const servant = member.servant;
+                  return (
+                    <ServantFaceButton
+                      key={index}
+                      servant={servant}
+                      index={index}
+                      faceSrc={servant ? faces[servant.variantKey] : null}
+                      isSupport={member.isSupport}
+                      onClick={() =>
+                        setPrepDraft({
+                          step: "option",
+                          source: `servant_${index + 1}` as PrepSource,
+                        })
+                      }
+                    />
+                  );
+                })}
                 <span className="battle-choice-separator" aria-hidden />
                 <button
                   type="button"
@@ -730,19 +770,20 @@ export function BattleSceneBlock({
               <div className="battle-choice-row">
                 {prepDraft.source !== "equipment" &&
                   prepDraft.source !== "commandSpell" && (
-                    <ServantFaceButton
-                      servant={currentPartyServants[sourceIndex(prepDraft.source) ?? 0] ?? null}
-                      index={sourceIndex(prepDraft.source) ?? 0}
-                      faceSrc={
-                        currentPartyServants[sourceIndex(prepDraft.source) ?? 0]
-                          ? faces[
-                              currentPartyServants[sourceIndex(prepDraft.source) ?? 0]!
-                                .variantKey
-                            ]
-                          : null
-                      }
-                      onClick={() => setPrepDraft({ step: "source" })}
-                    />
+                    (() => {
+                      const index = sourceIndex(prepDraft.source) ?? 0;
+                      const member = currentPartyMembers[index] ?? { servant: null, isSupport: false };
+                      const servant = member.servant;
+                      return (
+                        <ServantFaceButton
+                          servant={servant}
+                          index={index}
+                          faceSrc={servant ? faces[servant.variantKey] : null}
+                          isSupport={member.isSupport}
+                          onClick={() => setPrepDraft({ step: "source" })}
+                        />
+                      );
+                    })()
                   )}
                 {prepDraft.source === "equipment" && (
                   <button
@@ -807,15 +848,19 @@ export function BattleSceneBlock({
                 >
                   无目标
                 </button>
-                {currentPartyServants.slice(0, 3).map((servant, index) => (
-                  <ServantFaceButton
-                    key={index}
-                    servant={servant}
-                    index={index}
-                    faceSrc={servant ? faces[servant.variantKey] : null}
-                    onClick={() => finishPrepAction(prepDraft, `servant_${index + 1}`)}
-                  />
-                ))}
+                {currentPartyMembers.slice(0, 3).map((member, index) => {
+                  const servant = member.servant;
+                  return (
+                    <ServantFaceButton
+                      key={index}
+                      servant={servant}
+                      index={index}
+                      faceSrc={servant ? faces[servant.variantKey] : null}
+                      isSupport={member.isSupport}
+                      onClick={() => finishPrepAction(prepDraft, `servant_${index + 1}`)}
+                    />
+                  );
+                })}
                 {prepDraft.source === "equipment" && (
                   <>
                     <span className="battle-choice-separator" aria-hidden />
@@ -839,7 +884,11 @@ export function BattleSceneBlock({
               </div>
             ) : (
               <div className="battle-choice-row order-change">
-                {Array.from({ length: 6 }, (_, index) => currentPartyServants[index] ?? null).map((servant, index) => {
+                {Array.from(
+                  { length: 6 },
+                  (_, index) => currentPartyMembers[index] ?? { servant: null, isSupport: false }
+                ).map((member, index) => {
+                  const servant = member.servant;
                   const slot = `servant_${index + 1}` as PartySlot;
                   const needsFront = prepDraft.front == null;
                   const selectable = Boolean(servant) && (needsFront ? index < 3 : index >= 3);
@@ -849,6 +898,7 @@ export function BattleSceneBlock({
                       servant={servant}
                       index={index}
                       faceSrc={servant ? faces[servant.variantKey] : null}
+                      isSupport={member.isSupport}
                       disabled={!selectable}
                       selected={prepDraft.front === slot}
                       onClick={() => {
@@ -908,8 +958,9 @@ export function BattleSceneBlock({
         <div className="battle-action-list">
           {attackPriority.map((card, index) => {
             const rowDraft = attackDraft?.targetIndex === index ? attackDraft : null;
-            const attackPartyServants =
-              attackActionLineups[index] ?? currentPartyServants;
+            const attackPartyMembers =
+              attackActionLineups[index] ?? currentPartyMembers;
+            const attackPartyServants = partyMembersToServants(attackPartyMembers);
             return (
               <div className="battle-action-row committed" key={card.id}>
                 {index >= FIXED_ATTACK_CARD_COUNT ? (
@@ -929,12 +980,12 @@ export function BattleSceneBlock({
                   <span className="battle-attack-slot-label">{attackSlotLabel(index)}</span>
                 )}
                 {rowDraft ? (
-                  renderAttackDraft(rowDraft, attackPartyServants)
+                  renderAttackDraft(rowDraft, attackPartyMembers)
                 ) : (
                   <>
                     <AttackActionFace
                       card={card}
-                      partyServants={attackPartyServants}
+                      partyMembers={attackPartyMembers}
                       faces={faces}
                     />
                     <button
@@ -983,7 +1034,7 @@ export function BattleSceneBlock({
                 </Text>
               </button>
             ) : (
-              renderAttackDraft(attackDraft, currentAttackPartyServants)
+              renderAttackDraft(attackDraft, currentAttackPartyMembers)
             )}
           </div>
         </div>

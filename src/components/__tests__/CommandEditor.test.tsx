@@ -144,6 +144,47 @@ describe("CommandEditor pagination", () => {
     ]);
   });
 
+  it("marks the support servant avatar in advanced command settings", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    const altria = makeServant(2, "乙");
+    const partyLineup = [
+      makeServant(1, "甲"),
+      altria,
+      makeServant(3, "丙"),
+      altria,
+      makeServant(5, "戊"),
+      makeServant(6, "己"),
+    ];
+    const { container } = renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        partyLineup={partyLineup}
+        partyMembers={partyLineup.map((servant, index) => ({
+          servant,
+          isSupport: index === 3,
+        }))}
+      />
+    );
+
+    await screen.findByText("主力输出");
+
+    const altriaButtons = screen.getAllByRole("button", { name: "乙" });
+    expect(altriaButtons).toHaveLength(2);
+    expect(altriaButtons[0].querySelector(".battle-support-badge")).toBeNull();
+    expect(altriaButtons[1].querySelector(".battle-support-badge")).not.toBeNull();
+    expect(container.querySelectorAll(".battle-support-badge")).toHaveLength(1);
+  });
+
   it("shows inferred NP color for automatic grand servant settings", async () => {
     const user = userEvent.setup();
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {

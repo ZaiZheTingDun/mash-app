@@ -3,7 +3,12 @@ import { Flex, IconButton, Text } from "@radix-ui/themes";
 import { invoke } from "../tauri";
 import { AdvancedCommandEditor } from "./AdvancedCommandEditor";
 import { BattleSceneBlock } from "./BattleSceneBlock";
-import { deriveScenePartyLineups } from "./partyServants";
+import {
+  deriveScenePartyLineups,
+  deriveScenePartyMembers,
+  toPartyMembers,
+  type PartyMember,
+} from "./partyServants";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -17,6 +22,7 @@ import type { Servant } from "../types/servant";
 interface CommandEditorProps {
   projectId: string | null;
   partyLineup: (Servant | null)[];
+  partyMembers?: PartyMember[];
   advancedMode?: boolean;
   grandServants?: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
@@ -79,6 +85,7 @@ function normalizeScene(scene: BattleScene): BattleScene {
 export function CommandEditor({
   projectId,
   partyLineup,
+  partyMembers,
   advancedMode = false,
   grandServants = [],
   grandCardStrategy,
@@ -91,7 +98,9 @@ export function CommandEditor({
   );
   const [loaded, setLoaded] = useState(() => !projectId);
   const [activeIndex, setActiveIndex] = useState(0);
+  const initialPartyMembers = partyMembers ?? toPartyMembers(partyLineup);
   const scenePartyLineups = deriveScenePartyLineups(partyLineup, scenes);
+  const scenePartyMembers = deriveScenePartyMembers(initialPartyMembers, scenes);
 
   useEffect(() => {
     if (advancedMode || !projectId) {
@@ -165,6 +174,7 @@ export function CommandEditor({
       <AdvancedCommandEditor
         projectId={projectId}
         partyLineup={partyLineup}
+        partyMembers={initialPartyMembers}
         grandServants={grandServants}
         grandCardStrategy={grandCardStrategy}
         grandCardPriorityEnabled={grandCardPriorityEnabled}
@@ -177,6 +187,7 @@ export function CommandEditor({
   if (!loaded) return null;
   const activeScene = scenes[activeIndex] ?? scenes[0] ?? createDefaultScene();
   const activeParty = scenePartyLineups[activeIndex] ?? partyLineup;
+  const activePartyMembers = scenePartyMembers[activeIndex] ?? initialPartyMembers;
 
   return (
     <Flex direction="column" className="command-editor">
@@ -232,6 +243,7 @@ export function CommandEditor({
           key={activeScene.id}
           scene={activeScene}
           partyServants={activeParty}
+          partyMembers={activePartyMembers}
           onChange={(updated) => handleSceneChange(activeScene.id, updated)}
         />
       </div>

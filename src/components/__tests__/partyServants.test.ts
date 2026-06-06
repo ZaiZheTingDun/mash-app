@@ -1,8 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
+  deriveMembersAfterAttackCards,
+  deriveMembersAfterPreparationActions,
+  derivePartyMembers,
   deriveLineupAfterPreparationActions,
   derivePartyLineup,
   derivePartyServants,
+  deriveScenePartyMembers,
   deriveScenePartyLineups,
   deriveScenePartyServants,
 } from "../partyServants";
@@ -236,6 +240,127 @@ describe("derivePartyServants", () => {
       null,
       null,
       null,
+    ]);
+  });
+});
+
+describe("derivePartyMembers", () => {
+  it("marks only the support slot when owned and support servants match", () => {
+    const slots = makeSlots([
+      { type: "servant", servant: ALTRIA },
+      { type: "support", servant: null },
+      { type: "servant", servant: MERLIN },
+    ]);
+    const members = derivePartyMembers(slots, makeProject(ALTRIA.id), SERVANTS);
+
+    expect(members.map((member) => member.servant)).toEqual([ALTRIA, ALTRIA, MERLIN]);
+    expect(members.map((member) => member.isSupport)).toEqual([false, true, false]);
+  });
+
+  it("moves the support slot marker with Order Change", () => {
+    const members = [
+      { servant: MERLIN, isSupport: false },
+      { servant: WAVER, isSupport: false },
+      { servant: MASH, isSupport: false },
+      { servant: ALTRIA, isSupport: true },
+      { servant: CHEN_GONG, isSupport: false },
+      { servant: null, isSupport: false },
+    ];
+
+    const next = deriveMembersAfterPreparationActions(members, [
+      {
+        type: "equipment",
+        id: "eq_1",
+        skill: "skill_3",
+        target: null,
+        orderChange: {
+          front: "servant_2",
+          back: "servant_4",
+        },
+      },
+    ]);
+
+    expect(next.map((member) => member.servant)).toEqual([
+      MERLIN,
+      ALTRIA,
+      MASH,
+      WAVER,
+      CHEN_GONG,
+      null,
+    ]);
+    expect(next.map((member) => member.isSupport)).toEqual([
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  it("keeps the support marker on the substitute after a front-line exit", () => {
+    const members = [
+      { servant: ARASH, isSupport: false },
+      { servant: MERLIN, isSupport: false },
+      { servant: WAVER, isSupport: false },
+      { servant: ALTRIA, isSupport: true },
+      { servant: MASH, isSupport: false },
+      { servant: CHEN_GONG, isSupport: false },
+    ];
+
+    const next = deriveMembersAfterAttackCards(members, [
+      { card: "servant_1_np" },
+    ]);
+
+    expect(next.map((member) => member.servant)).toEqual([
+      ALTRIA,
+      MERLIN,
+      WAVER,
+      MASH,
+      CHEN_GONG,
+      null,
+    ]);
+    expect(next.map((member) => member.isSupport)).toEqual([
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  it("carries the support marker across battle scene transitions", () => {
+    const lineups = deriveScenePartyMembers(
+      [
+        { servant: ARASH, isSupport: false },
+        { servant: MERLIN, isSupport: false },
+        { servant: WAVER, isSupport: false },
+        { servant: ALTRIA, isSupport: true },
+        { servant: MASH, isSupport: false },
+        { servant: CHEN_GONG, isSupport: false },
+      ],
+      [
+        makeScene({ attackPriority: [{ id: "atk_0", card: "servant_1_np" }] }),
+        makeScene({ id: "scene_2" }),
+      ]
+    );
+
+    expect(lineups[1].map((member) => member.servant)).toEqual([
+      ALTRIA,
+      MERLIN,
+      WAVER,
+      MASH,
+      CHEN_GONG,
+      null,
+    ]);
+    expect(lineups[1].map((member) => member.isSupport)).toEqual([
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
     ]);
   });
 });

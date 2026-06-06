@@ -4,7 +4,11 @@ import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updat
 import { invoke, listen } from "./tauri";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { ContentGrid } from "./components/ContentGrid";
-import { derivePartyLineup, derivePartyServants } from "./components/partyServants";
+import {
+  derivePartyMembers,
+  derivePartyLineup,
+  derivePartyServants,
+} from "./components/partyServants";
 import { CommandEditor } from "./components/CommandEditor";
 import { BattlePage } from "./components/BattlePage";
 import { EnhancementPage } from "./components/EnhancementPage";
@@ -289,6 +293,10 @@ function App({ theme, onThemeChange }: AppProps) {
     () => derivePartyLineup(slots, activeProject, servants),
     [slots, activeProject, servants]
   );
+  const partyMembers = useMemo(
+    () => derivePartyMembers(slots, activeProject, servants),
+    [slots, activeProject, servants]
+  );
 
   // Stable list of front-line servant ids (deduped, drops nulls). Fed to
   // the Debug page so its "候选从者 id" input pre-fills with the same
@@ -459,6 +467,7 @@ function App({ theme, onThemeChange }: AppProps) {
                     key={activeProjectId ?? "no-project"}
                     projectId={activeProjectId}
                     partyLineup={partyLineup}
+                    partyMembers={partyMembers}
                     advancedMode={activeProject?.advancedMode === true}
                     grandServants={activeProject?.grandServants ?? []}
                     grandCardStrategy={activeProject?.grandCardStrategy}
