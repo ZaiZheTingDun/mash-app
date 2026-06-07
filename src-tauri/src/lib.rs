@@ -3417,6 +3417,7 @@ enum AssetInstallPlan {
     Base {
         target_version: u32,
         packs: Vec<AssetsPackRelease>,
+        patches: Vec<AssetsPatchRelease>,
     },
     Patches {
         target_version: u32,
@@ -3446,7 +3447,10 @@ impl AssetInstallPlan {
     fn download_size(&self) -> u64 {
         match self {
             Self::None => 0,
-            Self::Base { packs, .. } => packs.iter().map(|item| item.size).sum(),
+            Self::Base { packs, patches, .. } => {
+                packs.iter().map(|item| item.size).sum::<u64>()
+                    + patches.iter().map(|item| item.size).sum::<u64>()
+            }
             Self::Patches { patches, .. } => patches.iter().map(|item| item.size).sum(),
         }
     }
@@ -3661,26 +3665,36 @@ fn asset_update_plan(
         return AssetInstallPlan::None;
     }
 
-    let Some(mut version) = current_version else {
+    let Some(version) = current_version else {
+        let Some(patches) = asset_patch_chain(remote.base.version, target_version, remote) else {
+            return AssetInstallPlan::Base {
+                target_version: remote.base.version.min(target_version),
+                packs: remote.base.packs.clone(),
+                patches: Vec::new(),
+            };
+        };
         return AssetInstallPlan::Base {
             target_version,
             packs: remote.base.packs.clone(),
+            patches,
         };
     };
 
-    let mut patches = Vec::new();
-    while version < target_version {
-        let Some(patch) = remote.patches.iter().find(|patch| {
-            patch.from == version && patch.to <= target_version && patch.to > version
-        }) else {
+    let Some(patches) = asset_patch_chain(version, target_version, remote) else {
+        let Some(base_patches) = asset_patch_chain(remote.base.version, target_version, remote)
+        else {
             return AssetInstallPlan::Base {
-                target_version,
+                target_version: remote.base.version.min(target_version),
                 packs: remote.base.packs.clone(),
+                patches: Vec::new(),
             };
         };
-        patches.push(patch.clone());
-        version = patch.to;
-    }
+        return AssetInstallPlan::Base {
+            target_version,
+            packs: remote.base.packs.clone(),
+            patches: base_patches,
+        };
+    };
 
     if patches.is_empty() {
         AssetInstallPlan::None
@@ -3690,6 +3704,22 @@ fn asset_update_plan(
             patches,
         }
     }
+}
+
+fn asset_patch_chain(
+    mut version: u32,
+    target_version: u32,
+    remote: &AssetsRemoteManifest,
+) -> Option<Vec<AssetsPatchRelease>> {
+    let mut patches = Vec::new();
+    while version < target_version {
+        let patch = remote.patches.iter().find(|patch| {
+            patch.from == version && patch.to <= target_version && patch.to > version
+        })?;
+        patches.push(patch.clone());
+        version = patch.to;
+    }
+    Some(patches)
 }
 
 fn extract_zip_archive(zip_path: &Path, destination: &Path) -> Result<(), String> {
@@ -4096,7 +4126,7 @@ fn download_and_install_asset_bundles_inner(
 
     match &plan {
         AssetInstallPlan::None => {}
-        AssetInstallPlan::Base { packs, .. } => {
+        AssetInstallPlan::Base { packs, patches, .. } => {
             for pack in packs {
                 let url = join_remote_url(&latest_base_url, &pack.file);
                 let filename = pack
@@ -4111,6 +4141,23 @@ fn download_and_install_asset_bundles_inner(
                 emit_asset_download_progress(&app, &pack.name, "installing", 0, None, None, None);
                 install_asset_zip_merge(&zip_path, &assets_root)?;
                 emit_asset_download_progress(&app, &pack.name, "installed", 0, None, None, None);
+            }
+            for patch in patches {
+                let kind = format!("patch-v{}-to-v{}", patch.from, patch.to);
+                let url = join_remote_url(&latest_base_url, &patch.file);
+                let filename = patch
+                    .file
+                    .rsplit('/')
+                    .next()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(kind.as_str());
+                let zip_path = downloads_dir.join(filename);
+                download_asset_artifact(&app, &kind, &url, &zip_path)?;
+                verify_asset_artifact(&zip_path, &patch.sha256, patch.size)?;
+                emit_asset_download_progress(&app, &kind, "installing", 0, None, None, None);
+                install_asset_zip_merge(&zip_path, &assets_root)?;
+                write_asset_version(&assets_root, patch.to)?;
+                emit_asset_download_progress(&app, &kind, "installed", 0, None, None, None);
             }
         }
         AssetInstallPlan::Patches { patches, .. } => {
@@ -4984,6 +5031,20 @@ mod tests {
     }
 
     #[test]
+    fn asset_update_plan_installs_base_then_patches_for_missing_assets() {
+        let remote = build_assets_remote_manifest(
+            2,
+            r#"[{"from": 1, "to": 2, "file": "patches/v1-to-v2.zip", "sha256": "p12", "size": 7}]"#,
+        );
+
+        let plan = asset_update_plan(None, 2, &remote);
+
+        assert_eq!(plan.target_version(), Some(2));
+        assert_eq!(plan.plan_type(), "base");
+        assert_eq!(plan.download_size(), 37);
+    }
+
+    #[test]
     fn asset_update_plan_chains_patches_to_target() {
         let remote = build_assets_remote_manifest(
             3,
@@ -5009,7 +5070,7 @@ mod tests {
 
         let plan = asset_update_plan(Some(1), 3, &remote);
 
-        assert_eq!(plan.target_version(), Some(3));
+        assert_eq!(plan.target_version(), Some(1));
         assert_eq!(plan.plan_type(), "base");
         assert_eq!(plan.download_size(), 30);
     }
