@@ -1002,40 +1002,63 @@ fn load_enhancement_target(
 }
 
 fn preferred_cn_name(value: &serde_json::Value) -> Option<String> {
-    value
-        .get("name_cn_server")
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            value
-                .get("name_cn")
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-        })
-        .map(str::to_string)
+    string_field(value, &["name_cn_server", "nameCNServer"])
+        .or_else(|| string_field(value, &["name_cn", "nameCN"]))
 }
 
 fn first_np_name(s: &serde_json::Value) -> Option<String> {
-    let nps = s.get("noble_phantasms")?;
+    let nps = s
+        .get("noblePhantasms")
+        .or_else(|| s.get("noble_phantasms"))?;
     let entry = if let Some(arr) = nps.as_array() {
         arr.first()?
     } else {
         nps.as_object()?.values().next()?
     };
-    preferred_cn_name(entry).or_else(|| {
-        entry
-            .get("name")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string)
-    })
+    preferred_cn_name(entry).or_else(|| string_field(entry, &["name"]))
+}
+
+fn string_field(value: &serde_json::Value, keys: &[&str]) -> Option<String> {
+    keys.iter()
+        .filter_map(|key| value.get(key))
+        .filter_map(|v| v.as_str())
+        .map(str::trim)
+        .find(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn u32_field(value: &serde_json::Value, keys: &[&str]) -> Option<u32> {
+    keys.iter()
+        .filter_map(|key| value.get(key))
+        .find_map(|v| v.as_u64())
+        .map(|n| n as u32)
+}
+
+fn display_class_name(raw: &str) -> String {
+    match raw.trim() {
+        "alterEgo" => "Alterego".into(),
+        "moonCancer" => "Moon Cancer".into(),
+        "uOlgaMarieAquaCollection" => "U-Olga Marie Aqua".into(),
+        "uOlgaMarieFlareCollection" => "U-Olga Marie Flare".into(),
+        "uOlgaMarieGrandCollection" => "U-Olga Marie Grand".into(),
+        "uOlgaMarieStellarCollection" => "U-Olga Marie Stellar".into(),
+        "unBeastOlgaMarie" => "U-Olga Marie".into(),
+        other if other.is_empty() => String::new(),
+        other => {
+            let mut chars = other.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        }
+    }
 }
 
 fn normalize_np_card(card: &str) -> Option<String> {
     match card.trim().to_ascii_lowercase().as_str() {
+        "1" => Some("arts".into()),
+        "2" => Some("buster".into()),
+        "3" => Some("quick".into()),
         "buster" => Some("buster".into()),
         "arts" => Some("arts".into()),
         "quick" => Some("quick".into()),
@@ -1044,15 +1067,16 @@ fn normalize_np_card(card: &str) -> Option<String> {
 }
 
 fn first_np_card(s: &serde_json::Value) -> Option<String> {
-    let nps = s.get("noble_phantasms")?;
+    let nps = s
+        .get("noblePhantasms")
+        .or_else(|| s.get("noble_phantasms"))?;
     let entry = if let Some(arr) = nps.as_array() {
         arr.first()?
     } else {
         nps.as_object()?.values().next()?.as_array()?.first()?
     };
-    entry
-        .get("card")
-        .and_then(|v| v.as_str())
+    string_field(entry, &["cardName", "card"])
+        .as_deref()
         .and_then(normalize_np_card)
 }
 
@@ -1085,7 +1109,18 @@ fn servants_data() -> &'static [ServantInfo] {
         let variants_raw: Vec<serde_json::Value> =
             serde_json::from_str(include_str!("resources/servants_variants.json"))
                 .expect("invalid servants_variants.json");
+        let variants_cn_raw: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("resources/servants_variants_cn.json"))
+                .expect("invalid servants_variants_cn.json");
         let variants_by_id: HashMap<u32, Vec<serde_json::Value>> = variants_raw
+            .into_iter()
+            .filter_map(|entry| {
+                let id = entry.get("id")?.as_u64()? as u32;
+                let variants = entry.get("variants")?.as_array()?.clone();
+                Some((id, variants))
+            })
+            .collect();
+        let cn_variants_by_id: HashMap<u32, Vec<serde_json::Value>> = variants_cn_raw
             .into_iter()
             .filter_map(|entry| {
                 let id = entry.get("id")?.as_u64()? as u32;
@@ -1098,55 +1133,59 @@ fn servants_data() -> &'static [ServantInfo] {
             .enumerate()
             .flat_map(|(idx, s)| {
                 let result = (|| {
-                    let id = s.get("id")?.as_u64()? as u32;
-                    let name_cn = s.get("name_cn")?.as_str()?.to_string();
-                    let name_cn_server = s
-                        .get("name_cn_server")
-                        .and_then(|v| v.as_str())
-                        .map(str::trim)
-                        .filter(|s| !s.is_empty())
-                        .map(|s| s.to_string());
-                    let name_jp = s.get("name_jp")?.as_str()?.to_string();
-                    let name_en = s.get("name_en")?.as_str()?.to_string();
-                    let name_other = s
-                        .get("name_other")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
+                    let id = u32_field(s, &["collectionNo", "id"])?;
+                    let name_cn = string_field(s, &["nameCN", "name_cn"])?;
+                    let name_cn_server = string_field(s, &["nameCNServer", "name_cn_server"]);
+                    let name_jp = string_field(s, &["nameJP", "name_jp"])?;
+                    let name_en = string_field(s, &["nameEN", "name_en", "name"]).unwrap_or_default();
+                    let name_other = string_field(s, &["nameOther", "name_other"]);
 
-                    let base_stats = s.get("base_stats")?.as_object()?;
-
-                    let (class, rarity) = if let Some(cls) = base_stats.get("class") {
-                        let class = cls.as_str()?.to_string();
-                        let rarity = base_stats.get("rarity")?.as_u64()? as u32;
-                        (class, rarity)
+                    let (class, rarity) = if let Some(class_name) =
+                        string_field(s, &["className", "class"])
+                    {
+                        let rarity = u32_field(s, &["rarity"])?;
+                        (display_class_name(&class_name), rarity)
                     } else {
-                        let first_variant = base_stats.values().next()?.as_object()?;
-                        let class = first_variant.get("class")?.as_str()?.to_string();
-                        let rarity = first_variant.get("rarity")?.as_u64()? as u32;
-                        (class, rarity)
+                        let base_stats = s.get("base_stats")?.as_object()?;
+                        if let Some(cls) = base_stats.get("class") {
+                            let class = cls.as_str()?.to_string();
+                            let rarity = base_stats.get("rarity")?.as_u64()? as u32;
+                            (class, rarity)
+                        } else {
+                            let first_variant = base_stats.values().next()?.as_object()?;
+                            let class = first_variant.get("class")?.as_str()?.to_string();
+                            let rarity = first_variant.get("rarity")?.as_u64()? as u32;
+                            (class, rarity)
+                        }
                     };
 
                     let base_np = first_np_name(s);
                     let base_np_card = first_np_card(s);
                     let variants = variants_by_id.get(&id);
+                    let cn_variants = cn_variants_by_id.get(&id);
                     let infos: Vec<ServantInfo> = if let Some(variants) = variants {
                         variants
                             .iter()
                             .enumerate()
-                            .map(|(variant_idx, variant)| ServantInfo {
-                                id,
-                                variant_key: format!("{id}:{}", variant_idx + 1),
-                                face_id: variant_face_id(variant),
-                                name_cn: name_cn.clone(),
-                                name_cn_server: name_cn_server.clone(),
-                                name_jp: name_jp.clone(),
-                                name_en: name_en.clone(),
-                                name_other: name_other.clone(),
-                                class: class.clone(),
-                                rarity,
-                                noble_phantasm_name: last_variant_np_name(variant)
-                                    .or_else(|| base_np.clone()),
-                                noble_phantasm_card: base_np_card.clone(),
+                            .map(|(variant_idx, variant)| {
+                                let np_variant = cn_variants
+                                    .and_then(|entries| entries.get(variant_idx))
+                                    .unwrap_or(variant);
+                                ServantInfo {
+                                    id,
+                                    variant_key: format!("{id}:{}", variant_idx + 1),
+                                    face_id: variant_face_id(variant),
+                                    name_cn: name_cn.clone(),
+                                    name_cn_server: name_cn_server.clone(),
+                                    name_jp: name_jp.clone(),
+                                    name_en: name_en.clone(),
+                                    name_other: name_other.clone(),
+                                    class: class.clone(),
+                                    rarity,
+                                    noble_phantasm_name: last_variant_np_name(np_variant)
+                                        .or_else(|| base_np.clone()),
+                                    noble_phantasm_card: base_np_card.clone(),
+                                }
                             })
                             .collect()
                     } else {
@@ -1169,7 +1208,10 @@ fn servants_data() -> &'static [ServantInfo] {
                 })();
 
                 if result.is_none() {
-                    let id_hint = s.get("id").and_then(|v| v.as_u64());
+                    let id_hint = s
+                        .get("collectionNo")
+                        .or_else(|| s.get("id"))
+                        .and_then(|v| v.as_u64());
                     eprintln!(
                         "[servants] dropping entry at index {idx} (id={id_hint:?}): missing or invalid fields"
                     );
@@ -1472,18 +1514,17 @@ fn normalize_jp_key(s: &str) -> String {
         .join("")
 }
 
-/// Process-wide `name_jp -> CN OCR name` map for every servant Noble
+/// Process-wide `nameJP/name_jp -> CN OCR name` map for every servant Noble
 /// Phantasm we know about, built once from `resources/servants.json`.
 /// Handles both shapes the source file uses:
-///   - flat list:           `noble_phantasms: [ {...}, ... ]`
+///   - Atlas list:          `noblePhantasms: [ {...}, ... ]`
+///   - legacy flat list:    `noble_phantasms: [ {...}, ... ]`
 ///   - dict-of-variants:    `noble_phantasms: { "初始": [...], "奥特瑙斯": [...] }`
-/// Prefer `name_cn_server` over `name_cn` because the CN client can
-/// display renamed terms that differ from the wiki-localized Chinese
-/// names. Keeps entries even when the CN value equals the JP value:
-/// some legitimate names are identical across both languages, and
-/// server-specific aliases can still override them. Used only when the
-/// active server is `Server::Cn` to translate Atlas JP NP names into the
-/// strings the OCR will actually see on a CN client.
+/// Prefer server aliases when present, otherwise use the formal CN name.
+/// Keeps entries even when the CN value equals the JP value: some
+/// legitimate names are identical across both languages. Used only when
+/// the active server is `Server::Cn` to translate Atlas JP NP names into
+/// the strings the OCR will actually see on a CN client.
 fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
     static INDEX: OnceLock<HashMap<String, String>> = OnceLock::new();
     INDEX.get_or_init(|| {
@@ -1493,24 +1534,20 @@ fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
 
         let mut map: HashMap<String, String> = HashMap::new();
         let mut consider = |entry: &serde_json::Value| {
-            let jp = entry
-                .get("name_jp")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .trim();
+            let jp = string_field(entry, &["nameJP", "name_jp"]).unwrap_or_default();
             let cn = preferred_cn_name(entry).unwrap_or_default();
             if jp.is_empty() || cn.is_empty() {
                 return;
             }
-            let key = normalize_jp_key(jp);
+            let key = normalize_jp_key(&jp);
             if key.is_empty() {
                 return;
             }
-            map.entry(key).or_insert_with(|| cn.to_string());
+            map.entry(key).or_insert(cn);
         };
 
         for s in raw.iter() {
-            let Some(nps) = s.get("noble_phantasms") else {
+            let Some(nps) = s.get("noblePhantasms").or_else(|| s.get("noble_phantasms")) else {
                 continue;
             };
             if let Some(arr) = nps.as_array() {
@@ -1611,15 +1648,15 @@ fn localize_np_names(jp_names: &[String]) -> Vec<String> {
 
 /// Parse and cache the (id, name, np_names) triple for one servant.
 ///
-/// Reads `<servant_assets_dir>/{id}/servant.json` (the Atlas Academy dump
-/// committed under `src-tauri/assets/servants/`), pulls the top-level
-/// `name` field plus every entry of `noblePhantasms[].name`. When
-/// `server == Server::Cn`, both the servant name and every NP name are
-/// translated through `resources/servants.json` (`name_jp -> CN OCR name`,
-/// where `name_cn_server` wins over `name_cn`). Unmapped NPs are dropped
-/// — when the resulting `np_names` list is
-/// empty the sidecar transparently falls back to name-only matching, so
-/// support detection still proceeds at lower precision.
+/// Reads `<servant_assets_dir>/{id}/servant.json` for JP and
+/// `<servant_assets_dir>/{id}/servant-cn.json` for CN when available,
+/// pulling the top-level `name` field plus every distinct
+/// `noblePhantasms[].name`. Older asset packs without `servant-cn.json`
+/// fall back to JP metadata translated through `resources/servants.json`
+/// (`nameJP/name_jp -> nameCN/name_cn`). Unmapped NPs are dropped — when
+/// the resulting `np_names` list is empty the sidecar transparently
+/// falls back to name-only matching, so support detection still proceeds
+/// at lower precision.
 ///
 /// Cached in a process-wide `OnceLock<Mutex<HashMap<(u32, Server), _>>>`
 /// so repeat lookups (e.g. the debug page calling `find_supports`
@@ -1641,15 +1678,22 @@ pub(crate) fn load_servant_metadata(
 
     let assets_dir = resolve_servant_assets_dir(app)
         .ok_or_else(|| "未找到 servant 资源目录 (src-tauri/assets/servants/)".to_string())?;
-    let path = assets_dir.join(id.to_string()).join("servant.json");
+    let servant_dir = assets_dir.join(id.to_string());
+    let cn_path = servant_dir.join("servant-cn.json");
+    let jp_path = servant_dir.join("servant.json");
+    let path = if server == Server::Cn && cn_path.is_file() {
+        cn_path
+    } else {
+        jp_path
+    };
     let raw = fs::read_to_string(&path)
-        .map_err(|e| format!("无法读取 servant.json ({}): {e}", path.display()))?;
+        .map_err(|e| format!("无法读取 servant 元数据 ({}): {e}", path.display()))?;
     let json: serde_json::Value = serde_json::from_str(&raw)
-        .map_err(|e| format!("servant.json 解析失败 ({}): {e}", path.display()))?;
-    let name_jp = json
+        .map_err(|e| format!("servant 元数据解析失败 ({}): {e}", path.display()))?;
+    let raw_name = json
         .get("name")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("servant.json 缺少 'name' 字段: {}", path.display()))?
+        .ok_or_else(|| format!("servant 元数据缺少 'name' 字段: {}", path.display()))?
         .to_string();
     // Atlas dump uses camelCase like "alterEgo" / "moonCancer"; lowercase
     // here so the runner's class-tab map can use simple lowercase keys.
@@ -1662,24 +1706,25 @@ pub(crate) fn load_servant_metadata(
     // Deduplicate while preserving discovery order: a few servants list the
     // same NP under multiple `num` overcharge tiers and we only want the
     // distinct names for fuzzy matching.
-    let mut np_names_jp: Vec<String> = Vec::new();
+    let mut raw_np_names: Vec<String> = Vec::new();
     if let Some(arr) = json.get("noblePhantasms").and_then(|v| v.as_array()) {
         for entry in arr {
             if let Some(n) = entry.get("name").and_then(|v| v.as_str()) {
                 let trimmed = n.trim();
-                if !trimmed.is_empty() && !np_names_jp.iter().any(|x| x == trimmed) {
-                    np_names_jp.push(trimmed.to_string());
+                if !trimmed.is_empty() && !raw_np_names.iter().any(|x| x == trimmed) {
+                    raw_np_names.push(trimmed.to_string());
                 }
             }
         }
     }
 
     let (name, np_names) = match server {
-        Server::Jp => (name_jp, np_names_jp),
+        Server::Jp => (raw_name, raw_np_names),
+        Server::Cn if path.ends_with("servant-cn.json") => (raw_name, raw_np_names),
         Server::Cn => {
-            let cn_name = localize_servant_name_by_id(id, &name_jp);
-            let cn_nps = localize_np_names(&np_names_jp);
-            let dropped = np_names_jp.len().saturating_sub(cn_nps.len());
+            let cn_name = localize_servant_name_by_id(id, &raw_name);
+            let cn_nps = localize_np_names(&raw_np_names);
+            let dropped = raw_np_names.len().saturating_sub(cn_nps.len());
             if dropped > 0 {
                 eprintln!(
                     "[load_servant_metadata] servant {id}: dropped {dropped} unmapped NP name(s) for CN (will fall back to name-only matching if all dropped)"
