@@ -35,6 +35,31 @@ function assetStatus(installed: boolean): AssetBundleStatus {
     servantFiles: installed ? 12 : 0,
     craftEssenceFiles: installed ? 8 : 0,
     installDir: "/tmp/mash-assets",
+    currentVersion: installed ? 2 : null,
+    appAssetsVersion: 2,
+    remoteLatestVersion: null,
+    remoteLatestBaseVersion: null,
+    targetVersion: null,
+    updateAvailable: false,
+    updateDownloadSize: 0,
+    updatePlan: "none",
+    latestUrl: "https://mash.xiaotongx.com/mash/assets/latest.json",
+    remoteManifestUrl: null,
+    updateCheckError: null,
+  };
+}
+
+function staleAssetStatus(): AssetBundleStatus {
+  return {
+    ...assetStatus(false),
+    importedServants: true,
+    importedCraftEssences: true,
+    servantFiles: 12,
+    craftEssenceFiles: 8,
+    currentVersion: 1,
+    targetVersion: 2,
+    updateAvailable: true,
+    updatePlan: "pending",
   };
 }
 
@@ -67,6 +92,20 @@ describe("SetupPage", () => {
     expect(
       screen.getByText("需要导入包含 assets/servants 和 assets/ces 的素材包")
     ).toBeInTheDocument();
+    expect(onReady).not.toHaveBeenCalled();
+  });
+
+  it("keeps setup open when assets need a configured-version update", async () => {
+    const onReady = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") return runtimeStatus(true);
+      if (cmd === "get_asset_bundle_status") return staleAssetStatus();
+      return null;
+    });
+
+    renderWithTheme(<SetupPage onReady={onReady} />);
+
+    expect(await screen.findByText("需要更新素材包 v1 → v2")).toBeInTheDocument();
     expect(onReady).not.toHaveBeenCalled();
   });
 });

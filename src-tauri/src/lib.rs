@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 #[cfg(desktop)]
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
@@ -3350,6 +3350,108 @@ pub(crate) fn resolve_sidecar_models_dir(app: &tauri::AppHandle) -> Option<PathB
     ))
 }
 
+const ASSETS_MANIFEST_JSON: &str = include_str!("../resources/assets-manifest.json");
+const ASSET_DOWNLOAD_PROGRESS_EVENT: &str = "asset-download-progress";
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AssetsAppManifest {
+    assets_version: u32,
+    latest_url: String,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AssetsLatestManifest {
+    latest: u32,
+    latest_base: u32,
+    manifest: String,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AssetsRemoteManifest {
+    latest: u32,
+    latest_base: u32,
+    base: AssetsBaseRelease,
+    #[serde(default)]
+    patches: Vec<AssetsPatchRelease>,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AssetsBaseRelease {
+    version: u32,
+    #[serde(default)]
+    packs: Vec<AssetsPackRelease>,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AssetsPackRelease {
+    name: String,
+    file: String,
+    sha256: String,
+    size: u64,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AssetsPatchRelease {
+    from: u32,
+    to: u32,
+    file: String,
+    sha256: String,
+    size: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AssetVersionRecord {
+    version: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum AssetInstallPlan {
+    None,
+    Base {
+        target_version: u32,
+        packs: Vec<AssetsPackRelease>,
+    },
+    Patches {
+        target_version: u32,
+        patches: Vec<AssetsPatchRelease>,
+    },
+}
+
+impl AssetInstallPlan {
+    fn plan_type(&self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Base { .. } => "base",
+            Self::Patches { .. } => "patch",
+        }
+    }
+
+    fn target_version(&self) -> Option<u32> {
+        match self {
+            Self::None => None,
+            Self::Base { target_version, .. } | Self::Patches { target_version, .. } => {
+                Some(*target_version)
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn download_size(&self) -> u64 {
+        match self {
+            Self::None => 0,
+            Self::Base { packs, .. } => packs.iter().map(|item| item.size).sum(),
+            Self::Patches { patches, .. } => patches.iter().map(|item| item.size).sum(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct AssetBundleImportResult {
@@ -3366,6 +3468,39 @@ struct AssetBundleStatus {
     installed: bool,
     imported_servants: bool,
     imported_craft_essences: bool,
+    servant_files: u64,
+    craft_essence_files: u64,
+    install_dir: String,
+    current_version: Option<u32>,
+    app_assets_version: u32,
+    remote_latest_version: Option<u32>,
+    remote_latest_base_version: Option<u32>,
+    target_version: Option<u32>,
+    update_available: bool,
+    update_download_size: u64,
+    update_plan: String,
+    latest_url: String,
+    remote_manifest_url: Option<String>,
+    update_check_error: Option<String>,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct AssetDownloadProgress {
+    kind: String,
+    phase: String,
+    downloaded_bytes: u64,
+    total_bytes: Option<u64>,
+    bytes_per_second: Option<f64>,
+    eta_seconds: Option<u64>,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AssetDownloadInstallResult {
+    installed: bool,
+    installed_version: Option<u32>,
+    plan: String,
     servant_files: u64,
     craft_essence_files: u64,
     install_dir: String,
@@ -3397,6 +3532,164 @@ fn refresh_asset_protocol_scope(app: &tauri::AppHandle) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+fn parse_assets_app_manifest(contents: &str) -> Result<AssetsAppManifest, String> {
+    serde_json::from_str(contents).map_err(|e| format!("解析素材包配置失败: {e}"))
+}
+
+fn assets_app_manifest(app: &tauri::AppHandle) -> Result<AssetsAppManifest, String> {
+    let contents = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|base| base.join("resources").join("assets-manifest.json"))
+        .and_then(|path| fs::read_to_string(path).ok())
+        .unwrap_or_else(|| ASSETS_MANIFEST_JSON.to_string());
+    parse_assets_app_manifest(&contents)
+}
+
+fn asset_version_path(assets_root: &Path) -> PathBuf {
+    assets_root.join("assets-version.json")
+}
+
+fn read_asset_version(assets_root: &Path) -> Option<AssetVersionRecord> {
+    fs::read_to_string(asset_version_path(assets_root))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+}
+
+fn write_asset_version(assets_root: &Path, version: u32) -> Result<(), String> {
+    fs::create_dir_all(assets_root).map_err(|e| format!("创建素材目录失败: {e}"))?;
+    let record = AssetVersionRecord { version };
+    fs::write(
+        asset_version_path(assets_root),
+        serde_json::to_string_pretty(&record).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| format!("写入素材包版本记录失败: {e}"))
+}
+
+fn read_import_asset_version(
+    extracted_root: &Path,
+    import_root: &Path,
+) -> Result<Option<u32>, String> {
+    let mut candidates = vec![import_root.join("assets-version.json")];
+    let root_record = extracted_root.join("assets-version.json");
+    if root_record != candidates[0] {
+        candidates.push(root_record);
+    }
+
+    for path in candidates {
+        if !path.exists() {
+            continue;
+        }
+        let contents =
+            fs::read_to_string(&path).map_err(|e| format!("读取素材包版本记录失败: {e}"))?;
+        let record: AssetVersionRecord = serde_json::from_str(&contents)
+            .map_err(|e| format!("解析素材包版本记录失败: {e}"))?;
+        return Ok(Some(record.version));
+    }
+
+    Ok(None)
+}
+
+fn local_asset_version(
+    assets_root: &Path,
+    imported_servants: bool,
+    imported_craft_essences: bool,
+) -> Option<u32> {
+    read_asset_version(assets_root)
+        .map(|record| record.version)
+        .or_else(|| (imported_servants || imported_craft_essences).then_some(1))
+}
+
+fn http_text(url: &str) -> Result<String, String> {
+    reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("创建下载客户端失败: {e}"))?
+        .get(url)
+        .send()
+        .map_err(|e| format!("读取远端素材包配置失败: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("读取远端素材包配置失败: {e}"))?
+        .text()
+        .map_err(|e| format!("读取远端素材包配置失败: {e}"))
+}
+
+fn parse_assets_latest_manifest(contents: &str) -> Result<AssetsLatestManifest, String> {
+    serde_json::from_str(contents).map_err(|e| format!("解析远端素材 latest.json 失败: {e}"))
+}
+
+fn parse_assets_remote_manifest(contents: &str) -> Result<AssetsRemoteManifest, String> {
+    serde_json::from_str(contents).map_err(|e| format!("解析远端素材 manifest 失败: {e}"))
+}
+
+fn url_dir(url: &str) -> String {
+    url.rsplit_once('/')
+        .map(|(base, _)| format!("{base}/"))
+        .unwrap_or_default()
+}
+
+fn join_remote_url(base: &str, path: &str) -> String {
+    if path.starts_with("http://") || path.starts_with("https://") {
+        path.to_string()
+    } else {
+        format!("{}{}", base.trim_end_matches('/'), format!("/{path}"))
+    }
+}
+
+fn fetch_assets_remote_manifest(
+    latest_url: &str,
+) -> Result<(AssetsLatestManifest, AssetsRemoteManifest, String, String), String> {
+    let latest_contents = http_text(latest_url)?;
+    let latest = parse_assets_latest_manifest(&latest_contents)?;
+    let latest_base_url = url_dir(latest_url);
+    let manifest_url = join_remote_url(&latest_base_url, &latest.manifest);
+    let manifest_contents = http_text(&manifest_url)?;
+    let manifest = parse_assets_remote_manifest(&manifest_contents)?;
+    Ok((latest, manifest, latest_base_url, manifest_url))
+}
+
+fn asset_update_plan(
+    current_version: Option<u32>,
+    app_assets_version: u32,
+    remote: &AssetsRemoteManifest,
+) -> AssetInstallPlan {
+    let target_version = app_assets_version.min(remote.latest);
+    if current_version.is_some_and(|version| version >= target_version) {
+        return AssetInstallPlan::None;
+    }
+
+    let Some(mut version) = current_version else {
+        return AssetInstallPlan::Base {
+            target_version,
+            packs: remote.base.packs.clone(),
+        };
+    };
+
+    let mut patches = Vec::new();
+    while version < target_version {
+        let Some(patch) = remote.patches.iter().find(|patch| {
+            patch.from == version && patch.to <= target_version && patch.to > version
+        }) else {
+            return AssetInstallPlan::Base {
+                target_version,
+                packs: remote.base.packs.clone(),
+            };
+        };
+        patches.push(patch.clone());
+        version = patch.to;
+    }
+
+    if patches.is_empty() {
+        AssetInstallPlan::None
+    } else {
+        AssetInstallPlan::Patches {
+            target_version,
+            patches,
+        }
+    }
 }
 
 fn extract_zip_archive(zip_path: &Path, destination: &Path) -> Result<(), String> {
@@ -3460,6 +3753,10 @@ fn copy_asset_tree(source: &Path, destination: &Path) -> Result<FileCopyStats, S
     Ok(stats)
 }
 
+fn merge_asset_tree(source: &Path, destination: &Path) -> Result<FileCopyStats, String> {
+    copy_asset_tree(source, destination)
+}
+
 fn replace_asset_tree(source: &Path, destination: &Path) -> Result<FileCopyStats, String> {
     let staging = destination.with_extension(format!("import-{}", uuid::Uuid::new_v4()));
     if staging.exists() {
@@ -3471,6 +3768,40 @@ fn replace_asset_tree(source: &Path, destination: &Path) -> Result<FileCopyStats
     }
     fs::rename(&staging, destination).map_err(|e| format!("安装素材失败: {e}"))?;
     Ok(stats)
+}
+
+fn install_asset_directories(
+    import_root: &Path,
+    assets_root: &Path,
+    replace_existing: bool,
+) -> Result<(bool, bool, FileCopyStats, FileCopyStats), String> {
+    let servant_source = import_root.join("servants");
+    let ce_source = import_root.join("ces");
+    let has_servants = servant_source.is_dir();
+    let has_ces = ce_source.is_dir();
+    if !has_servants && !has_ces {
+        return Err("压缩包内未找到 assets/servants 或 assets/ces 目录".to_string());
+    }
+
+    fs::create_dir_all(assets_root).map_err(|e| format!("创建素材目录失败: {e}"))?;
+    let install_tree = |source: &Path, destination: PathBuf| {
+        if replace_existing {
+            replace_asset_tree(source, &destination)
+        } else {
+            merge_asset_tree(source, &destination)
+        }
+    };
+    let servant_stats = if has_servants {
+        install_tree(&servant_source, assets_root.join("servants"))?
+    } else {
+        FileCopyStats::default()
+    };
+    let ce_stats = if has_ces {
+        install_tree(&ce_source, assets_root.join("ces"))?
+    } else {
+        FileCopyStats::default()
+    };
+    Ok((has_servants, has_ces, servant_stats, ce_stats))
 }
 
 fn import_asset_bundle_from_zip_path(
@@ -3490,25 +3821,10 @@ fn import_asset_bundle_from_zip_path(
     extract_zip_archive(zip_path, &extracted_root)?;
 
     let import_root = locate_import_root(&extracted_root);
-    let servant_source = import_root.join("servants");
-    let ce_source = import_root.join("ces");
-    let has_servants = servant_source.is_dir();
-    let has_ces = ce_source.is_dir();
-    if !has_servants && !has_ces {
-        return Err("压缩包内未找到 assets/servants 或 assets/ces 目录".to_string());
-    }
-
-    fs::create_dir_all(assets_root).map_err(|e| format!("创建素材目录失败: {e}"))?;
-    let servant_stats = if has_servants {
-        replace_asset_tree(&servant_source, &assets_root.join("servants"))?
-    } else {
-        FileCopyStats::default()
-    };
-    let ce_stats = if has_ces {
-        replace_asset_tree(&ce_source, &assets_root.join("ces"))?
-    } else {
-        FileCopyStats::default()
-    };
+    let imported_version = read_import_asset_version(&extracted_root, &import_root)?.unwrap_or(1);
+    let (has_servants, has_ces, servant_stats, ce_stats) =
+        install_asset_directories(&import_root, assets_root, true)?;
+    write_asset_version(assets_root, imported_version)?;
 
     Ok(AssetBundleImportResult {
         imported_servants: has_servants,
@@ -3539,24 +3855,45 @@ fn count_files_recursive(dir: &Path) -> Result<u64, String> {
 }
 
 fn asset_bundle_status_for_app(app: &tauri::AppHandle) -> Result<AssetBundleStatus, String> {
-    asset_bundle_status_from_root(&app_assets_dir(app))
+    let app_manifest = assets_app_manifest(app)?;
+    let assets_root = app_assets_dir(app);
+    Ok(asset_bundle_status_from_root(&assets_root, &app_manifest))
 }
 
-fn asset_bundle_status_from_root(assets_root: &Path) -> Result<AssetBundleStatus, String> {
+fn asset_bundle_status_from_root(
+    assets_root: &Path,
+    app_manifest: &AssetsAppManifest,
+) -> AssetBundleStatus {
     let servants = assets_root.join("servants");
     let craft_essences = assets_root.join("ces");
-    let servant_files = count_files_recursive(&servants)?;
-    let craft_essence_files = count_files_recursive(&craft_essences)?;
+    let servant_files = count_files_recursive(&servants).unwrap_or(0);
+    let craft_essence_files = count_files_recursive(&craft_essences).unwrap_or(0);
     let imported_servants = servant_files > 0;
     let imported_craft_essences = craft_essence_files > 0;
-    Ok(AssetBundleStatus {
-        installed: imported_servants && imported_craft_essences,
+    let current_version =
+        local_asset_version(assets_root, imported_servants, imported_craft_essences);
+    let version_installed = current_version == Some(app_manifest.assets_version);
+    let update_available =
+        current_version.is_some_and(|version| version < app_manifest.assets_version);
+    AssetBundleStatus {
+        installed: imported_servants && imported_craft_essences && version_installed,
         imported_servants,
         imported_craft_essences,
         servant_files,
         craft_essence_files,
         install_dir: assets_root.to_string_lossy().into_owned(),
-    })
+        current_version,
+        app_assets_version: app_manifest.assets_version,
+        remote_latest_version: None,
+        remote_latest_base_version: None,
+        target_version: update_available.then_some(app_manifest.assets_version),
+        update_available,
+        update_download_size: 0,
+        update_plan: if update_available { "pending" } else { "none" }.to_string(),
+        latest_url: app_manifest.latest_url.clone(),
+        remote_manifest_url: None,
+        update_check_error: None,
+    }
 }
 
 #[tauri::command]
@@ -3593,6 +3930,234 @@ async fn import_asset_bundle(
     Ok(result)
 }
 
+fn asset_downloads_dir(assets_root: &Path) -> PathBuf {
+    assets_root.join(".downloads")
+}
+
+fn emit_asset_download_progress(
+    app: &tauri::AppHandle,
+    kind: &str,
+    phase: &str,
+    downloaded_bytes: u64,
+    total_bytes: Option<u64>,
+    bytes_per_second: Option<f64>,
+    eta_seconds: Option<u64>,
+) {
+    app.emit(
+        ASSET_DOWNLOAD_PROGRESS_EVENT,
+        AssetDownloadProgress {
+            kind: kind.to_string(),
+            phase: phase.to_string(),
+            downloaded_bytes,
+            total_bytes,
+            bytes_per_second,
+            eta_seconds,
+        },
+    )
+    .ok();
+}
+
+fn download_asset_artifact(
+    app: &tauri::AppHandle,
+    kind: &str,
+    url: &str,
+    destination: &Path,
+) -> Result<(), String> {
+    let parent = destination
+        .parent()
+        .ok_or_else(|| "素材包下载路径缺少父目录".to_string())?;
+    fs::create_dir_all(parent).map_err(|e| format!("创建素材包下载目录失败: {e}"))?;
+    let partial = destination.with_extension("zip.part");
+    if partial.exists() {
+        fs::remove_file(&partial).map_err(|e| format!("清理素材包下载临时文件失败: {e}"))?;
+    }
+
+    emit_asset_download_progress(app, kind, "connecting", 0, None, None, None);
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("创建素材包下载客户端失败: {e}"))?;
+    let mut response = client
+        .get(url)
+        .send()
+        .map_err(|e| format!("下载素材包失败: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("下载素材包失败: {e}"))?;
+    let total = response.content_length();
+    let mut file =
+        fs::File::create(&partial).map_err(|e| format!("创建素材包下载文件失败: {e}"))?;
+    let mut buffer = [0_u8; 64 * 1024];
+    let started = Instant::now();
+    let mut downloaded = 0_u64;
+    let mut last_emit = Instant::now();
+    emit_asset_download_progress(app, kind, "downloading", 0, total, Some(0.0), None);
+
+    loop {
+        let read = response
+            .read(&mut buffer)
+            .map_err(|e| format!("读取素材包下载流失败: {e}"))?;
+        if read == 0 {
+            break;
+        }
+        file.write_all(&buffer[..read])
+            .map_err(|e| format!("写入素材包下载文件失败: {e}"))?;
+        downloaded += read as u64;
+
+        let now = Instant::now();
+        if now.duration_since(last_emit).as_millis() >= 250 || total == Some(downloaded) {
+            let elapsed = started.elapsed().as_secs_f64().max(0.001);
+            let bytes_per_second = downloaded as f64 / elapsed;
+            let eta_seconds = total.and_then(|value| {
+                if bytes_per_second > 0.0 && value > downloaded {
+                    Some(((value - downloaded) as f64 / bytes_per_second).ceil() as u64)
+                } else {
+                    None
+                }
+            });
+            emit_asset_download_progress(
+                app,
+                kind,
+                "downloading",
+                downloaded,
+                total,
+                Some(bytes_per_second),
+                eta_seconds,
+            );
+            last_emit = now;
+        }
+    }
+
+    file.flush()
+        .map_err(|e| format!("写入素材包下载文件失败: {e}"))?;
+    fs::rename(&partial, destination).map_err(|e| format!("保存素材包下载文件失败: {e}"))?;
+    emit_asset_download_progress(app, kind, "downloaded", downloaded, total, None, None);
+    Ok(())
+}
+
+fn install_asset_zip_merge(zip_path: &Path, assets_root: &Path) -> Result<FileCopyStats, String> {
+    let temp = tempfile::Builder::new()
+        .prefix("asset-update-")
+        .tempdir_in(
+            assets_root
+                .parent()
+                .ok_or_else(|| "无法定位素材根目录".to_string())?,
+        )
+        .map_err(|e| format!("创建临时目录失败: {e}"))?;
+    let extracted_root = temp.path().join("unzipped");
+    fs::create_dir_all(&extracted_root).map_err(|e| format!("创建临时目录失败: {e}"))?;
+    extract_zip_archive(zip_path, &extracted_root)?;
+    let import_root = locate_import_root(&extracted_root);
+    let (_has_servants, _has_ces, servant_stats, ce_stats) =
+        install_asset_directories(&import_root, assets_root, false)?;
+    let mut stats = FileCopyStats::default();
+    stats += servant_stats;
+    stats += ce_stats;
+    Ok(stats)
+}
+
+fn verify_asset_artifact(
+    zip_path: &Path,
+    expected_sha256: &str,
+    expected_size: u64,
+) -> Result<(), String> {
+    let actual_size = fs::metadata(zip_path)
+        .map_err(|e| format!("读取素材包文件信息失败: {e}"))?
+        .len();
+    if actual_size != expected_size {
+        return Err(format!(
+            "素材包大小不匹配，期望 {expected_size} bytes，实际 {actual_size} bytes"
+        ));
+    }
+    let actual = sha256_file(zip_path)?;
+    if actual.eq_ignore_ascii_case(expected_sha256) {
+        Ok(())
+    } else {
+        Err(format!(
+            "素材包 sha256 不匹配，期望 {expected_sha256}，实际 {actual}"
+        ))
+    }
+}
+
+fn download_and_install_asset_bundles_inner(
+    app: tauri::AppHandle,
+) -> Result<AssetDownloadInstallResult, String> {
+    let app_manifest = assets_app_manifest(&app)?;
+    let assets_root = app_assets_dir(&app);
+    let local_status = asset_bundle_status_from_root(&assets_root, &app_manifest);
+    let (_latest, remote, latest_base_url, _manifest_url) =
+        fetch_assets_remote_manifest(&app_manifest.latest_url)?;
+    let plan = asset_update_plan(
+        local_status.current_version,
+        app_manifest.assets_version,
+        &remote,
+    );
+    let downloads_dir = asset_downloads_dir(&assets_root);
+    let target_version = plan.target_version();
+
+    match &plan {
+        AssetInstallPlan::None => {}
+        AssetInstallPlan::Base { packs, .. } => {
+            for pack in packs {
+                let url = join_remote_url(&latest_base_url, &pack.file);
+                let filename = pack
+                    .file
+                    .rsplit('/')
+                    .next()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(pack.name.as_str());
+                let zip_path = downloads_dir.join(filename);
+                download_asset_artifact(&app, &pack.name, &url, &zip_path)?;
+                verify_asset_artifact(&zip_path, &pack.sha256, pack.size)?;
+                emit_asset_download_progress(&app, &pack.name, "installing", 0, None, None, None);
+                install_asset_zip_merge(&zip_path, &assets_root)?;
+                emit_asset_download_progress(&app, &pack.name, "installed", 0, None, None, None);
+            }
+        }
+        AssetInstallPlan::Patches { patches, .. } => {
+            for patch in patches {
+                let kind = format!("patch-v{}-to-v{}", patch.from, patch.to);
+                let url = join_remote_url(&latest_base_url, &patch.file);
+                let filename = patch
+                    .file
+                    .rsplit('/')
+                    .next()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(kind.as_str());
+                let zip_path = downloads_dir.join(filename);
+                download_asset_artifact(&app, &kind, &url, &zip_path)?;
+                verify_asset_artifact(&zip_path, &patch.sha256, patch.size)?;
+                emit_asset_download_progress(&app, &kind, "installing", 0, None, None, None);
+                install_asset_zip_merge(&zip_path, &assets_root)?;
+                write_asset_version(&assets_root, patch.to)?;
+                emit_asset_download_progress(&app, &kind, "installed", 0, None, None, None);
+            }
+        }
+    }
+
+    if let Some(version) = target_version {
+        write_asset_version(&assets_root, version)?;
+    }
+    refresh_asset_protocol_scope(&app)?;
+    let final_status = asset_bundle_status_from_root(&assets_root, &app_manifest);
+    Ok(AssetDownloadInstallResult {
+        installed: !matches!(plan, AssetInstallPlan::None),
+        installed_version: target_version,
+        plan: plan.plan_type().to_string(),
+        servant_files: final_status.servant_files,
+        craft_essence_files: final_status.craft_essence_files,
+        install_dir: assets_root.to_string_lossy().into_owned(),
+    })
+}
+
+#[tauri::command]
+async fn download_asset_bundles(
+    app: tauri::AppHandle,
+) -> Result<AssetDownloadInstallResult, String> {
+    tauri::async_runtime::spawn_blocking(move || download_and_install_asset_bundles_inner(app))
+        .await
+        .map_err(|e| format!("素材包下载任务失败: {e}"))?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -3619,6 +4184,7 @@ pub fn run() {
             get_asset_bundle_status,
             pick_asset_bundle,
             import_asset_bundle,
+            download_asset_bundles,
             get_runtime_status,
             pick_runtime_bundle,
             import_runtime_bundle,
@@ -4184,6 +4750,88 @@ mod tests {
     }
 
     #[test]
+    fn import_asset_bundle_from_zip_path_writes_nested_version_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let install_root = tmp.path().join("installed");
+        let zip_path = tmp.path().join("bundle.zip");
+        fs::write(
+            &zip_path,
+            build_zip(&[
+                ("assets/assets-version.json", br#"{"version":2}"#),
+                ("assets/servants/1/narrow_servant_4.png", b"portrait"),
+                ("assets/ces/2/card_ce.png", b"ce"),
+            ]),
+        )
+        .unwrap();
+
+        import_asset_bundle_from_zip_path(&zip_path, &install_root).unwrap();
+
+        assert_eq!(read_asset_version(&install_root).unwrap().version, 2);
+    }
+
+    #[test]
+    fn import_asset_bundle_from_zip_path_writes_root_version_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let install_root = tmp.path().join("installed");
+        let zip_path = tmp.path().join("bundle.zip");
+        fs::write(
+            &zip_path,
+            build_zip(&[
+                ("assets-version.json", br#"{"version":2}"#),
+                ("servants/1/narrow_servant_4.png", b"portrait"),
+                ("ces/2/card_ce.png", b"ce"),
+            ]),
+        )
+        .unwrap();
+
+        import_asset_bundle_from_zip_path(&zip_path, &install_root).unwrap();
+
+        assert_eq!(read_asset_version(&install_root).unwrap().version, 2);
+    }
+
+    #[test]
+    fn import_asset_bundle_from_zip_path_defaults_missing_version_to_v1() {
+        let tmp = tempfile::tempdir().unwrap();
+        let install_root = tmp.path().join("installed");
+        let zip_path = tmp.path().join("bundle.zip");
+        fs::write(
+            &zip_path,
+            build_zip(&[
+                ("servants/1/narrow_servant_4.png", b"portrait"),
+                ("ces/2/card_ce.png", b"ce"),
+            ]),
+        )
+        .unwrap();
+
+        import_asset_bundle_from_zip_path(&zip_path, &install_root).unwrap();
+
+        assert_eq!(read_asset_version(&install_root).unwrap().version, 1);
+    }
+
+    #[test]
+    fn import_asset_bundle_from_zip_path_rejects_invalid_version_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let install_root = tmp.path().join("installed");
+        let zip_path = tmp.path().join("bundle.zip");
+        fs::write(
+            &zip_path,
+            build_zip(&[
+                ("assets/assets-version.json", br#"{"version":"bad"}"#),
+                ("assets/servants/1/narrow_servant_4.png", b"portrait"),
+                ("assets/ces/2/card_ce.png", b"ce"),
+            ]),
+        )
+        .unwrap();
+
+        let err = import_asset_bundle_from_zip_path(&zip_path, &install_root).unwrap_err();
+
+        assert!(err.contains("解析素材包版本记录失败"));
+        assert!(!asset_version_path(&install_root).exists());
+        assert!(!install_root.join("servants").exists());
+        assert!(!install_root.join("ces").exists());
+    }
+
+    #[test]
     fn import_asset_bundle_from_zip_path_replaces_existing_tree() {
         let tmp = tempfile::tempdir().unwrap();
         let install_root = tmp.path().join("installed");
@@ -4226,10 +4874,12 @@ mod tests {
     fn asset_bundle_status_requires_servants_and_craft_essences() {
         let tmp = tempfile::tempdir().unwrap();
         let assets_root = tmp.path().join("assets");
-        let missing = asset_bundle_status_from_root(&assets_root).unwrap();
+        let app_manifest = build_assets_app_manifest(2);
+        let missing = asset_bundle_status_from_root(&assets_root, &app_manifest);
         assert!(!missing.installed);
         assert!(!missing.imported_servants);
         assert!(!missing.imported_craft_essences);
+        assert_eq!(missing.current_version, None);
 
         fs::create_dir_all(assets_root.join("servants").join("1")).unwrap();
         fs::write(
@@ -4240,18 +4890,189 @@ mod tests {
             b"face",
         )
         .unwrap();
-        let partial = asset_bundle_status_from_root(&assets_root).unwrap();
+        let partial = asset_bundle_status_from_root(&assets_root, &app_manifest);
         assert!(!partial.installed);
         assert!(partial.imported_servants);
         assert!(!partial.imported_craft_essences);
         assert_eq!(partial.servant_files, 1);
+        assert_eq!(partial.current_version, Some(1));
 
         fs::create_dir_all(assets_root.join("ces").join("2")).unwrap();
         fs::write(assets_root.join("ces").join("2").join("card_ce.png"), b"ce").unwrap();
-        let installed = asset_bundle_status_from_root(&assets_root).unwrap();
+        let stale = asset_bundle_status_from_root(&assets_root, &app_manifest);
+        assert!(!stale.installed);
+        assert_eq!(stale.servant_files, 1);
+        assert_eq!(stale.craft_essence_files, 1);
+        assert_eq!(stale.current_version, Some(1));
+        assert_eq!(stale.target_version, Some(2));
+        assert!(stale.update_available);
+        assert_eq!(stale.update_download_size, 0);
+        assert_eq!(stale.update_plan, "pending");
+        assert_eq!(stale.remote_latest_version, None);
+
+        write_asset_version(&assets_root, 2).unwrap();
+        let installed = asset_bundle_status_from_root(&assets_root, &app_manifest);
         assert!(installed.installed);
-        assert_eq!(installed.servant_files, 1);
-        assert_eq!(installed.craft_essence_files, 1);
+        assert_eq!(installed.current_version, Some(2));
+        assert_eq!(installed.target_version, None);
+        assert!(!installed.update_available);
+    }
+
+    fn build_assets_app_manifest(version: u32) -> AssetsAppManifest {
+        parse_assets_app_manifest(&format!(
+            r#"{{
+                "assetsVersion": {version},
+                "latestUrl": "https://mash.xiaotongx.com/mash/assets/latest.json"
+            }}"#
+        ))
+        .unwrap()
+    }
+
+    fn build_assets_remote_manifest(latest: u32, patches: &str) -> AssetsRemoteManifest {
+        parse_assets_remote_manifest(&format!(
+            r#"{{
+                "latest": {latest},
+                "latestBase": 1,
+                "base": {{
+                    "version": 1,
+                    "packs": [
+                        {{
+                            "name": "assets-json",
+                            "file": "base/v1/assets-json-v1.zip",
+                            "sha256": "base-json-sha",
+                            "size": 10
+                        }},
+                        {{
+                            "name": "servant-images",
+                            "file": "base/v1/servant-images-v1.zip",
+                            "sha256": "base-servants-sha",
+                            "size": 20
+                        }}
+                    ]
+                }},
+                "patches": {patches}
+            }}"#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn assets_app_manifest_parses_target_version_and_latest_url() {
+        let manifest = parse_assets_app_manifest(ASSETS_MANIFEST_JSON).unwrap();
+        assert_eq!(manifest.assets_version, 2);
+        assert_eq!(
+            manifest.latest_url,
+            "https://mash.xiaotongx.com/mash/assets/latest.json"
+        );
+    }
+
+    #[test]
+    fn asset_update_plan_caps_target_to_app_configured_version() {
+        let remote = build_assets_remote_manifest(
+            3,
+            r#"[
+                {"from": 1, "to": 2, "file": "patches/v1-to-v2.zip", "sha256": "p12", "size": 7},
+                {"from": 2, "to": 3, "file": "patches/v2-to-v3.zip", "sha256": "p23", "size": 9}
+            ]"#,
+        );
+
+        let plan = asset_update_plan(Some(1), 2, &remote);
+
+        assert_eq!(plan.target_version(), Some(2));
+        assert_eq!(plan.plan_type(), "patch");
+        assert_eq!(plan.download_size(), 7);
+    }
+
+    #[test]
+    fn asset_update_plan_chains_patches_to_target() {
+        let remote = build_assets_remote_manifest(
+            3,
+            r#"[
+                {"from": 1, "to": 2, "file": "patches/v1-to-v2.zip", "sha256": "p12", "size": 7},
+                {"from": 2, "to": 3, "file": "patches/v2-to-v3.zip", "sha256": "p23", "size": 9}
+            ]"#,
+        );
+
+        let plan = asset_update_plan(Some(1), 3, &remote);
+
+        assert_eq!(plan.target_version(), Some(3));
+        assert_eq!(plan.plan_type(), "patch");
+        assert_eq!(plan.download_size(), 16);
+    }
+
+    #[test]
+    fn asset_update_plan_falls_back_to_base_when_patch_chain_is_missing() {
+        let remote = build_assets_remote_manifest(
+            3,
+            r#"[{"from": 2, "to": 3, "file": "patches/v2-to-v3.zip", "sha256": "p23", "size": 9}]"#,
+        );
+
+        let plan = asset_update_plan(Some(1), 3, &remote);
+
+        assert_eq!(plan.target_version(), Some(3));
+        assert_eq!(plan.plan_type(), "base");
+        assert_eq!(plan.download_size(), 30);
+    }
+
+    #[test]
+    fn install_asset_zip_merge_copies_json_and_png_without_deleting_old_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let assets_root = tmp.path().join("assets");
+        fs::create_dir_all(assets_root.join("servants").join("1")).unwrap();
+        fs::write(
+            assets_root.join("servants").join("1").join("old.png"),
+            b"old",
+        )
+        .unwrap();
+        let zip_path = tmp.path().join("patch.zip");
+        fs::write(
+            &zip_path,
+            build_zip(&[
+                ("assets/servants/1/servant.json", br#"{"name":"test"}"#),
+                ("assets/servants/1/new.png", b"new"),
+                ("assets/ces/2/card_ce.png", b"ce"),
+            ]),
+        )
+        .unwrap();
+
+        let stats = install_asset_zip_merge(&zip_path, &assets_root).unwrap();
+
+        assert_eq!(stats.files, 3);
+        assert!(assets_root
+            .join("servants")
+            .join("1")
+            .join("old.png")
+            .is_file());
+        assert!(assets_root
+            .join("servants")
+            .join("1")
+            .join("servant.json")
+            .is_file());
+        assert!(assets_root
+            .join("servants")
+            .join("1")
+            .join("new.png")
+            .is_file());
+        assert!(assets_root
+            .join("ces")
+            .join("2")
+            .join("card_ce.png")
+            .is_file());
+    }
+
+    #[test]
+    fn verify_asset_artifact_rejects_size_and_sha_mismatches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = tmp.path().join("asset.zip");
+        fs::write(&zip_path, b"zip bytes").unwrap();
+
+        let size_err = verify_asset_artifact(&zip_path, &"0".repeat(64), 1).unwrap_err();
+        assert!(size_err.contains("大小不匹配"));
+
+        let err = verify_asset_artifact(&zip_path, &"0".repeat(64), 9).unwrap_err();
+
+        assert!(err.contains("sha256 不匹配"));
+        assert!(!asset_version_path(tmp.path()).exists());
     }
 
     fn build_runtime_manifest(

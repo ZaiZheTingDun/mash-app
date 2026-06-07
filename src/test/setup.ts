@@ -112,6 +112,15 @@ vi.mock("@tauri-apps/api/core", () => ({
           craftEssenceFiles: 0,
           installDir: "/tmp/mash-assets",
         };
+      case "download_asset_bundles":
+        return {
+          installed: true,
+          installedVersion: 2,
+          plan: "patch",
+          servantFiles: 0,
+          craftEssenceFiles: 0,
+          installDir: "/tmp/mash-assets",
+        };
       case "get_asset_bundle_status":
         return {
           installed: false,
@@ -120,6 +129,17 @@ vi.mock("@tauri-apps/api/core", () => ({
           servantFiles: 0,
           craftEssenceFiles: 0,
           installDir: "/tmp/mash-assets",
+          currentVersion: null,
+          appAssetsVersion: 2,
+          remoteLatestVersion: null,
+          remoteLatestBaseVersion: null,
+          targetVersion: 2,
+          updateAvailable: true,
+          updateDownloadSize: 0,
+          updatePlan: "pending",
+          latestUrl: "https://mash.xiaotongx.com/mash/assets/latest.json",
+          remoteManifestUrl: null,
+          updateCheckError: null,
         };
       case "get_runtime_status":
         return {

@@ -269,11 +269,31 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         servantFiles: 0,
         craftEssenceFiles: 0,
         installDir: "/dev/mash-assets",
+        currentVersion: null,
+        appAssetsVersion: 2,
+        remoteLatestVersion: null,
+        remoteLatestBaseVersion: null,
+        targetVersion: 2,
+        updateAvailable: true,
+        updateDownloadSize: 0,
+        updatePlan: "pending",
+        latestUrl: "https://mash.xiaotongx.com/mash/assets/latest.json",
+        remoteManifestUrl: null,
+        updateCheckError: null,
       } as T;
     case "import_asset_bundle":
       return {
         importedServants: false,
         importedCraftEssences: false,
+        servantFiles: 0,
+        craftEssenceFiles: 0,
+        installDir: "/dev/mash-assets",
+      } as T;
+    case "download_asset_bundles":
+      return {
+        installed: true,
+        installedVersion: 2,
+        plan: "base",
         servantFiles: 0,
         craftEssenceFiles: 0,
         installDir: "/dev/mash-assets",

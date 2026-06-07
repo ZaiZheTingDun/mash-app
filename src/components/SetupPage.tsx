@@ -90,6 +90,8 @@ export function SetupPage({ onReady }: SetupPageProps) {
                 ? `已导入从者 ${assetStatus?.servantFiles ?? 0} 个文件，礼装 ${
                     assetStatus?.craftEssenceFiles ?? 0
                   } 个文件`
+                : assetStatus?.updateAvailable && assetStatus.targetVersion != null
+                  ? `需要更新素材包 v${assetStatus.currentVersion} → v${assetStatus.targetVersion}`
                 : "需要导入包含 assets/servants 和 assets/ces 的素材包"}
             </Text>
             <AssetBundleButton onImported={refresh} />

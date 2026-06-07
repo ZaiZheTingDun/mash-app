@@ -22,6 +22,8 @@ import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
 import type { CraftEssence } from "./types/craftEssence";
 import type { Project } from "./types/project";
+import type { AssetBundleStatus } from "./types/assets";
+import type { RuntimeStatus } from "./types/runtime";
 import type { AppTheme } from "./types/theme";
 import "./App.css";
 
@@ -72,6 +74,7 @@ function App({ theme, onThemeChange }: AppProps) {
   const [craftEssences, setCraftEssences] = useState<CraftEssence[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [setupChecking, setSetupChecking] = useState(true);
   const [setupReady, setSetupReady] = useState(false);
   const [operationLogs, setOperationLogs] = useState<OperationLogEntry[]>([]);
   const [operationLogOpen, setOperationLogOpen] = useState(false);
@@ -198,6 +201,31 @@ function App({ theme, onThemeChange }: AppProps) {
       unlistenMenu.then((fn) => fn());
     };
   }, [checkForUpdates]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      invoke<RuntimeStatus>("get_runtime_status"),
+      invoke<AssetBundleStatus>("get_asset_bundle_status"),
+    ])
+      .then(([runtime, assets]) => {
+        if (cancelled) return;
+        setSetupReady(runtime.installed && assets.installed);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(String(err));
+        setSetupReady(false);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSetupChecking(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load both static catalogs in parallel. The CE catalog is small (just
   // id/name) and shared across all projects, so caching it on the App
@@ -390,6 +418,16 @@ function App({ theme, onThemeChange }: AppProps) {
   const handleBackToTeam = useCallback(() => {
     setView("team");
   }, []);
+
+  if (setupChecking) {
+    return (
+      <Flex direction="column" className="app-root" data-theme={theme}>
+        <Flex align="center" justify="center" style={{ flex: 1 }}>
+          <Spinner size="3" />
+        </Flex>
+      </Flex>
+    );
+  }
 
   if (!setupReady) {
     return (

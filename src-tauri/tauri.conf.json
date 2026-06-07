@@ -63,6 +63,7 @@
       "resources/servers/cn/templates/items/*",
       "resources/adb/*",
       "resources/scrcpy/scrcpy-server.jar",
+      "resources/assets-manifest.json",
       "resources/runtime-manifest.json"
     ],
     "createUpdaterArtifacts": true
