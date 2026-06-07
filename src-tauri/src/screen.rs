@@ -300,6 +300,8 @@ pub struct SupportRowMatch {
     pub tap: Point,
     pub name_text: String,
     pub name_score: f64,
+    #[serde(default)]
+    pub name_matched_name: Option<String>,
     pub name_region: NormRect,
     pub np_text: String,
     pub np_score: f64,
@@ -339,8 +341,7 @@ pub struct SupportCandidate {
     pub text: String,
     pub score: f64,
     pub region: NormRect,
-    /// Set on NP candidates to identify which expected NP they matched;
-    /// always ``None`` for name candidates.
+    /// Identifies which expected name / NP candidate won the fuzzy match.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub matched_name: Option<String>,
 }
@@ -1052,7 +1053,7 @@ impl SidecarClient {
     }
 
     /// OCR the support-select screen's list region and return rows whose
-    /// servant-name + NP-name fragments fuzzy-match ``expected_name`` and
+    /// servant-name + NP-name fragments fuzzy-match one of ``expected_names`` and
     /// any of ``expected_np_names`` and sit close enough vertically to be
     /// part of the same row. Defaults (list region, thresholds, pair_dy)
     /// are owned by the sidecar; this binding stays minimal so retuning
@@ -1061,12 +1062,14 @@ impl SidecarClient {
         &mut self,
         image_path: Option<&Path>,
         expected_name: &str,
+        expected_names: &[String],
         expected_np_names: &[String],
         include_support_details: bool,
     ) -> Result<FindSupportsResult, String> {
         let mut req = serde_json::json!({
             "cmd": "find_supports",
             "expectedName": expected_name,
+            "expectedNames": expected_names,
             "expectedNpNames": expected_np_names,
             "includeSupportDetails": include_support_details,
         });

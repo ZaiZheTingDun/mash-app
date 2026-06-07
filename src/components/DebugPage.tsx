@@ -318,6 +318,7 @@ export interface SupportRowMatchDto {
   tap: PointDto;
   nameText: string;
   nameScore: number;
+  nameMatchedName?: string | null;
   nameRegion: NormRectDto;
   npText: string;
   npScore: number;
@@ -356,6 +357,7 @@ export interface SupportFragmentDto {
   region: NormRectDto;
   ocrConfidence: number;
   nameScore: number;
+  matchedName?: string;
   bestNpScore: number;
   bestNpName: string;
 }
@@ -429,6 +431,7 @@ function supportCeArtworkChecksText(
 interface ServantMetadataDto {
   id: number;
   name: string;
+  names: string[];
   npNames: string[];
 }
 
@@ -1223,7 +1226,7 @@ export function DebugPage({
         });
         setSupportMetadata(meta);
         log(
-          `加载从者元数据: ${meta.name} · 宝具 [${meta.npNames.join(" / ")}]`
+          `加载从者元数据: ${meta.name} · 名称 [${meta.names.join(" / ")}] · 宝具 [${meta.npNames.join(" / ")}]`
         );
       }
       const result = await invoke<FindSupportsResultDto>(
@@ -2396,6 +2399,9 @@ export function DebugPage({
                     目标：{supportMetadata.name} (#{supportMetadata.id})
                   </Text>
                   <Text size="1" color="gray">
+                    名称候选: {supportMetadata.names.join(" / ")}
+                  </Text>
+                  <Text size="1" color="gray">
                     宝具候选: {supportMetadata.npNames.join(" / ")}
                   </Text>
                   <Text size="1" color="gray">
@@ -2567,7 +2573,8 @@ export function DebugPage({
                             color="gray"
                             key={`name-cand-side-${i}`}
                           >
-                            · {c.text} ({c.score.toFixed(2)}) @ y=
+                            · {c.text} ({c.score.toFixed(2)})
+                            {c.matchedName ? ` → ${c.matchedName}` : ""} @ y=
                             {c.region.y.toFixed(3)}
                           </Text>
                         ))}

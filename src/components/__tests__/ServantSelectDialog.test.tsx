@@ -106,6 +106,39 @@ describe("ServantSelectDialog", () => {
     expect(screen.getByText("国服中文名")).toBeInTheDocument();
   });
 
+  it("filters by overwrite servant aliases while displaying the formal name", async () => {
+    const user = userEvent.setup();
+    setup({
+      servants: [
+        {
+          id: 244,
+          variantKey: "244",
+          name_cn: "吉娜可·加里吉利",
+          name_jp: "ジナコ＝カリギリ",
+          name_en: "Jinako Carigiri",
+          overWriteServantNames: [
+            {
+              nameCn: "伟大的石像神",
+              nameJp: "大いなる石像神",
+            },
+          ],
+          class: "Moon Cancer",
+          rarity: 5,
+          noblePhantasmName: "肉弹啊，明天再开始努力吧",
+        },
+        ...FIXTURE,
+      ],
+    });
+
+    await user.type(screen.getByPlaceholderText("搜索从者名称..."), "石像神");
+    expect(screen.getByText("吉娜可·加里吉利")).toBeInTheDocument();
+    expect(screen.queryByText("伟大的石像神")).not.toBeInTheDocument();
+
+    await user.clear(screen.getByPlaceholderText("搜索从者名称..."));
+    await user.type(screen.getByPlaceholderText("搜索从者名称..."), "大いなる");
+    expect(screen.getByText("吉娜可·加里吉利")).toBeInTheDocument();
+  });
+
   it("filters by English name (case-insensitive)", async () => {
     const user = userEvent.setup();
     setup();

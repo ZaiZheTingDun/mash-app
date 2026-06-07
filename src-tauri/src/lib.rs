@@ -953,6 +953,13 @@ fn load_advanced_battle_scenes(
 }
 
 #[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ServantNameAlias {
+    name_jp: Option<String>,
+    name_cn: Option<String>,
+}
+
+#[derive(serde::Serialize, Clone)]
 struct ServantInfo {
     id: u32,
     #[serde(rename = "variantKey")]
@@ -965,6 +972,11 @@ struct ServantInfo {
     name_jp: String,
     name_en: String,
     name_other: Option<String>,
+    #[serde(
+        rename = "overWriteServantNames",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    over_write_servant_names: Vec<ServantNameAlias>,
     class: String,
     rarity: u32,
     #[serde(rename = "noblePhantasmName")]
@@ -1025,6 +1037,38 @@ fn string_field(value: &serde_json::Value, keys: &[&str]) -> Option<String> {
         .map(str::trim)
         .find(|s| !s.is_empty())
         .map(str::to_string)
+}
+
+fn push_unique_nonempty(out: &mut Vec<String>, value: impl AsRef<str>) {
+    let trimmed = value.as_ref().trim();
+    if !trimmed.is_empty() && !out.iter().any(|existing| existing == trimmed) {
+        out.push(trimmed.to_string());
+    }
+}
+
+fn servant_name_aliases(value: &serde_json::Value) -> Vec<ServantNameAlias> {
+    let Some(arr) = value
+        .get("overWriteServantNames")
+        .or_else(|| value.get("overwriteServantNames"))
+        .or_else(|| value.get("over_write_servant_names"))
+        .and_then(|v| v.as_array())
+    else {
+        return Vec::new();
+    };
+
+    arr.iter()
+        .filter_map(|entry| {
+            let alias = ServantNameAlias {
+                name_jp: string_field(entry, &["nameJP", "name_jp"]),
+                name_cn: string_field(entry, &["nameCN", "name_cn"]),
+            };
+            if alias.name_jp.is_none() && alias.name_cn.is_none() {
+                None
+            } else {
+                Some(alias)
+            }
+        })
+        .collect()
 }
 
 fn u32_field(value: &serde_json::Value, keys: &[&str]) -> Option<u32> {
@@ -1139,6 +1183,7 @@ fn servants_data() -> &'static [ServantInfo] {
                     let name_jp = string_field(s, &["nameJP", "name_jp"])?;
                     let name_en = string_field(s, &["nameEN", "name_en", "name"]).unwrap_or_default();
                     let name_other = string_field(s, &["nameOther", "name_other"]);
+                    let over_write_servant_names = servant_name_aliases(s);
 
                     let (class, rarity) = if let Some(class_name) =
                         string_field(s, &["className", "class"])
@@ -1180,6 +1225,7 @@ fn servants_data() -> &'static [ServantInfo] {
                                     name_jp: name_jp.clone(),
                                     name_en: name_en.clone(),
                                     name_other: name_other.clone(),
+                                    over_write_servant_names: over_write_servant_names.clone(),
                                     class: class.clone(),
                                     rarity,
                                     noble_phantasm_name: last_variant_np_name(np_variant)
@@ -1198,6 +1244,7 @@ fn servants_data() -> &'static [ServantInfo] {
                             name_jp,
                             name_en,
                             name_other,
+                            over_write_servant_names,
                             class,
                             rarity,
                             noble_phantasm_name: base_np,
@@ -1498,6 +1545,8 @@ fn get_template_asset_path(
 pub struct ServantMetadata {
     pub id: u32,
     pub name: String,
+    #[serde(default)]
+    pub names: Vec<String>,
     pub np_names: Vec<String>,
     /// Atlas Academy `className`, lowercased (e.g. `caster`, `alterego`,
     /// `mooncancer`). Drives the support-select class-tab tap so the
@@ -1613,6 +1662,52 @@ fn servant_id_to_cn_index() -> &'static HashMap<u32, String> {
         }
         map
     })
+}
+
+fn servant_id_to_names_index(server: Server) -> &'static HashMap<u32, Vec<String>> {
+    static JP_INDEX: OnceLock<HashMap<u32, Vec<String>>> = OnceLock::new();
+    static CN_INDEX: OnceLock<HashMap<u32, Vec<String>>> = OnceLock::new();
+    let index = match server {
+        Server::Jp => &JP_INDEX,
+        Server::Cn => &CN_INDEX,
+    };
+    index.get_or_init(|| {
+        let mut map: HashMap<u32, Vec<String>> = HashMap::new();
+        for s in servants_data() {
+            let names = map.entry(s.id).or_default();
+            match server {
+                Server::Jp => {
+                    push_unique_nonempty(names, &s.name_jp);
+                    for alias in &s.over_write_servant_names {
+                        if let Some(name) = &alias.name_jp {
+                            push_unique_nonempty(names, name);
+                        }
+                    }
+                }
+                Server::Cn => {
+                    let cn = s.name_cn_server.as_deref().unwrap_or(&s.name_cn);
+                    push_unique_nonempty(names, cn);
+                    for alias in &s.over_write_servant_names {
+                        if let Some(name) = &alias.name_cn {
+                            push_unique_nonempty(names, name);
+                        }
+                    }
+                }
+            }
+        }
+        map
+    })
+}
+
+fn localized_servant_names_by_id(id: u32, server: Server, primary_name: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    push_unique_nonempty(&mut names, primary_name);
+    if let Some(alias_names) = servant_id_to_names_index(server).get(&id) {
+        for name in alias_names {
+            push_unique_nonempty(&mut names, name);
+        }
+    }
+    names
 }
 
 fn localize_servant_name_by_id(id: u32, jp: &str) -> String {
@@ -1740,9 +1835,11 @@ pub(crate) fn load_servant_metadata(
         }
     };
 
+    let names = localized_servant_names_by_id(id, server, &name);
     let meta = ServantMetadata {
         id,
         name,
+        names,
         np_names,
         class_name,
     };
@@ -4692,6 +4789,48 @@ mod tests {
         assert_eq!(
             idx.get(&normalize_jp_key("メドゥーサ")).map(|s| s.as_str()),
             Some("歌果")
+        );
+    }
+
+    #[test]
+    fn servants_data_exposes_overwrite_servant_names() {
+        let jinako = servants_data().iter().find(|s| s.id == 244).unwrap();
+        assert_eq!(jinako.name_cn, "吉娜可·加里吉利");
+        assert!(jinako
+            .over_write_servant_names
+            .iter()
+            .any(|alias| alias.name_cn.as_deref() == Some("伟大的石像神")
+                && alias.name_jp.as_deref() == Some("大いなる石像神")));
+    }
+
+    #[test]
+    fn localized_servant_names_include_overwrite_aliases_by_server() {
+        let cn_names = localized_servant_names_by_id(244, Server::Cn, "吉娜可·加里吉利");
+        assert_eq!(
+            cn_names.first().map(|s| s.as_str()),
+            Some("吉娜可·加里吉利")
+        );
+        assert!(cn_names.iter().any(|name| name == "伟大的石像神"));
+        assert!(!cn_names.iter().any(|name| name == "大いなる石像神"));
+
+        let jp_names = localized_servant_names_by_id(244, Server::Jp, "ジナコ＝カリギリ");
+        assert_eq!(
+            jp_names.first().map(|s| s.as_str()),
+            Some("ジナコ＝カリギリ")
+        );
+        assert!(jp_names.iter().any(|name| name == "大いなる石像神"));
+        assert!(!jp_names.iter().any(|name| name == "伟大的石像神"));
+    }
+
+    #[test]
+    fn localized_servant_names_dedupe_primary_alias_overlap() {
+        let names = localized_servant_names_by_id(244, Server::Cn, "伟大的石像神");
+        assert_eq!(
+            names
+                .iter()
+                .filter(|name| name.as_str() == "伟大的石像神")
+                .count(),
+            1
         );
     }
 

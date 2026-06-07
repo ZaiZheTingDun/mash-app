@@ -331,6 +331,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return {
         id: servant?.id ?? args.servantId,
         name: servant?.name_cn ?? "模拟从者",
+        names: servant ? [servant.name_cn] : ["模拟从者"],
         npNames: servant?.noblePhantasmName ? [servant.noblePhantasmName] : [],
       } as T;
     }

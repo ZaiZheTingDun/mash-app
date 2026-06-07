@@ -1637,6 +1637,75 @@ def test_support_skill_details_distinguish_owned_and_append_panels(monkeypatch):
     assert append_levels == [10, 10, 9, None, None]
 
 
+def test_find_supports_matches_overwrite_name_alias_with_np_pair(monkeypatch):
+    import mash_cv.cv as cv
+
+    img = np.zeros((1000, 1000, 3), dtype=np.uint8)
+    box_name = [[100, 100], [240, 100], [240, 130], [100, 130]]
+    box_np = [[120, 185], [340, 185], [340, 215], [120, 215]]
+
+    def fake_ocr(_crop):
+        return (
+            [
+                (box_name, "伟大的石像神", 0.98),
+                (box_np, "肉弹啊明天再开始努力吧", 0.97),
+            ],
+            None,
+        )
+
+    monkeypatch.setattr(cv, "_get_ocr", lambda: fake_ocr)
+    monkeypatch.setattr(cv, "_support_find_confirm_button_anchors", lambda _img: [])
+    monkeypatch.setattr(cv, "_support_grand_badge_scores_per_anchor", lambda _img, _anchors: None)
+
+    result = cv._find_supports(
+        img,
+        {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+        "吉娜可·加里吉利",
+        ["肉弹啊，明天再开始努力吧"],
+        0.7,
+        0.7,
+        0.2,
+        expected_names=["吉娜可·加里吉利", "伟大的石像神"],
+    )
+
+    assert len(result["supports"]) == 1
+    row = result["supports"][0]
+    assert row["nameText"] == "伟大的石像神"
+    assert row["nameMatchedName"] == "伟大的石像神"
+    assert row["npMatchedName"] == "肉弹啊，明天再开始努力吧"
+    assert result["diagnostics"]["nameCandidates"][0]["matchedName"] == "伟大的石像神"
+    assert result["diagnostics"]["fragments"][0]["matchedName"] == "伟大的石像神"
+
+
+def test_find_supports_name_only_fallback_uses_overwrite_name_alias(monkeypatch):
+    import mash_cv.cv as cv
+
+    img = np.zeros((1000, 1000, 3), dtype=np.uint8)
+    box_name = [[100, 100], [240, 100], [240, 130], [100, 130]]
+
+    def fake_ocr(_crop):
+        return ([(box_name, "大いなる石像神", 0.98)], None)
+
+    monkeypatch.setattr(cv, "_get_ocr", lambda: fake_ocr)
+    monkeypatch.setattr(cv, "_support_find_confirm_button_anchors", lambda _img: [])
+    monkeypatch.setattr(cv, "_support_grand_badge_scores_per_anchor", lambda _img, _anchors: None)
+
+    result = cv._find_supports(
+        img,
+        {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+        "ジナコ＝カリギリ",
+        [],
+        0.7,
+        0.7,
+        0.2,
+        expected_names=["ジナコ＝カリギリ", "大いなる石像神"],
+    )
+
+    assert result["diagnostics"]["nameOnlyFallback"] is True
+    assert len(result["supports"]) == 1
+    assert result["supports"][0]["nameMatchedName"] == "大いなる石像神"
+
+
 @pytest.mark.skipif(
     not os.path.isfile(
         os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "skill.png"))

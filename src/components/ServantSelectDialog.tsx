@@ -61,6 +61,14 @@ function displayCnName(servant: Servant): string {
   return servant.name_cn_server?.trim() || servant.name_cn;
 }
 
+function aliasMatchesSearch(servant: Servant, q: string): boolean {
+  return (servant.overWriteServantNames ?? []).some((alias) => {
+    const jp = alias.nameJp ?? "";
+    const cn = alias.nameCn ?? "";
+    return jp.toLowerCase().includes(q) || cn.toLowerCase().includes(q);
+  });
+}
+
 export function ServantSelectDialog({
   open,
   onOpenChange,
@@ -108,7 +116,8 @@ export function ServantSelectDialog({
         s.name_en.toLowerCase().includes(q) ||
         s.name_jp.includes(q) ||
         (s.name_other ?? "").toLowerCase().includes(q) ||
-        (s.noblePhantasmName ?? "").toLowerCase().includes(q)
+        (s.noblePhantasmName ?? "").toLowerCase().includes(q) ||
+        aliasMatchesSearch(s, q)
     );
   }, [servants, search, classFilter, rarityFilter, disabledIds]);
 

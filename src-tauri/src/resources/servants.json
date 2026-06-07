@@ -4704,6 +4704,12 @@
         "card": "1",
         "cardName": "arts"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "大いなる石像神",
+        "nameCN": "伟大的石像神"
+      }
     ]
   },
   {
@@ -4817,6 +4823,16 @@
         "nameCN": "波旬变生·三千大千天魔王",
         "card": "2",
         "cardName": "buster"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "織田信長",
+        "nameCN": "织田信长"
+      },
+      {
+        "nameJP": "織田吉法師",
+        "nameCN": "织田吉法师"
       }
     ]
   },
@@ -5140,6 +5156,12 @@
         "nameCN": "喷射三段突",
         "card": "3",
         "cardName": "quick"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "オキタ・Ｊ・ソウジ",
+        "nameCN": "冲田·J·总司"
       }
     ]
   },
@@ -5982,6 +6004,12 @@
         "card": "2",
         "cardName": "buster"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "妖精騎士ガウェイン",
+        "nameCN": "妖精骑士高文"
+      }
     ]
   },
   {
@@ -6000,6 +6028,12 @@
         "nameCN": "痛幻哭奏",
         "card": "3",
         "cardName": "quick"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "妖精騎士トリスタン",
+        "nameCN": "妖精骑士崔斯坦"
       }
     ]
   },
@@ -6027,6 +6061,12 @@
         "nameCN": "无人知晓的无垢搏动",
         "card": "2",
         "cardName": "buster"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "妖精騎士ランスロット",
+        "nameCN": "妖精骑士兰斯洛特"
       }
     ]
   },
@@ -6768,6 +6808,12 @@
         "card": "2",
         "cardName": "buster"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "アルクェイド・ブリュンスタッド",
+        "nameCN": "爱尔奎特·布伦史塔德"
+      }
     ]
   },
   {
@@ -7110,6 +7156,16 @@
         "card": "1",
         "cardName": "arts"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "グレゴリー・ラスプーチン",
+        "nameCN": "格里戈里·拉斯普京"
+      },
+      {
+        "nameJP": "言峰神父",
+        "nameCN": "言峰神父"
+      }
     ]
   },
   {
@@ -7166,6 +7222,16 @@
         "nameCN": "重启动心脏都市",
         "card": "3",
         "cardName": "quick"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "トラロック",
+        "nameCN": "特拉洛克"
+      },
+      {
+        "nameJP": "ウィツィロポチトリ",
+        "nameCN": "维齐洛波奇特利"
       }
     ]
   },
@@ -7376,6 +7442,12 @@
         "card": "1",
         "cardName": "arts"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "カーリー",
+        "nameCN": "迦梨"
+      }
     ]
   },
   {
@@ -7413,6 +7485,16 @@
         "nameCN": "圣剑遥远梦之遗痕",
         "card": "2",
         "cardName": "buster"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "救世主トネリコ",
+        "nameCN": "救世主梣"
+      },
+      {
+        "nameJP": "水妃モルガン",
+        "nameCN": "水妃摩根"
       }
     ]
   },
@@ -7509,6 +7591,12 @@
         "card": "1",
         "cardName": "arts"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "メリュジーヌ・オンディーヌ",
+        "nameCN": "梅柳齐娜·翁蒂娜"
+      }
     ]
   },
   {
@@ -7528,6 +7616,20 @@
         "card": "1",
         "cardName": "arts"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "バーゲスト",
+        "nameCN": "巴格斯特"
+      },
+      {
+        "nameJP": "妖精騎士バーゲスト",
+        "nameCN": "妖精骑士巴格斯特"
+      },
+      {
+        "nameJP": "ＵＤＫ－バーゲスト",
+        "nameCN": "ＵＤＫ－巴格斯特"
+      }
     ]
   },
   {
@@ -7546,6 +7648,16 @@
         "nameCN": "祝贺跃祭",
         "card": "2",
         "cardName": "buster"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "バーヴァン・シー",
+        "nameCN": "芭万·希"
+      },
+      {
+        "nameJP": "妖精騎士トリスタン",
+        "nameCN": "妖精骑士崔斯坦"
       }
     ]
   },
@@ -7649,6 +7761,12 @@
         "nameCN": "风林火山",
         "card": "2",
         "cardName": "buster"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "武田信玄",
+        "nameCN": "武田信玄"
       }
     ]
   },
@@ -7993,6 +8111,16 @@
         "card": "3",
         "cardName": "quick"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "阿曇磯良",
+        "nameCN": "阿昙矶良"
+      },
+      {
+        "nameJP": "シリウス",
+        "nameCN": "天狼星"
+      }
     ]
   },
   {
@@ -8012,6 +8140,16 @@
         "card": "1",
         "cardName": "arts"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "アンキ・エレシュキガル",
+        "nameCN": "安基埃列什基伽勒"
+      },
+      {
+        "nameJP": "スペース・エレシュキガル",
+        "nameCN": "太空埃列什基伽勒"
+      }
     ]
   },
   {
@@ -8030,6 +8168,16 @@
         "nameCN": "第七圣典·断罪死",
         "card": "2",
         "cardName": "buster"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "教えて！シエル先生",
+        "nameCN": "教教我吧！希耶尔老师"
+      },
+      {
+        "nameJP": "スターシエル",
+        "nameCN": "星之希耶尔"
       }
     ]
   },
@@ -8095,6 +8243,16 @@
         "nameCN": "Ｇ.Ｇ.Ｇ.",
         "card": "1",
         "cardName": "arts"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "ＢＢコスモ",
+        "nameCN": "ＢＢ宇宙"
+      },
+      {
+        "nameJP": "ゴールデンＢＢ",
+        "nameCN": "黄金ＢＢ"
       }
     ]
   },
@@ -8286,6 +8444,16 @@
         "card": "2",
         "cardName": "buster"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "スペース・ファンタズムーンＶ",
+        "nameCN": "Space PhantasmoonＶ"
+      },
+      {
+        "nameJP": "サンタズムーン",
+        "nameCN": "Santasmoon"
+      }
     ]
   },
   {
@@ -8305,6 +8473,12 @@
         "card": "2",
         "cardName": "buster"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "獅子心王リチャード",
+        "nameCN": "狮心王理查"
+      }
     ]
   },
   {
@@ -8323,6 +8497,12 @@
         "nameCN": "米兰蛇龙·纹章咬合",
         "card": "3",
         "cardName": "quick"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "ビショーネ〔ウロボロスシフト〕",
+        "nameCN": "比肖内〔乌洛波洛斯转变〕"
       }
     ]
   },
@@ -8515,6 +8695,12 @@
         "card": "2",
         "cardName": "buster"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "オルガマリー・アニムスフィア",
+        "nameCN": "オルガマリー・アニムスフィア"
+      }
     ]
   },
   {
@@ -8591,6 +8777,16 @@
         "card": "1",
         "cardName": "arts"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "両儀式",
+        "nameCN": "両儀式"
+      },
+      {
+        "nameJP": "玉兎輝夜",
+        "nameCN": "玉兎輝夜"
+      }
     ]
   },
   {
@@ -8609,6 +8805,12 @@
         "nameCN": "日輪が穿つ星河の朔月",
         "card": "1",
         "cardName": "arts"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "朔月美遊",
+        "nameCN": "朔月美遊"
       }
     ]
   },
@@ -8912,6 +9114,12 @@
         "nameCN": "汝、星を鋤く豊穣",
         "card": "1",
         "cardName": "arts"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "nameJP": "デメテル・エリニュス",
+        "nameCN": "デメテル・エリニュス"
       }
     ]
   },

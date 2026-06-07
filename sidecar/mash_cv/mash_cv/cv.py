@@ -38,6 +38,7 @@ stream frame is used):
                                                                   "ready":true,"edgeFrac":0.12,
                                                                   "stdBgr":91.4}, ...]}
 → {"cmd":"find_supports","expectedName":"アルトリア・キャスター",
+    "expectedNames":["アルトリア・キャスター","キャストリア"],
     "expectedNpNames":["きみをいだく希望の星"]}
                                                     ← {"supports":[{"rowRegion":{...},"tap":{...},
                                                                     "nameText":"...","npText":"...",
@@ -2457,6 +2458,29 @@ def _fuzzy_score(haystack: str, needle: str) -> float:
     return best
 
 
+def _expected_names_or_single(expected_name: str, expected_names: Optional[list[str]]) -> list[str]:
+    names: list[str] = []
+    fallback = str(expected_name).strip()
+    if fallback:
+        names.append(fallback)
+    for name in expected_names or []:
+        text = str(name).strip()
+        if text and text not in names:
+            names.append(text)
+    return names
+
+
+def _best_fuzzy_name(text: str, expected_names: list[str]) -> tuple[float, str]:
+    best_score = 0.0
+    best_name = ""
+    for name in expected_names:
+        score = _fuzzy_score(text, name)
+        if score > best_score:
+            best_score = float(score)
+            best_name = name
+    return best_score, best_name
+
+
 def _support_np_can_pair_with_name(name_cand: dict, np_cand: dict) -> bool:
     """Return whether an NP OCR fragment can belong to a name fragment's row."""
     nr = name_cand["region"]
@@ -2541,11 +2565,12 @@ def _find_supports(
     np_threshold: float,
     pair_dy: float,
     include_support_details: bool = False,
+    expected_names: Optional[list[str]] = None,
 ) -> dict:
     """OCR the support-select list region and return matched support rows.
 
     A row is considered a match iff a name fragment that fuzzy-matches
-    ``expected_name`` and an NP fragment that fuzzy-matches one of
+    one of ``expected_names`` and an NP fragment that fuzzy-matches one of
     ``expected_np_names`` are detected with their y-centers within
     ``pair_dy`` of each other. Synthesized row bbox = union of the pair,
     expanded horizontally to the full ``list_region`` width so the
@@ -2555,6 +2580,7 @@ def _find_supports(
     its threshold, plus the raw fragment count) so the debug UI can show
     misses as well as hits.
     """
+    expected_name_candidates = _expected_names_or_single(expected_name, expected_names)
     h, w = img.shape[:2]
     diag: dict = {
         "listRegion": dict(list_region),
@@ -2654,12 +2680,13 @@ def _find_supports(
         )
         region = _poly_to_norm_rect(pts, w, h)
 
-        ns = _fuzzy_score(text, expected_name)
+        ns, matched_name = _best_fuzzy_name(text, expected_name_candidates)
         if ns >= name_threshold:
             name_cands.append(
                 {
                     "text": str(text),
                     "score": float(ns),
+                    "matchedName": matched_name,
                     "region": region,
                     "yc": region["y"] + region["h"] / 2.0,
                 }
@@ -2696,13 +2723,19 @@ def _find_supports(
                 "region": region,
                 "ocrConfidence": float(conf) if conf is not None else 0.0,
                 "nameScore": float(ns),
+                "matchedName": matched_name,
                 "bestNpScore": float(best_np_score),
                 "bestNpName": best_np_text,
             }
         )
 
     diag["nameCandidates"] = [
-        {"text": c["text"], "score": c["score"], "region": c["region"]}
+        {
+            "text": c["text"],
+            "score": c["score"],
+            "matchedName": c["matchedName"],
+            "region": c["region"],
+        }
         for c in name_cands
     ]
     diag["npCandidates"] = [
@@ -2767,6 +2800,7 @@ def _find_supports(
                     "tap": tap,
                     "nameText": nc["text"],
                     "nameScore": float(nc["score"]),
+                    "nameMatchedName": nc["matchedName"],
                     "nameRegion": nr,
                     "npText": "",
                     "npScore": 0.0,
@@ -2834,6 +2868,7 @@ def _find_supports(
                 "tap": tap,
                 "nameText": nc["text"],
                 "nameScore": float(nc["score"]),
+                "nameMatchedName": nc["matchedName"],
                 "nameRegion": nr,
                 "npText": npc["text"],
                 "npScore": float(npc["score"]),
@@ -4487,6 +4522,7 @@ def main() -> None:
                         float(cmd.get("npThreshold", SUPPORT_NP_THRESHOLD)),
                         float(cmd.get("pairDy", SUPPORT_ROW_PAIR_DY)),
                         bool(cmd.get("includeSupportDetails", False)),
+                        [str(n) for n in (cmd.get("expectedNames") or []) if n],
                     ),
                 )
         elif action == "ocr_region":

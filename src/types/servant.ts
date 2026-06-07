@@ -1,3 +1,8 @@
+export interface ServantNameAlias {
+  nameJp?: string | null;
+  nameCn?: string | null;
+}
+
 export interface Servant {
   id: number;
   variantKey: string;
@@ -7,6 +12,7 @@ export interface Servant {
   name_jp: string;
   name_en: string;
   name_other?: string;
+  overWriteServantNames?: ServantNameAlias[];
   class: string;
   rarity: number;
   noblePhantasmName?: string | null;

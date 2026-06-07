@@ -485,6 +485,7 @@ export function DebugCanvas({
               >
                 <span className="debug-overlay-label">
                   名 {c.score.toFixed(2)} · {c.text}
+                  {c.matchedName ? ` → ${c.matchedName}` : ""}
                 </span>
               </Box>
             ))}

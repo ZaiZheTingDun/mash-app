@@ -1125,8 +1125,13 @@ pub fn debug_find_supports(
     let client = guard
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-    let result: FindSupportsResult =
-        client.find_supports(Some(&image_path), &meta.name, &meta.np_names, true)?;
+    let result: FindSupportsResult = client.find_supports(
+        Some(&image_path),
+        &meta.name,
+        &meta.names,
+        &meta.np_names,
+        true,
+    )?;
     eprintln!(
         "[debug_find_supports] {} match(es), {} name cand(s), {} np cand(s), {} fragment(s)",
         result.supports.len(),

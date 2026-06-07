@@ -1987,6 +1987,7 @@ impl Runner {
         let result = match self.sidecar().find_supports(
             None,
             &meta.name,
+            &meta.names,
             &meta.np_names,
             include_support_details,
         ) {
@@ -7200,6 +7201,7 @@ mod tests {
             tap: Point::new(0.3, 0.55),
             name_text: "哈贝特洛特".into(),
             name_score: 1.0,
+            name_matched_name: None,
             name_region: region,
             np_text: "为你纺织的时光之轮等级5".into(),
             np_score: 1.0,
