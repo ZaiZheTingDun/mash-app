@@ -35,10 +35,11 @@ function craftEssenceSearchText(ce: CraftEssence) {
 
 /**
  * Picker for craft essences. Modeled after `ServantSelectDialog` but
- * simpler: the bundled `craft_essences.json` only carries `id` + `name`
- * (+ optional wiki link), so the row is text-only and we don't need a
- * `disabledIds` prop — duplicate CEs across slots are valid (e.g. a
- * party can run several copies of the same MLB CE).
+ * simpler: Rust normalizes the bundled `craft_essences.json` to
+ * collectionNo-as-id + Chinese name (+ optional wiki link), so the row
+ * is text-only and we don't need a `disabledIds` prop — duplicate CEs
+ * across slots are valid (e.g. a party can run several copies of the
+ * same MLB CE).
  *
  * The CE catalog has ~2600 entries, so we render the list with a tiny
  * fixed-row-height windowed renderer instead of mounting every option.

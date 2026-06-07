@@ -1235,8 +1235,8 @@ fn get_servants() -> &'static [ServantInfo] {
 }
 
 /// One craft-essence entry exposed to the frontend. Mirrors the shape of
-/// `resources/craft_essences.json` (which only ships `id`, `name`, and a
-/// wiki link). Kept minimal — additional metadata lives in the per-CE
+/// `resources/craft_essences.json` (using Atlas `collectionNo` as the
+/// stable app-facing CE id). Kept minimal — additional metadata lives in the per-CE
 /// `assets/ces/{id}/craft-essence.json` Atlas dump and is loaded lazily
 /// only when the runner actually needs it.
 #[derive(serde::Serialize, Clone, Debug)]
@@ -1275,8 +1275,14 @@ fn craft_essences_data() -> &'static [CraftEssenceInfo] {
             .enumerate()
             .filter_map(|(idx, ce)| {
                 let result = (|| {
-                    let id = ce.get("id")?.as_u64()? as u32;
-                    let raw_name = ce.get("name")?.as_str()?.to_string();
+                    let id = ce.get("collectionNo")?.as_u64()? as u32;
+                    let raw_name = ce
+                        .get("name_cn")
+                        .and_then(|v| v.as_str())
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .or_else(|| ce.get("name").and_then(|v| v.as_str()))
+                        .map(str::to_string)?;
                     let fixed_name = translation_fixes.get(&id);
                     let name = fixed_name.cloned().unwrap_or_else(|| raw_name.clone());
                     let name_aliases = if fixed_name.is_some() && raw_name != name {
@@ -1296,7 +1302,7 @@ fn craft_essences_data() -> &'static [CraftEssenceInfo] {
                     })
                 })();
                 if result.is_none() {
-                    let id_hint = ce.get("id").and_then(|v| v.as_u64());
+                    let id_hint = ce.get("collectionNo").and_then(|v| v.as_u64());
                     eprintln!(
                         "[craft_essences] dropping entry at index {idx} (id={id_hint:?}): missing or invalid fields"
                     );
@@ -4578,18 +4584,24 @@ mod tests {
     }
 
     #[test]
-    fn craft_essences_data_applies_translation_fixes_with_aliases() {
+    fn craft_essences_data_uses_collection_no_and_cn_names() {
         let ces = craft_essences_data();
         let ce_2234 = ces.iter().find(|ce| ce.id == 2234).unwrap();
+        let ce_2235 = ces.iter().find(|ce| ce.id == 2235).unwrap();
         let ce_2236 = ces.iter().find(|ce| ce.id == 2236).unwrap();
         let ce_2237 = ces.iter().find(|ce| ce.id == 2237).unwrap();
 
+        assert!(
+            ces.iter().all(|ce| ce.id < 9000000),
+            "CE ids exposed to the app must use collectionNo, not Atlas internal ids"
+        );
         assert_eq!(ce_2234.name, "心愿之味");
-        assert_eq!(ce_2234.name_aliases, vec!["心意的滋味"]);
+        assert!(ce_2234.name_aliases.is_empty());
+        assert_eq!(ce_2235.name, "龙之山地徒步");
         assert_eq!(ce_2236.name, "悠久的特洛伊");
         assert!(ce_2236.name_aliases.is_empty());
         assert_eq!(ce_2237.name, "去往大海");
-        assert_eq!(ce_2237.name_aliases, vec!["向着大海"]);
+        assert!(ce_2237.name_aliases.is_empty());
     }
 
     #[test]
