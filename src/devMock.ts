@@ -86,6 +86,8 @@ const craftEssences: CraftEssence[] = [
 let useBluestack = false;
 let server: Server = "JP";
 let nextProjectNumber = 2;
+let activeProjectId: string | null = "dev-project-1";
+let appTheme: "light" | "dark" | "system" | null = null;
 
 let projects: Project[] = [
   {
@@ -170,12 +172,26 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return clone(craftEssences) as T;
     case "list_projects":
       return clone(projects) as T;
+    case "get_active_project_id":
+      return activeProjectId as T;
+    case "set_active_project_id":
+      activeProjectId =
+        typeof args.activeProjectId === "string" ? args.activeProjectId : null;
+      return null as T;
+    case "get_app_theme":
+      return appTheme as T;
+    case "set_app_theme":
+      if (args.theme === "light" || args.theme === "dark" || args.theme === "system") {
+        appTheme = args.theme;
+      }
+      return null as T;
     case "create_project": {
       const project = createProject(
         String(args.name ?? `模拟队伍 ${nextProjectNumber}`),
         args.advancedMode === true
       );
       projects = [...projects, project];
+      activeProjectId = project.id;
       return clone(project) as T;
     }
     case "duplicate_project": {
@@ -189,6 +205,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         name: String(args.name ?? `${source.name} 副本`),
       };
       projects = [...projects, project];
+      activeProjectId = project.id;
       battleScenesByProject.set(
         project.id,
         clone(battleScenesByProject.get(source.id) ?? [])
@@ -206,6 +223,9 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     }
     case "delete_project":
       projects = projects.filter((project) => project.id !== args.id);
+      if (activeProjectId === args.id) {
+        activeProjectId = projects[0]?.id ?? null;
+      }
       battleScenesByProject.delete(String(args.id));
       advancedBattleScenesByProject.delete(String(args.id));
       return null as T;

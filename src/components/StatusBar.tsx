@@ -11,7 +11,7 @@ import {
 } from "@radix-ui/react-icons";
 import { invoke, listen } from "../tauri";
 import { SERVER_LABELS, type Server } from "../types/server";
-import type { AppTheme } from "../types/theme";
+import type { AppTheme, AppThemePreference } from "../types/theme";
 
 type LogLevel = "info" | "debug";
 
@@ -38,7 +38,8 @@ interface StatusBarProps {
    * shortcut) can still mount `<StatusBar />` with no props. */
   onOpenDebug?: () => void;
   theme?: AppTheme;
-  onThemeChange?: (theme: AppTheme) => void;
+  themePreference?: AppThemePreference;
+  onThemeChange?: (theme: AppThemePreference) => void;
   operationLogs?: OperationLogEntry[];
   operationLogOpen?: boolean;
   onOperationLogOpenChange?: (open: boolean) => void;
@@ -52,6 +53,7 @@ interface StatusBarProps {
 export function StatusBar({
   onOpenDebug,
   theme,
+  themePreference,
   onThemeChange,
   operationLogs = [],
   operationLogOpen = false,
@@ -162,8 +164,15 @@ export function StatusBar({
 
   const handleThemeToggle = useCallback(() => {
     if (!theme || !onThemeChange) return;
-    onThemeChange(theme === "dark" ? "light" : "dark");
-  }, [theme, onThemeChange]);
+    const currentPreference = themePreference ?? theme;
+    const nextPreference =
+      currentPreference === "light"
+        ? "dark"
+        : currentPreference === "dark"
+          ? "system"
+          : "light";
+    onThemeChange(nextPreference);
+  }, [theme, themePreference, onThemeChange]);
 
   useEffect(() => {
     if (!operationLogOpen) return;
@@ -263,15 +272,29 @@ export function StatusBar({
             <button
               type="button"
               className="status-theme-btn"
-              aria-label={theme === "dark" ? "切换浅色模式" : "切换深色模式"}
+              aria-label={`切换主题模式，当前${
+                themePreference === "system"
+                  ? "跟随系统"
+                  : theme === "dark"
+                    ? "深色"
+                    : "浅色"
+              }`}
               onClick={handleThemeToggle}
             >
-              {theme === "dark" ? (
-                <SunIcon width={12} height={12} />
-              ) : (
+              {themePreference === "system" ? (
+                <DesktopIcon width={12} height={12} />
+              ) : theme === "dark" ? (
                 <MoonIcon width={12} height={12} />
+              ) : (
+                <SunIcon width={12} height={12} />
               )}
-              <Text size="1">{theme === "dark" ? "浅色" : "深色"}</Text>
+              <Text size="1">
+                {themePreference === "system"
+                  ? "系统"
+                  : theme === "dark"
+                    ? "深色"
+                    : "浅色"}
+              </Text>
             </button>
           )}
           <Popover.Root>

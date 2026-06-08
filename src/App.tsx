@@ -24,7 +24,7 @@ import type { CraftEssence } from "./types/craftEssence";
 import type { Project } from "./types/project";
 import type { AssetBundleStatus } from "./types/assets";
 import type { RuntimeStatus } from "./types/runtime";
-import type { AppTheme } from "./types/theme";
+import type { AppTheme, AppThemePreference } from "./types/theme";
 import {
   appendCoalescedOperationLog,
   type LogLevel,
@@ -49,7 +49,8 @@ interface AutomationEvent {
 
 interface AppProps {
   theme: AppTheme;
-  onThemeChange: (theme: AppTheme) => void;
+  themePreference: AppThemePreference;
+  onThemeChange: (theme: AppThemePreference) => void;
 }
 
 function localDateKey(date: Date): string {
@@ -59,7 +60,7 @@ function localDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function App({ theme, onThemeChange }: AppProps) {
+function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [view, setView] = useState<View>("team");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -238,20 +239,39 @@ function App({ theme, onThemeChange }: AppProps) {
       .finally(() => setLoading(false));
   }, []);
 
+  const persistActiveProjectId = useCallback((id: string | null) => {
+    void invoke("set_active_project_id", { activeProjectId: id }).catch(console.error);
+  }, []);
+
+  const handleProjectSelect = useCallback(
+    (id: string) => {
+      setActiveProjectId(id);
+      persistActiveProjectId(id);
+    },
+    [persistActiveProjectId]
+  );
+
   // Load the project list once at startup so the team-builder can read/write
-  // `supportServantId` directly off the active project. Sidebar still owns
-  // the create/delete UI, but it now mutates this lifted state instead of
-  // its own local copy so the support slot stays in sync.
+  // `supportServantId` directly off the active project. The active project id
+  // is also backend-owned, so app restarts reopen the last chosen lineup.
   useEffect(() => {
-    invoke<Project[]>("list_projects")
-      .then((list) => {
+    Promise.all([
+      invoke<Project[]>("list_projects"),
+      invoke<string | null>("get_active_project_id"),
+    ])
+      .then(([list, savedActiveProjectId]) => {
         setProjects(list);
         if (list.length > 0) {
-          setActiveProjectId((prev) => prev ?? list[0].id);
+          const savedProject = list.find((project) => project.id === savedActiveProjectId);
+          const nextActiveProjectId = savedProject?.id ?? list[0].id;
+          setActiveProjectId(nextActiveProjectId);
+          if (nextActiveProjectId !== savedActiveProjectId) {
+            persistActiveProjectId(nextActiveProjectId);
+          }
         }
       })
       .catch(console.error);
-  }, []);
+  }, [persistActiveProjectId]);
 
   const activeProject = useMemo(
     () => projects.find((p) => p.id === activeProjectId) ?? null,
@@ -347,9 +367,10 @@ function App({ theme, onThemeChange }: AppProps) {
       .then((p) => {
         setProjects((prev) => [...prev, p]);
         setActiveProjectId(p.id);
+        persistActiveProjectId(p.id);
       })
       .catch(console.error);
-  }, []);
+  }, [persistActiveProjectId]);
 
   const handleRenameProject = useCallback(
     (id: string, name: string) => {
@@ -365,9 +386,10 @@ function App({ theme, onThemeChange }: AppProps) {
       .then((p) => {
         setProjects((prev) => [...prev, p]);
         setActiveProjectId(p.id);
+        persistActiveProjectId(p.id);
       })
       .catch(console.error);
-  }, []);
+  }, [persistActiveProjectId]);
 
   const handleDeleteProject = useCallback(
     (id: string) => {
@@ -376,14 +398,16 @@ function App({ theme, onThemeChange }: AppProps) {
           setProjects((prev) => {
             const next = prev.filter((p) => p.id !== id);
             if (activeProjectId === id) {
-              setActiveProjectId(next.length > 0 ? next[0].id : null);
+              const nextActiveProjectId = next.length > 0 ? next[0].id : null;
+              setActiveProjectId(nextActiveProjectId);
+              persistActiveProjectId(nextActiveProjectId);
             }
             return next;
           });
         })
         .catch(console.error);
     },
-    [activeProjectId]
+    [activeProjectId, persistActiveProjectId]
   );
 
   const handleStartRun = useCallback(() => {
@@ -440,7 +464,7 @@ function App({ theme, onThemeChange }: AppProps) {
             <BattlePage
               projects={projects}
               activeProjectId={activeProjectId}
-              onProjectSelect={setActiveProjectId}
+              onProjectSelect={handleProjectSelect}
               onCreateProject={handleCreateProject}
               onRenameProject={handleRenameProject}
               onDuplicateProject={handleDuplicateProject}
@@ -469,7 +493,7 @@ function App({ theme, onThemeChange }: AppProps) {
               <ProjectBar
                 projects={projects}
                 activeProjectId={activeProjectId}
-                onProjectSelect={setActiveProjectId}
+                onProjectSelect={handleProjectSelect}
                 onCreateProject={handleCreateProject}
                 onRenameProject={handleRenameProject}
                 onDuplicateProject={handleDuplicateProject}
@@ -580,6 +604,7 @@ function App({ theme, onThemeChange }: AppProps) {
       <StatusBar
         onOpenDebug={featureToggles.cvDebug ? handleOpenDebug : undefined}
         theme={theme}
+        themePreference={themePreference}
         onThemeChange={onThemeChange}
         operationLogs={operationLogs}
         operationLogOpen={operationLogOpen}

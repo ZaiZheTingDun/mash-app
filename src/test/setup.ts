@@ -101,6 +101,14 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "list_projects":
       case "load_battle_scenes":
         return [];
+      case "get_active_project_id":
+        return null;
+      case "set_active_project_id":
+        return null;
+      case "get_app_theme":
+        return null;
+      case "set_app_theme":
+        return null;
       case "pick_asset_bundle":
       case "pick_runtime_bundle":
         return null;

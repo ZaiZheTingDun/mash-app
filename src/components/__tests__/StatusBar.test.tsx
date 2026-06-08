@@ -186,7 +186,7 @@ describe("StatusBar", () => {
     });
   });
 
-  it("dispatches theme changes from the status bar toggle", async () => {
+  it("cycles theme preference through light, dark, and system", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";
       if (cmd === "get_use_bluestack") return false;
@@ -195,13 +195,33 @@ describe("StatusBar", () => {
     });
     const onThemeChange = vi.fn();
     const user = userEvent.setup();
-    renderWithTheme(
-      <StatusBar theme="light" onThemeChange={onThemeChange} />
+    const { rerender } = renderWithTheme(
+      <StatusBar theme="light" themePreference="light" onThemeChange={onThemeChange} />
     );
 
-    await user.click(screen.getByRole("button", { name: "切换深色模式" }));
+    await user.click(
+      screen.getByRole("button", { name: "切换主题模式，当前浅色" })
+    );
 
-    expect(onThemeChange).toHaveBeenCalledWith("dark");
+    expect(onThemeChange).toHaveBeenLastCalledWith("dark");
+
+    rerender(
+      <StatusBar theme="dark" themePreference="dark" onThemeChange={onThemeChange} />
+    );
+    await user.click(
+      screen.getByRole("button", { name: "切换主题模式，当前深色" })
+    );
+
+    expect(onThemeChange).toHaveBeenLastCalledWith("system");
+
+    rerender(
+      <StatusBar theme="dark" themePreference="system" onThemeChange={onThemeChange} />
+    );
+    await user.click(
+      screen.getByRole("button", { name: "切换主题模式，当前跟随系统" })
+    );
+
+    expect(onThemeChange).toHaveBeenLastCalledWith("light");
   });
 
   it("opens and renders the shared operation log panel from the status bar", async () => {

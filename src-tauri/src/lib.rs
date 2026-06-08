@@ -767,6 +767,19 @@ fn projects_file_path(app: &tauri::AppHandle) -> PathBuf {
     app_data_dir(app).join("projects.json")
 }
 
+fn app_ui_settings_path(app: &tauri::AppHandle) -> PathBuf {
+    app_data_dir(app).join("app_ui_settings.json")
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+struct AppUiSettings {
+    #[serde(default)]
+    active_project_id: Option<String>,
+    #[serde(default)]
+    theme: Option<String>,
+}
+
 fn project_battle_scenes_path(app: &tauri::AppHandle, project_id: &str) -> PathBuf {
     let dir = app_data_dir(app).join("projects").join(project_id);
     fs::create_dir_all(&dir).ok();
@@ -821,6 +834,52 @@ fn write_projects(app: &tauri::AppHandle, projects: &[Project]) -> Result<(), St
     let path = projects_file_path(app);
     let json = serde_json::to_string_pretty(projects).map_err(|e| e.to_string())?;
     fs::write(&path, json).map_err(|e| e.to_string())
+}
+
+fn read_app_ui_settings_from_path(path: &Path) -> AppUiSettings {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn write_app_ui_settings_to_path(path: &Path, settings: &AppUiSettings) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_active_project_id(app: tauri::AppHandle) -> Option<String> {
+    read_app_ui_settings_from_path(&app_ui_settings_path(&app)).active_project_id
+}
+
+#[tauri::command]
+fn set_active_project_id(
+    app: tauri::AppHandle,
+    active_project_id: Option<String>,
+) -> Result<(), String> {
+    let path = app_ui_settings_path(&app);
+    let mut settings = read_app_ui_settings_from_path(&path);
+    settings.active_project_id = active_project_id;
+    write_app_ui_settings_to_path(&path, &settings)
+}
+
+#[tauri::command]
+fn get_app_theme(app: tauri::AppHandle) -> Option<String> {
+    read_app_ui_settings_from_path(&app_ui_settings_path(&app))
+        .theme
+        .filter(|theme| theme == "light" || theme == "dark" || theme == "system")
+}
+
+#[tauri::command]
+fn set_app_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
+    if theme != "light" && theme != "dark" && theme != "system" {
+        return Err(format!("invalid app theme: {theme}"));
+    }
+    let path = app_ui_settings_path(&app);
+    let mut settings = read_app_ui_settings_from_path(&path);
+    settings.theme = Some(theme);
+    write_app_ui_settings_to_path(&path, &settings)
 }
 
 #[tauri::command]
@@ -4298,6 +4357,10 @@ pub fn run() {
             save_advanced_battle_scenes,
             load_advanced_battle_scenes,
             list_projects,
+            get_active_project_id,
+            set_active_project_id,
+            get_app_theme,
+            set_app_theme,
             create_project,
             duplicate_project,
             update_project,
@@ -4526,6 +4589,30 @@ mod tests {
         for i in [0, 1, 3, 4, 5] {
             assert_eq!(slots[i].kind, "servant");
         }
+    }
+
+    // --- app UI settings ----------------------------------------------
+
+    #[test]
+    fn app_ui_settings_persist_active_project_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("app_ui_settings.json");
+
+        let initial = read_app_ui_settings_from_path(&path);
+        assert!(initial.active_project_id.is_none());
+
+        write_app_ui_settings_to_path(
+            &path,
+            &AppUiSettings {
+                active_project_id: Some("project-2".into()),
+                theme: Some("system".into()),
+            },
+        )
+        .unwrap();
+
+        let saved = read_app_ui_settings_from_path(&path);
+        assert_eq!(saved.active_project_id.as_deref(), Some("project-2"));
+        assert_eq!(saved.theme.as_deref(), Some("system"));
     }
 
     // --- ProjectSlot serde --------------------------------------------
