@@ -27,18 +27,23 @@ function makeServant(
 function makeScene(id: string, skill: string): BattleScene {
   return {
     id,
-    preparationActions: [
+    turns: [
       {
-        type: "equipment",
-        id: `${id}_eq`,
-        skill,
-        target: null,
+        id: `${id}_turn_1`,
+        preparationActions: [
+          {
+            type: "equipment",
+            id: `${id}_eq`,
+            skill,
+            target: null,
+          },
+        ],
+        servantActions: [],
+        equipmentActions: [],
+        commandSpellActions: [],
+        attackPriority: [],
       },
     ],
-    servantActions: [],
-    equipmentActions: [],
-    commandSpellActions: [],
-    attackPriority: [],
   };
 }
 
@@ -73,6 +78,57 @@ describe("CommandEditor pagination", () => {
     expect(screen.getByText("Battle 2 / 2")).toBeInTheDocument();
     expect(screen.getByText("御主礼装 释放 技能 3")).toBeInTheDocument();
     expect(screen.queryByText("御主礼装 释放 技能 1")).not.toBeInTheDocument();
+  });
+
+  it("adds, switches, and protects battle turns", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_battle_scenes") {
+        return [makeScene("scene_1", "skill_1")];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    expect(await screen.findByRole("button", { name: "Turn 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除当前 Turn" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "添加 Turn" }));
+
+    expect(screen.getByRole("button", { name: "Turn 2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除当前 Turn" })).toBeEnabled();
+    expect(screen.queryByText("御主礼装 释放 技能 1")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "save_battle_scenes",
+        expect.objectContaining({
+          scenes: [
+            expect.objectContaining({
+              turns: expect.arrayContaining([
+                expect.objectContaining({ id: "scene_1_turn_1" }),
+                expect.objectContaining({ preparationActions: [] }),
+              ]),
+            }),
+          ],
+        })
+      );
+    });
+
+    await user.click(screen.getByRole("button", { name: "Turn 1" }));
+    expect(screen.getByText("御主礼装 释放 技能 1")).toBeInTheDocument();
   });
 
   it("uses the advanced scene commands in advanced mode", async () => {

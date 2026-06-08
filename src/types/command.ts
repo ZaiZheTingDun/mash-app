@@ -38,7 +38,7 @@ export interface AttackCard {
   card: string | null;
 }
 
-export interface BattleScene {
+export interface BattleTurn {
   id: string;
   preparationActions: PreparationAction[];
   servantActions: ServantAction[];
@@ -46,6 +46,17 @@ export interface BattleScene {
   commandSpellActions: CommandSpellAction[];
   enemyTarget?: string | null;
   attackPriority: AttackCard[];
+}
+
+export interface BattleScene {
+  id: string;
+  turns: BattleTurn[];
+  preparationActions?: PreparationAction[];
+  servantActions?: ServantAction[];
+  equipmentActions?: EquipmentAction[];
+  commandSpellActions?: CommandSpellAction[];
+  enemyTarget?: string | null;
+  attackPriority?: AttackCard[];
 }
 
 export interface AdvancedNpSlotCondition {

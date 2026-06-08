@@ -4,8 +4,8 @@ import { invoke } from "../tauri";
 import { AdvancedCommandEditor } from "./AdvancedCommandEditor";
 import { BattleSceneBlock } from "./BattleSceneBlock";
 import {
-  deriveScenePartyLineups,
-  deriveScenePartyMembers,
+  deriveTurnPartyMembers,
+  partyMembersToServants,
   toPartyMembers,
   type PartyMember,
 } from "./partyServants";
@@ -15,7 +15,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from "@radix-ui/react-icons";
-import type { BattleScene, AttackCard } from "../types/command";
+import type { BattleScene, BattleTurn, AttackCard } from "../types/command";
 import type { GrandCardStrategy, GrandServantConfig } from "../types/project";
 import type { Servant } from "../types/servant";
 
@@ -32,10 +32,15 @@ interface CommandEditorProps {
 }
 
 let nextSceneId = 1;
+let nextTurnId = 1;
 const FIXED_ATTACK_CARD_COUNT = 3;
 
 function createSceneId(): string {
   return `scene_${nextSceneId++}_${Date.now()}`;
+}
+
+function createTurnId(): string {
+  return `turn_${nextTurnId++}_${Date.now()}`;
 }
 
 function createDefaultAttackPriority(): AttackCard[] {
@@ -45,9 +50,9 @@ function createDefaultAttackPriority(): AttackCard[] {
   }));
 }
 
-function createDefaultScene(): BattleScene {
+function createDefaultTurn(): BattleTurn {
   return {
-    id: createSceneId(),
+    id: createTurnId(),
     preparationActions: [],
     servantActions: [],
     equipmentActions: [],
@@ -57,8 +62,15 @@ function createDefaultScene(): BattleScene {
   };
 }
 
-function normalizeScene(scene: BattleScene): BattleScene {
-  const attackPriority = [...(scene.attackPriority ?? [])];
+function createDefaultScene(): BattleScene {
+  return {
+    id: createSceneId(),
+    turns: [createDefaultTurn()],
+  };
+}
+
+function normalizeTurn(turn: BattleTurn): BattleTurn {
+  const attackPriority = [...(turn.attackPriority ?? [])];
   while (attackPriority.length < FIXED_ATTACK_CARD_COUNT) {
     attackPriority.push({
       id: `atk_fixed_${attackPriority.length + 1}_${Date.now()}`,
@@ -66,19 +78,46 @@ function normalizeScene(scene: BattleScene): BattleScene {
     });
   }
   return {
-    ...scene,
+    ...turn,
     preparationActions:
-      scene.preparationActions ??
+      turn.preparationActions ??
       [
-        ...(scene.servantActions ?? []),
-        ...(scene.equipmentActions ?? []),
-        ...(scene.commandSpellActions ?? []),
+        ...(turn.servantActions ?? []),
+        ...(turn.equipmentActions ?? []),
+        ...(turn.commandSpellActions ?? []),
       ],
     servantActions: [],
     equipmentActions: [],
     commandSpellActions: [],
-    enemyTarget: scene.enemyTarget ?? null,
+    enemyTarget: turn.enemyTarget ?? null,
     attackPriority,
+  };
+}
+
+function normalizeScene(scene: BattleScene): BattleScene {
+  const legacyTurn =
+    scene.preparationActions ||
+      scene.servantActions ||
+      scene.equipmentActions ||
+      scene.commandSpellActions ||
+      scene.attackPriority ||
+      scene.enemyTarget != null
+      ? [
+        normalizeTurn({
+          id: `${scene.id}_turn_1`,
+          preparationActions: scene.preparationActions ?? [],
+          servantActions: scene.servantActions ?? [],
+          equipmentActions: scene.equipmentActions ?? [],
+          commandSpellActions: scene.commandSpellActions ?? [],
+          enemyTarget: scene.enemyTarget ?? null,
+          attackPriority: scene.attackPriority ?? [],
+        }),
+      ]
+      : [];
+  const turns = (scene.turns?.length ? scene.turns : legacyTurn).map(normalizeTurn);
+  return {
+    id: scene.id,
+    turns: turns.length > 0 ? turns : [createDefaultTurn()],
   };
 }
 
@@ -98,9 +137,8 @@ export function CommandEditor({
   );
   const [loaded, setLoaded] = useState(() => !projectId);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [activeTurnIndex, setActiveTurnIndex] = useState(0);
   const initialPartyMembers = partyMembers ?? toPartyMembers(partyLineup);
-  const scenePartyLineups = deriveScenePartyLineups(partyLineup, scenes);
-  const scenePartyMembers = deriveScenePartyMembers(initialPartyMembers, scenes);
 
   useEffect(() => {
     if (advancedMode || !projectId) {
@@ -112,11 +150,13 @@ export function CommandEditor({
         if (cancelled) return;
         setScenes(saved.length > 0 ? saved.map(normalizeScene) : [createDefaultScene()]);
         setActiveIndex(0);
+        setActiveTurnIndex(0);
       })
       .catch(() => {
         if (cancelled) return;
         setScenes([createDefaultScene()]);
         setActiveIndex(0);
+        setActiveTurnIndex(0);
       })
       .finally(() => {
         if (!cancelled) {
@@ -136,17 +176,6 @@ export function CommandEditor({
     [projectId]
   );
 
-  const handleSceneChange = useCallback(
-    (sceneId: string, updatedScene: BattleScene) => {
-      setScenes((prev) => {
-        const next = prev.map((s) => (s.id === sceneId ? updatedScene : s));
-        saveScenes(next);
-        return next;
-      });
-    },
-    [saveScenes]
-  );
-
   const handleDeleteScene = useCallback(
     (sceneId: string) => {
       setScenes((prev) => {
@@ -154,6 +183,7 @@ export function CommandEditor({
         const fallback = next.length > 0 ? next : [createDefaultScene()];
         saveScenes(next);
         setActiveIndex((current) => Math.min(current, fallback.length - 1));
+        setActiveTurnIndex(0);
         return fallback;
       });
     },
@@ -165,9 +195,57 @@ export function CommandEditor({
       const next = [...prev, createDefaultScene()];
       saveScenes(next);
       setActiveIndex(next.length - 1);
+      setActiveTurnIndex(0);
       return next;
     });
   }, [saveScenes]);
+
+  const handleTurnChange = useCallback(
+    (sceneId: string, turnId: string, updatedTurn: BattleTurn) => {
+      setScenes((prev) => {
+        const next = prev.map((scene) =>
+          scene.id === sceneId
+            ? {
+              ...scene,
+              turns: scene.turns.map((turn) =>
+                turn.id === turnId ? updatedTurn : turn
+              ),
+            }
+            : scene
+        );
+        saveScenes(next);
+        return next;
+      });
+    },
+    [saveScenes]
+  );
+
+  const handleAddTurn = useCallback(() => {
+    setScenes((prev) => {
+      const next = prev.map((scene, index) => {
+        if (index !== activeIndex) return scene;
+        const turns = [...scene.turns, createDefaultTurn()];
+        setActiveTurnIndex(turns.length - 1);
+        return { ...scene, turns };
+      });
+      saveScenes(next);
+      return next;
+    });
+  }, [activeIndex, saveScenes]);
+
+  const handleDeleteTurn = useCallback(() => {
+    setScenes((prev) => {
+      const next = prev.map((scene, index) => {
+        if (index !== activeIndex || activeTurnIndex === 0) return scene;
+        const turns = scene.turns.filter((_, turnIndex) => turnIndex !== activeTurnIndex);
+        const fallbackTurns = turns.length > 0 ? turns : [createDefaultTurn()];
+        setActiveTurnIndex(Math.max(0, activeTurnIndex - 1));
+        return { ...scene, turns: fallbackTurns };
+      });
+      saveScenes(next);
+      return next;
+    });
+  }, [activeIndex, activeTurnIndex, saveScenes]);
 
   if (advancedMode) {
     return (
@@ -186,8 +264,14 @@ export function CommandEditor({
 
   if (!loaded) return null;
   const activeScene = scenes[activeIndex] ?? scenes[0] ?? createDefaultScene();
-  const activeParty = scenePartyLineups[activeIndex] ?? partyLineup;
-  const activePartyMembers = scenePartyMembers[activeIndex] ?? initialPartyMembers;
+  const activeTurn = activeScene.turns[activeTurnIndex] ?? activeScene.turns[0] ?? createDefaultTurn();
+  const activePartyMembers = deriveTurnPartyMembers(
+    initialPartyMembers,
+    scenes,
+    activeIndex,
+    activeTurnIndex
+  );
+  const activeParty = partyMembersToServants(activePartyMembers);
 
   return (
     <Flex direction="column" className="command-editor">
@@ -198,7 +282,10 @@ export function CommandEditor({
           color="gray"
           aria-label="上一场战斗"
           disabled={activeIndex === 0}
-          onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}
+          onClick={() => {
+            setActiveIndex((index) => Math.max(0, index - 1));
+            setActiveTurnIndex(0);
+          }}
         >
           <ChevronLeftIcon width={18} height={18} />
         </IconButton>
@@ -211,9 +298,10 @@ export function CommandEditor({
           color="gray"
           aria-label="下一场战斗"
           disabled={activeIndex >= scenes.length - 1}
-          onClick={() =>
-            setActiveIndex((index) => Math.min(scenes.length - 1, index + 1))
-          }
+          onClick={() => {
+            setActiveIndex((index) => Math.min(scenes.length - 1, index + 1));
+            setActiveTurnIndex(0);
+          }}
         >
           <ChevronRightIcon width={18} height={18} />
         </IconButton>
@@ -238,13 +326,48 @@ export function CommandEditor({
           </IconButton>
         )}
       </Flex>
+      <Flex align="center" justify="between" gap="3" className="battle-turn-nav">
+        <Flex align="center" gap="2" wrap="wrap">
+          <Text size="2" weight="bold">Turn:</Text>
+          {activeScene.turns.map((turn, index) => (
+            <button
+              type="button"
+              key={turn.id}
+              className={`battle-turn-tab${activeTurn.id === turn.id ? " is-selected" : ""}`}
+              aria-label={`Turn ${index + 1}`}
+              onClick={() => setActiveTurnIndex(index)}
+            >
+              {index + 1}
+            </button>
+          ))}
+          <IconButton
+            type="button"
+            variant="surface"
+            color="gray"
+            aria-label="添加 Turn"
+            onClick={handleAddTurn}
+          >
+            <PlusIcon width={16} height={16} />
+          </IconButton>
+        </Flex>
+        <IconButton
+          type="button"
+          variant="surface"
+          color="red"
+          aria-label="删除当前 Turn"
+          disabled={activeTurnIndex === 0}
+          onClick={handleDeleteTurn}
+        >
+          <TrashIcon width={16} height={16} />
+        </IconButton>
+      </Flex>
       <div className="command-scroll-region">
         <BattleSceneBlock
-          key={activeScene.id}
-          scene={activeScene}
+          key={`${activeScene.id}:${activeTurn.id}`}
+          scene={activeTurn}
           partyServants={activeParty}
           partyMembers={activePartyMembers}
-          onChange={(updated) => handleSceneChange(activeScene.id, updated)}
+          onChange={(updated) => handleTurnChange(activeScene.id, activeTurn.id, updated)}
         />
       </div>
     </Flex>

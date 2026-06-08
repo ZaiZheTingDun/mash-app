@@ -12,7 +12,7 @@ import {
 } from "../partyServants";
 import type { SlotItem } from "../ContentGrid";
 import { createInitialProjectSlots } from "../projectSlots";
-import type { BattleScene } from "../../types/command";
+import type { BattleScene, BattleTurn } from "../../types/command";
 import type { Project } from "../../types/project";
 import type { Servant } from "../../types/servant";
 
@@ -141,19 +141,25 @@ function makeProject(supportServantId: number | null): Project {
   };
 }
 
-function makeScene(overrides: Partial<BattleScene> = {}): BattleScene {
+function makeScene(overrides: Partial<BattleTurn> & { id?: string } = {}): BattleScene {
+  const { id = "scene_1", ...turnOverrides } = overrides;
   return {
-    id: "scene_1",
-    preparationActions: [],
-    servantActions: [],
-    equipmentActions: [],
-    commandSpellActions: [],
-    attackPriority: [
-      { id: "atk_0", card: null },
-      { id: "atk_1", card: null },
-      { id: "atk_2", card: null },
+    id,
+    turns: [
+      {
+        id: `${id}_turn_1`,
+        preparationActions: [],
+        servantActions: [],
+        equipmentActions: [],
+        commandSpellActions: [],
+        attackPriority: [
+          { id: "atk_0", card: null },
+          { id: "atk_1", card: null },
+          { id: "atk_2", card: null },
+        ],
+        ...turnOverrides,
+      },
     ],
-    ...overrides,
   };
 }
 

@@ -267,9 +267,28 @@ changes (i.e. when the runner moves to a different row).
   confirms, then waits for the attack button before continuing. This overlay
   is not the pre-battle `TeamChange` screen and is not detected through the
   `Screen::TeamChange` route.
-- In normal mode, `battle_scenes.json` stores attack selection in
-  `attackPriority` and optional pre-attack enemy targeting in `enemyTarget`.
-  When `enemyTarget` is set to `enemy_1..6`, the runner taps that enemy on the
+- In normal mode, `battle_scenes.json` stores each Battle as `turns[]`. The
+  runner still uses the `BATTLE m/n` HUD read to choose the Battle, then uses an
+  internal 0-based turn counter for the current Battle. The counter resets when
+  the HUD moves to a new Battle. After a submitted attack resolves back to an
+  actionable Battle screen, the runner waits briefly for a successful HUD read
+  before incrementing the turn counter; if the HUD read keeps failing past the
+  timeout, it falls back to the existing turn-advance behavior so automation
+  does not stall. While the counter is within the configured `turns[]`, that
+  turn's preparation actions, optional `enemyTarget`, and `attackPriority` are
+  used. Once the counter exceeds the last configured turn, normal mode reuses
+  only the last turn's `attackPriority`; it does not re-run preparation actions
+  or enemy targeting, because those may depend on one-shot skills or cooldown
+  state.
+- Known limitation: when deriving party state for a later Battle, the runner and
+  editor currently assume every configured turn in previous Battles has already
+  executed. If a Battle ends before its later configured turns run, lineup
+  previews and subsequent command-card ownership inference can apply effects
+  that did not happen in-game. This is recorded for a future change; current
+  behavior is unchanged.
+- In normal mode, `attackPriority` stores attack selection and `enemyTarget`
+  stores optional pre-attack enemy targeting for a configured turn. When
+  `enemyTarget` is set to `enemy_1..6`, the runner taps that enemy on the
   Battle screen after preparation actions have settled and before tapping the
   attack button, then taps the normal animation-skip point once to dismiss any
   already-selected target popup. The first three `attackPriority` rows are the
@@ -284,14 +303,14 @@ changes (i.e. when the runner moves to a different row).
   does not regroup duplicate colors ahead of the NP. Fallback rows after the
   first three repeat while they can still match before the next fallback row is
   considered. Before command-card recognition, normal mode applies already
-  executed current-scene preparation actions whose `change_order_servants.json`
+  executed current-turn preparation actions whose `change_order_servants.json`
   timing is `immediate` (for example Order Change) to the front-line servant id
-  map. For previous scenes, it also applies configured NP attack rows that
-  trigger `immediate` retreat/removal rules, then applies preparation-action
-  rules whose timing is `endOfTurn` (for example skill-based end-of-turn
-  retreat/death). Current-scene NP rows and `endOfTurn` skill exits are not
-  applied until the scene is past, so the runner does not remove a servant
-  before selecting that servant's NP or remaining same-turn cards.
+  map. For previous turns and previous Battles, it also applies configured NP
+  attack rows that trigger `immediate` retreat/removal rules, then applies
+  preparation-action rules whose timing is `endOfTurn` (for example skill-based
+  end-of-turn retreat/death). Current-turn NP rows and `endOfTurn` skill exits
+  are not applied until the turn is past, so the runner does not remove a
+  servant before selecting that servant's NP or remaining same-turn cards.
   A normal-mode attack entry may also use `servant_{i}_all`, which matches the
   leftmost unused command card owned by that front-line servant regardless of
   B/A/Q color.

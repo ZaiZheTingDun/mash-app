@@ -1,6 +1,6 @@
 import type { SlotItem } from "./ContentGrid";
 import type { Project } from "../types/project";
-import type { BattleScene, PreparationAction } from "../types/command";
+import type { BattleScene, BattleTurn, PreparationAction } from "../types/command";
 import type { Servant } from "../types/servant";
 import changeOrderRulesJson from "../../src-tauri/src/resources/change_order_servants.json";
 
@@ -274,18 +274,66 @@ export function deriveScenePartyMembers(
   for (const scene of scenes) {
     sceneMembers.push(members.map((member) => ({ ...member })));
 
-    for (const action of scene.preparationActions ?? scene.servantActions) {
-      applyPreparationAction(members, action, "immediate");
-    }
-
-    for (const card of scene.attackPriority) {
-      applyAttackCard(members, card.card, npUseCounts);
-    }
-
-    for (const action of scene.preparationActions ?? scene.servantActions) {
-      applyPreparationAction(members, action, "endOfTurn");
+    for (const turn of sceneTurns(scene)) {
+      applyTurnLineupChanges(members, turn, npUseCounts);
     }
   }
 
   return sceneMembers;
+}
+
+export function deriveTurnPartyMembers(
+  initialMembers: PartyMember[],
+  scenes: BattleScene[],
+  targetSceneIndex: number,
+  targetTurnIndex: number
+): PartyMember[] {
+  const members = initialMembers.map((member) => ({ ...member }));
+  const npUseCounts = new Map<number, number>();
+
+  for (const [sceneIndex, scene] of scenes.entries()) {
+    if (sceneIndex > targetSceneIndex) break;
+    const turns = sceneTurns(scene);
+    for (const [turnIndex, turn] of turns.entries()) {
+      if (sceneIndex === targetSceneIndex && turnIndex >= targetTurnIndex) {
+        return members.map((member) => ({ ...member }));
+      }
+      applyTurnLineupChanges(members, turn, npUseCounts);
+    }
+  }
+
+  return members.map((member) => ({ ...member }));
+}
+
+function sceneTurns(scene: BattleScene): BattleTurn[] {
+  if (scene.turns?.length) return scene.turns;
+  return [
+    {
+      id: `${scene.id}_legacy_turn_1`,
+      preparationActions: scene.preparationActions ?? [],
+      servantActions: scene.servantActions ?? [],
+      equipmentActions: scene.equipmentActions ?? [],
+      commandSpellActions: scene.commandSpellActions ?? [],
+      enemyTarget: scene.enemyTarget ?? null,
+      attackPriority: scene.attackPriority ?? [],
+    },
+  ];
+}
+
+function applyTurnLineupChanges(
+  members: PartyMember[],
+  turn: BattleTurn,
+  npUseCounts: Map<number, number>
+) {
+  for (const action of turn.preparationActions ?? turn.servantActions) {
+    applyPreparationAction(members, action, "immediate");
+  }
+
+  for (const card of turn.attackPriority) {
+    applyAttackCard(members, card.card, npUseCounts);
+  }
+
+  for (const action of turn.preparationActions ?? turn.servantActions) {
+    applyPreparationAction(members, action, "endOfTurn");
+  }
 }

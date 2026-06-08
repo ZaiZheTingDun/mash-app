@@ -3,7 +3,7 @@ import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import { BattleSceneBlock } from "../BattleSceneBlock";
-import type { BattleScene } from "../../types/command";
+import type { BattleTurn } from "../../types/command";
 import type { Servant } from "../../types/servant";
 
 function makeServant(id: number, name_cn: string): Servant {
@@ -18,7 +18,7 @@ function makeServant(id: number, name_cn: string): Servant {
   };
 }
 
-function makeScene(overrides: Partial<BattleScene> = {}): BattleScene {
+function makeScene(overrides: Partial<BattleTurn> = {}): BattleTurn {
   return {
     id: "scene_1",
     preparationActions: [],
@@ -65,7 +65,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "敌人 5" }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect((onChange.mock.calls[0][0] as BattleScene).enemyTarget).toBe(
+    expect((onChange.mock.calls[0][0] as BattleTurn).enemyTarget).toBe(
       "enemy_5"
     );
 
@@ -78,7 +78,7 @@ describe("BattleSceneBlock staged action editor", () => {
     );
     await user.click(screen.getByRole("button", { name: "敌人 5" }));
 
-    expect((onChange.mock.calls[1][0] as BattleScene).enemyTarget).toBeNull();
+    expect((onChange.mock.calls[1][0] as BattleTurn).enemyTarget).toBeNull();
   });
 
   it("shows the preparation source picker when the add row is clicked", async () => {
@@ -109,7 +109,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "乙" }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    const next = onChange.mock.calls[0][0] as BattleScene;
+    const next = onChange.mock.calls[0][0] as BattleTurn;
     expect(next.preparationActions).toHaveLength(1);
     expect(next.preparationActions[0]).toMatchObject({
       type: "servant",
@@ -138,7 +138,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "戊" }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    const next = onChange.mock.calls[0][0] as BattleScene;
+    const next = onChange.mock.calls[0][0] as BattleTurn;
     expect(next.preparationActions[0]).toMatchObject({
       type: "equipment",
       skill: "skill_2",
@@ -266,7 +266,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "丁" }));
     await user.click(screen.getByRole("button", { name: "B" }));
 
-    const next = onChange.mock.calls[0][0] as BattleScene;
+    const next = onChange.mock.calls[0][0] as BattleTurn;
     expect(next.attackPriority).toHaveLength(3);
     expect(next.attackPriority[0]).toMatchObject({
       card: "servant_1_buster",
@@ -325,7 +325,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "B" }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    const next = onChange.mock.calls[0][0] as BattleScene;
+    const next = onChange.mock.calls[0][0] as BattleTurn;
     expect(next.attackPriority).toHaveLength(3);
     expect(next.attackPriority[0]).toMatchObject({
       card: "servant_1_buster",
@@ -349,7 +349,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "甲" }));
     await user.click(screen.getByRole("button", { name: "ALL" }));
 
-    const next = onChange.mock.calls[0][0] as BattleScene;
+    const next = onChange.mock.calls[0][0] as BattleTurn;
     expect(next.attackPriority[1]).toMatchObject({
       card: "servant_1_all",
     });
@@ -384,7 +384,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "丁" }));
     await user.click(screen.getByRole("button", { name: "B" }));
 
-    const next = onChange.mock.calls[0][0] as BattleScene;
+    const next = onChange.mock.calls[0][0] as BattleTurn;
     expect(next.attackPriority[1]).toMatchObject({
       card: "servant_1_buster",
     });
@@ -409,7 +409,7 @@ describe("BattleSceneBlock staged action editor", () => {
 
     await user.click(screen.getAllByRole("button", { name: "清除指令卡" })[0]);
 
-    const next = onChange.mock.calls[0][0] as BattleScene;
+    const next = onChange.mock.calls[0][0] as BattleTurn;
     expect(next.attackPriority).toHaveLength(3);
     expect(next.attackPriority[0].card).toBeNull();
   });
@@ -435,7 +435,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "甲" }));
     await user.click(screen.getByRole("button", { name: "B" }));
 
-    const appended = onChange.mock.calls[0][0] as BattleScene;
+    const appended = onChange.mock.calls[0][0] as BattleTurn;
     expect(appended.attackPriority).toHaveLength(4);
     expect(appended.attackPriority[3]).toMatchObject({
       card: "servant_1_buster",
@@ -448,7 +448,7 @@ describe("BattleSceneBlock staged action editor", () => {
     );
     await user.click(screen.getByRole("button", { name: "删除行动" }));
 
-    const removed = onChange.mock.calls[0][0] as BattleScene;
+    const removed = onChange.mock.calls[0][0] as BattleTurn;
     expect(removed.attackPriority).toHaveLength(3);
   });
 
@@ -498,7 +498,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "删除行动" }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    const next = onChange.mock.calls[0][0] as BattleScene;
+    const next = onChange.mock.calls[0][0] as BattleTurn;
     expect(next.preparationActions).toEqual([]);
   });
 

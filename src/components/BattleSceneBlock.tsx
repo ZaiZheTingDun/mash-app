@@ -18,7 +18,7 @@ import {
 } from "./partyServants";
 import type {
   AttackCard,
-  BattleScene,
+  BattleTurn,
   CommandSpellAction,
   EquipmentAction,
   OrderChangeSelection,
@@ -28,10 +28,10 @@ import type {
 import type { Servant } from "../types/servant";
 
 interface BattleSceneBlockProps {
-  scene: BattleScene;
+  scene: BattleTurn;
   partyServants: (Servant | null)[];
   partyMembers?: PartyMember[];
-  onChange: (updated: BattleScene) => void;
+  onChange: (updated: BattleTurn) => void;
 }
 
 type PrepSource = "equipment" | "commandSpell" | `servant_${1 | 2 | 3}`;
@@ -106,7 +106,7 @@ function createId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function emptyLegacyFields(scene: BattleScene): BattleScene {
+function emptyLegacyFields(scene: BattleTurn): BattleTurn {
   return {
     ...scene,
     servantActions: [],

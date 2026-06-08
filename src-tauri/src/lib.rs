@@ -148,13 +148,11 @@ pub struct AttackCard {
     pub card: Option<String>,
 }
 
-/// One configured battle-scene block. The runner picks which block to
-/// execute by reading the `BATTLE m/n` HUD strip and indexing on `m - 1`,
-/// so each block represents the per-scene action plan rather than a
-/// per-turn one. JSON shape on the wire is unchanged from the legacy
-/// `Turn` struct so old `turns.json` files can be migrated in place.
+/// One configured turn inside a battle scene. The runner selects a
+/// `BattleScene` from the `BATTLE m/n` HUD and then uses an internal
+/// per-scene turn counter to choose which `BattleTurn` runs.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct BattleScene {
+pub struct BattleTurn {
     pub id: String,
     #[serde(rename = "preparationActions", default)]
     pub preparation_actions: Vec<Action>,
@@ -169,11 +167,11 @@ pub struct BattleScene {
     pub command_spell_actions: Vec<Action>,
     #[serde(rename = "enemyTarget", default)]
     pub enemy_target: Option<String>,
-    #[serde(rename = "attackPriority")]
+    #[serde(rename = "attackPriority", default)]
     pub attack_priority: Vec<AttackCard>,
 }
 
-impl BattleScene {
+impl BattleTurn {
     fn normalize_preparation_actions(mut self) -> Self {
         if self.preparation_actions.is_empty() {
             self.preparation_actions
@@ -186,6 +184,61 @@ impl BattleScene {
         self.servant_actions.clear();
         self.equipment_actions.clear();
         self.command_spell_actions.clear();
+        self
+    }
+}
+
+/// One configured battle-scene block. New saves store all normal-mode
+/// per-turn config under `turns`. The legacy top-level fields are kept only
+/// for reading old `battle_scenes.json` / `turns.json` files and are skipped
+/// when serializing.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct BattleScene {
+    pub id: String,
+    #[serde(default)]
+    pub turns: Vec<BattleTurn>,
+    #[serde(rename = "preparationActions", default, skip_serializing)]
+    pub preparation_actions: Vec<Action>,
+    #[serde(rename = "servantActions", default, skip_serializing)]
+    pub servant_actions: Vec<Action>,
+    #[serde(rename = "equipmentActions", default, skip_serializing)]
+    pub equipment_actions: Vec<Action>,
+    #[serde(rename = "commandSpellActions", default, skip_serializing)]
+    pub command_spell_actions: Vec<Action>,
+    #[serde(rename = "enemyTarget", default, skip_serializing)]
+    pub enemy_target: Option<String>,
+    #[serde(rename = "attackPriority", default, skip_serializing)]
+    pub attack_priority: Vec<AttackCard>,
+}
+
+impl BattleScene {
+    fn normalize_turns(mut self) -> Self {
+        if self.turns.is_empty() {
+            self.turns.push(
+                BattleTurn {
+                    id: format!("{}_turn_1", self.id),
+                    preparation_actions: std::mem::take(&mut self.preparation_actions),
+                    servant_actions: std::mem::take(&mut self.servant_actions),
+                    equipment_actions: std::mem::take(&mut self.equipment_actions),
+                    command_spell_actions: std::mem::take(&mut self.command_spell_actions),
+                    enemy_target: self.enemy_target.take(),
+                    attack_priority: std::mem::take(&mut self.attack_priority),
+                }
+                .normalize_preparation_actions(),
+            );
+        } else {
+            self.turns = self
+                .turns
+                .into_iter()
+                .map(BattleTurn::normalize_preparation_actions)
+                .collect();
+            self.preparation_actions.clear();
+            self.servant_actions.clear();
+            self.equipment_actions.clear();
+            self.command_spell_actions.clear();
+            self.enemy_target = None;
+            self.attack_priority.clear();
+        }
         self
     }
 }
@@ -891,7 +944,7 @@ fn save_battle_scenes(
     let path = project_battle_scenes_path(&app, &project_id);
     let scenes: Vec<BattleScene> = scenes
         .into_iter()
-        .map(BattleScene::normalize_preparation_actions)
+        .map(BattleScene::normalize_turns)
         .collect();
     let json = serde_json::to_string_pretty(&scenes).map_err(|e| e.to_string())?;
     fs::write(&path, json).map_err(|e| e.to_string())
@@ -904,7 +957,7 @@ fn load_battle_scenes(app: tauri::AppHandle, project_id: String) -> Vec<BattleSc
         return serde_json::from_str::<Vec<BattleScene>>(&contents)
             .unwrap_or_default()
             .into_iter()
-            .map(BattleScene::normalize_preparation_actions)
+            .map(BattleScene::normalize_turns)
             .collect();
     }
 
@@ -917,7 +970,7 @@ fn load_battle_scenes(app: tauri::AppHandle, project_id: String) -> Vec<BattleSc
         let scenes: Vec<BattleScene> = serde_json::from_str::<Vec<BattleScene>>(&contents)
             .unwrap_or_default()
             .into_iter()
-            .map(BattleScene::normalize_preparation_actions)
+            .map(BattleScene::normalize_turns)
             .collect();
         if let Ok(json) = serde_json::to_string_pretty(&scenes) {
             let _ = fs::write(&path, json);
@@ -3589,8 +3642,8 @@ fn read_import_asset_version(
         }
         let contents =
             fs::read_to_string(&path).map_err(|e| format!("读取素材包版本记录失败: {e}"))?;
-        let record: AssetVersionRecord = serde_json::from_str(&contents)
-            .map_err(|e| format!("解析素材包版本记录失败: {e}"))?;
+        let record: AssetVersionRecord =
+            serde_json::from_str(&contents).map_err(|e| format!("解析素材包版本记录失败: {e}"))?;
         return Ok(Some(record.version));
     }
 
@@ -5904,19 +5957,21 @@ mod tests {
         });
         let scene: BattleScene = serde_json::from_value::<BattleScene>(json)
             .unwrap()
-            .normalize_preparation_actions();
+            .normalize_turns();
         assert_eq!(scene.id, "scene_1");
-        assert_eq!(scene.preparation_actions.len(), 3);
+        assert_eq!(scene.turns.len(), 1);
+        let turn = &scene.turns[0];
+        assert_eq!(turn.preparation_actions.len(), 3);
         assert!(matches!(
-            scene.preparation_actions[0],
+            turn.preparation_actions[0],
             Action::Servant { .. }
         ));
         assert!(matches!(
-            scene.preparation_actions[1],
+            turn.preparation_actions[1],
             Action::Equipment { .. }
         ));
         assert!(matches!(
-            scene.preparation_actions[2],
+            turn.preparation_actions[2],
             Action::CommandSpell { .. }
         ));
         assert!(scene.servant_actions.is_empty());
@@ -5928,11 +5983,20 @@ mod tests {
     fn battle_scene_round_trips_preparation_actions_under_camel_case_key() {
         let scene = BattleScene {
             id: "scene_1".into(),
-            preparation_actions: vec![Action::CommandSpell {
-                id: "cs_1".into(),
-                spell: Some("np_release".into()),
-                target: Some("servant_1".into()),
+            turns: vec![BattleTurn {
+                id: "turn_1".into(),
+                preparation_actions: vec![Action::CommandSpell {
+                    id: "cs_1".into(),
+                    spell: Some("np_release".into()),
+                    target: Some("servant_1".into()),
+                }],
+                servant_actions: vec![],
+                equipment_actions: vec![],
+                command_spell_actions: vec![],
+                enemy_target: None,
+                attack_priority: vec![],
             }],
+            preparation_actions: vec![],
             servant_actions: vec![],
             equipment_actions: vec![],
             command_spell_actions: vec![],
@@ -5940,18 +6004,21 @@ mod tests {
             attack_priority: vec![],
         };
         let json = serde_json::to_value(&scene).unwrap();
-        assert!(json["preparationActions"].is_array());
+        assert!(json["turns"][0]["preparationActions"].is_array());
+        assert!(json["preparationActions"].is_null());
         assert!(json["commandSpellActions"].is_null());
         assert_eq!(
-            json["preparationActions"][0]["type"],
+            json["turns"][0]["preparationActions"][0]["type"],
             serde_json::json!("commandSpell")
         );
 
         // Deserialize back — symmetry guards against accidentally
         // exposing a field under one name and reading it under another.
-        let parsed: BattleScene = serde_json::from_value(json).unwrap();
-        assert_eq!(parsed.preparation_actions.len(), 1);
-        match &parsed.preparation_actions[0] {
+        let parsed: BattleScene = serde_json::from_value::<BattleScene>(json)
+            .unwrap()
+            .normalize_turns();
+        assert_eq!(parsed.turns[0].preparation_actions.len(), 1);
+        match &parsed.turns[0].preparation_actions[0] {
             Action::CommandSpell { spell, target, .. } => {
                 assert_eq!(spell.as_deref(), Some("np_release"));
                 assert_eq!(target.as_deref(), Some("servant_1"));
@@ -5971,7 +6038,8 @@ mod tests {
         let scene: BattleScene = serde_json::from_value(json).unwrap();
 
         assert_eq!(scene.id, "scene_1");
-        assert!(scene.enemy_target.is_none());
+        let scene = scene.normalize_turns();
+        assert!(scene.turns[0].enemy_target.is_none());
     }
 
     #[test]

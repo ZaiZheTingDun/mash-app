@@ -1566,6 +1566,37 @@ body,
   padding: 4px 0 8px;
 }
 
+.battle-turn-nav {
+  flex: 0 0 auto;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-3);
+  background: var(--fgo-surface);
+  padding: 8px 10px;
+  margin-right: 12px;
+}
+
+.battle-turn-tab {
+  min-width: 44px;
+  height: 34px;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-2);
+  background: var(--gray-2);
+  color: var(--gray-12);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.battle-turn-tab:hover {
+  background: var(--gray-3);
+}
+
+.battle-turn-tab.is-selected {
+  border-color: var(--blue-8);
+  background: var(--blue-4);
+  color: var(--blue-12);
+}
+
 .command-scroll-region {
   flex: 1;
   min-height: 0;

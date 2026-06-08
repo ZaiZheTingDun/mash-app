@@ -7,14 +7,14 @@ use crate::touch::{self, TouchBackend};
 use crate::{
     load_servant_metadata, servant_np_card, Action, AdvancedBattleScene,
     AdvancedCommandCardCondition, AdvancedOutputType, AdvancedRule, AttackCard, BattleScene,
-    ServantMetadata, Server,
+    BattleTurn, ServantMetadata, Server,
 };
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::Emitter;
 
 // ---------------------------------------------------------------------------
@@ -683,6 +683,11 @@ struct BattleState {
     /// `scenes` vec). One config block = one battle scene as labeled in
     /// the HUD's `BATTLE m/n`.
     current_scene_index: usize,
+    /// 0-based turn counter inside the current normal-mode battle scene.
+    /// It resets when the HUD moves to a new `BATTLE m/n` scene and
+    /// increments when a submitted attack resolves back to an actionable
+    /// Battle screen.
+    current_turn_index: usize,
     /// `m` value last successfully detected from the BATTLE m/n HUD strip.
     /// Stays `Some(prev)` across transient failed reads (e.g. NP overlay
     /// briefly covers the strip) so we don't double-trigger skill
@@ -694,6 +699,9 @@ struct BattleState {
     /// execution — only an actual `Some(prev) → Some(curr != prev)`
     /// transition advances the index and triggers a re-execution.
     executed_scene_index: Option<usize>,
+    /// Normal-mode turn config that has already had preparation actions
+    /// executed. Advanced mode continues to use `executed_scene_index`.
+    executed_turn_key: Option<(usize, usize)>,
     /// Whether we used the scene config (vs fallback) — drives card selection
     scene_config_used: bool,
     /// Set after clicking start on TeamConfirm; tolerates longer Unknown streaks
@@ -702,6 +710,10 @@ struct BattleState {
     /// can remain detectable for a short moment before the animation takes
     /// over; this prevents submitting another set of picks in that window.
     attack_submitted: bool,
+    /// Start time for the normal-mode post-attack HUD-read grace period.
+    /// While this is set, the runner has returned to an actionable Battle
+    /// screen but is waiting for `BATTLE m/n` before advancing a turn.
+    post_attack_hud_wait_started: Option<Instant>,
     advanced_startup_done: HashSet<usize>,
     advanced_control_indices: HashMap<usize, usize>,
     advanced_startup_control_indices: HashMap<usize, usize>,
@@ -712,11 +724,14 @@ impl BattleState {
     fn new() -> Self {
         Self {
             current_scene_index: 0,
+            current_turn_index: 0,
             last_screen_scene: None,
             executed_scene_index: None,
+            executed_turn_key: None,
             scene_config_used: false,
             waiting_for_battle: false,
             attack_submitted: false,
+            post_attack_hud_wait_started: None,
             advanced_startup_done: HashSet::new(),
             advanced_control_indices: HashMap::new(),
             advanced_startup_control_indices: HashMap::new(),
@@ -779,6 +794,33 @@ fn tick_scene_state(
         last_screen_scene: next_last,
         current_scene_index: next_index,
         needs_exec: executed_scene_index != Some(next_index),
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum PostAttackHudReadGate {
+    Ready,
+    Waiting { started_at: Instant },
+    TimedOut,
+}
+
+fn post_attack_hud_read_gate(
+    advanced_mode: bool,
+    attack_returned_after_submit: bool,
+    screen_scene: Option<(u32, u32)>,
+    wait_started: Option<Instant>,
+    now: Instant,
+    timeout: Duration,
+) -> PostAttackHudReadGate {
+    if advanced_mode || !attack_returned_after_submit || screen_scene.is_some() {
+        return PostAttackHudReadGate::Ready;
+    }
+
+    let started_at = wait_started.unwrap_or(now);
+    if now.duration_since(started_at) >= timeout {
+        PostAttackHudReadGate::TimedOut
+    } else {
+        PostAttackHudReadGate::Waiting { started_at }
     }
 }
 
@@ -888,7 +930,10 @@ fn scroll_support_list_delta(confirm_button_anchors: &[NormRect]) -> f64 {
 fn scroll_support_list_duration_ms(delta: f64) -> u32 {
     let raw_ms = (delta.abs() / SUPPORT_SCROLL_VELOCITY * 1000.0).round();
     let raw_ms = raw_ms.clamp(0.0, u32::MAX as f64) as u32;
-    raw_ms.clamp(SUPPORT_SCROLL_MIN_DURATION_MS, SUPPORT_SCROLL_MAX_DURATION_MS)
+    raw_ms.clamp(
+        SUPPORT_SCROLL_MIN_DURATION_MS,
+        SUPPORT_SCROLL_MAX_DURATION_MS,
+    )
 }
 
 /// Render a one-line, human-readable summary of a support-list scroll
@@ -1387,6 +1432,11 @@ const SKILL_POLL_INTERVAL: Duration = Duration::from_millis(300);
 /// to cover NP-length animations without hanging forever if something
 /// genuinely went wrong.
 const SKILL_WAIT_TIMEOUT: Duration = Duration::from_secs(45);
+/// After a submitted attack resolves back to Battle, wait briefly for a
+/// reliable `BATTLE m/n` HUD read before advancing the normal-mode turn
+/// counter. If CV keeps failing, fall back to the legacy turn-advance logic
+/// so automation does not stall forever.
+const POST_ATTACK_HUD_READ_TIMEOUT: Duration = Duration::from_secs(3);
 const COMMAND_CARD_COUNT: usize = 5;
 /// Order Change opens as a semi-transparent overlay over Battle. The
 /// classifier often keeps returning `Battle`, so the runner waits for the
@@ -1633,7 +1683,10 @@ impl Runner {
     ) -> bool {
         let from_px = from.to_physical(self.screen_w, self.screen_h);
         let to_px = to.to_physical(self.screen_w, self.screen_h);
-        match self.touch.swipe_with_settle(from_px, to_px, swipe_ms, settle_ms) {
+        match self
+            .touch
+            .swipe_with_settle(from_px, to_px, swipe_ms, settle_ms)
+        {
             Ok(()) => true,
             Err(err) => {
                 self.fail_action(screen, "滑动", err);
@@ -1850,10 +1903,7 @@ impl Runner {
                         &format!("等待识别画面… ({unknown_count}/{timeout})"),
                     );
                     if is_battle_result_screen(last_detected_screen) {
-                        self.emit_debug(
-                            "Unknown",
-                            "结算页可能被弹窗遮挡，尝试点击跳过区域",
-                        );
+                        self.emit_debug("Unknown", "结算页可能被弹窗遮挡，尝试点击跳过区域");
                         if self.tap_at("Unknown", BATTLE_RESULT_POPUP_SKIP) {
                             thread::sleep(ACTION_DELAY);
                         }
@@ -2692,16 +2742,40 @@ impl Runner {
             return;
         }
 
+        let attack_returned_after_submit = self.battle.attack_submitted;
+
         // Attack button is back -- the prior NP / attack cinematic (if
         // any) has finished. Drop back to the short Unknown tolerance.
         self.battle.waiting_for_battle = false;
-        self.battle.attack_submitted = false;
 
         // Read the current battle scene (m of n) from the BATTLE label HUD.
         let screen_scene = self
             .sidecar()
             .read_battle_scene(None, BATTLE_SCENE_REGION)
             .unwrap_or(None);
+        match post_attack_hud_read_gate(
+            self.advanced_mode,
+            attack_returned_after_submit,
+            screen_scene,
+            self.battle.post_attack_hud_wait_started,
+            Instant::now(),
+            POST_ATTACK_HUD_READ_TIMEOUT,
+        ) {
+            PostAttackHudReadGate::Ready => {
+                self.battle.post_attack_hud_wait_started = None;
+                self.battle.attack_submitted = false;
+            }
+            PostAttackHudReadGate::Waiting { started_at } => {
+                self.battle.post_attack_hud_wait_started = Some(started_at);
+                self.emit("Battle", "等待读取 Battle HUD…");
+                return;
+            }
+            PostAttackHudReadGate::TimedOut => {
+                self.battle.post_attack_hud_wait_started = None;
+                self.battle.attack_submitted = false;
+                self.emit("Battle", "Battle HUD 读取超时，沿用当前 Turn 推进逻辑");
+            }
+        }
         let scene_m = screen_scene.map(|(m, _)| m);
 
         // Decide what to do based on (prior scene, fresh read). See
@@ -2715,10 +2789,19 @@ impl Runner {
             self.battle.executed_scene_index,
             scene_m,
         );
+        let previous_scene_index = self.battle.current_scene_index;
         self.battle.current_scene_index = tick.current_scene_index;
         self.battle.last_screen_scene = tick.last_screen_scene;
+        let scene_changed = self.battle.current_scene_index != previous_scene_index;
+        if !self.advanced_mode {
+            if scene_changed {
+                self.battle.current_turn_index = 0;
+            } else if attack_returned_after_submit {
+                self.battle.current_turn_index = self.battle.current_turn_index.saturating_add(1);
+            }
+        }
 
-        if tick.needs_exec {
+        if self.advanced_mode && tick.needs_exec {
             self.battle.scene_config_used = false;
             let scene_str = match screen_scene {
                 Some((m, n)) => format!("{m}/{n}"),
@@ -2732,33 +2815,75 @@ impl Runner {
                     scene_str,
                 ),
             );
-            if self.advanced_mode {
-                self.battle.scene_config_used = self
-                    .advanced_scenes
-                    .get(self.battle.current_scene_index)
-                    .is_some();
-            } else if let Some(scene_cfg) =
-                self.scenes.get(self.battle.current_scene_index).cloned()
-            {
-                self.execute_scene_skills(&scene_cfg);
-                self.battle.scene_config_used = true;
+            self.battle.scene_config_used = self
+                .advanced_scenes
+                .get(self.battle.current_scene_index)
+                .is_some();
+            self.battle.executed_scene_index = Some(self.battle.current_scene_index);
+        } else if self.advanced_mode {
+            self.emit("Battle", "场景未变更，直接攻击");
+        } else {
+            self.battle.scene_config_used = false;
+            let turn_key = (
+                self.battle.current_scene_index,
+                self.battle.current_turn_index,
+            );
+            if let Some((turn_cfg, over_configured_turns)) = normal_turn_for_current_state(
+                &self.scenes,
+                self.battle.current_scene_index,
+                self.battle.current_turn_index,
+            ) {
+                let scene_str = match screen_scene {
+                    Some((m, n)) => format!("{m}/{n}"),
+                    None => "?".into(),
+                };
+                if over_configured_turns {
+                    self.emit(
+                        "Battle",
+                        &format!(
+                            "Battle {} Turn {} 超出配置，沿用最后 Turn 的攻击配置 (画面场景: {})",
+                            self.battle.current_scene_index + 1,
+                            self.battle.current_turn_index + 1,
+                            scene_str,
+                        ),
+                    );
+                } else if self.battle.executed_turn_key != Some(turn_key) {
+                    self.emit(
+                        "Battle",
+                        &format!(
+                            "执行 Battle {} Turn {} 指令 (画面场景: {})",
+                            self.battle.current_scene_index + 1,
+                            self.battle.current_turn_index + 1,
+                            scene_str,
+                        ),
+                    );
+                    self.execute_turn_skills(&turn_cfg);
+                    self.battle.executed_turn_key = Some(turn_key);
+                    self.battle.scene_config_used = true;
+                } else {
+                    self.emit("Battle", "Turn 未变更，直接攻击");
+                    self.battle.scene_config_used = true;
+                }
             } else {
                 self.emit(
                     "Battle",
                     &format!(
-                        "无第 {} 组指令配置，直接攻击",
+                        "无第 {} 组 Battle 配置，直接攻击",
                         self.battle.current_scene_index + 1
                     ),
                 );
             }
-            self.battle.executed_scene_index = Some(self.battle.current_scene_index);
-        } else {
-            self.emit("Battle", "场景未变更，直接攻击");
         }
 
         if !self.advanced_mode {
-            if let Some(scene_cfg) = self.scenes.get(self.battle.current_scene_index).cloned() {
-                self.select_enemy_target(scene_cfg.enemy_target.as_deref());
+            if let Some((turn_cfg, over_configured_turns)) = normal_turn_for_current_state(
+                &self.scenes,
+                self.battle.current_scene_index,
+                self.battle.current_turn_index,
+            ) {
+                if !over_configured_turns {
+                    self.select_enemy_target(turn_cfg.enemy_target.as_deref());
+                }
             }
         }
 
@@ -2819,7 +2944,8 @@ impl Runner {
             self.build_full_party_ids(),
             &self.scenes,
             self.battle.current_scene_index,
-            self.battle.executed_scene_index,
+            self.battle.current_turn_index,
+            self.battle.executed_turn_key,
         )
     }
 
@@ -3066,6 +3192,7 @@ impl Runner {
             self.battle.scene_config_used,
             &self.scenes,
             self.battle.current_scene_index,
+            self.battle.current_turn_index,
         ) {
             picks = pick_by_priority(
                 priority,
@@ -3285,7 +3412,7 @@ impl Runner {
                         if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
                             return;
                         }
-                        let prep_scene = BattleScene {
+                        let prep_turn = BattleTurn {
                             id: scene.id.clone(),
                             preparation_actions: startup_actions,
                             servant_actions: Vec::new(),
@@ -3294,7 +3421,7 @@ impl Runner {
                             enemy_target: None,
                             attack_priority: Vec::new(),
                         };
-                        self.execute_scene_skills(&prep_scene);
+                        self.execute_turn_skills(&prep_turn);
 
                         self.emit("Battle", "启动阶段完成，进入自动战斗");
                         if !self.tap_at("Battle", ATTACK_BUTTON) {
@@ -3345,7 +3472,7 @@ impl Runner {
                         if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
                             return;
                         }
-                        let control_scene = BattleScene {
+                        let control_turn = BattleTurn {
                             id: format!("{}_control_{}", scene.id, control_index + 1),
                             preparation_actions: vec![control_action],
                             servant_actions: Vec::new(),
@@ -3354,7 +3481,7 @@ impl Runner {
                             enemy_target: None,
                             attack_priority: Vec::new(),
                         };
-                        self.execute_scene_skills(&control_scene);
+                        self.execute_turn_skills(&control_turn);
                         self.battle
                             .advanced_control_indices
                             .insert(scene_index, control_index + 1);
@@ -3438,7 +3565,7 @@ impl Runner {
                     if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
                         return;
                     }
-                    let prep_scene = BattleScene {
+                    let prep_turn = BattleTurn {
                         id: scene.id.clone(),
                         preparation_actions: startup_actions,
                         servant_actions: Vec::new(),
@@ -3447,7 +3574,7 @@ impl Runner {
                         enemy_target: None,
                         attack_priority: Vec::new(),
                     };
-                    self.execute_scene_skills(&prep_scene);
+                    self.execute_turn_skills(&prep_turn);
 
                     self.emit("Battle", "启动阶段完成，进入自动战斗");
                     if !self.tap_at("Battle", ATTACK_BUTTON) {
@@ -3527,7 +3654,7 @@ impl Runner {
                     if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
                         return;
                     }
-                    let control_scene = BattleScene {
+                    let control_turn = BattleTurn {
                         id: format!("{}_auto_control_{}", scene.id, next_control_count),
                         preparation_actions: control_actions,
                         servant_actions: Vec::new(),
@@ -3536,7 +3663,7 @@ impl Runner {
                         enemy_target: None,
                         attack_priority: Vec::new(),
                     };
-                    self.execute_scene_skills(&control_scene);
+                    self.execute_turn_skills(&control_turn);
 
                     self.emit("Battle", "控制行动完成，返回指令卡攻击");
                     if !self.tap_at("Battle", ATTACK_BUTTON) {
@@ -3627,7 +3754,7 @@ impl Runner {
                 if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
                     return;
                 }
-                let prep_scene = BattleScene {
+                let prep_turn = BattleTurn {
                     id: rule.id.clone(),
                     preparation_actions: prep_actions,
                     servant_actions: Vec::new(),
@@ -3636,7 +3763,7 @@ impl Runner {
                     enemy_target: None,
                     attack_priority: Vec::new(),
                 };
-                self.execute_scene_skills(&prep_scene);
+                self.execute_turn_skills(&prep_turn);
 
                 self.emit("Battle", "高级规则准备行动完成，重新进入指令卡");
                 if !self.tap_at("Battle", ATTACK_BUTTON) {
@@ -3879,8 +4006,8 @@ impl Runner {
 
     // -- skill execution -----------------------------------------------------
 
-    fn execute_scene_skills(&mut self, scene: &BattleScene) {
-        for action in scene_preparation_actions(scene) {
+    fn execute_turn_skills(&mut self, turn: &BattleTurn) {
+        for action in turn_preparation_actions(turn) {
             match action {
                 Action::Servant {
                     servant,
@@ -4678,8 +4805,23 @@ fn command_spell_index(spell: Option<&str>) -> Option<usize> {
     }
 }
 
-fn scene_preparation_actions(scene: &BattleScene) -> std::slice::Iter<'_, Action> {
-    scene.preparation_actions.iter()
+fn turn_preparation_actions(turn: &BattleTurn) -> std::slice::Iter<'_, Action> {
+    turn.preparation_actions.iter()
+}
+
+fn normal_turn_for_current_state(
+    scenes: &[BattleScene],
+    current_scene_index: usize,
+    current_turn_index: usize,
+) -> Option<(BattleTurn, bool)> {
+    let turns = &scenes.get(current_scene_index)?.turns;
+    let last_index = turns.len().checked_sub(1)?;
+    let over_configured_turns = current_turn_index > last_index;
+    let effective_index = current_turn_index.min(last_index);
+    turns
+        .get(effective_index)
+        .cloned()
+        .map(|turn| (turn, over_configured_turns))
 }
 
 fn attack_priority_for_current_scene<'a>(
@@ -4687,41 +4829,70 @@ fn attack_priority_for_current_scene<'a>(
     scene_config_used: bool,
     scenes: &'a [BattleScene],
     current_scene_index: usize,
+    current_turn_index: usize,
 ) -> Option<&'a [AttackCard]> {
     if advanced_mode && !scene_config_used {
         return None;
     }
+    let turns = &scenes.get(current_scene_index)?.turns;
+    let last_index = turns.len().checked_sub(1)?;
+    let effective_index = current_turn_index.min(last_index);
     scenes
         .get(current_scene_index)
-        .map(|scene| scene.attack_priority.as_slice())
+        .and_then(|scene| scene.turns.get(effective_index))
+        .map(|turn| turn.attack_priority.as_slice())
 }
 
 fn normal_current_party_ids_from(
     mut ids: [Option<u32>; 6],
     scenes: &[BattleScene],
     current_scene_index: usize,
-    executed_scene_index: Option<usize>,
+    current_turn_index: usize,
+    executed_turn_key: Option<(usize, usize)>,
 ) -> [Option<u32>; 3] {
     let mut np_use_counts: HashMap<u32, u32> = HashMap::new();
-    for (index, scene) in scenes.iter().enumerate() {
-        let should_apply = index < current_scene_index || executed_scene_index == Some(index);
-        if !should_apply {
-            continue;
+    for (scene_index, scene) in scenes.iter().enumerate() {
+        if scene_index > current_scene_index {
+            break;
         }
-        for action in scene_preparation_actions(scene) {
-            if action_frontline_available(&ids, action) {
-                apply_party_lineup_change(&mut ids, action);
+        for (turn_index, turn) in scene.turns.iter().enumerate() {
+            let before_current_scene = scene_index < current_scene_index;
+            let before_current_turn =
+                scene_index == current_scene_index && turn_index < current_turn_index;
+            let is_current_turn =
+                scene_index == current_scene_index && turn_index == current_turn_index;
+            let prep_has_executed = before_current_scene
+                || before_current_turn
+                || executed_turn_key == Some((scene_index, turn_index));
+            if !prep_has_executed && !is_current_turn {
+                continue;
             }
-        }
-        if index < current_scene_index {
-            for card in &scene.attack_priority {
-                apply_attack_card_lineup_change(&mut ids, card, &mut np_use_counts);
-            }
-            for action in scene_preparation_actions(scene) {
-                if action_frontline_available(&ids, action) {
-                    apply_party_lineup_change_at(&mut ids, action, ChangeOrderTiming::EndOfTurn);
+
+            if prep_has_executed {
+                for action in turn_preparation_actions(turn) {
+                    if action_frontline_available(&ids, action) {
+                        apply_party_lineup_change(&mut ids, action);
+                    }
                 }
             }
+
+            if before_current_scene || before_current_turn {
+                for card in &turn.attack_priority {
+                    apply_attack_card_lineup_change(&mut ids, card, &mut np_use_counts);
+                }
+                for action in turn_preparation_actions(turn) {
+                    if action_frontline_available(&ids, action) {
+                        apply_party_lineup_change_at(
+                            &mut ids,
+                            action,
+                            ChangeOrderTiming::EndOfTurn,
+                        );
+                    }
+                }
+            }
+        }
+        if scene_index == current_scene_index {
+            break;
         }
     }
     [ids[0], ids[1], ids[2]]
@@ -5854,6 +6025,34 @@ mod tests {
         }
     }
 
+    fn normal_turn(
+        preparation_actions: Vec<Action>,
+        attack_priority: Vec<AttackCard>,
+    ) -> BattleTurn {
+        BattleTurn {
+            id: "turn_1".into(),
+            preparation_actions,
+            servant_actions: Vec::new(),
+            equipment_actions: Vec::new(),
+            command_spell_actions: Vec::new(),
+            enemy_target: None,
+            attack_priority,
+        }
+    }
+
+    fn normal_scene(id: &str, turns: Vec<BattleTurn>) -> BattleScene {
+        BattleScene {
+            id: id.into(),
+            turns,
+            preparation_actions: Vec::new(),
+            servant_actions: Vec::new(),
+            equipment_actions: Vec::new(),
+            command_spell_actions: Vec::new(),
+            enemy_target: None,
+            attack_priority: Vec::new(),
+        }
+    }
+
     fn grand_config(servant_id: u32, np_card: &str, priority: &str) -> GrandServantRuntimeConfig {
         grand_config_at(0, servant_id, np_card, priority)
     }
@@ -6454,68 +6653,105 @@ mod tests {
 
     #[test]
     fn normal_attack_priority_is_used_even_when_scene_was_not_reexecuted() {
-        let scene = BattleScene {
-            id: "scene_1".into(),
-            preparation_actions: vec![],
-            servant_actions: vec![],
-            equipment_actions: vec![],
-            command_spell_actions: vec![],
-            enemy_target: None,
-            attack_priority: vec![AttackCard {
-                id: "chain_1".into(),
-                card: Some("servant_1_all".into()),
-            }],
-        };
+        let scene = normal_scene(
+            "scene_1",
+            vec![normal_turn(
+                vec![],
+                vec![AttackCard {
+                    id: "chain_1".into(),
+                    card: Some("servant_1_all".into()),
+                }],
+            )],
+        );
 
         let scenes = [scene];
-        let priority = attack_priority_for_current_scene(false, false, &scenes, 0).unwrap();
+        let priority = attack_priority_for_current_scene(false, false, &scenes, 0, 0).unwrap();
 
         assert_eq!(priority[0].card.as_deref(), Some("servant_1_all"));
     }
 
     #[test]
-    fn advanced_attack_priority_still_requires_scene_config_used() {
-        let scene = BattleScene {
-            id: "scene_1".into(),
-            preparation_actions: vec![],
-            servant_actions: vec![],
-            equipment_actions: vec![],
-            command_spell_actions: vec![],
-            enemy_target: None,
-            attack_priority: vec![AttackCard {
-                id: "chain_1".into(),
-                card: Some("servant_1_all".into()),
-            }],
-        };
+    fn normal_attack_priority_reuses_last_turn_after_configured_turns() {
+        let scene = normal_scene(
+            "scene_1",
+            vec![
+                normal_turn(
+                    vec![],
+                    vec![AttackCard {
+                        id: "turn_1_attack".into(),
+                        card: Some("servant_1_buster".into()),
+                    }],
+                ),
+                normal_turn(
+                    vec![],
+                    vec![AttackCard {
+                        id: "turn_2_attack".into(),
+                        card: Some("servant_2_arts".into()),
+                    }],
+                ),
+            ],
+        );
 
-        assert!(attack_priority_for_current_scene(true, false, &[scene], 0).is_none());
+        let scenes = [scene];
+        let priority = attack_priority_for_current_scene(false, false, &scenes, 0, 2).unwrap();
+
+        assert_eq!(priority[0].card.as_deref(), Some("servant_2_arts"));
+    }
+
+    #[test]
+    fn normal_turn_for_current_state_marks_over_configured_turns() {
+        let mut first = normal_turn(vec![], vec![]);
+        first.id = "turn_1".into();
+        let mut second = normal_turn(vec![], vec![]);
+        second.id = "turn_2".into();
+        let scene = normal_scene("scene_1", vec![first, second]);
+
+        let (turn, over_configured_turns) = normal_turn_for_current_state(&[scene], 0, 2).unwrap();
+
+        assert_eq!(turn.id, "turn_2");
+        assert!(over_configured_turns);
+    }
+
+    #[test]
+    fn advanced_attack_priority_still_requires_scene_config_used() {
+        let scene = normal_scene(
+            "scene_1",
+            vec![normal_turn(
+                vec![],
+                vec![AttackCard {
+                    id: "chain_1".into(),
+                    card: Some("servant_1_all".into()),
+                }],
+            )],
+        );
+
+        assert!(attack_priority_for_current_scene(true, false, &[scene], 0, 0).is_none());
     }
 
     #[test]
     fn normal_current_party_ids_apply_executed_order_change_before_attack() {
-        let scene = BattleScene {
-            id: "scene_1".into(),
-            preparation_actions: vec![Action::Equipment {
-                id: "eq_1".into(),
-                skill: Some("skill_3".into()),
-                target: None,
-                order_change: Some(crate::OrderChangeSelection {
-                    front: Some("servant_1".into()),
-                    back: Some("servant_4".into()),
-                }),
-            }],
-            servant_actions: vec![],
-            equipment_actions: vec![],
-            command_spell_actions: vec![],
-            enemy_target: None,
-            attack_priority: vec![],
-        };
+        let scene = normal_scene(
+            "scene_1",
+            vec![normal_turn(
+                vec![Action::Equipment {
+                    id: "eq_1".into(),
+                    skill: Some("skill_3".into()),
+                    target: None,
+                    order_change: Some(crate::OrderChangeSelection {
+                        front: Some("servant_1".into()),
+                        back: Some("servant_4".into()),
+                    }),
+                }],
+                vec![],
+            )],
+        );
 
         let party_ids = normal_current_party_ids_from(
             [Some(10), Some(20), Some(30), Some(40), None, None],
             &[scene],
             0,
-            Some(0),
+            0,
+            Some((0, 0)),
         );
 
         assert_eq!(party_ids, [Some(40), Some(20), Some(30)]);
@@ -6523,33 +6759,24 @@ mod tests {
 
     #[test]
     fn normal_current_party_ids_apply_previous_scene_np_retreat_before_attack() {
-        let scene_1 = BattleScene {
-            id: "scene_1".into(),
-            preparation_actions: vec![],
-            servant_actions: vec![],
-            equipment_actions: vec![],
-            command_spell_actions: vec![],
-            enemy_target: None,
-            attack_priority: vec![AttackCard {
-                id: "atk_1".into(),
-                card: Some("servant_2_np".into()),
-            }],
-        };
-        let scene_2 = BattleScene {
-            id: "scene_2".into(),
-            preparation_actions: vec![],
-            servant_actions: vec![],
-            equipment_actions: vec![],
-            command_spell_actions: vec![],
-            enemy_target: None,
-            attack_priority: vec![],
-        };
+        let scene_1 = normal_scene(
+            "scene_1",
+            vec![normal_turn(
+                vec![],
+                vec![AttackCard {
+                    id: "atk_1".into(),
+                    card: Some("servant_2_np".into()),
+                }],
+            )],
+        );
+        let scene_2 = normal_scene("scene_2", vec![normal_turn(vec![], vec![])]);
 
         let party_ids = normal_current_party_ids_from(
             [Some(284), Some(16), Some(315), Some(211), None, None],
             &[scene_1, scene_2],
             1,
-            Some(1),
+            0,
+            Some((1, 0)),
         );
 
         assert_eq!(party_ids, [Some(284), Some(211), Some(315)]);
@@ -6557,60 +6784,82 @@ mod tests {
 
     #[test]
     fn normal_current_party_ids_do_not_apply_current_scene_np_before_attack() {
-        let scene = BattleScene {
-            id: "scene_1".into(),
-            preparation_actions: vec![],
-            servant_actions: vec![],
-            equipment_actions: vec![],
-            command_spell_actions: vec![],
-            enemy_target: None,
-            attack_priority: vec![AttackCard {
-                id: "atk_1".into(),
-                card: Some("servant_2_np".into()),
-            }],
-        };
+        let scene = normal_scene(
+            "scene_1",
+            vec![normal_turn(
+                vec![],
+                vec![AttackCard {
+                    id: "atk_1".into(),
+                    card: Some("servant_2_np".into()),
+                }],
+            )],
+        );
 
         let party_ids = normal_current_party_ids_from(
             [Some(284), Some(16), Some(315), Some(211), None, None],
             &[scene],
             0,
-            Some(0),
+            0,
+            Some((0, 0)),
         );
 
         assert_eq!(party_ids, [Some(284), Some(16), Some(315)]);
     }
 
     #[test]
+    fn normal_current_party_ids_do_not_repeat_last_turn_prep_after_configured_turns() {
+        let scene = normal_scene(
+            "scene_1",
+            vec![
+                normal_turn(vec![], vec![]),
+                normal_turn(
+                    vec![Action::Equipment {
+                        id: "eq_1".into(),
+                        skill: Some("skill_3".into()),
+                        target: None,
+                        order_change: Some(crate::OrderChangeSelection {
+                            front: Some("servant_1".into()),
+                            back: Some("servant_4".into()),
+                        }),
+                    }],
+                    vec![],
+                ),
+            ],
+        );
+
+        let party_ids = normal_current_party_ids_from(
+            [Some(10), Some(20), Some(30), Some(40), None, None],
+            &[scene],
+            0,
+            2,
+            None,
+        );
+
+        assert_eq!(party_ids, [Some(40), Some(20), Some(30)]);
+    }
+
+    #[test]
     fn normal_current_party_ids_apply_previous_scene_end_of_turn_skill_exit() {
-        let scene_1 = BattleScene {
-            id: "scene_1".into(),
-            preparation_actions: vec![Action::Servant {
-                id: "sa_1".into(),
-                servant: Some("servant_1".into()),
-                skill: Some("skill_3".into()),
-                target: None,
-            }],
-            servant_actions: vec![],
-            equipment_actions: vec![],
-            command_spell_actions: vec![],
-            enemy_target: None,
-            attack_priority: vec![],
-        };
-        let scene_2 = BattleScene {
-            id: "scene_2".into(),
-            preparation_actions: vec![],
-            servant_actions: vec![],
-            equipment_actions: vec![],
-            command_spell_actions: vec![],
-            enemy_target: None,
-            attack_priority: vec![],
-        };
+        let scene_1 = normal_scene(
+            "scene_1",
+            vec![normal_turn(
+                vec![Action::Servant {
+                    id: "sa_1".into(),
+                    servant: Some("servant_1".into()),
+                    skill: Some("skill_3".into()),
+                    target: None,
+                }],
+                vec![],
+            )],
+        );
+        let scene_2 = normal_scene("scene_2", vec![normal_turn(vec![], vec![])]);
 
         let party_ids = normal_current_party_ids_from(
             [Some(315), Some(434), Some(384), Some(11), Some(22), None],
             &[scene_1, scene_2],
             1,
-            Some(1),
+            0,
+            Some((1, 0)),
         );
 
         assert_eq!(party_ids, [Some(11), Some(434), Some(384)]);
@@ -7646,7 +7895,11 @@ mod tests {
             .find(|group| group.id == "enemyTargets")
             .expect("enemy target coordinate group");
 
-        let labels: Vec<&str> = group.points.iter().map(|point| point.label.as_str()).collect();
+        let labels: Vec<&str> = group
+            .points
+            .iter()
+            .map(|point| point.label.as_str())
+            .collect();
         assert_eq!(
             labels,
             vec!["Enemy1", "Enemy2", "Enemy3", "Enemy4", "Enemy5", "Enemy6"]
@@ -7654,9 +7907,9 @@ mod tests {
     }
 
     #[test]
-    fn scene_preparation_actions_preserves_configured_row_order() {
-        let scene = BattleScene {
-            id: "scene_1".into(),
+    fn turn_preparation_actions_preserves_configured_row_order() {
+        let turn = BattleTurn {
+            id: "turn_1".into(),
             preparation_actions: vec![
                 Action::Equipment {
                     id: "eq_1".into(),
@@ -7683,7 +7936,7 @@ mod tests {
             attack_priority: vec![],
         };
 
-        let kinds: Vec<&str> = scene_preparation_actions(&scene)
+        let kinds: Vec<&str> = turn_preparation_actions(&turn)
             .map(|action| match action {
                 Action::Servant { .. } => "servant",
                 Action::Equipment { .. } => "equipment",
@@ -7725,6 +7978,55 @@ mod tests {
                 needs_exec: false,
             }
         );
+    }
+
+    #[test]
+    fn post_attack_hud_read_gate_continues_when_hud_read_succeeds() {
+        let now = Instant::now();
+        let gate = post_attack_hud_read_gate(
+            false,
+            true,
+            Some((2, 3)),
+            None,
+            now,
+            POST_ATTACK_HUD_READ_TIMEOUT,
+        );
+
+        assert_eq!(gate, PostAttackHudReadGate::Ready);
+    }
+
+    #[test]
+    fn post_attack_hud_read_gate_waits_before_timeout() {
+        let now = Instant::now();
+        let gate =
+            post_attack_hud_read_gate(false, true, None, None, now, POST_ATTACK_HUD_READ_TIMEOUT);
+
+        assert_eq!(gate, PostAttackHudReadGate::Waiting { started_at: now });
+    }
+
+    #[test]
+    fn post_attack_hud_read_gate_times_out_to_legacy_progression() {
+        let started_at = Instant::now();
+        let now = started_at + POST_ATTACK_HUD_READ_TIMEOUT + Duration::from_millis(1);
+        let gate = post_attack_hud_read_gate(
+            false,
+            true,
+            None,
+            Some(started_at),
+            now,
+            POST_ATTACK_HUD_READ_TIMEOUT,
+        );
+
+        assert_eq!(gate, PostAttackHudReadGate::TimedOut);
+    }
+
+    #[test]
+    fn post_attack_hud_read_gate_does_not_delay_advanced_mode() {
+        let now = Instant::now();
+        let gate =
+            post_attack_hud_read_gate(true, true, None, None, now, POST_ATTACK_HUD_READ_TIMEOUT);
+
+        assert_eq!(gate, PostAttackHudReadGate::Ready);
     }
 
     #[test]
@@ -7786,24 +8088,16 @@ mod tests {
 
     #[test]
     fn scroll_delta_falls_back_to_fixed_when_no_anchors() {
-        assert!(
-            (scroll_support_list_delta(&[]) - SUPPORT_SCROLL_FALLBACK_DELTA).abs() < 1e-9
-        );
+        assert!((scroll_support_list_delta(&[]) - SUPPORT_SCROLL_FALLBACK_DELTA).abs() < 1e-9);
     }
 
     #[test]
     fn scroll_delta_moves_last_anchor_to_first_row_target() {
-        let anchors = vec![
-            anchor_at_y(0.364),
-            anchor_at_y(0.642),
-            anchor_at_y(0.919),
-        ];
+        let anchors = vec![anchor_at_y(0.364), anchor_at_y(0.642), anchor_at_y(0.919)];
         let delta = scroll_support_list_delta(&anchors);
         assert!((delta - (0.919 - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y)).abs() < 1e-9);
         let new_position_of_last_button = 0.919 - delta;
-        assert!(
-            (new_position_of_last_button - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y).abs() < 1e-9
-        );
+        assert!((new_position_of_last_button - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y).abs() < 1e-9);
     }
 
     #[test]
@@ -7897,7 +8191,10 @@ mod tests {
             SUPPORT_SCROLL_MIN_DURATION_MS,
             SUPPORT_SCROLL_SETTLE_MS,
         );
-        assert!(msg.contains("无"), "empty anchors should render as 无, got: {msg}");
+        assert!(
+            msg.contains("无"),
+            "empty anchors should render as 无, got: {msg}"
+        );
         assert!(msg.contains("n=0"));
     }
 

@@ -118,11 +118,16 @@ const battleScenesByProject = new Map<string, BattleScene[]>([
     [
       {
         id: "dev-scene-1",
-        preparationActions: [],
-        servantActions: [],
-        equipmentActions: [],
-        commandSpellActions: [],
-        attackPriority: [],
+        turns: [
+          {
+            id: "dev-scene-1-turn-1",
+            preparationActions: [],
+            servantActions: [],
+            equipmentActions: [],
+            commandSpellActions: [],
+            attackPriority: [],
+          },
+        ],
       },
     ],
   ],
