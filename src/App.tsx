@@ -25,6 +25,11 @@ import type { Project } from "./types/project";
 import type { AssetBundleStatus } from "./types/assets";
 import type { RuntimeStatus } from "./types/runtime";
 import type { AppTheme } from "./types/theme";
+import {
+  appendCoalescedOperationLog,
+  type LogLevel,
+  type OperationLogEntry,
+} from "./operationLog";
 import "./App.css";
 
 // Linear flow: 队伍设置 → 指令设置 → 开始任务. Each forward step is
@@ -33,12 +38,6 @@ import "./App.css";
 // horizontal `StageNavigator` (queue/support/command tabs).
 type View = "team" | "command" | "battle" | "enhancement" | "debug";
 
-/// Severity of an entry in the runner operation log. Mirrors the Rust
-/// `LogLevel` enum: `info` is what the user normally sees, `debug` is
-/// technical diagnostic output kept behind the "显示调试" toggle in the
-/// status bar so the operation log stays readable during a normal run.
-export type LogLevel = "info" | "debug";
-
 interface AutomationEvent {
   state: string;
   currentScreen: string;
@@ -46,12 +45,6 @@ interface AutomationEvent {
   // Optional for backwards compatibility with older backends that don't
   // emit a level; treat missing as "info".
   level?: LogLevel;
-}
-
-export interface OperationLogEntry {
-  time: string;
-  message: string;
-  level: LogLevel;
 }
 
 interface AppProps {
@@ -89,7 +82,9 @@ function App({ theme, onThemeChange }: AppProps) {
       const time = [d.getHours(), d.getMinutes(), d.getSeconds()]
         .map((n) => String(n).padStart(2, "0"))
         .join(":");
-      setOperationLogs((prev) => [...prev, { time, message, level }]);
+      setOperationLogs((prev) =>
+        appendCoalescedOperationLog(prev, { time, message, level })
+      );
     },
     [],
   );
