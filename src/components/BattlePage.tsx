@@ -254,6 +254,7 @@ export function BattlePage({
       supportGrandCraftEssenceMlbRequired:
         selectedProject.supportGrandCraftEssenceMlbRequired ?? [true, true, true],
       supportGrandBondCeMode: selectedProject.supportGrandBondCeMode ?? "any",
+      grandBattleClass: selectedProject.grandBattleClass ?? "saber",
       grandServants: selectedProject.grandServants ?? [],
       grandCardStrategy: selectedProject.grandCardStrategy ?? {
         chainPriority: DEFAULT_GRAND_CHAIN_PRIORITY,

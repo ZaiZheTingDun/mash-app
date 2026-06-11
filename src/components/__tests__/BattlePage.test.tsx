@@ -158,6 +158,25 @@ describe("BattlePage", () => {
     });
   });
 
+  it("passes grand battle class to automation", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage({
+      ...PROJECT,
+      grandBattleClass: "berserker",
+    });
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("start_automation", {
+        config: expect.objectContaining({
+          grandBattleClass: "berserker",
+        }),
+      });
+    });
+  });
+
   it("blocks grand battle start until at least one grand servant is selected", async () => {
     const user = userEvent.setup();
     mockProjectCommands();

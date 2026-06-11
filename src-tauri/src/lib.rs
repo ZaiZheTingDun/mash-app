@@ -26,7 +26,7 @@ use enhancement_runner::{
     server_supported as enhancement_server_supported, EnhancementConfig, EnhancementRunner,
     EnhancementRunnerHandle, EnhancementRunnerState, EnhancementTarget,
 };
-use runner::{ApRecoveryItem, RunConfig, RunnerHandle, RunnerState};
+use runner::{ApRecoveryItem, GrandBattleClass, RunConfig, RunnerHandle, RunnerState};
 
 #[cfg(desktop)]
 const CHECK_FOR_UPDATE_MENU_ID: &str = "check-for-update";
@@ -589,6 +589,8 @@ pub struct Project {
     #[serde(default)]
     pub grand_servants: Vec<GrandServantConfig>,
     #[serde(default)]
+    pub grand_battle_class: GrandBattleClass,
+    #[serde(default)]
     pub grand_card_strategy: GrandCardStrategy,
     /// Optional support-search NP minimum level. `None` means "任意".
     #[serde(default)]
@@ -892,6 +894,7 @@ fn create_project(
     app: tauri::AppHandle,
     name: String,
     advanced_mode: Option<bool>,
+    grand_battle_class: Option<GrandBattleClass>,
 ) -> Result<Project, String> {
     let project = Project {
         id: uuid::Uuid::new_v4().to_string(),
@@ -905,6 +908,7 @@ fn create_project(
         ),
         support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
         grand_servants: Vec::new(),
+        grand_battle_class: grand_battle_class.unwrap_or_default(),
         grand_card_strategy: GrandCardStrategy::default(),
         support_noble_phantasm_level_min: None,
         support_skill_level_mins: default_support_skill_level_mins(),
@@ -2344,7 +2348,7 @@ fn input_size_for_taps(adb_size: Option<(u32, u32)>, stream_size: (u32, u32)) ->
 #[tauri::command]
 fn start_automation(
     app: tauri::AppHandle,
-    config: RunConfig,
+    mut config: RunConfig,
     bluestack_state: tauri::State<'_, Mutex<bool>>,
     server_state: tauri::State<'_, Mutex<Server>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
@@ -2377,6 +2381,9 @@ fn start_automation(
         .as_ref()
         .map(|project| project.advanced_mode)
         .unwrap_or(false);
+    if let Some(project) = project.as_ref() {
+        config.grand_battle_class = project.grand_battle_class;
+    }
     let scenes = if advanced_mode {
         Vec::new()
     } else {
@@ -4697,6 +4704,7 @@ mod tests {
             SupportGrandBondCeMode::Any
         );
         assert!(project.grand_servants.is_empty());
+        assert_eq!(project.grand_battle_class, GrandBattleClass::Saber);
         assert_eq!(
             project.grand_card_strategy.chain_priority,
             default_grand_chain_priority()
@@ -4708,6 +4716,20 @@ mod tests {
         assert!(project.repeat_mode.is_none());
         assert!(project.repeat_count.is_none());
         assert!(project.ap_recovery_items.is_empty());
+    }
+
+    #[test]
+    fn project_round_trips_grand_battle_class() {
+        let json = serde_json::json!({
+            "id": "abc",
+            "name": "Berserker",
+            "grandBattleClass": "berserker",
+        });
+        let project: Project = serde_json::from_value(json).unwrap();
+        assert_eq!(project.grand_battle_class, GrandBattleClass::Berserker);
+
+        let saved = serde_json::to_value(&project).unwrap();
+        assert_eq!(saved["grandBattleClass"], serde_json::json!("berserker"));
     }
 
     #[test]
@@ -4724,6 +4746,7 @@ mod tests {
                 default_support_grand_craft_essence_mlb_required(),
             support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
             grand_servants: Vec::new(),
+            grand_battle_class: GrandBattleClass::Saber,
             grand_card_strategy: GrandCardStrategy::default(),
             support_noble_phantasm_level_min: None,
             support_skill_level_mins: default_support_skill_level_mins(),

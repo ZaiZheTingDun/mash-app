@@ -22,13 +22,18 @@ import {
   CheckIcon,
 } from "@radix-ui/react-icons";
 import type { Project } from "../types/project";
+import type { GrandBattleClass } from "../types/project";
 
 interface ProjectBarProps {
   projects: Project[];
   activeProjectId: string | null;
   disabled?: boolean;
   onProjectSelect: (id: string) => void;
-  onCreateProject: (name: string, advancedMode?: boolean) => void;
+  onCreateProject: (
+    name: string,
+    advancedMode?: boolean,
+    grandBattleClass?: GrandBattleClass
+  ) => void;
   onRenameProject: (id: string, name: string) => void;
   onDuplicateProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
@@ -58,6 +63,8 @@ export function ProjectBar({
   const [nameDialogMode, setNameDialogMode] = useState<NameDialogMode | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftAdvancedMode, setDraftAdvancedMode] = useState(false);
+  const [draftGrandBattleClass, setDraftGrandBattleClass] =
+    useState<GrandBattleClass>("saber");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const activeProject =
@@ -77,6 +84,7 @@ export function ProjectBar({
         setDraftName(`队伍 ${projects.length + 1}`);
       }
       setDraftAdvancedMode(false);
+      setDraftGrandBattleClass("saber");
     },
     [activeProject, projects.length]
   );
@@ -86,7 +94,7 @@ export function ProjectBar({
       event.preventDefault();
       if (!nameDialogMode || !trimmedDraftName) return;
       if (nameDialogMode === "create") {
-        onCreateProject(trimmedDraftName, draftAdvancedMode);
+        onCreateProject(trimmedDraftName, draftAdvancedMode, draftGrandBattleClass);
       } else if (nameDialogMode === "rename" && activeProject) {
         onRenameProject(activeProject.id, trimmedDraftName);
       } else if (nameDialogMode === "duplicate" && activeProject) {
@@ -97,6 +105,7 @@ export function ProjectBar({
     [
       activeProject,
       draftAdvancedMode,
+      draftGrandBattleClass,
       nameDialogMode,
       onCreateProject,
       onDuplicateProject,
@@ -249,22 +258,43 @@ export function ProjectBar({
                 />
               </label>
               {nameDialogMode === "create" && (
-                <label className="project-mode-toggle">
-                  <Flex align="center" justify="between" gap="3">
-                    <Box>
-                      <Text as="div" size="2" weight="medium">
-                        冠位戴冠战模式
+                <>
+                  <label className="project-mode-toggle">
+                    <Flex align="center" justify="between" gap="3">
+                      <Box>
+                        <Text as="div" size="2" weight="medium">
+                          冠位戴冠战模式
+                        </Text>
+                        <Text as="div" size="1" color="gray">
+                          单场战斗，按冠位从者策略自动出卡
+                        </Text>
+                      </Box>
+                      <Switch
+                        checked={draftAdvancedMode}
+                        onCheckedChange={setDraftAdvancedMode}
+                      />
+                    </Flex>
+                  </label>
+                  {draftAdvancedMode && (
+                    <label>
+                      <Text as="div" size="2" mb="2" weight="medium">
+                        戴冠战类型
                       </Text>
-                      <Text as="div" size="1" color="gray">
-                        单场战斗，按冠位从者策略自动出卡
-                      </Text>
-                    </Box>
-                    <Switch
-                      checked={draftAdvancedMode}
-                      onCheckedChange={setDraftAdvancedMode}
-                    />
-                  </Flex>
-                </label>
+                      <select
+                        className="project-grand-battle-class-select"
+                        value={draftGrandBattleClass}
+                        onChange={(event) =>
+                          setDraftGrandBattleClass(
+                            event.target.value as GrandBattleClass
+                          )
+                        }
+                      >
+                        <option value="saber">剑阶</option>
+                        <option value="berserker">狂阶</option>
+                      </select>
+                    </label>
+                  )}
+                </>
               )}
               <Flex justify="end" gap="2">
                 <Dialog.Close>

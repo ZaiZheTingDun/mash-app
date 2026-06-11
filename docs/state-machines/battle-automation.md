@@ -344,20 +344,21 @@ changes (i.e. when the runner moves to a different row).
   ready NPs and command cards are scored together with the configured
   main-output servant, output type, and NP color (`npCard`, or the servant
   resource's `noblePhantasmCard` when set to automatic). In Grand battle mode,
-  the project stores one or two `grandServants`; the first is the main output
-  and the second is the deputy. The automatic picker prefers main-servant
-  three-card chains first, then deputy chains, with exquisite B/A/Q chains
-  ahead of same-color force/quick/skill chains and ordinary brave chains.
-  Same-color chains that include the main output outrank same-color chains
-  that include the deputy. Exquisite damage-priority chains place the target
-  NP last; NP-priority chains place a red command card before a non-red target
-  NP when available. Same-color chains with a target NP place the NP first
-  because command-card position performance does not apply to NPs. If no chain
-  is available, the picker can place deputy or auxiliary ready NPs before the
-  target NP for overcharge, then keeps output servant command cards later so
-  they receive the second/third-card performance bonus. Legacy advanced `rules`
-  are still supported: when a scene has rule entries, the older rule evaluator
-  runs instead of the three-stage strategy flow.
+  the project stores `grandBattleClass` plus one or two `grandServants`; missing
+  legacy `grandBattleClass` values default to `saber`. The first Grand servant
+  is the main output and the second is the deputy. Saber Grand teams use the
+  configurable `grandCardStrategy.chainPriority` order: main chains, ready main
+  NP, deputy chains, main same-color chains, deputy same-color chains, then
+  fallback. Berserker Grand teams use a fixed order: main NP same-color chain,
+  deputy NP same-color chain, main non-NP same-color chain, deputy non-NP
+  same-color chain, then Grand exquisite chain. Same-color chains with a target
+  NP place the NP first because command-card position performance does not
+  apply to NPs. If no chain is available, the picker can place deputy or
+  auxiliary ready NPs before the target NP for overcharge, then keeps output
+  servant command cards later so they receive the second/third-card performance
+  bonus. Legacy advanced `rules` are still supported: when a scene has rule
+  entries, the older rule evaluator runs instead of the three-stage strategy
+  flow.
 - `waiting_for_battle` extends Unknown tolerance during loading and long attack
   animations.
 - `APRecovery` now anchors on `label_item` and scans the item-column template

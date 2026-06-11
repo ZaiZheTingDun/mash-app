@@ -351,7 +351,7 @@ describe("CommandEditor pagination", () => {
     );
 
     await user.click(strategyToggle);
-    await user.click(screen.getByRole("button", { name: "上移主冠位宝具已就绪" }));
+    await user.click(screen.getByRole("button", { name: "上移主冠位宝具" }));
 
     expect(onGrandCardStrategyChange).toHaveBeenCalledWith({
       chainPriority: [

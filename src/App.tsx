@@ -22,6 +22,7 @@ import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
 import type { CraftEssence } from "./types/craftEssence";
 import type { Project } from "./types/project";
+import type { GrandBattleClass } from "./types/project";
 import type { AssetBundleStatus } from "./types/assets";
 import type { RuntimeStatus } from "./types/runtime";
 import type { AppTheme, AppThemePreference } from "./types/theme";
@@ -362,8 +363,12 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   // sidebar now reduced to action buttons, the picker moves to the
   // `<ProjectBar/>` ribbon above the team grid and the mutations live
   // here so both `App` and `ProjectBar` mutate the same lifted state.
-  const handleCreateProject = useCallback((name: string, advancedMode = false) => {
-    invoke<Project>("create_project", { name, advancedMode })
+  const handleCreateProject = useCallback((
+    name: string,
+    advancedMode = false,
+    grandBattleClass: GrandBattleClass = "saber"
+  ) => {
+    invoke<Project>("create_project", { name, advancedMode, grandBattleClass })
       .then((p) => {
         setProjects((prev) => [...prev, p]);
         setActiveProjectId(p.id);

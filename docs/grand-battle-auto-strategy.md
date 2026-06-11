@@ -16,9 +16,11 @@ enables advanced mode and configures `grandServants`.
 - Ready Noble Phantasms and recognized command cards are scored together.
 - Hand-written advanced `rules` still take precedence. This strategy only runs
   for the automatic advanced flow.
+- `grandBattleClass` selects the automatic Grand battle strategy. Missing
+  legacy project data defaults to `saber`.
 - The project-level `grandCardStrategy.chainPriority` list can reorder the
-  automatic chain tiers. Missing or incomplete configs use the default order
-  below.
+  saber automatic chain tiers. Missing or incomplete configs use the default
+  saber order below.
 
 If `npCard` is `auto`, the runner uses the servant resource's
 `noblePhantasmCard` value. If the configured Grand servant is not currently in
@@ -50,9 +52,10 @@ If the main Grand servant is already in the front line, cannot be located, or
 the swap target cannot be resolved, the runner skips the automatic swap without
 failing the battle loop.
 
-## Chain Priority
+## Saber Chain Priority
 
-By default, the picker chooses three attacks by the following chain priority:
+For `grandBattleClass: "saber"`, the picker chooses three attacks by the
+following chain priority:
 
 1. Main servant three-card chain.
 2. Any combo that fires the main servant's ready Noble Phantasm.
@@ -109,6 +112,28 @@ Fallback ordering:
   preferred first-card color:
   - `damage`: buster.
   - `np`: arts.
+
+## Berserker Chain Priority
+
+For `grandBattleClass: "berserker"`, the picker uses a separate fixed priority
+list:
+
+1. Main Grand servant NP same-color chain.
+2. Deputy Grand servant NP same-color chain.
+3. Main Grand servant non-NP same-color chain.
+4. Deputy Grand servant non-NP same-color chain.
+5. Grand servant exquisite chain.
+
+An NP same-color chain contains the matching Grand servant's ready NP and two
+other attacks of the same color. A non-NP same-color chain contains at least
+one normal command card from that Grand servant and no NP from that same role.
+An exquisite chain contains one buster, one arts, and one quick attack and at
+least one main or deputy Grand servant attack; when both roles qualify, main
+outranks deputy.
+
+Within a selected same-color chain, the NP is tapped before command cards.
+Other ordering uses the same Grand sorting rules as the saber fallback so
+main/deputy output cards are kept late when no stronger order rule applies.
 
 ## Non-Grand Behavior
 
