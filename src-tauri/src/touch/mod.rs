@@ -30,12 +30,7 @@ pub trait TouchBackend: Send {
     /// use [`swipe_with_settle`] instead.
     ///
     /// [`swipe_with_settle`]: TouchBackend::swipe_with_settle
-    fn swipe(
-        &mut self,
-        from: (u32, u32),
-        to: (u32, u32),
-        duration_ms: u32,
-    ) -> Result<(), String>;
+    fn swipe(&mut self, from: (u32, u32), to: (u32, u32), duration_ms: u32) -> Result<(), String>;
 
     /// "Press, drag, hold, release" swipe. After completing the
     /// active motion in `swipe_ms`, the contact stays at `to` for

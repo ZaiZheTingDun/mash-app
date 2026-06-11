@@ -26,12 +26,7 @@ impl TouchBackend for AdbInputBackend {
         self.adb.tap(x, y)
     }
 
-    fn swipe(
-        &mut self,
-        from: (u32, u32),
-        to: (u32, u32),
-        duration_ms: u32,
-    ) -> Result<(), String> {
+    fn swipe(&mut self, from: (u32, u32), to: (u32, u32), duration_ms: u32) -> Result<(), String> {
         self.adb.swipe(from, to, duration_ms)
     }
 

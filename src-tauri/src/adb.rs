@@ -439,7 +439,10 @@ mod tests {
         let steps = settle_swipe_move_steps(swipe_ms);
         let per_step_ms = swipe_ms as f64 / steps as f64;
         let script = build_settle_swipe_script((540, 1500), (540, 500), swipe_ms, 400);
-        let needle = format!("sleep {per_step_ms_s:.3}", per_step_ms_s = per_step_ms / 1000.0);
+        let needle = format!(
+            "sleep {per_step_ms_s:.3}",
+            per_step_ms_s = per_step_ms / 1000.0
+        );
         let count = script.matches(&needle).count();
         assert_eq!(
             count, steps as usize,
