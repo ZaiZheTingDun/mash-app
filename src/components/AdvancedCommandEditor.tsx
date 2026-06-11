@@ -82,12 +82,12 @@ const DEFAULT_GRAND_CHAIN_PRIORITY: GrandChainPriorityItem[] = [
   "fallback",
 ];
 const GRAND_CHAIN_PRIORITY_LABELS: Record<GrandChainPriorityItem, string> = {
-  mainBraveChain: "主冠位三卡链",
-  mainReadyNp: "主冠位宝具已就绪",
-  deputyBraveChain: "副冠位三卡链",
-  mainColorChain: "包含主冠位的同色链",
-  deputyColorChain: "包含副冠位的同色链",
-  fallback: "兜底输出排序",
+  mainBraveChain: "主冠位精湛追击连携",
+  mainReadyNp: "主冠位宝具",
+  deputyBraveChain: "副冠位精湛追击连携",
+  mainColorChain: "包含主冠位的同色连携",
+  deputyColorChain: "包含副冠位的同色连携",
+  fallback: "默认输出排序",
 };
 
 let nextAdvancedSceneId = 1;
