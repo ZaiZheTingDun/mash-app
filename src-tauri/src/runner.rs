@@ -3045,7 +3045,7 @@ impl Runner {
                 .filter(|scene| scene.rules.is_empty() || uses_advanced_strategy_flow(scene))
                 .map(|scene| self.advanced_current_party_ids(scene))
                 .unwrap_or_else(|| self.build_party_ids());
-            let Some((cards, nps)) = self.read_attack_state(&party_ids) else {
+            let Some((cards, nps)) = self.read_attack_state(&party_ids, true) else {
                 return;
             };
             self.handle_advanced_attack(cards, nps, party_ids);
@@ -3053,7 +3053,8 @@ impl Runner {
         }
 
         let party_ids = self.normal_current_party_ids();
-        let Some((cards, nps)) = self.read_attack_state(&party_ids) else {
+        let recognize_command_cards = normal_scenes_need_command_card_recognition(&self.scenes);
+        let Some((cards, nps)) = self.read_attack_state(&party_ids, recognize_command_cards) else {
             return;
         };
         self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, None);
@@ -3085,6 +3086,7 @@ impl Runner {
     fn read_attack_state(
         &mut self,
         party_ids: &[Option<u32>; 3],
+        recognize_command_cards: bool,
     ) -> Option<(Vec<CommandCardMatch>, Vec<NoblePhantasmMatch>)> {
         // Unique candidate set, stable by party position.
         let mut candidate_ids: Vec<u32> = Vec::with_capacity(3);
@@ -3093,34 +3095,40 @@ impl Runner {
                 candidate_ids.push(*id);
             }
         }
-        self.emit("Attack", &format!("指令卡候选从者: {:?}", candidate_ids));
 
-        if self.assets_dir.is_none() {
-            self.emit("Attack", "未找到从者资源目录，将无法按从者匹配指令卡");
-        }
+        let cards = if recognize_command_cards {
+            self.emit("Attack", &format!("指令卡候选从者: {:?}", candidate_ids));
 
-        let assets_dir = self.assets_dir.clone();
-        let cards = loop {
-            let cards = match self.sidecar().find_command_cards(
-                None,
-                None,
-                &candidate_ids,
-                assets_dir.as_deref(),
-            ) {
-                Ok(c) => c,
-                Err(err) => {
-                    self.fail_action("Attack", "识别指令卡", err);
+            if self.assets_dir.is_none() {
+                self.emit("Attack", "未找到从者资源目录，将无法按从者匹配指令卡");
+            }
+
+            let assets_dir = self.assets_dir.clone();
+            loop {
+                let cards = match self.sidecar().find_command_cards(
+                    None,
+                    None,
+                    &candidate_ids,
+                    assets_dir.as_deref(),
+                ) {
+                    Ok(c) => c,
+                    Err(err) => {
+                        self.fail_action("Attack", "识别指令卡", err);
+                        return None;
+                    }
+                };
+                if !should_retry_command_card_owner_detection(&cards, &candidate_ids) {
+                    break cards;
+                }
+                if self.is_cancelled() {
                     return None;
                 }
-            };
-            if !should_retry_command_card_owner_detection(&cards, &candidate_ids) {
-                break cards;
+                self.emit("Attack", "指令卡从者未识别，等待卡面稳定后重试");
+                thread::sleep(ACTION_DELAY);
             }
-            if self.is_cancelled() {
-                return None;
-            }
-            self.emit("Attack", "指令卡从者未识别，等待卡面稳定后重试");
-            thread::sleep(ACTION_DELAY);
+        } else {
+            self.emit("Attack", "未配置普通指令卡，跳过指令卡识别");
+            fallback_command_cards()
         };
 
         let nps = match self.sidecar().find_noble_phantasms(None, None) {
@@ -3131,28 +3139,30 @@ impl Runner {
             }
         };
 
-        let card_summary: Vec<String> = cards
-            .iter()
-            .map(|c| {
-                let owner = c
-                    .servant_id
-                    .and_then(|id| {
-                        party_ids
-                            .iter()
-                            .position(|party_id| *party_id == Some(id))
-                            .map(|index| format!("S{}:{id}", index + 1))
-                            .or_else(|| Some(format!("?:{id}")))
-                    })
-                    .unwrap_or_else(|| "未识别".into());
-                format!(
-                    "C{}={}/{}",
-                    c.slot + 1,
-                    c.suit.as_deref().unwrap_or("?"),
-                    owner,
-                )
-            })
-            .collect();
-        self.emit("Attack", &format!("指令卡: {}", card_summary.join(" ")));
+        if recognize_command_cards {
+            let card_summary: Vec<String> = cards
+                .iter()
+                .map(|c| {
+                    let owner = c
+                        .servant_id
+                        .and_then(|id| {
+                            party_ids
+                                .iter()
+                                .position(|party_id| *party_id == Some(id))
+                                .map(|index| format!("S{}:{id}", index + 1))
+                                .or_else(|| Some(format!("?:{id}")))
+                        })
+                        .unwrap_or_else(|| "未识别".into());
+                    format!(
+                        "C{}={}/{}",
+                        c.slot + 1,
+                        c.suit.as_deref().unwrap_or("?"),
+                        owner,
+                    )
+                })
+                .collect();
+            self.emit("Attack", &format!("指令卡: {}", card_summary.join(" ")));
+        }
         let ready: Vec<String> = nps
             .iter()
             .filter(|n| n.ready)
@@ -3322,7 +3332,7 @@ impl Runner {
                 self.advanced_party_ids_after_control(&scene, executed_control_count)
             };
             let (cards, nps, party_ids) = if current_party_ids != party_ids {
-                let Some((cards, nps)) = self.read_attack_state(&current_party_ids) else {
+                let Some((cards, nps)) = self.read_attack_state(&current_party_ids, true) else {
                     return;
                 };
                 (cards, nps, current_party_ids)
@@ -3429,7 +3439,7 @@ impl Runner {
                         }
                         thread::sleep(ACTION_DELAY);
                         let Some((next_cards, next_nps)) =
-                            self.read_attack_state(&startup_party_ids)
+                            self.read_attack_state(&startup_party_ids, true)
                         else {
                             return;
                         };
@@ -3494,7 +3504,7 @@ impl Runner {
                         let control_party_ids =
                             self.advanced_party_ids_after_control(&scene, control_index + 1);
                         let Some((next_cards, _next_nps)) =
-                            self.read_attack_state(&control_party_ids)
+                            self.read_attack_state(&control_party_ids, true)
                         else {
                             return;
                         };
@@ -3581,7 +3591,8 @@ impl Runner {
                         return;
                     }
                     thread::sleep(ACTION_DELAY);
-                    let Some((next_cards, next_nps)) = self.read_attack_state(&startup_party_ids)
+                    let Some((next_cards, next_nps)) =
+                        self.read_attack_state(&startup_party_ids, true)
                     else {
                         return;
                     };
@@ -3670,7 +3681,8 @@ impl Runner {
                         return;
                     }
                     thread::sleep(ACTION_DELAY);
-                    let Some((next_cards, next_nps)) = self.read_attack_state(&control_party_ids)
+                    let Some((next_cards, next_nps)) =
+                        self.read_attack_state(&control_party_ids, true)
                     else {
                         return;
                     };
@@ -3770,7 +3782,7 @@ impl Runner {
                     return;
                 }
                 thread::sleep(ACTION_DELAY);
-                let Some((next_cards, next_nps)) = self.read_attack_state(&party_ids) else {
+                let Some((next_cards, next_nps)) = self.read_attack_state(&party_ids, true) else {
                     return;
                 };
                 cards = next_cards;
@@ -4841,6 +4853,57 @@ fn attack_priority_for_current_scene<'a>(
         .get(current_scene_index)
         .and_then(|scene| scene.turns.get(effective_index))
         .map(|turn| turn.attack_priority.as_slice())
+}
+
+fn attack_card_requires_command_card_recognition(card: &AttackCard) -> bool {
+    card.card
+        .as_deref()
+        .and_then(parse_priority_card)
+        .map(|(_, kind)| kind != "np")
+        .unwrap_or(false)
+}
+
+fn normal_scenes_need_command_card_recognition(scenes: &[BattleScene]) -> bool {
+    scenes.iter().any(|scene| {
+        scene.turns.iter().any(|turn| {
+            turn.attack_priority
+                .iter()
+                .any(attack_card_requires_command_card_recognition)
+        })
+    })
+}
+
+fn fallback_command_cards() -> Vec<CommandCardMatch> {
+    COMMAND_CARDS
+        .iter()
+        .enumerate()
+        .map(|(slot, point)| CommandCardMatch {
+            slot: slot as u32,
+            x: point.x,
+            y: point.y,
+            card_region: NormRect {
+                x: point.x,
+                y: point.y,
+                w: 0.0,
+                h: 0.0,
+            },
+            face_region: NormRect {
+                x: point.x,
+                y: point.y,
+                w: 0.0,
+                h: 0.0,
+            },
+            crit_digit_regions: None,
+            crit_digit_reads: None,
+            suit: None,
+            icon_score: None,
+            icon_region: None,
+            servant_id: None,
+            ascension: None,
+            face_score: None,
+            crit_chance: None,
+        })
+        .collect()
 }
 
 fn normal_current_party_ids_from(
@@ -6696,6 +6759,54 @@ mod tests {
         let priority = attack_priority_for_current_scene(false, false, &scenes, 0, 2).unwrap();
 
         assert_eq!(priority[0].card.as_deref(), Some("servant_2_arts"));
+    }
+
+    #[test]
+    fn normal_scenes_skip_command_card_recognition_when_no_regular_cards_are_configured() {
+        let scenes = [
+            normal_scene(
+                "scene_1",
+                vec![normal_turn(
+                    vec![],
+                    vec![AttackCard {
+                        id: "np_1".into(),
+                        card: Some("servant_1_np".into()),
+                    }],
+                )],
+            ),
+            normal_scene("scene_2", vec![normal_turn(vec![], vec![])]),
+        ];
+
+        assert!(!normal_scenes_need_command_card_recognition(&scenes));
+    }
+
+    #[test]
+    fn normal_scenes_need_command_card_recognition_when_regular_card_is_configured() {
+        let scenes = [normal_scene(
+            "scene_1",
+            vec![normal_turn(
+                vec![],
+                vec![AttackCard {
+                    id: "card_1".into(),
+                    card: Some("servant_1_all".into()),
+                }],
+            )],
+        )];
+
+        assert!(normal_scenes_need_command_card_recognition(&scenes));
+    }
+
+    #[test]
+    fn fallback_command_cards_use_fixed_attack_screen_positions() {
+        let cards = fallback_command_cards();
+
+        assert_eq!(cards.len(), COMMAND_CARDS.len());
+        for (card, point) in cards.iter().zip(COMMAND_CARDS.iter()) {
+            assert_eq!(card.servant_id, None);
+            assert_eq!(card.suit, None);
+            approx(card.x, point.x);
+            approx(card.y, point.y);
+        }
     }
 
     #[test]

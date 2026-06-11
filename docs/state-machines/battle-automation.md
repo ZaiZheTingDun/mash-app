@@ -313,7 +313,10 @@ changes (i.e. when the runner moves to a different row).
   servant before selecting that servant's NP or remaining same-turn cards.
   A normal-mode attack entry may also use `servant_{i}_all`, which matches the
   leftmost unused command card owned by that front-line servant regardless of
-  B/A/Q color.
+  B/A/Q color. If no normal-mode Battle/turn config contains a regular command
+  card row (`Buster`, `Arts`, `Quick`, or `All`), the runner skips command-card
+  recognition entirely on the attack screen. NP readiness is still detected,
+  and ordinary cards are only used as fixed left-to-right fallback tap targets.
 - Advanced-mode teams store battle scenes in `advanced_battle_scenes.json`.
   The current strategy UI uses a three-stage flow. First, the runner enters
   the attack-card screen and treats the scene as "waiting for startup": it
