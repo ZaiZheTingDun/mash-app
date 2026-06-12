@@ -38,19 +38,6 @@ fn default_grand_card_priority() -> String {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum GrandBattleClass {
-    Saber,
-    Berserker,
-}
-
-impl Default for GrandBattleClass {
-    fn default() -> Self {
-        Self::Saber
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub enum GrandChainPriorityItem {
     MainBraveChain,
     MainReadyNp,
@@ -156,8 +143,6 @@ pub struct RunConfig {
     pub support_grand_bond_ce_mode: SupportGrandBondCeMode,
     #[serde(default)]
     pub grand_servants: Vec<GrandServantConfig>,
-    #[serde(default)]
-    pub grand_battle_class: GrandBattleClass,
     #[serde(default)]
     pub grand_card_strategy: GrandCardStrategy,
     /// Minimum NP level required for the chosen support row. `None`
@@ -3464,7 +3449,6 @@ impl Runner {
                             &next_nps,
                             &startup_party_ids,
                             &grand_servants,
-                            self.config.grand_battle_class,
                             &self.config.grand_card_strategy,
                         );
                         self.tap_picks("Attack", &picks);
@@ -3477,7 +3461,6 @@ impl Runner {
                         &nps,
                         &startup_party_ids,
                         &grand_servants,
-                        self.config.grand_battle_class,
                         &self.config.grand_card_strategy,
                     );
                     self.tap_picks("Attack", &picks);
@@ -3531,7 +3514,6 @@ impl Runner {
                             &[],
                             &control_party_ids,
                             &grand_servants,
-                            self.config.grand_battle_class,
                             &self.config.grand_card_strategy,
                         );
                         self.tap_picks("Attack", &picks);
@@ -3545,7 +3527,6 @@ impl Runner {
                         &[],
                         &party_ids,
                         &grand_servants,
-                        self.config.grand_battle_class,
                         &self.config.grand_card_strategy,
                     );
                     self.tap_picks("Attack", &picks);
@@ -3621,7 +3602,6 @@ impl Runner {
                         &next_nps,
                         &startup_party_ids,
                         &grand_servants,
-                        self.config.grand_battle_class,
                         &self.config.grand_card_strategy,
                     );
                     self.tap_picks("Attack", &picks);
@@ -3634,7 +3614,6 @@ impl Runner {
                     &nps,
                     &startup_party_ids,
                     &grand_servants,
-                    self.config.grand_battle_class,
                     &self.config.grand_card_strategy,
                 );
                 self.tap_picks("Attack", &picks);
@@ -3713,7 +3692,6 @@ impl Runner {
                         &next_nps,
                         &control_party_ids,
                         &grand_servants,
-                        self.config.grand_battle_class,
                         &self.config.grand_card_strategy,
                     );
                     self.tap_picks("Attack", &picks);
@@ -3726,7 +3704,6 @@ impl Runner {
                     &nps,
                     &control_party_ids,
                     &grand_servants,
-                    self.config.grand_battle_class,
                     &self.config.grand_card_strategy,
                 );
                 self.tap_picks("Attack", &picks);
@@ -3743,7 +3720,6 @@ impl Runner {
                 &nps,
                 &active_party_ids,
                 &grand_servants,
-                self.config.grand_battle_class,
                 &self.config.grand_card_strategy,
             );
             self.tap_picks("Attack", &picks);
@@ -5664,19 +5640,6 @@ fn combo_has_role_np(
         .any(|candidate| candidate.is_np && candidate.servant_id == Some(config.servant_id))
 }
 
-fn combo_has_role_command_card(
-    combo: &[&AdvancedPickCandidate],
-    role: GrandRole,
-    grand_servants: &[GrandServantRuntimeConfig],
-) -> bool {
-    let Some(config) = grand_config_for_role(role, grand_servants) else {
-        return false;
-    };
-    combo
-        .iter()
-        .any(|candidate| !candidate.is_np && candidate.servant_id == Some(config.servant_id))
-}
-
 fn combo_is_exquisite(combo: &[&AdvancedPickCandidate]) -> bool {
     candidate_color_counts(combo) == (1, 1, 1)
 }
@@ -5776,71 +5739,6 @@ fn score_grand_combo(
     strategy: &GrandCardStrategy,
 ) -> i32 {
     let (tier, target_role) = grand_combo_tier(combo, grand_servants, strategy);
-    let np_count = combo.iter().filter(|candidate| candidate.is_np).count() as i32;
-    let main_count = combo
-        .iter()
-        .filter(|candidate| {
-            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Main
-        })
-        .count() as i32;
-    let deputy_count = combo
-        .iter()
-        .filter(|candidate| {
-            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Deputy
-        })
-        .count() as i32;
-    let target_count = target_role
-        .map(|role| {
-            combo
-                .iter()
-                .filter(|candidate| {
-                    grand_role_for_servant(candidate.servant_id, grand_servants) == role
-                })
-                .count() as i32
-        })
-        .unwrap_or(main_count.max(deputy_count));
-
-    tier * 1_000 + target_count * 150 + main_count * 60 + deputy_count * 40 + np_count * 20
-}
-
-fn berserker_grand_combo_tier(
-    combo: &[&AdvancedPickCandidate],
-    grand_servants: &[GrandServantRuntimeConfig],
-) -> (i32, Option<GrandRole>) {
-    if combo_same_color(combo) && combo_has_role_np(combo, GrandRole::Main, grand_servants) {
-        return (5_000, Some(GrandRole::Main));
-    }
-    if combo_same_color(combo) && combo_has_role_np(combo, GrandRole::Deputy, grand_servants) {
-        return (4_000, Some(GrandRole::Deputy));
-    }
-    if combo_same_color(combo)
-        && !combo_has_role_np(combo, GrandRole::Main, grand_servants)
-        && combo_has_role_command_card(combo, GrandRole::Main, grand_servants)
-    {
-        return (3_000, Some(GrandRole::Main));
-    }
-    if combo_same_color(combo)
-        && !combo_has_role_np(combo, GrandRole::Deputy, grand_servants)
-        && combo_has_role_command_card(combo, GrandRole::Deputy, grand_servants)
-    {
-        return (2_000, Some(GrandRole::Deputy));
-    }
-    if combo_is_exquisite(combo) {
-        if combo_has_role(combo, GrandRole::Main, grand_servants) {
-            return (1_000, Some(GrandRole::Main));
-        }
-        if combo_has_role(combo, GrandRole::Deputy, grand_servants) {
-            return (1_000, Some(GrandRole::Deputy));
-        }
-    }
-    (0, None)
-}
-
-fn score_berserker_grand_combo(
-    combo: &[&AdvancedPickCandidate],
-    grand_servants: &[GrandServantRuntimeConfig],
-) -> i32 {
-    let (tier, target_role) = berserker_grand_combo_tier(combo, grand_servants);
     let np_count = combo.iter().filter(|candidate| candidate.is_np).count() as i32;
     let main_count = combo
         .iter()
@@ -5990,7 +5888,6 @@ fn sort_grand_picks(
 fn choose_grand_auto_picks(
     candidates: &[AdvancedPickCandidate],
     grand_servants: &[GrandServantRuntimeConfig],
-    grand_battle_class: GrandBattleClass,
     strategy: &GrandCardStrategy,
 ) -> Vec<Pick> {
     let mut best_score = i32::MIN;
@@ -6000,22 +5897,10 @@ fn choose_grand_auto_picks(
         for j in (i + 1)..candidates.len() {
             for k in (j + 1)..candidates.len() {
                 let combo = vec![&candidates[i], &candidates[j], &candidates[k]];
-                let score = match grand_battle_class {
-                    GrandBattleClass::Saber => score_grand_combo(&combo, grand_servants, strategy),
-                    GrandBattleClass::Berserker => {
-                        score_berserker_grand_combo(&combo, grand_servants)
-                    }
-                };
+                let score = score_grand_combo(&combo, grand_servants, strategy);
                 if score > best_score {
                     best_score = score;
-                    best_role = match grand_battle_class {
-                        GrandBattleClass::Saber => {
-                            grand_combo_tier(&combo, grand_servants, strategy).1
-                        }
-                        GrandBattleClass::Berserker => {
-                            berserker_grand_combo_tier(&combo, grand_servants).1
-                        }
-                    };
+                    best_role = grand_combo_tier(&combo, grand_servants, strategy).1;
                     best = vec![
                         candidates[i].clone(),
                         candidates[j].clone(),
@@ -6035,7 +5920,6 @@ fn choose_advanced_auto_picks(
     nps: &[NoblePhantasmMatch],
     party_ids: &[Option<u32>; 3],
     grand_servants: &[GrandServantRuntimeConfig],
-    grand_battle_class: GrandBattleClass,
     grand_card_strategy: &GrandCardStrategy,
 ) -> Vec<Pick> {
     let main_index = main_output_index(scene);
@@ -6104,12 +5988,7 @@ fn choose_advanced_auto_picks(
     }
 
     if !grand_servants.is_empty() {
-        return choose_grand_auto_picks(
-            &candidates,
-            grand_servants,
-            grand_battle_class,
-            grand_card_strategy,
-        );
+        return choose_grand_auto_picks(&candidates, grand_servants, grand_card_strategy);
     }
 
     let mut best_score = i32::MIN;
@@ -6392,7 +6271,6 @@ mod tests {
         assert_eq!(cfg.support_grand_craft_essence_mlb_required, [true; 3]);
         assert_eq!(cfg.support_grand_bond_ce_mode, SupportGrandBondCeMode::Any);
         assert!(cfg.grand_servants.is_empty());
-        assert_eq!(cfg.grand_battle_class, GrandBattleClass::Saber);
         assert_eq!(
             cfg.grand_card_strategy.chain_priority,
             default_grand_chain_priority()
@@ -6423,7 +6301,6 @@ mod tests {
             { "slotIndex": 0, "npCard": "buster", "priority": "damage" },
             { "slotIndex": 2, "npCard": "auto", "priority": "np" }
         ]);
-        payload["grandBattleClass"] = serde_json::json!("berserker");
         let cfg: RunConfig = serde_json::from_value(payload).unwrap();
         assert_eq!(cfg.support_craft_essence_id, Some(1485));
         assert_eq!(cfg.support_craft_essence_mlb_required, false);
@@ -6445,7 +6322,6 @@ mod tests {
         assert_eq!(cfg.grand_servants[0].slot_index, 0);
         assert_eq!(cfg.grand_servants[0].np_card, "buster");
         assert_eq!(cfg.grand_servants[1].priority, "np");
-        assert_eq!(cfg.grand_battle_class, GrandBattleClass::Berserker);
 
         // Re-serialize and confirm the field round-trips under the
         // camelCase rename rule applied to the whole struct.
@@ -6473,7 +6349,6 @@ mod tests {
                 { "slotIndex": 2, "npCard": "auto", "priority": "np" }
             ])
         );
-        assert_eq!(json["grandBattleClass"], serde_json::json!("berserker"));
     }
 
     #[test]
@@ -7395,7 +7270,6 @@ mod tests {
             &nps,
             &[Some(10), Some(20), Some(30)],
             &[],
-            GrandBattleClass::Saber,
             &GrandCardStrategy::default(),
         );
 
@@ -7428,7 +7302,6 @@ mod tests {
             &nps,
             &[Some(10), Some(20), Some(30)],
             &grands,
-            GrandBattleClass::Saber,
             &GrandCardStrategy::default(),
         );
 
@@ -7453,7 +7326,6 @@ mod tests {
             &nps,
             &[Some(10), Some(20), Some(30)],
             &grands,
-            GrandBattleClass::Saber,
             &GrandCardStrategy::default(),
         );
 
@@ -7481,7 +7353,6 @@ mod tests {
             &nps,
             &[Some(10), Some(20), Some(30)],
             &grands,
-            GrandBattleClass::Saber,
             &GrandCardStrategy::default(),
         );
 
@@ -7514,7 +7385,6 @@ mod tests {
             &nps,
             &[Some(405), Some(7), Some(8)],
             &grands,
-            GrandBattleClass::Saber,
             &GrandCardStrategy::default(),
         );
 
@@ -7554,7 +7424,6 @@ mod tests {
             &nps,
             &[Some(10), Some(20), Some(30)],
             &grands,
-            GrandBattleClass::Saber,
             &GrandCardStrategy::default(),
         );
 
@@ -7598,7 +7467,6 @@ mod tests {
             &nps,
             &[Some(10), Some(20), Some(30)],
             &grands,
-            GrandBattleClass::Saber,
             &strategy,
         );
 
@@ -7630,7 +7498,6 @@ mod tests {
             &nps,
             &[Some(10), Some(20), Some(30)],
             &grands,
-            GrandBattleClass::Saber,
             &GrandCardStrategy::default(),
         );
 
@@ -7640,148 +7507,6 @@ mod tests {
             "deputy NP should not displace main same-color chain: {:?}",
             labels
         );
-    }
-
-    #[test]
-    fn berserker_grand_auto_prefers_main_np_same_color_before_deputy_np() {
-        let scene = empty_advanced_scene();
-        let cards = vec![
-            command_card(0, Some(10), Some("b"), None),
-            command_card(1, Some(10), Some("b"), None),
-            command_card(2, Some(20), Some("q"), None),
-            command_card(3, Some(20), Some("q"), None),
-            command_card(4, Some(30), Some("a"), None),
-        ];
-        let nps = vec![np_slot(0, true), np_slot(1, true), np_slot(2, false)];
-        let grands = vec![
-            grand_config(10, "buster", "damage"),
-            grand_config_at(1, 20, "quick", "damage"),
-        ];
-        let picks = choose_advanced_auto_picks(
-            &scene,
-            &cards,
-            &nps,
-            &[Some(10), Some(20), Some(30)],
-            &grands,
-            GrandBattleClass::Berserker,
-            &GrandCardStrategy::default(),
-        );
-
-        assert_eq!(pick_labels(&picks), vec!["NP0", "C0", "C1"]);
-    }
-
-    #[test]
-    fn berserker_grand_auto_deputy_np_same_color_beats_main_other_same_color() {
-        let scene = empty_advanced_scene();
-        let cards = vec![
-            command_card(0, Some(10), Some("a"), None),
-            command_card(1, Some(10), Some("a"), None),
-            command_card(2, Some(30), Some("a"), None),
-            command_card(3, Some(20), Some("q"), None),
-            command_card(4, Some(20), Some("q"), None),
-        ];
-        let nps = vec![np_slot(0, false), np_slot(1, true), np_slot(2, false)];
-        let grands = vec![
-            grand_config(10, "arts", "damage"),
-            grand_config_at(1, 20, "quick", "damage"),
-        ];
-        let picks = choose_advanced_auto_picks(
-            &scene,
-            &cards,
-            &nps,
-            &[Some(10), Some(20), Some(30)],
-            &grands,
-            GrandBattleClass::Berserker,
-            &GrandCardStrategy::default(),
-        );
-
-        assert_eq!(pick_labels(&picks), vec!["NP1", "C3", "C4"]);
-    }
-
-    #[test]
-    fn berserker_grand_auto_main_other_same_color_beats_deputy_other_same_color() {
-        let scene = empty_advanced_scene();
-        let cards = vec![
-            command_card(0, Some(10), Some("a"), None),
-            command_card(1, Some(10), Some("a"), None),
-            command_card(2, Some(30), Some("a"), None),
-            command_card(3, Some(20), Some("q"), None),
-            command_card(4, Some(20), Some("q"), None),
-        ];
-        let nps = vec![np_slot(0, false), np_slot(1, false), np_slot(2, false)];
-        let grands = vec![
-            grand_config(10, "arts", "damage"),
-            grand_config_at(1, 20, "quick", "damage"),
-        ];
-        let picks = choose_advanced_auto_picks(
-            &scene,
-            &cards,
-            &nps,
-            &[Some(10), Some(20), Some(30)],
-            &grands,
-            GrandBattleClass::Berserker,
-            &GrandCardStrategy::default(),
-        );
-
-        assert_eq!(pick_labels(&picks), vec!["C2", "C0", "C1"]);
-    }
-
-    #[test]
-    fn berserker_grand_auto_deputy_other_same_color_beats_exquisite_chain() {
-        let scene = empty_advanced_scene();
-        let cards = vec![
-            command_card(0, Some(10), Some("b"), None),
-            command_card(1, Some(10), Some("q"), None),
-            command_card(2, Some(20), Some("a"), None),
-            command_card(3, Some(20), Some("a"), None),
-            command_card(4, Some(30), Some("a"), None),
-        ];
-        let nps = vec![np_slot(0, false), np_slot(1, false), np_slot(2, false)];
-        let grands = vec![
-            grand_config(10, "buster", "damage"),
-            grand_config_at(1, 20, "arts", "damage"),
-        ];
-        let picks = choose_advanced_auto_picks(
-            &scene,
-            &cards,
-            &nps,
-            &[Some(10), Some(20), Some(30)],
-            &grands,
-            GrandBattleClass::Berserker,
-            &GrandCardStrategy::default(),
-        );
-
-        assert_eq!(pick_labels(&picks), vec!["C4", "C2", "C3"]);
-    }
-
-    #[test]
-    fn berserker_grand_auto_uses_exquisite_chain_when_no_same_color_tier_matches() {
-        let scene = empty_advanced_scene();
-        let cards = vec![
-            command_card(0, Some(10), Some("b"), None),
-            command_card(1, Some(20), Some("a"), None),
-            command_card(2, Some(30), Some("q"), None),
-            command_card(3, Some(30), Some("b"), None),
-            command_card(4, Some(30), Some("a"), None),
-        ];
-        let nps = vec![np_slot(0, false), np_slot(1, false), np_slot(2, false)];
-        let grands = vec![
-            grand_config(10, "buster", "damage"),
-            grand_config_at(1, 20, "arts", "damage"),
-        ];
-        let picks = choose_advanced_auto_picks(
-            &scene,
-            &cards,
-            &nps,
-            &[Some(10), Some(20), Some(30)],
-            &grands,
-            GrandBattleClass::Berserker,
-            &GrandCardStrategy::default(),
-        );
-
-        let mut labels = pick_labels(&picks);
-        labels.sort();
-        assert_eq!(labels, vec!["C0", "C1", "C2"]);
     }
 
     #[test]

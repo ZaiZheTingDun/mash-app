@@ -89,25 +89,10 @@ describe("ProjectBar", () => {
     await user.type(input, "周回队伍");
     await user.click(screen.getByRole("button", { name: "新建" }));
 
-    expect(onCreateProject).toHaveBeenCalledWith("周回队伍", false, "saber");
+    expect(onCreateProject).toHaveBeenCalledWith("周回队伍", false);
   });
 
-  it("creates an advanced saber project by default when the advanced toggle is enabled", async () => {
-    const user = userEvent.setup();
-    const onCreateProject = vi.fn();
-    renderProjectBar({ onCreateProject });
-
-    await user.click(screen.getByRole("button", { name: /队伍操作/ }));
-    await user.click(await screen.findByRole("menuitem", { name: /新建队伍/ }));
-    expect(screen.queryByLabelText("戴冠战类型")).not.toBeInTheDocument();
-    await user.click(await screen.findByRole("switch", { name: /冠位戴冠战模式/ }));
-    expect(screen.getByLabelText("戴冠战类型")).toHaveValue("saber");
-    await user.click(screen.getByRole("button", { name: "新建" }));
-
-    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "saber");
-  });
-
-  it("creates an advanced berserker project when selected", async () => {
+  it("creates an advanced project when the advanced toggle is enabled", async () => {
     const user = userEvent.setup();
     const onCreateProject = vi.fn();
     renderProjectBar({ onCreateProject });
@@ -115,10 +100,9 @@ describe("ProjectBar", () => {
     await user.click(screen.getByRole("button", { name: /队伍操作/ }));
     await user.click(await screen.findByRole("menuitem", { name: /新建队伍/ }));
     await user.click(await screen.findByRole("switch", { name: /冠位戴冠战模式/ }));
-    await user.selectOptions(screen.getByLabelText("戴冠战类型"), "berserker");
     await user.click(screen.getByRole("button", { name: "新建" }));
 
-    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "berserker");
+    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true);
   });
 
   it("renames the active project from the action menu", async () => {
