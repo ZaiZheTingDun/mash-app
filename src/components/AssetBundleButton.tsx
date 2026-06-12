@@ -10,6 +10,7 @@ import type {
 
 interface AssetBundleButtonProps {
   onImported?: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 function basename(path: string): string {
@@ -86,7 +87,24 @@ function progressLabel(progress: AssetDownloadProgress | null): string {
   return `正在下载 ${progress.kind}：${formatBytes(progress.downloadedBytes)}${total}${speed}${eta}`;
 }
 
-export function AssetBundleButton({ onImported }: AssetBundleButtonProps) {
+function progressPercent(progress: AssetDownloadProgress | null): number | null {
+  if (!progress) {
+    return null;
+  }
+  if (
+    progress.phase === "downloaded" ||
+    progress.phase === "installing" ||
+    progress.phase === "installed"
+  ) {
+    return 100;
+  }
+  if (!progress.totalBytes) {
+    return null;
+  }
+  return Math.min(100, (progress.downloadedBytes / progress.totalBytes) * 100);
+}
+
+export function AssetBundleButton({ onImported, onBusyChange }: AssetBundleButtonProps) {
   const [bundleStatus, setBundleStatus] = useState<AssetBundleStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -100,6 +118,10 @@ export function AssetBundleButton({ onImported }: AssetBundleButtonProps) {
   useEffect(() => {
     refreshStatus().catch((err) => setStatus(`检查失败：${String(err)}`));
   }, [refreshStatus]);
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
 
   useEffect(() => {
     let disposed = false;
@@ -122,15 +144,33 @@ export function AssetBundleButton({ onImported }: AssetBundleButtonProps) {
   }, []);
 
   const handleDownload = useCallback(async () => {
+    const forceBase = Boolean(bundleStatus?.installed && !bundleStatus.updateAvailable);
+    if (forceBase) {
+      const confirmed = window.confirm(
+        "确认重新下载素材包？\n\n这会重新下载完整素材包，并覆盖本地从者和礼装素材。"
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
     setBusy(true);
     setStatus(null);
     setDownloadProgress(null);
     try {
-      const result = await invoke<AssetDownloadInstallResult>("download_asset_bundles");
+      const result = forceBase
+        ? await invoke<AssetDownloadInstallResult>("download_asset_bundles", {
+            forceBase: true,
+          })
+        : await invoke<AssetDownloadInstallResult>("download_asset_bundles");
       if (!result.installed) {
         setStatus("素材包已是最新。");
       } else {
-        setStatus(`安装完成：素材包 v${result.installedVersion}`);
+        setStatus(
+          forceBase
+            ? `重新下载完成：素材包 v${result.installedVersion}`
+            : `安装完成：素材包 v${result.installedVersion}`
+        );
       }
       await refreshStatus();
       onImported?.();
@@ -139,7 +179,7 @@ export function AssetBundleButton({ onImported }: AssetBundleButtonProps) {
     } finally {
       setBusy(false);
     }
-  }, [onImported, refreshStatus]);
+  }, [bundleStatus, onImported, refreshStatus]);
 
   const handleImport = useCallback(async () => {
     setBusy(true);
@@ -183,9 +223,7 @@ export function AssetBundleButton({ onImported }: AssetBundleButtonProps) {
   }, [onImported, refreshStatus]);
 
   const canDownload = Boolean(bundleStatus?.updateAvailable || !bundleStatus?.installed);
-  const progressPercent = downloadProgress?.totalBytes
-    ? Math.min(100, (downloadProgress.downloadedBytes / downloadProgress.totalBytes) * 100)
-    : null;
+  const progressValue = progressPercent(downloadProgress);
 
   return (
     <div className="asset-import-block runtime-import-block">
@@ -219,7 +257,7 @@ export function AssetBundleButton({ onImported }: AssetBundleButtonProps) {
           <progress
             className="runtime-progress-bar"
             max={100}
-            value={progressPercent ?? undefined}
+            value={progressValue ?? undefined}
           />
           <Text size="1" color="gray">
             {progressLabel(downloadProgress)}

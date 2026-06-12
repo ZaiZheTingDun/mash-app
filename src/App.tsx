@@ -38,7 +38,7 @@ import "./App.css";
 // triggered by the bottom-right primary button on the previous page;
 // `debug` is reached out-of-band from the sidebar. Replaces the older
 // horizontal `StageNavigator` (queue/support/command tabs).
-type View = "team" | "command" | "battle" | "enhancement" | "debug";
+type View = "team" | "command" | "battle" | "enhancement" | "debug" | "resource";
 
 interface AutomationEvent {
   state: string;
@@ -215,11 +215,15 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     const unlistenSelfCheck = listen("self-check-requested", () => {
       void runSelfCheck();
     });
+    const unlistenResourceManager = listen("resource-manager-requested", () => {
+      setView("resource");
+    });
 
     return () => {
       cancelled = true;
       unlistenMenu.then((fn) => fn());
       unlistenSelfCheck.then((fn) => fn());
+      unlistenResourceManager.then((fn) => fn());
     };
   }, [checkForUpdates, runSelfCheck]);
 
@@ -480,7 +484,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     );
   }
 
-  if (!setupReady) {
+  if (!setupReady && view !== "resource") {
     return (
       <Flex direction="column" className="app-root" data-theme={theme}>
         <SetupPage onReady={() => setSetupReady(true)} />
@@ -527,6 +531,8 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
               craftEssences={craftEssences}
               defaultCardServantIds={partyServantIds}
             />
+          ) : view === "resource" ? (
+            <SetupPage mode="manage" onBack={handleBackToConfig} />
           ) : (
             <Box className="main-content-inner">
               <ProjectBar

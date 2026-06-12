@@ -13,7 +13,7 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 #[cfg(desktop)]
@@ -36,6 +36,10 @@ const CHECK_FOR_UPDATE_EVENT: &str = "updater-check-requested";
 const SELF_CHECK_MENU_ID: &str = "self-check";
 #[cfg(desktop)]
 const SELF_CHECK_EVENT: &str = "self-check-requested";
+#[cfg(desktop)]
+const RESOURCE_MANAGER_MENU_ID: &str = "resource-manager";
+#[cfg(desktop)]
+const RESOURCE_MANAGER_EVENT: &str = "resource-manager-requested";
 
 // ---------------------------------------------------------------------------
 // Server selection (global app setting). Drives which template/config bundle
@@ -2207,6 +2211,13 @@ fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<(
                 None::<&str>,
             )?,
             &MenuItem::with_id(handle, SELF_CHECK_MENU_ID, "自检...", true, None::<&str>)?,
+            &MenuItem::with_id(
+                handle,
+                RESOURCE_MANAGER_MENU_ID,
+                "资源管理...",
+                true,
+                None::<&str>,
+            )?,
         ],
     )?;
 
@@ -2228,6 +2239,13 @@ fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<(
                         None::<&str>,
                     )?,
                     &MenuItem::with_id(handle, SELF_CHECK_MENU_ID, "自检...", true, None::<&str>)?,
+                    &MenuItem::with_id(
+                        handle,
+                        RESOURCE_MANAGER_MENU_ID,
+                        "资源管理...",
+                        true,
+                        None::<&str>,
+                    )?,
                     &PredefinedMenuItem::separator(handle)?,
                     &PredefinedMenuItem::services(handle, None)?,
                     &PredefinedMenuItem::separator(handle)?,
@@ -2286,6 +2304,8 @@ fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<(
             let _ = app.emit(CHECK_FOR_UPDATE_EVENT, ());
         } else if event.id() == SELF_CHECK_MENU_ID {
             let _ = app.emit(SELF_CHECK_EVENT, ());
+        } else if event.id() == RESOURCE_MANAGER_MENU_ID {
+            let _ = app.emit(RESOURCE_MANAGER_EVENT, ());
         }
     });
     Ok(())
@@ -2609,6 +2629,24 @@ fn get_enhancement_automation_status(
 const RUNTIME_MANIFEST_JSON: &str = include_str!("../resources/runtime-manifest.json");
 const RUNTIME_DIR_NAME: &str = "mash-cv";
 const RUNTIME_DOWNLOAD_PROGRESS_EVENT: &str = "runtime-download-progress";
+
+#[derive(Default)]
+struct ResourceDownloadCancelState {
+    runtime: AtomicBool,
+    assets: AtomicBool,
+}
+
+fn cancelled_download_error() -> String {
+    "下载已取消".to_string()
+}
+
+fn ensure_download_not_cancelled(cancel: &AtomicBool) -> Result<(), String> {
+    if cancel.load(Ordering::Relaxed) {
+        Err(cancelled_download_error())
+    } else {
+        Ok(())
+    }
+}
 
 #[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -3145,7 +3183,9 @@ fn download_runtime_artifact(
     kind: &str,
     url: &str,
     destination: &Path,
+    cancel: &AtomicBool,
 ) -> Result<(), String> {
+    ensure_download_not_cancelled(cancel)?;
     let parent = destination
         .parent()
         .ok_or_else(|| "runtime 下载路径缺少父目录".to_string())?;
@@ -3175,11 +3215,19 @@ fn download_runtime_artifact(
     emit_runtime_download_progress(app, kind, "downloading", 0, total, Some(0.0), None);
 
     loop {
+        if let Err(err) = ensure_download_not_cancelled(cancel) {
+            let _ = fs::remove_file(&partial);
+            return Err(err);
+        }
         let read = response
             .read(&mut buffer)
             .map_err(|e| format!("读取 runtime 下载流失败: {e}"))?;
         if read == 0 {
             break;
+        }
+        if let Err(err) = ensure_download_not_cancelled(cancel) {
+            let _ = fs::remove_file(&partial);
+            return Err(err);
         }
         file.write_all(&buffer[..read])
             .map_err(|e| format!("写入 runtime 下载文件失败: {e}"))?;
@@ -3218,6 +3266,7 @@ fn download_runtime_artifact(
 
 fn download_and_install_runtime_bundles_inner(
     app: tauri::AppHandle,
+    cancel: Arc<ResourceDownloadCancelState>,
 ) -> Result<RuntimeDownloadInstallResult, String> {
     let manifest = runtime_manifest(&app)?;
     let platform = runtime_platform_key();
@@ -3236,7 +3285,14 @@ fn download_and_install_runtime_bundles_inner(
             manifest.mash_cv_runtime_version
         );
         let zip_path = downloads_dir.join(filename);
-        download_runtime_artifact(&app, "runtime", &artifact.runtime_url, &zip_path)?;
+        download_runtime_artifact(
+            &app,
+            "runtime",
+            &artifact.runtime_url,
+            &zip_path,
+            &cancel.runtime,
+        )?;
+        ensure_download_not_cancelled(&cancel.runtime)?;
         emit_runtime_download_progress(&app, "runtime", "installing", 0, None, None, None);
         installed.push(import_runtime_bundle_from_zip_path(
             &zip_path,
@@ -3250,7 +3306,8 @@ fn download_and_install_runtime_bundles_inner(
     if !status.code_installed {
         let filename = format!("mash-cv-code-v{}.zip", manifest.mash_cv_code_version);
         let zip_path = downloads_dir.join(filename);
-        download_runtime_artifact(&app, "code", &artifact.code_url, &zip_path)?;
+        download_runtime_artifact(&app, "code", &artifact.code_url, &zip_path, &cancel.runtime)?;
+        ensure_download_not_cancelled(&cancel.runtime)?;
         emit_runtime_download_progress(&app, "code", "installing", 0, None, None, None);
         installed.push(import_runtime_bundle_from_zip_path(
             &zip_path,
@@ -3302,10 +3359,15 @@ async fn import_runtime_bundle(
 #[tauri::command]
 async fn download_runtime_bundles(
     app: tauri::AppHandle,
+    cancel_state: tauri::State<'_, Arc<ResourceDownloadCancelState>>,
 ) -> Result<RuntimeDownloadInstallResult, String> {
-    tauri::async_runtime::spawn_blocking(move || download_and_install_runtime_bundles_inner(app))
-        .await
-        .map_err(|e| format!("runtime 下载任务失败: {e}"))?
+    let cancel_state = cancel_state.inner().clone();
+    cancel_state.runtime.store(false, Ordering::Relaxed);
+    tauri::async_runtime::spawn_blocking(move || {
+        download_and_install_runtime_bundles_inner(app, cancel_state)
+    })
+    .await
+    .map_err(|e| format!("runtime 下载任务失败: {e}"))?
 }
 
 // ---------------------------------------------------------------------------
@@ -3539,6 +3601,11 @@ enum AssetInstallPlan {
         packs: Vec<AssetsPackRelease>,
         patches: Vec<AssetsPatchRelease>,
     },
+    ForceBase {
+        target_version: u32,
+        packs: Vec<AssetsPackRelease>,
+        patches: Vec<AssetsPatchRelease>,
+    },
     Patches {
         target_version: u32,
         patches: Vec<AssetsPatchRelease>,
@@ -3550,6 +3617,7 @@ impl AssetInstallPlan {
         match self {
             Self::None => "none",
             Self::Base { .. } => "base",
+            Self::ForceBase { .. } => "force-base",
             Self::Patches { .. } => "patch",
         }
     }
@@ -3557,9 +3625,9 @@ impl AssetInstallPlan {
     fn target_version(&self) -> Option<u32> {
         match self {
             Self::None => None,
-            Self::Base { target_version, .. } | Self::Patches { target_version, .. } => {
-                Some(*target_version)
-            }
+            Self::Base { target_version, .. }
+            | Self::ForceBase { target_version, .. }
+            | Self::Patches { target_version, .. } => Some(*target_version),
         }
     }
 
@@ -3567,7 +3635,7 @@ impl AssetInstallPlan {
     fn download_size(&self) -> u64 {
         match self {
             Self::None => 0,
-            Self::Base { packs, patches, .. } => {
+            Self::Base { packs, patches, .. } | Self::ForceBase { packs, patches, .. } => {
                 packs.iter().map(|item| item.size).sum::<u64>()
                     + patches.iter().map(|item| item.size).sum::<u64>()
             }
@@ -3801,8 +3869,19 @@ fn asset_update_plan(
     current_version: Option<u32>,
     app_assets_version: u32,
     remote: &AssetsRemoteManifest,
+    force_base: bool,
 ) -> AssetInstallPlan {
     let target_version = app_assets_version.min(remote.latest);
+    if force_base {
+        let patches =
+            asset_patch_chain(remote.base.version, target_version, remote).unwrap_or_default();
+        return AssetInstallPlan::ForceBase {
+            target_version,
+            packs: remote.base.packs.clone(),
+            patches,
+        };
+    }
+
     if current_version.is_some_and(|version| version >= target_version) {
         return AssetInstallPlan::None;
     }
@@ -3929,16 +4008,57 @@ fn merge_asset_tree(source: &Path, destination: &Path) -> Result<FileCopyStats, 
     copy_asset_tree(source, destination)
 }
 
+fn cleanup_replaced_asset_trees(assets_root: &Path) {
+    let Ok(entries) = fs::read_dir(assets_root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let is_replaced_asset_tree =
+            name.starts_with("servants.replaced-") || name.starts_with("ces.replaced-");
+        if !is_replaced_asset_tree || !path.is_dir() {
+            continue;
+        }
+        if let Err(err) = fs::remove_dir_all(&path) {
+            eprintln!(
+                "[assets] cleanup stale replaced asset tree failed: {}: {err}",
+                path.display()
+            );
+        }
+    }
+}
+
 fn replace_asset_tree(source: &Path, destination: &Path) -> Result<FileCopyStats, String> {
     let staging = destination.with_extension(format!("import-{}", uuid::Uuid::new_v4()));
     if staging.exists() {
         fs::remove_dir_all(&staging).map_err(|e| format!("清理临时目录失败: {e}"))?;
     }
     let stats = copy_asset_tree(source, &staging)?;
-    if destination.exists() {
-        fs::remove_dir_all(destination).map_err(|e| format!("替换旧素材失败: {e}"))?;
+
+    let replaced = destination.with_extension(format!("replaced-{}", uuid::Uuid::new_v4()));
+    if replaced.exists() {
+        fs::remove_dir_all(&replaced).map_err(|e| format!("清理旧素材临时目录失败: {e}"))?;
     }
-    fs::rename(&staging, destination).map_err(|e| format!("安装素材失败: {e}"))?;
+    if destination.exists() {
+        fs::rename(destination, &replaced).map_err(|e| format!("替换旧素材失败: {e}"))?;
+    }
+    if let Err(err) = fs::rename(&staging, destination) {
+        if replaced.exists() {
+            let _ = fs::rename(&replaced, destination);
+        }
+        return Err(format!("安装素材失败: {err}"));
+    }
+    if replaced.exists() {
+        if let Err(err) = fs::remove_dir_all(&replaced) {
+            eprintln!(
+                "[assets] cleanup replaced asset tree failed: {}: {err}",
+                replaced.display()
+            );
+        }
+    }
     Ok(stats)
 }
 
@@ -3980,6 +4100,7 @@ fn import_asset_bundle_from_zip_path(
     zip_path: &Path,
     assets_root: &Path,
 ) -> Result<AssetBundleImportResult, String> {
+    cleanup_replaced_asset_trees(assets_root);
     let temp = tempfile::Builder::new()
         .prefix("asset-import-")
         .tempdir_in(
@@ -3997,6 +4118,7 @@ fn import_asset_bundle_from_zip_path(
     let (has_servants, has_ces, servant_stats, ce_stats) =
         install_asset_directories(&import_root, assets_root, true)?;
     write_asset_version(assets_root, imported_version)?;
+    cleanup_replaced_asset_trees(assets_root);
 
     Ok(AssetBundleImportResult {
         imported_servants: has_servants,
@@ -4230,7 +4352,9 @@ fn download_asset_artifact(
     kind: &str,
     url: &str,
     destination: &Path,
+    cancel: &AtomicBool,
 ) -> Result<(), String> {
+    ensure_download_not_cancelled(cancel)?;
     let parent = destination
         .parent()
         .ok_or_else(|| "素材包下载路径缺少父目录".to_string())?;
@@ -4261,11 +4385,19 @@ fn download_asset_artifact(
     emit_asset_download_progress(app, kind, "downloading", 0, total, Some(0.0), None);
 
     loop {
+        if let Err(err) = ensure_download_not_cancelled(cancel) {
+            let _ = fs::remove_file(&partial);
+            return Err(err);
+        }
         let read = response
             .read(&mut buffer)
             .map_err(|e| format!("读取素材包下载流失败: {e}"))?;
         if read == 0 {
             break;
+        }
+        if let Err(err) = ensure_download_not_cancelled(cancel) {
+            let _ = fs::remove_file(&partial);
+            return Err(err);
         }
         file.write_all(&buffer[..read])
             .map_err(|e| format!("写入素材包下载文件失败: {e}"))?;
@@ -4323,6 +4455,54 @@ fn install_asset_zip_merge(zip_path: &Path, assets_root: &Path) -> Result<FileCo
     Ok(stats)
 }
 
+fn merge_asset_zip_into_root(zip_path: &Path, assets_root: &Path) -> Result<FileCopyStats, String> {
+    let temp = tempfile::Builder::new()
+        .prefix("asset-base-")
+        .tempdir_in(
+            assets_root
+                .parent()
+                .ok_or_else(|| "无法定位素材根目录".to_string())?,
+        )
+        .map_err(|e| format!("创建临时目录失败: {e}"))?;
+    let extracted_root = temp.path().join("unzipped");
+    fs::create_dir_all(&extracted_root).map_err(|e| format!("创建临时目录失败: {e}"))?;
+    extract_zip_archive(zip_path, &extracted_root)?;
+    let import_root = locate_import_root(&extracted_root);
+    let (_has_servants, _has_ces, servant_stats, ce_stats) =
+        install_asset_directories(&import_root, assets_root, false)?;
+    let mut stats = FileCopyStats::default();
+    stats += servant_stats;
+    stats += ce_stats;
+    Ok(stats)
+}
+
+fn install_asset_zip_base_replace(
+    zip_paths: &[PathBuf],
+    assets_root: &Path,
+) -> Result<FileCopyStats, String> {
+    let temp = tempfile::Builder::new()
+        .prefix("asset-base-combined-")
+        .tempdir_in(
+            assets_root
+                .parent()
+                .ok_or_else(|| "无法定位素材根目录".to_string())?,
+        )
+        .map_err(|e| format!("创建临时目录失败: {e}"))?;
+    let combined_root = temp.path().join("assets");
+    fs::create_dir_all(&combined_root).map_err(|e| format!("创建临时目录失败: {e}"))?;
+
+    for zip_path in zip_paths {
+        merge_asset_zip_into_root(zip_path, &combined_root)?;
+    }
+
+    let (_has_servants, _has_ces, servant_stats, ce_stats) =
+        install_asset_directories(&combined_root, assets_root, true)?;
+    let mut stats = FileCopyStats::default();
+    stats += servant_stats;
+    stats += ce_stats;
+    Ok(stats)
+}
+
 fn verify_asset_artifact(
     zip_path: &Path,
     expected_sha256: &str,
@@ -4348,9 +4528,12 @@ fn verify_asset_artifact(
 
 fn download_and_install_asset_bundles_inner(
     app: tauri::AppHandle,
+    force_base: bool,
+    cancel: Arc<ResourceDownloadCancelState>,
 ) -> Result<AssetDownloadInstallResult, String> {
     let app_manifest = assets_app_manifest(&app)?;
     let assets_root = app_assets_dir(&app);
+    cleanup_replaced_asset_trees(&assets_root);
     let local_status = asset_bundle_status_from_root(&assets_root, &app_manifest);
     let (_latest, remote, latest_base_url, _manifest_url) =
         fetch_assets_remote_manifest(&app_manifest.latest_url)?;
@@ -4358,6 +4541,7 @@ fn download_and_install_asset_bundles_inner(
         local_status.current_version,
         app_manifest.assets_version,
         &remote,
+        force_base,
     );
     let downloads_dir = asset_downloads_dir(&assets_root);
     let target_version = plan.target_version();
@@ -4374,8 +4558,9 @@ fn download_and_install_asset_bundles_inner(
                     .filter(|value| !value.is_empty())
                     .unwrap_or(pack.name.as_str());
                 let zip_path = downloads_dir.join(filename);
-                download_asset_artifact(&app, &pack.name, &url, &zip_path)?;
+                download_asset_artifact(&app, &pack.name, &url, &zip_path, &cancel.assets)?;
                 verify_asset_artifact(&zip_path, &pack.sha256, pack.size)?;
+                ensure_download_not_cancelled(&cancel.assets)?;
                 emit_asset_download_progress(&app, &pack.name, "installing", 0, None, None, None);
                 install_asset_zip_merge(&zip_path, &assets_root)?;
                 emit_asset_download_progress(&app, &pack.name, "installed", 0, None, None, None);
@@ -4390,8 +4575,49 @@ fn download_and_install_asset_bundles_inner(
                     .filter(|value| !value.is_empty())
                     .unwrap_or(kind.as_str());
                 let zip_path = downloads_dir.join(filename);
-                download_asset_artifact(&app, &kind, &url, &zip_path)?;
+                download_asset_artifact(&app, &kind, &url, &zip_path, &cancel.assets)?;
                 verify_asset_artifact(&zip_path, &patch.sha256, patch.size)?;
+                ensure_download_not_cancelled(&cancel.assets)?;
+                emit_asset_download_progress(&app, &kind, "installing", 0, None, None, None);
+                install_asset_zip_merge(&zip_path, &assets_root)?;
+                write_asset_version(&assets_root, patch.to)?;
+                emit_asset_download_progress(&app, &kind, "installed", 0, None, None, None);
+            }
+        }
+        AssetInstallPlan::ForceBase { packs, patches, .. } => {
+            let mut base_zip_paths = Vec::new();
+            for pack in packs {
+                let url = join_remote_url(&latest_base_url, &pack.file);
+                let filename = pack
+                    .file
+                    .rsplit('/')
+                    .next()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(pack.name.as_str());
+                let zip_path = downloads_dir.join(filename);
+                download_asset_artifact(&app, &pack.name, &url, &zip_path, &cancel.assets)?;
+                verify_asset_artifact(&zip_path, &pack.sha256, pack.size)?;
+                ensure_download_not_cancelled(&cancel.assets)?;
+                base_zip_paths.push(zip_path);
+            }
+            ensure_download_not_cancelled(&cancel.assets)?;
+            emit_asset_download_progress(&app, "base", "installing", 0, None, None, None);
+            install_asset_zip_base_replace(&base_zip_paths, &assets_root)?;
+            emit_asset_download_progress(&app, "base", "installed", 0, None, None, None);
+
+            for patch in patches {
+                let kind = format!("patch-v{}-to-v{}", patch.from, patch.to);
+                let url = join_remote_url(&latest_base_url, &patch.file);
+                let filename = patch
+                    .file
+                    .rsplit('/')
+                    .next()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(kind.as_str());
+                let zip_path = downloads_dir.join(filename);
+                download_asset_artifact(&app, &kind, &url, &zip_path, &cancel.assets)?;
+                verify_asset_artifact(&zip_path, &patch.sha256, patch.size)?;
+                ensure_download_not_cancelled(&cancel.assets)?;
                 emit_asset_download_progress(&app, &kind, "installing", 0, None, None, None);
                 install_asset_zip_merge(&zip_path, &assets_root)?;
                 write_asset_version(&assets_root, patch.to)?;
@@ -4409,8 +4635,9 @@ fn download_and_install_asset_bundles_inner(
                     .filter(|value| !value.is_empty())
                     .unwrap_or(kind.as_str());
                 let zip_path = downloads_dir.join(filename);
-                download_asset_artifact(&app, &kind, &url, &zip_path)?;
+                download_asset_artifact(&app, &kind, &url, &zip_path, &cancel.assets)?;
                 verify_asset_artifact(&zip_path, &patch.sha256, patch.size)?;
+                ensure_download_not_cancelled(&cancel.assets)?;
                 emit_asset_download_progress(&app, &kind, "installing", 0, None, None, None);
                 install_asset_zip_merge(&zip_path, &assets_root)?;
                 write_asset_version(&assets_root, patch.to)?;
@@ -4422,6 +4649,7 @@ fn download_and_install_asset_bundles_inner(
     if let Some(version) = target_version {
         write_asset_version(&assets_root, version)?;
     }
+    cleanup_replaced_asset_trees(&assets_root);
     refresh_asset_protocol_scope(&app)?;
     let final_status = asset_bundle_status_from_root(&assets_root, &app_manifest);
     Ok(AssetDownloadInstallResult {
@@ -4437,10 +4665,25 @@ fn download_and_install_asset_bundles_inner(
 #[tauri::command]
 async fn download_asset_bundles(
     app: tauri::AppHandle,
+    force_base: Option<bool>,
+    cancel_state: tauri::State<'_, Arc<ResourceDownloadCancelState>>,
 ) -> Result<AssetDownloadInstallResult, String> {
-    tauri::async_runtime::spawn_blocking(move || download_and_install_asset_bundles_inner(app))
-        .await
-        .map_err(|e| format!("素材包下载任务失败: {e}"))?
+    let cancel_state = cancel_state.inner().clone();
+    cancel_state.assets.store(false, Ordering::Relaxed);
+    tauri::async_runtime::spawn_blocking(move || {
+        download_and_install_asset_bundles_inner(app, force_base.unwrap_or(false), cancel_state)
+    })
+    .await
+    .map_err(|e| format!("素材包下载任务失败: {e}"))?
+}
+
+#[tauri::command]
+fn cancel_resource_downloads(
+    cancel_state: tauri::State<'_, Arc<ResourceDownloadCancelState>>,
+) -> Result<(), String> {
+    cancel_state.runtime.store(true, Ordering::Relaxed);
+    cancel_state.assets.store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -4460,6 +4703,7 @@ pub fn run() {
             app.manage(Mutex::new(server));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
             app.manage(Mutex::new(EnhancementRunnerHandle::new_idle()));
+            app.manage(Arc::new(ResourceDownloadCancelState::default()));
             app.manage(debug::DebugSidecar::new());
             Ok(())
         })
@@ -4471,6 +4715,7 @@ pub fn run() {
             pick_asset_bundle,
             import_asset_bundle,
             download_asset_bundles,
+            cancel_resource_downloads,
             get_runtime_status,
             pick_runtime_bundle,
             import_runtime_bundle,
@@ -5339,7 +5584,7 @@ mod tests {
             ]"#,
         );
 
-        let plan = asset_update_plan(Some(1), 2, &remote);
+        let plan = asset_update_plan(Some(1), 2, &remote, false);
 
         assert_eq!(plan.target_version(), Some(2));
         assert_eq!(plan.plan_type(), "patch");
@@ -5353,7 +5598,7 @@ mod tests {
             r#"[{"from": 1, "to": 2, "file": "patches/v1-to-v2.zip", "sha256": "p12", "size": 7}]"#,
         );
 
-        let plan = asset_update_plan(None, 2, &remote);
+        let plan = asset_update_plan(None, 2, &remote, false);
 
         assert_eq!(plan.target_version(), Some(2));
         assert_eq!(plan.plan_type(), "base");
@@ -5370,7 +5615,7 @@ mod tests {
             ]"#,
         );
 
-        let plan = asset_update_plan(Some(1), 3, &remote);
+        let plan = asset_update_plan(Some(1), 3, &remote, false);
 
         assert_eq!(plan.target_version(), Some(3));
         assert_eq!(plan.plan_type(), "patch");
@@ -5384,11 +5629,88 @@ mod tests {
             r#"[{"from": 2, "to": 3, "file": "patches/v2-to-v3.zip", "sha256": "p23", "size": 9}]"#,
         );
 
-        let plan = asset_update_plan(Some(1), 3, &remote);
+        let plan = asset_update_plan(Some(1), 3, &remote, false);
 
         assert_eq!(plan.target_version(), Some(1));
         assert_eq!(plan.plan_type(), "base");
         assert_eq!(plan.download_size(), 30);
+    }
+
+    #[test]
+    fn asset_update_plan_force_base_reinstalls_even_when_current_is_latest() {
+        let remote = build_assets_remote_manifest(
+            2,
+            r#"[{"from": 1, "to": 2, "file": "patches/v1-to-v2.zip", "sha256": "p12", "size": 7}]"#,
+        );
+
+        let plan = asset_update_plan(Some(2), 2, &remote, true);
+
+        assert_eq!(plan.target_version(), Some(2));
+        assert_eq!(plan.plan_type(), "force-base");
+        assert_eq!(plan.download_size(), 37);
+    }
+
+    #[test]
+    fn install_asset_zip_base_replace_combines_base_packs_before_replacing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let assets_root = tmp.path().join("assets");
+        fs::create_dir_all(assets_root.join("servants").join("1")).unwrap();
+        fs::write(
+            assets_root.join("servants").join("1").join("old.png"),
+            b"old",
+        )
+        .unwrap();
+
+        let json_zip = tmp.path().join("json.zip");
+        fs::write(
+            &json_zip,
+            build_zip(&[("assets/servants/1/servant.json", br#"{"name":"test"}"#)]),
+        )
+        .unwrap();
+        let image_zip = tmp.path().join("image.zip");
+        fs::write(
+            &image_zip,
+            build_zip(&[("assets/servants/1/face_servant_1.png", b"face")]),
+        )
+        .unwrap();
+
+        let stats = install_asset_zip_base_replace(&[json_zip, image_zip], &assets_root).unwrap();
+
+        assert_eq!(stats.files, 2);
+        assert!(!assets_root
+            .join("servants")
+            .join("1")
+            .join("old.png")
+            .exists());
+        assert!(assets_root
+            .join("servants")
+            .join("1")
+            .join("servant.json")
+            .is_file());
+        assert!(assets_root
+            .join("servants")
+            .join("1")
+            .join("face_servant_1.png")
+            .is_file());
+    }
+
+    #[test]
+    fn cleanup_replaced_asset_trees_removes_only_asset_replaced_dirs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let assets_root = tmp.path().join("assets");
+        fs::create_dir_all(assets_root.join("servants.replaced-old")).unwrap();
+        fs::create_dir_all(assets_root.join("ces.replaced-old")).unwrap();
+        fs::create_dir_all(assets_root.join("servants")).unwrap();
+        fs::create_dir_all(assets_root.join("other.replaced-old")).unwrap();
+        fs::write(assets_root.join("servants.replaced-file"), b"file").unwrap();
+
+        cleanup_replaced_asset_trees(&assets_root);
+
+        assert!(!assets_root.join("servants.replaced-old").exists());
+        assert!(!assets_root.join("ces.replaced-old").exists());
+        assert!(assets_root.join("servants").is_dir());
+        assert!(assets_root.join("other.replaced-old").is_dir());
+        assert!(assets_root.join("servants.replaced-file").is_file());
     }
 
     #[test]

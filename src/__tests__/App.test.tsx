@@ -1,4 +1,5 @@
 import { act, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -151,5 +152,37 @@ describe("App active project restore", () => {
     });
 
     expect(await screen.findByText(/自检失败：Error: boom/)).toBeInTheDocument();
+  });
+
+  it("opens resource management from the menu event and returns to the team page", async () => {
+    let resourceHandler: (() => void) | null = null;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "resource-manager-requested") {
+        resourceHandler = () =>
+          handler({
+            event: "resource-manager-requested",
+            id: 0,
+            payload: null,
+          } as Parameters<typeof handler>[0]);
+      }
+      return () => {};
+    });
+    installAppMock("project-1");
+    const user = userEvent.setup();
+
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    await act(async () => {
+      resourceHandler?.();
+    });
+
+    expect(await screen.findByText("资源管理")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "取消" }));
+
+    expect(invoke).toHaveBeenCalledWith("cancel_resource_downloads");
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
   });
 });

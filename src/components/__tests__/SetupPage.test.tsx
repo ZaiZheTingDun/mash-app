@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import { SetupPage } from "../SetupPage";
@@ -107,5 +108,74 @@ describe("SetupPage", () => {
 
     expect(await screen.findByText("需要更新素材包 v1 → v2")).toBeInTheDocument();
     expect(onReady).not.toHaveBeenCalled();
+  });
+
+  it("keeps management mode open even when runtime and assets are installed", async () => {
+    const onReady = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") return runtimeStatus(true);
+      if (cmd === "get_asset_bundle_status") return assetStatus(true);
+      return null;
+    });
+
+    renderWithTheme(<SetupPage mode="manage" onReady={onReady} />);
+
+    expect(await screen.findByText("资源管理")).toBeInTheDocument();
+    expect(screen.getByText("已安装运行时 base 和 code 包")).toBeInTheDocument();
+    expect(onReady).not.toHaveBeenCalled();
+  });
+
+  it("calls onBack from the management cancel button", async () => {
+    const onBack = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") return runtimeStatus(true);
+      if (cmd === "get_asset_bundle_status") return assetStatus(true);
+      return null;
+    });
+    const user = userEvent.setup();
+
+    renderWithTheme(<SetupPage mode="manage" onBack={onBack} />);
+
+    await user.click(await screen.findByRole("button", { name: "取消" }));
+
+    expect(invoke).toHaveBeenCalledWith("cancel_resource_downloads");
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onBack from the management done button without cancelling downloads", async () => {
+    const onBack = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") return runtimeStatus(true);
+      if (cmd === "get_asset_bundle_status") return assetStatus(true);
+      return null;
+    });
+    const user = userEvent.setup();
+
+    renderWithTheme(<SetupPage mode="manage" onBack={onBack} />);
+
+    await user.click(await screen.findByRole("button", { name: "完成" }));
+
+    expect(invoke).not.toHaveBeenCalledWith("cancel_resource_downloads");
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the management done button while a resource download is running", async () => {
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "get_runtime_status") return Promise.resolve(runtimeStatus(true));
+      if (cmd === "get_asset_bundle_status") return Promise.resolve(staleAssetStatus());
+      if (cmd === "download_asset_bundles") {
+        return new Promise(() => {});
+      }
+      return Promise.resolve(null);
+    });
+    const user = userEvent.setup();
+
+    renderWithTheme(<SetupPage mode="manage" onBack={vi.fn()} />);
+
+    const done = await screen.findByRole("button", { name: "完成" });
+    expect(done).toBeEnabled();
+    await user.click(await screen.findByRole("button", { name: "在线更新" }));
+
+    expect(done).toBeDisabled();
   });
 });

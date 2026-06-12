@@ -163,6 +163,38 @@ describe("RuntimeBundleButton", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps the progress bar determinate when runtime download finishes", async () => {
+    const progressHandlers: Array<(event: Event<RuntimeDownloadProgress>) => void> = [];
+    vi.mocked(listen).mockImplementation(async (_event, handler) => {
+      progressHandlers.push(handler as (event: Event<RuntimeDownloadProgress>) => void);
+      return () => {};
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") {
+        return runtimeStatus();
+      }
+      return null;
+    });
+
+    renderWithTheme(<RuntimeBundleButton />);
+
+    await screen.findByRole("button", { name: "开始下载" });
+    progressHandlers[0]({
+      event: "runtime-download-progress",
+      id: 1,
+      payload: {
+        kind: "runtime",
+        phase: "downloaded",
+        downloadedBytes: 0,
+        totalBytes: null,
+        bytesPerSecond: null,
+        etaSeconds: null,
+      },
+    });
+
+    expect(await screen.findByRole("progressbar")).toHaveAttribute("value", "100");
+  });
+
   it("imports a selected runtime zip from manual upload and refreshes status", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const onInstalled = vi.fn();

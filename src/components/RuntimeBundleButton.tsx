@@ -10,6 +10,7 @@ import type {
 
 interface RuntimeBundleButtonProps {
   onInstalled?: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 function basename(path: string): string {
@@ -90,7 +91,24 @@ function progressLabel(progress: RuntimeDownloadProgress | null): string {
   return `正在下载 ${target}：${formatBytes(progress.downloadedBytes)}${total}${speed}${eta}`;
 }
 
-export function RuntimeBundleButton({ onInstalled }: RuntimeBundleButtonProps) {
+function progressPercent(progress: RuntimeDownloadProgress | null): number | null {
+  if (!progress) {
+    return null;
+  }
+  if (
+    progress.phase === "downloaded" ||
+    progress.phase === "installing" ||
+    progress.phase === "installed"
+  ) {
+    return 100;
+  }
+  if (!progress.totalBytes) {
+    return null;
+  }
+  return Math.min(100, (progress.downloadedBytes / progress.totalBytes) * 100);
+}
+
+export function RuntimeBundleButton({ onInstalled, onBusyChange }: RuntimeBundleButtonProps) {
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -104,6 +122,10 @@ export function RuntimeBundleButton({ onInstalled }: RuntimeBundleButtonProps) {
   useEffect(() => {
     refreshStatus().catch((err) => setMessage(`检查失败：${String(err)}`));
   }, [refreshStatus]);
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
 
   useEffect(() => {
     let disposed = false;
@@ -184,9 +206,7 @@ export function RuntimeBundleButton({ onInstalled }: RuntimeBundleButtonProps) {
   }, [onInstalled, refreshStatus]);
 
   const needsInstall = !status?.installed;
-  const progressPercent = downloadProgress?.totalBytes
-    ? Math.min(100, (downloadProgress.downloadedBytes / downloadProgress.totalBytes) * 100)
-    : null;
+  const progressValue = progressPercent(downloadProgress);
 
   return (
     <div className="asset-import-block runtime-import-block">
@@ -220,7 +240,7 @@ export function RuntimeBundleButton({ onInstalled }: RuntimeBundleButtonProps) {
           <progress
             className="runtime-progress-bar"
             max={100}
-            value={progressPercent ?? undefined}
+            value={progressValue ?? undefined}
           />
           <Text size="1" color="gray">
             {progressLabel(downloadProgress)}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Box, Flex, Spinner, Text } from "@radix-ui/themes";
+import { Box, Button, Flex, Spinner, Text } from "@radix-ui/themes";
 import { AssetBundleButton } from "./AssetBundleButton";
 import { RuntimeBundleButton } from "./RuntimeBundleButton";
 import { invoke } from "../tauri";
@@ -7,14 +7,18 @@ import type { AssetBundleStatus } from "../types/assets";
 import type { RuntimeStatus } from "../types/runtime";
 
 interface SetupPageProps {
-  onReady: () => void;
+  mode?: "setup" | "manage";
+  onBack?: () => void;
+  onReady?: () => void;
 }
 
-export function SetupPage({ onReady }: SetupPageProps) {
+export function SetupPage({ mode = "setup", onBack, onReady }: SetupPageProps) {
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null);
   const [assetStatus, setAssetStatus] = useState<AssetBundleStatus | null>(null);
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [runtimeBusy, setRuntimeBusy] = useState(false);
+  const [assetsBusy, setAssetsBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     setChecking(true);
@@ -26,33 +30,61 @@ export function SetupPage({ onReady }: SetupPageProps) {
       ]);
       setRuntimeStatus(runtime);
       setAssetStatus(assets);
-      if (runtime.installed && assets.installed) {
-        onReady();
+      if (mode === "setup" && runtime.installed && assets.installed) {
+        onReady?.();
       }
     } catch (err) {
       setError(String(err));
     } finally {
       setChecking(false);
     }
-  }, [onReady]);
+  }, [mode, onReady]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
+  const handleCancel = useCallback(async () => {
+    await invoke("cancel_resource_downloads").catch((err) => {
+      console.error("cancel_resource_downloads failed", err);
+    });
+    onBack?.();
+  }, [onBack]);
+
+  const handleDone = useCallback(() => {
+    onBack?.();
+  }, [onBack]);
+
   const runtimeReady = runtimeStatus?.installed ?? false;
   const assetsReady = assetStatus?.installed ?? false;
+  const resourceBusy = runtimeBusy || assetsBusy;
 
   return (
     <Flex direction="column" className="setup-page">
       <Box className="setup-panel">
         <Flex direction="column" gap="4">
+          <Flex align="start" justify="between" gap="3">
+            <Box>
+              <Text size="6" weight="bold">
+                {mode === "manage" ? "资源管理" : "初始化 mash"}
+              </Text>
+            </Box>
+            {mode === "manage" && onBack && (
+              <Flex align="center" gap="2">
+                <Button type="button" variant="soft" color="gray" onClick={handleCancel}>
+                  取消
+                </Button>
+                <Button type="button" onClick={handleDone} disabled={resourceBusy}>
+                  完成
+                </Button>
+              </Flex>
+            )}
+          </Flex>
           <Box>
-            <Text size="6" weight="bold">
-              初始化 mash
-            </Text>
             <Text size="2" color="gray" className="setup-subtitle">
-              安装 CV 运行时并导入素材包后即可进入主页。
+              {mode === "manage"
+                ? "管理 CV 运行时和素材包下载。"
+                : "安装 CV 运行时并导入素材包后即可进入主页。"}
             </Text>
           </Box>
 
@@ -78,7 +110,7 @@ export function SetupPage({ onReady }: SetupPageProps) {
             <Text size="2" color="gray">
               {runtimeReady ? "已安装运行时 base 和 code 包" : "需要安装 runtime base 和 code 包"}
             </Text>
-            <RuntimeBundleButton onInstalled={refresh} />
+            <RuntimeBundleButton onInstalled={refresh} onBusyChange={setRuntimeBusy} />
           </Box>
 
           <Box className={`setup-requirement ${assetsReady ? "ready" : "missing"}`}>
@@ -94,7 +126,7 @@ export function SetupPage({ onReady }: SetupPageProps) {
                   ? `需要更新素材包 v${assetStatus.currentVersion} → v${assetStatus.targetVersion}`
                 : "需要导入包含 assets/servants 和 assets/ces 的素材包"}
             </Text>
-            <AssetBundleButton onImported={refresh} />
+            <AssetBundleButton onImported={refresh} onBusyChange={setAssetsBusy} />
           </Box>
         </Flex>
       </Box>
