@@ -295,10 +295,10 @@
       "detect": {
         "template": "text_battle_result_bond_level_up",
         "region": {
-          "x": 0.25,
-          "y": 0.37,
-          "w": 0.55,
-          "h": 0.15
+          "x": 0.546,
+          "y": 0.408,
+          "w": 0.376,
+          "h": 0.06
         },
         "threshold": 0.85,
         "priority": 10
