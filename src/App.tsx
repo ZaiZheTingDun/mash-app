@@ -16,6 +16,7 @@ import { DebugPage } from "./components/DebugPage";
 import { StatusBar } from "./components/StatusBar";
 import { ProjectBar } from "./components/ProjectBar";
 import { SetupPage } from "./components/SetupPage";
+import { SelfCheckDialog } from "./components/SelfCheckDialog";
 import { createInitialProjectSlots } from "./components/projectSlots";
 import { featureToggles } from "./featureToggles";
 import type { SlotItem } from "./components/ContentGrid";
@@ -24,6 +25,7 @@ import type { CraftEssence } from "./types/craftEssence";
 import type { Project } from "./types/project";
 import type { AssetBundleStatus } from "./types/assets";
 import type { RuntimeStatus } from "./types/runtime";
+import type { SelfCheckStatus } from "./types/selfCheck";
 import type { AppTheme, AppThemePreference } from "./types/theme";
 import {
   appendCoalescedOperationLog,
@@ -76,6 +78,10 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [updateChecking, setUpdateChecking] = useState(false);
   const [updateInstalling, setUpdateInstalling] = useState(false);
   const [updateProgressText, setUpdateProgressText] = useState<string | null>(null);
+  const [selfCheckOpen, setSelfCheckOpen] = useState(false);
+  const [selfCheckLoading, setSelfCheckLoading] = useState(false);
+  const [selfCheckStatus, setSelfCheckStatus] = useState<SelfCheckStatus | null>(null);
+  const [selfCheckError, setSelfCheckError] = useState<string | null>(null);
 
   const appendOperationLog = useCallback(
     (message: string, level: LogLevel = "info") => {
@@ -120,6 +126,21 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
       setUpdateChecking(false);
     }
   }, [appendOperationLog]);
+
+  const runSelfCheck = useCallback(async () => {
+    setSelfCheckOpen(true);
+    setSelfCheckLoading(true);
+    setSelfCheckError(null);
+    setSelfCheckStatus(null);
+    try {
+      const next = await invoke<SelfCheckStatus>("get_self_check_status");
+      setSelfCheckStatus(next);
+    } catch (err) {
+      setSelfCheckError(String(err));
+    } finally {
+      setSelfCheckLoading(false);
+    }
+  }, []);
 
   const handleInstallUpdate = useCallback(async () => {
     if (!availableUpdate || updateInstalling) return;
@@ -191,12 +212,16 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     const unlistenMenu = listen("updater-check-requested", () => {
       void checkForUpdates(true);
     });
+    const unlistenSelfCheck = listen("self-check-requested", () => {
+      void runSelfCheck();
+    });
 
     return () => {
       cancelled = true;
       unlistenMenu.then((fn) => fn());
+      unlistenSelfCheck.then((fn) => fn());
     };
-  }, [checkForUpdates]);
+  }, [checkForUpdates, runSelfCheck]);
 
   useEffect(() => {
     let cancelled = false;
@@ -444,6 +469,13 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         <Flex align="center" justify="center" style={{ flex: 1 }}>
           <Spinner size="3" />
         </Flex>
+        <SelfCheckDialog
+          open={selfCheckOpen}
+          loading={selfCheckLoading}
+          status={selfCheckStatus}
+          error={selfCheckError}
+          onOpenChange={setSelfCheckOpen}
+        />
       </Flex>
     );
   }
@@ -452,6 +484,13 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     return (
       <Flex direction="column" className="app-root" data-theme={theme}>
         <SetupPage onReady={() => setSetupReady(true)} />
+        <SelfCheckDialog
+          open={selfCheckOpen}
+          loading={selfCheckLoading}
+          status={selfCheckStatus}
+          error={selfCheckError}
+          onOpenChange={setSelfCheckOpen}
+        />
       </Flex>
     );
   }
@@ -614,6 +653,13 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         updateInstalling={updateInstalling}
         updateProgressText={updateProgressText}
         onInstallUpdate={handleInstallUpdate}
+      />
+      <SelfCheckDialog
+        open={selfCheckOpen}
+        loading={selfCheckLoading}
+        status={selfCheckStatus}
+        error={selfCheckError}
+        onOpenChange={setSelfCheckOpen}
       />
     </Flex>
   );

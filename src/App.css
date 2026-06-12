@@ -3594,3 +3594,9 @@ body,
 .debug-log-error .debug-log-msg {
   color: var(--red-11);
 }
+
+@media (max-width: 560px) {
+  .self-check-row {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}

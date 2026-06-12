@@ -32,6 +32,10 @@ use runner::{ApRecoveryItem, RunConfig, RunnerHandle, RunnerState};
 const CHECK_FOR_UPDATE_MENU_ID: &str = "check-for-update";
 #[cfg(desktop)]
 const CHECK_FOR_UPDATE_EVENT: &str = "updater-check-requested";
+#[cfg(desktop)]
+const SELF_CHECK_MENU_ID: &str = "self-check";
+#[cfg(desktop)]
+const SELF_CHECK_EVENT: &str = "self-check-requested";
 
 // ---------------------------------------------------------------------------
 // Server selection (global app setting). Drives which template/config bundle
@@ -2202,6 +2206,7 @@ fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<(
                 true,
                 None::<&str>,
             )?,
+            &MenuItem::with_id(handle, SELF_CHECK_MENU_ID, "自检...", true, None::<&str>)?,
         ],
     )?;
 
@@ -2222,6 +2227,7 @@ fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<(
                         true,
                         None::<&str>,
                     )?,
+                    &MenuItem::with_id(handle, SELF_CHECK_MENU_ID, "自检...", true, None::<&str>)?,
                     &PredefinedMenuItem::separator(handle)?,
                     &PredefinedMenuItem::services(handle, None)?,
                     &PredefinedMenuItem::separator(handle)?,
@@ -2278,6 +2284,8 @@ fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<(
     app.on_menu_event(|app, event| {
         if event.id() == CHECK_FOR_UPDATE_MENU_ID {
             let _ = app.emit(CHECK_FOR_UPDATE_EVENT, ());
+        } else if event.id() == SELF_CHECK_MENU_ID {
+            let _ = app.emit(SELF_CHECK_EVENT, ());
         }
     });
     Ok(())
@@ -3622,6 +3630,28 @@ struct AssetDownloadInstallResult {
     install_dir: String,
 }
 
+#[derive(serde::Serialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct SelfCheckAssetGroup {
+    entries: u64,
+    has_image: bool,
+    has_json: bool,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct SelfCheckStatus {
+    app_version: String,
+    cv_runtime_version: String,
+    cv_runtime_installed: bool,
+    cv_code_version: String,
+    cv_code_installed: bool,
+    asset_version: Option<u32>,
+    app_assets_version: u32,
+    servants: SelfCheckAssetGroup,
+    ces: SelfCheckAssetGroup,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct FileCopyStats {
     files: u64,
@@ -3996,6 +4026,97 @@ fn count_files_recursive(dir: &Path) -> Result<u64, String> {
     Ok(count)
 }
 
+fn file_ext_lower(path: &Path) -> Option<String> {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
+}
+
+fn is_supported_asset_image(path: &Path) -> bool {
+    matches!(
+        file_ext_lower(path).as_deref(),
+        Some("png" | "jpg" | "jpeg" | "webp")
+    )
+}
+
+fn scan_asset_files_recursive(
+    dir: &Path,
+    has_image: &mut bool,
+    has_json: &mut bool,
+) -> Result<(), String> {
+    if !dir.is_dir() || (*has_image && *has_json) {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(dir).map_err(|e| format!("读取素材目录失败: {e}"))? {
+        let entry = entry.map_err(|e| format!("读取素材目录失败: {e}"))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("读取素材类型失败: {e}"))?;
+        let path = entry.path();
+        if file_type.is_dir() {
+            scan_asset_files_recursive(&path, has_image, has_json)?;
+        } else if file_type.is_file() {
+            *has_image |= is_supported_asset_image(&path);
+            *has_json |= file_ext_lower(&path).as_deref() == Some("json");
+        }
+        if *has_image && *has_json {
+            break;
+        }
+    }
+    Ok(())
+}
+
+fn scan_self_check_asset_group(dir: &Path) -> SelfCheckAssetGroup {
+    if !dir.is_dir() {
+        return SelfCheckAssetGroup::default();
+    }
+
+    let entries = fs::read_dir(dir)
+        .ok()
+        .map(|items| {
+            items
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| {
+                    entry
+                        .file_type()
+                        .map(|file_type| file_type.is_dir())
+                        .unwrap_or(false)
+                })
+                .count() as u64
+        })
+        .unwrap_or(0);
+    let mut has_image = false;
+    let mut has_json = false;
+    let _ = scan_asset_files_recursive(dir, &mut has_image, &mut has_json);
+    SelfCheckAssetGroup {
+        entries,
+        has_image,
+        has_json,
+    }
+}
+
+fn self_check_status_for_app(app: &tauri::AppHandle) -> Result<SelfCheckStatus, String> {
+    let runtime = runtime_status_for_app(app)?;
+    let assets = asset_bundle_status_for_app(app)?;
+    let assets_root = app_assets_dir(app);
+    Ok(SelfCheckStatus {
+        app_version: app.package_info().version.to_string(),
+        cv_runtime_version: runtime
+            .installed_runtime_version
+            .unwrap_or(runtime.required_runtime_version),
+        cv_runtime_installed: runtime.runtime_installed,
+        cv_code_version: runtime
+            .installed_code_version
+            .unwrap_or(runtime.required_code_version),
+        cv_code_installed: runtime.code_installed,
+        asset_version: assets.current_version,
+        app_assets_version: assets.app_assets_version,
+        servants: scan_self_check_asset_group(&assets_root.join("servants")),
+        ces: scan_self_check_asset_group(&assets_root.join("ces")),
+    })
+}
+
 fn asset_bundle_status_for_app(app: &tauri::AppHandle) -> Result<AssetBundleStatus, String> {
     let app_manifest = assets_app_manifest(app)?;
     let assets_root = app_assets_dir(app);
@@ -4041,6 +4162,11 @@ fn asset_bundle_status_from_root(
 #[tauri::command]
 fn get_asset_bundle_status(app: tauri::AppHandle) -> Result<AssetBundleStatus, String> {
     asset_bundle_status_for_app(&app)
+}
+
+#[tauri::command]
+fn get_self_check_status(app: tauri::AppHandle) -> Result<SelfCheckStatus, String> {
+    self_check_status_for_app(&app)
 }
 
 #[tauri::command]
@@ -4340,6 +4466,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_servants,
             get_craft_essences,
+            get_self_check_status,
             get_asset_bundle_status,
             pick_asset_bundle,
             import_asset_bundle,
@@ -5103,6 +5230,55 @@ mod tests {
         assert_eq!(installed.current_version, Some(2));
         assert_eq!(installed.target_version, None);
         assert!(!installed.update_available);
+    }
+
+    #[test]
+    fn self_check_asset_group_reports_empty_missing_dirs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let status = scan_self_check_asset_group(&tmp.path().join("servants"));
+
+        assert_eq!(status.entries, 0);
+        assert!(!status.has_image);
+        assert!(!status.has_json);
+    }
+
+    #[test]
+    fn self_check_asset_group_counts_only_top_level_entries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let servants = tmp.path().join("servants");
+        fs::create_dir_all(servants.join("1").join("nested")).unwrap();
+        fs::create_dir_all(servants.join("2")).unwrap();
+        fs::write(servants.join("1").join("face_servant_1.png"), b"png").unwrap();
+        fs::write(servants.join("1").join("nested").join("extra.json"), b"{}").unwrap();
+        fs::write(servants.join("loose.json"), b"{}").unwrap();
+
+        let status = scan_self_check_asset_group(&servants);
+
+        assert_eq!(status.entries, 2);
+        assert!(status.has_image);
+        assert!(status.has_json);
+    }
+
+    #[test]
+    fn self_check_asset_group_scans_servants_and_ces_independently() {
+        let tmp = tempfile::tempdir().unwrap();
+        let assets_root = tmp.path().join("assets");
+        let servants = assets_root.join("servants");
+        let ces = assets_root.join("ces");
+        fs::create_dir_all(servants.join("1")).unwrap();
+        fs::create_dir_all(ces.join("10")).unwrap();
+        fs::write(servants.join("1").join("servant.json"), b"{}").unwrap();
+        fs::write(ces.join("10").join("card_ce.webp"), b"webp").unwrap();
+
+        let servant_status = scan_self_check_asset_group(&servants);
+        let ce_status = scan_self_check_asset_group(&ces);
+
+        assert_eq!(servant_status.entries, 1);
+        assert!(!servant_status.has_image);
+        assert!(servant_status.has_json);
+        assert_eq!(ce_status.entries, 1);
+        assert!(ce_status.has_image);
+        assert!(!ce_status.has_json);
     }
 
     fn build_assets_app_manifest(version: u32) -> AssetsAppManifest {

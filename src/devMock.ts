@@ -306,6 +306,18 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         remoteManifestUrl: null,
         updateCheckError: null,
       } as T;
+    case "get_self_check_status":
+      return {
+        appVersion: "0.5.4",
+        cvRuntimeVersion: "2026.05.08-runtime1",
+        cvRuntimeInstalled: false,
+        cvCodeVersion: "2026.05.08-code1",
+        cvCodeInstalled: false,
+        assetVersion: null,
+        appAssetsVersion: 2,
+        servants: { entries: 0, hasImage: false, hasJson: false },
+        ces: { entries: 0, hasImage: false, hasJson: false },
+      } as T;
     case "import_asset_bundle":
       return {
         importedServants: false,

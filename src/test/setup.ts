@@ -149,6 +149,18 @@ vi.mock("@tauri-apps/api/core", () => ({
           remoteManifestUrl: null,
           updateCheckError: null,
         };
+      case "get_self_check_status":
+        return {
+          appVersion: "0.5.4",
+          cvRuntimeVersion: "2026.05.08-runtime1",
+          cvRuntimeInstalled: false,
+          cvCodeVersion: "2026.05.08-code1",
+          cvCodeInstalled: false,
+          assetVersion: null,
+          appAssetsVersion: 2,
+          servants: { entries: 0, hasImage: false, hasJson: false },
+          ces: { entries: 0, hasImage: false, hasJson: false },
+        };
       case "get_runtime_status":
         return {
           requiredRuntimeVersion: "2026.05.08-runtime1",
