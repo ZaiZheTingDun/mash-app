@@ -185,4 +185,54 @@ describe("App active project restore", () => {
     expect(invoke).toHaveBeenCalledWith("cancel_resource_downloads");
     expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
   });
+
+  it("saves an adb screenshot from the menu event", async () => {
+    let screenshotHandler: (() => void) | null = null;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "save-adb-screenshot-requested") {
+        screenshotHandler = () =>
+          handler({
+            event: "save-adb-screenshot-requested",
+            id: 0,
+            payload: null,
+          } as Parameters<typeof handler>[0]);
+      }
+      return () => {};
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "save_adb_screenshot") return "/tmp/mash-screenshot.png";
+      switch (cmd) {
+        case "get_runtime_status":
+        case "get_asset_bundle_status":
+          return { installed: true };
+        case "get_servants":
+        case "get_craft_essences":
+          return [];
+        case "list_projects":
+          return projects;
+        case "get_active_project_id":
+          return "project-1";
+        case "check_adb":
+          return { connected: false, deviceName: null };
+        case "get_server":
+          return "JP";
+        case "should_check_updates_today":
+          return false;
+        default:
+          return null;
+      }
+    });
+
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    await act(async () => {
+      screenshotHandler?.();
+    });
+
+    expect(invoke).toHaveBeenCalledWith("save_adb_screenshot");
+    expect(await screen.findByText("截图已保存: /tmp/mash-screenshot.png")).toBeInTheDocument();
+  });
 });

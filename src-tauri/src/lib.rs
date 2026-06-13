@@ -40,6 +40,10 @@ const SELF_CHECK_EVENT: &str = "self-check-requested";
 const RESOURCE_MANAGER_MENU_ID: &str = "resource-manager";
 #[cfg(desktop)]
 const RESOURCE_MANAGER_EVENT: &str = "resource-manager-requested";
+#[cfg(desktop)]
+const SAVE_ADB_SCREENSHOT_MENU_ID: &str = "save-adb-screenshot";
+#[cfg(desktop)]
+const SAVE_ADB_SCREENSHOT_EVENT: &str = "save-adb-screenshot-requested";
 
 // ---------------------------------------------------------------------------
 // Server selection (global app setting). Drives which template/config bundle
@@ -2221,6 +2225,20 @@ fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<(
         ],
     )?;
 
+    let tools_menu = Submenu::with_id_and_items(
+        handle,
+        "tools",
+        "工具",
+        true,
+        &[&MenuItem::with_id(
+            handle,
+            SAVE_ADB_SCREENSHOT_MENU_ID,
+            "截图...",
+            true,
+            None::<&str>,
+        )?],
+    )?;
+
     let menu = Menu::with_items(
         handle,
         &[
@@ -2293,6 +2311,7 @@ fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<(
                 true,
                 &[&PredefinedMenuItem::fullscreen(handle, None)?],
             )?,
+            &tools_menu,
             &window_menu,
             &help_menu,
         ],
@@ -2306,9 +2325,55 @@ fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<(
             let _ = app.emit(SELF_CHECK_EVENT, ());
         } else if event.id() == RESOURCE_MANAGER_MENU_ID {
             let _ = app.emit(RESOURCE_MANAGER_EVENT, ());
+        } else if event.id() == SAVE_ADB_SCREENSHOT_MENU_ID {
+            let _ = app.emit(SAVE_ADB_SCREENSHOT_EVENT, ());
         }
     });
     Ok(())
+}
+
+fn with_png_extension(path: PathBuf) -> PathBuf {
+    if path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+    {
+        path
+    } else {
+        path.with_extension("png")
+    }
+}
+
+#[tauri::command]
+async fn save_adb_screenshot(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<bool>>,
+) -> Result<Option<String>, String> {
+    let use_bluestack = *state.lock().unwrap();
+    let mut adb_dev = adb::Adb::new(&app, use_bluestack);
+    adb_dev.connect()?;
+    let screenshot_path = adb_dev.screenshot_to_file()?;
+
+    let target = app
+        .dialog()
+        .file()
+        .add_filter("PNG", &["png"])
+        .set_title("保存原始截图")
+        .set_file_name("mash-screenshot.png")
+        .blocking_save_file();
+
+    let Some(target) = target else {
+        let _ = fs::remove_file(&screenshot_path);
+        return Ok(None);
+    };
+    let target = with_png_extension(target.into_path().map_err(|e| e.to_string())?);
+    if let Err(err) = fs::copy(&screenshot_path, &target) {
+        let _ = fs::remove_file(&screenshot_path);
+        return Err(format!("failed to save screenshot: {err}"));
+    }
+    let _ = fs::remove_file(&screenshot_path);
+
+    Ok(Some(target.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]
@@ -4738,6 +4803,7 @@ pub fn run() {
             update_project,
             delete_project,
             check_adb,
+            save_adb_screenshot,
             run_startup_migration,
             get_use_bluestack,
             set_use_bluestack,
@@ -6706,5 +6772,25 @@ mod tests {
         assert_eq!(parsed.grand_auto_order_change, Some(true));
         assert_eq!(parsed.rules.len(), 1);
         assert_eq!(parsed.rules[0].actions.len(), 2);
+    }
+
+    #[test]
+    fn screenshot_save_path_keeps_or_adds_png_extension() {
+        assert_eq!(
+            with_png_extension(PathBuf::from("/tmp/capture.png")),
+            PathBuf::from("/tmp/capture.png")
+        );
+        assert_eq!(
+            with_png_extension(PathBuf::from("/tmp/capture.PNG")),
+            PathBuf::from("/tmp/capture.PNG")
+        );
+        assert_eq!(
+            with_png_extension(PathBuf::from("/tmp/capture")),
+            PathBuf::from("/tmp/capture.png")
+        );
+        assert_eq!(
+            with_png_extension(PathBuf::from("/tmp/capture.jpg")),
+            PathBuf::from("/tmp/capture.png")
+        );
     }
 }

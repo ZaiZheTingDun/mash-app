@@ -142,6 +142,21 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     }
   }, []);
 
+  const saveAdbScreenshot = useCallback(async () => {
+    setOperationLogOpen(true);
+    appendOperationLog("正在通过 ADB 截取原始截图...");
+    try {
+      const savedPath = await invoke<string | null>("save_adb_screenshot");
+      if (savedPath) {
+        appendOperationLog(`截图已保存: ${savedPath}`);
+      } else {
+        appendOperationLog("已取消保存截图");
+      }
+    } catch (err) {
+      appendOperationLog(`截图失败: ${String(err)}`, "error");
+    }
+  }, [appendOperationLog]);
+
   const handleInstallUpdate = useCallback(async () => {
     if (!availableUpdate || updateInstalling) return;
     setUpdateInstalling(true);
@@ -218,14 +233,18 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     const unlistenResourceManager = listen("resource-manager-requested", () => {
       setView("resource");
     });
+    const unlistenSaveAdbScreenshot = listen("save-adb-screenshot-requested", () => {
+      void saveAdbScreenshot();
+    });
 
     return () => {
       cancelled = true;
       unlistenMenu.then((fn) => fn());
       unlistenSelfCheck.then((fn) => fn());
       unlistenResourceManager.then((fn) => fn());
+      unlistenSaveAdbScreenshot.then((fn) => fn());
     };
-  }, [checkForUpdates, runSelfCheck]);
+  }, [checkForUpdates, runSelfCheck, saveAdbScreenshot]);
 
   useEffect(() => {
     let cancelled = false;
