@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const defaultIgnoredServerDirs = new Set(["shared"]);
 
 function parseArgs(argv) {
   const args = {
@@ -61,6 +62,8 @@ function printHelp() {
   console.log(`Usage: node scripts/diff-server-templates.mjs [options]
 
 Compare template files across server resource bundles.
+The shared resource bundle is skipped by default; pass it explicitly via
+--servers if you need to inspect it.
 
 Options:
   --check              Exit with code 1 when any server is missing templates.
@@ -77,6 +80,7 @@ async function listServerIds(root) {
   const entries = await readdir(root, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isDirectory())
+    .filter((entry) => !defaultIgnoredServerDirs.has(entry.name))
     .map((entry) => entry.name)
     .sort((left, right) => left.localeCompare(right));
 }

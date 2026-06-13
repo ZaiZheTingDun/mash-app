@@ -212,7 +212,10 @@
     },
     "BattleResultFriendRequest": {
       "detect": {
-        "template": "text_battle_result_friend_request",
+        "templates": [
+          "text_battle_result_friend_request",
+          "text_battle_result_friend_request_dark"
+        ],
         "region": {
           "x": 0.62,
           "y": 0.806,
@@ -237,6 +240,24 @@
           "h": 0.096
         },
         "threshold": 0.85
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
+      }
+    },
+    "BattleResultExpLevelUp": {
+      "detect": {
+        "template": "text_battle_result_equip_level_up",
+        "region": {
+          "x": 0.577,
+          "y": 0.351,
+          "w": 0.17,
+          "h": 0.052
+        },
+        "threshold": 0.85,
+        "priority": 10
       },
       "variants": {
         "main": {
@@ -298,12 +319,12 @@
     },
     "APRecovery": {
       "detect": {
-        "template": "items/label_item",
+        "template": "dialog_ap_recovery",
         "region": {
-          "x": 0.244,
-          "y": 0.142,
-          "w": 0.095,
-          "h": 0.659
+          "x": 0.423,
+          "y": 0.031,
+          "w": 0.155,
+          "h": 0.085
         },
         "threshold": 0.82
       },
