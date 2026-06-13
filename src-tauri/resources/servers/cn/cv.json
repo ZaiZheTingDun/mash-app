@@ -70,16 +70,6 @@
                 "h": 0.131
               },
               "threshold": 0.8
-            },
-            "support_scroll_end": {
-              "template": "ui_scroll_bar_end",
-              "region": {
-                "x": 0.937,
-                "y": 0.904,
-                "w": 0.063,
-                "h": 0.096
-              },
-              "threshold": 0.85
             }
           }
         },

@@ -74,13 +74,19 @@ their real screens:
   `button_mission_start` for TeamConfirm and `button_confirm` for TeamChange.
   The class-filter strip alone is shared by both screens, so it is not unique
   enough.
-- `SupportSelect.detect`: shared two-probe screen detection. The sidecar must
-  match both `shared/screen_support_select` in the upper-left support-page
-  chrome and `shared/screen_support_refresh_button` near the refresh control.
-  The left anchor alone is not unique enough because servant-select screens
-  share similar back-button chrome.
-- `SupportSelect.variants.main.elements.support_scroll_end`: detects the bottom
-  of the support list.
+- `SupportSelect.detect`: shared single-probe screen detection. The sidecar
+  matches `shared/screen_support_select` in the left-side support-page chrome;
+  this template includes enough support-select-specific chrome to distinguish
+  the page without depending on the refresh button state.
+- `SupportSelect.variants.main.elements.refresh_available`: detects the
+  enabled support refresh button. The game disables refresh for roughly ten
+  seconds after use, so the runner waits for this element before tapping the
+  fixed refresh coordinate.
+- `SupportSelect.variants.main.elements.support_scroll_start` /
+  `.support_scroll_end`: detect the top and bottom scroll-bar indicators.
+  The runner uses `support_scroll_end` as the normal bottom-of-list signal.
+  On a fresh, unscrolled list, if `support_scroll_start` is also absent, the
+  list has no scroll bar and is treated as already exhausted.
 - "冠位从者" ribbon probe (CN-only, surfaced as
   `FindSupportsResult.diagnostics.isGrandSectionVisible` plus the per-row
   `diagnostics.grandRibbonAnchorScores` aligned 1-1 with

@@ -59,23 +59,49 @@
             "template": "shared/screen_support_select",
             "region": {
               "x": 0,
-              "y": 0,
-              "w": 0.045,
-              "h": 0.233
-            },
-            "threshold": 0.75
-          },
-          {
-            "template": "shared/screen_support_refresh_button",
-            "region": {
-              "x": 0.711,
-              "y": 0.176,
-              "w": 0.03,
-              "h": 0.045
+              "y": 0.107,
+              "w": 0.065,
+              "h": 0.146
             },
             "threshold": 0.75
           }
         ]
+      },
+      "variants": {
+        "main": {
+          "elements": {
+            "support_scroll_start": {
+              "template": "shared/ui_scroll_bar_start",
+              "region": {
+                "x": 0.937,
+                "y": 0.191,
+                "w": 0.063,
+                "h": 0.096
+              },
+              "threshold": 0.85
+            },
+            "support_scroll_end": {
+              "template": "shared/ui_scroll_bar_end",
+              "region": {
+                "x": 0.937,
+                "y": 0.904,
+                "w": 0.063,
+                "h": 0.096
+              },
+              "threshold": 0.85
+            },
+            "refresh_available": {
+              "template": "shared/screen_support_refresh_button",
+              "region": {
+                "x": 0.711,
+                "y": 0.176,
+                "w": 0.03,
+                "h": 0.045
+              },
+              "threshold": 0.75
+            }
+          }
+        }
       }
     }
   }

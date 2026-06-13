@@ -313,6 +313,7 @@ const SKIP_ANIMATION_BUTTON: Point = Point::new(0.685, 0.095);
 const BATTLE_SCREEN: &str = "Battle";
 const SUPPORT_SELECT_SCREEN: &str = "SupportSelect";
 pub const ATTACK_BUTTON_ELEMENT: &str = "attack_button";
+const SUPPORT_SCROLL_START_ELEMENT: &str = "support_scroll_start";
 const SUPPORT_SCROLL_END_ELEMENT: &str = "support_scroll_end";
 /// Party servant auto-placement is reserved for a later implementation.
 /// Keep the config shape intact, but do not enter ServantSelect from
@@ -1064,6 +1065,11 @@ const SUPPORT_SCROLL_SETTLE_MS: u32 = 250;
 /// list refetch and re-render takes ~2.5s on slow devices; one extra second
 /// of buffer keeps us from OCRing a half-loaded list.
 const SUPPORT_REFRESH_SETTLE: Duration = Duration::from_secs(3);
+/// The game keeps the support refresh button disabled for roughly ten
+/// seconds after a refresh. Poll the button template before tapping so we do
+/// not waste a tap on the cooldown state.
+const SUPPORT_REFRESH_AVAILABLE_TIMEOUT: Duration = Duration::from_secs(12);
+const SUPPORT_REFRESH_AVAILABLE_POLL: Duration = Duration::from_millis(500);
 /// Small timeout for the refresh-confirm dialog to animate in after tapping
 /// the support refresh button.
 const SUPPORT_REFRESH_DIALOG_APPEAR_TIMEOUT: Duration = Duration::from_secs(2);
@@ -1084,6 +1090,7 @@ const SUPPORT_REFRESH_DIALOG_CONFIRM_SETTLE: Duration = Duration::from_millis(50
 const SUPPORT_REFRESH_BUTTON: Point = Point::new(0.726, 0.178);
 /// Confirm button inside the support refresh dialog.
 const SUPPORT_REFRESH_CONFIRM_BUTTON: Point = Point::new(0.650, 0.779);
+const SUPPORT_REFRESH_AVAILABLE_ELEMENT: &str = "refresh_available";
 const SUPPORT_REFRESH_DIALOG_ELEMENT: &str = "dialog_refresh_support";
 
 /// "技能显示切换" toggle on the support-select screen — the button that
@@ -1160,6 +1167,11 @@ pub const SUPPORT_GRAND_CE_THIRD_CENTER_FROM_PANEL_TOP_Y: f64 = 0.220;
 /// background pixels so even mismatched CEs score ~0.4-0.5; the matched
 /// CE typically scores 0.75+.
 pub const SUPPORT_CE_THRESHOLD: f64 = 0.70;
+/// Support rows have a right-side "助战编队确认" button that opens the
+/// friend/support detail page. Use that button as a vertical row anchor,
+/// but tap slightly to its left so selecting a support stays on the main
+/// row hit-area.
+const SUPPORT_SELECT_TAP_LEFT_OF_CONFIRM_BUTTON_X: f64 = 0.030;
 
 fn format_ce_artwork_checks(checks: &[SupportCeArtworkCheck]) -> String {
     checks
@@ -1251,6 +1263,18 @@ pub fn grand_ce_search_region(row: &SupportRowMatch, slot: usize) -> Option<Norm
             r.y + r.h + 0.13
         });
     grand_ce_search_region_from_third_center(third_center_y, slot)
+}
+
+fn support_row_tap_point(row: &SupportRowMatch) -> Point {
+    row.score_anchor
+        .as_ref()
+        .map(|anchor| {
+            Point::new(
+                anchor.x - SUPPORT_SELECT_TAP_LEFT_OF_CONFIRM_BUTTON_X,
+                anchor.y + anchor.h / 2.0,
+            )
+        })
+        .unwrap_or(row.tap)
 }
 
 fn support_level_meets(actual: Option<u32>, required_min: Option<u32>) -> bool {
@@ -2100,7 +2124,7 @@ impl Runner {
                     support_skill_diag_message(row),
                 ),
             );
-            if !self.tap_at("SupportSelect", row.tap) {
+            if !self.tap_at("SupportSelect", support_row_tap_point(row)) {
                 return;
             }
             self.support_selected = true;
@@ -2223,6 +2247,9 @@ impl Runner {
                     SUPPORT_MAX_REFRESHES,
                 ),
             );
+            if !self.wait_for_support_refresh_available() {
+                return;
+            }
             if !self.tap_at("SupportSelect", SUPPORT_REFRESH_BUTTON) {
                 return;
             }
@@ -2500,7 +2527,9 @@ impl Runner {
 
     /// Return true when the scroll-bar-end indicator is visible in the
     /// bottom-right corner of the support list, meaning the user has
-    /// scrolled all the way down. Logs the actual match score every poll
+    /// scrolled all the way down. If the list is still at the top and the
+    /// start indicator is absent, treat the list as non-scrollable and
+    /// therefore already exhausted. Logs the actual match score every poll
     /// so the threshold can be tuned from real numbers; transient sidecar
     /// errors degrade to `false` so a CV blip just means "keep scrolling"
     /// instead of triggering a refresh loop.
@@ -2510,18 +2539,102 @@ impl Runner {
             SUPPORT_SELECT_SCREEN,
             SUPPORT_SCROLL_END_ELEMENT,
         ) {
-            Ok(m) => {
+            Ok(m) if m.found => {
                 eprintln!(
                     "[runner] scroll-bar-end score={:.3} -> {}",
-                    m.score,
-                    if m.found { "AT-BOTTOM" } else { "scrolling" },
+                    m.score, "AT-BOTTOM",
                 );
-                m.found
+                return true;
+            }
+            Ok(m) => {
+                eprintln!(
+                    "[runner] scroll-bar-end score={:.3} -> not-at-bottom",
+                    m.score,
+                );
             }
             Err(e) => {
                 eprintln!("[runner] scroll-bar-end check failed (treating as not-at-bottom): {e}");
+            }
+        }
+
+        if self.support_scroll_count > 0 {
+            return false;
+        }
+
+        match self.sidecar().find_element_by_name(
+            None,
+            SUPPORT_SELECT_SCREEN,
+            SUPPORT_SCROLL_START_ELEMENT,
+        ) {
+            Ok(m) if m.found => {
+                eprintln!(
+                    "[runner] scroll-bar-start score={:.3} -> scrollable",
+                    m.score,
+                );
                 false
             }
+            Ok(m) => {
+                eprintln!(
+                    "[runner] scroll-bar-start score={:.3} -> no-scrollbar",
+                    m.score,
+                );
+                true
+            }
+            Err(e) => {
+                eprintln!("[runner] scroll-bar-start check failed (treating as scrollable): {e}");
+                false
+            }
+        }
+    }
+
+    fn wait_for_support_refresh_available(&mut self) -> bool {
+        let deadline = Instant::now() + SUPPORT_REFRESH_AVAILABLE_TIMEOUT;
+        let mut emitted_wait = false;
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+            match self.sidecar().find_element_by_name(
+                None,
+                SUPPORT_SELECT_SCREEN,
+                SUPPORT_REFRESH_AVAILABLE_ELEMENT,
+            ) {
+                Ok(m) if m.found => {
+                    eprintln!("[runner] support-refresh score={:.3} -> available", m.score);
+                    return true;
+                }
+                Ok(m) => {
+                    eprintln!("[runner] support-refresh score={:.3} -> cooldown", m.score);
+                    if !emitted_wait {
+                        self.emit("SupportSelect", "等待助战刷新按钮可用");
+                        emitted_wait = true;
+                    }
+                }
+                Err(e)
+                    if is_unknown_element_error(
+                        &e,
+                        SUPPORT_SELECT_SCREEN,
+                        SUPPORT_REFRESH_AVAILABLE_ELEMENT,
+                    ) =>
+                {
+                    eprintln!(
+                        "[runner] support-refresh availability probe not configured; tapping directly"
+                    );
+                    return true;
+                }
+                Err(e) => {
+                    eprintln!("[runner] support-refresh availability probe failed: {e}");
+                    if !emitted_wait {
+                        self.emit("SupportSelect", "等待助战刷新按钮可用");
+                        emitted_wait = true;
+                    }
+                }
+            }
+            if Instant::now() >= deadline {
+                self.fail_action("SupportSelect", "等待助战刷新", "刷新按钮仍不可用".into());
+                return false;
+            }
+            thread::sleep(SUPPORT_REFRESH_AVAILABLE_POLL);
         }
     }
 
@@ -7574,6 +7687,32 @@ mod tests {
             append_skill_levels: append,
             skill_level_diagnostics: Vec::new(),
         }
+    }
+
+    #[test]
+    fn support_row_tap_point_uses_left_side_of_confirm_button_anchor() {
+        let mut row = support_row(None, vec![], vec![]);
+        row.tap = Point::new(0.30, 0.55);
+        row.score_anchor = Some(NormRect {
+            x: 0.85,
+            y: 0.86,
+            w: 0.08,
+            h: 0.06,
+        });
+
+        let point = support_row_tap_point(&row);
+        assert!((point.x - 0.82).abs() < 1e-9);
+        assert!((point.y - 0.89).abs() < 1e-9);
+    }
+
+    #[test]
+    fn support_row_tap_point_falls_back_to_ocr_row_tap() {
+        let mut row = support_row(None, vec![], vec![]);
+        row.tap = Point::new(0.30, 0.55);
+
+        let point = support_row_tap_point(&row);
+        assert!((point.x - 0.30).abs() < 1e-9);
+        assert!((point.y - 0.55).abs() < 1e-9);
     }
 
     #[test]

@@ -72,8 +72,9 @@ Ordinary battle template probes live under their real screens in
 
 - `Battle.variants.main.elements.attack_button`: used by `Runner::handle_battle`,
   `Runner::wait_for_attack_button`, and the debug attack-button probe.
-- `SupportSelect.variants.main.elements.support_scroll_end`: used by
-  support-list scrolling to detect the bottom of the list.
+- `SupportSelect.variants.main.elements.support_scroll_start` /
+  `.support_scroll_end`: used by support-list scrolling to detect whether the
+  list is at the top, bottom, or has no scroll bar at all.
 - `Battle.variants.main.elements.battle_scene_anchor`: exposes the
   `text_battle_label` search window to the debug template probe UI.
 
