@@ -68,6 +68,12 @@ their real screens:
 
 - `Battle.variants.main.elements.attack_button`: determines when the battle
   screen is actionable status.
+- `TeamConfirm.detect` / `TeamChange.detect`: shared two-probe screen
+  detection. Both screens match `shared/screen_team_party` in the class-filter
+  strip, then disambiguate with the lower-right action button:
+  `button_mission_start` for TeamConfirm and `button_confirm` for TeamChange.
+  The class-filter strip alone is shared by both screens, so it is not unique
+  enough.
 - `SupportSelect.detect`: shared two-probe screen detection. The sidecar must
   match both `shared/screen_support_select` in the upper-left support-page
   chrome and `shared/screen_support_refresh_button` near the refresh control.

@@ -1,5 +1,57 @@
 {
   "screens": {
+    "TeamConfirm": {
+      "detect": {
+        "requiredTemplates": [
+          {
+            "template": "shared/screen_team_party",
+            "region": {
+              "x": 0.169,
+              "y": 0.15,
+              "w": 0.023,
+              "h": 0.037
+            },
+            "threshold": 0.75
+          },
+          {
+            "template": "button_mission_start",
+            "region": {
+              "x": 0.818,
+              "y": 0.851,
+              "w": 0.187,
+              "h": 0.161
+            },
+            "threshold": 0.8
+          }
+        ]
+      }
+    },
+    "TeamChange": {
+      "detect": {
+        "requiredTemplates": [
+          {
+            "template": "shared/screen_team_party",
+            "region": {
+              "x": 0.169,
+              "y": 0.15,
+              "w": 0.023,
+              "h": 0.037
+            },
+            "threshold": 0.75
+          },
+          {
+            "template": "button_confirm",
+            "region": {
+              "x": 0.828,
+              "y": 0.863,
+              "w": 0.167,
+              "h": 0.137
+            },
+            "threshold": 0.8
+          }
+        ]
+      }
+    },
     "SupportSelect": {
       "detect": {
         "requiredTemplates": [

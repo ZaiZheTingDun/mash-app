@@ -8,10 +8,15 @@ These files ship with the app (declared in `tauri.conf.json` → `bundle.resourc
 resources/
   runtime-manifest.json  # required mash-cv base/code versions + artifact URLs/SHA-256
   servers/
+    shared/
+      cv.json       # server-neutral screen probes merged before JP/CN config
+      templates/    # loaded with the shared/ key prefix
+        screen_team_party.png
+        screen_support_select.png
+        screen_support_refresh_button.png
     jp/
       cv.json       # screen + element template mapping (see below)
       templates/    # PNG templates, loaded by stem (filename without extension)
-        screen_team_confirm.png     # anchors referenced by cv.json
         button_attack.png
         ...
         text_battle_label.png       # battle-scene OCR anchor (not in cv.json)
@@ -31,8 +36,14 @@ will be incomplete until CN templates are captured — `find_element` calls
 for missing templates surface a clear error rather than silently
 misdetecting.
 
-Every PNG under a server's `templates/` folder is loaded by the sidecar on
-startup and keyed by its filename stem. Most are referenced by that
+The sidecar loads `servers/shared/templates/` first, keyed with a
+`shared/` prefix, then loads the active server's `templates/` folder keyed
+by filename stem. Shared `cv.json` is loaded first and deep-merged with the
+active server's `cv.json`, so shared screen detects can combine with
+server-specific variants/elements.
+
+Every PNG under the active server's `templates/` folder is loaded by the
+sidecar on startup and keyed by its filename stem. Most are referenced by that
 server's `cv.json`, but a few (the battle-scene OCR set below) are looked
 up directly by the Rust runner.
 
@@ -123,9 +134,18 @@ All coordinates are normalized (0.0..1.0) across the screenshot.
   "screens": {
     "TeamConfirm": {
       "detect": {
-        "template": "screen_team_confirm",   // PNG filename without extension
-        "region":   { "x": 0, "y": 0, "w": 1, "h": 0.15 },
-        "threshold": 0.85
+        "requiredTemplates": [
+          {
+            "template": "shared/screen_team_party",
+            "region": { "x": 0.169, "y": 0.15, "w": 0.023, "h": 0.037 },
+            "threshold": 0.75
+          },
+          {
+            "template": "button_mission_start",
+            "region": { "x": 0.818, "y": 0.851, "w": 0.187, "h": 0.161 },
+            "threshold": 0.8
+          }
+        ]
       },
       "elements": {
         "start": {
@@ -138,6 +158,10 @@ All coordinates are normalized (0.0..1.0) across the screenshot.
   }
 }
 ```
+
+`detect.template` matches one template. `detect.templates` is an OR list for
+alternate skins of the same screen. `detect.requiredTemplates` is an AND list:
+all probes must match, and the screen score is the weakest matched probe.
 
 ## Detection logic
 
