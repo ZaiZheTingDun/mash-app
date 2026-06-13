@@ -96,6 +96,7 @@ static_template_keys: set[str] = set()
 # Last directory passed to ``_load_templates``. Used by ``_ensure_icon_cache``
 # to re-read RGBA icons with their alpha mask preserved.
 templates_dir: Optional[str] = None
+template_dirs: list[str] = []
 config: dict = {"screens": {}}
 # Populated once start_stream succeeds. The stream module is imported lazily
 # inside _start_stream so commands that never touch live video don't load
@@ -595,17 +596,20 @@ def _scale_static_template_for_image(
 
 
 def _template_path_for_key(template_key: str) -> Optional[str]:
-    if not templates_dir:
+    if not template_dirs:
         return None
     key = str(template_key).replace("\\", "/").strip("/")
     if not key or key.startswith(".") or "/../" in f"/{key}/":
         return None
-    path = os.path.normpath(os.path.join(templates_dir, f"{key}.png"))
-    root = os.path.abspath(templates_dir)
-    full = os.path.abspath(path)
-    if os.path.commonpath([root, full]) != root:
-        return None
-    return full
+    for directory in reversed(template_dirs):
+        path = os.path.normpath(os.path.join(directory, f"{key}.png"))
+        root = os.path.abspath(directory)
+        full = os.path.abspath(path)
+        if os.path.commonpath([root, full]) != root:
+            continue
+        if os.path.isfile(full):
+            return full
+    return None
 
 
 def _get_template(template_key: str) -> Optional[np.ndarray]:
@@ -961,30 +965,58 @@ def _detect_screen(img: np.ndarray) -> dict:
         det = spec.get("detect")
         if not det:
             continue
+        threshold = float(det.get("threshold", 0.85))
+        region = det.get("region", DEFAULT_REGION)
+        required_templates = det.get("requiredTemplates")
+        if isinstance(required_templates, list) and required_templates:
+            required_scores: list[float] = []
+            for required in required_templates:
+                if not isinstance(required, dict):
+                    required_scores = []
+                    break
+                key = required.get("template")
+                if not key:
+                    required_scores = []
+                    break
+                tmpl = _get_template(str(key))
+                if tmpl is None:
+                    required_scores = []
+                    break
+                result = _match_template_region(
+                    img,
+                    tmpl,
+                    required.get("region", DEFAULT_REGION),
+                    float(required.get("threshold", threshold)),
+                    str(key),
+                )
+                if not result.get("found"):
+                    required_scores = []
+                    break
+                required_scores.append(float(result.get("score", 0.0)))
+            screen_score = min(required_scores) if required_scores else 0.0
         # Accept either a single ``template`` string or a ``templates``
         # list. The list form lets one screen carry multiple variant
         # templates (e.g. CN's friend-request prompt has both a light and
         # a dark background skin) — we run all variants and keep the
         # highest score, treating them as alternatives. Falls back to the
         # legacy single-template form if neither is present.
-        keys: list[str] = []
-        if isinstance(det.get("templates"), list):
-            keys = [str(k) for k in det["templates"] if k]
-        elif det.get("template"):
-            keys = [str(det["template"])]
-        threshold = float(det.get("threshold", 0.85))
+        else:
+            keys: list[str] = []
+            if isinstance(det.get("templates"), list):
+                keys = [str(k) for k in det["templates"] if k]
+            elif det.get("template"):
+                keys = [str(det["template"])]
+            screen_score = 0.0
+            for key in keys:
+                tmpl = _get_template(key)
+                if tmpl is None:
+                    continue
+                result = _match_template_region(img, tmpl, region, threshold, key)
+                if result.get("found"):
+                    score = float(result.get("score", 0.0))
+                    if score > screen_score:
+                        screen_score = score
         priority = int(det.get("priority", 0))
-        region = det.get("region", DEFAULT_REGION)
-        screen_score = 0.0
-        for key in keys:
-            tmpl = _get_template(key)
-            if tmpl is None:
-                continue
-            result = _match_template_region(img, tmpl, region, threshold, key)
-            if result.get("found"):
-                score = float(result.get("score", 0.0))
-                if score > screen_score:
-                    screen_score = score
         if screen_score > 0.0 and (
             priority > best_priority
             or (priority == best_priority and screen_score > best_score)
@@ -4162,30 +4194,49 @@ def _verify_ce_decoration_icon(
 # ---------------------------------------------------------------------------
 
 
-def _load_templates(directory: str) -> dict:
+def _normalize_template_key_prefix(prefix: str) -> str:
+    prefix = str(prefix or "").replace("\\", "/").strip("/")
+    return f"{prefix}/" if prefix else ""
+
+
+def _load_templates(directory: str, append: bool = False, key_prefix: str = "") -> dict:
     global templates_dir
-    templates.clear()
-    template_masks.clear()
-    static_template_keys.clear()
-    _icon_color_sig.clear()
+    key_prefix = _normalize_template_key_prefix(key_prefix)
+    if not append:
+        templates.clear()
+        template_masks.clear()
+        static_template_keys.clear()
+        template_dirs.clear()
+        _icon_color_sig.clear()
     count = 0
     if not os.path.isdir(directory):
         return {"ok": False, "error": f"directory not found: {directory}"}
+    directory = os.path.abspath(directory)
     for fname in os.listdir(directory):
         path = os.path.join(directory, fname)
         if not os.path.isfile(path) or not fname.lower().endswith(".png"):
             continue
-        key = os.path.splitext(fname)[0]
+        key = f"{key_prefix}{os.path.splitext(fname)[0]}"
         gray, mask = _read_template_png(path)
         if gray is None:
             continue
         templates[key] = gray
         if mask is not None:
             template_masks[key] = mask
+        else:
+            template_masks.pop(key, None)
         static_template_keys.add(key)
         count += 1
     templates_dir = directory
-    return {"ok": True, "count": count}
+    if directory in template_dirs:
+        template_dirs.remove(directory)
+    template_dirs.append(directory)
+    response = {"ok": True, "count": count}
+    if append:
+        response["append"] = True
+    if key_prefix:
+        response["keyPrefix"] = key_prefix
+    return response
 
 
 def _read_template_png(
@@ -4220,15 +4271,33 @@ def _read_template_png(
     return None, None
 
 
-def _load_config(path: str) -> dict:
+def _deep_merge_dict(base: dict, override: dict) -> dict:
+    merged = dict(base)
+    for key, value in override.items():
+        existing = merged.get(key)
+        if isinstance(existing, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge_dict(existing, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _load_config(path: str, merge: bool = False) -> dict:
     global config
     try:
         with open(path, "r", encoding="utf-8") as f:
-            config = json.load(f)
+            loaded = json.load(f)
     except Exception as exc:
         return {"ok": False, "error": f"failed to load config: {exc}"}
+    if merge:
+        config = _deep_merge_dict(config, loaded)
+    else:
+        config = loaded
     screens = len(config.get("screens", {}))
-    return {"ok": True, "screens": screens}
+    response = {"ok": True, "screens": screens}
+    if merge:
+        response["merge"] = True
+    return response
 
 
 def _respond(obj: dict) -> None:
@@ -4396,9 +4465,16 @@ def main() -> None:
         elif action == "ping":
             _reply(req_id, {"ok": True})
         elif action == "load_templates":
-            _reply(req_id, _load_templates(cmd["dir"]))
+            _reply(
+                req_id,
+                _load_templates(
+                    cmd["dir"],
+                    bool(cmd.get("append", False)),
+                    str(cmd.get("keyPrefix", "")),
+                ),
+            )
         elif action == "load_config":
-            _reply(req_id, _load_config(cmd["path"]))
+            _reply(req_id, _load_config(cmd["path"], bool(cmd.get("merge", False))))
         elif action == "set_server":
             _reply(req_id, _set_server(str(cmd.get("server", ""))))
         elif action == "start_stream":

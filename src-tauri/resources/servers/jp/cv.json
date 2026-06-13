@@ -78,16 +78,6 @@
       }
     },
     "SupportSelect": {
-      "detect": {
-        "template": "screen_support_select",
-        "region": {
-          "x": 0.709,
-          "y": 0,
-          "w": 0.291,
-          "h": 0.112
-        },
-        "threshold": 0.85
-      },
       "variants": {
         "main": {
           "elements": {

@@ -68,6 +68,11 @@ their real screens:
 
 - `Battle.variants.main.elements.attack_button`: determines when the battle
   screen is actionable status.
+- `SupportSelect.detect`: shared two-probe screen detection. The sidecar must
+  match both `shared/screen_support_select` in the upper-left support-page
+  chrome and `shared/screen_support_refresh_button` near the refresh control.
+  The left anchor alone is not unique enough because servant-select screens
+  share similar back-button chrome.
 - `SupportSelect.variants.main.elements.support_scroll_end`: detects the bottom
   of the support list.
 - "冠位从者" ribbon probe (CN-only, surfaced as

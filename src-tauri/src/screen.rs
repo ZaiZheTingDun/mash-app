@@ -576,6 +576,12 @@ pub struct SidecarClient {
     stream_size: Option<(u32, u32)>,
 }
 
+#[derive(Debug, Clone)]
+pub struct TemplateLoadSpec {
+    pub dir: PathBuf,
+    pub key_prefix: Option<String>,
+}
+
 impl SidecarClient {
     /// Spawn the mash-cv sidecar and optionally load templates + config.
     ///
@@ -586,8 +592,8 @@ impl SidecarClient {
     /// degrades to JP-only behaviour rather than failing the spawn.
     pub fn spawn(
         app: &tauri::AppHandle,
-        templates_dir: Option<&Path>,
-        config_path: Option<&Path>,
+        template_dirs: &[TemplateLoadSpec],
+        config_paths: &[PathBuf],
         server: crate::Server,
     ) -> Result<Self, String> {
         let exe = crate::resolve_sidecar_exe(app)
@@ -674,26 +680,29 @@ impl SidecarClient {
             Err(e) => return Err(format!("sidecar did not become ready: {e}")),
         }
 
-        if let Some(dir) = templates_dir {
-            if dir.exists() {
+        for (idx, dir) in template_dirs.iter().enumerate() {
+            if dir.dir.exists() {
                 let req = serde_json::json!({
                     "cmd": "load_templates",
-                    "dir": dir.to_string_lossy(),
+                    "dir": dir.dir.to_string_lossy(),
+                    "append": idx > 0,
+                    "keyPrefix": dir.key_prefix.as_deref().unwrap_or(""),
                 });
                 match client.send_recv(&req) {
                     Ok(resp) => eprintln!("[mash-cv] load_templates -> {resp}"),
                     Err(e) => eprintln!("[mash-cv] load_templates failed: {e}"),
                 }
             } else {
-                eprintln!("[mash-cv] templates dir missing: {}", dir.display());
+                eprintln!("[mash-cv] templates dir missing: {}", dir.dir.display());
             }
         }
 
-        if let Some(path) = config_path {
+        for (idx, path) in config_paths.iter().enumerate() {
             if path.exists() {
                 let req = serde_json::json!({
                     "cmd": "load_config",
                     "path": path.to_string_lossy(),
+                    "merge": idx > 0,
                 });
                 match client.send_recv(&req) {
                     Ok(resp) => eprintln!("[mash-cv] load_config -> {resp}"),

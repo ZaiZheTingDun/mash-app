@@ -50,6 +50,8 @@
       "signingIdentity": "-"
     },
     "resources": [
+      "resources/servers/shared/cv.json",
+      "resources/servers/shared/templates/*",
       "resources/servers/jp/cv.json",
       "resources/servers/jp/templates/*",
       "resources/servers/jp/templates/digit_v2/*",

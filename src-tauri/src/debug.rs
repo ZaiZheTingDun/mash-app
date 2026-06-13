@@ -16,8 +16,8 @@ use crate::screen::{
 };
 use crate::{
     app_data_dir, load_servant_metadata, resolve_ce_assets_dir, resolve_cv_config_path,
-    resolve_scrcpy_jar, resolve_servant_assets_dir, resolve_templates_dir, Server, STREAM_BIT_RATE,
-    STREAM_MAX_SIZE,
+    resolve_cv_config_paths, resolve_scrcpy_jar, resolve_servant_assets_dir, resolve_template_dirs,
+    Server, STREAM_BIT_RATE, STREAM_MAX_SIZE,
 };
 
 // ---------------------------------------------------------------------------
@@ -65,16 +65,22 @@ fn ensure_debug_sidecar(
 ) -> Result<(), String> {
     let mut guard = debug_state.0.lock().unwrap();
     if guard.is_none() {
-        let tdir = resolve_templates_dir(app, server);
-        let cfg = resolve_cv_config_path(app, server);
+        let tdirs = resolve_template_dirs(app, server);
+        let cfgs = resolve_cv_config_paths(app, server);
         eprintln!(
-            "[debug] spawning mash-cv sidecar (server={server}, templates_dir={}, config={})",
-            tdir.as_ref()
+            "[debug] spawning mash-cv sidecar (server={server}, templates_dirs={}, configs={})",
+            tdirs
+                .iter()
+                .map(|spec| match spec.key_prefix.as_deref() {
+                    Some(prefix) => format!("{}=>{}", spec.dir.display(), prefix),
+                    None => spec.dir.display().to_string(),
+                })
+                .collect::<Vec<_>>()
+                .join(","),
+            cfgs.iter()
                 .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|| "<none>".into()),
-            cfg.as_ref()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|| "<none>".into()),
+                .collect::<Vec<_>>()
+                .join(","),
         );
         let client = crate::spawn_configured_sidecar(app, server)?;
         eprintln!("[debug] sidecar ready");
@@ -370,22 +376,28 @@ pub fn debug_list_templates(
     server_state: tauri::State<'_, Mutex<Server>>,
 ) -> Vec<String> {
     let server = current_server(&server_state);
-    let Some(dir) = resolve_templates_dir(&app, server) else {
-        eprintln!("[debug_list_templates] resource_dir not available");
-        return Vec::new();
-    };
     let mut keys = Vec::new();
-    match collect_template_keys(&dir, &dir, &mut keys) {
-        Ok(()) => {}
-        Err(e) => {
-            eprintln!("[debug_list_templates] cannot read {}: {e}", dir.display());
+    for spec in resolve_template_dirs(&app, server) {
+        match collect_template_keys(
+            &spec.dir,
+            &spec.dir,
+            spec.key_prefix.as_deref().unwrap_or(""),
+            &mut keys,
+        ) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!(
+                    "[debug_list_templates] cannot read {}: {e}",
+                    spec.dir.display()
+                );
+            }
         }
     }
     keys.sort();
+    keys.dedup();
     eprintln!(
-        "[debug_list_templates] {} template(s) in {}",
+        "[debug_list_templates] {} template(s) for server={server}",
         keys.len(),
-        dir.display()
     );
     keys
 }
@@ -393,12 +405,13 @@ pub fn debug_list_templates(
 fn collect_template_keys(
     root: &std::path::Path,
     dir: &std::path::Path,
+    key_prefix: &str,
     keys: &mut Vec<String>,
 ) -> std::io::Result<()> {
     for entry in fs::read_dir(dir)? {
         let path = entry?.path();
         if path.is_dir() {
-            collect_template_keys(root, &path, keys)?;
+            collect_template_keys(root, &path, key_prefix, keys)?;
             continue;
         }
         if path
@@ -415,6 +428,10 @@ fn collect_template_keys(
         let mut key = relative.with_extension("").to_string_lossy().into_owned();
         if std::path::MAIN_SEPARATOR != '/' {
             key = key.replace(std::path::MAIN_SEPARATOR, "/");
+        }
+        let prefix = key_prefix.trim_matches('/');
+        if !prefix.is_empty() {
+            key = format!("{prefix}/{key}");
         }
         keys.push(key);
     }

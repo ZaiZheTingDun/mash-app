@@ -2403,9 +2403,9 @@ pub(crate) fn spawn_configured_sidecar(
     app: &tauri::AppHandle,
     server: Server,
 ) -> Result<screen::SidecarClient, String> {
-    let templates_dir = resolve_templates_dir(app, server);
-    let cv_config = resolve_cv_config_path(app, server);
-    screen::SidecarClient::spawn(app, templates_dir.as_deref(), cv_config.as_deref(), server)
+    let template_dirs = resolve_template_dirs(app, server);
+    let cv_configs = resolve_cv_config_paths(app, server);
+    screen::SidecarClient::spawn(app, &template_dirs, &cv_configs, server)
 }
 
 fn take_or_spawn_sidecar(
@@ -3466,6 +3466,49 @@ pub(crate) fn resolve_templates_dir(app: &tauri::AppHandle, server: Server) -> O
     )
 }
 
+/// Resolve shared templates that are loaded before server-specific templates.
+pub(crate) fn resolve_shared_templates_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    {
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("servers")
+            .join("shared")
+            .join("templates");
+        if dev.is_dir() {
+            return Some(dev);
+        }
+    }
+
+    let base = app.path().resource_dir().ok()?;
+    Some(
+        base.join("resources")
+            .join("servers")
+            .join("shared")
+            .join("templates"),
+    )
+}
+
+pub(crate) fn resolve_template_dirs(
+    app: &tauri::AppHandle,
+    server: Server,
+) -> Vec<screen::TemplateLoadSpec> {
+    let mut dirs = Vec::new();
+    if let Some(shared) = resolve_shared_templates_dir(app) {
+        dirs.push(screen::TemplateLoadSpec {
+            dir: shared,
+            key_prefix: Some("shared".to_string()),
+        });
+    }
+    if let Some(server_dir) = resolve_templates_dir(app, server) {
+        dirs.push(screen::TemplateLoadSpec {
+            dir: server_dir,
+            key_prefix: None,
+        });
+    }
+    dirs
+}
+
 /// Resolve the bundled cv.json path for the given server.
 pub(crate) fn resolve_cv_config_path(app: &tauri::AppHandle, server: Server) -> Option<PathBuf> {
     #[cfg(debug_assertions)]
@@ -3487,6 +3530,39 @@ pub(crate) fn resolve_cv_config_path(app: &tauri::AppHandle, server: Server) -> 
             .join(server.dir_token())
             .join("cv.json"),
     )
+}
+
+pub(crate) fn resolve_shared_cv_config_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    {
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("servers")
+            .join("shared")
+            .join("cv.json");
+        if dev.is_file() {
+            return Some(dev);
+        }
+    }
+
+    let base = app.path().resource_dir().ok()?;
+    Some(
+        base.join("resources")
+            .join("servers")
+            .join("shared")
+            .join("cv.json"),
+    )
+}
+
+pub(crate) fn resolve_cv_config_paths(app: &tauri::AppHandle, server: Server) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Some(shared) = resolve_shared_cv_config_path(app) {
+        paths.push(shared);
+    }
+    if let Some(server_path) = resolve_cv_config_path(app, server) {
+        paths.push(server_path);
+    }
+    paths
 }
 
 /// Resolve the bundled scrcpy-server.jar path.
@@ -4863,6 +4939,15 @@ mod tests {
             .iter()
             .map(|item| item.as_str().unwrap().to_string())
             .collect();
+
+        assert!(
+            resources.contains("resources/servers/shared/cv.json"),
+            "missing Tauri bundle resource for shared cv.json"
+        );
+        assert!(
+            resources.contains("resources/servers/shared/templates/*"),
+            "missing Tauri bundle resource glob for shared templates"
+        );
 
         for server in ["jp", "cn"] {
             let templates_dir = manifest_dir

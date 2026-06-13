@@ -22,6 +22,7 @@ def _clear_state():
     from mash_cv import cv as _cv_module
     _cv_module._ce_template_cache.clear()
     _cv_module.static_template_keys.clear()
+    _cv_module.template_dirs.clear()
     _cv_module.templates_dir = None
     yield
     mash_cv.templates.clear()
@@ -30,6 +31,7 @@ def _clear_state():
     mash_cv._icon_color_sig.clear()
     _cv_module._ce_template_cache.clear()
     _cv_module.static_template_keys.clear()
+    _cv_module.template_dirs.clear()
     _cv_module.templates_dir = None
 
 
@@ -233,6 +235,75 @@ class TestDetectScreen:
         result = mash_cv._detect_screen(img)
         assert result["screen"] == "Unknown"
 
+    def test_required_templates_all_must_match(self):
+        """requiredTemplates are an AND condition for a single screen."""
+        first = _gradient_patch(20)
+        second = _gradient_patch(12)
+        second = (255 - second).copy()
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        img[10:30, 10:30] = cv2.merge([first, first, first])
+        img[80:92, 120:132] = cv2.merge([second, second, second])
+
+        mash_cv.templates["left_anchor"] = first.copy()
+        mash_cv.templates["refresh_button"] = second.copy()
+        mash_cv._set_config({
+            "screens": {
+                "SupportSelect": {
+                    "detect": {
+                        "requiredTemplates": [
+                            {
+                                "template": "left_anchor",
+                                "region": {"x": 0.0, "y": 0.0, "w": 0.5, "h": 0.5},
+                                "threshold": 0.8,
+                            },
+                            {
+                                "template": "refresh_button",
+                                "region": {"x": 0.5, "y": 0.3, "w": 0.4, "h": 0.4},
+                                "threshold": 0.8,
+                            },
+                        ]
+                    }
+                }
+            }
+        })
+
+        result = mash_cv._detect_screen(img)
+        assert result["screen"] == "SupportSelect"
+        assert result["score"] >= 0.8
+
+    def test_required_templates_skip_when_any_probe_misses(self):
+        """A partial requiredTemplates match must not identify the screen."""
+        patch = _gradient_patch(20)
+        missing = (255 - patch).copy()
+        img = _make_bgr_image(200, 200, bgr=(200, 200, 200))
+        img[10:30, 10:30] = cv2.merge([patch, patch, patch])
+
+        mash_cv.templates["left_anchor"] = patch.copy()
+        mash_cv.templates["refresh_button"] = missing
+        mash_cv._set_config({
+            "screens": {
+                "SupportSelect": {
+                    "detect": {
+                        "requiredTemplates": [
+                            {
+                                "template": "left_anchor",
+                                "region": {"x": 0.0, "y": 0.0, "w": 0.5, "h": 0.5},
+                                "threshold": 0.8,
+                            },
+                            {
+                                "template": "refresh_button",
+                                "region": {"x": 0.5, "y": 0.5, "w": 0.5, "h": 0.5},
+                                "threshold": 0.8,
+                            },
+                        ]
+                    }
+                }
+            }
+        })
+
+        result = mash_cv._detect_screen(img)
+        assert result["screen"] == "Unknown"
+
     def test_templates_list_falls_back_to_legacy_template_key(self):
         """``template`` (singular) keeps working when ``templates`` is
         absent — the new schema is purely additive."""
@@ -256,6 +327,77 @@ class TestDetectScreen:
         result = mash_cv._detect_screen(img)
         assert result["screen"] == "Legacy"
         assert result["score"] >= 0.8
+
+    def test_load_templates_can_append_with_key_prefix(self, tmp_path):
+        shared_dir = tmp_path / "shared"
+        server_dir = tmp_path / "server"
+        shared_dir.mkdir()
+        server_dir.mkdir()
+
+        shared_patch = _gradient_patch(20)
+        server_patch = (255 - shared_patch).copy()
+        _save_image(shared_patch, str(shared_dir / "screen_support_select.png"))
+        _save_image(server_patch, str(server_dir / "screen_support_select.png"))
+
+        result = mash_cv._load_templates(str(shared_dir), key_prefix="shared")
+        assert result["ok"] is True
+        assert "shared/screen_support_select" in mash_cv.templates
+
+        result = mash_cv._load_templates(str(server_dir), append=True)
+        assert result["ok"] is True
+        assert "screen_support_select" in mash_cv.templates
+        assert "shared/screen_support_select" in mash_cv.templates
+        assert not np.array_equal(
+            mash_cv.templates["screen_support_select"],
+            mash_cv.templates["shared/screen_support_select"],
+        )
+
+    def test_load_config_can_merge_shared_and_server_screens(self, tmp_path):
+        shared_path = tmp_path / "shared.json"
+        server_path = tmp_path / "server.json"
+        shared_path.write_text(
+            json.dumps({
+                "screens": {
+                    "SupportSelect": {
+                        "detect": {
+                            "requiredTemplates": [
+                                {
+                                    "template": "shared/screen_support_select",
+                                    "region": {"x": 0, "y": 0, "w": 0.045, "h": 0.233},
+                                    "threshold": 0.75,
+                                }
+                            ]
+                        }
+                    }
+                }
+            }),
+            encoding="utf-8",
+        )
+        server_path.write_text(
+            json.dumps({
+                "screens": {
+                    "SupportSelect": {
+                        "variants": {
+                            "main": {
+                                "elements": {
+                                    "support_scroll_end": {
+                                        "template": "support_scroll_end"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }),
+            encoding="utf-8",
+        )
+
+        assert mash_cv._load_config(str(shared_path))["ok"] is True
+        assert mash_cv._load_config(str(server_path), merge=True)["ok"] is True
+
+        support = mash_cv._get_config()["screens"]["SupportSelect"]
+        assert "requiredTemplates" in support["detect"]
+        assert "variants" in support
 
     def test_cn_friend_request_dark_template_is_bundled(self):
         """The dark-skin friend-request template must ship in the CN

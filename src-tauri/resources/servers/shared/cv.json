@@ -1,0 +1,30 @@
+{
+  "screens": {
+    "SupportSelect": {
+      "detect": {
+        "requiredTemplates": [
+          {
+            "template": "shared/screen_support_select",
+            "region": {
+              "x": 0,
+              "y": 0,
+              "w": 0.045,
+              "h": 0.233
+            },
+            "threshold": 0.75
+          },
+          {
+            "template": "shared/screen_support_refresh_button",
+            "region": {
+              "x": 0.711,
+              "y": 0.176,
+              "w": 0.03,
+              "h": 0.045
+            },
+            "threshold": 0.75
+          }
+        ]
+      }
+    }
+  }
+}
