@@ -153,7 +153,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         appendOperationLog("已取消保存截图");
       }
     } catch (err) {
-      appendOperationLog(`截图失败: ${String(err)}`, "error");
+      appendOperationLog(`截图失败: ${String(err)}`);
     }
   }, [appendOperationLog]);
 
