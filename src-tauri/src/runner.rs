@@ -1440,7 +1440,7 @@ fn class_tab_for(class_name: &str) -> Option<Point> {
         _ => None,
     }
 }
-const UNKNOWN_TIMEOUT: u32 = 10;
+const UNKNOWN_TIMEOUT: u32 = 50;
 /// Tolerated streak of `Unknown` screens while a long animation / loading
 /// transition is playing -- raised from the default so a stacked NP chain
 /// (which can run 30s+ of cut-ins before the battle screen reappears)
