@@ -44,6 +44,7 @@ export function SettingsSelfCheckPage({ active }: SettingsSelfCheckPageProps) {
         <Button
           type="button"
           variant="soft"
+          color="gray"
           onClick={runSelfCheck}
           disabled={loading}
         >

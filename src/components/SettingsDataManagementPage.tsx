@@ -167,15 +167,15 @@ export function SettingsDataManagementPage({
         <Flex align="start" justify="between" gap="4">
           <Box>
             <Text size="3" weight="bold">
-              导入配置
+              导入队伍
             </Text>
             <Text size="2" color="gray" className="settings-data-description">
-              从 .mashconfig.zip 或 .mashconfig.json 读取配置，确认后追加到当前软件。
+              选择要导入的队伍打包文件
             </Text>
           </Box>
-          <Button type="button" onClick={handlePickImportFile} disabled={importLoading}>
+          <Button type="button" variant="soft" color="gray" onClick={handlePickImportFile} disabled={importLoading}>
             {importLoading && !importDialogOpen ? <Spinner size="1" /> : null}
-            <Text size="2">导入配置</Text>
+            <Text size="2">导入队伍</Text>
           </Button>
         </Flex>
         {importError && (
@@ -194,14 +194,14 @@ export function SettingsDataManagementPage({
         <Flex align="start" justify="between" gap="4">
           <Box>
             <Text size="3" weight="bold">
-              导出配置
+              导出队伍
             </Text>
             <Text size="2" color="gray" className="settings-data-description">
-              选择要导出的配置，并打包到用户选择的文件夹内。
+              将选择的队伍导出到目标文件夹
             </Text>
           </Box>
-          <Button type="button" variant="soft" onClick={openExportDialog}>
-            <Text size="2">导出配置</Text>
+          <Button type="button" variant="soft" color="gray" onClick={openExportDialog}>
+            <Text size="2">导出队伍</Text>
           </Button>
         </Flex>
         {exportMessage && !exportDialogOpen && (
@@ -213,18 +213,18 @@ export function SettingsDataManagementPage({
 
       <Dialog.Root open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
         <Dialog.Content maxWidth="520px">
-          <Dialog.Title>导出配置</Dialog.Title>
+          <Dialog.Title>导出队伍</Dialog.Title>
           <Flex direction="column" gap="3">
             {exportLoading && exportableConfigs.length === 0 ? (
               <Flex align="center" gap="2">
                 <Spinner size="1" />
                 <Text size="2" color="gray">
-                  正在读取配置…
+                  正在读取队伍…
                 </Text>
               </Flex>
             ) : exportableConfigs.length === 0 ? (
               <Text size="2" color="gray">
-                当前没有可导出的配置。
+                当前没有可导出的队伍。
               </Text>
             ) : (
               <>
