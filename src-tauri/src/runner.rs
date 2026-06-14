@@ -1103,9 +1103,10 @@ const SUPPORT_REFRESH_DIALOG_ELEMENT: &str = "dialog_refresh_support";
 /// settings row, so it shares y with the class-tab strip.
 const SUPPORT_SKILL_PANEL_TOGGLE_BUTTON: Point = Point::new(0.658, 0.178);
 /// Settle time after tapping the panel toggle: long enough for the
-/// support-list rows to redraw their skill icons before the next OCR
-/// pass. Shorter than `SUPPORT_SCROLL_SETTLE` because no list reflow
-/// happens — only the per-row icon swap.
+/// support-list rows to redraw their skill icons and for OCR to see
+/// the new panel. This is intentionally longer than ordinary support
+/// row settles because the toggle can briefly show transitional/blank
+/// skill slots on real devices.
 const SUPPORT_SKILL_PANEL_TOGGLE_SETTLE: Duration = Duration::from_millis(800);
 /// Cap on how many times we'll tap the toggle for a single candidate
 /// row before giving up on it. The cycle is length 3 plus we may need
@@ -1317,6 +1318,38 @@ fn support_level_candidate_key(row: &SupportRowMatch) -> String {
     format!(
         "{}|{}|{:.3}",
         row.name_text, row.np_matched_name, row.row_region.y
+    )
+}
+
+fn format_optional_levels(levels: &[Option<u32>]) -> String {
+    if levels.is_empty() {
+        return "-".into();
+    }
+    levels
+        .iter()
+        .map(|level| format_actual_level(*level))
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn support_level_wait_diagnostic(
+    row: &SupportRowMatch,
+    previous_key: Option<&str>,
+    current_key: &str,
+) -> String {
+    let key_state = match previous_key {
+        None => "新候选".to_string(),
+        Some(prev) if prev == current_key => "同一候选".to_string(),
+        Some(prev) => format!("候选变化 {prev} -> {current_key}"),
+    };
+    format!(
+        "panel={} np={} owned=[{}] append=[{}] y={:.3} key={}",
+        row.skill_panel.as_deref().unwrap_or("-"),
+        format_actual_level(row.np_level),
+        format_optional_levels(&row.skill_levels),
+        format_optional_levels(&row.append_skill_levels),
+        row.row_region.y,
+        key_state,
     )
 }
 
@@ -2083,6 +2116,7 @@ impl Runner {
         // means the same gap (e.g. "持有技能 2 ≥ 10（实际 8）"); dedup
         // keeps the log readable.
         let mut level_filter_reasons: Vec<String> = Vec::new();
+        let mut skill_wait_diagnostic: Option<String> = None;
         let mut chosen_index: Option<usize> = None;
         for (index, row) in result.supports.iter().enumerate() {
             if let Some(reason) = self.support_row_ce_mismatch(row) {
@@ -2091,6 +2125,8 @@ impl Runner {
                 }
                 continue;
             }
+            let previous_candidate_key = self.support_level_progress.candidate_key.clone();
+            let current_candidate_key = support_level_candidate_key(row);
             match support_row_matches_level_requirements_with_progress(
                 self.server,
                 &self.config,
@@ -2102,7 +2138,25 @@ impl Runner {
                     break;
                 }
                 SupportLevelFilter::WaitingForPanel => {
-                    waiting_for_skill_panel = true;
+                    let diagnostic = support_level_wait_diagnostic(
+                        row,
+                        previous_candidate_key.as_deref(),
+                        &current_candidate_key,
+                    );
+                    if self.support_level_progress.panel_toggle_taps
+                        < SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS
+                    {
+                        waiting_for_skill_panel = true;
+                        skill_wait_diagnostic = Some(diagnostic);
+                        break;
+                    }
+                    self.emit(
+                        "SupportSelect",
+                        &format!(
+                            "切换面板已达上限，跳过当前助战，继续检查同屏候选…；识别 {diagnostic}"
+                        ),
+                    );
+                    self.support_level_progress = SupportLevelPanelProgress::default();
                 }
                 SupportLevelFilter::Fail(reason) => {
                     if !level_filter_reasons.contains(&reason) {
@@ -2156,33 +2210,27 @@ impl Runner {
             // We can't rely on the game auto-flipping panels (the user
             // may have the toggle locked on 固定持有 or 固定追加), so
             // actively tap "技能显示切换" until both panels have been
-            // observed. Cap at MAX_TOGGLE_TAPS so a row that genuinely
-            // can't be verified (e.g. icon rendering bug) eventually
-            // releases us back to the scroll branch.
-            if self.support_level_progress.panel_toggle_taps < SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS {
-                self.support_level_progress.panel_toggle_taps += 1;
-                self.emit(
-                    "SupportSelect",
-                    &format!(
-                        "找到从者，主动点击技能显示切换 ({}/{})",
-                        self.support_level_progress.panel_toggle_taps,
-                        SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS,
-                    ),
-                );
-                if !self.tap_at("SupportSelect", SUPPORT_SKILL_PANEL_TOGGLE_BUTTON) {
-                    return;
-                }
-                thread::sleep(SUPPORT_SKILL_PANEL_TOGGLE_SETTLE);
-                return;
-            }
+            // observed. The per-row cap is enforced inside the scan loop
+            // so an exhausted top candidate can fall through to another
+            // visible candidate before we scroll/refresh.
+            self.support_level_progress.panel_toggle_taps += 1;
             self.emit(
                 "SupportSelect",
-                "切换面板已达上限，跳过该助战，继续滚动列表…",
+                &format!(
+                    "找到从者，主动点击技能显示切换 ({}/{}){}",
+                    self.support_level_progress.panel_toggle_taps,
+                    SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS,
+                    skill_wait_diagnostic
+                        .as_deref()
+                        .map(|diag| format!("；识别 {diag}"))
+                        .unwrap_or_default(),
+                ),
             );
-            // Drop the per-candidate accumulator so the next visible
-            // candidate (after scroll/refresh) starts fresh, then fall
-            // through to the scroll/refresh branch below.
-            self.support_level_progress = SupportLevelPanelProgress::default();
+            if !self.tap_at("SupportSelect", SUPPORT_SKILL_PANEL_TOGGLE_BUTTON) {
+                return;
+            }
+            thread::sleep(SUPPORT_SKILL_PANEL_TOGGLE_SETTLE);
+            return;
         }
         if !level_filter_reasons.is_empty() {
             self.emit(
