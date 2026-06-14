@@ -27,7 +27,7 @@ const navItems: Array<{
     {
       group: "game",
       section: "dataManagement",
-      label: "数据管理",
+      label: "队伍管理",
       icon: <ArchiveIcon width={15} height={15} />,
       render: (_active, props) => (
         <SettingsDataManagementPage onProjectsImported={props.onProjectsImported} />
@@ -113,10 +113,12 @@ export function SettingsDialog({
           </Flex>
 
           <Flex direction="column" className="settings-content">
-            <Flex align="center" justify="between" className="settings-content-header">
-              <Text size="5" weight="bold">
-                {activeItem.label}
-              </Text>
+            <Flex align="center" className="settings-content-header">
+              <Flex align="center" className="settings-content-header-inner">
+                <Text size="5" weight="bold">
+                  {activeItem.label}
+                </Text>
+              </Flex>
               <Dialog.Close>
                 <IconButton type="button" variant="ghost" color="gray" aria-label="关闭设置">
                   <Cross1Icon width={15} height={15} />
@@ -125,7 +127,9 @@ export function SettingsDialog({
             </Flex>
 
             <Box className="settings-content-scroll">
-              {activeItem.render(open && activeItem.section === section, { onProjectsImported })}
+              <Box className="settings-content-body">
+                {activeItem.render(open && activeItem.section === section, { onProjectsImported })}
+              </Box>
             </Box>
           </Flex>
         </Flex>

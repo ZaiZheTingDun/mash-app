@@ -77,7 +77,7 @@ describe("SettingsDialog", () => {
 
     await user.click(screen.getByRole("button", { name: "资源管理" }));
 
-    expect(await screen.findByText("管理 CV 运行时和素材包下载")).toBeInTheDocument();
+    expect(await screen.findByText("CV 运行时")).toBeInTheDocument();
     expect(screen.getByText("素材包")).toBeInTheDocument();
   });
 
@@ -88,10 +88,14 @@ describe("SettingsDialog", () => {
     expect(screen.getByText("游戏")).toBeInTheDocument();
     expect(screen.getByText("应用")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "数据管理" }));
+    await user.click(screen.getByRole("button", { name: "队伍管理" }));
 
     expect(await screen.findByRole("button", { name: "导入配置" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导出配置" })).toBeInTheDocument();
+    expect(screen.getByText("从 .mashconfig.zip 或 .mashconfig.json 读取配置，确认后追加到当前软件。"))
+      .toBeInTheDocument();
+    expect(screen.getByText("选择要导出的配置，并打包到用户选择的文件夹内。"))
+      .toBeInTheDocument();
   });
 
   it("shows export configs and disables export after deselecting all", async () => {
@@ -123,6 +127,8 @@ describe("SettingsDialog", () => {
 
     expect(await screen.findByText("第一套")).toBeInTheDocument();
     expect(screen.getByText("第二套")).toBeInTheDocument();
+    expect(screen.queryByText(/普通指令/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/高级指令/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导出" })).toBeEnabled();
 
     await user.click(screen.getByRole("checkbox", { name: "全选" }));
@@ -130,7 +136,7 @@ describe("SettingsDialog", () => {
     expect(screen.getByRole("button", { name: "导出" })).toBeDisabled();
   });
 
-  it("previews import results and calls onProjectsImported after import", async () => {
+  it("previews import results and imports only selected configs", async () => {
     const user = userEvent.setup();
     const onProjectsImported = vi.fn();
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
@@ -146,6 +152,14 @@ describe("SettingsDialog", () => {
               advancedMode: false,
               battleSceneCount: 1,
               advancedBattleSceneCount: 0,
+            },
+            {
+              importKey: "1",
+              sourceName: "第二套",
+              targetName: "第二套（导入）",
+              advancedMode: true,
+              battleSceneCount: 0,
+              advancedBattleSceneCount: 2,
             },
           ],
           invalidItems: [{ label: "第 2 项", reason: "配置结构无法识别" }],
@@ -166,12 +180,22 @@ describe("SettingsDialog", () => {
     await user.click(screen.getByRole("button", { name: "导入配置" }));
 
     expect(await screen.findByText("第一套 → 第一套（导入）")).toBeInTheDocument();
+    expect(screen.getByText("第二套 → 第二套（导入）")).toBeInTheDocument();
+    expect(screen.queryByText(/普通指令/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/高级指令/)).not.toBeInTheDocument();
     expect(screen.getByText("配置结构无法识别")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("checkbox", { name: /第二套/ }));
     await user.click(screen.getByRole("button", { name: "导入" }));
 
     await waitFor(() => {
       expect(onProjectsImported).toHaveBeenCalledWith([importedProject]);
+    });
+    expect(await screen.findByText("已导入 1 个配置")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "导入" })).not.toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("import_configurations", {
+      filePath: "/tmp/config.mashconfig.json",
+      importKeys: ["0"],
     });
   });
 
