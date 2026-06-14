@@ -1468,9 +1468,16 @@ fn preview_config_import_from_path(
     })
 }
 
-fn import_configurations_from_path(root: &Path, path: &Path) -> Result<ConfigImportResult, String> {
+fn import_configurations_from_path(
+    root: &Path,
+    path: &Path,
+    import_keys: &[String],
+) -> Result<ConfigImportResult, String> {
     if !path.is_file() {
         return Err("选择的配置文件不存在".to_string());
+    }
+    if import_keys.is_empty() {
+        return Err("请选择需要导入的配置".to_string());
     }
     let bytes = read_config_package_bytes(path)?;
     let projects_path = root.join("projects.json");
@@ -1480,11 +1487,18 @@ fn import_configurations_from_path(root: &Path, path: &Path) -> Result<ConfigImp
         .map(|project| project.name.clone())
         .collect();
     let parsed = parse_config_import_from_bytes(&bytes, &existing_names)?;
-    if parsed.valid.is_empty() {
+    let selected: std::collections::HashSet<&str> =
+        import_keys.iter().map(String::as_str).collect();
+    let selected_entries: Vec<ParsedConfigEntry> = parsed
+        .valid
+        .into_iter()
+        .filter(|entry| selected.contains(entry.source_index.to_string().as_str()))
+        .collect();
+    if selected_entries.is_empty() {
         return Err("没有可导入的配置".to_string());
     }
     let mut imported_projects = Vec::new();
-    for parsed_entry in parsed.valid {
+    for parsed_entry in selected_entries {
         let mut project = parsed_entry.entry.project;
         project.id = uuid::Uuid::new_v4().to_string();
         project.name = parsed_entry.target_name;
@@ -1561,8 +1575,9 @@ fn preview_config_import(
 fn import_configurations(
     app: tauri::AppHandle,
     file_path: String,
+    import_keys: Vec<String>,
 ) -> Result<ConfigImportResult, String> {
-    import_configurations_from_path(&app_data_dir(&app), &PathBuf::from(file_path))
+    import_configurations_from_path(&app_data_dir(&app), &PathBuf::from(file_path), &import_keys)
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -5780,7 +5795,8 @@ mod tests {
         let zip_path = root.join("import.mashconfig.zip");
         write_config_package_zip(&package, &zip_path).unwrap();
 
-        let result = import_configurations_from_path(root, &zip_path).unwrap();
+        let result =
+            import_configurations_from_path(root, &zip_path, &[String::from("0")]).unwrap();
 
         assert_eq!(result.imported_projects.len(), 1);
         let imported = &result.imported_projects[0];
@@ -5796,6 +5812,45 @@ mod tests {
     }
 
     #[test]
+    fn config_import_only_imports_selected_keys() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_projects_to_path(&root.join("projects.json"), &[]).unwrap();
+        let package = ConfigExportPackage {
+            schema_version: 1,
+            exported_at: "test".into(),
+            app_version: None,
+            configs: vec![
+                ConfigExportEntry {
+                    project: test_project("source-1", "第一套", false),
+                    battle_scenes: vec![test_battle_scene("battle-1")],
+                    advanced_battle_scenes: Vec::new(),
+                },
+                ConfigExportEntry {
+                    project: test_project("source-2", "第二套", true),
+                    battle_scenes: Vec::new(),
+                    advanced_battle_scenes: vec![test_advanced_scene("advanced-1")],
+                },
+            ],
+        };
+        let zip_path = root.join("import.mashconfig.zip");
+        write_config_package_zip(&package, &zip_path).unwrap();
+
+        let result =
+            import_configurations_from_path(root, &zip_path, &[String::from("1")]).unwrap();
+
+        assert_eq!(result.imported_projects.len(), 1);
+        assert_eq!(result.imported_projects[0].name, "第二套（导入）");
+        let projects = read_projects_from_path(&root.join("projects.json"));
+        assert_eq!(projects.len(), 1);
+        assert_eq!(
+            load_advanced_battle_scenes_from_root(root, &result.imported_projects[0].id).len(),
+            1
+        );
+        assert!(load_battle_scenes_from_root(root, &result.imported_projects[0].id).is_empty());
+    }
+
+    #[test]
     fn config_import_rejects_malformed_json_and_missing_selection() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
@@ -5805,6 +5860,9 @@ mod tests {
             .unwrap_err()
             .contains("有效 JSON"));
         assert!(export_package_for_project_ids(root, &[])
+            .unwrap_err()
+            .contains("请选择"));
+        assert!(import_configurations_from_path(root, &bad_json, &[])
             .unwrap_err()
             .contains("请选择"));
         assert!(

@@ -13,17 +13,6 @@ interface SettingsDataManagementPageProps {
   onProjectsImported?: (projects: Project[]) => void;
 }
 
-function configModeLabel(config: { advancedMode: boolean }): string {
-  return config.advancedMode ? "高级指令" : "普通指令";
-}
-
-function sceneSummary(config: {
-  battleSceneCount: number;
-  advancedBattleSceneCount: number;
-}): string {
-  return `普通 ${config.battleSceneCount} 组，高级 ${config.advancedBattleSceneCount} 组`;
-}
-
 export function SettingsDataManagementPage({
   onProjectsImported,
 }: SettingsDataManagementPageProps) {
@@ -37,6 +26,7 @@ export function SettingsDataManagementPage({
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importFilePath, setImportFilePath] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<ConfigImportPreview | null>(null);
+  const [selectedImportKeys, setSelectedImportKeys] = useState<Set<string>>(() => new Set());
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState<string | null>(null);
@@ -44,6 +34,13 @@ export function SettingsDataManagementPage({
   const allSelected = useMemo(
     () => exportableConfigs.length > 0 && selectedIds.size === exportableConfigs.length,
     [exportableConfigs.length, selectedIds.size],
+  );
+  const allImportSelected = useMemo(
+    () =>
+      importPreview != null &&
+      importPreview.validConfigs.length > 0 &&
+      selectedImportKeys.size === importPreview.validConfigs.length,
+    [importPreview, selectedImportKeys.size],
   );
 
   const openExportDialog = useCallback(async () => {
@@ -91,6 +88,7 @@ export function SettingsDataManagementPage({
       } else {
         setExportMessage("已取消导出");
       }
+      setExportDialogOpen(false);
     } catch (err) {
       setExportError(String(err));
     } finally {
@@ -103,6 +101,7 @@ export function SettingsDataManagementPage({
     setImportError(null);
     setImportMessage(null);
     setImportPreview(null);
+    setSelectedImportKeys(new Set());
     setImportFilePath(null);
     try {
       const filePath = await invoke<string | null>("pick_config_import_file");
@@ -113,6 +112,7 @@ export function SettingsDataManagementPage({
       const preview = await invoke<ConfigImportPreview>("preview_config_import", { filePath });
       setImportFilePath(filePath);
       setImportPreview(preview);
+      setSelectedImportKeys(new Set(preview.validConfigs.map((config) => config.importKey)));
       setImportDialogOpen(true);
     } catch (err) {
       setImportError(String(err));
@@ -121,23 +121,45 @@ export function SettingsDataManagementPage({
     }
   }, []);
 
+  const toggleImportConfig = useCallback((importKey: string, checked: boolean) => {
+    setSelectedImportKeys((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(importKey);
+      } else {
+        next.delete(importKey);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleAllImportConfigs = useCallback((checked: boolean) => {
+    setSelectedImportKeys(
+      checked && importPreview
+        ? new Set(importPreview.validConfigs.map((config) => config.importKey))
+        : new Set(),
+    );
+  }, [importPreview]);
+
   const handleImport = useCallback(async () => {
-    if (!importFilePath || !importPreview || importPreview.validConfigs.length === 0) return;
+    if (!importFilePath || !importPreview || selectedImportKeys.size === 0) return;
     setImportLoading(true);
     setImportError(null);
     setImportMessage(null);
     try {
       const result = await invoke<ConfigImportResult>("import_configurations", {
         filePath: importFilePath,
+        importKeys: Array.from(selectedImportKeys),
       });
       setImportMessage(`已导入 ${result.importedProjects.length} 个配置`);
       onProjectsImported?.(result.importedProjects);
+      setImportDialogOpen(false);
     } catch (err) {
       setImportError(String(err));
     } finally {
       setImportLoading(false);
     }
-  }, [importFilePath, importPreview, onProjectsImported]);
+  }, [importFilePath, importPreview, onProjectsImported, selectedImportKeys]);
 
   return (
     <Flex direction="column" gap="4">
@@ -190,7 +212,7 @@ export function SettingsDataManagementPage({
       </Box>
 
       <Dialog.Root open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-        <Dialog.Content maxWidth="620px">
+        <Dialog.Content maxWidth="520px">
           <Dialog.Title>导出配置</Dialog.Title>
           <Flex direction="column" gap="3">
             {exportLoading && exportableConfigs.length === 0 ? (
@@ -228,9 +250,6 @@ export function SettingsDataManagementPage({
                         <Text size="2" weight="medium">
                           {config.name}
                         </Text>
-                        <Text size="1" color="gray" className="settings-data-meta">
-                          {configModeLabel(config)} · {sceneSummary(config)}
-                        </Text>
                       </Box>
                     </label>
                   ))}
@@ -240,11 +259,6 @@ export function SettingsDataManagementPage({
             {exportError && (
               <Text size="2" color="red">
                 导出失败：{exportError}
-              </Text>
-            )}
-            {exportMessage && (
-              <Text size="2" color="gray">
-                {exportMessage}
               </Text>
             )}
             <Flex justify="end" gap="2">
@@ -267,7 +281,7 @@ export function SettingsDataManagementPage({
       </Dialog.Root>
 
       <Dialog.Root open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <Dialog.Content maxWidth="640px">
+        <Dialog.Content maxWidth="520px">
           <Dialog.Title>导入配置</Dialog.Title>
           <Flex direction="column" gap="3">
             {importPreview && (
@@ -284,18 +298,34 @@ export function SettingsDataManagementPage({
                       没有可导入的配置。
                     </Text>
                   ) : (
-                    <Flex direction="column" gap="2" className="settings-data-list">
-                      {importPreview.validConfigs.map((config) => (
-                        <Box key={config.importKey} className="settings-data-preview-row">
-                          <Text size="2" weight="medium">
-                            {config.sourceName} → {config.targetName}
-                          </Text>
-                          <Text size="1" color="gray" className="settings-data-meta">
-                            {configModeLabel(config)} · {sceneSummary(config)}
-                          </Text>
-                        </Box>
-                      ))}
-                    </Flex>
+                    <>
+                      <label className="settings-data-check-row settings-data-check-row-all">
+                        <Checkbox
+                          checked={allImportSelected}
+                          onCheckedChange={(checked) => toggleAllImportConfigs(checked === true)}
+                        />
+                        <Text size="2" weight="medium">
+                          全选
+                        </Text>
+                      </label>
+                      <Flex direction="column" gap="2" className="settings-data-list">
+                        {importPreview.validConfigs.map((config) => (
+                          <label key={config.importKey} className="settings-data-check-row">
+                            <Checkbox
+                              checked={selectedImportKeys.has(config.importKey)}
+                              onCheckedChange={(checked) =>
+                                toggleImportConfig(config.importKey, checked === true)
+                              }
+                            />
+                            <Box>
+                              <Text size="2" weight="medium">
+                                {config.sourceName} → {config.targetName}
+                              </Text>
+                            </Box>
+                          </label>
+                        ))}
+                      </Flex>
+                    </>
                   )}
                 </Box>
                 {importPreview.invalidItems.length > 0 && (
@@ -324,11 +354,6 @@ export function SettingsDataManagementPage({
                 导入失败：{importError}
               </Text>
             )}
-            {importMessage && (
-              <Text size="2" color="gray">
-                {importMessage}
-              </Text>
-            )}
             <Flex justify="end" gap="2">
               <Dialog.Close>
                 <Button type="button" variant="soft" color="gray">
@@ -341,8 +366,7 @@ export function SettingsDataManagementPage({
                 disabled={
                   importLoading ||
                   !importPreview ||
-                  importPreview.validConfigs.length === 0 ||
-                  importMessage != null
+                  selectedImportKeys.size === 0
                 }
               >
                 {importLoading && importDialogOpen ? <Spinner size="1" /> : null}
