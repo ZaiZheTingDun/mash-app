@@ -9,6 +9,7 @@ import type {
 } from "../types/assets";
 
 interface AssetBundleButtonProps {
+  status?: AssetBundleStatus | null;
   onImported?: () => void;
   onBusyChange?: (busy: boolean) => void;
 }
@@ -104,16 +105,23 @@ function progressPercent(progress: AssetDownloadProgress | null): number | null 
   return Math.min(100, (progress.downloadedBytes / progress.totalBytes) * 100);
 }
 
-export function AssetBundleButton({ onImported, onBusyChange }: AssetBundleButtonProps) {
-  const [bundleStatus, setBundleStatus] = useState<AssetBundleStatus | null>(null);
+export function AssetBundleButton({
+  status: controlledStatus,
+  onImported,
+  onBusyChange,
+}: AssetBundleButtonProps) {
+  const [localBundleStatus, setLocalBundleStatus] = useState<AssetBundleStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<AssetDownloadProgress | null>(null);
+  const bundleStatus = controlledStatus !== undefined ? controlledStatus : localBundleStatus;
+  const usesControlledStatus = controlledStatus !== undefined;
 
   const refreshStatus = useCallback(async () => {
+    if (usesControlledStatus) return;
     const next = await invoke<AssetBundleStatus>("get_asset_bundle_status");
-    setBundleStatus(next);
-  }, []);
+    setLocalBundleStatus(next);
+  }, [usesControlledStatus]);
 
   useEffect(() => {
     refreshStatus().catch((err) => setStatus(`检查失败：${String(err)}`));

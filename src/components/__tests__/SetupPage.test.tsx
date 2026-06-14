@@ -88,7 +88,7 @@ describe("SetupPage", () => {
 
     renderWithTheme(<SetupPage onReady={onReady} />);
 
-    expect(await screen.findByText("初始化 mash")).toBeInTheDocument();
+    expect(await screen.findByText("资源管理")).toBeInTheDocument();
     expect(screen.getByText("需要安装 runtime base 和 code 包")).toBeInTheDocument();
     expect(
       screen.getByText("需要导入包含 assets/servants 和 assets/ces 的素材包")
@@ -123,6 +123,22 @@ describe("SetupPage", () => {
     expect(await screen.findByText("资源管理")).toBeInTheDocument();
     expect(screen.getByText("已安装运行时 base 和 code 包")).toBeInTheDocument();
     expect(onReady).not.toHaveBeenCalled();
+  });
+
+  it("checks each resource status once when management mode mounts", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") return runtimeStatus(true);
+      if (cmd === "get_asset_bundle_status") return assetStatus(true);
+      return null;
+    });
+
+    renderWithTheme(<SetupPage mode="manage" />);
+
+    await screen.findByText("已安装运行时 base 和 code 包");
+    expect(vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "get_runtime_status"))
+      .toHaveLength(1);
+    expect(vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "get_asset_bundle_status"))
+      .toHaveLength(1);
   });
 
   it("calls onBack from the management cancel button", async () => {

@@ -9,6 +9,7 @@ import type {
 } from "../types/runtime";
 
 interface RuntimeBundleButtonProps {
+  status?: RuntimeStatus | null;
   onInstalled?: () => void;
   onBusyChange?: (busy: boolean) => void;
 }
@@ -108,16 +109,23 @@ function progressPercent(progress: RuntimeDownloadProgress | null): number | nul
   return Math.min(100, (progress.downloadedBytes / progress.totalBytes) * 100);
 }
 
-export function RuntimeBundleButton({ onInstalled, onBusyChange }: RuntimeBundleButtonProps) {
-  const [status, setStatus] = useState<RuntimeStatus | null>(null);
+export function RuntimeBundleButton({
+  status: controlledStatus,
+  onInstalled,
+  onBusyChange,
+}: RuntimeBundleButtonProps) {
+  const [localStatus, setLocalStatus] = useState<RuntimeStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<RuntimeDownloadProgress | null>(null);
+  const status = controlledStatus !== undefined ? controlledStatus : localStatus;
+  const usesControlledStatus = controlledStatus !== undefined;
 
   const refreshStatus = useCallback(async () => {
+    if (usesControlledStatus) return;
     const next = await invoke<RuntimeStatus>("get_runtime_status");
-    setStatus(next);
-  }, []);
+    setLocalStatus(next);
+  }, [usesControlledStatus]);
 
   useEffect(() => {
     refreshStatus().catch((err) => setMessage(`检查失败：${String(err)}`));
