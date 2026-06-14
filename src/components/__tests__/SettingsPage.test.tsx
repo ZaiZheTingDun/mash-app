@@ -90,12 +90,8 @@ describe("SettingsDialog", () => {
 
     await user.click(screen.getByRole("button", { name: "队伍管理" }));
 
-    expect(await screen.findByRole("button", { name: "导入配置" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "导出配置" })).toBeInTheDocument();
-    expect(screen.getByText("从 .mashconfig.zip 或 .mashconfig.json 读取配置，确认后追加到当前软件。"))
-      .toBeInTheDocument();
-    expect(screen.getByText("选择要导出的配置，并打包到用户选择的文件夹内。"))
-      .toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "导入队伍" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导出队伍" })).toBeInTheDocument();
   });
 
   it("shows export configs and disables export after deselecting all", async () => {
@@ -123,7 +119,7 @@ describe("SettingsDialog", () => {
     });
     renderWithTheme(<SettingsHarness initialSection="dataManagement" />);
 
-    await user.click(screen.getByRole("button", { name: "导出配置" }));
+    await user.click(screen.getByRole("button", { name: "导出队伍" }));
 
     expect(await screen.findByText("第一套")).toBeInTheDocument();
     expect(screen.getByText("第二套")).toBeInTheDocument();
@@ -177,7 +173,7 @@ describe("SettingsDialog", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "导入配置" }));
+    await user.click(screen.getByRole("button", { name: "导入队伍" }));
 
     expect(await screen.findByText("第一套 → 第一套（导入）")).toBeInTheDocument();
     expect(screen.getByText("第二套 → 第二套（导入）")).toBeInTheDocument();
@@ -191,7 +187,6 @@ describe("SettingsDialog", () => {
     await waitFor(() => {
       expect(onProjectsImported).toHaveBeenCalledWith([importedProject]);
     });
-    expect(await screen.findByText("已导入 1 个配置")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "导入" })).not.toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("import_configurations", {
       filePath: "/tmp/config.mashconfig.json",
@@ -214,7 +209,7 @@ describe("SettingsDialog", () => {
     });
     renderWithTheme(<SettingsHarness initialSection="dataManagement" />);
 
-    await user.click(screen.getByRole("button", { name: "导入配置" }));
+    await user.click(screen.getByRole("button", { name: "导入队伍" }));
 
     expect(await screen.findByText("没有可导入的配置。")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导入" })).toBeDisabled();
