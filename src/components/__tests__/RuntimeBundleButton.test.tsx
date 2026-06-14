@@ -48,7 +48,7 @@ describe("RuntimeBundleButton", () => {
     expect(screen.getByText("base：https://cdn.example.com/runtime.zip")).toBeInTheDocument();
     expect(screen.getByText("code：https://cdn.example.com/code.zip")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始下载" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "手动上传" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "手动上传" })).not.toBeInTheDocument();
   });
 
   it("shows installed runtime state", async () => {
@@ -193,75 +193,5 @@ describe("RuntimeBundleButton", () => {
     });
 
     expect(await screen.findByRole("progressbar")).toHaveAttribute("value", "100");
-  });
-
-  it("imports a selected runtime zip from manual upload and refreshes status", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const onInstalled = vi.fn();
-    let installed = false;
-    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
-      if (cmd === "get_runtime_status") {
-        return runtimeStatus({
-          installedRuntimeVersion: installed ? "2026.05.08-runtime1" : null,
-          runtimeInstalled: installed,
-          installedCodeVersion: installed ? "2026.05.08-code1" : null,
-          codeInstalled: installed,
-          installed,
-        });
-      }
-      if (cmd === "pick_runtime_bundle") {
-        return "/tmp/mash-cv.zip";
-      }
-      if (cmd === "import_runtime_bundle") {
-        expect(args).toEqual({ zipPath: "/tmp/mash-cv.zip" });
-        installed = true;
-        return {
-          installedKind: "runtime",
-          installedVersion: "2026.05.08-runtime1",
-          platform: "darwin-aarch64",
-          installDir: "/tmp/runtime",
-          executablePath: "/tmp/runtime/mash-cv/mash-cv",
-          codePath: null,
-        };
-      }
-      return null;
-    });
-    const user = userEvent.setup();
-
-    renderWithTheme(<RuntimeBundleButton onInstalled={onInstalled} />);
-
-    await user.click(await screen.findByRole("button", { name: "手动上传" }));
-
-    expect(confirmSpy).toHaveBeenCalled();
-    expect(await screen.findByText("安装完成：base 2026.05.08-runtime1")).toBeInTheDocument();
-    expect(
-      screen.getByText("CV 运行时已安装：base 2026.05.08-runtime1 / code 2026.05.08-code1")
-    ).toBeInTheDocument();
-    expect(onInstalled).toHaveBeenCalledTimes(1);
-    confirmSpy.mockRestore();
-  });
-
-  it("shows import errors", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-      if (cmd === "get_runtime_status") {
-        return runtimeStatus();
-      }
-      if (cmd === "pick_runtime_bundle") {
-        return "/tmp/mash-cv.zip";
-      }
-      if (cmd === "import_runtime_bundle") {
-        throw new Error("sha256 不匹配");
-      }
-      return null;
-    });
-    const user = userEvent.setup();
-
-    renderWithTheme(<RuntimeBundleButton />);
-
-    await user.click(await screen.findByRole("button", { name: "手动上传" }));
-
-    expect(await screen.findByText("安装失败：Error: sha256 不匹配")).toBeInTheDocument();
-    confirmSpy.mockRestore();
   });
 });

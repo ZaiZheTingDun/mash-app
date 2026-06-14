@@ -179,7 +179,7 @@ describe("App active project restore", () => {
       resourceHandler?.();
     });
 
-    expect(await screen.findByText("管理 CV 运行时和素材包下载")).toBeInTheDocument();
+    expect(await screen.findByText("CV 运行时")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "关闭设置" }));
 
     expect(invoke).toHaveBeenCalledWith("cancel_resource_downloads");
@@ -204,7 +204,7 @@ describe("App active project restore", () => {
 
     await user.click(screen.getByRole("button", { name: "资源管理" }));
 
-    expect(await screen.findByText("管理 CV 运行时和素材包下载")).toBeInTheDocument();
+    expect(await screen.findByText("CV 运行时")).toBeInTheDocument();
     expect(screen.getByText("CV 运行时")).toBeInTheDocument();
   });
 

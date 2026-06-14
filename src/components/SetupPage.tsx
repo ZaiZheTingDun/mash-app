@@ -92,14 +92,6 @@ export function ResourceManagementPanel({
           )}
         </Flex>
       )}
-      <Box>
-        <Text size="2" color="gray" className="setup-subtitle">
-          {mode === "manage"
-            ? "管理 CV 运行时和素材包下载"
-            : "安装 CV 运行时并下载素材包后即可进入应用"}
-        </Text>
-      </Box>
-
       {checking && (
         <Flex align="center" gap="2">
           <Spinner size="1" />
@@ -140,7 +132,7 @@ export function ResourceManagementPanel({
               } 个文件`
             : assetStatus?.updateAvailable && assetStatus.targetVersion != null
               ? `需要更新素材包 v${assetStatus.currentVersion} → v${assetStatus.targetVersion}`
-              : "需要导入包含 assets/servants 和 assets/ces 的素材包"}
+              : "需要下载包含 assets/servants 和 assets/ces 的素材包"}
         </Text>
         <AssetBundleButton
           status={assetStatus}

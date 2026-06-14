@@ -91,8 +91,10 @@ describe("SetupPage", () => {
     expect(await screen.findByText("资源管理")).toBeInTheDocument();
     expect(screen.getByText("需要安装 runtime base 和 code 包")).toBeInTheDocument();
     expect(
-      screen.getByText("需要导入包含 assets/servants 和 assets/ces 的素材包")
+      screen.getByText("需要下载包含 assets/servants 和 assets/ces 的素材包")
     ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "手动上传" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "手动导入" })).not.toBeInTheDocument();
     expect(onReady).not.toHaveBeenCalled();
   });
 
@@ -122,6 +124,8 @@ describe("SetupPage", () => {
 
     expect(await screen.findByText("资源管理")).toBeInTheDocument();
     expect(screen.getByText("已安装运行时 base 和 code 包")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "手动上传" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "手动导入" })).not.toBeInTheDocument();
     expect(onReady).not.toHaveBeenCalled();
   });
 

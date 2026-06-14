@@ -4,7 +4,6 @@ import { invoke, listen } from "../tauri";
 import type {
   RuntimeDownloadInstallResult,
   RuntimeDownloadProgress,
-  RuntimeInstallResult,
   RuntimeStatus,
 } from "../types/runtime";
 
@@ -12,12 +11,6 @@ interface RuntimeBundleButtonProps {
   status?: RuntimeStatus | null;
   onInstalled?: () => void;
   onBusyChange?: (busy: boolean) => void;
-}
-
-function basename(path: string): string {
-  const normalized = path.split("\\").join("/");
-  const parts = normalized.split("/");
-  return parts[parts.length - 1] || path;
 }
 
 function statusText(status: RuntimeStatus | null): string {
@@ -181,38 +174,6 @@ export function RuntimeBundleButton({
     }
   }, [onInstalled, refreshStatus]);
 
-  const handleImport = useCallback(async () => {
-    setBusy(true);
-    setMessage(null);
-    setDownloadProgress(null);
-    try {
-      const zipPath = await invoke<string | null>("pick_runtime_bundle");
-      if (!zipPath) {
-        return;
-      }
-
-      const confirmed = window.confirm(
-        `确认安装 CV 运行时？\n\n${basename(zipPath)}\n\n现有同版本 runtime 将被替换。`
-      );
-      if (!confirmed) {
-        return;
-      }
-
-      const result = await invoke<RuntimeInstallResult>("import_runtime_bundle", {
-        zipPath,
-      });
-      setMessage(
-        `安装完成：${result.installedKind === "runtime" ? "base" : "code"} ${result.installedVersion}`
-      );
-      await refreshStatus();
-      onInstalled?.();
-    } catch (err) {
-      setMessage(`安装失败：${String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  }, [onInstalled, refreshStatus]);
-
   const needsInstall = !status?.installed;
   const progressValue = progressPercent(downloadProgress);
 
@@ -231,14 +192,6 @@ export function RuntimeBundleButton({
             {busy ? "下载中…" : needsInstall ? "开始下载" : "重新下载"}
           </Text>
         </Button>
-        <button
-          type="button"
-          className="link-button runtime-manual-upload"
-          disabled={busy}
-          onClick={handleImport}
-        >
-          手动上传
-        </button>
       </div>
       <Text size="1" color={needsInstall ? "amber" : "gray"}>
         {statusText(status)}

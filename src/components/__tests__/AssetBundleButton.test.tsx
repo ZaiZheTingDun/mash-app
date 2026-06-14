@@ -31,72 +31,16 @@ function assetStatus(overrides: Partial<AssetBundleStatus> = {}): AssetBundleSta
 }
 
 describe("AssetBundleButton", () => {
-  it("does not import when the picker is cancelled", async () => {
+  it("does not show manual import controls", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_asset_bundle_status") return assetStatus();
-      if (cmd === "pick_asset_bundle") return null;
       return null;
     });
-    const user = userEvent.setup();
 
     renderWithTheme(<AssetBundleButton onImported={vi.fn()} />);
 
-    await user.click(await screen.findByRole("button", { name: "手动导入" }));
-
-    expect(invoke).toHaveBeenCalledWith("pick_asset_bundle");
-    expect(invoke).not.toHaveBeenCalledWith("import_asset_bundle", expect.anything());
-  });
-
-  it("imports the selected zip after confirmation", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const onImported = vi.fn();
-    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
-      if (cmd === "get_asset_bundle_status") return assetStatus();
-      if (cmd === "pick_asset_bundle") {
-        return "/tmp/mash-assets.zip";
-      }
-      if (cmd === "import_asset_bundle") {
-        expect(args).toEqual({ zipPath: "/tmp/mash-assets.zip" });
-        return {
-          importedServants: true,
-          importedCraftEssences: true,
-          servantFiles: 12,
-          craftEssenceFiles: 8,
-          installDir: "/tmp/assets",
-        };
-      }
-      return null;
-    });
-    const user = userEvent.setup();
-
-    renderWithTheme(<AssetBundleButton onImported={onImported} />);
-
-    await user.click(await screen.findByRole("button", { name: "手动导入" }));
-
-    expect(confirmSpy).toHaveBeenCalled();
-    expect(await screen.findByText("导入完成：从者 12 个文件，礼装 8 个文件")).toBeInTheDocument();
-    expect(onImported).toHaveBeenCalledTimes(1);
-    confirmSpy.mockRestore();
-  });
-
-  it("does not import when the confirmation is rejected", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-      if (cmd === "get_asset_bundle_status") return assetStatus();
-      if (cmd === "pick_asset_bundle") {
-        return "/tmp/mash-assets.zip";
-      }
-      return null;
-    });
-    const user = userEvent.setup();
-
-    renderWithTheme(<AssetBundleButton onImported={vi.fn()} />);
-
-    await user.click(await screen.findByRole("button", { name: "手动导入" }));
-
-    expect(confirmSpy).toHaveBeenCalled();
-    expect(invoke).not.toHaveBeenCalledWith("import_asset_bundle", expect.anything());
-    confirmSpy.mockRestore();
+    expect(await screen.findByRole("button", { name: "在线更新" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "手动导入" })).not.toBeInTheDocument();
   });
 
   it("shows local manifest target version and downloads remote asset bundles", async () => {

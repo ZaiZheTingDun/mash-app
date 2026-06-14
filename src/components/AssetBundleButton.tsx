@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, Spinner, Text } from "@radix-ui/themes";
 import { invoke, listen } from "../tauri";
 import type {
-  AssetBundleImportResult,
   AssetBundleStatus,
   AssetDownloadInstallResult,
   AssetDownloadProgress,
@@ -12,12 +11,6 @@ interface AssetBundleButtonProps {
   status?: AssetBundleStatus | null;
   onImported?: () => void;
   onBusyChange?: (busy: boolean) => void;
-}
-
-function basename(path: string): string {
-  const normalized = path.split("\\").join("/");
-  const parts = normalized.split("/");
-  return parts[parts.length - 1] || path;
 }
 
 function formatBytes(value: number): string {
@@ -53,7 +46,7 @@ function statusText(status: AssetBundleStatus | null): string {
     return `素材包需要更新：${versionLabel(status.currentVersion)} → v${status.targetVersion}${size}`;
   }
   if (!status.installed) {
-    return "素材包未安装：需要导入或下载包含 servants / ces 的资源包";
+    return "素材包未安装：需要下载包含 servants / ces 的资源包";
   }
   if (status.updateCheckError) {
     return `素材包已安装：${versionLabel(status.currentVersion)}（检查更新失败）`;
@@ -189,47 +182,6 @@ export function AssetBundleButton({
     }
   }, [bundleStatus, onImported, refreshStatus]);
 
-  const handleImport = useCallback(async () => {
-    setBusy(true);
-    setStatus(null);
-    setDownloadProgress(null);
-    try {
-      const zipPath = await invoke<string | null>("pick_asset_bundle");
-      if (!zipPath) {
-        return;
-      }
-
-      const confirmed = window.confirm(
-        `确认导入素材包？\n\n${basename(zipPath)}\n\n现有同名素材将被替换。`
-      );
-      if (!confirmed) {
-        return;
-      }
-
-      const result = await invoke<AssetBundleImportResult>("import_asset_bundle", {
-        zipPath,
-      });
-      const parts: string[] = [];
-      if (result.importedServants) {
-        parts.push(`从者 ${result.servantFiles} 个文件`);
-      }
-      if (result.importedCraftEssences) {
-        parts.push(`礼装 ${result.craftEssenceFiles} 个文件`);
-      }
-      setStatus(
-        parts.length > 0
-          ? `导入完成：${parts.join("，")}`
-          : "导入完成，但压缩包中没有可用素材"
-      );
-      await refreshStatus();
-      onImported?.();
-    } catch (err) {
-      setStatus(`导入失败：${String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  }, [onImported, refreshStatus]);
-
   const canDownload = Boolean(bundleStatus?.updateAvailable || !bundleStatus?.installed);
   const progressValue = progressPercent(downloadProgress);
 
@@ -248,14 +200,6 @@ export function AssetBundleButton({
             {busy ? "下载中…" : canDownload ? "在线更新" : "重新下载"}
           </Text>
         </Button>
-        <button
-          type="button"
-          className="link-button runtime-manual-upload"
-          disabled={busy}
-          onClick={handleImport}
-        >
-          手动导入
-        </button>
       </div>
       <Text size="1" color={bundleStatus?.updateAvailable || !bundleStatus?.installed ? "amber" : "gray"}>
         {statusText(bundleStatus)}
