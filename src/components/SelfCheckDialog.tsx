@@ -1,4 +1,4 @@
-import { Badge, Box, Button, Dialog, Flex, Grid, Spinner, Text } from "@radix-ui/themes";
+import { Badge, Box, Button, DataList, Dialog, Flex, Spinner, Text } from "@radix-ui/themes";
 import type { SelfCheckAssetGroup, SelfCheckStatus } from "../types/selfCheck";
 
 interface SelfCheckDialogProps {
@@ -31,30 +31,117 @@ function installBadge(installed: boolean): JSX.Element {
 
 function AssetGroupRow({
   label,
+  classifier,
   value,
 }: {
   label: string;
+  classifier: string;
   value: SelfCheckAssetGroup;
 }) {
   return (
-    <Grid columns="120px 1fr 1fr 1fr" gap="3" align="center" className="self-check-row">
-      <Text size="2" weight="medium">
-        {label}
+    <DataList.Item align="center">
+      <DataList.Label minWidth="120px">{label}</DataList.Label>
+      <DataList.Value>
+        <Flex align="center" justify="between" gap="5" className="self-check-asset-value">
+          <Text size="2">{value.entries} {classifier}</Text>
+          <Flex align="center" gap="5" wrap="wrap">
+            <Flex align="center" gap="2">
+              <Text size="2" color="gray">
+                图片
+              </Text>
+              {healthBadge(value.hasImage)}
+            </Flex>
+            <Flex align="center" gap="2">
+              <Text size="2" color="gray">
+                JSON
+              </Text>
+              {healthBadge(value.hasJson)}
+            </Flex>
+          </Flex>
+        </Flex>
+      </DataList.Value>
+    </DataList.Item>
+  );
+}
+
+export function SelfCheckContent({
+  loading,
+  status,
+  error,
+}: {
+  loading: boolean;
+  status: SelfCheckStatus | null;
+  error: string | null;
+}) {
+  if (loading) {
+    return (
+      <Flex align="center" gap="2">
+        <Spinner size="1" />
+        <Text size="2">正在自检...</Text>
+      </Flex>
+    );
+  }
+
+  if (error) {
+    return (
+      <Text size="2" color="red">
+        自检失败：{error}
       </Text>
-      <Text size="2">{value.entries} 个</Text>
-      <Flex align="center" gap="2">
-        <Text size="2" color="gray">
-          图片
+    );
+  }
+
+  if (!status) {
+    return null;
+  }
+
+  return (
+    <>
+      <Box>
+        <Text as="div" size="2" weight="bold" mb="2">
+          版本信息
         </Text>
-        {healthBadge(value.hasImage)}
-      </Flex>
-      <Flex align="center" gap="2">
-        <Text size="2" color="gray">
-          JSON
+        <DataList.Root>
+          <DataList.Item>
+            <DataList.Label minWidth="120px">软件版本</DataList.Label>
+            <DataList.Value>{status.appVersion}</DataList.Value>
+          </DataList.Item>
+          <DataList.Item align="center">
+            <DataList.Label minWidth="120px">CV runtime</DataList.Label>
+            <DataList.Value>
+              <Flex align="center" justify="between" gap="4" className="self-check-data-value">
+                <Text size="2">{status.cvRuntimeVersion}</Text>
+                {installBadge(status.cvRuntimeInstalled)}
+              </Flex>
+            </DataList.Value>
+          </DataList.Item>
+          <DataList.Item align="center">
+            <DataList.Label minWidth="120px">CV code</DataList.Label>
+            <DataList.Value>
+              <Flex align="center" justify="between" gap="4" className="self-check-data-value">
+                <Text size="2">{status.cvCodeVersion}</Text>
+                {installBadge(status.cvCodeInstalled)}
+              </Flex>
+            </DataList.Value>
+          </DataList.Item>
+          <DataList.Item>
+            <DataList.Label minWidth="120px">资源包版本</DataList.Label>
+            <DataList.Value>
+              {versionLabel(status.assetVersion)} / 目标 v{status.appAssetsVersion}
+            </DataList.Value>
+          </DataList.Item>
+        </DataList.Root>
+      </Box>
+
+      <Box>
+        <Text as="div" size="2" weight="bold" mb="2">
+          资源包
         </Text>
-        {healthBadge(value.hasJson)}
-      </Flex>
-    </Grid>
+        <DataList.Root>
+          <AssetGroupRow label="从者" classifier="骑" value={status.servants} />
+          <AssetGroupRow label="概念礼装" classifier="张" value={status.ces} />
+        </DataList.Root>
+      </Box>
+    </>
   );
 }
 
@@ -70,58 +157,7 @@ export function SelfCheckDialog({
       <Dialog.Content maxWidth="560px">
         <Dialog.Title size="4">自检结果</Dialog.Title>
         <Flex direction="column" gap="4">
-          {loading ? (
-            <Flex align="center" gap="2">
-              <Spinner size="1" />
-              <Text size="2">正在自检...</Text>
-            </Flex>
-          ) : error ? (
-            <Text size="2" color="red">
-              自检失败：{error}
-            </Text>
-          ) : status ? (
-            <>
-              <Box>
-                <Text as="div" size="2" weight="bold" mb="2">
-                  版本信息
-                </Text>
-                <Grid columns="140px 1fr auto" gap="3" align="center">
-                  <Text size="2" color="gray">
-                    软件版本
-                  </Text>
-                  <Text size="2">{status.appVersion}</Text>
-                  <Box />
-                  <Text size="2" color="gray">
-                    CV runtime
-                  </Text>
-                  <Text size="2">{status.cvRuntimeVersion}</Text>
-                  {installBadge(status.cvRuntimeInstalled)}
-                  <Text size="2" color="gray">
-                    CV code
-                  </Text>
-                  <Text size="2">{status.cvCodeVersion}</Text>
-                  {installBadge(status.cvCodeInstalled)}
-                  <Text size="2" color="gray">
-                    资源包版本
-                  </Text>
-                  <Text size="2">
-                    {versionLabel(status.assetVersion)} / 目标 v{status.appAssetsVersion}
-                  </Text>
-                  <Box />
-                </Grid>
-              </Box>
-
-              <Box>
-                <Text as="div" size="2" weight="bold" mb="2">
-                  资源包
-                </Text>
-                <Flex direction="column" gap="2">
-                  <AssetGroupRow label="servants" value={status.servants} />
-                  <AssetGroupRow label="ces" value={status.ces} />
-                </Flex>
-              </Box>
-            </>
-          ) : null}
+          <SelfCheckContent loading={loading} status={status} error={error} />
 
           <Flex justify="end">
             <Dialog.Close>
