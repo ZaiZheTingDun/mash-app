@@ -250,6 +250,23 @@ describe("StatusBar", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it("calls the settings handler from the left status bar action", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      return null;
+    });
+    const onOpenSettings = vi.fn();
+    const user = userEvent.setup();
+
+    renderWithTheme(<StatusBar onOpenSettings={onOpenSettings} />);
+
+    await user.click(screen.getByRole("button", { name: "设置" }));
+
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
   it("hides debug-level entries by default and reveals them via the toggle", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";

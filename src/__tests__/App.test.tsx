@@ -123,8 +123,8 @@ describe("App active project restore", () => {
     expect(screen.getByText("0.5.4")).toBeInTheDocument();
     expect(screen.getByText("2026.05.08-runtime1")).toBeInTheDocument();
     expect(screen.getByText("v2 / 目标 v2")).toBeInTheDocument();
-    expect(screen.getByText("3 个")).toBeInTheDocument();
-    expect(screen.getByText("5 个")).toBeInTheDocument();
+    expect(await screen.findByText("3 骑")).toBeInTheDocument();
+    expect(await screen.findByText("5 张")).toBeInTheDocument();
   });
 
   it("shows self-check failures in the dialog", async () => {
@@ -179,11 +179,33 @@ describe("App active project restore", () => {
       resourceHandler?.();
     });
 
-    expect(await screen.findByText("资源管理")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "取消" }));
+    expect(await screen.findByText("管理 CV 运行时和素材包下载")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "关闭设置" }));
 
     expect(invoke).toHaveBeenCalledWith("cancel_resource_downloads");
     expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+  });
+
+  it("opens the settings dialog from the status bar and switches sections", async () => {
+    installAppMock("project-1");
+    const user = userEvent.setup();
+
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "设置" }));
+
+    expect(await screen.findByRole("button", { name: "重新自检" })).toBeInTheDocument();
+    expect(await screen.findByText("0.5.4")).toBeInTheDocument();
+    expect(screen.getByText("～ 第一套 ～")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "资源管理" }));
+
+    expect(await screen.findByText("管理 CV 运行时和素材包下载")).toBeInTheDocument();
+    expect(screen.getByText("CV 运行时")).toBeInTheDocument();
   });
 
   it("saves an adb screenshot from the menu event", async () => {

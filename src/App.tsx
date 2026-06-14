@@ -16,6 +16,7 @@ import { DebugPage } from "./components/DebugPage";
 import { StatusBar } from "./components/StatusBar";
 import { ProjectBar } from "./components/ProjectBar";
 import { SetupPage } from "./components/SetupPage";
+import { SettingsDialog, type SettingsSection } from "./components/SettingsPage";
 import { SelfCheckDialog } from "./components/SelfCheckDialog";
 import { createInitialProjectSlots } from "./components/projectSlots";
 import { featureToggles } from "./featureToggles";
@@ -38,7 +39,7 @@ import "./App.css";
 // triggered by the bottom-right primary button on the previous page;
 // `debug` is reached out-of-band from the sidebar. Replaces the older
 // horizontal `StageNavigator` (queue/support/command tabs).
-type View = "team" | "command" | "battle" | "enhancement" | "debug" | "resource";
+type View = "team" | "command" | "battle" | "enhancement" | "debug";
 
 interface AutomationEvent {
   state: string;
@@ -64,6 +65,8 @@ function localDateKey(date: Date): string {
 
 function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [view, setView] = useState<View>("team");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("selfCheck");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
@@ -231,7 +234,8 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
       void runSelfCheck();
     });
     const unlistenResourceManager = listen("resource-manager-requested", () => {
-      setView("resource");
+      setSettingsSection("resources");
+      setSettingsOpen(true);
     });
     const unlistenSaveAdbScreenshot = listen("save-adb-screenshot-requested", () => {
       void saveAdbScreenshot();
@@ -472,6 +476,11 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     setView("enhancement");
   }, []);
 
+  const handleOpenSettings = useCallback(() => {
+    setSettingsSection("selfCheck");
+    setSettingsOpen(true);
+  }, []);
+
   // After the runner exits we return to the team page (the start of
   // the linear flow) rather than to "config", which no longer exists.
   const handleBackToConfig = useCallback(() => {
@@ -503,10 +512,16 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     );
   }
 
-  if (!setupReady && view !== "resource") {
+  if (!setupReady) {
     return (
       <Flex direction="column" className="app-root" data-theme={theme}>
         <SetupPage onReady={() => setSetupReady(true)} />
+        <SettingsDialog
+          open={settingsOpen}
+          section={settingsSection}
+          onOpenChange={setSettingsOpen}
+          onSectionChange={setSettingsSection}
+        />
         <SelfCheckDialog
           open={selfCheckOpen}
           loading={selfCheckLoading}
@@ -550,8 +565,6 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
               craftEssences={craftEssences}
               defaultCardServantIds={partyServantIds}
             />
-          ) : view === "resource" ? (
-            <SetupPage mode="manage" onBack={handleBackToConfig} />
           ) : (
             <Box className="main-content-inner">
               <ProjectBar
@@ -666,6 +679,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         </Box>
       </Flex>
       <StatusBar
+        onOpenSettings={handleOpenSettings}
         onOpenDebug={featureToggles.cvDebug ? handleOpenDebug : undefined}
         theme={theme}
         themePreference={themePreference}
@@ -678,6 +692,12 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         updateInstalling={updateInstalling}
         updateProgressText={updateProgressText}
         onInstallUpdate={handleInstallUpdate}
+      />
+      <SettingsDialog
+        open={settingsOpen}
+        section={settingsSection}
+        onOpenChange={setSettingsOpen}
+        onSectionChange={setSettingsSection}
       />
       <SelfCheckDialog
         open={selfCheckOpen}

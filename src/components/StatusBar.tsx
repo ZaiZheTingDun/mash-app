@@ -8,6 +8,7 @@ import {
   MoonIcon,
   SunIcon,
   Cross1Icon,
+  GearIcon,
 } from "@radix-ui/react-icons";
 import { invoke, listen } from "../tauri";
 import { SERVER_LABELS, type Server } from "../types/server";
@@ -33,6 +34,7 @@ interface AutomationStatusEvent {
 const POLL_INTERVAL_MS = 3000;
 
 interface StatusBarProps {
+  onOpenSettings?: () => void;
   /** Wired by `App.tsx` to switch the main view to the CV debug page.
    * Optional so existing tests (and any callers that don't need the
    * shortcut) can still mount `<StatusBar />` with no props. */
@@ -51,6 +53,7 @@ interface StatusBarProps {
 }
 
 export function StatusBar({
+  onOpenSettings,
   onOpenDebug,
   theme,
   themePreference,
@@ -228,17 +231,29 @@ export function StatusBar({
         </Box>
       )}
       <Flex className="status-bar" align="center" justify="between" gap="2">
-        <button
-          type="button"
-          className="status-log-btn"
-          aria-pressed={operationLogOpen}
-          onClick={() => onOperationLogOpenChange?.(!operationLogOpen)}
-        >
-          <HamburgerMenuIcon width={14} height={14} />
-          <Text size="1">
-            操作日志{infoLogCount > 0 ? ` (${infoLogCount})` : ""}
-          </Text>
-        </button>
+        <Flex align="center" gap="2">
+          {onOpenSettings && (
+            <button
+              type="button"
+              className="status-settings-btn"
+              onClick={onOpenSettings}
+            >
+              <GearIcon width={14} height={14} />
+              <Text size="1">设置</Text>
+            </button>
+          )}
+          <button
+            type="button"
+            className="status-log-btn"
+            aria-pressed={operationLogOpen}
+            onClick={() => onOperationLogOpenChange?.(!operationLogOpen)}
+          >
+            <HamburgerMenuIcon width={14} height={14} />
+            <Text size="1">
+              操作日志{infoLogCount > 0 ? ` (${infoLogCount})` : ""}
+            </Text>
+          </button>
+        </Flex>
 
         <Flex align="center" justify="end" gap="2">
           {updateAvailable && (
