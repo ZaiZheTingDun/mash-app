@@ -2,31 +2,46 @@ import { useCallback } from "react";
 import { Box, Button, Dialog, Flex, IconButton, Text } from "@radix-ui/themes";
 import { ArchiveIcon, CheckCircledIcon, Cross1Icon } from "@radix-ui/react-icons";
 import { invoke } from "../tauri";
+import type { Project } from "../types/project";
+import { SettingsDataManagementPage } from "./SettingsDataManagementPage";
 import { SettingsResourcesPage } from "./SettingsResourcesPage";
 import { SettingsSelfCheckPage } from "./SettingsSelfCheckPage";
 
-export type SettingsSection = "selfCheck" | "resources";
+export type SettingsSection = "selfCheck" | "resources" | "dataManagement";
 
 interface SettingsDialogProps {
   open: boolean;
   section: SettingsSection;
   onOpenChange: (open: boolean) => void;
   onSectionChange: (section: SettingsSection) => void;
+  onProjectsImported?: (projects: Project[]) => void;
 }
 
 const navItems: Array<{
+  group: "game" | "application";
   section: SettingsSection;
   label: string;
   icon: JSX.Element;
-  render: (active: boolean) => JSX.Element;
+  render: (active: boolean, props: Pick<SettingsDialogProps, "onProjectsImported">) => JSX.Element;
 }> = [
     {
+      group: "game",
+      section: "dataManagement",
+      label: "数据管理",
+      icon: <ArchiveIcon width={15} height={15} />,
+      render: (_active, props) => (
+        <SettingsDataManagementPage onProjectsImported={props.onProjectsImported} />
+      ),
+    },
+    {
+      group: "application",
       section: "resources",
       label: "资源管理",
       icon: <ArchiveIcon width={15} height={15} />,
       render: () => <SettingsResourcesPage />,
     },
     {
+      group: "application",
       section: "selfCheck",
       label: "软件自检",
       icon: <CheckCircledIcon width={15} height={15} />,
@@ -39,8 +54,13 @@ export function SettingsDialog({
   section,
   onOpenChange,
   onSectionChange,
+  onProjectsImported,
 }: SettingsDialogProps) {
   const activeItem = navItems.find((item) => item.section === section) ?? navItems[0];
+  const groupedItems = [
+    { group: "game", label: "游戏" },
+    { group: "application", label: "应用" },
+  ] as const;
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (!nextOpen && section === "resources") {
@@ -60,23 +80,32 @@ export function SettingsDialog({
               <Box className="settings-nav-title">
                 <Dialog.Title size="4">设置</Dialog.Title>
               </Box>
-              <Flex direction="column" gap="3">
-                {navItems.map((item) => (
-                  <Button
-                    key={item.section}
-                    type="button"
-                    variant="ghost"
-                    color="gray"
-                    data-active={section === item.section ? "true" : undefined}
-                    aria-current={section === item.section ? "page" : undefined}
-                    onClick={() => onSectionChange(item.section)}
-                    className="settings-nav-button"
-                  >
-                    {item.icon}
-                    <Text size="2" weight="medium">
-                      {item.label}
+              <Flex direction="column" gap="4">
+                {groupedItems.map((group) => (
+                  <Flex key={group.group} direction="column" gap="3" className="settings-nav-group">
+                    <Text size="1" weight="bold" color="gray" className="settings-nav-group-label">
+                      {group.label}
                     </Text>
-                  </Button>
+                    {navItems
+                      .filter((item) => item.group === group.group)
+                      .map((item) => (
+                        <Button
+                          key={item.section}
+                          type="button"
+                          variant="ghost"
+                          color="gray"
+                          data-active={section === item.section ? "true" : undefined}
+                          aria-current={section === item.section ? "page" : undefined}
+                          onClick={() => onSectionChange(item.section)}
+                          className="settings-nav-button"
+                        >
+                          {item.icon}
+                          <Text size="2" weight="medium">
+                            {item.label}
+                          </Text>
+                        </Button>
+                      ))}
+                  </Flex>
                 ))}
               </Flex>
 
@@ -96,7 +125,7 @@ export function SettingsDialog({
             </Flex>
 
             <Box className="settings-content-scroll">
-              {activeItem.render(open && activeItem.section === section)}
+              {activeItem.render(open && activeItem.section === section, { onProjectsImported })}
             </Box>
           </Flex>
         </Flex>

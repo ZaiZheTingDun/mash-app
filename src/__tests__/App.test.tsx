@@ -198,8 +198,8 @@ describe("App active project restore", () => {
 
     await user.click(screen.getByRole("button", { name: "设置" }));
 
-    expect(await screen.findByRole("button", { name: "重新自检" })).toBeInTheDocument();
-    expect(await screen.findByText("0.5.4")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "导入配置" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导出配置" })).toBeInTheDocument();
     expect(screen.getByText("～ 第一套 ～")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "资源管理" }));

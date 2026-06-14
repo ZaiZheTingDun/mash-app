@@ -242,6 +242,38 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         clone(args.scenes as AdvancedBattleScene[])
       );
       return null as T;
+    case "list_exportable_configs":
+      return projects.map((project) => ({
+        id: project.id,
+        name: project.name,
+        advancedMode: project.advancedMode === true,
+        battleSceneCount: battleScenesByProject.get(project.id)?.length ?? 0,
+        advancedBattleSceneCount: advancedBattleScenesByProject.get(project.id)?.length ?? 0,
+      })) as T;
+    case "export_configs":
+      return {
+        filePath: "/tmp/mash-config-dev.mashconfig.zip",
+        exportedCount: Array.isArray(args.projectIds) ? args.projectIds.length : 0,
+      } as T;
+    case "pick_config_import_file":
+      return "/tmp/mash-config-dev.mashconfig.json" as T;
+    case "preview_config_import":
+      return {
+        fileName: "mash-config-dev.mashconfig.json",
+        validConfigs: [
+          {
+            importKey: "0",
+            sourceName: "示例配置",
+            targetName: "示例配置（导入）",
+            advancedMode: false,
+            battleSceneCount: 1,
+            advancedBattleSceneCount: 0,
+          },
+        ],
+        invalidItems: [],
+      } as T;
+    case "import_configurations":
+      return { importedProjects: [] } as T;
     case "check_adb":
       return { connected: false, deviceName: null } as T;
     case "get_use_bluestack":

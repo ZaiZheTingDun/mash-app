@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 #[cfg(desktop)]
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
@@ -804,6 +804,18 @@ fn project_advanced_battle_scenes_path(app: &tauri::AppHandle, project_id: &str)
     dir.join("advanced_battle_scenes.json")
 }
 
+fn project_battle_scenes_path_in_root(root: &Path, project_id: &str) -> PathBuf {
+    root.join("projects")
+        .join(project_id)
+        .join("battle_scenes.json")
+}
+
+fn project_advanced_battle_scenes_path_in_root(root: &Path, project_id: &str) -> PathBuf {
+    root.join("projects")
+        .join(project_id)
+        .join("advanced_battle_scenes.json")
+}
+
 /// Legacy filename used before the per-scene rename. Kept around so
 /// `load_battle_scenes` can migrate any pre-existing project data on
 /// first launch after the rename.
@@ -815,7 +827,10 @@ fn legacy_project_turns_path(app: &tauri::AppHandle, project_id: &str) -> PathBu
 }
 
 fn read_projects(app: &tauri::AppHandle) -> Vec<Project> {
-    let path = projects_file_path(app);
+    read_projects_from_path(&projects_file_path(app))
+}
+
+fn read_projects_from_path(path: &Path) -> Vec<Project> {
     fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
@@ -843,9 +858,15 @@ fn normalize_project(mut project: Project) -> Project {
 }
 
 fn write_projects(app: &tauri::AppHandle, projects: &[Project]) -> Result<(), String> {
-    let path = projects_file_path(app);
+    write_projects_to_path(&projects_file_path(app), projects)
+}
+
+fn write_projects_to_path(path: &Path, projects: &[Project]) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
     let json = serde_json::to_string_pretty(projects).map_err(|e| e.to_string())?;
-    fs::write(&path, json).map_err(|e| e.to_string())
+    fs::write(path, json).map_err(|e| e.to_string())
 }
 
 fn read_app_ui_settings_from_path(path: &Path) -> AppUiSettings {
@@ -1074,6 +1095,474 @@ fn load_advanced_battle_scenes(
         .ok()
         .and_then(|contents| serde_json::from_str::<Vec<AdvancedBattleScene>>(&contents).ok())
         .unwrap_or_default()
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct ExportableConfigSummary {
+    id: String,
+    name: String,
+    advanced_mode: bool,
+    battle_scene_count: usize,
+    advanced_battle_scene_count: usize,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct ExportConfigsResult {
+    file_path: String,
+    exported_count: usize,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct ConfigImportPreviewItem {
+    import_key: String,
+    source_name: String,
+    target_name: String,
+    advanced_mode: bool,
+    battle_scene_count: usize,
+    advanced_battle_scene_count: usize,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct ConfigImportInvalidItem {
+    label: String,
+    reason: String,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct ConfigImportPreview {
+    file_name: String,
+    valid_configs: Vec<ConfigImportPreviewItem>,
+    invalid_items: Vec<ConfigImportInvalidItem>,
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ConfigImportResult {
+    imported_projects: Vec<Project>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ConfigExportPackage {
+    schema_version: u32,
+    exported_at: String,
+    #[serde(default)]
+    app_version: Option<String>,
+    configs: Vec<ConfigExportEntry>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ConfigExportEntry {
+    project: Project,
+    #[serde(default)]
+    battle_scenes: Vec<BattleScene>,
+    #[serde(default)]
+    advanced_battle_scenes: Vec<AdvancedBattleScene>,
+}
+
+#[derive(Clone, Debug)]
+struct ParsedConfigEntry {
+    source_index: usize,
+    source_name: String,
+    target_name: String,
+    entry: ConfigExportEntry,
+}
+
+#[derive(Clone, Debug)]
+struct ParsedConfigImport {
+    valid: Vec<ParsedConfigEntry>,
+    invalid: Vec<ConfigImportInvalidItem>,
+}
+
+fn load_battle_scenes_from_root(root: &Path, project_id: &str) -> Vec<BattleScene> {
+    fs::read_to_string(project_battle_scenes_path_in_root(root, project_id))
+        .ok()
+        .and_then(|contents| serde_json::from_str::<Vec<BattleScene>>(&contents).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .map(BattleScene::normalize_turns)
+        .collect()
+}
+
+fn load_advanced_battle_scenes_from_root(
+    root: &Path,
+    project_id: &str,
+) -> Vec<AdvancedBattleScene> {
+    fs::read_to_string(project_advanced_battle_scenes_path_in_root(
+        root, project_id,
+    ))
+    .ok()
+    .and_then(|contents| serde_json::from_str::<Vec<AdvancedBattleScene>>(&contents).ok())
+    .unwrap_or_default()
+}
+
+fn write_battle_scenes_to_root(
+    root: &Path,
+    project_id: &str,
+    scenes: &[BattleScene],
+) -> Result<(), String> {
+    let path = project_battle_scenes_path_in_root(root, project_id);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建配置目录失败: {e}"))?;
+    }
+    let scenes: Vec<BattleScene> = scenes
+        .iter()
+        .cloned()
+        .map(BattleScene::normalize_turns)
+        .collect();
+    let json = serde_json::to_string_pretty(&scenes).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| format!("写入普通指令配置失败: {e}"))
+}
+
+fn write_advanced_battle_scenes_to_root(
+    root: &Path,
+    project_id: &str,
+    scenes: &[AdvancedBattleScene],
+) -> Result<(), String> {
+    let path = project_advanced_battle_scenes_path_in_root(root, project_id);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建配置目录失败: {e}"))?;
+    }
+    let json = serde_json::to_string_pretty(scenes).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| format!("写入高级指令配置失败: {e}"))
+}
+
+fn exportable_config_summaries_from_root(root: &Path) -> Vec<ExportableConfigSummary> {
+    read_projects_from_path(&root.join("projects.json"))
+        .into_iter()
+        .map(|project| ExportableConfigSummary {
+            battle_scene_count: load_battle_scenes_from_root(root, &project.id).len(),
+            advanced_battle_scene_count: load_advanced_battle_scenes_from_root(root, &project.id)
+                .len(),
+            id: project.id,
+            name: project.name,
+            advanced_mode: project.advanced_mode,
+        })
+        .collect()
+}
+
+fn current_export_timestamp() -> String {
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    format_unix_timestamp_utc(seconds)
+}
+
+fn format_unix_timestamp_utc(seconds: u64) -> String {
+    let days = (seconds / 86_400) as i64;
+    let seconds_of_day = seconds % 86_400;
+    let (year, month, day) = civil_from_days(days);
+    let hour = seconds_of_day / 3_600;
+    let minute = (seconds_of_day % 3_600) / 60;
+    let second = seconds_of_day % 60;
+    format!("{year:04}{month:02}{day:02}-{hour:02}{minute:02}{second:02}")
+}
+
+fn civil_from_days(days_since_unix_epoch: i64) -> (i64, u32, u32) {
+    let z = days_since_unix_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = mp + if mp < 10 { 3 } else { -9 };
+    let year = y + if month <= 2 { 1 } else { 0 };
+    (year, month as u32, day as u32)
+}
+
+fn export_package_for_project_ids(
+    root: &Path,
+    project_ids: &[String],
+) -> Result<ConfigExportPackage, String> {
+    if project_ids.is_empty() {
+        return Err("请选择需要导出的配置".to_string());
+    }
+    let projects = read_projects_from_path(&root.join("projects.json"));
+    let selected: std::collections::HashSet<&str> =
+        project_ids.iter().map(String::as_str).collect();
+    let mut configs = Vec::new();
+    for project_id in project_ids {
+        let project = projects
+            .iter()
+            .find(|project| project.id == *project_id)
+            .cloned()
+            .ok_or_else(|| format!("未找到配置: {project_id}"))?;
+        configs.push(ConfigExportEntry {
+            battle_scenes: load_battle_scenes_from_root(root, &project.id),
+            advanced_battle_scenes: load_advanced_battle_scenes_from_root(root, &project.id),
+            project,
+        });
+    }
+    if configs.len() != selected.len() {
+        return Err("导出配置列表包含重复项".to_string());
+    }
+    Ok(ConfigExportPackage {
+        schema_version: 1,
+        exported_at: current_export_timestamp(),
+        app_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+        configs,
+    })
+}
+
+fn write_config_package_zip(package: &ConfigExportPackage, target: &Path) -> Result<(), String> {
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建导出目录失败: {e}"))?;
+    }
+    let file = fs::File::create(target).map_err(|e| format!("创建导出文件失败: {e}"))?;
+    let mut writer = zip::ZipWriter::new(file);
+    writer
+        .start_file(
+            "mash-config-export.json",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .map_err(|e| format!("写入导出包失败: {e}"))?;
+    let json = serde_json::to_vec_pretty(package).map_err(|e| e.to_string())?;
+    writer
+        .write_all(&json)
+        .map_err(|e| format!("写入导出包失败: {e}"))?;
+    writer
+        .finish()
+        .map_err(|e| format!("完成导出包失败: {e}"))?;
+    Ok(())
+}
+
+fn read_config_package_bytes(path: &Path) -> Result<Vec<u8>, String> {
+    let extension = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if extension == "zip" {
+        let file = fs::File::open(path).map_err(|e| format!("无法打开配置包: {e}"))?;
+        let mut archive = ZipArchive::new(file).map_err(|e| format!("无法读取配置包 zip: {e}"))?;
+        let mut entry = archive
+            .by_name("mash-config-export.json")
+            .map_err(|_| "配置包缺少 mash-config-export.json".to_string())?;
+        let mut bytes = Vec::new();
+        entry
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("读取配置包失败: {e}"))?;
+        Ok(bytes)
+    } else {
+        fs::read(path).map_err(|e| format!("无法读取配置文件: {e}"))
+    }
+}
+
+fn parse_config_import_from_bytes(
+    bytes: &[u8],
+    existing_names: &[String],
+) -> Result<ParsedConfigImport, String> {
+    let value: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|e| format!("配置文件不是有效 JSON: {e}"))?;
+    let schema_version = value
+        .get("schemaVersion")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| "配置文件缺少 schemaVersion".to_string())?;
+    if schema_version != 1 {
+        return Err(format!("不支持的配置文件版本: {schema_version}"));
+    }
+    let configs = value
+        .get("configs")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| "配置文件缺少 configs".to_string())?;
+
+    let mut used_names = existing_names.to_vec();
+    let mut valid = Vec::new();
+    let mut invalid = Vec::new();
+    for (index, config) in configs.iter().enumerate() {
+        let label = config
+            .get("project")
+            .and_then(|project| project.get("name"))
+            .and_then(|name| name.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("第 {} 项", index + 1));
+        match serde_json::from_value::<ConfigExportEntry>(config.clone()) {
+            Ok(mut entry) => {
+                entry.project = normalize_project(entry.project);
+                let source_name = entry.project.name.trim().to_string();
+                if source_name.is_empty() {
+                    invalid.push(ConfigImportInvalidItem {
+                        label,
+                        reason: "配置名称为空".to_string(),
+                    });
+                    continue;
+                }
+                entry.battle_scenes = entry
+                    .battle_scenes
+                    .into_iter()
+                    .map(BattleScene::normalize_turns)
+                    .collect();
+                let target_name = unique_import_name(&source_name, &used_names);
+                used_names.push(target_name.clone());
+                valid.push(ParsedConfigEntry {
+                    source_index: index,
+                    source_name,
+                    target_name,
+                    entry,
+                });
+            }
+            Err(err) => invalid.push(ConfigImportInvalidItem {
+                label,
+                reason: format!("配置结构无法识别: {err}"),
+            }),
+        }
+    }
+    Ok(ParsedConfigImport { valid, invalid })
+}
+
+fn unique_import_name(source_name: &str, existing_names: &[String]) -> String {
+    let base = format!("{source_name}（导入）");
+    if !existing_names.iter().any(|name| name == &base) {
+        return base;
+    }
+    for index in 2.. {
+        let candidate = format!("{source_name}（导入 {index}）");
+        if !existing_names.iter().any(|name| name == &candidate) {
+            return candidate;
+        }
+    }
+    unreachable!()
+}
+
+fn preview_config_import_from_path(
+    root: &Path,
+    path: &Path,
+) -> Result<ConfigImportPreview, String> {
+    if !path.is_file() {
+        return Err("选择的配置文件不存在".to_string());
+    }
+    let bytes = read_config_package_bytes(path)?;
+    let existing_names: Vec<String> = read_projects_from_path(&root.join("projects.json"))
+        .into_iter()
+        .map(|project| project.name)
+        .collect();
+    let parsed = parse_config_import_from_bytes(&bytes, &existing_names)?;
+    Ok(ConfigImportPreview {
+        file_name: path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("配置文件")
+            .to_string(),
+        valid_configs: parsed
+            .valid
+            .into_iter()
+            .map(|entry| ConfigImportPreviewItem {
+                import_key: entry.source_index.to_string(),
+                source_name: entry.source_name,
+                target_name: entry.target_name,
+                advanced_mode: entry.entry.project.advanced_mode,
+                battle_scene_count: entry.entry.battle_scenes.len(),
+                advanced_battle_scene_count: entry.entry.advanced_battle_scenes.len(),
+            })
+            .collect(),
+        invalid_items: parsed.invalid,
+    })
+}
+
+fn import_configurations_from_path(root: &Path, path: &Path) -> Result<ConfigImportResult, String> {
+    if !path.is_file() {
+        return Err("选择的配置文件不存在".to_string());
+    }
+    let bytes = read_config_package_bytes(path)?;
+    let projects_path = root.join("projects.json");
+    let mut projects = read_projects_from_path(&projects_path);
+    let existing_names: Vec<String> = projects
+        .iter()
+        .map(|project| project.name.clone())
+        .collect();
+    let parsed = parse_config_import_from_bytes(&bytes, &existing_names)?;
+    if parsed.valid.is_empty() {
+        return Err("没有可导入的配置".to_string());
+    }
+    let mut imported_projects = Vec::new();
+    for parsed_entry in parsed.valid {
+        let mut project = parsed_entry.entry.project;
+        project.id = uuid::Uuid::new_v4().to_string();
+        project.name = parsed_entry.target_name;
+        let project = normalize_project(project);
+        write_battle_scenes_to_root(root, &project.id, &parsed_entry.entry.battle_scenes)?;
+        write_advanced_battle_scenes_to_root(
+            root,
+            &project.id,
+            &parsed_entry.entry.advanced_battle_scenes,
+        )?;
+        projects.push(project.clone());
+        imported_projects.push(project);
+    }
+    write_projects_to_path(&projects_path, &projects)?;
+    Ok(ConfigImportResult { imported_projects })
+}
+
+#[tauri::command]
+fn list_exportable_configs(app: tauri::AppHandle) -> Vec<ExportableConfigSummary> {
+    exportable_config_summaries_from_root(&app_data_dir(&app))
+}
+
+#[tauri::command]
+async fn export_configs(
+    app: tauri::AppHandle,
+    project_ids: Vec<String>,
+) -> Result<Option<ExportConfigsResult>, String> {
+    let root = app_data_dir(&app);
+    let package = export_package_for_project_ids(&root, &project_ids)?;
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("选择导出文件夹")
+        .blocking_pick_folder();
+    let Some(folder) = picked else {
+        return Ok(None);
+    };
+    let folder = folder.into_path().map_err(|e| e.to_string())?;
+    let target = folder.join(format!(
+        "mash-config-{}.mashconfig.zip",
+        current_export_timestamp()
+    ));
+    write_config_package_zip(&package, &target)?;
+    Ok(Some(ExportConfigsResult {
+        file_path: target.to_string_lossy().into_owned(),
+        exported_count: package.configs.len(),
+    }))
+}
+
+#[tauri::command]
+async fn pick_config_import_file(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("Mash 配置", &["zip", "json"])
+        .set_title("选择配置文件")
+        .blocking_pick_file();
+    let Some(path) = picked else {
+        return Ok(None);
+    };
+    let path = path.into_path().map_err(|e| e.to_string())?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+fn preview_config_import(
+    app: tauri::AppHandle,
+    file_path: String,
+) -> Result<ConfigImportPreview, String> {
+    preview_config_import_from_path(&app_data_dir(&app), &PathBuf::from(file_path))
+}
+
+#[tauri::command]
+fn import_configurations(
+    app: tauri::AppHandle,
+    file_path: String,
+) -> Result<ConfigImportResult, String> {
+    import_configurations_from_path(&app_data_dir(&app), &PathBuf::from(file_path))
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -4869,6 +5358,11 @@ pub fn run() {
             load_battle_scenes,
             save_advanced_battle_scenes,
             load_advanced_battle_scenes,
+            list_exportable_configs,
+            export_configs,
+            pick_config_import_file,
+            preview_config_import,
+            import_configurations,
             list_projects,
             get_active_project_id,
             set_active_project_id,
@@ -5136,6 +5630,188 @@ mod tests {
         let saved = read_app_ui_settings_from_path(&path);
         assert_eq!(saved.active_project_id.as_deref(), Some("project-2"));
         assert_eq!(saved.theme.as_deref(), Some("system"));
+    }
+
+    fn test_project(id: &str, name: &str, advanced_mode: bool) -> Project {
+        Project {
+            id: id.into(),
+            name: name.into(),
+            advanced_mode,
+            support_servant_id: None,
+            support_servant_variant_key: None,
+            support_grand_mode: false,
+            support_grand_craft_essence_ids: default_support_grand_craft_essence_ids(),
+            support_grand_craft_essence_mlb_required:
+                default_support_grand_craft_essence_mlb_required(),
+            support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
+            grand_servants: Vec::new(),
+            grand_card_strategy: GrandCardStrategy::default(),
+            support_noble_phantasm_level_min: None,
+            support_skill_level_mins: default_support_skill_level_mins(),
+            support_append_skill_level_mins: default_support_append_skill_level_mins(),
+            slots: default_project_slots(),
+            repeat_mission: false,
+            repeat_mode: Some(ProjectRepeatMode::Single),
+            repeat_count: None,
+            ap_recovery_items: Vec::new(),
+        }
+    }
+
+    fn test_battle_scene(id: &str) -> BattleScene {
+        BattleScene {
+            id: id.into(),
+            turns: Vec::new(),
+            preparation_actions: Vec::new(),
+            servant_actions: Vec::new(),
+            equipment_actions: Vec::new(),
+            command_spell_actions: Vec::new(),
+            enemy_target: None,
+            attack_priority: Vec::new(),
+        }
+    }
+
+    fn test_advanced_scene(id: &str) -> AdvancedBattleScene {
+        AdvancedBattleScene {
+            id: id.into(),
+            main_output: None,
+            grand_auto_order_change: None,
+            command_conditions: Vec::new(),
+            control_actions: Vec::new(),
+            startup_actions: Vec::new(),
+            rules: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn config_export_package_contains_selected_projects_and_scenes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let projects = vec![
+            test_project("project-1", "第一套", false),
+            test_project("project-2", "第二套", true),
+        ];
+        write_projects_to_path(&root.join("projects.json"), &projects).unwrap();
+        write_battle_scenes_to_root(root, "project-1", &[test_battle_scene("battle-1")]).unwrap();
+        write_advanced_battle_scenes_to_root(
+            root,
+            "project-2",
+            &[test_advanced_scene("advanced-1")],
+        )
+        .unwrap();
+
+        let package = export_package_for_project_ids(root, &[String::from("project-2")]).unwrap();
+
+        assert_eq!(package.schema_version, 1);
+        assert_eq!(package.configs.len(), 1);
+        assert_eq!(package.configs[0].project.id, "project-2");
+        assert!(package.configs[0].battle_scenes.is_empty());
+        assert_eq!(package.configs[0].advanced_battle_scenes.len(), 1);
+    }
+
+    #[test]
+    fn config_export_timestamp_uses_filename_friendly_utc_format() {
+        assert_eq!(format_unix_timestamp_utc(0), "19700101-000000");
+        assert_eq!(format_unix_timestamp_utc(1_704_067_199), "20231231-235959");
+    }
+
+    #[test]
+    fn config_import_preview_reports_valid_and_invalid_entries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_projects_to_path(
+            &root.join("projects.json"),
+            &[test_project("existing", "第一套", false)],
+        )
+        .unwrap();
+        let path = root.join("import.mashconfig.json");
+        let valid_project = serde_json::to_value(test_project("source", "第一套", false)).unwrap();
+        fs::write(
+            &path,
+            serde_json::json!({
+                "schemaVersion": 1,
+                "exportedAt": "test",
+                "configs": [
+                    {
+                        "project": valid_project,
+                        "battleScenes": [test_battle_scene("battle-1")],
+                        "advancedBattleScenes": []
+                    },
+                    {
+                        "project": { "id": "broken", "name": "" },
+                        "battleScenes": []
+                    }
+                ]
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let preview = preview_config_import_from_path(root, &path).unwrap();
+
+        assert_eq!(preview.valid_configs.len(), 1);
+        assert_eq!(preview.valid_configs[0].source_name, "第一套");
+        assert_eq!(preview.valid_configs[0].target_name, "第一套（导入）");
+        assert_eq!(preview.valid_configs[0].battle_scene_count, 1);
+        assert_eq!(preview.invalid_items.len(), 1);
+    }
+
+    #[test]
+    fn config_import_appends_copies_with_new_ids_and_unique_names() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_projects_to_path(
+            &root.join("projects.json"),
+            &[
+                test_project("existing-1", "第一套", false),
+                test_project("existing-2", "第一套（导入）", false),
+            ],
+        )
+        .unwrap();
+        let package = ConfigExportPackage {
+            schema_version: 1,
+            exported_at: "test".into(),
+            app_version: None,
+            configs: vec![ConfigExportEntry {
+                project: test_project("source", "第一套", false),
+                battle_scenes: vec![test_battle_scene("battle-1")],
+                advanced_battle_scenes: vec![test_advanced_scene("advanced-1")],
+            }],
+        };
+        let zip_path = root.join("import.mashconfig.zip");
+        write_config_package_zip(&package, &zip_path).unwrap();
+
+        let result = import_configurations_from_path(root, &zip_path).unwrap();
+
+        assert_eq!(result.imported_projects.len(), 1);
+        let imported = &result.imported_projects[0];
+        assert_ne!(imported.id, "source");
+        assert_eq!(imported.name, "第一套（导入 2）");
+        let projects = read_projects_from_path(&root.join("projects.json"));
+        assert_eq!(projects.len(), 3);
+        assert_eq!(load_battle_scenes_from_root(root, &imported.id).len(), 1);
+        assert_eq!(
+            load_advanced_battle_scenes_from_root(root, &imported.id).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn config_import_rejects_malformed_json_and_missing_selection() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let bad_json = root.join("bad.mashconfig.json");
+        fs::write(&bad_json, "{").unwrap();
+        assert!(preview_config_import_from_path(root, &bad_json)
+            .unwrap_err()
+            .contains("有效 JSON"));
+        assert!(export_package_for_project_ids(root, &[])
+            .unwrap_err()
+            .contains("请选择"));
+        assert!(
+            export_package_for_project_ids(root, &[String::from("missing")])
+                .unwrap_err()
+                .contains("未找到配置")
+        );
     }
 
     // --- ProjectSlot serde --------------------------------------------

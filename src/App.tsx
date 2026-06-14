@@ -66,7 +66,7 @@ function localDateKey(date: Date): string {
 function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [view, setView] = useState<View>("team");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<SettingsSection>("selfCheck");
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("dataManagement");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
@@ -303,27 +303,33 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     [persistActiveProjectId]
   );
 
+  const refreshProjects = useCallback(async () => {
+    const [list, savedActiveProjectId] = await Promise.all([
+      invoke<Project[]>("list_projects"),
+      invoke<string | null>("get_active_project_id"),
+    ]);
+    setProjects(list);
+    if (list.length > 0) {
+      const savedProject = list.find((project) => project.id === savedActiveProjectId);
+      const nextActiveProjectId = savedProject?.id ?? list[0].id;
+      setActiveProjectId(nextActiveProjectId);
+      if (nextActiveProjectId !== savedActiveProjectId) {
+        persistActiveProjectId(nextActiveProjectId);
+      }
+    } else {
+      setActiveProjectId(null);
+      if (savedActiveProjectId != null) {
+        persistActiveProjectId(null);
+      }
+    }
+  }, [persistActiveProjectId]);
+
   // Load the project list once at startup so the team-builder can read/write
   // `supportServantId` directly off the active project. The active project id
   // is also backend-owned, so app restarts reopen the last chosen lineup.
   useEffect(() => {
-    Promise.all([
-      invoke<Project[]>("list_projects"),
-      invoke<string | null>("get_active_project_id"),
-    ])
-      .then(([list, savedActiveProjectId]) => {
-        setProjects(list);
-        if (list.length > 0) {
-          const savedProject = list.find((project) => project.id === savedActiveProjectId);
-          const nextActiveProjectId = savedProject?.id ?? list[0].id;
-          setActiveProjectId(nextActiveProjectId);
-          if (nextActiveProjectId !== savedActiveProjectId) {
-            persistActiveProjectId(nextActiveProjectId);
-          }
-        }
-      })
-      .catch(console.error);
-  }, [persistActiveProjectId]);
+    void refreshProjects().catch(console.error);
+  }, [refreshProjects]);
 
   const activeProject = useMemo(
     () => projects.find((p) => p.id === activeProjectId) ?? null,
@@ -466,6 +472,18 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     setView("battle");
   }, []);
 
+  const handleProjectsImported = useCallback((importedProjects: Project[]) => {
+    void refreshProjects()
+      .then(() => {
+        const firstImported = importedProjects[0];
+        if (firstImported) {
+          setActiveProjectId(firstImported.id);
+          persistActiveProjectId(firstImported.id);
+        }
+      })
+      .catch(console.error);
+  }, [persistActiveProjectId, refreshProjects]);
+
   const handleOpenDebug = useCallback(() => {
     if (!featureToggles.cvDebug) return;
     setView("debug");
@@ -477,7 +495,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   }, []);
 
   const handleOpenSettings = useCallback(() => {
-    setSettingsSection("selfCheck");
+    setSettingsSection("dataManagement");
     setSettingsOpen(true);
   }, []);
 
@@ -521,6 +539,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
           section={settingsSection}
           onOpenChange={setSettingsOpen}
           onSectionChange={setSettingsSection}
+          onProjectsImported={handleProjectsImported}
         />
         <SelfCheckDialog
           open={selfCheckOpen}
@@ -698,6 +717,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         section={settingsSection}
         onOpenChange={setSettingsOpen}
         onSectionChange={setSettingsSection}
+        onProjectsImported={handleProjectsImported}
       />
       <SelfCheckDialog
         open={selfCheckOpen}

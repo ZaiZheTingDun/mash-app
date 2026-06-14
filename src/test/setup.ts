@@ -111,7 +111,20 @@ vi.mock("@tauri-apps/api/core", () => ({
         return null;
       case "pick_asset_bundle":
       case "pick_runtime_bundle":
+      case "pick_config_import_file":
         return null;
+      case "list_exportable_configs":
+        return [];
+      case "export_configs":
+        return null;
+      case "preview_config_import":
+        return {
+          fileName: "empty.mashconfig.json",
+          validConfigs: [],
+          invalidItems: [],
+        };
+      case "import_configurations":
+        return { importedProjects: [] };
       case "import_asset_bundle":
         return {
           importedServants: false,

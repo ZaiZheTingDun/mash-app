@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import { SettingsDialog, type SettingsSection } from "../SettingsPage";
 import type { SelfCheckStatus } from "../../types/selfCheck";
+import type { Project } from "../../types/project";
 
 const selfCheckStatus: SelfCheckStatus = {
   appVersion: "0.5.4",
@@ -19,7 +20,20 @@ const selfCheckStatus: SelfCheckStatus = {
   ces: { entries: 5, hasImage: true, hasJson: false },
 };
 
-function SettingsHarness({ initialSection = "selfCheck" }: { initialSection?: SettingsSection }) {
+const importedProject: Project = {
+  id: "imported-1",
+  name: "导入配置",
+  advancedMode: false,
+  slots: [],
+};
+
+function SettingsHarness({
+  initialSection = "selfCheck",
+  onProjectsImported = vi.fn(),
+}: {
+  initialSection?: SettingsSection;
+  onProjectsImported?: (projects: Project[]) => void;
+}) {
   const [section, setSection] = useState<SettingsSection>(initialSection);
   return (
     <SettingsDialog
@@ -27,6 +41,7 @@ function SettingsHarness({ initialSection = "selfCheck" }: { initialSection?: Se
       section={section}
       onOpenChange={vi.fn()}
       onSectionChange={setSection}
+      onProjectsImported={onProjectsImported}
     />
   );
 }
@@ -64,5 +79,120 @@ describe("SettingsDialog", () => {
 
     expect(await screen.findByText("管理 CV 运行时和素材包下载")).toBeInTheDocument();
     expect(screen.getByText("素材包")).toBeInTheDocument();
+  });
+
+  it("groups settings navigation and switches to data management", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness />);
+
+    expect(screen.getByText("游戏")).toBeInTheDocument();
+    expect(screen.getByText("应用")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "数据管理" }));
+
+    expect(await screen.findByRole("button", { name: "导入配置" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导出配置" })).toBeInTheDocument();
+  });
+
+  it("shows export configs and disables export after deselecting all", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "list_exportable_configs") {
+        return [
+          {
+            id: "project-1",
+            name: "第一套",
+            advancedMode: false,
+            battleSceneCount: 1,
+            advancedBattleSceneCount: 0,
+          },
+          {
+            id: "project-2",
+            name: "第二套",
+            advancedMode: true,
+            battleSceneCount: 0,
+            advancedBattleSceneCount: 2,
+          },
+        ];
+      }
+      return null;
+    });
+    renderWithTheme(<SettingsHarness initialSection="dataManagement" />);
+
+    await user.click(screen.getByRole("button", { name: "导出配置" }));
+
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
+    expect(screen.getByText("第二套")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导出" })).toBeEnabled();
+
+    await user.click(screen.getByRole("checkbox", { name: "全选" }));
+
+    expect(screen.getByRole("button", { name: "导出" })).toBeDisabled();
+  });
+
+  it("previews import results and calls onProjectsImported after import", async () => {
+    const user = userEvent.setup();
+    const onProjectsImported = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "pick_config_import_file") return "/tmp/config.mashconfig.json";
+      if (cmd === "preview_config_import") {
+        return {
+          fileName: "config.mashconfig.json",
+          validConfigs: [
+            {
+              importKey: "0",
+              sourceName: "第一套",
+              targetName: "第一套（导入）",
+              advancedMode: false,
+              battleSceneCount: 1,
+              advancedBattleSceneCount: 0,
+            },
+          ],
+          invalidItems: [{ label: "第 2 项", reason: "配置结构无法识别" }],
+        };
+      }
+      if (cmd === "import_configurations") {
+        return { importedProjects: [importedProject] };
+      }
+      return null;
+    });
+    renderWithTheme(
+      <SettingsHarness
+        initialSection="dataManagement"
+        onProjectsImported={onProjectsImported}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "导入配置" }));
+
+    expect(await screen.findByText("第一套 → 第一套（导入）")).toBeInTheDocument();
+    expect(screen.getByText("配置结构无法识别")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "导入" }));
+
+    await waitFor(() => {
+      expect(onProjectsImported).toHaveBeenCalledWith([importedProject]);
+    });
+  });
+
+  it("disables import when preview has no valid configs", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "pick_config_import_file") return "/tmp/config.mashconfig.json";
+      if (cmd === "preview_config_import") {
+        return {
+          fileName: "config.mashconfig.json",
+          validConfigs: [],
+          invalidItems: [{ label: "第 1 项", reason: "配置结构无法识别" }],
+        };
+      }
+      return null;
+    });
+    renderWithTheme(<SettingsHarness initialSection="dataManagement" />);
+
+    await user.click(screen.getByRole("button", { name: "导入配置" }));
+
+    expect(await screen.findByText("没有可导入的配置。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导入" })).toBeDisabled();
   });
 });
