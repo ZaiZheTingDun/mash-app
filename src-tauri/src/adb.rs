@@ -19,14 +19,23 @@ fn adb_executable_name() -> &'static str {
     "adb"
 }
 
-fn bundled_adb_candidates(resource_dir: PathBuf) -> [PathBuf; 2] {
-    [
-        resource_dir.join("adb").join(adb_executable_name()),
+fn bundled_adb_candidates(resource_dir: PathBuf) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    #[cfg(debug_assertions)]
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("adb")
+            .join(adb_executable_name()),
+    );
+    candidates.push(resource_dir.join("adb").join(adb_executable_name()));
+    candidates.push(
         resource_dir
             .join("resources")
             .join("adb")
             .join(adb_executable_name()),
-    ]
+    );
+    candidates
 }
 
 pub(crate) fn resolve_adb_path(app: &tauri::AppHandle) -> PathBuf {
@@ -361,12 +370,18 @@ mod tests {
     #[test]
     fn bundled_adb_candidates_cover_dev_and_bundle_resource_layouts() {
         let base = PathBuf::from("/app/resources");
+        #[cfg(debug_assertions)]
         assert_eq!(
             bundled_adb_candidates(base.clone())[0],
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/adb/adb")
+        );
+        let offset = if cfg!(debug_assertions) { 1 } else { 0 };
+        assert_eq!(
+            bundled_adb_candidates(base.clone())[offset],
             base.join("adb/adb")
         );
         assert_eq!(
-            bundled_adb_candidates(base.clone())[1],
+            bundled_adb_candidates(base.clone())[offset + 1],
             base.join("resources/adb/adb")
         );
     }
