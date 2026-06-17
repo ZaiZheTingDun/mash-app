@@ -16,9 +16,10 @@ enables advanced mode and configures `grandServants`.
 - Ready Noble Phantasms and recognized command cards are scored together.
 - Hand-written advanced `rules` still take precedence. This strategy only runs
   for the automatic advanced flow.
+- `grandClass` selects the automatic rule set. Missing legacy values default to
+  `saber`.
 - The project-level `grandCardStrategy.chainPriority` list can reorder the
-  automatic chain tiers. Missing or incomplete configs use the default order
-  below.
+  Saber automatic rule order. Berserker uses its fixed rule order.
 
 If `npCard` is `auto`, the runner uses the servant resource's
 `noblePhantasmCard` value. If the configured Grand servant is not currently in
@@ -50,65 +51,76 @@ If the main Grand servant is already in the front line, cannot be located, or
 the swap target cannot be resolved, the runner skips the automatic swap without
 failing the battle loop.
 
-## Chain Priority
+## Rule Model
 
-By default, the picker chooses three attacks by the following chain priority:
+Grand automatic card selection is rule-based. Each rule has exactly three
+slots, and the slot order is the click order. A candidate combo must satisfy
+the rule's slot constraints plus any rule-wide constraints:
 
-1. Main servant three-card chain.
-2. Any combo that fires the main servant's ready Noble Phantasm.
-3. Deputy servant three-card chain.
-4. Same-color chain containing the main servant.
-5. Same-color chain containing the deputy servant.
-6. Fallback output ordering.
+- Owner: main Grand, deputy Grand, any Grand, or any servant.
+- Kind: command card, Noble Phantasm, or either.
+- Color: exact B/A/Q, any color, or the configured NP color of a Grand role.
+- `sameColor`: all three chosen attacks have the same color.
+- `colorSetBAQ`: the three chosen attacks contain one buster, one arts, and one
+  quick. This is the "exquisite" chain.
+- `include` / `exclude`: required or forbidden attacks in the three-card combo.
 
-Within a same-servant three-card chain:
+When several combos match the same rule, the picker prefers the combo with more
+target-role attacks, then main/deputy Grand attacks, then NPs and lower original
+card order. When a rule's slots allow multiple valid attack orders, non-Grand
+command cards are placed before Grand servant command cards where possible.
 
-1. Exquisite chain: one buster, one arts, one quick.
-2. Same-color force/quick/skill chain: three buster, three quick, or three arts.
-3. Ordinary brave chain.
+## Saber Rules
 
-The main servant always outranks the deputy at the same chain class.
+Saber mode keeps the user-configurable `grandCardStrategy.chainPriority` order.
+Each priority item expands to rule templates:
 
-The "main NP ready" tier sits between main and deputy three-card chains
-because the tier-3 same-color chain "containing main" exists to *charge*
-a future NP, so once the main NP is already ready it should fire even
-when its color cannot form a same-color chain with the current hand
-(e.g. a buster main NP in a hand of mostly arts cards). This bump only
-applies to the main output's NP; a ready deputy NP on its own does not
-displace a main same-color chain.
+1. Main exquisite brave chain with NP:
+   main command, main command, main NP; rule-wide color set must be B/A/Q.
+2. Main exquisite brave chain without NP:
+   main buster command, main arts command, main quick command; main NP excluded.
+3. Main ready NP:
+   any attack, any attack, main NP.
+4. Deputy exquisite brave chain with NP:
+   deputy command, deputy command, deputy NP; rule-wide color set must be B/A/Q.
+5. Deputy exquisite brave chain without NP:
+   deputy buster command, deputy arts command, deputy quick command; deputy NP
+   excluded.
+6. Main same-color chain:
+   any three attacks of the same color, including at least one main Grand
+   attack.
+7. Deputy same-color chain:
+   any three attacks of the same color, including at least one deputy Grand
+   attack.
+8. Fallback:
+   any three attacks.
 
-## Attack Order
+The default Saber priority order is main exquisite brave chain, main ready NP,
+deputy exquisite brave chain, main same-color chain, deputy same-color chain,
+then fallback.
 
-Exquisite damage-priority chain:
+## Berserker Rules
 
-- Put the target NP last.
-- Avoid putting a same-color command card before that NP when possible, because
-  the Grand battle chain bonus for that color would be consumed before the NP.
+Berserker mode uses a fixed order:
 
-Exquisite NP-priority chain:
-
-- If a red command card exists and the target NP is not red, place the red card
-  before the NP to preserve NP gain while still giving the NP the red first-card
-  damage benefit.
-- If the target NP is red, use the damage-priority NP-last order.
-
-Same-color force/quick/skill chain with a target NP:
-
-- Put the NP first.
-- Command-card second/third position performance does not apply to NPs, so the
-  normal cards should receive later card positions instead.
-
-Fallback ordering:
-
-- Prefer the main servant's attacks over the deputy's attacks.
-- Ready deputy or auxiliary NPs may be placed before the target NP to provide
-  overcharge.
-- Command cards from output servants are kept later when no chain is available,
-  because second and third command cards get higher position performance.
-- The first command card may be a non-output servant's card when it provides the
-  preferred first-card color:
-  - `damage`: buster.
-  - `np`: arts.
+1. Main Grand NP same-color chain:
+   command card matching the main NP color, command card matching the main NP
+   color, main NP.
+2. Main Grand NP:
+   any attack, any attack, main NP.
+3. Deputy Grand NP same-color chain:
+   command card matching the deputy NP color, command card matching the deputy
+   NP color, deputy NP.
+4. Main Grand other same-color chain:
+   any three attacks of the same color, including the main Grand servant, but
+   excluding the main Grand NP.
+5. Deputy Grand other same-color chain:
+   any three attacks of the same color, including the deputy Grand servant, but
+   excluding the deputy Grand NP.
+6. Grand exquisite chain:
+   buster, arts, quick; includes at least one Grand servant attack.
+7. Fallback:
+   any three attacks.
 
 ## Non-Grand Behavior
 

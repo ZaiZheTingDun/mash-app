@@ -83,6 +83,19 @@ pub struct GrandServantConfig {
     pub priority: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GrandClass {
+    Saber,
+    Berserker,
+}
+
+impl Default for GrandClass {
+    fn default() -> Self {
+        Self::Saber
+    }
+}
+
 #[derive(Debug, Clone)]
 struct GrandServantRuntimeConfig {
     slot_index: usize,
@@ -143,6 +156,8 @@ pub struct RunConfig {
     pub support_grand_bond_ce_mode: SupportGrandBondCeMode,
     #[serde(default)]
     pub grand_servants: Vec<GrandServantConfig>,
+    #[serde(default)]
+    pub grand_class: GrandClass,
     #[serde(default)]
     pub grand_card_strategy: GrandCardStrategy,
     /// Minimum NP level required for the chosen support row. `None`
@@ -3460,16 +3475,39 @@ impl Runner {
         nps: Vec<NoblePhantasmMatch>,
         party_ids: [Option<u32>; 3],
     ) {
+        let grand_servants = self.grand_servant_runtime_configs();
         let Some(scene) = self
             .advanced_scenes
             .get(self.battle.current_scene_index)
             .cloned()
         else {
+            if !grand_servants.is_empty() {
+                self.emit("Attack", "无高级指令配置，按冠位自动策略攻击");
+                let scene = AdvancedBattleScene {
+                    id: "__grand_auto_default__".into(),
+                    main_output: None,
+                    grand_auto_order_change: None,
+                    command_conditions: Vec::new(),
+                    control_actions: Vec::new(),
+                    startup_actions: Vec::new(),
+                    rules: Vec::new(),
+                };
+                let picks = choose_advanced_auto_picks_with_grand_class(
+                    &scene,
+                    &cards,
+                    &nps,
+                    &party_ids,
+                    &grand_servants,
+                    &self.config.grand_card_strategy,
+                    self.config.grand_class,
+                );
+                self.tap_picks("Attack", &picks);
+                return;
+            }
             self.emit("Attack", "无高级指令配置，按默认顺序补位");
             self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, None);
             return;
         };
-        let grand_servants = self.grand_servant_runtime_configs();
 
         if scene.rules.is_empty() || uses_advanced_strategy_flow(&scene) {
             let scene_index = self.battle.current_scene_index;
@@ -3604,25 +3642,27 @@ impl Runner {
                         else {
                             return;
                         };
-                        let picks = choose_advanced_auto_picks(
+                        let picks = choose_advanced_auto_picks_with_grand_class(
                             &scene,
                             &next_cards,
                             &next_nps,
                             &startup_party_ids,
                             &grand_servants,
                             &self.config.grand_card_strategy,
+                            self.config.grand_class,
                         );
                         self.tap_picks("Attack", &picks);
                         return;
                     }
 
-                    let picks = choose_advanced_auto_picks(
+                    let picks = choose_advanced_auto_picks_with_grand_class(
                         &scene,
                         &cards,
                         &nps,
                         &startup_party_ids,
                         &grand_servants,
                         &self.config.grand_card_strategy,
+                        self.config.grand_class,
                     );
                     self.tap_picks("Attack", &picks);
                     return;
@@ -3669,26 +3709,28 @@ impl Runner {
                         else {
                             return;
                         };
-                        let picks = choose_advanced_auto_picks(
+                        let picks = choose_advanced_auto_picks_with_grand_class(
                             &scene,
                             &next_cards,
                             &[],
                             &control_party_ids,
                             &grand_servants,
                             &self.config.grand_card_strategy,
+                            self.config.grand_class,
                         );
                         self.tap_picks("Attack", &picks);
                         return;
                     }
 
                     self.emit("Attack", "启动条件未满足，按自动优先级攻击且不释放宝具");
-                    let picks = choose_advanced_auto_picks(
+                    let picks = choose_advanced_auto_picks_with_grand_class(
                         &scene,
                         &cards,
                         &[],
                         &party_ids,
                         &grand_servants,
                         &self.config.grand_card_strategy,
+                        self.config.grand_class,
                     );
                     self.tap_picks("Attack", &picks);
                     return;
@@ -3757,25 +3799,27 @@ impl Runner {
                     else {
                         return;
                     };
-                    let picks = choose_advanced_auto_picks(
+                    let picks = choose_advanced_auto_picks_with_grand_class(
                         &scene,
                         &next_cards,
                         &next_nps,
                         &startup_party_ids,
                         &grand_servants,
                         &self.config.grand_card_strategy,
+                        self.config.grand_class,
                     );
                     self.tap_picks("Attack", &picks);
                     return;
                 }
 
-                let picks = choose_advanced_auto_picks(
+                let picks = choose_advanced_auto_picks_with_grand_class(
                     &scene,
                     &cards,
                     &nps,
                     &startup_party_ids,
                     &grand_servants,
                     &self.config.grand_card_strategy,
+                    self.config.grand_class,
                 );
                 self.tap_picks("Attack", &picks);
                 return;
@@ -3847,25 +3891,27 @@ impl Runner {
                     else {
                         return;
                     };
-                    let picks = choose_advanced_auto_picks(
+                    let picks = choose_advanced_auto_picks_with_grand_class(
                         &scene,
                         &next_cards,
                         &next_nps,
                         &control_party_ids,
                         &grand_servants,
                         &self.config.grand_card_strategy,
+                        self.config.grand_class,
                     );
                     self.tap_picks("Attack", &picks);
                     return;
                 }
 
-                let picks = choose_advanced_auto_picks(
+                let picks = choose_advanced_auto_picks_with_grand_class(
                     &scene,
                     &cards,
                     &nps,
                     &control_party_ids,
                     &grand_servants,
                     &self.config.grand_card_strategy,
+                    self.config.grand_class,
                 );
                 self.tap_picks("Attack", &picks);
                 return;
@@ -3875,13 +3921,14 @@ impl Runner {
                 executed_control_count,
                 startup_control_count,
             );
-            let picks = choose_advanced_auto_picks(
+            let picks = choose_advanced_auto_picks_with_grand_class(
                 &scene,
                 &cards,
                 &nps,
                 &active_party_ids,
                 &grand_servants,
                 &self.config.grand_card_strategy,
+                self.config.grand_class,
             );
             self.tap_picks("Attack", &picks);
             return;
@@ -5762,45 +5809,6 @@ fn sort_advanced_picks(scene: &AdvancedBattleScene, picks: &mut Vec<AdvancedPick
     }
 }
 
-fn combo_same_role_servant(
-    combo: &[&AdvancedPickCandidate],
-    role: GrandRole,
-    grand_servants: &[GrandServantRuntimeConfig],
-) -> bool {
-    let Some(config) = grand_config_for_role(role, grand_servants) else {
-        return false;
-    };
-    combo
-        .iter()
-        .all(|candidate| candidate.servant_id == Some(config.servant_id))
-}
-
-fn combo_has_role(
-    combo: &[&AdvancedPickCandidate],
-    role: GrandRole,
-    grand_servants: &[GrandServantRuntimeConfig],
-) -> bool {
-    let Some(config) = grand_config_for_role(role, grand_servants) else {
-        return false;
-    };
-    combo
-        .iter()
-        .any(|candidate| candidate.servant_id == Some(config.servant_id))
-}
-
-fn combo_has_role_np(
-    combo: &[&AdvancedPickCandidate],
-    role: GrandRole,
-    grand_servants: &[GrandServantRuntimeConfig],
-) -> bool {
-    let Some(config) = grand_config_for_role(role, grand_servants) else {
-        return false;
-    };
-    combo
-        .iter()
-        .any(|candidate| candidate.is_np && candidate.servant_id == Some(config.servant_id))
-}
-
 fn combo_is_exquisite(combo: &[&AdvancedPickCandidate]) -> bool {
     candidate_color_counts(combo) == (1, 1, 1)
 }
@@ -5810,6 +5818,264 @@ fn combo_same_color(combo: &[&AdvancedPickCandidate]) -> bool {
         candidate_color_counts(combo),
         (3, 0, 0) | (0, 3, 0) | (0, 0, 3)
     )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RuleOwner {
+    MainGrand,
+    DeputyGrand,
+    AnyGrand,
+    Any,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RuleKind {
+    Np,
+    Command,
+    Any,
+}
+
+#[derive(Clone, Copy)]
+enum RuleColor {
+    Any,
+    Exact(&'static str),
+    SameAsNp(GrandRole),
+}
+
+#[derive(Clone, Copy)]
+struct RuleSlot {
+    owner: RuleOwner,
+    kind: RuleKind,
+    color: RuleColor,
+}
+
+#[derive(Clone, Copy)]
+struct RuleNeed {
+    owner: RuleOwner,
+    kind: RuleKind,
+}
+
+struct GrandCardRule {
+    slots: [RuleSlot; 3],
+    same_color: bool,
+    color_set_baq: bool,
+    include: Vec<RuleNeed>,
+    exclude: Vec<RuleNeed>,
+    target_role: Option<GrandRole>,
+}
+
+struct GrandRuleMatch {
+    ordered: Vec<AdvancedPickCandidate>,
+    score: i32,
+}
+
+fn any_slot() -> RuleSlot {
+    RuleSlot {
+        owner: RuleOwner::Any,
+        kind: RuleKind::Any,
+        color: RuleColor::Any,
+    }
+}
+
+fn slot(owner: RuleOwner, kind: RuleKind, color: RuleColor) -> RuleSlot {
+    RuleSlot { owner, kind, color }
+}
+
+fn need(owner: RuleOwner, kind: RuleKind) -> RuleNeed {
+    RuleNeed { owner, kind }
+}
+
+fn owner_matches(
+    candidate: &AdvancedPickCandidate,
+    owner: RuleOwner,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> bool {
+    match owner {
+        RuleOwner::Any => true,
+        RuleOwner::MainGrand => {
+            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Main
+        }
+        RuleOwner::DeputyGrand => {
+            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Deputy
+        }
+        RuleOwner::AnyGrand => matches!(
+            grand_role_for_servant(candidate.servant_id, grand_servants),
+            GrandRole::Main | GrandRole::Deputy
+        ),
+    }
+}
+
+fn kind_matches(candidate: &AdvancedPickCandidate, kind: RuleKind) -> bool {
+    match kind {
+        RuleKind::Any => true,
+        RuleKind::Np => candidate.is_np,
+        RuleKind::Command => !candidate.is_np,
+    }
+}
+
+fn color_matches(
+    candidate: &AdvancedPickCandidate,
+    color: RuleColor,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> bool {
+    match color {
+        RuleColor::Any => true,
+        RuleColor::Exact(expected) => candidate.color.as_deref() == Some(expected),
+        RuleColor::SameAsNp(role) => target_np_color(Some(role), grand_servants)
+            .as_deref()
+            .is_some_and(|expected| candidate.color.as_deref() == Some(expected)),
+    }
+}
+
+fn candidate_matches_need(
+    candidate: &AdvancedPickCandidate,
+    need: RuleNeed,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> bool {
+    owner_matches(candidate, need.owner, grand_servants) && kind_matches(candidate, need.kind)
+}
+
+fn candidate_matches_slot(
+    candidate: &AdvancedPickCandidate,
+    slot: RuleSlot,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> bool {
+    owner_matches(candidate, slot.owner, grand_servants)
+        && kind_matches(candidate, slot.kind)
+        && color_matches(candidate, slot.color, grand_servants)
+}
+
+fn combo_matches_rule_requirements(
+    combo: &[&AdvancedPickCandidate],
+    rule: &GrandCardRule,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> bool {
+    if rule.same_color && !combo_same_color(combo) {
+        return false;
+    }
+    if rule.color_set_baq && !combo_is_exquisite(combo) {
+        return false;
+    }
+    if rule.include.iter().any(|need| {
+        !combo
+            .iter()
+            .any(|candidate| candidate_matches_need(candidate, *need, grand_servants))
+    }) {
+        return false;
+    }
+    if rule.exclude.iter().any(|need| {
+        combo
+            .iter()
+            .any(|candidate| candidate_matches_need(candidate, *need, grand_servants))
+    }) {
+        return false;
+    }
+    true
+}
+
+fn ordered_position_score(
+    index: usize,
+    candidate: &AdvancedPickCandidate,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> i32 {
+    let original_order_score = 100 - candidate.original_order as i32;
+    if candidate.is_np {
+        return 10_000 + original_order_score;
+    }
+    let is_grand = matches!(
+        grand_role_for_servant(candidate.servant_id, grand_servants),
+        GrandRole::Main | GrandRole::Deputy
+    );
+    if is_grand {
+        index as i32 * 1_000 + original_order_score
+    } else {
+        (2 - index as i32) * 100 + original_order_score
+    }
+}
+
+fn score_rule_match(
+    ordered: &[&AdvancedPickCandidate; 3],
+    rule: &GrandCardRule,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> i32 {
+    let np_count = ordered.iter().filter(|candidate| candidate.is_np).count() as i32;
+    let main_count = ordered
+        .iter()
+        .filter(|candidate| {
+            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Main
+        })
+        .count() as i32;
+    let deputy_count = ordered
+        .iter()
+        .filter(|candidate| {
+            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Deputy
+        })
+        .count() as i32;
+    let target_count = rule
+        .target_role
+        .map(|role| {
+            ordered
+                .iter()
+                .filter(|candidate| {
+                    grand_role_for_servant(candidate.servant_id, grand_servants) == role
+                })
+                .count() as i32
+        })
+        .unwrap_or(main_count.max(deputy_count));
+    let order_score = ordered
+        .iter()
+        .enumerate()
+        .map(|(index, candidate)| ordered_position_score(index, candidate, grand_servants))
+        .sum::<i32>();
+    target_count * 10_000 + main_count * 1_000 + deputy_count * 800 + np_count * 200 + order_score
+}
+
+fn match_grand_rule(
+    combo: &[&AdvancedPickCandidate],
+    rule: &GrandCardRule,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> Option<GrandRuleMatch> {
+    if combo.len() != 3 || !combo_matches_rule_requirements(combo, rule, grand_servants) {
+        return None;
+    }
+    let permutations = [
+        [0usize, 1usize, 2usize],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ];
+    let mut best: Option<GrandRuleMatch> = None;
+    for permutation in permutations {
+        let ordered = [
+            combo[permutation[0]],
+            combo[permutation[1]],
+            combo[permutation[2]],
+        ];
+        if !ordered
+            .iter()
+            .zip(rule.slots.iter())
+            .all(|(candidate, slot)| candidate_matches_slot(candidate, *slot, grand_servants))
+        {
+            continue;
+        }
+        let score = score_rule_match(&ordered, rule, grand_servants);
+        let candidate_match = GrandRuleMatch {
+            ordered: ordered
+                .iter()
+                .map(|candidate| (*candidate).clone())
+                .collect(),
+            score,
+        };
+        if best
+            .as_ref()
+            .is_none_or(|current| candidate_match.score > current.score)
+        {
+            best = Some(candidate_match);
+        }
+    }
+    best
 }
 
 fn normalized_grand_chain_priority(strategy: &GrandCardStrategy) -> Vec<GrandChainPriorityItem> {
@@ -5826,105 +6092,6 @@ fn normalized_grand_chain_priority(strategy: &GrandCardStrategy) -> Vec<GrandCha
         }
     }
     normalized
-}
-
-fn grand_combo_matches_priority(
-    combo: &[&AdvancedPickCandidate],
-    grand_servants: &[GrandServantRuntimeConfig],
-    item: GrandChainPriorityItem,
-) -> Option<(i32, Option<GrandRole>)> {
-    match item {
-        GrandChainPriorityItem::MainBraveChain
-            if combo_same_role_servant(combo, GrandRole::Main, grand_servants) =>
-        {
-            if combo_is_exquisite(combo) {
-                Some((300, Some(GrandRole::Main)))
-            } else if combo_same_color(combo) {
-                Some((200, Some(GrandRole::Main)))
-            } else {
-                Some((100, Some(GrandRole::Main)))
-            }
-        }
-        GrandChainPriorityItem::MainReadyNp
-            if combo_has_role_np(combo, GrandRole::Main, grand_servants) =>
-        {
-            Some((0, Some(GrandRole::Main)))
-        }
-        GrandChainPriorityItem::DeputyBraveChain
-            if combo_same_role_servant(combo, GrandRole::Deputy, grand_servants) =>
-        {
-            if combo_is_exquisite(combo) {
-                Some((300, Some(GrandRole::Deputy)))
-            } else if combo_same_color(combo) {
-                Some((200, Some(GrandRole::Deputy)))
-            } else {
-                Some((100, Some(GrandRole::Deputy)))
-            }
-        }
-        GrandChainPriorityItem::MainColorChain
-            if combo_same_color(combo)
-                && combo_has_role(combo, GrandRole::Main, grand_servants) =>
-        {
-            Some((0, Some(GrandRole::Main)))
-        }
-        GrandChainPriorityItem::DeputyColorChain
-            if combo_same_color(combo)
-                && combo_has_role(combo, GrandRole::Deputy, grand_servants) =>
-        {
-            Some((0, Some(GrandRole::Deputy)))
-        }
-        GrandChainPriorityItem::Fallback => Some((0, None)),
-        _ => None,
-    }
-}
-
-fn grand_combo_tier(
-    combo: &[&AdvancedPickCandidate],
-    grand_servants: &[GrandServantRuntimeConfig],
-    strategy: &GrandCardStrategy,
-) -> (i32, Option<GrandRole>) {
-    let priority = normalized_grand_chain_priority(strategy);
-    for (index, item) in priority.iter().enumerate() {
-        if let Some((sub_score, role)) = grand_combo_matches_priority(combo, grand_servants, *item)
-        {
-            let rank = (priority.len() - index) as i32;
-            return (rank * 1_000 + sub_score, role);
-        }
-    }
-    (1_000, None)
-}
-
-fn score_grand_combo(
-    combo: &[&AdvancedPickCandidate],
-    grand_servants: &[GrandServantRuntimeConfig],
-    strategy: &GrandCardStrategy,
-) -> i32 {
-    let (tier, target_role) = grand_combo_tier(combo, grand_servants, strategy);
-    let np_count = combo.iter().filter(|candidate| candidate.is_np).count() as i32;
-    let main_count = combo
-        .iter()
-        .filter(|candidate| {
-            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Main
-        })
-        .count() as i32;
-    let deputy_count = combo
-        .iter()
-        .filter(|candidate| {
-            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Deputy
-        })
-        .count() as i32;
-    let target_count = target_role
-        .map(|role| {
-            combo
-                .iter()
-                .filter(|candidate| {
-                    grand_role_for_servant(candidate.servant_id, grand_servants) == role
-                })
-                .count() as i32
-        })
-        .unwrap_or(main_count.max(deputy_count));
-
-    tier * 1_000 + target_count * 150 + main_count * 60 + deputy_count * 40 + np_count * 20
 }
 
 fn target_np_color(
@@ -6046,42 +6213,276 @@ fn sort_grand_picks(
     });
 }
 
+fn saber_rules_for_priority_item(item: GrandChainPriorityItem) -> Vec<GrandCardRule> {
+    match item {
+        GrandChainPriorityItem::MainBraveChain => vec![
+            GrandCardRule {
+                slots: [
+                    slot(RuleOwner::MainGrand, RuleKind::Command, RuleColor::Any),
+                    slot(RuleOwner::MainGrand, RuleKind::Command, RuleColor::Any),
+                    slot(RuleOwner::MainGrand, RuleKind::Np, RuleColor::Any),
+                ],
+                same_color: false,
+                color_set_baq: true,
+                include: Vec::new(),
+                exclude: Vec::new(),
+                target_role: Some(GrandRole::Main),
+            },
+            GrandCardRule {
+                slots: [
+                    slot(
+                        RuleOwner::MainGrand,
+                        RuleKind::Command,
+                        RuleColor::Exact("b"),
+                    ),
+                    slot(
+                        RuleOwner::MainGrand,
+                        RuleKind::Command,
+                        RuleColor::Exact("a"),
+                    ),
+                    slot(
+                        RuleOwner::MainGrand,
+                        RuleKind::Command,
+                        RuleColor::Exact("q"),
+                    ),
+                ],
+                same_color: false,
+                color_set_baq: true,
+                include: Vec::new(),
+                exclude: vec![need(RuleOwner::MainGrand, RuleKind::Np)],
+                target_role: Some(GrandRole::Main),
+            },
+        ],
+        GrandChainPriorityItem::MainReadyNp => vec![GrandCardRule {
+            slots: [
+                any_slot(),
+                any_slot(),
+                slot(RuleOwner::MainGrand, RuleKind::Np, RuleColor::Any),
+            ],
+            same_color: false,
+            color_set_baq: false,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            target_role: Some(GrandRole::Main),
+        }],
+        GrandChainPriorityItem::DeputyBraveChain => vec![
+            GrandCardRule {
+                slots: [
+                    slot(RuleOwner::DeputyGrand, RuleKind::Command, RuleColor::Any),
+                    slot(RuleOwner::DeputyGrand, RuleKind::Command, RuleColor::Any),
+                    slot(RuleOwner::DeputyGrand, RuleKind::Np, RuleColor::Any),
+                ],
+                same_color: false,
+                color_set_baq: true,
+                include: Vec::new(),
+                exclude: Vec::new(),
+                target_role: Some(GrandRole::Deputy),
+            },
+            GrandCardRule {
+                slots: [
+                    slot(
+                        RuleOwner::DeputyGrand,
+                        RuleKind::Command,
+                        RuleColor::Exact("b"),
+                    ),
+                    slot(
+                        RuleOwner::DeputyGrand,
+                        RuleKind::Command,
+                        RuleColor::Exact("a"),
+                    ),
+                    slot(
+                        RuleOwner::DeputyGrand,
+                        RuleKind::Command,
+                        RuleColor::Exact("q"),
+                    ),
+                ],
+                same_color: false,
+                color_set_baq: true,
+                include: Vec::new(),
+                exclude: vec![need(RuleOwner::DeputyGrand, RuleKind::Np)],
+                target_role: Some(GrandRole::Deputy),
+            },
+        ],
+        GrandChainPriorityItem::MainColorChain => vec![GrandCardRule {
+            slots: [any_slot(), any_slot(), any_slot()],
+            same_color: true,
+            color_set_baq: false,
+            include: vec![need(RuleOwner::MainGrand, RuleKind::Any)],
+            exclude: Vec::new(),
+            target_role: Some(GrandRole::Main),
+        }],
+        GrandChainPriorityItem::DeputyColorChain => vec![GrandCardRule {
+            slots: [any_slot(), any_slot(), any_slot()],
+            same_color: true,
+            color_set_baq: false,
+            include: vec![need(RuleOwner::DeputyGrand, RuleKind::Any)],
+            exclude: Vec::new(),
+            target_role: Some(GrandRole::Deputy),
+        }],
+        GrandChainPriorityItem::Fallback => vec![GrandCardRule {
+            slots: [any_slot(), any_slot(), any_slot()],
+            same_color: false,
+            color_set_baq: false,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            target_role: None,
+        }],
+    }
+}
+
+fn saber_grand_card_rules(strategy: &GrandCardStrategy) -> Vec<GrandCardRule> {
+    normalized_grand_chain_priority(strategy)
+        .into_iter()
+        .flat_map(saber_rules_for_priority_item)
+        .collect()
+}
+
+fn berserker_grand_card_rules() -> Vec<GrandCardRule> {
+    vec![
+        GrandCardRule {
+            slots: [
+                slot(
+                    RuleOwner::Any,
+                    RuleKind::Command,
+                    RuleColor::SameAsNp(GrandRole::Main),
+                ),
+                slot(
+                    RuleOwner::Any,
+                    RuleKind::Command,
+                    RuleColor::SameAsNp(GrandRole::Main),
+                ),
+                slot(RuleOwner::MainGrand, RuleKind::Np, RuleColor::Any),
+            ],
+            same_color: false,
+            color_set_baq: false,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            target_role: Some(GrandRole::Main),
+        },
+        GrandCardRule {
+            slots: [
+                any_slot(),
+                any_slot(),
+                slot(RuleOwner::MainGrand, RuleKind::Np, RuleColor::Any),
+            ],
+            same_color: false,
+            color_set_baq: false,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            target_role: Some(GrandRole::Main),
+        },
+        GrandCardRule {
+            slots: [
+                slot(
+                    RuleOwner::Any,
+                    RuleKind::Command,
+                    RuleColor::SameAsNp(GrandRole::Deputy),
+                ),
+                slot(
+                    RuleOwner::Any,
+                    RuleKind::Command,
+                    RuleColor::SameAsNp(GrandRole::Deputy),
+                ),
+                slot(RuleOwner::DeputyGrand, RuleKind::Np, RuleColor::Any),
+            ],
+            same_color: false,
+            color_set_baq: false,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            target_role: Some(GrandRole::Deputy),
+        },
+        GrandCardRule {
+            slots: [any_slot(), any_slot(), any_slot()],
+            same_color: true,
+            color_set_baq: false,
+            include: vec![need(RuleOwner::MainGrand, RuleKind::Any)],
+            exclude: vec![need(RuleOwner::MainGrand, RuleKind::Np)],
+            target_role: Some(GrandRole::Main),
+        },
+        GrandCardRule {
+            slots: [any_slot(), any_slot(), any_slot()],
+            same_color: true,
+            color_set_baq: false,
+            include: vec![need(RuleOwner::DeputyGrand, RuleKind::Any)],
+            exclude: vec![need(RuleOwner::DeputyGrand, RuleKind::Np)],
+            target_role: Some(GrandRole::Deputy),
+        },
+        GrandCardRule {
+            slots: [
+                slot(RuleOwner::Any, RuleKind::Any, RuleColor::Exact("b")),
+                slot(RuleOwner::Any, RuleKind::Any, RuleColor::Exact("a")),
+                slot(RuleOwner::Any, RuleKind::Any, RuleColor::Exact("q")),
+            ],
+            same_color: false,
+            color_set_baq: true,
+            include: vec![need(RuleOwner::AnyGrand, RuleKind::Any)],
+            exclude: Vec::new(),
+            target_role: None,
+        },
+        GrandCardRule {
+            slots: [any_slot(), any_slot(), any_slot()],
+            same_color: false,
+            color_set_baq: false,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            target_role: None,
+        },
+    ]
+}
+
+fn grand_card_rules_for_class(
+    grand_class: GrandClass,
+    strategy: &GrandCardStrategy,
+) -> Vec<GrandCardRule> {
+    match grand_class {
+        GrandClass::Saber => saber_grand_card_rules(strategy),
+        GrandClass::Berserker => berserker_grand_card_rules(),
+    }
+}
+
 fn choose_grand_auto_picks(
     candidates: &[AdvancedPickCandidate],
     grand_servants: &[GrandServantRuntimeConfig],
     strategy: &GrandCardStrategy,
+    grand_class: GrandClass,
 ) -> Vec<Pick> {
-    let mut best_score = i32::MIN;
-    let mut best_role = None;
-    let mut best: Vec<AdvancedPickCandidate> = Vec::new();
-    for i in 0..candidates.len() {
-        for j in (i + 1)..candidates.len() {
-            for k in (j + 1)..candidates.len() {
-                let combo = vec![&candidates[i], &candidates[j], &candidates[k]];
-                let score = score_grand_combo(&combo, grand_servants, strategy);
-                if score > best_score {
-                    best_score = score;
-                    best_role = grand_combo_tier(&combo, grand_servants, strategy).1;
-                    best = vec![
-                        candidates[i].clone(),
-                        candidates[j].clone(),
-                        candidates[k].clone(),
-                    ];
+    for rule in grand_card_rules_for_class(grand_class, strategy) {
+        let mut best: Option<GrandRuleMatch> = None;
+        for i in 0..candidates.len() {
+            for j in (i + 1)..candidates.len() {
+                for k in (j + 1)..candidates.len() {
+                    let combo = vec![&candidates[i], &candidates[j], &candidates[k]];
+                    let Some(rule_match) = match_grand_rule(&combo, &rule, grand_servants) else {
+                        continue;
+                    };
+                    if best
+                        .as_ref()
+                        .is_none_or(|current| rule_match.score > current.score)
+                    {
+                        best = Some(rule_match);
+                    }
                 }
             }
         }
+        if let Some(best) = best {
+            return best
+                .ordered
+                .into_iter()
+                .map(|candidate| candidate.pick)
+                .collect();
+        }
     }
-    sort_grand_picks(&mut best, best_role, grand_servants);
-    best.into_iter().map(|candidate| candidate.pick).collect()
+    Vec::new()
 }
 
-fn choose_advanced_auto_picks(
+fn choose_advanced_auto_picks_with_grand_class(
     scene: &AdvancedBattleScene,
     cards: &[CommandCardMatch],
     nps: &[NoblePhantasmMatch],
     party_ids: &[Option<u32>; 3],
     grand_servants: &[GrandServantRuntimeConfig],
     grand_card_strategy: &GrandCardStrategy,
+    grand_class: GrandClass,
 ) -> Vec<Pick> {
     let main_index = main_output_index(scene);
     let main_np_color = main_np_color(scene, party_ids);
@@ -6139,6 +6540,13 @@ fn choose_advanced_auto_picks(
         let mut selected = candidates;
         if grand_servants.is_empty() {
             sort_advanced_picks(scene, &mut selected);
+        } else if selected.len() == 3 {
+            return choose_grand_auto_picks(
+                &selected,
+                grand_servants,
+                grand_card_strategy,
+                grand_class,
+            );
         } else {
             sort_grand_picks(&mut selected, None, grand_servants);
         }
@@ -6149,7 +6557,12 @@ fn choose_advanced_auto_picks(
     }
 
     if !grand_servants.is_empty() {
-        return choose_grand_auto_picks(&candidates, grand_servants, grand_card_strategy);
+        return choose_grand_auto_picks(
+            &candidates,
+            grand_servants,
+            grand_card_strategy,
+            grand_class,
+        );
     }
 
     let mut best_score = i32::MIN;
@@ -6172,6 +6585,26 @@ fn choose_advanced_auto_picks(
     }
     sort_advanced_picks(scene, &mut best);
     best.into_iter().map(|candidate| candidate.pick).collect()
+}
+
+#[cfg(test)]
+fn choose_advanced_auto_picks(
+    scene: &AdvancedBattleScene,
+    cards: &[CommandCardMatch],
+    nps: &[NoblePhantasmMatch],
+    party_ids: &[Option<u32>; 3],
+    grand_servants: &[GrandServantRuntimeConfig],
+    grand_card_strategy: &GrandCardStrategy,
+) -> Vec<Pick> {
+    choose_advanced_auto_picks_with_grand_class(
+        scene,
+        cards,
+        nps,
+        party_ids,
+        grand_servants,
+        grand_card_strategy,
+        GrandClass::Saber,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -7470,7 +7903,7 @@ mod tests {
     }
 
     #[test]
-    fn grand_auto_same_color_chain_places_np_first() {
+    fn grand_auto_main_np_color_chain_places_np_last() {
         let scene = empty_advanced_scene();
         let cards = vec![
             command_card(0, Some(10), Some("b"), None),
@@ -7490,7 +7923,7 @@ mod tests {
             &GrandCardStrategy::default(),
         );
 
-        assert_eq!(pick_labels(&picks), vec!["NP0", "C0", "C1"]);
+        assert_eq!(pick_labels(&picks), vec!["C0", "C1", "NP0"]);
     }
 
     #[test]
@@ -7517,7 +7950,7 @@ mod tests {
             &GrandCardStrategy::default(),
         );
 
-        assert_eq!(pick_labels(&picks), vec!["NP1", "NP0", "C0"]);
+        assert_eq!(pick_labels(&picks), vec!["NP1", "C0", "NP0"]);
     }
 
     /// Reproduces the real-world Iori (id 405, buster NP) hand:
@@ -7598,13 +8031,13 @@ mod tests {
     }
 
     #[test]
-    fn grand_auto_respects_custom_chain_priority_order() {
+    fn grand_auto_respects_custom_exquisite_brave_chain_priority_order() {
         let scene = empty_advanced_scene();
         let cards = vec![
             command_card(0, Some(20), Some("a"), None),
-            command_card(1, Some(20), Some("a"), None),
-            command_card(2, Some(20), Some("a"), None),
-            command_card(3, Some(30), Some("b"), None),
+            command_card(1, Some(20), Some("b"), None),
+            command_card(2, Some(20), Some("q"), None),
+            command_card(3, Some(30), Some("a"), None),
             command_card(4, Some(30), Some("q"), None),
         ];
         let nps = vec![np_slot(0, true), np_slot(1, false), np_slot(2, false)];
@@ -7631,7 +8064,138 @@ mod tests {
             &strategy,
         );
 
-        assert_eq!(pick_labels(&picks), vec!["C0", "C1", "C2"]);
+        assert_eq!(pick_labels(&picks), vec!["C1", "C0", "C2"]);
+    }
+
+    #[test]
+    fn berserker_grand_auto_main_np_color_chain_clicks_np_last() {
+        let scene = empty_advanced_scene();
+        let cards = vec![
+            command_card(0, Some(20), Some("b"), None),
+            command_card(1, Some(30), Some("b"), None),
+            command_card(2, Some(10), Some("a"), None),
+            command_card(3, Some(30), Some("q"), None),
+            command_card(4, Some(20), Some("a"), None),
+        ];
+        let nps = vec![np_slot(0, true), np_slot(1, false), np_slot(2, false)];
+        let grands = vec![grand_config(10, "buster", "damage")];
+        let picks = choose_advanced_auto_picks_with_grand_class(
+            &scene,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &grands,
+            &GrandCardStrategy::default(),
+            GrandClass::Berserker,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["C0", "C1", "NP0"]);
+    }
+
+    #[test]
+    fn berserker_grand_auto_main_np_outranks_deputy_np_color_chain() {
+        let scene = empty_advanced_scene();
+        let cards = vec![
+            command_card(0, Some(10), Some("a"), None),
+            command_card(1, Some(10), Some("a"), None),
+            command_card(2, Some(20), Some("b"), None),
+            command_card(3, Some(30), Some("b"), None),
+            command_card(4, Some(30), Some("a"), None),
+        ];
+        let nps = vec![np_slot(0, true), np_slot(1, true), np_slot(2, false)];
+        let grands = vec![
+            grand_config(10, "arts", "damage"),
+            grand_config_at(1, 20, "buster", "damage"),
+        ];
+        let picks = choose_advanced_auto_picks_with_grand_class(
+            &scene,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &grands,
+            &GrandCardStrategy::default(),
+            GrandClass::Berserker,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["C0", "C1", "NP0"]);
+    }
+
+    #[test]
+    fn berserker_grand_auto_deputy_np_color_chain_outranks_main_other_same_color_without_main_np() {
+        let scene = empty_advanced_scene();
+        let cards = vec![
+            command_card(0, Some(10), Some("a"), None),
+            command_card(1, Some(10), Some("a"), None),
+            command_card(2, Some(20), Some("b"), None),
+            command_card(3, Some(30), Some("b"), None),
+            command_card(4, Some(30), Some("a"), None),
+        ];
+        let nps = vec![np_slot(0, false), np_slot(1, true), np_slot(2, false)];
+        let grands = vec![
+            grand_config(10, "arts", "damage"),
+            grand_config_at(1, 20, "buster", "damage"),
+        ];
+        let picks = choose_advanced_auto_picks_with_grand_class(
+            &scene,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &grands,
+            &GrandCardStrategy::default(),
+            GrandClass::Berserker,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["C3", "C2", "NP1"]);
+    }
+
+    #[test]
+    fn berserker_grand_auto_other_same_color_runs_when_main_np_is_unavailable() {
+        let scene = empty_advanced_scene();
+        let cards = vec![
+            command_card(0, Some(10), Some("a"), None),
+            command_card(1, Some(20), Some("a"), None),
+            command_card(2, Some(30), Some("a"), None),
+            command_card(3, Some(20), Some("b"), None),
+            command_card(4, Some(30), Some("q"), None),
+        ];
+        let nps = vec![np_slot(0, false), np_slot(1, false), np_slot(2, false)];
+        let grands = vec![grand_config(10, "quick", "damage")];
+        let picks = choose_advanced_auto_picks_with_grand_class(
+            &scene,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &grands,
+            &GrandCardStrategy::default(),
+            GrandClass::Berserker,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["C1", "C2", "C0"]);
+    }
+
+    #[test]
+    fn berserker_grand_auto_exquisite_chain_uses_buster_arts_quick_slot_order() {
+        let scene = empty_advanced_scene();
+        let cards = vec![
+            command_card(0, Some(30), Some("q"), None),
+            command_card(1, Some(20), Some("a"), None),
+            command_card(2, Some(30), Some("b"), None),
+            command_card(3, Some(10), Some("q"), None),
+            command_card(4, Some(20), Some("a"), None),
+        ];
+        let nps = vec![np_slot(0, false), np_slot(1, false), np_slot(2, false)];
+        let grands = vec![grand_config(10, "buster", "damage")];
+        let picks = choose_advanced_auto_picks_with_grand_class(
+            &scene,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &grands,
+            &GrandCardStrategy::default(),
+            GrandClass::Berserker,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["C2", "C1", "C3"]);
     }
 
     /// A ready DEPUTY NP, on its own, must NOT outrank a main same-
@@ -7682,6 +8246,7 @@ mod tests {
         payload["apRecoveryItems"] = serde_json::json!(["gold", "bronze"]);
         let cfg: RunConfig = serde_json::from_value(payload).unwrap();
         assert_eq!(cfg.support_servant_id, Some(284));
+        assert_eq!(cfg.grand_class, GrandClass::Saber);
         assert_eq!(cfg.support_noble_phantasm_level_min, Some(2));
         assert_eq!(cfg.support_skill_level_mins, [Some(10), None, Some(9)]);
         assert_eq!(
@@ -7694,6 +8259,18 @@ mod tests {
             cfg.ap_recovery_items,
             vec![ApRecoveryItem::Gold, ApRecoveryItem::Bronze]
         );
+    }
+
+    #[test]
+    fn run_config_round_trips_grand_class() {
+        let mut payload = minimal_run_config_json();
+        payload["grandClass"] = serde_json::json!("berserker");
+
+        let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+
+        assert_eq!(cfg.grand_class, GrandClass::Berserker);
+        let serialized = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(serialized["grandClass"], serde_json::json!("berserker"));
     }
 
     #[test]
