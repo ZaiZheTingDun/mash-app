@@ -23,7 +23,7 @@ import { featureToggles } from "./featureToggles";
 import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
 import type { CraftEssence } from "./types/craftEssence";
-import type { Project } from "./types/project";
+import type { GrandClass, Project } from "./types/project";
 import type { AssetBundleStatus } from "./types/assets";
 import type { RuntimeStatus } from "./types/runtime";
 import type { SelfCheckStatus } from "./types/selfCheck";
@@ -420,8 +420,8 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   // sidebar now reduced to action buttons, the picker moves to the
   // `<ProjectBar/>` ribbon above the team grid and the mutations live
   // here so both `App` and `ProjectBar` mutate the same lifted state.
-  const handleCreateProject = useCallback((name: string, advancedMode = false) => {
-    invoke<Project>("create_project", { name, advancedMode })
+  const handleCreateProject = useCallback((name: string, advancedMode = false, grandClass: GrandClass = "saber") => {
+    invoke<Project>("create_project", { name, advancedMode, grandClass })
       .then((p) => {
         setProjects((prev) => [...prev, p]);
         setActiveProjectId(p.id);
@@ -559,6 +559,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
           {view === "battle" ? (
             <BattlePage
               projects={projects}
+              servants={servants}
               activeProjectId={activeProjectId}
               onProjectSelect={handleProjectSelect}
               onCreateProject={handleCreateProject}
@@ -623,6 +624,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
                     partyMembers={partyMembers}
                     advancedMode={activeProject?.advancedMode === true}
                     grandServants={activeProject?.grandServants ?? []}
+                    grandClass={activeProject?.grandClass ?? "saber"}
                     grandCardStrategy={activeProject?.grandCardStrategy}
                     grandCardPriorityEnabled={featureToggles.grandCardPriority}
                     onGrandServantsChange={(grandServants) => {

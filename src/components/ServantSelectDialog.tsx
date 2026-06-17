@@ -23,6 +23,7 @@ interface ServantSelectDialogProps {
    * support slot) that want to allow duplicates can simply omit it.
    */
   disabledIds?: number[];
+  defaultClassFilter?: string;
 }
 
 const CLASS_COLORS: Record<string, string> = {
@@ -75,9 +76,10 @@ export function ServantSelectDialog({
   onSelect,
   servants,
   disabledIds,
+  defaultClassFilter,
 }: ServantSelectDialogProps) {
   const [search, setSearch] = useState("");
-  const [classFilter, setClassFilter] = useState("");
+  const [classFilter, setClassFilter] = useState(defaultClassFilter ?? "");
   const [rarityFilter, setRarityFilter] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
@@ -85,7 +87,8 @@ export function ServantSelectDialog({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const classOptions = useMemo(
-    () => Array.from(new Set(servants.map((s) => s.class))).sort(),
+    () =>
+      Array.from(new Set(servants.map((s) => s.class))).sort(),
     [servants]
   );
   const rarityOptions = useMemo(
@@ -120,6 +123,13 @@ export function ServantSelectDialog({
         aliasMatchesSearch(s, q)
     );
   }, [servants, search, classFilter, rarityFilter, disabledIds]);
+
+  useEffect(() => {
+    if (!classFilter) return;
+    if (!classOptions.includes(classFilter)) {
+      setClassFilter("");
+    }
+  }, [classFilter, classOptions]);
 
   const safeActiveIndex =
     filtered.length === 0 ? 0 : Math.min(activeIndex, filtered.length - 1);
@@ -185,6 +195,13 @@ export function ServantSelectDialog({
     }
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    setClassFilter(defaultClassFilter ?? "");
+    setActiveIndex(0);
+    resetScroll();
+  }, [open, defaultClassFilter, resetScroll]);
+
   const handleSelect = useCallback(
     (servant: Servant) => {
       onSelect(servant);
@@ -199,6 +216,12 @@ export function ServantSelectDialog({
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       onOpenChange(nextOpen);
+      if (nextOpen) {
+        setClassFilter(defaultClassFilter ?? "");
+        setActiveIndex(0);
+        resetScroll();
+        return;
+      }
       if (!nextOpen) {
         setSearch("");
         setClassFilter("");
@@ -207,7 +230,7 @@ export function ServantSelectDialog({
         resetScroll();
       }
     },
-    [onOpenChange, resetScroll]
+    [defaultClassFilter, onOpenChange, resetScroll]
   );
 
   const ensureVisible = useCallback((index: number) => {

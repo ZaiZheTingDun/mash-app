@@ -45,7 +45,28 @@ const ALTRIA_CASTER: Servant = {
   rarity: 5,
 };
 
+const ALTRIA_SABER: Servant = {
+  id: 2,
+  variantKey: "2",
+  name_cn: "阿尔托莉雅",
+  name_jp: "アルトリア",
+  name_en: "Altria",
+  class: "Saber",
+  rarity: 5,
+};
+
+const HERACLES: Servant = {
+  id: 3,
+  variantKey: "3",
+  name_cn: "赫拉克勒斯",
+  name_jp: "ヘラクレス",
+  name_en: "Heracles",
+  class: "Berserker",
+  rarity: 4,
+};
+
 const SERVANTS: Servant[] = [MASH, ALTRIA_CASTER];
+const GRAND_SERVANTS: Servant[] = [ALTRIA_CASTER, ALTRIA_SABER, HERACLES];
 
 const CES: CraftEssence[] = [
   { id: 1, name: "Kaleidoscope" },
@@ -323,6 +344,64 @@ describe("ContentGrid", () => {
     // No <img> for this servant, but the placeholder shows the name.
     expect(screen.queryByAltText("阿尔托莉雅·卡斯特")).not.toBeInTheDocument();
     expect(screen.getByText("阿尔托莉雅·卡斯特")).toBeInTheDocument();
+  });
+
+  it("defaults servant selection filter to Saber in default grand battle projects", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <ContentGrid
+        servants={GRAND_SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{ ...PROJECT, advancedMode: true }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getAllByText("选择从者")[0]);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText("职介筛选")).toHaveTextContent("Saber");
+    expect(within(dialog).getByText("阿尔托莉雅")).toBeInTheDocument();
+    expect(within(dialog).queryByText("赫拉克勒斯")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("阿尔托莉雅·卡斯特")).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("combobox", { name: "职介筛选" }));
+    await user.click(await screen.findByRole("option", { name: "全部职介" }));
+
+    expect(within(dialog).getByText("阿尔托莉雅")).toBeInTheDocument();
+    expect(within(dialog).getByText("赫拉克勒斯")).toBeInTheDocument();
+    expect(within(dialog).getByText("阿尔托莉雅·卡斯特")).toBeInTheDocument();
+  });
+
+  it("defaults support selection filter to Berserker in berserker grand battle projects", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <ContentGrid
+        servants={GRAND_SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{ ...PROJECT, advancedMode: true, grandClass: "berserker" }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByText("助战"));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText("职介筛选")).toHaveTextContent("Berserker");
+    expect(within(dialog).getByText("赫拉克勒斯")).toBeInTheDocument();
+    expect(within(dialog).queryByText("阿尔托莉雅")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("阿尔托莉雅·卡斯特")).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("combobox", { name: "职介筛选" }));
+    await user.click(await screen.findByRole("option", { name: "全部职介" }));
+
+    expect(within(dialog).getByText("阿尔托莉雅")).toBeInTheDocument();
+    expect(within(dialog).getByText("赫拉克勒斯")).toBeInTheDocument();
+    expect(within(dialog).getByText("阿尔托莉雅·卡斯特")).toBeInTheDocument();
   });
 
   // --- Support badge -------------------------------------------------

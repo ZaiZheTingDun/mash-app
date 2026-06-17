@@ -502,6 +502,19 @@ impl Default for SupportGrandBondCeMode {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GrandClass {
+    Saber,
+    Berserker,
+}
+
+impl Default for GrandClass {
+    fn default() -> Self {
+        Self::Saber
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum ProjectRepeatMode {
@@ -598,6 +611,8 @@ pub struct Project {
     pub support_grand_craft_essence_mlb_required: [bool; 3],
     #[serde(default)]
     pub support_grand_bond_ce_mode: SupportGrandBondCeMode,
+    #[serde(default)]
+    pub grand_class: GrandClass,
     #[serde(default)]
     pub grand_servants: Vec<GrandServantConfig>,
     #[serde(default)]
@@ -925,6 +940,7 @@ fn create_project(
     app: tauri::AppHandle,
     name: String,
     advanced_mode: Option<bool>,
+    grand_class: Option<GrandClass>,
 ) -> Result<Project, String> {
     let project = Project {
         id: uuid::Uuid::new_v4().to_string(),
@@ -937,6 +953,7 @@ fn create_project(
         support_grand_craft_essence_mlb_required: default_support_grand_craft_essence_mlb_required(
         ),
         support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
+        grand_class: grand_class.unwrap_or_default(),
         grand_servants: Vec::new(),
         grand_card_strategy: GrandCardStrategy::default(),
         support_noble_phantasm_level_min: None,
@@ -5659,6 +5676,7 @@ mod tests {
             support_grand_craft_essence_mlb_required:
                 default_support_grand_craft_essence_mlb_required(),
             support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
+            grand_class: GrandClass::Saber,
             grand_servants: Vec::new(),
             grand_card_strategy: GrandCardStrategy::default(),
             support_noble_phantasm_level_min: None,
@@ -5953,6 +5971,7 @@ mod tests {
             project.support_grand_bond_ce_mode,
             SupportGrandBondCeMode::Any
         );
+        assert_eq!(project.grand_class, GrandClass::Saber);
         assert!(project.grand_servants.is_empty());
         assert_eq!(
             project.grand_card_strategy.chain_priority,
@@ -5968,6 +5987,20 @@ mod tests {
     }
 
     #[test]
+    fn project_grand_class_round_trips_as_camel_case() {
+        let json = serde_json::json!({
+            "id": "abc",
+            "name": "Grand",
+            "grandClass": "berserker",
+        });
+        let project: Project = serde_json::from_value(json).unwrap();
+        assert_eq!(project.grand_class, GrandClass::Berserker);
+
+        let serialized = serde_json::to_value(&project).unwrap();
+        assert_eq!(serialized["grandClass"], serde_json::json!("berserker"));
+    }
+
+    #[test]
     fn normalize_project_migrates_legacy_repeat_flag_to_infinite_mode() {
         let project = normalize_project(Project {
             id: "abc".into(),
@@ -5980,6 +6013,7 @@ mod tests {
             support_grand_craft_essence_mlb_required:
                 default_support_grand_craft_essence_mlb_required(),
             support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
+            grand_class: GrandClass::Saber,
             grand_servants: Vec::new(),
             grand_card_strategy: GrandCardStrategy::default(),
             support_noble_phantasm_level_min: None,

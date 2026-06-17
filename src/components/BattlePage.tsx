@@ -19,9 +19,11 @@ import saintQuartzImage from "../../src-tauri/resources/images/item_saint_quartz
 import type {
   BattleApRecoveryItem,
   BattleRepeatMode,
+  GrandClass,
   GrandChainPriorityItem,
   Project,
 } from "../types/project";
+import type { Servant } from "../types/servant";
 
 interface AutomationEvent {
   state: string;
@@ -78,9 +80,10 @@ const DEFAULT_GRAND_CHAIN_PRIORITY: GrandChainPriorityItem[] = [
 
 interface BattlePageProps {
   projects: Project[];
+  servants: Servant[];
   activeProjectId: string | null;
   onProjectSelect: (id: string) => void;
-  onCreateProject: (name: string, advancedMode?: boolean) => void;
+  onCreateProject: (name: string, advancedMode?: boolean, grandClass?: GrandClass) => void;
   onRenameProject: (id: string, name: string) => void;
   onDuplicateProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
@@ -163,7 +166,6 @@ export function BattlePage({
   }, []);
 
   const selectedProject = projects.find((project) => project.id === activeProjectId) ?? null;
-
   const projectDraft = useMemo(
     () => (selectedProject ? projectDraftFromProject(selectedProject) : null),
     [selectedProject]
@@ -255,6 +257,7 @@ export function BattlePage({
         selectedProject.supportGrandCraftEssenceMlbRequired ?? [true, true, true],
       supportGrandBondCeMode: selectedProject.supportGrandBondCeMode ?? "any",
       grandServants: selectedProject.grandServants ?? [],
+      grandClass: selectedProject.grandClass ?? "saber",
       grandCardStrategy: selectedProject.grandCardStrategy ?? {
         chainPriority: DEFAULT_GRAND_CHAIN_PRIORITY,
       },

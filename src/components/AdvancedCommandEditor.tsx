@@ -28,6 +28,7 @@ import type {
   GrandCardPriority,
   GrandCardStrategy,
   GrandChainPriorityItem,
+  GrandClass,
   GrandNpCard,
   GrandServantConfig,
 } from "../types/project";
@@ -42,6 +43,7 @@ interface AdvancedCommandEditorProps {
   partyLineup: (Servant | null)[];
   partyMembers?: PartyMember[];
   grandServants?: GrandServantConfig[];
+  grandClass?: GrandClass;
   grandCardStrategy?: GrandCardStrategy;
   grandCardPriorityEnabled?: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
@@ -373,7 +375,11 @@ function GrandOutputSettings({
     onChange?.(normalizeGrandServants(next));
   };
   const addGrandServant = (slotIndex: number) => {
-    if (normalized.length >= 2 || selectedSlots.has(slotIndex) || partyLineup[slotIndex] == null) {
+    if (
+      normalized.length >= 2 ||
+      selectedSlots.has(slotIndex) ||
+      partyLineup[slotIndex] == null
+    ) {
       return;
     }
     persist([...normalized, { slotIndex, npCard: "auto", priority: "damage" }]);
@@ -437,7 +443,11 @@ function GrandOutputSettings({
                 index={index}
                 src={servant ? faces[servant.variantKey] : null}
                 selected={selectedSlots.has(index)}
-                disabled={servant == null || selectedSlots.has(index) || normalized.length >= 2}
+                disabled={
+                  servant == null ||
+                  selectedSlots.has(index) ||
+                  normalized.length >= 2
+                }
                 isSupport={partyMembers[index]?.isSupport ?? false}
                 onClick={() => addGrandServant(index)}
               />

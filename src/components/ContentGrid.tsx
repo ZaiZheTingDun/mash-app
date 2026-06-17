@@ -33,6 +33,7 @@ import { CraftEssenceSelectDialog } from "./CraftEssenceSelectDialog";
 import type { Servant } from "../types/servant";
 import type { CraftEssence } from "../types/craftEssence";
 import type {
+  GrandClass,
   Project,
   SupportGrandBondCeMode,
   SupportGrandCraftEssenceIds,
@@ -67,7 +68,7 @@ interface ContentGridProps {
    * Active project, the source of truth for the pinned support servant.
    * When `null`, the support slot still renders but selecting a servant
    * is a no-op until a project is created/selected.
-   */
+  */
   activeProject: Project | null;
   onUpdateActiveProject: (next: Project) => Promise<void> | void;
 }
@@ -132,6 +133,10 @@ function normalizeSupportGrandCraftEssenceMlbRequired(
   values: Project["supportGrandCraftEssenceMlbRequired"],
 ): SupportGrandCraftEssenceMlbRequired {
   return [0, 1, 2].map((index) => values?.[index] ?? true) as SupportGrandCraftEssenceMlbRequired;
+}
+
+function grandClassToServantClass(grandClass: GrandClass | undefined): string {
+  return grandClass === "berserker" ? "Berserker" : "Saber";
 }
 
 function supportLevelLabel(level: number | null | undefined) {
@@ -1089,6 +1094,10 @@ export function ContentGrid({
     activeProject?.supportGrandCraftEssenceMlbRequired,
   );
   const supportGrandBondCeMode = activeProject?.supportGrandBondCeMode ?? "any";
+  const defaultServantClassFilter =
+    activeProject?.advancedMode === true
+      ? grandClassToServantClass(activeProject.grandClass)
+      : undefined;
 
   const handleGrandModeToggle = () => {
     if (!activeProject) return;
@@ -1314,6 +1323,7 @@ export function ContentGrid({
         onSelect={handleSelect}
         servants={servants}
         disabledIds={disabledIds}
+        defaultClassFilter={defaultServantClassFilter}
       />
 
       <CraftEssenceSelectDialog

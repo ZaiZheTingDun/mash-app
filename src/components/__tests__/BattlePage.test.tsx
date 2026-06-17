@@ -6,6 +6,37 @@ import { useState } from "react";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import { BattlePage } from "../BattlePage";
 import type { Project } from "../../types/project";
+import type { Servant } from "../../types/servant";
+
+const SABER: Servant = {
+  id: 1,
+  variantKey: "1",
+  name_cn: "剑阶甲",
+  name_jp: "剑阶甲",
+  name_en: "Saber A",
+  class: "Saber",
+  rarity: 5,
+};
+
+const BERSERKER: Servant = {
+  id: 2,
+  variantKey: "2",
+  name_cn: "狂阶乙",
+  name_jp: "狂阶乙",
+  name_en: "Berserker B",
+  class: "Berserker",
+  rarity: 5,
+};
+
+const CASTER: Servant = {
+  id: 3,
+  variantKey: "3",
+  name_cn: "术阶丙",
+  name_jp: "术阶丙",
+  name_en: "Caster C",
+  class: "Caster",
+  rarity: 5,
+};
 
 const PROJECT: Project = {
   id: "project-1",
@@ -36,7 +67,7 @@ function mockProjectCommands() {
   });
 }
 
-function renderBattlePage(initialProject: Project) {
+function renderBattlePage(initialProject: Project, servants: Servant[] = [SABER, BERSERKER, CASTER]) {
   const callbacks = {
     onCreateProject: vi.fn(),
     onRenameProject: vi.fn(),
@@ -58,6 +89,7 @@ function renderBattlePage(initialProject: Project) {
     return (
       <BattlePage
         projects={projects}
+        servants={servants}
         activeProjectId={activeProjectId}
         onProjectSelect={setActiveProjectId}
         onCreateProject={callbacks.onCreateProject}
@@ -173,6 +205,96 @@ describe("BattlePage", () => {
     expect(screen.getByText("戴冠战需要选择 1 到 2 名冠位从者")).toBeInTheDocument();
     expect(callbacks.onAutomationStart).not.toHaveBeenCalled();
     expect(vi.mocked(invoke).mock.calls.some(([cmd]) => cmd === "start_automation")).toBe(false);
+  });
+
+  it("defaults legacy grand battle projects to saber without blocking other classes", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage({
+      ...PROJECT,
+      advancedMode: true,
+      grandServants: [{ slotIndex: 0, npCard: "auto", priority: "damage" }],
+      slots: [
+        { id: "slot-0", type: "servant", servantId: CASTER.id },
+        { id: "slot-1", type: "servant", servantId: null },
+        { id: "slot-2", type: "support", servantId: null },
+        { id: "slot-3", type: "servant", servantId: null },
+        { id: "slot-4", type: "servant", servantId: null },
+        { id: "slot-5", type: "servant", servantId: null },
+      ],
+    });
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("start_automation", {
+        config: expect.objectContaining({
+          grandClass: "saber",
+          grandServants: [{ slotIndex: 0, npCard: "auto", priority: "damage" }],
+        }),
+      });
+    });
+  });
+
+  it("starts berserker grand battle even when a grand servant slot is not berserker", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage({
+      ...PROJECT,
+      advancedMode: true,
+      grandClass: "berserker",
+      grandServants: [{ slotIndex: 0, npCard: "auto", priority: "damage" }],
+      slots: [
+        { id: "slot-0", type: "servant", servantId: SABER.id },
+        { id: "slot-1", type: "servant", servantId: null },
+        { id: "slot-2", type: "support", servantId: null },
+        { id: "slot-3", type: "servant", servantId: null },
+        { id: "slot-4", type: "servant", servantId: null },
+        { id: "slot-5", type: "servant", servantId: null },
+      ],
+    });
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("start_automation", {
+        config: expect.objectContaining({
+          grandClass: "berserker",
+          grandServants: [{ slotIndex: 0, npCard: "auto", priority: "damage" }],
+        }),
+      });
+    });
+  });
+
+  it("starts berserker grand battle when all selected servants match", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage({
+      ...PROJECT,
+      advancedMode: true,
+      grandClass: "berserker",
+      supportServantId: BERSERKER.id,
+      grandServants: [{ slotIndex: 0, npCard: "auto", priority: "damage" }],
+      slots: [
+        { id: "slot-0", type: "servant", servantId: BERSERKER.id },
+        { id: "slot-1", type: "servant", servantId: null },
+        { id: "slot-2", type: "support", servantId: null },
+        { id: "slot-3", type: "servant", servantId: null },
+        { id: "slot-4", type: "servant", servantId: null },
+        { id: "slot-5", type: "servant", servantId: null },
+      ],
+    });
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("start_automation", {
+        config: expect.objectContaining({
+          grandClass: "berserker",
+          grandServants: [{ slotIndex: 0, npCard: "auto", priority: "damage" }],
+        }),
+      });
+    });
   });
 
   it("persists count mode and repeat count from the inline stepper", async () => {

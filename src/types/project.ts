@@ -45,6 +45,7 @@ export type SupportGrandCraftEssenceMlbRequired = [boolean, boolean, boolean];
 export type SupportGrandBondCeMode = "any" | "bond" | "bondNp";
 export type GrandNpCard = "auto" | "buster" | "arts" | "quick";
 export type GrandCardPriority = "damage" | "np";
+export type GrandClass = "saber" | "berserker";
 export type GrandChainPriorityItem =
   | "mainBraveChain"
   | "mainReadyNp"
@@ -86,6 +87,7 @@ export interface Project {
   supportGrandCraftEssenceIds?: SupportGrandCraftEssenceIds;
   supportGrandCraftEssenceMlbRequired?: SupportGrandCraftEssenceMlbRequired;
   supportGrandBondCeMode?: SupportGrandBondCeMode;
+  grandClass?: GrandClass;
   grandServants?: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
   supportNoblePhantasmLevelMin?: number | null;

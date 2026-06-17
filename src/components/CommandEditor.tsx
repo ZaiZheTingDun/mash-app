@@ -16,7 +16,7 @@ import {
   TrashIcon,
 } from "@radix-ui/react-icons";
 import type { BattleScene, BattleTurn, AttackCard } from "../types/command";
-import type { GrandCardStrategy, GrandServantConfig } from "../types/project";
+import type { GrandCardStrategy, GrandClass, GrandServantConfig } from "../types/project";
 import type { Servant } from "../types/servant";
 
 interface CommandEditorProps {
@@ -25,6 +25,7 @@ interface CommandEditorProps {
   partyMembers?: PartyMember[];
   advancedMode?: boolean;
   grandServants?: GrandServantConfig[];
+  grandClass?: GrandClass;
   grandCardStrategy?: GrandCardStrategy;
   grandCardPriorityEnabled?: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
@@ -127,6 +128,7 @@ export function CommandEditor({
   partyMembers,
   advancedMode = false,
   grandServants = [],
+  grandClass = "saber",
   grandCardStrategy,
   grandCardPriorityEnabled = false,
   onGrandServantsChange,
@@ -254,6 +256,7 @@ export function CommandEditor({
         partyLineup={partyLineup}
         partyMembers={initialPartyMembers}
         grandServants={grandServants}
+        grandClass={grandClass}
         grandCardStrategy={grandCardStrategy}
         grandCardPriorityEnabled={grandCardPriorityEnabled}
         onGrandServantsChange={onGrandServantsChange}

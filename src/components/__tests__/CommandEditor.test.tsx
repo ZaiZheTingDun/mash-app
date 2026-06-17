@@ -11,6 +11,7 @@ function makeServant(
   id: number,
   name_cn: string,
   noblePhantasmCard?: Servant["noblePhantasmCard"],
+  cls = "saber",
 ): Servant {
   return {
     id,
@@ -18,7 +19,7 @@ function makeServant(
     name_cn,
     name_jp: name_cn,
     name_en: name_cn,
-    class: "saber",
+    class: cls,
     rarity: 5,
     noblePhantasmCard,
   };
@@ -240,6 +241,114 @@ describe("CommandEditor pagination", () => {
 
     expect(onGrandServantsChange).toHaveBeenCalledWith([
       { slotIndex: 0, npCard: "auto", priority: "damage" },
+    ]);
+  });
+
+  it("allows any class in the advanced grand output picker", async () => {
+    const user = userEvent.setup();
+    const onGrandServantsChange = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        grandClass="berserker"
+        onGrandServantsChange={onGrandServantsChange}
+        partyLineup={[
+          makeServant(1, "剑阶甲", undefined, "saber"),
+          makeServant(2, "狂阶乙", undefined, "berserker"),
+          makeServant(3, "术阶丙", undefined, "caster"),
+        ]}
+      />
+    );
+
+    await screen.findByText("主力输出");
+    expect(screen.getByRole("button", { name: "剑阶甲" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "术阶丙" })).not.toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "剑阶甲" }));
+
+    expect(onGrandServantsChange).toHaveBeenCalledWith([
+      { slotIndex: 0, npCard: "auto", priority: "damage" },
+    ]);
+  });
+
+  it("keeps persisted grand servants that do not match the selected grand class", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        grandClass="berserker"
+        grandServants={[{ slotIndex: 0, npCard: "auto", priority: "damage" }]}
+        partyLineup={[
+          makeServant(1, "剑阶甲", undefined, "saber"),
+          makeServant(2, "狂阶乙", undefined, "berserker"),
+          makeServant(3, "术阶丙", undefined, "caster"),
+        ]}
+      />
+    );
+
+    await screen.findByText("主力输出");
+
+    expect(screen.getByRole("button", { name: "主冠位：剑阶甲" })).toBeInTheDocument();
+  });
+
+  it("adds a second grand output servant without class restriction", async () => {
+    const user = userEvent.setup();
+    const onGrandServantsChange = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        grandClass="berserker"
+        grandServants={[{ slotIndex: 0, npCard: "auto", priority: "damage" }]}
+        onGrandServantsChange={onGrandServantsChange}
+        partyLineup={[
+          makeServant(1, "剑阶甲", undefined, "saber"),
+          makeServant(2, "狂阶乙", undefined, "berserker"),
+          makeServant(3, "术阶丙", undefined, "caster"),
+        ]}
+      />
+    );
+
+    await screen.findByText("主力输出");
+    expect(screen.getByRole("button", { name: "主冠位：剑阶甲" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "狂阶乙" })).not.toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "狂阶乙" }));
+
+    expect(onGrandServantsChange).toHaveBeenCalledWith([
+      { slotIndex: 0, npCard: "auto", priority: "damage" },
+      { slotIndex: 1, npCard: "auto", priority: "damage" },
     ]);
   });
 
