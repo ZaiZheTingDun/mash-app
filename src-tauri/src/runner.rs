@@ -5482,6 +5482,8 @@ fn pick_by_priority(
         }
     }
 
+    let fixed_len = priority.len().min(3);
+    fill_empty_pick_slots(&mut picks[..fixed_len], cards, used_card_slots);
     picks.into_iter().flatten().collect()
 }
 
@@ -5561,6 +5563,38 @@ fn pick_one_priority(
         suit: c.suit.clone(),
         from_priority: Some(card_str.to_string()),
     })
+}
+
+/// Fill still-empty fixed-chain positions with the leftmost remaining command
+/// cards, preserving the user's configured three-card order.
+fn fill_empty_pick_slots(
+    picks: &mut [Option<Pick>],
+    cards: &[CommandCardMatch],
+    used_card_slots: &mut HashSet<u32>,
+) {
+    let mut sorted: Vec<&CommandCardMatch> = cards.iter().collect();
+    sorted.sort_by_key(|c| c.slot);
+
+    let mut next_card_idx = 0;
+    for pick in picks.iter_mut().filter(|pick| pick.is_none()) {
+        while next_card_idx < sorted.len() && used_card_slots.contains(&sorted[next_card_idx].slot) {
+            next_card_idx += 1;
+        }
+        if next_card_idx >= sorted.len() {
+            break;
+        }
+
+        let c = sorted[next_card_idx];
+        used_card_slots.insert(c.slot);
+        *pick = Some(Pick::Card {
+            slot: c.slot,
+            point: Point::new(c.x, c.y),
+            servant_id: c.servant_id,
+            suit: c.suit.clone(),
+            from_priority: None,
+        });
+        next_card_idx += 1;
+    }
 }
 
 /// After the priority walk, top picks up to 3 by choosing the leftmost
@@ -7496,6 +7530,45 @@ mod tests {
         );
 
         assert_eq!(pick_labels(&picks), vec!["NP0", "C0", "C2"]);
+    }
+
+    #[test]
+    fn normal_priority_fills_missed_first_fixed_slot_in_place() {
+        let priority = vec![
+            AttackCard {
+                id: "chain_1".into(),
+                card: Some("servant_3_np".into()),
+            },
+            AttackCard {
+                id: "chain_2".into(),
+                card: Some("servant_3_all".into()),
+            },
+            AttackCard {
+                id: "chain_3".into(),
+                card: Some("servant_3_all".into()),
+            },
+        ];
+        let cards = vec![
+            command_card(0, Some(284), Some("a"), None),
+            command_card(1, Some(309), Some("b"), None),
+            command_card(2, Some(37), Some("a"), None),
+            command_card(3, Some(309), Some("q"), None),
+            command_card(4, Some(37), Some("a"), None),
+        ];
+        let nps = vec![np_slot(0, true)];
+        let mut used_cards = HashSet::new();
+        let mut used_nps = HashSet::new();
+
+        let picks = pick_by_priority(
+            &priority,
+            &cards,
+            &nps,
+            &[Some(284), Some(37), Some(309)],
+            &mut used_cards,
+            &mut used_nps,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["C0", "C1", "C3"]);
     }
 
     #[test]
