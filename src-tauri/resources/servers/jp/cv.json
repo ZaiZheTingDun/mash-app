@@ -277,9 +277,9 @@
         "template": "text_battle_result_bond_level_up",
         "region": {
           "x": 0.546,
-          "y": 0.408,
+          "y": 0.36,
           "w": 0.376,
-          "h": 0.06
+          "h": 0.14
         },
         "threshold": 0.85,
         "priority": 10

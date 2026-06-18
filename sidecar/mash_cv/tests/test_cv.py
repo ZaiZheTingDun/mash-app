@@ -501,6 +501,37 @@ class TestDetectScreen:
         assert result["screen"] == "BattleResultBondLevelUp"
         assert result["score"] >= 0.85
 
+    def test_jp_battle_result_bond_level_up_detects_real_capture(self):
+        """JP bond level-up text sits higher than CN, while the battle HUD
+        remains visible; the dedicated result screen must still win."""
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "jp", "templates"
+        )
+        cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "jp", "cv.json"
+        )
+        screenshot = os.path.join(
+            repo_root, ".screenshots", "jp", "bond_levelup.png"
+        )
+        if not (
+            os.path.isdir(templates_dir)
+            and os.path.isfile(cv_json)
+            and os.path.isfile(screenshot)
+        ):
+            pytest.skip("JP production resources or fixture not available")
+
+        mash_cv._load_templates(templates_dir)
+        mash_cv._load_config(cv_json)
+        img = cv2.imread(screenshot)
+        assert img is not None
+
+        result = mash_cv._detect_screen(img)
+        assert result["screen"] == "BattleResultBondLevelUp"
+        assert result["score"] >= 0.85
+
     def test_cn_battle_result_exp_level_up_detects_real_capture(self):
         """The EXP level-up overlay leaves the battle HUD visible, so the
         dedicated result screen must beat the base Battle screen."""
