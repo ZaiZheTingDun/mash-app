@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, it, expect, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -5,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import { CommandEditor } from "../CommandEditor";
 import type { AdvancedBattleScene, BattleScene } from "../../types/command";
+import type { GrandCardStrategy } from "../../types/project";
 import type { Servant } from "../../types/servant";
 
 function makeServant(
@@ -425,9 +427,8 @@ describe("CommandEditor pagination", () => {
     expect(screen.getByRole("option", { name: "自动读取（红）" })).toBeInTheDocument();
   });
 
-  it("keeps grand card strategy collapsed at the bottom and saves reordered priority", async () => {
+  it("keeps grand card rules collapsed at the bottom without inline ordering controls", async () => {
     const user = userEvent.setup();
-    const onGrandCardStrategyChange = vi.fn();
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "load_advanced_battle_scenes") {
         return [];
@@ -444,7 +445,6 @@ describe("CommandEditor pagination", () => {
         advancedMode
         grandServants={[{ slotIndex: 0, npCard: "auto", priority: "damage" }]}
         grandCardPriorityEnabled
-        onGrandCardStrategyChange={onGrandCardStrategyChange}
         partyLineup={[
           makeServant(1, "甲"),
           makeServant(2, "乙"),
@@ -453,25 +453,18 @@ describe("CommandEditor pagination", () => {
       />
     );
 
-    const strategyToggle = await screen.findByRole("button", { name: /冠位出牌优先级/ });
+    const strategyToggle = await screen.findByRole("button", { name: /指令卡策略/ });
     expect(strategyToggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByText("启动阶段").compareDocumentPosition(strategyToggle)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
 
     await user.click(strategyToggle);
-    await user.click(screen.getByRole("button", { name: "上移主冠位宝具" }));
-
-    expect(onGrandCardStrategyChange).toHaveBeenCalledWith({
-      chainPriority: [
-        "mainReadyNp",
-        "mainBraveChain",
-        "deputyBraveChain",
-        "mainColorChain",
-        "deputyColorChain",
-        "fallback",
-      ],
-    });
+    expect(screen.queryByRole("button", { name: /上移/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /下移/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("连携")).not.toBeInTheDocument();
+    expect(screen.queryByText("必须包含")).not.toBeInTheDocument();
+    expect(screen.queryByText("排除")).not.toBeInTheDocument();
   });
 
   it("hides grand card strategy when the feature toggle is disabled", async () => {
@@ -501,7 +494,83 @@ describe("CommandEditor pagination", () => {
 
     await screen.findByText("启动阶段");
 
-    expect(screen.queryByRole("button", { name: /冠位出牌优先级/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /指令卡策略/ })).not.toBeInTheDocument();
+  });
+
+  it("adds and edits custom grand card rules", async () => {
+    const user = userEvent.setup();
+    const onGrandCardStrategyChange = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    function StrategyHarness() {
+      const [strategy, setStrategy] = useState<GrandCardStrategy | undefined>();
+      return (
+        <CommandEditor
+          projectId="project_1"
+          advancedMode
+          grandServants={[{ slotIndex: 0, npCard: "auto", priority: "damage" }]}
+          grandCardPriorityEnabled
+          grandCardStrategy={strategy}
+          onGrandCardStrategyChange={(next) => {
+            onGrandCardStrategyChange(next);
+            setStrategy(next);
+          }}
+          partyLineup={[
+            makeServant(1, "甲", "buster"),
+            makeServant(2, "乙"),
+            makeServant(3, "丙"),
+          ]}
+        />
+      );
+    }
+
+    renderWithTheme(<StrategyHarness />);
+
+    await user.click(await screen.findByRole("button", { name: /指令卡策略/ }));
+    await user.click(screen.getByRole("button", { name: "添加规则" }));
+
+    expect(await screen.findByRole("dialog", { name: "设置策略" })).toBeInTheDocument();
+    const grandOption = screen.getByRole("button", { name: "冠位从者" });
+    await user.click(grandOption);
+    expect(grandOption).toHaveAttribute("aria-pressed", "true");
+    await user.click(grandOption);
+    expect(grandOption).toHaveAttribute("aria-pressed", "false");
+    await user.click(screen.getByRole("button", { name: "甲" }));
+    await user.click(screen.getByRole("radio", { name: "宝具" }));
+    expect(screen.queryByRole("radio", { name: "红" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "完成" }));
+
+    const lastCall = onGrandCardStrategyChange.mock.calls[
+      onGrandCardStrategyChange.mock.calls.length - 1
+    ]?.[0] as GrandCardStrategy;
+    expect(lastCall.customRules).toHaveLength(1);
+    expect(lastCall.customRules?.[0]).toMatchObject({
+      slots: [
+        expect.objectContaining({
+          servantId: 1,
+          grandServant: false,
+          kind: "np",
+          color: "buster",
+        }),
+        expect.objectContaining({ servantId: null }),
+        expect.objectContaining({ servantId: null }),
+      ],
+    });
+
+    expect(screen.getAllByRole("button", { name: /未选择从者/ })).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "删除自定义规则" }));
+    const deleteCall = onGrandCardStrategyChange.mock.calls[
+      onGrandCardStrategyChange.mock.calls.length - 1
+    ]?.[0];
+    expect(deleteCall).toMatchObject({ customRules: [] });
   });
 
   it("uses post-Order Change lineup in advanced startup actions", async () => {

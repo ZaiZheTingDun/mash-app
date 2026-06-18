@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
+import { AlertDialog, Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { invoke, listen } from "./tauri";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
@@ -85,6 +85,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [selfCheckLoading, setSelfCheckLoading] = useState(false);
   const [selfCheckStatus, setSelfCheckStatus] = useState<SelfCheckStatus | null>(null);
   const [selfCheckError, setSelfCheckError] = useState<string | null>(null);
+  const [ruleValidationError, setRuleValidationError] = useState<string | null>(null);
 
   const appendOperationLog = useCallback(
     (message: string, level: LogLevel = "info") => {
@@ -468,9 +469,35 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     [activeProjectId, persistActiveProjectId]
   );
 
+  const validateCustomRules = useCallback(() => {
+    if (!activeProject?.advancedMode) return true;
+    const rules = activeProject.grandCardStrategy?.customRules ?? [];
+    if (rules.length === 0) return true;
+    const currentIds = new Set(
+      partyMembers
+        .map((member) => member.servant?.id ?? null)
+        .filter((id): id is number => id != null)
+    );
+    const missing: string[] = [];
+    for (const [ruleIndex, rule] of rules.entries()) {
+      for (const [slotIndex, slot] of (rule.slots ?? []).entries()) {
+        if (slot.grandServant === true) {
+          continue;
+        }
+        if (slot.servantId != null && !currentIds.has(slot.servantId)) {
+          missing.push(`${rule.name || `规则 ${ruleIndex + 1}`} 第 ${slotIndex + 1} 张`);
+        }
+      }
+    }
+    if (missing.length === 0) return true;
+    setRuleValidationError(`以下出牌规则引用的从者不在当前队伍中，请修复后继续：${missing.join("、")}`);
+    return false;
+  }, [activeProject, partyMembers]);
+
   const handleStartRun = useCallback(() => {
+    if (!validateCustomRules()) return;
     setView("battle");
-  }, []);
+  }, [validateCustomRules]);
 
   const handleProjectsImported = useCallback((importedProjects: Project[]) => {
     void refreshProjects()
@@ -506,8 +533,9 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   }, []);
 
   const handleGotoCommand = useCallback(() => {
+    if (!validateCustomRules()) return;
     setView("command");
-  }, []);
+  }, [validateCustomRules]);
 
   const handleBackToTeam = useCallback(() => {
     setView("team");
@@ -626,19 +654,15 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
                     grandServants={activeProject?.grandServants ?? []}
                     grandClass={activeProject?.grandClass ?? "saber"}
                     grandCardStrategy={activeProject?.grandCardStrategy}
-                    grandCardPriorityEnabled={featureToggles.grandCardPriority}
+                    grandCardPriorityEnabled
                     onGrandServantsChange={(grandServants) => {
                       if (!activeProject) return;
                       void handleUpdateProject({ ...activeProject, grandServants });
                     }}
-                    onGrandCardStrategyChange={
-                      featureToggles.grandCardPriority
-                        ? (grandCardStrategy) => {
-                            if (!activeProject) return;
-                            void handleUpdateProject({ ...activeProject, grandCardStrategy });
-                          }
-                        : undefined
-                    }
+                    onGrandCardStrategyChange={(grandCardStrategy) => {
+                      if (!activeProject) return;
+                      void handleUpdateProject({ ...activeProject, grandCardStrategy });
+                    }}
                   />
                   <Flex justify="between" align="center" className="page-footer">
                     <Button
@@ -728,6 +752,24 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         error={selfCheckError}
         onOpenChange={setSelfCheckOpen}
       />
+      <AlertDialog.Root
+        open={ruleValidationError != null}
+        onOpenChange={(open) => {
+          if (!open) setRuleValidationError(null);
+        }}
+      >
+        <AlertDialog.Content maxWidth="420px">
+          <AlertDialog.Title>需要修复出牌规则</AlertDialog.Title>
+          <AlertDialog.Description>
+            {ruleValidationError}
+          </AlertDialog.Description>
+          <Flex justify="end" mt="4">
+            <AlertDialog.Action>
+              <Button type="button">知道了</Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Flex>
   );
 }

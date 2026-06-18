@@ -564,14 +564,40 @@ fn default_grand_chain_priority() -> Vec<GrandChainPriorityItem> {
 pub struct GrandCardStrategy {
     #[serde(default = "default_grand_chain_priority")]
     pub chain_priority: Vec<GrandChainPriorityItem>,
+    #[serde(default)]
+    pub custom_rules: Vec<GrandCardRuleConfig>,
 }
 
 impl Default for GrandCardStrategy {
     fn default() -> Self {
         Self {
             chain_priority: default_grand_chain_priority(),
+            custom_rules: Vec::new(),
         }
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GrandCardRuleSlotConfig {
+    #[serde(default)]
+    pub servant_id: Option<u32>,
+    #[serde(default)]
+    pub grand_servant: bool,
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub color: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GrandCardRuleConfig {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub slots: Vec<GrandCardRuleSlotConfig>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

@@ -54,8 +54,25 @@ export type GrandChainPriorityItem =
   | "deputyColorChain"
   | "fallback";
 
+export type GrandRuleKind = "any" | "command" | "np";
+export type GrandRuleColor = "any" | "buster" | "arts" | "quick";
+
+export interface GrandCardRuleSlotConfig {
+  servantId: number | null;
+  grandServant?: boolean;
+  kind: GrandRuleKind;
+  color: GrandRuleColor;
+}
+
+export interface GrandCardRuleConfig {
+  id: string;
+  name: string;
+  slots: GrandCardRuleSlotConfig[];
+}
+
 export interface GrandCardStrategy {
   chainPriority?: GrandChainPriorityItem[];
+  customRules?: GrandCardRuleConfig[];
 }
 
 export interface GrandServantConfig {

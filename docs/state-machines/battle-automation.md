@@ -363,14 +363,24 @@ changes (i.e. when the runner moves to a different row).
   resource's `noblePhantasmCard` when set to automatic). In Grand battle mode,
   the project stores `grandClass` plus one or two `grandServants`; the first is
   the main output and the second is the deputy. Missing legacy `grandClass`
-  values default to Saber. The automatic picker uses class-specific rule
-  templates: each rule defines three slots, and those slots are the final click
-  order. Saber mode expands the user-configurable chain priority into rules
-  such as main/deputy exquisite brave chain, main ready NP, same-color chain,
-  and fallback. Berserker mode uses fixed rules: main NP same-color chain,
-  main ready NP, deputy NP same-color chain, main other same-color chain
-  excluding that main NP, deputy other same-color chain excluding that deputy
-  NP, Grand exquisite B/A/Q chain, then fallback. Legacy advanced `rules` are still supported:
+  values default to Saber. The automatic picker uses rule templates where each
+  rule defines three slots, and those slots are the final click order. When
+  `grandCardStrategy.customRules` is non-empty, user rules are tried first; each
+  user rule binds its three slots to exact servant ids, or optionally any Grand
+  servant, plus an attack kind (`any`, command-card-only, or NP) and optional
+  color. Custom slots targeting any Grand servant also prefer main Grand before
+  deputy Grand. Invalid user rules are skipped. Saber mode then expands the
+  user-configurable chain priority into built-in rules such as main/deputy
+  exquisite brave chain, main ready NP, same-color chain, and fallback.
+  Berserker mode uses fixed built-in rules: main NP same-color chain, main
+  ready NP, deputy NP same-color chain, main other same-color chain excluding
+  that main NP, deputy other same-color chain excluding that deputy NP, Grand
+  exquisite B/A/Q chain, then fallback. In the two main-NP Berserker rules,
+  the second free/command slot is configured to prefer a ready deputy Grand NP;
+  for the same-color chain that deputy NP must also match the main NP color.
+  Berserker built-in rule slots whose owner is any servant prefer main Grand
+  attacks, then deputy Grand attacks, then non-Grand attacks. Legacy advanced
+  `rules` are still supported:
   when a scene has rule entries, the older rule evaluator runs instead of the
   three-stage strategy flow.
 - `waiting_for_battle` extends Unknown tolerance during loading and long attack

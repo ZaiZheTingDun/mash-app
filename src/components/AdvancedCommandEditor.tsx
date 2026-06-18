@@ -6,9 +6,26 @@ import {
   Cross2Icon,
   PlusIcon,
 } from "@radix-ui/react-icons";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { convertFileSrc, invoke } from "../tauri";
 import { BattleActorIcon } from "./BattleActorIcon";
 import { battleActorLabel, servantLabel } from "./battleActorLabels";
+import { OptionCardRadioGroup } from "./OptionCardRadioGroup";
+import { SectionHeading } from "./SectionHeading";
 import {
   deriveMembersAfterPreparationActions,
   partyMembersToServants,
@@ -26,10 +43,14 @@ import type {
 } from "../types/command";
 import type {
   GrandCardPriority,
+  GrandCardRuleConfig,
+  GrandCardRuleSlotConfig,
   GrandCardStrategy,
   GrandChainPriorityItem,
   GrandClass,
   GrandNpCard,
+  GrandRuleColor,
+  GrandRuleKind,
   GrandServantConfig,
 } from "../types/project";
 import type { Servant } from "../types/servant";
@@ -75,6 +96,11 @@ const COMMAND_BG_BY_SUIT: Record<Exclude<AdvancedCommandCardCondition["suit"], "
   buster: commandBgBuster,
   quick: commandBgQuick,
 };
+const COMMAND_BG_BY_RULE_COLOR: Record<Exclude<GrandRuleColor, "any">, string> = {
+  arts: commandBgArts,
+  buster: commandBgBuster,
+  quick: commandBgQuick,
+};
 const DEFAULT_GRAND_CHAIN_PRIORITY: GrandChainPriorityItem[] = [
   "mainBraveChain",
   "mainReadyNp",
@@ -83,14 +109,41 @@ const DEFAULT_GRAND_CHAIN_PRIORITY: GrandChainPriorityItem[] = [
   "deputyColorChain",
   "fallback",
 ];
-const GRAND_CHAIN_PRIORITY_LABELS: Record<GrandChainPriorityItem, string> = {
-  mainBraveChain: "主冠位精湛追击连携",
-  mainReadyNp: "主冠位宝具",
-  deputyBraveChain: "副冠位精湛追击连携",
-  mainColorChain: "包含主冠位的同色连携",
-  deputyColorChain: "包含副冠位的同色连携",
-  fallback: "默认输出排序",
+const RULE_KIND_LABELS: Record<GrandRuleKind, string> = {
+  any: "任意",
+  command: "指令卡",
+  np: "宝具",
 };
+const RULE_COLOR_LABELS: Record<GrandRuleColor, string> = {
+  any: "任意",
+  buster: "红",
+  arts: "蓝",
+  quick: "绿",
+};
+const RULE_KIND_DIALOG_LABELS: Record<GrandRuleKind, string> = {
+  any: "任意",
+  command: "指令卡",
+  np: "宝具",
+};
+const RULE_KIND_DIALOG_DESCRIPTIONS: Record<GrandRuleKind, string> = {
+  any: "自动识别任意出牌卡",
+  command: "仅识别普通指令卡",
+  np: "仅识别宝具卡",
+};
+const RULE_COLOR_DIALOG_LABELS: Record<GrandRuleColor, string> = {
+  any: "任意",
+  buster: "红卡",
+  arts: "蓝卡",
+  quick: "绿卡",
+};
+const RULE_COLOR_DIALOG_DESCRIPTIONS: Record<GrandRuleColor, string> = {
+  any: "Any",
+  buster: "Buster",
+  arts: "Arts",
+  quick: "Quick",
+};
+const RULE_KIND_OPTIONS: GrandRuleKind[] = ["any", "command", "np"];
+const RULE_COLOR_OPTIONS: GrandRuleColor[] = ["any", "buster", "arts", "quick"];
 
 let nextAdvancedSceneId = 1;
 
@@ -175,7 +228,48 @@ function normalizeGrandCardStrategy(strategy: GrandCardStrategy | undefined): Gr
       priority.push(item);
     }
   }
-  return { chainPriority: priority };
+  return {
+    chainPriority: priority,
+    customRules: normalizeCustomRules(strategy?.customRules),
+  };
+}
+
+function defaultRuleSlot(): GrandCardRuleSlotConfig {
+  return { servantId: null, grandServant: false, kind: "any", color: "any" };
+}
+
+function createDefaultCustomRule(): GrandCardRuleConfig {
+  return {
+    id: createId("grand_rule"),
+    name: "自定义规则",
+    slots: [defaultRuleSlot(), defaultRuleSlot(), defaultRuleSlot()],
+  };
+}
+
+function normalizeRuleSlot(slot: Partial<GrandCardRuleSlotConfig> | undefined): GrandCardRuleSlotConfig {
+  const kinds: GrandRuleKind[] = ["any", "command", "np"];
+  const colors: GrandRuleColor[] = ["any", "buster", "arts", "quick"];
+  const kind = slot?.kind;
+  const color = slot?.color;
+  return {
+    servantId: typeof slot?.servantId === "number" ? slot.servantId : null,
+    grandServant: slot?.grandServant === true,
+    kind: kinds.includes(kind as GrandRuleKind) ? (kind as GrandRuleKind) : "any",
+    color: colors.includes(color as GrandRuleColor) ? (color as GrandRuleColor) : "any",
+  };
+}
+
+function normalizeCustomRule(rule: Partial<GrandCardRuleConfig> | undefined, index: number): GrandCardRuleConfig {
+  const slots = [0, 1, 2].map((slotIndex) => normalizeRuleSlot(rule?.slots?.[slotIndex]));
+  return {
+    id: rule?.id || createId("grand_rule"),
+    name: rule?.name ?? `自定义规则 ${index + 1}`,
+    slots,
+  };
+}
+
+function normalizeCustomRules(rules: GrandCardRuleConfig[] | undefined): GrandCardRuleConfig[] {
+  return (rules ?? []).map((rule, index) => normalizeCustomRule(rule, index));
 }
 
 function cardColorLabel(card: Servant["noblePhantasmCard"] | undefined): string | null {
@@ -668,29 +762,346 @@ function AdvancedCommandCardButton({
   );
 }
 
+function ruleCardColorClass(color: GrandRuleColor): string {
+  return color === "buster" || color === "arts" || color === "quick" ? ` ${color}` : "";
+}
+
+function ruleCardLabel(slot: GrandCardRuleSlotConfig, servant: Servant | null, slotIndex: number): string {
+  const servantText = slot.grandServant ? "冠位从者" : servant?.name_cn ?? "未选择从者";
+  const kindText = RULE_KIND_LABELS[slot.kind];
+  const colorText = RULE_COLOR_LABELS[slot.color];
+  return `第 ${slotIndex + 1} 张，${servantText}，${kindText}，${colorText}`;
+}
+
+function GrandRuleCardButton({
+  slot,
+  slotIndex,
+  partyMembers,
+  faces,
+  onClick,
+}: {
+  slot: GrandCardRuleSlotConfig;
+  slotIndex: number;
+  partyMembers: PartyMember[];
+  faces: Record<string, string | null>;
+  onClick: () => void;
+}) {
+  const partyLineup = partyMembersToServants(partyMembers);
+  const memberIndex =
+    slot.servantId == null ? -1 : partyLineup.findIndex((servant) => servant?.id === slot.servantId);
+  const member = memberIndex >= 0 ? partyMembers[memberIndex] : null;
+  const servant = member?.servant ?? null;
+  const usesGrandServant = slot.grandServant === true;
+  const missingServant = !usesGrandServant && slot.servantId != null && servant == null;
+  const color = slot.kind === "np" && servant?.noblePhantasmCard ? servant.noblePhantasmCard : slot.color;
+  const faceSrc = servant ? faces[servant.variantKey] : null;
+  const warningText = missingServant ? "失效" : null;
+  const style: CSSProperties | undefined =
+    color === "buster" || color === "arts" || color === "quick"
+      ? { backgroundImage: `url(${COMMAND_BG_BY_RULE_COLOR[color]})` }
+      : undefined;
+
+  return (
+    <button
+      type="button"
+      className={`grand-rule-card${ruleCardColorClass(color)}${missingServant ? " invalid" : ""}`}
+      aria-label={ruleCardLabel({ ...slot, color }, servant, slotIndex)}
+      style={style}
+      onClick={onClick}
+    >
+      {usesGrandServant ? (
+        <span className="grand-rule-card-grand">冠</span>
+      ) : servant ? (
+        <BattleActorIcon
+          kind="servant"
+          src={faceSrc}
+          label={servantLabel(memberIndex, servant)}
+          isSupport={member?.isSupport ?? false}
+          size="button"
+          className="grand-rule-card-face"
+        />
+      ) : (
+        <span className="grand-rule-card-empty">+</span>
+      )}
+      <span className={`grand-rule-card-meta${warningText ? " warning" : ""}`}>
+        <span>{RULE_KIND_LABELS[slot.kind]}</span>
+        {warningText ? <span>{warningText}</span> : null}
+      </span>
+    </button>
+  );
+}
+
+function GrandRuleEditorServantPicker({
+  editingCard,
+  partyMembers,
+  faces,
+  onSelect,
+}: {
+  editingCard: GrandCardRuleSlotConfig;
+  partyMembers: PartyMember[];
+  faces: Record<string, string | null>;
+  onSelect: (patch: Partial<GrandCardRuleSlotConfig>) => void;
+}) {
+  const grandSelected = editingCard.grandServant === true;
+  return (
+    <div className="grand-rule-editor-section">
+      <SectionHeading className="grand-rule-section-heading">从者</SectionHeading>
+      <div className="grand-rule-editor-servants">
+        <button
+          type="button"
+          className={`grand-rule-editor-grand-option${grandSelected ? " selected" : ""}`}
+          aria-pressed={grandSelected}
+          onClick={() =>
+            onSelect({
+              grandServant: !grandSelected,
+              servantId: null,
+            })
+          }
+        >
+          冠位从者
+        </button>
+        {partyMembers.map((member, index) => {
+          const servant = member.servant;
+          const selected = !grandSelected && servant != null && editingCard.servantId === servant.id;
+          return (
+            <div className="grand-rule-editor-servant-cell" key={`${servant?.variantKey ?? "empty"}-${index}`}>
+              {index === 3 && <span className="battle-choice-separator" aria-hidden />}
+              <FaceChip
+                servant={servant}
+                index={index}
+                src={servant ? faces[servant.variantKey] : null}
+                selected={selected}
+                disabled={!servant}
+                isSupport={member.isSupport}
+                onClick={() =>
+                  onSelect({
+                    grandServant: false,
+                    servantId: selected ? null : servant?.id ?? null,
+                  })
+                }
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GrandRuleEditorKindPicker({
+  value,
+  onChange,
+}: {
+  value: GrandRuleKind;
+  onChange: (kind: GrandRuleKind) => void;
+}) {
+  return (
+    <div className="grand-rule-editor-section">
+      <SectionHeading className="grand-rule-section-heading">指令卡类型</SectionHeading>
+      <OptionCardRadioGroup
+        value={value}
+        className="grand-rule-kind-cards"
+        onValueChange={(kind) => onChange(kind as GrandRuleKind)}
+        options={RULE_KIND_OPTIONS.map((kind) => ({
+          value: kind,
+          title: RULE_KIND_DIALOG_LABELS[kind],
+          description: RULE_KIND_DIALOG_DESCRIPTIONS[kind],
+          className: "grand-rule-kind-card",
+        }))}
+      />
+    </div>
+  );
+}
+
+function GrandRuleEditorColorPicker({
+  value,
+  onChange,
+}: {
+  value: GrandRuleColor;
+  onChange: (color: GrandRuleColor) => void;
+}) {
+  return (
+    <div className="grand-rule-editor-section">
+      <SectionHeading className="grand-rule-section-heading">指令卡颜色</SectionHeading>
+      <OptionCardRadioGroup
+        value={value}
+        className="grand-rule-color-cards"
+        onValueChange={(color) => onChange(color as GrandRuleColor)}
+        options={RULE_COLOR_OPTIONS.map((color) => ({
+          value: color,
+          title: RULE_COLOR_DIALOG_LABELS[color],
+          ariaLabel: RULE_COLOR_LABELS[color],
+          description: RULE_COLOR_DIALOG_DESCRIPTIONS[color],
+          visual:
+            color === "any" ? (
+              <span className="grand-rule-color-wheel" />
+            ) : (
+              <span
+                className={`grand-rule-color-swatch ${color}`}
+                style={{ backgroundImage: `url(${COMMAND_BG_BY_RULE_COLOR[color]})` }}
+              />
+            ),
+          className: `grand-rule-color-card ${color}`,
+        }))}
+      />
+    </div>
+  );
+}
+
+function SortableGrandRuleRow({
+  rule,
+  index,
+  partyMembers,
+  faces,
+  onDelete,
+  onEditSlot,
+}: {
+  rule: GrandCardRuleConfig;
+  index: number;
+  partyMembers: PartyMember[];
+  faces: Record<string, string | null>;
+  onDelete: () => void;
+  onEditSlot: (slotIndex: number) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: rule.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  } as CSSProperties;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`grand-rule-row${isDragging ? " dragging" : ""}`}
+      style={style}
+      {...attributes}
+      {...listeners}
+    >
+      <button
+        type="button"
+        className="advanced-inline-delete"
+        aria-label={`删除${rule.name || `规则 ${index + 1}`}`}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onDelete();
+        }}
+      >
+        <Cross2Icon width={13} height={13} />
+      </button>
+      <div className="grand-rule-cards" aria-label={rule.name || `规则 ${index + 1}`}>
+        {rule.slots.map((slot, slotIndex) => (
+          <GrandRuleCardButton
+            key={slotIndex}
+            slot={slot}
+            slotIndex={slotIndex}
+            partyMembers={partyMembers}
+            faces={faces}
+            onClick={() => onEditSlot(slotIndex)}
+          />
+        ))}
+      </div>
+      <div className="grand-rule-row-spacer" aria-hidden />
+    </div>
+  );
+}
+
 function GrandCardStrategyPanel({
   strategy,
+  partyMembers,
+  faces,
   onChange,
 }: {
   strategy?: GrandCardStrategy;
+  partyMembers: PartyMember[];
+  faces: Record<string, string | null>;
   onChange?: (strategy: GrandCardStrategy) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [editingSlot, setEditingSlot] = useState<{ ruleId: string; slotIndex: number } | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const normalized = normalizeGrandCardStrategy(strategy);
-  const priority = normalized.chainPriority ?? DEFAULT_GRAND_CHAIN_PRIORITY;
-  const firstPriority = priority[0] ?? "mainBraveChain";
+  const customRules = normalized.customRules ?? [];
+  const partyLineup = partyMembersToServants(partyMembers);
+  const editingRule = editingSlot
+    ? customRules.find((rule) => rule.id === editingSlot.ruleId) ?? null
+    : null;
+  const editingCard =
+    editingRule && editingSlot
+      ? editingRule.slots[editingSlot.slotIndex] ?? defaultRuleSlot()
+      : null;
+  const editingServant =
+    editingCard?.servantId == null
+      ? null
+      : partyLineup.find((servant) => servant?.id === editingCard.servantId) ?? null;
 
-  const moveItem = (index: number, delta: -1 | 1) => {
-    const nextIndex = index + delta;
-    if (nextIndex < 0 || nextIndex >= priority.length) return;
-    const next = [...priority];
-    const [item] = next.splice(index, 1);
-    next.splice(nextIndex, 0, item);
-    onChange?.({ chainPriority: next });
+  const persist = (patch: Partial<GrandCardStrategy>) => {
+    onChange?.({
+      ...normalized,
+      ...patch,
+    });
   };
 
-  const reset = () => {
-    onChange?.({ chainPriority: [...DEFAULT_GRAND_CHAIN_PRIORITY] });
+  const updateRules = (rules: GrandCardRuleConfig[]) => {
+    persist({ customRules: normalizeCustomRules(rules) });
+  };
+
+  const addRule = () => {
+    const rule = createDefaultCustomRule();
+    persist({ customRules: [...customRules, rule] });
+    setEditingSlot({ ruleId: rule.id, slotIndex: 0 });
+  };
+
+  const updateRule = (ruleId: string, updater: (rule: GrandCardRuleConfig) => GrandCardRuleConfig) => {
+    updateRules(customRules.map((rule) => (rule.id === ruleId ? normalizeCustomRule(updater(rule), 0) : rule)));
+  };
+
+  const resetCustomRules = () => {
+    persist({
+      customRules: [],
+      chainPriority: [...DEFAULT_GRAND_CHAIN_PRIORITY],
+    });
+    setEditingSlot(null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = customRules.findIndex((rule) => rule.id === active.id);
+    const newIndex = customRules.findIndex((rule) => rule.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    updateRules(arrayMove(customRules, oldIndex, newIndex));
+  };
+
+  const updateEditingSlot = (patch: Partial<GrandCardRuleSlotConfig>) => {
+    if (!editingSlot) return;
+    updateRule(editingSlot.ruleId, (rule) => ({
+      ...rule,
+      slots: rule.slots.map((slot, index) => {
+        if (index !== editingSlot.slotIndex) return slot;
+        const next = { ...slot, ...patch };
+        if (patch.servantId !== undefined) {
+          const servant = partyLineup.find((item) => item?.id === patch.servantId) ?? null;
+          if (next.kind === "np" && servant?.noblePhantasmCard) {
+            next.color = servant.noblePhantasmCard;
+          }
+        }
+        if (patch.kind === "np" && editingServant?.noblePhantasmCard) {
+          next.color = editingServant.noblePhantasmCard;
+        }
+        if (patch.kind === "any" && next.color == null) {
+          next.color = "any";
+        }
+        return next;
+      }),
+    }));
   };
 
   return (
@@ -704,46 +1115,73 @@ function GrandCardStrategyPanel({
         <span className="grand-strategy-chevron" aria-hidden>
           {open ? <ChevronUpIcon width={16} height={16} /> : <ChevronDownIcon width={16} height={16} />}
         </span>
-        <span className="grand-strategy-title">冠位出牌优先级</span>
-        <span className="grand-strategy-current">{GRAND_CHAIN_PRIORITY_LABELS[firstPriority]}</span>
+        <span className="grand-strategy-title">指令卡策略</span>
       </button>
       {open && (
         <div className="grand-strategy-body">
-          <div className="grand-strategy-list">
-            {priority.map((item, index) => (
-              <div className="grand-strategy-item" key={item}>
-                <span className="grand-strategy-rank">{index + 1}</span>
-                <Text size="2" weight="medium" className="grand-strategy-label">
-                  {GRAND_CHAIN_PRIORITY_LABELS[item]}
-                </Text>
-                <div className="grand-strategy-actions">
-                  <button
-                    type="button"
-                    className="grand-strategy-move"
-                    aria-label={`上移${GRAND_CHAIN_PRIORITY_LABELS[item]}`}
-                    disabled={index === 0}
-                    onClick={() => moveItem(index, -1)}
-                  >
-                    <ChevronUpIcon width={15} height={15} />
-                  </button>
-                  <button
-                    type="button"
-                    className="grand-strategy-move"
-                    aria-label={`下移${GRAND_CHAIN_PRIORITY_LABELS[item]}`}
-                    disabled={index === priority.length - 1}
-                    onClick={() => moveItem(index, 1)}
-                  >
-                    <ChevronDownIcon width={15} height={15} />
-                  </button>
-                </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={customRules.map((rule) => rule.id)} strategy={verticalListSortingStrategy}>
+              <div className="grand-rule-list">
+                {customRules.map((rule, index) => (
+                  <SortableGrandRuleRow
+                    key={rule.id}
+                    rule={rule}
+                    index={index}
+                    partyMembers={partyMembers}
+                    faces={faces}
+                    onDelete={() => updateRules(customRules.filter((item) => item.id !== rule.id))}
+                    onEditSlot={(slotIndex) => setEditingSlot({ ruleId: rule.id, slotIndex })}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
-          <Button type="button" variant="soft" color="gray" onClick={reset}>
-            恢复默认
-          </Button>
+            </SortableContext>
+          </DndContext>
+          <Flex gap="3" wrap="wrap">
+            <Button type="button" variant="soft" onClick={addRule}>
+              添加规则
+            </Button>
+            <Button type="button" variant="soft" color="gray" onClick={resetCustomRules}>
+              恢复默认
+            </Button>
+          </Flex>
         </div>
       )}
+
+      <Dialog.Root
+        open={editingCard != null}
+        onOpenChange={(dialogOpen) => {
+          if (!dialogOpen) setEditingSlot(null);
+        }}
+      >
+        <Dialog.Content maxWidth="640px" className="grand-rule-editor-dialog">
+          <Dialog.Title>设置策略</Dialog.Title>
+          {editingCard && (
+            <div className="grand-rule-editor">
+              <GrandRuleEditorServantPicker
+                editingCard={editingCard}
+                partyMembers={partyMembers}
+                faces={faces}
+                onSelect={(patch) => updateEditingSlot(patch)}
+              />
+              <GrandRuleEditorKindPicker
+                value={editingCard.kind}
+                onChange={(kind) => updateEditingSlot({ kind })}
+              />
+              {editingCard.kind !== "np" && (
+                <GrandRuleEditorColorPicker
+                  value={editingCard.color}
+                  onChange={(color) => updateEditingSlot({ color })}
+                />
+              )}
+            </div>
+          )}
+          <Flex justify="end" mt="4">
+            <Dialog.Close>
+              <Button type="button">完成</Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
     </section>
   );
 }
@@ -1350,6 +1788,8 @@ function AdvancedStrategyEditor({
       {grandCardPriorityEnabled && (
         <GrandCardStrategyPanel
           strategy={grandCardStrategy}
+          partyMembers={partyMembers}
+          faces={faces}
           onChange={onGrandCardStrategyChange}
         />
       )}

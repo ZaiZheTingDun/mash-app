@@ -208,6 +208,76 @@ describe("App active project restore", () => {
     expect(screen.getByText("CV 运行时")).toBeInTheDocument();
   });
 
+  it("blocks command setup when custom card rules reference removed servants", async () => {
+    const user = userEvent.setup();
+    const slots = createInitialProjectSlots();
+    slots[0] = { ...slots[0], servantId: 1 };
+    const invalidProject: Project = {
+      id: "project-invalid-rule",
+      name: "失效规则",
+      advancedMode: true,
+      slots,
+      grandCardStrategy: {
+        customRules: [
+          {
+            id: "rule_1",
+            name: "自定义规则",
+            slots: [
+              { servantId: 999, kind: "any", color: "buster" },
+              { servantId: 1, kind: "any", color: "any" },
+              { servantId: 1, kind: "np", color: "buster" },
+            ],
+          },
+        ],
+      },
+    };
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      switch (cmd) {
+        case "get_runtime_status":
+        case "get_asset_bundle_status":
+          return { installed: true };
+        case "get_servants":
+          return [
+            {
+              id: 1,
+              variantKey: "1",
+              name_cn: "甲",
+              name_jp: "甲",
+              name_en: "A",
+              class: "Saber",
+              rarity: 5,
+              noblePhantasmCard: "buster",
+            },
+          ];
+        case "get_craft_essences":
+          return [];
+        case "list_projects":
+          return [invalidProject];
+        case "get_active_project_id":
+          return invalidProject.id;
+        case "check_adb":
+          return { connected: false, deviceName: null };
+        case "get_server":
+          return "JP";
+        case "should_check_updates_today":
+          return false;
+        default:
+          return null;
+      }
+    });
+
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+
+    expect(await screen.findByText("～ 失效规则 ～")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "指令设置" }));
+
+    expect(await screen.findByText("需要修复出牌规则")).toBeInTheDocument();
+    expect(screen.getByText(/自定义规则 第 1 张/)).toBeInTheDocument();
+    expect(screen.queryByText("主力输出")).not.toBeInTheDocument();
+  });
+
   it("saves an adb screenshot from the menu event", async () => {
     let screenshotHandler: (() => void) | null = null;
     vi.mocked(listen).mockImplementation(async (event, handler) => {

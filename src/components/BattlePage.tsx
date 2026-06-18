@@ -5,12 +5,13 @@ import {
   Button,
   CheckboxCards,
   Flex,
-  RadioGroup,
   Text,
 } from "@radix-ui/themes";
 import { invoke, listen } from "../tauri";
 import { ChevronLeftIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons";
 import { ProjectBar } from "./ProjectBar";
+import { OptionCardRadioGroup } from "./OptionCardRadioGroup";
+import { SectionHeading } from "./SectionHeading";
 import goldFruitImage from "../../src-tauri/resources/images/item_fruit_golden.png";
 import silverFruitImage from "../../src-tauri/resources/images/item_fruit_silver.png";
 import bronzeFruitImage from "../../src-tauri/resources/images/item_fruit_bronzed_cobalt.png";
@@ -409,103 +410,74 @@ export function BattlePage({
 
       <Flex direction="column" className="battle-body battle-body-scroll">
         <Box className="battle-panel">
-          <Box className="battle-section-heading">
-            <Text size="4" weight="bold">
-              重复任务
-            </Text>
-          </Box>
-          <RadioGroup.Root
+          <SectionHeading>重复任务</SectionHeading>
+          <OptionCardRadioGroup
             value={repeatMode}
             className="battle-repeat-cards"
             disabled={running || !selectedProject}
             onValueChange={(value) => handleRepeatModeChange(value as BattleRepeatMode)}
-          >
-            <div
-              aria-disabled={running || !selectedProject}
-              aria-pressed={repeatMode === "single"}
-              className={`battle-repeat-card ${repeatMode === "single" ? "is-selected" : ""}`}
-              onClick={() => handleRepeatModeChange("single")}
-            >
-              <RadioGroup.Item value="single" className="battle-repeat-radio" />
-              <div>
-                <Text size="3" weight="bold">不重复</Text>
-                <Text> </Text>
-                <Text size="2" color="gray">任务执行完毕后停止</Text>
-              </div>
-            </div>
-
-            <div
-              aria-disabled={running || !selectedProject}
-              aria-pressed={repeatMode === "infinite"}
-              className={`battle-repeat-card ${repeatMode === "infinite" ? "is-selected" : ""}`}
-              onClick={() => handleRepeatModeChange("infinite")}
-            >
-              <RadioGroup.Item value="infinite" className="battle-repeat-radio" />
-              <div>
-                <Text size="3" weight="bold">无限</Text>
-                <Text> </Text>
-                <Text size="2" color="gray">无限重复执行任务</Text>
-              </div>
-              <span className="battle-repeat-symbol">∞</span>
-            </div>
-
-            <div
-              aria-disabled={running || !selectedProject}
-              aria-pressed={repeatMode === "count"}
-              className={`battle-repeat-card battle-repeat-card-count ${repeatMode === "count" ? "is-selected" : ""
-                }`}
-              onClick={enableRepeatCount}
-            >
-              <RadioGroup.Item value="count" className="battle-repeat-radio" />
-              <div>
-                <Text size="3" weight="bold">设置次数</Text>
-              </div>
-              <div className="battle-repeat-counter" aria-label="重复次数">
-                <Button
-                  color="indigo"
-                  disabled={running || !selectedProject || displayedRepeatCount <= 1}
-                  aria-label="减少重复次数"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleRepeatCountStep(-1);
-                  }}
-                >
-                  <MinusIcon width={15} height={15} />
-                </Button>
-                <input
-                  className="battle-counter-value"
-                  type="number"
-                  min="1"
-                  step="1"
-                  inputMode="numeric"
-                  aria-label="重复次数"
-                  value={displayedRepeatCount}
-                  disabled={running || !selectedProject}
-                  onClick={(event) => event.stopPropagation()}
-                  onChange={(event) => handleRepeatCountInput(event.target.value)}
-                />
-                <Button
-                  disabled={running || !selectedProject}
-                  color="indigo"
-                  aria-label="增加重复次数"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleRepeatCountStep(1);
-                  }}
-                >
-                  <PlusIcon width={15} height={15} />
-                </Button>
-              </div>
-            </div>
-          </RadioGroup.Root>
+            options={[
+              {
+                value: "single",
+                title: "不重复",
+                description: "任务执行完毕后停止",
+              },
+              {
+                value: "infinite",
+                title: "无限",
+                description: "无限重复执行任务",
+                accessory: <span className="battle-repeat-symbol">∞</span>,
+              },
+              {
+                value: "count",
+                title: "设置次数",
+                className: "battle-repeat-card-count",
+                onSelect: enableRepeatCount,
+                accessory: (
+                  <div className="battle-repeat-counter" aria-label="重复次数">
+                    <Button
+                      color="indigo"
+                      disabled={running || !selectedProject || displayedRepeatCount <= 1}
+                      aria-label="减少重复次数"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleRepeatCountStep(-1);
+                      }}
+                    >
+                      <MinusIcon width={15} height={15} />
+                    </Button>
+                    <input
+                      className="battle-counter-value"
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="numeric"
+                      aria-label="重复次数"
+                      value={displayedRepeatCount}
+                      disabled={running || !selectedProject}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) => handleRepeatCountInput(event.target.value)}
+                    />
+                    <Button
+                      disabled={running || !selectedProject}
+                      color="indigo"
+                      aria-label="增加重复次数"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleRepeatCountStep(1);
+                      }}
+                    >
+                      <PlusIcon width={15} height={15} />
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+          />
         </Box>
 
         <Box className="battle-panel">
-          <Box className="battle-section-heading">
-            <Text size="4" weight="bold">
-              行动力恢复
-            </Text>
-          </Box>
+          <SectionHeading>行动力恢复</SectionHeading>
           <CheckboxCards.Root
             value={apRecoveryItems}
             className="battle-recovery-cards"
