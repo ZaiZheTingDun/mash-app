@@ -310,13 +310,16 @@ changes (i.e. when the runner moves to a different row).
   attack button, then taps the normal animation-skip point once to dismiss any
   already-selected target popup. The first three `attackPriority` rows are the
   intended card chain order (first, second, third card); rows after that are
-  fallback priorities. The
-  runner walks the list in order and skips entries whose NP is not ready or
-  whose matching command card did not appear, so a configured `Buster / NP /
-  Buster` chain remains `Buster, NP, Buster` when two Buster cards are
-  visible. Empty fixed chain rows inherit the previous non-NP fixed row, so
-  `NP / All / empty` chooses NP plus two command cards when available; NP rows
-  are never inherited because one NP slot can only be used once per turn. It
+  fallback priorities. The first three rows are fixed final card positions:
+  if a fixed row's NP is not ready or its matching command card did not appear,
+  that position remains empty until fallback rows fill empty positions from
+  left to right. So a configured `Buster / NP / Buster` chain remains
+  `Buster, NP, Buster` when two Buster cards are visible, while a missing
+  first card can be replaced by the first matching fallback before the fixed
+  second and third cards. Empty fixed chain rows inherit the previous non-NP
+  fixed row, so `NP / All / empty` chooses NP plus two command cards when
+  available; NP rows are never inherited because one NP slot can only be used
+  once per turn. It
   does not regroup duplicate colors ahead of the NP. Fallback rows after the
   first three repeat while they can still match before the next fallback row is
   considered. Before command-card recognition, normal mode applies already

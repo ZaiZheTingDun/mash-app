@@ -5421,8 +5421,8 @@ fn command_condition_matches_card(
     true
 }
 
-/// Walk the first three priority rows as fixed chain slots, then walk
-/// remaining rows as fallback priorities. Empty fixed slots inherit the
+/// Walk the first three priority rows as fixed chain slots, then fill missing
+/// slots from remaining fallback priorities. Empty fixed slots inherit the
 /// previous non-NP fixed slot, so a partial ``NP, All, empty`` chain still
 /// tries to fill the third card from the ``All`` rule. Fallback rows are
 /// repeated while they can still match, before moving to the next priority.
@@ -5436,13 +5436,10 @@ fn pick_by_priority(
     used_card_slots: &mut HashSet<u32>,
     used_np_slots: &mut HashSet<u32>,
 ) -> Vec<Pick> {
-    let mut picks: Vec<Pick> = Vec::with_capacity(3);
+    let mut picks: Vec<Option<Pick>> = (0..3).map(|_| None).collect();
     let mut inherited_fixed_card: Option<String> = None;
 
-    for entry in priority.iter().take(3) {
-        if picks.len() >= 3 {
-            break;
-        }
+    for (idx, entry) in priority.iter().take(3).enumerate() {
         let card_str = entry.card.as_deref().or(inherited_fixed_card.as_deref());
         if let Some(card_str) = card_str {
             if let Some(pick) = pick_one_priority(
@@ -5453,7 +5450,7 @@ fn pick_by_priority(
                 used_card_slots,
                 used_np_slots,
             ) {
-                picks.push(pick);
+                picks[idx] = Some(pick);
             }
         }
         if let Some(card) = entry.card.as_deref() {
@@ -5467,7 +5464,7 @@ fn pick_by_priority(
         let Some(card_str) = entry.card.as_deref() else {
             continue;
         };
-        while picks.len() < 3 {
+        while let Some(slot_idx) = picks.iter().position(Option::is_none) {
             let Some(pick) = pick_one_priority(
                 card_str,
                 cards,
@@ -5478,14 +5475,14 @@ fn pick_by_priority(
             ) else {
                 break;
             };
-            picks.push(pick);
+            picks[slot_idx] = Some(pick);
             if priority_card_is_np(card_str) {
                 break;
             }
         }
     }
 
-    picks
+    picks.into_iter().flatten().collect()
 }
 
 fn parse_priority_card(card_str: &str) -> Option<(usize, &str)> {
@@ -7397,7 +7394,7 @@ mod tests {
             &mut used_nps,
         );
 
-        assert_eq!(pick_labels(&picks), vec!["NP0", "C0", "C1"]);
+        assert_eq!(pick_labels(&picks), vec!["C1", "NP0", "C0"]);
     }
 
     #[test]
@@ -7545,7 +7542,48 @@ mod tests {
             &mut used_nps,
         );
 
-        assert_eq!(pick_labels(&picks), vec!["C1", "C2", "C4"]);
+        assert_eq!(pick_labels(&picks), vec!["C2", "C4", "C1"]);
+    }
+
+    #[test]
+    fn normal_fallback_fills_missing_fixed_chain_slot_before_ready_nps() {
+        let priority = vec![
+            AttackCard {
+                id: "chain_1".into(),
+                card: Some("servant_1_arts".into()),
+            },
+            AttackCard {
+                id: "chain_2".into(),
+                card: Some("servant_1_np".into()),
+            },
+            AttackCard {
+                id: "chain_3".into(),
+                card: Some("servant_2_np".into()),
+            },
+            AttackCard {
+                id: "fallback_1".into(),
+                card: Some("servant_2_arts".into()),
+            },
+            AttackCard {
+                id: "fallback_2".into(),
+                card: Some("servant_3_arts".into()),
+            },
+        ];
+        let cards = vec![command_card(0, Some(30), Some("a"), None)];
+        let nps = vec![np_slot(0, true), np_slot(1, true)];
+        let mut used_cards = HashSet::new();
+        let mut used_nps = HashSet::new();
+
+        let picks = pick_by_priority(
+            &priority,
+            &cards,
+            &nps,
+            &[Some(10), Some(20), Some(30)],
+            &mut used_cards,
+            &mut used_nps,
+        );
+
+        assert_eq!(pick_labels(&picks), vec!["C0", "NP0", "NP1"]);
     }
 
     #[test]
