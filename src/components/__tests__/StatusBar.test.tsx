@@ -267,6 +267,63 @@ describe("StatusBar", () => {
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
+  it("resets the BlueStacks ADB connection from the status popover and logs each step", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return true;
+      if (cmd === "check_adb") return { connected: true, deviceName: "127.0.0.1:5555" };
+      if (cmd === "reset_bluestacks_adb_connection") {
+        return {
+          ok: true,
+          steps: [
+            {
+              command: "adb disconnect 127.0.0.1:5555",
+              success: true,
+              status: 0,
+              stdout: "disconnected 127.0.0.1:5555",
+              stderr: "",
+            },
+            {
+              command: "adb -s 127.0.0.1:5555 shell echo ok",
+              success: true,
+              status: 0,
+              stdout: "ok",
+              stderr: "",
+            },
+          ],
+        };
+      }
+      return null;
+    });
+    const onLogEntry = vi.fn();
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    renderWithTheme(
+      <StatusBar
+        onLogEntry={onLogEntry}
+        onOperationLogOpenChange={onOpenChange}
+      />
+    );
+
+    await user.click(await screen.findByRole("button", { name: /游戏已连接/ }));
+    await user.click(screen.getByRole("button", { name: "重置 ADB 链接" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("reset_bluestacks_adb_connection");
+    });
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+    await waitFor(() => {
+      expect(onLogEntry).toHaveBeenCalledWith("ADB 链接重置完成");
+    });
+    expect(onLogEntry).toHaveBeenCalledWith("开始重置 BlueStacks ADB 链接…");
+    expect(onLogEntry).toHaveBeenCalledWith(
+      expect.stringContaining("adb disconnect 127.0.0.1:5555"),
+    );
+    expect(onLogEntry).toHaveBeenCalledWith(
+      expect.stringContaining("adb -s 127.0.0.1:5555 shell echo ok"),
+    );
+  });
+
   it("hides debug-level entries by default and reveals them via the toggle", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";

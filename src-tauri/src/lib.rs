@@ -2535,6 +2535,23 @@ struct AdbStatus {
     device_name: Option<String>,
 }
 
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AdbResetStep {
+    command: String,
+    success: bool,
+    status: Option<i32>,
+    stdout: String,
+    stderr: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AdbResetResult {
+    ok: bool,
+    steps: Vec<AdbResetStep>,
+}
+
 fn adb_settings_path(app: &tauri::AppHandle) -> PathBuf {
     let dir = app
         .path()
@@ -2944,6 +2961,65 @@ fn check_adb(app: tauri::AppHandle, state: tauri::State<'_, Mutex<bool>>) -> Adb
         connected: device_name.is_some(),
         device_name,
     }
+}
+
+#[tauri::command]
+fn reset_bluestacks_adb_connection(app: tauri::AppHandle) -> AdbResetResult {
+    let adb_path = adb::resolve_adb_path(&app);
+    let serial = "127.0.0.1:5555";
+    let commands: Vec<Vec<&str>> = vec![
+        vec!["disconnect", serial],
+        vec!["kill-server"],
+        vec!["start-server"],
+        vec!["connect", serial],
+        vec!["devices", "-l"],
+        vec!["-s", serial, "shell", "echo", "ok"],
+    ];
+    let mut steps = Vec::with_capacity(commands.len());
+
+    eprintln!("[adb-reset] begin (adb={})", adb_path.display());
+    for args in commands {
+        let command = format!("{} {}", adb_path.display(), args.join(" "));
+        eprintln!("[adb-reset] running: {command}");
+        match std::process::Command::new(&adb_path).args(&args).output() {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                let success = output.status.success();
+                let status = output.status.code();
+                eprintln!(
+                    "[adb-reset] finished: success={success} status={status:?} command={command}"
+                );
+                if !stdout.is_empty() {
+                    eprintln!("[adb-reset] stdout: {stdout}");
+                }
+                if !stderr.is_empty() {
+                    eprintln!("[adb-reset] stderr: {stderr}");
+                }
+                steps.push(AdbResetStep {
+                    command,
+                    success,
+                    status,
+                    stdout,
+                    stderr,
+                });
+            }
+            Err(err) => {
+                let stderr = err.to_string();
+                eprintln!("[adb-reset] spawn failed: command={command} error={stderr}");
+                steps.push(AdbResetStep {
+                    command,
+                    success: false,
+                    status: None,
+                    stdout: String::new(),
+                    stderr,
+                });
+            }
+        }
+    }
+    let ok = steps.iter().all(|step| step.success);
+    eprintln!("[adb-reset] done ok={ok}");
+    AdbResetResult { ok, steps }
 }
 
 pub(crate) fn spawn_configured_sidecar(
@@ -5431,6 +5507,7 @@ pub fn run() {
             update_project,
             delete_project,
             check_adb,
+            reset_bluestacks_adb_connection,
             save_adb_screenshot,
             run_startup_migration,
             get_use_bluestack,

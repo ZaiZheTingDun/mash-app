@@ -737,6 +737,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         updateInstalling={updateInstalling}
         updateProgressText={updateProgressText}
         onInstallUpdate={handleInstallUpdate}
+        onLogEntry={appendOperationLog}
       />
       <SettingsDialog
         open={settingsOpen}

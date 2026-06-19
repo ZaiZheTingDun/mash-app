@@ -232,6 +232,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         };
       case "check_adb":
         return { connected: false, deviceName: null };
+      case "reset_bluestacks_adb_connection":
+        return { ok: true, steps: [] };
       case "get_use_bluestack":
         return false;
       case "get_server":

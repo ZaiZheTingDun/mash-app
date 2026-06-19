@@ -276,6 +276,54 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return { importedProjects: [] } as T;
     case "check_adb":
       return { connected: false, deviceName: null } as T;
+    case "reset_bluestacks_adb_connection":
+      return {
+        ok: true,
+        steps: [
+          {
+            command: "adb disconnect 127.0.0.1:5555",
+            success: true,
+            status: 0,
+            stdout: "disconnected 127.0.0.1:5555",
+            stderr: "",
+          },
+          {
+            command: "adb kill-server",
+            success: true,
+            status: 0,
+            stdout: "",
+            stderr: "",
+          },
+          {
+            command: "adb start-server",
+            success: true,
+            status: 0,
+            stdout: "",
+            stderr: "",
+          },
+          {
+            command: "adb connect 127.0.0.1:5555",
+            success: true,
+            status: 0,
+            stdout: "connected to 127.0.0.1:5555",
+            stderr: "",
+          },
+          {
+            command: "adb devices -l",
+            success: true,
+            status: 0,
+            stdout: "List of devices attached\n127.0.0.1:5555 device",
+            stderr: "",
+          },
+          {
+            command: "adb -s 127.0.0.1:5555 shell echo ok",
+            success: true,
+            status: 0,
+            stdout: "ok",
+            stderr: "",
+          },
+        ],
+      } as T;
     case "get_use_bluestack":
       return useBluestack as T;
     case "set_use_bluestack":
