@@ -23,10 +23,11 @@ use tauri_plugin_dialog::DialogExt;
 use zip::ZipArchive;
 
 use enhancement_runner::{
-    server_supported as enhancement_server_supported, EnhancementConfig, EnhancementRunner,
-    EnhancementRunnerHandle, EnhancementRunnerState, EnhancementTarget,
+    server_supported as enhancement_server_supported, EnhancementAutomationEvent,
+    EnhancementConfig, EnhancementRunner, EnhancementRunnerHandle, EnhancementRunnerState,
+    EnhancementTarget,
 };
-use runner::{ApRecoveryItem, RunConfig, RunnerHandle, RunnerState};
+use runner::{ApRecoveryItem, AutomationEvent, LogLevel, RunConfig, RunnerHandle, RunnerState};
 
 #[cfg(desktop)]
 const CHECK_FOR_UPDATE_MENU_ID: &str = "check-for-update";
@@ -2552,6 +2553,15 @@ struct AdbResetResult {
     steps: Vec<AdbResetStep>,
 }
 
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AdbResetStatusEvent {
+    message: String,
+    step: Option<AdbResetStep>,
+    done: bool,
+    ok: Option<bool>,
+}
+
 fn adb_settings_path(app: &tauri::AppHandle) -> PathBuf {
     let dir = app
         .path()
@@ -2966,60 +2976,132 @@ fn check_adb(app: tauri::AppHandle, state: tauri::State<'_, Mutex<bool>>) -> Adb
 #[tauri::command]
 fn reset_bluestacks_adb_connection(app: tauri::AppHandle) -> AdbResetResult {
     let adb_path = adb::resolve_adb_path(&app);
-    let serial = "127.0.0.1:5555";
-    let commands: Vec<Vec<&str>> = vec![
-        vec!["disconnect", serial],
-        vec!["kill-server"],
-        vec!["start-server"],
-        vec!["connect", serial],
-        vec!["devices", "-l"],
-        vec!["-s", serial, "shell", "echo", "ok"],
+    let commands: Vec<Vec<String>> = vec![
+        vec!["disconnect".into(), "127.0.0.1:5555".into()],
+        vec!["kill-server".into()],
+        vec!["start-server".into()],
+        vec!["connect".into(), "127.0.0.1:5555".into()],
+        vec!["devices".into(), "-l".into()],
+        vec![
+            "-s".into(),
+            "127.0.0.1:5555".into(),
+            "shell".into(),
+            "echo".into(),
+            "ok".into(),
+        ],
     ];
-    let mut steps = Vec::with_capacity(commands.len());
 
-    eprintln!("[adb-reset] begin (adb={})", adb_path.display());
-    for args in commands {
-        let command = format!("{} {}", adb_path.display(), args.join(" "));
-        eprintln!("[adb-reset] running: {command}");
-        match std::process::Command::new(&adb_path).args(&args).output() {
-            Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                let success = output.status.success();
-                let status = output.status.code();
-                eprintln!(
-                    "[adb-reset] finished: success={success} status={status:?} command={command}"
-                );
-                if !stdout.is_empty() {
-                    eprintln!("[adb-reset] stdout: {stdout}");
-                }
-                if !stderr.is_empty() {
-                    eprintln!("[adb-reset] stderr: {stderr}");
-                }
-                steps.push(AdbResetStep {
-                    command,
-                    success,
-                    status,
-                    stdout,
-                    stderr,
-                });
+    std::thread::spawn(move || {
+        let mut steps = Vec::with_capacity(commands.len());
+        let _ = app.emit(
+            "adb-reset-status",
+            AdbResetStatusEvent {
+                message: "开始重置 BlueStacks ADB 链接…".into(),
+                step: None,
+                done: false,
+                ok: None,
+            },
+        );
+        eprintln!("[adb-reset] begin (adb={})", adb_path.display());
+        for args in commands {
+            let step = run_adb_reset_step(&adb_path, &args);
+            let message = format_adb_reset_step_message(&step);
+            let _ = app.emit(
+                "adb-reset-status",
+                AdbResetStatusEvent {
+                    message,
+                    step: Some(step.clone()),
+                    done: false,
+                    ok: None,
+                },
+            );
+            steps.push(step);
+        }
+        let ok = steps.iter().all(|step| step.success);
+        eprintln!("[adb-reset] done ok={ok}");
+        let _ = app.emit(
+            "adb-reset-status",
+            AdbResetStatusEvent {
+                message: if ok {
+                    "ADB 链接重置完成".into()
+                } else {
+                    "ADB 链接重置完成，但存在失败命令".into()
+                },
+                step: None,
+                done: true,
+                ok: Some(ok),
+            },
+        );
+    });
+
+    AdbResetResult {
+        ok: true,
+        steps: Vec::new(),
+    }
+}
+
+fn run_adb_reset_step(adb_path: &Path, args: &[String]) -> AdbResetStep {
+    let command = format!("{} {}", adb_path.display(), args.join(" "));
+    eprintln!("[adb-reset] running: {command}");
+    match std::process::Command::new(adb_path).args(args).output() {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let success = output.status.success();
+            let status = output.status.code();
+            eprintln!(
+                "[adb-reset] finished: success={success} status={status:?} command={command}"
+            );
+            if !stdout.is_empty() {
+                eprintln!("[adb-reset] stdout: {stdout}");
             }
-            Err(err) => {
-                let stderr = err.to_string();
-                eprintln!("[adb-reset] spawn failed: command={command} error={stderr}");
-                steps.push(AdbResetStep {
-                    command,
-                    success: false,
-                    status: None,
-                    stdout: String::new(),
-                    stderr,
-                });
+            if !stderr.is_empty() {
+                eprintln!("[adb-reset] stderr: {stderr}");
+            }
+            AdbResetStep {
+                command,
+                success,
+                status,
+                stdout,
+                stderr,
+            }
+        }
+        Err(err) => {
+            let stderr = err.to_string();
+            eprintln!("[adb-reset] spawn failed: command={command} error={stderr}");
+            AdbResetStep {
+                command,
+                success: false,
+                status: None,
+                stdout: String::new(),
+                stderr,
             }
         }
     }
-    let ok = steps.iter().all(|step| step.success);
-    eprintln!("[adb-reset] done ok={ok}");
-    AdbResetResult { ok, steps }
+}
+
+fn format_adb_reset_step_message(step: &AdbResetStep) -> String {
+    let status_text = step
+        .status
+        .map(|status| format!("exit {status}"))
+        .unwrap_or_else(|| "spawn failed".into());
+    let output = [&step.stdout, &step.stderr]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(" | ");
+    format!(
+        "{}: {} ({}){}",
+        if step.success { "成功" } else { "失败" },
+        step.command,
+        status_text,
+        if output.is_empty() {
+            String::new()
+        } else {
+            format!(" - {output}")
+        }
+    )
 }
 
 pub(crate) fn spawn_configured_sidecar(
@@ -3057,6 +3139,87 @@ fn input_size_for_taps(adb_size: Option<(u32, u32)>, stream_size: (u32, u32)) ->
     }
 }
 
+fn runner_is_busy(state: &RunnerState) -> bool {
+    matches!(state, RunnerState::Starting | RunnerState::Running)
+}
+
+fn enhancement_runner_is_busy(state: &EnhancementRunnerState) -> bool {
+    matches!(
+        state,
+        EnhancementRunnerState::Starting | EnhancementRunnerState::Running
+    )
+}
+
+fn emit_automation_status(
+    app: &tauri::AppHandle,
+    state: &Arc<Mutex<RunnerState>>,
+    screen: &str,
+    message: &str,
+) {
+    let state_str = {
+        let s = state.lock().unwrap();
+        format!("{:?}", *s)
+    };
+    let _ = app.emit(
+        "automation-status",
+        AutomationEvent {
+            state: state_str,
+            current_screen: screen.into(),
+            message: message.into(),
+            level: LogLevel::Info,
+        },
+    );
+}
+
+fn fail_automation_start(app: &tauri::AppHandle, state: &Arc<Mutex<RunnerState>>, message: String) {
+    *state.lock().unwrap() = RunnerState::Error {
+        message: message.clone(),
+    };
+    emit_automation_status(app, state, "", &format!("启动失败: {message}"));
+}
+
+fn stop_automation_start(app: &tauri::AppHandle, state: &Arc<Mutex<RunnerState>>) {
+    *state.lock().unwrap() = RunnerState::Idle;
+    emit_automation_status(app, state, "", "自动化已停止");
+}
+
+fn emit_enhancement_status(
+    app: &tauri::AppHandle,
+    state: &Arc<Mutex<EnhancementRunnerState>>,
+    screen: &str,
+    message: &str,
+) {
+    let state_str = {
+        let s = state.lock().unwrap();
+        format!("{:?}", *s)
+    };
+    let _ = app.emit(
+        "enhancement-automation-status",
+        EnhancementAutomationEvent {
+            state: state_str,
+            current_screen: screen.into(),
+            message: message.into(),
+            level: LogLevel::Info,
+        },
+    );
+}
+
+fn fail_enhancement_start(
+    app: &tauri::AppHandle,
+    state: &Arc<Mutex<EnhancementRunnerState>>,
+    message: String,
+) {
+    *state.lock().unwrap() = EnhancementRunnerState::Error {
+        message: message.clone(),
+    };
+    emit_enhancement_status(app, state, "", &format!("启动失败: {message}"));
+}
+
+fn stop_enhancement_start(app: &tauri::AppHandle, state: &Arc<Mutex<EnhancementRunnerState>>) {
+    *state.lock().unwrap() = EnhancementRunnerState::Idle;
+    emit_enhancement_status(app, state, "", "强化自动化已停止");
+}
+
 #[tauri::command]
 fn start_automation(
     app: tauri::AppHandle,
@@ -3069,7 +3232,7 @@ fn start_automation(
 ) -> Result<(), String> {
     let is_running = {
         let state = handle_state.lock().unwrap().state.clone();
-        let running = matches!(*state.lock().unwrap(), RunnerState::Running);
+        let running = runner_is_busy(&state.lock().unwrap());
         running
     };
     if is_running {
@@ -3077,10 +3240,7 @@ fn start_automation(
     }
     {
         let handle = enhancement_handle_state.lock().unwrap();
-        let running = matches!(
-            *handle.state.lock().unwrap(),
-            EnhancementRunnerState::Running
-        );
+        let running = enhancement_runner_is_busy(&handle.state.lock().unwrap());
         if running {
             return Err("强化自动化正在运行中".into());
         }
@@ -3107,71 +3267,103 @@ fn start_automation(
     let use_bluestack = *bluestack_state.lock().unwrap();
     let server = *server_state.lock().unwrap();
 
-    let mut adb_dev = adb::Adb::new(&app, use_bluestack);
-    adb_dev.connect()?;
-    let serial = adb_dev.serial().map(|s| s.to_string());
+    let state = Arc::new(Mutex::new(RunnerState::Starting));
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stop_after_current = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
-    let jar_path =
-        resolve_scrcpy_jar(&app).ok_or_else(|| "找不到 scrcpy-server.jar 资源".to_string())?;
-    if !jar_path.exists() {
-        return Err(format!("scrcpy-server.jar 不存在: {}", jar_path.display()));
+    {
+        let mut handle = handle_state.lock().unwrap();
+        handle.state = state.clone();
+        handle.cancel = cancel.clone();
+        handle.stop_after_current = stop_after_current.clone();
     }
 
-    let mut sidecar = take_or_spawn_sidecar(&app, &debug_state, server)?;
+    let debug_sidecar = debug_state.0.clone();
+    std::thread::spawn(move || {
+        emit_automation_status(&app, &state, "", "正在连接 ADB…");
+        let mut adb_dev = adb::Adb::new(&app, use_bluestack);
+        if let Err(err) = adb_dev.connect() {
+            fail_automation_start(&app, &state, err);
+            return;
+        }
+        if cancel.load(Ordering::Relaxed) {
+            stop_automation_start(&app, &state);
+            return;
+        }
+        let serial = adb_dev.serial().map(|s| s.to_string());
 
-    let (w, h) = sidecar
-        .start_stream(
+        let Some(jar_path) = resolve_scrcpy_jar(&app) else {
+            fail_automation_start(&app, &state, "找不到 scrcpy-server.jar 资源".into());
+            return;
+        };
+        if !jar_path.exists() {
+            fail_automation_start(
+                &app,
+                &state,
+                format!("scrcpy-server.jar 不存在: {}", jar_path.display()),
+            );
+            return;
+        }
+
+        emit_automation_status(&app, &state, "", "正在启动视频流…");
+        let debug_state = debug::DebugSidecar(debug_sidecar.clone());
+        let mut sidecar = match take_or_spawn_sidecar(&app, &debug_state, server) {
+            Ok(sidecar) => sidecar,
+            Err(err) => {
+                fail_automation_start(&app, &state, err);
+                return;
+            }
+        };
+
+        let (w, h) = match sidecar.start_stream(
             adb_dev.path(),
             &jar_path,
             serial.as_deref(),
             STREAM_MAX_SIZE,
             STREAM_BIT_RATE,
-        )
-        .map_err(|e| format!("启动 scrcpy 视频流失败: {e}"))?;
-    if !stream_meets_minimum_resolution(w, h) {
-        if let Err(err) = sidecar.stop_stream() {
-            eprintln!("[runner] stop unsupported-resolution stream failed: {err}");
+        ) {
+            Ok(size) => size,
+            Err(err) => {
+                fail_automation_start(&app, &state, format!("启动 scrcpy 视频流失败: {err}"));
+                return;
+            }
+        };
+        if !stream_meets_minimum_resolution(w, h) {
+            if let Err(err) = sidecar.stop_stream() {
+                eprintln!("[runner] stop unsupported-resolution stream failed: {err}");
+            }
+            fail_automation_start(&app, &state, stream_resolution_error(w, h));
+            return;
         }
-        return Err(stream_resolution_error(w, h));
-    }
-    let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
-    if input_size != (w, h) {
-        eprintln!(
-            "[runner] using adb input size {}x{} with stream frame {}x{}",
-            input_size.0, input_size.1, w, h
+        let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
+        if input_size != (w, h) {
+            eprintln!(
+                "[runner] using adb input size {}x{} with stream frame {}x{}",
+                input_size.0, input_size.1, w, h
+            );
+        }
+        let screen_size = Some(input_size);
+        let assets_dir = resolve_servant_assets_dir(&app);
+        let ce_assets_dir = resolve_ce_assets_dir(&app);
+        let runner = runner::Runner::new(
+            adb_dev,
+            sidecar,
+            config,
+            scenes,
+            advanced_mode,
+            advanced_scenes,
+            app,
+            state,
+            cancel,
+            stop_after_current,
+            screen_size,
+            assets_dir,
+            ce_assets_dir,
+            server,
+            Some(debug_sidecar),
         );
-    }
-    let screen_size = Some(input_size);
-
-    let state = Arc::new(Mutex::new(RunnerState::Running));
-    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let stop_after_current = Arc::new(std::sync::atomic::AtomicBool::new(false));
-
-    let mut handle = handle_state.lock().unwrap();
-    handle.state = state.clone();
-    handle.cancel = cancel.clone();
-    handle.stop_after_current = stop_after_current.clone();
-
-    let assets_dir = resolve_servant_assets_dir(&app);
-    let ce_assets_dir = resolve_ce_assets_dir(&app);
-    let runner = runner::Runner::new(
-        adb_dev,
-        sidecar,
-        config,
-        scenes,
-        advanced_mode,
-        advanced_scenes,
-        app,
-        state,
-        cancel,
-        stop_after_current,
-        screen_size,
-        assets_dir,
-        ce_assets_dir,
-        server,
-        Some(debug_state.0.clone()),
-    );
-    std::thread::spawn(move || runner.run());
+        runner.run();
+    });
 
     Ok(())
 }
@@ -3211,17 +3403,14 @@ fn start_enhancement_automation(
 ) -> Result<(), String> {
     {
         let handle = handle_state.lock().unwrap();
-        let running = matches!(
-            *handle.state.lock().unwrap(),
-            EnhancementRunnerState::Running
-        );
+        let running = enhancement_runner_is_busy(&handle.state.lock().unwrap());
         if running {
             return Err("强化自动化正在运行中".into());
         }
     }
     {
         let handle = battle_handle_state.lock().unwrap();
-        let running = matches!(*handle.state.lock().unwrap(), RunnerState::Running);
+        let running = runner_is_busy(&handle.state.lock().unwrap());
         if running {
             return Err("战斗自动化正在运行中，请先停止".into());
         }
@@ -3238,57 +3427,90 @@ fn start_enhancement_automation(
         return Err("目标从者 id 与 variantKey 不匹配".into());
     }
 
-    let mut adb_dev = adb::Adb::new(&app, use_bluestack);
-    adb_dev.connect()?;
-    let serial = adb_dev.serial().map(|s| s.to_string());
-
-    let jar_path =
-        resolve_scrcpy_jar(&app).ok_or_else(|| "找不到 scrcpy-server.jar 资源".to_string())?;
-    if !jar_path.exists() {
-        return Err(format!("scrcpy-server.jar 不存在: {}", jar_path.display()));
+    let state = Arc::new(Mutex::new(EnhancementRunnerState::Starting));
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    {
+        let mut handle = handle_state.lock().unwrap();
+        handle.state = state.clone();
+        handle.cancel = cancel.clone();
     }
 
-    let mut sidecar = take_or_spawn_sidecar(&app, &debug_state, server)?;
-    let (w, h) = sidecar
-        .start_stream(
+    let debug_sidecar = debug_state.0.clone();
+    std::thread::spawn(move || {
+        emit_enhancement_status(&app, &state, "", "正在连接 ADB…");
+        let mut adb_dev = adb::Adb::new(&app, use_bluestack);
+        if let Err(err) = adb_dev.connect() {
+            fail_enhancement_start(&app, &state, err);
+            return;
+        }
+        if cancel.load(Ordering::Relaxed) {
+            stop_enhancement_start(&app, &state);
+            return;
+        }
+        let serial = adb_dev.serial().map(|s| s.to_string());
+
+        let Some(jar_path) = resolve_scrcpy_jar(&app) else {
+            fail_enhancement_start(&app, &state, "找不到 scrcpy-server.jar 资源".into());
+            return;
+        };
+        if !jar_path.exists() {
+            fail_enhancement_start(
+                &app,
+                &state,
+                format!("scrcpy-server.jar 不存在: {}", jar_path.display()),
+            );
+            return;
+        }
+
+        emit_enhancement_status(&app, &state, "", "正在启动视频流…");
+        let debug_state = debug::DebugSidecar(debug_sidecar.clone());
+        let mut sidecar = match take_or_spawn_sidecar(&app, &debug_state, server) {
+            Ok(sidecar) => sidecar,
+            Err(err) => {
+                fail_enhancement_start(&app, &state, err);
+                return;
+            }
+        };
+        let (w, h) = match sidecar.start_stream(
             adb_dev.path(),
             &jar_path,
             serial.as_deref(),
             STREAM_MAX_SIZE,
             STREAM_BIT_RATE,
-        )
-        .map_err(|e| format!("启动 scrcpy 视频流失败: {e}"))?;
-    if !stream_meets_minimum_resolution(w, h) {
-        if let Err(err) = sidecar.stop_stream() {
-            eprintln!("[enhancement] stop unsupported-resolution stream failed: {err}");
+        ) {
+            Ok(size) => size,
+            Err(err) => {
+                fail_enhancement_start(&app, &state, format!("启动 scrcpy 视频流失败: {err}"));
+                return;
+            }
+        };
+        if !stream_meets_minimum_resolution(w, h) {
+            if let Err(err) = sidecar.stop_stream() {
+                eprintln!("[enhancement] stop unsupported-resolution stream failed: {err}");
+            }
+            fail_enhancement_start(&app, &state, stream_resolution_error(w, h));
+            return;
         }
-        return Err(stream_resolution_error(w, h));
-    }
-    let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
-    if input_size != (w, h) {
-        eprintln!(
-            "[enhancement] using adb input size {}x{} with stream frame {}x{}",
-            input_size.0, input_size.1, w, h
+        let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
+        if input_size != (w, h) {
+            eprintln!(
+                "[enhancement] using adb input size {}x{} with stream frame {}x{}",
+                input_size.0, input_size.1, w, h
+            );
+        }
+
+        let runner = EnhancementRunner::new(
+            adb_dev,
+            sidecar,
+            app,
+            state,
+            cancel,
+            input_size,
+            target,
+            Some(debug_sidecar),
         );
-    }
-
-    let state = Arc::new(Mutex::new(EnhancementRunnerState::Running));
-    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let mut handle = handle_state.lock().unwrap();
-    handle.state = state.clone();
-    handle.cancel = cancel.clone();
-
-    let runner = EnhancementRunner::new(
-        adb_dev,
-        sidecar,
-        app,
-        state,
-        cancel,
-        input_size,
-        target,
-        Some(debug_state.0.clone()),
-    );
-    std::thread::spawn(move || runner.run());
+        runner.run();
+    });
     Ok(())
 }
 

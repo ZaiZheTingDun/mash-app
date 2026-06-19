@@ -244,6 +244,7 @@ pub struct EnhancementTarget {
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum EnhancementRunnerState {
     Idle,
+    Starting,
     Running,
     Finished,
     Error { message: String },

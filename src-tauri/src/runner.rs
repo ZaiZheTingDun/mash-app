@@ -260,6 +260,7 @@ impl Default for SupportGrandBondCeMode {
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum RunnerState {
     Idle,
+    Starting,
     Running,
     Finished,
     Error { message: String },

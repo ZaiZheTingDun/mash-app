@@ -40,6 +40,13 @@ interface AdbResetResult {
   steps: AdbResetStep[];
 }
 
+interface AdbResetStatusEvent {
+  message: string;
+  step?: AdbResetStep | null;
+  done: boolean;
+  ok?: boolean | null;
+}
+
 interface AutomationStatusEvent {
   state: string;
 }
@@ -139,14 +146,14 @@ export function StatusBar({
       "automation-status",
       (event) => {
         const state = event.payload.state ?? "";
-        setBattleRunnerRunning(state.includes("Running"));
+        setBattleRunnerRunning(state.includes("Starting") || state.includes("Running"));
       }
     );
     const unlistenEnhancement = listen<AutomationStatusEvent>(
       "enhancement-automation-status",
       (event) => {
         const state = event.payload.state ?? "";
-        setEnhancementRunnerRunning(state.includes("Running"));
+        setEnhancementRunnerRunning(state.includes("Starting") || state.includes("Running"));
       }
     );
     return () => {
@@ -154,6 +161,20 @@ export function StatusBar({
       unlistenEnhancement.then((fn) => fn());
     };
   }, []);
+
+  useEffect(() => {
+    const unlisten = listen<AdbResetStatusEvent>("adb-reset-status", (event) => {
+      const { done, message } = event.payload;
+      onLogEntry?.(message);
+      if (done) {
+        setResettingAdb(false);
+        pollAdb();
+      }
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [onLogEntry, pollAdb]);
 
   const handleConnect = useCallback(() => {
     setChecking(true);
@@ -166,9 +187,9 @@ export function StatusBar({
   const handleResetAdb = useCallback(() => {
     setResettingAdb(true);
     onOperationLogOpenChange?.(true);
-    onLogEntry?.("开始重置 BlueStacks ADB 链接…");
     invoke<AdbResetResult>("reset_bluestacks_adb_connection")
       .then((result) => {
+        if (result.steps.length === 0) return;
         result.steps.forEach((step) => {
           const statusText = step.status == null ? "spawn failed" : `exit ${step.status}`;
           const output = [step.stdout, step.stderr].filter(Boolean).join(" | ");
@@ -179,13 +200,14 @@ export function StatusBar({
           );
         });
         onLogEntry?.(result.ok ? "ADB 链接重置完成" : "ADB 链接重置完成，但存在失败命令");
+        setResettingAdb(false);
         pollAdb();
       })
       .catch((err) => {
         onLogEntry?.(`ADB 链接重置失败: ${String(err)}`);
         setStatus({ connected: false, deviceName: null });
-      })
-      .finally(() => setResettingAdb(false));
+        setResettingAdb(false);
+      });
   }, [onLogEntry, onOperationLogOpenChange, pollAdb]);
 
   const handleBluestackToggle = useCallback((checked: boolean) => {

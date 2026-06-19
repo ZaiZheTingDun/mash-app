@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type Event } from "@tauri-apps/api/event";
 import { useState } from "react";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import { BattlePage } from "../BattlePage";
@@ -144,6 +145,34 @@ describe("BattlePage", () => {
     await user.click(await screen.findByRole("button", { name: "开始" }));
 
     expect(callbacks.onAutomationStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("recovers the start button when startup fails through the status event", async () => {
+    let automationHandler: ((event: Event<{ state: string }>) => void) | null = null;
+    vi.mocked(listen).mockImplementationOnce(async (event, handler) => {
+      if (event === "automation-status") {
+        automationHandler = handler as (event: Event<{ state: string }>) => void;
+      }
+      return () => {};
+    });
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage(PROJECT);
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+    expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
+
+    act(() => {
+      automationHandler?.({
+        event: "automation-status",
+        id: 0,
+        payload: { state: 'Error { message: "no device found" }' },
+      } as Event<{ state: string }>);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "开始" })).toBeEnabled();
+    });
   });
 
   it("passes support skill and NP level requirements to automation", async () => {

@@ -16,6 +16,12 @@ import { SERVER_LABELS } from "../../types/server";
 // component the same way the runners do.
 type AutomationPayload = { state: string };
 type AutomationListener = (event: Event<AutomationPayload>) => void;
+type AdbResetPayload = {
+  message: string;
+  done: boolean;
+  ok?: boolean | null;
+};
+type AdbResetListener = (event: Event<AdbResetPayload>) => void;
 
 function captureAutomationListener(
   targetEvent = "automation-status"
@@ -268,6 +274,13 @@ describe("StatusBar", () => {
   });
 
   it("resets the BlueStacks ADB connection from the status popover and logs each step", async () => {
+    let resetHandler: AdbResetListener | null = null;
+    vi.mocked(listen).mockImplementation(async (event, cb) => {
+      if (event === "adb-reset-status") {
+        resetHandler = cb as AdbResetListener;
+      }
+      return () => {};
+    });
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";
       if (cmd === "get_use_bluestack") return true;
@@ -275,22 +288,7 @@ describe("StatusBar", () => {
       if (cmd === "reset_bluestacks_adb_connection") {
         return {
           ok: true,
-          steps: [
-            {
-              command: "adb disconnect 127.0.0.1:5555",
-              success: true,
-              status: 0,
-              stdout: "disconnected 127.0.0.1:5555",
-              stderr: "",
-            },
-            {
-              command: "adb -s 127.0.0.1:5555 shell echo ok",
-              success: true,
-              status: 0,
-              stdout: "ok",
-              stderr: "",
-            },
-          ],
+          steps: [],
         };
       }
       return null;
@@ -312,6 +310,46 @@ describe("StatusBar", () => {
       expect(invoke).toHaveBeenCalledWith("reset_bluestacks_adb_connection");
     });
     expect(onOpenChange).toHaveBeenCalledWith(true);
+
+    act(() => {
+      resetHandler?.({
+        event: "adb-reset-status",
+        id: 0,
+        payload: {
+          message: "开始重置 BlueStacks ADB 链接…",
+          done: false,
+          ok: null,
+        },
+      } as Event<AdbResetPayload>);
+      resetHandler?.({
+        event: "adb-reset-status",
+        id: 1,
+        payload: {
+          message: "成功: adb disconnect 127.0.0.1:5555 (exit 0) - disconnected 127.0.0.1:5555",
+          done: false,
+          ok: null,
+        },
+      } as Event<AdbResetPayload>);
+      resetHandler?.({
+        event: "adb-reset-status",
+        id: 2,
+        payload: {
+          message: "成功: adb -s 127.0.0.1:5555 shell echo ok (exit 0) - ok",
+          done: false,
+          ok: null,
+        },
+      } as Event<AdbResetPayload>);
+      resetHandler?.({
+        event: "adb-reset-status",
+        id: 3,
+        payload: {
+          message: "ADB 链接重置完成",
+          done: true,
+          ok: true,
+        },
+      } as Event<AdbResetPayload>);
+    });
+
     await waitFor(() => {
       expect(onLogEntry).toHaveBeenCalledWith("ADB 链接重置完成");
     });

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type Event } from "@tauri-apps/api/event";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import { EnhancementPage } from "../EnhancementPage";
 import type { Servant } from "../../types/servant";
@@ -32,6 +33,39 @@ describe("EnhancementPage", () => {
         targetServantId: 100100,
         targetServantVariantKey: "100100:1",
       },
+    });
+  });
+
+  it("recovers the start button when startup fails through the status event", async () => {
+    let enhancementHandler: ((event: Event<{ state: string; currentScreen: string; message: string }>) => void) | null = null;
+    vi.mocked(listen).mockImplementationOnce(async (event, handler) => {
+      if (event === "enhancement-automation-status") {
+        enhancementHandler = handler as (
+          event: Event<{ state: string; currentScreen: string; message: string }>
+        ) => void;
+      }
+      return () => {};
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<EnhancementPage servants={SERVANTS} onBack={() => {}} />);
+
+    await user.click(screen.getByRole("button", { name: "开始" }));
+    expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
+
+    act(() => {
+      enhancementHandler?.({
+        event: "enhancement-automation-status",
+        id: 0,
+        payload: {
+          state: 'Error { message: "no device found" }',
+          currentScreen: "",
+          message: "启动失败: no device found",
+        },
+      } as Event<{ state: string; currentScreen: string; message: string }>);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "开始" })).toBeEnabled();
     });
   });
 
