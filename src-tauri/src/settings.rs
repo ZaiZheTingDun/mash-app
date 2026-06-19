@@ -72,23 +72,6 @@ fn load_last_update_check_date(app: &tauri::AppHandle) -> Option<String> {
         .and_then(|text| serde_json::from_str::<String>(&text).ok())
 }
 
-pub(crate) fn parse_first_ready_device(output: &str) -> Option<String> {
-    output.lines().skip(1).find_map(|line| {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            return None;
-        }
-        let mut parts = trimmed.split('\t');
-        let serial = parts.next()?.trim();
-        let status = parts.next()?.trim();
-        if status == "device" {
-            Some(serial.to_string())
-        } else {
-            None
-        }
-    })
-}
-
 #[tauri::command]
 pub(crate) fn get_use_bluestack(state: tauri::State<'_, Mutex<bool>>) -> bool {
     *state.lock().unwrap()
