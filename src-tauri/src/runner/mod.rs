@@ -11,6 +11,7 @@ mod results;
 mod state;
 mod support;
 
+#[cfg(test)]
 pub(crate) use ap_recovery::*;
 pub(crate) use attack::*;
 pub use config::*;
@@ -1889,117 +1890,6 @@ impl Runner {
 
         self.emit("Attack", "无高级规则命中攻击，按默认顺序补位");
         self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, None);
-    }
-
-    fn ap_recovery_candidates(&self, page: ApRecoveryPage) -> Vec<ApRecoveryTemplate> {
-        ap_recovery_candidates_for_page(&self.config.ap_recovery_items, page)
-    }
-
-    fn find_ap_recovery_item(&mut self, item: ApRecoveryTemplate) -> Result<Option<Point>, String> {
-        self.sidecar().find_element(
-            None,
-            item.template_key,
-            AP_RECOVERY_ITEMS_REGION,
-            AP_RECOVERY_ITEM_THRESHOLD,
-        )
-    }
-
-    fn ap_recovery_list_visible(&mut self) -> Result<bool, String> {
-        Ok(self
-            .sidecar()
-            .find_element(
-                None,
-                AP_RECOVERY_LIST_LABEL_TEMPLATE,
-                AP_RECOVERY_ITEMS_REGION,
-                0.8,
-            )?
-            .is_some())
-    }
-
-    fn handle_ap_recovery(&mut self) {
-        if self.config.ap_recovery_items.is_empty() {
-            self.emit("APRecovery", "行动力不足且未配置自动吃苹果，停止");
-            self.set_state(RunnerState::Finished);
-            return;
-        }
-
-        match self.ap_recovery_list_visible() {
-            Ok(true) => {}
-            Ok(false) => {
-                self.emit("APRecovery", "未定位到道具列表，等待重试…");
-                thread::sleep(ACTION_DELAY);
-                return;
-            }
-            Err(err) => {
-                self.fail_action("APRecovery", "定位道具列表", err);
-                return;
-            }
-        }
-
-        for item in self.ap_recovery_candidates(ApRecoveryPage::Top) {
-            match self.find_ap_recovery_item(item) {
-                Ok(Some(point)) => {
-                    self.emit("APRecovery", &format!("行动力不足，使用{}", item.label));
-                    if !self.tap_at("APRecovery", point) {
-                        return;
-                    }
-                    thread::sleep(ACTION_DELAY);
-                    if !self.tap_at("APRecovery", AP_RECOVERY_CONFIRM_BUTTON) {
-                        return;
-                    }
-                    thread::sleep(ACTION_DELAY);
-                    return;
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    self.fail_action("APRecovery", &format!("识别{}", item.label), err);
-                    return;
-                }
-            }
-        }
-
-        let bottom_items = self.ap_recovery_candidates(ApRecoveryPage::Bottom);
-        if bottom_items.is_empty() {
-            self.emit("APRecovery", "已配置苹果数量不足，停止");
-            self.set_state(RunnerState::Finished);
-            return;
-        }
-
-        self.emit("APRecovery", "上半页未找到可用道具，滚动到底部继续查找");
-        if !self.swipe_at(
-            "APRecovery",
-            AP_RECOVERY_SCROLL_FROM,
-            AP_RECOVERY_SCROLL_TO,
-            350,
-        ) {
-            return;
-        }
-        thread::sleep(ACTION_DELAY);
-
-        for item in bottom_items {
-            match self.find_ap_recovery_item(item) {
-                Ok(Some(point)) => {
-                    self.emit("APRecovery", &format!("行动力不足，使用{}", item.label));
-                    if !self.tap_at("APRecovery", point) {
-                        return;
-                    }
-                    thread::sleep(ACTION_DELAY);
-                    if !self.tap_at("APRecovery", AP_RECOVERY_CONFIRM_BUTTON) {
-                        return;
-                    }
-                    thread::sleep(ACTION_DELAY);
-                    return;
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    self.fail_action("APRecovery", &format!("识别{}", item.label), err);
-                    return;
-                }
-            }
-        }
-
-        self.emit("APRecovery", "所有已配置苹果数量不足，停止");
-        self.set_state(RunnerState::Finished);
     }
 
     // -- skill execution -----------------------------------------------------
