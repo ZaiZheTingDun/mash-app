@@ -10,7 +10,6 @@ import {
 } from "@radix-ui/themes";
 import {
   ChevronLeftIcon,
-  ChevronRightIcon,
   ExternalLinkIcon,
   ReloadIcon,
 } from "@radix-ui/react-icons";
@@ -28,6 +27,7 @@ import {
 } from "./DebugCanvasWindow";
 import { CraftEssenceSelectDialog } from "./CraftEssenceSelectDialog";
 import { ServantSelectDialog } from "./ServantSelectDialog";
+import { DebugSection } from "./DebugSection";
 import type {
   AttackButtonResultDto,
   BattleSceneResultDto,
@@ -43,45 +43,6 @@ import type {
   SupportCeIconCheckDto,
   SupportRowMatchDto,
 } from "./debugTypes";
-
-/**
- * Collapsible group used throughout the debug UI. Built on the native
- * `<details>` element so it needs zero React state and is naturally
- * keyboard-accessible. The chevron rotates via a CSS rule on
- * `.debug-section[open] > summary > .debug-section-chevron`.
- */
-function DebugSection({
-  title,
-  defaultOpen = false,
-  badge,
-  children,
-}: {
-  title: string;
-  defaultOpen?: boolean;
-  badge?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <details className="debug-section" open={defaultOpen}>
-      <summary className="debug-section-summary">
-        <ChevronRightIcon
-          className="debug-section-chevron"
-          width={14}
-          height={14}
-        />
-        <Text size="2" weight="medium">
-          {title}
-        </Text>
-        {badge !== undefined && badge !== null && (
-          <Text size="1" color="gray" className="debug-section-badge">
-            {badge}
-          </Text>
-        )}
-      </summary>
-      <div className="debug-section-body">{children}</div>
-    </details>
-  );
-}
 
 const BATTLE_SCENE_FAIL_HINTS: Record<string, string> = {
   empty_region: "区域为空（NormRect 越界？）",
