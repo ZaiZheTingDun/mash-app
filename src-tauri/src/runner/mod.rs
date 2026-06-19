@@ -3194,91 +3194,6 @@ fn turn_preparation_actions(turn: &BattleTurn) -> std::slice::Iter<'_, Action> {
     turn.preparation_actions.iter()
 }
 
-fn normal_turn_for_current_state(
-    scenes: &[BattleScene],
-    current_scene_index: usize,
-    current_turn_index: usize,
-) -> Option<(BattleTurn, bool)> {
-    let turns = &scenes.get(current_scene_index)?.turns;
-    let last_index = turns.len().checked_sub(1)?;
-    let over_configured_turns = current_turn_index > last_index;
-    let effective_index = current_turn_index.min(last_index);
-    turns
-        .get(effective_index)
-        .cloned()
-        .map(|turn| (turn, over_configured_turns))
-}
-
-fn attack_priority_for_current_scene<'a>(
-    advanced_mode: bool,
-    scene_config_used: bool,
-    scenes: &'a [BattleScene],
-    current_scene_index: usize,
-    current_turn_index: usize,
-) -> Option<&'a [AttackCard]> {
-    if advanced_mode && !scene_config_used {
-        return None;
-    }
-    let turns = &scenes.get(current_scene_index)?.turns;
-    let last_index = turns.len().checked_sub(1)?;
-    let effective_index = current_turn_index.min(last_index);
-    scenes
-        .get(current_scene_index)
-        .and_then(|scene| scene.turns.get(effective_index))
-        .map(|turn| turn.attack_priority.as_slice())
-}
-
-fn attack_card_requires_command_card_recognition(card: &AttackCard) -> bool {
-    card.card
-        .as_deref()
-        .and_then(parse_priority_card)
-        .map(|(_, kind)| kind != "np")
-        .unwrap_or(false)
-}
-
-fn normal_scenes_need_command_card_recognition(scenes: &[BattleScene]) -> bool {
-    scenes.iter().any(|scene| {
-        scene.turns.iter().any(|turn| {
-            turn.attack_priority
-                .iter()
-                .any(attack_card_requires_command_card_recognition)
-        })
-    })
-}
-
-fn fallback_command_cards() -> Vec<CommandCardMatch> {
-    COMMAND_CARDS
-        .iter()
-        .enumerate()
-        .map(|(slot, point)| CommandCardMatch {
-            slot: slot as u32,
-            x: point.x,
-            y: point.y,
-            card_region: NormRect {
-                x: point.x,
-                y: point.y,
-                w: 0.0,
-                h: 0.0,
-            },
-            face_region: NormRect {
-                x: point.x,
-                y: point.y,
-                w: 0.0,
-                h: 0.0,
-            },
-            crit_digit_regions: None,
-            crit_digit_reads: None,
-            suit: None,
-            icon_score: None,
-            icon_region: None,
-            servant_id: None,
-            ascension: None,
-            face_score: None,
-            crit_chance: None,
-        })
-        .collect()
-}
-
 fn normal_current_party_ids_from(
     mut ids: [Option<u32>; 6],
     scenes: &[BattleScene],
@@ -3394,12 +3309,6 @@ fn jitter_offset() -> (i32, i32) {
     let dx = (nanos % span) as i32 - TAP_JITTER_PX;
     let dy = ((nanos / span) % span) as i32 - TAP_JITTER_PX;
     (dx, dy)
-}
-
-/// Center of a normalized rectangle (used to derive a tap point from a
-/// detected NP slot's `card_region`).
-fn rect_center(r: &NormRect) -> Point {
-    Point::new(r.x + r.w / 2.0, r.y + r.h / 2.0)
 }
 
 // ---------------------------------------------------------------------------
