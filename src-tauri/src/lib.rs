@@ -5847,6 +5847,13 @@ mod tests {
             0.074,
             0.1,
         );
+        assert_battle_close_button_element(
+            &elements["command_spell_close_button"],
+            0.826,
+            0.159,
+            0.074,
+            0.1,
+        );
     }
 
     fn assert_battle_close_button_element(

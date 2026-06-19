@@ -284,6 +284,11 @@ changes (i.e. when the runner moves to a different row).
   tapping the animation-skip point. If the picker never appears or never
   closes, the current action chain stops instead of falling back to a fixed
   delay and guessing.
+- Command Spell target selection uses the same gate with
+  `Battle.variants.main.elements.command_spell_close_button` after the spell
+  confirmation dialog. The earlier command-spell button, spell-row, and confirm
+  dialogs still use fixed modal-settle delays; only the final ally target
+  picker is close-button synchronized.
 - In-battle Order Change is stored on an equipment action as
   `orderChange.front` + `orderChange.back`. The runner taps the master skill,
   waits for `Battle.variants.main.elements.order_change_close_button`, selects

@@ -118,6 +118,16 @@
               },
               "threshold": 0.8
             },
+            "command_spell_close_button": {
+              "template": "shared/battle_close_button",
+              "region": {
+                "x": 0.826,
+                "y": 0.159,
+                "w": 0.074,
+                "h": 0.1
+              },
+              "threshold": 0.8
+            },
             "order_change_close_button": {
               "template": "shared/battle_close_button",
               "region": {

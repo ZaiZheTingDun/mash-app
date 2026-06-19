@@ -356,6 +356,7 @@ const BATTLE_SCREEN: &str = "Battle";
 const SUPPORT_SELECT_SCREEN: &str = "SupportSelect";
 pub const ATTACK_BUTTON_ELEMENT: &str = "attack_button";
 pub const SKILL_TARGET_CLOSE_BUTTON_ELEMENT: &str = "skill_target_close_button";
+pub const COMMAND_SPELL_CLOSE_BUTTON_ELEMENT: &str = "command_spell_close_button";
 pub const ORDER_CHANGE_CLOSE_BUTTON_ELEMENT: &str = "order_change_close_button";
 const SUPPORT_SCROLL_START_ELEMENT: &str = "support_scroll_start";
 const SUPPORT_SCROLL_END_ELEMENT: &str = "support_scroll_end";
@@ -4468,6 +4469,17 @@ impl Runner {
                     }
                     thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
 
+                    self.emit("Battle", "等待令咒目标选择框出现");
+                    if !self.wait_for_element_visible(
+                        "Battle",
+                        COMMAND_SPELL_CLOSE_BUTTON_ELEMENT,
+                        SKILL_WAIT_TIMEOUT,
+                        "等待令咒目标选择框出现…",
+                        "等待令咒目标选择框出现超时",
+                    ) {
+                        return;
+                    }
+
                     self.emit(
                         "Battle",
                         &format!("令咒目标: {}", target.as_deref().unwrap_or("?")),
@@ -4475,7 +4487,16 @@ impl Runner {
                     if !self.tap_at("Battle", target_pos) {
                         return;
                     }
-                    thread::sleep(ACTION_DELAY);
+                    self.emit("Battle", "等待令咒目标选择框关闭");
+                    if !self.wait_for_element_hidden(
+                        "Battle",
+                        COMMAND_SPELL_CLOSE_BUTTON_ELEMENT,
+                        SKILL_WAIT_TIMEOUT,
+                        "等待令咒目标选择框关闭…",
+                        "等待令咒目标选择框关闭超时",
+                    ) {
+                        return;
+                    }
 
                     self.skip_after_skill();
 
@@ -9451,6 +9472,10 @@ mod tests {
         assert_eq!(
             SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
             "skill_target_close_button"
+        );
+        assert_eq!(
+            COMMAND_SPELL_CLOSE_BUTTON_ELEMENT,
+            "command_spell_close_button"
         );
         assert_eq!(
             ORDER_CHANGE_CLOSE_BUTTON_ELEMENT,
