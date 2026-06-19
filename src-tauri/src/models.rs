@@ -1,0 +1,561 @@
+//! IPC wire models shared by Tauri commands, persisted project JSON, and runners.
+//! Keep serde field names camelCase-compatible with the TypeScript interfaces.
+
+use crate::runner::ApRecoveryItem;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(tag = "type")]
+pub enum Action {
+    #[serde(rename = "servant")]
+    Servant {
+        id: String,
+        servant: Option<String>,
+        skill: Option<String>,
+        target: Option<String>,
+    },
+    #[serde(rename = "equipment")]
+    Equipment {
+        id: String,
+        skill: Option<String>,
+        #[serde(default)]
+        target: Option<String>,
+        #[serde(rename = "orderChange", default)]
+        order_change: Option<OrderChangeSelection>,
+    },
+    #[serde(rename = "commandSpell")]
+    CommandSpell {
+        id: String,
+        spell: Option<String>,
+        #[serde(default)]
+        target: Option<String>,
+    },
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct OrderChangeSelection {
+    pub front: Option<String>,
+    pub back: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct AttackCard {
+    pub id: String,
+    pub card: Option<String>,
+}
+
+/// One configured turn inside a battle scene. The runner selects a
+/// `BattleScene` from the `BATTLE m/n` HUD and then uses an internal
+/// per-scene turn counter to choose which `BattleTurn` runs.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct BattleTurn {
+    pub id: String,
+    #[serde(rename = "preparationActions", default)]
+    pub preparation_actions: Vec<Action>,
+    #[serde(rename = "servantActions", default, skip_serializing)]
+    pub servant_actions: Vec<Action>,
+    #[serde(rename = "equipmentActions", default, skip_serializing)]
+    pub equipment_actions: Vec<Action>,
+    /// Per-scene Command Spell taps (令咒). Optional for backwards
+    /// compatibility: legacy `battle_scenes.json` files written before
+    /// this field was added deserialize with an empty list.
+    #[serde(rename = "commandSpellActions", default, skip_serializing)]
+    pub command_spell_actions: Vec<Action>,
+    #[serde(rename = "enemyTarget", default)]
+    pub enemy_target: Option<String>,
+    #[serde(rename = "attackPriority", default)]
+    pub attack_priority: Vec<AttackCard>,
+}
+
+impl BattleTurn {
+    pub(crate) fn normalize_preparation_actions(mut self) -> Self {
+        if self.preparation_actions.is_empty() {
+            self.preparation_actions
+                .extend(self.servant_actions.iter().cloned());
+            self.preparation_actions
+                .extend(self.equipment_actions.iter().cloned());
+            self.preparation_actions
+                .extend(self.command_spell_actions.iter().cloned());
+        }
+        self.servant_actions.clear();
+        self.equipment_actions.clear();
+        self.command_spell_actions.clear();
+        self
+    }
+}
+
+/// One configured battle-scene block. New saves store all normal-mode
+/// per-turn config under `turns`. The legacy top-level fields are kept only
+/// for reading old `battle_scenes.json` / `turns.json` files and are skipped
+/// when serializing.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct BattleScene {
+    pub id: String,
+    #[serde(default)]
+    pub turns: Vec<BattleTurn>,
+    #[serde(rename = "preparationActions", default, skip_serializing)]
+    pub preparation_actions: Vec<Action>,
+    #[serde(rename = "servantActions", default, skip_serializing)]
+    pub servant_actions: Vec<Action>,
+    #[serde(rename = "equipmentActions", default, skip_serializing)]
+    pub equipment_actions: Vec<Action>,
+    #[serde(rename = "commandSpellActions", default, skip_serializing)]
+    pub command_spell_actions: Vec<Action>,
+    #[serde(rename = "enemyTarget", default, skip_serializing)]
+    pub enemy_target: Option<String>,
+    #[serde(rename = "attackPriority", default, skip_serializing)]
+    pub attack_priority: Vec<AttackCard>,
+}
+
+impl BattleScene {
+    pub(crate) fn normalize_turns(mut self) -> Self {
+        if self.turns.is_empty() {
+            self.turns.push(
+                BattleTurn {
+                    id: format!("{}_turn_1", self.id),
+                    preparation_actions: std::mem::take(&mut self.preparation_actions),
+                    servant_actions: std::mem::take(&mut self.servant_actions),
+                    equipment_actions: std::mem::take(&mut self.equipment_actions),
+                    command_spell_actions: std::mem::take(&mut self.command_spell_actions),
+                    enemy_target: self.enemy_target.take(),
+                    attack_priority: std::mem::take(&mut self.attack_priority),
+                }
+                .normalize_preparation_actions(),
+            );
+        } else {
+            self.turns = self
+                .turns
+                .into_iter()
+                .map(BattleTurn::normalize_preparation_actions)
+                .collect();
+            self.preparation_actions.clear();
+            self.servant_actions.clear();
+            self.equipment_actions.clear();
+            self.command_spell_actions.clear();
+            self.enemy_target = None;
+            self.attack_priority.clear();
+        }
+        self
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedNpSlotCondition {
+    pub servant: String,
+    pub ready: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedNpConditionGroup {
+    pub id: String,
+    #[serde(default)]
+    pub slots: Vec<AdvancedNpSlotCondition>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedCommandCardCondition {
+    pub slot: u32,
+    pub servant: String,
+    pub suit: String,
+    #[serde(default)]
+    pub min_crit_chance: Option<u32>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedCommandConditionGroup {
+    pub id: String,
+    #[serde(default)]
+    pub cards: Vec<AdvancedCommandCardCondition>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(tag = "type")]
+pub enum AdvancedAction {
+    #[serde(rename = "servant")]
+    Servant {
+        id: String,
+        servant: Option<String>,
+        skill: Option<String>,
+        target: Option<String>,
+    },
+    #[serde(rename = "equipment")]
+    Equipment {
+        id: String,
+        skill: Option<String>,
+        #[serde(default)]
+        target: Option<String>,
+        #[serde(rename = "orderChange", default)]
+        order_change: Option<OrderChangeSelection>,
+    },
+    #[serde(rename = "commandSpell")]
+    CommandSpell {
+        id: String,
+        spell: Option<String>,
+        #[serde(default)]
+        target: Option<String>,
+    },
+    #[serde(rename = "attack")]
+    Attack { id: String, card: Option<String> },
+}
+
+impl AdvancedAction {
+    pub(crate) fn as_preparation_action(&self) -> Option<Action> {
+        match self {
+            Self::Servant {
+                id,
+                servant,
+                skill,
+                target,
+            } => Some(Action::Servant {
+                id: id.clone(),
+                servant: servant.clone(),
+                skill: skill.clone(),
+                target: target.clone(),
+            }),
+            Self::Equipment {
+                id,
+                skill,
+                target,
+                order_change,
+            } => Some(Action::Equipment {
+                id: id.clone(),
+                skill: skill.clone(),
+                target: target.clone(),
+                order_change: order_change.clone(),
+            }),
+            Self::CommandSpell { id, spell, target } => Some(Action::CommandSpell {
+                id: id.clone(),
+                spell: spell.clone(),
+                target: target.clone(),
+            }),
+            Self::Attack { .. } => None,
+        }
+    }
+
+    pub(crate) fn as_attack_card(&self) -> Option<AttackCard> {
+        match self {
+            Self::Attack { id, card } => Some(AttackCard {
+                id: id.clone(),
+                card: card.clone(),
+            }),
+            _ => None,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedRule {
+    pub id: String,
+    #[serde(default)]
+    pub np_condition_groups: Vec<AdvancedNpConditionGroup>,
+    #[serde(default)]
+    pub command_condition_groups: Vec<AdvancedCommandConditionGroup>,
+    #[serde(default)]
+    pub actions: Vec<AdvancedAction>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum AdvancedOutputType {
+    Np,
+    Critical,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedMainOutput {
+    #[serde(default)]
+    pub servant: Option<String>,
+    #[serde(default)]
+    pub output_type: Option<AdvancedOutputType>,
+    #[serde(rename = "npCard", default)]
+    pub np_card: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedBattleScene {
+    pub id: String,
+    #[serde(default)]
+    pub main_output: Option<AdvancedMainOutput>,
+    #[serde(default)]
+    pub grand_auto_order_change: Option<bool>,
+    #[serde(default)]
+    pub command_conditions: Vec<AdvancedCommandCardCondition>,
+    #[serde(default)]
+    pub control_actions: Vec<Action>,
+    #[serde(default)]
+    pub startup_actions: Vec<Action>,
+    #[serde(default)]
+    pub rules: Vec<AdvancedRule>,
+}
+
+// ---------------------------------------------------------------------------
+// Project system
+// ---------------------------------------------------------------------------
+
+/// One cell of the team-builder grid. The frontend stores six of these per
+/// project (5 servant slots + 1 support slot) along with their order, so
+/// drag-and-drop layouts and chosen servants survive across sessions.
+///
+/// `kind` is either `"servant"` or `"support"`. For support slots,
+/// `servant_id` is ignored — the pinned servant lives on
+/// `Project::support_servant_id` (kept separate because the runner reads
+/// it through `RunConfig::support_servant_id` and we don't want two
+/// sources of truth for the same value).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSlot {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(default)]
+    pub servant_id: Option<u32>,
+    /// Optional UI variant key for servants with multiple gameplay
+    /// variants. The runner still acts on the base servant id; this
+    /// keeps the team builder showing the exact variant the user picked.
+    #[serde(default)]
+    pub servant_variant_key: Option<String>,
+    /// Pinned craft-essence id for this slot. Persisted alongside the
+    /// servant so each loadout can carry its own equipment plan; for
+    /// support slots the runner uses this to verify candidate rows on
+    /// the support-select screen, party slots store it for future use.
+    #[serde(default)]
+    pub craft_essence_id: Option<u32>,
+    #[serde(default = "default_true")]
+    pub craft_essence_mlb_required: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Default 6-slot layout used both when creating a fresh project and when
+/// deserializing a legacy `projects.json` that predates the `slots` field.
+pub(crate) fn default_project_slots() -> Vec<ProjectSlot> {
+    let new_slot = |id: &str, kind: &str| ProjectSlot {
+        id: id.into(),
+        kind: kind.into(),
+        servant_id: None,
+        servant_variant_key: None,
+        craft_essence_id: None,
+        craft_essence_mlb_required: true,
+    };
+    vec![
+        new_slot("slot-0", "servant"),
+        new_slot("slot-1", "servant"),
+        new_slot("slot-2", "support"),
+        new_slot("slot-3", "servant"),
+        new_slot("slot-4", "servant"),
+        new_slot("slot-5", "servant"),
+    ]
+}
+
+pub(crate) fn default_support_skill_level_mins() -> [Option<u32>; 3] {
+    [None; 3]
+}
+
+pub(crate) fn default_support_append_skill_level_mins() -> [Option<u32>; 5] {
+    [None; 5]
+}
+
+pub(crate) fn default_support_grand_craft_essence_ids() -> [Option<u32>; 3] {
+    [None; 3]
+}
+
+pub(crate) fn default_support_grand_craft_essence_mlb_required() -> [bool; 3] {
+    [true; 3]
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SupportGrandBondCeMode {
+    Any,
+    Bond,
+    BondNp,
+}
+
+impl Default for SupportGrandBondCeMode {
+    fn default() -> Self {
+        Self::Any
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GrandClass {
+    Saber,
+    Berserker,
+}
+
+impl Default for GrandClass {
+    fn default() -> Self {
+        Self::Saber
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum ProjectRepeatMode {
+    Single,
+    Infinite,
+    Count,
+}
+
+impl Default for ProjectRepeatMode {
+    fn default() -> Self {
+        Self::Single
+    }
+}
+
+pub(crate) fn default_grand_np_card() -> String {
+    "auto".into()
+}
+
+pub(crate) fn default_grand_card_priority() -> String {
+    "damage".into()
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GrandChainPriorityItem {
+    MainBraveChain,
+    MainReadyNp,
+    DeputyBraveChain,
+    MainColorChain,
+    DeputyColorChain,
+    Fallback,
+}
+
+pub(crate) fn default_grand_chain_priority() -> Vec<GrandChainPriorityItem> {
+    vec![
+        GrandChainPriorityItem::MainBraveChain,
+        GrandChainPriorityItem::MainReadyNp,
+        GrandChainPriorityItem::DeputyBraveChain,
+        GrandChainPriorityItem::MainColorChain,
+        GrandChainPriorityItem::DeputyColorChain,
+        GrandChainPriorityItem::Fallback,
+    ]
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GrandCardStrategy {
+    #[serde(default = "default_grand_chain_priority")]
+    pub chain_priority: Vec<GrandChainPriorityItem>,
+    #[serde(default)]
+    pub custom_rules: Vec<GrandCardRuleConfig>,
+}
+
+impl Default for GrandCardStrategy {
+    fn default() -> Self {
+        Self {
+            chain_priority: default_grand_chain_priority(),
+            custom_rules: Vec::new(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GrandCardRuleSlotConfig {
+    #[serde(default)]
+    pub servant_id: Option<u32>,
+    #[serde(default)]
+    pub grand_servant: bool,
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub color: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GrandCardRuleConfig {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub slots: Vec<GrandCardRuleSlotConfig>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GrandServantConfig {
+    pub slot_index: u32,
+    #[serde(default = "default_grand_np_card")]
+    pub np_card: String,
+    #[serde(default = "default_grand_card_priority")]
+    pub priority: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Project {
+    pub id: String,
+    pub name: String,
+    /// Advanced teams use rule-based battle configuration stored separately
+    /// from the legacy preparation/attack scene list.
+    #[serde(default)]
+    pub advanced_mode: bool,
+    /// Pinned support-select servant id. The runner's `handle_support_select`
+    /// reads this through `RunConfig::support_servant_id` to drive the OCR
+    /// detector. `None` means the user hasn't pinned anyone yet, in which
+    /// case the runner falls back to tapping the topmost visible support.
+    /// `#[serde(default)]` so legacy `projects.json` rows without the field
+    /// continue to deserialize.
+    #[serde(default)]
+    pub support_servant_id: Option<u32>,
+    #[serde(default)]
+    pub support_servant_variant_key: Option<String>,
+    #[serde(default)]
+    pub support_grand_mode: bool,
+    #[serde(default = "default_support_grand_craft_essence_ids")]
+    pub support_grand_craft_essence_ids: [Option<u32>; 3],
+    #[serde(default = "default_support_grand_craft_essence_mlb_required")]
+    pub support_grand_craft_essence_mlb_required: [bool; 3],
+    #[serde(default)]
+    pub support_grand_bond_ce_mode: SupportGrandBondCeMode,
+    #[serde(default)]
+    pub grand_class: GrandClass,
+    #[serde(default)]
+    pub grand_servants: Vec<GrandServantConfig>,
+    #[serde(default)]
+    pub grand_card_strategy: GrandCardStrategy,
+    /// Optional support-search NP minimum level. `None` means "任意".
+    #[serde(default)]
+    pub support_noble_phantasm_level_min: Option<u32>,
+    /// Optional support-search owned skill minimum levels, one entry per
+    /// skill slot. `None` means "任意".
+    #[serde(default = "default_support_skill_level_mins")]
+    pub support_skill_level_mins: [Option<u32>; 3],
+    /// Optional support-search append skill minimum levels, one entry per
+    /// append slot. `None` means "任意".
+    #[serde(default = "default_support_append_skill_level_mins")]
+    pub support_append_skill_level_mins: [Option<u32>; 5],
+    /// Team-builder grid layout (chosen servants + slot order). Persisted
+    /// so the user's selections survive app restarts and project switches.
+    /// Defaulted via `default_project_slots` for legacy rows.
+    #[serde(default = "default_project_slots")]
+    pub slots: Vec<ProjectSlot>,
+    /// When `true`, the runner taps "Next" on the post-battle continue
+    /// screen so the same quest is queued again; when `false`, it taps
+    /// "Close" and the run terminates. `#[serde(default)]` keeps legacy
+    /// rows (no field) defaulting to `false` = single-run behaviour.
+    #[serde(default)]
+    pub repeat_mission: bool,
+    /// Three-way repeat selector persisted for the start page. `None`
+    /// indicates a legacy row and is normalized from `repeat_mission`.
+    #[serde(default)]
+    pub repeat_mode: Option<ProjectRepeatMode>,
+    /// Persisted run count used when `repeat_mode == Count`.
+    #[serde(default)]
+    pub repeat_count: Option<u32>,
+    /// Persisted AP recovery items in UI priority order.
+    #[serde(default)]
+    pub ap_recovery_items: Vec<ApRecoveryItem>,
+}

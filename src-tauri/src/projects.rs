@@ -1,0 +1,768 @@
+//! Project CRUD and configuration import/export.
+//! This module owns the persisted project JSON shape and scene-file round trips.
+
+use super::*;
+
+pub(crate) fn read_projects(app: &tauri::AppHandle) -> Vec<Project> {
+    read_projects_from_path(&projects_file_path(app))
+}
+
+pub(crate) fn read_projects_from_path(path: &Path) -> Vec<Project> {
+    fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .map(|projects: Vec<Project>| {
+            projects
+                .into_iter()
+                .map(normalize_project)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+pub(crate) fn normalize_project(mut project: Project) -> Project {
+    let repeat_mode = match project.repeat_mode {
+        Some(mode) => mode,
+        None if project.repeat_mission => ProjectRepeatMode::Infinite,
+        None => ProjectRepeatMode::Single,
+    };
+    project.repeat_mission = !matches!(repeat_mode, ProjectRepeatMode::Single);
+    project.repeat_mode = Some(repeat_mode);
+    if !matches!(project.repeat_mode, Some(ProjectRepeatMode::Count)) {
+        project.repeat_count = None;
+    }
+    project
+}
+
+pub(crate) fn write_projects(app: &tauri::AppHandle, projects: &[Project]) -> Result<(), String> {
+    write_projects_to_path(&projects_file_path(app), projects)
+}
+
+pub(crate) fn write_projects_to_path(path: &Path, projects: &[Project]) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let json = serde_json::to_string_pretty(projects).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| e.to_string())
+}
+
+pub(crate) fn read_app_ui_settings_from_path(path: &Path) -> AppUiSettings {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+pub(crate) fn write_app_ui_settings_to_path(
+    path: &Path,
+    settings: &AppUiSettings,
+) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) fn get_active_project_id(app: tauri::AppHandle) -> Option<String> {
+    read_app_ui_settings_from_path(&app_ui_settings_path(&app)).active_project_id
+}
+
+#[tauri::command]
+pub(crate) fn set_active_project_id(
+    app: tauri::AppHandle,
+    active_project_id: Option<String>,
+) -> Result<(), String> {
+    let path = app_ui_settings_path(&app);
+    let mut settings = read_app_ui_settings_from_path(&path);
+    settings.active_project_id = active_project_id;
+    write_app_ui_settings_to_path(&path, &settings)
+}
+
+#[tauri::command]
+pub(crate) fn get_app_theme(app: tauri::AppHandle) -> Option<String> {
+    read_app_ui_settings_from_path(&app_ui_settings_path(&app))
+        .theme
+        .filter(|theme| theme == "light" || theme == "dark" || theme == "system")
+}
+
+#[tauri::command]
+pub(crate) fn set_app_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
+    if theme != "light" && theme != "dark" && theme != "system" {
+        return Err(format!("invalid app theme: {theme}"));
+    }
+    let path = app_ui_settings_path(&app);
+    let mut settings = read_app_ui_settings_from_path(&path);
+    settings.theme = Some(theme);
+    write_app_ui_settings_to_path(&path, &settings)
+}
+
+#[tauri::command]
+pub(crate) fn list_projects(app: tauri::AppHandle) -> Vec<Project> {
+    read_projects(&app)
+}
+
+#[tauri::command]
+pub(crate) fn create_project(
+    app: tauri::AppHandle,
+    name: String,
+    advanced_mode: Option<bool>,
+    grand_class: Option<GrandClass>,
+) -> Result<Project, String> {
+    let project = Project {
+        id: uuid::Uuid::new_v4().to_string(),
+        name,
+        advanced_mode: advanced_mode.unwrap_or(false),
+        support_servant_id: None,
+        support_servant_variant_key: None,
+        support_grand_mode: false,
+        support_grand_craft_essence_ids: default_support_grand_craft_essence_ids(),
+        support_grand_craft_essence_mlb_required: default_support_grand_craft_essence_mlb_required(
+        ),
+        support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
+        grand_class: grand_class.unwrap_or_default(),
+        grand_servants: Vec::new(),
+        grand_card_strategy: GrandCardStrategy::default(),
+        support_noble_phantasm_level_min: None,
+        support_skill_level_mins: default_support_skill_level_mins(),
+        support_append_skill_level_mins: default_support_append_skill_level_mins(),
+        slots: default_project_slots(),
+        repeat_mission: false,
+        repeat_mode: Some(ProjectRepeatMode::Single),
+        repeat_count: None,
+        ap_recovery_items: Vec::new(),
+    };
+    let mut projects = read_projects(&app);
+    projects.push(project.clone());
+    write_projects(&app, &projects)?;
+    Ok(project)
+}
+
+pub(crate) fn copy_project_dir(src: &Path, dst: &Path) -> Result<(), String> {
+    if !src.exists() {
+        return Ok(());
+    }
+    fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let entry_src = entry.path();
+        let entry_dst = dst.join(entry.file_name());
+        if entry_src.is_dir() {
+            copy_project_dir(&entry_src, &entry_dst)?;
+        } else {
+            fs::copy(&entry_src, &entry_dst).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn duplicate_project(
+    app: tauri::AppHandle,
+    source_id: String,
+    name: String,
+) -> Result<Project, String> {
+    let mut projects = read_projects(&app);
+    let source = projects
+        .iter()
+        .find(|p| p.id == source_id)
+        .cloned()
+        .ok_or_else(|| format!("project not found: {source_id}"))?;
+    let project = Project {
+        id: uuid::Uuid::new_v4().to_string(),
+        name,
+        ..source
+    };
+    projects.push(project.clone());
+    write_projects(&app, &projects)?;
+
+    let projects_dir = app_data_dir(&app).join("projects");
+    copy_project_dir(
+        &projects_dir.join(&source_id),
+        &projects_dir.join(&project.id),
+    )?;
+    Ok(project)
+}
+
+/// Replace the stored project entry whose ``id`` matches ``project.id`` with
+/// the supplied value. Used by the team-builder support slot to persist the
+/// pinned servant id without a dedicated single-field setter (so future
+/// project-level fields don't each need their own command).
+#[tauri::command]
+pub(crate) fn update_project(app: tauri::AppHandle, project: Project) -> Result<Project, String> {
+    let mut projects = read_projects(&app);
+    let Some(index) = projects.iter().position(|item| item.id == project.id) else {
+        return Err(format!("project not found: {}", project.id));
+    };
+    projects[index] = normalize_project(project);
+    write_projects(&app, &projects)?;
+    Ok(projects[index].clone())
+}
+
+#[tauri::command]
+pub(crate) fn delete_project(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let mut projects = read_projects(&app);
+    projects.retain(|p| p.id != id);
+    write_projects(&app, &projects)?;
+    let dir = app_data_dir(&app).join("projects").join(&id);
+    if dir.exists() {
+        let _ = fs::remove_dir_all(&dir);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn save_battle_scenes(
+    app: tauri::AppHandle,
+    project_id: String,
+    scenes: Vec<BattleScene>,
+) -> Result<(), String> {
+    let path = project_battle_scenes_path(&app, &project_id);
+    let scenes: Vec<BattleScene> = scenes
+        .into_iter()
+        .map(BattleScene::normalize_turns)
+        .collect();
+    let json = serde_json::to_string_pretty(&scenes).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) fn load_battle_scenes(app: tauri::AppHandle, project_id: String) -> Vec<BattleScene> {
+    let path = project_battle_scenes_path(&app, &project_id);
+    if let Ok(contents) = fs::read_to_string(&path) {
+        return serde_json::from_str::<Vec<BattleScene>>(&contents)
+            .unwrap_or_default()
+            .into_iter()
+            .map(BattleScene::normalize_turns)
+            .collect();
+    }
+
+    // One-shot migration: pre-rename projects stored their per-scene
+    // config under `turns.json`. The on-disk JSON shape is identical
+    // (BattleScene was just renamed from Turn), so we can read it as-is,
+    // write it under the new filename, and remove the legacy file.
+    let legacy = legacy_project_turns_path(&app, &project_id);
+    if let Ok(contents) = fs::read_to_string(&legacy) {
+        let scenes: Vec<BattleScene> = serde_json::from_str::<Vec<BattleScene>>(&contents)
+            .unwrap_or_default()
+            .into_iter()
+            .map(BattleScene::normalize_turns)
+            .collect();
+        if let Ok(json) = serde_json::to_string_pretty(&scenes) {
+            let _ = fs::write(&path, json);
+        }
+        let _ = fs::remove_file(&legacy);
+        return scenes;
+    }
+
+    Vec::new()
+}
+
+#[tauri::command]
+pub(crate) fn save_advanced_battle_scenes(
+    app: tauri::AppHandle,
+    project_id: String,
+    scenes: Vec<AdvancedBattleScene>,
+) -> Result<(), String> {
+    let path = project_advanced_battle_scenes_path(&app, &project_id);
+    let json = serde_json::to_string_pretty(&scenes).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) fn load_advanced_battle_scenes(
+    app: tauri::AppHandle,
+    project_id: String,
+) -> Vec<AdvancedBattleScene> {
+    let path = project_advanced_battle_scenes_path(&app, &project_id);
+    fs::read_to_string(&path)
+        .ok()
+        .and_then(|contents| serde_json::from_str::<Vec<AdvancedBattleScene>>(&contents).ok())
+        .unwrap_or_default()
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExportableConfigSummary {
+    id: String,
+    name: String,
+    advanced_mode: bool,
+    battle_scene_count: usize,
+    advanced_battle_scene_count: usize,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExportConfigsResult {
+    pub(crate) file_path: String,
+    pub(crate) exported_count: usize,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConfigImportPreviewItem {
+    pub(crate) import_key: String,
+    pub(crate) source_name: String,
+    pub(crate) target_name: String,
+    pub(crate) advanced_mode: bool,
+    pub(crate) battle_scene_count: usize,
+    pub(crate) advanced_battle_scene_count: usize,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConfigImportInvalidItem {
+    pub(crate) label: String,
+    pub(crate) reason: String,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConfigImportPreview {
+    pub(crate) file_name: String,
+    pub(crate) valid_configs: Vec<ConfigImportPreviewItem>,
+    pub(crate) invalid_items: Vec<ConfigImportInvalidItem>,
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConfigImportResult {
+    pub(crate) imported_projects: Vec<Project>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConfigExportPackage {
+    pub(crate) schema_version: u32,
+    pub(crate) exported_at: String,
+    #[serde(default)]
+    pub(crate) app_version: Option<String>,
+    pub(crate) configs: Vec<ConfigExportEntry>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConfigExportEntry {
+    pub(crate) project: Project,
+    #[serde(default)]
+    pub(crate) battle_scenes: Vec<BattleScene>,
+    #[serde(default)]
+    pub(crate) advanced_battle_scenes: Vec<AdvancedBattleScene>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ParsedConfigEntry {
+    pub(crate) source_index: usize,
+    pub(crate) source_name: String,
+    pub(crate) target_name: String,
+    pub(crate) entry: ConfigExportEntry,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ParsedConfigImport {
+    valid: Vec<ParsedConfigEntry>,
+    invalid: Vec<ConfigImportInvalidItem>,
+}
+
+pub(crate) fn load_battle_scenes_from_root(root: &Path, project_id: &str) -> Vec<BattleScene> {
+    fs::read_to_string(project_battle_scenes_path_in_root(root, project_id))
+        .ok()
+        .and_then(|contents| serde_json::from_str::<Vec<BattleScene>>(&contents).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .map(BattleScene::normalize_turns)
+        .collect()
+}
+
+pub(crate) fn load_advanced_battle_scenes_from_root(
+    root: &Path,
+    project_id: &str,
+) -> Vec<AdvancedBattleScene> {
+    fs::read_to_string(project_advanced_battle_scenes_path_in_root(
+        root, project_id,
+    ))
+    .ok()
+    .and_then(|contents| serde_json::from_str::<Vec<AdvancedBattleScene>>(&contents).ok())
+    .unwrap_or_default()
+}
+
+pub(crate) fn write_battle_scenes_to_root(
+    root: &Path,
+    project_id: &str,
+    scenes: &[BattleScene],
+) -> Result<(), String> {
+    let path = project_battle_scenes_path_in_root(root, project_id);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建配置目录失败: {e}"))?;
+    }
+    let scenes: Vec<BattleScene> = scenes
+        .iter()
+        .cloned()
+        .map(BattleScene::normalize_turns)
+        .collect();
+    let json = serde_json::to_string_pretty(&scenes).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| format!("写入普通指令配置失败: {e}"))
+}
+
+pub(crate) fn write_advanced_battle_scenes_to_root(
+    root: &Path,
+    project_id: &str,
+    scenes: &[AdvancedBattleScene],
+) -> Result<(), String> {
+    let path = project_advanced_battle_scenes_path_in_root(root, project_id);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建配置目录失败: {e}"))?;
+    }
+    let json = serde_json::to_string_pretty(scenes).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| format!("写入高级指令配置失败: {e}"))
+}
+
+pub(crate) fn exportable_config_summaries_from_root(root: &Path) -> Vec<ExportableConfigSummary> {
+    read_projects_from_path(&root.join("projects.json"))
+        .into_iter()
+        .map(|project| ExportableConfigSummary {
+            battle_scene_count: load_battle_scenes_from_root(root, &project.id).len(),
+            advanced_battle_scene_count: load_advanced_battle_scenes_from_root(root, &project.id)
+                .len(),
+            id: project.id,
+            name: project.name,
+            advanced_mode: project.advanced_mode,
+        })
+        .collect()
+}
+
+pub(crate) fn current_export_timestamp() -> String {
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    format_unix_timestamp_utc(seconds)
+}
+
+pub(crate) fn format_unix_timestamp_utc(seconds: u64) -> String {
+    let days = (seconds / 86_400) as i64;
+    let seconds_of_day = seconds % 86_400;
+    let (year, month, day) = civil_from_days(days);
+    let hour = seconds_of_day / 3_600;
+    let minute = (seconds_of_day % 3_600) / 60;
+    let second = seconds_of_day % 60;
+    format!("{year:04}{month:02}{day:02}-{hour:02}{minute:02}{second:02}")
+}
+
+pub(crate) fn civil_from_days(days_since_unix_epoch: i64) -> (i64, u32, u32) {
+    let z = days_since_unix_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = mp + if mp < 10 { 3 } else { -9 };
+    let year = y + if month <= 2 { 1 } else { 0 };
+    (year, month as u32, day as u32)
+}
+
+pub(crate) fn export_package_for_project_ids(
+    root: &Path,
+    project_ids: &[String],
+) -> Result<ConfigExportPackage, String> {
+    if project_ids.is_empty() {
+        return Err("请选择需要导出的配置".to_string());
+    }
+    let projects = read_projects_from_path(&root.join("projects.json"));
+    let selected: std::collections::HashSet<&str> =
+        project_ids.iter().map(String::as_str).collect();
+    let mut configs = Vec::new();
+    for project_id in project_ids {
+        let project = projects
+            .iter()
+            .find(|project| project.id == *project_id)
+            .cloned()
+            .ok_or_else(|| format!("未找到配置: {project_id}"))?;
+        configs.push(ConfigExportEntry {
+            battle_scenes: load_battle_scenes_from_root(root, &project.id),
+            advanced_battle_scenes: load_advanced_battle_scenes_from_root(root, &project.id),
+            project,
+        });
+    }
+    if configs.len() != selected.len() {
+        return Err("导出配置列表包含重复项".to_string());
+    }
+    Ok(ConfigExportPackage {
+        schema_version: 1,
+        exported_at: current_export_timestamp(),
+        app_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+        configs,
+    })
+}
+
+pub(crate) fn write_config_package_zip(
+    package: &ConfigExportPackage,
+    target: &Path,
+) -> Result<(), String> {
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建导出目录失败: {e}"))?;
+    }
+    let file = fs::File::create(target).map_err(|e| format!("创建导出文件失败: {e}"))?;
+    let mut writer = zip::ZipWriter::new(file);
+    writer
+        .start_file(
+            "mash-config-export.json",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .map_err(|e| format!("写入导出包失败: {e}"))?;
+    let json = serde_json::to_vec_pretty(package).map_err(|e| e.to_string())?;
+    writer
+        .write_all(&json)
+        .map_err(|e| format!("写入导出包失败: {e}"))?;
+    writer
+        .finish()
+        .map_err(|e| format!("完成导出包失败: {e}"))?;
+    Ok(())
+}
+
+pub(crate) fn read_config_package_bytes(path: &Path) -> Result<Vec<u8>, String> {
+    let extension = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if extension == "zip" {
+        let file = fs::File::open(path).map_err(|e| format!("无法打开配置包: {e}"))?;
+        let mut archive = ZipArchive::new(file).map_err(|e| format!("无法读取配置包 zip: {e}"))?;
+        let mut entry = archive
+            .by_name("mash-config-export.json")
+            .map_err(|_| "配置包缺少 mash-config-export.json".to_string())?;
+        let mut bytes = Vec::new();
+        entry
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("读取配置包失败: {e}"))?;
+        Ok(bytes)
+    } else {
+        fs::read(path).map_err(|e| format!("无法读取配置文件: {e}"))
+    }
+}
+
+pub(crate) fn parse_config_import_from_bytes(
+    bytes: &[u8],
+    existing_names: &[String],
+) -> Result<ParsedConfigImport, String> {
+    let value: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|e| format!("配置文件不是有效 JSON: {e}"))?;
+    let schema_version = value
+        .get("schemaVersion")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| "配置文件缺少 schemaVersion".to_string())?;
+    if schema_version != 1 {
+        return Err(format!("不支持的配置文件版本: {schema_version}"));
+    }
+    let configs = value
+        .get("configs")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| "配置文件缺少 configs".to_string())?;
+
+    let mut used_names = existing_names.to_vec();
+    let mut valid = Vec::new();
+    let mut invalid = Vec::new();
+    for (index, config) in configs.iter().enumerate() {
+        let label = config
+            .get("project")
+            .and_then(|project| project.get("name"))
+            .and_then(|name| name.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("第 {} 项", index + 1));
+        match serde_json::from_value::<ConfigExportEntry>(config.clone()) {
+            Ok(mut entry) => {
+                entry.project = normalize_project(entry.project);
+                let source_name = entry.project.name.trim().to_string();
+                if source_name.is_empty() {
+                    invalid.push(ConfigImportInvalidItem {
+                        label,
+                        reason: "配置名称为空".to_string(),
+                    });
+                    continue;
+                }
+                entry.battle_scenes = entry
+                    .battle_scenes
+                    .into_iter()
+                    .map(BattleScene::normalize_turns)
+                    .collect();
+                let target_name = unique_import_name(&source_name, &used_names);
+                used_names.push(target_name.clone());
+                valid.push(ParsedConfigEntry {
+                    source_index: index,
+                    source_name,
+                    target_name,
+                    entry,
+                });
+            }
+            Err(err) => invalid.push(ConfigImportInvalidItem {
+                label,
+                reason: format!("配置结构无法识别: {err}"),
+            }),
+        }
+    }
+    Ok(ParsedConfigImport { valid, invalid })
+}
+
+pub(crate) fn unique_import_name(source_name: &str, existing_names: &[String]) -> String {
+    let base = format!("{source_name}（导入）");
+    if !existing_names.iter().any(|name| name == &base) {
+        return base;
+    }
+    for index in 2.. {
+        let candidate = format!("{source_name}（导入 {index}）");
+        if !existing_names.iter().any(|name| name == &candidate) {
+            return candidate;
+        }
+    }
+    unreachable!()
+}
+
+pub(crate) fn preview_config_import_from_path(
+    root: &Path,
+    path: &Path,
+) -> Result<ConfigImportPreview, String> {
+    if !path.is_file() {
+        return Err("选择的配置文件不存在".to_string());
+    }
+    let bytes = read_config_package_bytes(path)?;
+    let existing_names: Vec<String> = read_projects_from_path(&root.join("projects.json"))
+        .into_iter()
+        .map(|project| project.name)
+        .collect();
+    let parsed = parse_config_import_from_bytes(&bytes, &existing_names)?;
+    Ok(ConfigImportPreview {
+        file_name: path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("配置文件")
+            .to_string(),
+        valid_configs: parsed
+            .valid
+            .into_iter()
+            .map(|entry| ConfigImportPreviewItem {
+                import_key: entry.source_index.to_string(),
+                source_name: entry.source_name,
+                target_name: entry.target_name,
+                advanced_mode: entry.entry.project.advanced_mode,
+                battle_scene_count: entry.entry.battle_scenes.len(),
+                advanced_battle_scene_count: entry.entry.advanced_battle_scenes.len(),
+            })
+            .collect(),
+        invalid_items: parsed.invalid,
+    })
+}
+
+pub(crate) fn import_configurations_from_path(
+    root: &Path,
+    path: &Path,
+    import_keys: &[String],
+) -> Result<ConfigImportResult, String> {
+    if !path.is_file() {
+        return Err("选择的配置文件不存在".to_string());
+    }
+    if import_keys.is_empty() {
+        return Err("请选择需要导入的配置".to_string());
+    }
+    let bytes = read_config_package_bytes(path)?;
+    let projects_path = root.join("projects.json");
+    let mut projects = read_projects_from_path(&projects_path);
+    let existing_names: Vec<String> = projects
+        .iter()
+        .map(|project| project.name.clone())
+        .collect();
+    let parsed = parse_config_import_from_bytes(&bytes, &existing_names)?;
+    let selected: std::collections::HashSet<&str> =
+        import_keys.iter().map(String::as_str).collect();
+    let selected_entries: Vec<ParsedConfigEntry> = parsed
+        .valid
+        .into_iter()
+        .filter(|entry| selected.contains(entry.source_index.to_string().as_str()))
+        .collect();
+    if selected_entries.is_empty() {
+        return Err("没有可导入的配置".to_string());
+    }
+    let mut imported_projects = Vec::new();
+    for parsed_entry in selected_entries {
+        let mut project = parsed_entry.entry.project;
+        project.id = uuid::Uuid::new_v4().to_string();
+        project.name = parsed_entry.target_name;
+        let project = normalize_project(project);
+        write_battle_scenes_to_root(root, &project.id, &parsed_entry.entry.battle_scenes)?;
+        write_advanced_battle_scenes_to_root(
+            root,
+            &project.id,
+            &parsed_entry.entry.advanced_battle_scenes,
+        )?;
+        projects.push(project.clone());
+        imported_projects.push(project);
+    }
+    write_projects_to_path(&projects_path, &projects)?;
+    Ok(ConfigImportResult { imported_projects })
+}
+
+#[tauri::command]
+pub(crate) fn list_exportable_configs(app: tauri::AppHandle) -> Vec<ExportableConfigSummary> {
+    exportable_config_summaries_from_root(&app_data_dir(&app))
+}
+
+#[tauri::command]
+pub(crate) async fn export_configs(
+    app: tauri::AppHandle,
+    project_ids: Vec<String>,
+) -> Result<Option<ExportConfigsResult>, String> {
+    let root = app_data_dir(&app);
+    let package = export_package_for_project_ids(&root, &project_ids)?;
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("选择导出文件夹")
+        .blocking_pick_folder();
+    let Some(folder) = picked else {
+        return Ok(None);
+    };
+    let folder = folder.into_path().map_err(|e| e.to_string())?;
+    let target = folder.join(format!(
+        "mash-config-{}.mashconfig.zip",
+        current_export_timestamp()
+    ));
+    write_config_package_zip(&package, &target)?;
+    Ok(Some(ExportConfigsResult {
+        file_path: target.to_string_lossy().into_owned(),
+        exported_count: package.configs.len(),
+    }))
+}
+
+#[tauri::command]
+pub(crate) async fn pick_config_import_file(
+    app: tauri::AppHandle,
+) -> Result<Option<String>, String> {
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("Mash 配置", &["zip", "json"])
+        .set_title("选择配置文件")
+        .blocking_pick_file();
+    let Some(path) = picked else {
+        return Ok(None);
+    };
+    let path = path.into_path().map_err(|e| e.to_string())?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+pub(crate) fn preview_config_import(
+    app: tauri::AppHandle,
+    file_path: String,
+) -> Result<ConfigImportPreview, String> {
+    preview_config_import_from_path(&app_data_dir(&app), &PathBuf::from(file_path))
+}
+
+#[tauri::command]
+pub(crate) fn import_configurations(
+    app: tauri::AppHandle,
+    file_path: String,
+    import_keys: Vec<String>,
+) -> Result<ConfigImportResult, String> {
+    import_configurations_from_path(&app_data_dir(&app), &PathBuf::from(file_path), &import_keys)
+}
