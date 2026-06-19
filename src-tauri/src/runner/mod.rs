@@ -7,6 +7,7 @@ mod config;
 mod coords;
 mod grand;
 mod party;
+mod state;
 mod support;
 
 pub(crate) use ap_recovery::*;
@@ -16,6 +17,7 @@ use config::{default_grand_chain_priority, GrandServantRuntimeConfig};
 pub(crate) use coords::*;
 pub(crate) use grand::*;
 pub(crate) use party::*;
+pub(crate) use state::*;
 pub(crate) use support::*;
 
 use crate::adb::Adb;
@@ -36,110 +38,6 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
-
-impl BattleState {
-    fn new() -> Self {
-        Self {
-            current_scene_index: 0,
-            current_turn_index: 0,
-            last_screen_scene: None,
-            executed_scene_index: None,
-            executed_turn_key: None,
-            scene_config_used: false,
-            waiting_for_battle: false,
-            attack_submitted: false,
-            post_attack_hud_wait_started: None,
-            advanced_startup_done: HashSet::new(),
-            advanced_control_indices: HashMap::new(),
-            advanced_startup_control_indices: HashMap::new(),
-            advanced_auto_order_changes: HashMap::new(),
-        }
-    }
-}
-
-/// Outcome of merging a fresh `BATTLE m/n` reading into the prior scene
-/// state. Returned by [`tick_scene_state`] so the decision logic
-/// (advance? lock in? re-execute?) is testable independently of the
-/// runner's I/O side effects (taps, sidecar IPC, emitted events).
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-struct SceneTick {
-    /// New value for `BattleState::last_screen_scene`. Preserves the
-    /// prior `Some(prev)` across transient `None` reads.
-    last_screen_scene: Option<u32>,
-    /// New value for `BattleState::current_scene_index`. Increments
-    /// only on an actual `Some(prev) → Some(curr != prev)` transition.
-    current_scene_index: usize,
-    /// True iff the configured skills for `current_scene_index` should
-    /// be executed this iteration. False on every iteration where the
-    /// caller has already executed for the same index value, including
-    /// when the latest CV read failed and we're sitting on a previously
-    /// locked-in scene.
-    needs_exec: bool,
-}
-
-fn tick_scene_state(
-    last_screen_scene: Option<u32>,
-    current_scene_index: usize,
-    executed_scene_index: Option<usize>,
-    scene_m: Option<u32>,
-) -> SceneTick {
-    // Three update paths for `current_scene_index`:
-    //
-    // 1. First successful read (no prior `last_screen_scene`): snap the
-    //    index to `scene_m - 1` so the runner aligns with whatever
-    //    scene the screen is actually on. This handles the user
-    //    starting the runner mid-quest (e.g. screen already shows 2/3
-    //    on the first poll) — without the snap we would execute
-    //    config block 0 for the actual scene 2 and only advance on the
-    //    *next* observed transition.
-    // 2. Subsequent transition (`prev → curr` with both Some and
-    //    different): increment the index by 1, mirroring the on-screen
-    //    advance.
-    // 3. Anything else (failed read, same `m` re-read, no read yet):
-    //    leave the index alone.
-    let next_index = match (last_screen_scene, scene_m) {
-        (None, Some(curr)) => curr.saturating_sub(1) as usize,
-        (Some(prev), Some(curr)) if prev != curr => current_scene_index + 1,
-        _ => current_scene_index,
-    };
-    let next_last = if scene_m.is_some() {
-        scene_m
-    } else {
-        last_screen_scene
-    };
-    SceneTick {
-        last_screen_scene: next_last,
-        current_scene_index: next_index,
-        needs_exec: executed_scene_index != Some(next_index),
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum PostAttackHudReadGate {
-    Ready,
-    Waiting { started_at: Instant },
-    TimedOut,
-}
-
-fn post_attack_hud_read_gate(
-    advanced_mode: bool,
-    attack_returned_after_submit: bool,
-    screen_scene: Option<(u32, u32)>,
-    wait_started: Option<Instant>,
-    now: Instant,
-    timeout: Duration,
-) -> PostAttackHudReadGate {
-    if advanced_mode || !attack_returned_after_submit || screen_scene.is_some() {
-        return PostAttackHudReadGate::Ready;
-    }
-
-    let started_at = wait_started.unwrap_or(now);
-    if now.duration_since(started_at) >= timeout {
-        PostAttackHudReadGate::TimedOut
-    } else {
-        PostAttackHudReadGate::Waiting { started_at }
-    }
-}
 
 const UNKNOWN_TIMEOUT: u32 = 10;
 /// Tolerated streak of `Unknown` screens while a long animation / loading
