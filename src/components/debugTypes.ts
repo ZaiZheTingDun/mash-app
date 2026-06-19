@@ -1,5 +1,3 @@
-import type { SupportGrandBondCeMode } from "../types/project";
-
 export interface DebugScreenSize {
   w: number;
   h: number;

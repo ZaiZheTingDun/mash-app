@@ -40,7 +40,6 @@ import type {
   ProbeResult,
   RunnerCoordinatesDto,
   SupportCeArtworkCheckDto,
-  SupportCeIconCheckDto,
   SupportRowMatchDto,
 } from "./debugTypes";
 

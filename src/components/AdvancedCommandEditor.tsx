@@ -27,6 +27,43 @@ import { battleActorLabel, servantLabel } from "./battleActorLabels";
 import { OptionCardRadioGroup } from "./OptionCardRadioGroup";
 import { SectionHeading } from "./SectionHeading";
 import {
+  COMMAND_SPELL_LABELS,
+  COMMAND_BG_BY_RULE_COLOR,
+  COMMAND_BG_BY_SUIT,
+  DEFAULT_GRAND_CHAIN_PRIORITY,
+  EMPTY_STARTUP_ACTIONS,
+  RULE_COLOR_DIALOG_DESCRIPTIONS,
+  RULE_COLOR_DIALOG_LABELS,
+  RULE_COLOR_LABELS,
+  RULE_COLOR_OPTIONS,
+  RULE_KIND_DIALOG_DESCRIPTIONS,
+  RULE_KIND_DIALOG_LABELS,
+  RULE_KIND_LABELS,
+  RULE_KIND_OPTIONS,
+  SKILLS,
+  SKILL_LABELS,
+  autoNpOptionLabel,
+  commandCardAria,
+  createId,
+  createDefaultCustomRule,
+  createDefaultScene,
+  defaultCommandCard,
+  defaultRuleSlot,
+  mainGrandBackSlot,
+  normalizeCustomRule,
+  normalizeCustomRules,
+  normalizeGrandCardStrategy,
+  normalizeGrandServants,
+  normalizeScene,
+  npCardLabel,
+  prepSummary,
+  priorityLabel,
+  servantSlotIndex,
+  type FrontServant,
+  type PartySlot,
+  type PrepDraft,
+} from "./advancedCommandModel";
+import {
   deriveMembersAfterPreparationActions,
   partyMembersToServants,
   toPartyMembers,
@@ -46,7 +83,6 @@ import type {
   GrandCardRuleConfig,
   GrandCardRuleSlotConfig,
   GrandCardStrategy,
-  GrandChainPriorityItem,
   GrandClass,
   GrandNpCard,
   GrandRuleColor,
@@ -56,8 +92,6 @@ import type {
 import type { Servant } from "../types/servant";
 import orderChangeIcon from "../../src-tauri/resources/images/icon_order_change.png";
 import commandBgArts from "../../src-tauri/resources/images/command_bg/command_bg_a.png";
-import commandBgBuster from "../../src-tauri/resources/images/command_bg/command_bg_b.png";
-import commandBgQuick from "../../src-tauri/resources/images/command_bg/command_bg_q.png";
 
 interface AdvancedCommandEditorProps {
   projectId: string | null;
@@ -69,278 +103,6 @@ interface AdvancedCommandEditorProps {
   grandCardPriorityEnabled?: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
   onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
-}
-
-type PartySlot = `servant_${1 | 2 | 3 | 4 | 5 | 6}`;
-type FrontServant = Extract<PartySlot, "servant_1" | "servant_2" | "servant_3">;
-type PrepSource = "equipment" | "commandSpell" | PartySlot;
-type PrepDraft =
-  | { step: "source" }
-  | { step: "option"; source: PrepSource }
-  | { step: "target"; source: PrepSource; option: string }
-  | { step: "orderChange"; source: "equipment"; option: string; front: PartySlot | null };
-
-const SKILLS = ["skill_1", "skill_2", "skill_3"] as const;
-const SKILL_LABELS: Record<string, string> = {
-  skill_1: "技能 1",
-  skill_2: "技能 2",
-  skill_3: "技能 3",
-};
-const COMMAND_SPELL_LABELS: Record<string, string> = {
-  np_release: "宝具解放",
-  restore: "灵基修复",
-};
-const EMPTY_STARTUP_ACTIONS: PreparationAction[] = [];
-const COMMAND_BG_BY_SUIT: Record<Exclude<AdvancedCommandCardCondition["suit"], "any">, string> = {
-  arts: commandBgArts,
-  buster: commandBgBuster,
-  quick: commandBgQuick,
-};
-const COMMAND_BG_BY_RULE_COLOR: Record<Exclude<GrandRuleColor, "any">, string> = {
-  arts: commandBgArts,
-  buster: commandBgBuster,
-  quick: commandBgQuick,
-};
-const DEFAULT_GRAND_CHAIN_PRIORITY: GrandChainPriorityItem[] = [
-  "mainBraveChain",
-  "mainReadyNp",
-  "deputyBraveChain",
-  "mainColorChain",
-  "deputyColorChain",
-  "fallback",
-];
-const RULE_KIND_LABELS: Record<GrandRuleKind, string> = {
-  any: "任意",
-  command: "指令卡",
-  np: "宝具",
-};
-const RULE_COLOR_LABELS: Record<GrandRuleColor, string> = {
-  any: "任意",
-  buster: "红",
-  arts: "蓝",
-  quick: "绿",
-};
-const RULE_KIND_DIALOG_LABELS: Record<GrandRuleKind, string> = {
-  any: "任意",
-  command: "指令卡",
-  np: "宝具",
-};
-const RULE_KIND_DIALOG_DESCRIPTIONS: Record<GrandRuleKind, string> = {
-  any: "自动识别任意出牌卡",
-  command: "仅识别普通指令卡",
-  np: "仅识别宝具卡",
-};
-const RULE_COLOR_DIALOG_LABELS: Record<GrandRuleColor, string> = {
-  any: "任意",
-  buster: "红卡",
-  arts: "蓝卡",
-  quick: "绿卡",
-};
-const RULE_COLOR_DIALOG_DESCRIPTIONS: Record<GrandRuleColor, string> = {
-  any: "Any",
-  buster: "Buster",
-  arts: "Arts",
-  quick: "Quick",
-};
-const RULE_KIND_OPTIONS: GrandRuleKind[] = ["any", "command", "np"];
-const RULE_COLOR_OPTIONS: GrandRuleColor[] = ["any", "buster", "arts", "quick"];
-
-let nextAdvancedSceneId = 1;
-
-function createId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function createDefaultScene(): AdvancedBattleScene {
-  return {
-    id: `advanced_scene_${nextAdvancedSceneId++}_${Date.now()}`,
-    mainOutput: { servant: null, outputType: null, npCard: "auto" },
-    grandAutoOrderChange: null,
-    commandConditions: [0, 1, 2, 3, 4].map(defaultCommandCard),
-    controlActions: [],
-    startupActions: [],
-    rules: [],
-  };
-}
-
-function normalizeScene(scene: AdvancedBattleScene): AdvancedBattleScene {
-  return {
-    ...scene,
-    mainOutput: scene.mainOutput
-      ? { npCard: "auto", ...scene.mainOutput }
-      : { servant: null, outputType: null, npCard: "auto" },
-    grandAutoOrderChange: scene.grandAutoOrderChange ?? null,
-    commandConditions:
-      scene.commandConditions && scene.commandConditions.length === 5
-        ? scene.commandConditions.map((card) => ({ ...card, minCritChance: null }))
-        : [0, 1, 2, 3, 4].map(defaultCommandCard),
-    controlActions: scene.controlActions ?? [],
-    startupActions: scene.startupActions ?? [],
-    rules: [],
-  };
-}
-
-function defaultCommandCard(slot: number): AdvancedCommandCardCondition {
-  return {
-    slot,
-    servant: "any",
-    suit: "any",
-    minCritChance: null,
-  };
-}
-
-function servantSlotIndex(source: string | null | undefined): number | null {
-  const match = source?.match(/^servant_([1-6])$/);
-  return match ? Number(match[1]) - 1 : null;
-}
-
-function mainGrandBackSlot(grandServants: GrandServantConfig[]): number | null {
-  const slotIndex = grandServants[0]?.slotIndex;
-  return Number.isInteger(slotIndex) && slotIndex >= 3 && slotIndex < 6 ? slotIndex : null;
-}
-
-function normalizeGrandServants(values: GrandServantConfig[] | undefined): GrandServantConfig[] {
-  const seen = new Set<number>();
-  return (values ?? [])
-    .filter((item) => Number.isInteger(item.slotIndex) && item.slotIndex >= 0 && item.slotIndex < 6)
-    .filter((item) => {
-      if (seen.has(item.slotIndex)) return false;
-      seen.add(item.slotIndex);
-      return true;
-    })
-    .slice(0, 2)
-    .map((item) => ({
-      slotIndex: item.slotIndex,
-      npCard: item.npCard ?? "auto",
-      priority: item.priority ?? "damage",
-    }));
-}
-
-function normalizeGrandCardStrategy(strategy: GrandCardStrategy | undefined): GrandCardStrategy {
-  const configured = strategy?.chainPriority ?? [];
-  const priority = configured.filter(
-    (item, index): item is GrandChainPriorityItem =>
-      DEFAULT_GRAND_CHAIN_PRIORITY.includes(item as GrandChainPriorityItem) &&
-      configured.indexOf(item) === index
-  );
-  for (const item of DEFAULT_GRAND_CHAIN_PRIORITY) {
-    if (!priority.includes(item)) {
-      priority.push(item);
-    }
-  }
-  return {
-    chainPriority: priority,
-    customRules: normalizeCustomRules(strategy?.customRules),
-  };
-}
-
-function defaultRuleSlot(): GrandCardRuleSlotConfig {
-  return { servantId: null, grandServant: false, kind: "any", color: "any" };
-}
-
-function createDefaultCustomRule(): GrandCardRuleConfig {
-  return {
-    id: createId("grand_rule"),
-    name: "自定义规则",
-    slots: [defaultRuleSlot(), defaultRuleSlot(), defaultRuleSlot()],
-  };
-}
-
-function normalizeRuleSlot(slot: Partial<GrandCardRuleSlotConfig> | undefined): GrandCardRuleSlotConfig {
-  const kinds: GrandRuleKind[] = ["any", "command", "np"];
-  const colors: GrandRuleColor[] = ["any", "buster", "arts", "quick"];
-  const kind = slot?.kind;
-  const color = slot?.color;
-  return {
-    servantId: typeof slot?.servantId === "number" ? slot.servantId : null,
-    grandServant: slot?.grandServant === true,
-    kind: kinds.includes(kind as GrandRuleKind) ? (kind as GrandRuleKind) : "any",
-    color: colors.includes(color as GrandRuleColor) ? (color as GrandRuleColor) : "any",
-  };
-}
-
-function normalizeCustomRule(rule: Partial<GrandCardRuleConfig> | undefined, index: number): GrandCardRuleConfig {
-  const slots = [0, 1, 2].map((slotIndex) => normalizeRuleSlot(rule?.slots?.[slotIndex]));
-  return {
-    id: rule?.id || createId("grand_rule"),
-    name: rule?.name ?? `自定义规则 ${index + 1}`,
-    slots,
-  };
-}
-
-function normalizeCustomRules(rules: GrandCardRuleConfig[] | undefined): GrandCardRuleConfig[] {
-  return (rules ?? []).map((rule, index) => normalizeCustomRule(rule, index));
-}
-
-function cardColorLabel(card: Servant["noblePhantasmCard"] | undefined): string | null {
-  switch (card) {
-    case "buster":
-      return "红";
-    case "arts":
-      return "蓝";
-    case "quick":
-      return "绿";
-    default:
-      return null;
-  }
-}
-
-function npCardLabel(card: GrandNpCard | undefined, inferredCard?: Servant["noblePhantasmCard"]): string {
-  switch (card) {
-    case "buster":
-      return "红";
-    case "arts":
-      return "蓝";
-    case "quick":
-      return "绿";
-    default:
-      return cardColorLabel(inferredCard) ? `自动${cardColorLabel(inferredCard)}` : "自动";
-  }
-}
-
-function autoNpOptionLabel(servant: Servant | null): string {
-  const label = cardColorLabel(servant?.noblePhantasmCard);
-  return label ? `自动读取（${label}）` : "自动读取";
-}
-
-function priorityLabel(priority: GrandCardPriority | undefined): string {
-  return priority === "np" ? "NP" : "伤害";
-}
-
-function prepSummary(action: PreparationAction, partyLineup: (Servant | null)[]): string {
-  if (action.type === "commandSpell") {
-    const target = servantSlotIndex(action.target);
-    const suffix = target == null ? "" : ` to ${servantLabel(target, partyLineup[target] ?? null)}`;
-    return `令咒 ${COMMAND_SPELL_LABELS[action.spell ?? ""] ?? "行动"}${suffix}`;
-  }
-  if (action.type === "equipment") {
-    if (action.orderChange) {
-      const front = servantSlotIndex(action.orderChange.front);
-      const back = servantSlotIndex(action.orderChange.back);
-      const swap =
-        front == null || back == null
-          ? ""
-          : ` ${servantLabel(front, partyLineup[front] ?? null)} ↔ ${servantLabel(back, partyLineup[back] ?? null)}`;
-      return `御主礼装 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"} Order Change${swap}`;
-    }
-    const target = servantSlotIndex(action.target);
-    const suffix = target == null ? "" : ` to ${servantLabel(target, partyLineup[target] ?? null)}`;
-    return `御主礼装 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}${suffix}`;
-  }
-  const source = servantSlotIndex(action.servant) ?? 0;
-  const target = servantSlotIndex(action.target);
-  const suffix = target == null ? "" : ` to ${servantLabel(target, partyLineup[target] ?? null)}`;
-  return `${servantLabel(source, partyLineup[source] ?? null)} ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}${suffix}`;
-}
-
-function commandCardSummary(card: AdvancedCommandCardCondition): string {
-  const servant = card.servant === "any" ? "ANY" : `S${card.servant.slice(-1)}`;
-  const suit = card.suit === "any" ? "ANY" : card.suit[0].toUpperCase();
-  return `${servant}${suit}`;
-}
-
-function commandCardAria(card: AdvancedCommandCardCondition): string {
-  return `设置指令卡 ${card.slot + 1}，${commandCardSummary(card)}`;
 }
 
 function useServantFaces(partyLineup: (Servant | null)[]) {
