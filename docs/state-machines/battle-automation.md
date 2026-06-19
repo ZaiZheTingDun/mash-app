@@ -277,12 +277,20 @@ changes (i.e. when the runner moves to a different row).
 - `BattleResultExp` covers ordinary master / servant EXP settlement. The
   separate `BattleResultExpLevelUp` CV screen covers the equipment / skill
   level-up overlay and routes to the same next-button tap target.
+- Targeted servant and equipment skills use the shared battle close-button
+  probe as a synchronization gate. After tapping the skill, the runner waits
+  for `Battle.variants.main.elements.skill_target_close_button`, taps the
+  configured ally target, then waits for that close button to disappear before
+  tapping the animation-skip point. If the picker never appears or never
+  closes, the current action chain stops instead of falling back to a fixed
+  delay and guessing.
 - In-battle Order Change is stored on an equipment action as
   `orderChange.front` + `orderChange.back`. The runner taps the master skill,
-  lets the semi-transparent Battle overlay settle, selects exactly one
-  front-line slot (`servant_1..3`) and one back-line slot (`servant_4..6`),
-  confirms, then waits for the attack button before continuing. This overlay
-  is not the pre-battle `TeamChange` screen and is not detected through the
+  waits for `Battle.variants.main.elements.order_change_close_button`, selects
+  exactly one front-line slot (`servant_1..3`) and one back-line slot
+  (`servant_4..6`), confirms, waits for that close button to disappear, then
+  waits for the attack button before continuing. This overlay is not the
+  pre-battle `TeamChange` screen and is not detected through the
   `Screen::TeamChange` route.
 - In normal mode, `battle_scenes.json` stores each Battle as `turns[]`. The
   runner still uses the `BATTLE m/n` HUD read to choose the Battle, then uses an

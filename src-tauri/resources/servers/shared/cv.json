@@ -103,6 +103,34 @@
           }
         }
       }
+    },
+    "Battle": {
+      "variants": {
+        "main": {
+          "elements": {
+            "skill_target_close_button": {
+              "template": "shared/battle_close_button",
+              "region": {
+                "x": 0.822,
+                "y": 0.161,
+                "w": 0.074,
+                "h": 0.1
+              },
+              "threshold": 0.8
+            },
+            "order_change_close_button": {
+              "template": "shared/battle_close_button",
+              "region": {
+                "x": 0.918,
+                "y": 0.138,
+                "w": 0.074,
+                "h": 0.1
+              },
+              "threshold": 0.8
+            }
+          }
+        }
+      }
     }
   }
 }

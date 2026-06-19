@@ -354,6 +354,8 @@ const SKIP_ANIMATION_BUTTON: Point = Point::new(0.685, 0.095);
 const BATTLE_SCREEN: &str = "Battle";
 const SUPPORT_SELECT_SCREEN: &str = "SupportSelect";
 pub const ATTACK_BUTTON_ELEMENT: &str = "attack_button";
+pub const SKILL_TARGET_CLOSE_BUTTON_ELEMENT: &str = "skill_target_close_button";
+pub const ORDER_CHANGE_CLOSE_BUTTON_ELEMENT: &str = "order_change_close_button";
 const SUPPORT_SCROLL_START_ELEMENT: &str = "support_scroll_start";
 const SUPPORT_SCROLL_END_ELEMENT: &str = "support_scroll_end";
 /// Party servant auto-placement is reserved for a later implementation.
@@ -1536,11 +1538,6 @@ const SKILL_WAIT_TIMEOUT: Duration = Duration::from_secs(45);
 /// so automation does not stall forever.
 const POST_ATTACK_HUD_READ_TIMEOUT: Duration = Duration::from_secs(3);
 const COMMAND_CARD_COUNT: usize = 5;
-/// Order Change opens as a semi-transparent overlay over Battle. The
-/// classifier often keeps returning `Battle`, so the runner waits for the
-/// overlay animation to settle and then taps the known panel coordinates.
-const ORDER_CHANGE_PANEL_SETTLE: Duration = Duration::from_millis(900);
-
 /// Maximum per-axis jitter (in physical pixels) added to every tap so
 /// repeated runs don't land on identical coordinates. Small enough to
 /// stay well inside button hit-boxes; large enough that the noise is
@@ -1847,6 +1844,70 @@ impl Runner {
         }
     }
 
+    fn wait_for_element_visible(
+        &mut self,
+        screen: &str,
+        element: &str,
+        timeout: Duration,
+        status_text: &str,
+        timeout_text: &str,
+    ) -> bool {
+        self.wait_for_element_state(screen, element, true, timeout, status_text, timeout_text)
+    }
+
+    fn wait_for_element_hidden(
+        &mut self,
+        screen: &str,
+        element: &str,
+        timeout: Duration,
+        status_text: &str,
+        timeout_text: &str,
+    ) -> bool {
+        self.wait_for_element_state(screen, element, false, timeout, status_text, timeout_text)
+    }
+
+    fn wait_for_element_state(
+        &mut self,
+        screen: &str,
+        element: &str,
+        expected_found: bool,
+        timeout: Duration,
+        status_text: &str,
+        timeout_text: &str,
+    ) -> bool {
+        let start = std::time::Instant::now();
+        let mut tick: u32 = 0;
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+            let found = match self
+                .sidecar()
+                .find_element_by_name(None, BATTLE_SCREEN, element)
+            {
+                Ok(matched) => Some(matched.found),
+                Err(err) => {
+                    eprintln!(
+                        "[runner] find_element_by_name({BATTLE_SCREEN}.{element}) failed: {err}"
+                    );
+                    None
+                }
+            };
+            if found == Some(expected_found) {
+                return true;
+            }
+            if start.elapsed() >= timeout {
+                self.emit(screen, timeout_text);
+                return false;
+            }
+            tick += 1;
+            if tick % 4 == 1 {
+                self.emit(screen, status_text);
+            }
+            thread::sleep(SKILL_POLL_INTERVAL);
+        }
+    }
+
     /// Block until the attack-button probe in `cv.json` matches, polling
     /// every `SKILL_POLL_INTERVAL`. Used after firing a skill so
     /// the next tap doesn't land during the cut-in / animation while the
@@ -1855,30 +1916,13 @@ impl Runner {
     /// Returns ``true`` when the button is detected, ``false`` on timeout
     /// or cancellation. Emits status updates so the user can see the wait.
     fn wait_for_attack_button(&mut self, screen: &str, timeout: Duration) -> bool {
-        let start = std::time::Instant::now();
-        let mut tick: u32 = 0;
-        loop {
-            if self.is_cancelled() {
-                return false;
-            }
-            let found = self
-                .sidecar()
-                .find_element_by_name(None, BATTLE_SCREEN, ATTACK_BUTTON_ELEMENT)
-                .map(|m| m.found)
-                .unwrap_or(false);
-            if found {
-                return true;
-            }
-            if start.elapsed() >= timeout {
-                self.emit(screen, "等待攻击按钮超时");
-                return false;
-            }
-            tick += 1;
-            if tick % 4 == 1 {
-                self.emit(screen, "等待技能动画结束…");
-            }
-            thread::sleep(SKILL_POLL_INTERVAL);
-        }
+        self.wait_for_element_visible(
+            screen,
+            ATTACK_BUTTON_ELEMENT,
+            timeout,
+            "等待技能动画结束…",
+            "等待攻击按钮超时",
+        )
     }
 
     // -- main loop -----------------------------------------------------------
@@ -4279,6 +4323,17 @@ impl Runner {
                     thread::sleep(ACTION_DELAY);
 
                     if let Some(target_pos) = skill_target_position(target.as_deref()) {
+                        self.emit("Battle", "等待目标选择框出现");
+                        if !self.wait_for_element_visible(
+                            "Battle",
+                            SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
+                            SKILL_WAIT_TIMEOUT,
+                            "等待目标选择框出现…",
+                            "等待目标选择框出现超时",
+                        ) {
+                            return;
+                        }
+
                         self.emit(
                             "Battle",
                             &format!("选择目标: {}", target.as_deref().unwrap_or("?")),
@@ -4286,7 +4341,16 @@ impl Runner {
                         if !self.tap_at("Battle", target_pos) {
                             return;
                         }
-                        thread::sleep(ACTION_DELAY);
+                        self.emit("Battle", "等待目标选择框关闭");
+                        if !self.wait_for_element_hidden(
+                            "Battle",
+                            SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
+                            SKILL_WAIT_TIMEOUT,
+                            "等待目标选择框关闭…",
+                            "等待目标选择框关闭超时",
+                        ) {
+                            return;
+                        }
                     }
 
                     self.skip_after_skill();
@@ -4333,6 +4397,17 @@ impl Runner {
                             return;
                         }
                     } else if let Some(target_pos) = skill_target_position(target.as_deref()) {
+                        self.emit("Battle", "等待目标选择框出现");
+                        if !self.wait_for_element_visible(
+                            "Battle",
+                            SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
+                            SKILL_WAIT_TIMEOUT,
+                            "等待目标选择框出现…",
+                            "等待目标选择框出现超时",
+                        ) {
+                            return;
+                        }
+
                         self.emit(
                             "Battle",
                             &format!("选择目标: {}", target.as_deref().unwrap_or("?")),
@@ -4340,7 +4415,16 @@ impl Runner {
                         if !self.tap_at("Battle", target_pos) {
                             return;
                         }
-                        thread::sleep(ACTION_DELAY);
+                        self.emit("Battle", "等待目标选择框关闭");
+                        if !self.wait_for_element_hidden(
+                            "Battle",
+                            SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
+                            SKILL_WAIT_TIMEOUT,
+                            "等待目标选择框关闭…",
+                            "等待目标选择框关闭超时",
+                        ) {
+                            return;
+                        }
                     }
 
                     if order_change.is_none() {
@@ -4424,7 +4508,17 @@ impl Runner {
             return true;
         };
 
-        thread::sleep(ORDER_CHANGE_PANEL_SETTLE);
+        self.emit("Battle", "等待换人框出现");
+        if !self.wait_for_element_visible(
+            "Battle",
+            ORDER_CHANGE_CLOSE_BUTTON_ELEMENT,
+            SKILL_WAIT_TIMEOUT,
+            "等待换人框出现…",
+            "等待换人框出现超时",
+        ) {
+            return false;
+        }
+
         self.emit(
             "Battle",
             &format!(
@@ -4447,7 +4541,16 @@ impl Runner {
         if !self.tap_at("Battle", ORDER_CHANGE_CONFIRM) {
             return false;
         }
-        thread::sleep(ACTION_DELAY);
+        self.emit("Battle", "等待换人框关闭");
+        if !self.wait_for_element_hidden(
+            "Battle",
+            ORDER_CHANGE_CLOSE_BUTTON_ELEMENT,
+            SKILL_WAIT_TIMEOUT,
+            "等待换人框关闭…",
+            "等待换人框关闭超时",
+        ) {
+            return false;
+        }
         true
     }
 
@@ -5577,7 +5680,8 @@ fn fill_empty_pick_slots(
 
     let mut next_card_idx = 0;
     for pick in picks.iter_mut().filter(|pick| pick.is_none()) {
-        while next_card_idx < sorted.len() && used_card_slots.contains(&sorted[next_card_idx].slot) {
+        while next_card_idx < sorted.len() && used_card_slots.contains(&sorted[next_card_idx].slot)
+        {
             next_card_idx += 1;
         }
         if next_card_idx >= sorted.len() {
@@ -9336,9 +9440,21 @@ mod tests {
         // Dialog row order is documented next to `COMMAND_SPELL_OPTIONS`:
         // 0 = 宝具解放 (np_release), 1 = 灵基修复 (restore). If anyone
         // swaps the array entries without updating the helper the runner
-        // would tap the wrong spell — this test pins the mapping.
+        // would tap the wrong spell; this test pins the mapping.
         assert_eq!(command_spell_index(Some("np_release")), Some(0));
         assert_eq!(command_spell_index(Some("restore")), Some(1));
+    }
+
+    #[test]
+    fn battle_close_button_element_names_are_stable() {
+        assert_eq!(
+            SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
+            "skill_target_close_button"
+        );
+        assert_eq!(
+            ORDER_CHANGE_CLOSE_BUTTON_ELEMENT,
+            "order_change_close_button"
+        );
     }
 
     #[test]

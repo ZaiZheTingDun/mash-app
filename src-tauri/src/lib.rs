@@ -5522,6 +5522,58 @@ mod tests {
         }
     }
 
+    #[test]
+    fn shared_cv_defines_battle_close_button_elements() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let config_path = manifest_dir
+            .join("resources")
+            .join("servers")
+            .join("shared")
+            .join("cv.json");
+        let config: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+        let elements = &config["screens"]["Battle"]["variants"]["main"]["elements"];
+
+        assert_battle_close_button_element(
+            &elements["skill_target_close_button"],
+            0.822,
+            0.161,
+            0.074,
+            0.1,
+        );
+        assert_battle_close_button_element(
+            &elements["order_change_close_button"],
+            0.918,
+            0.138,
+            0.074,
+            0.1,
+        );
+    }
+
+    fn assert_battle_close_button_element(
+        element: &serde_json::Value,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    ) {
+        assert_eq!(
+            element["template"].as_str(),
+            Some("shared/battle_close_button")
+        );
+        assert_close(element["region"]["x"].as_f64().unwrap(), x);
+        assert_close(element["region"]["y"].as_f64().unwrap(), y);
+        assert_close(element["region"]["w"].as_f64().unwrap(), w);
+        assert_close(element["region"]["h"].as_f64().unwrap(), h);
+    }
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 1e-9,
+            "expected {expected}, got {actual}"
+        );
+    }
+
     // --- input coordinate sizing --------------------------------------
 
     #[test]
