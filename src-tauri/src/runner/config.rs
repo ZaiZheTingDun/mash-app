@@ -109,11 +109,11 @@ impl Default for GrandClass {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct GrandServantRuntimeConfig {
-    pub(super) slot_index: usize,
-    pub(super) servant_id: u32,
-    pub(super) np_card: String,
-    pub(super) priority: String,
+pub(crate) struct GrandServantRuntimeConfig {
+    pub(crate) slot_index: usize,
+    pub(crate) servant_id: u32,
+    pub(crate) np_card: String,
+    pub(crate) priority: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
