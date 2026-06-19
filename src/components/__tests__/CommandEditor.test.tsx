@@ -423,8 +423,9 @@ describe("CommandEditor pagination", () => {
     expect(await screen.findByText("自动红")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "主冠位：甲" }));
+    await user.click(screen.getByRole("combobox", { name: "宝具颜色" }));
 
-    expect(screen.getByRole("option", { name: "自动读取（红）" })).toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: "自动读取（红）" })).toBeInTheDocument();
   });
 
   it("keeps grand card rules collapsed at the bottom without inline ordering controls", async () => {

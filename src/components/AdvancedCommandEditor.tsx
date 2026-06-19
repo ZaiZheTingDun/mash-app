@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Dialog, Flex, Text, Button } from "@radix-ui/themes";
+import { Dialog, Flex, Text, Button, Select } from "@radix-ui/themes";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
@@ -558,37 +558,46 @@ function GrandOutputSettings({
       >
         <Dialog.Content maxWidth="420px">
           <Dialog.Title>冠位从者设置</Dialog.Title>
+          <Dialog.Description className="sr-only">
+            设置冠位从者的宝具颜色和出卡策略。
+          </Dialog.Description>
           {settings && settingsIndex != null && (
             <Flex direction="column" gap="4">
               <label className="grand-setting-field">
                 <Text size="2" weight="medium">宝具颜色</Text>
-                <select
+                <Select.Root
                   value={settings.npCard ?? "auto"}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     updateGrandServant(settingsIndex, {
-                      npCard: event.target.value as GrandNpCard,
+                      npCard: value as GrandNpCard,
                     })
                   }
                 >
-                  <option value="auto">{autoNpOptionLabel(settingsServant)}</option>
-                  <option value="buster">红卡</option>
-                  <option value="arts">蓝卡</option>
-                  <option value="quick">绿卡</option>
-                </select>
+                  <Select.Trigger aria-label="宝具颜色" />
+                  <Select.Content>
+                    <Select.Item value="auto">{autoNpOptionLabel(settingsServant)}</Select.Item>
+                    <Select.Item value="buster">红卡</Select.Item>
+                    <Select.Item value="arts">蓝卡</Select.Item>
+                    <Select.Item value="quick">绿卡</Select.Item>
+                  </Select.Content>
+                </Select.Root>
               </label>
               <label className="grand-setting-field">
                 <Text size="2" weight="medium">出卡策略</Text>
-                <select
+                <Select.Root
                   value={settings.priority ?? "damage"}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     updateGrandServant(settingsIndex, {
-                      priority: event.target.value as GrandCardPriority,
+                      priority: value as GrandCardPriority,
                     })
                   }
                 >
-                  <option value="damage">伤害优先</option>
-                  <option value="np">NP 优先</option>
-                </select>
+                  <Select.Trigger aria-label="出卡策略" />
+                  <Select.Content>
+                    <Select.Item value="damage">伤害优先</Select.Item>
+                    <Select.Item value="np">NP 优先</Select.Item>
+                  </Select.Content>
+                </Select.Root>
               </label>
               <Flex justify="between" gap="3">
                 <Button type="button" variant="soft" color="red" onClick={() => removeGrandServant(settingsIndex)}>
@@ -1802,43 +1811,52 @@ function AdvancedStrategyEditor({
       >
         <Dialog.Content maxWidth="360px">
           <Dialog.Title>设置指令卡</Dialog.Title>
+          <Dialog.Description className="sr-only">
+            设置指令卡匹配的从者和色卡条件。
+          </Dialog.Description>
           {editingCard && (
             <div className="advanced-card-editor">
               <label>
                 从者
-                <select
+                <Select.Root
                   value={editingCard.servant}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     updateCommandCard(editingCard.slot, (prev) => ({
                       ...prev,
-                      servant: event.target.value as AdvancedCommandCardCondition["servant"],
+                      servant: value as AdvancedCommandCardCondition["servant"],
                       minCritChance: null,
                     }))
                   }
                 >
-                  <option value="any">任意</option>
-                  <option value="servant_1">{servantLabel(0, partyLineup[0] ?? null)}</option>
-                  <option value="servant_2">{servantLabel(1, partyLineup[1] ?? null)}</option>
-                  <option value="servant_3">{servantLabel(2, partyLineup[2] ?? null)}</option>
-                </select>
+                  <Select.Trigger aria-label="从者" />
+                  <Select.Content>
+                    <Select.Item value="any">任意</Select.Item>
+                    <Select.Item value="servant_1">{servantLabel(0, partyLineup[0] ?? null)}</Select.Item>
+                    <Select.Item value="servant_2">{servantLabel(1, partyLineup[1] ?? null)}</Select.Item>
+                    <Select.Item value="servant_3">{servantLabel(2, partyLineup[2] ?? null)}</Select.Item>
+                  </Select.Content>
+                </Select.Root>
               </label>
               <label>
                 色卡
-                <select
+                <Select.Root
                   value={editingCard.suit}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     updateCommandCard(editingCard.slot, (prev) => ({
                       ...prev,
-                      suit: event.target.value as AdvancedCommandCardCondition["suit"],
+                      suit: value as AdvancedCommandCardCondition["suit"],
                       minCritChance: null,
                     }))
                   }
                 >
-                  <option value="any">任意</option>
-                  <option value="buster">红卡</option>
-                  <option value="arts">蓝卡</option>
-                  <option value="quick">绿卡</option>
-                </select>
+                  <Select.Trigger aria-label="色卡" />
+                  <Select.Content>
+                    <Select.Item value="any">任意</Select.Item>
+                    <Select.Item value="buster">红卡</Select.Item>
+                    <Select.Item value="arts">蓝卡</Select.Item>
+                    <Select.Item value="quick">绿卡</Select.Item>
+                  </Select.Content>
+                </Select.Root>
               </label>
             </div>
           )}

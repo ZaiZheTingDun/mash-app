@@ -588,20 +588,26 @@ export function StatusBar({
           </Box>
         </Box>
       )}
-      <Flex className="status-bar" align="center" justify="between" gap="2">
-        <Flex align="center" gap="2">
+      <Flex className="status-bar" align="center" justify="between">
+        <Flex align="center">
           {onOpenSettings && (
-            <button
+            <Button
               type="button"
+              size="1"
+              variant="solid"
+              color="gray"
               className="status-settings-btn"
               onClick={onOpenSettings}
             >
               <GearIcon width={14} height={14} />
               <Text size="1">设置</Text>
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             type="button"
+            size="1"
+            variant="solid"
+            color="gray"
             className="status-log-btn"
             aria-pressed={operationLogOpen}
             onClick={() => onOperationLogOpenChange?.(!operationLogOpen)}
@@ -610,13 +616,15 @@ export function StatusBar({
             <Text size="1">
               操作日志{infoLogCount > 0 ? ` (${infoLogCount})` : ""}
             </Text>
-          </button>
+          </Button>
         </Flex>
 
-        <Flex align="center" justify="end" gap="2">
+        <Flex align="center" justify="end" gap="1">
           {updateAvailable && (
-            <button
+            <Button
               type="button"
+              size="1"
+              variant="solid"
               className="status-update-btn"
               disabled={updateInstalling || updateChecking}
               onClick={onInstallUpdate}
@@ -627,23 +635,29 @@ export function StatusBar({
                   ? updateProgressText ?? "更新中…"
                   : updateChecking
                     ? "检测中…"
-                    : "更新"}
+                  : "更新"}
               </Text>
-            </button>
+            </Button>
           )}
           {onOpenDebug && (
-            <button
+            <Button
               type="button"
+              size="1"
+              variant="solid"
+              color="gray"
               className="status-debug-btn"
               onClick={onOpenDebug}
             >
               <MagnifyingGlassIcon width={12} height={12} />
               <Text size="1">CV 调试</Text>
-            </button>
+            </Button>
           )}
           {theme && onThemeChange && (
-            <button
+            <Button
               type="button"
+              size="1"
+              variant="solid"
+              color="gray"
               className="status-theme-btn"
               aria-label={`切换主题模式，当前${
                 themePreference === "system"
@@ -666,20 +680,20 @@ export function StatusBar({
                   ? "系统"
                   : theme === "dark"
                     ? "深色"
-                    : "浅色"}
+                  : "浅色"}
               </Text>
-            </button>
+            </Button>
           )}
           <Popover.Root>
             <Popover.Trigger>
-              <button className="status-trigger">
+              <Button type="button" size="1" variant="solid" color="gray" className="status-trigger">
                 <span
                   className={`status-dot ${status.connected ? "connected" : "disconnected"}`}
                 />
                 <Text size="1" className="status-label">
                   {status.connected ? "游戏已连接" : "游戏未连接"}
                 </Text>
-              </button>
+              </Button>
             </Popover.Trigger>
             <Popover.Content side="top" align="end" size="1" className="status-popover">
               <Flex direction="column" gap="3">

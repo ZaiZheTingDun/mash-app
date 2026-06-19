@@ -9,6 +9,10 @@ export interface OptionCardRadioOption {
   accessory?: ReactNode;
   className?: string;
   style?: CSSProperties;
+  /**
+   * Optional extra action for cards that need to initialize related
+   * state before the selected value is committed.
+   */
   onSelect?: () => void;
 }
 
@@ -46,9 +50,7 @@ export function OptionCardRadioGroup({
             onClick={() => {
               if (disabled) return;
               option.onSelect?.();
-              if (!option.onSelect) {
-                onValueChange(option.value);
-              }
+              onValueChange(option.value);
             }}
           >
             <RadioGroup.Item

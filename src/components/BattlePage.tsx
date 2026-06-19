@@ -6,6 +6,7 @@ import {
   CheckboxCards,
   Flex,
   Text,
+  TextField,
 } from "@radix-ui/themes";
 import { invoke, listen } from "../tauri";
 import { ChevronLeftIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons";
@@ -446,11 +447,13 @@ export function BattlePage({
                     >
                       <MinusIcon width={15} height={15} />
                     </Button>
-                    <input
+                    <TextField.Root
                       className="battle-counter-value"
                       type="number"
                       min="1"
                       step="1"
+                      variant="soft"
+                      radius="none"
                       inputMode="numeric"
                       aria-label="重复次数"
                       value={displayedRepeatCount}

@@ -1368,6 +1368,7 @@ fn support_row_tap_point(row: &SupportRowMatch) -> Point {
         .unwrap_or(row.tap)
 }
 
+#[cfg(test)]
 fn support_level_meets(actual: Option<u32>, required_min: Option<u32>) -> bool {
     match required_min {
         None => true,
@@ -1595,7 +1596,6 @@ const DEFAULT_W: u32 = 1080;
 const DEFAULT_H: u32 = 1920;
 
 pub struct Runner {
-    adb: Adb,
     sidecar: Option<SidecarClient>,
     sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     config: RunConfig,
@@ -1693,7 +1693,6 @@ impl Runner {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         let touch = build_touch_backend(&adb);
         Self {
-            adb,
             touch,
             sidecar: Some(sidecar),
             sidecar_cache,

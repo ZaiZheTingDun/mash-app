@@ -115,7 +115,7 @@ describe("appendCoalescedOperationLog", () => {
 
     expect(next).toHaveLength(MAX_OPERATION_LOG_ENTRIES);
     expect(next[0].message).toBe("日志 1");
-    expect(next.at(-1)?.message).toBe("最新日志");
+    expect(next[next.length - 1]?.message).toBe("最新日志");
   });
 
   it("coalesces progress logs without exceeding the latest-entry cap", () => {
@@ -132,6 +132,6 @@ describe("appendCoalescedOperationLog", () => {
     );
 
     expect(next).toHaveLength(MAX_OPERATION_LOG_ENTRIES);
-    expect(next.at(-1)).toEqual(log("12:00:01", "等待识别画面… (2/75)"));
+    expect(next[next.length - 1]).toEqual(log("12:00:01", "等待识别画面… (2/75)"));
   });
 });
