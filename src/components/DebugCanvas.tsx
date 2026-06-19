@@ -9,7 +9,7 @@ import type {
   ProbeResult,
   RunnerCoordinatesDto,
   SupportCeArtworkCheckDto,
-} from "./DebugPage";
+} from "./debugTypes";
 
 function supportPanelShortLabel(panel: "owned" | "append" | null | undefined) {
   if (panel === "owned") return "持";
