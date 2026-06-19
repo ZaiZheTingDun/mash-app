@@ -506,3 +506,147 @@ pub(crate) fn advanced_startup_flow_actions(
     );
     actions
 }
+
+impl Runner {
+    /// Build the front-line ``[party_slot_0, party_slot_1, party_slot_2]``
+    /// id map. Player-configured slots take precedence; any remaining
+    /// front-line slot is assumed to be the support (its id parsed out of
+    /// ``support_servant_name`` when the user pinned a specific servant).
+    pub(crate) fn build_party_ids(&self) -> [Option<u32>; 3] {
+        let full = self.build_full_party_ids();
+        [full[0], full[1], full[2]]
+    }
+
+    pub(crate) fn build_full_party_ids(&self) -> [Option<u32>; 6] {
+        let mut full: [Option<u32>; 6] = [None, None, None, None, None, None];
+        for sel in &self.config.servant_selections {
+            let slot = sel.slot_index as usize;
+            if slot < 6 {
+                full[slot] = Some(sel.servant_id);
+            }
+        }
+
+        let support_id = self.config.support_servant_id.or_else(|| {
+            self.config
+                .support_servant_name
+                .as_deref()
+                .and_then(parse_servant_name_id)
+        });
+        if let Some(support_id) = support_id {
+            if let Some(slot) = self
+                .config
+                .support_slot_index
+                .and_then(|slot| usize::try_from(slot).ok())
+                .filter(|slot| *slot < full.len())
+            {
+                full[slot] = Some(support_id);
+            } else {
+                for slot in full.iter_mut().take(3) {
+                    if slot.is_none() {
+                        *slot = Some(support_id);
+                        break;
+                    }
+                }
+            }
+        }
+        full
+    }
+
+    pub(crate) fn normal_current_party_ids(&self) -> [Option<u32>; 3] {
+        normal_current_party_ids_from(
+            self.build_full_party_ids(),
+            &self.scenes,
+            self.battle.current_scene_index,
+            self.battle.current_turn_index,
+            self.battle.executed_turn_key,
+        )
+    }
+
+    pub(crate) fn grand_servant_runtime_configs(&self) -> Vec<GrandServantRuntimeConfig> {
+        let full = self.build_full_party_ids();
+        let mut seen = HashSet::new();
+        self.config
+            .grand_servants
+            .iter()
+            .filter_map(|config| {
+                let slot = usize::try_from(config.slot_index).ok()?;
+                let servant_id = full.get(slot).copied().flatten()?;
+                if !seen.insert(servant_id) {
+                    return None;
+                }
+                Some(GrandServantRuntimeConfig {
+                    slot_index: slot,
+                    servant_id,
+                    np_card: config.np_card.clone(),
+                    priority: config.priority.clone(),
+                })
+            })
+            .take(2)
+            .collect()
+    }
+
+    pub(crate) fn advanced_party_ids_after_control(
+        &self,
+        scene: &AdvancedBattleScene,
+        control_count: usize,
+    ) -> [Option<u32>; 3] {
+        self.advanced_party_ids_after_actions(scene.control_actions.iter().take(control_count))
+    }
+
+    pub(crate) fn advanced_party_ids_after_startup_flow(
+        &self,
+        scene: &AdvancedBattleScene,
+        control_count: usize,
+        startup_control_count: usize,
+    ) -> [Option<u32>; 3] {
+        let actions = advanced_startup_flow_actions(
+            scene,
+            control_count,
+            startup_control_count,
+            self.battle
+                .advanced_auto_order_changes
+                .get(&self.battle.current_scene_index),
+        );
+        self.advanced_party_ids_after_actions(actions.iter())
+    }
+
+    pub(crate) fn advanced_party_ids_after_actions<'a>(
+        &self,
+        actions: impl Iterator<Item = &'a Action>,
+    ) -> [Option<u32>; 3] {
+        let mut ids = self.build_full_party_ids();
+        for action in actions {
+            if action_frontline_available(&ids, action) {
+                apply_party_lineup_change(&mut ids, action);
+            }
+        }
+        [ids[0], ids[1], ids[2]]
+    }
+
+    pub(crate) fn advanced_actions_and_party_after(
+        &self,
+        already_executed: impl Iterator<Item = Action>,
+        pending: impl Iterator<Item = Action>,
+    ) -> (Vec<Action>, [Option<u32>; 3]) {
+        let mut ids = self.build_full_party_ids();
+        for action in already_executed {
+            if action_frontline_available(&ids, &action) {
+                apply_party_lineup_change(&mut ids, &action);
+            }
+        }
+
+        let mut actions = Vec::new();
+        for action in pending {
+            if !action_frontline_available(&ids, &action) {
+                self.emit(
+                    "Battle",
+                    &format!("跳过行动：{} 不在前排", action_frontline_label(&action)),
+                );
+                continue;
+            }
+            apply_party_lineup_change(&mut ids, &action);
+            actions.push(action);
+        }
+        (actions, [ids[0], ids[1], ids[2]])
+    }
+}
