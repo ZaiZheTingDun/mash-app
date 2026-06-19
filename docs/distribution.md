@@ -18,6 +18,12 @@ mash/
     stable/
       latest.json
 
+  downloads/
+    latest/
+      Mash_aarch64.dmg
+    versions/
+      Mash_0.5.3_aarch64.dmg
+
   runtime/
     mash-cv/
       code/
@@ -76,6 +82,30 @@ R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-tauri-updater
 ```
 
 The local script requires the current commit to be exactly on a `vX.Y.Z` tag and the worktree to be clean. It builds only the `app` bundle, so it does not create a DMG.
+
+## DMG Installer Downloads
+
+The DMG installer is a direct user download, separate from the Tauri updater channel. It is published under `downloads/`:
+
+```text
+mash/downloads/latest/Mash_aarch64.dmg
+mash/downloads/versions/Mash_0.5.3_aarch64.dmg
+```
+
+Public URLs:
+
+```text
+https://mash.xiaotongx.com/mash/downloads/latest/Mash_aarch64.dmg
+https://mash.xiaotongx.com/mash/downloads/versions/Mash_0.5.3_aarch64.dmg
+```
+
+`downloads/latest/` is the mutable stable download path for website links and manual installation. `downloads/versions/` stores versioned DMG files for rollback and manual recovery. Publish the versioned DMG first, then overwrite the matching file under `downloads/latest/`. The release script keeps only the three most recent versioned DMG files for the same architecture.
+
+Release flow:
+
+```bash
+R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-dmg.sh
+```
 
 ## CV Code Release
 
