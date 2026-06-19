@@ -82,7 +82,7 @@ fn ensure_debug_sidecar(
                 .collect::<Vec<_>>()
                 .join(","),
         );
-        let client = crate::spawn_configured_sidecar(app, server)?;
+        let client = crate::automation_commands::spawn_configured_sidecar(app, server)?;
         eprintln!("[debug] sidecar ready");
         *guard = Some(client);
     }
