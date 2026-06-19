@@ -1,26 +1,23 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Box, Flex, Text, Popover, Button, Spinner, Checkbox, Select, IconButton } from "@radix-ui/themes";
+import { Avatar, Box, Flex, Text, Popover, Button, Spinner, Checkbox, Select, IconButton } from "@radix-ui/themes";
 import {
   HamburgerMenuIcon,
   Link2Icon,
   DesktopIcon,
   MagnifyingGlassIcon,
   MoonIcon,
+  PersonIcon,
   SunIcon,
   Cross1Icon,
   GearIcon,
 } from "@radix-ui/react-icons";
-import { invoke, listen } from "../tauri";
+import { convertFileSrc, invoke, listen } from "../tauri";
+import type { OperationLogEntry, AttackLogMeta } from "../operationLog";
 import { SERVER_LABELS, type Server } from "../types/server";
+import type { Servant } from "../types/servant";
 import type { AppTheme, AppThemePreference } from "../types/theme";
 
 type LogLevel = "info" | "debug";
-
-interface OperationLogEntry {
-  time: string;
-  message: string;
-  level: LogLevel;
-}
 
 interface AdbStatus {
   connected: boolean;
@@ -52,6 +49,288 @@ interface AutomationStatusEvent {
 }
 
 const POLL_INTERVAL_MS = 3000;
+const COMMAND_CARD_LABELS = ["指令卡一", "指令卡二", "指令卡三", "指令卡四", "指令卡五"];
+
+function useOperationLogFaces(
+  operationLogs: OperationLogEntry[],
+  servantById: Map<number, Servant>
+): Record<number, string | null> {
+  const [faces, setFaces] = useState<Record<number, string | null>>({});
+  const requests = useMemo(() => {
+    const ids = new Set<number>();
+    for (const entry of operationLogs) {
+      const attack = entry.attack;
+      if (!attack) continue;
+      attack.frontServantIds.forEach((id) => {
+        if (id != null) ids.add(id);
+      });
+      attack.candidateServantIds?.forEach((id) => ids.add(id));
+      attack.commandCards?.forEach((card) => {
+        if (card.servantId != null) ids.add(card.servantId);
+      });
+      if (attack.selectedPick?.servantId != null) ids.add(attack.selectedPick.servantId);
+    }
+    return Array.from(ids)
+      .map((servantId) => {
+        const servant = servantById.get(servantId);
+        return {
+          servantId,
+          faceId: servant?.faceId ?? null,
+        };
+      })
+      .sort((a, b) => a.servantId - b.servantId);
+  }, [operationLogs, servantById]);
+  const key = JSON.stringify(requests);
+
+  useEffect(() => {
+    const parsed = JSON.parse(key) as typeof requests;
+    const missing = parsed.filter(({ servantId }) => !(servantId in faces));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map((request) =>
+        invoke<string | null>("get_servant_face_path", {
+          servantId: request.servantId,
+          faceId: request.faceId,
+        })
+          .then((path) => [request.servantId, path ? convertFileSrc(path) : null] as const)
+          .catch(() => [request.servantId, null] as const)
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      setFaces((prev) => {
+        const next = { ...prev };
+        for (const [servantId, src] of results) next[servantId] = src;
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Keep this effect keyed by the request set; including `faces`
+    // would refetch after every cache fill.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return faces;
+}
+
+function servantName(servantById: Map<number, Servant>, servantId: number | null | undefined): string {
+  if (servantId == null) return "未识别从者";
+  const servant = servantById.get(servantId);
+  return servant?.name_cn_server || servant?.name_cn || `从者 ${servantId}`;
+}
+
+function OperationLogFace({
+  servantId,
+  servantById,
+  faceSrcByServantId,
+  muted = false,
+  highlighted = false,
+}: {
+  servantId: number | null | undefined;
+  servantById: Map<number, Servant>;
+  faceSrcByServantId: Record<number, string | null>;
+  muted?: boolean;
+  highlighted?: boolean;
+}) {
+  const label = servantName(servantById, servantId);
+  const src = servantId != null ? faceSrcByServantId[servantId] : null;
+  return (
+    <span
+      className={[
+        "operation-log-face",
+        muted ? "operation-log-face--muted" : "",
+        highlighted ? "operation-log-face--highlighted" : "",
+      ].filter(Boolean).join(" ")}
+      aria-label={label}
+      title={label}
+    >
+      <Avatar
+        src={src ?? undefined}
+        alt=""
+        fallback={<PersonIcon width={13} height={13} aria-hidden />}
+        radius="none"
+        size="1"
+        draggable={false}
+      />
+    </span>
+  );
+}
+
+function SuitDot({ suit }: { suit: string | null | undefined }) {
+  const normalized = suit === "a" || suit === "b" || suit === "q" ? suit : "unknown";
+  return (
+    <span
+      className={`operation-log-suit-dot operation-log-suit-dot--${normalized}`}
+      aria-label={suitLabel(suit)}
+      title={suitLabel(suit)}
+    />
+  );
+}
+
+function suitLabel(suit: string | null | undefined): string {
+  if (suit === "q") return "Quick";
+  if (suit === "a") return "Arts";
+  if (suit === "b") return "Buster";
+  return "未知色卡";
+}
+
+function OperationLogMessage({
+  entry,
+  servantById,
+  faceSrcByServantId,
+}: {
+  entry: OperationLogEntry;
+  servantById: Map<number, Servant>;
+  faceSrcByServantId: Record<number, string | null>;
+}) {
+  const attack = entry.attack;
+  if (!attack) return <>{entry.message}</>;
+  if (attack.selectedPick) {
+    return (
+      <SelectedPickLogMessage
+        attack={attack}
+        servantById={servantById}
+        faceSrcByServantId={faceSrcByServantId}
+      />
+    );
+  }
+  if (attack.readyNpSlots) {
+    return (
+      <ReadyNpLogMessage
+        attack={attack}
+        servantById={servantById}
+        faceSrcByServantId={faceSrcByServantId}
+      />
+    );
+  }
+  if (attack.commandCards) {
+    return (
+      <CommandCardsLogMessage
+        attack={attack}
+        servantById={servantById}
+        faceSrcByServantId={faceSrcByServantId}
+      />
+    );
+  }
+  if (attack.candidateServantIds) {
+    return (
+      <span className="operation-log-rich">
+        <span>指令卡候选从者:</span>
+        <span className="operation-log-face-row">
+          {attack.candidateServantIds.map((servantId, index) => (
+            <OperationLogFace
+              key={`${servantId}-${index}`}
+              servantId={servantId}
+              servantById={servantById}
+              faceSrcByServantId={faceSrcByServantId}
+            />
+          ))}
+        </span>
+      </span>
+    );
+  }
+  return <>{entry.message}</>;
+}
+
+function CommandCardsLogMessage({
+  attack,
+  servantById,
+  faceSrcByServantId,
+}: {
+  attack: AttackLogMeta;
+  servantById: Map<number, Servant>;
+  faceSrcByServantId: Record<number, string | null>;
+}) {
+  return (
+    <span className="operation-log-rich">
+      <span>指令卡:</span>
+      <span className="operation-log-card-list">
+        {attack.commandCards?.map((card, index) => (
+          <span className="operation-log-card-item" key={`${card.slot}-${index}`}>
+            <OperationLogFace
+              servantId={card.servantId}
+              servantById={servantById}
+              faceSrcByServantId={faceSrcByServantId}
+            />
+            <SuitDot suit={card.suit} />
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+function ReadyNpLogMessage({
+  attack,
+  servantById,
+  faceSrcByServantId,
+}: {
+  attack: AttackLogMeta;
+  servantById: Map<number, Servant>;
+  faceSrcByServantId: Record<number, string | null>;
+}) {
+  const ready = new Set(attack.readyNpSlots ?? []);
+  return (
+    <span className="operation-log-rich">
+      <span>宝具就绪:</span>
+      <span className="operation-log-face-row">
+        {attack.frontServantIds.map((servantId, index) => (
+          <OperationLogFace
+            key={index}
+            servantId={servantId}
+            servantById={servantById}
+            faceSrcByServantId={faceSrcByServantId}
+            muted={!ready.has(index)}
+            highlighted={ready.has(index)}
+          />
+        ))}
+      </span>
+    </span>
+  );
+}
+
+function SelectedPickLogMessage({
+  attack,
+  servantById,
+  faceSrcByServantId,
+}: {
+  attack: AttackLogMeta;
+  servantById: Map<number, Servant>;
+  faceSrcByServantId: Record<number, string | null>;
+}) {
+  const pick = attack.selectedPick;
+  if (!pick) return null;
+  const servantId = pick.servantId ?? attack.frontServantIds[pick.slot] ?? null;
+  return (
+    <span className="operation-log-rich">
+      <span>
+        {pick.step}/{pick.total} 选择 {pick.fromPriority ?? "补位"} →
+      </span>
+      {pick.kind === "np" ? (
+        <span className="operation-log-pick-result">
+          <span>宝具</span>
+          <OperationLogFace
+            servantId={servantId}
+            servantById={servantById}
+            faceSrcByServantId={faceSrcByServantId}
+          />
+        </span>
+      ) : (
+        <span className="operation-log-pick-result">
+          <span>{COMMAND_CARD_LABELS[pick.slot] ?? `指令卡${pick.slot + 1}`}</span>
+          <OperationLogFace
+            servantId={servantId}
+            servantById={servantById}
+            faceSrcByServantId={faceSrcByServantId}
+          />
+          <SuitDot suit={pick.suit} />
+        </span>
+      )}
+    </span>
+  );
+}
 
 interface StatusBarProps {
   onOpenSettings?: () => void;
@@ -63,6 +342,7 @@ interface StatusBarProps {
   themePreference?: AppThemePreference;
   onThemeChange?: (theme: AppThemePreference) => void;
   operationLogs?: OperationLogEntry[];
+  servants?: Servant[];
   operationLogOpen?: boolean;
   onOperationLogOpenChange?: (open: boolean) => void;
   updateAvailable?: boolean;
@@ -80,6 +360,7 @@ export function StatusBar({
   themePreference,
   onThemeChange,
   operationLogs = [],
+  servants = [],
   operationLogOpen = false,
   onOperationLogOpenChange,
   updateAvailable = false,
@@ -108,6 +389,14 @@ export function StatusBar({
   const [showDebugLogs, setShowDebugLogs] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const runnerRunning = battleRunnerRunning || enhancementRunnerRunning;
+  const servantById = useMemo(() => {
+    const byId = new Map<number, Servant>();
+    for (const servant of servants) {
+      if (!byId.has(servant.id)) byId.set(servant.id, servant);
+    }
+    return byId;
+  }, [servants]);
+  const operationLogFaces = useOperationLogFaces(operationLogs, servantById);
 
   const visibleOperationLogs = useMemo(
     () =>
@@ -286,7 +575,13 @@ export function StatusBar({
                 }
               >
                 <span className="operation-log-time">{entry.time}</span>
-                <span className="operation-log-msg">{entry.message}</span>
+                <span className="operation-log-msg">
+                  <OperationLogMessage
+                    entry={entry}
+                    servantById={servantById}
+                    faceSrcByServantId={operationLogFaces}
+                  />
+                </span>
               </div>
             ))}
             <div ref={logEndRef} />

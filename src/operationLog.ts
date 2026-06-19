@@ -1,10 +1,37 @@
 export type LogLevel = "info" | "debug";
 
+export interface AttackLogCommandCard {
+  slot: number;
+  suit: string | null;
+  servantId: number | null;
+}
+
+export interface AttackLogSelectedPick {
+  step: number;
+  total: number;
+  fromPriority: string | null;
+  kind: "np" | "card";
+  slot: number;
+  suit?: string | null;
+  servantId?: number | null;
+}
+
+export interface AttackLogMeta {
+  frontServantIds: [number | null, number | null, number | null];
+  candidateServantIds?: number[] | null;
+  commandCards?: AttackLogCommandCard[] | null;
+  readyNpSlots?: number[] | null;
+  selectedPick?: AttackLogSelectedPick | null;
+}
+
 export interface OperationLogEntry {
   time: string;
   message: string;
   level: LogLevel;
+  attack?: AttackLogMeta | null;
 }
+
+export const MAX_OPERATION_LOG_ENTRIES = 500;
 
 const PROGRESS_LOG_RE = /^(.*…)\s+\((\d+)\/(\d+)\)$/;
 
@@ -20,7 +47,7 @@ export function appendCoalescedOperationLog(
   entry: OperationLogEntry,
 ): OperationLogEntry[] {
   const coalesceKey = operationLogCoalesceKey(entry.message);
-  if (!coalesceKey) return [...logs, entry];
+  if (!coalesceKey) return trimOperationLogs([...logs, entry]);
 
   let matchingIndex = -1;
   for (let index = logs.length - 1; index >= 0; index -= 1) {
@@ -31,7 +58,14 @@ export function appendCoalescedOperationLog(
     }
     break;
   }
-  if (matchingIndex === -1) return [...logs, entry];
+  if (matchingIndex === -1) return trimOperationLogs([...logs, entry]);
 
-  return logs.map((log, index) => (index === matchingIndex ? entry : log));
+  return trimOperationLogs(
+    logs.map((log, index) => (index === matchingIndex ? entry : log))
+  );
+}
+
+function trimOperationLogs(logs: OperationLogEntry[]): OperationLogEntry[] {
+  if (logs.length <= MAX_OPERATION_LOG_ENTRIES) return logs;
+  return logs.slice(logs.length - MAX_OPERATION_LOG_ENTRIES);
 }

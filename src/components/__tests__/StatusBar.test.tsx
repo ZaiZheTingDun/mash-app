@@ -6,6 +6,7 @@ import { listen, type Event } from "@tauri-apps/api/event";
 import { renderWithTheme } from "../../test/renderWithTheme";
 import { StatusBar } from "../StatusBar";
 import { SERVER_LABELS } from "../../types/server";
+import type { Servant } from "../../types/servant";
 
 // The default `invoke` mock in `setup.ts` returns "JP" for `get_server`
 // and `false` for `get_use_bluestack`; individual tests below override
@@ -22,6 +23,39 @@ type AdbResetPayload = {
   ok?: boolean | null;
 };
 type AdbResetListener = (event: Event<AdbResetPayload>) => void;
+
+const LOG_SERVANTS: Servant[] = [
+  {
+    id: 284,
+    variantKey: "284",
+    faceId: 800284,
+    name_cn: "从者二八四",
+    name_jp: "",
+    name_en: "",
+    class: "caster",
+    rarity: 5,
+  },
+  {
+    id: 16,
+    variantKey: "16",
+    faceId: 800016,
+    name_cn: "从者十六",
+    name_jp: "",
+    name_en: "",
+    class: "saber",
+    rarity: 4,
+  },
+  {
+    id: 309,
+    variantKey: "309",
+    faceId: 800309,
+    name_cn: "从者三零九",
+    name_jp: "",
+    name_en: "",
+    class: "pretender",
+    rarity: 5,
+  },
+];
 
 function captureAutomationListener(
   targetEvent = "automation-status"
@@ -254,6 +288,155 @@ describe("StatusBar", () => {
     await user.click(screen.getByRole("button", { name: "关闭操作日志" }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("renders attack operation logs with compact servant faces and card colors", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "get_servant_face_path") {
+        const { servantId } = args as { servantId: number };
+        return `/tmp/face-${servantId}.png`;
+      }
+      return null;
+    });
+
+    const { container } = renderWithTheme(
+      <StatusBar
+        servants={LOG_SERVANTS}
+        operationLogOpen
+        operationLogs={[
+          {
+            time: "19:53:25",
+            message: "指令卡候选从者: [284, 16, 309]",
+            level: "info",
+            attack: {
+              frontServantIds: [284, 16, 309],
+              candidateServantIds: [284, 16, 309],
+            },
+          },
+          {
+            time: "19:53:25",
+            message: "指令卡: C1=q/S3:309 C2=b/S3:309 C3=a/S2:16",
+            level: "info",
+            attack: {
+              frontServantIds: [284, 16, 309],
+              commandCards: [
+                { slot: 0, suit: "q", servantId: 309 },
+                { slot: 1, suit: "b", servantId: 309 },
+                { slot: 2, suit: "a", servantId: 16 },
+              ],
+            },
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText("指令卡候选从者:")).toBeInTheDocument();
+    expect(screen.getByLabelText("从者二八四")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("从者三零九")).toHaveLength(3);
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("get_servant_face_path", {
+        servantId: 309,
+        faceId: 800309,
+      });
+    });
+    expect(container.querySelector(".operation-log-suit-dot--q")).not.toBeNull();
+    expect(container.querySelector(".operation-log-suit-dot--b")).not.toBeNull();
+    expect(container.querySelector(".operation-log-suit-dot--a")).not.toBeNull();
+  });
+
+  it("renders ready NPs with muted faces and highlights ready slots", () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "get_servant_face_path") return null;
+      return null;
+    });
+
+    const { container } = renderWithTheme(
+      <StatusBar
+        servants={LOG_SERVANTS}
+        operationLogOpen
+        operationLogs={[
+          {
+            time: "19:57:35",
+            message: "宝具就绪: NP3",
+            level: "info",
+            attack: {
+              frontServantIds: [284, 16, 309],
+              readyNpSlots: [2],
+            },
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText("宝具就绪:")).toBeInTheDocument();
+    expect(container.querySelectorAll(".operation-log-face--muted")).toHaveLength(2);
+    expect(container.querySelectorAll(".operation-log-face--highlighted")).toHaveLength(1);
+    expect(screen.getByLabelText("从者三零九")).toHaveClass("operation-log-face--highlighted");
+  });
+
+  it("renders selected NP and command-card picks with fallback faces", () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "get_servant_face_path") return null;
+      return null;
+    });
+
+    const { container } = renderWithTheme(
+      <StatusBar
+        servants={LOG_SERVANTS}
+        operationLogOpen
+        operationLogs={[
+          {
+            time: "19:57:35",
+            message: "1/3 选择 servant_3_np → NP3",
+            level: "info",
+            attack: {
+              frontServantIds: [284, 16, 309],
+              selectedPick: {
+                step: 1,
+                total: 3,
+                fromPriority: "servant_3_np",
+                kind: "np",
+                slot: 2,
+                servantId: 309,
+              },
+            },
+          },
+          {
+            time: "19:57:35",
+            message: "2/3 选择 servant_3_all → C3 (q/309)",
+            level: "info",
+            attack: {
+              frontServantIds: [284, 16, 309],
+              selectedPick: {
+                step: 2,
+                total: 3,
+                fromPriority: "servant_3_all",
+                kind: "card",
+                slot: 2,
+                suit: "q",
+                servantId: 309,
+              },
+            },
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText(/1\/3 选择 servant_3_np →/)).toBeInTheDocument();
+    expect(screen.getByText("宝具")).toBeInTheDocument();
+    expect(screen.getByText(/2\/3 选择 servant_3_all →/)).toBeInTheDocument();
+    expect(screen.getByText("指令卡三")).toBeInTheDocument();
+    expect(container.querySelector(".operation-log-suit-dot--q")).not.toBeNull();
+    expect(container.querySelectorAll(".operation-log-face")).toHaveLength(2);
   });
 
   it("calls the settings handler from the left status bar action", async () => {

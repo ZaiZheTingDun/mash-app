@@ -3167,6 +3167,7 @@ fn emit_automation_status(
             current_screen: screen.into(),
             message: message.into(),
             level: LogLevel::Info,
+            attack: None,
         },
     );
 }

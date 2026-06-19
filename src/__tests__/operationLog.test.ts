@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appendCoalescedOperationLog,
+  MAX_OPERATION_LOG_ENTRIES,
   type OperationLogEntry,
 } from "../operationLog";
 
@@ -100,5 +101,37 @@ describe("appendCoalescedOperationLog", () => {
       log("23:08:36", "等待识别画面… (2/75)"),
       log("23:08:35", "结算页可能被弹窗遮挡，尝试点击跳过区域", "debug"),
     ]);
+  });
+
+  it("keeps only the latest operation log entries", () => {
+    const logs = Array.from({ length: MAX_OPERATION_LOG_ENTRIES }, (_, index) =>
+      log("12:00:00", `日志 ${index}`)
+    );
+
+    const next = appendCoalescedOperationLog(
+      logs,
+      log("12:00:01", "最新日志"),
+    );
+
+    expect(next).toHaveLength(MAX_OPERATION_LOG_ENTRIES);
+    expect(next[0].message).toBe("日志 1");
+    expect(next.at(-1)?.message).toBe("最新日志");
+  });
+
+  it("coalesces progress logs without exceeding the latest-entry cap", () => {
+    const logs = [
+      ...Array.from({ length: MAX_OPERATION_LOG_ENTRIES - 1 }, (_, index) =>
+        log("12:00:00", `日志 ${index}`)
+      ),
+      log("12:00:00", "等待识别画面… (1/75)"),
+    ];
+
+    const next = appendCoalescedOperationLog(
+      logs,
+      log("12:00:01", "等待识别画面… (2/75)"),
+    );
+
+    expect(next).toHaveLength(MAX_OPERATION_LOG_ENTRIES);
+    expect(next.at(-1)).toEqual(log("12:00:01", "等待识别画面… (2/75)"));
   });
 });

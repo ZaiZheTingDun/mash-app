@@ -3183,7 +3183,7 @@ body,
   padding: 14px 24px 22px;
   font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
   font-size: 12px;
-  line-height: 1.7;
+  line-height: 2.3;
 }
 
 .operation-log-placeholder {
@@ -3203,6 +3203,87 @@ body,
 .operation-log-msg {
   color: var(--gray-12);
   word-break: break-all;
+}
+
+.operation-log-rich,
+.operation-log-face-row,
+.operation-log-card-list,
+.operation-log-card-item,
+.operation-log-pick-result {
+  display: inline-flex;
+  align-items: center;
+}
+
+.operation-log-rich {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.operation-log-face-row,
+.operation-log-card-list {
+  gap: 5px;
+}
+
+.operation-log-card-item,
+.operation-log-pick-result {
+  gap: 4px;
+}
+
+.operation-log-face {
+  width: 23px;
+  height: 23px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid var(--gray-6);
+  background: var(--gray-3);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.operation-log-face .rt-AvatarRoot {
+  width: 23px;
+  height: 23px;
+}
+
+.operation-log-face--muted {
+  filter: grayscale(1);
+  opacity: 0.42;
+}
+
+.operation-log-face--highlighted {
+  border-color: var(--amber-9);
+  box-shadow: 0 0 0 1px var(--amber-9);
+}
+
+.operation-log-suit-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid color-mix(in srgb, currentColor 70%, transparent);
+  flex-shrink: 0;
+}
+
+.operation-log-suit-dot--q {
+  background: var(--green-9);
+  color: var(--green-9);
+}
+
+.operation-log-suit-dot--a {
+  background: var(--blue-9);
+  color: var(--blue-9);
+}
+
+.operation-log-suit-dot--b {
+  background: var(--red-9);
+  color: var(--red-9);
+}
+
+.operation-log-suit-dot--unknown {
+  background: var(--gray-8);
+  color: var(--gray-8);
 }
 
 .operation-log-entry--debug .operation-log-time,

@@ -30,6 +30,7 @@ import type { SelfCheckStatus } from "./types/selfCheck";
 import type { AppTheme, AppThemePreference } from "./types/theme";
 import {
   appendCoalescedOperationLog,
+  type AttackLogMeta,
   type LogLevel,
   type OperationLogEntry,
 } from "./operationLog";
@@ -48,6 +49,7 @@ interface AutomationEvent {
   // Optional for backwards compatibility with older backends that don't
   // emit a level; treat missing as "info".
   level?: LogLevel;
+  attack?: AttackLogMeta | null;
 }
 
 interface AppProps {
@@ -88,13 +90,13 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [ruleValidationError, setRuleValidationError] = useState<string | null>(null);
 
   const appendOperationLog = useCallback(
-    (message: string, level: LogLevel = "info") => {
+    (message: string, level: LogLevel = "info", attack?: AttackLogMeta | null) => {
       const d = new Date();
       const time = [d.getHours(), d.getMinutes(), d.getSeconds()]
         .map((n) => String(n).padStart(2, "0"))
         .join(":");
       setOperationLogs((prev) =>
-        appendCoalescedOperationLog(prev, { time, message, level })
+        appendCoalescedOperationLog(prev, { time, message, level, attack })
       );
     },
     [],
@@ -198,7 +200,11 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
 
   useEffect(() => {
     const unlistenBattle = listen<AutomationEvent>("automation-status", (event) => {
-      appendOperationLog(event.payload.message, event.payload.level ?? "info");
+      appendOperationLog(
+        event.payload.message,
+        event.payload.level ?? "info",
+        event.payload.attack ?? null
+      );
     });
     const unlistenEnhancement = listen<AutomationEvent>(
       "enhancement-automation-status",
@@ -730,6 +736,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         themePreference={themePreference}
         onThemeChange={onThemeChange}
         operationLogs={operationLogs}
+        servants={servants}
         operationLogOpen={operationLogOpen}
         onOperationLogOpenChange={setOperationLogOpen}
         updateAvailable={availableUpdate != null}

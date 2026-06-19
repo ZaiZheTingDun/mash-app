@@ -287,6 +287,51 @@ pub struct AutomationEvent {
     pub current_screen: String,
     pub message: String,
     pub level: LogLevel,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attack: Option<AttackLogMeta>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AttackLogMeta {
+    pub front_servant_ids: [Option<u32>; 3],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_servant_ids: Option<Vec<u32>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_cards: Option<Vec<AttackLogCommandCard>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ready_np_slots: Option<Vec<u32>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_pick: Option<AttackLogSelectedPick>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AttackLogCommandCard {
+    pub slot: u32,
+    pub suit: Option<String>,
+    pub servant_id: Option<u32>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AttackLogSelectedPick {
+    pub step: usize,
+    pub total: usize,
+    pub from_priority: Option<String>,
+    pub kind: AttackLogPickKind,
+    pub slot: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub servant_id: Option<u32>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AttackLogPickKind {
+    Np,
+    Card,
 }
 
 /// Handle stored in Tauri managed state to control / observe the runner.
@@ -1703,6 +1748,20 @@ impl Runner {
     }
 
     fn emit_with_level(&self, screen: &str, message: &str, level: LogLevel) {
+        self.emit_with_level_and_attack(screen, message, level, None);
+    }
+
+    fn emit_attack(&self, message: &str, attack: AttackLogMeta) {
+        self.emit_with_level_and_attack("Attack", message, LogLevel::Info, Some(attack));
+    }
+
+    fn emit_with_level_and_attack(
+        &self,
+        screen: &str,
+        message: &str,
+        level: LogLevel,
+        attack: Option<AttackLogMeta>,
+    ) {
         let state_str = {
             let s = self.state.lock().unwrap();
             format!("{:?}", *s)
@@ -1714,6 +1773,7 @@ impl Runner {
                 current_screen: screen.into(),
                 message: message.into(),
                 level,
+                attack,
             },
         );
     }
@@ -3345,7 +3405,16 @@ impl Runner {
         }
 
         let cards = if recognize_command_cards {
-            self.emit("Attack", &format!("指令卡候选从者: {:?}", candidate_ids));
+            self.emit_attack(
+                &format!("指令卡候选从者: {:?}", candidate_ids),
+                AttackLogMeta {
+                    front_servant_ids: *party_ids,
+                    candidate_servant_ids: Some(candidate_ids.clone()),
+                    command_cards: None,
+                    ready_np_slots: None,
+                    selected_pick: None,
+                },
+            );
 
             if self.assets_dir.is_none() {
                 self.emit("Attack", "未找到从者资源目录，将无法按从者匹配指令卡");
@@ -3409,17 +3478,49 @@ impl Runner {
                     )
                 })
                 .collect();
-            self.emit("Attack", &format!("指令卡: {}", card_summary.join(" ")));
+            self.emit_attack(
+                &format!("指令卡: {}", card_summary.join(" ")),
+                AttackLogMeta {
+                    front_servant_ids: *party_ids,
+                    candidate_servant_ids: None,
+                    command_cards: Some(command_cards_log_meta(&cards)),
+                    ready_np_slots: None,
+                    selected_pick: None,
+                },
+            );
         }
         let ready: Vec<String> = nps
             .iter()
             .filter(|n| n.ready)
             .map(|n| format!("NP{}", n.slot + 1))
             .collect();
+        let ready_np_slots: Vec<u32> = nps
+            .iter()
+            .filter(|n| n.ready)
+            .map(|n| n.slot)
+            .collect();
         if ready.is_empty() {
-            self.emit("Attack", "宝具就绪: 无");
+            self.emit_attack(
+                "宝具就绪: 无",
+                AttackLogMeta {
+                    front_servant_ids: *party_ids,
+                    candidate_servant_ids: None,
+                    command_cards: None,
+                    ready_np_slots: Some(ready_np_slots),
+                    selected_pick: None,
+                },
+            );
         } else {
-            self.emit("Attack", &format!("宝具就绪: {}", ready.join(" ")));
+            self.emit_attack(
+                &format!("宝具就绪: {}", ready.join(" ")),
+                AttackLogMeta {
+                    front_servant_ids: *party_ids,
+                    candidate_servant_ids: None,
+                    command_cards: None,
+                    ready_np_slots: Some(ready_np_slots),
+                    selected_pick: None,
+                },
+            );
         }
 
         Some((cards, nps))
@@ -3474,10 +3575,10 @@ impl Runner {
             return;
         }
 
-        self.tap_picks("Attack", &picks);
+        self.tap_picks("Attack", &picks, party_ids);
     }
 
-    fn tap_picks(&mut self, screen: &str, picks: &[Pick]) {
+    fn tap_picks(&mut self, screen: &str, picks: &[Pick], party_ids: &[Option<u32>; 3]) {
         if picks.is_empty() {
             self.emit(screen, "未能选出任何卡，跳过");
             self.battle.scene_config_used = false;
@@ -3485,7 +3586,7 @@ impl Runner {
         }
 
         for (i, pick) in picks.iter().enumerate() {
-            let (msg, point) = match pick {
+            let (msg, point, selected_pick) = match pick {
                 Pick::Card {
                     slot,
                     point,
@@ -3505,6 +3606,15 @@ impl Runner {
                     (
                         format!("{}/{} {}{}", i + 1, picks.len(), label, detail),
                         *point,
+                        AttackLogSelectedPick {
+                            step: i + 1,
+                            total: picks.len(),
+                            from_priority: from_priority.clone(),
+                            kind: AttackLogPickKind::Card,
+                            slot: *slot,
+                            suit: suit.clone(),
+                            servant_id: *servant_id,
+                        },
                     )
                 }
                 Pick::Np {
@@ -3520,9 +3630,31 @@ impl Runner {
                         slot + 1,
                     ),
                     *point,
+                    AttackLogSelectedPick {
+                        step: i + 1,
+                        total: picks.len(),
+                        from_priority: Some(from_priority.clone()),
+                        kind: AttackLogPickKind::Np,
+                        slot: *slot,
+                        suit: None,
+                        servant_id: party_ids.get(*slot as usize).copied().flatten(),
+                    },
                 ),
             };
-            self.emit(screen, &msg);
+            if screen == "Attack" {
+                self.emit_attack(
+                    &msg,
+                    AttackLogMeta {
+                        front_servant_ids: *party_ids,
+                        candidate_servant_ids: None,
+                        command_cards: None,
+                        ready_np_slots: None,
+                        selected_pick: Some(selected_pick),
+                    },
+                );
+            } else {
+                self.emit(screen, &msg);
+            }
             if !self.tap_at(screen, point) {
                 return;
             }
@@ -3573,7 +3705,7 @@ impl Runner {
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
                 );
-                self.tap_picks("Attack", &picks);
+                self.tap_picks("Attack", &picks, &party_ids);
                 return;
             }
             self.emit("Attack", "无高级指令配置，按默认顺序补位");
@@ -3723,7 +3855,7 @@ impl Runner {
                             &self.config.grand_card_strategy,
                             self.config.grand_class,
                         );
-                        self.tap_picks("Attack", &picks);
+                        self.tap_picks("Attack", &picks, &startup_party_ids);
                         return;
                     }
 
@@ -3736,7 +3868,7 @@ impl Runner {
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
                     );
-                    self.tap_picks("Attack", &picks);
+                    self.tap_picks("Attack", &picks, &startup_party_ids);
                     return;
                 }
 
@@ -3790,7 +3922,7 @@ impl Runner {
                             &self.config.grand_card_strategy,
                             self.config.grand_class,
                         );
-                        self.tap_picks("Attack", &picks);
+                        self.tap_picks("Attack", &picks, &control_party_ids);
                         return;
                     }
 
@@ -3804,7 +3936,7 @@ impl Runner {
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
                     );
-                    self.tap_picks("Attack", &picks);
+                    self.tap_picks("Attack", &picks, &party_ids);
                     return;
                 }
 
@@ -3880,7 +4012,7 @@ impl Runner {
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
                     );
-                    self.tap_picks("Attack", &picks);
+                    self.tap_picks("Attack", &picks, &startup_party_ids);
                     return;
                 }
 
@@ -3893,7 +4025,7 @@ impl Runner {
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
                 );
-                self.tap_picks("Attack", &picks);
+                self.tap_picks("Attack", &picks, &startup_party_ids);
                 return;
             }
 
@@ -3972,7 +4104,7 @@ impl Runner {
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
                     );
-                    self.tap_picks("Attack", &picks);
+                    self.tap_picks("Attack", &picks, &control_party_ids);
                     return;
                 }
 
@@ -3985,7 +4117,7 @@ impl Runner {
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
                 );
-                self.tap_picks("Attack", &picks);
+                self.tap_picks("Attack", &picks, &control_party_ids);
                 return;
             }
             let active_party_ids = self.advanced_party_ids_after_startup_flow(
@@ -4002,7 +4134,7 @@ impl Runner {
                 &self.config.grand_card_strategy,
                 self.config.grand_class,
             );
-            self.tap_picks("Attack", &picks);
+            self.tap_picks("Attack", &picks, &active_party_ids);
             return;
         }
 
@@ -5420,6 +5552,17 @@ fn suit_code(suit: &str) -> Option<&'static str> {
         "buster" => Some("b"),
         _ => None,
     }
+}
+
+fn command_cards_log_meta(cards: &[CommandCardMatch]) -> Vec<AttackLogCommandCard> {
+    cards
+        .iter()
+        .map(|card| AttackLogCommandCard {
+            slot: card.slot,
+            suit: card.suit.clone(),
+            servant_id: card.servant_id,
+        })
+        .collect()
 }
 
 fn advanced_rule_matches(
@@ -7064,6 +7207,74 @@ mod tests {
             std_bgr: 0.0,
             edge_threshold: 0.0,
         }
+    }
+
+    #[test]
+    fn attack_log_command_cards_keep_slot_suit_and_servant_id() {
+        let cards = vec![
+            command_card(0, Some(309), Some("q"), None),
+            command_card(1, None, Some("b"), None),
+            command_card(2, Some(16), None, None),
+        ];
+
+        assert_eq!(
+            command_cards_log_meta(&cards),
+            vec![
+                AttackLogCommandCard {
+                    slot: 0,
+                    suit: Some("q".into()),
+                    servant_id: Some(309),
+                },
+                AttackLogCommandCard {
+                    slot: 1,
+                    suit: Some("b".into()),
+                    servant_id: None,
+                },
+                AttackLogCommandCard {
+                    slot: 2,
+                    suit: None,
+                    servant_id: Some(16),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn attack_log_meta_serializes_selected_pick_in_camel_case() {
+        let meta = AttackLogMeta {
+            front_servant_ids: [Some(284), Some(16), Some(309)],
+            candidate_servant_ids: Some(vec![284, 16, 309]),
+            command_cards: None,
+            ready_np_slots: Some(vec![2]),
+            selected_pick: Some(AttackLogSelectedPick {
+                step: 1,
+                total: 3,
+                from_priority: Some("servant_3_np".into()),
+                kind: AttackLogPickKind::Np,
+                slot: 2,
+                suit: None,
+                servant_id: Some(309),
+            }),
+        };
+
+        let json = serde_json::to_value(meta).unwrap();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "frontServantIds": [284, 16, 309],
+                "candidateServantIds": [284, 16, 309],
+                "readyNpSlots": [2],
+                "selectedPick": {
+                    "step": 1,
+                    "total": 3,
+                    "fromPriority": "servant_3_np",
+                    "kind": "np",
+                    "slot": 2,
+                    "servantId": 309
+                }
+            })
+        );
     }
 
     fn empty_advanced_scene() -> AdvancedBattleScene {
