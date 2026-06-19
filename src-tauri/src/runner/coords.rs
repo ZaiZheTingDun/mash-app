@@ -131,33 +131,6 @@ pub(crate) const ORDER_CHANGE_CONFIRM: Point = Point::new(0.500, 0.872);
 /// (which is sized for in-place taps on the battle screen).
 pub(crate) const COMMAND_SPELL_DIALOG_SETTLE: Duration = Duration::from_millis(600);
 
-// ---------------------------------------------------------------------------
-// Battle-result tap targets. Each post-battle page has a single forward
-// button; constants are kept here so the debug page (and future overlay)
-// can introspect them without crawling the match arm.
-// ---------------------------------------------------------------------------
-
-/// "Next" arrow on the bond-points result page.
-pub(crate) const BATTLE_RESULT_BOND_NEXT: Point = Point::new(0.041, 0.945);
-/// "Next" arrow on the EXP-gain result page (same physical button as bond).
-pub(crate) const BATTLE_RESULT_EXP_NEXT: Point = Point::new(0.041, 0.945);
-/// "Next" button on the loot/drops summary page.
-pub(crate) const BATTLE_RESULT_LOOT_NEXT: Point = Point::new(0.874, 0.890);
-/// "Skip / Close" on the optional friend-request prompt that appears
-/// after using a non-friend support.
-pub(crate) const BATTLE_RESULT_FRIEND_SKIP: Point = Point::new(0.254, 0.854);
-/// "Continue / Repeat" button on the final continue page — taps this when
-/// `RunConfig::repeat_mission` is true.
-pub(crate) const BATTLE_RESULT_CONTINUE_REPEAT: Point = Point::new(0.657, 0.809);
-/// "Close / Stop" button on the final continue page — taps this when
-/// `RunConfig::repeat_mission` is false. The runner finishes after.
-pub(crate) const BATTLE_RESULT_CONTINUE_STOP: Point = Point::new(0.348, 0.809);
-/// Generic skip/close target for transient battle-result popups that can
-/// obscure the settlement page and make screen detection return Unknown.
-/// Same physical position as the battle animation-skip button, but kept as
-/// a separate semantic constant so result-popup behavior can be tuned alone.
-pub(crate) const BATTLE_RESULT_POPUP_SKIP: Point = Point::new(0.685, 0.095);
-
 pub(crate) const AP_RECOVERY_ITEMS_REGION: NormRect = NormRect {
     x: 0.244,
     y: 0.142,
@@ -169,29 +142,6 @@ pub(crate) const AP_RECOVERY_SCROLL_TO: Point = Point::new(0.780, 0.426);
 pub(crate) const AP_RECOVERY_CONFIRM_BUTTON: Point = Point::new(0.663, 0.795);
 pub(crate) const AP_RECOVERY_LIST_LABEL_TEMPLATE: &str = "items/label_item";
 pub(crate) const AP_RECOVERY_ITEM_THRESHOLD: f64 = 0.82;
-
-/// Cadence used by `tap_until_screen_changes` when dismissing post-battle
-/// result pages. Slow enough for the device to register each tap and for
-/// `detect()` to read a fresh frame, fast enough that a 3–5 s bond /
-/// EXP animation only absorbs a few wasted taps before the page actually
-/// transitions.
-pub(crate) const BATTLE_RESULT_TAP_INTERVAL: Duration = Duration::from_millis(300);
-/// Hard ceiling for how long any single result page is allowed to absorb
-/// taps before the runner emits a timeout warning. Comfortably above the
-/// longest measured bond / EXP animation (~5 s for a multi-servant
-/// level-up cascade).
-pub(crate) const BATTLE_RESULT_TAP_TIMEOUT: Duration = Duration::from_secs(10);
-
-pub(crate) fn is_battle_result_screen(screen: Screen) -> bool {
-    matches!(
-        screen,
-        Screen::BattleResultBond
-            | Screen::BattleResultExp
-            | Screen::BattleResultLoot
-            | Screen::BattleResultFriendRequest
-            | Screen::BattleResultContinue
-    )
-}
 
 // ---------------------------------------------------------------------------
 // Debug: expose coordinate constants for visualization

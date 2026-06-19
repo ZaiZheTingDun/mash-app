@@ -7,6 +7,7 @@ mod config;
 mod coords;
 mod grand;
 mod party;
+mod results;
 mod state;
 mod support;
 
@@ -17,6 +18,7 @@ use config::{default_grand_chain_priority, GrandServantRuntimeConfig};
 pub(crate) use coords::*;
 pub(crate) use grand::*;
 pub(crate) use party::*;
+pub(crate) use results::*;
 pub(crate) use state::*;
 pub(crate) use support::*;
 
@@ -2700,91 +2702,6 @@ impl Runner {
 
         self.emit("Attack", "无高级规则命中攻击，按默认顺序补位");
         self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, None);
-    }
-
-    // -- battle-result screen handlers ---------------------------------------
-
-    fn handle_battle_result_bond(&mut self) {
-        self.emit("BattleResultBond", "羁绊点数结算，前往下一画面");
-        self.tap_until_screen_changes(
-            "BattleResultBond",
-            Screen::BattleResultBond,
-            BATTLE_RESULT_BOND_NEXT,
-            BATTLE_RESULT_TAP_INTERVAL,
-            BATTLE_RESULT_TAP_TIMEOUT,
-        );
-    }
-
-    fn handle_battle_result_exp(&mut self) {
-        self.emit("BattleResultExp", "经验结算，前往下一画面");
-        self.tap_until_screen_changes(
-            "BattleResultExp",
-            Screen::BattleResultExp,
-            BATTLE_RESULT_EXP_NEXT,
-            BATTLE_RESULT_TAP_INTERVAL,
-            BATTLE_RESULT_TAP_TIMEOUT,
-        );
-    }
-
-    fn handle_battle_result_loot(&mut self) {
-        self.emit("BattleResultLoot", "掉落结算，前往下一画面");
-        if self.tap_at("BattleResultLoot", BATTLE_RESULT_LOOT_NEXT) {
-            thread::sleep(ACTION_DELAY);
-        }
-    }
-
-    fn handle_battle_result_friend_request(&mut self) {
-        self.emit("BattleResultFriendRequest", "跳过好友申请");
-        if self.tap_at("BattleResultFriendRequest", BATTLE_RESULT_FRIEND_SKIP) {
-            thread::sleep(ACTION_DELAY);
-        }
-    }
-
-    /// Final continue page. Branches on `RunConfig::repeat_mission`:
-    ///
-    /// * `true` — tap "Next" so FGO re-queues the same quest. Per-run
-    ///   bookkeeping (team-change flag, battle turn counters, placed-
-    ///   servant set) is reset so the next loop reuses pre-battle handlers
-    ///   from a clean slate. The pinned support metadata is intentionally
-    ///   kept since the same servant is still desired.
-    /// * `false` — tap "Close" and transition to `Finished`. The main
-    ///   loop's post-handler check exits cleanly so the user sees the
-    ///   "已完成" toast.
-    fn handle_battle_result_continue(&mut self) {
-        if self.battle_result_continue_handled {
-            self.emit("BattleResultContinue", "等待结算页切换…");
-            thread::sleep(ACTION_DELAY);
-            return;
-        }
-        self.battle_result_continue_handled = true;
-
-        self.completed_mission_runs += 1;
-        let reached_run_cap = self
-            .config
-            .max_mission_runs
-            .is_some_and(|max| self.completed_mission_runs >= max);
-        let should_repeat = self.config.max_mission_runs.is_some() || self.config.repeat_mission;
-
-        if should_repeat && !reached_run_cap && !self.should_stop_after_current() {
-            self.emit("BattleResultContinue", "继续重复任务");
-            if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_REPEAT) {
-                return;
-            }
-            self.team_changed = false;
-            self.servants_placed.clear();
-            self.battle = BattleState::new();
-            self.battle.waiting_for_battle = true;
-            thread::sleep(ACTION_DELAY);
-        } else {
-            self.emit(
-                "BattleResultContinue",
-                &format!("结束任务（已完成 {} 轮）", self.completed_mission_runs),
-            );
-            if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_STOP) {
-                return;
-            }
-            self.set_state(RunnerState::Finished);
-        }
     }
 
     fn ap_recovery_candidates(&self, page: ApRecoveryPage) -> Vec<ApRecoveryTemplate> {
