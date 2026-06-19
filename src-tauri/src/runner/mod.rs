@@ -916,61 +916,6 @@ impl Drop for Runner {
     }
 }
 
-fn normal_current_party_ids_from(
-    mut ids: [Option<u32>; 6],
-    scenes: &[BattleScene],
-    current_scene_index: usize,
-    current_turn_index: usize,
-    executed_turn_key: Option<(usize, usize)>,
-) -> [Option<u32>; 3] {
-    let mut np_use_counts: HashMap<u32, u32> = HashMap::new();
-    for (scene_index, scene) in scenes.iter().enumerate() {
-        if scene_index > current_scene_index {
-            break;
-        }
-        for (turn_index, turn) in scene.turns.iter().enumerate() {
-            let before_current_scene = scene_index < current_scene_index;
-            let before_current_turn =
-                scene_index == current_scene_index && turn_index < current_turn_index;
-            let is_current_turn =
-                scene_index == current_scene_index && turn_index == current_turn_index;
-            let prep_has_executed = before_current_scene
-                || before_current_turn
-                || executed_turn_key == Some((scene_index, turn_index));
-            if !prep_has_executed && !is_current_turn {
-                continue;
-            }
-
-            if prep_has_executed {
-                for action in turn_preparation_actions(turn) {
-                    if action_frontline_available(&ids, action) {
-                        apply_party_lineup_change(&mut ids, action);
-                    }
-                }
-            }
-
-            if before_current_scene || before_current_turn {
-                for card in &turn.attack_priority {
-                    apply_attack_card_lineup_change(&mut ids, card, &mut np_use_counts);
-                }
-                for action in turn_preparation_actions(turn) {
-                    if action_frontline_available(&ids, action) {
-                        apply_party_lineup_change_at(
-                            &mut ids,
-                            action,
-                            ChangeOrderTiming::EndOfTurn,
-                        );
-                    }
-                }
-            }
-        }
-        if scene_index == current_scene_index {
-            break;
-        }
-    }
-    [ids[0], ids[1], ids[2]]
-}
-
 fn slot_x_position(index: u32) -> f64 {
     match index {
         0 => 0.12,
@@ -981,13 +926,6 @@ fn slot_x_position(index: u32) -> f64 {
         5 => 0.88,
         _ => 0.50,
     }
-}
-
-/// Parse a template-key style servant name like ``"servant_215"`` into its
-/// numeric id. Returns ``None`` for any other string shape so callers can
-/// gracefully drop unknown supports instead of erroring.
-fn parse_servant_name_id(name: &str) -> Option<u32> {
-    name.strip_prefix("servant_")?.parse::<u32>().ok()
 }
 
 /// Cheap (dx, dy) pixel jitter in the range
