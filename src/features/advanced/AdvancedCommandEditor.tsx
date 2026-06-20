@@ -98,6 +98,7 @@ function AdvancedPreparationActionSummary({
 }) {
   const partyLineup = partyMembersToServants(partyMembers);
   const resolvedAction = resolvePreparationAction(action, partyMembers);
+  // TODO: duplicate
   const targetIndex =
     action.type === "servant"
       ? resolveMemberRefIndex(

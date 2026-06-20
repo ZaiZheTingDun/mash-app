@@ -526,6 +526,8 @@
 
 /* Compact pill that lives next to the connection-status popover and
    replaces the now-removed sidebar shortcut to the CV debug page. */
+
+/* TODO: consinder to have a common class */
 .status-log-btn,
 .status-settings-btn,
 .status-debug-btn,
@@ -536,6 +538,14 @@
   cursor: pointer;
   padding: 2px 6px;
   transition: background 0.12s, color 0.12s;
+}
+
+.status-log-btn,
+.status-settings-btn,
+.status-debug-btn,
+.status-update-btn,
+.status-theme-btn {
+  opacity: 1;
 }
 
 .status-debug-btn:hover,
