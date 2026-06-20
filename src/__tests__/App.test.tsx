@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { renderWithTheme } from "../test/renderWithTheme";
-import { createInitialProjectSlots } from "../components/projectSlots";
+import { createInitialProjectSlots } from "../features/team/projectSlots";
 import type { Project } from "../types/project";
 import type { SelfCheckStatus } from "../types/selfCheck";
 

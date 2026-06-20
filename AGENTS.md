@@ -11,8 +11,8 @@ src/                              # React frontend
   main.tsx                        # Entry point, wraps app in Radix <Theme>
   App.tsx                         # Top-level layout, stage routing, servant loading
   styles/                         # CSS entrypoint and feature-oriented style modules
-  components/                     # Shared React components and legacy component entrypoints
-    __tests__/                    # Vitest specs colocated by sibling folder (*.test.tsx)
+  components/common/              # Shared component primitives used across features
+  features/                       # Feature-owned UI, helpers, and sibling __tests__ folders
   test/                           # Shared frontend test helpers (setup.ts, renderWithTheme.tsx)
   types/                          # Shared TypeScript interfaces
 src-tauri/                        # Tauri / Rust backend
@@ -83,7 +83,7 @@ bash build_sidecar.sh       # Build runtime base zip + lightweight code zip arti
 
 Three independent test runners cover the three layers — none of them require an ADB device, scrcpy stream, or PyInstaller-bundled sidecar:
 
-- **Frontend** — Vitest + `@testing-library/react` + jsdom. Configured in [vite.config.ts](vite.config.ts) under the `test` block (`include: ["src/**/__tests__/**/*.test.{ts,tsx}"]`). The shared setup (`src/test/setup.ts`) stubs `@tauri-apps/api/core` so `invoke()` resolves against an in-memory mock; component tests use `renderWithTheme` from `src/test/renderWithTheme.tsx` to mount inside a Radix `<Theme>`. **Test files live in a sibling `__tests__/` folder next to the code they cover** (e.g. `src/components/__tests__/Foo.test.tsx` for `src/components/Foo.tsx`) — never colocated alongside the component file.
+- **Frontend** — Vitest + `@testing-library/react` + jsdom. Configured in [vite.config.ts](vite.config.ts) under the `test` block (`include: ["src/**/__tests__/**/*.test.{ts,tsx}"]`). The shared setup (`src/test/setup.ts`) stubs `@tauri-apps/api/core` so `invoke()` resolves against an in-memory mock; component tests use `renderWithTheme` from `src/test/renderWithTheme.tsx` to mount inside a Radix `<Theme>`. **Test files live in a sibling `__tests__/` folder next to the feature or shared component code they cover** (e.g. `src/features/team/__tests__/ContentGrid.test.tsx` for `src/features/team/ContentGrid.tsx`) — never colocated alongside the component file.
 - **Rust** — plain `cargo test` against `#[cfg(test)] mod tests { ... }` blocks at the bottom of each `src-tauri/src/*.rs` module. No extra dev-deps needed.
 - **Python sidecar** — pytest under `sidecar/mash_cv/tests/`. See `tests/test_cv.py` for both pure unit tests and end-to-end REPL tests that spin up `python -m mash_cv` as a subprocess.
 

@@ -21,7 +21,7 @@ vi.mock("../App", () => ({
   },
 }));
 
-vi.mock("../components/DebugCanvasWindow", () => ({
+vi.mock("../features/debug/DebugCanvasWindow", () => ({
   DebugCanvasWindow: () => <div>调试窗口已加载</div>,
 }));
 

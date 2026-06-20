@@ -1,7 +1,7 @@
 import React from "react";
 import { Theme } from "@radix-ui/themes";
 import App from "./App";
-import { DebugCanvasWindow } from "./components/DebugCanvasWindow";
+import { DebugCanvasWindow } from "./features/debug/DebugCanvasWindow";
 import { invoke } from "./tauri";
 import type { AppTheme, AppThemePreference } from "./types/theme";
 

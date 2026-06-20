@@ -3,27 +3,27 @@ import { AlertDialog, Box, Button, Flex, Text, Spinner } from "@radix-ui/themes"
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { invoke, listen } from "./tauri";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
-import { ContentGrid } from "./components/ContentGrid";
+import { ContentGrid } from "./features/team/ContentGrid";
 import {
   derivePartyMembers,
   derivePartyLineup,
   derivePartyServants,
   relocateAdvancedBattleSceneMembers,
   relocateBattleSceneMembers,
-} from "./components/partyServants";
-import { CommandEditor } from "./components/CommandEditor";
-import { BattlePage } from "./components/BattlePage";
-import { EnhancementPage } from "./components/EnhancementPage";
-import { DebugPage } from "./components/DebugPage";
-import { StatusBar } from "./components/StatusBar";
-import { ProjectBar } from "./components/ProjectBar";
-import { SetupPage } from "./components/SetupPage";
-import { SettingsDialog, type SettingsSection } from "./components/SettingsPage";
-import { SelfCheckDialog } from "./components/SelfCheckDialog";
-import { createInitialProjectSlots } from "./components/projectSlots";
-import { relocateGrandCardStrategySlots, relocateGrandServants } from "./components/grandRuleSlots";
+} from "./features/team/partyServants";
+import { CommandEditor } from "./features/battle/CommandEditor";
+import { BattlePage } from "./features/battle/BattlePage";
+import { EnhancementPage } from "./features/enhancement/EnhancementPage";
+import { DebugPage } from "./features/debug/DebugPage";
+import { StatusBar } from "./features/status/StatusBar";
+import { ProjectBar } from "./features/projects/ProjectBar";
+import { SetupPage } from "./features/setup/SetupPage";
+import { SettingsDialog, type SettingsSection } from "./features/settings/SettingsPage";
+import { SelfCheckDialog } from "./features/settings/SelfCheckDialog";
+import { createInitialProjectSlots } from "./features/team/projectSlots";
+import { relocateGrandCardStrategySlots, relocateGrandServants } from "./features/advanced/grandRuleSlots";
 import { featureToggles } from "./featureToggles";
-import type { SlotItem } from "./components/ContentGrid";
+import type { SlotItem } from "./features/team/ContentGrid";
 import type { Servant } from "./types/servant";
 import type { CraftEssence } from "./types/craftEssence";
 import type { GrandClass, Project } from "./types/project";

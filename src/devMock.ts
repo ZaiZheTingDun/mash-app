@@ -1,4 +1,4 @@
-import { createInitialProjectSlots } from "./components/projectSlots";
+import { createInitialProjectSlots } from "./features/team/projectSlots";
 import type { AdvancedBattleScene, BattleScene } from "./types/command";
 import type { CraftEssence } from "./types/craftEssence";
 import type { Project } from "./types/project";
