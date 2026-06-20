@@ -58,6 +58,7 @@ export type GrandRuleKind = "any" | "command" | "np";
 export type GrandRuleColor = "any" | "buster" | "arts" | "quick";
 
 export interface GrandCardRuleSlotConfig {
+  slotIndex?: number | null;
   servantId: number | null;
   grandServant?: boolean;
   kind: GrandRuleKind;

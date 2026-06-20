@@ -180,7 +180,7 @@ export function normalizeGrandCardStrategy(strategy: GrandCardStrategy | undefin
 }
 
 export function defaultRuleSlot(): GrandCardRuleSlotConfig {
-  return { servantId: null, grandServant: false, kind: "any", color: "any" };
+  return { slotIndex: null, servantId: null, grandServant: false, kind: "any", color: "any" };
 }
 
 export function createDefaultCustomRule(): GrandCardRuleConfig {
@@ -197,6 +197,10 @@ export function normalizeRuleSlot(slot: Partial<GrandCardRuleSlotConfig> | undef
   const kind = slot?.kind;
   const color = slot?.color;
   return {
+    slotIndex:
+      typeof slot?.slotIndex === "number" && Number.isInteger(slot.slotIndex)
+        ? slot.slotIndex
+        : null,
     servantId: typeof slot?.servantId === "number" ? slot.servantId : null,
     grandServant: slot?.grandServant === true,
     kind: kinds.includes(kind as GrandRuleKind) ? (kind as GrandRuleKind) : "any",

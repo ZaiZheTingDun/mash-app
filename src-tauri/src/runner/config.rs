@@ -66,6 +66,8 @@ impl Default for GrandCardStrategy {
 #[serde(rename_all = "camelCase")]
 pub struct GrandCardRuleSlotConfig {
     #[serde(default)]
+    pub slot_index: Option<u32>,
+    #[serde(default)]
     pub servant_id: Option<u32>,
     #[serde(default)]
     pub grand_servant: bool,

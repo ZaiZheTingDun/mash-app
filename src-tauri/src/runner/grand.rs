@@ -7,12 +7,12 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) struct AdvancedPickCandidate {
-    pick: Pick,
-    servant_index: Option<usize>,
-    servant_id: Option<u32>,
-    color: Option<String>,
-    original_order: u32,
-    is_np: bool,
+    pub(crate) pick: Pick,
+    pub(crate) servant_index: Option<usize>,
+    pub(crate) servant_id: Option<u32>,
+    pub(crate) color: Option<String>,
+    pub(crate) original_order: u32,
+    pub(crate) is_np: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -43,6 +43,27 @@ pub(crate) fn grand_role_for_servant(
         }
         _ => GrandRole::Other,
     }
+}
+
+pub(crate) fn grand_role_for_candidate(
+    candidate: &AdvancedPickCandidate,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> GrandRole {
+    if let Some(index) = candidate.servant_index {
+        if grand_servants
+            .first()
+            .is_some_and(|config| config.slot_index == index)
+        {
+            return GrandRole::Main;
+        }
+        if grand_servants
+            .get(1)
+            .is_some_and(|config| config.slot_index == index)
+        {
+            return GrandRole::Deputy;
+        }
+    }
+    grand_role_for_servant(candidate.servant_id, grand_servants)
 }
 
 pub(crate) fn grand_config_for_role(
@@ -209,6 +230,7 @@ pub(crate) enum RuleOwner {
     MainGrand,
     DeputyGrand,
     AnyGrand,
+    ExactSlot(usize),
     ExactServant(u32),
     Any,
 }
@@ -258,7 +280,7 @@ pub(crate) struct GrandCardRule {
 }
 
 pub(crate) struct GrandRuleMatch {
-    ordered: Vec<AdvancedPickCandidate>,
+    pub(crate) ordered: Vec<AdvancedPickCandidate>,
     score: i32,
 }
 
@@ -376,6 +398,8 @@ pub(crate) fn custom_rule_config_to_rule(config: &GrandCardRuleConfig) -> Option
             };
             let owner = if slot_config.grand_servant {
                 RuleOwner::AnyGrand
+            } else if let Some(slot_index) = slot_config.slot_index {
+                RuleOwner::ExactSlot(slot_index as usize)
             } else {
                 RuleOwner::ExactServant(slot_config.servant_id?)
             };
@@ -416,15 +440,16 @@ pub(crate) fn owner_matches(
     match owner {
         RuleOwner::Any => true,
         RuleOwner::MainGrand => {
-            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Main
+            grand_role_for_candidate(candidate, grand_servants) == GrandRole::Main
         }
         RuleOwner::DeputyGrand => {
-            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Deputy
+            grand_role_for_candidate(candidate, grand_servants) == GrandRole::Deputy
         }
         RuleOwner::AnyGrand => matches!(
-            grand_role_for_servant(candidate.servant_id, grand_servants),
+            grand_role_for_candidate(candidate, grand_servants),
             GrandRole::Main | GrandRole::Deputy
         ),
+        RuleOwner::ExactSlot(slot_index) => candidate.servant_index == Some(slot_index),
         RuleOwner::ExactServant(servant_id) => candidate.servant_id == Some(servant_id),
     }
 }
@@ -1090,9 +1115,16 @@ pub(crate) fn choose_advanced_auto_picks_with_grand_class(
     for np in nps.iter().filter(|np| np.ready) {
         let servant_index = Some(np.slot as usize).filter(|index| *index < 3);
         let servant_id = servant_index.and_then(|index| party_ids.get(index).copied().flatten());
-        let color = if let Some(config) =
-            servant_id.and_then(|id| grand_servants.iter().find(|config| config.servant_id == id))
-        {
+        let color = if let Some(config) = servant_index
+            .and_then(|index| {
+                grand_servants
+                    .iter()
+                    .find(|config| config.slot_index == index)
+            })
+            .or_else(|| {
+                servant_id
+                    .and_then(|id| grand_servants.iter().find(|config| config.servant_id == id))
+            }) {
             grand_np_color(config).map(str::to_string)
         } else if servant_index == main_index {
             main_np_color.map(str::to_string)
@@ -1116,6 +1148,11 @@ pub(crate) fn choose_advanced_auto_picks_with_grand_class(
     }
 
     for card in cards {
+        // TODO: Command-card owner detection currently only returns servantId,
+        // so when an owned servant and a support servant share the same id we
+        // cannot tell which member owns this card yet. Keep the first matching
+        // slot for now; replace this with slot/support-aware ownership once
+        // the sidecar can distinguish support cards from owned cards.
         let servant_index = card
             .servant_id
             .and_then(|id| party_ids.iter().position(|party_id| *party_id == Some(id)));

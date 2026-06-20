@@ -479,18 +479,21 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     if (!activeProject?.advancedMode) return true;
     const rules = activeProject.grandCardStrategy?.customRules ?? [];
     if (rules.length === 0) return true;
-    const currentIds = new Set(
-      partyMembers
-        .map((member) => member.servant?.id ?? null)
-        .filter((id): id is number => id != null)
-    );
     const missing: string[] = [];
     for (const [ruleIndex, rule] of rules.entries()) {
       for (const [slotIndex, slot] of (rule.slots ?? []).entries()) {
         if (slot.grandServant === true) {
           continue;
         }
-        if (slot.servantId != null && !currentIds.has(slot.servantId)) {
+        const member =
+          slot.slotIndex != null ? partyMembers[slot.slotIndex] : null;
+        const slotMatches =
+          member?.servant != null && member.servant.id === slot.servantId;
+        const legacyMatches =
+          slot.slotIndex == null &&
+          slot.servantId != null &&
+          partyMembers.some((candidate) => candidate.servant?.id === slot.servantId);
+        if (slot.servantId != null && !slotMatches && !legacyMatches) {
           missing.push(`${rule.name || `规则 ${ruleIndex + 1}`} 第 ${slotIndex + 1} 张`);
         }
       }

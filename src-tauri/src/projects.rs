@@ -31,7 +31,48 @@ pub(crate) fn normalize_project(mut project: Project) -> Project {
     if !matches!(project.repeat_mode, Some(ProjectRepeatMode::Count)) {
         project.repeat_count = None;
     }
+    normalize_grand_card_rule_slots(&mut project);
     project
+}
+
+fn normalize_grand_card_rule_slots(project: &mut Project) {
+    let slots = project.slots.clone();
+    let support_servant_id = project.support_servant_id;
+    for rule in &mut project.grand_card_strategy.custom_rules {
+        for slot in &mut rule.slots {
+            if slot.grand_servant {
+                slot.slot_index = None;
+                continue;
+            }
+            let valid_slot = slot
+                .slot_index
+                .and_then(|index| {
+                    slots
+                        .get(index as usize)
+                        .map(|project_slot| (index, project_slot))
+                })
+                .and_then(|(index, project_slot)| {
+                    let actual_id = if project_slot.kind == "support" {
+                        support_servant_id
+                    } else {
+                        project_slot.servant_id
+                    };
+                    (actual_id.is_some() && actual_id == slot.servant_id).then_some(index)
+                });
+            slot.slot_index = valid_slot.or_else(|| {
+                slot.servant_id.and_then(|servant_id| {
+                    slots.iter().enumerate().find_map(|(index, project_slot)| {
+                        let actual_id = if project_slot.kind == "support" {
+                            support_servant_id
+                        } else {
+                            project_slot.servant_id
+                        };
+                        (actual_id == Some(servant_id)).then_some(index as u32)
+                    })
+                })
+            });
+        }
+    }
 }
 
 pub(crate) fn write_projects(app: &tauri::AppHandle, projects: &[Project]) -> Result<(), String> {

@@ -1878,7 +1878,23 @@ fn grand_auto_deputy_ready_np_does_not_outrank_main_same_color_chain() {
 
 fn custom_rule_slot(servant_id: Option<u32>, kind: &str, color: &str) -> GrandCardRuleSlotConfig {
     GrandCardRuleSlotConfig {
+        slot_index: None,
         servant_id,
+        grand_servant: false,
+        kind: kind.into(),
+        color: color.into(),
+    }
+}
+
+fn custom_rule_slot_at(
+    slot_index: u32,
+    servant_id: u32,
+    kind: &str,
+    color: &str,
+) -> GrandCardRuleSlotConfig {
+    GrandCardRuleSlotConfig {
+        slot_index: Some(slot_index),
+        servant_id: Some(servant_id),
         grand_servant: false,
         kind: kind.into(),
         color: color.into(),
@@ -1887,6 +1903,7 @@ fn custom_rule_slot(servant_id: Option<u32>, kind: &str, color: &str) -> GrandCa
 
 fn custom_grand_rule_slot(kind: &str, color: &str) -> GrandCardRuleSlotConfig {
     GrandCardRuleSlotConfig {
+        slot_index: None,
         servant_id: None,
         grand_servant: true,
         kind: kind.into(),
@@ -1962,6 +1979,71 @@ fn custom_grand_rule_takes_priority_before_builtin_rules() {
     );
 
     assert_eq!(pick_labels(&picks), vec!["C2", "C0", "NP0"]);
+}
+
+#[test]
+fn custom_grand_rule_matches_duplicate_servant_by_slot_index() {
+    let candidates = vec![
+        AdvancedPickCandidate {
+            pick: Pick::Np {
+                slot: 0,
+                point: Point::new(0.0, 0.0),
+                from_priority: "test".into(),
+            },
+            servant_index: Some(0),
+            servant_id: Some(10),
+            color: None,
+            original_order: 0,
+            is_np: true,
+        },
+        AdvancedPickCandidate {
+            pick: Pick::Np {
+                slot: 1,
+                point: Point::new(0.0, 0.0),
+                from_priority: "test".into(),
+            },
+            servant_index: Some(1),
+            servant_id: Some(10),
+            color: None,
+            original_order: 1,
+            is_np: true,
+        },
+        AdvancedPickCandidate {
+            pick: Pick::Card {
+                slot: 0,
+                point: Point::new(0.0, 0.0),
+                servant_id: Some(30),
+                suit: Some("b".into()),
+                from_priority: Some("test".into()),
+            },
+            servant_index: Some(2),
+            servant_id: Some(30),
+            color: Some("b".into()),
+            original_order: 10,
+            is_np: false,
+        },
+    ];
+    let rule = custom_rule_config_to_rule(&GrandCardRuleConfig {
+        id: "custom_1".into(),
+        name: "指定支援槽".into(),
+        slots: vec![
+            custom_rule_slot_at(1, 10, "np", "any"),
+            custom_rule_slot(Some(30), "command", "buster"),
+            custom_rule_slot_at(0, 10, "np", "any"),
+        ],
+    })
+    .expect("slot-index rule should convert");
+    let combo = vec![&candidates[0], &candidates[1], &candidates[2]];
+    let matched = match_grand_rule(&combo, &rule, &[]).expect("rule should match by slot");
+    let labels = pick_labels(
+        &matched
+            .ordered
+            .into_iter()
+            .map(|candidate| candidate.pick)
+            .collect::<Vec<_>>(),
+    );
+
+    assert_eq!(labels, vec!["NP1", "C0", "NP0"]);
 }
 
 #[test]

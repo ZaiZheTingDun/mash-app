@@ -930,13 +930,14 @@ impl Runner {
                 if scene.grand_auto_order_change == Some(true) {
                     let auto_order_change =
                         grand_auto_order_change_action(&cards, &party_ids, &grand_servants);
-                    let original_ids = self.build_full_party_ids();
-                    let mut ids = original_ids;
+                    let original_members = self.build_full_party_members();
+                    let mut members = original_members;
                     let mut startup_actions = Vec::new();
                     if let Some(action) = auto_order_change.clone() {
                         self.emit("Attack", "启动条件：自动将后排主冠位换至前排");
+                        let ids = party_member_ids(&members);
                         if action_frontline_available(&ids, &action) {
-                            apply_party_lineup_change(&mut ids, &action);
+                            apply_party_member_lineup_change(&mut members, &action);
                             startup_actions.push(action.clone());
                             self.battle
                                 .advanced_auto_order_changes
@@ -970,9 +971,11 @@ impl Runner {
                         .chain(scene.startup_actions.iter())
                         .cloned();
                     for action in pending_actions {
-                        let Some(resolved_action) =
-                            resolve_action_to_current_positions(&ids, &original_ids, &action)
-                        else {
+                        let Some(resolved_action) = resolve_action_to_current_member_positions(
+                            &members,
+                            &original_members,
+                            &action,
+                        ) else {
                             self.emit(
                                 "Battle",
                                 &format!(
@@ -982,6 +985,7 @@ impl Runner {
                             );
                             continue;
                         };
+                        let ids = party_member_ids(&members);
                         if !action_frontline_available(&ids, &resolved_action) {
                             self.emit(
                                 "Battle",
@@ -989,9 +993,10 @@ impl Runner {
                             );
                             continue;
                         }
-                        apply_party_lineup_change(&mut ids, &resolved_action);
+                        apply_party_member_lineup_change(&mut members, &resolved_action);
                         startup_actions.push(resolved_action);
                     }
+                    let ids = party_member_ids(&members);
                     let startup_party_ids = [ids[0], ids[1], ids[2]];
                     self.battle
                         .advanced_control_indices

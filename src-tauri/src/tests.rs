@@ -286,6 +286,47 @@ fn test_battle_scene(id: &str) -> BattleScene {
     }
 }
 
+#[test]
+fn normalize_project_migrates_grand_rule_servant_id_to_first_matching_slot() {
+    let mut project = test_project("project-1", "重复从者", true);
+    project.support_servant_id = Some(10);
+    project.slots[0].servant_id = Some(10);
+    project.grand_card_strategy.custom_rules = vec![GrandCardRuleConfig {
+        id: "rule-1".into(),
+        name: "旧规则".into(),
+        slots: vec![
+            GrandCardRuleSlotConfig {
+                slot_index: None,
+                servant_id: Some(10),
+                grand_servant: false,
+                kind: "np".into(),
+                color: "any".into(),
+            },
+            GrandCardRuleSlotConfig {
+                slot_index: None,
+                servant_id: Some(10),
+                grand_servant: false,
+                kind: "command".into(),
+                color: "buster".into(),
+            },
+            GrandCardRuleSlotConfig {
+                slot_index: None,
+                servant_id: None,
+                grand_servant: true,
+                kind: "any".into(),
+                color: "any".into(),
+            },
+        ],
+    }];
+
+    let normalized = normalize_project(project);
+    let slots = &normalized.grand_card_strategy.custom_rules[0].slots;
+
+    assert_eq!(slots[0].slot_index, Some(0));
+    assert_eq!(slots[1].slot_index, Some(0));
+    assert_eq!(slots[2].slot_index, None);
+}
+
 fn test_advanced_scene(id: &str) -> AdvancedBattleScene {
     AdvancedBattleScene {
         id: id.into(),
