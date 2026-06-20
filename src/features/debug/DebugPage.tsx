@@ -13,21 +13,16 @@ import {
   ExternalLinkIcon,
   ReloadIcon,
 } from "@radix-ui/react-icons";
-import { emit, invoke, listen, convertFileSrc } from "../../tauri";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { LogicalSize } from "@tauri-apps/api/dpi";
+import { invoke, convertFileSrc } from "../../tauri";
 import type { CvConfig } from "../../types/cv";
 import type { CraftEssence } from "../../types/craftEssence";
 import type { Servant } from "../../types/servant";
 import type { SupportGrandBondCeMode } from "../../types/project";
 import type { DebugCanvasState } from "./DebugCanvas";
-import {
-  DEBUG_CANVAS_REQUEST_EVENT,
-  DEBUG_CANVAS_STATE_EVENT,
-} from "./DebugCanvasWindow";
 import { CraftEssenceSelectDialog } from "../team/CraftEssenceSelectDialog";
 import { ServantSelectDialog } from "../team/ServantSelectDialog";
 import { DebugSection } from "./DebugSection";
+import { useDebugCanvasPopout } from "./useDebugCanvasPopout";
 import {
   BATTLE_SCENE_FAIL_HINTS,
   EMPTY_DEBUG_SELECT_VALUE,
@@ -84,8 +79,6 @@ interface DebugPageProps {
 }
 
 type DebugServantPickerTarget = "card" | "support" | "enhancement";
-const DEBUG_CANVAS_POPOUT_WIDTH = 1280;
-const DEBUG_CANVAS_POPOUT_HEIGHT = 900;
 
 export function DebugPage({
   onBack,
@@ -197,7 +190,6 @@ export function DebugPage({
   >(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const didShutdown = useRef(false);
-  const [popoutOpen, setPopoutOpen] = useState(false);
 
   const log = useCallback(
     (message: string, level: LogEntry["level"] = "info") => {
@@ -950,60 +942,6 @@ export function DebugPage({
     log,
   ]);
 
-  /**
-   * Spawn (or focus, if already open) the popout `WebviewWindow` that
-   * mirrors the canvas at full size. The popout loads the same SPA
-   * bundle with `#debug-canvas` in the URL hash; `main.tsx` swaps in
-   * `<DebugCanvasWindow />` based on that hash. State sync runs over
-   * Tauri events (`debug-canvas:state` / `debug-canvas:request`) — see
-   * the popout-sync `useEffect`s above.
-   */
-  const handleOpenPopout = useCallback(async () => {
-    try {
-      const existing = await WebviewWindow.getByLabel("debug-canvas");
-      if (existing) {
-        await existing.setSize(
-          new LogicalSize(DEBUG_CANVAS_POPOUT_WIDTH, DEBUG_CANVAS_POPOUT_HEIGHT)
-        );
-        await existing.show();
-        await existing.setFocus();
-        log("已聚焦弹出画面");
-        return;
-      }
-      const win = new WebviewWindow("debug-canvas", {
-        url: "index.html#debug-canvas",
-        title: "调试画面",
-        width: DEBUG_CANVAS_POPOUT_WIDTH,
-        height: DEBUG_CANVAS_POPOUT_HEIGHT,
-        resizable: true,
-      });
-      // Wait for the OS to finish creating the webview before
-      // re-broadcasting state. We deliberately do NOT register
-      // `onCloseRequested` here — that handler intercepts the
-      // native close action and forces us to call `destroy()`,
-      // which then needs window-close IPC perms and is easy to
-      // get wrong. `tauri://destroyed` fires after the window
-      // has actually closed, which is all we need to flip the
-      // button label back.
-      win.once("tauri://created", () => {
-        setPopoutOpen(true);
-        emit(DEBUG_CANVAS_STATE_EVENT, canvasStateRef.current).catch(
-          () => {}
-        );
-        log("弹出画面已打开");
-      });
-      win.once("tauri://destroyed", () => {
-        setPopoutOpen(false);
-        log("弹出画面已关闭");
-      });
-      win.once("tauri://error", (e) => {
-        log(`弹出画面创建失败: ${JSON.stringify(e.payload)}`, "error");
-      });
-    } catch (err) {
-      log(`弹出画面失败: ${err}`, "error");
-    }
-  }, [log]);
-
   const handleClearLogs = useCallback(() => setLogs([]), []);
 
   const handleReloadSidecar = useCallback(async () => {
@@ -1025,21 +963,6 @@ export function DebugPage({
     ? `${convertFileSrc(capture.imagePath)}?t=${cacheBuster}`
     : null;
 
-  // -------------------------------------------------------------------
-  // Popout window (DebugCanvasWindow) state sync
-  // -------------------------------------------------------------------
-  // The popout is a separate WebviewWindow rendering only the canvas,
-  // so it can be dragged onto a second monitor without the main page's
-  // toolbars and side-panels stealing space. State flows in one
-  // direction:
-  //
-  //   DebugPage ── debug-canvas:state ──▶ DebugCanvasWindow
-  //   DebugPage ◀── debug-canvas:request ── DebugCanvasWindow  (on mount)
-  //
-  // The popout has no debug state of its own, so on mount it emits a
-  // `request` event; the host responds by re-emitting the current
-  // snapshot. After that, every re-render of the host pushes the
-  // snapshot out — emit is cheap and the popout is the only listener.
   const canvasState: DebugCanvasState = useMemo(
     () => ({
       imageSrc,
@@ -1068,50 +991,8 @@ export function DebugPage({
       visibleCoordGroups,
     ]
   );
-
-  const canvasStateRef = useRef(canvasState);
-  useEffect(() => {
-    canvasStateRef.current = canvasState;
-    if (popoutOpen) {
-      emit(DEBUG_CANVAS_STATE_EVENT, canvasState).catch((err) => {
-        console.warn("[DebugPage] emit canvas state failed", err);
-      });
-    }
-  }, [canvasState, popoutOpen]);
-
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    listen(DEBUG_CANVAS_REQUEST_EVENT, () => {
-      emit(DEBUG_CANVAS_STATE_EVENT, canvasStateRef.current).catch(() => {});
-    })
-      .then((fn) => {
-        unlisten = fn;
-      })
-      .catch((err) => {
-        console.warn("[DebugPage] listen canvas request failed", err);
-      });
-    return () => {
-      if (unlisten) unlisten();
-    };
-  }, []);
-
-  // If the popout already exists when the page mounts (e.g. user
-  // navigated away from CV Debug and came back), reflect that in the
-  // button label and watch for native close via `tauri://destroyed`.
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    (async () => {
-      const win = await WebviewWindow.getByLabel("debug-canvas");
-      if (!win) return;
-      setPopoutOpen(true);
-      unlisten = await win.once("tauri://destroyed", () => {
-        setPopoutOpen(false);
-      });
-    })().catch(() => {});
-    return () => {
-      if (unlisten) unlisten();
-    };
-  }, []);
+  const { popoutOpen, openPopout: handleOpenPopout } =
+    useDebugCanvasPopout(canvasState, log);
 
   return (
     <Flex direction="column" className="debug-page">
