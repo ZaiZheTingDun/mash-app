@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Box,
   Button,
@@ -6,7 +6,6 @@ import {
   Text,
 } from "@radix-ui/themes";
 import { PlusIcon, PersonIcon, Cross2Icon } from "@radix-ui/react-icons";
-import { invoke, convertFileSrc } from "../tauri";
 import type React from "react";
 import {
   DndContext,
@@ -25,6 +24,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { ServantSelectDialog } from "./ServantSelectDialog";
 import { CraftEssenceSelectDialog } from "./CraftEssenceSelectDialog";
+import { useCeCards, usePortraits } from "./contentGridAssets";
 import {
   SupportRequirementSummary,
   SupportSettingsDialog,
@@ -301,142 +301,6 @@ function GrandCraftEssenceOverlay({
       })}
     </div>
   );
-}
-
-/**
- * Generic asset-path resolver hook. Walks a Rust command that takes a
- * single integer id and returns either an absolute file path or
- * `null`, then wraps the path with `convertFileSrc` so the result is
- * ready to drop into `<img src>`.
- *
- * Returns a map keyed by id; values are either a `convertFileSrc` URL,
- * `null` when the resolver returned `None`, or `undefined` while the
- * fetch is still in flight. Refires only when the id set actually
- * changes (slot reorders that don't add/remove ids are no-ops).
- *
- * The CE card resolver uses this because it only needs one numeric id.
- * Servant portraits are variant-aware and use a dedicated hook below.
- */
-function useAssetPaths(
-  command: string,
-  argKey: string,
-  ids: number[],
-): Record<number, string | null | undefined> {
-  const [cache, setCache] = useState<Record<number, string | null>>({});
-
-  const key = ids
-    .filter((id, i, arr) => arr.indexOf(id) === i)
-    .sort((a, b) => a - b)
-    .join(",");
-
-  useEffect(() => {
-    const parsedIds = key
-      ? key.split(",").map((s) => Number(s)).filter((n) => Number.isFinite(n))
-      : [];
-    const missing = parsedIds.filter((id) => !(id in cache));
-    if (missing.length === 0) return;
-    let cancelled = false;
-    Promise.all(
-      missing.map((id) =>
-        invoke<string | null>(command, { [argKey]: id })
-          .then((path) => [id, path ? convertFileSrc(path) : null] as const)
-          .catch(() => [id, null] as const)
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      setCache((prev) => {
-        const next = { ...prev };
-        for (const [id, src] of results) {
-          next[id] = src;
-        }
-        return next;
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-    // `cache` intentionally excluded — re-running on cache writes would
-    // create an infinite loop. The effect re-fires only when the id set
-    // changes, which is exactly when we need to fetch new ones.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, command, argKey]);
-
-  return cache;
-}
-
-/**
- * Resolve full-art portrait paths for servants that don't have a cached
- * entry yet. Variants share the same base servant id, so the cache is
- * keyed by `variantKey` and the backend receives the variant asset id
- * (`faceId`) when one exists.
- */
-function usePortraits(servants: Servant[]): Record<string, string | null | undefined> {
-  const [cache, setCache] = useState<Record<string, string | null>>({});
-  const byVariant = new Map<string, Servant>();
-  for (const servant of servants) {
-    byVariant.set(servant.variantKey, servant);
-  }
-  const requests = Array.from(byVariant.values())
-    .map((servant) => ({
-      variantKey: servant.variantKey,
-      servantId: servant.id,
-      faceId: servant.faceId ?? null,
-    }))
-    .sort((a, b) => a.variantKey.localeCompare(b.variantKey));
-  const key = JSON.stringify(requests);
-
-  useEffect(() => {
-    const parsed = JSON.parse(key) as typeof requests;
-    const missing = parsed.filter(({ variantKey }) => !(variantKey in cache));
-    if (missing.length === 0) return;
-    let cancelled = false;
-    Promise.all(
-      missing.map((request) =>
-        invoke<string | null>("get_servant_portrait_path", {
-          servantId: request.servantId,
-          faceId: request.faceId,
-        })
-          .then(
-            (path) =>
-              [
-                request.variantKey,
-                path ? convertFileSrc(path) : null,
-              ] as const
-          )
-          .catch(() => [request.variantKey, null] as const)
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      setCache((prev) => {
-        const next = { ...prev };
-        for (const [variantKey, src] of results) {
-          next[variantKey] = src;
-        }
-        return next;
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-    // `cache` intentionally excluded — re-running on cache writes would
-    // create an infinite loop. The effect re-fires only when the servant
-    // variant set changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-
-  return cache;
-}
-
-/**
- * Resolve craft-essence card art paths. The resolver lives in Rust
- * (`get_craft_essence_card_path`) and looks up
- * `assets/ces/{id}/card_ce.png`. Cards are checked into the repo today
- * for the full Atlas Academy CE list, so this almost always resolves
- * to a real file — the `null` branch in `CraftEssenceOverlay` exists
- * only as a defensive fallback for missing assets.
- */
-function useCeCards(ceIds: number[]): Record<number, string | null | undefined> {
-  return useAssetPaths("get_craft_essence_card_path", "craftEssenceId", ceIds);
 }
 
 interface SortableSlotProps {
