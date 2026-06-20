@@ -4,7 +4,7 @@ import {
   Cross2Icon,
   PlusIcon,
 } from "@radix-ui/react-icons";
-import { convertFileSrc, invoke } from "../../tauri";
+import { invoke } from "../../tauri";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
 import { FaceChip } from "./AdvancedFaceChip";
@@ -38,6 +38,7 @@ import {
   toPartyMembers,
   type PartyMember,
 } from "../team/partyServants";
+import { useServantFaceImages } from "../team/useServantFaceImages";
 import type {
   AdvancedBattleScene,
   AdvancedCommandCardCondition,
@@ -67,49 +68,6 @@ interface AdvancedCommandEditorProps {
   grandCardPriorityEnabled?: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
   onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
-}
-
-function useServantFaces(partyLineup: (Servant | null)[]) {
-  const [faces, setFaces] = useState<Record<string, string | null>>({});
-  const requests = useMemo(
-    () =>
-      partyLineup
-        .filter((servant): servant is Servant => Boolean(servant))
-        .map((servant) => ({
-          key: servant.variantKey,
-          servantId: servant.id,
-          faceId: servant.faceId ?? null,
-        })),
-    [partyLineup]
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    const missing = requests.filter(({ key }) => !(key in faces));
-    if (missing.length === 0) return;
-    Promise.all(
-      missing.map((request) =>
-        invoke<string | null>("get_servant_face_path", {
-          servantId: request.servantId,
-          faceId: request.faceId,
-        })
-          .then((path) => [request.key, path ? convertFileSrc(path) : null] as const)
-          .catch(() => [request.key, null] as const)
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      setFaces((prev) => {
-        const next = { ...prev };
-        for (const [key, src] of results) next[key] = src;
-        return next;
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [faces, requests]);
-
-  return faces;
 }
 
 function AdvancedInlineFace({
@@ -1217,7 +1175,7 @@ export function AdvancedCommandEditor({
     () => partyMembersToServants(initialPartyMembers),
     [initialPartyMembers]
   );
-  const faces = useServantFaces(initialPartyLineup);
+  const faces = useServantFaceImages(initialPartyLineup);
 
   useEffect(() => {
     if (!projectId) return;

@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type React from "react";
 import { Button, Text } from "@radix-ui/themes";
-import { invoke, convertFileSrc } from "../../tauri";
 import {
   Cross2Icon,
   PlusIcon,
@@ -9,6 +8,7 @@ import {
 import orderChangeIcon from "../../../src-tauri/resources/images/icon_order_change.png";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
+import { useServantFaceImages } from "../team/useServantFaceImages";
 import {
   deriveMembersAfterAttackCards,
   deriveMembersAfterPreparationActions,
@@ -53,55 +53,6 @@ interface BattleSceneBlockProps {
   partyServants: (Servant | null)[];
   partyMembers?: PartyMember[];
   onChange: (updated: BattleTurn) => void;
-}
-
-function useServantFaces(partyServants: (Servant | null)[]) {
-  const [faces, setFaces] = useState<Record<string, string | null>>({});
-  const requests = useMemo(
-    () =>
-      partyServants
-        .filter((servant): servant is Servant => Boolean(servant))
-        .map((servant) => ({
-          variantKey: servant.variantKey,
-          servantId: servant.id,
-          faceId: servant.faceId ?? null,
-        }))
-        .sort((a, b) => a.variantKey.localeCompare(b.variantKey)),
-    [partyServants]
-  );
-  const key = JSON.stringify(requests);
-
-  useEffect(() => {
-    const parsed = JSON.parse(key) as typeof requests;
-    const missing = parsed.filter(({ variantKey }) => !(variantKey in faces));
-    if (missing.length === 0) return;
-    let cancelled = false;
-    Promise.all(
-      missing.map((request) =>
-        invoke<string | null>("get_servant_face_path", {
-          servantId: request.servantId,
-          faceId: request.faceId,
-        })
-          .then((path) => [request.variantKey, path ? convertFileSrc(path) : null] as const)
-          .catch(() => [request.variantKey, null] as const)
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      setFaces((prev) => {
-        const next = { ...prev };
-        for (const [variantKey, src] of results) next[variantKey] = src;
-        return next;
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-    // Keep this effect keyed by the request set; including `faces`
-    // would re-run every time the cache is filled.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-
-  return faces;
 }
 
 function ServantFaceButton({
@@ -397,7 +348,7 @@ export function BattleSceneBlock({
     [partyMembers, partyServants]
   );
   const initialPartyServants = partyMembersToServants(initialPartyMembers);
-  const faces = useServantFaces(initialPartyServants);
+  const faces = useServantFaceImages(initialPartyServants);
   const preparationActions = useMemo(
     () =>
       scene.preparationActions ??
