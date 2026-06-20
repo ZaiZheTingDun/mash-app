@@ -31,7 +31,7 @@ pub(crate) use support::*;
 use crate::adb::Adb;
 use crate::screen::{
     CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen, SidecarClient,
-    SupportCeArtworkCheck, SupportCeVerificationOptions, SupportRowMatch,
+    SupportCeArtworkCheck, SupportCeIconCheck, SupportCeVerificationOptions, SupportRowMatch,
 };
 use crate::touch::{self, TouchBackend};
 use crate::{

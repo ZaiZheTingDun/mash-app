@@ -31,6 +31,7 @@ import {
   asNumberOrNull,
   readDebugPrefs,
   supportCeArtworkChecksText,
+  supportCeIconChecksText,
   supportLevelList,
   supportPanelLabel,
   supportSkillDiagnosticsText,
@@ -904,12 +905,8 @@ export function DebugPage({
           const iconCheckPart = [
             ...(s.ce?.iconChecks ?? []),
             ...(s.grandCes ?? []).flatMap((ce) => ce.iconChecks ?? []),
-          ]
-            .map(
-              (check) =>
-                `${check.kind} ${check.score.toFixed(2)}/${check.threshold.toFixed(2)} ${check.passed ? "✓" : "✗"}`
-            )
-            .join(" · ");
+          ];
+          const iconCheckText = supportCeIconChecksText(iconCheckPart);
           log(
             `  行 y=${s.rowRegion.y.toFixed(3)} | 名称='${s.nameText}' (${s.nameScore.toFixed(2)})` +
               npPart +
@@ -920,7 +917,7 @@ export function DebugPage({
               cePart +
               (ceArtworkPart ? ` | 礼装variants ${ceArtworkPart}` : "") +
               (grandArtworkPart ? ` | 冠位variants ${grandArtworkPart}` : "") +
-              (iconCheckPart ? ` | 图标 ${iconCheckPart}` : "")
+              (iconCheckText ? ` | 图标 ${iconCheckText}` : "")
           );
         }
       }

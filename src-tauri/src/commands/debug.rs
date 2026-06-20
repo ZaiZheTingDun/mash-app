@@ -1204,9 +1204,13 @@ pub fn debug_find_supports(
                         );
                         if !result.artwork_checks.is_empty() {
                             eprintln!(
-                                "[debug_find_supports] row y={:.3} CE variants: {}",
+                                "[debug_find_supports] row y={:.3} CE variants: {} | {}",
                                 row.row_region.y,
                                 format_ce_artwork_checks(&result.artwork_checks),
+                                runner::format_ce_verification_summary(
+                                    &result.artwork_checks,
+                                    &result.icon_checks
+                                ),
                             );
                         }
                         DebugSupportCeInfo {
@@ -1273,10 +1277,14 @@ pub fn debug_find_supports(
                         };
                         if !result.artwork_checks.is_empty() {
                             eprintln!(
-                                "[debug_find_supports] row y={:.3} Grand CE {} variants: {}",
+                                "[debug_find_supports] row y={:.3} Grand CE {} variants: {} | {}",
                                 row.row_region.y,
                                 index + 1,
                                 format_ce_artwork_checks(&result.artwork_checks),
+                                runner::format_ce_verification_summary(
+                                    &result.artwork_checks,
+                                    &result.icon_checks
+                                ),
                             );
                         }
                         DebugSupportCeInfo {

@@ -1,6 +1,7 @@
 import type { SupportGrandBondCeMode } from "../../types/project";
 import type {
   SupportCeArtworkCheckDto,
+  SupportCeIconCheckDto,
   SupportRowMatchDto,
 } from "./debugTypes";
 
@@ -68,12 +69,39 @@ export function supportCeArtworkChecksText(
   checks: SupportCeArtworkCheckDto[] | undefined
 ): string {
   if (!checks || checks.length === 0) return "";
+  const selectedRegionKind = checks.find((check) => check.selected)?.regionKind;
   return checks
+    .filter((check) => !selectedRegionKind || check.regionKind === selectedRegionKind)
     .map((check) => {
       const marker = check.selected ? "*" : check.passed ? "✓" : "✗";
-      return `${check.regionKind}:${check.variant} ${check.score.toFixed(2)}/${check.threshold.toFixed(2)}${marker}`;
+      return `${supportCeArtworkVariantLabel(check.variant)}（${check.score.toFixed(2)}/${check.threshold.toFixed(2)}）${marker}`;
     })
     .join(" · ");
+}
+
+export function supportCeIconChecksText(
+  checks: SupportCeIconCheckDto[] | undefined
+): string {
+  if (!checks || checks.length === 0) return "";
+  return checks
+    .map(
+      (check) =>
+        `${supportCeIconKindLabel(check.kind)}（${check.score.toFixed(2)}/${check.threshold.toFixed(2)}）${check.passed ? "✓" : "✗"}`
+    )
+    .join(" · ");
+}
+
+function supportCeArtworkVariantLabel(variant: string): string {
+  if (variant === "full") return "完整匹配";
+  if (variant === "center") return "中间匹配";
+  if (variant === "top_right") return "右上匹配";
+  return variant;
+}
+
+function supportCeIconKindLabel(kind: string): string {
+  if (kind === "mlb") return "满破图标";
+  if (kind === "grandBond" || kind === "grandBondNp") return "牵绊图标";
+  return kind;
 }
 
 export function timestamp(): string {

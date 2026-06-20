@@ -298,6 +298,57 @@ pub(crate) fn format_ce_artwork_checks(checks: &[SupportCeArtworkCheck]) -> Stri
         .join(" · ")
 }
 
+fn ce_artwork_variant_label(variant: &str) -> &str {
+    match variant {
+        "full" => "完整匹配",
+        "center" => "中间匹配",
+        "top_right" => "右上匹配",
+        other => other,
+    }
+}
+
+fn ce_icon_check_label(kind: &str) -> &str {
+    match kind {
+        "mlb" => "满破图标",
+        "grandBond" | "grandBondNp" => "牵绊图标",
+        other => other,
+    }
+}
+
+pub(crate) fn format_ce_verification_summary(
+    artwork_checks: &[SupportCeArtworkCheck],
+    icon_checks: &[SupportCeIconCheck],
+) -> String {
+    let selected_region_kind = artwork_checks
+        .iter()
+        .find(|check| check.selected)
+        .map(|check| check.region_kind.as_str());
+    let artwork_parts = artwork_checks
+        .iter()
+        .filter(|check| {
+            selected_region_kind
+                .map(|region_kind| check.region_kind == region_kind)
+                .unwrap_or(true)
+        })
+        .map(|check| {
+            format!(
+                "{}（{:.2}/{:.2}）",
+                ce_artwork_variant_label(&check.variant),
+                check.score,
+                check.threshold
+            )
+        });
+    let icon_parts = icon_checks.iter().map(|check| {
+        format!(
+            "{}（{:.2}/{:.2}）",
+            ce_icon_check_label(&check.kind),
+            check.score,
+            check.threshold
+        )
+    });
+    artwork_parts.chain(icon_parts).collect::<Vec<_>>().join(" ")
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SupportLevelFilter {
     Pass,
@@ -1020,9 +1071,21 @@ impl Runner {
                         "grandBondNp" => "冠位连接牵绊图标",
                         other => other,
                     };
-                    Some(format!("{label} {kind}不匹配"))
+                    let summary =
+                        format_ce_verification_summary(&result.artwork_checks, &result.icon_checks);
+                    Some(if summary.is_empty() {
+                        format!("{label} {kind}不匹配")
+                    } else {
+                        format!("{label} {kind}不匹配：{summary}")
+                    })
                 } else {
-                    Some(format!("{label} 不匹配"))
+                    let summary =
+                        format_ce_verification_summary(&result.artwork_checks, &result.icon_checks);
+                    Some(if summary.is_empty() {
+                        format!("{label} 不匹配")
+                    } else {
+                        format!("{label} 不匹配：{summary}")
+                    })
                 }
             }
             Err(e) => {
