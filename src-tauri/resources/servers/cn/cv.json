@@ -272,6 +272,24 @@
         }
       }
     },
+    "BattleResultMasterLevelUp": {
+      "detect": {
+        "template": "text_battle_result_master_level_up",
+        "region": {
+          "x": 0.558,
+          "y": 0.357,
+          "w": 0.134,
+          "h": 0.086
+        },
+        "threshold": 0.85,
+        "priority": 10
+      },
+      "variants": {
+        "main": {
+          "elements": {}
+        }
+      }
+    },
     "BattleResultBond": {
       "detect": {
         "template": "text_battle_result_bond",

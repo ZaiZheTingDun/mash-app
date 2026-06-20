@@ -182,6 +182,10 @@ the operator should always see.
   overlay (`text_battle_result_equip_level_up`) and routes to the same
   `BattleResultExp` handler. It has elevated priority because the overlay
   leaves the battle HUD visible and can otherwise be classified as `Battle`.
+- `BattleResultMasterLevelUp.detect`: detects the CN master level-up overlay
+  (`text_battle_result_master_level_up`) and routes to the same
+  `BattleResultExp` handler. It also uses elevated priority because the
+  battle HUD can remain visible behind the overlay.
 - `BattleResultLootEvent.detect`: detects the CN event rewards page that can
   appear after the normal loot page (`text_battle_result_loot_event`) and
   routes to the same `BattleResultLoot` handler, so the runner taps the

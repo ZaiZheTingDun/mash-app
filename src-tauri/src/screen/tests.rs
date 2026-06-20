@@ -64,6 +64,14 @@ fn exp_level_up_screen_routes_to_exp_handler() {
 }
 
 #[test]
+fn master_level_up_screen_routes_to_exp_handler() {
+    assert_eq!(
+        "BattleResultMasterLevelUp".parse::<Screen>().unwrap(),
+        Screen::BattleResultExp
+    );
+}
+
+#[test]
 fn loot_event_screen_routes_to_loot_handler() {
     assert_eq!(
         "BattleResultLootEvent".parse::<Screen>().unwrap(),

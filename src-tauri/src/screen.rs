@@ -547,7 +547,9 @@ impl FromStr for Screen {
             "Battle" => Self::Battle,
             "Attack" => Self::Attack,
             "BattleResultLoot" | "BattleResultLootEvent" => Self::BattleResultLoot,
-            "BattleResultExp" | "BattleResultExpLevelUp" => Self::BattleResultExp,
+            "BattleResultExp" | "BattleResultExpLevelUp" | "BattleResultMasterLevelUp" => {
+                Self::BattleResultExp
+            }
             "BattleResultBond" | "BattleResultBondLevelUp" => Self::BattleResultBond,
             "BattleResultContinue" => Self::BattleResultContinue,
             "BattleResultFriendRequest" => Self::BattleResultFriendRequest,
