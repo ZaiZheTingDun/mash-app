@@ -12,8 +12,9 @@ pub(crate) fn parse_index(s: &str, prefix: &str) -> Option<usize> {
         .map(|n| n.saturating_sub(1))
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct PartyMemberRuntime {
+    pub(crate) member_id: Option<String>,
     pub(crate) slot_index: usize,
     pub(crate) servant_id: u32,
     pub(crate) is_support: bool,
@@ -21,12 +22,12 @@ pub(crate) struct PartyMemberRuntime {
 
 pub(crate) fn party_member_ids(members: &[Option<PartyMemberRuntime>; 6]) -> [Option<u32>; 6] {
     [
-        members[0].map(|member| member.servant_id),
-        members[1].map(|member| member.servant_id),
-        members[2].map(|member| member.servant_id),
-        members[3].map(|member| member.servant_id),
-        members[4].map(|member| member.servant_id),
-        members[5].map(|member| member.servant_id),
+        members[0].as_ref().map(|member| member.servant_id),
+        members[1].as_ref().map(|member| member.servant_id),
+        members[2].as_ref().map(|member| member.servant_id),
+        members[3].as_ref().map(|member| member.servant_id),
+        members[4].as_ref().map(|member| member.servant_id),
+        members[5].as_ref().map(|member| member.servant_id),
     ]
 }
 
@@ -144,11 +145,11 @@ pub(crate) fn apply_change_order_effect(
 pub(crate) fn compact_member_backline(members: &mut [Option<PartyMemberRuntime>; 6]) {
     let backline: Vec<Option<PartyMemberRuntime>> = members[3..]
         .iter()
-        .copied()
+        .cloned()
         .filter(|slot| slot.is_some())
         .collect();
     for slot in 3..6 {
-        members[slot] = backline.get(slot - 3).copied().flatten();
+        members[slot] = backline.get(slot - 3).cloned().flatten();
     }
 }
 
@@ -160,7 +161,7 @@ pub(crate) fn remove_party_member_slot(
         return;
     }
     let replacement = (3..6).find(|slot| members[*slot].is_some());
-    members[index] = replacement.and_then(|slot| members[slot]);
+    members[index] = replacement.and_then(|slot| members[slot].clone());
     if let Some(slot) = replacement {
         members[slot] = None;
     }
@@ -174,14 +175,14 @@ pub(crate) fn withdraw_party_member_slot_to_back(
     if index >= 3 {
         return;
     }
-    let Some(member) = members[index] else {
+    let Some(member) = members[index].clone() else {
         return;
     };
     compact_member_backline(members);
     let Some(replacement) = (3..6).find(|slot| members[*slot].is_some()) else {
         return;
     };
-    members[index] = members[replacement];
+    members[index] = members[replacement].clone();
     members[replacement] = Some(member);
 }
 
@@ -328,7 +329,7 @@ pub(crate) fn apply_party_member_lineup_change_at(
     else {
         return;
     };
-    let (Some(member), Some(skill)) = (members[source_index], skill.as_deref()) else {
+    let (Some(member), Some(skill)) = (members[source_index].as_ref(), skill.as_deref()) else {
         return;
     };
     for rule in change_order_rules() {
@@ -409,11 +410,11 @@ pub(crate) fn apply_attack_card_member_lineup_change(
     else {
         return;
     };
-    let Some(member) = members[source_index] else {
+    let Some(member) = members[source_index].clone() else {
         return;
     };
     let next_count = np_use_counts.get(&member).copied().unwrap_or(0) + 1;
-    np_use_counts.insert(member, next_count);
+    np_use_counts.insert(member.clone(), next_count);
 
     for rule in change_order_rules() {
         if rule.servant_id != member.servant_id {
@@ -473,9 +474,18 @@ pub(crate) fn grand_auto_order_change_action(
         id: "auto_grand_order_change".into(),
         skill: Some("skill_3".into()),
         target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
         order_change: Some(crate::OrderChangeSelection {
             front: Some(format!("servant_{}", front_index + 1)),
+            front_member_id: None,
+            front_servant_id: party_ids[front_index],
+            front_is_support: false,
             back: Some(format!("servant_{}", main.slot_index + 1)),
+            back_member_id: None,
+            back_servant_id: Some(main.servant_id),
+            back_is_support: main.is_support,
         }),
     })
 }
@@ -549,14 +559,59 @@ pub(crate) fn current_slot_for_original_member_selection(
     allowed: std::ops::Range<usize>,
 ) -> Option<String> {
     let original_index = parse_index(value, "servant_")?;
-    let original_member = original_members.get(original_index).copied().flatten()?;
+    let original_member = original_members.get(original_index).cloned().flatten()?;
     let current_index = members
         .iter()
-        .position(|current_member| *current_member == Some(original_member))?;
+        .position(|current_member| current_member.as_ref() == Some(&original_member))?;
     if !allowed.contains(&current_index) {
         return None;
     }
     Some(format!("servant_{}", current_index + 1))
+}
+
+fn current_slot_for_member_ref(
+    members: &[Option<PartyMemberRuntime>; 6],
+    original_members: &[Option<PartyMemberRuntime>; 6],
+    fallback_value: Option<&str>,
+    member_id: Option<&str>,
+    servant_id: Option<u32>,
+    is_support: bool,
+    allowed: std::ops::Range<usize>,
+) -> Option<Option<String>> {
+    if let Some(member_id) = member_id {
+        let current_index = members.iter().position(|member| {
+            member
+                .as_ref()
+                .and_then(|member| member.member_id.as_deref())
+                == Some(member_id)
+        })?;
+        if !allowed.contains(&current_index) {
+            return None;
+        }
+        return Some(Some(format!("servant_{}", current_index + 1)));
+    }
+
+    if let Some(servant_id) = servant_id {
+        let current_index = members.iter().position(|member| {
+            member.as_ref().is_some_and(|member| {
+                member.servant_id == servant_id && member.is_support == is_support
+            })
+        })?;
+        if !allowed.contains(&current_index) {
+            return None;
+        }
+        return Some(Some(format!("servant_{}", current_index + 1)));
+    }
+
+    match fallback_value {
+        Some(value) => Some(Some(current_slot_for_original_member_selection(
+            members,
+            original_members,
+            value,
+            allowed,
+        )?)),
+        None => Some(None),
+    }
 }
 
 #[cfg(test)]
@@ -611,6 +666,9 @@ pub(crate) fn resolve_action_to_current_positions(
                 servant.as_deref(),
                 0..3,
             )?,
+            servant_member_id: None,
+            servant_id: None,
+            servant_is_support: false,
             skill: match action {
                 Action::Servant { skill, .. } => skill.clone(),
                 _ => None,
@@ -620,6 +678,9 @@ pub(crate) fn resolve_action_to_current_positions(
                 original_ids,
                 target.as_deref(),
             )?,
+            target_member_id: None,
+            target_servant_id: None,
+            target_is_support: false,
         }),
         Action::Equipment {
             id,
@@ -635,6 +696,9 @@ pub(crate) fn resolve_action_to_current_positions(
                 original_ids,
                 target.as_deref(),
             )?,
+            target_member_id: None,
+            target_servant_id: None,
+            target_is_support: false,
             order_change: Some(crate::OrderChangeSelection {
                 front: resolve_required_slot_to_current_position(
                     ids,
@@ -642,12 +706,18 @@ pub(crate) fn resolve_action_to_current_positions(
                     order_change.front.as_deref(),
                     0..3,
                 )?,
+                front_member_id: None,
+                front_servant_id: None,
+                front_is_support: false,
                 back: resolve_required_slot_to_current_position(
                     ids,
                     original_ids,
                     order_change.back.as_deref(),
                     3..6,
                 )?,
+                back_member_id: None,
+                back_servant_id: None,
+                back_is_support: false,
             }),
         }),
         Action::Equipment {
@@ -655,6 +725,7 @@ pub(crate) fn resolve_action_to_current_positions(
             skill,
             target,
             order_change: None,
+            ..
         } => Some(Action::Equipment {
             id: id.clone(),
             skill: skill.clone(),
@@ -663,9 +734,14 @@ pub(crate) fn resolve_action_to_current_positions(
                 original_ids,
                 target.as_deref(),
             )?,
+            target_member_id: None,
+            target_servant_id: None,
+            target_is_support: false,
             order_change: None,
         }),
-        Action::CommandSpell { id, spell, target } => Some(Action::CommandSpell {
+        Action::CommandSpell {
+            id, spell, target, ..
+        } => Some(Action::CommandSpell {
             id: id.clone(),
             spell: spell.clone(),
             target: resolve_optional_slot_to_current_position(
@@ -673,37 +749,10 @@ pub(crate) fn resolve_action_to_current_positions(
                 original_ids,
                 target.as_deref(),
             )?,
+            target_member_id: None,
+            target_servant_id: None,
+            target_is_support: false,
         }),
-    }
-}
-
-pub(crate) fn resolve_required_member_slot_to_current_position(
-    members: &[Option<PartyMemberRuntime>; 6],
-    original_members: &[Option<PartyMemberRuntime>; 6],
-    value: Option<&str>,
-    allowed: std::ops::Range<usize>,
-) -> Option<Option<String>> {
-    Some(Some(current_slot_for_original_member_selection(
-        members,
-        original_members,
-        value?,
-        allowed,
-    )?))
-}
-
-pub(crate) fn resolve_optional_member_slot_to_current_position(
-    members: &[Option<PartyMemberRuntime>; 6],
-    original_members: &[Option<PartyMemberRuntime>; 6],
-    value: Option<&str>,
-) -> Option<Option<String>> {
-    match value {
-        Some(value) => Some(Some(current_slot_for_original_member_selection(
-            members,
-            original_members,
-            value,
-            0..3,
-        )?)),
-        None => Some(None),
     }
 }
 
@@ -716,78 +765,145 @@ pub(crate) fn resolve_action_to_current_member_positions(
         Action::Servant {
             id,
             servant,
+            servant_member_id,
+            servant_id,
+            servant_is_support,
             target,
+            target_member_id,
+            target_servant_id,
+            target_is_support,
             ..
         } => Some(Action::Servant {
             id: id.clone(),
-            servant: resolve_required_member_slot_to_current_position(
+            servant: current_slot_for_member_ref(
                 members,
                 original_members,
                 servant.as_deref(),
+                servant_member_id.as_deref(),
+                *servant_id,
+                *servant_is_support,
                 0..3,
             )?,
+            servant_member_id: servant_member_id.clone(),
+            servant_id: *servant_id,
+            servant_is_support: *servant_is_support,
             skill: match action {
                 Action::Servant { skill, .. } => skill.clone(),
                 _ => None,
             },
-            target: resolve_optional_member_slot_to_current_position(
+            target: current_slot_for_member_ref(
                 members,
                 original_members,
                 target.as_deref(),
+                target_member_id.as_deref(),
+                *target_servant_id,
+                *target_is_support,
+                0..3,
             )?,
+            target_member_id: target_member_id.clone(),
+            target_servant_id: *target_servant_id,
+            target_is_support: *target_is_support,
         }),
         Action::Equipment {
             id,
             skill,
             target,
+            target_member_id,
+            target_servant_id,
+            target_is_support,
             order_change: Some(order_change),
             ..
         } => Some(Action::Equipment {
             id: id.clone(),
             skill: skill.clone(),
-            target: resolve_optional_member_slot_to_current_position(
+            target: current_slot_for_member_ref(
                 members,
                 original_members,
                 target.as_deref(),
+                target_member_id.as_deref(),
+                *target_servant_id,
+                *target_is_support,
+                0..3,
             )?,
+            target_member_id: target_member_id.clone(),
+            target_servant_id: *target_servant_id,
+            target_is_support: *target_is_support,
             order_change: Some(crate::OrderChangeSelection {
-                front: resolve_required_member_slot_to_current_position(
+                front: current_slot_for_member_ref(
                     members,
                     original_members,
                     order_change.front.as_deref(),
+                    order_change.front_member_id.as_deref(),
+                    order_change.front_servant_id,
+                    order_change.front_is_support,
                     0..3,
                 )?,
-                back: resolve_required_member_slot_to_current_position(
+                front_member_id: order_change.front_member_id.clone(),
+                front_servant_id: order_change.front_servant_id,
+                front_is_support: order_change.front_is_support,
+                back: current_slot_for_member_ref(
                     members,
                     original_members,
                     order_change.back.as_deref(),
+                    order_change.back_member_id.as_deref(),
+                    order_change.back_servant_id,
+                    order_change.back_is_support,
                     3..6,
                 )?,
+                back_member_id: order_change.back_member_id.clone(),
+                back_servant_id: order_change.back_servant_id,
+                back_is_support: order_change.back_is_support,
             }),
         }),
         Action::Equipment {
             id,
             skill,
             target,
+            target_member_id,
+            target_servant_id,
+            target_is_support,
             order_change: None,
+            ..
         } => Some(Action::Equipment {
             id: id.clone(),
             skill: skill.clone(),
-            target: resolve_optional_member_slot_to_current_position(
+            target: current_slot_for_member_ref(
                 members,
                 original_members,
                 target.as_deref(),
+                target_member_id.as_deref(),
+                *target_servant_id,
+                *target_is_support,
+                0..3,
             )?,
+            target_member_id: target_member_id.clone(),
+            target_servant_id: *target_servant_id,
+            target_is_support: *target_is_support,
             order_change: None,
         }),
-        Action::CommandSpell { id, spell, target } => Some(Action::CommandSpell {
+        Action::CommandSpell {
+            id,
+            spell,
+            target,
+            target_member_id,
+            target_servant_id,
+            target_is_support,
+            ..
+        } => Some(Action::CommandSpell {
             id: id.clone(),
             spell: spell.clone(),
-            target: resolve_optional_member_slot_to_current_position(
+            target: current_slot_for_member_ref(
                 members,
                 original_members,
                 target.as_deref(),
+                target_member_id.as_deref(),
+                *target_servant_id,
+                *target_is_support,
+                0..3,
             )?,
+            target_member_id: target_member_id.clone(),
+            target_servant_id: *target_servant_id,
+            target_is_support: *target_is_support,
         }),
     }
 }
@@ -860,6 +976,7 @@ pub(crate) fn normal_current_party_ids_from(
     let mut members: [Option<PartyMemberRuntime>; 6] = [None, None, None, None, None, None];
     for (slot_index, servant_id) in ids.into_iter().enumerate() {
         members[slot_index] = servant_id.map(|servant_id| PartyMemberRuntime {
+            member_id: None,
             slot_index,
             servant_id,
             is_support: false,
@@ -960,6 +1077,7 @@ impl Runner {
             let slot = sel.slot_index as usize;
             if slot < 6 {
                 full[slot] = Some(PartyMemberRuntime {
+                    member_id: sel.member_id.clone(),
                     slot_index: slot,
                     servant_id: sel.servant_id,
                     is_support: false,
@@ -981,6 +1099,7 @@ impl Runner {
                 .filter(|slot| *slot < full.len())
             {
                 full[slot] = Some(PartyMemberRuntime {
+                    member_id: self.config.support_member_id.clone(),
                     slot_index: slot,
                     servant_id: support_id,
                     is_support: true,
@@ -989,6 +1108,7 @@ impl Runner {
                 for (slot_index, slot) in full.iter_mut().take(3).enumerate() {
                     if slot.is_none() {
                         *slot = Some(PartyMemberRuntime {
+                            member_id: self.config.support_member_id.clone(),
                             slot_index,
                             servant_id: support_id,
                             is_support: true,
@@ -1024,11 +1144,12 @@ impl Runner {
                 if !seen.insert(slot) {
                     return None;
                 }
-                let member = full.get(slot).copied().flatten()?;
+                let member = full.get(slot).cloned().flatten()?;
                 let servant_id = member.servant_id;
                 Some(GrandServantRuntimeConfig {
                     slot_index: slot,
                     servant_id,
+                    is_support: member.is_support,
                     np_card: config.np_card.clone(),
                     priority: config.priority.clone(),
                 })

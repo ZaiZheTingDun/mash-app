@@ -173,6 +173,7 @@ fn grand_config_at(
     GrandServantRuntimeConfig {
         slot_index,
         servant_id,
+        is_support: false,
         np_card: np_card.into(),
         priority: priority.into(),
     }
@@ -390,8 +391,8 @@ fn run_config_round_trips_support_craft_essence_id() {
     assert_eq!(
         json["grandServants"],
         serde_json::json!([
-            { "slotIndex": 0, "npCard": "buster", "priority": "damage" },
-            { "slotIndex": 2, "npCard": "auto", "priority": "np" }
+            { "memberId": null, "slotIndex": 0, "servantId": null, "isSupport": false, "npCard": "buster", "priority": "damage" },
+            { "memberId": null, "slotIndex": 2, "servantId": null, "isSupport": false, "npCard": "auto", "priority": "np" }
         ])
     );
 }
@@ -406,6 +407,9 @@ fn advanced_rule_matches_np_and_command_groups_with_and_between_types() {
                 slots: vec![crate::AdvancedNpSlotCondition {
                     servant: "servant_1".into(),
                     ready: false,
+                    member_id: None,
+                    servant_id: None,
+                    is_support: false,
                 }],
             },
             crate::AdvancedNpConditionGroup {
@@ -413,6 +417,9 @@ fn advanced_rule_matches_np_and_command_groups_with_and_between_types() {
                 slots: vec![crate::AdvancedNpSlotCondition {
                     servant: "servant_2".into(),
                     ready: true,
+                    member_id: None,
+                    servant_id: None,
+                    is_support: false,
                 }],
             },
         ],
@@ -423,6 +430,9 @@ fn advanced_rule_matches_np_and_command_groups_with_and_between_types() {
                 servant: "servant_1".into(),
                 suit: "buster".into(),
                 min_crit_chance: Some(80),
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             }],
         }],
         actions: vec![],
@@ -443,6 +453,9 @@ fn advanced_rule_rejects_when_command_group_misses_even_if_np_matches() {
             slots: vec![crate::AdvancedNpSlotCondition {
                 servant: "servant_1".into(),
                 ready: true,
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             }],
         }],
         command_condition_groups: vec![crate::AdvancedCommandConditionGroup {
@@ -452,6 +465,9 @@ fn advanced_rule_rejects_when_command_group_misses_even_if_np_matches() {
                 servant: "servant_1".into(),
                 suit: "arts".into(),
                 min_crit_chance: Some(90),
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             }],
         }],
         actions: vec![],
@@ -475,12 +491,18 @@ fn advanced_startup_conditions_match_only_configured_command_cards() {
                 servant: "servant_1".into(),
                 suit: "buster".into(),
                 min_crit_chance: None,
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             },
             AdvancedCommandCardCondition {
                 slot: 1,
                 servant: "any".into(),
                 suit: "any".into(),
                 min_crit_chance: None,
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             },
         ],
         control_actions: Vec::new(),
@@ -510,12 +532,18 @@ fn advanced_startup_conditions_match_duplicate_servant_cards_in_any_slots() {
                 servant: "servant_1".into(),
                 suit: "any".into(),
                 min_crit_chance: None,
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             },
             AdvancedCommandCardCondition {
                 slot: 1,
                 servant: "servant_1".into(),
                 suit: "any".into(),
                 min_crit_chance: None,
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             },
         ],
         control_actions: Vec::new(),
@@ -577,18 +605,30 @@ fn normal_priority_skips_missing_chain_card_then_uses_fallbacks() {
         AttackCard {
             id: "chain_1".into(),
             card: Some("servant_1_buster".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_2".into(),
             card: Some("servant_1_np".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_3".into(),
             card: Some("servant_1_arts".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "fallback_1".into(),
             card: Some("servant_2_quick".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
     ];
     let cards = vec![
@@ -617,14 +657,23 @@ fn normal_priority_preserves_chain_order_between_duplicate_card_colors_and_np() 
         AttackCard {
             id: "chain_1".into(),
             card: Some("servant_1_buster".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_2".into(),
             card: Some("servant_1_np".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_3".into(),
             card: Some("servant_1_buster".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
     ];
     let cards = vec![
@@ -652,6 +701,9 @@ fn normal_priority_all_matches_any_suit_for_servant() {
     let priority = vec![AttackCard {
         id: "chain_1".into(),
         card: Some("servant_1_all".into()),
+        member_id: None,
+        servant_id: None,
+        is_support: false,
     }];
     let cards = vec![
         command_card(0, Some(20), Some("b"), None),
@@ -679,14 +731,23 @@ fn normal_priority_empty_fixed_slot_inherits_previous_non_np_rule() {
         AttackCard {
             id: "chain_1".into(),
             card: Some("servant_1_np".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_2".into(),
             card: Some("servant_1_all".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_3".into(),
             card: None,
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
     ];
     let cards = vec![
@@ -718,14 +779,23 @@ fn normal_priority_fills_missed_first_fixed_slot_in_place() {
         AttackCard {
             id: "chain_1".into(),
             card: Some("servant_3_np".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_2".into(),
             card: Some("servant_3_all".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_3".into(),
             card: Some("servant_3_all".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
     ];
     let cards = vec![
@@ -757,22 +827,37 @@ fn normal_fallback_priority_repeats_before_next_fallback() {
         AttackCard {
             id: "chain_1".into(),
             card: Some("servant_1_buster".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_2".into(),
             card: Some("servant_1_np".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_3".into(),
             card: Some("servant_1_arts".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "fallback_1".into(),
             card: Some("servant_1_all".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "fallback_2".into(),
             card: Some("servant_2_all".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
     ];
     let cards = vec![
@@ -804,22 +889,37 @@ fn normal_fallback_fills_missing_fixed_chain_slot_before_ready_nps() {
         AttackCard {
             id: "chain_1".into(),
             card: Some("servant_1_arts".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_2".into(),
             card: Some("servant_1_np".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "chain_3".into(),
             card: Some("servant_2_np".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "fallback_1".into(),
             card: Some("servant_2_arts".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
         AttackCard {
             id: "fallback_2".into(),
             card: Some("servant_3_arts".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         },
     ];
     let cards = vec![command_card(0, Some(30), Some("a"), None)];
@@ -848,6 +948,9 @@ fn normal_attack_priority_is_used_even_when_scene_was_not_reexecuted() {
             vec![AttackCard {
                 id: "chain_1".into(),
                 card: Some("servant_1_all".into()),
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             }],
         )],
     );
@@ -868,6 +971,9 @@ fn normal_attack_priority_reuses_last_turn_after_configured_turns() {
                 vec![AttackCard {
                     id: "turn_1_attack".into(),
                     card: Some("servant_1_buster".into()),
+                    member_id: None,
+                    servant_id: None,
+                    is_support: false,
                 }],
             ),
             normal_turn(
@@ -875,6 +981,9 @@ fn normal_attack_priority_reuses_last_turn_after_configured_turns() {
                 vec![AttackCard {
                     id: "turn_2_attack".into(),
                     card: Some("servant_2_arts".into()),
+                    member_id: None,
+                    servant_id: None,
+                    is_support: false,
                 }],
             ),
         ],
@@ -896,6 +1005,9 @@ fn normal_scenes_skip_command_card_recognition_when_no_regular_cards_are_configu
                 vec![AttackCard {
                     id: "np_1".into(),
                     card: Some("servant_1_np".into()),
+                    member_id: None,
+                    servant_id: None,
+                    is_support: false,
                 }],
             )],
         ),
@@ -914,6 +1026,9 @@ fn normal_scenes_need_command_card_recognition_when_regular_card_is_configured()
             vec![AttackCard {
                 id: "card_1".into(),
                 card: Some("servant_1_all".into()),
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             }],
         )],
     )];
@@ -957,6 +1072,9 @@ fn advanced_attack_priority_still_requires_scene_config_used() {
             vec![AttackCard {
                 id: "chain_1".into(),
                 card: Some("servant_1_all".into()),
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             }],
         )],
     );
@@ -973,9 +1091,18 @@ fn normal_current_party_ids_apply_executed_order_change_before_attack() {
                 id: "eq_1".into(),
                 skill: Some("skill_3".into()),
                 target: None,
+                target_member_id: None,
+                target_servant_id: None,
+                target_is_support: false,
                 order_change: Some(crate::OrderChangeSelection {
                     front: Some("servant_1".into()),
+                    front_member_id: None,
+                    front_servant_id: None,
+                    front_is_support: false,
                     back: Some("servant_4".into()),
+                    back_member_id: None,
+                    back_servant_id: None,
+                    back_is_support: false,
                 }),
             }],
             vec![],
@@ -1002,6 +1129,9 @@ fn normal_current_party_ids_apply_previous_scene_np_retreat_before_attack() {
             vec![AttackCard {
                 id: "atk_1".into(),
                 card: Some("servant_2_np".into()),
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             }],
         )],
     );
@@ -1027,6 +1157,9 @@ fn normal_current_party_ids_do_not_apply_current_scene_np_before_attack() {
             vec![AttackCard {
                 id: "atk_1".into(),
                 card: Some("servant_2_np".into()),
+                member_id: None,
+                servant_id: None,
+                is_support: false,
             }],
         )],
     );
@@ -1053,9 +1186,18 @@ fn normal_current_party_ids_do_not_repeat_last_turn_prep_after_configured_turns(
                     id: "eq_1".into(),
                     skill: Some("skill_3".into()),
                     target: None,
+                    target_member_id: None,
+                    target_servant_id: None,
+                    target_is_support: false,
                     order_change: Some(crate::OrderChangeSelection {
                         front: Some("servant_1".into()),
+                        front_member_id: None,
+                        front_servant_id: None,
+                        front_is_support: false,
                         back: Some("servant_4".into()),
+                        back_member_id: None,
+                        back_servant_id: None,
+                        back_is_support: false,
                     }),
                 }],
                 vec![],
@@ -1082,8 +1224,14 @@ fn normal_current_party_ids_apply_previous_scene_end_of_turn_skill_exit() {
             vec![Action::Servant {
                 id: "sa_1".into(),
                 servant: Some("servant_1".into()),
+                servant_member_id: None,
+                servant_id: None,
+                servant_is_support: false,
                 skill: Some("skill_3".into()),
                 target: None,
+                target_member_id: None,
+                target_servant_id: None,
+                target_is_support: false,
             }],
             vec![],
         )],
@@ -1149,25 +1297,46 @@ fn startup_action_selected_slot_resolves_to_current_position_after_auto_order_ch
     let swapped_out_source = Action::Servant {
         id: "a1".into(),
         servant: Some("servant_1".into()),
+        servant_member_id: None,
+        servant_id: None,
+        servant_is_support: false,
         skill: Some("skill_1".into()),
         target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
     };
     let main_grand_source = Action::Servant {
         id: "a4".into(),
         servant: Some("servant_4".into()),
+        servant_member_id: None,
+        servant_id: None,
+        servant_is_support: false,
         skill: Some("skill_1".into()),
         target: Some("servant_2".into()),
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
     };
     let unchanged_source = Action::Servant {
         id: "a2".into(),
         servant: Some("servant_2".into()),
+        servant_member_id: None,
+        servant_id: None,
+        servant_is_support: false,
         skill: Some("skill_1".into()),
         target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
     };
     let swapped_target = Action::Equipment {
         id: "a3".into(),
         skill: Some("skill_1".into()),
         target: Some("servant_1".into()),
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
         order_change: None,
     };
 
@@ -1197,33 +1366,120 @@ fn startup_action_selected_slot_resolves_to_current_position_after_auto_order_ch
 }
 
 #[test]
+fn startup_action_member_id_resolves_after_team_reorder() {
+    let original_members = [
+        Some(PartyMemberRuntime {
+            member_id: Some("slot-a".into()),
+            slot_index: 0,
+            servant_id: 10,
+            is_support: false,
+        }),
+        Some(PartyMemberRuntime {
+            member_id: Some("slot-b".into()),
+            slot_index: 1,
+            servant_id: 20,
+            is_support: false,
+        }),
+        None,
+        None,
+        None,
+        None,
+    ];
+    let changed_members = [
+        Some(PartyMemberRuntime {
+            member_id: Some("slot-b".into()),
+            slot_index: 1,
+            servant_id: 20,
+            is_support: false,
+        }),
+        Some(PartyMemberRuntime {
+            member_id: Some("slot-a".into()),
+            slot_index: 0,
+            servant_id: 10,
+            is_support: false,
+        }),
+        None,
+        None,
+        None,
+        None,
+    ];
+    let action = Action::Servant {
+        id: "startup_member".into(),
+        servant: Some("servant_2".into()),
+        servant_member_id: Some("slot-b".into()),
+        servant_id: Some(20),
+        servant_is_support: false,
+        skill: Some("skill_1".into()),
+        target: Some("servant_1".into()),
+        target_member_id: Some("slot-a".into()),
+        target_servant_id: Some(10),
+        target_is_support: false,
+    };
+
+    let resolved =
+        resolve_action_to_current_member_positions(&changed_members, &original_members, &action)
+            .unwrap();
+
+    match resolved {
+        Action::Servant {
+            servant, target, ..
+        } => {
+            assert_eq!(servant.as_deref(), Some("servant_1"));
+            assert_eq!(target.as_deref(), Some("servant_2"));
+        }
+        _ => panic!("expected servant action"),
+    }
+}
+
+#[test]
 fn auto_order_change_startup_flow_replays_control_after_swap() {
     let auto_order_change = Action::Equipment {
         id: "auto_oc".into(),
         skill: Some("skill_3".into()),
         target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
         order_change: Some(crate::OrderChangeSelection {
             front: Some("servant_1".into()),
+            front_member_id: None,
+            front_servant_id: None,
+            front_is_support: false,
             back: Some("servant_4".into()),
+            back_member_id: None,
+            back_servant_id: None,
+            back_is_support: false,
         }),
     };
     let first_control = Action::Equipment {
         id: "control_1".into(),
         skill: Some("skill_1".into()),
         target: Some("servant_1".into()),
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
         order_change: None,
     };
     let second_control = Action::Equipment {
         id: "control_2".into(),
         skill: Some("skill_2".into()),
         target: Some("servant_2".into()),
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
         order_change: None,
     };
     let startup = Action::Servant {
         id: "startup_1".into(),
         servant: Some("servant_1".into()),
+        servant_member_id: None,
+        servant_id: None,
+        servant_is_support: false,
         skill: Some("skill_1".into()),
         target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
     };
     let scene = AdvancedBattleScene {
         id: "advanced_scene_1".into(),
@@ -1255,9 +1511,18 @@ fn party_lineup_change_swaps_support_from_configured_back_slot() {
         id: "a1".into(),
         skill: Some("skill_3".into()),
         target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
         order_change: Some(crate::OrderChangeSelection {
             front: Some("servant_2".into()),
+            front_member_id: None,
+            front_servant_id: None,
+            front_is_support: false,
             back: Some("servant_6".into()),
+            back_member_id: None,
+            back_servant_id: None,
+            back_is_support: false,
         }),
     };
 
@@ -1275,8 +1540,14 @@ fn party_lineup_change_does_not_apply_end_of_turn_skill_by_default() {
     let action = Action::Servant {
         id: "a1".into(),
         servant: Some("servant_1".into()),
+        servant_member_id: None,
+        servant_id: None,
+        servant_is_support: false,
         skill: Some("skill_2".into()),
         target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
     };
 
     apply_party_lineup_change(&mut ids, &action);
@@ -1293,8 +1564,14 @@ fn party_lineup_change_applies_end_of_turn_servant_skill_withdraw_rule() {
     let action = Action::Servant {
         id: "a1".into(),
         servant: Some("servant_1".into()),
+        servant_member_id: None,
+        servant_id: None,
+        servant_is_support: false,
         skill: Some("skill_2".into()),
         target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
     };
 
     apply_party_lineup_change_at(&mut ids, &action, ChangeOrderTiming::EndOfTurn);
@@ -1311,8 +1588,14 @@ fn party_lineup_change_removes_habetrot_at_end_of_turn_after_third_skill() {
     let action = Action::Servant {
         id: "a1".into(),
         servant: Some("servant_1".into()),
+        servant_member_id: None,
+        servant_id: None,
+        servant_is_support: false,
         skill: Some("skill_3".into()),
         target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
     };
 
     apply_party_lineup_change_at(&mut ids, &action, ChangeOrderTiming::EndOfTurn);
@@ -1326,8 +1609,14 @@ fn party_lineup_change_removes_ultimate_elisabeth_at_end_of_turn_after_third_ski
     let action = Action::Servant {
         id: "a1".into(),
         servant: Some("servant_2".into()),
+        servant_member_id: None,
+        servant_id: None,
+        servant_is_support: false,
         skill: Some("skill_3".into()),
         target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
     };
 
     apply_party_lineup_change_at(&mut ids, &action, ChangeOrderTiming::EndOfTurn);
@@ -1341,8 +1630,14 @@ fn action_frontline_available_rejects_source_out_of_frontline() {
     let action = Action::Servant {
         id: "a1".into(),
         servant: Some("servant_4".into()),
+        servant_member_id: None,
+        servant_id: None,
+        servant_is_support: false,
         skill: Some("skill_1".into()),
         target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
     };
 
     assert!(!action_frontline_available(&ids, &action));
@@ -1354,8 +1649,14 @@ fn action_frontline_available_rejects_missing_frontline_target() {
     let action = Action::Servant {
         id: "a1".into(),
         servant: Some("servant_1".into()),
+        servant_member_id: None,
+        servant_id: None,
+        servant_is_support: false,
         skill: Some("skill_1".into()),
         target: Some("servant_2".into()),
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
     };
 
     assert!(!action_frontline_available(&ids, &action));
@@ -1366,7 +1667,10 @@ fn advanced_auto_np_output_prefers_ready_np_and_arts_cards() {
     let scene = AdvancedBattleScene {
         id: "advanced_scene_1".into(),
         main_output: Some(crate::AdvancedMainOutput {
+            member_id: None,
             servant: Some("servant_1".into()),
+            servant_id: None,
+            is_support: false,
             output_type: Some(AdvancedOutputType::Np),
             np_card: Some("arts".into()),
         }),
@@ -1878,8 +2182,10 @@ fn grand_auto_deputy_ready_np_does_not_outrank_main_same_color_chain() {
 
 fn custom_rule_slot(servant_id: Option<u32>, kind: &str, color: &str) -> GrandCardRuleSlotConfig {
     GrandCardRuleSlotConfig {
+        member_id: None,
         slot_index: None,
         servant_id,
+        is_support: false,
         grand_servant: false,
         kind: kind.into(),
         color: color.into(),
@@ -1893,8 +2199,10 @@ fn custom_rule_slot_at(
     color: &str,
 ) -> GrandCardRuleSlotConfig {
     GrandCardRuleSlotConfig {
+        member_id: None,
         slot_index: Some(slot_index),
         servant_id: Some(servant_id),
+        is_support: false,
         grand_servant: false,
         kind: kind.into(),
         color: color.into(),
@@ -1903,8 +2211,10 @@ fn custom_rule_slot_at(
 
 fn custom_grand_rule_slot(kind: &str, color: &str) -> GrandCardRuleSlotConfig {
     GrandCardRuleSlotConfig {
+        member_id: None,
         slot_index: None,
         servant_id: None,
+        is_support: false,
         grand_servant: true,
         kind: kind.into(),
         color: color.into(),
@@ -2044,6 +2354,43 @@ fn custom_grand_rule_matches_duplicate_servant_by_slot_index() {
     );
 
     assert_eq!(labels, vec!["NP1", "C0", "NP0"]);
+}
+
+#[test]
+fn grand_role_for_candidate_prefers_slot_over_duplicate_servant_id() {
+    let grands = vec![
+        GrandServantRuntimeConfig {
+            slot_index: 0,
+            servant_id: 10,
+            is_support: false,
+            np_card: "buster".into(),
+            priority: "damage".into(),
+        },
+        GrandServantRuntimeConfig {
+            slot_index: 1,
+            servant_id: 10,
+            is_support: true,
+            np_card: "arts".into(),
+            priority: "damage".into(),
+        },
+    ];
+    let candidate = AdvancedPickCandidate {
+        pick: Pick::Np {
+            slot: 1,
+            point: Point::new(0.0, 0.0),
+            from_priority: "test".into(),
+        },
+        servant_index: Some(1),
+        servant_id: Some(10),
+        color: None,
+        original_order: 1,
+        is_np: true,
+    };
+
+    assert_eq!(
+        grand_role_for_candidate(&candidate, &grands),
+        GrandRole::Deputy
+    );
 }
 
 #[test]
@@ -2684,18 +3031,30 @@ fn turn_preparation_actions_preserves_configured_row_order() {
                 id: "eq_1".into(),
                 skill: Some("skill_2".into()),
                 target: None,
+                target_member_id: None,
+                target_servant_id: None,
+                target_is_support: false,
                 order_change: None,
             },
             Action::Servant {
                 id: "sa_1".into(),
                 servant: Some("servant_1".into()),
+                servant_member_id: None,
+                servant_id: None,
+                servant_is_support: false,
                 skill: Some("skill_3".into()),
                 target: Some("servant_2".into()),
+                target_member_id: None,
+                target_servant_id: None,
+                target_is_support: false,
             },
             Action::CommandSpell {
                 id: "cs_1".into(),
                 spell: Some("restore".into()),
                 target: Some("servant_1".into()),
+                target_member_id: None,
+                target_servant_id: None,
+                target_is_support: false,
             },
         ],
         servant_actions: vec![],

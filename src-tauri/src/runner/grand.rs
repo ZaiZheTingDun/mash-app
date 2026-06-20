@@ -547,7 +547,7 @@ pub(crate) fn ordered_position_score(
         return 10_000 + original_order_score;
     }
     let is_grand = matches!(
-        grand_role_for_servant(candidate.servant_id, grand_servants),
+        grand_role_for_candidate(candidate, grand_servants),
         GrandRole::Main | GrandRole::Deputy
     );
     if is_grand {
@@ -569,7 +569,7 @@ pub(crate) fn owner_priority_score(
             slot.owner_priority.map(|priority| {
                 match (
                     priority,
-                    grand_role_for_servant(candidate.servant_id, grand_servants),
+                    grand_role_for_candidate(candidate, grand_servants),
                 ) {
                     (RuleOwnerPriority::MainDeputyOther, GrandRole::Main) => 300_000,
                     (RuleOwnerPriority::MainDeputyOther, GrandRole::Deputy) => 200_000,
@@ -604,14 +604,12 @@ pub(crate) fn score_rule_match(
     let np_count = ordered.iter().filter(|candidate| candidate.is_np).count() as i32;
     let main_count = ordered
         .iter()
-        .filter(|candidate| {
-            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Main
-        })
+        .filter(|candidate| grand_role_for_candidate(candidate, grand_servants) == GrandRole::Main)
         .count() as i32;
     let deputy_count = ordered
         .iter()
         .filter(|candidate| {
-            grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Deputy
+            grand_role_for_candidate(candidate, grand_servants) == GrandRole::Deputy
         })
         .count() as i32;
     let target_count = rule
@@ -619,9 +617,7 @@ pub(crate) fn score_rule_match(
         .map(|role| {
             ordered
                 .iter()
-                .filter(|candidate| {
-                    grand_role_for_servant(candidate.servant_id, grand_servants) == role
-                })
+                .filter(|candidate| grand_role_for_candidate(candidate, grand_servants) == role)
                 .count() as i32
         })
         .unwrap_or(main_count.max(deputy_count));
@@ -765,7 +761,7 @@ pub(crate) fn sort_grand_picks(
     if let Some(role) = tier_role {
         let same_servant = picks
             .iter()
-            .all(|candidate| grand_role_for_servant(candidate.servant_id, grand_servants) == role);
+            .all(|candidate| grand_role_for_candidate(candidate, grand_servants) == role);
         let refs: Vec<&AdvancedPickCandidate> = picks.iter().collect();
         if same_servant && combo_is_exquisite(&refs) {
             sort_exquisite_grand_picks(picks, role, grand_servants);
@@ -775,7 +771,7 @@ pub(crate) fn sort_grand_picks(
             picks.sort_by_key(|candidate| {
                 (
                     if candidate.is_np { 0 } else { 1 },
-                    if grand_role_for_servant(candidate.servant_id, grand_servants) == role {
+                    if grand_role_for_candidate(candidate, grand_servants) == role {
                         1
                     } else {
                         0
@@ -787,9 +783,10 @@ pub(crate) fn sort_grand_picks(
         }
     }
 
-    let target_role = if picks.iter().any(|candidate| {
-        grand_role_for_servant(candidate.servant_id, grand_servants) == GrandRole::Main
-    }) {
+    let target_role = if picks
+        .iter()
+        .any(|candidate| grand_role_for_candidate(candidate, grand_servants) == GrandRole::Main)
+    {
         GrandRole::Main
     } else {
         GrandRole::Deputy
@@ -797,8 +794,7 @@ pub(crate) fn sort_grand_picks(
     let target_np_slot = picks
         .iter()
         .find(|candidate| {
-            candidate.is_np
-                && grand_role_for_servant(candidate.servant_id, grand_servants) == target_role
+            candidate.is_np && grand_role_for_candidate(candidate, grand_servants) == target_role
         })
         .map(|candidate| candidate.original_order);
     let preferred_dye = grand_config_for_role(target_role, grand_servants)
@@ -806,7 +802,7 @@ pub(crate) fn sort_grand_picks(
         .unwrap_or("b");
 
     picks.sort_by_key(|candidate| {
-        let role = grand_role_for_servant(candidate.servant_id, grand_servants);
+        let role = grand_role_for_candidate(candidate, grand_servants);
         let is_target = role == target_role;
         (
             match (candidate.is_np, is_target, target_np_slot.is_some()) {

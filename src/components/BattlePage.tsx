@@ -233,10 +233,10 @@ export function BattlePage({
       selectedProject.slots
         ?.map((slot, slotIndex) =>
           slot.type === "servant" && slot.servantId != null
-            ? { slotIndex, servantId: slot.servantId }
+            ? { memberId: slot.id, slotIndex, servantId: slot.servantId }
             : null
         )
-        .filter((selection): selection is { slotIndex: number; servantId: number } =>
+        .filter((selection): selection is { memberId: string; slotIndex: number; servantId: number } =>
           selection != null
         ) ?? [];
     const maxMissionRuns =
@@ -249,6 +249,7 @@ export function BattlePage({
       supportServantId: selectedProject.supportServantId ?? null,
       supportSlotIndex:
         supportSlot != null ? selectedProject.slots?.indexOf(supportSlot) ?? null : null,
+      supportMemberId: supportSlot?.id ?? null,
       supportCraftEssenceId: supportSlot?.craftEssenceId ?? null,
       supportCraftEssenceMlbRequired:
         supportSlot?.craftEssenceMlbRequired ?? true,

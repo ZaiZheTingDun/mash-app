@@ -296,22 +296,28 @@ fn normalize_project_migrates_grand_rule_servant_id_to_first_matching_slot() {
         name: "旧规则".into(),
         slots: vec![
             GrandCardRuleSlotConfig {
+                member_id: None,
                 slot_index: None,
                 servant_id: Some(10),
+                is_support: false,
                 grand_servant: false,
                 kind: "np".into(),
                 color: "any".into(),
             },
             GrandCardRuleSlotConfig {
+                member_id: None,
                 slot_index: None,
                 servant_id: Some(10),
+                is_support: false,
                 grand_servant: false,
                 kind: "command".into(),
                 color: "buster".into(),
             },
             GrandCardRuleSlotConfig {
+                member_id: None,
                 slot_index: None,
                 servant_id: None,
+                is_support: false,
                 grand_servant: true,
                 kind: "any".into(),
                 color: "any".into(),
@@ -1983,6 +1989,9 @@ fn action_command_spell_serializes_with_camel_case_tag() {
         id: "cs_1".into(),
         spell: Some("np_release".into()),
         target: Some("servant_2".into()),
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
     };
     let json = serde_json::to_value(&action).unwrap();
     assert_eq!(json["type"], serde_json::json!("commandSpell"));
@@ -2001,7 +2010,9 @@ fn action_command_spell_target_defaults_to_none_when_missing() {
     });
     let action: Action = serde_json::from_value(json).unwrap();
     match action {
-        Action::CommandSpell { id, spell, target } => {
+        Action::CommandSpell {
+            id, spell, target, ..
+        } => {
             assert_eq!(id, "cs_1");
             assert_eq!(spell.as_deref(), Some("restore"));
             assert!(target.is_none());
@@ -2102,6 +2113,9 @@ fn battle_scene_round_trips_preparation_actions_under_camel_case_key() {
                 id: "cs_1".into(),
                 spell: Some("np_release".into()),
                 target: Some("servant_1".into()),
+                target_member_id: None,
+                target_servant_id: None,
+                target_is_support: false,
             }],
             servant_actions: vec![],
             equipment_actions: vec![],
@@ -2160,7 +2174,10 @@ fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
     let scene = AdvancedBattleScene {
         id: "advanced_scene_1".into(),
         main_output: Some(AdvancedMainOutput {
+            member_id: None,
             servant: Some("servant_1".into()),
+            servant_id: None,
+            is_support: false,
             output_type: Some(AdvancedOutputType::Np),
             np_card: Some("arts".into()),
         }),
@@ -2170,17 +2187,29 @@ fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
             servant: "servant_1".into(),
             suit: "buster".into(),
             min_crit_chance: Some(80),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
         }],
         control_actions: vec![Action::Servant {
             id: "sa_control".into(),
             servant: Some("servant_1".into()),
+            servant_member_id: None,
+            servant_id: None,
+            servant_is_support: false,
             skill: Some("skill_1".into()),
             target: None,
+            target_member_id: None,
+            target_servant_id: None,
+            target_is_support: false,
         }],
         startup_actions: vec![Action::Equipment {
             id: "eq_start".into(),
             skill: Some("skill_2".into()),
             target: None,
+            target_member_id: None,
+            target_servant_id: None,
+            target_is_support: false,
             order_change: None,
         }],
         rules: vec![AdvancedRule {
@@ -2190,6 +2219,9 @@ fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
                 slots: vec![AdvancedNpSlotCondition {
                     servant: "servant_1".into(),
                     ready: true,
+                    member_id: None,
+                    servant_id: None,
+                    is_support: false,
                 }],
             }],
             command_condition_groups: vec![AdvancedCommandConditionGroup {
@@ -2199,18 +2231,30 @@ fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
                     servant: "servant_1".into(),
                     suit: "buster".into(),
                     min_crit_chance: Some(80),
+                    member_id: None,
+                    servant_id: None,
+                    is_support: false,
                 }],
             }],
             actions: vec![
                 AdvancedAction::Servant {
                     id: "sa_1".into(),
                     servant: Some("servant_1".into()),
+                    servant_member_id: None,
+                    servant_id: None,
+                    servant_is_support: false,
                     skill: Some("skill_1".into()),
                     target: None,
+                    target_member_id: None,
+                    target_servant_id: None,
+                    target_is_support: false,
                 },
                 AdvancedAction::Attack {
                     id: "atk_1".into(),
                     card: Some("servant_1_buster".into()),
+                    member_id: None,
+                    servant_id: None,
+                    is_support: false,
                 },
             ],
         }],

@@ -1,10 +1,20 @@
 import type { SlotItem } from "./ContentGrid";
 import type { Project } from "../types/project";
-import type { BattleScene, BattleTurn, PreparationAction } from "../types/command";
+import type {
+  AdvancedBattleScene,
+  AdvancedAttackAction,
+  AdvancedCommandCardCondition,
+  AdvancedNpSlotCondition,
+  AttackCard,
+  BattleScene,
+  BattleTurn,
+  PreparationAction,
+} from "../types/command";
 import type { Servant } from "../types/servant";
 import changeOrderRulesJson from "../../src-tauri/src/resources/change_order_servants.json";
 
 export interface PartyMember {
+  memberId?: string | null;
   servant: Servant | null;
   isSupport: boolean;
 }
@@ -24,7 +34,7 @@ type ChangeOrderRule = {
 const CHANGE_ORDER_RULES = changeOrderRulesJson as ChangeOrderRule[];
 
 export function toPartyMembers(lineup: (Servant | null)[]): PartyMember[] {
-  return lineup.map((servant) => ({ servant, isSupport: false }));
+  return lineup.map((servant) => ({ memberId: null, servant, isSupport: false }));
 }
 
 export function partyMembersToServants(members: PartyMember[]): (Servant | null)[] {
@@ -51,6 +61,7 @@ export function derivePartyMembers(
         null)
       : null;
   return slots.map((slot) => ({
+    memberId: slot.id,
     servant: slot.type === "support" ? supportPinned : slot.servant,
     isSupport: slot.type === "support",
   }));
@@ -88,12 +99,446 @@ function parseServantPosition(value: string | null | undefined): number | null {
   return Number(match[1]) - 1;
 }
 
+export function memberRefAt(
+  members: PartyMember[],
+  value: string | null | undefined
+): { memberId: string | null; servantId: number | null; isSupport: boolean } {
+  const index = parseServantPosition(value);
+  const member = index == null ? null : members[index] ?? null;
+  return {
+    memberId: member?.memberId ?? null,
+    servantId: member?.servant?.id ?? null,
+    isSupport: member?.isSupport === true,
+  };
+}
+
+export function resolveMemberRefIndex(
+  members: PartyMember[],
+  fallbackValue: string | null | undefined,
+  memberId: string | null | undefined,
+  servantId: number | null | undefined,
+  isSupport: boolean | null | undefined
+): number | null {
+  if (memberId) {
+    const index = members.findIndex((member) => member.memberId === memberId);
+    if (index >= 0) return index;
+  }
+  if (servantId != null) {
+    const support = isSupport === true;
+    const index = members.findIndex(
+      (member) => member.servant?.id === servantId && member.isSupport === support
+    );
+    if (index >= 0) return index;
+  }
+  return parseServantPosition(fallbackValue);
+}
+
+function resolveActionSlot(
+  members: PartyMember[],
+  fallbackValue: string | null | undefined,
+  memberId: string | null | undefined,
+  servantId: number | null | undefined,
+  isSupport: boolean | null | undefined
+): string | null {
+  const index = resolveMemberRefIndex(members, fallbackValue, memberId, servantId, isSupport);
+  return index == null ? fallbackValue ?? null : `servant_${index + 1}`;
+}
+
+function slotStringForMemberRef(
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[],
+  fallbackValue: string | null | undefined,
+  memberId: string | null | undefined,
+  servantId: number | null | undefined,
+  isSupport: boolean | null | undefined,
+  maxIndex: number
+): { value: string | null; memberId: string | null; servantId: number | null; isSupport: boolean } {
+  const fallbackRef = memberRefAt(previousMembers, fallbackValue);
+  const resolvedMemberId = memberId ?? fallbackRef.memberId;
+  const resolvedServantId = servantId ?? fallbackRef.servantId;
+  const resolvedIsSupport = isSupport ?? fallbackRef.isSupport;
+  const index = resolveMemberRefIndex(
+    nextMembers,
+    fallbackValue,
+    resolvedMemberId,
+    resolvedServantId,
+    resolvedIsSupport
+  );
+  return {
+    value: index != null && index < maxIndex ? `servant_${index + 1}` : fallbackValue ?? null,
+    memberId: resolvedMemberId,
+    servantId: resolvedServantId,
+    isSupport: resolvedIsSupport,
+  };
+}
+
+export function resolvePreparationAction(action: PreparationAction, members: PartyMember[]): PreparationAction {
+  if (action.type === "servant") {
+    return {
+      ...action,
+      servant: resolveActionSlot(
+        members,
+        action.servant,
+        action.servantMemberId,
+        action.servantId,
+        action.servantIsSupport
+      ),
+      target: resolveActionSlot(
+        members,
+        action.target,
+        action.targetMemberId,
+        action.targetServantId,
+        action.targetIsSupport
+      ),
+    };
+  }
+  if (action.type === "equipment") {
+    return {
+      ...action,
+      target: resolveActionSlot(
+        members,
+        action.target,
+        action.targetMemberId,
+        action.targetServantId,
+        action.targetIsSupport
+      ),
+      orderChange: action.orderChange
+        ? {
+            ...action.orderChange,
+            front: resolveActionSlot(
+              members,
+              action.orderChange.front,
+              action.orderChange.frontMemberId,
+              action.orderChange.frontServantId,
+              action.orderChange.frontIsSupport
+            ),
+            back: resolveActionSlot(
+              members,
+              action.orderChange.back,
+              action.orderChange.backMemberId,
+              action.orderChange.backServantId,
+              action.orderChange.backIsSupport
+            ),
+          }
+        : action.orderChange,
+    };
+  }
+  return {
+    ...action,
+    target: resolveActionSlot(
+      members,
+      action.target,
+      action.targetMemberId,
+      action.targetServantId,
+      action.targetIsSupport
+    ),
+  };
+}
+
+function withTargetRef<T extends { target: string | null }>(
+  action: T,
+  members: PartyMember[]
+): T & {
+  targetMemberId?: string | null;
+  targetServantId?: number | null;
+  targetIsSupport?: boolean;
+} {
+  const existing = action as T & {
+    targetMemberId?: string | null;
+    targetServantId?: number | null;
+    targetIsSupport?: boolean;
+  };
+  if (existing.targetMemberId != null || existing.targetServantId != null) {
+    return existing;
+  }
+  const ref = memberRefAt(members, action.target);
+  return {
+    ...existing,
+    targetMemberId: ref.memberId,
+    targetServantId: ref.servantId,
+    targetIsSupport: ref.isSupport,
+  };
+}
+
+export function relocatePreparationActionMembers(
+  action: PreparationAction,
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[]
+): PreparationAction {
+  if (action.type === "servant") {
+    const sourceRef =
+      action.servantMemberId != null || action.servantId != null
+        ? {
+            servantMemberId: action.servantMemberId ?? null,
+            servantId: action.servantId ?? null,
+            servantIsSupport: action.servantIsSupport === true,
+          }
+        : (() => {
+            const ref = memberRefAt(previousMembers, action.servant);
+            return {
+              servantMemberId: ref.memberId,
+              servantId: ref.servantId,
+              servantIsSupport: ref.isSupport,
+            };
+          })();
+    return resolvePreparationAction(
+      {
+        ...withTargetRef(action, previousMembers),
+        ...sourceRef,
+      },
+      nextMembers
+    );
+  }
+
+  if (action.type === "equipment") {
+    const orderChange = action.orderChange
+      ? {
+          ...action.orderChange,
+          ...(() => {
+            if (
+              action.orderChange?.frontMemberId != null ||
+              action.orderChange?.frontServantId != null
+            ) {
+              return {};
+            }
+            const ref = memberRefAt(previousMembers, action.orderChange?.front);
+            return {
+              frontMemberId: ref.memberId,
+              frontServantId: ref.servantId,
+              frontIsSupport: ref.isSupport,
+            };
+          })(),
+          ...(() => {
+            if (
+              action.orderChange?.backMemberId != null ||
+              action.orderChange?.backServantId != null
+            ) {
+              return {};
+            }
+            const ref = memberRefAt(previousMembers, action.orderChange?.back);
+            return {
+              backMemberId: ref.memberId,
+              backServantId: ref.servantId,
+              backIsSupport: ref.isSupport,
+            };
+          })(),
+        }
+      : action.orderChange;
+    return resolvePreparationAction(
+      {
+        ...withTargetRef(action, previousMembers),
+        orderChange,
+      },
+      nextMembers
+    );
+  }
+
+  return resolvePreparationAction(withTargetRef(action, previousMembers), nextMembers);
+}
+
+export function relocateAdvancedBattleSceneMembers(
+  scene: AdvancedBattleScene,
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[]
+): AdvancedBattleScene {
+  const mainOutput = scene.mainOutput
+    ? (() => {
+        const ref = slotStringForMemberRef(
+          previousMembers,
+          nextMembers,
+          scene.mainOutput?.servant,
+          scene.mainOutput?.memberId,
+          scene.mainOutput?.servantId,
+          scene.mainOutput?.isSupport,
+          3
+        );
+        return {
+          ...scene.mainOutput,
+          servant: ref.value as AdvancedBattleScene["mainOutput"] extends infer T
+            ? T extends { servant: infer S }
+              ? S
+              : never
+            : never,
+          memberId: ref.memberId,
+          servantId: ref.servantId,
+          isSupport: ref.isSupport,
+        };
+      })()
+    : scene.mainOutput;
+  return {
+    ...scene,
+    mainOutput,
+    commandConditions: scene.commandConditions?.map((condition) =>
+      relocateAdvancedCommandCardCondition(condition, previousMembers, nextMembers)
+    ),
+    controlActions: scene.controlActions?.map((action) =>
+      relocatePreparationActionMembers(action, previousMembers, nextMembers)
+    ),
+    startupActions: scene.startupActions?.map((action) =>
+      relocatePreparationActionMembers(action, previousMembers, nextMembers)
+    ),
+    rules: scene.rules.map((rule) => ({
+      ...rule,
+      npConditionGroups: rule.npConditionGroups.map((group) => ({
+        ...group,
+        slots: group.slots.map((slot) =>
+          relocateAdvancedNpSlotCondition(slot, previousMembers, nextMembers)
+        ),
+      })),
+      commandConditionGroups: rule.commandConditionGroups.map((group) => ({
+        ...group,
+        cards: group.cards.map((condition) =>
+          relocateAdvancedCommandCardCondition(condition, previousMembers, nextMembers)
+        ),
+      })),
+      actions: rule.actions.map((action) =>
+        action.type === "attack"
+          ? relocateAdvancedAttackActionMembers(action, previousMembers, nextMembers)
+          : relocatePreparationActionMembers(action, previousMembers, nextMembers)
+      ),
+    })),
+  };
+}
+
+function relocateAdvancedAttackActionMembers(
+  action: AdvancedAttackAction,
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[]
+): AdvancedAttackAction {
+  return relocateAttackCardMembers(action, previousMembers, nextMembers) as AdvancedAttackAction;
+}
+
+function relocateAdvancedNpSlotCondition(
+  condition: AdvancedNpSlotCondition,
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[]
+): AdvancedNpSlotCondition {
+  const ref = slotStringForMemberRef(
+    previousMembers,
+    nextMembers,
+    condition.servant,
+    condition.memberId,
+    condition.servantId,
+    condition.isSupport,
+    3
+  );
+  return {
+    ...condition,
+    servant: (ref.value ?? condition.servant) as AdvancedNpSlotCondition["servant"],
+    memberId: ref.memberId,
+    servantId: ref.servantId,
+    isSupport: ref.isSupport,
+  };
+}
+
+function relocateAdvancedCommandCardCondition(
+  condition: AdvancedCommandCardCondition,
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[]
+): AdvancedCommandCardCondition {
+  if (condition.servant === "any") return condition;
+  const ref = slotStringForMemberRef(
+    previousMembers,
+    nextMembers,
+    condition.servant,
+    condition.memberId,
+    condition.servantId,
+    condition.isSupport,
+    3
+  );
+  return {
+    ...condition,
+    servant: (ref.value ?? condition.servant) as AdvancedCommandCardCondition["servant"],
+    memberId: ref.memberId,
+    servantId: ref.servantId,
+    isSupport: ref.isSupport,
+  };
+}
+
+function relocateAttackCardMembers(
+  card: AttackCard,
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[]
+): AttackCard {
+  const match = card.card?.match(/^(servant_[1-6])_(.+)$/);
+  if (!match) return card;
+  const ref = slotStringForMemberRef(
+    previousMembers,
+    nextMembers,
+    match[1],
+    card.memberId,
+    card.servantId,
+    card.isSupport,
+    3
+  );
+  return {
+    ...card,
+    card: ref.value ? `${ref.value}_${match[2]}` : card.card,
+    memberId: ref.memberId,
+    servantId: ref.servantId,
+    isSupport: ref.isSupport,
+  };
+}
+
+function relocateBattleTurnMembers(
+  turn: BattleTurn,
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[]
+): BattleTurn {
+  return {
+    ...turn,
+    preparationActions: turn.preparationActions.map((action) =>
+      relocatePreparationActionMembers(action, previousMembers, nextMembers)
+    ),
+    servantActions: turn.servantActions?.map((action) =>
+      relocatePreparationActionMembers(action, previousMembers, nextMembers) as typeof action
+    ),
+    equipmentActions: turn.equipmentActions?.map((action) =>
+      relocatePreparationActionMembers(action, previousMembers, nextMembers) as typeof action
+    ),
+    commandSpellActions: turn.commandSpellActions?.map((action) =>
+      relocatePreparationActionMembers(action, previousMembers, nextMembers) as typeof action
+    ),
+    attackPriority: turn.attackPriority.map((card) =>
+      relocateAttackCardMembers(card, previousMembers, nextMembers)
+    ),
+  };
+}
+
+export function relocateBattleSceneMembers(
+  scene: BattleScene,
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[]
+): BattleScene {
+  return {
+    ...scene,
+    turns: scene.turns.map((turn) =>
+      relocateBattleTurnMembers(turn, previousMembers, nextMembers)
+    ),
+    preparationActions: scene.preparationActions?.map((action) =>
+      relocatePreparationActionMembers(action, previousMembers, nextMembers)
+    ),
+    servantActions: scene.servantActions?.map((action) =>
+      relocatePreparationActionMembers(action, previousMembers, nextMembers) as typeof action
+    ),
+    equipmentActions: scene.equipmentActions?.map((action) =>
+      relocatePreparationActionMembers(action, previousMembers, nextMembers) as typeof action
+    ),
+    commandSpellActions: scene.commandSpellActions?.map((action) =>
+      relocatePreparationActionMembers(action, previousMembers, nextMembers) as typeof action
+    ),
+    attackPriority: scene.attackPriority?.map((card) =>
+      relocateAttackCardMembers(card, previousMembers, nextMembers)
+    ),
+  };
+}
+
 function compactBackline(members: PartyMember[]) {
   const backline = members
     .slice(3)
     .filter((member) => Boolean(member.servant));
   for (let i = 3; i < members.length; i += 1) {
-    members[i] = backline[i - 3] ?? { servant: null, isSupport: false };
+    members[i] = backline[i - 3] ?? { memberId: null, servant: null, isSupport: false };
   }
 }
 
@@ -102,10 +547,10 @@ function removeAt(members: PartyMember[], index: number) {
   const replacementIndex = members.findIndex((member, i) => i >= 3 && member.servant);
   members[index] =
     replacementIndex === -1
-      ? { servant: null, isSupport: false }
+      ? { memberId: null, servant: null, isSupport: false }
       : { ...members[replacementIndex] };
   if (replacementIndex !== -1) {
-    members[replacementIndex] = { servant: null, isSupport: false };
+    members[replacementIndex] = { memberId: null, servant: null, isSupport: false };
   }
   compactBackline(members);
 }
@@ -145,11 +590,12 @@ function applyPreparationAction(
   action: PreparationAction,
   timing: ChangeOrderRule["timing"] = "immediate"
 ) {
+  const resolvedAction = resolvePreparationAction(action, members);
   if (timing === "endOfTurn" && action.type !== "servant") return;
 
-  if (action.type === "equipment" && action.orderChange) {
-    const frontIndex = parseServantPosition(action.orderChange.front);
-    const backIndex = parseServantPosition(action.orderChange.back);
+  if (resolvedAction.type === "equipment" && resolvedAction.orderChange) {
+    const frontIndex = parseServantPosition(resolvedAction.orderChange.front);
+    const backIndex = parseServantPosition(resolvedAction.orderChange.back);
     if (
       frontIndex != null &&
       backIndex != null &&
@@ -166,16 +612,16 @@ function applyPreparationAction(
     return;
   }
 
-  if (action.type !== "servant") return;
-  const sourceIndex = parseServantPosition(action.servant);
-  if (sourceIndex == null || !action.skill) return;
+  if (resolvedAction.type !== "servant") return;
+  const sourceIndex = parseServantPosition(resolvedAction.servant);
+  if (sourceIndex == null || !resolvedAction.skill) return;
   const servant = members[sourceIndex]?.servant;
   if (!servant) return;
   const rule = CHANGE_ORDER_RULES.find(
     (r) =>
       r.servantId === servant.id &&
       r.trigger.type === "servantSkill" &&
-      r.trigger.skill === action.skill &&
+      r.trigger.skill === resolvedAction.skill &&
       (r.timing ?? "immediate") === timing
   );
   if (rule) applyRule(members, sourceIndex, rule);

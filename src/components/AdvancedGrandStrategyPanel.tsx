@@ -151,8 +151,10 @@ function GrandRuleEditorServantPicker({
           onClick={() =>
             onSelect({
               grandServant: !grandSelected,
+              memberId: null,
               slotIndex: null,
               servantId: null,
+              isSupport: false,
             })
           }
         >
@@ -163,8 +165,11 @@ function GrandRuleEditorServantPicker({
           const selected =
             !grandSelected &&
             servant != null &&
-            editingCard.slotIndex === index &&
-            editingCard.servantId === servant.id;
+            (editingCard.memberId != null
+              ? editingCard.memberId === member.memberId
+              : editingCard.slotIndex === index) &&
+            editingCard.servantId === servant.id &&
+            editingCard.isSupport === member.isSupport;
           return (
             <div className="grand-rule-editor-servant-cell" key={`${servant?.variantKey ?? "empty"}-${index}`}>
               {index === 3 && <span className="battle-choice-separator" aria-hidden />}
@@ -178,8 +183,10 @@ function GrandRuleEditorServantPicker({
                 onClick={() =>
                   onSelect({
                     grandServant: false,
+                    memberId: selected ? null : member.memberId ?? null,
                     slotIndex: selected ? null : index,
                     servantId: selected ? null : servant?.id ?? null,
+                    isSupport: selected ? false : member.isSupport,
                   })
                 }
               />
@@ -343,7 +350,9 @@ export function GrandCardStrategyPanel({
   const editingServant =
     editingCard?.slotIndex == null
       ? null
-      : partyLineup[editingCard.slotIndex] ?? null;
+      : editingCard.memberId != null
+        ? partyMembers.find((member) => member.memberId === editingCard.memberId)?.servant ?? null
+        : partyLineup[editingCard.slotIndex] ?? null;
 
   const persist = (patch: Partial<GrandCardStrategy>) => {
     onChange?.({
@@ -390,9 +399,11 @@ export function GrandCardStrategyPanel({
       slots: rule.slots.map((slot, index) => {
         if (index !== editingSlot.slotIndex) return slot;
         const next = { ...slot, ...patch };
-        if (patch.slotIndex !== undefined || patch.servantId !== undefined) {
+        if (patch.memberId !== undefined || patch.slotIndex !== undefined || patch.servantId !== undefined) {
           const servant =
-            next.slotIndex == null
+            next.memberId != null
+              ? partyMembers.find((member) => member.memberId === next.memberId)?.servant ?? null
+              : next.slotIndex == null
               ? null
               : partyLineup[next.slotIndex] ?? null;
           if (next.kind === "np" && servant?.noblePhantasmCard) {

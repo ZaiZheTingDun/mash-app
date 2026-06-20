@@ -12,6 +12,7 @@ import { battleActorLabel, servantLabel } from "./battleActorLabels";
 import {
   deriveMembersAfterAttackCards,
   deriveMembersAfterPreparationActions,
+  memberRefAt,
   partyMembersToServants,
   toPartyMembers,
   type PartyMember,
@@ -455,6 +456,33 @@ export function BattleSceneBlock({
     onChange(emptyLegacyFields({ ...scene, enemyTarget }));
   };
 
+  const targetRef = (target: string | null) => {
+    const ref = memberRefAt(currentPartyMembers, target);
+    return {
+      targetMemberId: ref.memberId,
+      targetServantId: ref.servantId,
+      targetIsSupport: ref.isSupport,
+    };
+  };
+
+  const servantRef = (servant: string | null) => {
+    const ref = memberRefAt(currentPartyMembers, servant);
+    return {
+      servantMemberId: ref.memberId,
+      servantId: ref.servantId,
+      servantIsSupport: ref.isSupport,
+    };
+  };
+
+  const orderChangeRef = (key: "front" | "back", slot: PartySlot) => {
+    const ref = memberRefAt(currentPartyMembers, slot);
+    return {
+      [`${key}MemberId`]: ref.memberId,
+      [`${key}ServantId`]: ref.servantId,
+      [`${key}IsSupport`]: ref.isSupport,
+    };
+  };
+
   const finishPrepAction = (draft: Extract<PrepDraft, { step: "target" }>, target: string | null) => {
     let action: PreparationAction;
     if (draft.source === "equipment") {
@@ -463,6 +491,7 @@ export function BattleSceneBlock({
         id: createId("eq"),
         skill: draft.option,
         target,
+        ...targetRef(target),
         orderChange: null,
       } satisfies EquipmentAction;
     } else if (draft.source === "commandSpell") {
@@ -471,14 +500,17 @@ export function BattleSceneBlock({
         id: createId("cs"),
         spell: draft.option as CommandSpellAction["spell"],
         target,
+        ...targetRef(target),
       } satisfies CommandSpellAction;
     } else {
       action = {
         type: "servant",
         id: createId("sa"),
         servant: draft.source,
+        ...servantRef(draft.source),
         skill: draft.option,
         target,
+        ...targetRef(target),
       } satisfies ServantAction;
     }
     updatePreparationActions([...preparationActions, action]);
@@ -497,7 +529,9 @@ export function BattleSceneBlock({
       target: null,
       orderChange: {
         front: draft.front,
+        ...orderChangeRef("front", draft.front),
         back,
+        ...orderChangeRef("back", back),
       },
     } satisfies EquipmentAction;
     updatePreparationActions([...preparationActions, action]);
@@ -507,13 +541,20 @@ export function BattleSceneBlock({
   const finishAttackAction = (source: AttackSource, option: string) => {
     const next = [...attackPriority];
     const card = `${source}_${option}`;
+    const ref = memberRefAt(currentPartyMembers, source);
+    const patch = {
+      card,
+      memberId: ref.memberId,
+      servantId: ref.servantId,
+      isSupport: ref.isSupport,
+    };
     if (attackDraft?.targetIndex != null) {
       next[attackDraft.targetIndex] = {
         ...(next[attackDraft.targetIndex] ?? { id: createId("atk") }),
-        card,
+        ...patch,
       };
     } else {
-      next.push({ id: createId("atk"), card });
+      next.push({ id: createId("atk"), ...patch });
     }
     updateAttackPriority(next);
     setAttackDraft(null);

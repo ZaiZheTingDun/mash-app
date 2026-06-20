@@ -10,6 +10,8 @@ use super::*;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServantSlotConfig {
+    #[serde(default)]
+    pub member_id: Option<String>,
     pub slot_index: u32,
     pub servant_id: u32,
 }
@@ -66,9 +68,13 @@ impl Default for GrandCardStrategy {
 #[serde(rename_all = "camelCase")]
 pub struct GrandCardRuleSlotConfig {
     #[serde(default)]
+    pub member_id: Option<String>,
+    #[serde(default)]
     pub slot_index: Option<u32>,
     #[serde(default)]
     pub servant_id: Option<u32>,
+    #[serde(default)]
+    pub is_support: bool,
     #[serde(default)]
     pub grand_servant: bool,
     #[serde(default)]
@@ -90,7 +96,13 @@ pub struct GrandCardRuleConfig {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GrandServantConfig {
+    #[serde(default)]
+    pub member_id: Option<String>,
     pub slot_index: u32,
+    #[serde(default)]
+    pub servant_id: Option<u32>,
+    #[serde(default)]
+    pub is_support: bool,
     #[serde(default = "default_grand_np_card")]
     pub np_card: String,
     #[serde(default = "default_grand_card_priority")]
@@ -114,6 +126,7 @@ impl Default for GrandClass {
 pub(crate) struct GrandServantRuntimeConfig {
     pub(crate) slot_index: usize,
     pub(crate) servant_id: u32,
+    pub(crate) is_support: bool,
     pub(crate) np_card: String,
     pub(crate) priority: String,
 }
@@ -150,6 +163,9 @@ pub struct RunConfig {
     /// the full 1-6 position map to stay accurate after a swap.
     #[serde(default)]
     pub support_slot_index: Option<u32>,
+    /// Stable team-builder slot id of the pinned support member.
+    #[serde(default)]
+    pub support_member_id: Option<String>,
     /// Craft-essence id pinned via the team-builder support CE slot.
     /// When `Some`, `handle_support_select` runs `verify_support_ce`
     /// against each OCR-detected row and picks the first row whose CE

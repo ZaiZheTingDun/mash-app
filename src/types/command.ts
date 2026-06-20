@@ -2,13 +2,25 @@ export interface ServantAction {
   type: "servant";
   id: string;
   servant: string | null;
+  servantMemberId?: string | null;
+  servantId?: number | null;
+  servantIsSupport?: boolean;
   skill: string | null;
   target: string | null;
+  targetMemberId?: string | null;
+  targetServantId?: number | null;
+  targetIsSupport?: boolean;
 }
 
 export interface OrderChangeSelection {
   front: string | null;
+  frontMemberId?: string | null;
+  frontServantId?: number | null;
+  frontIsSupport?: boolean;
   back: string | null;
+  backMemberId?: string | null;
+  backServantId?: number | null;
+  backIsSupport?: boolean;
 }
 
 export interface EquipmentAction {
@@ -16,6 +28,9 @@ export interface EquipmentAction {
   id: string;
   skill: string | null;
   target: string | null;
+  targetMemberId?: string | null;
+  targetServantId?: number | null;
+  targetIsSupport?: boolean;
   orderChange?: OrderChangeSelection | null;
 }
 
@@ -26,6 +41,9 @@ export interface CommandSpellAction {
   id: string;
   spell: CommandSpell | null;
   target: string | null;
+  targetMemberId?: string | null;
+  targetServantId?: number | null;
+  targetIsSupport?: boolean;
 }
 
 export type PreparationAction =
@@ -36,6 +54,9 @@ export type PreparationAction =
 export interface AttackCard {
   id: string;
   card: string | null;
+  memberId?: string | null;
+  servantId?: number | null;
+  isSupport?: boolean;
 }
 
 export interface BattleTurn {
@@ -61,6 +82,9 @@ export interface BattleScene {
 
 export interface AdvancedNpSlotCondition {
   servant: "servant_1" | "servant_2" | "servant_3";
+  memberId?: string | null;
+  servantId?: number | null;
+  isSupport?: boolean;
   ready: boolean;
 }
 
@@ -72,6 +96,9 @@ export interface AdvancedNpConditionGroup {
 export interface AdvancedCommandCardCondition {
   slot: number;
   servant: "servant_1" | "servant_2" | "servant_3" | "any";
+  memberId?: string | null;
+  servantId?: number | null;
+  isSupport?: boolean;
   suit: "buster" | "arts" | "quick" | "any";
   minCritChance: number | null;
 }
@@ -85,6 +112,9 @@ export interface AdvancedAttackAction {
   type: "attack";
   id: string;
   card: string | null;
+  memberId?: string | null;
+  servantId?: number | null;
+  isSupport?: boolean;
 }
 
 export type AdvancedAction = PreparationAction | AdvancedAttackAction;
@@ -99,7 +129,10 @@ export interface AdvancedRule {
 export type AdvancedOutputType = "np" | "critical";
 
 export interface AdvancedMainOutput {
+  memberId?: string | null;
   servant: "servant_1" | "servant_2" | "servant_3" | null;
+  servantId?: number | null;
+  isSupport?: boolean;
   outputType: AdvancedOutputType | null;
   npCard?: "auto" | "buster" | "arts" | "quick" | null;
 }

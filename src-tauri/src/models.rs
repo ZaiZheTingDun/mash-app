@@ -10,8 +10,20 @@ pub enum Action {
     Servant {
         id: String,
         servant: Option<String>,
+        #[serde(rename = "servantMemberId", default)]
+        servant_member_id: Option<String>,
+        #[serde(rename = "servantId", default)]
+        servant_id: Option<u32>,
+        #[serde(rename = "servantIsSupport", default)]
+        servant_is_support: bool,
         skill: Option<String>,
         target: Option<String>,
+        #[serde(rename = "targetMemberId", default)]
+        target_member_id: Option<String>,
+        #[serde(rename = "targetServantId", default)]
+        target_servant_id: Option<u32>,
+        #[serde(rename = "targetIsSupport", default)]
+        target_is_support: bool,
     },
     #[serde(rename = "equipment")]
     Equipment {
@@ -19,6 +31,12 @@ pub enum Action {
         skill: Option<String>,
         #[serde(default)]
         target: Option<String>,
+        #[serde(rename = "targetMemberId", default)]
+        target_member_id: Option<String>,
+        #[serde(rename = "targetServantId", default)]
+        target_servant_id: Option<u32>,
+        #[serde(rename = "targetIsSupport", default)]
+        target_is_support: bool,
         #[serde(rename = "orderChange", default)]
         order_change: Option<OrderChangeSelection>,
     },
@@ -28,19 +46,43 @@ pub enum Action {
         spell: Option<String>,
         #[serde(default)]
         target: Option<String>,
+        #[serde(rename = "targetMemberId", default)]
+        target_member_id: Option<String>,
+        #[serde(rename = "targetServantId", default)]
+        target_servant_id: Option<u32>,
+        #[serde(rename = "targetIsSupport", default)]
+        target_is_support: bool,
     },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct OrderChangeSelection {
     pub front: Option<String>,
+    #[serde(rename = "frontMemberId", default)]
+    pub front_member_id: Option<String>,
+    #[serde(rename = "frontServantId", default)]
+    pub front_servant_id: Option<u32>,
+    #[serde(rename = "frontIsSupport", default)]
+    pub front_is_support: bool,
     pub back: Option<String>,
+    #[serde(rename = "backMemberId", default)]
+    pub back_member_id: Option<String>,
+    #[serde(rename = "backServantId", default)]
+    pub back_servant_id: Option<u32>,
+    #[serde(rename = "backIsSupport", default)]
+    pub back_is_support: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AttackCard {
     pub id: String,
     pub card: Option<String>,
+    #[serde(rename = "memberId", default)]
+    pub member_id: Option<String>,
+    #[serde(rename = "servantId", default)]
+    pub servant_id: Option<u32>,
+    #[serde(rename = "isSupport", default)]
+    pub is_support: bool,
 }
 
 /// One configured turn inside a battle scene. The runner selects a
@@ -142,6 +184,12 @@ impl BattleScene {
 #[serde(rename_all = "camelCase")]
 pub struct AdvancedNpSlotCondition {
     pub servant: String,
+    #[serde(default)]
+    pub member_id: Option<String>,
+    #[serde(default)]
+    pub servant_id: Option<u32>,
+    #[serde(default)]
+    pub is_support: bool,
     pub ready: bool,
 }
 
@@ -158,6 +206,12 @@ pub struct AdvancedNpConditionGroup {
 pub struct AdvancedCommandCardCondition {
     pub slot: u32,
     pub servant: String,
+    #[serde(default)]
+    pub member_id: Option<String>,
+    #[serde(default)]
+    pub servant_id: Option<u32>,
+    #[serde(default)]
+    pub is_support: bool,
     pub suit: String,
     #[serde(default)]
     pub min_crit_chance: Option<u32>,
@@ -178,8 +232,20 @@ pub enum AdvancedAction {
     Servant {
         id: String,
         servant: Option<String>,
+        #[serde(rename = "servantMemberId", default)]
+        servant_member_id: Option<String>,
+        #[serde(rename = "servantId", default)]
+        servant_id: Option<u32>,
+        #[serde(rename = "servantIsSupport", default)]
+        servant_is_support: bool,
         skill: Option<String>,
         target: Option<String>,
+        #[serde(rename = "targetMemberId", default)]
+        target_member_id: Option<String>,
+        #[serde(rename = "targetServantId", default)]
+        target_servant_id: Option<u32>,
+        #[serde(rename = "targetIsSupport", default)]
+        target_is_support: bool,
     },
     #[serde(rename = "equipment")]
     Equipment {
@@ -187,6 +253,12 @@ pub enum AdvancedAction {
         skill: Option<String>,
         #[serde(default)]
         target: Option<String>,
+        #[serde(rename = "targetMemberId", default)]
+        target_member_id: Option<String>,
+        #[serde(rename = "targetServantId", default)]
+        target_servant_id: Option<u32>,
+        #[serde(rename = "targetIsSupport", default)]
+        target_is_support: bool,
         #[serde(rename = "orderChange", default)]
         order_change: Option<OrderChangeSelection>,
     },
@@ -196,9 +268,24 @@ pub enum AdvancedAction {
         spell: Option<String>,
         #[serde(default)]
         target: Option<String>,
+        #[serde(rename = "targetMemberId", default)]
+        target_member_id: Option<String>,
+        #[serde(rename = "targetServantId", default)]
+        target_servant_id: Option<u32>,
+        #[serde(rename = "targetIsSupport", default)]
+        target_is_support: bool,
     },
     #[serde(rename = "attack")]
-    Attack { id: String, card: Option<String> },
+    Attack {
+        id: String,
+        card: Option<String>,
+        #[serde(rename = "memberId", default)]
+        member_id: Option<String>,
+        #[serde(rename = "servantId", default)]
+        servant_id: Option<u32>,
+        #[serde(rename = "isSupport", default)]
+        is_support: bool,
+    },
 }
 
 impl AdvancedAction {
@@ -207,29 +294,57 @@ impl AdvancedAction {
             Self::Servant {
                 id,
                 servant,
+                servant_member_id,
+                servant_id,
+                servant_is_support,
                 skill,
                 target,
+                target_member_id,
+                target_servant_id,
+                target_is_support,
             } => Some(Action::Servant {
                 id: id.clone(),
                 servant: servant.clone(),
+                servant_member_id: servant_member_id.clone(),
+                servant_id: *servant_id,
+                servant_is_support: *servant_is_support,
                 skill: skill.clone(),
                 target: target.clone(),
+                target_member_id: target_member_id.clone(),
+                target_servant_id: *target_servant_id,
+                target_is_support: *target_is_support,
             }),
             Self::Equipment {
                 id,
                 skill,
                 target,
+                target_member_id,
+                target_servant_id,
+                target_is_support,
                 order_change,
             } => Some(Action::Equipment {
                 id: id.clone(),
                 skill: skill.clone(),
                 target: target.clone(),
+                target_member_id: target_member_id.clone(),
+                target_servant_id: *target_servant_id,
+                target_is_support: *target_is_support,
                 order_change: order_change.clone(),
             }),
-            Self::CommandSpell { id, spell, target } => Some(Action::CommandSpell {
+            Self::CommandSpell {
+                id,
+                spell,
+                target,
+                target_member_id,
+                target_servant_id,
+                target_is_support,
+            } => Some(Action::CommandSpell {
                 id: id.clone(),
                 spell: spell.clone(),
                 target: target.clone(),
+                target_member_id: target_member_id.clone(),
+                target_servant_id: *target_servant_id,
+                target_is_support: *target_is_support,
             }),
             Self::Attack { .. } => None,
         }
@@ -237,9 +352,18 @@ impl AdvancedAction {
 
     pub(crate) fn as_attack_card(&self) -> Option<AttackCard> {
         match self {
-            Self::Attack { id, card } => Some(AttackCard {
+            Self::Attack {
+                id,
+                card,
+                member_id,
+                servant_id,
+                is_support,
+            } => Some(AttackCard {
                 id: id.clone(),
                 card: card.clone(),
+                member_id: member_id.clone(),
+                servant_id: *servant_id,
+                is_support: *is_support,
             }),
             _ => None,
         }
@@ -269,7 +393,13 @@ pub enum AdvancedOutputType {
 #[serde(rename_all = "camelCase")]
 pub struct AdvancedMainOutput {
     #[serde(default)]
+    pub member_id: Option<String>,
+    #[serde(default)]
     pub servant: Option<String>,
+    #[serde(default)]
+    pub servant_id: Option<u32>,
+    #[serde(default)]
+    pub is_support: bool,
     #[serde(default)]
     pub output_type: Option<AdvancedOutputType>,
     #[serde(rename = "npCard", default)]
@@ -464,9 +594,13 @@ impl Default for GrandCardStrategy {
 #[serde(rename_all = "camelCase")]
 pub struct GrandCardRuleSlotConfig {
     #[serde(default)]
+    pub member_id: Option<String>,
+    #[serde(default)]
     pub slot_index: Option<u32>,
     #[serde(default)]
     pub servant_id: Option<u32>,
+    #[serde(default)]
+    pub is_support: bool,
     #[serde(default)]
     pub grand_servant: bool,
     #[serde(default)]
@@ -488,7 +622,13 @@ pub struct GrandCardRuleConfig {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GrandServantConfig {
+    #[serde(default)]
+    pub member_id: Option<String>,
     pub slot_index: u32,
+    #[serde(default)]
+    pub servant_id: Option<u32>,
+    #[serde(default)]
+    pub is_support: bool,
     #[serde(default = "default_grand_np_card")]
     pub np_card: String,
     #[serde(default = "default_grand_card_priority")]

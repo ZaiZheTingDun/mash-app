@@ -242,7 +242,7 @@ describe("CommandEditor pagination", () => {
     await user.click(screen.getByRole("button", { name: "甲" }));
 
     expect(onGrandServantsChange).toHaveBeenCalledWith([
-      { slotIndex: 0, npCard: "auto", priority: "damage" },
+      { memberId: null, slotIndex: 0, servantId: 1, isSupport: false, npCard: "auto", priority: "damage" },
     ]);
   });
 
@@ -280,7 +280,7 @@ describe("CommandEditor pagination", () => {
     await user.click(screen.getByRole("button", { name: "剑阶甲" }));
 
     expect(onGrandServantsChange).toHaveBeenCalledWith([
-      { slotIndex: 0, npCard: "auto", priority: "damage" },
+      { memberId: null, slotIndex: 0, servantId: 1, isSupport: false, npCard: "auto", priority: "damage" },
     ]);
   });
 
@@ -349,8 +349,8 @@ describe("CommandEditor pagination", () => {
     await user.click(screen.getByRole("button", { name: "狂阶乙" }));
 
     expect(onGrandServantsChange).toHaveBeenCalledWith([
-      { slotIndex: 0, npCard: "auto", priority: "damage" },
-      { slotIndex: 1, npCard: "auto", priority: "damage" },
+      { memberId: null, slotIndex: 0, servantId: null, isSupport: false, npCard: "auto", priority: "damage" },
+      { memberId: null, slotIndex: 1, servantId: 2, isSupport: false, npCard: "auto", priority: "damage" },
     ]);
   });
 

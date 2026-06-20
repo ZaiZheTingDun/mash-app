@@ -8,6 +8,8 @@ import {
   derivePartyMembers,
   derivePartyLineup,
   derivePartyServants,
+  relocateAdvancedBattleSceneMembers,
+  relocateBattleSceneMembers,
 } from "./components/partyServants";
 import { CommandEditor } from "./components/CommandEditor";
 import { BattlePage } from "./components/BattlePage";
@@ -19,6 +21,7 @@ import { SetupPage } from "./components/SetupPage";
 import { SettingsDialog, type SettingsSection } from "./components/SettingsPage";
 import { SelfCheckDialog } from "./components/SelfCheckDialog";
 import { createInitialProjectSlots } from "./components/projectSlots";
+import { relocateGrandCardStrategySlots, relocateGrandServants } from "./components/grandRuleSlots";
 import { featureToggles } from "./featureToggles";
 import type { SlotItem } from "./components/ContentGrid";
 import type { Servant } from "./types/servant";
@@ -28,6 +31,7 @@ import type { AssetBundleStatus } from "./types/assets";
 import type { RuntimeStatus } from "./types/runtime";
 import type { SelfCheckStatus } from "./types/selfCheck";
 import type { AppTheme, AppThemePreference } from "./types/theme";
+import type { AdvancedBattleScene, BattleScene } from "./types/command";
 import {
   appendCoalescedOperationLog,
   type AttackLogMeta,
@@ -388,9 +392,55 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         craftEssenceId: s.craftEssence?.id ?? null,
         craftEssenceMlbRequired: s.craftEssenceMlbRequired ?? true,
       }));
-      void handleUpdateProject({ ...activeProject, slots: projectSlots });
+      const grandCardStrategy = activeProject.grandCardStrategy
+        ? relocateGrandCardStrategySlots(
+            activeProject.grandCardStrategy,
+            next,
+            activeProject.supportServantId
+          )
+        : activeProject.grandCardStrategy;
+      const grandServants = relocateGrandServants(
+        activeProject.grandServants,
+        next,
+        activeProject.supportServantId
+      );
+      void handleUpdateProject({ ...activeProject, slots: projectSlots, grandCardStrategy, grandServants });
+      const previousPartyMembers = derivePartyMembers(slots, activeProject, servants);
+      const nextPartyMembers = derivePartyMembers(
+        next,
+        { ...activeProject, slots: projectSlots },
+        servants
+      );
+      void invoke<AdvancedBattleScene[]>("load_advanced_battle_scenes", {
+        projectId: activeProject.id,
+      })
+        .then((scenes) => {
+          if (scenes.length === 0) return;
+          const relocatedScenes = scenes.map((scene) =>
+            relocateAdvancedBattleSceneMembers(scene, previousPartyMembers, nextPartyMembers)
+          );
+          return invoke("save_advanced_battle_scenes", {
+            projectId: activeProject.id,
+            scenes: relocatedScenes,
+          });
+        })
+        .catch(console.error);
+      void invoke<BattleScene[]>("load_battle_scenes", {
+        projectId: activeProject.id,
+      })
+        .then((scenes) => {
+          if (scenes.length === 0) return;
+          const relocatedScenes = scenes.map((scene) =>
+            relocateBattleSceneMembers(scene, previousPartyMembers, nextPartyMembers)
+          );
+          return invoke("save_battle_scenes", {
+            projectId: activeProject.id,
+            scenes: relocatedScenes,
+          });
+        })
+        .catch(console.error);
     },
-    [activeProject, handleUpdateProject]
+    [activeProject, handleUpdateProject, servants, slots]
   );
 
   const partyServants = useMemo(
@@ -486,13 +536,23 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
           continue;
         }
         const member =
-          slot.slotIndex != null ? partyMembers[slot.slotIndex] : null;
+          slot.memberId != null
+            ? partyMembers.find((candidate) => candidate.memberId === slot.memberId)
+            : slot.slotIndex != null
+              ? partyMembers[slot.slotIndex]
+              : null;
         const slotMatches =
-          member?.servant != null && member.servant.id === slot.servantId;
+          member?.servant != null &&
+          member.servant.id === slot.servantId &&
+          member.isSupport === (slot.isSupport === true);
         const legacyMatches =
           slot.slotIndex == null &&
           slot.servantId != null &&
-          partyMembers.some((candidate) => candidate.servant?.id === slot.servantId);
+          partyMembers.some(
+            (candidate) =>
+              candidate.servant?.id === slot.servantId &&
+              candidate.isSupport === (slot.isSupport === true)
+          );
         if (slot.servantId != null && !slotMatches && !legacyMatches) {
           missing.push(`${rule.name || `规则 ${ruleIndex + 1}`} 第 ${slotIndex + 1} 张`);
         }

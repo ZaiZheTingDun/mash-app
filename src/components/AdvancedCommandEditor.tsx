@@ -33,7 +33,10 @@ import {
 } from "./advancedCommandModel";
 import {
   deriveMembersAfterPreparationActions,
+  memberRefAt,
   partyMembersToServants,
+  resolveMemberRefIndex,
+  resolvePreparationAction,
   toPartyMembers,
   type PartyMember,
 } from "./partyServants";
@@ -156,14 +159,25 @@ function GrandOutputSettings({
     onChange?.(normalizeGrandServants(next));
   };
   const addGrandServant = (slotIndex: number) => {
+    const member = partyMembers[slotIndex];
     if (
       normalized.length >= 2 ||
       selectedSlots.has(slotIndex) ||
-      partyLineup[slotIndex] == null
+      member?.servant == null
     ) {
       return;
     }
-    persist([...normalized, { slotIndex, npCard: "auto", priority: "damage" }]);
+    persist([
+      ...normalized,
+      {
+        memberId: member.memberId ?? null,
+        slotIndex,
+        servantId: member.servant.id,
+        isSupport: member.isSupport,
+        npCard: "auto",
+        priority: "damage",
+      },
+    ]);
   };
   const removeGrandServant = (index: number) => {
     persist(normalized.filter((_, itemIndex) => itemIndex !== index));
@@ -319,12 +333,48 @@ function AdvancedPreparationActionSummary({
   faces: Record<string, string | null>;
 }) {
   const partyLineup = partyMembersToServants(partyMembers);
-  const targetIndex = servantSlotIndex(action.target);
+  const resolvedAction = resolvePreparationAction(action, partyMembers);
+  const targetIndex =
+    action.type === "servant"
+      ? resolveMemberRefIndex(
+          partyMembers,
+          action.target,
+          action.targetMemberId,
+          action.targetServantId,
+          action.targetIsSupport
+        )
+      : action.type === "equipment"
+        ? resolveMemberRefIndex(
+            partyMembers,
+            action.target,
+            action.targetMemberId,
+            action.targetServantId,
+            action.targetIsSupport
+          )
+        : resolveMemberRefIndex(
+            partyMembers,
+            action.target,
+            action.targetMemberId,
+            action.targetServantId,
+            action.targetIsSupport
+          );
   const orderChangeSlots =
     action.type === "equipment" && action.orderChange
       ? {
-          front: servantSlotIndex(action.orderChange.front),
-          back: servantSlotIndex(action.orderChange.back),
+          front: resolveMemberRefIndex(
+            partyMembers,
+            action.orderChange.front,
+            action.orderChange.frontMemberId,
+            action.orderChange.frontServantId,
+            action.orderChange.frontIsSupport
+          ),
+          back: resolveMemberRefIndex(
+            partyMembers,
+            action.orderChange.back,
+            action.orderChange.backMemberId,
+            action.orderChange.backServantId,
+            action.orderChange.backIsSupport
+          ),
         }
       : null;
 
@@ -332,8 +382,15 @@ function AdvancedPreparationActionSummary({
   let sourceText: string;
   let actionText: string;
 
-  if (action.type === "servant") {
-    const source = servantSlotIndex(action.servant) ?? 0;
+  if (resolvedAction.type === "servant") {
+    const source =
+      resolveMemberRefIndex(
+        partyMembers,
+        action.type === "servant" ? action.servant : null,
+        action.type === "servant" ? action.servantMemberId : null,
+        action.type === "servant" ? action.servantId : null,
+        action.type === "servant" ? action.servantIsSupport : false
+      ) ?? 0;
     const member = partyMembers[source] ?? { servant: null, isSupport: false };
     const servant = member.servant;
     sourceFace = (
@@ -345,7 +402,7 @@ function AdvancedPreparationActionSummary({
       />
     );
     sourceText = servantLabel(source, servant);
-    actionText = `释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`;
+    actionText = `释放 ${SKILL_LABELS[resolvedAction.skill ?? ""] ?? "技能"}`;
   } else {
     const kind = action.type === "equipment" ? "equipment" : "commandSpell";
     sourceFace = (
@@ -353,13 +410,13 @@ function AdvancedPreparationActionSummary({
     );
     sourceText = action.type === "equipment" ? "御主礼装" : "令咒";
     actionText =
-      action.type === "equipment"
-        ? `释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`
-        : COMMAND_SPELL_LABELS[action.spell ?? ""] ?? "行动";
+      resolvedAction.type === "equipment"
+        ? `释放 ${SKILL_LABELS[resolvedAction.skill ?? ""] ?? "技能"}`
+        : COMMAND_SPELL_LABELS[resolvedAction.spell ?? ""] ?? "行动";
   }
 
   return (
-    <span className="battle-action-summary" aria-label={prepSummary(action, partyLineup)}>
+    <span className="battle-action-summary" aria-label={prepSummary(resolvedAction, partyLineup)}>
       {sourceFace}
       <Text size="2" weight="medium" className="battle-action-name">
         {sourceText} {actionText}
@@ -548,9 +605,41 @@ function AdvancedStrategyEditor({
     onChange({ ...scene, controlActions: actions });
   };
 
+  const targetRef = (members: PartyMember[], target: string | null) => {
+    const ref = memberRefAt(members, target);
+    return {
+      targetMemberId: ref.memberId,
+      targetServantId: ref.servantId,
+      targetIsSupport: ref.isSupport,
+    };
+  };
+
+  const servantRef = (members: PartyMember[], servant: string | null) => {
+    const ref = memberRefAt(members, servant);
+    return {
+      servantMemberId: ref.memberId,
+      servantId: ref.servantId,
+      servantIsSupport: ref.isSupport,
+    };
+  };
+
+  const orderChangeRef = (
+    members: PartyMember[],
+    key: "front" | "back",
+    slot: PartySlot
+  ) => {
+    const ref = memberRefAt(members, slot);
+    return {
+      [`${key}MemberId`]: ref.memberId,
+      [`${key}ServantId`]: ref.servantId,
+      [`${key}IsSupport`]: ref.isSupport,
+    };
+  };
+
   const makePrepAction = (
     draft: Extract<PrepDraft, { step: "target" }>,
-    target: string | null
+    target: string | null,
+    members: PartyMember[]
   ): PreparationAction => {
     if (draft.source === "equipment") {
       return {
@@ -558,6 +647,7 @@ function AdvancedStrategyEditor({
         id: createId("eq"),
         skill: draft.option,
         target,
+        ...targetRef(members, target),
         orderChange: null,
       } satisfies EquipmentAction;
     }
@@ -567,14 +657,17 @@ function AdvancedStrategyEditor({
         id: createId("cs"),
         spell: draft.option as CommandSpellAction["spell"],
         target,
+        ...targetRef(members, target),
       } satisfies CommandSpellAction;
     }
     return {
       type: "servant",
       id: createId("sa"),
       servant: draft.source,
+      ...servantRef(members, draft.source),
       skill: draft.option,
       target,
+      ...targetRef(members, target),
     } satisfies ServantAction;
   };
 
@@ -582,7 +675,7 @@ function AdvancedStrategyEditor({
     draft: Extract<PrepDraft, { step: "target" }>,
     target: string | null
   ) => {
-    updateStartupActions([...startupActions, makePrepAction(draft, target)]);
+    updateStartupActions([...startupActions, makePrepAction(draft, target, currentPartyMembers)]);
     setPrepDraft(null);
   };
 
@@ -590,7 +683,7 @@ function AdvancedStrategyEditor({
     draft: Extract<PrepDraft, { step: "target" }>,
     target: string | null
   ) => {
-    updateControlActions([...controlActions, makePrepAction(draft, target)]);
+    updateControlActions([...controlActions, makePrepAction(draft, target, postControlMembers)]);
     setControlDraft(null);
   };
 
@@ -608,7 +701,9 @@ function AdvancedStrategyEditor({
         target: null,
         orderChange: {
           front: draft.front,
+          ...orderChangeRef(currentPartyMembers, "front", draft.front),
           back,
+          ...orderChangeRef(currentPartyMembers, "back", back),
         } satisfies OrderChangeSelection,
       } satisfies EquipmentAction,
     ]);
@@ -629,7 +724,9 @@ function AdvancedStrategyEditor({
         target: null,
         orderChange: {
           front: draft.front,
+          ...orderChangeRef(postControlMembers, "front", draft.front),
           back,
+          ...orderChangeRef(postControlMembers, "back", back),
         } satisfies OrderChangeSelection,
       } satisfies EquipmentAction,
     ]);
@@ -1083,13 +1180,20 @@ function AdvancedStrategyEditor({
                 从者
                 <Select.Root
                   value={editingCard.servant}
-                  onValueChange={(value) =>
+                  onValueChange={(value) => {
+                    const ref =
+                      value === "any"
+                        ? { memberId: null, servantId: null, isSupport: false }
+                        : memberRefAt(partyMembers, value);
                     updateCommandCard(editingCard.slot, (prev) => ({
                       ...prev,
                       servant: value as AdvancedCommandCardCondition["servant"],
+                      memberId: ref.memberId,
+                      servantId: ref.servantId,
+                      isSupport: ref.isSupport,
                       minCritChance: null,
-                    }))
-                  }
+                    }));
+                  }}
                 >
                   <Select.Trigger aria-label="从者" />
                   <Select.Content>

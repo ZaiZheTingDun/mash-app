@@ -155,7 +155,10 @@ export function normalizeGrandServants(values: GrandServantConfig[] | undefined)
     })
     .slice(0, 2)
     .map((item) => ({
+      memberId: item.memberId ?? null,
       slotIndex: item.slotIndex,
+      servantId: item.servantId ?? null,
+      isSupport: item.isSupport === true,
       npCard: item.npCard ?? "auto",
       priority: item.priority ?? "damage",
     }));
@@ -180,7 +183,14 @@ export function normalizeGrandCardStrategy(strategy: GrandCardStrategy | undefin
 }
 
 export function defaultRuleSlot(): GrandCardRuleSlotConfig {
-  return { slotIndex: null, servantId: null, grandServant: false, kind: "any", color: "any" };
+  return {
+    slotIndex: null,
+    servantId: null,
+    isSupport: false,
+    grandServant: false,
+    kind: "any",
+    color: "any",
+  };
 }
 
 export function createDefaultCustomRule(): GrandCardRuleConfig {
@@ -197,11 +207,13 @@ export function normalizeRuleSlot(slot: Partial<GrandCardRuleSlotConfig> | undef
   const kind = slot?.kind;
   const color = slot?.color;
   return {
+    memberId: slot?.memberId ?? null,
     slotIndex:
       typeof slot?.slotIndex === "number" && Number.isInteger(slot.slotIndex)
         ? slot.slotIndex
         : null,
     servantId: typeof slot?.servantId === "number" ? slot.servantId : null,
+    isSupport: slot?.isSupport === true,
     grandServant: slot?.grandServant === true,
     kind: kinds.includes(kind as GrandRuleKind) ? (kind as GrandRuleKind) : "any",
     color: colors.includes(color as GrandRuleColor) ? (color as GrandRuleColor) : "any",

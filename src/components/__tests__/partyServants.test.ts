@@ -9,6 +9,8 @@ import {
   deriveScenePartyMembers,
   deriveScenePartyLineups,
   deriveScenePartyServants,
+  relocateAdvancedBattleSceneMembers,
+  relocateBattleSceneMembers,
 } from "../partyServants";
 import type { SlotItem } from "../ContentGrid";
 import { createInitialProjectSlots } from "../projectSlots";
@@ -558,5 +560,165 @@ describe("deriveScenePartyServants", () => {
 
     expect(lineups[0]).toEqual([ARASH, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG]);
     expect(lineups[1]).toEqual([ARASH, MASH, WAVER, ALTRIA, MERLIN, CHEN_GONG]);
+  });
+
+  it("relocates legacy startup actions to the same member after team reorder", () => {
+    const previousMembers = [
+      { memberId: "slot-a", servant: ARASH, isSupport: false },
+      { memberId: "slot-b", servant: MERLIN, isSupport: false },
+    ];
+    const nextMembers = [
+      { memberId: "slot-b", servant: MERLIN, isSupport: false },
+      { memberId: "slot-a", servant: ARASH, isSupport: false },
+    ];
+    const scene = {
+      id: "advanced_scene_1",
+      startupActions: [
+        {
+          type: "servant" as const,
+          id: "sa_1",
+          servant: "servant_1",
+          skill: "skill_1",
+          target: null,
+        },
+      ],
+      rules: [],
+    };
+
+    const relocated = relocateAdvancedBattleSceneMembers(scene, previousMembers, nextMembers);
+
+    expect(relocated.startupActions?.[0]).toMatchObject({
+      servant: "servant_2",
+      servantMemberId: "slot-a",
+      servantId: ARASH.id,
+      servantIsSupport: false,
+    });
+  });
+
+  it("relocates normal battle attack cards to the same member after team reorder", () => {
+    const previousMembers = [
+      { memberId: "slot-a", servant: ARASH, isSupport: false },
+      { memberId: "slot-b", servant: MERLIN, isSupport: false },
+      { memberId: "slot-c", servant: MASH, isSupport: true },
+    ];
+    const nextMembers = [
+      { memberId: "slot-b", servant: MERLIN, isSupport: false },
+      { memberId: "slot-c", servant: MASH, isSupport: true },
+      { memberId: "slot-a", servant: ARASH, isSupport: false },
+    ];
+    const scene: BattleScene = makeScene({
+      attackPriority: [
+        { id: "atk_1", card: "servant_1_np" },
+        { id: "atk_2", card: "servant_3_buster" },
+      ],
+    });
+
+    const relocated = relocateBattleSceneMembers(scene, previousMembers, nextMembers);
+
+    expect(relocated.turns[0].attackPriority).toMatchObject([
+      {
+        card: "servant_3_np",
+        memberId: "slot-a",
+        servantId: ARASH.id,
+        isSupport: false,
+      },
+      {
+        card: "servant_2_buster",
+        memberId: "slot-c",
+        servantId: MASH.id,
+        isSupport: true,
+      },
+    ]);
+  });
+
+  it("relocates advanced output, conditions, and rule attacks to the same member after team reorder", () => {
+    const previousMembers = [
+      { memberId: "slot-a", servant: ARASH, isSupport: false },
+      { memberId: "slot-b", servant: MERLIN, isSupport: false },
+      { memberId: "slot-c", servant: MASH, isSupport: true },
+    ];
+    const nextMembers = [
+      { memberId: "slot-b", servant: MERLIN, isSupport: false },
+      { memberId: "slot-c", servant: MASH, isSupport: true },
+      { memberId: "slot-a", servant: ARASH, isSupport: false },
+    ];
+
+    const relocated = relocateAdvancedBattleSceneMembers(
+      {
+        id: "advanced_scene_1",
+        mainOutput: {
+          servant: "servant_1",
+          outputType: "np",
+          npCard: "auto",
+        },
+        commandConditions: [
+          {
+            slot: 0,
+            servant: "servant_3",
+            suit: "buster",
+            minCritChance: null,
+          },
+        ],
+        startupActions: [],
+        rules: [
+          {
+            id: "rule_1",
+            npConditionGroups: [
+              {
+                id: "np_1",
+                slots: [{ servant: "servant_1", ready: true }],
+              },
+            ],
+            commandConditionGroups: [
+              {
+                id: "cmd_1",
+                cards: [
+                  {
+                    slot: 0,
+                    servant: "servant_3",
+                    suit: "arts",
+                    minCritChance: null,
+                  },
+                ],
+              },
+            ],
+            actions: [{ type: "attack", id: "atk_1", card: "servant_3_np" }],
+          },
+        ],
+      },
+      previousMembers,
+      nextMembers
+    );
+
+    expect(relocated.mainOutput).toMatchObject({
+      servant: "servant_3",
+      memberId: "slot-a",
+      servantId: ARASH.id,
+      isSupport: false,
+    });
+    expect(relocated.commandConditions?.[0]).toMatchObject({
+      servant: "servant_2",
+      memberId: "slot-c",
+      servantId: MASH.id,
+      isSupport: true,
+    });
+    expect(relocated.rules[0].npConditionGroups[0].slots[0]).toMatchObject({
+      servant: "servant_3",
+      memberId: "slot-a",
+      servantId: ARASH.id,
+      isSupport: false,
+    });
+    expect(relocated.rules[0].commandConditionGroups[0].cards[0]).toMatchObject({
+      servant: "servant_2",
+      memberId: "slot-c",
+      servantId: MASH.id,
+      isSupport: true,
+    });
+    expect(relocated.rules[0].actions[0]).toMatchObject({
+      card: "servant_2_np",
+      memberId: "slot-c",
+      servantId: MASH.id,
+      isSupport: true,
+    });
   });
 });

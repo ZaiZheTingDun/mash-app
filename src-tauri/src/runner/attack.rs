@@ -931,7 +931,7 @@ impl Runner {
                     let auto_order_change =
                         grand_auto_order_change_action(&cards, &party_ids, &grand_servants);
                     let original_members = self.build_full_party_members();
-                    let mut members = original_members;
+                    let mut members = original_members.clone();
                     let mut startup_actions = Vec::new();
                     if let Some(action) = auto_order_change.clone() {
                         self.emit("Attack", "启动条件：自动将后排主冠位换至前排");
