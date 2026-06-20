@@ -3,7 +3,8 @@
 
 use super::*;
 
-pub(crate) const RUNTIME_MANIFEST_JSON: &str = include_str!("../resources/runtime-manifest.json");
+pub(crate) const RUNTIME_MANIFEST_JSON: &str =
+    include_str!("../../resources/runtime-manifest.json");
 pub(crate) const RUNTIME_DIR_NAME: &str = "mash-cv";
 pub(crate) const RUNTIME_DOWNLOAD_PROGRESS_EVENT: &str = "runtime-download-progress";
 

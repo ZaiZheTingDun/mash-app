@@ -3,7 +3,8 @@
 
 use super::*;
 
-pub(crate) const ASSETS_MANIFEST_JSON: &str = include_str!("../resources/assets-manifest.json");
+pub(crate) const ASSETS_MANIFEST_JSON: &str =
+    include_str!("../../resources/assets-manifest.json");
 pub(crate) const ASSET_DOWNLOAD_PROGRESS_EVENT: &str = "asset-download-progress";
 
 #[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]

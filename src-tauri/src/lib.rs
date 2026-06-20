@@ -1,36 +1,27 @@
 mod adb;
-mod adb_commands;
-mod asset_resources;
-mod automation_commands;
-mod catalog;
-mod debug;
+mod commands;
 mod enhancement_runner;
 mod models;
 mod paths;
-mod projects;
 mod runner;
-mod runtime_resources;
 mod screen;
 mod server;
-mod settings;
 mod touch;
 
+#[cfg(test)]
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+#[cfg(test)]
 use std::fs;
-use std::io::{self, Read, Write};
-use std::path::Path;
+#[cfg(test)]
+use std::io::Write;
+#[cfg(test)]
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, Mutex};
 #[cfg(desktop)]
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
-use tauri_plugin_dialog::DialogExt;
-use zip::ZipArchive;
 
-use enhancement_runner::{EnhancementRunnerHandle, EnhancementTarget};
+use enhancement_runner::EnhancementRunnerHandle;
 use runner::RunnerHandle;
 
 pub use models::*;
@@ -39,13 +30,13 @@ pub use server::{
     STREAM_MAX_SIZE,
 };
 
-pub(crate) use asset_resources::*;
-pub(crate) use catalog::*;
+pub(crate) use commands::assets::*;
+pub(crate) use commands::catalog::*;
 pub(crate) use paths::*;
 #[cfg(test)]
-pub(crate) use projects::*;
-pub(crate) use runtime_resources::*;
-pub(crate) use settings::*;
+pub(crate) use commands::projects::*;
+pub(crate) use commands::runtime::*;
+pub(crate) use commands::settings::*;
 
 #[cfg(desktop)]
 const CHECK_FOR_UPDATE_MENU_ID: &str = "check-for-update";
@@ -248,78 +239,78 @@ pub fn run() {
             app.manage(Mutex::new(RunnerHandle::new_idle()));
             app.manage(Mutex::new(EnhancementRunnerHandle::new_idle()));
             app.manage(Arc::new(ResourceDownloadCancelState::default()));
-            app.manage(debug::DebugSidecar::new());
+            app.manage(commands::debug::DebugSidecar::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            catalog::get_servants,
-            catalog::get_craft_essences,
-            asset_resources::get_self_check_status,
-            asset_resources::get_asset_bundle_status,
-            asset_resources::pick_asset_bundle,
-            asset_resources::import_asset_bundle,
-            asset_resources::download_asset_bundles,
-            asset_resources::cancel_resource_downloads,
-            runtime_resources::get_runtime_status,
-            runtime_resources::pick_runtime_bundle,
-            runtime_resources::import_runtime_bundle,
-            runtime_resources::download_runtime_bundles,
-            catalog::get_servant_portrait_path,
-            catalog::get_servant_face_path,
-            catalog::get_craft_essence_card_path,
-            catalog::get_template_asset_path,
-            projects::save_battle_scenes,
-            projects::load_battle_scenes,
-            projects::save_advanced_battle_scenes,
-            projects::load_advanced_battle_scenes,
-            projects::list_exportable_configs,
-            projects::export_configs,
-            projects::pick_config_import_file,
-            projects::preview_config_import,
-            projects::import_configurations,
-            projects::list_projects,
-            projects::get_active_project_id,
-            projects::set_active_project_id,
-            projects::get_app_theme,
-            projects::set_app_theme,
-            projects::create_project,
-            projects::duplicate_project,
-            projects::update_project,
-            projects::delete_project,
-            adb_commands::check_adb,
-            adb_commands::reset_bluestacks_adb_connection,
-            adb_commands::save_adb_screenshot,
-            settings::run_startup_migration,
-            settings::get_use_bluestack,
-            settings::set_use_bluestack,
-            settings::get_server,
-            settings::set_server,
-            settings::should_check_updates_today,
-            settings::mark_update_checked_today,
-            automation_commands::start_automation,
-            automation_commands::stop_automation,
-            automation_commands::stop_automation_after_current,
-            automation_commands::get_automation_status,
-            automation_commands::start_enhancement_automation,
-            automation_commands::stop_enhancement_automation,
-            automation_commands::get_enhancement_automation_status,
-            debug::debug_capture,
-            debug::debug_find_element,
-            debug::debug_find_element_by_name,
-            debug::debug_list_templates,
-            debug::debug_get_cv_config,
-            debug::debug_reload_sidecar,
-            debug::debug_shutdown,
-            debug::debug_get_runner_coordinates,
-            debug::debug_find_command_cards,
-            debug::debug_find_noble_phantasms,
-            debug::debug_find_enhancement_servant,
-            debug::debug_find_attack_button,
-            debug::debug_read_battle_scene,
-            debug::debug_find_supports,
-            debug::debug_list_servant_assets,
-            debug::warm_sidecar,
-            catalog::get_servant_metadata,
+            commands::catalog::get_servants,
+            commands::catalog::get_craft_essences,
+            commands::assets::get_self_check_status,
+            commands::assets::get_asset_bundle_status,
+            commands::assets::pick_asset_bundle,
+            commands::assets::import_asset_bundle,
+            commands::assets::download_asset_bundles,
+            commands::assets::cancel_resource_downloads,
+            commands::runtime::get_runtime_status,
+            commands::runtime::pick_runtime_bundle,
+            commands::runtime::import_runtime_bundle,
+            commands::runtime::download_runtime_bundles,
+            commands::catalog::get_servant_portrait_path,
+            commands::catalog::get_servant_face_path,
+            commands::catalog::get_craft_essence_card_path,
+            commands::catalog::get_template_asset_path,
+            commands::projects::save_battle_scenes,
+            commands::projects::load_battle_scenes,
+            commands::projects::save_advanced_battle_scenes,
+            commands::projects::load_advanced_battle_scenes,
+            commands::projects::list_exportable_configs,
+            commands::projects::export_configs,
+            commands::projects::pick_config_import_file,
+            commands::projects::preview_config_import,
+            commands::projects::import_configurations,
+            commands::projects::list_projects,
+            commands::projects::get_active_project_id,
+            commands::projects::set_active_project_id,
+            commands::projects::get_app_theme,
+            commands::projects::set_app_theme,
+            commands::projects::create_project,
+            commands::projects::duplicate_project,
+            commands::projects::update_project,
+            commands::projects::delete_project,
+            commands::adb::check_adb,
+            commands::adb::reset_bluestacks_adb_connection,
+            commands::adb::save_adb_screenshot,
+            commands::settings::run_startup_migration,
+            commands::settings::get_use_bluestack,
+            commands::settings::set_use_bluestack,
+            commands::settings::get_server,
+            commands::settings::set_server,
+            commands::settings::should_check_updates_today,
+            commands::settings::mark_update_checked_today,
+            commands::automation::start_automation,
+            commands::automation::stop_automation,
+            commands::automation::stop_automation_after_current,
+            commands::automation::get_automation_status,
+            commands::automation::start_enhancement_automation,
+            commands::automation::stop_enhancement_automation,
+            commands::automation::get_enhancement_automation_status,
+            commands::debug::debug_capture,
+            commands::debug::debug_find_element,
+            commands::debug::debug_find_element_by_name,
+            commands::debug::debug_list_templates,
+            commands::debug::debug_get_cv_config,
+            commands::debug::debug_reload_sidecar,
+            commands::debug::debug_shutdown,
+            commands::debug::debug_get_runner_coordinates,
+            commands::debug::debug_find_command_cards,
+            commands::debug::debug_find_noble_phantasms,
+            commands::debug::debug_find_enhancement_servant,
+            commands::debug::debug_find_attack_button,
+            commands::debug::debug_read_battle_scene,
+            commands::debug::debug_find_supports,
+            commands::debug::debug_list_servant_assets,
+            commands::debug::warm_sidecar,
+            commands::catalog::get_servant_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

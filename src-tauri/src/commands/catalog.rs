@@ -198,13 +198,13 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
     static SERVANTS: OnceLock<Vec<ServantInfo>> = OnceLock::new();
     SERVANTS.get_or_init(|| {
         let raw: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("resources/servants.json"))
+            serde_json::from_str(include_str!("../resources/servants.json"))
                 .expect("invalid servants.json");
         let variants_raw: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("resources/servants_variants.json"))
+            serde_json::from_str(include_str!("../resources/servants_variants.json"))
                 .expect("invalid servants_variants.json");
         let variants_cn_raw: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("resources/servants_variants_cn.json"))
+            serde_json::from_str(include_str!("../resources/servants_variants_cn.json"))
                 .expect("invalid servants_variants_cn.json");
         let variants_by_id: HashMap<u32, Vec<serde_json::Value>> = variants_raw
             .into_iter()
@@ -357,12 +357,12 @@ pub(crate) fn craft_essences_data() -> &'static [CraftEssenceInfo] {
     static CES: OnceLock<Vec<CraftEssenceInfo>> = OnceLock::new();
     CES.get_or_init(|| {
         let raw: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("resources/craft_essences.json"))
+            serde_json::from_str(include_str!("../resources/craft_essences.json"))
                 .expect("invalid craft_essences.json");
         let translation_fixes: HashMap<u32, String> = serde_json::from_str::<
             Vec<CraftEssenceTranslationFix>,
         >(include_str!(
-            "resources/craft_essence_translation_fixes.json"
+            "../resources/craft_essence_translation_fixes.json"
         ))
         .expect("invalid craft_essence_translation_fixes.json")
         .into_iter()
@@ -637,7 +637,7 @@ pub(crate) fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
     static INDEX: OnceLock<HashMap<String, String>> = OnceLock::new();
     INDEX.get_or_init(|| {
         let raw: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("resources/servants.json"))
+            serde_json::from_str(include_str!("../resources/servants.json"))
                 .expect("invalid servants.json");
 
         let mut map: HashMap<String, String> = HashMap::new();

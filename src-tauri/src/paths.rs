@@ -1,7 +1,9 @@
 //! App data and resource path resolution.
 //! All persisted user data must be rooted under Tauri's app_data_dir.
 
-use super::*;
+use std::fs;
+use std::path::{Path, PathBuf};
+use tauri::Manager;
 
 pub(crate) fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
     let dir = app

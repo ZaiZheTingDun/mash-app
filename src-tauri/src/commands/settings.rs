@@ -5,7 +5,7 @@
 //! switches also invalidate idle sidecars so future CV calls load the selected
 //! server resources.
 
-use crate::debug;
+use crate::commands::debug;
 use crate::enhancement_runner::{EnhancementRunnerHandle, EnhancementRunnerState};
 use crate::paths::{migrate_legacy_app_data, StartupMigrationStatus};
 use crate::runner::{RunnerHandle, RunnerState};

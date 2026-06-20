@@ -7,17 +7,19 @@
 //! existing command names and event payloads.
 
 use crate::adb;
-use crate::catalog::load_enhancement_target;
-use crate::debug;
+use crate::commands::catalog::load_enhancement_target;
+use crate::commands::debug;
+use crate::commands::projects::{
+    load_advanced_battle_scenes, load_battle_scenes, read_projects,
+};
+use crate::commands::runtime::{
+    resolve_ce_assets_dir, resolve_scrcpy_jar, resolve_servant_assets_dir,
+};
 use crate::enhancement_runner::{
     server_supported as enhancement_server_supported, EnhancementAutomationEvent,
     EnhancementConfig, EnhancementRunner, EnhancementRunnerHandle, EnhancementRunnerState,
 };
-use crate::projects::{load_advanced_battle_scenes, load_battle_scenes, read_projects};
 use crate::runner::{AutomationEvent, LogLevel, RunConfig, Runner, RunnerHandle, RunnerState};
-use crate::runtime_resources::{
-    resolve_ce_assets_dir, resolve_scrcpy_jar, resolve_servant_assets_dir,
-};
 use crate::screen;
 use crate::server::{
     stream_meets_minimum_resolution, stream_resolution_error, Server, STREAM_BIT_RATE,
