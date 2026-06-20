@@ -16,12 +16,32 @@ import {
   toPartyMembers,
   type PartyMember,
 } from "./partyServants";
+import {
+  ATTACK_OPTIONS,
+  CARD_LABELS,
+  COMMAND_SPELL_LABELS,
+  ENEMY_TARGETS,
+  FIXED_ATTACK_CARD_COUNT,
+  SKILLS,
+  SKILL_LABELS,
+  createId,
+  emptyLegacyFields,
+  normalizeAttackPriority,
+  orderChangeSummary,
+  servantSlotIndex,
+  sourceIndex,
+  type AttackDraft,
+  type AttackSource,
+  type EnemyTarget,
+  type PartySlot,
+  type PrepDraft,
+  type PrepSource,
+} from "./battleSceneModel";
 import type {
   AttackCard,
   BattleTurn,
   CommandSpellAction,
   EquipmentAction,
-  OrderChangeSelection,
   PreparationAction,
   ServantAction,
 } from "../types/command";
@@ -32,107 +52,6 @@ interface BattleSceneBlockProps {
   partyServants: (Servant | null)[];
   partyMembers?: PartyMember[];
   onChange: (updated: BattleTurn) => void;
-}
-
-type PrepSource = "equipment" | "commandSpell" | `servant_${1 | 2 | 3}`;
-type AttackSource = `servant_${1 | 2 | 3}`;
-type PartySlot = `servant_${1 | 2 | 3 | 4 | 5 | 6}`;
-type EnemyTarget = `enemy_${1 | 2 | 3 | 4 | 5 | 6}`;
-type PrepDraft =
-  | { step: "source" }
-  | { step: "option"; source: PrepSource }
-  | { step: "target"; source: PrepSource; option: string }
-  | {
-    step: "orderChange";
-    source: "equipment";
-    option: string;
-    front: PartySlot | null;
-  };
-type AttackDraft =
-  | { step: "source"; targetIndex: number | null }
-  | { step: "option"; source: AttackSource; targetIndex: number | null };
-
-const FIXED_ATTACK_CARD_COUNT = 3;
-
-const SKILLS = ["skill_1", "skill_2", "skill_3"] as const;
-const SKILL_LABELS: Record<string, string> = {
-  skill_1: "技能 1",
-  skill_2: "技能 2",
-  skill_3: "技能 3",
-};
-
-const COMMAND_SPELL_LABELS: Record<string, string> = {
-  np_release: "宝具解放",
-  restore: "灵基修复",
-};
-
-const ATTACK_OPTIONS = [
-  { value: "np", label: "宝具" },
-  { value: "buster", label: "B" },
-  { value: "arts", label: "A" },
-  { value: "quick", label: "Q" },
-  { value: "all", label: "ALL" },
-] as const;
-
-const ENEMY_TARGETS = [
-  { value: "enemy_1", label: "敌人 1", text: "1" },
-  { value: "enemy_2", label: "敌人 2", text: "2" },
-  { value: "enemy_3", label: "敌人 3", text: "3" },
-  { value: "enemy_4", label: "敌人 4", text: "4" },
-  { value: "enemy_5", label: "敌人 5", text: "5" },
-  { value: "enemy_6", label: "敌人 6", text: "6" },
-] as const;
-
-const CARD_LABELS: Record<string, string> = {
-  np: "宝具",
-  buster: "红卡攻击",
-  arts: "蓝卡攻击",
-  quick: "绿卡攻击",
-  all: "任意指令卡",
-};
-
-function normalizeAttackPriority(priority: AttackCard[]): AttackCard[] {
-  const next = [...priority];
-  while (next.length < FIXED_ATTACK_CARD_COUNT) {
-    next.push({
-      id: createId(`atk_fixed_${next.length + 1}`),
-      card: null,
-    });
-  }
-  return next;
-}
-
-function createId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function emptyLegacyFields(scene: BattleTurn): BattleTurn {
-  return {
-    ...scene,
-    servantActions: [],
-    equipmentActions: [],
-    commandSpellActions: [],
-  };
-}
-
-function servantSlotIndex(source: string | null | undefined): number | null {
-  const match = source?.match(/^servant_([1-6])$/);
-  return match ? Number(match[1]) - 1 : null;
-}
-
-function sourceIndex(source: PrepSource | AttackSource): number | null {
-  const index = servantSlotIndex(source);
-  return index != null && index < 3 ? index : null;
-}
-
-function orderChangeSummary(
-  orderChange: OrderChangeSelection,
-  partyServants: (Servant | null)[]
-): string | null {
-  const frontIndex = servantSlotIndex(orderChange.front);
-  const backIndex = servantSlotIndex(orderChange.back);
-  if (frontIndex == null || backIndex == null) return null;
-  return `${servantLabel(frontIndex, partyServants[frontIndex] ?? null)} ↔ ${servantLabel(backIndex, partyServants[backIndex] ?? null)}`;
 }
 
 function useServantFaces(partyServants: (Servant | null)[]) {
