@@ -19,32 +19,65 @@ use tauri::Manager;
 pub(crate) const SUPPORT_CE_THRESHOLD_DEFAULT: f64 = 0.70;
 pub(crate) const SUPPORT_CE_THRESHOLD_MIN: f64 = 0.60;
 pub(crate) const SUPPORT_CE_THRESHOLD_MAX: f64 = 0.85;
+pub(crate) const SUPPORT_ICON_THRESHOLD_DEFAULT: f64 = 0.70;
+pub(crate) const SUPPORT_ICON_THRESHOLD_MIN: f64 = 0.60;
+pub(crate) const SUPPORT_ICON_THRESHOLD_MAX: f64 = 0.85;
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecognitionSettings {
+    #[serde(default = "default_support_ce_threshold")]
     pub support_ce_threshold: f64,
+    #[serde(default = "default_support_icon_threshold")]
+    pub support_mlb_icon_threshold: f64,
+    #[serde(default = "default_support_icon_threshold")]
+    pub support_bond_icon_threshold: f64,
 }
 
 impl Default for RecognitionSettings {
     fn default() -> Self {
         Self {
             support_ce_threshold: SUPPORT_CE_THRESHOLD_DEFAULT,
+            support_mlb_icon_threshold: SUPPORT_ICON_THRESHOLD_DEFAULT,
+            support_bond_icon_threshold: SUPPORT_ICON_THRESHOLD_DEFAULT,
         }
     }
 }
 
-fn normalize_support_ce_threshold(value: f64) -> Result<f64, String> {
+fn default_support_ce_threshold() -> f64 {
+    SUPPORT_CE_THRESHOLD_DEFAULT
+}
+
+fn default_support_icon_threshold() -> f64 {
+    SUPPORT_ICON_THRESHOLD_DEFAULT
+}
+
+fn normalize_threshold(value: f64, label: &str, min: f64, max: f64) -> Result<f64, String> {
     if !value.is_finite() {
-        return Err("助战礼装阈值必须是有效数字".into());
+        return Err(format!("{label}必须是有效数字"));
     }
-    if !(SUPPORT_CE_THRESHOLD_MIN..=SUPPORT_CE_THRESHOLD_MAX).contains(&value) {
-        return Err(format!(
-            "助战礼装阈值必须在 {:.2} 到 {:.2} 之间",
-            SUPPORT_CE_THRESHOLD_MIN, SUPPORT_CE_THRESHOLD_MAX
-        ));
+    if !(min..=max).contains(&value) {
+        return Err(format!("{label}必须在 {min:.2} 到 {max:.2} 之间"));
     }
     Ok((value * 100.0).round() / 100.0)
+}
+
+fn normalize_support_ce_threshold(value: f64) -> Result<f64, String> {
+    normalize_threshold(
+        value,
+        "助战礼装阈值",
+        SUPPORT_CE_THRESHOLD_MIN,
+        SUPPORT_CE_THRESHOLD_MAX,
+    )
+}
+
+fn normalize_support_icon_threshold(value: f64, label: &str) -> Result<f64, String> {
+    normalize_threshold(
+        value,
+        label,
+        SUPPORT_ICON_THRESHOLD_MIN,
+        SUPPORT_ICON_THRESHOLD_MAX,
+    )
 }
 
 fn adb_settings_path(app: &tauri::AppHandle) -> PathBuf {
@@ -111,11 +144,20 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
         .ok()
         .and_then(|s| serde_json::from_str::<RecognitionSettings>(&s).ok())
         .and_then(|settings| {
-            normalize_support_ce_threshold(settings.support_ce_threshold)
-                .ok()
-                .map(|support_ce_threshold| RecognitionSettings {
-                    support_ce_threshold,
-                })
+            Some(RecognitionSettings {
+                support_ce_threshold: normalize_support_ce_threshold(settings.support_ce_threshold)
+                    .ok()?,
+                support_mlb_icon_threshold: normalize_support_icon_threshold(
+                    settings.support_mlb_icon_threshold,
+                    "满破图标阈值",
+                )
+                .ok()?,
+                support_bond_icon_threshold: normalize_support_icon_threshold(
+                    settings.support_bond_icon_threshold,
+                    "牵绊图标阈值",
+                )
+                .ok()?,
+            })
         })
         .unwrap_or_default()
 }
@@ -167,9 +209,46 @@ pub(crate) fn set_support_ce_threshold(
     value: f64,
 ) -> Result<RecognitionSettings, String> {
     let value = normalize_support_ce_threshold(value)?;
-    let next = RecognitionSettings {
-        support_ce_threshold: value,
-    };
+    let mut next = *state.lock().unwrap();
+    next.support_ce_threshold = value;
+    *state.lock().unwrap() = next;
+    let path = recognition_settings_path(&app);
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&next).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(next)
+}
+
+#[tauri::command]
+pub(crate) fn set_support_mlb_icon_threshold(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: f64,
+) -> Result<RecognitionSettings, String> {
+    let value = normalize_support_icon_threshold(value, "满破图标阈值")?;
+    let mut next = *state.lock().unwrap();
+    next.support_mlb_icon_threshold = value;
+    *state.lock().unwrap() = next;
+    let path = recognition_settings_path(&app);
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&next).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(next)
+}
+
+#[tauri::command]
+pub(crate) fn set_support_bond_icon_threshold(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: f64,
+) -> Result<RecognitionSettings, String> {
+    let value = normalize_support_icon_threshold(value, "牵绊图标阈值")?;
+    let mut next = *state.lock().unwrap();
+    next.support_bond_icon_threshold = value;
     *state.lock().unwrap() = next;
     let path = recognition_settings_path(&app);
     fs::write(
@@ -214,6 +293,29 @@ mod tests {
         assert!(normalize_support_ce_threshold(0.59).is_err());
         assert!(normalize_support_ce_threshold(0.86).is_err());
         assert!(normalize_support_ce_threshold(f64::NAN).is_err());
+    }
+
+    #[test]
+    fn support_icon_threshold_accepts_configured_range() {
+        assert_eq!(
+            normalize_support_icon_threshold(0.60, "满破图标阈值").unwrap(),
+            0.60
+        );
+        assert_eq!(
+            normalize_support_icon_threshold(0.70, "满破图标阈值").unwrap(),
+            0.70
+        );
+        assert_eq!(
+            normalize_support_icon_threshold(0.85, "满破图标阈值").unwrap(),
+            0.85
+        );
+    }
+
+    #[test]
+    fn support_icon_threshold_rejects_invalid_values() {
+        assert!(normalize_support_icon_threshold(0.59, "牵绊图标阈值").is_err());
+        assert!(normalize_support_icon_threshold(0.86, "牵绊图标阈值").is_err());
+        assert!(normalize_support_icon_threshold(f64::NAN, "牵绊图标阈值").is_err());
     }
 }
 

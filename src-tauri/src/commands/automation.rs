@@ -193,10 +193,10 @@ pub(crate) fn start_automation(
 
     let use_bluestack = *bluestack_state.lock().unwrap();
     let server = *server_state.lock().unwrap();
-    config.support_ce_threshold = recognition_settings_state
-        .lock()
-        .unwrap()
-        .support_ce_threshold;
+    let recognition_settings = *recognition_settings_state.lock().unwrap();
+    config.support_ce_threshold = recognition_settings.support_ce_threshold;
+    config.support_mlb_icon_threshold = recognition_settings.support_mlb_icon_threshold;
+    config.support_bond_icon_threshold = recognition_settings.support_bond_icon_threshold;
 
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));

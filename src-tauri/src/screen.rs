@@ -626,6 +626,8 @@ impl SidecarClient {
             "threshold": threshold,
             "mlbRequired": options.mlb_required,
             "grandBondCeMode": options.grand_bond_ce_mode,
+            "mlbIconThreshold": options.mlb_icon_threshold,
+            "bondIconThreshold": options.bond_icon_threshold,
         });
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;

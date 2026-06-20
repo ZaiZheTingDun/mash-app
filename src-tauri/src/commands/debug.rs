@@ -1101,10 +1101,10 @@ pub fn debug_find_supports(
     grand_bond_ce_mode: Option<String>,
 ) -> Result<DebugFindSupportsResult, String> {
     require_automation_idle(&handle_state, &enhancement_handle_state)?;
-    let support_ce_threshold = recognition_settings_state
-        .lock()
-        .unwrap()
-        .support_ce_threshold;
+    let recognition_settings = *recognition_settings_state.lock().unwrap();
+    let support_ce_threshold = recognition_settings.support_ce_threshold;
+    let support_mlb_icon_threshold = recognition_settings.support_mlb_icon_threshold;
+    let support_bond_icon_threshold = recognition_settings.support_bond_icon_threshold;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -1187,6 +1187,8 @@ pub fn debug_find_supports(
                     SupportCeVerificationOptions {
                         mlb_required: craft_essence_mlb_required.unwrap_or(true),
                         grand_bond_ce_mode: None,
+                        mlb_icon_threshold: support_mlb_icon_threshold,
+                        bond_icon_threshold: support_bond_icon_threshold,
                     },
                 ) {
                     Ok(result) => {
@@ -1267,6 +1269,8 @@ pub fn debug_find_supports(
                         } else {
                             None
                         },
+                        mlb_icon_threshold: support_mlb_icon_threshold,
+                        bond_icon_threshold: support_bond_icon_threshold,
                     },
                 ) {
                     Ok(result) => {

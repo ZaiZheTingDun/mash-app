@@ -346,7 +346,10 @@ pub(crate) fn format_ce_verification_summary(
             check.threshold
         )
     });
-    artwork_parts.chain(icon_parts).collect::<Vec<_>>().join(" ")
+    artwork_parts
+        .chain(icon_parts)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1011,6 +1014,7 @@ impl Runner {
             SupportCeVerificationOptions {
                 mlb_required: self.config.support_craft_essence_mlb_required,
                 grand_bond_ce_mode: None,
+                ..Default::default()
             },
         )
         .is_none()
@@ -1021,9 +1025,11 @@ impl Runner {
         region: NormRect,
         template_path: &Path,
         label: &str,
-        options: SupportCeVerificationOptions,
+        mut options: SupportCeVerificationOptions,
     ) -> Option<String> {
         let support_ce_threshold = self.config.support_ce_threshold;
+        options.mlb_icon_threshold = self.config.support_mlb_icon_threshold;
+        options.bond_icon_threshold = self.config.support_bond_icon_threshold;
         match self.sidecar().verify_support_ce(
             None,
             region,
@@ -1123,6 +1129,7 @@ impl Runner {
                         } else {
                             None
                         },
+                        ..Default::default()
                     },
                 ) {
                     return Some(reason);

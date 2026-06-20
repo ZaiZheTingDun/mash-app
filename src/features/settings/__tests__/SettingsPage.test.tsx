@@ -52,8 +52,34 @@ describe("SettingsDialog", () => {
       if (cmd === "get_self_check_status") return selfCheckStatus;
       if (cmd === "get_runtime_status") return { installed: true };
       if (cmd === "get_asset_bundle_status") return { installed: true };
-      if (cmd === "get_recognition_settings") return { supportCeThreshold: 0.7 };
-      if (cmd === "set_support_ce_threshold") return { supportCeThreshold: 0.65 };
+      if (cmd === "get_recognition_settings") {
+        return {
+          supportCeThreshold: 0.7,
+          supportMlbIconThreshold: 0.7,
+          supportBondIconThreshold: 0.7,
+        };
+      }
+      if (cmd === "set_support_ce_threshold") {
+        return {
+          supportCeThreshold: 0.65,
+          supportMlbIconThreshold: 0.7,
+          supportBondIconThreshold: 0.7,
+        };
+      }
+      if (cmd === "set_support_mlb_icon_threshold") {
+        return {
+          supportCeThreshold: 0.7,
+          supportMlbIconThreshold: 0.76,
+          supportBondIconThreshold: 0.7,
+        };
+      }
+      if (cmd === "set_support_bond_icon_threshold") {
+        return {
+          supportCeThreshold: 0.7,
+          supportMlbIconThreshold: 0.7,
+          supportBondIconThreshold: 0.78,
+        };
+      }
       return null;
     });
   });
@@ -107,7 +133,7 @@ describe("SettingsDialog", () => {
 
     await user.clear(input);
     await user.type(input, "0.65");
-    await user.click(screen.getByRole("button", { name: "保存" }));
+    await user.click(screen.getAllByRole("button", { name: "保存" })[0]);
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_support_ce_threshold", {
@@ -115,6 +141,37 @@ describe("SettingsDialog", () => {
       });
     });
     expect(await screen.findByText("已保存")).toBeInTheDocument();
+  });
+
+  it("saves support CE icon recognition thresholds", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="recognition" />);
+
+    const mlbInput = await screen.findByRole("spinbutton", {
+      name: "满破图标匹配阈值数值",
+    });
+    await user.clear(mlbInput);
+    await user.type(mlbInput, "0.76");
+    await user.click(screen.getAllByRole("button", { name: "保存" })[1]);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_support_mlb_icon_threshold", {
+        value: 0.76,
+      });
+    });
+
+    const bondInput = screen.getByRole("spinbutton", {
+      name: "牵绊图标匹配阈值数值",
+    });
+    await user.clear(bondInput);
+    await user.type(bondInput, "0.78");
+    await user.click(screen.getAllByRole("button", { name: "保存" })[2]);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_support_bond_icon_threshold", {
+        value: 0.78,
+      });
+    });
   });
 
   it("shows export configs and disables export after deselecting all", async () => {

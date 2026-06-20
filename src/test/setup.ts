@@ -239,9 +239,19 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "get_server":
         return "JP";
       case "get_recognition_settings":
-        return { supportCeThreshold: 0.7 };
+        return {
+          supportCeThreshold: 0.7,
+          supportMlbIconThreshold: 0.7,
+          supportBondIconThreshold: 0.7,
+        };
       case "set_support_ce_threshold":
-        return { supportCeThreshold: 0.7 };
+      case "set_support_mlb_icon_threshold":
+      case "set_support_bond_icon_threshold":
+        return {
+          supportCeThreshold: 0.7,
+          supportMlbIconThreshold: 0.7,
+          supportBondIconThreshold: 0.7,
+        };
       case "should_check_updates_today":
         return false;
       case "mark_update_checked_today":

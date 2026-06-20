@@ -178,6 +178,12 @@ pub struct RunConfig {
     /// settings when automation starts.
     #[serde(default = "default_support_ce_threshold")]
     pub support_ce_threshold: f64,
+    /// Runtime threshold for optional support CE MLB icon verification.
+    #[serde(default = "default_support_icon_threshold")]
+    pub support_mlb_icon_threshold: f64,
+    /// Runtime threshold for optional support Grand bond icon verification.
+    #[serde(default = "default_support_icon_threshold")]
+    pub support_bond_icon_threshold: f64,
     #[serde(default = "default_true")]
     pub support_craft_essence_mlb_required: bool,
     #[serde(default)]
@@ -232,6 +238,10 @@ fn default_support_skill_level_mins() -> [Option<u32>; 3] {
 
 fn default_support_ce_threshold() -> f64 {
     crate::commands::settings::SUPPORT_CE_THRESHOLD_DEFAULT
+}
+
+fn default_support_icon_threshold() -> f64 {
+    crate::commands::settings::SUPPORT_ICON_THRESHOLD_DEFAULT
 }
 
 fn default_true() -> bool {

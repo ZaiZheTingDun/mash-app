@@ -3922,6 +3922,8 @@ def _verify_support_ce(
     threshold: float,
     mlb_required: bool = False,
     grand_bond_ce_mode: str | None = None,
+    mlb_icon_threshold: float = CE_DECORATION_ICON_THRESHOLD,
+    bond_icon_threshold: float = CE_DECORATION_ICON_THRESHOLD,
 ) -> dict:
     """Score a row's CE icon against ``template_path``.
 
@@ -4115,6 +4117,7 @@ def _verify_support_ce(
                 CE_MLB_ICON_TEMPLATE,
                 "mlb",
                 {"x": 0.55, "y": 0.30, "w": 0.45, "h": 0.70},
+                float(mlb_icon_threshold),
             )
         )
 
@@ -4126,6 +4129,7 @@ def _verify_support_ce(
                 CE_GRAND_BOND_TEMPLATE,
                 "grandBond",
                 {"x": -0.05, "y": -0.35, "w": 0.58, "h": 1.05},
+                float(bond_icon_threshold),
             )
         )
     elif mode == "bondNp":
@@ -4136,6 +4140,7 @@ def _verify_support_ce(
                 CE_GRAND_BOND_NP_TEMPLATE,
                 "grandBondNp",
                 {"x": -0.08, "y": -0.45, "w": 0.66, "h": 1.20},
+                float(bond_icon_threshold),
             )
         )
 
@@ -4155,6 +4160,7 @@ def _verify_ce_decoration_icon(
     template_key: str,
     kind: str,
     rel_region: dict,
+    threshold: float = CE_DECORATION_ICON_THRESHOLD,
 ) -> dict:
     """Match an optional CE decoration icon inside a CE-relative search box."""
     abs_region = {
@@ -4172,14 +4178,14 @@ def _verify_ce_decoration_icon(
             "region": abs_region,
             "score": 0.0,
             "passed": False,
-            "threshold": CE_DECORATION_ICON_THRESHOLD,
+            "threshold": threshold,
             "error": "template not loaded",
         }
     match = _score_template_region(
         img,
         tmpl,
         abs_region,
-        CE_DECORATION_ICON_THRESHOLD,
+        threshold,
         template_key,
     )
     return {
@@ -4188,7 +4194,7 @@ def _verify_ce_decoration_icon(
         "region": match.get("region") or abs_region,
         "score": float(match.get("score", 0.0)),
         "passed": bool(match.get("found", False)),
-        "threshold": CE_DECORATION_ICON_THRESHOLD,
+        "threshold": threshold,
     }
 
 
@@ -4648,6 +4654,8 @@ def main() -> None:
                     float(cmd.get("threshold", 0.7)),
                     bool(cmd.get("mlbRequired", False)),
                     cmd.get("grandBondCeMode"),
+                    float(cmd.get("mlbIconThreshold", CE_DECORATION_ICON_THRESHOLD)),
+                    float(cmd.get("bondIconThreshold", CE_DECORATION_ICON_THRESHOLD)),
                 ),
             )
         elif action == "find_region":

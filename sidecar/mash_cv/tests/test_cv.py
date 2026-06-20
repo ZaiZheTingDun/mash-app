@@ -2991,6 +2991,19 @@ class TestVerifySupportCE:
             found = _verify_support_ce(img, region, tmpl_path, 0.7, True)
             assert found["passed"] is True, found
             assert found["iconChecks"][0]["passed"] is True
+            assert found["iconChecks"][0]["threshold"] == 0.7
+
+            too_strict = _verify_support_ce(
+                img,
+                region,
+                tmpl_path,
+                0.7,
+                mlb_required=True,
+                mlb_icon_threshold=1.01,
+            )
+            assert too_strict["passed"] is False, too_strict
+            assert too_strict["iconChecks"][0]["threshold"] == 1.01
+            assert too_strict["iconChecks"][0]["passed"] is False
         finally:
             cv.templates.pop(cv.CE_MLB_ICON_TEMPLATE, None)
 
@@ -3150,6 +3163,15 @@ class TestGrandBondDecorationIcons:
         )
         assert result["passed"] is True, result
         assert result["score"] > 0.80, result
+        strict = _verify_ce_decoration_icon(
+            img,
+            ce1,
+            CE_GRAND_BOND_TEMPLATE,
+            "grandBond",
+            self.BOND_REL,
+            threshold=min(1.01, result["score"] + 0.01),
+        )
+        assert strict["passed"] is False, strict
 
     def test_bondnp_sword_matches_in_iori_slot1(self):
         """Iori's CE-1 slot in the fixture is decorated with the

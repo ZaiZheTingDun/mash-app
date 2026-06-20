@@ -31,13 +31,32 @@ pub struct NormRect {
     pub h: f64,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupportCeVerificationOptions {
     #[serde(default)]
     pub mlb_required: bool,
     #[serde(default)]
     pub grand_bond_ce_mode: Option<String>,
+    #[serde(default = "default_support_icon_threshold")]
+    pub mlb_icon_threshold: f64,
+    #[serde(default = "default_support_icon_threshold")]
+    pub bond_icon_threshold: f64,
+}
+
+fn default_support_icon_threshold() -> f64 {
+    crate::commands::settings::SUPPORT_ICON_THRESHOLD_DEFAULT
+}
+
+impl Default for SupportCeVerificationOptions {
+    fn default() -> Self {
+        Self {
+            mlb_required: false,
+            grand_bond_ce_mode: None,
+            mlb_icon_threshold: default_support_icon_threshold(),
+            bond_icon_threshold: default_support_icon_threshold(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

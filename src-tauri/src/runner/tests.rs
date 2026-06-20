@@ -310,6 +310,18 @@ fn minimal_run_config_json() -> serde_json::Value {
 fn run_config_defaults_support_ce_to_none_when_field_missing() {
     let cfg: RunConfig = serde_json::from_value(minimal_run_config_json()).unwrap();
     assert!(cfg.support_craft_essence_id.is_none());
+    assert_eq!(
+        cfg.support_ce_threshold,
+        crate::commands::settings::SUPPORT_CE_THRESHOLD_DEFAULT
+    );
+    assert_eq!(
+        cfg.support_mlb_icon_threshold,
+        crate::commands::settings::SUPPORT_ICON_THRESHOLD_DEFAULT
+    );
+    assert_eq!(
+        cfg.support_bond_icon_threshold,
+        crate::commands::settings::SUPPORT_ICON_THRESHOLD_DEFAULT
+    );
     assert_eq!(cfg.support_craft_essence_mlb_required, true);
     assert_eq!(cfg.support_grand_mode, false);
     assert_eq!(cfg.support_grand_craft_essence_ids, [None; 3]);
@@ -341,6 +353,8 @@ fn run_config_round_trips_support_craft_essence_id() {
     payload["supportGrandMode"] = serde_json::json!(true);
     payload["supportGrandCraftEssenceIds"] = serde_json::json!([1001, null, 1003]);
     payload["supportCraftEssenceMlbRequired"] = serde_json::json!(false);
+    payload["supportMlbIconThreshold"] = serde_json::json!(0.76);
+    payload["supportBondIconThreshold"] = serde_json::json!(0.78);
     payload["supportGrandCraftEssenceMlbRequired"] = serde_json::json!([true, false, true]);
     payload["supportGrandBondCeMode"] = serde_json::json!("bondNp");
     payload["grandServants"] = serde_json::json!([
@@ -350,6 +364,8 @@ fn run_config_round_trips_support_craft_essence_id() {
     let cfg: RunConfig = serde_json::from_value(payload).unwrap();
     assert_eq!(cfg.support_craft_essence_id, Some(1485));
     assert_eq!(cfg.support_craft_essence_mlb_required, false);
+    assert_eq!(cfg.support_mlb_icon_threshold, 0.76);
+    assert_eq!(cfg.support_bond_icon_threshold, 0.78);
     assert_eq!(cfg.support_slot_index, Some(5));
     assert_eq!(cfg.support_grand_mode, true);
     assert_eq!(
