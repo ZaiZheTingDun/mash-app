@@ -24,6 +24,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { convertFileSrc, invoke } from "../tauri";
 import { BattleActorIcon } from "./BattleActorIcon";
 import { battleActorLabel, servantLabel } from "./battleActorLabels";
+import { FaceChip } from "./AdvancedFaceChip";
 import { OptionCardRadioGroup } from "./OptionCardRadioGroup";
 import { SectionHeading } from "./SectionHeading";
 import {
@@ -146,45 +147,6 @@ function useServantFaces(partyLineup: (Servant | null)[]) {
   }, [faces, requests]);
 
   return faces;
-}
-
-function FaceChip({
-  servant,
-  index,
-  src,
-  active = true,
-  selected = false,
-  disabled = false,
-  isSupport = false,
-  onClick,
-}: {
-  servant: Servant | null;
-  index: number;
-  src: string | null | undefined;
-  active?: boolean;
-  selected?: boolean;
-  disabled?: boolean;
-  isSupport?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={`advanced-face-chip${active ? "" : " dim"}${selected ? " selected" : ""}`}
-      aria-label={servantLabel(index, servant)}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <BattleActorIcon
-        kind="servant"
-        src={src}
-        label={servantLabel(index, servant)}
-        isSupport={isSupport}
-        size="button"
-        className="advanced-face-chip-icon"
-      />
-    </button>
-  );
 }
 
 function AdvancedInlineFace({
