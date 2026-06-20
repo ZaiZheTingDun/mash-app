@@ -18,11 +18,12 @@ src/                              # React frontend
 src-tauri/                        # Tauri / Rust backend
   src/                            # Each module ends with a `#[cfg(test)] mod tests` block
     main.rs                       # Thin entry: calls mash_lib::run()
-    lib.rs                        # Commands, serde types, plugin registration
+    lib.rs                        # Tauri builder, managed state, plugin/menu setup, command registration
+    commands/                     # Tauri command modules grouped by domain
     adb.rs                        # ADB device connection, tap, swipe
     screen.rs                     # Python sidecar IPC (stream, detect, find_element, read_battle_scene)
-    runner.rs                     # Automation main loop (state machine, UI coord constants)
-    debug.rs                      # Debug-page commands (screenshot capture, coord dump)
+    runner/                       # Battle automation runner modules
+    touch/                        # Low-level touch event helpers
   resources/                      # Bundled runtime assets (see resources/README.md)
     cv.json                       # Screen / element template config
     templates/                    # PNG templates (buttons, anchors, digit_0..9, …)
