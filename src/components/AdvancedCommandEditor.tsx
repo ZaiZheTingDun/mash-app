@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog, Flex, Text, Button, Select } from "@radix-ui/themes";
 import {
   Cross2Icon,
@@ -8,15 +8,14 @@ import { convertFileSrc, invoke } from "../tauri";
 import { BattleActorIcon } from "./BattleActorIcon";
 import { battleActorLabel, servantLabel } from "./battleActorLabels";
 import { FaceChip } from "./AdvancedFaceChip";
+import { AdvancedCommandCardButton } from "./AdvancedCommandCardButton";
 import { GrandCardStrategyPanel } from "./AdvancedGrandStrategyPanel";
 import {
   COMMAND_SPELL_LABELS,
-  COMMAND_BG_BY_SUIT,
   EMPTY_STARTUP_ACTIONS,
   SKILLS,
   SKILL_LABELS,
   autoNpOptionLabel,
-  commandCardAria,
   createId,
   createDefaultScene,
   defaultCommandCard,
@@ -26,7 +25,6 @@ import {
   npCardLabel,
   prepSummary,
   priorityLabel,
-  servantSlotIndex,
   type FrontServant,
   type PartySlot,
   type PrepDraft,
@@ -58,7 +56,6 @@ import type {
 } from "../types/project";
 import type { Servant } from "../types/servant";
 import orderChangeIcon from "../../src-tauri/resources/images/icon_order_change.png";
-import commandBgArts from "../../src-tauri/resources/images/command_bg/command_bg_a.png";
 
 interface AdvancedCommandEditorProps {
   projectId: string | null;
@@ -469,49 +466,6 @@ function AdvancedPreparationActionSummary({
         )
       )}
     </span>
-  );
-}
-
-function AdvancedCommandCardButton({
-  card,
-  partyMembers,
-  faces,
-  onClick,
-}: {
-  card: AdvancedCommandCardCondition;
-  partyMembers: PartyMember[];
-  faces: Record<string, string | null>;
-  onClick: () => void;
-}) {
-  const servantIndex = servantSlotIndex(card.servant);
-  const member = servantIndex == null ? null : partyMembers[servantIndex] ?? null;
-  const servant = member?.servant ?? null;
-  const faceSrc = servant ? faces[servant.variantKey] : null;
-  const unset = card.servant === "any" && card.suit === "any";
-  const grayscale = card.suit === "any";
-  const style = {
-    "--command-card-bg": `url(${card.suit === "any" ? commandBgArts : COMMAND_BG_BY_SUIT[card.suit]})`,
-  } as CSSProperties;
-
-  return (
-    <button
-      type="button"
-      className={`advanced-command-card${grayscale ? " unset" : ""}`}
-      style={style}
-      aria-label={commandCardAria(card)}
-      onClick={onClick}
-    >
-      {!unset && servantIndex != null && (
-        <BattleActorIcon
-          kind="servant"
-          src={faceSrc}
-          label={servantLabel(servantIndex, servant)}
-          isSupport={member?.isSupport ?? false}
-          size="button"
-          className="advanced-command-card-face"
-        />
-      )}
-    </button>
   );
 }
 
