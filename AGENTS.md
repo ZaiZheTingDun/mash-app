@@ -112,6 +112,7 @@ The only acceptable reasons to skip writing a test are: (a) the change is purely
 - **Styling**: Single `App.css` using Radix CSS variables (`var(--gray-7)`, `var(--blue-9)`, `var(--radius-2)`, etc.). No Tailwind, CSS Modules, or styled-components.
 - **JSON field naming**: camelCase on the wire — Rust structs use `#[serde(rename = "...")]` to match TypeScript field names.
 - **UI language**: Chinese strings in user-facing text.
+- **FGO team member identity**: A team may contain the same servant once as an owned servant and once as a support servant. Team-related mutations must never identify members by `servantId` alone. Prefer slot/member-instance identity for operations such as update, remove, swap, ordering, and craft-essence changes; keep the support-servant flag as semantic metadata for validation, display, and support-specific behavior.
 
 ## Architecture: Backend-Owned State
 
