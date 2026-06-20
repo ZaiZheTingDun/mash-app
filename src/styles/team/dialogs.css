@@ -1,0 +1,115 @@
+/* ── Servant Select Dialog ── */
+
+.servant-dialog {
+  --dialog-content-padding: 20px;
+}
+
+.servant-search {
+  margin-top: 12px;
+}
+
+.servant-filter-row {
+  margin-top: 10px;
+}
+
+.servant-filter-trigger {
+  flex: 1;
+  min-width: 0;
+}
+
+.servant-list-scroll {
+  height: 420px;
+  margin-top: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ce-list-scroll {
+  height: 420px;
+  margin-top: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.servant-option {
+  appearance: none;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: var(--radius-2);
+  transition: background 0.12s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.servant-option-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.servant-face-frame {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  border-radius: var(--radius-2);
+  border: 1px solid var(--gray-6);
+  overflow: hidden;
+  background: var(--gray-3);
+  display: grid;
+  place-items: center;
+  color: var(--gray-10);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.servant-face-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.servant-option-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.servant-option:hover,
+.servant-option.focused {
+  background: var(--blue-3);
+}
+
+.servant-option:active {
+  background: var(--blue-4);
+}
+
+.servant-option:focus-visible {
+  outline: 2px solid var(--blue-8);
+  outline-offset: -2px;
+}
+
+.servant-class-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-1);
+  min-width: 48px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.servant-rarity {
+  color: #d4a537;
+}
+
+.servant-np-name {
+  color: var(--gray-11);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

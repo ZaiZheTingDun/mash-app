@@ -1,0 +1,336 @@
+/* ── Craft Essence Tile ── */
+
+.image-card {
+  background: #fff;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.image-card:hover {
+  border-color: var(--blue-7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.image-card-inner {
+  width: 100%;
+  height: 100%;
+}
+
+.servant-slot {
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.servant-slot.empty {
+  border-style: dashed;
+  border-color: var(--gray-7);
+  background: var(--gray-2);
+}
+
+.servant-slot.empty:hover {
+  border-color: var(--blue-7);
+  background: var(--blue-2);
+}
+
+.servant-slot.filled {
+  border-color: var(--blue-6);
+  background: linear-gradient(135deg, var(--blue-2), var(--violet-2));
+}
+
+.servant-slot.filled:hover {
+  border-color: var(--blue-8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* ── CE Overlay (square plate on top of the servant portrait) ──
+ *
+ * FGO formation cards mount the equipped CE as a square plate that
+ * covers the lower portion of the portrait, framed by four red
+ * L-shaped corner brackets. We mirror that here:
+ *
+ *   - `.ce-overlay`         — the square plate (aspect-ratio 1/1).
+ *   - `.ce-overlay-img`     — the CE card art (filled state).
+ *   - `.ce-overlay-scrim`   — translucent gray fill (empty state, or
+ *                             fallback when the card art file is
+ *                             missing on disk).
+ *   - `.ce-overlay-corner`  — four absolutely-positioned L brackets,
+ *                             always rendered so the slot reads as
+ *                             "this is where the CE goes" even when
+ *                             unequipped.
+ *   - `.ce-overlay-clear`   — the small `×` to unpin a CE, only
+ *                             rendered in the filled state.
+ *
+ * Empty / filled states share the same footprint so swapping in a CE
+ * does not reflow the card.
+ */
+.ce-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  /* Match the source PNG aspect (150 × 68) so the CE card art is
+   * displayed at its real proportions; the plate ends up roughly
+   * `card-width / 2.2` tall, which also matches the FGO formation
+   * UI where the equipped CE strip sits across the bottom of the
+   * portrait without being a giant square. */
+  aspect-ratio: var(--ce-card-aspect);
+  cursor: pointer;
+  z-index: 2;
+  overflow: hidden;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  transition: filter 0.15s;
+}
+
+.ce-overlay:hover {
+  filter: brightness(1.08);
+}
+
+.ce-overlay-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.ce-overlay-scrim {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: rgba(40, 40, 40, 0.55);
+  color: rgba(255, 255, 255, 0.75);
+  text-align: center;
+}
+
+.ce-overlay.filled .ce-overlay-scrim {
+  /* Fallback only — visible when the CE card art failed to resolve.
+   * Slightly brighter so the name stays readable against a dark
+   * portrait. */
+  background: rgba(20, 20, 20, 0.7);
+  color: white;
+}
+
+.ce-overlay-empty-icon {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.ce-overlay-fallback-label {
+  color: inherit;
+  line-height: 1.2;
+}
+
+.ce-overlay-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--red-9, #e5484d);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ce-overlay-corner.tl {
+  top: 0;
+  left: 0;
+  border-right: none;
+  border-bottom: none;
+}
+
+.ce-overlay-corner.tr {
+  top: 0;
+  right: 0;
+  border-left: none;
+  border-bottom: none;
+}
+
+.ce-overlay-corner.bl {
+  bottom: 0;
+  left: 0;
+  border-right: none;
+  border-top: none;
+}
+
+.ce-overlay-corner.br {
+  bottom: 0;
+  right: 0;
+  border-left: none;
+  border-top: none;
+}
+
+.ce-overlay-clear {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.55);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  opacity: 0;
+  transition: background 0.15s, opacity 0.15s;
+  z-index: 3;
+}
+
+.ce-overlay:hover .ce-overlay-clear,
+.ce-overlay-clear:focus-visible {
+  opacity: 1;
+}
+
+.ce-overlay-clear:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.ce-condition-icon,
+.ce-condition-badge {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.75));
+}
+
+.ce-condition-icon-mlb {
+  right: 2px;
+  bottom: 2px;
+  width: 12px;
+  height: 12px;
+  object-fit: contain;
+}
+
+.ce-condition-icon-bond {
+  left: 2px;
+  top: 2px;
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
+
+.ce-condition-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.grand-ce-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3px;
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.grand-ce-slot {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 4.4 / 1;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 3px;
+  background: rgba(40, 40, 40, 0.62);
+  cursor: pointer;
+}
+
+.grand-ce-slot:hover {
+  filter: brightness(1.08);
+}
+
+.grand-ce-slot-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.grand-ce-slot-scrim {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 4px;
+  align-items: center;
+  padding: 2px 6px 2px 4px;
+  background: rgba(20, 20, 20, 0.68);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.grand-ce-slot-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.grand-ce-slot-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grand-ce-slot-clear {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.grand-ce-slot:hover .grand-ce-slot-clear,
+.grand-ce-slot-clear:focus-visible {
+  opacity: 1;
+}
+
+.ce-select-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

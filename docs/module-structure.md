@@ -20,7 +20,7 @@ Frontend code lives under `src/`.
 - `features/debug/` owns the debug page, canvas, popout window, debug DTOs/helpers, and related tests.
 - `features/settings/` owns settings pages, runtime/assets/self-check controls, and settings tests.
 - `features/setup/`, `features/enhancement/`, `features/status/`, and `features/projects/` own their corresponding screens/components and tests.
-- `styles/` contains the global stylesheet entrypoint plus feature-oriented CSS modules. CSS remains global by design; do not introduce CSS Modules or styled-components.
+- `styles/` contains the global stylesheet entrypoint plus feature-oriented CSS modules. CSS remains global by design; do not introduce CSS Modules or styled-components. Large feature styles can use a subdirectory with an `index.css` aggregator, as `styles/team/` does for layout, slots, craft essence overlays, and dialogs.
 - `types/` contains frontend interfaces that must stay aligned with Rust serde DTOs.
 - `test/` contains shared Vitest setup and render helpers.
 
