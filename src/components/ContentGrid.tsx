@@ -1,11 +1,5 @@
 import { useState } from "react";
-import {
-  Box,
-  Button,
-  Flex,
-  Text,
-} from "@radix-ui/themes";
-import { PlusIcon, PersonIcon } from "@radix-ui/react-icons";
+import { Box } from "@radix-ui/themes";
 import {
   DndContext,
   closestCenter,
@@ -16,30 +10,22 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  useSortable,
   arrayMove,
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { ServantSelectDialog } from "./ServantSelectDialog";
 import { CraftEssenceSelectDialog } from "./CraftEssenceSelectDialog";
 import { useCeCards, usePortraits } from "./contentGridAssets";
-import {
-  CraftEssenceOverlay,
-  GrandCraftEssenceOverlay,
-} from "./ContentGridOverlays";
-import {
-  SupportRequirementSummary,
-  SupportSettingsDialog,
-} from "./SupportSettingsDialog";
+import { SortableSlot } from "./ContentGridSlot";
+import { SupportSettingsDialog } from "./SupportSettingsDialog";
 import {
   grandClassToServantClass,
-  hasConfiguredLevels,
   normalizeSupportAppendSkillLevels,
   normalizeSupportGrandCraftEssenceIds,
   normalizeSupportGrandCraftEssenceMlbRequired,
   normalizeSupportSkillLevels,
 } from "./supportSettingsModel";
+import type { SlotItem } from "./contentGridTypes";
 import type { Servant } from "../types/servant";
 import type { CraftEssence } from "../types/craftEssence";
 import type {
@@ -54,19 +40,7 @@ import mlbIconSrc from "../../src-tauri/resources/images/icon_mlb_mark.png";
 import grandBondIconSrc from "../../src-tauri/resources/images/icon_grand_bond_ce.png";
 import grandBondNpIconSrc from "../../src-tauri/resources/images/icon_grand_bond_ce_np.png";
 
-export interface SlotItem {
-  id: string;
-  type: "servant" | "support";
-  servant: Servant | null;
-  /**
-   * Pinned craft essence for this slot. Persisted on the project but
-   * only consumed by the runner for the support slot today (party-slot
-   * CEs are stored for future auto-equip work). Renders as a small
-   * picker tile beneath each servant slot.
-  */
-  craftEssence: CraftEssence | null;
-  craftEssenceMlbRequired?: boolean;
-}
+export type { SlotItem } from "./contentGridTypes";
 
 interface ContentGridProps {
   servants: Servant[];
@@ -80,241 +54,6 @@ interface ContentGridProps {
   */
   activeProject: Project | null;
   onUpdateActiveProject: (next: Project) => Promise<void> | void;
-}
-
-interface SortableSlotProps {
-  slot: SlotItem;
-  portraitSrc: string | null | undefined;
-  ceCardSrc: string | null | undefined;
-  supportGrandMode: boolean;
-  supportGrandCraftEssences: (CraftEssence | null)[];
-  supportGrandCeCardSrcs: (string | null | undefined)[];
-  supportGrandCeMlbRequired: SupportGrandCraftEssenceMlbRequired;
-  supportGrandBondCeMode: SupportGrandBondCeMode;
-  mlbIconSrc: string | null | undefined;
-  bondIconSrc: string | null | undefined;
-  bondNpIconSrc: string | null | undefined;
-  supportNpLevel: number | null | undefined;
-  supportSkillLevels: SupportSkillLevelMins;
-  supportAppendSkillLevels: SupportAppendSkillLevelMins;
-  onSelect: () => void;
-  onCeSelect: () => void;
-  onCeClear: () => void;
-  onGrandModeToggle: () => void;
-  onGrandCeSelect: (index: number) => void;
-  onGrandCeClear: (index: number) => void;
-  onSupportSettingsOpen: () => void;
-}
-
-/**
- * Map a servant's rarity to the CSS class that drives its portrait
- * frame gradient. Rarity buckets follow FGO's metallic frame scheme:
- *
- *   1 ★ / 2 ★  → brass
- *   3 ★        → silver
- *   4 ★ / 5 ★  → gold
- *
- * Returns an empty string for unknown / out-of-range values so the
- * caller can opt out of the gradient (the default flat-grey frame
- * still renders).
- */
-function rarityFrameClass(rarity: number): string {
-  if (rarity >= 4) return "rarity-gold";
-  if (rarity === 3) return "rarity-silver";
-  if (rarity >= 1) return "rarity-brass";
-  return "";
-}
-
-/**
- * One unified servant+CE card. The vertical stack is:
- *   1. `.slot-header` — empty reserved band (future: ascension/lv/etc).
- *   2. `.servant-portrait` — aspect-ratio-locked image area that owns:
- *        - the portrait `<img>` (or placeholder),
- *        - the top-right `SUPPORT` badge on the support slot,
- *        - a `.ce-overlay` strip pinned to the bottom edge that covers
- *          the lower slice of the portrait (replaces the standalone CE
- *          tile that used to sit below this card),
- *        - on the support slot, either the requirement-summary chips
- *          or the "技能/宝具设置" button as an overlay above the CE strip.
- *
- * Empty / empty-support states keep the same skeleton so the card
- * height matches a filled card; only the middle portrait region swaps
- * for a `+ 选择从者` / `助战` placeholder.
- */
-function SortableSlot({
-  slot,
-  portraitSrc,
-  ceCardSrc,
-  supportGrandMode,
-  supportGrandCraftEssences,
-  supportGrandCeCardSrcs,
-  supportGrandCeMlbRequired,
-  supportGrandBondCeMode,
-  mlbIconSrc,
-  bondIconSrc,
-  bondNpIconSrc,
-  supportNpLevel,
-  supportSkillLevels,
-  supportAppendSkillLevels,
-  onSelect,
-  onCeSelect,
-  onCeClear,
-  onGrandModeToggle,
-  onGrandCeSelect,
-  onGrandCeClear,
-  onSupportSettingsOpen,
-}: SortableSlotProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: slot.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-    zIndex: isDragging ? 10 : undefined,
-  };
-
-  const { servant } = slot;
-  const isSupport = slot.type === "support";
-  const rarityClass = servant ? rarityFrameClass(servant.rarity) : "";
-  const hasSupportRequirements =
-    supportNpLevel != null ||
-    hasConfiguredLevels(supportSkillLevels) ||
-    hasConfiguredLevels(supportAppendSkillLevels);
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="slot-drag-wrapper"
-      {...attributes}
-      {...listeners}
-    >
-      <Flex direction="column" className="slot-card">
-        <div className="slot-header" />
-        <div
-          className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}${isSupport && supportGrandMode ? " grand-support" : ""}${rarityClass ? ` ${rarityClass}` : ""}`}
-          onClick={onSelect}
-        >
-          {servant ? (
-            portraitSrc ? (
-              <img
-                className="servant-portrait-img"
-                src={portraitSrc}
-                alt={servant.name_cn}
-                draggable={false}
-              />
-            ) : (
-              <Flex
-                direction="column"
-                align="center"
-                justify="center"
-                className="servant-portrait-placeholder"
-              >
-                <Text size="2" weight="bold" align="center">
-                  {servant.name_cn}
-                </Text>
-              </Flex>
-            )
-          ) : isSupport ? (
-            <Flex
-              direction="column"
-              align="center"
-              justify="center"
-              gap="1"
-              className="servant-portrait-placeholder"
-            >
-              <PersonIcon width={28} height={28} className="support-slot-icon" />
-              <Text size="1" weight="medium" className="support-slot-label">
-                助战
-              </Text>
-            </Flex>
-          ) : (
-            <Flex
-              direction="column"
-              align="center"
-              justify="center"
-              gap="1"
-              className="servant-portrait-placeholder"
-            >
-              <PlusIcon width={28} height={28} className="servant-slot-icon" />
-              <Text size="1" color="gray">
-                选择从者
-              </Text>
-            </Flex>
-          )}
-          {isSupport && (
-            <span className="support-corner-badge">SUPPORT</span>
-          )}
-          {isSupport && (
-            <button
-              type="button"
-              className={`support-grand-toggle${supportGrandMode ? " active" : ""}`}
-              aria-pressed={supportGrandMode}
-              aria-label={supportGrandMode ? "关闭冠位模式" : "开启冠位模式"}
-              onClick={(event) => {
-                event.stopPropagation();
-                onGrandModeToggle();
-              }}
-            >
-              冠位
-            </button>
-          )}
-          {isSupport && hasSupportRequirements && (
-            <SupportRequirementSummary
-              npLevel={supportNpLevel}
-              skillLevels={supportSkillLevels}
-              appendSkillLevels={supportAppendSkillLevels}
-              onOpen={onSupportSettingsOpen}
-            />
-          )}
-          {isSupport && !hasSupportRequirements && (
-            <Button
-              type="button"
-              size="1"
-              variant="surface"
-              color="gray"
-              className="support-settings-button support-settings-overlay-button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onSupportSettingsOpen();
-              }}
-            >
-              技能/宝具设置
-            </Button>
-          )}
-          {isSupport && supportGrandMode ? (
-            <GrandCraftEssenceOverlay
-              craftEssences={supportGrandCraftEssences}
-              cardSrcs={supportGrandCeCardSrcs}
-              mlbRequired={supportGrandCeMlbRequired}
-              mlbIconSrc={mlbIconSrc}
-              grandBondCeMode={supportGrandBondCeMode}
-              bondIconSrc={bondIconSrc}
-              bondNpIconSrc={bondNpIconSrc}
-              onSelect={onGrandCeSelect}
-              onClear={onGrandCeClear}
-            />
-          ) : (
-            <CraftEssenceOverlay
-              craftEssence={slot.craftEssence}
-              cardSrc={ceCardSrc}
-              mlbRequired={isSupport ? slot.craftEssenceMlbRequired ?? true : false}
-              mlbIconSrc={mlbIconSrc}
-              onSelect={onCeSelect}
-              onClear={onCeClear}
-            />
-          )}
-        </div>
-      </Flex>
-    </div>
-  );
 }
 
 export function ContentGrid({
