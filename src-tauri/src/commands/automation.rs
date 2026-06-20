@@ -9,9 +9,7 @@
 use crate::adb;
 use crate::commands::catalog::load_enhancement_target;
 use crate::commands::debug;
-use crate::commands::projects::{
-    load_advanced_battle_scenes, load_battle_scenes, read_projects,
-};
+use crate::commands::projects::{load_advanced_battle_scenes, load_battle_scenes, read_projects};
 use crate::commands::runtime::{
     resolve_ce_assets_dir, resolve_scrcpy_jar, resolve_servant_assets_dir,
 };

@@ -43,7 +43,7 @@ Backend code lives under `src-tauri/src/`.
   - `settings.rs` for app settings, startup migration, server selection, and update-check settings.
 - `runner/` contains the battle automation state machine split by domain: config, coordinates, state, support, AP recovery, party mutation, attack selection, Grand strategy, runtime helpers, prebattle routing, result handling, and tests.
 - `touch/` contains low-level touch input construction.
-- `screen.rs` owns Python sidecar IPC and screen/CV DTOs.
+- `screen.rs` owns the Python sidecar client/IPC; `screen/types.rs` owns screen/CV DTOs re-exported through `crate::screen`.
 - `enhancement_runner.rs` owns enhancement automation.
 - `models.rs` contains serde DTOs shared across commands and frontend IPC.
 - `paths.rs` contains app-data/resource path resolution and migration helpers.

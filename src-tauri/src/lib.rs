@@ -32,11 +32,11 @@ pub use server::{
 
 pub(crate) use commands::assets::*;
 pub(crate) use commands::catalog::*;
-pub(crate) use paths::*;
 #[cfg(test)]
 pub(crate) use commands::projects::*;
 pub(crate) use commands::runtime::*;
 pub(crate) use commands::settings::*;
+pub(crate) use paths::*;
 
 #[cfg(desktop)]
 const CHECK_FOR_UPDATE_MENU_ID: &str = "check-for-update";

@@ -21,7 +21,7 @@ src-tauri/                        # Tauri / Rust backend
     lib.rs                        # Tauri builder, managed state, plugin/menu setup, command registration
     commands/                     # Tauri command modules grouped by domain
     adb.rs                        # ADB device connection, tap, swipe
-    screen.rs                     # Python sidecar IPC (stream, detect, find_element, read_battle_scene)
+    screen.rs, screen/            # Python sidecar IPC and screen/CV DTOs
     runner/                       # Battle automation runner modules
     touch/                        # Low-level touch event helpers
   resources/                      # Bundled runtime assets (see resources/README.md)
