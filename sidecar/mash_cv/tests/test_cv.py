@@ -2905,15 +2905,17 @@ class TestVerifySupportCE:
         result = _verify_support_ce(img, region, tmpl_path, 0.7)
         assert result["passed"] is True, result
         assert result["score"] >= 0.7, result
-        assert result["threshold"] > 0.7, result
+        assert result["threshold"] == 0.7, result
         checks = result["artworkChecks"]
         assert {check["variant"] for check in checks} == {
             "full",
             "center",
             "top_right",
         }
+        assert {check["threshold"] for check in checks} == {0.7}
         selected = [check for check in checks if check["selected"]]
         assert len(selected) == 1
+        assert selected[0]["variant"] != "full"
         assert selected[0]["threshold"] == result["threshold"]
         assert selected[0]["score"] == result["score"]
 

@@ -3792,8 +3792,6 @@ CE_OCCLUSION_CENTER_LEFT_CROP_PX = 26
 CE_OCCLUSION_CENTER_RIGHT_CROP_PX = 30
 CE_OCCLUSION_TOP_RIGHT_LEFT_CROP_PX = 26
 CE_OCCLUSION_TOP_RIGHT_BOTTOM_CROP_PX = 22
-CE_OCCLUSION_SAFE_SINGLE_CROP_THRESHOLD_BONUS = 0.04
-CE_OCCLUSION_SAFE_DOUBLE_CROP_THRESHOLD_BONUS = 0.08
 CE_OCCLUSION_SAFE_MIN_FULL_SCORE = 0.60
 
 # In Grand Saber rows the bond / bondNp slot renders the CE artwork at the
@@ -3877,16 +3875,15 @@ def _load_ce_template(
     return gray
 
 
-def _ce_artwork_match_templates(tmpl: np.ndarray) -> list[tuple[str, np.ndarray, float]]:
+def _ce_artwork_match_templates(tmpl: np.ndarray) -> list[tuple[str, np.ndarray]]:
     """Return full and occlusion-safe CE artwork templates.
 
     The full template stays first for the normal path. Later variants crop
     the template to regions that avoid the event-bonus badge in the lower-left
-    corner, while staying large enough to preserve CE-specific artwork. Each
-    variant carries a threshold bonus so smaller regions must score higher.
+    corner, while staying large enough to preserve CE-specific artwork.
     """
     h, w = tmpl.shape[:2]
-    variants = [("full", tmpl, 0.0)]
+    variants = [("full", tmpl)]
 
     min_w = max(8, int(round(w * 0.45)))
     min_h = max(8, int(round(h * 0.45)))
@@ -3901,7 +3898,6 @@ def _ce_artwork_match_templates(tmpl: np.ndarray) -> list[tuple[str, np.ndarray,
             (
                 "center",
                 tmpl[:, center_left:center_x1],
-                CE_OCCLUSION_SAFE_SINGLE_CROP_THRESHOLD_BONUS,
             )
         )
 
@@ -3913,7 +3909,6 @@ def _ce_artwork_match_templates(tmpl: np.ndarray) -> list[tuple[str, np.ndarray,
             (
                 "top_right",
                 tmpl[:top_right_y1, top_right_left:],
-                CE_OCCLUSION_SAFE_DOUBLE_CROP_THRESHOLD_BONUS,
             )
         )
 
@@ -3990,8 +3985,7 @@ def _verify_support_ce(
     # Relax the base artwork threshold for bond slots only; see the
     # ``BOND_CE_ARTWORK_THRESHOLD`` comment for the rationale. Take the
     # ``min`` so callers passing an *already* lower threshold (tests,
-    # tuning runs) keep their tighter constraint. Occlusion-safe crops add
-    # a per-candidate bonus on top of this base threshold.
+    # tuning runs) keep their tighter constraint.
     effective_base_threshold = (
         min(float(threshold), BOND_CE_ARTWORK_THRESHOLD)
         if bond_mode_active
@@ -4020,9 +4014,9 @@ def _verify_support_ce(
             cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
         )
 
-        for variant, base_tmpl, threshold_bonus in _ce_artwork_match_templates(tmpl):
+        for variant, base_tmpl in _ce_artwork_match_templates(tmpl):
             attempt_tmpl = base_tmpl
-            attempt_threshold = min(1.0, effective_base_threshold + threshold_bonus)
+            attempt_threshold = effective_base_threshold
 
             # If the search window is too small for the icon (caller misconfigured
             # SUPPORT_CE_OFFSET_IN_ROW), shrink the template proportionally so
