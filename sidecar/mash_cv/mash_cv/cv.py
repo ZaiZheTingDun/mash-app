@@ -3763,21 +3763,21 @@ _ce_template_cache: dict[tuple[str, int, int], np.ndarray] = {}
 # only the inner art that actually appears on screen, otherwise
 # matchTemplate has to find the inner art inside the framed template and
 # the score collapses.
-CE_TEMPLATE_TOP_CROP = 16
-CE_TEMPLATE_BOTTOM_CROP = 16
+CE_TEMPLATE_TOP_CROP = 13
+CE_TEMPLATE_BOTTOM_CROP = 13
 CE_TEMPLATE_RIGHT_CROP = 0
 
 # On-screen size of the support-row CE icon, expressed as fractions of the
 # full screenshot dimensions. Reference data point: at 2560×1440 the icon
-# renders at 315×90 px (315/2560 ≈ 0.123, 90/1440 ≈ 0.0625). FGO scales
+# renders at 312×88 px (312/2560 ≈ 0.122, 88/1440 ≈ 0.061). FGO scales
 # the support UI proportionally, so these fractions hold across the
 # common emulator/native resolutions and we resize the template to
 # exactly this pixel size before running ``cv2.matchTemplate``. Doing
 # this also implicitly corrects the small (~3%) aspect-ratio mismatch
-# between the cropped template (122/36 = 3.389) and the on-screen icon
-# (315/90 = 3.500).
-CE_ICON_W_FRAC = 315.0 / 2560.0
-CE_ICON_H_FRAC = 90.0 / 1440.0
+# between the cropped template (150/42 = 3.571) and the on-screen icon
+# (312/88 = 3.545).
+CE_ICON_W_FRAC = 312.0 / 2560.0
+CE_ICON_H_FRAC = 88.0 / 1440.0
 CE_MLB_ICON_TEMPLATE = "icon_mlb_mark"
 CE_GRAND_BOND_TEMPLATE = "icon_grand_bond_ce"
 CE_GRAND_BOND_NP_TEMPLATE = "icon_grand_bond_ce_np"
@@ -3788,8 +3788,10 @@ CE_DECORATION_ICON_THRESHOLD = 0.70
 # correct CE is visible (for example 0.66 / 0.70). Keep the conservative
 # threshold for the full strip, but require higher scores from the smaller
 # occlusion-safe crops because less artwork means higher false-positive risk.
-CE_OCCLUSION_SAFE_LEFT_CROP_FRAC = 0.30
-CE_OCCLUSION_SAFE_BOTTOM_CROP_FRAC = 0.35
+CE_OCCLUSION_CENTER_LEFT_CROP_PX = 26
+CE_OCCLUSION_CENTER_RIGHT_CROP_PX = 30
+CE_OCCLUSION_TOP_RIGHT_LEFT_CROP_PX = 26
+CE_OCCLUSION_TOP_RIGHT_BOTTOM_CROP_PX = 22
 CE_OCCLUSION_SAFE_SINGLE_CROP_THRESHOLD_BONUS = 0.04
 CE_OCCLUSION_SAFE_DOUBLE_CROP_THRESHOLD_BONUS = 0.08
 CE_OCCLUSION_SAFE_MIN_FULL_SCORE = 0.60
@@ -3886,24 +3888,31 @@ def _ce_artwork_match_templates(tmpl: np.ndarray) -> list[tuple[str, np.ndarray,
     h, w = tmpl.shape[:2]
     variants = [("full", tmpl, 0.0)]
 
-    x0 = int(round(w * CE_OCCLUSION_SAFE_LEFT_CROP_FRAC))
-    y1 = int(round(h * (1.0 - CE_OCCLUSION_SAFE_BOTTOM_CROP_FRAC)))
     min_w = max(8, int(round(w * 0.45)))
     min_h = max(8, int(round(h * 0.45)))
 
-    if w - x0 >= min_w:
-        variants.append(
-            ("noLeft30", tmpl[:, x0:], CE_OCCLUSION_SAFE_SINGLE_CROP_THRESHOLD_BONUS)
-        )
-    if y1 >= min_h:
-        variants.append(
-            ("noBottom35", tmpl[:y1, :], CE_OCCLUSION_SAFE_SINGLE_CROP_THRESHOLD_BONUS)
-        )
-    if w - x0 >= min_w and y1 >= min_h:
+    center_left = min(CE_OCCLUSION_CENTER_LEFT_CROP_PX, max(0, w - 1))
+    center_right = min(
+        CE_OCCLUSION_CENTER_RIGHT_CROP_PX, max(0, w - center_left - 1)
+    )
+    center_x1 = w - center_right
+    if center_x1 - center_left >= min_w:
         variants.append(
             (
-                "noLeft30Bottom35",
-                tmpl[:y1, x0:],
+                "center",
+                tmpl[:, center_left:center_x1],
+                CE_OCCLUSION_SAFE_SINGLE_CROP_THRESHOLD_BONUS,
+            )
+        )
+
+    top_right_left = min(CE_OCCLUSION_TOP_RIGHT_LEFT_CROP_PX, max(0, w - 1))
+    top_right_bottom = min(CE_OCCLUSION_TOP_RIGHT_BOTTOM_CROP_PX, max(0, h - 1))
+    top_right_y1 = h - top_right_bottom
+    if w - top_right_left >= min_w and top_right_y1 >= min_h:
+        variants.append(
+            (
+                "top_right",
+                tmpl[:top_right_y1, top_right_left:],
                 CE_OCCLUSION_SAFE_DOUBLE_CROP_THRESHOLD_BONUS,
             )
         )

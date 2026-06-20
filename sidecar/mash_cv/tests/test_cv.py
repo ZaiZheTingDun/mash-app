@@ -2909,9 +2909,8 @@ class TestVerifySupportCE:
         checks = result["artworkChecks"]
         assert {check["variant"] for check in checks} == {
             "full",
-            "noLeft30",
-            "noBottom35",
-            "noLeft30Bottom35",
+            "center",
+            "top_right",
         }
         selected = [check for check in checks if check["selected"]]
         assert len(selected) == 1
@@ -2934,8 +2933,8 @@ class TestVerifySupportCE:
         # This is too much damage to trust a small clean crop by itself:
         # the best occlusion-safe variant passes its raised threshold, but
         # the full artwork score must still clear the 0.60 sanity gate.
-        badge_w = int(round(target_w * 0.85))
-        badge_h = int(round(target_h * 0.62))
+        badge_w = int(round(target_w * 0.80))
+        badge_h = int(round(target_h * 0.30))
         img[py + target_h - badge_h : py + target_h, px : px + badge_w] = (0, 0, 255)
 
         region = {
@@ -3411,7 +3410,12 @@ class TestGrandBondDecorationIcons:
         Bond mode must not force the narrow-region score when the full region
         is the one aligned with the asset; the link icon check is still what
         distinguishes the connected row."""
-        from mash_cv.cv import _verify_support_ce, CE_GRAND_BOND_NP_TEMPLATE
+        from mash_cv.cv import (
+            _verify_support_ce,
+            CE_GRAND_BOND_NP_TEMPLATE,
+            CE_TEMPLATE_TOP_CROP,
+            CE_TEMPLATE_BOTTOM_CROP,
+        )
 
         H, W = 1440, 2560
         img = np.full((H, W, 3), 8, dtype=np.uint8)
@@ -3425,7 +3429,10 @@ class TestGrandBondDecorationIcons:
         img[sy : sy + sh, sx : sx + sw] = full_art
 
         asset = np.full((68, 150, 3), 0, dtype=np.uint8)
-        asset[16:52, :] = cv2.resize(full_art, (150, 36), interpolation=cv2.INTER_AREA)
+        inner_h = 68 - CE_TEMPLATE_TOP_CROP - CE_TEMPLATE_BOTTOM_CROP
+        asset[CE_TEMPLATE_TOP_CROP : 68 - CE_TEMPLATE_BOTTOM_CROP, :] = cv2.resize(
+            full_art, (150, inner_h), interpolation=cv2.INTER_AREA
+        )
         asset_path = tmp_path / "card_ce.png"
         cv2.imwrite(str(asset_path), asset)
 
