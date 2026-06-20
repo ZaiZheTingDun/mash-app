@@ -1,0 +1,175 @@
+/* ── App Layout ── */
+
+.app-root {
+  height: 100vh;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse at center, transparent 42%, var(--fgo-vignette) 100%),
+    linear-gradient(135deg, var(--fgo-bg-base), var(--fgo-bg-soft));
+}
+
+.app-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12px 18px, var(--fgo-star) 0 1px, transparent 1.4px),
+    radial-gradient(circle at 64px 56px, var(--fgo-silver) 0 0.8px, transparent 1.2px),
+    linear-gradient(45deg, transparent 48%, var(--fgo-line) 49%, var(--fgo-line) 51%, transparent 52%),
+    linear-gradient(-45deg, transparent 48%, var(--fgo-line) 49%, var(--fgo-line) 51%, transparent 52%);
+  background-size: 96px 96px, 128px 128px, 72px 72px, 72px 72px;
+  -webkit-mask-image: radial-gradient(circle at center, black 36%, transparent 82%);
+  mask-image: radial-gradient(circle at center, black 36%, transparent 82%);
+  opacity: 0.6;
+}
+
+.app-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  flex-direction: row;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Main Content ── */
+
+.main-content {
+  flex: 1;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content-inner {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Page Footer (linear flow next/back buttons) ── */
+
+/* Sticks the per-page action row to the bottom of the main content
+   pane. `margin-top: auto` pushes the footer down inside the flex
+   column even when the page body is short. */
+.page-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  width: 100%;
+}
+
+.asset-import-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.runtime-import-block {
+  max-width: 340px;
+}
+
+.runtime-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.link-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--blue-11);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link-button:disabled {
+  color: var(--gray-9);
+  cursor: not-allowed;
+}
+
+.runtime-manual-upload {
+  font-size: 12px;
+}
+
+.runtime-download-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.runtime-progress-bar {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--blue-9);
+}
+
+.runtime-download-url {
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Setup Gate ── */
+
+.setup-page {
+  min-height: 100vh;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.setup-panel {
+  width: min(720px, 100%);
+  padding: 24px;
+  border: 1px solid var(--fgo-surface-border);
+  border-radius: var(--radius-3);
+  background: var(--fgo-surface-strong);
+  box-shadow: 0 18px 42px var(--fgo-shadow);
+}
+
+.setup-subtitle {
+  display: block;
+  margin-top: 6px;
+}
+
+.setup-requirement {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--fgo-surface-strong) 72%, transparent);
+}
+
+.setup-requirement.ready {
+  border-color: var(--green-7);
+}
+
+.setup-requirement.missing {
+  border-color: var(--amber-7);
+}
+
+.resource-panel-embedded {
+  max-width: 760px;
+}

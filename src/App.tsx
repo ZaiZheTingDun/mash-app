@@ -38,8 +38,6 @@ import {
   type LogLevel,
   type OperationLogEntry,
 } from "./operationLog";
-import "./App.css";
-
 // Linear flow: 队伍设置 → 指令设置 → 开始任务. Each forward step is
 // triggered by the bottom-right primary button on the previous page;
 // `debug` is reached out-of-band from the sidebar. Replaces the older

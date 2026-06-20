@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { AppThemeRoot } from "./AppThemeRoot";
-import "./App.css";
+import "./styles/index.css";
 
 // Tauri spawns secondary windows pointing at the same SPA bundle and
 // distinguishes them by URL hash. `#debug-canvas` swaps the entire

@@ -1,0 +1,463 @@
+/* ── Debug Page ── */
+
+.debug-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 32px;
+  min-height: 0;
+}
+
+.debug-header {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--gray-6);
+  margin-bottom: 20px;
+}
+
+.debug-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+}
+
+.debug-canvas-col {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.debug-toolbar {
+  flex-shrink: 0;
+}
+
+.debug-section {
+  flex-shrink: 0;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  background: var(--fgo-surface);
+  backdrop-filter: blur(14px);
+}
+
+.debug-section-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  border-radius: var(--radius-2);
+}
+
+.debug-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.debug-section-summary:hover {
+  background: var(--fgo-control-hover);
+}
+
+.debug-section-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+  color: var(--gray-9);
+}
+
+.debug-section[open] > .debug-section-summary .debug-section-chevron {
+  transform: rotate(90deg);
+}
+
+.debug-section-badge {
+  margin-left: auto;
+}
+
+.debug-section-body {
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--gray-5);
+}
+
+.debug-text-field {
+  min-width: 220px;
+}
+
+.debug-servant-choice-list {
+  min-width: 240px;
+  max-width: 100%;
+  flex: 1;
+}
+
+.debug-threshold-field {
+  min-width: 72px;
+  width: 72px;
+}
+
+.debug-id-field {
+  width: 140px;
+}
+
+.debug-select-trigger {
+  min-width: 140px;
+}
+
+.debug-canvas-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gray-3);
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-3);
+  overflow: hidden;
+  padding: 12px;
+}
+
+.debug-canvas {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  display: inline-block;
+  line-height: 0;
+}
+
+.debug-canvas-img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-2);
+}
+
+.debug-canvas-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+}
+
+.debug-overlay-box {
+  position: absolute;
+  border: 2px solid var(--green-9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.debug-overlay-label {
+  position: absolute;
+  top: -20px;
+  left: 0;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  background: var(--green-9);
+  color: #fff;
+  border-radius: var(--radius-1);
+  white-space: nowrap;
+}
+
+.debug-overlay-card {
+  border-color: var(--blue-9);
+}
+
+.debug-overlay-card > .debug-overlay-label {
+  background: var(--blue-9);
+}
+
+.debug-overlay-face {
+  border: 1px dashed var(--blue-7);
+  background: rgba(0, 144, 255, 0.05);
+}
+
+.debug-overlay-icon {
+  border: 1px solid var(--amber-9);
+  background: rgba(255, 170, 0, 0.08);
+}
+
+.debug-overlay-crit {
+  border-width: 2px;
+  border-style: solid;
+}
+
+.debug-overlay-crit-kept {
+  border-color: var(--crimson-9);
+  background: rgba(220, 50, 90, 0.14);
+}
+
+.debug-overlay-crit-miss {
+  border-color: var(--gray-9);
+  background: rgba(120, 120, 120, 0.08);
+  border-style: dashed;
+}
+
+/* Per-digit score labels sit BELOW the box (the rendered crit
+ * percentage glyph occupies the space directly above), centered on
+ * the box itself rather than left-anchored like the standard
+ * overlay label. */
+.debug-overlay-crit-label {
+  top: 100%;
+  left: 50%;
+  transform: translate(-50%, 2px);
+  font-size: 10px;
+  padding: 1px 4px;
+  background: var(--crimson-9);
+}
+
+.debug-overlay-crit-miss > .debug-overlay-crit-label {
+  background: var(--gray-9);
+}
+
+.debug-overlay-np-ready {
+  border: 2px solid var(--green-9);
+  background: rgba(0, 200, 80, 0.1);
+}
+
+.debug-overlay-np-ready > .debug-overlay-label {
+  background: var(--green-9);
+}
+
+.debug-overlay-np-empty {
+  border: 2px dashed var(--gray-9);
+  background: rgba(120, 120, 120, 0.1);
+}
+
+.debug-overlay-np-empty > .debug-overlay-label {
+  background: var(--gray-9);
+}
+
+.debug-overlay-support-region {
+  border: 2px dashed var(--purple-9);
+  background: rgba(160, 80, 200, 0.04);
+}
+
+.debug-overlay-support-region > .debug-overlay-label {
+  background: var(--purple-9);
+}
+
+.debug-overlay-support-name-cand {
+  border: 1px dashed var(--cyan-8);
+  background: rgba(0, 180, 200, 0.05);
+}
+
+.debug-overlay-support-name-cand > .debug-overlay-label {
+  background: var(--cyan-9);
+  font-size: 9px;
+}
+
+.debug-overlay-support-np-cand {
+  border: 1px dashed var(--amber-8);
+  background: rgba(220, 170, 0, 0.05);
+}
+
+.debug-overlay-support-np-cand > .debug-overlay-label {
+  background: var(--amber-9);
+  font-size: 9px;
+}
+
+.debug-overlay-support-row {
+  border: 2px solid var(--green-9);
+  background: rgba(0, 200, 80, 0.08);
+}
+
+.debug-overlay-support-row > .debug-overlay-label {
+  background: var(--green-9);
+}
+
+.debug-overlay-support-tap {
+  background: var(--green-9);
+}
+
+.debug-overlay-support-anchor-search {
+  border: 2px dashed var(--green-8);
+  background: rgba(0, 200, 80, 0.04);
+}
+
+.debug-overlay-support-anchor-search > .debug-overlay-label {
+  background: var(--green-8);
+}
+
+.debug-overlay-support-score-anchor {
+  border: 2px solid var(--green-11);
+  background: rgba(0, 200, 80, 0.08);
+}
+
+.debug-overlay-support-score-anchor > .debug-overlay-label {
+  background: var(--green-11);
+}
+
+.debug-overlay-support-grand-badge.hit {
+  border: 2px solid var(--amber-11);
+  background: rgba(245, 200, 60, 0.18);
+}
+
+.debug-overlay-support-grand-badge.hit > .debug-overlay-label {
+  background: var(--amber-11);
+  color: #1a1300;
+}
+
+.debug-overlay-support-grand-badge.miss {
+  border: 2px dashed var(--gray-9);
+  background: rgba(120, 120, 120, 0.08);
+}
+
+.debug-overlay-support-grand-badge.miss > .debug-overlay-label {
+  background: var(--gray-9);
+}
+
+.debug-coord-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.debug-coord-region {
+  position: absolute;
+  border: 2px dashed var(--orange-9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.debug-coord-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--blue-9);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.debug-coord-label {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  border-radius: var(--radius-1);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.debug-coord-region > .debug-coord-label {
+  top: -18px;
+  left: 0;
+  transform: none;
+  background: var(--orange-9);
+}
+
+.debug-side {
+  width: 280px;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.debug-side-label {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.debug-screen-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  background: var(--fgo-surface);
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+}
+
+.debug-match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.debug-match-entry {
+  padding: 10px 12px;
+  background: var(--fgo-surface);
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.debug-match-entry.found {
+  border-left: 3px solid var(--green-9);
+}
+
+.debug-match-entry.missed {
+  border-left: 3px solid var(--red-9);
+}
+
+.debug-path {
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
+.debug-log-container {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.debug-log {
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  background: var(--gray-1);
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.debug-log-entry {
+  display: flex;
+  gap: 8px;
+}
+
+.debug-log-time {
+  color: var(--gray-9);
+  flex-shrink: 0;
+}
+
+.debug-log-msg {
+  word-break: break-all;
+  color: var(--gray-12);
+}
+
+.debug-log-info .debug-log-msg {
+  color: var(--gray-12);
+}
+
+.debug-log-warn .debug-log-msg {
+  color: var(--amber-11);
+}
+
+.debug-log-error .debug-log-msg {
+  color: var(--red-11);
+}

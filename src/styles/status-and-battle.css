@@ -1,0 +1,568 @@
+/* ── Status Bar ── */
+
+.status-bar {
+  width: 100%;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  background: var(--fgo-surface);
+  border-top: 1px solid var(--fgo-surface-border);
+  box-shadow: 0 -10px 28px var(--fgo-shadow);
+  backdrop-filter: blur(16px);
+}
+
+.operation-log-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 28px;
+  z-index: 8;
+  height: 50vh;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--fgo-surface-border);
+  background: var(--gray-1);
+  box-shadow: 0 -18px 42px var(--fgo-shadow);
+}
+
+.operation-log-header {
+  flex-shrink: 0;
+  min-height: 48px;
+  padding: 0 20px 0 24px;
+}
+
+.operation-log-close {
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--gray-12);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-2);
+}
+
+.operation-log-close:hover {
+  background: var(--fgo-control-hover);
+}
+
+.operation-log-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 24px 22px;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 12px;
+  line-height: 2.3;
+}
+
+.operation-log-placeholder {
+  color: var(--gray-9);
+}
+
+.operation-log-entry {
+  display: flex;
+  gap: 10px;
+}
+
+.operation-log-time {
+  color: var(--gray-9);
+  flex-shrink: 0;
+}
+
+.operation-log-msg {
+  color: var(--gray-12);
+  word-break: break-all;
+}
+
+.operation-log-rich,
+.operation-log-face-row,
+.operation-log-card-list,
+.operation-log-card-item,
+.operation-log-pick-result {
+  display: inline-flex;
+  align-items: center;
+}
+
+.operation-log-rich {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.operation-log-face-row,
+.operation-log-card-list {
+  gap: 5px;
+}
+
+.operation-log-card-item,
+.operation-log-pick-result {
+  gap: 4px;
+}
+
+.operation-log-face {
+  width: 23px;
+  height: 23px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid var(--gray-6);
+  background: var(--gray-3);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.operation-log-face .rt-AvatarRoot {
+  width: 23px;
+  height: 23px;
+}
+
+.operation-log-face--muted {
+  filter: grayscale(1);
+  opacity: 0.42;
+}
+
+.operation-log-face--highlighted {
+  border-color: var(--amber-9);
+  box-shadow: 0 0 0 1px var(--amber-9);
+}
+
+.operation-log-suit-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid color-mix(in srgb, currentColor 70%, transparent);
+  flex-shrink: 0;
+}
+
+.operation-log-suit-dot--q {
+  background: var(--green-9);
+  color: var(--green-9);
+}
+
+.operation-log-suit-dot--a {
+  background: var(--blue-9);
+  color: var(--blue-9);
+}
+
+.operation-log-suit-dot--b {
+  background: var(--red-9);
+  color: var(--red-9);
+}
+
+.operation-log-suit-dot--unknown {
+  background: var(--gray-8);
+  color: var(--gray-8);
+}
+
+.operation-log-entry--debug .operation-log-time,
+.operation-log-entry--debug .operation-log-msg {
+  color: var(--gray-9);
+}
+
+.operation-log-debug-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gray-11);
+  cursor: pointer;
+  user-select: none;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.status-dot.connected {
+  background: #22c55e;
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.4);
+}
+
+.status-dot.disconnected {
+  background: #ef4444;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.3);
+}
+
+.status-trigger {
+  appearance: none;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: var(--radius-1);
+  transition: background 0.12s;
+}
+
+.status-trigger:hover {
+  background: var(--fgo-control-hover);
+}
+
+.status-label {
+  color: var(--gray-11);
+  user-select: none;
+}
+
+.status-popover {
+  min-width: 180px;
+}
+
+.bluestack-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--gray-5);
+  user-select: none;
+}
+
+/* ── Battle Page ── */
+
+.battle-page {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.battle-topbar {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 12px;
+}
+
+.battle-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.battle-body-scroll {
+  overflow-y: auto;
+  padding: 4px 8px 4px 0;
+}
+
+.battle-project-trigger {
+  width: min(100%, 360px);
+  justify-content: center;
+}
+
+.battle-panel {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 20px;
+}
+
+.battle-panel:first-child {
+  border-top: none;
+  padding-top: 4px;
+}
+
+.battle-section-heading {
+  position: relative;
+  gap: 7px;
+  padding-left: 18px;
+}
+
+.battle-section-heading::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 4px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--blue-9);
+}
+
+.option-card-radio-group,
+.battle-repeat-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+}
+
+.option-card-radio-item,
+.battle-recovery-card {
+  position: relative;
+  border: 1px solid var(--gray-6);
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--gray-1), var(--gray-2));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.option-card-radio-item {
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  cursor: pointer;
+}
+
+.option-card-radio-item:hover,
+.battle-recovery-card:hover {
+  border-color: var(--blue-7);
+  box-shadow: 0 12px 26px rgba(28, 100, 242, 0.1);
+  transform: translateY(-1px);
+}
+
+.option-card-radio-item[aria-disabled="true"],
+.battle-recovery-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}
+
+.option-card-radio-item.is-selected,
+.battle-recovery-card.is-selected {
+  border-color: var(--blue-9);
+  box-shadow: 0 0 0 1px var(--blue-8), 0 14px 30px rgba(28, 100, 242, 0.13);
+}
+
+.option-card-radio-control {
+  margin-top: 1px;
+}
+
+.option-card-radio-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.battle-repeat-symbol {
+  color: var(--gray-8);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.battle-repeat-card-count {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.battle-repeat-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  overflow: hidden;
+  border: 1px solid var(--gray-5);
+  border-radius: 8px;
+  background: var(--gray-1);
+}
+
+.battle-counter-value {
+  width: 42px;
+  padding-right: 4px;
+  text-align: center;
+  color: var(--gray-12);
+  background: transparent;
+  appearance: textfield;
+}
+
+.battle-counter-value::-webkit-outer-spin-button,
+.battle-counter-value::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.battle-counter-value:disabled {
+  color: var(--gray-8);
+}
+
+.battle-recovery-cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(128px, 1fr));
+  gap: 20px;
+}
+
+.battle-recovery-card {
+  appearance: none;
+  min-height: 166px;
+  padding: 18px 14px 16px;
+  border: 1px solid var(--gray-6);
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.battle-recovery-image {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  margin: 8px 0 4px;
+  filter: drop-shadow(0 8px 10px rgba(15, 23, 42, 0.18));
+}
+
+.battle-recovery-amount {
+  color: var(--blue-9);
+}
+
+.battle-footer {
+  flex-shrink: 0;
+  padding-top: 12px;
+  z-index: 4;
+}
+
+.battle-log-drawer {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 70px;
+  z-index: 3;
+  height: min(42vh, 320px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--gray-6);
+  border-radius: 12px 12px 0 0;
+  background: var(--gray-1);
+  box-shadow: 0 -18px 42px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+
+.battle-log-drawer-header {
+  flex-shrink: 0;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid var(--gray-5);
+}
+
+.battle-log {
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--gray-2);
+  padding: 10px 14px;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.battle-log-placeholder {
+  color: var(--gray-9);
+}
+
+.battle-log-entry {
+  display: flex;
+  gap: 10px;
+}
+
+.battle-log-time {
+  color: var(--gray-9);
+  flex-shrink: 0;
+}
+
+.battle-log-msg {
+  color: var(--gray-12);
+  word-break: break-all;
+}
+
+.enhancement-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--gray-6);
+  background: var(--gray-2);
+  border-radius: var(--radius-2);
+}
+
+.enhancement-servant-trigger {
+  width: 100%;
+  text-align: left;
+  justify-content: space-between;
+}
+
+@media (max-width: 720px) {
+  .battle-page {
+    padding: 12px;
+  }
+
+  .battle-recovery-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .battle-footer {
+    align-items: stretch;
+  }
+
+  .battle-log-drawer {
+    left: 12px;
+    right: 12px;
+    bottom: 82px;
+  }
+}
+
+/* ── Status bar debug shortcut ── */
+
+/* Compact pill that lives next to the connection-status popover and
+   replaces the now-removed sidebar shortcut to the CV debug page. */
+.status-log-btn,
+.status-settings-btn,
+.status-debug-btn,
+.status-update-btn,
+.status-theme-btn {
+  background: none;
+  color: var(--gray-11);
+  cursor: pointer;
+  padding: 2px 6px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.status-debug-btn:hover,
+.status-update-btn:hover:not(:disabled),
+.status-settings-btn:hover,
+.status-log-btn:hover,
+.status-log-btn[aria-pressed="true"],
+.status-theme-btn:hover {
+  background: var(--fgo-control-hover);
+  color: var(--gray-12);
+}
+
+.status-debug-btn:focus-visible,
+.status-settings-btn:focus-visible,
+.status-log-btn:focus-visible,
+.status-update-btn:focus-visible,
+.status-theme-btn:focus-visible {
+  outline: 2px solid var(--blue-8);
+  outline-offset: 1px;
+}
+
+.status-update-btn {
+  color: var(--blue-11);
+  background: color-mix(in srgb, var(--blue-9) 16%, transparent);
+}
+
+.status-update-btn:disabled {
+  cursor: default;
+  opacity: 0.72;
+}

@@ -1,0 +1,79 @@
+@import "@radix-ui/themes/styles.css";
+
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+  color: #0f0f0f;
+  background-color: #f6f6f6;
+  --fgo-bg-base: #f6f1e7;
+  --fgo-bg-soft: #ebe2cf;
+  --fgo-line: rgba(120, 92, 45, 0.16);
+  --fgo-gold: rgba(188, 143, 54, 0.34);
+  --fgo-blue: rgba(36, 92, 150, 0.2);
+  --fgo-silver: rgba(255, 255, 255, 0.46);
+  --fgo-star: rgba(54, 88, 122, 0.18);
+  --fgo-vignette: rgba(80, 52, 20, 0.13);
+  --fgo-surface: color-mix(in srgb, var(--fgo-bg-base) 78%, transparent);
+  --fgo-surface-strong: rgba(250, 247, 239, 0.86);
+  --fgo-surface-border: color-mix(in srgb, var(--fgo-line) 78%, rgba(255, 255, 255, 0.22));
+  --fgo-control-hover: rgba(31, 41, 55, 0.07);
+  --fgo-shadow: rgba(48, 31, 12, 0.2);
+  --settings-glass-bg: rgba(250, 247, 239, 0.62);
+  --settings-glass-nav-bg: rgba(250, 247, 239, 0.42);
+  --settings-glass-header-bg: rgba(250, 247, 239, 0.22);
+  --settings-glass-border: rgba(255, 255, 255, 0.54);
+  --settings-glass-divider: rgba(120, 92, 45, 0.14);
+  --settings-glass-shadow: rgba(48, 31, 12, 0.24);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+:root[data-theme="dark"] {
+  color: #edf6ff;
+  background-color: #07111f;
+  --fgo-bg-base: #07111f;
+  --fgo-bg-soft: #0d1d33;
+  --fgo-line: rgba(160, 190, 230, 0.12);
+  --fgo-gold: rgba(214, 169, 74, 0.28);
+  --fgo-blue: rgba(54, 132, 220, 0.22);
+  --fgo-silver: rgba(231, 241, 255, 0.2);
+  --fgo-star: rgba(196, 218, 250, 0.2);
+  --fgo-vignette: rgba(0, 0, 0, 0.43);
+  --fgo-surface: rgba(9, 22, 39, 0.74);
+  --fgo-surface-strong: rgba(13, 29, 51, 0.82);
+  --fgo-surface-border: rgba(160, 190, 230, 0.16);
+  --fgo-control-hover: rgba(231, 241, 255, 0.08);
+  --fgo-shadow: rgba(0, 0, 0, 0.34);
+  --settings-glass-bg: rgba(13, 18, 32, 0.62);
+  --settings-glass-nav-bg: rgba(10, 15, 28, 0.46);
+  --settings-glass-header-bg: rgba(18, 26, 44, 0.22);
+  --settings-glass-border: rgba(188, 205, 255, 0.17);
+  --settings-glass-divider: rgba(188, 205, 255, 0.12);
+  --settings-glass-shadow: rgba(0, 0, 0, 0.42);
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

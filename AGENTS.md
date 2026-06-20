@@ -10,8 +10,8 @@
 src/                              # React frontend
   main.tsx                        # Entry point, wraps app in Radix <Theme>
   App.tsx                         # Top-level layout, stage routing, servant loading
-  App.css                         # All styles (single file, uses Radix CSS variables)
-  components/                     # Flat folder of React components
+  styles/                         # CSS entrypoint and feature-oriented style modules
+  components/                     # Shared React components and legacy component entrypoints
     __tests__/                    # Vitest specs colocated by sibling folder (*.test.tsx)
   test/                           # Shared frontend test helpers (setup.ts, renderWithTheme.tsx)
   types/                          # Shared TypeScript interfaces
@@ -107,9 +107,9 @@ The only acceptable reasons to skip writing a test are: (a) the change is purely
 ## Project Conventions
 
 - **State management**: React local state only (`useState`, `useEffect`, `useMemo`, `useCallback`). No external state libraries.
-- **Components**: Flat `src/components/` folder, one component per file, functional components only.
+- **Components**: Functional components only. Shared primitives live under `src/components/`; larger feature-owned UI should live under `src/features/<feature>/` once it has a clear owner.
 - **Types**: Shared interfaces live in `src/types/`. TS interfaces must stay aligned with Rust serde structs.
-- **Styling**: Single `App.css` using Radix CSS variables (`var(--gray-7)`, `var(--blue-9)`, `var(--radius-2)`, etc.). No Tailwind, CSS Modules, or styled-components.
+- **Styling**: Use `src/styles/index.css` as the single imported stylesheet entrypoint, split into feature-oriented CSS modules under `src/styles/`. Prefer Radix CSS variables (`var(--gray-7)`, `var(--blue-9)`, `var(--radius-2)`, etc.). No Tailwind, CSS Modules, or styled-components.
 - **JSON field naming**: camelCase on the wire — Rust structs use `#[serde(rename = "...")]` to match TypeScript field names.
 - **UI language**: Chinese strings in user-facing text.
 - **FGO team member identity**: A team may contain the same servant once as an owned servant and once as a support servant. Team-related mutations must never identify members by `servantId` alone. Prefer slot/member-instance identity for operations such as update, remove, swap, ordering, and craft-essence changes; keep the support-servant flag as semantic metadata for validation, display, and support-specific behavior.

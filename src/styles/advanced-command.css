@@ -1,0 +1,886 @@
+/* ── Advanced Command Editor ── */
+
+.advanced-strategy-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.advanced-strategy-section {
+  padding-right: 116px;
+}
+
+.advanced-phase {
+  padding-right: 14px;
+}
+
+.advanced-rule-add {
+  min-height: 64px;
+  padding: 4px 0;
+}
+
+.advanced-rule-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 44px 12px 12px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--fgo-surface-strong) 82%, transparent);
+}
+
+.advanced-rule-delete {
+  left: auto;
+  right: 8px;
+  top: 12px;
+  opacity: 1;
+}
+
+.advanced-inline-delete {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--red-10);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-1);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.12s;
+}
+
+.advanced-inline-delete:hover {
+  background: var(--red-3);
+}
+
+.advanced-delete-spacer {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
+.advanced-rule-section,
+.advanced-choice-column,
+.advanced-group-list,
+.advanced-condition-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.advanced-condition-row {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.advanced-grand-order-choice,
+.advanced-grand-order-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.advanced-grand-order-note {
+  color: var(--gray-12);
+}
+
+.grand-card-strategy-section {
+  min-height: 0;
+  padding: 0;
+}
+
+.grand-strategy-summary {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--gray-12);
+  width: 100%;
+  min-height: 58px;
+  padding: 0 18px;
+  display: grid;
+  grid-template-columns: 24px max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.grand-strategy-chevron {
+  display: inline-grid;
+  place-items: center;
+  color: var(--gray-11);
+}
+
+.grand-strategy-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.grand-strategy-current {
+  min-width: 0;
+  color: var(--gray-11);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grand-strategy-body {
+  border-top: 1px solid var(--gray-6);
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.grand-strategy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grand-strategy-item {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+}
+
+.grand-strategy-rank {
+  color: var(--gray-10);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.grand-strategy-label {
+  min-width: 0;
+}
+
+.grand-strategy-actions {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.grand-strategy-move {
+  appearance: none;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-2);
+  background: var(--gray-2);
+  color: var(--gray-12);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.grand-strategy-move:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.grand-rule-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+}
+
+.grand-rule-item.disabled {
+  opacity: 0.62;
+}
+
+.grand-rule-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.grand-rule-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grand-strategy-built-in {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--gray-6);
+}
+
+.grand-rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grand-rule-row {
+  min-height: 94px;
+  display: grid;
+  grid-template-columns: 22px auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-3);
+  background: var(--gray-1);
+  cursor: grab;
+}
+
+.grand-rule-row.dragging {
+  opacity: 0.72;
+  cursor: grabbing;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+
+.grand-rule-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 70px);
+  gap: 10px;
+  align-items: center;
+}
+
+.grand-rule-row-spacer {
+  min-width: 0;
+}
+
+.grand-rule-card {
+  appearance: none;
+  width: 70px;
+  height: 78px;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-3);
+  background: var(--gray-3);
+  background-position: center;
+  background-size: 152% auto;
+  background-repeat: no-repeat;
+  color: var(--gray-12);
+  display: grid;
+  grid-template-rows: 1fr auto;
+  justify-items: center;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  cursor: pointer;
+}
+
+.grand-rule-card.invalid {
+  border-color: var(--red-8);
+  box-shadow: inset 0 0 0 1px var(--red-8);
+}
+
+.grand-rule-card-empty {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--gray-8);
+  border-radius: var(--radius-2);
+  display: inline-grid;
+  place-items: center;
+  color: var(--gray-10);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.grand-rule-card-grand {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--amber-8);
+  border-radius: var(--radius-2);
+  background: var(--amber-4);
+  color: var(--amber-12);
+  display: inline-grid;
+  place-items: center;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.grand-rule-card-face {
+  align-self: center;
+}
+
+.grand-rule-card-meta {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  color: var(--gray-12);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.grand-rule-card-meta.warning {
+  justify-content: space-between;
+}
+
+.grand-rule-editor-dialog {
+  min-width: min(560px, calc(100vw - 32px));
+  border-radius: 18px;
+}
+
+.grand-rule-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.grand-rule-editor-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.grand-rule-section-heading {
+  padding-left: 14px;
+  gap: 0;
+}
+
+.grand-rule-section-heading::before {
+  top: 2px;
+  height: 18px;
+}
+
+.grand-rule-section-heading .rt-Text {
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.grand-rule-editor-servants {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.grand-rule-editor-servant-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.grand-rule-editor-grand-option {
+  appearance: none;
+  min-width: 90px;
+  height: 52px;
+  border: 1px solid var(--gray-8);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+  color: var(--gray-12);
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+.grand-rule-editor-grand-option:hover {
+  border-color: var(--blue-8);
+  background: var(--blue-2);
+}
+
+.grand-rule-editor-grand-option.selected {
+  border-color: var(--amber-9);
+  background: var(--amber-3);
+  color: var(--amber-12);
+  box-shadow: 0 0 0 2px var(--amber-5);
+}
+
+.option-card-radio-group.grand-rule-kind-cards {
+}
+
+.option-card-radio-item.grand-rule-kind-card {
+  min-height: 42px;
+  padding: 10px 12px;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+}
+
+.option-card-radio-group.grand-rule-color-cards {
+  justify-content: center;
+  gap: 14px;
+}
+
+.option-card-radio-item.grand-rule-color-card {
+  min-height: 56px;
+  padding: 10px 14px;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.option-card-radio-item.grand-rule-color-card.any {
+  padding: 10px 14px;
+}
+
+.option-card-radio-item.grand-rule-color-card .option-card-radio-control {
+  position: static;
+}
+
+.option-card-radio-item.grand-rule-color-card .option-card-radio-content {
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.grand-rule-color-swatch,
+.grand-rule-color-wheel {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: inline-block;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 0 10px rgba(0, 0, 0, 0.14);
+}
+
+.grand-rule-color-swatch {
+  background-position: center;
+  background-size: 170% auto;
+  background-repeat: no-repeat;
+}
+
+.grand-rule-color-wheel {
+  background: conic-gradient(#ef4444, #f59e0b, #22c55e, #0ea5e9, #8b5cf6, #ef4444);
+}
+
+@media (max-width: 720px) {
+  .grand-rule-row {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+
+  .grand-rule-cards {
+    grid-template-columns: repeat(3, minmax(58px, 1fr));
+  }
+
+  .grand-rule-card {
+    width: 100%;
+  }
+
+  .grand-rule-row-spacer {
+    display: none;
+  }
+}
+
+.advanced-action-row {
+  padding-left: 0;
+}
+
+.battle-option-btn:disabled {
+  cursor: default;
+  opacity: 0.72;
+  transform: none;
+}
+
+.advanced-condition-group {
+  padding: 10px;
+  border: 1px solid var(--gray-5);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+}
+
+.advanced-face-chip {
+  appearance: none;
+  position: relative;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 1px solid var(--gray-8);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+  color: var(--gray-12);
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  font-weight: 700;
+}
+
+.advanced-face-chip.dim {
+  filter: grayscale(1);
+  opacity: 0.42;
+}
+
+.advanced-face-chip.selected,
+.battle-option-btn.selected {
+  border-color: var(--blue-9);
+  background: var(--blue-3);
+  box-shadow: 0 0 0 2px var(--blue-5);
+}
+
+.advanced-face-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.advanced-card-row,
+.advanced-manual-startup-condition,
+.advanced-card-editor,
+.advanced-attack-picker,
+.advanced-attack-source,
+.advanced-main-output-grid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.advanced-main-output-grid {
+  align-items: flex-start;
+  min-height: 62px;
+}
+
+.advanced-main-output-trigger {
+  min-width: 138px;
+}
+
+.advanced-main-output-summary {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--gray-12);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  text-align: left;
+}
+
+.advanced-np-card-select {
+  height: 30px;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+  color: var(--gray-12);
+  padding: 0 8px;
+}
+
+.advanced-card-editor {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.advanced-command-card {
+  appearance: none;
+  position: relative;
+  width: 82px;
+  height: 122px;
+  padding: 10px 7px 9px;
+  border: 1px solid var(--gray-10);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gray-12);
+  cursor: pointer;
+  display: grid;
+  place-items: start center;
+  gap: 8px;
+  font-weight: 700;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gray-12) 12%, transparent);
+}
+
+.advanced-command-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--gray-1) 18%, transparent), color-mix(in srgb, var(--gray-1) 18%, transparent)),
+    var(--command-card-bg);
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+}
+
+.advanced-command-card.unset::before {
+  filter: grayscale(1);
+  opacity: 0.76;
+}
+
+.advanced-command-card-face {
+  position: relative;
+  z-index: 1;
+  width: 42px;
+  height: 42px;
+  border: 1px solid color-mix(in srgb, var(--gray-12) 72%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--gray-1) 62%, transparent);
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  font-size: 11px;
+}
+
+.advanced-command-card-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.advanced-card-editor label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--gray-11);
+}
+
+.advanced-card-editor select {
+  height: 30px;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+  color: var(--gray-12);
+}
+
+.scene-block {
+  background: var(--fgo-surface);
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-3);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scene-header {
+  padding-bottom: 8px;
+}
+
+.scene-action-btn {
+  appearance: none;
+  border: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-2);
+  color: #fff;
+  transition: opacity 0.15s;
+}
+
+.scene-action-btn:hover {
+  opacity: 0.85;
+}
+
+.scene-action-btn-servant {
+  background: #22c55e;
+}
+
+.scene-action-btn-equipment {
+  background: #a855f7;
+}
+
+.scene-action-btn-command-spell {
+  background: #f59e0b;
+}
+
+.scene-delete-btn {
+  appearance: none;
+  border: none;
+  background: var(--gray-5);
+  color: var(--gray-11);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: var(--radius-2);
+  transition: background 0.15s;
+}
+
+.scene-delete-btn:hover {
+  background: var(--red-4);
+  color: var(--red-11);
+}
+
+/* ── Action Rows ── */
+
+.scene-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-2);
+}
+
+.action-row-servant {
+  background: color-mix(in srgb, var(--blue-4) 46%, transparent);
+}
+
+.action-row-equipment {
+  background: color-mix(in srgb, var(--purple-4) 46%, transparent);
+}
+
+.action-row-command-spell {
+  background: color-mix(in srgb, var(--amber-4) 46%, transparent);
+}
+
+.action-label {
+  flex-shrink: 0;
+  color: var(--gray-11);
+  user-select: none;
+}
+
+.action-select {
+  appearance: none;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 28px 6px 10px;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+  color: var(--gray-12);
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 0.15s;
+}
+
+.action-select:hover {
+  border-color: var(--blue-7);
+}
+
+.action-select:focus {
+  outline: 2px solid var(--blue-8);
+  outline-offset: -1px;
+}
+
+.action-delete-btn {
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--gray-8);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-1);
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.action-delete-btn:hover:not(:disabled) {
+  color: var(--red-9);
+}
+
+.action-delete-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ── Attack Priority ── */
+
+.attack-priority-section {
+  background: rgba(239, 68, 68, 0.06);
+  border-radius: var(--radius-2);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attack-priority-header {
+  padding-bottom: 4px;
+}
+
+.attack-priority-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  color: var(--gray-8);
+  cursor: grab;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.attack-select {
+  flex: 1;
+}
+
+.add-priority-btn {
+  appearance: none;
+  border: 1px dashed var(--gray-7);
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--gray-11);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-2);
+  transition: all 0.15s;
+}
+
+.add-priority-btn:hover {
+  border-color: var(--red-7);
+  color: var(--red-9);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+/* ── Add Battle Scene Button ── */
+
+.add-scene-btn {
+  appearance: none;
+  border: none;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  background: #22c55e;
+  cursor: pointer;
+  padding: 14px;
+  border-radius: var(--radius-3);
+  width: 100%;
+  text-align: center;
+  transition: background 0.15s;
+}
+
+.add-scene-btn:hover {
+  background: #16a34a;
+}
