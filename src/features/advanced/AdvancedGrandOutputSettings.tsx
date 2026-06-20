@@ -1,0 +1,247 @@
+import { useState } from "react";
+import { Button, Dialog, Flex, Select, Text } from "@radix-ui/themes";
+import { FaceChip } from "./AdvancedFaceChip";
+import {
+  autoNpOptionLabel,
+  normalizeGrandServants,
+  npCardLabel,
+  priorityLabel,
+} from "./advancedCommandModel";
+import {
+  partyMembersToServants,
+  type PartyMember,
+} from "../team/partyServants";
+import type {
+  GrandCardPriority,
+  GrandNpCard,
+  GrandServantConfig,
+} from "../../types/project";
+
+interface GrandOutputSettingsProps {
+  partyMembers: PartyMember[];
+  faces: Record<string, string | null>;
+  grandServants: GrandServantConfig[];
+  onChange?: (grandServants: GrandServantConfig[]) => void;
+}
+
+export function GrandOutputSettings({
+  partyMembers,
+  faces,
+  grandServants,
+  onChange,
+}: GrandOutputSettingsProps) {
+  const [settingsIndex, setSettingsIndex] = useState<number | null>(null);
+  const partyLineup = partyMembersToServants(partyMembers);
+  const normalized = normalizeGrandServants(grandServants);
+  const selectedSlots = new Set(normalized.map((item) => item.slotIndex));
+  const settings =
+    settingsIndex == null ? null : normalized[settingsIndex] ?? null;
+  const settingsServant =
+    settings == null ? null : partyLineup[settings.slotIndex] ?? null;
+
+  const persist = (next: GrandServantConfig[]) => {
+    onChange?.(normalizeGrandServants(next));
+  };
+  const addGrandServant = (slotIndex: number) => {
+    const member = partyMembers[slotIndex];
+    if (
+      normalized.length >= 2 ||
+      selectedSlots.has(slotIndex) ||
+      member?.servant == null
+    ) {
+      return;
+    }
+    persist([
+      ...normalized,
+      {
+        memberId: member.memberId ?? null,
+        slotIndex,
+        servantId: member.servant.id,
+        isSupport: member.isSupport,
+        npCard: "auto",
+        priority: "damage",
+      },
+    ]);
+  };
+  const removeGrandServant = (index: number) => {
+    persist(normalized.filter((_, itemIndex) => itemIndex !== index));
+    setSettingsIndex(null);
+  };
+  const updateGrandServant = (
+    index: number,
+    patch: Partial<Pick<GrandServantConfig, "npCard" | "priority">>
+  ) => {
+    persist(
+      normalized.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item
+      )
+    );
+  };
+  const moveToMain = (index: number) => {
+    if (index <= 0) return;
+    const next = [...normalized];
+    const [item] = next.splice(index, 1);
+    next.unshift(item);
+    persist(next);
+    setSettingsIndex(0);
+  };
+
+  return (
+    <>
+      <div className="advanced-grand-output">
+        <div className="advanced-grand-output-row">
+          <Text size="2" weight="medium" className="advanced-grand-output-label">
+            冠位
+          </Text>
+          <div className="advanced-grand-output-slots">
+            {normalized.map((config, index) => {
+              const servant = partyLineup[config.slotIndex] ?? null;
+              return (
+                <button
+                  key={`${config.slotIndex}-${index}`}
+                  type="button"
+                  className="grand-servant-tile"
+                  aria-label={`${index === 0 ? "主" : "副"}冠位${
+                    servant ? `：${servant.name_cn}` : ""
+                  }`}
+                  onClick={() => setSettingsIndex(index)}
+                >
+                  <span className="grand-role-badge">
+                    {index === 0 ? "主" : "副"}
+                  </span>
+                  {servant && faces[servant.variantKey] ? (
+                    <img
+                      src={faces[servant.variantKey] ?? undefined}
+                      alt={servant.name_cn}
+                      draggable={false}
+                    />
+                  ) : (
+                    <span className="grand-servant-placeholder">
+                      {servant?.name_cn ?? "未选择"}
+                    </span>
+                  )}
+                  <span className="grand-np-badge">
+                    {npCardLabel(config.npCard, servant?.noblePhantasmCard)}
+                  </span>
+                  <span className="grand-priority-badge">
+                    {priorityLabel(config.priority)}
+                  </span>
+                </button>
+              );
+            })}
+            {normalized.length < 2 && (
+              <div className="grand-servant-empty">选择冠位从者</div>
+            )}
+          </div>
+        </div>
+        <div className="advanced-grand-output-row">
+          <Text size="2" weight="medium" className="advanced-grand-output-label">
+            辅助
+          </Text>
+          <div className="battle-choice-row">
+            {partyLineup.slice(0, 6).map((servant, index) => (
+              <FaceChip
+                key={index}
+                servant={servant}
+                index={index}
+                src={servant ? faces[servant.variantKey] : null}
+                selected={selectedSlots.has(index)}
+                disabled={
+                  servant == null ||
+                  selectedSlots.has(index) ||
+                  normalized.length >= 2
+                }
+                isSupport={partyMembers[index]?.isSupport ?? false}
+                onClick={() => addGrandServant(index)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <Dialog.Root
+        open={settings != null}
+        onOpenChange={(open) => {
+          if (!open) setSettingsIndex(null);
+        }}
+      >
+        <Dialog.Content maxWidth="420px">
+          <Dialog.Title>冠位从者设置</Dialog.Title>
+          <Dialog.Description className="sr-only">
+            设置冠位从者的宝具颜色和出卡策略。
+          </Dialog.Description>
+          {settings && settingsIndex != null && (
+            <Flex direction="column" gap="4">
+              <label className="grand-setting-field">
+                <Text size="2" weight="medium">
+                  宝具颜色
+                </Text>
+                <Select.Root
+                  value={settings.npCard ?? "auto"}
+                  onValueChange={(value) =>
+                    updateGrandServant(settingsIndex, {
+                      npCard: value as GrandNpCard,
+                    })
+                  }
+                >
+                  <Select.Trigger aria-label="宝具颜色" />
+                  <Select.Content>
+                    <Select.Item value="auto">
+                      {autoNpOptionLabel(settingsServant)}
+                    </Select.Item>
+                    <Select.Item value="buster">红卡</Select.Item>
+                    <Select.Item value="arts">蓝卡</Select.Item>
+                    <Select.Item value="quick">绿卡</Select.Item>
+                  </Select.Content>
+                </Select.Root>
+              </label>
+              <label className="grand-setting-field">
+                <Text size="2" weight="medium">
+                  出卡策略
+                </Text>
+                <Select.Root
+                  value={settings.priority ?? "damage"}
+                  onValueChange={(value) =>
+                    updateGrandServant(settingsIndex, {
+                      priority: value as GrandCardPriority,
+                    })
+                  }
+                >
+                  <Select.Trigger aria-label="出卡策略" />
+                  <Select.Content>
+                    <Select.Item value="damage">伤害优先</Select.Item>
+                    <Select.Item value="np">NP 优先</Select.Item>
+                  </Select.Content>
+                </Select.Root>
+              </label>
+              <Flex justify="between" gap="3">
+                <Button
+                  type="button"
+                  variant="soft"
+                  color="red"
+                  onClick={() => removeGrandServant(settingsIndex)}
+                >
+                  移除
+                </Button>
+                <Flex gap="3">
+                  {settingsIndex > 0 && (
+                    <Button
+                      type="button"
+                      variant="soft"
+                      onClick={() => moveToMain(settingsIndex)}
+                    >
+                      设为主
+                    </Button>
+                  )}
+                  <Dialog.Close>
+                    <Button type="button">完成</Button>
+                  </Dialog.Close>
+                </Flex>
+              </Flex>
+            </Flex>
+          )}
+        </Dialog.Content>
+      </Dialog.Root>
+    </>
+  );
+}
