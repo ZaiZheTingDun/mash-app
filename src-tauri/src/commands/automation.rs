@@ -13,6 +13,7 @@ use crate::commands::projects::{load_advanced_battle_scenes, load_battle_scenes,
 use crate::commands::runtime::{
     resolve_ce_assets_dir, resolve_scrcpy_jar, resolve_servant_assets_dir,
 };
+use crate::commands::settings::RecognitionSettings;
 use crate::enhancement_runner::{
     server_supported as enhancement_server_supported, EnhancementAutomationEvent,
     EnhancementConfig, EnhancementRunner, EnhancementRunnerHandle, EnhancementRunnerState,
@@ -148,9 +149,10 @@ fn stop_enhancement_start(app: &tauri::AppHandle, state: &Arc<Mutex<EnhancementR
 #[tauri::command]
 pub(crate) fn start_automation(
     app: tauri::AppHandle,
-    config: RunConfig,
+    mut config: RunConfig,
     bluestack_state: tauri::State<'_, Mutex<bool>>,
     server_state: tauri::State<'_, Mutex<Server>>,
+    recognition_settings_state: tauri::State<'_, Mutex<RecognitionSettings>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
@@ -191,6 +193,10 @@ pub(crate) fn start_automation(
 
     let use_bluestack = *bluestack_state.lock().unwrap();
     let server = *server_state.lock().unwrap();
+    config.support_ce_threshold = recognition_settings_state
+        .lock()
+        .unwrap()
+        .support_ce_threshold;
 
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));

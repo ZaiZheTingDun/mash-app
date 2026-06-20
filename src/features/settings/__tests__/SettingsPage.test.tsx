@@ -52,6 +52,8 @@ describe("SettingsDialog", () => {
       if (cmd === "get_self_check_status") return selfCheckStatus;
       if (cmd === "get_runtime_status") return { installed: true };
       if (cmd === "get_asset_bundle_status") return { installed: true };
+      if (cmd === "get_recognition_settings") return { supportCeThreshold: 0.7 };
+      if (cmd === "set_support_ce_threshold") return { supportCeThreshold: 0.65 };
       return null;
     });
   });
@@ -92,6 +94,27 @@ describe("SettingsDialog", () => {
 
     expect(await screen.findByRole("button", { name: "导入队伍" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导出队伍" })).toBeInTheDocument();
+  });
+
+  it("loads and saves the support CE recognition threshold", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="recognition" />);
+
+    const input = await screen.findByRole("spinbutton", {
+      name: "助战礼装匹配阈值数值",
+    });
+    expect(input).toHaveValue(0.7);
+
+    await user.clear(input);
+    await user.type(input, "0.65");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_support_ce_threshold", {
+        value: 0.65,
+      });
+    });
+    expect(await screen.findByText("已保存")).toBeInTheDocument();
   });
 
   it("shows export configs and disables export after deselecting all", async () => {

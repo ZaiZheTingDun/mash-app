@@ -238,6 +238,10 @@ vi.mock("@tauri-apps/api/core", () => ({
         return false;
       case "get_server":
         return "JP";
+      case "get_recognition_settings":
+        return { supportCeThreshold: 0.7 };
+      case "set_support_ce_threshold":
+        return { supportCeThreshold: 0.7 };
       case "should_check_updates_today":
         return false;
       case "mark_update_checked_today":

@@ -102,6 +102,25 @@
   background: transparent;
 }
 
+.recognition-setting-block {
+  padding: 18px 0;
+}
+
+.recognition-threshold-row {
+  width: 100%;
+}
+
+.recognition-threshold-range {
+  flex: 1;
+  min-width: 180px;
+  accent-color: var(--blue-9);
+}
+
+.recognition-threshold-input {
+  width: 84px;
+  flex: 0 0 84px;
+}
+
 .self-check-data-value,
 .self-check-asset-value {
   width: min(100%, 520px);

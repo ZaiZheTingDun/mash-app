@@ -16,6 +16,37 @@ use std::str::FromStr;
 use std::sync::Mutex;
 use tauri::Manager;
 
+pub(crate) const SUPPORT_CE_THRESHOLD_DEFAULT: f64 = 0.70;
+pub(crate) const SUPPORT_CE_THRESHOLD_MIN: f64 = 0.60;
+pub(crate) const SUPPORT_CE_THRESHOLD_MAX: f64 = 0.85;
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecognitionSettings {
+    pub support_ce_threshold: f64,
+}
+
+impl Default for RecognitionSettings {
+    fn default() -> Self {
+        Self {
+            support_ce_threshold: SUPPORT_CE_THRESHOLD_DEFAULT,
+        }
+    }
+}
+
+fn normalize_support_ce_threshold(value: f64) -> Result<f64, String> {
+    if !value.is_finite() {
+        return Err("助战礼装阈值必须是有效数字".into());
+    }
+    if !(SUPPORT_CE_THRESHOLD_MIN..=SUPPORT_CE_THRESHOLD_MAX).contains(&value) {
+        return Err(format!(
+            "助战礼装阈值必须在 {:.2} 到 {:.2} 之间",
+            SUPPORT_CE_THRESHOLD_MIN, SUPPORT_CE_THRESHOLD_MAX
+        ));
+    }
+    Ok((value * 100.0).round() / 100.0)
+}
+
 fn adb_settings_path(app: &tauri::AppHandle) -> PathBuf {
     let dir = app
         .path()
@@ -51,6 +82,15 @@ fn update_check_settings_path(app: &tauri::AppHandle) -> PathBuf {
     dir.join("update_check_settings.json")
 }
 
+fn recognition_settings_path(app: &tauri::AppHandle) -> PathBuf {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .expect("failed to resolve app data dir");
+    fs::create_dir_all(&dir).ok();
+    dir.join("recognition_settings.json")
+}
+
 pub(crate) fn load_server_setting(app: &tauri::AppHandle) -> Server {
     let path = server_settings_path(app);
     fs::read_to_string(&path)
@@ -62,6 +102,21 @@ pub(crate) fn load_server_setting(app: &tauri::AppHandle) -> Server {
                 .map(|s| s.to_string())
         })
         .and_then(|s| Server::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSettings {
+    let path = recognition_settings_path(app);
+    fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<RecognitionSettings>(&s).ok())
+        .and_then(|settings| {
+            normalize_support_ce_threshold(settings.support_ce_threshold)
+                .ok()
+                .map(|support_ce_threshold| RecognitionSettings {
+                    support_ce_threshold,
+                })
+        })
         .unwrap_or_default()
 }
 
@@ -99,6 +154,33 @@ pub(crate) fn get_server(state: tauri::State<'_, Mutex<Server>>) -> Server {
 }
 
 #[tauri::command]
+pub(crate) fn get_recognition_settings(
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+) -> RecognitionSettings {
+    *state.lock().unwrap()
+}
+
+#[tauri::command]
+pub(crate) fn set_support_ce_threshold(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: f64,
+) -> Result<RecognitionSettings, String> {
+    let value = normalize_support_ce_threshold(value)?;
+    let next = RecognitionSettings {
+        support_ce_threshold: value,
+    };
+    *state.lock().unwrap() = next;
+    let path = recognition_settings_path(&app);
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&next).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(next)
+}
+
+#[tauri::command]
 pub(crate) async fn run_startup_migration(
     app: tauri::AppHandle,
     bluestack_state: tauri::State<'_, Mutex<bool>>,
@@ -114,6 +196,25 @@ pub(crate) async fn run_startup_migration(
         *server_state.lock().unwrap() = load_server_setting(&app);
     }
     Ok(status)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn support_ce_threshold_accepts_configured_range() {
+        assert_eq!(normalize_support_ce_threshold(0.60).unwrap(), 0.60);
+        assert_eq!(normalize_support_ce_threshold(0.70).unwrap(), 0.70);
+        assert_eq!(normalize_support_ce_threshold(0.85).unwrap(), 0.85);
+    }
+
+    #[test]
+    fn support_ce_threshold_rejects_invalid_values() {
+        assert!(normalize_support_ce_threshold(0.59).is_err());
+        assert!(normalize_support_ce_threshold(0.86).is_err());
+        assert!(normalize_support_ce_threshold(f64::NAN).is_err());
+    }
 }
 
 #[tauri::command]

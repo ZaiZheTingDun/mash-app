@@ -85,6 +85,7 @@ const craftEssences: CraftEssence[] = [
 
 let useBluestack = false;
 let server: Server = "JP";
+let supportCeThreshold = 0.7;
 let nextProjectNumber = 2;
 let activeProjectId: string | null = "dev-project-1";
 let appTheme: "light" | "dark" | "system" | null = null;
@@ -336,6 +337,14 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         server = args.value;
       }
       return null as T;
+    case "get_recognition_settings":
+      return { supportCeThreshold } as T;
+    case "set_support_ce_threshold":
+      supportCeThreshold =
+        typeof args.value === "number"
+          ? Math.min(0.85, Math.max(0.6, args.value))
+          : supportCeThreshold;
+      return { supportCeThreshold } as T;
     case "pick_asset_bundle":
     case "pick_runtime_bundle":
     case "get_servant_portrait_path":

@@ -1,13 +1,19 @@
 import { useCallback } from "react";
 import { Box, Button, Dialog, Flex, IconButton, Text } from "@radix-ui/themes";
-import { ArchiveIcon, CheckCircledIcon, Cross1Icon } from "@radix-ui/react-icons";
+import {
+  ArchiveIcon,
+  CheckCircledIcon,
+  Cross1Icon,
+  MixerHorizontalIcon,
+} from "@radix-ui/react-icons";
 import { invoke } from "../../tauri";
 import type { Project } from "../../types/project";
 import { SettingsDataManagementPage } from "./SettingsDataManagementPage";
+import { SettingsRecognitionPage } from "./SettingsRecognitionPage";
 import { SettingsResourcesPage } from "./SettingsResourcesPage";
 import { SettingsSelfCheckPage } from "./SettingsSelfCheckPage";
 
-export type SettingsSection = "selfCheck" | "resources" | "dataManagement";
+export type SettingsSection = "selfCheck" | "resources" | "dataManagement" | "recognition";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -24,6 +30,13 @@ const navItems: Array<{
   icon: JSX.Element;
   render: (active: boolean, props: Pick<SettingsDialogProps, "onProjectsImported">) => JSX.Element;
 }> = [
+    {
+      group: "game",
+      section: "recognition",
+      label: "识别设置",
+      icon: <MixerHorizontalIcon width={15} height={15} />,
+      render: (active) => <SettingsRecognitionPage active={active} />,
+    },
     {
       group: "game",
       section: "dataManagement",

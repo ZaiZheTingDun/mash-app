@@ -231,11 +231,13 @@ pub fn run() {
         .setup(|app| {
             let use_bluestack = load_bluestack_setting(&app.handle());
             let server = load_server_setting(&app.handle());
+            let recognition_settings = load_recognition_settings(&app.handle());
             #[cfg(desktop)]
             configure_app_menu(app)?;
             refresh_asset_protocol_scope(&app.handle())?;
             app.manage(Mutex::new(use_bluestack));
             app.manage(Mutex::new(server));
+            app.manage(Mutex::new(recognition_settings));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
             app.manage(Mutex::new(EnhancementRunnerHandle::new_idle()));
             app.manage(Arc::new(ResourceDownloadCancelState::default()));
@@ -285,6 +287,8 @@ pub fn run() {
             commands::settings::set_use_bluestack,
             commands::settings::get_server,
             commands::settings::set_server,
+            commands::settings::get_recognition_settings,
+            commands::settings::set_support_ce_threshold,
             commands::settings::should_check_updates_today,
             commands::settings::mark_update_checked_today,
             commands::automation::start_automation,

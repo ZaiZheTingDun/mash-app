@@ -272,11 +272,6 @@ pub(crate) const SUPPORT_GRAND_CE_H: f64 = 0.064;
 pub(crate) const SUPPORT_GRAND_CE_GAP: f64 = 0.000;
 pub(crate) const SUPPORT_GRAND_CE_THIRD_CENTER_FROM_BUTTON_TOP_Y: f64 = 0.180;
 pub(crate) const SUPPORT_GRAND_CE_THIRD_CENTER_FROM_PANEL_TOP_Y: f64 = 0.220;
-/// Minimum `TM_CCOEFF_NORMED` score to accept a row's CE icon as the
-/// pinned CE. Conservative on purpose — the CE icons share a lot of dark
-/// background pixels so even mismatched CEs score ~0.4-0.5; the matched
-/// CE typically scores 0.75+.
-pub(crate) const SUPPORT_CE_THRESHOLD: f64 = 0.70;
 /// Support rows have a right-side "助战编队确认" button that opens the
 /// friend/support detail page. Use that button as a vertical row anchor,
 /// but tap slightly to its left so selecting a support stays on the main
@@ -950,8 +945,8 @@ impl Runner {
         grand_ce_search_region(row, slot)
     }
 
-    /// Return true when a row's CE icon scores at or above
-    /// `SUPPORT_CE_THRESHOLD` against `template_path`.
+    /// Return true when a row's CE icon scores at or above the configured
+    /// support CE threshold against `template_path`.
     pub(crate) fn support_row_matches_ce(
         &mut self,
         row: &SupportRowMatch,
@@ -977,18 +972,19 @@ impl Runner {
         label: &str,
         options: SupportCeVerificationOptions,
     ) -> Option<String> {
+        let support_ce_threshold = self.config.support_ce_threshold;
         match self.sidecar().verify_support_ce(
             None,
             region,
             template_path,
-            SUPPORT_CE_THRESHOLD,
+            support_ce_threshold,
             options,
         ) {
             Ok(result) => {
                 let effective_threshold = if result.threshold > 0.0 {
                     result.threshold
                 } else {
-                    SUPPORT_CE_THRESHOLD
+                    support_ce_threshold
                 };
                 eprintln!(
                     "[runner] {label} verify: score={:.3} threshold={:.2} -> {}",

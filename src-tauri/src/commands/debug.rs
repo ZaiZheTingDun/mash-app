@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::adb;
+use crate::commands::settings::RecognitionSettings;
 use crate::enhancement_runner::{
     EnhancementRunnerHandle, EnhancementRunnerState, SERVANT_FACE_MATCH_CROP,
     SERVANT_FACE_TEMPLATE_SIZE, SERVANT_LIST_REGION,
@@ -1089,6 +1090,7 @@ pub fn debug_find_supports(
     app: tauri::AppHandle,
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
+    recognition_settings_state: tauri::State<'_, Mutex<RecognitionSettings>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     servant_id: u32,
@@ -1099,6 +1101,10 @@ pub fn debug_find_supports(
     grand_bond_ce_mode: Option<String>,
 ) -> Result<DebugFindSupportsResult, String> {
     require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    let support_ce_threshold = recognition_settings_state
+        .lock()
+        .unwrap()
+        .support_ce_threshold;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -1177,7 +1183,7 @@ pub fn debug_find_supports(
                     Some(&image_path),
                     region,
                     template,
-                    runner::SUPPORT_CE_THRESHOLD,
+                    support_ce_threshold,
                     SupportCeVerificationOptions {
                         mlb_required: craft_essence_mlb_required.unwrap_or(true),
                         grand_bond_ce_mode: None,
@@ -1187,7 +1193,7 @@ pub fn debug_find_supports(
                         let effective_threshold = if result.threshold > 0.0 {
                             result.threshold
                         } else {
-                            runner::SUPPORT_CE_THRESHOLD
+                            support_ce_threshold
                         };
                         eprintln!(
                             "[debug_find_supports] row y={:.3} CE score={:.3} threshold={:.2} -> {}",
@@ -1225,7 +1231,7 @@ pub fn debug_find_supports(
                             passed: false,
                             artwork_checks: Vec::new(),
                             icon_checks: Vec::new(),
-                            threshold: runner::SUPPORT_CE_THRESHOLD,
+                            threshold: support_ce_threshold,
                             template_path: template_path_str.clone(),
                             error: Some(e),
                         }
@@ -1249,7 +1255,7 @@ pub fn debug_find_supports(
                     Some(&image_path),
                     region,
                     template_path,
-                    runner::SUPPORT_CE_THRESHOLD,
+                    support_ce_threshold,
                     SupportCeVerificationOptions {
                         mlb_required: grand_craft_essence_mlb_required.unwrap_or([true; 3])[index],
                         grand_bond_ce_mode: if index == 1 {
@@ -1263,7 +1269,7 @@ pub fn debug_find_supports(
                         let effective_threshold = if result.threshold > 0.0 {
                             result.threshold
                         } else {
-                            runner::SUPPORT_CE_THRESHOLD
+                            support_ce_threshold
                         };
                         if !result.artwork_checks.is_empty() {
                             eprintln!(
@@ -1290,7 +1296,7 @@ pub fn debug_find_supports(
                         passed: false,
                         artwork_checks: Vec::new(),
                         icon_checks: Vec::new(),
-                        threshold: runner::SUPPORT_CE_THRESHOLD,
+                        threshold: support_ce_threshold,
                         template_path: template_path_str,
                         error: Some(e),
                     },
@@ -1306,7 +1312,7 @@ pub fn debug_find_supports(
                     passed: false,
                     artwork_checks: Vec::new(),
                     icon_checks: Vec::new(),
-                    threshold: runner::SUPPORT_CE_THRESHOLD,
+                    threshold: support_ce_threshold,
                     template_path: template_path_str,
                     error: Some("礼装模板不存在".into()),
                 }

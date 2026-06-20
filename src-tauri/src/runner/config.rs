@@ -174,6 +174,10 @@ pub struct RunConfig {
     /// first OCR match.
     #[serde(default)]
     pub support_craft_essence_id: Option<u32>,
+    /// Runtime CE artwork threshold injected from persisted recognition
+    /// settings when automation starts.
+    #[serde(default = "default_support_ce_threshold")]
+    pub support_ce_threshold: f64,
     #[serde(default = "default_true")]
     pub support_craft_essence_mlb_required: bool,
     #[serde(default)]
@@ -224,6 +228,10 @@ pub struct RunConfig {
 
 fn default_support_skill_level_mins() -> [Option<u32>; 3] {
     [None; 3]
+}
+
+fn default_support_ce_threshold() -> f64 {
+    crate::commands::settings::SUPPORT_CE_THRESHOLD_DEFAULT
 }
 
 fn default_true() -> bool {
