@@ -18,6 +18,7 @@ import {
   DotsHorizontalIcon,
   Pencil1Icon,
   PlusIcon,
+  GearIcon,
   TrashIcon,
   CheckIcon,
 } from "@radix-ui/react-icons";
@@ -32,6 +33,7 @@ interface ProjectBarProps {
   onRenameProject: (id: string, name: string) => void;
   onDuplicateProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
+  onOpenProjectSettings: () => void;
 }
 
 type NameDialogMode = "create" | "rename" | "duplicate";
@@ -54,6 +56,7 @@ export function ProjectBar({
   onRenameProject,
   onDuplicateProject,
   onDeleteProject,
+  onOpenProjectSettings,
 }: ProjectBarProps) {
   const [nameDialogMode, setNameDialogMode] = useState<NameDialogMode | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -191,6 +194,16 @@ export function ProjectBar({
             </IconButton>
           </DropdownMenu.Trigger>
           <DropdownMenu.Content>
+            <DropdownMenu.Item
+              disabled={disabled || !activeProject}
+              onSelect={onOpenProjectSettings}
+            >
+              <Flex align="center" gap="2">
+                <GearIcon width={12} height={12} />
+                <Text size="2">队伍设置</Text>
+              </Flex>
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator />
             <DropdownMenu.Item
               disabled={disabled || !activeProject}
               onSelect={() => openNameDialog("rename")}

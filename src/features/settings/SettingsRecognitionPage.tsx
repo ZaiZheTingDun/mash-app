@@ -1,139 +1,42 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Box, Button, Flex, Text, TextField } from "@radix-ui/themes";
 import { invoke } from "../../tauri";
+import type { RecognitionSettings } from "../../types/recognition";
+import {
+  clampThreshold,
+  DEFAULT_RECOGNITION_SETTINGS,
+  formatThreshold,
+  normalizeRecognitionSettings,
+  settingsToDraft,
+  SUPPORT_THRESHOLD_STEP,
+  THRESHOLD_CONFIGS,
+  type ThresholdConfig,
+  type ThresholdKey,
+} from "./recognitionSettingsModel";
 
-const SUPPORT_THRESHOLD_DEFAULT = 0.7;
-const SUPPORT_THRESHOLD_MIN = 0.6;
-const SUPPORT_THRESHOLD_MAX = 0.85;
-const SUPPORT_FULL_GATE_THRESHOLD_DEFAULT = 0.6;
-const SUPPORT_FULL_GATE_THRESHOLD_MIN = 0.4;
-const SUPPORT_FULL_GATE_THRESHOLD_MAX = 0.7;
-const SUPPORT_THRESHOLD_STEP = 0.01;
-
-type ThresholdKey =
-  | "supportCeThreshold"
-  | "supportCeFullGateThreshold"
-  | "supportMlbIconThreshold"
-  | "supportBondIconThreshold";
-
-interface RecognitionSettings {
-  supportCeThreshold: number;
-  supportCeFullGateThreshold: number;
-  supportMlbIconThreshold: number;
-  supportBondIconThreshold: number;
+interface RecognitionThresholdSettingsProps {
+  active: boolean;
+  helpText?: string;
+  loadSettings: () => Promise<RecognitionSettings>;
+  loadDefaultSettings?: () => Promise<RecognitionSettings>;
+  saveThreshold: (
+    config: Pick<ThresholdConfig, "key" | "command">,
+    value: number,
+    options?: { restoreDefault?: boolean }
+  ) => Promise<RecognitionSettings>;
 }
 
-interface ThresholdConfig {
-  key: ThresholdKey;
-  label: string;
-  description: string;
-  ariaLabel: string;
-  command: string;
-  defaultValue: number;
-  min: number;
-  max: number;
-}
-
-const THRESHOLD_CONFIGS: ThresholdConfig[] = [
-  {
-    key: "supportCeThreshold",
-    label: "助战礼装匹配阈值",
-    description: "低数值更容易命中，高数值更不容易误选；默认 0.70",
-    ariaLabel: "助战礼装匹配阈值数值",
-    command: "set_support_ce_threshold",
-    defaultValue: SUPPORT_THRESHOLD_DEFAULT,
-    min: SUPPORT_THRESHOLD_MIN,
-    max: SUPPORT_THRESHOLD_MAX,
-  },
-  {
-    key: "supportCeFullGateThreshold",
-    label: "完整匹配兜底阈值",
-    description:
-      "中间或右上匹配命中时，完整匹配也必须至少达到该值；默认 0.60",
-    ariaLabel: "完整匹配兜底阈值数值",
-    command: "set_support_ce_full_gate_threshold",
-    defaultValue: SUPPORT_FULL_GATE_THRESHOLD_DEFAULT,
-    min: SUPPORT_FULL_GATE_THRESHOLD_MIN,
-    max: SUPPORT_FULL_GATE_THRESHOLD_MAX,
-  },
-  {
-    key: "supportMlbIconThreshold",
-    label: "满破图标匹配阈值",
-    description: "用于匹配助战礼装满破图标；默认 0.70",
-    ariaLabel: "满破图标匹配阈值数值",
-    command: "set_support_mlb_icon_threshold",
-    defaultValue: SUPPORT_THRESHOLD_DEFAULT,
-    min: SUPPORT_THRESHOLD_MIN,
-    max: SUPPORT_THRESHOLD_MAX,
-  },
-  {
-    key: "supportBondIconThreshold",
-    label: "牵绊图标匹配阈值",
-    description: "用于匹配冠位礼装牵绊 / 冠位连接牵绊图标；默认 0.70",
-    ariaLabel: "牵绊图标匹配阈值数值",
-    command: "set_support_bond_icon_threshold",
-    defaultValue: SUPPORT_THRESHOLD_DEFAULT,
-    min: SUPPORT_THRESHOLD_MIN,
-    max: SUPPORT_THRESHOLD_MAX,
-  },
-];
-
-const DEFAULT_SETTINGS: RecognitionSettings = {
-  supportCeThreshold: SUPPORT_THRESHOLD_DEFAULT,
-  supportCeFullGateThreshold: SUPPORT_FULL_GATE_THRESHOLD_DEFAULT,
-  supportMlbIconThreshold: SUPPORT_THRESHOLD_DEFAULT,
-  supportBondIconThreshold: SUPPORT_THRESHOLD_DEFAULT,
-};
-
-function clampThreshold(value: number, config: ThresholdConfig) {
-  if (!Number.isFinite(value)) return config.defaultValue;
-  return Math.min(config.max, Math.max(config.min, value));
-}
-
-function normalizeSettings(settings: RecognitionSettings): RecognitionSettings {
-  return {
-    supportCeThreshold: clampThreshold(settings.supportCeThreshold, THRESHOLD_CONFIGS[0]),
-    supportCeFullGateThreshold: clampThreshold(
-      settings.supportCeFullGateThreshold,
-      THRESHOLD_CONFIGS[1]
-    ),
-    supportMlbIconThreshold: clampThreshold(
-      settings.supportMlbIconThreshold,
-      THRESHOLD_CONFIGS[2]
-    ),
-    supportBondIconThreshold: clampThreshold(
-      settings.supportBondIconThreshold,
-      THRESHOLD_CONFIGS[3]
-    ),
-  };
-}
-
-function formatThreshold(value: number, config: ThresholdConfig) {
-  return clampThreshold(value, config).toFixed(2);
-}
-
-function settingsToDraft(settings: RecognitionSettings): Record<ThresholdKey, string> {
-  return {
-    supportCeThreshold: formatThreshold(settings.supportCeThreshold, THRESHOLD_CONFIGS[0]),
-    supportCeFullGateThreshold: formatThreshold(
-      settings.supportCeFullGateThreshold,
-      THRESHOLD_CONFIGS[1]
-    ),
-    supportMlbIconThreshold: formatThreshold(
-      settings.supportMlbIconThreshold,
-      THRESHOLD_CONFIGS[2]
-    ),
-    supportBondIconThreshold: formatThreshold(
-      settings.supportBondIconThreshold,
-      THRESHOLD_CONFIGS[3]
-    ),
-  };
-}
-
-export function SettingsRecognitionPage({ active }: { active: boolean }) {
-  const [saved, setSaved] = useState<RecognitionSettings>(DEFAULT_SETTINGS);
+export function RecognitionThresholdSettings({
+  active,
+  helpText,
+  loadSettings,
+  loadDefaultSettings,
+  saveThreshold,
+}: RecognitionThresholdSettingsProps) {
+  const [saved, setSaved] = useState<RecognitionSettings>(DEFAULT_RECOGNITION_SETTINGS);
+  const [defaults, setDefaults] = useState<RecognitionSettings>(DEFAULT_RECOGNITION_SETTINGS);
   const [draft, setDraft] = useState<Record<ThresholdKey, string>>(
-    settingsToDraft(DEFAULT_SETTINGS)
+    settingsToDraft(DEFAULT_RECOGNITION_SETTINGS)
   );
   const [loading, setLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<ThresholdKey | null>(null);
@@ -151,39 +54,40 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
     [draft]
   );
 
-  const loadSettings = useCallback(async () => {
+  const loadCurrentSettings = useCallback(async () => {
     setLoading(true);
     setError(null);
     setSavedMessageKey(null);
     try {
-      const settings = normalizeSettings(
-        await invoke<RecognitionSettings>("get_recognition_settings")
-      );
-      setSaved(settings);
-      setDraft(settingsToDraft(settings));
+      const [settings, defaultSettings] = await Promise.all([
+        loadSettings(),
+        loadDefaultSettings?.() ?? Promise.resolve(DEFAULT_RECOGNITION_SETTINGS),
+      ]);
+      setDefaults(normalizeRecognitionSettings(defaultSettings));
+      const normalizedSettings = normalizeRecognitionSettings(settings);
+      setSaved(normalizedSettings);
+      setDraft(settingsToDraft(normalizedSettings));
     } catch (err) {
       setError(String(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadDefaultSettings, loadSettings]);
 
   useEffect(() => {
     if (active) {
-      void loadSettings();
+      void loadCurrentSettings();
     }
-  }, [active, loadSettings]);
+  }, [active, loadCurrentSettings]);
 
-  const saveThreshold = useCallback(
-    async (config: ThresholdConfig, value: number) => {
+  const saveCurrentThreshold = useCallback(
+    async (config: ThresholdConfig, value: number, options?: { restoreDefault?: boolean }) => {
       setSavingKey(config.key);
       setError(null);
       setSavedMessageKey(null);
       try {
-        const settings = normalizeSettings(
-          await invoke<RecognitionSettings>(config.command, {
-            value: clampThreshold(value, config),
-          })
+        const settings = normalizeRecognitionSettings(
+          await saveThreshold(config, clampThreshold(value, config), options)
         );
         setSaved(settings);
         setDraft(settingsToDraft(settings));
@@ -194,13 +98,18 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
         setSavingKey(null);
       }
     },
-    []
+    [saveThreshold]
   );
 
   return (
     <Flex direction="column" gap="4">
       <Box className="settings-section-panel">
         <Flex direction="column" gap="5" className="recognition-setting-block">
+          {helpText && (
+            <Text size="2" color="gray" className="recognition-setting-help">
+              {helpText}
+            </Text>
+          )}
           {THRESHOLD_CONFIGS.map((config) => {
             const draftNumber = draftNumbers[config.key];
             const draftValid =
@@ -211,6 +120,7 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
               draftValid &&
               formatThreshold(draftNumber, config) !== formatThreshold(saved[config.key], config);
             const saving = savingKey === config.key;
+            const defaultValue = defaults[config.key];
 
             return (
               <Flex key={config.key} direction="column" gap="4">
@@ -219,7 +129,7 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
                     {config.label}
                   </Text>
                   <Text size="1" color="gray">
-                    {config.description}
+                    {config.description(defaultValue)}
                   </Text>
                 </Flex>
 
@@ -285,16 +195,18 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
                         loading ||
                         savingKey != null ||
                         formatThreshold(saved[config.key], config) ===
-                          formatThreshold(config.defaultValue, config)
+                          formatThreshold(defaultValue, config)
                       }
-                      onClick={() => void saveThreshold(config, config.defaultValue)}
+                      onClick={() =>
+                        void saveCurrentThreshold(config, defaultValue, { restoreDefault: true })
+                      }
                     >
                       恢复默认
                     </Button>
                     <Button
                       type="button"
                       disabled={loading || savingKey != null || !dirty}
-                      onClick={() => void saveThreshold(config, draftNumber)}
+                      onClick={() => void saveCurrentThreshold(config, draftNumber)}
                     >
                       {saving ? "保存中…" : "保存"}
                     </Button>
@@ -306,5 +218,26 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
         </Flex>
       </Box>
     </Flex>
+  );
+}
+
+export function SettingsRecognitionPage({ active }: { active: boolean }) {
+  const loadSettings = useCallback(
+    () => invoke<RecognitionSettings>("get_recognition_settings"),
+    []
+  );
+  const saveThreshold = useCallback(
+    (config: Pick<ThresholdConfig, "command">, value: number) =>
+      invoke<RecognitionSettings>(config.command, { value }),
+    []
+  );
+
+  return (
+    <RecognitionThresholdSettings
+      active={active}
+      helpText="此处为全局设置；若只想针对某个队伍进行设置，请前往队伍设置页面。"
+      loadSettings={loadSettings}
+      saveThreshold={saveThreshold}
+    />
   );
 }

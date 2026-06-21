@@ -18,6 +18,7 @@ use crate::enhancement_runner::{
     server_supported as enhancement_server_supported, EnhancementAutomationEvent,
     EnhancementConfig, EnhancementRunner, EnhancementRunnerHandle, EnhancementRunnerState,
 };
+use crate::models::ProjectRecognitionSettings;
 use crate::runner::{AutomationEvent, LogLevel, RunConfig, Runner, RunnerHandle, RunnerState};
 use crate::screen;
 use crate::server::{
@@ -146,6 +147,26 @@ fn stop_enhancement_start(app: &tauri::AppHandle, state: &Arc<Mutex<EnhancementR
     emit_enhancement_status(app, state, "", "强化自动化已停止");
 }
 
+pub(crate) fn effective_recognition_settings(
+    global: RecognitionSettings,
+    project: Option<ProjectRecognitionSettings>,
+) -> RecognitionSettings {
+    RecognitionSettings {
+        support_ce_threshold: project
+            .and_then(|settings| settings.support_ce_threshold)
+            .unwrap_or(global.support_ce_threshold),
+        support_ce_full_gate_threshold: project
+            .and_then(|settings| settings.support_ce_full_gate_threshold)
+            .unwrap_or(global.support_ce_full_gate_threshold),
+        support_mlb_icon_threshold: project
+            .and_then(|settings| settings.support_mlb_icon_threshold)
+            .unwrap_or(global.support_mlb_icon_threshold),
+        support_bond_icon_threshold: project
+            .and_then(|settings| settings.support_bond_icon_threshold)
+            .unwrap_or(global.support_bond_icon_threshold),
+    }
+}
+
 #[tauri::command]
 pub(crate) fn start_automation(
     app: tauri::AppHandle,
@@ -193,7 +214,10 @@ pub(crate) fn start_automation(
 
     let use_bluestack = *bluestack_state.lock().unwrap();
     let server = *server_state.lock().unwrap();
-    let recognition_settings = *recognition_settings_state.lock().unwrap();
+    let recognition_settings = effective_recognition_settings(
+        *recognition_settings_state.lock().unwrap(),
+        project.as_ref().and_then(|project| project.recognition_settings),
+    );
     config.support_ce_threshold = recognition_settings.support_ce_threshold;
     config.support_ce_full_gate_threshold = recognition_settings.support_ce_full_gate_threshold;
     config.support_mlb_icon_threshold = recognition_settings.support_mlb_icon_threshold;

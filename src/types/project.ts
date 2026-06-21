@@ -1,3 +1,5 @@
+import type { RecognitionSettings } from "./recognition";
+
 /**
  * One cell of the team-builder grid. Mirrors the Rust `ProjectSlot` struct.
  * For `type: "support"` slots, `servantId` is ignored on render — the
@@ -116,6 +118,7 @@ export interface Project {
   supportNoblePhantasmLevelMin?: number | null;
   supportSkillLevelMins?: SupportSkillLevelMins;
   supportAppendSkillLevelMins?: SupportAppendSkillLevelMins;
+  recognitionSettings?: Partial<RecognitionSettings> | null;
   /**
    * Team-builder grid layout (5 servant slots + 1 support slot, in
    * arrangement order). Persisted on the backend so selections and

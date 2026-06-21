@@ -17,6 +17,7 @@ import { EnhancementPage } from "./features/enhancement/EnhancementPage";
 import { DebugPage } from "./features/debug/DebugPage";
 import { StatusBar } from "./features/status/StatusBar";
 import { ProjectBar } from "./features/projects/ProjectBar";
+import { ProjectSettingsDialog } from "./features/projects/ProjectSettingsDialog";
 import { SetupPage } from "./features/setup/SetupPage";
 import { SettingsDialog, type SettingsSection } from "./features/settings/SettingsPage";
 import { SelfCheckDialog } from "./features/settings/SelfCheckDialog";
@@ -70,7 +71,8 @@ function localDateKey(date: Date): string {
 function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [view, setView] = useState<View>("team");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<SettingsSection>("dataManagement");
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("recognition");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
@@ -589,9 +591,14 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   }, []);
 
   const handleOpenSettings = useCallback(() => {
-    setSettingsSection("dataManagement");
+    setSettingsSection("recognition");
     setSettingsOpen(true);
   }, []);
+
+  const handleOpenProjectSettings = useCallback(() => {
+    if (!activeProject) return;
+    setProjectSettingsOpen(true);
+  }, [activeProject]);
 
   // After the runner exits we return to the team page (the start of
   // the linear flow) rather than to "config", which no longer exists.
@@ -661,6 +668,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
               onRenameProject={handleRenameProject}
               onDuplicateProject={handleDuplicateProject}
               onDeleteProject={handleDeleteProject}
+              onOpenProjectSettings={handleOpenProjectSettings}
               onUpdateProject={handleUpdateProject}
               onBack={handleBackToConfig}
               onAutomationStart={handleAutomationStart}
@@ -690,6 +698,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
                 onRenameProject={handleRenameProject}
                 onDuplicateProject={handleDuplicateProject}
                 onDeleteProject={handleDeleteProject}
+                onOpenProjectSettings={handleOpenProjectSettings}
               />
               {loading ? (
                 <Flex align="center" justify="center" style={{ flex: 1 }}>
@@ -813,6 +822,12 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         onOpenChange={setSettingsOpen}
         onSectionChange={setSettingsSection}
         onProjectsImported={handleProjectsImported}
+      />
+      <ProjectSettingsDialog
+        open={projectSettingsOpen}
+        project={activeProject}
+        onOpenChange={setProjectSettingsOpen}
+        onUpdateProject={handleUpdateProject}
       />
       <SelfCheckDialog
         open={selfCheckOpen}

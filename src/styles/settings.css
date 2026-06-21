@@ -29,6 +29,11 @@
   background: var(--settings-glass-nav-bg);
 }
 
+.settings-nav > nav {
+  min-height: 0;
+  height: 100%;
+}
+
 .settings-nav-title {
   padding: 0 8px 16px;
 }
@@ -53,6 +58,12 @@
 
 .settings-nav-button[data-active="true"]:hover {
   background: color-mix(in srgb, var(--gray-a5) 78%, rgba(255, 255, 255, 0.14));
+}
+
+.team-settings-nav-project {
+  margin-top: auto;
+  padding: 16px 8px 0;
+  overflow-wrap: anywhere;
 }
 
 .settings-content {
@@ -104,6 +115,11 @@
 
 .recognition-setting-block {
   padding: 18px 0;
+}
+
+.recognition-setting-help {
+  display: block;
+  padding-bottom: 4px;
 }
 
 .recognition-threshold-row {

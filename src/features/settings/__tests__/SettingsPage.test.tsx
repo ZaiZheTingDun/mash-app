@@ -138,6 +138,10 @@ describe("SettingsDialog", () => {
     const user = userEvent.setup();
     renderWithTheme(<SettingsHarness initialSection="recognition" />);
 
+    expect(
+      await screen.findByText("此处为全局设置；若只想针对某个队伍进行设置，请前往队伍设置页面。")
+    ).toBeInTheDocument();
+
     const input = await screen.findByRole("spinbutton", {
       name: "助战礼装匹配阈值数值",
     });

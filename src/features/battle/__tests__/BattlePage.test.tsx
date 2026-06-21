@@ -74,6 +74,7 @@ function renderBattlePage(initialProject: Project, servants: Servant[] = [SABER,
     onRenameProject: vi.fn(),
     onDuplicateProject: vi.fn(),
     onDeleteProject: vi.fn(),
+    onOpenProjectSettings: vi.fn(),
     onBack: vi.fn(),
     onAutomationStart: vi.fn(),
     onLogEntry: vi.fn(),
@@ -97,6 +98,7 @@ function renderBattlePage(initialProject: Project, servants: Servant[] = [SABER,
         onRenameProject={callbacks.onRenameProject}
         onDuplicateProject={callbacks.onDuplicateProject}
         onDeleteProject={callbacks.onDeleteProject}
+        onOpenProjectSettings={callbacks.onOpenProjectSettings}
         onUpdateProject={handleUpdateProject}
         onBack={callbacks.onBack}
         onAutomationStart={callbacks.onAutomationStart}

@@ -28,6 +28,7 @@ describe("ProjectBar", () => {
       onRenameProject: vi.fn(),
       onDuplicateProject: vi.fn(),
       onDeleteProject: vi.fn(),
+      onOpenProjectSettings: vi.fn(),
       ...overrides,
     };
     return {
@@ -135,6 +136,29 @@ describe("ProjectBar", () => {
     await user.click(screen.getByRole("button", { name: "保存" }));
 
     expect(onRenameProject).toHaveBeenCalledWith("p1", "新名字");
+  });
+
+  it("opens team settings from the action menu", async () => {
+    const user = userEvent.setup();
+    const onOpenProjectSettings = vi.fn();
+    renderProjectBar({ onOpenProjectSettings });
+
+    await user.click(screen.getByRole("button", { name: /队伍操作/ }));
+    await user.click(await screen.findByRole("menuitem", { name: /队伍设置/ }));
+
+    expect(onOpenProjectSettings).toHaveBeenCalledOnce();
+  });
+
+  it("disables team settings when no project is active", async () => {
+    const user = userEvent.setup();
+    renderProjectBar({ projects: [], activeProjectId: null });
+
+    await user.click(screen.getByRole("button", { name: /队伍操作/ }));
+
+    expect(await screen.findByRole("menuitem", { name: /队伍设置/ })).toHaveAttribute(
+      "aria-disabled",
+      "true"
+    );
   });
 
   it("duplicates the active project from the action menu", async () => {

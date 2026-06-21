@@ -238,6 +238,7 @@ pub(crate) fn create_project(
         support_noble_phantasm_level_min: None,
         support_skill_level_mins: default_support_skill_level_mins(),
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
+        recognition_settings: None,
         slots: default_project_slots(),
         repeat_mission: false,
         repeat_mode: Some(ProjectRepeatMode::Single),

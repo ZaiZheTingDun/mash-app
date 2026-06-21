@@ -635,6 +635,19 @@ pub struct GrandServantConfig {
     pub priority: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectRecognitionSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_ce_threshold: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_ce_full_gate_threshold: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_mlb_icon_threshold: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_bond_icon_threshold: Option<f64>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
@@ -679,6 +692,10 @@ pub struct Project {
     /// append slot. `None` means "任意".
     #[serde(default = "default_support_append_skill_level_mins")]
     pub support_append_skill_level_mins: [Option<u32>; 5],
+    /// Optional project-specific recognition thresholds. `None` means this
+    /// project inherits the global recognition settings.
+    #[serde(default)]
+    pub recognition_settings: Option<ProjectRecognitionSettings>,
     /// Team-builder grid layout (chosen servants + slot order). Persisted
     /// so the user's selections survive app restarts and project switches.
     /// Defaulted via `default_project_slots` for legacy rows.

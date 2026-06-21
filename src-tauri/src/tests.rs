@@ -265,6 +265,7 @@ fn test_project(id: &str, name: &str, advanced_mode: bool) -> Project {
         support_noble_phantasm_level_min: None,
         support_skill_level_mins: default_support_skill_level_mins(),
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
+        recognition_settings: None,
         slots: default_project_slots(),
         repeat_mission: false,
         repeat_mode: Some(ProjectRepeatMode::Single),
@@ -604,6 +605,7 @@ fn project_legacy_json_without_slots_falls_back_to_defaults() {
     assert!(project.support_noble_phantasm_level_min.is_none());
     assert_eq!(project.support_skill_level_mins, [None; 3]);
     assert_eq!(project.support_append_skill_level_mins, [None; 5]);
+    assert!(project.recognition_settings.is_none());
     assert_eq!(project.repeat_mission, false);
     assert!(project.repeat_mode.is_none());
     assert!(project.repeat_count.is_none());
@@ -625,6 +627,102 @@ fn project_grand_class_round_trips_as_camel_case() {
 }
 
 #[test]
+fn project_recognition_settings_round_trip_as_camel_case() {
+    let json = serde_json::json!({
+        "id": "abc",
+        "name": "Project Settings",
+        "recognitionSettings": {
+            "supportCeThreshold": 0.66,
+            "supportCeFullGateThreshold": 0.56,
+            "supportMlbIconThreshold": 0.77,
+            "supportBondIconThreshold": 0.78,
+        },
+    });
+    let project: Project = serde_json::from_value(json).unwrap();
+    let settings = project.recognition_settings.unwrap();
+    assert_eq!(settings.support_ce_threshold, Some(0.66));
+    assert_eq!(settings.support_ce_full_gate_threshold, Some(0.56));
+    assert_eq!(settings.support_mlb_icon_threshold, Some(0.77));
+    assert_eq!(settings.support_bond_icon_threshold, Some(0.78));
+
+    let serialized = serde_json::to_value(&project).unwrap();
+    assert_eq!(
+        serialized["recognitionSettings"]["supportCeThreshold"],
+        serde_json::json!(0.66)
+    );
+    assert_eq!(
+        serialized["recognitionSettings"]["supportCeFullGateThreshold"],
+        serde_json::json!(0.56)
+    );
+}
+
+#[test]
+fn project_recognition_settings_allows_partial_overrides() {
+    let json = serde_json::json!({
+        "id": "abc",
+        "name": "Partial Project Settings",
+        "recognitionSettings": {
+            "supportCeThreshold": 0.66,
+        },
+    });
+    let project: Project = serde_json::from_value(json).unwrap();
+    let settings = project.recognition_settings.unwrap();
+    assert_eq!(settings.support_ce_threshold, Some(0.66));
+    assert_eq!(settings.support_ce_full_gate_threshold, None);
+    assert_eq!(settings.support_mlb_icon_threshold, None);
+    assert_eq!(settings.support_bond_icon_threshold, None);
+
+    let serialized = serde_json::to_value(&project).unwrap();
+    assert_eq!(
+        serialized["recognitionSettings"]["supportCeThreshold"],
+        serde_json::json!(0.66)
+    );
+    assert!(serialized["recognitionSettings"]
+        .get("supportCeFullGateThreshold")
+        .is_none());
+}
+
+#[test]
+fn effective_recognition_settings_inherit_global_without_project_override() {
+    let global = RecognitionSettings {
+        support_ce_threshold: 0.61,
+        support_ce_full_gate_threshold: 0.41,
+        support_mlb_icon_threshold: 0.62,
+        support_bond_icon_threshold: 0.63,
+    };
+
+    let effective = commands::automation::effective_recognition_settings(global, None);
+
+    assert_eq!(effective.support_ce_threshold, 0.61);
+    assert_eq!(effective.support_ce_full_gate_threshold, 0.41);
+    assert_eq!(effective.support_mlb_icon_threshold, 0.62);
+    assert_eq!(effective.support_bond_icon_threshold, 0.63);
+}
+
+#[test]
+fn effective_recognition_settings_use_project_override() {
+    let global = RecognitionSettings {
+        support_ce_threshold: 0.61,
+        support_ce_full_gate_threshold: 0.41,
+        support_mlb_icon_threshold: 0.62,
+        support_bond_icon_threshold: 0.63,
+    };
+    let project = ProjectRecognitionSettings {
+        support_ce_threshold: Some(0.66),
+        support_ce_full_gate_threshold: None,
+        support_mlb_icon_threshold: Some(0.77),
+        support_bond_icon_threshold: None,
+    };
+
+    let effective = commands::automation::effective_recognition_settings(global, Some(project));
+
+    assert_eq!(effective.support_ce_threshold, 0.66);
+    assert_eq!(effective.support_ce_full_gate_threshold, 0.41);
+    assert_eq!(effective.support_mlb_icon_threshold, 0.77);
+    assert_eq!(effective.support_bond_icon_threshold, 0.63);
+}
+
+#[test]
 fn normalize_project_migrates_legacy_repeat_flag_to_infinite_mode() {
     let project = normalize_project(Project {
         id: "abc".into(),
@@ -643,6 +741,7 @@ fn normalize_project_migrates_legacy_repeat_flag_to_infinite_mode() {
         support_noble_phantasm_level_min: None,
         support_skill_level_mins: default_support_skill_level_mins(),
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
+        recognition_settings: None,
         slots: default_project_slots(),
         repeat_mission: true,
         repeat_mode: None,

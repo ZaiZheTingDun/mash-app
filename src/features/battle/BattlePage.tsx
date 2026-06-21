@@ -89,6 +89,7 @@ interface BattlePageProps {
   onRenameProject: (id: string, name: string) => void;
   onDuplicateProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
+  onOpenProjectSettings: () => void;
   onUpdateProject: (project: Project) => Promise<void>;
   onBack: () => void;
   onAutomationStart?: () => void;
@@ -141,6 +142,7 @@ export function BattlePage({
   onRenameProject,
   onDuplicateProject,
   onDeleteProject,
+  onOpenProjectSettings,
   onUpdateProject,
   onBack,
   onAutomationStart,
@@ -407,6 +409,7 @@ export function BattlePage({
           onRenameProject={onRenameProject}
           onDuplicateProject={onDuplicateProject}
           onDeleteProject={onDeleteProject}
+          onOpenProjectSettings={onOpenProjectSettings}
         />
       </Box>
 

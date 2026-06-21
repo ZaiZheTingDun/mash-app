@@ -198,6 +198,9 @@ describe("App active project restore", () => {
 
     await user.click(screen.getByRole("button", { name: "设置" }));
 
+    expect(await screen.findByText("此处为全局设置；若只想针对某个队伍进行设置，请前往队伍设置页面。")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "队伍管理" }));
+
     expect(await screen.findByRole("button", { name: "导入队伍" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导出队伍" })).toBeInTheDocument();
     expect(screen.getByText("～ 第一套 ～")).toBeInTheDocument();
