@@ -215,6 +215,11 @@
   object-fit: contain;
 }
 
+.ce-overlay .ce-condition-icon-mlb {
+  right: 14px;
+  bottom: 10px;
+}
+
 .ce-condition-icon-bond {
   left: 2px;
   top: 2px;
