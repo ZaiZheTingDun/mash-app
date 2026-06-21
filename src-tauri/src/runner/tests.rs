@@ -1453,6 +1453,174 @@ fn startup_action_member_id_resolves_after_team_reorder() {
     }
 }
 
+fn runtime_member(
+    member_id: &str,
+    slot_index: usize,
+    servant_id: u32,
+    is_support: bool,
+) -> PartyMemberRuntime {
+    PartyMemberRuntime {
+        member_id: Some(member_id.into()),
+        slot_index,
+        servant_id,
+        is_support,
+    }
+}
+
+#[test]
+fn normal_battle_order_change_keeps_waver_actions_on_waver_member() {
+    const TYPHON: u32 = 441;
+    const MERLIN: u32 = 150;
+    const PHANTASMOON: u32 = 431;
+    const WAVER: u32 = 37;
+
+    let original_members = [
+        Some(runtime_member("slot-typhon", 0, TYPHON, true)),
+        Some(runtime_member("slot-merlin", 1, MERLIN, false)),
+        Some(runtime_member("slot-phantasmoon", 2, PHANTASMOON, false)),
+        Some(runtime_member("slot-waver", 3, WAVER, false)),
+        None,
+        None,
+    ];
+    let mut current_members = original_members.clone();
+    let order_change = Action::Equipment {
+        id: "order_change_waver_merlin".into(),
+        skill: Some("skill_3".into()),
+        target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
+        order_change: Some(crate::OrderChangeSelection {
+            front: Some("servant_2".into()),
+            front_member_id: Some("slot-merlin".into()),
+            front_servant_id: Some(MERLIN),
+            front_is_support: false,
+            back: Some("servant_4".into()),
+            back_member_id: Some("slot-waver".into()),
+            back_servant_id: Some(WAVER),
+            back_is_support: false,
+        }),
+    };
+    let waver_skill_1 = Action::Servant {
+        id: "waver_skill_1".into(),
+        servant: Some("servant_2".into()),
+        servant_member_id: Some("slot-waver".into()),
+        servant_id: Some(WAVER),
+        servant_is_support: false,
+        skill: Some("skill_1".into()),
+        target: Some("servant_1".into()),
+        target_member_id: Some("slot-typhon".into()),
+        target_servant_id: Some(TYPHON),
+        target_is_support: true,
+    };
+    let waver_skill_2 = Action::Servant {
+        id: "waver_skill_2".into(),
+        servant: Some("servant_2".into()),
+        servant_member_id: Some("slot-waver".into()),
+        servant_id: Some(WAVER),
+        servant_is_support: false,
+        skill: Some("skill_2".into()),
+        target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
+    };
+    let waver_skill_3 = Action::Servant {
+        id: "waver_skill_3".into(),
+        servant: Some("servant_2".into()),
+        servant_member_id: Some("slot-waver".into()),
+        servant_id: Some(WAVER),
+        servant_is_support: false,
+        skill: Some("skill_3".into()),
+        target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
+    };
+
+    let resolved_order_change =
+        resolve_available_member_action(&current_members, &original_members, &order_change)
+            .expect("Order Change should be executable");
+    apply_party_member_lineup_change(&mut current_members, &resolved_order_change);
+
+    assert_eq!(
+        party_member_ids(&current_members),
+        [
+            Some(TYPHON),
+            Some(WAVER),
+            Some(PHANTASMOON),
+            Some(MERLIN),
+            None,
+            None
+        ]
+    );
+
+    let resolved_skill_1 =
+        resolve_available_member_action(&current_members, &original_members, &waver_skill_1)
+            .expect("Waver skill 1 should resolve after Order Change");
+    let resolved_skill_2 =
+        resolve_available_member_action(&current_members, &original_members, &waver_skill_2)
+            .expect("Waver skill 2 should resolve after Order Change");
+    let resolved_skill_3 =
+        resolve_available_member_action(&current_members, &original_members, &waver_skill_3)
+            .expect("Waver skill 3 should resolve after Order Change");
+
+    match resolved_skill_1 {
+        Action::Servant {
+            servant, target, ..
+        } => {
+            assert_eq!(servant.as_deref(), Some("servant_2"));
+            assert_eq!(target.as_deref(), Some("servant_1"));
+        }
+        _ => panic!("expected servant action"),
+    }
+    for resolved in [resolved_skill_2, resolved_skill_3] {
+        match resolved {
+            Action::Servant {
+                servant, target, ..
+            } => {
+                assert_eq!(servant.as_deref(), Some("servant_2"));
+                assert_eq!(target, None);
+            }
+            _ => panic!("expected servant action"),
+        }
+    }
+}
+
+#[test]
+fn member_action_does_not_fall_back_to_same_position_when_member_is_backline() {
+    const TYPHON: u32 = 441;
+    const MERLIN: u32 = 150;
+    const PHANTASMOON: u32 = 431;
+    const WAVER: u32 = 37;
+
+    let members = [
+        Some(runtime_member("slot-typhon", 0, TYPHON, true)),
+        Some(runtime_member("slot-merlin", 1, MERLIN, false)),
+        Some(runtime_member("slot-phantasmoon", 2, PHANTASMOON, false)),
+        Some(runtime_member("slot-waver", 3, WAVER, false)),
+        None,
+        None,
+    ];
+    let action = Action::Servant {
+        id: "waver_backline_skill".into(),
+        servant: Some("servant_2".into()),
+        servant_member_id: Some("slot-waver".into()),
+        servant_id: Some(WAVER),
+        servant_is_support: false,
+        skill: Some("skill_1".into()),
+        target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
+    };
+
+    assert!(
+        resolve_available_member_action(&members, &members, &action).is_none(),
+        "Waver is in the back line, so this must not execute as Merlin in servant_2"
+    );
+}
+
 #[test]
 fn auto_order_change_startup_flow_replays_control_after_swap() {
     let auto_order_change = Action::Equipment {

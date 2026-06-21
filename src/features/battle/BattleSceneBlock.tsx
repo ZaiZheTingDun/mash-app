@@ -14,6 +14,7 @@ import {
   deriveMembersAfterPreparationActions,
   memberRefAt,
   partyMembersToServants,
+  resolveMemberRefIndex,
   toPartyMembers,
   type PartyMember,
 } from "../team/partyServants";
@@ -28,8 +29,6 @@ import {
   createId,
   emptyLegacyFields,
   normalizeAttackPriority,
-  orderChangeSummary,
-  servantSlotIndex,
   sourceIndex,
   type AttackDraft,
   type AttackSource,
@@ -119,12 +118,42 @@ function PreparationActionSummary({
   faces: Record<string, string | null>;
 }) {
   const partyServants = partyMembersToServants(partyMembers);
-  const targetIndex = sourceIndex((action.target ?? "") as PrepSource);
+  const targetIndex = frontMemberIndex(
+    partyMembers,
+    action.target,
+    action.type === "servant" ||
+      action.type === "equipment" ||
+      action.type === "commandSpell"
+      ? action.targetMemberId
+      : null,
+    action.type === "servant" ||
+      action.type === "equipment" ||
+      action.type === "commandSpell"
+      ? action.targetServantId
+      : null,
+    action.type === "servant" ||
+      action.type === "equipment" ||
+      action.type === "commandSpell"
+      ? action.targetIsSupport
+      : false
+  );
   const orderChangeSlots =
     action.type === "equipment" && action.orderChange
       ? {
-        front: servantSlotIndex(action.orderChange.front),
-        back: servantSlotIndex(action.orderChange.back),
+        front: memberIndex(
+          partyMembers,
+          action.orderChange.front,
+          action.orderChange.frontMemberId,
+          action.orderChange.frontServantId,
+          action.orderChange.frontIsSupport
+        ),
+        back: memberIndex(
+          partyMembers,
+          action.orderChange.back,
+          action.orderChange.backMemberId,
+          action.orderChange.backServantId,
+          action.orderChange.backIsSupport
+        ),
       }
       : null;
   let sourceFace: React.ReactNode;
@@ -132,18 +161,27 @@ function PreparationActionSummary({
   let actionText: string;
 
   if (action.type === "servant") {
-    const src = sourceIndex((action.servant ?? "servant_1") as PrepSource) ?? 0;
-    const member = partyMembers[src] ?? { servant: null, isSupport: false };
+    const src = frontMemberIndex(
+      partyMembers,
+      action.servant,
+      action.servantMemberId,
+      action.servantId,
+      action.servantIsSupport
+    );
+    const member =
+      src == null
+        ? { servant: null, isSupport: false }
+        : partyMembers[src] ?? { servant: null, isSupport: false };
     const servant = member.servant;
     sourceFace = (
       <ServantInlineFace
         servant={servant}
-        index={src}
+        index={src ?? 0}
         faceSrc={servant ? faces[servant.variantKey] : null}
         isSupport={member.isSupport}
       />
     );
-    sourceText = servantLabel(src, servant);
+    sourceText = src == null ? "从者" : servantLabel(src, servant);
     actionText = `释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`;
   } else {
     const kind = action.type === "equipment" ? "equipment" : "commandSpell";
@@ -160,7 +198,7 @@ function PreparationActionSummary({
   return (
     <span
       className="battle-action-summary"
-      aria-label={actionSummary(action, partyServants)}
+      aria-label={actionSummary(action, partyMembers)}
     >
       {sourceFace}
       <Text size="2" weight="medium" className="battle-action-name">
@@ -219,6 +257,27 @@ function PreparationActionSummary({
       )}
     </span>
   );
+}
+
+function memberIndex(
+  members: PartyMember[],
+  fallbackValue: string | null | undefined,
+  memberId: string | null | undefined,
+  servantId: number | null | undefined,
+  isSupport: boolean | null | undefined
+): number | null {
+  return resolveMemberRefIndex(members, fallbackValue, memberId, servantId, isSupport);
+}
+
+function frontMemberIndex(
+  members: PartyMember[],
+  fallbackValue: string | null | undefined,
+  memberId: string | null | undefined,
+  servantId: number | null | undefined,
+  isSupport: boolean | null | undefined
+): number | null {
+  const index = memberIndex(members, fallbackValue, memberId, servantId, isSupport);
+  return index != null && index >= 0 && index < 3 ? index : null;
 }
 
 function AttackActionFace({
@@ -294,30 +353,73 @@ function DraftCancelButton({
 
 function actionSummary(
   action: PreparationAction,
-  partyServants: (Servant | null)[]
+  partyMembers: PartyMember[]
 ): string {
+  const partyServants = partyMembersToServants(partyMembers);
   if (action.type === "servant") {
-    const src = sourceIndex((action.servant ?? "servant_1") as PrepSource) ?? 0;
-    const target = sourceIndex((action.target ?? "") as PrepSource);
+    const src = frontMemberIndex(
+      partyMembers,
+      action.servant,
+      action.servantMemberId,
+      action.servantId,
+      action.servantIsSupport
+    );
+    const target = frontMemberIndex(
+      partyMembers,
+      action.target,
+      action.targetMemberId,
+      action.targetServantId,
+      action.targetIsSupport
+    );
+    const sourceLabel = src == null ? "从者" : servantLabel(src, partyServants[src] ?? null);
     return target == null
-      ? `${servantLabel(src, partyServants[src] ?? null)} 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`
-      : `${servantLabel(src, partyServants[src] ?? null)} 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"} to ${servantLabel(target, partyServants[target] ?? null)}`;
+      ? `${sourceLabel} 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`
+      : `${sourceLabel} 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"} to ${servantLabel(target, partyServants[target] ?? null)}`;
   }
 
   if (action.type === "equipment") {
     if (action.orderChange) {
-      const summary = orderChangeSummary(action.orderChange, partyServants);
+      const front = memberIndex(
+        partyMembers,
+        action.orderChange.front,
+        action.orderChange.frontMemberId,
+        action.orderChange.frontServantId,
+        action.orderChange.frontIsSupport
+      );
+      const back = memberIndex(
+        partyMembers,
+        action.orderChange.back,
+        action.orderChange.backMemberId,
+        action.orderChange.backServantId,
+        action.orderChange.backIsSupport
+      );
+      const summary =
+        front == null || back == null
+          ? null
+          : `${servantLabel(front, partyServants[front] ?? null)} ↔ ${servantLabel(back, partyServants[back] ?? null)}`;
       return summary
         ? `御主礼装 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"} Order Change ${summary}`
         : `御主礼装 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"} Order Change`;
     }
-    const target = sourceIndex((action.target ?? "") as PrepSource);
+    const target = frontMemberIndex(
+      partyMembers,
+      action.target,
+      action.targetMemberId,
+      action.targetServantId,
+      action.targetIsSupport
+    );
     return target == null
       ? `御主礼装 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`
       : `御主礼装 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"} to ${servantLabel(target, partyServants[target] ?? null)}`;
   }
 
-  const target = sourceIndex((action.target ?? "") as PrepSource);
+  const target = frontMemberIndex(
+    partyMembers,
+    action.target,
+    action.targetMemberId,
+    action.targetServantId,
+    action.targetIsSupport
+  );
   return target == null
     ? `令咒 ${COMMAND_SPELL_LABELS[action.spell ?? ""] ?? "行动"}`
     : `令咒 ${COMMAND_SPELL_LABELS[action.spell ?? ""] ?? "行动"} to ${servantLabel(target, partyServants[target] ?? null)}`;

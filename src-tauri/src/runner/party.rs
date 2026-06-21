@@ -534,6 +534,16 @@ pub(crate) fn action_frontline_available(ids: &[Option<u32>; 6], action: &Action
     }
 }
 
+pub(crate) fn resolve_available_member_action(
+    members: &[Option<PartyMemberRuntime>; 6],
+    original_members: &[Option<PartyMemberRuntime>; 6],
+    action: &Action,
+) -> Option<Action> {
+    let resolved = resolve_action_to_current_member_positions(members, original_members, action)?;
+    let ids = party_member_ids(members);
+    action_frontline_available(&ids, &resolved).then_some(resolved)
+}
+
 #[cfg(test)]
 pub(crate) fn current_slot_for_original_selection(
     ids: &[Option<u32>; 6],
@@ -1000,6 +1010,7 @@ pub(crate) fn normal_current_party_members_from(
     current_turn_index: usize,
     executed_turn_key: Option<(usize, usize)>,
 ) -> [Option<PartyMemberRuntime>; 6] {
+    let original_members = members.clone();
     let mut np_use_counts: HashMap<PartyMemberRuntime, u32> = HashMap::new();
     for (scene_index, scene) in scenes.iter().enumerate() {
         if scene_index > current_scene_index {
@@ -1020,9 +1031,10 @@ pub(crate) fn normal_current_party_members_from(
 
             if prep_has_executed {
                 for action in turn_preparation_actions(turn) {
-                    let ids = party_member_ids(&members);
-                    if action_frontline_available(&ids, action) {
-                        apply_party_member_lineup_change(&mut members, action);
+                    if let Some(resolved) =
+                        resolve_available_member_action(&members, &original_members, action)
+                    {
+                        apply_party_member_lineup_change(&mut members, &resolved);
                     }
                 }
             }
@@ -1032,11 +1044,12 @@ pub(crate) fn normal_current_party_members_from(
                     apply_attack_card_member_lineup_change(&mut members, card, &mut np_use_counts);
                 }
                 for action in turn_preparation_actions(turn) {
-                    let ids = party_member_ids(&members);
-                    if action_frontline_available(&ids, action) {
+                    if let Some(resolved) =
+                        resolve_available_member_action(&members, &original_members, action)
+                    {
                         apply_party_member_lineup_change_at(
                             &mut members,
-                            action,
+                            &resolved,
                             ChangeOrderTiming::EndOfTurn,
                         );
                     }
@@ -1133,6 +1146,42 @@ impl Runner {
         [ids[0], ids[1], ids[2]]
     }
 
+    pub(crate) fn resolve_normal_turn_for_current_members(&self, turn: &BattleTurn) -> BattleTurn {
+        let original_members = self.build_full_party_members();
+        let mut members = normal_current_party_members_from(
+            original_members.clone(),
+            &self.scenes,
+            self.battle.current_scene_index,
+            self.battle.current_turn_index,
+            self.battle.executed_turn_key,
+        );
+        let mut preparation_actions = Vec::new();
+
+        for action in turn_preparation_actions(turn) {
+            let Some(resolved) =
+                resolve_available_member_action(&members, &original_members, action)
+            else {
+                self.emit(
+                    "Battle",
+                    &format!("跳过行动：{} 不在前排", action_frontline_label(action)),
+                );
+                continue;
+            };
+            apply_party_member_lineup_change(&mut members, &resolved);
+            preparation_actions.push(resolved);
+        }
+
+        BattleTurn {
+            id: turn.id.clone(),
+            preparation_actions,
+            servant_actions: Vec::new(),
+            equipment_actions: Vec::new(),
+            command_spell_actions: Vec::new(),
+            enemy_target: turn.enemy_target.clone(),
+            attack_priority: turn.attack_priority.clone(),
+        }
+    }
+
     pub(crate) fn grand_servant_runtime_configs(&self) -> Vec<GrandServantRuntimeConfig> {
         let full = self.build_full_party_members();
         let mut seen = HashSet::new();
@@ -1187,11 +1236,13 @@ impl Runner {
         &self,
         actions: impl Iterator<Item = &'a Action>,
     ) -> [Option<u32>; 3] {
-        let mut members = self.build_full_party_members();
+        let original_members = self.build_full_party_members();
+        let mut members = original_members.clone();
         for action in actions {
-            let ids = party_member_ids(&members);
-            if action_frontline_available(&ids, action) {
-                apply_party_member_lineup_change(&mut members, action);
+            if let Some(resolved) =
+                resolve_available_member_action(&members, &original_members, action)
+            {
+                apply_party_member_lineup_change(&mut members, &resolved);
             }
         }
         let ids = party_member_ids(&members);
@@ -1203,26 +1254,29 @@ impl Runner {
         already_executed: impl Iterator<Item = Action>,
         pending: impl Iterator<Item = Action>,
     ) -> (Vec<Action>, [Option<u32>; 3]) {
-        let mut members = self.build_full_party_members();
+        let original_members = self.build_full_party_members();
+        let mut members = original_members.clone();
         for action in already_executed {
-            let ids = party_member_ids(&members);
-            if action_frontline_available(&ids, &action) {
-                apply_party_member_lineup_change(&mut members, &action);
+            if let Some(resolved) =
+                resolve_available_member_action(&members, &original_members, &action)
+            {
+                apply_party_member_lineup_change(&mut members, &resolved);
             }
         }
 
         let mut actions = Vec::new();
         for action in pending {
-            let ids = party_member_ids(&members);
-            if !action_frontline_available(&ids, &action) {
+            let Some(resolved) =
+                resolve_available_member_action(&members, &original_members, &action)
+            else {
                 self.emit(
                     "Battle",
                     &format!("跳过行动：{} 不在前排", action_frontline_label(&action)),
                 );
                 continue;
-            }
-            apply_party_member_lineup_change(&mut members, &action);
-            actions.push(action);
+            };
+            apply_party_member_lineup_change(&mut members, &resolved);
+            actions.push(resolved);
         }
         let ids = party_member_ids(&members);
         (actions, [ids[0], ids[1], ids[2]])

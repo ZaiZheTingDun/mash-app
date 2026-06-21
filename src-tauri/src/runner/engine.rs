@@ -278,7 +278,8 @@ impl Runner {
                             scene_str,
                         ),
                     );
-                    self.execute_turn_skills(&turn_cfg);
+                    let resolved_turn = self.resolve_normal_turn_for_current_members(&turn_cfg);
+                    self.execute_turn_skills(&resolved_turn);
                     self.battle.executed_turn_key = Some(turn_key);
                     self.battle.scene_config_used = true;
                 } else {

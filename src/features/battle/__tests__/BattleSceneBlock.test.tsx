@@ -5,6 +5,7 @@ import { renderWithTheme } from "../../../test/renderWithTheme";
 import { BattleSceneBlock } from "../BattleSceneBlock";
 import type { BattleTurn } from "../../../types/command";
 import type { Servant } from "../../../types/servant";
+import type { PartyMember } from "../../team/partyServants";
 
 function makeServant(id: number, name_cn: string): Servant {
   return {
@@ -40,6 +41,17 @@ const PARTY: (Servant | null)[] = [
 ];
 const ARASH = makeServant(16, "阿拉什");
 const HABETROT = makeServant(315, "哈贝特洛特");
+const TYPHON = makeServant(441, "堤丰·厄斐墨洛斯");
+const MERLIN = makeServant(150, "梅林");
+const PHANTASMOON = makeServant(431, "Phantasmoon");
+const WAVER = makeServant(37, "诸葛孔明〔埃尔梅罗Ⅱ世〕");
+
+const TYPHON_WAVER_MEMBERS: PartyMember[] = [
+  { memberId: "slot-typhon", servant: TYPHON, isSupport: true },
+  { memberId: "slot-merlin", servant: MERLIN, isSupport: false },
+  { memberId: "slot-phantasmoon", servant: PHANTASMOON, isSupport: false },
+  { memberId: "slot-waver", servant: WAVER, isSupport: false },
+];
 
 describe("BattleSceneBlock staged action editor", () => {
   it("shows enemy target selection as unset by default", () => {
@@ -528,6 +540,108 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(children[2]).toHaveClass("battle-action-to");
     expect(children[3]).toHaveClass("battle-inline-face");
     expect(children[4]).toHaveTextContent("乙");
+  });
+
+  it("does not display a back-line member action as the front support fallback", () => {
+    const { container } = renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          preparationActions: [
+            {
+              type: "servant",
+              id: "sa_waver_backline",
+              servant: "servant_1",
+              servantMemberId: "slot-waver",
+              servantId: WAVER.id,
+              servantIsSupport: false,
+              skill: "skill_1",
+              target: null,
+            },
+          ],
+        })}
+        partyServants={TYPHON_WAVER_MEMBERS.map((member) => member.servant)}
+        partyMembers={TYPHON_WAVER_MEMBERS}
+        onChange={vi.fn()}
+      />
+    );
+
+    const summary = container.querySelector(".battle-action-summary");
+    expect(summary).toHaveTextContent("从者 释放 技能 1");
+    expect(summary).not.toHaveTextContent("堤丰·厄斐墨洛斯");
+    expect(summary).not.toHaveTextContent("诸葛孔明〔埃尔梅罗Ⅱ世〕");
+    expect(summary).toHaveAccessibleName("从者 释放 技能 1");
+  });
+
+  it("displays Waver member actions after Order Change brings him forward", () => {
+    const { container } = renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          preparationActions: [
+            {
+              type: "equipment",
+              id: "eq_order_change",
+              skill: "skill_3",
+              target: null,
+              orderChange: {
+                front: "servant_2",
+                frontMemberId: "slot-merlin",
+                frontServantId: MERLIN.id,
+                frontIsSupport: false,
+                back: "servant_4",
+                backMemberId: "slot-waver",
+                backServantId: WAVER.id,
+                backIsSupport: false,
+              },
+            },
+            {
+              type: "servant",
+              id: "sa_waver_1",
+              servant: "servant_1",
+              servantMemberId: "slot-waver",
+              servantId: WAVER.id,
+              servantIsSupport: false,
+              skill: "skill_1",
+              target: "servant_1",
+              targetMemberId: "slot-typhon",
+              targetServantId: TYPHON.id,
+              targetIsSupport: true,
+            },
+            {
+              type: "servant",
+              id: "sa_waver_2",
+              servant: "servant_1",
+              servantMemberId: "slot-waver",
+              servantId: WAVER.id,
+              servantIsSupport: false,
+              skill: "skill_2",
+              target: null,
+            },
+            {
+              type: "servant",
+              id: "sa_waver_3",
+              servant: "servant_1",
+              servantMemberId: "slot-waver",
+              servantId: WAVER.id,
+              servantIsSupport: false,
+              skill: "skill_3",
+              target: null,
+            },
+          ],
+        })}
+        partyServants={TYPHON_WAVER_MEMBERS.map((member) => member.servant)}
+        partyMembers={TYPHON_WAVER_MEMBERS}
+        onChange={vi.fn()}
+      />
+    );
+
+    const summaries = Array.from(container.querySelectorAll(".battle-action-summary"));
+    expect(summaries[1]).toHaveTextContent("诸葛孔明〔埃尔梅罗Ⅱ世〕 释放 技能 1");
+    expect(summaries[1]).toHaveTextContent("堤丰·厄斐墨洛斯");
+    expect(summaries[1]).toHaveAccessibleName(
+      "诸葛孔明〔埃尔梅罗Ⅱ世〕 释放 技能 1 to 堤丰·厄斐墨洛斯"
+    );
+    expect(summaries[2]).toHaveTextContent("诸葛孔明〔埃尔梅罗Ⅱ世〕 释放 技能 2");
+    expect(summaries[3]).toHaveTextContent("诸葛孔明〔埃尔梅罗Ⅱ世〕 释放 技能 3");
   });
 
   it("renders Order Change actions with both servant faces", () => {
