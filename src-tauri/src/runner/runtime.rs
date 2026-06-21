@@ -27,6 +27,16 @@ impl Runner {
         self.emit_with_level(screen, message, LogLevel::Debug);
     }
 
+    /// Local-only diagnostics for details that are useful during
+    /// development but too noisy for packaged builds.
+    pub(crate) fn emit_local_debug(&self, screen: &str, message: &str) {
+        #[cfg(debug_assertions)]
+        self.emit_with_level(screen, message, LogLevel::LocalDebug);
+
+        #[cfg(not(debug_assertions))]
+        let _ = (screen, message);
+    }
+
     pub(crate) fn emit_with_level(&self, screen: &str, message: &str, level: LogLevel) {
         self.emit_with_level_and_attack(screen, message, level, None);
     }

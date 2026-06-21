@@ -178,6 +178,9 @@ pub struct RunConfig {
     /// settings when automation starts.
     #[serde(default = "default_support_ce_threshold")]
     pub support_ce_threshold: f64,
+    /// Minimum full-artwork score required when a cropped CE variant is selected.
+    #[serde(default = "default_support_ce_full_gate_threshold")]
+    pub support_ce_full_gate_threshold: f64,
     /// Runtime threshold for optional support CE MLB icon verification.
     #[serde(default = "default_support_icon_threshold")]
     pub support_mlb_icon_threshold: f64,
@@ -240,6 +243,10 @@ fn default_support_ce_threshold() -> f64 {
     crate::commands::settings::SUPPORT_CE_THRESHOLD_DEFAULT
 }
 
+fn default_support_ce_full_gate_threshold() -> f64 {
+    crate::commands::settings::SUPPORT_CE_FULL_GATE_THRESHOLD_DEFAULT
+}
+
 fn default_support_icon_threshold() -> f64 {
     crate::commands::settings::SUPPORT_ICON_THRESHOLD_DEFAULT
 }
@@ -293,13 +300,15 @@ pub enum RunnerState {
 /// transitions through. `Debug` is reserved for technical diagnostics
 /// the operator usually doesn't need to see (e.g. raw CV anchor
 /// coordinates, computed swipe distances) but that are valuable when
-/// triaging a bug report. The frontend filters out `Debug` entries by
-/// default and exposes a toggle for power users.
+/// triaging a bug report. `LocalDebug` is for noisier diagnostics that
+/// should only surface in local development builds. The frontend filters
+/// out diagnostic entries by default and exposes a toggle for power users.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LogLevel {
     Info,
     Debug,
+    LocalDebug,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

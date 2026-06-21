@@ -626,6 +626,7 @@ impl SidecarClient {
             "threshold": threshold,
             "mlbRequired": options.mlb_required,
             "grandBondCeMode": options.grand_bond_ce_mode,
+            "fullGateThreshold": options.full_gate_threshold,
             "mlbIconThreshold": options.mlb_icon_threshold,
             "bondIconThreshold": options.bond_icon_threshold,
         });

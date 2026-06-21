@@ -38,6 +38,8 @@ pub struct SupportCeVerificationOptions {
     pub mlb_required: bool,
     #[serde(default)]
     pub grand_bond_ce_mode: Option<String>,
+    #[serde(default = "default_support_ce_full_gate_threshold")]
+    pub full_gate_threshold: f64,
     #[serde(default = "default_support_icon_threshold")]
     pub mlb_icon_threshold: f64,
     #[serde(default = "default_support_icon_threshold")]
@@ -48,11 +50,16 @@ fn default_support_icon_threshold() -> f64 {
     crate::commands::settings::SUPPORT_ICON_THRESHOLD_DEFAULT
 }
 
+fn default_support_ce_full_gate_threshold() -> f64 {
+    crate::commands::settings::SUPPORT_CE_FULL_GATE_THRESHOLD_DEFAULT
+}
+
 impl Default for SupportCeVerificationOptions {
     fn default() -> Self {
         Self {
             mlb_required: false,
             grand_bond_ce_mode: None,
+            full_gate_threshold: default_support_ce_full_gate_threshold(),
             mlb_icon_threshold: default_support_icon_threshold(),
             bond_icon_threshold: default_support_icon_threshold(),
         }
@@ -101,12 +108,22 @@ pub struct SupportCeVerificationResult {
     /// `passed` verdict for bond rows scoring 0.65–0.70.
     #[serde(default)]
     pub threshold: f64,
+    #[serde(default)]
+    pub full_gate_score: f64,
+    #[serde(default = "default_support_ce_full_gate_threshold")]
+    pub full_gate_threshold: f64,
+    #[serde(default = "default_true")]
+    pub full_gate_passed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(default)]
     pub icon_checks: Vec<SupportCeIconCheck>,
     #[serde(default)]
     pub artwork_checks: Vec<SupportCeArtworkCheck>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

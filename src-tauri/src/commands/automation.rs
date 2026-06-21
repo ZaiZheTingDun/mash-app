@@ -195,6 +195,7 @@ pub(crate) fn start_automation(
     let server = *server_state.lock().unwrap();
     let recognition_settings = *recognition_settings_state.lock().unwrap();
     config.support_ce_threshold = recognition_settings.support_ce_threshold;
+    config.support_ce_full_gate_threshold = recognition_settings.support_ce_full_gate_threshold;
     config.support_mlb_icon_threshold = recognition_settings.support_mlb_icon_threshold;
     config.support_bond_icon_threshold = recognition_settings.support_bond_icon_threshold;
 

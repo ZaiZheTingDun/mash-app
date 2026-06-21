@@ -241,14 +241,17 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "get_recognition_settings":
         return {
           supportCeThreshold: 0.7,
+          supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
           supportBondIconThreshold: 0.7,
         };
       case "set_support_ce_threshold":
+      case "set_support_ce_full_gate_threshold":
       case "set_support_mlb_icon_threshold":
       case "set_support_bond_icon_threshold":
         return {
           supportCeThreshold: 0.7,
+          supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
           supportBondIconThreshold: 0.7,
         };

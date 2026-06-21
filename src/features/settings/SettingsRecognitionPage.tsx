@@ -5,15 +5,20 @@ import { invoke } from "../../tauri";
 const SUPPORT_THRESHOLD_DEFAULT = 0.7;
 const SUPPORT_THRESHOLD_MIN = 0.6;
 const SUPPORT_THRESHOLD_MAX = 0.85;
+const SUPPORT_FULL_GATE_THRESHOLD_DEFAULT = 0.6;
+const SUPPORT_FULL_GATE_THRESHOLD_MIN = 0.4;
+const SUPPORT_FULL_GATE_THRESHOLD_MAX = 0.7;
 const SUPPORT_THRESHOLD_STEP = 0.01;
 
 type ThresholdKey =
   | "supportCeThreshold"
+  | "supportCeFullGateThreshold"
   | "supportMlbIconThreshold"
   | "supportBondIconThreshold";
 
 interface RecognitionSettings {
   supportCeThreshold: number;
+  supportCeFullGateThreshold: number;
   supportMlbIconThreshold: number;
   supportBondIconThreshold: number;
 }
@@ -24,60 +29,104 @@ interface ThresholdConfig {
   description: string;
   ariaLabel: string;
   command: string;
+  defaultValue: number;
+  min: number;
+  max: number;
 }
 
 const THRESHOLD_CONFIGS: ThresholdConfig[] = [
   {
     key: "supportCeThreshold",
     label: "助战礼装匹配阈值",
-    description: "较低更容易命中，较高更不容易误选；默认 0.70。",
+    description: "低数值更容易命中，高数值更不容易误选；默认 0.70",
     ariaLabel: "助战礼装匹配阈值数值",
     command: "set_support_ce_threshold",
+    defaultValue: SUPPORT_THRESHOLD_DEFAULT,
+    min: SUPPORT_THRESHOLD_MIN,
+    max: SUPPORT_THRESHOLD_MAX,
+  },
+  {
+    key: "supportCeFullGateThreshold",
+    label: "完整匹配兜底阈值",
+    description:
+      "中间或右上匹配命中时，完整匹配也必须至少达到该值；默认 0.60",
+    ariaLabel: "完整匹配兜底阈值数值",
+    command: "set_support_ce_full_gate_threshold",
+    defaultValue: SUPPORT_FULL_GATE_THRESHOLD_DEFAULT,
+    min: SUPPORT_FULL_GATE_THRESHOLD_MIN,
+    max: SUPPORT_FULL_GATE_THRESHOLD_MAX,
   },
   {
     key: "supportMlbIconThreshold",
     label: "满破图标匹配阈值",
-    description: "用于校验助战礼装右侧满破图标；默认 0.70。",
+    description: "用于匹配助战礼装满破图标；默认 0.70",
     ariaLabel: "满破图标匹配阈值数值",
     command: "set_support_mlb_icon_threshold",
+    defaultValue: SUPPORT_THRESHOLD_DEFAULT,
+    min: SUPPORT_THRESHOLD_MIN,
+    max: SUPPORT_THRESHOLD_MAX,
   },
   {
     key: "supportBondIconThreshold",
     label: "牵绊图标匹配阈值",
-    description: "用于校验冠位礼装牵绊 / 冠位连接牵绊图标；默认 0.70。",
+    description: "用于匹配冠位礼装牵绊 / 冠位连接牵绊图标；默认 0.70",
     ariaLabel: "牵绊图标匹配阈值数值",
     command: "set_support_bond_icon_threshold",
+    defaultValue: SUPPORT_THRESHOLD_DEFAULT,
+    min: SUPPORT_THRESHOLD_MIN,
+    max: SUPPORT_THRESHOLD_MAX,
   },
 ];
 
 const DEFAULT_SETTINGS: RecognitionSettings = {
   supportCeThreshold: SUPPORT_THRESHOLD_DEFAULT,
+  supportCeFullGateThreshold: SUPPORT_FULL_GATE_THRESHOLD_DEFAULT,
   supportMlbIconThreshold: SUPPORT_THRESHOLD_DEFAULT,
   supportBondIconThreshold: SUPPORT_THRESHOLD_DEFAULT,
 };
 
-function clampThreshold(value: number) {
-  if (!Number.isFinite(value)) return SUPPORT_THRESHOLD_DEFAULT;
-  return Math.min(SUPPORT_THRESHOLD_MAX, Math.max(SUPPORT_THRESHOLD_MIN, value));
+function clampThreshold(value: number, config: ThresholdConfig) {
+  if (!Number.isFinite(value)) return config.defaultValue;
+  return Math.min(config.max, Math.max(config.min, value));
 }
 
 function normalizeSettings(settings: RecognitionSettings): RecognitionSettings {
   return {
-    supportCeThreshold: clampThreshold(settings.supportCeThreshold),
-    supportMlbIconThreshold: clampThreshold(settings.supportMlbIconThreshold),
-    supportBondIconThreshold: clampThreshold(settings.supportBondIconThreshold),
+    supportCeThreshold: clampThreshold(settings.supportCeThreshold, THRESHOLD_CONFIGS[0]),
+    supportCeFullGateThreshold: clampThreshold(
+      settings.supportCeFullGateThreshold,
+      THRESHOLD_CONFIGS[1]
+    ),
+    supportMlbIconThreshold: clampThreshold(
+      settings.supportMlbIconThreshold,
+      THRESHOLD_CONFIGS[2]
+    ),
+    supportBondIconThreshold: clampThreshold(
+      settings.supportBondIconThreshold,
+      THRESHOLD_CONFIGS[3]
+    ),
   };
 }
 
-function formatThreshold(value: number) {
-  return clampThreshold(value).toFixed(2);
+function formatThreshold(value: number, config: ThresholdConfig) {
+  return clampThreshold(value, config).toFixed(2);
 }
 
 function settingsToDraft(settings: RecognitionSettings): Record<ThresholdKey, string> {
   return {
-    supportCeThreshold: formatThreshold(settings.supportCeThreshold),
-    supportMlbIconThreshold: formatThreshold(settings.supportMlbIconThreshold),
-    supportBondIconThreshold: formatThreshold(settings.supportBondIconThreshold),
+    supportCeThreshold: formatThreshold(settings.supportCeThreshold, THRESHOLD_CONFIGS[0]),
+    supportCeFullGateThreshold: formatThreshold(
+      settings.supportCeFullGateThreshold,
+      THRESHOLD_CONFIGS[1]
+    ),
+    supportMlbIconThreshold: formatThreshold(
+      settings.supportMlbIconThreshold,
+      THRESHOLD_CONFIGS[2]
+    ),
+    supportBondIconThreshold: formatThreshold(
+      settings.supportBondIconThreshold,
+      THRESHOLD_CONFIGS[3]
+    ),
   };
 }
 
@@ -133,7 +182,7 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
       try {
         const settings = normalizeSettings(
           await invoke<RecognitionSettings>(config.command, {
-            value: clampThreshold(value),
+            value: clampThreshold(value, config),
           })
         );
         setSaved(settings);
@@ -150,23 +199,17 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
 
   return (
     <Flex direction="column" gap="4">
-      <Box>
-        <Text size="2" color="gray" className="setup-subtitle">
-          调整助战列表中礼装与礼装图标匹配的通过阈值
-        </Text>
-      </Box>
-
       <Box className="settings-section-panel">
         <Flex direction="column" gap="5" className="recognition-setting-block">
           {THRESHOLD_CONFIGS.map((config) => {
             const draftNumber = draftNumbers[config.key];
             const draftValid =
               Number.isFinite(draftNumber) &&
-              draftNumber >= SUPPORT_THRESHOLD_MIN &&
-              draftNumber <= SUPPORT_THRESHOLD_MAX;
+              draftNumber >= config.min &&
+              draftNumber <= config.max;
             const dirty =
               draftValid &&
-              formatThreshold(draftNumber) !== formatThreshold(saved[config.key]);
+              formatThreshold(draftNumber, config) !== formatThreshold(saved[config.key], config);
             const saving = savingKey === config.key;
 
             return (
@@ -183,15 +226,15 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
                 <Flex align="center" gap="3" className="recognition-threshold-row">
                   <input
                     type="range"
-                    min={SUPPORT_THRESHOLD_MIN}
-                    max={SUPPORT_THRESHOLD_MAX}
+                    min={config.min}
+                    max={config.max}
                     step={SUPPORT_THRESHOLD_STEP}
                     value={draftValid ? draftNumber : saved[config.key]}
                     onChange={(event) => {
                       const value = Number.parseFloat(event.currentTarget.value);
                       setDraft((current) => ({
                         ...current,
-                        [config.key]: formatThreshold(value),
+                        [config.key]: formatThreshold(value, config),
                       }));
                       setSavedMessageKey(null);
                     }}
@@ -201,8 +244,8 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
                   />
                   <TextField.Root
                     type="number"
-                    min={SUPPORT_THRESHOLD_MIN}
-                    max={SUPPORT_THRESHOLD_MAX}
+                    min={config.min}
+                    max={config.max}
                     step={SUPPORT_THRESHOLD_STEP}
                     value={draft[config.key]}
                     onChange={(event) => {
@@ -221,7 +264,7 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
 
                 <Flex align="center" justify="between" gap="3" wrap="wrap">
                   <Text size="1" color={draftValid ? "gray" : "red"}>
-                    允许范围 0.60 到 0.85
+                    允许范围 {config.min.toFixed(2)} 到 {config.max.toFixed(2)}
                   </Text>
                   <Flex align="center" gap="2">
                     {error && savingKey == null && (
@@ -241,10 +284,10 @@ export function SettingsRecognitionPage({ active }: { active: boolean }) {
                       disabled={
                         loading ||
                         savingKey != null ||
-                        formatThreshold(saved[config.key]) ===
-                          formatThreshold(SUPPORT_THRESHOLD_DEFAULT)
+                        formatThreshold(saved[config.key], config) ===
+                          formatThreshold(config.defaultValue, config)
                       }
-                      onClick={() => void saveThreshold(config, SUPPORT_THRESHOLD_DEFAULT)}
+                      onClick={() => void saveThreshold(config, config.defaultValue)}
                     >
                       恢复默认
                     </Button>

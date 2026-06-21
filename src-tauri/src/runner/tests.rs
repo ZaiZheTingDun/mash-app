@@ -315,6 +315,10 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
         crate::commands::settings::SUPPORT_CE_THRESHOLD_DEFAULT
     );
     assert_eq!(
+        cfg.support_ce_full_gate_threshold,
+        crate::commands::settings::SUPPORT_CE_FULL_GATE_THRESHOLD_DEFAULT
+    );
+    assert_eq!(
         cfg.support_mlb_icon_threshold,
         crate::commands::settings::SUPPORT_ICON_THRESHOLD_DEFAULT
     );
@@ -353,6 +357,7 @@ fn run_config_round_trips_support_craft_essence_id() {
     payload["supportGrandMode"] = serde_json::json!(true);
     payload["supportGrandCraftEssenceIds"] = serde_json::json!([1001, null, 1003]);
     payload["supportCraftEssenceMlbRequired"] = serde_json::json!(false);
+    payload["supportCeFullGateThreshold"] = serde_json::json!(0.55);
     payload["supportMlbIconThreshold"] = serde_json::json!(0.76);
     payload["supportBondIconThreshold"] = serde_json::json!(0.78);
     payload["supportGrandCraftEssenceMlbRequired"] = serde_json::json!([true, false, true]);
@@ -364,6 +369,7 @@ fn run_config_round_trips_support_craft_essence_id() {
     let cfg: RunConfig = serde_json::from_value(payload).unwrap();
     assert_eq!(cfg.support_craft_essence_id, Some(1485));
     assert_eq!(cfg.support_craft_essence_mlb_required, false);
+    assert_eq!(cfg.support_ce_full_gate_threshold, 0.55);
     assert_eq!(cfg.support_mlb_icon_threshold, 0.76);
     assert_eq!(cfg.support_bond_icon_threshold, 0.78);
     assert_eq!(cfg.support_slot_index, Some(5));

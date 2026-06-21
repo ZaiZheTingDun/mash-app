@@ -3922,6 +3922,7 @@ def _verify_support_ce(
     threshold: float,
     mlb_required: bool = False,
     grand_bond_ce_mode: str | None = None,
+    full_gate_threshold: float = CE_OCCLUSION_SAFE_MIN_FULL_SCORE,
     mlb_icon_threshold: float = CE_DECORATION_ICON_THRESHOLD,
     bond_icon_threshold: float = CE_DECORATION_ICON_THRESHOLD,
 ) -> dict:
@@ -4095,6 +4096,8 @@ def _verify_support_ce(
     icon_checks: list[dict] = []
     effective_threshold = best_threshold
     full_gate_passed = True
+    full_gate_score = score
+    effective_full_gate_threshold = float(full_gate_threshold)
     if selected_check is not None and selected_check.get("variant") != "full":
         selected_region_kind = selected_check.get("regionKind")
         selected_full_score = next(
@@ -4106,7 +4109,8 @@ def _verify_support_ce(
             ),
             0.0,
         )
-        full_gate_passed = selected_full_score >= CE_OCCLUSION_SAFE_MIN_FULL_SCORE
+        full_gate_score = selected_full_score
+        full_gate_passed = selected_full_score >= effective_full_gate_threshold
     ce_passed = score >= effective_threshold and full_gate_passed
 
     if mlb_required:
@@ -4149,6 +4153,9 @@ def _verify_support_ce(
         "score": score,
         "passed": passed,
         "threshold": effective_threshold,
+        "fullGateScore": full_gate_score,
+        "fullGateThreshold": effective_full_gate_threshold,
+        "fullGatePassed": full_gate_passed,
         "iconChecks": icon_checks,
         "artworkChecks": artwork_checks,
     }
@@ -4654,6 +4661,7 @@ def main() -> None:
                     float(cmd.get("threshold", 0.7)),
                     bool(cmd.get("mlbRequired", False)),
                     cmd.get("grandBondCeMode"),
+                    float(cmd.get("fullGateThreshold", CE_OCCLUSION_SAFE_MIN_FULL_SCORE)),
                     float(cmd.get("mlbIconThreshold", CE_DECORATION_ICON_THRESHOLD)),
                     float(cmd.get("bondIconThreshold", CE_DECORATION_ICON_THRESHOLD)),
                 ),

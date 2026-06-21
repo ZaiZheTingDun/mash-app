@@ -86,6 +86,7 @@ const craftEssences: CraftEssence[] = [
 let useBluestack = false;
 let server: Server = "JP";
 let supportCeThreshold = 0.7;
+let supportCeFullGateThreshold = 0.6;
 let supportMlbIconThreshold = 0.7;
 let supportBondIconThreshold = 0.7;
 let nextProjectNumber = 2;
@@ -342,6 +343,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "get_recognition_settings":
       return {
         supportCeThreshold,
+        supportCeFullGateThreshold,
         supportMlbIconThreshold,
         supportBondIconThreshold,
       } as T;
@@ -352,6 +354,18 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
           : supportCeThreshold;
       return {
         supportCeThreshold,
+        supportCeFullGateThreshold,
+        supportMlbIconThreshold,
+        supportBondIconThreshold,
+      } as T;
+    case "set_support_ce_full_gate_threshold":
+      supportCeFullGateThreshold =
+        typeof args.value === "number"
+          ? Math.min(0.7, Math.max(0.4, args.value))
+          : supportCeFullGateThreshold;
+      return {
+        supportCeThreshold,
+        supportCeFullGateThreshold,
         supportMlbIconThreshold,
         supportBondIconThreshold,
       } as T;
@@ -362,6 +376,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
           : supportMlbIconThreshold;
       return {
         supportCeThreshold,
+        supportCeFullGateThreshold,
         supportMlbIconThreshold,
         supportBondIconThreshold,
       } as T;
@@ -372,6 +387,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
           : supportBondIconThreshold;
       return {
         supportCeThreshold,
+        supportCeFullGateThreshold,
         supportMlbIconThreshold,
         supportBondIconThreshold,
       } as T;

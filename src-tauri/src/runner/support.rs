@@ -353,6 +353,28 @@ pub(crate) fn format_ce_verification_summary(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SupportCeMismatch {
+    reason: String,
+    debug_summary: Option<String>,
+}
+
+impl SupportCeMismatch {
+    fn new(reason: String, debug_summary: Option<String>) -> Self {
+        Self {
+            reason,
+            debug_summary,
+        }
+    }
+
+    fn reason_only(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+            debug_summary: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SupportLevelFilter {
     Pass,
     /// The visible panel produced an OCR'd level that's below the
@@ -717,6 +739,7 @@ impl Runner {
         let ce_filter_enabled = self.support_ce_filter_enabled();
         let mut waiting_for_skill_panel = false;
         let mut ce_filter_reasons: Vec<String> = Vec::new();
+        let mut ce_filter_debug_summaries: Vec<String> = Vec::new();
         // Distinct mismatch reasons across the visible candidates, in
         // first-seen order. Same servant from multiple friends often
         // means the same gap (e.g. "持有技能 2 ≥ 10（实际 8）"); dedup
@@ -725,9 +748,14 @@ impl Runner {
         let mut skill_wait_diagnostic: Option<String> = None;
         let mut chosen_index: Option<usize> = None;
         for (index, row) in result.supports.iter().enumerate() {
-            if let Some(reason) = self.support_row_ce_mismatch(row) {
-                if !ce_filter_reasons.contains(&reason) {
-                    ce_filter_reasons.push(reason);
+            if let Some(mismatch) = self.support_row_ce_mismatch(row) {
+                if !ce_filter_reasons.contains(&mismatch.reason) {
+                    ce_filter_reasons.push(mismatch.reason);
+                }
+                if let Some(summary) = mismatch.debug_summary {
+                    if !ce_filter_debug_summaries.contains(&summary) {
+                        ce_filter_debug_summaries.push(summary);
+                    }
                 }
                 continue;
             }
@@ -809,6 +837,9 @@ impl Runner {
                 ce_filter_reasons.join("；")
             };
             self.emit("SupportSelect", &format!("找到从者但{reason}，继续滚动…"));
+            for summary in ce_filter_debug_summaries {
+                self.emit_debug("SupportSelect", &summary);
+            }
         }
         if waiting_for_skill_panel {
             // The candidate's name + NP match but we still need the
@@ -999,35 +1030,15 @@ impl Runner {
         grand_ce_search_region(row, slot)
     }
 
-    /// Return true when a row's CE icon scores at or above the configured
-    /// support CE threshold against `template_path`.
-    pub(crate) fn support_row_matches_ce(
-        &mut self,
-        row: &SupportRowMatch,
-        template_path: &Path,
-    ) -> bool {
-        let region = Self::support_ce_search_region(row);
-        self.support_row_region_ce_mismatch(
-            region,
-            template_path,
-            "礼装",
-            SupportCeVerificationOptions {
-                mlb_required: self.config.support_craft_essence_mlb_required,
-                grand_bond_ce_mode: None,
-                ..Default::default()
-            },
-        )
-        .is_none()
-    }
-
     pub(crate) fn support_row_region_ce_mismatch(
         &mut self,
         region: NormRect,
         template_path: &Path,
         label: &str,
         mut options: SupportCeVerificationOptions,
-    ) -> Option<String> {
+    ) -> Option<SupportCeMismatch> {
         let support_ce_threshold = self.config.support_ce_threshold;
+        options.full_gate_threshold = self.config.support_ce_full_gate_threshold;
         options.mlb_icon_threshold = self.config.support_mlb_icon_threshold;
         options.bond_icon_threshold = self.config.support_bond_icon_threshold;
         match self.sidecar().verify_support_ce(
@@ -1064,8 +1075,28 @@ impl Runner {
                         if check.passed { "PASS" } else { "skip" },
                     );
                 }
+                let summary =
+                    format_ce_verification_summary(&result.artwork_checks, &result.icon_checks);
+                let debug_summary = (!summary.is_empty()).then(|| format!("{label}：{summary}"));
                 if result.passed {
                     None
+                } else if !result.full_gate_passed && result.score >= effective_threshold {
+                    let hint = format!(
+                        "当完整匹配不满足且中间匹配或右上匹配满足时，要求完整匹配至少为 {:.2}，可在设置调整",
+                        result.full_gate_threshold
+                    );
+                    let reason = if summary.is_empty() {
+                        format!(
+                            "{label} 完整匹配不足（{:.2}/{:.2}）：{hint}",
+                            result.full_gate_score, result.full_gate_threshold
+                        )
+                    } else {
+                        format!(
+                            "{label} 完整匹配不足（{:.2}/{:.2}）：{summary}；{hint}",
+                            result.full_gate_score, result.full_gate_threshold
+                        )
+                    };
+                    Some(SupportCeMismatch::new(reason, debug_summary))
                 } else if let Some(check) = result.icon_checks.iter().find(|check| !check.passed) {
                     // Surface decoration-icon failures with a more actionable
                     // message when present; if the artwork also failed but
@@ -1077,42 +1108,46 @@ impl Runner {
                         "grandBondNp" => "冠位连接牵绊图标",
                         other => other,
                     };
-                    let summary =
-                        format_ce_verification_summary(&result.artwork_checks, &result.icon_checks);
-                    Some(if summary.is_empty() {
+                    let reason = if summary.is_empty() {
                         format!("{label} {kind}不匹配")
                     } else {
                         format!("{label} {kind}不匹配：{summary}")
-                    })
+                    };
+                    Some(SupportCeMismatch::new(reason, debug_summary))
                 } else {
-                    let summary =
-                        format_ce_verification_summary(&result.artwork_checks, &result.icon_checks);
-                    Some(if summary.is_empty() {
+                    let reason = if summary.is_empty() {
                         format!("{label} 不匹配")
                     } else {
                         format!("{label} 不匹配：{summary}")
-                    })
+                    };
+                    Some(SupportCeMismatch::new(reason, debug_summary))
                 }
             }
             Err(e) => {
                 eprintln!("[runner] support CE verify failed (treating as skip): {e}");
-                Some(format!("{label} 校验失败"))
+                Some(SupportCeMismatch::reason_only(format!("{label} 校验失败")))
             }
         }
     }
 
-    pub(crate) fn support_row_ce_mismatch(&mut self, row: &SupportRowMatch) -> Option<String> {
+    pub(crate) fn support_row_ce_mismatch(
+        &mut self,
+        row: &SupportRowMatch,
+    ) -> Option<SupportCeMismatch> {
         if self.config.support_grand_mode {
             let templates = self.resolve_support_grand_ce_templates();
             if templates.iter().any(Option::is_some) && row.score_anchor.is_none() {
-                return Some("确认按钮未完整显示".into());
+                return Some(SupportCeMismatch::reason_only("确认按钮未完整显示"));
             }
             for (index, template) in templates.iter().enumerate() {
                 let Some(template) = template.as_deref() else {
                     continue;
                 };
                 let Some(region) = Self::support_grand_ce_search_region(row, index) else {
-                    return Some(format!("冠位礼装 {} 区域无效", index + 1));
+                    return Some(SupportCeMismatch::reason_only(format!(
+                        "冠位礼装 {} 区域无效",
+                        index + 1
+                    )));
                 };
                 if let Some(reason) = self.support_row_region_ce_mismatch(
                     region,
@@ -1138,11 +1173,30 @@ impl Runner {
             None
         } else {
             let template = self.resolve_support_ce_template()?;
-            if self.support_row_matches_ce(row, &template) {
-                None
-            } else {
-                Some("礼装不匹配".into())
-            }
+            let region = Self::support_ce_search_region(row);
+            self.support_row_region_ce_mismatch(
+                region,
+                &template,
+                "礼装",
+                SupportCeVerificationOptions {
+                    mlb_required: self.config.support_craft_essence_mlb_required,
+                    grand_bond_ce_mode: None,
+                    ..Default::default()
+                },
+            )
+            .map(|mismatch| {
+                if mismatch.reason.contains("完整匹配不足") {
+                    SupportCeMismatch {
+                        reason: mismatch.reason.replace("礼装 完整匹配不足", "礼装完整匹配不足"),
+                        debug_summary: mismatch.debug_summary,
+                    }
+                } else {
+                    SupportCeMismatch {
+                        reason: "礼装不匹配".to_string(),
+                        debug_summary: mismatch.debug_summary,
+                    }
+                }
+            })
         }
     }
 
@@ -1170,9 +1224,8 @@ impl Runner {
     /// detector glitched on this frame) we fall back to a single fixed
     /// delta so the runner still makes progress.
     ///
-    /// Emits a debug-level log entry with the detected anchor positions
-    /// and the chosen delta so the operator can inspect what the runner
-    /// "saw" when triaging a "scrolled past my servant" bug report.
+    /// Emits a local-only debug log with the detected anchor positions
+    /// and the chosen delta for development triage.
     pub(crate) fn scroll_support_list(&mut self, confirm_button_anchors: &[NormRect]) -> bool {
         let delta = scroll_support_list_delta(confirm_button_anchors);
         let from_y = SUPPORT_SCROLL_FROM_Y;
@@ -1190,7 +1243,7 @@ impl Runner {
         // an operator can tell at a glance which backend produced the
         // gesture they're triaging — useful when we add more
         // backends behind the `TouchBackend` trait again.
-        self.emit_debug(
+        self.emit_local_debug(
             "SupportSelect",
             &format!("{scroll_msg} [{}]", self.touch.name()),
         );

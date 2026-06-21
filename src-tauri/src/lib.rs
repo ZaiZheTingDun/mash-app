@@ -289,6 +289,7 @@ pub fn run() {
             commands::settings::set_server,
             commands::settings::get_recognition_settings,
             commands::settings::set_support_ce_threshold,
+            commands::settings::set_support_ce_full_gate_threshold,
             commands::settings::set_support_mlb_icon_threshold,
             commands::settings::set_support_bond_icon_threshold,
             commands::settings::should_check_updates_today,

@@ -202,6 +202,9 @@ export interface SupportCeInfoDto {
   score: number;
   passed: boolean;
   threshold: number;
+  fullGateScore?: number;
+  fullGateThreshold?: number;
+  fullGatePassed?: boolean;
   artworkChecks?: SupportCeArtworkCheckDto[];
   iconChecks?: SupportCeIconCheckDto[];
   templatePath?: string;

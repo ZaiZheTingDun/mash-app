@@ -576,6 +576,32 @@ describe("StatusBar", () => {
     expect(screen.getByText("调试诊断输出")).toBeInTheDocument();
   });
 
+  it("shows local debug entries only after enabling debug logs in dev builds", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(
+      <StatusBar
+        operationLogs={[
+          { time: "12:34:56", message: "用户可见消息", level: "info" },
+          { time: "12:34:57", message: "本地滚动诊断", level: "localDebug" },
+        ]}
+        operationLogOpen
+      />
+    );
+
+    expect(screen.getByText("用户可见消息")).toBeInTheDocument();
+    expect(screen.queryByText("本地滚动诊断")).not.toBeInTheDocument();
+    expect(screen.getByText("操作日志 (1)")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: /显示调试/ }));
+    expect(screen.getByText("本地滚动诊断")).toBeInTheDocument();
+  });
+
   it("shows the update action in the operation log header when an update is available", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";

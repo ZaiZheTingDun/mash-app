@@ -55,6 +55,7 @@ describe("SettingsDialog", () => {
       if (cmd === "get_recognition_settings") {
         return {
           supportCeThreshold: 0.7,
+          supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
           supportBondIconThreshold: 0.7,
         };
@@ -62,6 +63,15 @@ describe("SettingsDialog", () => {
       if (cmd === "set_support_ce_threshold") {
         return {
           supportCeThreshold: 0.65,
+          supportCeFullGateThreshold: 0.6,
+          supportMlbIconThreshold: 0.7,
+          supportBondIconThreshold: 0.7,
+        };
+      }
+      if (cmd === "set_support_ce_full_gate_threshold") {
+        return {
+          supportCeThreshold: 0.7,
+          supportCeFullGateThreshold: 0.55,
           supportMlbIconThreshold: 0.7,
           supportBondIconThreshold: 0.7,
         };
@@ -69,6 +79,7 @@ describe("SettingsDialog", () => {
       if (cmd === "set_support_mlb_icon_threshold") {
         return {
           supportCeThreshold: 0.7,
+          supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.76,
           supportBondIconThreshold: 0.7,
         };
@@ -76,6 +87,7 @@ describe("SettingsDialog", () => {
       if (cmd === "set_support_bond_icon_threshold") {
         return {
           supportCeThreshold: 0.7,
+          supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
           supportBondIconThreshold: 0.78,
         };
@@ -152,7 +164,7 @@ describe("SettingsDialog", () => {
     });
     await user.clear(mlbInput);
     await user.type(mlbInput, "0.76");
-    await user.click(screen.getAllByRole("button", { name: "保存" })[1]);
+    await user.click(screen.getAllByRole("button", { name: "保存" })[2]);
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_support_mlb_icon_threshold", {
@@ -165,11 +177,31 @@ describe("SettingsDialog", () => {
     });
     await user.clear(bondInput);
     await user.type(bondInput, "0.78");
-    await user.click(screen.getAllByRole("button", { name: "保存" })[2]);
+    await user.click(screen.getAllByRole("button", { name: "保存" })[3]);
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_support_bond_icon_threshold", {
         value: 0.78,
+      });
+    });
+  });
+
+  it("saves the support CE full-match gate threshold", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="recognition" />);
+
+    const input = await screen.findByRole("spinbutton", {
+      name: "完整匹配兜底阈值数值",
+    });
+    expect(input).toHaveValue(0.6);
+
+    await user.clear(input);
+    await user.type(input, "0.55");
+    await user.click(screen.getAllByRole("button", { name: "保存" })[1]);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_support_ce_full_gate_threshold", {
+        value: 0.55,
       });
     });
   });

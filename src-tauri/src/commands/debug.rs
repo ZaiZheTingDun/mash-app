@@ -1103,6 +1103,7 @@ pub fn debug_find_supports(
     require_automation_idle(&handle_state, &enhancement_handle_state)?;
     let recognition_settings = *recognition_settings_state.lock().unwrap();
     let support_ce_threshold = recognition_settings.support_ce_threshold;
+    let support_ce_full_gate_threshold = recognition_settings.support_ce_full_gate_threshold;
     let support_mlb_icon_threshold = recognition_settings.support_mlb_icon_threshold;
     let support_bond_icon_threshold = recognition_settings.support_bond_icon_threshold;
 
@@ -1187,6 +1188,7 @@ pub fn debug_find_supports(
                     SupportCeVerificationOptions {
                         mlb_required: craft_essence_mlb_required.unwrap_or(true),
                         grand_bond_ce_mode: None,
+                        full_gate_threshold: support_ce_full_gate_threshold,
                         mlb_icon_threshold: support_mlb_icon_threshold,
                         bond_icon_threshold: support_bond_icon_threshold,
                     },
@@ -1269,6 +1271,7 @@ pub fn debug_find_supports(
                         } else {
                             None
                         },
+                        full_gate_threshold: support_ce_full_gate_threshold,
                         mlb_icon_threshold: support_mlb_icon_threshold,
                         bond_icon_threshold: support_bond_icon_threshold,
                     },

@@ -17,7 +17,7 @@ import { SERVER_LABELS, type Server } from "../../types/server";
 import type { Servant } from "../../types/servant";
 import type { AppTheme, AppThemePreference } from "../../types/theme";
 
-type LogLevel = "info" | "debug";
+type LogLevel = "info" | "debug" | "localDebug";
 
 interface AdbStatus {
   connected: boolean;
@@ -399,17 +399,21 @@ export function StatusBar({
   const operationLogFaces = useOperationLogFaces(operationLogs, servantById);
 
   const visibleOperationLogs = useMemo(
-    () =>
-      showDebugLogs
-        ? operationLogs
-        : operationLogs.filter((entry) => entry.level !== "debug"),
+    () => {
+      const localDebugVisible = import.meta.env.DEV;
+      return operationLogs.filter((entry) => {
+        if (entry.level === "localDebug") return showDebugLogs && localDebugVisible;
+        if (entry.level === "debug") return showDebugLogs;
+        return true;
+      });
+    },
     [operationLogs, showDebugLogs],
   );
   // Show the count of user-facing (info) entries even when debug is on;
   // the trigger label is meant to track "what the runner is doing", not
   // raw event volume.
   const infoLogCount = useMemo(
-    () => operationLogs.filter((entry) => entry.level !== "debug").length,
+    () => operationLogs.filter((entry) => entry.level === "info").length,
     [operationLogs],
   );
 
@@ -570,6 +574,7 @@ export function StatusBar({
                 key={index}
                 className={
                   entry.level === "debug"
+                  || entry.level === "localDebug"
                     ? "operation-log-entry operation-log-entry--debug"
                     : "operation-log-entry"
                 }

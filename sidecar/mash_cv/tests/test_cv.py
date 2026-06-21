@@ -2954,7 +2954,21 @@ class TestVerifySupportCE:
         assert full["score"] < CE_OCCLUSION_SAFE_MIN_FULL_SCORE
         assert selected["variant"] != "full"
         assert selected["passed"] is True
+        assert result["fullGateScore"] == full["score"]
+        assert result["fullGateThreshold"] == CE_OCCLUSION_SAFE_MIN_FULL_SCORE
+        assert result["fullGatePassed"] is False
         assert result["passed"] is False, result
+
+        relaxed = _verify_support_ce(
+            img,
+            region,
+            tmpl_path,
+            0.7,
+            full_gate_threshold=0.50,
+        )
+        assert relaxed["fullGateThreshold"] == 0.50
+        assert relaxed["fullGatePassed"] is True
+        assert relaxed["passed"] is True, relaxed
 
     def test_requires_mlb_icon_when_requested(self, tmp_path):
         import mash_cv.cv as cv
