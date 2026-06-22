@@ -339,7 +339,16 @@ changes (i.e. when the runner moves to a different row).
   once per turn. It
   does not regroup duplicate colors ahead of the NP. Fallback rows after the
   first three repeat while they can still match before the next fallback row is
-  considered. Before command-card recognition, normal mode applies already
+  considered. Before reading NP readiness, the runner waits until all five
+  command cards are visibly present by requiring each fixed slot to expose a
+  card suit/icon signal; this does not require servant ownership recognition.
+  NP readiness is then read from the bright cap near the right end of each
+  bottom NP-gauge slot. A cap brightness score of `0.5` or higher means ready.
+  The sidecar still returns the bottom digit count and the legacy upper
+  NP-card texture result for debugging/future configuration, but neither is
+  used as a fallback. If a glow score is unavailable, the runner keeps retrying
+  until all three front-line glow scores are readable.
+  Before command-card recognition, normal mode applies already
   executed current-turn preparation actions whose `change_order_servants.json`
   timing is `immediate` (for example Order Change) to the front-line servant id
   map. For previous turns and previous Battles, it also applies configured NP
@@ -352,8 +361,9 @@ changes (i.e. when the runner moves to a different row).
   leftmost unused command card owned by that front-line servant regardless of
   B/A/Q color. If no normal-mode Battle/turn config contains a regular command
   card row (`Buster`, `Arts`, `Quick`, or `All`), the runner skips command-card
-  recognition entirely on the attack screen. NP readiness is still detected,
-  and ordinary cards are only used as fixed left-to-right fallback tap targets.
+  ownership recognition on the attack screen after the five-card visibility
+  gate. NP readiness is still detected with the same glow-cap path, and
+  ordinary cards are only used as fixed left-to-right fallback tap targets.
 - Advanced-mode teams store battle scenes in `advanced_battle_scenes.json`.
   The current strategy UI uses a three-stage flow. First, the runner enters
   the attack-card screen and treats the scene as "waiting for startup": it

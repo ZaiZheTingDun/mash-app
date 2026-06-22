@@ -87,6 +87,40 @@ pub(crate) fn should_retry_command_card_owner_detection(
         && (cards.len() < COMMAND_CARD_COUNT || cards.iter().any(|card| card.servant_id.is_none()))
 }
 
+pub(crate) fn command_cards_visible(cards: &[CommandCardMatch]) -> bool {
+    cards.len() == COMMAND_CARD_COUNT
+        && cards
+            .iter()
+            .all(|card| card.suit.is_some() && card.icon_region.is_some())
+}
+
+pub(crate) fn np_gauge_read_complete(nps: &[NoblePhantasmMatch]) -> bool {
+    nps.len() == 3 && nps.iter().all(|np| np.np_glow_score.is_some())
+}
+
+/// Merge a new NP sample into the running best-per-slot accumulator,
+/// keeping the highest `np_glow_score` seen for each slot index.
+pub(crate) fn merge_best_np_slots(
+    acc: &mut Option<Vec<NoblePhantasmMatch>>,
+    sample: Vec<NoblePhantasmMatch>,
+) {
+    if let Some(best) = acc.as_mut() {
+        for slot in sample {
+            if let Some(existing) = best.iter_mut().find(|s| s.slot == slot.slot) {
+                let old_score = existing.np_glow_score.unwrap_or(f64::NEG_INFINITY);
+                let new_score = slot.np_glow_score.unwrap_or(f64::NEG_INFINITY);
+                if new_score > old_score {
+                    *existing = slot;
+                }
+            } else {
+                best.push(slot);
+            }
+        }
+    } else {
+        *acc = Some(sample);
+    }
+}
+
 pub(crate) fn np_condition_matches(
     condition: &crate::AdvancedNpSlotCondition,
     nps: &[NoblePhantasmMatch],
@@ -621,6 +655,14 @@ impl Runner {
                         return None;
                     }
                 };
+                if !command_cards_visible(&cards) {
+                    if self.is_cancelled() {
+                        return None;
+                    }
+                    self.emit("Attack", "指令卡尚未完全出现，等待卡面稳定后重试");
+                    thread::sleep(ACTION_DELAY);
+                    continue;
+                }
                 if !should_retry_command_card_owner_detection(&cards, &candidate_ids) {
                     break cards;
                 }
@@ -631,16 +673,62 @@ impl Runner {
                 thread::sleep(ACTION_DELAY);
             }
         } else {
-            self.emit("Attack", "未配置普通指令卡，跳过指令卡识别");
+            loop {
+                let cards = match self.sidecar().find_command_cards(None, None, &[], None) {
+                    Ok(c) => c,
+                    Err(err) => {
+                        self.fail_action("Attack", "等待指令卡出现", err);
+                        return None;
+                    }
+                };
+                if command_cards_visible(&cards) {
+                    break;
+                }
+                if self.is_cancelled() {
+                    return None;
+                }
+                self.emit("Attack", "指令卡尚未完全出现，等待卡面稳定后重试");
+                thread::sleep(ACTION_DELAY);
+            }
+            self.emit("Attack", "未配置普通指令卡，跳过指令卡归属识别");
             fallback_command_cards()
         };
 
-        let nps = match self.sidecar().find_noble_phantasms(None, None) {
-            Ok(n) => n,
-            Err(err) => {
-                self.fail_action("Attack", "识别宝具卡", err);
+        let nps = loop {
+            let started = Instant::now();
+            let sample_window = Duration::from_secs(1);
+            let sample_interval = Duration::from_millis(200);
+            let mut best_nps: Option<Vec<NoblePhantasmMatch>> = None;
+
+            loop {
+                let sample = match self.sidecar().find_noble_phantasms(None, None) {
+                    Ok(n) => n,
+                    Err(err) => {
+                        self.fail_action("Attack", "读取宝具数字", err);
+                        return None;
+                    }
+                };
+
+                merge_best_np_slots(&mut best_nps, sample);
+
+                if self.is_cancelled() {
+                    return None;
+                }
+                if started.elapsed() >= sample_window {
+                    break;
+                }
+                thread::sleep(sample_interval);
+            }
+
+            let nps = best_nps.unwrap_or_default();
+            if np_gauge_read_complete(&nps) {
+                break nps;
+            }
+            if self.is_cancelled() {
                 return None;
             }
+            self.emit("Attack", "宝具数字未识别完整，等待遮挡消失后重试");
+            thread::sleep(ACTION_DELAY);
         };
 
         if recognize_command_cards {

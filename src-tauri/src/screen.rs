@@ -470,9 +470,9 @@ impl SidecarClient {
             .map_err(|e| format!("invalid command-card response: {e}"))
     }
 
-    /// Report whether each fixed Noble Phantasm card slot currently holds
-    /// a card. ``np_regions`` overrides the sidecar's built-in three-slot
-    /// layout — pass ``None`` to use the defaults.
+    /// Report NP readiness from the bottom gauge percentages. ``np_regions``
+    /// still provides the upper NP-card tap regions — pass ``None`` to use
+    /// the defaults.
     pub fn find_noble_phantasms(
         &mut self,
         image_path: Option<&Path>,
@@ -941,6 +941,17 @@ impl SidecarClient {
     /// is the maximum time the sidecar will block waiting for a fresh frame
     /// (0 = return immediately if none is cached).
     pub fn get_frame_jpeg(&mut self, wait_seconds: f64) -> Result<Vec<u8>, String> {
+        let (b64, _, _) = self.get_frame_jpeg_base64(wait_seconds)?;
+        base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| format!("invalid base64 in jpegB64: {e}"))
+    }
+
+    /// Return the latest decoded frame as base64 JPEG plus frame dimensions.
+    pub fn get_frame_jpeg_base64(
+        &mut self,
+        wait_seconds: f64,
+    ) -> Result<(String, u32, u32), String> {
         let req = serde_json::json!({
             "cmd": "get_frame",
             "waitSeconds": wait_seconds,
@@ -953,9 +964,9 @@ impl SidecarClient {
         let b64 = resp["jpegB64"]
             .as_str()
             .ok_or_else(|| "get_frame missing jpegB64".to_string())?;
-        base64::engine::general_purpose::STANDARD
-            .decode(b64)
-            .map_err(|e| format!("invalid base64 in jpegB64: {e}"))
+        let width = resp["width"].as_u64().unwrap_or(0) as u32;
+        let height = resp["height"].as_u64().unwrap_or(0) as u32;
+        Ok((b64.to_string(), width, height))
     }
 
     /// Tell the sidecar to exit.

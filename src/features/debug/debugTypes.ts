@@ -10,6 +10,20 @@ export interface DebugCaptureResult {
   screenSize: DebugScreenSize | null;
 }
 
+export interface DebugStreamStatusDto {
+  connected: boolean;
+  screenSize: DebugScreenSize | null;
+}
+
+export interface DebugStreamFrameResultDto {
+  jpegBase64: string;
+  width: number;
+  height: number;
+  screen?: string | null;
+  score?: number | null;
+  timestampMs: number;
+}
+
 export interface NormRectDto {
   x: number;
   y: number;
@@ -88,6 +102,13 @@ export interface NoblePhantasmMatchDto {
   edgeFrac: number;
   stdBgr: number;
   edgeThreshold?: number;
+  cardReady?: boolean | null;
+  readySource?: "glow" | "gauge" | "unknown" | string;
+  gaugeDigitCount?: number | null;
+  gaugeRegion?: NormRectDto | null;
+  npGlowRegion?: NormRectDto | null;
+  npGlowScore?: number | null;
+  npGlowReady?: boolean | null;
 }
 
 export interface EnhancementServantFaceMatchDto {

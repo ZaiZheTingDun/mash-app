@@ -7,7 +7,7 @@ const EMPTY_STATE: DebugCanvasState = {
   imageSrc: null,
   probes: [],
   commandCards: [],
-  noblePhantasms: [],
+  npGaugeSlots: [],
   battleScene: null,
   attackButton: null,
   enhancementServantResult: null,

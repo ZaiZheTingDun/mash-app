@@ -296,7 +296,7 @@ pub struct CommandCardMatch {
 ///
 /// One record is returned per slot regardless of readiness so callers can
 /// render every slot in a debug overlay. ``ready`` is the primary signal;
-/// ``edge_frac`` and ``std_bgr`` expose the underlying measurements so
+/// ``edge_frac`` and ``std_bgr`` expose the legacy upper-card measurements so
 /// thresholds can be re-tuned from the debug UI without code changes.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -306,14 +306,33 @@ pub struct NoblePhantasmMatch {
     pub ready: bool,
     pub edge_frac: f64,
     pub std_bgr: f64,
-    /// Edge-fraction threshold the sidecar used to flag this slot. The
-    /// detector now adapts per frame (see ``_decide_np_ready`` in
-    /// ``cv.py``) so the value can change between calls — surfacing it
-    /// here lets the debug overlay explain why a given slot landed on
-    /// either side of the line. Optional for backward compat with older
-    /// sidecar bundles that don't emit the field.
+    /// Backward-compatible legacy upper-card threshold.
     #[serde(default)]
     pub edge_threshold: f64,
+    /// Legacy upper NP-card detector result. This is exposed for debug /
+    /// future configuration only; current readiness is driven by the bottom
+    /// gauge glow cap.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card_ready: Option<bool>,
+    /// Which detector produced the final ``ready`` flag: currently
+    /// ``"glow"`` for the bottom gauge cap, or ``"unknown"`` when it could
+    /// not be read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ready_source: Option<String>,
+    /// Number of visible digits in the bottom NP gauge ROI. Debug-only;
+    /// current readiness does not use this as a fallback.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gauge_digit_count: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gauge_region: Option<NormRect>,
+    /// Probe for the bright NP-charge slot near the right end of the
+    /// bottom gauge. Current readiness is driven by this score.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub np_glow_region: Option<NormRect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub np_glow_score: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub np_glow_ready: Option<bool>,
 }
 
 /// One support row whose servant-name and NP-name fragments OCR'd, fuzzy-

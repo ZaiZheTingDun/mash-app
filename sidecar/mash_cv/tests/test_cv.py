@@ -1523,22 +1523,21 @@ class TestFindCommandCards:
 
 
 class TestFindNoblePhantasms:
-    """Exercise the NP readiness detector against a real attack-screen
-    capture. Detection is structural (Canny edge density inside the slot)
-    and requires no templates or assets."""
+    """Exercise the NP readiness detector.
+
+    The live detector uses the bright cap near the bottom NP gauge. Digit
+    counts and upper-card texture scores are returned for debugging but do
+    not participate in the current ready flag.
+    """
 
     def test_returns_empty_when_no_regions(self):
         img = _make_bgr_image(2560, 1440)
         result = mash_cv._find_noble_phantasms(img, [])
         assert result["slots"] == []
-        # The detector still echoes the default cutoff back so the debug
-        # UI has a stable field to render even on degenerate inputs.
-        assert result["edgeThreshold"] == pytest.approx(
-            mash_cv.NP_READY_EDGE_HIGH
-        )
+        assert result["edgeThreshold"] == pytest.approx(0.0)
 
-    def test_blank_image_marks_all_empty(self):
-        """A flat-colour image has zero edges, so no slot is ready."""
+    def test_blank_image_marks_all_not_ready(self):
+        """A flat-colour image has a dark glow cap and is not ready."""
         img = _make_bgr_image(2560, 1440, bgr=(20, 20, 20))
         result = mash_cv._find_noble_phantasms(
             img, list(mash_cv.DEFAULT_NP_CARD_SLOTS)
@@ -1548,46 +1547,11 @@ class TestFindNoblePhantasms:
             assert s["slot"] == slot
             assert "cardRegion" in s
             assert s["ready"] is False
+            assert s["readySource"] == "glow"
+            assert s["gaugeDigitCount"] is None
+            assert s["npGlowScore"] < 0.5
             assert s["edgeFrac"] == pytest.approx(0.0, abs=1e-6)
             assert s["stdBgr"] == pytest.approx(0.0, abs=1e-6)
-
-    def test_returns_three_slots_with_correct_ready_flags(self):
-        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "noble_debug.png"))
-        assert img is not None, "noble_debug.png fixture missing"
-
-        result = mash_cv._find_noble_phantasms(
-            img, list(mash_cv.DEFAULT_NP_CARD_SLOTS)
-        )
-        slots = result["slots"]
-        assert len(slots) == 3
-
-        ready_flags = [s["ready"] for s in slots]
-        assert ready_flags == [True, True, False]
-
-        # Calibration sanity: the two ready slots have substantially more
-        # edge structure than the empty one. Use loose thresholds so minor
-        # OpenCV/Canny tweaks don't invalidate the test.
-        assert slots[0]["edgeFrac"] > 0.10
-        assert slots[1]["edgeFrac"] > 0.10
-        assert slots[2]["edgeFrac"] < 0.07
-
-        # Card regions are returned in the same order as the input slots
-        # and span sensible portions of the screen.
-        for slot, s in enumerate(slots):
-            assert s["slot"] == slot
-            box = s["cardRegion"]
-            assert 0.0 <= box["x"] < 1.0
-            assert 0.0 <= box["y"] < 1.0
-            assert 0.0 < box["w"] <= 1.0
-            assert 0.0 < box["h"] <= 1.0
-
-    def test_threshold_override_marks_all_empty(self):
-        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "noble_debug.png"))
-        assert img is not None
-        result = mash_cv._find_noble_phantasms(
-            img, list(mash_cv.DEFAULT_NP_CARD_SLOTS), edge_threshold=0.99
-        )
-        assert all(s["ready"] is False for s in result["slots"])
 
     def test_custom_regions_passthrough(self):
         img = _make_bgr_image(2560, 1440)
@@ -1601,132 +1565,103 @@ class TestFindNoblePhantasms:
         assert box["w"] == pytest.approx(0.05, abs=1e-3)
         assert box["h"] == pytest.approx(0.05, abs=1e-3)
 
-    def test_cn_dark_np_card_is_detected(self):
-        """Regression: CN Morgan / Stella have low-detail dark NP art that
-        sits at ~5.8% edge density — well below the legacy 0.08 cutoff
-        but obviously ready to a human. The adaptive baseline (NP1's
-        ~1.0% empty edge density) should let it cross the threshold."""
-        img = cv2.imread(
-            os.path.join(_TEST_SCREENSHOTS_DIR, "noble_debug_cn.png")
+    def test_fixed_hundreds_slot_accepts_broken_digit_body(self):
+        from mash_cv import cv as _cv_module
+
+        img = _make_bgr_image(320, 160, bgr=(0, 0, 0))
+        gauge = {"x": 0.20, "y": 0.35, "w": 0.30, "h": 0.30}
+        hundreds = _cv_module._child_norm_rect(
+            gauge, _cv_module.DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS[0]
         )
-        assert img is not None, "noble_debug_cn.png fixture missing"
+        h, w = img.shape[:2]
+        x = int(round(hundreds["x"] * w))
+        y = int(round(hundreds["y"] * h))
+        rw = int(round(hundreds["w"] * w))
+        rh = int(round(hundreds["h"] * h))
+        cv2.rectangle(
+            img,
+            (x + rw // 3, y + 3),
+            (x + rw // 2, y + rh - 4),
+            (255, 255, 255),
+            -1,
+        )
+        cv2.rectangle(
+            img,
+            (x + rw // 2 + 3, y + 3),
+            (x + rw - 4, y + rh - 4),
+            (255, 255, 255),
+            -1,
+        )
+
+        assert _cv_module._np_gauge_digit_slot_visible(img, hundreds) is True
+
+    def test_fixed_hundreds_slot_rejects_bottom_gauge_line(self):
+        from mash_cv import cv as _cv_module
+
+        img = _make_bgr_image(320, 160, bgr=(0, 0, 0))
+        gauge = {"x": 0.20, "y": 0.35, "w": 0.30, "h": 0.30}
+        hundreds = _cv_module._child_norm_rect(
+            gauge, _cv_module.DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS[0]
+        )
+        h, w = img.shape[:2]
+        x = int(round(hundreds["x"] * w))
+        y = int(round(hundreds["y"] * h))
+        rw = int(round(hundreds["w"] * w))
+        rh = int(round(hundreds["h"] * h))
+        cv2.rectangle(
+            img,
+            (x, y + rh - 5),
+            (x + rw - 1, y + rh - 2),
+            (255, 255, 255),
+            -1,
+        )
+
+        assert _cv_module._np_gauge_digit_slot_visible(img, hundreds) is False
+
+    @pytest.mark.parametrize(
+        ("filename", "expected_counts"),
+        [
+            ("np_test1.png", [2, 2, 2]),
+            ("np_test2.png", [3, None, 2]),
+            ("np_test3.png", [3, 2, 3]),
+            ("np_test4.png", [3, 3, 3]),
+            ("np_test5.png", [3, 3, 3]),
+            ("np_test8.jpg", [3, 2, 2]),
+            ("np_test9.jpg", [3, 3, 2]),
+        ],
+    )
+    def test_cn_bottom_np_glow_drives_readiness(self, filename, expected_counts):
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        screenshot = os.path.join(repo_root, ".screenshots", "cn", filename)
+        if not os.path.isfile(screenshot):
+            pytest.skip(f"{filename} fixture not available")
+
+        img = cv2.imread(screenshot)
+        assert img is not None
+
+        if os.path.isdir(_PROD_CN_TEMPLATES_DIR):
+            mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR)
 
         result = mash_cv._find_noble_phantasms(
-            img, list(mash_cv.DEFAULT_NP_CARD_SLOTS)
+            img,
+            list(mash_cv.DEFAULT_NP_CARD_SLOTS),
         )
         slots = result["slots"]
         assert len(slots) == 3
-        ready_flags = [s["ready"] for s in slots]
-        assert ready_flags == [False, True, True]
 
-        # Sanity-check the underlying signals so a future change to
-        # OpenCV/Canny doesn't silently shift the calibration the
-        # adaptive logic depends on.
-        assert slots[0]["edgeFrac"] < 0.03   # empty floor
-        assert slots[1]["edgeFrac"] < 0.08   # dark-art ready BELOW old fixed cutoff
-        assert slots[2]["edgeFrac"] > 0.08   # busy-art ready ABOVE old fixed cutoff
-
-        # Adaptive threshold lands between empty and dark-ready; surfaced
-        # in the response so the debug UI can show it.
-        thr = result["edgeThreshold"]
-        assert slots[0]["edgeThreshold"] == pytest.approx(thr)
-        assert slots[0]["edgeFrac"] < thr <= slots[1]["edgeFrac"]
-
-    def test_cn_no_np_enemy_ui_is_not_detected_as_ready(self):
-        """Enemy HP/class UI can sit under the fixed NP slots and has high
-        edge density, but lacks the bright NP-card frame/backing."""
-        img = cv2.imread(
-            os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command_cn_no_np.jpg")
-        )
-        assert img is not None, "battle_command_cn_no_np.jpg fixture missing"
-
-        result = mash_cv._find_noble_phantasms(
-            img, list(mash_cv.DEFAULT_NP_CARD_SLOTS)
-        )
-        slots = result["slots"]
-        assert len(slots) == 3
-        assert [s["ready"] for s in slots] == [False, False, False]
-        assert max(s["edgeFrac"] for s in slots) > mash_cv.NP_READY_EDGE_HIGH
-
-
-class TestDecideNpReady:
-    """Pure-logic coverage for the adaptive readiness decision so we can
-    exhaustively probe scenarios that are awkward to stage as full
-    fixtures (e.g. all-empty / all-ready / explicit override)."""
-
-    def test_anchors_to_empty_baseline_when_one_slot_is_clearly_empty(self):
-        # CN runtime numbers: empty + dark-ready + busy-ready.
-        flags, thr = mash_cv._decide_np_ready(
-            [0.010, 0.058, 0.099], [38.0, 82.0, 84.0]
-        )
-        assert flags == [False, True, True]
-        # max(NP_READY_EDGE_LOW=0.035, baseline*ratio=0.020) -> 0.035.
-        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_LOW)
-
-    def test_uses_high_absolute_cutoff_when_no_slot_is_clearly_empty(self):
-        # JP fixture numbers: ready, ready, "empty" sitting at 5.2% over a
-        # busy background. baseline=0.052 >= NP_EMPTY_EDGE_HINT (0.03), so
-        # the adaptive logic refuses to anchor to it and falls back to
-        # the 0.07 absolute cutoff. stdBgr below NP_READY_STD_BGR keeps
-        # the empty slot empty.
-        flags, thr = mash_cv._decide_np_ready(
-            [0.120, 0.115, 0.052], [91.0, 96.0, 43.0]
-        )
-        assert flags == [True, True, False]
-        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_HIGH)
-
-    def test_std_bgr_rescues_dark_ready_card_with_no_empty_baseline(self):
-        # All three slots ready with one very dark card (low edges, but
-        # still high color variance from the framed art). Adaptive picks
-        # the high cutoff and the dark slot would otherwise be missed —
-        # the stdBgr backstop catches it.
-        flags, thr = mash_cv._decide_np_ready(
-            [0.058, 0.096, 0.120], [82.0, 84.0, 90.0]
-        )
-        assert flags == [True, True, True]
-        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_HIGH)
-
-    def test_bright_card_signal_is_required_in_adaptive_mode(self):
-        flags, thr = mash_cv._decide_np_ready(
-            [0.132, 0.074, 0.127],
-            [49.0, 49.0, 49.0],
-            [0.002, 0.002, 0.0],
-        )
-        assert flags == [False, False, False]
-        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_HIGH)
-
-    def test_all_empty_low_resolution_stays_empty(self):
-        flags, thr = mash_cv._decide_np_ready(
-            [0.009, 0.012, 0.015], [20.0, 22.0, 25.0]
-        )
-        assert flags == [False, False, False]
-        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_LOW)
-
-    def test_all_empty_busy_background_stays_empty(self):
-        # All three slots over busy backgrounds, no card present. Edge
-        # frac sits in the 0.05 range (above the empty hint), stdBgr
-        # below the ready backstop. Should still report all empty.
-        flags, thr = mash_cv._decide_np_ready(
-            [0.052, 0.050, 0.055], [43.0, 41.0, 45.0]
-        )
-        assert flags == [False, False, False]
-        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_HIGH)
-
-    def test_explicit_threshold_override_skips_adaptive_logic(self):
-        # When a caller pins a threshold, both the std backstop and the
-        # adaptive baseline are bypassed — the response should reflect
-        # that exact cutoff so calibration tools stay deterministic.
-        flags, thr = mash_cv._decide_np_ready(
-            [0.058, 0.096, 0.120], [82.0, 84.0, 90.0], edge_threshold=0.10
-        )
-        assert flags == [False, False, True]
-        assert thr == pytest.approx(0.10)
-
-    def test_empty_slots_returns_default_threshold(self):
-        flags, thr = mash_cv._decide_np_ready([], [])
-        assert flags == []
-        assert thr == pytest.approx(mash_cv.NP_READY_EDGE_HIGH)
-
+        assert [s.get("gaugeDigitCount") for s in slots] == expected_counts
+        for slot in slots:
+            assert slot["readySource"] == "glow"
+            assert slot["npGlowScore"] is not None
+            assert 0.0 <= slot["npGlowScore"] <= 1.0
+            assert slot["npGlowRegion"] is not None
+            assert slot["npGlowReady"] is (slot["npGlowScore"] >= 0.5)
+            assert slot["ready"] is slot["npGlowReady"]
+            assert "cardReady" in slot
+            assert 0.0 <= slot["edgeFrac"] <= 1.0
+            assert slot["stdBgr"] >= 0.0
 
 # ── _find_supports ──────────────────────────────────────────────────────
 

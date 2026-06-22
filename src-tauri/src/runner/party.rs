@@ -570,13 +570,22 @@ pub(crate) fn current_slot_for_original_member_selection(
 ) -> Option<String> {
     let original_index = parse_index(value, "servant_")?;
     let original_member = original_members.get(original_index).cloned().flatten()?;
-    let current_index = members
+    if let Some(current_index) = members
         .iter()
-        .position(|current_member| current_member.as_ref() == Some(&original_member))?;
-    if !allowed.contains(&current_index) {
-        return None;
+        .position(|current_member| current_member.as_ref() == Some(&original_member))
+    {
+        if !allowed.contains(&current_index) {
+            return None;
+        }
+        return Some(format!("servant_{}", current_index + 1));
     }
-    Some(format!("servant_{}", current_index + 1))
+    // Original servant was removed from the field (e.g. NP self-death).
+    // Fall back to whoever currently occupies the same slot index so that
+    // subsequent actions configured for that position still execute.
+    if allowed.contains(&original_index) && members[original_index].is_some() {
+        return Some(format!("servant_{}", original_index + 1));
+    }
+    None
 }
 
 fn current_slot_for_member_ref(
@@ -589,28 +598,32 @@ fn current_slot_for_member_ref(
     allowed: std::ops::Range<usize>,
 ) -> Option<Option<String>> {
     if let Some(member_id) = member_id {
-        let current_index = members.iter().position(|member| {
+        if let Some(current_index) = members.iter().position(|member| {
             member
                 .as_ref()
                 .and_then(|member| member.member_id.as_deref())
                 == Some(member_id)
-        })?;
-        if !allowed.contains(&current_index) {
-            return None;
+        }) {
+            if !allowed.contains(&current_index) {
+                return None;
+            }
+            return Some(Some(format!("servant_{}", current_index + 1)));
         }
-        return Some(Some(format!("servant_{}", current_index + 1)));
+        // member_id not found: servant was removed from the field; fall through
     }
 
     if let Some(servant_id) = servant_id {
-        let current_index = members.iter().position(|member| {
+        if let Some(current_index) = members.iter().position(|member| {
             member.as_ref().is_some_and(|member| {
                 member.servant_id == servant_id && member.is_support == is_support
             })
-        })?;
-        if !allowed.contains(&current_index) {
-            return None;
+        }) {
+            if !allowed.contains(&current_index) {
+                return None;
+            }
+            return Some(Some(format!("servant_{}", current_index + 1)));
         }
-        return Some(Some(format!("servant_{}", current_index + 1)));
+        // servant_id not found: servant was removed from the field; fall through
     }
 
     match fallback_value {

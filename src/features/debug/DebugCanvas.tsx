@@ -53,6 +53,15 @@ const SUPPORT_GRAND_BADGE_H = 0.019;
 // overlay classifies a per-anchor score as a hit iff it clears this.
 const SUPPORT_GRAND_BADGE_MATCH_THRESHOLD = 0.65;
 
+// Mirrors `DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS` in
+// `sidecar/mash_cv/mash_cv/cv.py`. These boxes are display-only: the
+// sidecar still owns the actual gauge read.
+const NP_GAUGE_DIGIT_SLOT_REGIONS = [
+  { x: -2 / 57, y: 0, w: 21 / 57, h: 1 },
+  { x: 17 / 57, y: 0, w: 23 / 57, h: 1 },
+  { x: 38 / 57, y: 0, w: 21 / 57, h: 1 },
+] as const;
+
 /**
  * All overlay state the canvas renders. The host component owns the
  * data; this component is purely presentational so it can be reused by
@@ -63,7 +72,7 @@ export interface DebugCanvasState {
   imageSrc: string | null;
   probes: ProbeResult[];
   commandCards: CommandCardMatchDto[];
-  noblePhantasms: NoblePhantasmMatchDto[];
+  npGaugeSlots: NoblePhantasmMatchDto[];
   battleScene: BattleSceneResultDto | null;
   attackButton: AttackButtonResultDto | null;
   enhancementServantResult: EnhancementServantMatchResultDto | null;
@@ -84,7 +93,7 @@ export interface DebugCanvasProps extends DebugCanvasState {
 
 /**
  * Renders the screenshot plus every overlay layer (probes, command
- * cards, NPs, battle scene, attack button, supports, coord overlay).
+ * cards, NP gauges, battle scene, attack button, supports, coord overlay).
  * Extracted from DebugPage so the popout window can reuse it without
  * duplicating ~370 lines of overlay JSX.
  */
@@ -92,7 +101,7 @@ export function DebugCanvas({
   imageSrc,
   probes,
   commandCards,
-  noblePhantasms,
+  npGaugeSlots,
   battleScene,
   attackButton,
   enhancementServantResult,
@@ -233,27 +242,63 @@ export function DebugCanvas({
           }
           return overlays;
         })}
-        {noblePhantasms.map((s) => (
-          <Box
-            key={`np-slot-${s.slot}`}
-            className={`debug-overlay-box ${
-              s.ready
-                ? "debug-overlay-np-ready"
-                : "debug-overlay-np-empty"
-            }`}
-            style={{
-              left: `${s.cardRegion.x * 100}%`,
-              top: `${s.cardRegion.y * 100}%`,
-              width: `${s.cardRegion.w * 100}%`,
-              height: `${s.cardRegion.h * 100}%`,
-            }}
-          >
-            <span className="debug-overlay-label">
-              NP{s.slot + 1} · {s.ready ? "ready" : "empty"} · edge{" "}
-              {(s.edgeFrac * 100).toFixed(1)}% · std {s.stdBgr.toFixed(0)}
-            </span>
-          </Box>
-        ))}
+        {npGaugeSlots.map((s) => {
+          const region = s.gaugeRegion ?? s.cardRegion;
+          return (
+            <Box
+              key={`np-gauge-${s.slot}`}
+              className={`debug-overlay-box debug-overlay-np-gauge ${
+                s.ready ? "debug-overlay-np-ready" : "debug-overlay-np-empty"
+              }`}
+              style={{
+                left: `${region.x * 100}%`,
+                top: `${region.y * 100}%`,
+                width: `${region.w * 100}%`,
+                height: `${region.h * 100}%`,
+              }}
+            >
+              <span className="debug-overlay-label">
+                NP{s.slot + 1} · {s.ready ? "ready" : "not ready"} ·{" "}
+                {s.npGlowScore != null
+                  ? `端帽 ${s.npGlowScore.toFixed(3)}`
+                  : "端帽 ?"}
+                {s.gaugeDigitCount != null ? ` · gauge ${s.gaugeDigitCount}位` : ""}
+                {s.cardReady != null ? ` · card ${s.cardReady ? "hit" : "miss"}` : ""}
+              </span>
+              {s.gaugeRegion &&
+                NP_GAUGE_DIGIT_SLOT_REGIONS.map((digitRegion, idx) => (
+                  <span
+                    key={`np-gauge-${s.slot}-digit-${idx}`}
+                    className="debug-overlay-np-digit-slot"
+                    style={{
+                      left: `${digitRegion.x * 100}%`,
+                      top: `${digitRegion.y * 100}%`,
+                      width: `${digitRegion.w * 100}%`,
+                      height: `${digitRegion.h * 100}%`,
+                    }}
+                  />
+                ))}
+              {s.npGlowRegion && (
+                <span
+                  className={`debug-overlay-np-glow-slot ${
+                    s.npGlowReady ? "ready" : "miss"
+                  }`}
+                  style={{
+                    left: `${((s.npGlowRegion.x - region.x) / region.w) * 100}%`,
+                    top: `${((s.npGlowRegion.y - region.y) / region.h) * 100}%`,
+                    width: `${(s.npGlowRegion.w / region.w) * 100}%`,
+                    height: `${(s.npGlowRegion.h / region.h) * 100}%`,
+                  }}
+                  title={
+                    s.npGlowScore != null
+                      ? `端帽亮度 ${s.npGlowScore.toFixed(3)}`
+                      : "端帽亮度 ?"
+                  }
+                />
+              )}
+            </Box>
+          );
+        })}
         {battleScene && (
           <>
             <Box

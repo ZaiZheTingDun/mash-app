@@ -18,7 +18,7 @@ import type { CvConfig } from "../../types/cv";
 import type { CraftEssence } from "../../types/craftEssence";
 import type { Servant } from "../../types/servant";
 import type { SupportGrandBondCeMode } from "../../types/project";
-import type { DebugCanvasState } from "./DebugCanvas";
+import { DebugCanvas, type DebugCanvasState } from "./DebugCanvas";
 import { CraftEssenceSelectDialog } from "../team/CraftEssenceSelectDialog";
 import { ServantSelectDialog } from "../team/ServantSelectDialog";
 import { DebugSection } from "./DebugSection";
@@ -43,6 +43,8 @@ import type {
   BattleSceneResultDto,
   CommandCardMatchDto,
   DebugCaptureResult,
+  DebugStreamFrameResultDto,
+  DebugStreamStatusDto,
   ElementMatchDto,
   EnhancementServantMatchResultDto,
   FindSupportsResultDto,
@@ -89,6 +91,14 @@ export function DebugPage({
 }: DebugPageProps) {
   const initialPrefs = useMemo(() => readDebugPrefs(), []);
   const [capture, setCapture] = useState<DebugCaptureResult | null>(null);
+  const [liveFrame, setLiveFrame] = useState<DebugStreamFrameResultDto | null>(
+    null
+  );
+  const [streamStatus, setStreamStatus] = useState<DebugStreamStatusDto | null>(
+    null
+  );
+  const [connectingStream, setConnectingStream] = useState(false);
+  const [disconnectingStream, setDisconnectingStream] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(0);
 
   const [cvConfig, setCvConfig] = useState<CvConfig | null>(null);
@@ -111,6 +121,8 @@ export function DebugPage({
 
   const [probes, setProbes] = useState<ProbeResult[]>([]);
   const [capturing, setCapturing] = useState(false);
+  const [dynamicCapture, setDynamicCapture] = useState(false);
+  const [dynamicCapturePaused, setDynamicCapturePaused] = useState(false);
   const [probing, setProbing] = useState(false);
   const [reloading, setReloading] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -141,10 +153,9 @@ export function DebugPage({
   );
   const [commandCards, setCommandCards] = useState<CommandCardMatchDto[]>([]);
   const [findingCards, setFindingCards] = useState(false);
-  const [noblePhantasms, setNoblePhantasms] = useState<NoblePhantasmMatchDto[]>(
-    []
-  );
-  const [findingNps, setFindingNps] = useState(false);
+  const [npGaugeSlots, setNpGaugeSlots] = useState<NoblePhantasmMatchDto[]>([]);
+  const [debuggingNpGauges, setDebuggingNpGauges] = useState(false);
+  const [dynamicNpGaugeDebug, setDynamicNpGaugeDebug] = useState(false);
   const [battleScene, setBattleScene] =
     useState<BattleSceneResultDto | null>(null);
   const [readingBattleScene, setReadingBattleScene] = useState(false);
@@ -191,6 +202,8 @@ export function DebugPage({
   >(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const didShutdown = useRef(false);
+  const npGaugePollingInFlight = useRef(false);
+  const capturePollingInFlight = useRef(false);
 
   const log = useCallback(
     (message: string, level: LogEntry["level"] = "info") => {
@@ -393,35 +406,136 @@ export function DebugPage({
     return resolveElementSpec(selectedScreen, selectedElement);
   }, [cvConfig, resolveElementSpec, selectedScreen, selectedElement]);
 
+  const captureFrame = useCallback(
+    async (options: { logResult: boolean; clearOverlays: boolean }) => {
+      const result = await invoke<DebugCaptureResult>("debug_capture");
+      setCapture(result);
+      setLiveFrame(null);
+      setCacheBuster(Date.now());
+      if (options.clearOverlays) {
+        setProbes([]);
+        setCommandCards([]);
+        setNpGaugeSlots([]);
+        setBattleScene(null);
+        setAttackButton(null);
+        setSupportResult(null);
+        setEnhancementServantResult(null);
+      }
+      if (options.logResult) {
+        log(
+          `截图成功 | 画面 = ${result.screen} (score=${result.score.toFixed(3)})` +
+            (result.screenSize
+              ? ` | 设备 = ${result.screenSize.w}×${result.screenSize.h}`
+              : "")
+        );
+      }
+      if (result.screen !== "Unknown" && screenNames.includes(result.screen)) {
+        setSelectedScreen(result.screen);
+      }
+    },
+    [log, screenNames]
+  );
+
   const handleCapture = useCallback(async () => {
     setCapturing(true);
     log("调用 debug_capture…");
     try {
-      const result = await invoke<DebugCaptureResult>("debug_capture");
-      setCapture(result);
-      setCacheBuster(Date.now());
-      setProbes([]);
-      setCommandCards([]);
-      setNoblePhantasms([]);
-      setBattleScene(null);
-      setAttackButton(null);
-      setSupportResult(null);
-      setEnhancementServantResult(null);
-      log(
-        `截图成功 | 画面 = ${result.screen} (score=${result.score.toFixed(3)})` +
-          (result.screenSize
-            ? ` | 设备 = ${result.screenSize.w}×${result.screenSize.h}`
-            : "")
-      );
-      if (result.screen !== "Unknown" && screenNames.includes(result.screen)) {
-        setSelectedScreen(result.screen);
-      }
+      await captureFrame({ logResult: true, clearOverlays: true });
     } catch (err) {
       log(`debug_capture 失败: ${err}`, "error");
     } finally {
       setCapturing(false);
     }
-  }, [log, screenNames]);
+  }, [captureFrame, log]);
+
+  const handleConnectStream = useCallback(async () => {
+    setConnectingStream(true);
+    log("连接 scrcpy debug 视频流…");
+    try {
+      const status = await invoke<DebugStreamStatusDto>("debug_stream_connect");
+      setStreamStatus(status);
+      log(
+        status.screenSize
+          ? `scrcpy 已连接 | ${status.screenSize.w}×${status.screenSize.h}`
+          : "scrcpy 已连接"
+      );
+    } catch (err) {
+      log(`连接 scrcpy 失败: ${err}`, "error");
+    } finally {
+      setConnectingStream(false);
+    }
+  }, [log]);
+
+  const handleDisconnectStream = useCallback(async () => {
+    setDisconnectingStream(true);
+    log("断开 scrcpy debug 视频流…");
+    try {
+      const status = await invoke<DebugStreamStatusDto>("debug_stream_disconnect");
+      setStreamStatus(status);
+      setDynamicCapture(false);
+      setDynamicNpGaugeDebug(false);
+      setLiveFrame(null);
+      log("scrcpy 已断开");
+    } catch (err) {
+      log(`断开 scrcpy 失败: ${err}`, "error");
+    } finally {
+      setDisconnectingStream(false);
+    }
+  }, [log]);
+
+  const handleToggleDynamicCapture = useCallback(() => {
+    setDynamicCapture((enabled) => {
+      const next = !enabled;
+      if (next) {
+        setDynamicCapturePaused(false);
+      }
+      log(next ? "动态画面读取已开启，每 0.2 秒刷新" : "动态画面读取已停止");
+      return next;
+    });
+  }, [log]);
+
+  const handleToggleDynamicCapturePaused = useCallback(() => {
+    setDynamicCapturePaused((paused) => {
+      const next = !paused;
+      log(next ? "动态画面读取已暂停" : "动态画面读取已继续");
+      return next;
+    });
+  }, [log]);
+
+  useEffect(() => {
+    if (!dynamicCapture || dynamicCapturePaused) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      if (capturePollingInFlight.current) return;
+      capturePollingInFlight.current = true;
+      try {
+        const frame = await invoke<DebugStreamFrameResultDto>(
+          "debug_stream_frame",
+          { detectScreen: false }
+        );
+        setLiveFrame(frame);
+        setStreamStatus({
+          connected: true,
+          screenSize: { w: frame.width, h: frame.height },
+        });
+      } catch (err) {
+        if (!cancelled) {
+          log(`动态画面读取失败: ${err}`, "error");
+          setDynamicCapture(false);
+        }
+      } finally {
+        capturePollingInFlight.current = false;
+      }
+    };
+
+    poll();
+    const intervalId = window.setInterval(poll, 200);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [dynamicCapture, dynamicCapturePaused, log]);
 
   const handleProbeByName = useCallback(async () => {
     if (!selectedScreen || !selectedElement) return;
@@ -494,7 +608,7 @@ export function DebugPage({
   const handleClearOverlays = useCallback(() => {
     setProbes([]);
     setCommandCards([]);
-    setNoblePhantasms([]);
+    setNpGaugeSlots([]);
     setBattleScene(null);
     setAttackButton(null);
     setSupportResult(null);
@@ -599,36 +713,84 @@ export function DebugPage({
     }
   }, [capture, selectedCardServantIds, displayServantName, log]);
 
-  const handleFindNoblePhantasms = useCallback(async () => {
-    if (!capture) return;
-    setFindingNps(true);
-    log("调用 debug_find_noble_phantasms");
-    try {
+  const readNpGauges = useCallback(
+    async (options: { logResult: boolean; live: boolean }) => {
       const slots = await invoke<NoblePhantasmMatchDto[]>(
-        "debug_find_noble_phantasms"
+        options.live
+          ? "debug_read_noble_phantasm_gauges_live"
+          : "debug_read_noble_phantasm_gauges"
       );
-      setNoblePhantasms(slots);
-      const readyCount = slots.filter((s) => s.ready).length;
-      const summary = slots
-        .map(
-          (s) =>
-            `NP${s.slot + 1}:${s.ready ? "有" : "无"}(${(s.edgeFrac * 100).toFixed(1)}%)`
-        )
-        .join("  ");
-      const threshold = slots[0]?.edgeThreshold;
-      const thresholdHint =
-        threshold !== undefined
-          ? ` · 阈值 ${(threshold * 100).toFixed(1)}%`
-          : "";
-      log(
-        `识别到 ${readyCount}/${slots.length} 张宝具卡${thresholdHint} | ${summary}`
-      );
+      setNpGaugeSlots(slots);
+      if (options.logResult) {
+        const readyCount = slots.filter((s) => s.ready).length;
+        const summary = slots
+          .map(
+            (s) =>
+              `NP${s.slot + 1}:${s.ready ? "有" : "无"}(${s.readySource ?? "unknown"}${
+                s.npGlowScore != null ? ` 端帽:${s.npGlowScore.toFixed(3)}` : ""
+              }${s.gaugeDigitCount != null ? ` digit:${s.gaugeDigitCount}位` : ""}${
+                s.cardReady != null ? ` card:${s.cardReady ? "hit" : "miss"}` : ""
+              })`
+          )
+          .join("  ");
+        const label = options.live ? "动态宝具端帽" : "宝具 gauge";
+        log(`${label}: ${readyCount}/${slots.length} 就绪 | ${summary}`);
+      }
+    },
+    [log]
+  );
+
+  const handleDebugNpGauges = useCallback(async () => {
+    if (!capture) return;
+    setDebuggingNpGauges(true);
+    log("调用 debug_read_noble_phantasm_gauges");
+    try {
+      await readNpGauges({ logResult: true, live: false });
     } catch (err) {
-      log(`debug_find_noble_phantasms 失败: ${err}`, "error");
+      log(`debug_read_noble_phantasm_gauges 失败: ${err}`, "error");
     } finally {
-      setFindingNps(false);
+      setDebuggingNpGauges(false);
     }
-  }, [capture, log]);
+  }, [capture, log, readNpGauges]);
+
+  const handleToggleDynamicNpGaugeDebug = useCallback(() => {
+    setDynamicNpGaugeDebug((enabled) => {
+      const next = !enabled;
+      log(
+        next
+          ? "动态宝具端帽检测已开启，每 1 秒连续采样"
+          : "动态宝具端帽检测已停止"
+      );
+      return next;
+    });
+  }, [log]);
+
+  useEffect(() => {
+    if (!dynamicNpGaugeDebug) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      if (npGaugePollingInFlight.current) return;
+      npGaugePollingInFlight.current = true;
+      try {
+        await readNpGauges({ logResult: true, live: true });
+      } catch (err) {
+        if (!cancelled) {
+          log(`动态宝具端帽检测失败: ${err}`, "error");
+          setDynamicNpGaugeDebug(false);
+        }
+      } finally {
+        npGaugePollingInFlight.current = false;
+      }
+    };
+
+    poll();
+    const intervalId = window.setInterval(poll, 200);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [dynamicNpGaugeDebug, log, readNpGauges]);
 
   const handleReadBattleScene = useCallback(async () => {
     if (!capture) return;
@@ -946,6 +1108,10 @@ export function DebugPage({
     log("重启 sidecar 并重新加载模板/配置…");
     try {
       await invoke("debug_reload_sidecar");
+      setStreamStatus(null);
+      setDynamicCapture(false);
+      setDynamicNpGaugeDebug(false);
+      setLiveFrame(null);
       log("sidecar 已重启，模板、cv.json 与 CV 代码已重新读取");
       await loadConfig();
       await loadTemplateList();
@@ -956,16 +1122,18 @@ export function DebugPage({
     }
   }, [log, loadConfig, loadTemplateList]);
 
-  const imageSrc = capture
-    ? `${convertFileSrc(capture.imagePath)}?t=${cacheBuster}`
-    : null;
+  const imageSrc = liveFrame
+    ? `data:image/jpeg;base64,${liveFrame.jpegBase64}`
+    : capture
+      ? `${convertFileSrc(capture.imagePath)}?t=${cacheBuster}`
+      : null;
 
   const canvasState: DebugCanvasState = useMemo(
     () => ({
       imageSrc,
       probes,
       commandCards,
-      noblePhantasms,
+      npGaugeSlots,
       battleScene,
       attackButton,
       enhancementServantResult,
@@ -978,7 +1146,7 @@ export function DebugPage({
       imageSrc,
       probes,
       commandCards,
-      noblePhantasms,
+      npGaugeSlots,
       battleScene,
       attackButton,
       enhancementServantResult,
@@ -1028,11 +1196,54 @@ export function DebugPage({
             <Button
               type="button"
               size="3"
-              disabled={capturing}
+              disabled={capturing || dynamicCapture}
               onClick={handleCapture}
             >
               {capturing ? "截取中…" : "截取画面"}
             </Button>
+
+            <Button
+              type="button"
+              size="1"
+              variant={streamStatus?.connected ? "solid" : "soft"}
+              color={streamStatus?.connected ? "green" : "gray"}
+              disabled={connectingStream || disconnectingStream}
+              onClick={
+                streamStatus?.connected
+                  ? handleDisconnectStream
+                  : handleConnectStream
+              }
+            >
+              {connectingStream
+                ? "连接中…"
+                : disconnectingStream
+                  ? "断开中…"
+                  : streamStatus?.connected
+                    ? "断开 scrcpy"
+                    : "连接 scrcpy"}
+            </Button>
+
+            <Button
+              type="button"
+              size="1"
+              variant={dynamicCapture ? "solid" : "soft"}
+              color={dynamicCapture ? "amber" : "gray"}
+              disabled={connectingStream || disconnectingStream}
+              onClick={handleToggleDynamicCapture}
+            >
+              {dynamicCapture ? "停止动态画面" : "动态读取画面"}
+            </Button>
+
+            {dynamicCapture && (
+              <Button
+                type="button"
+                size="1"
+                variant="surface"
+                onClick={handleToggleDynamicCapturePaused}
+              >
+                {dynamicCapturePaused ? "继续" : "暂停"}
+              </Button>
+            )}
 
             <Button
               type="button"
@@ -1111,7 +1322,7 @@ export function DebugPage({
               disabled={
                 probes.length === 0 &&
                 commandCards.length === 0 &&
-                noblePhantasms.length === 0 &&
+                npGaugeSlots.length === 0 &&
                 supportResult === null &&
                 enhancementServantResult === null &&
                 battleScene === null &&
@@ -1122,6 +1333,8 @@ export function DebugPage({
               清除标注
             </Button>
           </Flex>
+
+          <DebugCanvas {...canvasState} />
 
           <DebugSection title="原始模板探针">
             <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
@@ -1166,7 +1379,7 @@ export function DebugPage({
             </Flex>
           </DebugSection>
 
-          <DebugSection title="指令卡 / 宝具卡识别">
+          <DebugSection title="指令卡识别">
             <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
               <Flex align="center" gap="1" wrap="wrap" className="debug-servant-choice-list">
                 {selectedCardServantIds.length === 0 ? (
@@ -1215,13 +1428,28 @@ export function DebugPage({
               >
                 {findingCards ? "识别中…" : "识别指令卡"}
               </Button>
+            </Flex>
+          </DebugSection>
+
+          <DebugSection title="宝具调试">
+            <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
               <Button
                 type="button"
                 size="1"
-                disabled={findingNps || !capture}
-                onClick={handleFindNoblePhantasms}
+                disabled={debuggingNpGauges || dynamicNpGaugeDebug || !capture}
+                onClick={handleDebugNpGauges}
               >
-                {findingNps ? "识别中…" : "识别宝具卡"}
+                {debuggingNpGauges ? "读取中…" : "读取宝具 gauge"}
+              </Button>
+              <Button
+                type="button"
+                size="1"
+                variant={dynamicNpGaugeDebug ? "solid" : "soft"}
+                color={dynamicNpGaugeDebug ? "amber" : "gray"}
+                disabled={connectingStream || disconnectingStream}
+                onClick={handleToggleDynamicNpGaugeDebug}
+              >
+                {dynamicNpGaugeDebug ? "停止动态检测" : "动态检测端帽"}
               </Button>
             </Flex>
           </DebugSection>
@@ -1538,7 +1766,7 @@ export function DebugPage({
             </Text>
             <Box className="debug-screen-badge">
               <Text size="3" weight="bold">
-                {capture?.screen ?? "—"}
+                {capture?.screen ?? liveFrame?.screen ?? "—"}
               </Text>
               {capture && (
                 <Text size="1" color="gray">
@@ -1548,6 +1776,17 @@ export function DebugPage({
               {capture?.screenSize && (
                 <Text size="1" color="gray">
                   设备 {capture.screenSize.w} × {capture.screenSize.h}
+                </Text>
+              )}
+              {liveFrame && (
+                <Text size="1" color="gray">
+                  scrcpy {liveFrame.width} × {liveFrame.height}
+                  {dynamicCapturePaused ? " · 已暂停" : ""}
+                </Text>
+              )}
+              {streamStatus?.connected && !liveFrame && streamStatus.screenSize && (
+                <Text size="1" color="gray">
+                  scrcpy {streamStatus.screenSize.w} × {streamStatus.screenSize.h}
                 </Text>
               )}
             </Box>
@@ -1645,35 +1884,47 @@ export function DebugPage({
           </DebugSection>
 
           <DebugSection
-            title="宝具卡识别"
+            title="宝具调试"
             badge={
-              noblePhantasms.length > 0
-                ? `${noblePhantasms.filter((s) => s.ready).length}/${noblePhantasms.length}`
+              npGaugeSlots.length > 0
+                ? `${npGaugeSlots.filter((s) => s.ready).length}/${npGaugeSlots.length}`
                 : undefined
             }
           >
             <Box className="debug-match-list">
-              {noblePhantasms.length === 0 && (
+              {npGaugeSlots.length === 0 && (
                 <Text size="1" color="gray">
-                  暂无识别结果
+                  暂无调试结果
                 </Text>
               )}
-              {noblePhantasms.map((s) => (
+              {npGaugeSlots.map((s) => (
                 <Box
                   key={`np-row-${s.slot}`}
-                  className={`debug-match-entry ${s.ready ? "found" : "missed"}`}
+                  className={`debug-match-entry ${
+                    s.npGlowScore == null ? "missed" : s.ready ? "found" : ""
+                  }`}
                 >
                   <Flex justify="between" align="center">
                     <Text size="2" weight="medium">
                       NP{s.slot + 1}
                     </Text>
-                    <Text size="1" color={s.ready ? "green" : "gray"}>
-                      {s.ready ? "ready" : "empty"}
+                    <Text
+                      size="1"
+                      color={s.npGlowScore == null ? "gray" : s.ready ? "green" : "amber"}
+                    >
+                      {s.npGlowScore == null ? "unknown" : s.ready ? "ready" : "not ready"}
                     </Text>
                   </Flex>
                   <Text size="1" color="gray">
-                    edge {(s.edgeFrac * 100).toFixed(2)}% · std{" "}
-                    {s.stdBgr.toFixed(1)}
+                    {s.npGlowScore != null
+                      ? `端帽亮度 ${s.npGlowScore.toFixed(3)}${
+                          s.npGlowReady ? " 亮" : ""
+                        }`
+                      : "端帽未识别"}
+                    {s.gaugeDigitCount != null ? ` · digit ${s.gaugeDigitCount}位` : ""}
+                    {s.cardReady != null
+                      ? ` · card ${s.cardReady ? "hit" : "miss"} edge ${(s.edgeFrac * 100).toFixed(2)}%`
+                      : ""}
                   </Text>
                 </Box>
               ))}

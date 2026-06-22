@@ -11,7 +11,7 @@ function makeState(overrides: Partial<DebugCanvasState> = {}): DebugCanvasState 
     imageSrc: null,
     probes: [],
     commandCards: [],
-    noblePhantasms: [],
+    npGaugeSlots: [],
     battleScene: null,
     attackButton: null,
     enhancementServantResult: null,
@@ -124,6 +124,46 @@ describe("DebugCanvas", () => {
     expect(container.querySelector(".debug-coord-region")).toBeNull();
     // Coord-only points (no attack button etc.) should also be hidden.
     expect(container.querySelectorAll(".debug-coord-dot").length).toBe(0);
+  });
+
+  it("renders NP gauge digit slot overlays inside the gauge region", () => {
+    const { container } = renderWithTheme(
+      <DebugCanvas
+        {...makeState({
+          imageSrc: "tauri://localhost/fake.png?t=4",
+          npGaugeSlots: [
+            {
+              slot: 0,
+              cardRegion: { x: 0.241, y: 0.097, w: 0.187, h: 0.396 },
+              ready: true,
+              edgeFrac: 0,
+              stdBgr: 0,
+              readySource: "glow",
+              gaugeDigitCount: 3,
+              cardReady: true,
+              gaugeRegion: { x: 0.182, y: 0.913, w: 0.0297, h: 0.0278 },
+              npGlowRegion: {
+                x: 0.23529166666666668,
+                y: 0.9398148148148148,
+                w: 0.00625,
+                h: 0.011111111111111112,
+              },
+              npGlowScore: 0.8,
+              npGlowReady: true,
+            },
+          ],
+        })}
+      />
+    );
+
+    expect(container.querySelectorAll(".debug-overlay-np-gauge").length).toBe(1);
+    expect(container.querySelectorAll(".debug-overlay-np-digit-slot").length).toBe(3);
+    expect(container.querySelectorAll(".debug-overlay-np-glow-slot.ready").length).toBe(1);
+    expect(
+      container.textContent?.includes(
+        "NP1 · ready · 端帽 0.800 · gauge 3位 · card hit"
+      )
+    ).toBe(true);
   });
 
   it("colors each Grand-badge ROI by its own per-anchor score, not the aggregate flag", () => {

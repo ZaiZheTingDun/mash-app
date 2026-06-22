@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::adb;
 use crate::commands::settings::RecognitionSettings;
@@ -8,7 +10,7 @@ use crate::enhancement_runner::{
     EnhancementRunnerHandle, EnhancementRunnerState, SERVANT_FACE_MATCH_CROP,
     SERVANT_FACE_TEMPLATE_SIZE, SERVANT_LIST_REGION,
 };
-use crate::runner::{self, RunnerHandle, RunnerState};
+use crate::runner::{self, merge_best_np_slots, RunnerHandle, RunnerState};
 use crate::screen::{
     CommandCardMatch, ElementMatch, FindEnhancementServantGridResult, FindSupportsResult,
     NoblePhantasmMatch, NormRect, Point, ServantGridAnchor, ServantGridCell, ServantGridFaceMatch,
@@ -47,6 +49,24 @@ pub struct DebugCaptureResult {
     screen: String,
     score: f64,
     screen_size: Option<DebugScreenSize>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DebugStreamStatus {
+    connected: bool,
+    screen_size: Option<DebugScreenSize>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DebugStreamFrameResult {
+    jpeg_base64: String,
+    width: u32,
+    height: u32,
+    screen: Option<String>,
+    score: Option<f64>,
+    timestamp_ms: u128,
 }
 
 fn debug_image_path(app: &tauri::AppHandle) -> PathBuf {
@@ -138,6 +158,34 @@ fn ensure_debug_stream(
         return Err(crate::stream_resolution_error(w, h));
     }
     Ok(())
+}
+
+fn ensure_debug_stream_for_current_device(
+    app: &tauri::AppHandle,
+    bluestack_state: &Mutex<bool>,
+    server_state: &Mutex<Server>,
+    debug_state: &DebugSidecar,
+) -> Result<(), String> {
+    let use_bluestack = *bluestack_state.lock().unwrap();
+    let server = current_server(server_state);
+    let mut adb_dev = adb::Adb::new(app, use_bluestack);
+    adb_dev.connect()?;
+    let serial = adb_dev.serial().map(|s| s.to_string());
+    ensure_debug_stream(app, debug_state, server, serial.as_deref())
+}
+
+fn debug_stream_status(debug_state: &DebugSidecar) -> DebugStreamStatus {
+    let screen_size = debug_state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|client| client.stream_size())
+        .map(|(w, h)| DebugScreenSize { w, h });
+    DebugStreamStatus {
+        connected: screen_size.is_some(),
+        screen_size,
+    }
 }
 
 /// Returns Err with a user-facing message when automation is currently
@@ -321,6 +369,117 @@ pub fn debug_capture(
         score,
         screen_size: stream_size.map(|(w, h)| DebugScreenSize { w, h }),
     })
+}
+
+#[tauri::command]
+pub fn debug_stream_connect(
+    app: tauri::AppHandle,
+    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    server_state: tauri::State<'_, Mutex<Server>>,
+    debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+) -> Result<DebugStreamStatus, String> {
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    ensure_debug_stream_for_current_device(&app, &bluestack_state, &server_state, &debug_state)?;
+    Ok(debug_stream_status(&debug_state))
+}
+
+#[tauri::command]
+pub fn debug_stream_disconnect(
+    debug_state: tauri::State<'_, DebugSidecar>,
+) -> Result<DebugStreamStatus, String> {
+    {
+        let mut guard = debug_state.0.lock().unwrap();
+        if let Some(client) = guard.as_mut() {
+            if client.stream_size().is_some() {
+                client.stop_stream()?;
+            }
+        }
+    }
+    Ok(debug_stream_status(&debug_state))
+}
+
+#[tauri::command]
+pub fn debug_stream_frame(
+    app: tauri::AppHandle,
+    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    server_state: tauri::State<'_, Mutex<Server>>,
+    debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    detect_screen: Option<bool>,
+) -> Result<DebugStreamFrameResult, String> {
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    ensure_debug_stream_for_current_device(&app, &bluestack_state, &server_state, &debug_state)?;
+
+    let (jpeg_base64, width, height, screen, score) = {
+        let mut guard = debug_state.0.lock().unwrap();
+        let client = guard
+            .as_mut()
+            .ok_or_else(|| "debug sidecar not initialized".to_string())?;
+        let (jpeg_base64, width, height) = client.get_frame_jpeg_base64(0.2)?;
+        let (screen, score) = if detect_screen.unwrap_or(false) {
+            let (screen, score) = client.detect_label_full(None)?;
+            (Some(screen), Some(score))
+        } else {
+            (None, None)
+        };
+        (jpeg_base64, width, height, screen, score)
+    };
+
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+
+    Ok(DebugStreamFrameResult {
+        jpeg_base64,
+        width,
+        height,
+        screen,
+        score,
+        timestamp_ms,
+    })
+}
+
+#[tauri::command]
+pub fn debug_read_noble_phantasm_gauges_live(
+    app: tauri::AppHandle,
+    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    server_state: tauri::State<'_, Mutex<Server>>,
+    debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+) -> Result<Vec<NoblePhantasmMatch>, String> {
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    ensure_debug_stream_for_current_device(&app, &bluestack_state, &server_state, &debug_state)?;
+
+    let started = Instant::now();
+    let sample_interval = Duration::from_millis(200);
+    let sample_window = Duration::from_secs(1);
+    let mut best_slots: Option<Vec<NoblePhantasmMatch>> = None;
+
+    loop {
+        let sample = {
+            let mut guard = debug_state.0.lock().unwrap();
+            let client = guard
+                .as_mut()
+                .ok_or_else(|| "debug sidecar not initialized".to_string())?;
+            client.find_noble_phantasms(None, None)?
+        };
+
+        merge_best_np_slots(&mut best_slots, sample);
+
+        if started.elapsed() >= sample_window {
+            break;
+        }
+        thread::sleep(sample_interval);
+    }
+
+    let mut slots = best_slots.unwrap_or_default();
+    slots.sort_by_key(|slot| slot.slot);
+    Ok(slots)
 }
 
 #[tauri::command]
@@ -558,34 +717,49 @@ pub fn debug_find_command_cards(
     Ok(cards)
 }
 
-/// Run the NP-readiness detector against the most recent debug screenshot.
-/// Returns one record per Noble Phantasm card slot, each with a
-/// ``ready`` flag plus the underlying edge-density / std measurements
-/// for tuning.
+fn read_noble_phantasm_gauges(
+    app: &tauri::AppHandle,
+    server_state: &tauri::State<'_, Mutex<Server>>,
+    debug_state: &tauri::State<'_, DebugSidecar>,
+    handle_state: &tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: &tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+) -> Result<Vec<NoblePhantasmMatch>, String> {
+    require_automation_idle(handle_state, enhancement_handle_state)?;
+
+    let image_path = debug_image_path(app);
+    if !image_path.exists() {
+        return Err("尚未截取画面，请先点击 截取画面".into());
+    }
+
+    ensure_debug_sidecar(app, debug_state, current_server(server_state))?;
+
+    let mut guard = debug_state.0.lock().unwrap();
+    let client = guard
+        .as_mut()
+        .ok_or_else(|| "debug sidecar not initialized".to_string())?;
+    client.find_noble_phantasms(Some(&image_path), None)
+}
+
+/// Debug the bottom NP-gauge percentage detector against the most recent
+/// debug screenshot. Returns one record per front-line servant, including
+/// the gauge ROI and visible digit count.
 #[tauri::command]
-pub fn debug_find_noble_phantasms(
+pub fn debug_read_noble_phantasm_gauges(
     app: tauri::AppHandle,
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
 ) -> Result<Vec<NoblePhantasmMatch>, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
-
-    let image_path = debug_image_path(&app);
-    if !image_path.exists() {
-        return Err("尚未截取画面，请先点击 截取画面".into());
-    }
-
-    ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))?;
-
-    let mut guard = debug_state.0.lock().unwrap();
-    let client = guard
-        .as_mut()
-        .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-    let slots = client.find_noble_phantasms(Some(&image_path), None)?;
+    let slots = read_noble_phantasm_gauges(
+        &app,
+        &server_state,
+        &debug_state,
+        &handle_state,
+        &enhancement_handle_state,
+    )?;
     eprintln!(
-        "[debug_find_noble_phantasms] {} slot(s) found, ready={}",
+        "[debug_read_noble_phantasm_gauges] {} slot(s) found, ready={}",
         slots.len(),
         slots.iter().filter(|s| s.ready).count(),
     );

@@ -35,8 +35,8 @@ stream frame is used):
                                                        per-digit candidates+kept lists, splitAt, bestGap,
                                                        avgWidth, and a failReason enum.)
 → {"cmd":"find_noble_phantasms"}                    ← {"slots":[{"slot":0,"cardRegion":{...},
-                                                                  "ready":true,"edgeFrac":0.12,
-                                                                  "stdBgr":91.4}, ...]}
+                                                                  "ready":true,"readySource":"glow",
+                                                                  "npGlowScore":0.61}, ...]}
 → {"cmd":"find_supports","expectedName":"アルトリア・キャスター",
     "expectedNames":["アルトリア・キャスター","キャストリア"],
     "expectedNpNames":["きみをいだく希望の星"]}
@@ -183,46 +183,46 @@ FACE_FALLBACK_CROP_REL_Y1 = 0.5
 # ---------------------------------------------------------------------------
 # Noble-Phantasm (NP) card layout
 # ---------------------------------------------------------------------------
-# The three NP card slots sit in the upper band of the attack screen —
-# one per front-line servant. A slot is occupied iff that servant's NP
-# gauge is at >= 100%; otherwise the slot is empty and the battle scene
-# shows through.
-#
-# Detection uses Canny edge density inside the slot rather than template
-# matching against the NP frame: the NP card is the only thing in this
-# region of the screen with a dense, geometric X-frame + face circle +
-# text glyphs (~12% edges). An empty slot shows the much smoother battle
-# background (~5% edges). The threshold sits comfortably between the two
-# clusters and is robust against scenes where the background happens to
-# be uniformly colorful (which would defeat a saturation-only check).
+# The three NP card slots sit in the upper band of the attack screen and
+# remain the tap targets once a slot is ready. Readiness itself is decided
+# from the bottom NP-gauge percentage regions below.
 DEFAULT_NP_CARD_SLOTS: tuple[dict, ...] = (
     {"x": 0.241, "y": 0.097, "w": 0.187, "h": 0.396},
     {"x": 0.410, "y": 0.097, "w": 0.187, "h": 0.396},
     {"x": 0.603, "y": 0.097, "w": 0.187, "h": 0.396},
 )
-# Readiness thresholds. We do NOT use a single fixed cutoff because edge
-# density varies across servers/resolutions/art styles: a dark NP card
-# (e.g. CN Morgan's "Roadless Camelot") can sit at ~5% edges while a JP
-# attack scene's empty slot over a busy background can also sit at ~5%.
-# Instead the detector adapts per-frame using the lowest slot as an
-# "empty" baseline, falling back to absolute cutoffs when no slot is
-# clearly empty.
-NP_READY_EDGE_HIGH = 0.07           # Absolute "definitely ready" cutoff.
-NP_READY_EDGE_LOW = 0.035           # Floor for the adaptive threshold.
-NP_EMPTY_EDGE_HINT = 0.03           # Slot below this is treated as empty baseline.
-NP_READY_BASELINE_RATIO = 2.0       # Slot must exceed baseline * ratio to count.
-NP_READY_STD_BGR = 60.0             # Color-variance backstop: dense art always > this,
-                                    # empty backgrounds we've seen sit < 50.
-NP_READY_BRIGHT_MIN = 0.08          # Ready NP cards have a bright card frame / backing;
-                                    # enemy UI in the same band can be edgy but not bright.
+# Bottom NP-gauge percentage ROIs on the battle / attack screen. These
+# regions cover the numeric part of the gauge, not the trailing percent
+# sign. A value below 100 is two digits; 100% and overcharge values are
+# three digits, so readiness can be decided without classifying each glyph.
+DEFAULT_NP_GAUGE_DIGIT_REGIONS: tuple[dict, ...] = (
+    {"x": 0.182, "y": 0.913, "w": 0.0297, "h": 0.0278},
+    {"x": 0.429, "y": 0.913, "w": 0.0297, "h": 0.0278},
+    {"x": 0.678, "y": 0.913, "w": 0.0297, "h": 0.0278},
+)
+# Slot-relative digit regions inside each bottom NP-gauge ROI. The gauge
+# text is right-aligned: values below 100 populate only tens + ones, while
+# 100% and overcharge values also populate the hundreds slot.
+DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS: tuple[dict, ...] = (
+    {"x": -2.0 / 57.0, "y": 0.0, "w": 21.0 / 57.0, "h": 1.0},
+    {"x": 17.0 / 57.0, "y": 0.0, "w": 23.0 / 57.0, "h": 1.0},
+    {"x": 38.0 / 57.0, "y": 0.0, "w": 21.0 / 57.0, "h": 1.0},
+)
+NP_READY_EDGE_HIGH = 0.07
+NP_READY_EDGE_LOW = 0.035
+NP_EMPTY_EDGE_HINT = 0.03
+NP_READY_BASELINE_RATIO = 2.0
+NP_READY_STD_BGR = 60.0
+NP_READY_BRIGHT_MIN = 0.08
 NP_CANNY_LOW = 80
 NP_CANNY_HIGH = 160
-
-# Kept for backwards compatibility with callers/tests that still import
-# the old constant; the live detector no longer reads it.
 NP_READY_EDGE_THRESHOLD = NP_READY_EDGE_HIGH
-
-
+NP_GAUGE_HUNDREDS_TEMPLATE_MIN_SCORE = 0.35
+NP_GAUGE_GLOW_OFFSET_X = 0.05329166666666668
+NP_GAUGE_GLOW_OFFSET_Y = 0.026814814814814736
+NP_GAUGE_GLOW_W = 0.00625
+NP_GAUGE_GLOW_H = 0.011111111111111112
+NP_GAUGE_GLOW_READY_THRESHOLD = 0.5
 # ---------------------------------------------------------------------------
 # Support-select OCR layout
 # ---------------------------------------------------------------------------
@@ -2192,41 +2192,125 @@ def _find_command_cards(
     return {"cards": cards}
 
 
-def _decide_np_ready(
+def _child_norm_rect(parent: dict, child: dict) -> dict:
+    return {
+        "x": parent["x"] + parent["w"] * child["x"],
+        "y": parent["y"] + parent["h"] * child["y"],
+        "w": parent["w"] * child["w"],
+        "h": parent["h"] * child["h"],
+    }
+
+
+def _np_gauge_digit_slot_visible(img: np.ndarray, region: dict) -> bool:
+    """Return whether one fixed NP-gauge digit slot contains a digit body."""
+    h, w = img.shape[:2]
+    rx = max(0, int(round(region["x"] * w)))
+    ry = max(0, int(round(region["y"] * h)))
+    rw = max(1, min(int(round(region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(region["h"] * h)), h - ry))
+    roi = img[ry : ry + rh, rx : rx + rw]
+    if roi.size == 0:
+        return False
+
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    min_width = max(2, int(rw * 0.07))
+    min_height = max(10, int(rh * 0.45))
+    max_height = max(min_height, int(rh * 1.05))
+    min_area = max(18, int(rw * rh * 0.065))
+    max_area = int(rw * rh * 0.75)
+    max_top_y = int(rh * 0.42)
+    min_bottom_y = int(rh * 0.45)
+
+    for threshold in (100, 120, 140, 160):
+        mask = cv2.inRange(gray, threshold, 255)
+        count, _labels, stats, _centroids = cv2.connectedComponentsWithStats(mask, 8)
+        for idx in range(1, count):
+            x, y, cw, ch, area = [int(v) for v in stats[idx]]
+            if cw < min_width:
+                continue
+            if ch < min_height or ch > max_height:
+                continue
+            if area < min_area or area > max_area:
+                continue
+            if y > max_top_y:
+                continue
+            if y + ch < min_bottom_y:
+                continue
+            return True
+    return False
+
+
+def _np_gauge_hundreds_slot_visible(img: np.ndarray, region: dict) -> bool:
+    if not _np_gauge_digit_slot_visible(img, region):
+        return False
+
+    template_refs = _load_crit_digit_templates("digit_", "")
+    if template_refs is None:
+        return True
+
+    digit, score = _best_crit_digit_in_region(img, region, template_refs)
+    return (
+        digit is not None
+        and 1 <= digit <= 5
+        and score >= NP_GAUGE_HUNDREDS_TEMPLATE_MIN_SCORE
+    )
+
+
+def _np_gauge_glow_region(region: dict) -> dict:
+    return {
+        "x": region["x"] + NP_GAUGE_GLOW_OFFSET_X,
+        "y": region["y"] + NP_GAUGE_GLOW_OFFSET_Y,
+        "w": NP_GAUGE_GLOW_W,
+        "h": NP_GAUGE_GLOW_H,
+    }
+
+
+def _np_gauge_glow_score(img: np.ndarray, region: dict) -> Optional[float]:
+    h, w = img.shape[:2]
+    rx = max(0, int(round(region["x"] * w)))
+    ry = max(0, int(round(region["y"] * h)))
+    if rx >= w or ry >= h:
+        return None
+    rw = max(1, min(int(round(region["w"] * w)), w - rx))
+    rh = max(1, min(int(round(region["h"] * h)), h - ry))
+    roi = img[ry : ry + rh, rx : rx + rw]
+    if roi.size == 0:
+        return None
+
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    return float(gray.mean() / 255.0)
+
+
+def _read_np_gauge_digit_count(img: np.ndarray, region: dict) -> Optional[int]:
+    """Return the stable two- or three-digit shape of one NP gauge.
+
+    The bottom gauge uses fixed right-aligned digit slots. Values below
+    100 populate tens + ones, while 100% and overcharge values also populate
+    the hundreds slot. Any partial or contradictory pattern is reported as
+    unknown so the runner can retry after transient overlays disappear.
+    """
+    digit_regions = [
+        _child_norm_rect(region, digit_region)
+        for digit_region in DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS
+    ]
+    digits = [
+        _np_gauge_hundreds_slot_visible(img, digit_regions[0]),
+        _np_gauge_digit_slot_visible(img, digit_regions[1]),
+        _np_gauge_digit_slot_visible(img, digit_regions[2]),
+    ]
+    if all(digits):
+        return 3
+    if not digits[0] and digits[1] and digits[2]:
+        return 2
+    return None
+
+
+def _decide_np_card_ready(
     edge_fracs: list[float],
     std_bgrs: list[float],
     bright_fracs: Optional[list[float]] = None,
     edge_threshold: float | None = None,
 ) -> tuple[list[bool], float]:
-    """Decide ready/empty for each NP slot from its edge + color signals.
-
-    If ``edge_threshold`` is provided, fall back to the legacy single
-    fixed-cutoff behaviour (slot is ready iff ``edgeFrac >= threshold``).
-    This branch exists so the JSON dispatcher and unit tests can still
-    pin a specific cutoff for calibration.
-
-    Otherwise pick a per-frame adaptive cutoff:
-
-      * If the lowest slot is clearly empty (edge_frac <
-        ``NP_EMPTY_EDGE_HINT``) it anchors the scene background — a slot
-        is ready iff its edge_frac is at least ``2x`` of that baseline,
-        floored at ``NP_READY_EDGE_LOW``. This handles the common case
-        of "1 empty + N ready" where one of the ready cards has dark or
-        low-detail art (e.g. CN Morgan, Stella) and would otherwise dip
-        below an absolute 0.08 cutoff calibrated against busier art.
-      * Otherwise (no slot looks empty — could be all-ready or
-        all-busy-background) use the conservative absolute cutoff
-        ``NP_READY_EDGE_HIGH``.
-
-    A high color-variance signal (``stdBgr >= NP_READY_STD_BGR``) can
-    also satisfy the edge/texture side of the decision. In the adaptive
-    path, the slot must additionally contain enough very bright pixels
-    from the NP card frame/backing; otherwise busy enemy UI in the same
-    upper band can look edgy enough to exceed the cutoff.
-
-    Returns ``(ready_flags, edge_threshold_used)`` so callers can echo
-    the active threshold back to the debug UI for visibility.
-    """
     if edge_threshold is not None:
         return ([e >= edge_threshold for e in edge_fracs], edge_threshold)
 
@@ -2252,26 +2336,24 @@ def _decide_np_ready(
 def _find_noble_phantasms(
     img: np.ndarray,
     np_regions: list[dict],
-    edge_threshold: float | None = None,
+    np_gauge_regions: Optional[list[dict]] = None,
 ) -> dict:
-    """Report whether each fixed NP card slot currently holds a card.
+    """Report Noble Phantasm readiness for each fixed NP slot.
 
-    For every slot in ``np_regions`` we crop the slot, compute Canny
-    edge density and BGR std on the crop, then hand the per-slot
-    measurements to :func:`_decide_np_ready` to pick an adaptive
-    threshold for the frame. The active threshold is returned per-slot
-    (and at the response top level) so the debug UI can show why a slot
-    was flagged ready/empty.
-
-    ``edge_threshold`` overrides the adaptive logic with a fixed cutoff
-    when provided — used by calibration tools and unit tests.
+    Readiness is decided by the bright glow cap near the bottom NP gauge:
+    ``npGlowScore >= NP_GAUGE_GLOW_READY_THRESHOLD``. The bottom digit count
+    and legacy upper NP-card texture detector are returned for debugging and
+    future configuration, but neither participates in the current ``ready``
+    flag.
 
     Returns one record per slot so callers can render every slot in a
     debug overlay regardless of readiness.
     """
     h, w = img.shape[:2]
     if h == 0 or w == 0 or not np_regions:
-        return {"slots": [], "edgeThreshold": NP_READY_EDGE_HIGH}
+        return {"slots": [], "edgeThreshold": 0.0}
+
+    gauge_regions = np_gauge_regions or list(DEFAULT_NP_GAUGE_DIGIT_REGIONS)
 
     measurements: list[tuple[int, int, int, int, float, float, float]] = []
     for region in np_regions:
@@ -2292,14 +2374,29 @@ def _find_noble_phantasms(
     edge_fracs = [m[4] for m in measurements]
     std_bgrs = [m[5] for m in measurements]
     bright_fracs = [m[6] for m in measurements]
-    ready_flags, edge_thr = _decide_np_ready(
-        edge_fracs, std_bgrs, bright_fracs, edge_threshold
+    card_ready_flags, edge_thr = _decide_np_card_ready(
+        edge_fracs, std_bgrs, bright_fracs, None
     )
 
     slots: list[dict] = []
-    for slot, ((sx, sy, sw, sh, edge_frac, std_bgr, _bright_frac), ready) in enumerate(
-        zip(measurements, ready_flags)
-    ):
+    for slot, (measurement, card_ready) in enumerate(zip(measurements, card_ready_flags)):
+        sx, sy, sw, sh, edge_frac, std_bgr, _bright_frac = measurement
+        gauge_digit_count: Optional[int] = None
+        gauge_region = None
+        if slot < len(gauge_regions):
+            gauge_region = gauge_regions[slot]
+            gauge_digit_count = _read_np_gauge_digit_count(img, gauge_region)
+        glow_region = _np_gauge_glow_region(gauge_region) if gauge_region else None
+        glow_score = (
+            _np_gauge_glow_score(img, glow_region)
+            if glow_region is not None
+            else None
+        )
+        glow_ready = (
+            glow_score >= NP_GAUGE_GLOW_READY_THRESHOLD
+            if glow_score is not None
+            else None
+        )
         slots.append({
             "slot": slot,
             "cardRegion": {
@@ -2308,10 +2405,17 @@ def _find_noble_phantasms(
                 "w": sw / w,
                 "h": sh / h,
             },
-            "ready": ready,
+            "ready": bool(glow_ready),
             "edgeFrac": edge_frac,
             "stdBgr": std_bgr,
             "edgeThreshold": edge_thr,
+            "cardReady": bool(card_ready),
+            "readySource": "glow" if glow_ready is not None else "unknown",
+            "gaugeDigitCount": gauge_digit_count,
+            "gaugeRegion": gauge_region,
+            "npGlowRegion": glow_region,
+            "npGlowScore": glow_score,
+            "npGlowReady": glow_ready,
         })
 
     return {"slots": slots, "edgeThreshold": edge_thr}
@@ -4571,16 +4675,10 @@ def main() -> None:
                 regions = cmd.get("npRegions")
                 if not regions:
                     regions = list(DEFAULT_NP_CARD_SLOTS)
-                # Pass None when caller didn't specify so the detector
-                # uses its adaptive per-frame logic; only honour an
-                # explicit override.
-                edge_thr_arg = cmd.get("edgeThreshold")
-                edge_thr_arg = (
-                    float(edge_thr_arg) if edge_thr_arg is not None else None
-                )
+                gauge_regions = cmd.get("npGaugeRegions")
                 _reply(
                     req_id,
-                    _find_noble_phantasms(img, regions, edge_thr_arg),
+                    _find_noble_phantasms(img, regions, gauge_regions),
                 )
         elif action == "find_supports":
             img, err = _load_frame(cmd)

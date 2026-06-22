@@ -52,6 +52,13 @@ fn np_slot(slot: u32, ready: bool) -> NoblePhantasmMatch {
         edge_frac: 0.0,
         std_bgr: 0.0,
         edge_threshold: 0.0,
+        card_ready: None,
+        ready_source: None,
+        gauge_digit_count: None,
+        gauge_region: None,
+        np_glow_region: None,
+        np_glow_score: None,
+        np_glow_ready: None,
     }
 }
 
@@ -619,6 +626,59 @@ fn command_card_owner_detection_retries_until_all_five_cards_have_owners() {
     ));
     assert!(!should_retry_command_card_owner_detection(&cards, &[]));
     assert!(should_retry_command_card_owner_detection(&[], &[10]));
+}
+
+#[test]
+fn command_card_visibility_waits_for_all_five_suits_without_requiring_owner() {
+    let partial = vec![
+        command_card(0, None, Some("a"), None),
+        command_card(1, None, Some("q"), None),
+    ];
+    assert!(!command_cards_visible(&partial));
+
+    let mut missing_suit = vec![
+        command_card(0, None, Some("a"), None),
+        command_card(1, None, Some("q"), None),
+        command_card(2, None, Some("b"), None),
+        command_card(3, None, Some("a"), None),
+        command_card(4, None, None, None),
+    ];
+    for card in &mut missing_suit {
+        card.icon_region = Some(rect());
+    }
+    assert!(!command_cards_visible(&missing_suit));
+
+    let mut visible_without_owners = vec![
+        command_card(0, None, Some("a"), None),
+        command_card(1, None, Some("q"), None),
+        command_card(2, None, Some("b"), None),
+        command_card(3, None, Some("a"), None),
+        command_card(4, None, Some("q"), None),
+    ];
+    for card in &mut visible_without_owners {
+        card.icon_region = Some(rect());
+    }
+    assert!(command_cards_visible(&visible_without_owners));
+    assert!(should_retry_command_card_owner_detection(
+        &visible_without_owners,
+        &[10, 20]
+    ));
+}
+
+#[test]
+fn np_gauge_read_retries_until_all_three_slots_have_glow_scores() {
+    let mut complete = vec![np_slot(0, true), np_slot(1, false), np_slot(2, true)];
+    complete[0].np_glow_score = Some(0.8);
+    complete[1].np_glow_score = Some(0.3);
+    complete[2].np_glow_score = Some(0.7);
+    assert!(np_gauge_read_complete(&complete));
+
+    let mut obscured = complete.clone();
+    obscured[1].np_glow_score = None;
+    assert!(!np_gauge_read_complete(&obscured));
+
+    assert!(!np_gauge_read_complete(&complete[..2]));
+    assert!(!np_gauge_read_complete(&[]));
 }
 
 #[test]
