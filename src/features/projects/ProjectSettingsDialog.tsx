@@ -5,10 +5,11 @@ import { invoke } from "../../tauri";
 import {
   DEFAULT_RECOGNITION_SETTINGS,
   normalizeRecognitionSettings,
+  type ThresholdKey,
 } from "../settings/recognitionSettingsModel";
 import { RecognitionThresholdSettings } from "../settings/SettingsRecognitionPage";
 import type { Project } from "../../types/project";
-import type { RecognitionSettings } from "../../types/recognition";
+import type { ProjectRecognitionSettings, RecognitionSettings } from "../../types/recognition";
 
 interface ProjectSettingsDialogProps {
   open: boolean;
@@ -29,7 +30,7 @@ function projectRecognitionSettings(
   );
 }
 
-function hasRecognitionOverrides(settings: Partial<RecognitionSettings>) {
+function hasRecognitionOverrides(settings: ProjectRecognitionSettings) {
   return Object.values(settings).some((value) => typeof value === "number");
 }
 
@@ -50,7 +51,7 @@ export function ProjectSettingsDialog({
 
   const saveThreshold = useCallback(
     async (
-      { key }: { key: keyof RecognitionSettings },
+      { key }: { key: ThresholdKey },
       value: number,
       options?: { restoreDefault?: boolean }
     ) => {

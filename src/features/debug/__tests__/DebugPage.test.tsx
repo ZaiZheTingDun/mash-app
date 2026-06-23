@@ -139,7 +139,7 @@ describe("DebugPage", () => {
     );
   });
 
-  it("runs dynamic NP gauge detection through the live command", async () => {
+  it("runs dynamic NP detection through the live command", async () => {
     const user = userEvent.setup();
     mockDebugPageBootstrap((cmd) => {
       if (cmd === "debug_read_noble_phantasm_gauges_live") {
@@ -164,14 +164,15 @@ describe("DebugPage", () => {
 
     renderDebugPage();
 
-    await user.click(screen.getByRole("button", { name: "动态检测端帽" }));
+    await user.click(screen.getByRole("button", { name: "动态检测宝具" }));
 
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith(
         "debug_read_noble_phantasm_gauges_live"
       )
     );
-    expect(await screen.findByText(/端帽亮度 0\.620/)).toBeInTheDocument();
+    expect(await screen.findByText(/宝具卡 not ready/)).toBeInTheDocument();
+    expect(screen.getByText(/宝具条端帽 0\.620/)).toBeInTheDocument();
   });
 
   it("selects command-card candidates by searchable Chinese servant name", async () => {

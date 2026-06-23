@@ -54,6 +54,16 @@ describe("SettingsDialog", () => {
       if (cmd === "get_asset_bundle_status") return { installed: true };
       if (cmd === "get_recognition_settings") {
         return {
+          noblePhantasmDetectionMode: "card",
+          supportCeThreshold: 0.7,
+          supportCeFullGateThreshold: 0.6,
+          supportMlbIconThreshold: 0.7,
+          supportBondIconThreshold: 0.7,
+        };
+      }
+      if (cmd === "set_noble_phantasm_detection_mode") {
+        return {
+          noblePhantasmDetectionMode: "gauge",
           supportCeThreshold: 0.7,
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
@@ -62,6 +72,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_support_ce_threshold") {
         return {
+          noblePhantasmDetectionMode: "card",
           supportCeThreshold: 0.65,
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
@@ -70,6 +81,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_support_ce_full_gate_threshold") {
         return {
+          noblePhantasmDetectionMode: "card",
           supportCeThreshold: 0.7,
           supportCeFullGateThreshold: 0.55,
           supportMlbIconThreshold: 0.7,
@@ -78,6 +90,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_support_mlb_icon_threshold") {
         return {
+          noblePhantasmDetectionMode: "card",
           supportCeThreshold: 0.7,
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.76,
@@ -86,6 +99,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_support_bond_icon_threshold") {
         return {
+          noblePhantasmDetectionMode: "card",
           supportCeThreshold: 0.7,
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
@@ -127,6 +141,8 @@ describe("SettingsDialog", () => {
 
     expect(screen.getByText("游戏")).toBeInTheDocument();
     expect(screen.getByText("应用")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "基础设置" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "阈值设置" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "队伍管理" }));
 
@@ -157,6 +173,25 @@ describe("SettingsDialog", () => {
       });
     });
     expect(await screen.findByText("已保存")).toBeInTheDocument();
+  });
+
+  it("keeps NP-card detection as the default and can opt into gauge detection", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="basic" />);
+
+    const modeSelect = await screen.findByRole("combobox", { name: "宝具识别方式" });
+    expect(modeSelect).toHaveTextContent("宝具指令卡识别");
+    expect(screen.getByText("出现宝具识别问题可尝试切换，仍在实验中可能导致选卡速度变慢"))
+      .toBeInTheDocument();
+
+    await user.click(modeSelect);
+    await user.click(await screen.findByText("底部宝具条识别（实验性）"));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_noble_phantasm_detection_mode", {
+        value: "gauge",
+      });
+    });
   });
 
   it("saves support CE icon recognition thresholds", async () => {

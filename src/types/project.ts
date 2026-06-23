@@ -1,4 +1,4 @@
-import type { RecognitionSettings } from "./recognition";
+import type { ProjectRecognitionSettings } from "./recognition";
 
 /**
  * One cell of the team-builder grid. Mirrors the Rust `ProjectSlot` struct.
@@ -118,7 +118,7 @@ export interface Project {
   supportNoblePhantasmLevelMin?: number | null;
   supportSkillLevelMins?: SupportSkillLevelMins;
   supportAppendSkillLevelMins?: SupportAppendSkillLevelMins;
-  recognitionSettings?: Partial<RecognitionSettings> | null;
+  recognitionSettings?: ProjectRecognitionSettings | null;
   /**
    * Team-builder grid layout (5 servant slots + 1 support slot, in
    * arrangement order). Persisted on the backend so selections and

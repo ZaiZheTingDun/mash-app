@@ -26,9 +26,28 @@ pub(crate) const SUPPORT_CE_FULL_GATE_THRESHOLD_DEFAULT: f64 = 0.60;
 pub(crate) const SUPPORT_CE_FULL_GATE_THRESHOLD_MIN: f64 = 0.40;
 pub(crate) const SUPPORT_CE_FULL_GATE_THRESHOLD_MAX: f64 = 0.70;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NoblePhantasmDetectionMode {
+    Card,
+    Gauge,
+}
+
+impl Default for NoblePhantasmDetectionMode {
+    fn default() -> Self {
+        Self::Card
+    }
+}
+
+fn default_noble_phantasm_detection_mode() -> NoblePhantasmDetectionMode {
+    NoblePhantasmDetectionMode::Card
+}
+
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecognitionSettings {
+    #[serde(default = "default_noble_phantasm_detection_mode")]
+    pub noble_phantasm_detection_mode: NoblePhantasmDetectionMode,
     #[serde(default = "default_support_ce_threshold")]
     pub support_ce_threshold: f64,
     #[serde(default = "default_support_ce_full_gate_threshold")]
@@ -42,6 +61,7 @@ pub struct RecognitionSettings {
 impl Default for RecognitionSettings {
     fn default() -> Self {
         Self {
+            noble_phantasm_detection_mode: NoblePhantasmDetectionMode::Card,
             support_ce_threshold: SUPPORT_CE_THRESHOLD_DEFAULT,
             support_ce_full_gate_threshold: SUPPORT_CE_FULL_GATE_THRESHOLD_DEFAULT,
             support_mlb_icon_threshold: SUPPORT_ICON_THRESHOLD_DEFAULT,
@@ -164,6 +184,7 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
         .and_then(|s| serde_json::from_str::<RecognitionSettings>(&s).ok())
         .and_then(|settings| {
             Some(RecognitionSettings {
+                noble_phantasm_detection_mode: settings.noble_phantasm_detection_mode,
                 support_ce_threshold: normalize_support_ce_threshold(settings.support_ce_threshold)
                     .ok()?,
                 support_ce_full_gate_threshold: normalize_support_ce_full_gate_threshold(
@@ -183,6 +204,18 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
             })
         })
         .unwrap_or_default()
+}
+
+fn save_recognition_settings(
+    app: &tauri::AppHandle,
+    settings: &RecognitionSettings,
+) -> Result<(), String> {
+    let path = recognition_settings_path(app);
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())
 }
 
 fn load_last_update_check_date(app: &tauri::AppHandle) -> Option<String> {
@@ -226,6 +259,19 @@ pub(crate) fn get_recognition_settings(
 }
 
 #[tauri::command]
+pub(crate) fn set_noble_phantasm_detection_mode(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: NoblePhantasmDetectionMode,
+) -> Result<RecognitionSettings, String> {
+    let mut next = *state.lock().unwrap();
+    next.noble_phantasm_detection_mode = value;
+    *state.lock().unwrap() = next;
+    save_recognition_settings(&app, &next)?;
+    Ok(next)
+}
+
+#[tauri::command]
 pub(crate) fn set_support_ce_threshold(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
@@ -235,12 +281,7 @@ pub(crate) fn set_support_ce_threshold(
     let mut next = *state.lock().unwrap();
     next.support_ce_threshold = value;
     *state.lock().unwrap() = next;
-    let path = recognition_settings_path(&app);
-    fs::write(
-        &path,
-        serde_json::to_string_pretty(&next).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
+    save_recognition_settings(&app, &next)?;
     Ok(next)
 }
 
@@ -254,12 +295,7 @@ pub(crate) fn set_support_ce_full_gate_threshold(
     let mut next = *state.lock().unwrap();
     next.support_ce_full_gate_threshold = value;
     *state.lock().unwrap() = next;
-    let path = recognition_settings_path(&app);
-    fs::write(
-        &path,
-        serde_json::to_string_pretty(&next).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
+    save_recognition_settings(&app, &next)?;
     Ok(next)
 }
 
@@ -273,12 +309,7 @@ pub(crate) fn set_support_mlb_icon_threshold(
     let mut next = *state.lock().unwrap();
     next.support_mlb_icon_threshold = value;
     *state.lock().unwrap() = next;
-    let path = recognition_settings_path(&app);
-    fs::write(
-        &path,
-        serde_json::to_string_pretty(&next).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
+    save_recognition_settings(&app, &next)?;
     Ok(next)
 }
 
@@ -292,12 +323,7 @@ pub(crate) fn set_support_bond_icon_threshold(
     let mut next = *state.lock().unwrap();
     next.support_bond_icon_threshold = value;
     *state.lock().unwrap() = next;
-    let path = recognition_settings_path(&app);
-    fs::write(
-        &path,
-        serde_json::to_string_pretty(&next).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
+    save_recognition_settings(&app, &next)?;
     Ok(next)
 }
 

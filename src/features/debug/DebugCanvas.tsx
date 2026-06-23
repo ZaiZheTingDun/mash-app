@@ -34,6 +34,18 @@ function supportCeArtworkChecksTitle(
     .join(" · ");
 }
 
+function npCardStatus(slot: NoblePhantasmMatchDto) {
+  return slot.cardReady == null ? "?" : slot.cardReady ? "ready" : "miss";
+}
+
+function npGaugeStatus(slot: NoblePhantasmMatchDto) {
+  return slot.npGlowReady == null ? "?" : slot.npGlowReady ? "ready" : "miss";
+}
+
+function npAnyReady(slot: NoblePhantasmMatchDto) {
+  return slot.cardReady === true || slot.npGlowReady === true;
+}
+
 // Mirror of `SUPPORT_GRAND_BADGE_*` in
 // `sidecar/mash_cv/mash_cv/cv.py`. The sidecar template-matches the
 // "冠位从者" ribbon inside this rectangle (one per confirm-button
@@ -248,7 +260,7 @@ export function DebugCanvas({
             <Box
               key={`np-gauge-${s.slot}`}
               className={`debug-overlay-box debug-overlay-np-gauge ${
-                s.ready ? "debug-overlay-np-ready" : "debug-overlay-np-empty"
+                npAnyReady(s) ? "debug-overlay-np-ready" : "debug-overlay-np-empty"
               }`}
               style={{
                 left: `${region.x * 100}%`,
@@ -258,12 +270,11 @@ export function DebugCanvas({
               }}
             >
               <span className="debug-overlay-label">
-                NP{s.slot + 1} · {s.ready ? "ready" : "not ready"} ·{" "}
+                NP{s.slot + 1} · 卡 {npCardStatus(s)} · 条 {npGaugeStatus(s)} ·{" "}
                 {s.npGlowScore != null
                   ? `端帽 ${s.npGlowScore.toFixed(3)}`
                   : "端帽 ?"}
                 {s.gaugeDigitCount != null ? ` · gauge ${s.gaugeDigitCount}位` : ""}
-                {s.cardReady != null ? ` · card ${s.cardReady ? "hit" : "miss"}` : ""}
               </span>
               {s.gaugeRegion &&
                 NP_GAUGE_DIGIT_SLOT_REGIONS.map((digitRegion, idx) => (

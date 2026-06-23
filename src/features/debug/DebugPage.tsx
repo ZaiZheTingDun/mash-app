@@ -83,6 +83,22 @@ interface DebugPageProps {
 
 type DebugServantPickerTarget = "card" | "support" | "enhancement";
 
+function npCardStatus(slot: NoblePhantasmMatchDto) {
+  return slot.cardReady == null ? "unknown" : slot.cardReady ? "ready" : "not ready";
+}
+
+function npGaugeStatus(slot: NoblePhantasmMatchDto) {
+  return slot.npGlowReady == null ? "unknown" : slot.npGlowReady ? "ready" : "not ready";
+}
+
+function npAnyReady(slot: NoblePhantasmMatchDto) {
+  return slot.cardReady === true || slot.npGlowReady === true;
+}
+
+function npAllUnknown(slot: NoblePhantasmMatchDto) {
+  return slot.cardReady == null && slot.npGlowReady == null;
+}
+
 export function DebugPage({
   onBack,
   servants,
@@ -722,19 +738,20 @@ export function DebugPage({
       );
       setNpGaugeSlots(slots);
       if (options.logResult) {
-        const readyCount = slots.filter((s) => s.ready).length;
+        const cardReadyCount = slots.filter((s) => s.cardReady === true).length;
+        const gaugeReadyCount = slots.filter((s) => s.npGlowReady === true).length;
         const summary = slots
           .map(
             (s) =>
-              `NP${s.slot + 1}:${s.ready ? "有" : "无"}(${s.readySource ?? "unknown"}${
+              `NP${s.slot + 1}:卡:${npCardStatus(s)} 条:${npGaugeStatus(s)}(${
                 s.npGlowScore != null ? ` 端帽:${s.npGlowScore.toFixed(3)}` : ""
               }${s.gaugeDigitCount != null ? ` digit:${s.gaugeDigitCount}位` : ""}${
-                s.cardReady != null ? ` card:${s.cardReady ? "hit" : "miss"}` : ""
+                s.cardReady != null ? ` edge:${(s.edgeFrac * 100).toFixed(2)}%` : ""
               })`
           )
           .join("  ");
-        const label = options.live ? "动态宝具端帽" : "宝具 gauge";
-        log(`${label}: ${readyCount}/${slots.length} 就绪 | ${summary}`);
+        const label = options.live ? "动态宝具识别" : "宝具识别";
+        log(`${label}: 卡 ${cardReadyCount}/${slots.length} · 条 ${gaugeReadyCount}/${slots.length} | ${summary}`);
       }
     },
     [log]
@@ -758,8 +775,8 @@ export function DebugPage({
       const next = !enabled;
       log(
         next
-          ? "动态宝具端帽检测已开启，每 1 秒连续采样"
-          : "动态宝具端帽检测已停止"
+          ? "动态宝具识别已开启，每 1 秒连续采样"
+          : "动态宝具识别已停止"
       );
       return next;
     });
@@ -776,7 +793,7 @@ export function DebugPage({
         await readNpGauges({ logResult: true, live: true });
       } catch (err) {
         if (!cancelled) {
-          log(`动态宝具端帽检测失败: ${err}`, "error");
+          log(`动态宝具识别失败: ${err}`, "error");
           setDynamicNpGaugeDebug(false);
         }
       } finally {
@@ -1439,7 +1456,7 @@ export function DebugPage({
                 disabled={debuggingNpGauges || dynamicNpGaugeDebug || !capture}
                 onClick={handleDebugNpGauges}
               >
-                {debuggingNpGauges ? "读取中…" : "读取宝具 gauge"}
+                {debuggingNpGauges ? "读取中…" : "读取宝具识别"}
               </Button>
               <Button
                 type="button"
@@ -1449,7 +1466,7 @@ export function DebugPage({
                 disabled={connectingStream || disconnectingStream}
                 onClick={handleToggleDynamicNpGaugeDebug}
               >
-                {dynamicNpGaugeDebug ? "停止动态检测" : "动态检测端帽"}
+                {dynamicNpGaugeDebug ? "停止动态检测" : "动态检测宝具"}
               </Button>
             </Flex>
           </DebugSection>
@@ -1887,7 +1904,7 @@ export function DebugPage({
             title="宝具调试"
             badge={
               npGaugeSlots.length > 0
-                ? `${npGaugeSlots.filter((s) => s.ready).length}/${npGaugeSlots.length}`
+                ? `卡 ${npGaugeSlots.filter((s) => s.cardReady === true).length}/${npGaugeSlots.length} · 条 ${npGaugeSlots.filter((s) => s.npGlowReady === true).length}/${npGaugeSlots.length}`
                 : undefined
             }
           >
@@ -1901,7 +1918,7 @@ export function DebugPage({
                 <Box
                   key={`np-row-${s.slot}`}
                   className={`debug-match-entry ${
-                    s.npGlowScore == null ? "missed" : s.ready ? "found" : ""
+                    npAllUnknown(s) ? "missed" : npAnyReady(s) ? "found" : ""
                   }`}
                 >
                   <Flex justify="between" align="center">
@@ -1910,21 +1927,21 @@ export function DebugPage({
                     </Text>
                     <Text
                       size="1"
-                      color={s.npGlowScore == null ? "gray" : s.ready ? "green" : "amber"}
+                      color={npAllUnknown(s) ? "gray" : npAnyReady(s) ? "green" : "amber"}
                     >
-                      {s.npGlowScore == null ? "unknown" : s.ready ? "ready" : "not ready"}
+                      卡 {npCardStatus(s)} · 条 {npGaugeStatus(s)}
                     </Text>
                   </Flex>
                   <Text size="1" color="gray">
+                    {s.cardReady != null
+                      ? `宝具卡 ${s.cardReady ? "ready" : "not ready"} · edge ${(s.edgeFrac * 100).toFixed(2)}%`
+                      : "宝具卡 unknown"}
                     {s.npGlowScore != null
-                      ? `端帽亮度 ${s.npGlowScore.toFixed(3)}${
+                      ? ` · 宝具条端帽 ${s.npGlowScore.toFixed(3)}${
                           s.npGlowReady ? " 亮" : ""
                         }`
-                      : "端帽未识别"}
+                      : " · 宝具条端帽未识别"}
                     {s.gaugeDigitCount != null ? ` · digit ${s.gaugeDigitCount}位` : ""}
-                    {s.cardReady != null
-                      ? ` · card ${s.cardReady ? "hit" : "miss"} edge ${(s.edgeFrac * 100).toFixed(2)}%`
-                      : ""}
                   </Text>
                 </Box>
               ))}

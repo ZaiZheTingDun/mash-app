@@ -24,6 +24,7 @@ describe("ProjectSettingsDialog", () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_recognition_settings") {
         return {
+          noblePhantasmDetectionMode: "card",
           supportCeThreshold: 0.71,
           supportCeFullGateThreshold: 0.61,
           supportMlbIconThreshold: 0.72,

@@ -72,7 +72,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [view, setView] = useState<View>("team");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<SettingsSection>("recognition");
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("basic");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
@@ -591,7 +591,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   }, []);
 
   const handleOpenSettings = useCallback(() => {
-    setSettingsSection("recognition");
+    setSettingsSection("basic");
     setSettingsOpen(true);
   }, []);
 

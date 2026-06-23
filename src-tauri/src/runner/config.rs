@@ -2,6 +2,7 @@
 //! These types are serialized to the frontend, so serde names are part of IPC API.
 
 use super::*;
+use crate::commands::settings::NoblePhantasmDetectionMode;
 
 // ---------------------------------------------------------------------------
 // Configuration (received from frontend)
@@ -187,6 +188,11 @@ pub struct RunConfig {
     /// Runtime threshold for optional support Grand bond icon verification.
     #[serde(default = "default_support_icon_threshold")]
     pub support_bond_icon_threshold: f64,
+    /// NP readiness detector selected from global recognition settings.
+    /// Defaults to the legacy upper NP-card detector so existing users keep
+    /// the same battle behavior unless they explicitly opt into the gauge path.
+    #[serde(default)]
+    pub noble_phantasm_detection_mode: NoblePhantasmDetectionMode,
     #[serde(default = "default_true")]
     pub support_craft_essence_mlb_required: bool,
     #[serde(default)]

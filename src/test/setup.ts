@@ -92,7 +92,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(async (cmd: string) => {
+  invoke: vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
     switch (cmd) {
       case "run_startup_migration":
         return { migrated: false, from: null, to: "/tmp/mash-app-data" };
@@ -240,6 +240,15 @@ vi.mock("@tauri-apps/api/core", () => ({
         return "JP";
       case "get_recognition_settings":
         return {
+          noblePhantasmDetectionMode: "card",
+          supportCeThreshold: 0.7,
+          supportCeFullGateThreshold: 0.6,
+          supportMlbIconThreshold: 0.7,
+          supportBondIconThreshold: 0.7,
+        };
+      case "set_noble_phantasm_detection_mode":
+        return {
+          noblePhantasmDetectionMode: args?.value === "gauge" ? "gauge" : "card",
           supportCeThreshold: 0.7,
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
@@ -250,6 +259,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "set_support_mlb_icon_threshold":
       case "set_support_bond_icon_threshold":
         return {
+          noblePhantasmDetectionMode: "card",
           supportCeThreshold: 0.7,
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,

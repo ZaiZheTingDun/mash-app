@@ -685,6 +685,7 @@ fn project_recognition_settings_allows_partial_overrides() {
 #[test]
 fn effective_recognition_settings_inherit_global_without_project_override() {
     let global = RecognitionSettings {
+        noble_phantasm_detection_mode: commands::settings::NoblePhantasmDetectionMode::Card,
         support_ce_threshold: 0.61,
         support_ce_full_gate_threshold: 0.41,
         support_mlb_icon_threshold: 0.62,
@@ -697,11 +698,16 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
     assert_eq!(effective.support_ce_full_gate_threshold, 0.41);
     assert_eq!(effective.support_mlb_icon_threshold, 0.62);
     assert_eq!(effective.support_bond_icon_threshold, 0.63);
+    assert_eq!(
+        effective.noble_phantasm_detection_mode,
+        commands::settings::NoblePhantasmDetectionMode::Card
+    );
 }
 
 #[test]
 fn effective_recognition_settings_use_project_override() {
     let global = RecognitionSettings {
+        noble_phantasm_detection_mode: commands::settings::NoblePhantasmDetectionMode::Gauge,
         support_ce_threshold: 0.61,
         support_ce_full_gate_threshold: 0.41,
         support_mlb_icon_threshold: 0.62,
@@ -720,6 +726,10 @@ fn effective_recognition_settings_use_project_override() {
     assert_eq!(effective.support_ce_full_gate_threshold, 0.41);
     assert_eq!(effective.support_mlb_icon_threshold, 0.77);
     assert_eq!(effective.support_bond_icon_threshold, 0.63);
+    assert_eq!(
+        effective.noble_phantasm_detection_mode,
+        commands::settings::NoblePhantasmDetectionMode::Gauge
+    );
 }
 
 #[test]

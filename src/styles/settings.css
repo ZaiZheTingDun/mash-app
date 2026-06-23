@@ -117,9 +117,28 @@
   padding: 18px 0;
 }
 
+.recognition-setting-block + .recognition-setting-block,
+.settings-section-panel + .settings-section-panel {
+  border-top: 1px solid var(--gray-6);
+}
+
 .recognition-setting-help {
   display: block;
   padding-bottom: 4px;
+}
+
+.basic-setting-row {
+  width: 100%;
+}
+
+.basic-setting-copy {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.recognition-mode-select {
+  width: 220px;
+  flex: 0 0 220px;
 }
 
 .recognition-threshold-row {

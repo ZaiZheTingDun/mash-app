@@ -4,16 +4,23 @@ import {
   ArchiveIcon,
   CheckCircledIcon,
   Cross1Icon,
+  GearIcon,
   MixerHorizontalIcon,
 } from "@radix-ui/react-icons";
 import { invoke } from "../../tauri";
 import type { Project } from "../../types/project";
 import { SettingsDataManagementPage } from "./SettingsDataManagementPage";
+import { SettingsBasicPage } from "./SettingsBasicPage";
 import { SettingsRecognitionPage } from "./SettingsRecognitionPage";
 import { SettingsResourcesPage } from "./SettingsResourcesPage";
 import { SettingsSelfCheckPage } from "./SettingsSelfCheckPage";
 
-export type SettingsSection = "selfCheck" | "resources" | "dataManagement" | "recognition";
+export type SettingsSection =
+  | "basic"
+  | "selfCheck"
+  | "resources"
+  | "dataManagement"
+  | "recognition";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -30,37 +37,44 @@ const navItems: Array<{
   icon: JSX.Element;
   render: (active: boolean, props: Pick<SettingsDialogProps, "onProjectsImported">) => JSX.Element;
 }> = [
-    {
-      group: "game",
-      section: "recognition",
-      label: "识别设置",
-      icon: <MixerHorizontalIcon width={15} height={15} />,
-      render: (active) => <SettingsRecognitionPage active={active} />,
-    },
-    {
-      group: "game",
-      section: "dataManagement",
-      label: "队伍管理",
-      icon: <ArchiveIcon width={15} height={15} />,
-      render: (_active, props) => (
-        <SettingsDataManagementPage onProjectsImported={props.onProjectsImported} />
-      ),
-    },
-    {
-      group: "application",
-      section: "resources",
-      label: "资源管理",
-      icon: <ArchiveIcon width={15} height={15} />,
-      render: () => <SettingsResourcesPage />,
-    },
-    {
-      group: "application",
-      section: "selfCheck",
-      label: "软件自检",
-      icon: <CheckCircledIcon width={15} height={15} />,
-      render: (active) => <SettingsSelfCheckPage active={active} />,
-    },
-  ];
+  {
+    group: "game",
+    section: "basic",
+    label: "基础设置",
+    icon: <GearIcon width={15} height={15} />,
+    render: (active) => <SettingsBasicPage active={active} />,
+  },
+  {
+    group: "game",
+    section: "recognition",
+    label: "阈值设置",
+    icon: <MixerHorizontalIcon width={15} height={15} />,
+    render: (active) => <SettingsRecognitionPage active={active} />,
+  },
+  {
+    group: "game",
+    section: "dataManagement",
+    label: "队伍管理",
+    icon: <ArchiveIcon width={15} height={15} />,
+    render: (_active, props) => (
+      <SettingsDataManagementPage onProjectsImported={props.onProjectsImported} />
+    ),
+  },
+  {
+    group: "application",
+    section: "resources",
+    label: "资源管理",
+    icon: <ArchiveIcon width={15} height={15} />,
+    render: () => <SettingsResourcesPage />,
+  },
+  {
+    group: "application",
+    section: "selfCheck",
+    label: "软件自检",
+    icon: <CheckCircledIcon width={15} height={15} />,
+    render: (active) => <SettingsSelfCheckPage active={active} />,
+  },
+];
 
 export function SettingsDialog({
   open,
@@ -121,7 +135,6 @@ export function SettingsDialog({
                   </Flex>
                 ))}
               </Flex>
-
             </nav>
           </Flex>
 

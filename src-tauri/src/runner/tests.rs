@@ -62,6 +62,52 @@ fn np_slot(slot: u32, ready: bool) -> NoblePhantasmMatch {
     }
 }
 
+fn np_slot_with_detectors(
+    slot: u32,
+    ready: bool,
+    card_ready: Option<bool>,
+    glow_ready: Option<bool>,
+) -> NoblePhantasmMatch {
+    NoblePhantasmMatch {
+        ready_source: Some("glow".into()),
+        card_ready,
+        np_glow_score: glow_ready.map(|ready| if ready { 0.6 } else { 0.4 }),
+        np_glow_ready: glow_ready,
+        ..np_slot(slot, ready)
+    }
+}
+
+#[test]
+fn card_np_detection_mode_uses_legacy_card_ready_signal() {
+    let mut nps = vec![
+        np_slot_with_detectors(0, false, Some(true), Some(false)),
+        np_slot_with_detectors(1, true, Some(false), Some(true)),
+    ];
+
+    apply_np_detection_mode(
+        &mut nps,
+        crate::commands::settings::NoblePhantasmDetectionMode::Card,
+    );
+
+    assert!(nps[0].ready);
+    assert!(!nps[1].ready);
+    assert_eq!(nps[0].ready_source.as_deref(), Some("card"));
+    assert_eq!(nps[1].ready_source.as_deref(), Some("card"));
+}
+
+#[test]
+fn gauge_np_detection_mode_preserves_current_glow_signal() {
+    let mut nps = vec![np_slot_with_detectors(0, false, Some(true), Some(false))];
+
+    apply_np_detection_mode(
+        &mut nps,
+        crate::commands::settings::NoblePhantasmDetectionMode::Gauge,
+    );
+
+    assert!(!nps[0].ready);
+    assert_eq!(nps[0].ready_source.as_deref(), Some("glow"));
+}
+
 #[test]
 fn attack_log_command_cards_keep_slot_suit_and_servant_id() {
     let cards = vec![

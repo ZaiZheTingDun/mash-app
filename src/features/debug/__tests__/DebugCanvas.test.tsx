@@ -161,7 +161,7 @@ describe("DebugCanvas", () => {
     expect(container.querySelectorAll(".debug-overlay-np-glow-slot.ready").length).toBe(1);
     expect(
       container.textContent?.includes(
-        "NP1 · ready · 端帽 0.800 · gauge 3位 · card hit"
+        "NP1 · 卡 ready · 条 ready · 端帽 0.800 · gauge 3位"
       )
     ).toBe(true);
   });

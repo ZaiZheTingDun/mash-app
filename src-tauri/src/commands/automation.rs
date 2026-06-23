@@ -152,6 +152,7 @@ pub(crate) fn effective_recognition_settings(
     project: Option<ProjectRecognitionSettings>,
 ) -> RecognitionSettings {
     RecognitionSettings {
+        noble_phantasm_detection_mode: global.noble_phantasm_detection_mode,
         support_ce_threshold: project
             .and_then(|settings| settings.support_ce_threshold)
             .unwrap_or(global.support_ce_threshold),
@@ -216,12 +217,15 @@ pub(crate) fn start_automation(
     let server = *server_state.lock().unwrap();
     let recognition_settings = effective_recognition_settings(
         *recognition_settings_state.lock().unwrap(),
-        project.as_ref().and_then(|project| project.recognition_settings),
+        project
+            .as_ref()
+            .and_then(|project| project.recognition_settings),
     );
     config.support_ce_threshold = recognition_settings.support_ce_threshold;
     config.support_ce_full_gate_threshold = recognition_settings.support_ce_full_gate_threshold;
     config.support_mlb_icon_threshold = recognition_settings.support_mlb_icon_threshold;
     config.support_bond_icon_threshold = recognition_settings.support_bond_icon_threshold;
+    config.noble_phantasm_detection_mode = recognition_settings.noble_phantasm_detection_mode;
 
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));

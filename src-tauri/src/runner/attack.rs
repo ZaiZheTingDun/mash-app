@@ -4,6 +4,7 @@
 //! selection, and non-Grand advanced startup conditions.
 
 use super::*;
+use crate::commands::settings::NoblePhantasmDetectionMode;
 
 // ---------------------------------------------------------------------------
 // Attack pick logic
@@ -94,8 +95,29 @@ pub(crate) fn command_cards_visible(cards: &[CommandCardMatch]) -> bool {
             .all(|card| card.suit.is_some() && card.icon_region.is_some())
 }
 
+pub(crate) fn np_card_read_complete(nps: &[NoblePhantasmMatch]) -> bool {
+    nps.len() == 3 && nps.iter().all(|np| np.card_ready.is_some())
+}
+
 pub(crate) fn np_gauge_read_complete(nps: &[NoblePhantasmMatch]) -> bool {
     nps.len() == 3 && nps.iter().all(|np| np.np_glow_score.is_some())
+}
+
+pub(crate) fn apply_np_detection_mode(
+    nps: &mut [NoblePhantasmMatch],
+    mode: NoblePhantasmDetectionMode,
+) {
+    match mode {
+        NoblePhantasmDetectionMode::Card => {
+            for np in nps {
+                if let Some(card_ready) = np.card_ready {
+                    np.ready = card_ready;
+                    np.ready_source = Some("card".into());
+                }
+            }
+        }
+        NoblePhantasmDetectionMode::Gauge => {}
+    }
 }
 
 /// Merge a new NP sample into the running best-per-slot accumulator,
@@ -694,41 +716,63 @@ impl Runner {
             fallback_command_cards()
         };
 
-        let nps = loop {
-            let started = Instant::now();
-            let sample_window = Duration::from_secs(1);
-            let sample_interval = Duration::from_millis(200);
-            let mut best_nps: Option<Vec<NoblePhantasmMatch>> = None;
-
-            loop {
-                let sample = match self.sidecar().find_noble_phantasms(None, None) {
+        let np_detection_mode = self.config.noble_phantasm_detection_mode;
+        let nps = match np_detection_mode {
+            NoblePhantasmDetectionMode::Card => loop {
+                let mut nps = match self.sidecar().find_noble_phantasms(None, None) {
                     Ok(n) => n,
                     Err(err) => {
-                        self.fail_action("Attack", "读取宝具数字", err);
+                        self.fail_action("Attack", "识别宝具卡", err);
                         return None;
                     }
                 };
+                apply_np_detection_mode(&mut nps, np_detection_mode);
 
-                merge_best_np_slots(&mut best_nps, sample);
-
+                if np_card_read_complete(&nps) {
+                    break nps;
+                }
                 if self.is_cancelled() {
                     return None;
                 }
-                if started.elapsed() >= sample_window {
-                    break;
-                }
-                thread::sleep(sample_interval);
-            }
+                self.emit("Attack", "宝具卡尚未识别完整，等待卡面稳定后重试");
+                thread::sleep(ACTION_DELAY);
+            },
+            NoblePhantasmDetectionMode::Gauge => loop {
+                let started = Instant::now();
+                let sample_window = Duration::from_secs(1);
+                let sample_interval = Duration::from_millis(200);
+                let mut best_nps: Option<Vec<NoblePhantasmMatch>> = None;
 
-            let nps = best_nps.unwrap_or_default();
-            if np_gauge_read_complete(&nps) {
-                break nps;
-            }
-            if self.is_cancelled() {
-                return None;
-            }
-            self.emit("Attack", "宝具数字未识别完整，等待遮挡消失后重试");
-            thread::sleep(ACTION_DELAY);
+                loop {
+                    let sample = match self.sidecar().find_noble_phantasms(None, None) {
+                        Ok(n) => n,
+                        Err(err) => {
+                            self.fail_action("Attack", "读取宝具数字", err);
+                            return None;
+                        }
+                    };
+
+                    merge_best_np_slots(&mut best_nps, sample);
+
+                    if self.is_cancelled() {
+                        return None;
+                    }
+                    if started.elapsed() >= sample_window {
+                        break;
+                    }
+                    thread::sleep(sample_interval);
+                }
+
+                let nps = best_nps.unwrap_or_default();
+                if np_gauge_read_complete(&nps) {
+                    break nps;
+                }
+                if self.is_cancelled() {
+                    return None;
+                }
+                self.emit("Attack", "宝具数字未识别完整，等待遮挡消失后重试");
+                thread::sleep(ACTION_DELAY);
+            },
         };
 
         if recognize_command_cards {

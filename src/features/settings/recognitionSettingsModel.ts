@@ -74,6 +74,7 @@ export const THRESHOLD_CONFIGS: ThresholdConfig[] = [
 ];
 
 export const DEFAULT_RECOGNITION_SETTINGS: RecognitionSettings = {
+  noblePhantasmDetectionMode: "card",
   supportCeThreshold: SUPPORT_THRESHOLD_DEFAULT,
   supportCeFullGateThreshold: SUPPORT_FULL_GATE_THRESHOLD_DEFAULT,
   supportMlbIconThreshold: SUPPORT_THRESHOLD_DEFAULT,
@@ -87,6 +88,8 @@ export function clampThreshold(value: number, config: ThresholdConfig) {
 
 export function normalizeRecognitionSettings(settings: RecognitionSettings): RecognitionSettings {
   return {
+    noblePhantasmDetectionMode:
+      settings.noblePhantasmDetectionMode === "gauge" ? "gauge" : "card",
     supportCeThreshold: clampThreshold(settings.supportCeThreshold, THRESHOLD_CONFIGS[0]),
     supportCeFullGateThreshold: clampThreshold(
       settings.supportCeFullGateThreshold,

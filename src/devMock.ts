@@ -89,6 +89,7 @@ let supportCeThreshold = 0.7;
 let supportCeFullGateThreshold = 0.6;
 let supportMlbIconThreshold = 0.7;
 let supportBondIconThreshold = 0.7;
+let noblePhantasmDetectionMode: "card" | "gauge" = "card";
 let nextProjectNumber = 2;
 let activeProjectId: string | null = "dev-project-1";
 let appTheme: "light" | "dark" | "system" | null = null;
@@ -342,6 +343,18 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return null as T;
     case "get_recognition_settings":
       return {
+        noblePhantasmDetectionMode,
+        supportCeThreshold,
+        supportCeFullGateThreshold,
+        supportMlbIconThreshold,
+        supportBondIconThreshold,
+      } as T;
+    case "set_noble_phantasm_detection_mode":
+      if (args.value === "card" || args.value === "gauge") {
+        noblePhantasmDetectionMode = args.value;
+      }
+      return {
+        noblePhantasmDetectionMode,
         supportCeThreshold,
         supportCeFullGateThreshold,
         supportMlbIconThreshold,
@@ -353,6 +366,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
           ? Math.min(0.85, Math.max(0.6, args.value))
           : supportCeThreshold;
       return {
+        noblePhantasmDetectionMode,
         supportCeThreshold,
         supportCeFullGateThreshold,
         supportMlbIconThreshold,
@@ -364,6 +378,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
           ? Math.min(0.7, Math.max(0.4, args.value))
           : supportCeFullGateThreshold;
       return {
+        noblePhantasmDetectionMode,
         supportCeThreshold,
         supportCeFullGateThreshold,
         supportMlbIconThreshold,
@@ -375,6 +390,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
           ? Math.min(0.85, Math.max(0.6, args.value))
           : supportMlbIconThreshold;
       return {
+        noblePhantasmDetectionMode,
         supportCeThreshold,
         supportCeFullGateThreshold,
         supportMlbIconThreshold,
@@ -386,6 +402,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
           ? Math.min(0.85, Math.max(0.6, args.value))
           : supportBondIconThreshold;
       return {
+        noblePhantasmDetectionMode,
         supportCeThreshold,
         supportCeFullGateThreshold,
         supportMlbIconThreshold,
