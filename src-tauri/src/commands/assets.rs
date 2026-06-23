@@ -5,6 +5,9 @@ use super::*;
 
 pub(crate) const ASSETS_MANIFEST_JSON: &str = include_str!("../../resources/assets-manifest.json");
 pub(crate) const ASSET_DOWNLOAD_PROGRESS_EVENT: &str = "asset-download-progress";
+// To add a new asset directory: append its name here. install_asset_directories and
+// cleanup_replaced_asset_trees will handle it automatically.
+pub(crate) const ASSET_DIRS: &[&str] = &["servants", "ces", "icons", "mystic-codes"];
 
 #[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -488,8 +491,9 @@ pub(crate) fn cleanup_replaced_asset_trees(assets_root: &Path) {
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        let is_replaced_asset_tree =
-            name.starts_with("servants.replaced-") || name.starts_with("ces.replaced-");
+        let is_replaced_asset_tree = ASSET_DIRS
+            .iter()
+            .any(|dir| name.starts_with(&format!("{dir}.replaced-")));
         if !is_replaced_asset_tree || !path.is_dir() {
             continue;
         }
@@ -541,12 +545,12 @@ pub(crate) fn install_asset_directories(
     assets_root: &Path,
     replace_existing: bool,
 ) -> Result<(bool, bool, FileCopyStats, FileCopyStats), String> {
-    let servant_source = import_root.join("servants");
-    let ce_source = import_root.join("ces");
-    let has_servants = servant_source.is_dir();
-    let has_ces = ce_source.is_dir();
-    if !has_servants && !has_ces {
-        return Err("压缩包内未找到 assets/servants 或 assets/ces 目录".to_string());
+    let any_present = ASSET_DIRS.iter().any(|name| import_root.join(name).is_dir());
+    if !any_present {
+        return Err(format!(
+            "压缩包内未找到素材目录 ({})",
+            ASSET_DIRS.join("/")
+        ));
     }
 
     fs::create_dir_all(assets_root).map_err(|e| format!("创建素材目录失败: {e}"))?;
@@ -557,16 +561,29 @@ pub(crate) fn install_asset_directories(
             merge_asset_tree(source, &destination)
         }
     };
-    let servant_stats = if has_servants {
-        install_tree(&servant_source, assets_root.join("servants"))?
-    } else {
-        FileCopyStats::default()
-    };
-    let ce_stats = if has_ces {
-        install_tree(&ce_source, assets_root.join("ces"))?
-    } else {
-        FileCopyStats::default()
-    };
+
+    let mut servant_stats = FileCopyStats::default();
+    let mut ce_stats = FileCopyStats::default();
+    let mut has_servants = false;
+    let mut has_ces = false;
+    for &name in ASSET_DIRS {
+        let source = import_root.join(name);
+        if !source.is_dir() {
+            continue;
+        }
+        let stats = install_tree(&source, assets_root.join(name))?;
+        match name {
+            "servants" => {
+                has_servants = true;
+                servant_stats = stats;
+            }
+            "ces" => {
+                has_ces = true;
+                ce_stats = stats;
+            }
+            _ => {}
+        }
+    }
     Ok((has_servants, has_ces, servant_stats, ce_stats))
 }
 
