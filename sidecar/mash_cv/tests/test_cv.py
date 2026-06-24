@@ -1305,6 +1305,69 @@ class TestFindCommandCards:
         for c in result["cards"]:
             assert "servantId" not in c
 
+    def test_detects_command_card_support_icon_in_slot(self):
+        from mash_cv import cv as _cv_module
+
+        img = _make_bgr_image(1920, 1080)
+        tmpl = _gradient_patch(18)
+        mash_cv.templates["icon_support"] = tmpl
+        rendered_tmpl = _cv_module._resize_command_card_support_template(tmpl, img)
+
+        slot_px = _cv_module._slot_to_pixels(
+            mash_cv.DEFAULT_COMMAND_CARD_SLOTS[1], img.shape[1], img.shape[0]
+        )
+        bx, by, bw, bh = _cv_module._command_card_support_icon_region_bbox(
+            slot_px, img.shape[1], img.shape[0]
+        )
+        th, tw = rendered_tmpl.shape[:2]
+        img[by : by + th, bx : bx + tw] = cv2.merge(
+            [rendered_tmpl, rendered_tmpl, rendered_tmpl]
+        )
+
+        result = mash_cv._find_command_cards(
+            img,
+            list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS),
+            [],
+            None,
+        )
+        cards = result["cards"]
+
+        assert cards[1]["isSupport"] is True
+        assert cards[1]["supportIconScore"] >= 0.99
+        assert cards[1]["supportIconRegion"] is not None
+        assert all(card["isSupport"] is False for idx, card in enumerate(cards) if idx != 1)
+
+    def test_command_card_support_template_size_tracks_frame_resolution(self):
+        from mash_cv import cv as _cv_module
+
+        tmpl = _gradient_patch(18)
+
+        at_1080p = _cv_module._resize_command_card_support_template(
+            tmpl, _make_bgr_image(1920, 1080)
+        )
+        at_1440p = _cv_module._resize_command_card_support_template(
+            tmpl, _make_bgr_image(2560, 1440)
+        )
+
+        assert at_1080p.shape == (36, 50)
+        assert at_1440p.shape == (48, 67)
+
+    def test_reports_support_icon_region_even_when_match_misses(self):
+        img = _make_bgr_image(2560, 1440)
+        mash_cv.templates["icon_support"] = _gradient_patch(18)
+
+        result = mash_cv._find_command_cards(
+            img,
+            list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS),
+            [],
+            None,
+        )
+        card = result["cards"][1]
+
+        assert card["isSupport"] is False
+        assert "supportIconScore" in card
+        assert card["supportIconRegion"] is not None
+
     @pytest.mark.skipif(
         not os.path.isdir(_PROD_SERVANTS_DIR),
         reason="production servants assets dir not available",

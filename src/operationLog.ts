@@ -4,6 +4,7 @@ export interface AttackLogCommandCard {
   slot: number;
   suit: string | null;
   servantId: number | null;
+  isSupport: boolean;
 }
 
 export interface AttackLogSelectedPick {

@@ -148,6 +148,20 @@ COMMAND_CARD_CRIT_DIGIT_REGIONS: tuple[dict, ...] = (
     {"x": 0.311, "y": 0.09, "w": 0.117, "h": 0.118},
     {"x": 0.428, "y": 0.09, "w": 0.105, "h": 0.118},
 )
+COMMAND_CARD_SUPPORT_ICON_TEMPLATE = "icon_support"
+COMMAND_CARD_SUPPORT_ICON_THRESHOLD = 0.70
+COMMAND_CARD_SUPPORT_ICON_REFERENCE_SIZE = (1920, 1080)
+COMMAND_CARD_SUPPORT_ICON_SIZE = (50, 36)
+# Calibrated from the user-provided second-slot ROI:
+# x=0.35, y=0.560, w=0.035, h=0.058 on a screen where slot 2 is
+# x=0.2, y=0.46, w=0.2, h=0.4. Other slots only shift horizontally with
+# the fixed slot pitch, while vertical wobble still follows the card.
+COMMAND_CARD_SUPPORT_ICON_REGION = {
+    "x": 0.75,
+    "y": 0.25,
+    "w": 0.175,
+    "h": 0.145,
+}
 # Valid crit chances: 10, 20, ..., 100. Always multiples of 10, so the
 # ones slot is always "0" in a real reading and the hundreds slot is
 # only ever "1" (or empty). This set is used to reject false-positive
@@ -2009,6 +2023,41 @@ def _command_card_face_region_bbox(
     )
 
 
+def _command_card_support_icon_region_bbox(
+    slot_px: tuple[int, int, int, int],
+    img_w: int,
+    img_h: int,
+) -> tuple[int, int, int, int]:
+    """Return the calibrated support-badge search region for one card slot."""
+    return _relative_region_bbox(
+        slot_px,
+        COMMAND_CARD_SUPPORT_ICON_REGION,
+        img_w=img_w,
+        img_h=img_h,
+        pad_y_screen=COMMAND_CARD_Y_WOBBLE_SCREEN,
+    )
+
+
+def _resize_command_card_support_template(
+    tmpl: np.ndarray,
+    img: np.ndarray,
+) -> np.ndarray:
+    """Resize the cropped badge template to its rendered command-card size."""
+    frame_h, frame_w = img.shape[:2]
+    reference_w, reference_h = COMMAND_CARD_SUPPORT_ICON_REFERENCE_SIZE
+    target_w, target_h = COMMAND_CARD_SUPPORT_ICON_SIZE
+    scaled_w = max(1, int(round(target_w * frame_w / reference_w)))
+    scaled_h = max(1, int(round(target_h * frame_h / reference_h)))
+    if tmpl.shape[:2] == (scaled_h, scaled_w):
+        return tmpl
+    interpolation = (
+        cv2.INTER_AREA
+        if scaled_w < tmpl.shape[1] or scaled_h < tmpl.shape[0]
+        else cv2.INTER_CUBIC
+    )
+    return cv2.resize(tmpl, (scaled_w, scaled_h), interpolation=interpolation)
+
+
 def _identify_servant_in_slot(
     gray_img: np.ndarray,
     slot_px: tuple[int, int, int, int],
@@ -2177,6 +2226,27 @@ def _find_command_cards(
         record["critDigitReads"] = crit_reads
         if crit_value is not None:
             record["critChance"] = int(crit_value)
+
+        support_tmpl = _get_template(COMMAND_CARD_SUPPORT_ICON_TEMPLATE)
+        if support_tmpl is not None:
+            support_tmpl = _resize_command_card_support_template(support_tmpl, img)
+            support_region = _norm_rect_from_pixels(
+                _command_card_support_icon_region_bbox(slot_px, w, h), w, h
+            )
+            support_match = _score_template_region(
+                img,
+                support_tmpl,
+                support_region,
+                COMMAND_CARD_SUPPORT_ICON_THRESHOLD,
+            )
+            record["isSupport"] = bool(support_match.get("found", False))
+            record["supportIconScore"] = float(support_match.get("score", 0.0))
+            if support_match.get("region") is not None:
+                record["supportIconRegion"] = support_match["region"]
+            else:
+                record["supportIconRegion"] = support_region
+        else:
+            record["isSupport"] = False
 
         if can_identify:
             ident = _identify_servant_in_slot(

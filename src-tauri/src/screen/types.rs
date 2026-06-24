@@ -284,12 +284,18 @@ pub struct CommandCardMatch {
     pub icon_region: Option<NormRect>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub servant_id: Option<u32>,
+    #[serde(default)]
+    pub is_support: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ascension: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub face_score: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crit_chance: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_icon_score: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_icon_region: Option<NormRect>,
 }
 
 /// Result of NP-readiness detection for a single Noble Phantasm card slot.

@@ -717,7 +717,7 @@ export function DebugPage({
             const ident = c.servantId
               ? ` ${c.servantId}@${c.ascension ?? "?"}(${(c.faceScore ?? 0).toFixed(2)})`
               : "";
-            return `C${c.slot + 1}:${c.suit}${ident}`;
+            return `C${c.slot + 1}:${c.suit}${ident}${c.isSupport ? " [S]" : ""}`;
           })
           .join("  ");
         log(`识别到 ${cards.length} 张指令卡 | ${summary}`);

@@ -348,6 +348,7 @@ pub struct AttackLogCommandCard {
     pub slot: u32,
     pub suit: Option<String>,
     pub servant_id: Option<u32>,
+    pub is_support: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]

@@ -1100,6 +1100,7 @@ pub(crate) fn choose_advanced_auto_picks_with_grand_class(
     cards: &[CommandCardMatch],
     nps: &[NoblePhantasmMatch],
     party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
     grand_servants: &[GrandServantRuntimeConfig],
     grand_card_strategy: &GrandCardStrategy,
     grand_class: GrandClass,
@@ -1144,14 +1145,15 @@ pub(crate) fn choose_advanced_auto_picks_with_grand_class(
     }
 
     for card in cards {
-        // TODO: Command-card owner detection currently only returns servantId,
-        // so when an owned servant and a support servant share the same id we
-        // cannot tell which member owns this card yet. Keep the first matching
-        // slot for now; replace this with slot/support-aware ownership once
-        // the sidecar can distinguish support cards from owned cards.
-        let servant_index = card
-            .servant_id
-            .and_then(|id| party_ids.iter().position(|party_id| *party_id == Some(id)));
+        let servant_index = card.servant_id.and_then(|id| {
+            party_ids
+                .iter()
+                .enumerate()
+                .find(|(index, party_id)| {
+                    **party_id == Some(id) && party_supports[*index] == card.is_support
+                })
+                .map(|(index, _)| index)
+        });
         candidates.push(AdvancedPickCandidate {
             pick: Pick::Card {
                 slot: card.slot,
@@ -1225,6 +1227,7 @@ pub(crate) fn choose_advanced_auto_picks(
     cards: &[CommandCardMatch],
     nps: &[NoblePhantasmMatch],
     party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
     grand_servants: &[GrandServantRuntimeConfig],
     grand_card_strategy: &GrandCardStrategy,
 ) -> Vec<Pick> {
@@ -1233,6 +1236,7 @@ pub(crate) fn choose_advanced_auto_picks(
         cards,
         nps,
         party_ids,
+        party_supports,
         grand_servants,
         grand_card_strategy,
         GrandClass::Saber,

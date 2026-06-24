@@ -47,8 +47,17 @@ pub(crate) fn command_cards_log_meta(cards: &[CommandCardMatch]) -> Vec<AttackLo
             slot: card.slot,
             suit: card.suit.clone(),
             servant_id: card.servant_id,
+            is_support: card.is_support,
         })
         .collect()
+}
+
+fn party_slot_matches_card(
+    card: &CommandCardMatch,
+    expected_id: u32,
+    expected_support: bool,
+) -> bool {
+    card.servant_id == Some(expected_id) && card.is_support == expected_support
 }
 
 pub(crate) fn advanced_rule_matches(
@@ -56,6 +65,7 @@ pub(crate) fn advanced_rule_matches(
     cards: &[CommandCardMatch],
     nps: &[NoblePhantasmMatch],
     party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
 ) -> bool {
     let np_matches = if rule.np_condition_groups.is_empty() {
         true
@@ -71,10 +81,9 @@ pub(crate) fn advanced_rule_matches(
         true
     } else {
         rule.command_condition_groups.iter().any(|group| {
-            group
-                .cards
-                .iter()
-                .all(|condition| command_condition_matches(condition, cards, party_ids))
+            group.cards.iter().all(|condition| {
+                command_condition_matches(condition, cards, party_ids, party_supports)
+            })
         })
     };
     np_matches && command_matches
@@ -160,6 +169,7 @@ pub(crate) fn command_condition_matches(
     condition: &AdvancedCommandCardCondition,
     cards: &[CommandCardMatch],
     party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
 ) -> bool {
     let Some(card) = cards.iter().find(|card| card.slot == condition.slot) else {
         return false;
@@ -172,7 +182,7 @@ pub(crate) fn command_condition_matches(
         let Some(expected_id) = party_ids.get(index).copied().flatten() else {
             return false;
         };
-        if card.servant_id != Some(expected_id) {
+        if !party_slot_matches_card(card, expected_id, party_supports[index]) {
             return false;
         }
     }
@@ -199,6 +209,7 @@ pub(crate) fn command_condition_matches_card(
     condition: &AdvancedCommandCardCondition,
     card: &CommandCardMatch,
     party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
 ) -> bool {
     if condition.servant != "any" {
         let Some(index) = parse_index(&condition.servant, "servant_") else {
@@ -207,7 +218,7 @@ pub(crate) fn command_condition_matches_card(
         let Some(expected_id) = party_ids.get(index).copied().flatten() else {
             return false;
         };
-        if card.servant_id != Some(expected_id) {
+        if !party_slot_matches_card(card, expected_id, party_supports[index]) {
             return false;
         }
     }
@@ -242,6 +253,7 @@ pub(crate) fn pick_by_priority(
     cards: &[CommandCardMatch],
     nps: &[NoblePhantasmMatch],
     party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
     used_card_slots: &mut HashSet<u32>,
     used_np_slots: &mut HashSet<u32>,
 ) -> Vec<Pick> {
@@ -256,6 +268,7 @@ pub(crate) fn pick_by_priority(
                 cards,
                 nps,
                 party_ids,
+                party_supports,
                 used_card_slots,
                 used_np_slots,
             ) {
@@ -279,6 +292,7 @@ pub(crate) fn pick_by_priority(
                 cards,
                 nps,
                 party_ids,
+                party_supports,
                 used_card_slots,
                 used_np_slots,
             ) else {
@@ -317,6 +331,7 @@ pub(crate) fn pick_one_priority(
     cards: &[CommandCardMatch],
     nps: &[NoblePhantasmMatch],
     party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
     used_card_slots: &mut HashSet<u32>,
     used_np_slots: &mut HashSet<u32>,
 ) -> Option<Pick> {
@@ -337,6 +352,7 @@ pub(crate) fn pick_one_priority(
     }
 
     let wanted_id = party_ids[field_pos - 1]?;
+    let wanted_support = party_supports[field_pos - 1];
     let wanted_suit = if kind == "all" {
         None
     } else {
@@ -348,7 +364,7 @@ pub(crate) fn pick_one_priority(
         if used_card_slots.contains(&c.slot) {
             continue;
         }
-        if c.servant_id != Some(wanted_id) {
+        if !party_slot_matches_card(c, wanted_id, wanted_support) {
             continue;
         }
         if let Some(wanted_suit) = wanted_suit {
@@ -438,6 +454,7 @@ pub(crate) fn advanced_startup_conditions_match(
     scene: &AdvancedBattleScene,
     cards: &[CommandCardMatch],
     party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
 ) -> bool {
     let active: Vec<&AdvancedCommandCardCondition> = scene
         .command_conditions
@@ -448,7 +465,14 @@ pub(crate) fn advanced_startup_conditions_match(
         return true;
     }
     let mut used_slots = HashSet::new();
-    startup_conditions_match_from(0, &active, cards, party_ids, &mut used_slots)
+    startup_conditions_match_from(
+        0,
+        &active,
+        cards,
+        party_ids,
+        party_supports,
+        &mut used_slots,
+    )
 }
 
 pub(crate) fn startup_conditions_match_from(
@@ -456,6 +480,7 @@ pub(crate) fn startup_conditions_match_from(
     conditions: &[&AdvancedCommandCardCondition],
     cards: &[CommandCardMatch],
     party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
     used_slots: &mut HashSet<u32>,
 ) -> bool {
     if condition_index >= conditions.len() {
@@ -467,7 +492,7 @@ pub(crate) fn startup_conditions_match_from(
         if used_slots.contains(&card.slot) {
             continue;
         }
-        if !command_condition_matches_card(condition, card, party_ids) {
+        if !command_condition_matches_card(condition, card, party_ids, party_supports) {
             continue;
         }
         used_slots.insert(card.slot);
@@ -476,6 +501,7 @@ pub(crate) fn startup_conditions_match_from(
             conditions,
             cards,
             party_ids,
+            party_supports,
             used_slots,
         ) {
             return true;
@@ -571,9 +597,12 @@ pub(crate) fn fallback_command_cards() -> Vec<CommandCardMatch> {
             icon_score: None,
             icon_region: None,
             servant_id: None,
+            is_support: false,
             ascension: None,
             face_score: None,
             crit_chance: None,
+            support_icon_score: None,
+            support_icon_region: None,
         })
         .collect()
 }
@@ -593,19 +622,52 @@ impl Runner {
                 .filter(|scene| scene.rules.is_empty() || uses_advanced_strategy_flow(scene))
                 .map(|scene| self.advanced_current_party_ids(scene))
                 .unwrap_or_else(|| self.build_party_ids());
+            let party_supports = self
+                .advanced_scenes
+                .get(self.battle.current_scene_index)
+                .filter(|scene| scene.rules.is_empty() || uses_advanced_strategy_flow(scene))
+                .map(|scene| {
+                    let scene_index = self.battle.current_scene_index;
+                    let executed_control_count = *self
+                        .battle
+                        .advanced_control_indices
+                        .get(&scene_index)
+                        .unwrap_or(&0);
+                    if self.battle.advanced_startup_done.contains(&scene_index) {
+                        let startup_control_count = *self
+                            .battle
+                            .advanced_startup_control_indices
+                            .get(&scene_index)
+                            .unwrap_or(&executed_control_count);
+                        self.advanced_party_supports_after_startup_flow(
+                            scene,
+                            executed_control_count,
+                            startup_control_count,
+                        )
+                    } else {
+                        self.advanced_party_supports_after_control(scene, executed_control_count)
+                    }
+                })
+                .unwrap_or_else(|| {
+                    let (_, supports) = frontline_party_ids_and_supports(&frontline_party_members(
+                        &self.build_full_party_members(),
+                    ));
+                    supports
+                });
             let Some((cards, nps)) = self.read_attack_state(&party_ids, true) else {
                 return;
             };
-            self.handle_advanced_attack(cards, nps, party_ids);
+            self.handle_advanced_attack(cards, nps, party_ids, party_supports);
             return;
         }
 
         let party_ids = self.normal_current_party_ids();
+        let party_supports = self.normal_current_party_supports();
         let recognize_command_cards = normal_scenes_need_command_card_recognition(&self.scenes);
         let Some((cards, nps)) = self.read_attack_state(&party_ids, recognize_command_cards) else {
             return;
         };
-        self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, None);
+        self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, &party_supports, None);
     }
 
     pub(crate) fn advanced_current_party_ids(
@@ -782,11 +844,7 @@ impl Runner {
                     let owner = c
                         .servant_id
                         .and_then(|id| {
-                            party_ids
-                                .iter()
-                                .position(|party_id| *party_id == Some(id))
-                                .map(|index| format!("S{}:{id}", index + 1))
-                                .or_else(|| Some(format!("?:{id}")))
+                            Some(format!("{id}{}", if c.is_support { "[支]" } else { "" }))
                         })
                         .unwrap_or_else(|| "未识别".into());
                     format!(
@@ -846,6 +904,7 @@ impl Runner {
         cards: &[CommandCardMatch],
         nps: &[NoblePhantasmMatch],
         party_ids: &[Option<u32>; 3],
+        party_supports: &[bool; 3],
         attack_priority_override: Option<&[AttackCard]>,
     ) {
         let mut used_card_slots: HashSet<u32> = HashSet::new();
@@ -858,6 +917,7 @@ impl Runner {
                 cards,
                 nps,
                 party_ids,
+                party_supports,
                 &mut used_card_slots,
                 &mut used_np_slots,
             );
@@ -873,6 +933,7 @@ impl Runner {
                 cards,
                 nps,
                 party_ids,
+                party_supports,
                 &mut used_card_slots,
                 &mut used_np_slots,
             );
@@ -993,6 +1054,7 @@ impl Runner {
         cards: Vec<CommandCardMatch>,
         nps: Vec<NoblePhantasmMatch>,
         party_ids: [Option<u32>; 3],
+        party_supports: [bool; 3],
     ) {
         let grand_servants = self.grand_servant_runtime_configs();
         let Some(scene) = self
@@ -1016,6 +1078,7 @@ impl Runner {
                     &cards,
                     &nps,
                     &party_ids,
+                    &party_supports,
                     &grand_servants,
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
@@ -1024,7 +1087,7 @@ impl Runner {
                 return;
             }
             self.emit("Attack", "无高级指令配置，按默认顺序补位");
-            self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, None);
+            self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, &party_supports, None);
             return;
         };
 
@@ -1035,33 +1098,50 @@ impl Runner {
                 .advanced_control_indices
                 .get(&scene_index)
                 .unwrap_or(&0);
-            let current_party_ids = if self.battle.advanced_startup_done.contains(&scene_index) {
-                let startup_control_count = *self
-                    .battle
-                    .advanced_startup_control_indices
-                    .get(&scene_index)
-                    .unwrap_or(&executed_control_count);
-                self.advanced_party_ids_after_startup_flow(
-                    &scene,
-                    executed_control_count,
-                    startup_control_count,
-                )
-            } else {
-                self.advanced_party_ids_after_control(&scene, executed_control_count)
-            };
-            let (cards, nps, party_ids) = if current_party_ids != party_ids {
+            let (current_party_ids, current_party_supports) =
+                if self.battle.advanced_startup_done.contains(&scene_index) {
+                    let startup_control_count = *self
+                        .battle
+                        .advanced_startup_control_indices
+                        .get(&scene_index)
+                        .unwrap_or(&executed_control_count);
+                    (
+                        self.advanced_party_ids_after_startup_flow(
+                            &scene,
+                            executed_control_count,
+                            startup_control_count,
+                        ),
+                        self.advanced_party_supports_after_startup_flow(
+                            &scene,
+                            executed_control_count,
+                            startup_control_count,
+                        ),
+                    )
+                } else {
+                    (
+                        self.advanced_party_ids_after_control(&scene, executed_control_count),
+                        self.advanced_party_supports_after_control(&scene, executed_control_count),
+                    )
+                };
+            let (cards, nps, party_ids, party_supports) = if current_party_ids != party_ids
+                || current_party_supports != party_supports
+            {
                 let Some((cards, nps)) = self.read_attack_state(&current_party_ids, true) else {
                     return;
                 };
-                (cards, nps, current_party_ids)
+                (cards, nps, current_party_ids, current_party_supports)
             } else {
-                (cards, nps, party_ids)
+                (cards, nps, party_ids, party_supports)
             };
 
             if !self.battle.advanced_startup_done.contains(&scene_index) {
                 if scene.grand_auto_order_change == Some(true) {
-                    let auto_order_change =
-                        grand_auto_order_change_action(&cards, &party_ids, &grand_servants);
+                    let auto_order_change = grand_auto_order_change_action(
+                        &cards,
+                        &party_ids,
+                        &party_supports,
+                        &grand_servants,
+                    );
                     let original_members = self.build_full_party_members();
                     let mut members = original_members.clone();
                     let mut startup_actions = Vec::new();
@@ -1128,8 +1208,9 @@ impl Runner {
                         apply_party_member_lineup_change(&mut members, &resolved_action);
                         startup_actions.push(resolved_action);
                     }
-                    let ids = party_member_ids(&members);
-                    let startup_party_ids = [ids[0], ids[1], ids[2]];
+                    let startup_party_members = frontline_party_members(&members);
+                    let (startup_party_ids, startup_party_supports) =
+                        frontline_party_ids_and_supports(&startup_party_members);
                     self.battle
                         .advanced_control_indices
                         .insert(scene_index, next_control_count);
@@ -1171,6 +1252,7 @@ impl Runner {
                             &next_cards,
                             &next_nps,
                             &startup_party_ids,
+                            &startup_party_supports,
                             &grand_servants,
                             &self.config.grand_card_strategy,
                             self.config.grand_class,
@@ -1184,6 +1266,7 @@ impl Runner {
                         &cards,
                         &nps,
                         &startup_party_ids,
+                        &startup_party_supports,
                         &grand_servants,
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
@@ -1192,7 +1275,7 @@ impl Runner {
                     return;
                 }
 
-                if !advanced_startup_conditions_match(&scene, &cards, &party_ids) {
+                if !advanced_startup_conditions_match(&scene, &cards, &party_ids, &party_supports) {
                     let control_index = executed_control_count;
                     if let Some(control_action) = scene.control_actions.get(control_index).cloned()
                     {
@@ -1228,6 +1311,8 @@ impl Runner {
                         thread::sleep(ACTION_DELAY);
                         let control_party_ids =
                             self.advanced_party_ids_after_control(&scene, control_index + 1);
+                        let control_party_supports =
+                            self.advanced_party_supports_after_control(&scene, control_index + 1);
                         let Some((next_cards, _next_nps)) =
                             self.read_attack_state(&control_party_ids, true)
                         else {
@@ -1238,6 +1323,7 @@ impl Runner {
                             &next_cards,
                             &[],
                             &control_party_ids,
+                            &control_party_supports,
                             &grand_servants,
                             &self.config.grand_card_strategy,
                             self.config.grand_class,
@@ -1252,6 +1338,7 @@ impl Runner {
                         &cards,
                         &[],
                         &party_ids,
+                        &party_supports,
                         &grand_servants,
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
@@ -1279,14 +1366,17 @@ impl Runner {
                     .take(next_control_count.saturating_sub(executed_control_count))
                     .chain(scene.startup_actions.iter())
                     .cloned();
-                let (startup_actions, startup_party_ids) = self.advanced_actions_and_party_after(
-                    scene
-                        .control_actions
-                        .iter()
-                        .take(executed_control_count)
-                        .cloned(),
-                    pending_actions,
-                );
+                let (startup_actions, startup_party_members) = self
+                    .advanced_actions_and_members_after(
+                        scene
+                            .control_actions
+                            .iter()
+                            .take(executed_control_count)
+                            .cloned(),
+                        pending_actions,
+                    );
+                let (startup_party_ids, startup_party_supports) =
+                    frontline_party_ids_and_supports(&startup_party_members);
                 self.battle
                     .advanced_control_indices
                     .insert(scene_index, next_control_count);
@@ -1328,6 +1418,7 @@ impl Runner {
                         &next_cards,
                         &next_nps,
                         &startup_party_ids,
+                        &startup_party_supports,
                         &grand_servants,
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
@@ -1341,6 +1432,7 @@ impl Runner {
                     &cards,
                     &nps,
                     &startup_party_ids,
+                    &startup_party_supports,
                     &grand_servants,
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
@@ -1368,15 +1460,18 @@ impl Runner {
                         .advanced_auto_order_changes
                         .get(&self.battle.current_scene_index),
                 );
-                let (control_actions, control_party_ids) = self.advanced_actions_and_party_after(
-                    active_actions.into_iter(),
-                    scene
-                        .control_actions
-                        .iter()
-                        .skip(executed_control_count)
-                        .take(1)
-                        .cloned(),
-                );
+                let (control_actions, control_party_members) = self
+                    .advanced_actions_and_members_after(
+                        active_actions.into_iter(),
+                        scene
+                            .control_actions
+                            .iter()
+                            .skip(executed_control_count)
+                            .take(1)
+                            .cloned(),
+                    );
+                let (control_party_ids, control_party_supports) =
+                    frontline_party_ids_and_supports(&control_party_members);
                 let next_control_count = executed_control_count + 1;
                 self.battle
                     .advanced_control_indices
@@ -1420,6 +1515,7 @@ impl Runner {
                         &next_cards,
                         &next_nps,
                         &control_party_ids,
+                        &control_party_supports,
                         &grand_servants,
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
@@ -1433,6 +1529,7 @@ impl Runner {
                     &cards,
                     &nps,
                     &control_party_ids,
+                    &control_party_supports,
                     &grand_servants,
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
@@ -1445,11 +1542,17 @@ impl Runner {
                 executed_control_count,
                 startup_control_count,
             );
+            let active_party_supports = self.advanced_party_supports_after_startup_flow(
+                &scene,
+                executed_control_count,
+                startup_control_count,
+            );
             let picks = choose_advanced_auto_picks_with_grand_class(
                 &scene,
                 &cards,
                 &nps,
                 &active_party_ids,
+                &active_party_supports,
                 &grand_servants,
                 &self.config.grand_card_strategy,
                 self.config.grand_class,
@@ -1469,7 +1572,9 @@ impl Runner {
                 .iter()
                 .enumerate()
                 .skip(next_rule_index)
-                .find(|(_, rule)| advanced_rule_matches(rule, &cards, &nps, &party_ids))
+                .find(|(_, rule)| {
+                    advanced_rule_matches(rule, &cards, &nps, &party_ids, &party_supports)
+                })
                 .map(|(index, rule)| (index, rule.clone()))
             else {
                 break;
@@ -1528,6 +1633,7 @@ impl Runner {
                         &cards,
                         &nps,
                         &party_ids,
+                        &party_supports,
                         Some(&attack_priority),
                     );
                     return;
@@ -1541,7 +1647,13 @@ impl Runner {
                     "Attack",
                     &format!("高级规则 {} 命中，执行攻击", rule_index + 1),
                 );
-                self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, Some(&attack_priority));
+                self.pick_and_tap_attack_cards(
+                    &cards,
+                    &nps,
+                    &party_ids,
+                    &party_supports,
+                    Some(&attack_priority),
+                );
                 return;
             }
 
@@ -1549,6 +1661,6 @@ impl Runner {
         }
 
         self.emit("Attack", "无高级规则命中攻击，按默认顺序补位");
-        self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, None);
+        self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, &party_supports, None);
     }
 }

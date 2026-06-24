@@ -26,6 +26,16 @@ fn command_card(
     suit: Option<&str>,
     crit: Option<u32>,
 ) -> CommandCardMatch {
+    command_card_with_support(slot, servant_id, false, suit, crit)
+}
+
+fn command_card_with_support(
+    slot: u32,
+    servant_id: Option<u32>,
+    is_support: bool,
+    suit: Option<&str>,
+    crit: Option<u32>,
+) -> CommandCardMatch {
     CommandCardMatch {
         slot,
         x: 0.0,
@@ -38,9 +48,12 @@ fn command_card(
         icon_score: None,
         icon_region: None,
         servant_id,
+        is_support,
         ascension: None,
         face_score: None,
         crit_chance: crit,
+        support_icon_score: None,
+        support_icon_region: None,
     }
 }
 
@@ -123,16 +136,19 @@ fn attack_log_command_cards_keep_slot_suit_and_servant_id() {
                 slot: 0,
                 suit: Some("q".into()),
                 servant_id: Some(309),
+                is_support: false,
             },
             AttackLogCommandCard {
                 slot: 1,
                 suit: Some("b".into()),
                 servant_id: None,
+                is_support: false,
             },
             AttackLogCommandCard {
                 slot: 2,
                 suit: None,
                 servant_id: Some(16),
+                is_support: false,
             },
         ]
     );
@@ -516,7 +532,13 @@ fn advanced_rule_matches_np_and_command_groups_with_and_between_types() {
     let nps = vec![np_slot(0, true), np_slot(1, true), np_slot(2, false)];
     let party_ids = [Some(11), Some(22), Some(33)];
 
-    assert!(advanced_rule_matches(&rule, &cards, &nps, &party_ids));
+    assert!(advanced_rule_matches(
+        &rule,
+        &cards,
+        &nps,
+        &party_ids,
+        &[false, false, false],
+    ));
 }
 
 #[test]
@@ -551,7 +573,13 @@ fn advanced_rule_rejects_when_command_group_misses_even_if_np_matches() {
     let nps = vec![np_slot(0, true)];
     let party_ids = [Some(11), None, None];
 
-    assert!(!advanced_rule_matches(&rule, &cards, &nps, &party_ids));
+    assert!(!advanced_rule_matches(
+        &rule,
+        &cards,
+        &nps,
+        &party_ids,
+        &[false, false, false],
+    ));
 }
 
 #[test]
@@ -591,7 +619,10 @@ fn advanced_startup_conditions_match_only_configured_command_cards() {
     let party_ids = [Some(10), Some(20), Some(30)];
 
     assert!(advanced_startup_conditions_match(
-        &scene, &cards, &party_ids
+        &scene,
+        &cards,
+        &party_ids,
+        &[false, false, false],
     ));
 }
 
@@ -635,7 +666,10 @@ fn advanced_startup_conditions_match_duplicate_servant_cards_in_any_slots() {
     let party_ids = [Some(10), Some(20), Some(30)];
 
     assert!(advanced_startup_conditions_match(
-        &scene, &cards, &party_ids
+        &scene,
+        &cards,
+        &party_ids,
+        &[false, false, false],
     ));
 }
 
@@ -772,6 +806,7 @@ fn normal_priority_skips_missing_chain_card_then_uses_fallbacks() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &mut used_cards,
         &mut used_nps,
     );
@@ -817,6 +852,7 @@ fn normal_priority_preserves_chain_order_between_duplicate_card_colors_and_np() 
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &mut used_cards,
         &mut used_nps,
     );
@@ -846,6 +882,7 @@ fn normal_priority_all_matches_any_suit_for_servant() {
         &cards,
         &[],
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &mut used_cards,
         &mut used_nps,
     );
@@ -894,6 +931,7 @@ fn normal_priority_empty_fixed_slot_inherits_previous_non_np_rule() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &mut used_cards,
         &mut used_nps,
     );
@@ -942,6 +980,7 @@ fn normal_priority_fills_missed_first_fixed_slot_in_place() {
         &cards,
         &nps,
         &[Some(284), Some(37), Some(309)],
+        &[false, false, false],
         &mut used_cards,
         &mut used_nps,
     );
@@ -1004,6 +1043,7 @@ fn normal_fallback_priority_repeats_before_next_fallback() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &mut used_cards,
         &mut used_nps,
     );
@@ -1060,6 +1100,7 @@ fn normal_fallback_fills_missing_fixed_chain_slot_before_ready_nps() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &mut used_cards,
         &mut used_nps,
     );
@@ -1171,6 +1212,7 @@ fn fallback_command_cards_use_fixed_attack_screen_positions() {
     assert_eq!(cards.len(), COMMAND_CARDS.len());
     for (card, point) in cards.iter().zip(COMMAND_CARDS.iter()) {
         assert_eq!(card.servant_id, None);
+        assert!(!card.is_support);
         assert_eq!(card.suit, None);
         approx(card.x, point.x);
         approx(card.y, point.y);
@@ -1389,6 +1431,7 @@ fn grand_auto_order_change_targets_front_servant_with_most_cards() {
     let action = grand_auto_order_change_action(
         &cards,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &[grand_config_at(4, 99, "buster", "damage")],
     )
     .unwrap();
@@ -1413,9 +1456,117 @@ fn grand_auto_order_change_skips_when_main_grand_is_frontline() {
     assert!(grand_auto_order_change_action(
         &cards,
         &[Some(99), Some(20), Some(30)],
+        &[false, false, false],
         &[grand_config_at(0, 99, "buster", "damage")],
     )
     .is_none());
+}
+
+#[test]
+fn pick_by_priority_distinguishes_owned_and_support_cards_with_same_servant_id() {
+    let cards = vec![
+        command_card_with_support(0, Some(309), false, Some("a"), None),
+        command_card_with_support(1, Some(309), true, Some("a"), None),
+    ];
+    let priority = vec![AttackCard {
+        id: "atk_1".into(),
+        card: Some("servant_1_arts".into()),
+        member_id: None,
+        servant_id: Some(309),
+        is_support: true,
+    }];
+    let mut used_cards = HashSet::new();
+    let mut used_nps = HashSet::new();
+
+    let picks = pick_by_priority(
+        &priority,
+        &cards,
+        &[],
+        &[Some(309), None, None],
+        &[true, false, false],
+        &mut used_cards,
+        &mut used_nps,
+    );
+
+    assert_eq!(picks.len(), 1);
+    match &picks[0] {
+        Pick::Card {
+            slot, servant_id, ..
+        } => {
+            assert_eq!(*slot, 1);
+            assert_eq!(*servant_id, Some(309));
+        }
+        _ => panic!("expected command card pick"),
+    }
+}
+
+#[test]
+fn advanced_startup_conditions_match_respects_support_flag() {
+    let scene = AdvancedBattleScene {
+        id: "scene".into(),
+        main_output: None,
+        grand_auto_order_change: None,
+        command_conditions: vec![AdvancedCommandCardCondition {
+            slot: 0,
+            servant: "servant_1".into(),
+            member_id: None,
+            servant_id: Some(309),
+            is_support: true,
+            suit: "arts".into(),
+            min_crit_chance: None,
+        }],
+        control_actions: vec![],
+        startup_actions: vec![],
+        rules: vec![],
+    };
+    let support_cards = vec![command_card_with_support(
+        0,
+        Some(309),
+        true,
+        Some("a"),
+        None,
+    )];
+
+    assert!(advanced_startup_conditions_match(
+        &scene,
+        &support_cards,
+        &[Some(309), None, None],
+        &[true, false, false],
+    ));
+    assert!(!advanced_startup_conditions_match(
+        &scene,
+        &support_cards,
+        &[Some(309), None, None],
+        &[false, false, false],
+    ));
+}
+
+#[test]
+fn grand_auto_order_change_uses_support_ownership_when_counting_cards() {
+    let cards = vec![
+        command_card_with_support(0, Some(20), false, Some("a"), None),
+        command_card_with_support(1, Some(10), true, Some("b"), None),
+        command_card_with_support(2, Some(10), true, Some("q"), None),
+    ];
+
+    let action = grand_auto_order_change_action(
+        &cards,
+        &[Some(20), Some(10), Some(30)],
+        &[false, true, false],
+        &[grand_config_at(4, 99, "buster", "damage")],
+    )
+    .unwrap();
+
+    match action {
+        Action::Equipment {
+            order_change: Some(order_change),
+            ..
+        } => {
+            assert_eq!(order_change.front.as_deref(), Some("servant_2"));
+            assert!(order_change.front_is_support);
+        }
+        _ => panic!("expected auto Order Change action"),
+    }
 }
 
 #[test]
@@ -1989,6 +2140,7 @@ fn advanced_auto_np_output_prefers_ready_np_and_arts_cards() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &[],
         &GrandCardStrategy::default(),
     );
@@ -2021,6 +2173,7 @@ fn grand_auto_main_exquisite_damage_puts_np_last() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
     );
@@ -2045,6 +2198,7 @@ fn grand_auto_main_np_color_chain_places_np_last() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
     );
@@ -2072,6 +2226,7 @@ fn grand_auto_fallback_uses_deputy_np_as_overcharge_before_main_np() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
     );
@@ -2104,6 +2259,7 @@ fn grand_auto_fires_ready_main_np_when_color_does_not_fit_same_color_chain() {
         &cards,
         &nps,
         &[Some(405), Some(7), Some(8)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
     );
@@ -2143,6 +2299,7 @@ fn grand_auto_main_np_outranks_deputy_three_card_chain() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
     );
@@ -2187,6 +2344,7 @@ fn grand_auto_respects_custom_exquisite_brave_chain_priority_order() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &strategy,
     );
@@ -2211,6 +2369,7 @@ fn berserker_grand_auto_main_np_color_chain_clicks_np_last() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
         GrandClass::Berserker,
@@ -2239,6 +2398,7 @@ fn berserker_grand_auto_main_np_color_chain_prioritizes_grand_any_slots() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
         GrandClass::Berserker,
@@ -2267,6 +2427,7 @@ fn berserker_grand_auto_main_np_outranks_deputy_np_color_chain() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
         GrandClass::Berserker,
@@ -2295,6 +2456,7 @@ fn berserker_grand_auto_main_np_ready_prioritizes_grand_free_cards() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
         GrandClass::Berserker,
@@ -2323,6 +2485,7 @@ fn berserker_grand_auto_main_np_color_chain_places_ready_deputy_np_second() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
         GrandClass::Berserker,
@@ -2351,6 +2514,7 @@ fn berserker_grand_auto_main_np_ready_places_ready_deputy_np_second() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
         GrandClass::Berserker,
@@ -2379,6 +2543,7 @@ fn berserker_grand_auto_deputy_np_color_chain_outranks_main_other_same_color_wit
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
         GrandClass::Berserker,
@@ -2404,6 +2569,7 @@ fn berserker_grand_auto_other_same_color_runs_when_main_np_is_unavailable() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
         GrandClass::Berserker,
@@ -2432,6 +2598,7 @@ fn berserker_grand_auto_exquisite_chain_uses_buster_arts_quick_slot_order() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
         GrandClass::Berserker,
@@ -2464,6 +2631,7 @@ fn grand_auto_deputy_ready_np_does_not_outrank_main_same_color_chain() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &GrandCardStrategy::default(),
     );
@@ -2580,6 +2748,7 @@ fn custom_grand_rule_takes_priority_before_builtin_rules() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &strategy,
     );
@@ -2719,6 +2888,7 @@ fn custom_grand_rule_prioritizes_main_then_deputy_for_grand_slots() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &strategy,
     );
@@ -2753,6 +2923,7 @@ fn invalid_custom_grand_rule_falls_back_to_builtin_rules() {
         &cards,
         &nps,
         &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
         &grands,
         &strategy,
     );
@@ -3677,7 +3848,12 @@ fn icon_check(kind: &str, score: f64, threshold: f64, passed: bool) -> SupportCe
     SupportCeIconCheck {
         kind: kind.to_string(),
         template_key: format!("{kind}_template"),
-        region: NormRect { x: 0.0, y: 0.0, w: 0.1, h: 0.1 },
+        region: NormRect {
+            x: 0.0,
+            y: 0.0,
+            w: 0.1,
+            h: 0.1,
+        },
         score,
         threshold,
         passed,
@@ -3713,7 +3889,9 @@ fn assert_reason_and_debug(
     expected_debug_fragments: &[&str],
 ) {
     assert_eq!(mismatch.reason(), expected_reason);
-    let debug = mismatch.debug_summary().expect("debug_summary should be Some");
+    let debug = mismatch
+        .debug_summary()
+        .expect("debug_summary should be Some");
     for fragment in expected_debug_fragments {
         assert!(
             debug.contains(fragment),
@@ -3768,7 +3946,10 @@ fn mismatch_from_ce_result_plain_mismatch_no_score_details_in_reason() {
     result.artwork_checks = vec![artwork_check("full", 0.55, 0.70, false)];
     let mismatch = mismatch("礼装 1", 0.70, result);
 
-    assert!(!mismatch.reason().contains("0.55"), "reason must not contain raw score");
+    assert!(
+        !mismatch.reason().contains("0.55"),
+        "reason must not contain raw score"
+    );
     assert!(
         !mismatch.reason().contains("完整匹配"),
         "reason must not contain variant label"

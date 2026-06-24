@@ -166,6 +166,33 @@ describe("DebugCanvas", () => {
     ).toBe(true);
   });
 
+  it("renders command-card support badge overlays and labels", () => {
+    const { container } = renderWithTheme(
+      <DebugCanvas
+        {...makeState({
+          imageSrc: "tauri://localhost/fake.png?t=7",
+          commandCards: [
+            {
+              slot: 1,
+              x: 0.3,
+              y: 0.6,
+              cardRegion: { x: 0.2, y: 0.46, w: 0.2, h: 0.4 },
+              faceRegion: { x: 0.24, y: 0.55, w: 0.1, h: 0.14 },
+              suit: "a",
+              servantId: 309,
+              isSupport: true,
+              supportIconScore: 0.82,
+              supportIconRegion: { x: 0.35, y: 0.56, w: 0.035, h: 0.058 },
+            },
+          ],
+        })}
+      />
+    );
+
+    expect(container.textContent).toContain("助战✓");
+    expect(container.textContent).toContain("助战 ✓ 0.82");
+  });
+
   it("colors each Grand-badge ROI by its own per-anchor score, not the aggregate flag", () => {
     // Mixed list: row 0 scored 0.71 (Grand), row 1 scored 0.31 (not
     // Grand). Aggregate flag is true because at least one row hit,

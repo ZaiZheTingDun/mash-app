@@ -31,6 +31,29 @@ pub(crate) fn party_member_ids(members: &[Option<PartyMemberRuntime>; 6]) -> [Op
     ]
 }
 
+pub(crate) fn frontline_party_members(
+    members: &[Option<PartyMemberRuntime>; 6],
+) -> [Option<PartyMemberRuntime>; 3] {
+    [members[0].clone(), members[1].clone(), members[2].clone()]
+}
+
+pub(crate) fn frontline_party_ids_and_supports(
+    members: &[Option<PartyMemberRuntime>; 3],
+) -> ([Option<u32>; 3], [bool; 3]) {
+    (
+        [
+            members[0].as_ref().map(|member| member.servant_id),
+            members[1].as_ref().map(|member| member.servant_id),
+            members[2].as_ref().map(|member| member.servant_id),
+        ],
+        [
+            members[0].as_ref().is_some_and(|member| member.is_support),
+            members[1].as_ref().is_some_and(|member| member.is_support),
+            members[2].as_ref().is_some_and(|member| member.is_support),
+        ],
+    )
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ChangeOrderRule {
@@ -442,6 +465,7 @@ pub(crate) fn apply_attack_card_member_lineup_change(
 pub(crate) fn front_slot_with_most_cards(
     cards: &[CommandCardMatch],
     party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
 ) -> Option<usize> {
     let mut counts = [0usize; 3];
     for card in cards {
@@ -451,6 +475,7 @@ pub(crate) fn front_slot_with_most_cards(
         if let Some(index) = party_ids
             .iter()
             .position(|party_id| *party_id == Some(servant_id))
+            .filter(|index| party_supports[*index] == card.is_support)
         {
             counts[index] += 1;
         }
@@ -463,13 +488,14 @@ pub(crate) fn front_slot_with_most_cards(
 pub(crate) fn grand_auto_order_change_action(
     cards: &[CommandCardMatch],
     party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
     grand_servants: &[GrandServantRuntimeConfig],
 ) -> Option<Action> {
     let main = grand_servants.first()?;
     if !(3..6).contains(&main.slot_index) {
         return None;
     }
-    let front_index = front_slot_with_most_cards(cards, party_ids)?;
+    let front_index = front_slot_with_most_cards(cards, party_ids, party_supports)?;
     Some(Action::Equipment {
         id: "auto_grand_order_change".into(),
         skill: Some("skill_3".into()),
@@ -481,7 +507,7 @@ pub(crate) fn grand_auto_order_change_action(
             front: Some(format!("servant_{}", front_index + 1)),
             front_member_id: None,
             front_servant_id: party_ids[front_index],
-            front_is_support: false,
+            front_is_support: party_supports[front_index],
             back: Some(format!("servant_{}", main.slot_index + 1)),
             back_member_id: None,
             back_servant_id: Some(main.servant_id),
@@ -1148,6 +1174,18 @@ impl Runner {
     }
 
     pub(crate) fn normal_current_party_ids(&self) -> [Option<u32>; 3] {
+        let members = self.normal_current_party_members();
+        let (ids, _) = frontline_party_ids_and_supports(&members);
+        ids
+    }
+
+    pub(crate) fn normal_current_party_supports(&self) -> [bool; 3] {
+        let members = self.normal_current_party_members();
+        let (_, supports) = frontline_party_ids_and_supports(&members);
+        supports
+    }
+
+    pub(crate) fn normal_current_party_members(&self) -> [Option<PartyMemberRuntime>; 3] {
         let full = normal_current_party_members_from(
             self.build_full_party_members(),
             &self.scenes,
@@ -1155,8 +1193,7 @@ impl Runner {
             self.battle.current_turn_index,
             self.battle.executed_turn_key,
         );
-        let ids = party_member_ids(&full);
-        [ids[0], ids[1], ids[2]]
+        frontline_party_members(&full)
     }
 
     pub(crate) fn resolve_normal_turn_for_current_members(&self, turn: &BattleTurn) -> BattleTurn {
@@ -1225,7 +1262,10 @@ impl Runner {
         scene: &AdvancedBattleScene,
         control_count: usize,
     ) -> [Option<u32>; 3] {
-        self.advanced_party_ids_after_actions(scene.control_actions.iter().take(control_count))
+        let members = self
+            .advanced_party_members_after_actions(scene.control_actions.iter().take(control_count));
+        let (ids, _) = frontline_party_ids_and_supports(&members);
+        ids
     }
 
     pub(crate) fn advanced_party_ids_after_startup_flow(
@@ -1242,13 +1282,45 @@ impl Runner {
                 .advanced_auto_order_changes
                 .get(&self.battle.current_scene_index),
         );
-        self.advanced_party_ids_after_actions(actions.iter())
+        let members = self.advanced_party_members_after_actions(actions.iter());
+        let (ids, _) = frontline_party_ids_and_supports(&members);
+        ids
     }
 
-    pub(crate) fn advanced_party_ids_after_actions<'a>(
+    pub(crate) fn advanced_party_supports_after_control(
+        &self,
+        scene: &AdvancedBattleScene,
+        control_count: usize,
+    ) -> [bool; 3] {
+        let members = self
+            .advanced_party_members_after_actions(scene.control_actions.iter().take(control_count));
+        let (_, supports) = frontline_party_ids_and_supports(&members);
+        supports
+    }
+
+    pub(crate) fn advanced_party_supports_after_startup_flow(
+        &self,
+        scene: &AdvancedBattleScene,
+        control_count: usize,
+        startup_control_count: usize,
+    ) -> [bool; 3] {
+        let actions = advanced_startup_flow_actions(
+            scene,
+            control_count,
+            startup_control_count,
+            self.battle
+                .advanced_auto_order_changes
+                .get(&self.battle.current_scene_index),
+        );
+        let members = self.advanced_party_members_after_actions(actions.iter());
+        let (_, supports) = frontline_party_ids_and_supports(&members);
+        supports
+    }
+
+    pub(crate) fn advanced_party_members_after_actions<'a>(
         &self,
         actions: impl Iterator<Item = &'a Action>,
-    ) -> [Option<u32>; 3] {
+    ) -> [Option<PartyMemberRuntime>; 3] {
         let original_members = self.build_full_party_members();
         let mut members = original_members.clone();
         for action in actions {
@@ -1258,15 +1330,14 @@ impl Runner {
                 apply_party_member_lineup_change(&mut members, &resolved);
             }
         }
-        let ids = party_member_ids(&members);
-        [ids[0], ids[1], ids[2]]
+        frontline_party_members(&members)
     }
 
-    pub(crate) fn advanced_actions_and_party_after(
+    pub(crate) fn advanced_actions_and_members_after(
         &self,
         already_executed: impl Iterator<Item = Action>,
         pending: impl Iterator<Item = Action>,
-    ) -> (Vec<Action>, [Option<u32>; 3]) {
+    ) -> (Vec<Action>, [Option<PartyMemberRuntime>; 3]) {
         let original_members = self.build_full_party_members();
         let mut members = original_members.clone();
         for action in already_executed {
@@ -1291,7 +1362,6 @@ impl Runner {
             apply_party_member_lineup_change(&mut members, &resolved);
             actions.push(resolved);
         }
-        let ids = party_member_ids(&members);
-        (actions, [ids[0], ids[1], ids[2]])
+        (actions, frontline_party_members(&members))
     }
 }

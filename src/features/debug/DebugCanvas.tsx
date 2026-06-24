@@ -197,6 +197,8 @@ export function DebugCanvas({
               <span className="debug-overlay-label">
                 C{c.slot + 1}
                 {c.suit ? `·${c.suit.toUpperCase()}` : ""}
+                {c.isSupport ? " · 助战✓" : c.supportIconScore != null ? " · 助战✗" : ""}
+                {c.supportIconScore != null ? ` ${c.supportIconScore.toFixed(2)}` : ""}
                 {c.servantId !== undefined
                   ? ` · ${c.servantId}@${c.ascension ?? "?"} (${(c.faceScore ?? 0).toFixed(2)})`
                   : c.iconScore !== undefined
@@ -217,6 +219,31 @@ export function DebugCanvas({
                   height: `${c.iconRegion.h * 100}%`,
                 }}
               />
+            );
+          }
+          if (c.supportIconRegion) {
+            overlays.push(
+              <Box
+                key={`card-support-${c.slot}`}
+                className={`debug-overlay-box ${
+                  c.isSupport
+                    ? "debug-overlay-support-name-cand"
+                    : "debug-overlay-support-np-cand"
+                }`}
+                style={{
+                  left: `${c.supportIconRegion.x * 100}%`,
+                  top: `${c.supportIconRegion.y * 100}%`,
+                  width: `${c.supportIconRegion.w * 100}%`,
+                  height: `${c.supportIconRegion.h * 100}%`,
+                }}
+              >
+                <span className="debug-overlay-label">
+                  助战 {c.isSupport ? "✓" : "✗"}
+                  {c.supportIconScore != null
+                    ? ` ${c.supportIconScore.toFixed(2)}`
+                    : ""}
+                </span>
+              </Box>
             );
           }
           if (c.critDigitRegions) {

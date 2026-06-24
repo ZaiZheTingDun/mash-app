@@ -84,9 +84,12 @@ export interface CommandCardMatchDto {
   iconScore?: number;
   iconRegion?: NormRectDto;
   servantId?: number;
+  isSupport?: boolean;
   ascension?: number;
   faceScore?: number;
   critChance?: number;
+  supportIconScore?: number;
+  supportIconRegion?: NormRectDto;
 }
 
 export interface CritDigitReadDto {

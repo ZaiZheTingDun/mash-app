@@ -198,4 +198,42 @@ describe("DebugPage", () => {
     expect(screen.getByRole("button", { name: "黑之圣杯" })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/礼装 id/)).not.toBeInTheDocument();
   });
+
+  it("includes the support marker in command-card debug summaries", async () => {
+    const user = userEvent.setup();
+    mockDebugPageBootstrap((cmd) => {
+      if (cmd === "debug_capture") {
+        return {
+          imagePath: "/tmp/debug.png",
+          screen: "Attack",
+          score: 0.95,
+          screenSize: { w: 1080, h: 1920 },
+        };
+      }
+      if (cmd === "debug_find_command_cards") {
+        return [
+          {
+            slot: 1,
+            x: 0.3,
+            y: 0.6,
+            cardRegion: { x: 0.2, y: 0.46, w: 0.2, h: 0.4 },
+            faceRegion: { x: 0.24, y: 0.55, w: 0.1, h: 0.14 },
+            suit: "a",
+            servantId: 150,
+            ascension: 1,
+            faceScore: 0.88,
+            isSupport: true,
+          },
+        ];
+      }
+      return null;
+    });
+
+    renderDebugPage();
+
+    await user.click(screen.getByRole("button", { name: "截取画面" }));
+    await user.click(screen.getByRole("button", { name: "识别指令卡" }));
+
+    expect(await screen.findByText(/C2:a 150@1\(0.88\) \[S\]/)).toBeInTheDocument();
+  });
 });
