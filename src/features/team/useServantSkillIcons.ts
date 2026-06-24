@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { convertFileSrc, invoke } from "../../tauri";
 import type { Servant } from "../../types/servant";
 
-export type SkillIcons = [string | null, string | null, string | null];
+export type SkillEntry = { src: string | null; name: string };
+export type SkillIcons = [SkillEntry, SkillEntry, SkillEntry];
 
 export function useServantSkillIcons(servants: (Servant | null)[]) {
   const [skillIcons, setSkillIcons] = useState<Record<string, SkillIcons>>({});
@@ -29,21 +30,26 @@ export function useServantSkillIcons(servants: (Servant | null)[]) {
     const missing = parsed.filter(({ variantKey }) => !(variantKey in skillIcons));
     if (missing.length === 0) return;
     let cancelled = false;
+    const emptyIcons = (): SkillIcons => [
+      { src: null, name: "" },
+      { src: null, name: "" },
+      { src: null, name: "" },
+    ];
     Promise.all(
       missing.map((request) =>
-        invoke<[string | null, string | null, string | null]>("get_skill_icon_paths", {
+        invoke<[{ path: string | null; name: string }, { path: string | null; name: string }, { path: string | null; name: string }]>("get_skill_icon_paths", {
           servantId: request.servantId,
           variantKey: request.variantKey,
         })
-          .then((paths) => {
+          .then((entries) => {
             const icons: SkillIcons = [
-              paths[0] ? convertFileSrc(paths[0]) : null,
-              paths[1] ? convertFileSrc(paths[1]) : null,
-              paths[2] ? convertFileSrc(paths[2]) : null,
+              { src: entries[0].path ? convertFileSrc(entries[0].path) : null, name: entries[0].name },
+              { src: entries[1].path ? convertFileSrc(entries[1].path) : null, name: entries[1].name },
+              { src: entries[2].path ? convertFileSrc(entries[2].path) : null, name: entries[2].name },
             ];
             return [request.variantKey, icons] as const;
           })
-          .catch(() => [request.variantKey, [null, null, null] as SkillIcons] as const)
+          .catch(() => [request.variantKey, emptyIcons()] as const)
       )
     ).then((results) => {
       if (cancelled) return;

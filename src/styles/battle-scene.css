@@ -160,21 +160,15 @@
 }
 
 .battle-inline-skill-icon {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   vertical-align: middle;
   border: 1px solid var(--gray-7);
   border-radius: var(--radius-1);
   overflow: hidden;
   flex: 0 0 auto;
-}
-
-.battle-inline-skill-icon img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
+  margin-left: 4px;
 }
 
 .battle-action-delete {
@@ -499,19 +493,10 @@
 }
 
 .battle-option-btn.skill-icon {
-  padding: 0;
-  min-width: 46px;
-  min-height: 46px;
-  height: 46px;
-  width: 46px;
-}
-
-.battle-option-btn.skill-icon img {
-  width: 42px;
-  height: 42px;
-  object-fit: contain;
-  display: block;
-  border-radius: var(--radius-1);
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .battle-choice-row.order-change {

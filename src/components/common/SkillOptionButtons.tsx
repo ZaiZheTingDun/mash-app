@@ -1,3 +1,4 @@
+import { Avatar } from "@radix-ui/themes";
 import { SKILLS, SKILL_LABELS } from "../../features/battle/battleSceneModel";
 import type { SkillIcons } from "../../features/team/useServantSkillIcons";
 import type { Servant } from "../../types/servant";
@@ -10,19 +11,24 @@ interface SkillOptionButtonsProps {
 
 export function SkillOptionButtons({ servant, skillIcons, onSelect }: SkillOptionButtonsProps) {
   return SKILLS.map((skill, skillIndex) => {
-    const iconSrc = servant
-      ? (skillIcons[servant.variantKey]?.[skillIndex] ?? null)
-      : null;
+    const entry = servant ? (skillIcons[servant.variantKey]?.[skillIndex] ?? null) : null;
+    const iconSrc = entry?.src ?? null;
+    const label = entry?.name || SKILL_LABELS[skill];
     return (
       <button
         type="button"
         key={skill}
-        className={`battle-option-btn${iconSrc ? " skill-icon" : ""}`}
+        className="battle-option-btn skill-icon"
+        title={label}
         onClick={() => onSelect(skill)}
       >
-        {iconSrc
-          ? <img src={iconSrc} alt={SKILL_LABELS[skill]} draggable={false} />
-          : SKILL_LABELS[skill]}
+        <Avatar
+          src={iconSrc ?? undefined}
+          fallback={String(skillIndex + 1)}
+          alt={label}
+          radius="small"
+          size="3"
+        />
       </button>
     );
   });

@@ -416,7 +416,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "get_template_asset_path":
       return null as T;
     case "get_skill_icon_paths":
-      return [null, null, null] as T;
+      return [{ path: null, name: "" }, { path: null, name: "" }, { path: null, name: "" }] as T;
     case "get_runtime_status":
       return {
         requiredRuntimeVersion: "2026.05.08-runtime1",

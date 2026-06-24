@@ -583,14 +583,103 @@ fn variants_raw_data() -> &'static HashMap<u32, Vec<serde_json::Value>> {
     })
 }
 
-/// Returns the absolute paths to the three skill icon files for a given servant variant.
-/// Each element is `None` when the local asset file is absent (UI falls back to text).
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SkillIconEntry {
+    pub(crate) path: Option<String>,
+    pub(crate) name: String,
+}
+
+struct ServantSkillMaps {
+    icon_map: HashMap<u32, String>,
+    name_map: HashMap<u32, String>,
+}
+
+fn servant_skill_maps(
+    app: &tauri::AppHandle,
+    servant_id: u32,
+) -> Option<Arc<ServantSkillMaps>> {
+    static CACHE: OnceLock<Mutex<HashMap<u32, Arc<ServantSkillMaps>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    {
+        let guard = cache.lock().unwrap();
+        if let Some(cached) = guard.get(&servant_id) {
+            return Some(Arc::clone(cached));
+        }
+    }
+
+    let servant_dir = resolve_servant_assets_dir(app)?.join(servant_id.to_string());
+
+    let jp_raw = fs::read_to_string(servant_dir.join("servant.json")).ok()?;
+    let jp_json: serde_json::Value = serde_json::from_str(&jp_raw).ok()?;
+
+    let cn_json: Option<serde_json::Value> = fs::read_to_string(servant_dir.join("servant-cn.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
+
+    let skills = jp_json.get("skills").and_then(|v| v.as_array());
+
+    let icon_map: HashMap<u32, String> = skills
+        .map(|skills| {
+            skills
+                .iter()
+                .filter_map(|skill| {
+                    let id = skill.get("id")?.as_u64()? as u32;
+                    let icon_url = skill.get("icon")?.as_str()?;
+                    let filename = icon_url.split('/').last()?.to_string();
+                    Some((id, filename))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut name_map: HashMap<u32, String> = skills
+        .map(|skills| {
+            skills
+                .iter()
+                .filter_map(|skill| {
+                    let id = skill.get("id")?.as_u64()? as u32;
+                    let name = skill.get("name")?.as_str()?.to_string();
+                    Some((id, name))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if let Some(cn) = &cn_json {
+        if let Some(skills) = cn.get("skills").and_then(|v| v.as_array()) {
+            for skill in skills {
+                if let (Some(id), Some(name)) = (
+                    skill.get("id").and_then(|v| v.as_u64()).map(|n| n as u32),
+                    skill.get("name").and_then(|v| v.as_str()),
+                ) {
+                    name_map.insert(id, name.to_string());
+                }
+            }
+        }
+    }
+
+    let arc = Arc::new(ServantSkillMaps { icon_map, name_map });
+    cache.lock().unwrap().insert(servant_id, Arc::clone(&arc));
+    Some(arc)
+}
+
+/// Returns icon path and localized name for the three skill slots of a given servant variant.
+/// Path is `None` when the local asset file is absent (UI falls back to text label).
+/// Name prefers CN from `servant-cn.json`, falls back to JP from `servant.json`.
+/// Derived skill maps are cached by `servant_id`; raw JSON is discarded after extraction.
 #[tauri::command]
 pub(crate) fn get_skill_icon_paths(
     app: tauri::AppHandle,
     servant_id: u32,
     variant_key: String,
-) -> [Option<String>; 3] {
+) -> [SkillIconEntry; 3] {
+    let empty = || [
+        SkillIconEntry { path: None, name: String::new() },
+        SkillIconEntry { path: None, name: String::new() },
+        SkillIconEntry { path: None, name: String::new() },
+    ];
+
     let variant_index: usize = variant_key
         .split(':')
         .nth(1)
@@ -610,41 +699,25 @@ pub(crate) fn get_skill_icon_paths(
                     .and_then(|id| id.as_u64())
                     .map(|n| n as u32)
             }),
-            None => return [None, None, None],
+            None => return empty(),
         };
 
-    let Some(assets_root) = resolve_servant_assets_dir(&app) else {
-        return [None, None, None];
+    let Some(maps) = servant_skill_maps(&app, servant_id) else {
+        return empty();
     };
-    let servant_json_path = assets_root.join(servant_id.to_string()).join("servant.json");
-    let Ok(raw) = fs::read_to_string(&servant_json_path) else {
-        return [None, None, None];
-    };
-    let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw) else {
-        return [None, None, None];
-    };
-
-    let skill_icon_map: HashMap<u32, String> = json
-        .get("skills")
-        .and_then(|v| v.as_array())
-        .map(|skills| {
-            skills
-                .iter()
-                .filter_map(|skill| {
-                    let id = skill.get("id")?.as_u64()? as u32;
-                    let icon_url = skill.get("icon")?.as_str()?;
-                    let filename = icon_url.split('/').last()?.to_string();
-                    Some((id, filename))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
 
     let icons_dir = app_assets_dir(&app).join("icons");
     skill_ids.map(|maybe_id| {
-        let filename = maybe_id.and_then(|id| skill_icon_map.get(&id))?;
-        let candidate = icons_dir.join(filename.as_str());
-        candidate.is_file().then(|| candidate.to_string_lossy().into_owned())
+        let path = maybe_id
+            .and_then(|id| maps.icon_map.get(&id))
+            .map(|filename| icons_dir.join(filename.as_str()))
+            .filter(|p| p.is_file())
+            .map(|p| p.to_string_lossy().into_owned());
+        let name = maybe_id
+            .and_then(|id| maps.name_map.get(&id))
+            .cloned()
+            .unwrap_or_default();
+        SkillIconEntry { path, name }
     })
 }
 

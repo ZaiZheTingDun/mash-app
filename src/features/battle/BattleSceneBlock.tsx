@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type React from "react";
-import { Button, Text } from "@radix-ui/themes";
+import { Avatar, Button, Text } from "@radix-ui/themes";
 import {
   Cross2Icon,
   PlusIcon,
@@ -165,6 +165,7 @@ function PreparationActionSummary({
   let actionText: string;
   let skillIconSrc: string | null = null;
   let skillLabel = "技能";
+  let skillSlot = 0;
 
   if (action.type === "servant") {
     const src = frontMemberIndex(
@@ -188,10 +189,12 @@ function PreparationActionSummary({
       />
     );
     sourceText = src == null ? "从者" : servantLabel(src, servant);
-    skillLabel = SKILL_LABELS[action.skill ?? ""] ?? "技能";
-    actionText = `释放 ${skillLabel}`;
     const idx = skillSlotIndex(action.skill);
-    skillIconSrc = servant && idx >= 0 ? (skillIcons[servant.variantKey]?.[idx] ?? null) : null;
+    const skillEntry = servant && idx >= 0 ? (skillIcons[servant.variantKey]?.[idx] ?? null) : null;
+    skillIconSrc = skillEntry?.src ?? null;
+    skillLabel = skillEntry?.name || (SKILL_LABELS[action.skill ?? ""] ?? "技能");
+    skillSlot = idx >= 0 ? idx : 0;
+    actionText = `释放 ${skillLabel}`;
   } else {
     const kind = action.type === "equipment" ? "equipment" : "commandSpell";
     sourceFace = (
@@ -212,8 +215,8 @@ function PreparationActionSummary({
       {sourceFace}
       <Text size="2" weight="medium" className="battle-action-name">
         {sourceText}{" "}
-        {skillIconSrc != null
-          ? <>释放{" "}<span className="battle-inline-skill-icon"><img src={skillIconSrc} alt={skillLabel} draggable={false} /></span></>
+        {action.type === "servant"
+          ? <>释放{" "}<span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span></>
           : actionText}
       </Text>
       {orderChangeSlots?.front != null && orderChangeSlots.back != null ? (
