@@ -3658,3 +3658,167 @@ fn scroll_duration_clamped_at_maximum_for_pathological_deltas() {
         SUPPORT_SCROLL_MAX_DURATION_MS
     );
 }
+
+// ── CE mismatch reason / debug_summary separation ────────────────────────────
+
+fn artwork_check(variant: &str, score: f64, threshold: f64, passed: bool) -> SupportCeArtworkCheck {
+    SupportCeArtworkCheck {
+        variant: variant.to_string(),
+        region_kind: "ce".to_string(),
+        score,
+        threshold,
+        passed,
+        selected: passed,
+        error: None,
+    }
+}
+
+fn icon_check(kind: &str, score: f64, threshold: f64, passed: bool) -> SupportCeIconCheck {
+    SupportCeIconCheck {
+        kind: kind.to_string(),
+        template_key: format!("{kind}_template"),
+        region: NormRect { x: 0.0, y: 0.0, w: 0.1, h: 0.1 },
+        score,
+        threshold,
+        passed,
+        error: None,
+    }
+}
+
+fn ce_result() -> SupportCeVerificationResult {
+    SupportCeVerificationResult {
+        score: 0.0,
+        passed: false,
+        threshold: 0.0,
+        full_gate_score: 0.0,
+        full_gate_threshold: 0.80,
+        full_gate_passed: true,
+        error: None,
+        icon_checks: vec![],
+        artwork_checks: vec![],
+    }
+}
+
+fn mismatch(
+    label: &str,
+    effective_threshold: f64,
+    result: SupportCeVerificationResult,
+) -> SupportCeMismatch {
+    mismatch_from_ce_result(label, &result, effective_threshold).expect("expected mismatch")
+}
+
+fn assert_reason_and_debug(
+    mismatch: &SupportCeMismatch,
+    expected_reason: &str,
+    expected_debug_fragments: &[&str],
+) {
+    assert_eq!(mismatch.reason(), expected_reason);
+    let debug = mismatch.debug_summary().expect("debug_summary should be Some");
+    for fragment in expected_debug_fragments {
+        assert!(
+            debug.contains(fragment),
+            "debug summary should contain {fragment:?}, got {debug:?}"
+        );
+    }
+}
+
+#[test]
+fn format_ce_verification_summary_empty_when_no_checks() {
+    assert_eq!(format_ce_verification_summary(&[], &[]), "");
+}
+
+#[test]
+fn format_ce_verification_summary_artwork_only() {
+    let summary = format_ce_verification_summary(&[artwork_check("full", 0.85, 0.70, true)], &[]);
+    assert!(summary.contains("完整匹配"), "should contain variant label");
+    assert!(summary.contains("0.85"), "should contain score");
+    assert!(summary.contains("0.70"), "should contain threshold");
+    assert!(!summary.contains("满破"), "should not contain icon label");
+}
+
+#[test]
+fn format_ce_verification_summary_includes_icon_check() {
+    let summary = format_ce_verification_summary(&[], &[icon_check("mlb", 0.60, 0.75, false)]);
+    assert!(summary.contains("满破图标"), "should contain mlb label");
+    assert!(summary.contains("0.60"), "should contain score");
+}
+
+#[test]
+fn mismatch_from_ce_result_none_when_passed() {
+    let mut result = ce_result();
+    result.score = 0.90;
+    result.passed = true;
+    assert!(mismatch_from_ce_result("礼装 1", &result, 0.70).is_none());
+}
+
+#[test]
+fn mismatch_from_ce_result_plain_mismatch_reason_has_no_scores() {
+    let mut result = ce_result();
+    result.score = 0.55;
+    result.artwork_checks = vec![artwork_check("full", 0.55, 0.70, false)];
+    let mismatch = mismatch("礼装 1", 0.70, result);
+
+    assert_reason_and_debug(&mismatch, "礼装 1 不匹配", &["完整匹配", "0.55"]);
+}
+
+#[test]
+fn mismatch_from_ce_result_plain_mismatch_no_score_details_in_reason() {
+    let mut result = ce_result();
+    result.score = 0.55;
+    result.artwork_checks = vec![artwork_check("full", 0.55, 0.70, false)];
+    let mismatch = mismatch("礼装 1", 0.70, result);
+
+    assert!(!mismatch.reason().contains("0.55"), "reason must not contain raw score");
+    assert!(
+        !mismatch.reason().contains("完整匹配"),
+        "reason must not contain variant label"
+    );
+}
+
+#[test]
+fn mismatch_from_ce_result_icon_mismatch_names_icon_kind() {
+    let mut result = ce_result();
+    result.score = 0.85;
+    result.artwork_checks = vec![artwork_check("full", 0.85, 0.70, true)];
+    result.icon_checks = vec![icon_check("mlb", 0.50, 0.75, false)];
+    let mismatch = mismatch("礼装 2", 0.70, result);
+
+    assert_reason_and_debug(&mismatch, "礼装 2 满破图标不匹配", &["满破图标"]);
+    assert!(
+        !mismatch.reason().contains("0.50"),
+        "reason must not contain score"
+    );
+}
+
+#[test]
+fn mismatch_from_ce_result_full_gate_mismatch_reason_contains_scores_but_not_summary() {
+    let mut result = ce_result();
+    result.score = 0.90;
+    result.artwork_checks = vec![
+        artwork_check("full", 0.72, 0.80, false),
+        artwork_check("center", 0.90, 0.70, true),
+    ];
+    result.full_gate_passed = false;
+    result.full_gate_score = 0.72;
+    result.full_gate_threshold = 0.80;
+
+    let mismatch = mismatch("礼装 3", 0.70, result);
+
+    assert!(
+        mismatch.reason().contains("礼装 3 完整匹配不足"),
+        "reason should start with label"
+    );
+    assert!(
+        mismatch.reason().contains("0.72"),
+        "reason should include gate score"
+    );
+    assert!(
+        mismatch.reason().contains("0.80"),
+        "reason should include gate threshold"
+    );
+    assert!(
+        !mismatch.reason().contains("完整匹配（"),
+        "reason must not contain variant summary"
+    );
+    assert_reason_and_debug(&mismatch, mismatch.reason(), &["完整匹配"]);
+}

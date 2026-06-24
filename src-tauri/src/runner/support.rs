@@ -372,6 +372,48 @@ impl SupportCeMismatch {
             debug_summary: None,
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn reason(&self) -> &str {
+        &self.reason
+    }
+
+    #[cfg(test)]
+    pub(crate) fn debug_summary(&self) -> Option<&str> {
+        self.debug_summary.as_deref()
+    }
+}
+
+pub(crate) fn mismatch_from_ce_result(
+    label: &str,
+    result: &SupportCeVerificationResult,
+    effective_threshold: f64,
+) -> Option<SupportCeMismatch> {
+    let summary = format_ce_verification_summary(&result.artwork_checks, &result.icon_checks);
+    let debug_summary = (!summary.is_empty()).then(|| format!("{label}：{summary}"));
+    if result.passed {
+        None
+    } else if !result.full_gate_passed && result.score >= effective_threshold {
+        let hint = format!(
+            "当完整匹配不满足且中间匹配或右上匹配满足时，要求完整匹配至少为 {:.2}，可在设置调整",
+            result.full_gate_threshold
+        );
+        let reason = format!(
+            "{label} 完整匹配不足（{:.2}/{:.2}）：{hint}",
+            result.full_gate_score, result.full_gate_threshold
+        );
+        Some(SupportCeMismatch::new(reason, debug_summary))
+    } else if let Some(check) = result.icon_checks.iter().find(|check| !check.passed) {
+        let kind = match check.kind.as_str() {
+            "mlb" => "满破图标",
+            "grandBond" => "原始牵绊图标",
+            "grandBondNp" => "冠位连接牵绊图标",
+            other => other,
+        };
+        Some(SupportCeMismatch::new(format!("{label} {kind}不匹配"), debug_summary))
+    } else {
+        Some(SupportCeMismatch::new(format!("{label} 不匹配"), debug_summary))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1075,53 +1117,7 @@ impl Runner {
                         if check.passed { "PASS" } else { "skip" },
                     );
                 }
-                let summary =
-                    format_ce_verification_summary(&result.artwork_checks, &result.icon_checks);
-                let debug_summary = (!summary.is_empty()).then(|| format!("{label}：{summary}"));
-                if result.passed {
-                    None
-                } else if !result.full_gate_passed && result.score >= effective_threshold {
-                    let hint = format!(
-                        "当完整匹配不满足且中间匹配或右上匹配满足时，要求完整匹配至少为 {:.2}，可在设置调整",
-                        result.full_gate_threshold
-                    );
-                    let reason = if summary.is_empty() {
-                        format!(
-                            "{label} 完整匹配不足（{:.2}/{:.2}）：{hint}",
-                            result.full_gate_score, result.full_gate_threshold
-                        )
-                    } else {
-                        format!(
-                            "{label} 完整匹配不足（{:.2}/{:.2}）：{summary}；{hint}",
-                            result.full_gate_score, result.full_gate_threshold
-                        )
-                    };
-                    Some(SupportCeMismatch::new(reason, debug_summary))
-                } else if let Some(check) = result.icon_checks.iter().find(|check| !check.passed) {
-                    // Surface decoration-icon failures with a more actionable
-                    // message when present; if the artwork also failed but
-                    // the icon failed too, the icon miss is the cleaner
-                    // root cause to surface to the operator.
-                    let kind = match check.kind.as_str() {
-                        "mlb" => "满破图标",
-                        "grandBond" => "原始牵绊图标",
-                        "grandBondNp" => "冠位连接牵绊图标",
-                        other => other,
-                    };
-                    let reason = if summary.is_empty() {
-                        format!("{label} {kind}不匹配")
-                    } else {
-                        format!("{label} {kind}不匹配：{summary}")
-                    };
-                    Some(SupportCeMismatch::new(reason, debug_summary))
-                } else {
-                    let reason = if summary.is_empty() {
-                        format!("{label} 不匹配")
-                    } else {
-                        format!("{label} 不匹配：{summary}")
-                    };
-                    Some(SupportCeMismatch::new(reason, debug_summary))
-                }
+                mismatch_from_ce_result(label, &result, effective_threshold)
             }
             Err(e) => {
                 eprintln!("[runner] support CE verify failed (treating as skip): {e}");
