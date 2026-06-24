@@ -1681,6 +1681,30 @@ class TestFindNoblePhantasms:
 
         assert _cv_module._np_gauge_digit_slot_visible(img, hundreds) is False
 
+    def test_fixed_hundreds_slot_accepts_low_contrast_valid_digit(
+        self, monkeypatch
+    ):
+        from mash_cv import cv as _cv_module
+
+        img = _make_bgr_image(320, 160, bgr=(0, 0, 0))
+        gauge = {"x": 0.20, "y": 0.35, "w": 0.30, "h": 0.30}
+        hundreds = _cv_module._child_norm_rect(
+            gauge, _cv_module.DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS[0]
+        )
+        monkeypatch.setattr(
+            _cv_module, "_np_gauge_digit_slot_visible", lambda _img, _region: True
+        )
+        monkeypatch.setattr(
+            _cv_module, "_load_crit_digit_templates", lambda _prefix, _suffix: {}
+        )
+        monkeypatch.setattr(
+            _cv_module,
+            "_best_crit_digit_in_region",
+            lambda _img, _region, _refs: (2, 0.23),
+        )
+
+        assert _cv_module._np_gauge_hundreds_slot_visible(img, hundreds) is True
+
     @pytest.mark.parametrize(
         ("filename", "expected_counts"),
         [

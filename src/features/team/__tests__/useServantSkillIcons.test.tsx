@@ -26,7 +26,7 @@ describe("useServantSkillIcons", () => {
   });
 
   it("deduplicates servants by variant key and stores localized icon entries", async () => {
-    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Parameters<typeof invoke>[1]) => {
       if (cmd !== "get_skill_icon_paths") return null;
       const { servantId, variantKey } = args as { servantId: number; variantKey: string };
       return [
@@ -72,7 +72,7 @@ describe("useServantSkillIcons", () => {
   });
 
   it("does not refetch icons that are already cached on rerender", async () => {
-    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Parameters<typeof invoke>[1]) => {
       if (cmd !== "get_skill_icon_paths") return null;
       const { servantId } = args as { servantId: number };
       return [

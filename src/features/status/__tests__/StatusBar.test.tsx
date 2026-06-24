@@ -323,9 +323,9 @@ describe("StatusBar", () => {
             attack: {
               frontServantIds: [284, 16, 309],
               commandCards: [
-                { slot: 0, suit: "q", servantId: 309 },
-                { slot: 1, suit: "b", servantId: 309 },
-                { slot: 2, suit: "a", servantId: 16 },
+                { slot: 0, suit: "q", servantId: 309, isSupport: false },
+                { slot: 1, suit: "b", servantId: 309, isSupport: false },
+                { slot: 2, suit: "a", servantId: 16, isSupport: false },
               ],
             },
           },
