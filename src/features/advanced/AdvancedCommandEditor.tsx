@@ -37,7 +37,7 @@ import {
 import { useServantFaceImages } from "../team/useServantFaceImages";
 import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIcons";
 import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
-import { servantSlotIndex } from "../battle/battleSceneModel";
+import { servantSlotIndex, skillSlotIndex } from "../battle/battleSceneModel";
 import type {
   AdvancedBattleScene,
   AdvancedCommandCardCondition,
@@ -93,10 +93,12 @@ function AdvancedPreparationActionSummary({
   action,
   partyMembers,
   faces,
+  skillIcons,
 }: {
   action: PreparationAction;
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
+  skillIcons: Record<string, SkillIcons>;
 }) {
   const partyLineup = partyMembersToServants(partyMembers);
   const resolvedAction = resolvePreparationAction(action, partyMembers);
@@ -148,6 +150,8 @@ function AdvancedPreparationActionSummary({
   let sourceFace;
   let sourceText: string;
   let actionText: string;
+  let skillIconSrc: string | null = null;
+  let skillLabel = "技能";
 
   if (resolvedAction.type === "servant") {
     const source =
@@ -169,7 +173,10 @@ function AdvancedPreparationActionSummary({
       />
     );
     sourceText = servantLabel(source, servant);
-    actionText = `释放 ${SKILL_LABELS[resolvedAction.skill ?? ""] ?? "技能"}`;
+    skillLabel = SKILL_LABELS[resolvedAction.skill ?? ""] ?? "技能";
+    actionText = `释放 ${skillLabel}`;
+    const idx = skillSlotIndex(resolvedAction.skill);
+    skillIconSrc = servant && idx >= 0 ? (skillIcons[servant.variantKey]?.[idx] ?? null) : null;
   } else {
     const kind = action.type === "equipment" ? "equipment" : "commandSpell";
     sourceFace = (
@@ -186,7 +193,10 @@ function AdvancedPreparationActionSummary({
     <span className="battle-action-summary" aria-label={prepSummary(resolvedAction, partyLineup)}>
       {sourceFace}
       <Text size="2" weight="medium" className="battle-action-name">
-        {sourceText} {actionText}
+        {sourceText}{" "}
+        {skillIconSrc != null
+          ? <>释放{" "}<span className="battle-inline-skill-icon"><img src={skillIconSrc} alt={skillLabel} draggable={false} /></span></>
+          : actionText}
       </Text>
       {orderChangeSlots?.front != null && orderChangeSlots.back != null ? (
         <>
@@ -559,6 +569,7 @@ function AdvancedStrategyEditor({
                 action={action}
                 partyMembers={controlActionLineups[index] ?? partyMembers}
                 faces={faces}
+                skillIcons={skillIcons}
               />
             </div>
           ))}
@@ -728,6 +739,7 @@ function AdvancedStrategyEditor({
                 action={action}
                 partyMembers={startupActionLineups[index] ?? partyMembers}
                 faces={faces}
+                skillIcons={skillIcons}
               />
             </div>
           ))}

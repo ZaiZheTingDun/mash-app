@@ -87,6 +87,11 @@ export function emptyLegacyFields(scene: BattleTurn): BattleTurn {
   };
 }
 
+export function skillSlotIndex(skill: string | null | undefined): number {
+  const match = skill?.match(/^skill_([1-3])$/);
+  return match ? Number(match[1]) - 1 : -1;
+}
+
 export function servantSlotIndex(source: string | null | undefined): number | null {
   const match = source?.match(/^servant_([1-6])$/);
   return match ? Number(match[1]) - 1 : null;

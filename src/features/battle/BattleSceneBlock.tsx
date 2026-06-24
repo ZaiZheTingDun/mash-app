@@ -9,7 +9,7 @@ import orderChangeIcon from "../../../src-tauri/resources/images/icon_order_chan
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
 import { useServantFaceImages } from "../team/useServantFaceImages";
-import { useServantSkillIcons } from "../team/useServantSkillIcons";
+import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIcons";
 import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
 import {
   deriveMembersAfterAttackCards,
@@ -27,6 +27,7 @@ import {
   ENEMY_TARGETS,
   FIXED_ATTACK_CARD_COUNT,
   SKILL_LABELS,
+  skillSlotIndex,
   createId,
   emptyLegacyFields,
   normalizeAttackPriority,
@@ -113,10 +114,12 @@ function PreparationActionSummary({
   action,
   partyMembers,
   faces,
+  skillIcons,
 }: {
   action: PreparationAction;
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
+  skillIcons: Record<string, SkillIcons>;
 }) {
   const partyServants = partyMembersToServants(partyMembers);
   const targetIndex = frontMemberIndex(
@@ -160,6 +163,8 @@ function PreparationActionSummary({
   let sourceFace: React.ReactNode;
   let sourceText: string;
   let actionText: string;
+  let skillIconSrc: string | null = null;
+  let skillLabel = "技能";
 
   if (action.type === "servant") {
     const src = frontMemberIndex(
@@ -183,7 +188,10 @@ function PreparationActionSummary({
       />
     );
     sourceText = src == null ? "从者" : servantLabel(src, servant);
-    actionText = `释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`;
+    skillLabel = SKILL_LABELS[action.skill ?? ""] ?? "技能";
+    actionText = `释放 ${skillLabel}`;
+    const idx = skillSlotIndex(action.skill);
+    skillIconSrc = servant && idx >= 0 ? (skillIcons[servant.variantKey]?.[idx] ?? null) : null;
   } else {
     const kind = action.type === "equipment" ? "equipment" : "commandSpell";
     sourceFace = (
@@ -203,7 +211,10 @@ function PreparationActionSummary({
     >
       {sourceFace}
       <Text size="2" weight="medium" className="battle-action-name">
-        {sourceText} {actionText}
+        {sourceText}{" "}
+        {skillIconSrc != null
+          ? <>释放{" "}<span className="battle-inline-skill-icon"><img src={skillIconSrc} alt={skillLabel} draggable={false} /></span></>
+          : actionText}
       </Text>
       {orderChangeSlots?.front != null && orderChangeSlots.back != null ? (
         <>
@@ -705,6 +716,7 @@ export function BattleSceneBlock({
                 action={action}
                 partyMembers={preparationActionLineups[index] ?? initialPartyMembers}
                 faces={faces}
+                skillIcons={skillIcons}
               />
             </div>
           ))}
