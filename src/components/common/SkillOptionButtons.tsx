@@ -19,6 +19,7 @@ export function SkillOptionButtons({ servant, skillIcons, onSelect }: SkillOptio
         type="button"
         key={skill}
         className="battle-option-btn skill-icon"
+        aria-label={label}
         title={label}
         onClick={() => onSelect(skill)}
       >

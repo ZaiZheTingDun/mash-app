@@ -536,7 +536,7 @@ describe("BattleSceneBlock staged action editor", () => {
     const summary = container.querySelector(".battle-action-summary");
     const children = Array.from(summary?.children ?? []);
     expect(children[0]).toHaveClass("battle-inline-face");
-    expect(children[1]).toHaveTextContent("甲 释放 技能 1");
+    expect(summary).toHaveAccessibleName("甲 释放 技能 1 to 乙");
     expect(children[2]).toHaveClass("battle-action-to");
     expect(children[3]).toHaveClass("battle-inline-face");
     expect(children[4]).toHaveTextContent("乙");
@@ -566,10 +566,9 @@ describe("BattleSceneBlock staged action editor", () => {
     );
 
     const summary = container.querySelector(".battle-action-summary");
-    expect(summary).toHaveTextContent("从者 释放 技能 1");
+    expect(summary).toHaveAccessibleName("从者 释放 技能 1");
     expect(summary).not.toHaveTextContent("堤丰·厄斐墨洛斯");
     expect(summary).not.toHaveTextContent("诸葛孔明〔埃尔梅罗Ⅱ世〕");
-    expect(summary).toHaveAccessibleName("从者 释放 技能 1");
   });
 
   it("displays Waver member actions after Order Change brings him forward", () => {
@@ -635,13 +634,12 @@ describe("BattleSceneBlock staged action editor", () => {
     );
 
     const summaries = Array.from(container.querySelectorAll(".battle-action-summary"));
-    expect(summaries[1]).toHaveTextContent("诸葛孔明〔埃尔梅罗Ⅱ世〕 释放 技能 1");
     expect(summaries[1]).toHaveTextContent("堤丰·厄斐墨洛斯");
     expect(summaries[1]).toHaveAccessibleName(
       "诸葛孔明〔埃尔梅罗Ⅱ世〕 释放 技能 1 to 堤丰·厄斐墨洛斯"
     );
-    expect(summaries[2]).toHaveTextContent("诸葛孔明〔埃尔梅罗Ⅱ世〕 释放 技能 2");
-    expect(summaries[3]).toHaveTextContent("诸葛孔明〔埃尔梅罗Ⅱ世〕 释放 技能 3");
+    expect(summaries[2]).toHaveAccessibleName("诸葛孔明〔埃尔梅罗Ⅱ世〕 释放 技能 2");
+    expect(summaries[3]).toHaveAccessibleName("诸葛孔明〔埃尔梅罗Ⅱ世〕 释放 技能 3");
   });
 
   it("renders Order Change actions with both servant faces", () => {
