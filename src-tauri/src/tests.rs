@@ -1078,7 +1078,7 @@ fn import_asset_bundle_from_zip_path_rejects_zip_without_asset_dirs() {
 
     let err = import_asset_bundle_from_zip_path(&zip_path, &tmp.path().join("installed"))
         .expect_err("import should fail");
-    assert!(err.contains("assets/servants") || err.contains("assets/ces"));
+    assert!(err.contains("servants/ces/icons/mystic-codes"));
 }
 
 #[test]
@@ -1219,7 +1219,7 @@ fn build_assets_remote_manifest(latest: u32, patches: &str) -> AssetsRemoteManif
 #[test]
 fn assets_app_manifest_parses_target_version_and_latest_url() {
     let manifest = parse_assets_app_manifest(ASSETS_MANIFEST_JSON).unwrap();
-    assert_eq!(manifest.assets_version, 2);
+    assert_eq!(manifest.assets_version, 3);
     assert_eq!(
         manifest.latest_url,
         "https://mash.xiaotongx.com/mash/assets/latest.json"

@@ -595,6 +595,84 @@ struct ServantSkillMaps {
     name_map: HashMap<u32, String>,
 }
 
+fn parse_servant_skill_maps(
+    jp_json: &serde_json::Value,
+    cn_json: Option<&serde_json::Value>,
+) -> ServantSkillMaps {
+    let skills = jp_json.get("skills").and_then(|v| v.as_array());
+
+    let icon_map: HashMap<u32, String> = skills
+        .map(|skills| {
+            skills
+                .iter()
+                .filter_map(|skill| {
+                    let id = skill.get("id")?.as_u64()? as u32;
+                    let icon_url = skill.get("icon")?.as_str()?;
+                    let filename = icon_url.split('/').next_back()?.to_string();
+                    Some((id, filename))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut name_map: HashMap<u32, String> = skills
+        .map(|skills| {
+            skills
+                .iter()
+                .filter_map(|skill| {
+                    let id = skill.get("id")?.as_u64()? as u32;
+                    let name = skill.get("name")?.as_str()?.to_string();
+                    Some((id, name))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if let Some(cn) = cn_json {
+        if let Some(skills) = cn.get("skills").and_then(|v| v.as_array()) {
+            for skill in skills {
+                if let (Some(id), Some(name)) = (
+                    skill.get("id").and_then(|v| v.as_u64()).map(|n| n as u32),
+                    skill.get("name").and_then(|v| v.as_str()),
+                ) {
+                    name_map.insert(id, name.to_string());
+                }
+            }
+        }
+    }
+
+    ServantSkillMaps { icon_map, name_map }
+}
+
+fn variant_skill_ids(
+    variants_by_id: &HashMap<u32, Vec<serde_json::Value>>,
+    servant_id: u32,
+    variant_key: &str,
+) -> Option<[Option<u32>; 3]> {
+    let variant_index: usize = variant_key
+        .split(':')
+        .nth(1)
+        .and_then(|s| s.parse::<usize>().ok())
+        .map(|n| n.saturating_sub(1))
+        .unwrap_or(0);
+
+    variants_by_id
+        .get(&servant_id)
+        .and_then(|v| v.get(variant_index))
+        .map(|variant| {
+            ["1", "2", "3"].map(|slot| {
+                variant
+                    .get("skills")
+                    .and_then(|s| s.get(slot))
+                    .and_then(|arr| arr.as_array())
+                    .and_then(|arr| arr.last())
+                    .and_then(|entry| entry.get("id"))
+                    .and_then(|id| id.as_u64())
+                    .map(|n| n as u32)
+            })
+        })
+}
+
 fn servant_skill_maps(
     app: &tauri::AppHandle,
     servant_id: u32,
@@ -616,50 +694,7 @@ fn servant_skill_maps(
     let cn_json: Option<serde_json::Value> = fs::read_to_string(servant_dir.join("servant-cn.json"))
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok());
-
-    let skills = jp_json.get("skills").and_then(|v| v.as_array());
-
-    let icon_map: HashMap<u32, String> = skills
-        .map(|skills| {
-            skills
-                .iter()
-                .filter_map(|skill| {
-                    let id = skill.get("id")?.as_u64()? as u32;
-                    let icon_url = skill.get("icon")?.as_str()?;
-                    let filename = icon_url.split('/').last()?.to_string();
-                    Some((id, filename))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let mut name_map: HashMap<u32, String> = skills
-        .map(|skills| {
-            skills
-                .iter()
-                .filter_map(|skill| {
-                    let id = skill.get("id")?.as_u64()? as u32;
-                    let name = skill.get("name")?.as_str()?.to_string();
-                    Some((id, name))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    if let Some(cn) = &cn_json {
-        if let Some(skills) = cn.get("skills").and_then(|v| v.as_array()) {
-            for skill in skills {
-                if let (Some(id), Some(name)) = (
-                    skill.get("id").and_then(|v| v.as_u64()).map(|n| n as u32),
-                    skill.get("name").and_then(|v| v.as_str()),
-                ) {
-                    name_map.insert(id, name.to_string());
-                }
-            }
-        }
-    }
-
-    let arc = Arc::new(ServantSkillMaps { icon_map, name_map });
+    let arc = Arc::new(parse_servant_skill_maps(&jp_json, cn_json.as_ref()));
     cache.lock().unwrap().insert(servant_id, Arc::clone(&arc));
     Some(arc)
 }
@@ -680,28 +715,9 @@ pub(crate) fn get_skill_icon_paths(
         SkillIconEntry { path: None, name: String::new() },
     ];
 
-    let variant_index: usize = variant_key
-        .split(':')
-        .nth(1)
-        .and_then(|s| s.parse::<usize>().ok())
-        .map(|n| n.saturating_sub(1))
-        .unwrap_or(0);
-
-    let skill_ids: [Option<u32>; 3] =
-        match variants_raw_data().get(&servant_id).and_then(|v| v.get(variant_index)) {
-            Some(variant) => ["1", "2", "3"].map(|slot| {
-                variant
-                    .get("skills")
-                    .and_then(|s| s.get(slot))
-                    .and_then(|arr| arr.as_array())
-                    .and_then(|arr| arr.last())
-                    .and_then(|entry| entry.get("id"))
-                    .and_then(|id| id.as_u64())
-                    .map(|n| n as u32)
-            }),
-            None => return empty(),
-        };
-
+    let Some(skill_ids) = variant_skill_ids(variants_raw_data(), servant_id, &variant_key) else {
+        return empty();
+    };
     let Some(maps) = servant_skill_maps(&app, servant_id) else {
         return empty();
     };
@@ -719,6 +735,60 @@ pub(crate) fn get_skill_icon_paths(
             .unwrap_or_default();
         SkillIconEntry { path, name }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parse_servant_skill_maps_prefers_cn_names_and_extracts_icon_filenames() {
+        let jp = json!({
+            "skills": [
+                { "id": 11, "name": "JP 一技", "icon": "https://cdn.example.com/icons/skill_11.png" },
+                { "id": 22, "name": "JP 二技", "icon": "skill_22.png" }
+            ]
+        });
+        let cn = json!({
+            "skills": [
+                { "id": 11, "name": "CN 一技" }
+            ]
+        });
+
+        let maps = parse_servant_skill_maps(&jp, Some(&cn));
+
+        assert_eq!(maps.icon_map.get(&11).map(String::as_str), Some("skill_11.png"));
+        assert_eq!(maps.icon_map.get(&22).map(String::as_str), Some("skill_22.png"));
+        assert_eq!(maps.name_map.get(&11).map(String::as_str), Some("CN 一技"));
+        assert_eq!(maps.name_map.get(&22).map(String::as_str), Some("JP 二技"));
+    }
+
+    #[test]
+    fn variant_skill_ids_uses_last_entry_for_each_slot() {
+        let variants = HashMap::from([(
+            42,
+            vec![json!({
+                "skills": {
+                    "1": [{ "id": 1001 }, { "id": 1002 }],
+                    "2": [{ "id": 2001 }],
+                    "3": []
+                }
+            })],
+        )]);
+
+        let ids = variant_skill_ids(&variants, 42, "42:1").unwrap();
+
+        assert_eq!(ids, [Some(1002), Some(2001), None]);
+    }
+
+    #[test]
+    fn variant_skill_ids_returns_none_for_missing_variant() {
+        let variants = HashMap::from([(42, vec![json!({ "skills": {} })])]);
+
+        assert!(variant_skill_ids(&variants, 42, "42:2").is_none());
+        assert!(variant_skill_ids(&variants, 7, "7:1").is_none());
+    }
 }
 
 #[tauri::command]

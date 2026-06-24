@@ -620,6 +620,59 @@ pub(crate) fn import_asset_bundle_from_zip_path(
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn install_asset_directories_accepts_icons_without_servants_or_ces() {
+        let temp = tempfile::tempdir().unwrap();
+        let import_root = temp.path().join("import");
+        let assets_root = temp.path().join("assets");
+        fs::create_dir_all(import_root.join("icons")).unwrap();
+        fs::write(import_root.join("icons").join("skill.png"), b"icon").unwrap();
+
+        let (has_servants, has_ces, servant_stats, ce_stats) =
+            install_asset_directories(&import_root, &assets_root, true).unwrap();
+
+        assert!(!has_servants);
+        assert!(!has_ces);
+        assert_eq!(servant_stats, FileCopyStats::default());
+        assert_eq!(ce_stats, FileCopyStats::default());
+        assert!(assets_root.join("icons").join("skill.png").is_file());
+    }
+
+    #[test]
+    fn install_asset_directories_rejects_archives_without_known_asset_dirs() {
+        let temp = tempfile::tempdir().unwrap();
+        let import_root = temp.path().join("import");
+        let assets_root = temp.path().join("assets");
+        fs::create_dir_all(import_root.join("other")).unwrap();
+
+        let err = install_asset_directories(&import_root, &assets_root, true).unwrap_err();
+
+        assert!(err.contains("servants/ces/icons/mystic-codes"));
+    }
+
+    #[test]
+    fn cleanup_replaced_asset_trees_removes_all_managed_asset_dirs() {
+        let temp = tempfile::tempdir().unwrap();
+        let assets_root = temp.path();
+        let stale_icons = assets_root.join("icons.replaced-123");
+        let stale_codes = assets_root.join("mystic-codes.replaced-456");
+        let keep = assets_root.join("other.replaced-789");
+        fs::create_dir_all(&stale_icons).unwrap();
+        fs::create_dir_all(&stale_codes).unwrap();
+        fs::create_dir_all(&keep).unwrap();
+
+        cleanup_replaced_asset_trees(assets_root);
+
+        assert!(!stale_icons.exists());
+        assert!(!stale_codes.exists());
+        assert!(keep.exists());
+    }
+}
+
 pub(crate) fn count_files_recursive(dir: &Path) -> Result<u64, String> {
     if !dir.is_dir() {
         return Ok(0);

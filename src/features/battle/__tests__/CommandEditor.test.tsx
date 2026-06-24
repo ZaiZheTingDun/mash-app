@@ -688,6 +688,65 @@ describe("CommandEditor pagination", () => {
     expect(screen.getAllByText("丁").length).toBeGreaterThan(0);
   });
 
+  it("falls back to numbered skill icons in advanced startup summaries when no icon file exists", async () => {
+    const advancedScene: AdvancedBattleScene = {
+      id: "advanced_scene_1",
+      mainOutput: { servant: null, outputType: null },
+      commandConditions: [
+        { slot: 0, servant: "any", suit: "any", minCritChance: null },
+        { slot: 1, servant: "any", suit: "any", minCritChance: null },
+        { slot: 2, servant: "any", suit: "any", minCritChance: null },
+        { slot: 3, servant: "any", suit: "any", minCritChance: null },
+        { slot: 4, servant: "any", suit: "any", minCritChance: null },
+      ],
+      startupActions: [
+        {
+          type: "servant",
+          id: "sa_1",
+          servant: "servant_1",
+          skill: "skill_2",
+          target: null,
+        },
+      ],
+      rules: [],
+    };
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [advancedScene];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      if (cmd === "get_skill_icon_paths") {
+        return [
+          { path: null, name: "" },
+          { path: null, name: "" },
+          { path: null, name: "" },
+        ];
+      }
+      return [];
+    });
+
+    const { container } = renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    await screen.findByText("启动阶段");
+    const summary = container.querySelector(".battle-action-summary");
+    expect(summary).toHaveAccessibleName("甲 技能 2");
+    const skillIcon = summary?.querySelector(".battle-inline-skill-icon");
+    expect(skillIcon).toHaveAttribute("title", "技能 2");
+    expect(skillIcon).toHaveTextContent("2");
+  });
+
   it("shows grand auto order change choice inside startup conditions", async () => {
     const user = userEvent.setup();
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {

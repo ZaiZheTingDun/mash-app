@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { cleanup, screen } from "@testing-library/react";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { BattleSceneBlock } from "../BattleSceneBlock";
 import type { BattleTurn } from "../../../types/command";
@@ -54,6 +55,10 @@ const TYPHON_WAVER_MEMBERS: PartyMember[] = [
 ];
 
 describe("BattleSceneBlock staged action editor", () => {
+  afterEach(() => {
+    vi.mocked(invoke).mockClear();
+  });
+
   it("shows enemy target selection as unset by default", () => {
     renderWithTheme(
       <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={vi.fn()} />
@@ -540,6 +545,44 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(children[2]).toHaveClass("battle-action-to");
     expect(children[3]).toHaveClass("battle-inline-face");
     expect(children[4]).toHaveTextContent("乙");
+  });
+
+  it("shows localized skill names on servant action summary icons", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_skill_icon_paths") {
+        return [
+          { path: "/tmp/skill-1.png", name: "缓冲技能 A" },
+          { path: null, name: "" },
+          { path: null, name: "" },
+        ];
+      }
+      return null;
+    });
+
+    const { container } = renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          preparationActions: [
+            {
+              type: "servant",
+              id: "sa_1",
+              servant: "servant_1",
+              skill: "skill_1",
+              target: "servant_2",
+            },
+          ],
+        })}
+        partyServants={PARTY}
+        onChange={vi.fn()}
+      />
+    );
+
+    const summary = container.querySelector(".battle-action-summary");
+    const skillIcon = summary?.querySelector(".battle-inline-skill-icon");
+    expect(summary).toHaveAccessibleName("甲 释放 技能 1 to 乙");
+    await waitFor(() => {
+      expect(skillIcon).toHaveAttribute("title", "缓冲技能 A");
+    });
   });
 
   it("does not display a back-line member action as the front support fallback", () => {
