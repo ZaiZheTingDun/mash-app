@@ -319,7 +319,8 @@
 
 .battle-support-badge {
   position: absolute;
-  bottom: -1px; /* Overlap the border so the badge appears "attached" to the corner of the face button. */
+  bottom: -1px;
+  /* Overlap the border so the badge appears "attached" to the corner of the face button. */
   right: -1px;
   z-index: 2;
   font-size: 9px;
@@ -477,6 +478,22 @@
   height: 50px;
   object-fit: contain;
   display: block;
+}
+
+.battle-option-btn.skill-icon {
+  padding: 0;
+  min-width: 46px;
+  min-height: 46px;
+  height: 46px;
+  width: 46px;
+}
+
+.battle-option-btn.skill-icon img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  display: block;
+  border-radius: var(--radius-1);
 }
 
 .battle-choice-row.order-change {

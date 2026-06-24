@@ -9,6 +9,8 @@ import orderChangeIcon from "../../../src-tauri/resources/images/icon_order_chan
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
 import { useServantFaceImages } from "../team/useServantFaceImages";
+import { useServantSkillIcons } from "../team/useServantSkillIcons";
+import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
 import {
   deriveMembersAfterAttackCards,
   deriveMembersAfterPreparationActions,
@@ -24,7 +26,6 @@ import {
   COMMAND_SPELL_LABELS,
   ENEMY_TARGETS,
   FIXED_ATTACK_CARD_COUNT,
-  SKILLS,
   SKILL_LABELS,
   createId,
   emptyLegacyFields,
@@ -451,6 +452,7 @@ export function BattleSceneBlock({
   );
   const initialPartyServants = partyMembersToServants(initialPartyMembers);
   const faces = useServantFaceImages(initialPartyServants);
+  const skillIcons = useServantSkillIcons(initialPartyServants);
   const preparationActions = useMemo(
     () =>
       scene.preparationActions ??
@@ -817,22 +819,17 @@ export function BattleSceneBlock({
                         {label}
                       </button>
                     ))
-                    : SKILLS.map((skill) => (
-                      <button
-                        type="button"
-                        key={skill}
-                        className="battle-option-btn"
-                        onClick={() =>
-                          setPrepDraft({
-                            step: "target",
-                            source: prepDraft.source,
-                            option: skill,
-                          })
+                    : (
+                      <SkillOptionButtons
+                        servant={
+                          prepDraft.source !== "equipment"
+                            ? (currentPartyMembers[sourceIndex(prepDraft.source) ?? 0]?.servant ?? null)
+                            : null
                         }
-                      >
-                        {SKILL_LABELS[skill]}
-                      </button>
-                    ))}
+                        skillIcons={skillIcons}
+                        onSelect={(skill) => setPrepDraft({ step: "target", source: prepDraft.source, option: skill })}
+                      />
+                    )}
                 </div>
               </div>
             ) : prepDraft.step === "target" ? (

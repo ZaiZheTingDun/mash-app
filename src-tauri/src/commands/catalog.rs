@@ -567,6 +567,87 @@ pub(crate) fn get_craft_essence_card_path(
     Ok(pick_ce_card_in(&root, craft_essence_id).map(|p| p.to_string_lossy().into_owned()))
 }
 
+fn variants_raw_data() -> &'static HashMap<u32, Vec<serde_json::Value>> {
+    static VARIANTS: OnceLock<HashMap<u32, Vec<serde_json::Value>>> = OnceLock::new();
+    VARIANTS.get_or_init(|| {
+        let raw: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("../resources/servants_variants.json"))
+                .expect("invalid servants_variants.json");
+        raw.into_iter()
+            .filter_map(|entry| {
+                let id = entry.get("id")?.as_u64()? as u32;
+                let variants = entry.get("variants")?.as_array()?.clone();
+                Some((id, variants))
+            })
+            .collect()
+    })
+}
+
+/// Returns the absolute paths to the three skill icon files for a given servant variant.
+/// Each element is `None` when the local asset file is absent (UI falls back to text).
+#[tauri::command]
+pub(crate) fn get_skill_icon_paths(
+    app: tauri::AppHandle,
+    servant_id: u32,
+    variant_key: String,
+) -> [Option<String>; 3] {
+    let variant_index: usize = variant_key
+        .split(':')
+        .nth(1)
+        .and_then(|s| s.parse::<usize>().ok())
+        .map(|n| n.saturating_sub(1))
+        .unwrap_or(0);
+
+    let skill_ids: [Option<u32>; 3] =
+        match variants_raw_data().get(&servant_id).and_then(|v| v.get(variant_index)) {
+            Some(variant) => ["1", "2", "3"].map(|slot| {
+                variant
+                    .get("skills")
+                    .and_then(|s| s.get(slot))
+                    .and_then(|arr| arr.as_array())
+                    .and_then(|arr| arr.last())
+                    .and_then(|entry| entry.get("id"))
+                    .and_then(|id| id.as_u64())
+                    .map(|n| n as u32)
+            }),
+            None => return [None, None, None],
+        };
+
+    let Some(assets_root) = resolve_servant_assets_dir(&app) else {
+        return [None, None, None];
+    };
+    let servant_json_path = assets_root.join(servant_id.to_string()).join("servant.json");
+    let Ok(raw) = fs::read_to_string(&servant_json_path) else {
+        return [None, None, None];
+    };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return [None, None, None];
+    };
+
+    let skill_icon_map: HashMap<u32, String> = json
+        .get("skills")
+        .and_then(|v| v.as_array())
+        .map(|skills| {
+            skills
+                .iter()
+                .filter_map(|skill| {
+                    let id = skill.get("id")?.as_u64()? as u32;
+                    let icon_url = skill.get("icon")?.as_str()?;
+                    let filename = icon_url.split('/').last()?.to_string();
+                    Some((id, filename))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let icons_dir = app_assets_dir(&app).join("icons");
+    skill_ids.map(|maybe_id| {
+        let filename = maybe_id.and_then(|id| skill_icon_map.get(&id))?;
+        let candidate = icons_dir.join(filename.as_str());
+        candidate.is_file().then(|| candidate.to_string_lossy().into_owned())
+    })
+}
+
 #[tauri::command]
 pub(crate) fn get_template_asset_path(
     app: tauri::AppHandle,

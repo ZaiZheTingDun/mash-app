@@ -14,7 +14,6 @@ import { GrandCardStrategyPanel } from "./AdvancedGrandStrategyPanel";
 import {
   COMMAND_SPELL_LABELS,
   EMPTY_STARTUP_ACTIONS,
-  SKILLS,
   SKILL_LABELS,
   createId,
   createDefaultScene,
@@ -36,6 +35,9 @@ import {
   type PartyMember,
 } from "../team/partyServants";
 import { useServantFaceImages } from "../team/useServantFaceImages";
+import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIcons";
+import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
+import { servantSlotIndex } from "../battle/battleSceneModel";
 import type {
   AdvancedBattleScene,
   AdvancedCommandCardCondition,
@@ -241,6 +243,7 @@ function AdvancedStrategyEditor({
   scene,
   partyMembers,
   faces,
+  skillIcons,
   grandServants,
   grandCardStrategy,
   grandCardPriorityEnabled,
@@ -251,6 +254,7 @@ function AdvancedStrategyEditor({
   scene: AdvancedBattleScene;
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
+  skillIcons: Record<string, SkillIcons>;
   grandServants: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
   grandCardPriorityEnabled: boolean;
@@ -615,16 +619,17 @@ function AdvancedStrategyEditor({
                           {label}
                         </button>
                       ))
-                    : SKILLS.map((skill) => (
-                        <button
-                          type="button"
-                          className="battle-option-btn"
-                          key={skill}
-                          onClick={() => setControlDraft({ step: "target", source: controlDraft.source, option: skill })}
-                        >
-                          {SKILL_LABELS[skill]}
-                        </button>
-                      ))}
+                    : (
+                      <SkillOptionButtons
+                        servant={
+                          controlDraft.source !== "equipment"
+                            ? (postControlMembers[servantSlotIndex(controlDraft.source) ?? 0]?.servant ?? null)
+                            : null
+                        }
+                        skillIcons={skillIcons}
+                        onSelect={(skill) => setControlDraft({ step: "target", source: controlDraft.source, option: skill })}
+                      />
+                    )}
                 </>
               ) : controlDraft.step === "target" ? (
                 <>
@@ -782,16 +787,17 @@ function AdvancedStrategyEditor({
                           {label}
                         </button>
                       ))
-                    : SKILLS.map((skill) => (
-                        <button
-                          type="button"
-                          className="battle-option-btn"
-                          key={skill}
-                          onClick={() => setPrepDraft({ step: "target", source: prepDraft.source, option: skill })}
-                        >
-                          {SKILL_LABELS[skill]}
-                        </button>
-                      ))}
+                    : (
+                      <SkillOptionButtons
+                        servant={
+                          prepDraft.source !== "equipment"
+                            ? (currentPartyMembers[servantSlotIndex(prepDraft.source) ?? 0]?.servant ?? null)
+                            : null
+                        }
+                        skillIcons={skillIcons}
+                        onSelect={(skill) => setPrepDraft({ step: "target", source: prepDraft.source, option: skill })}
+                      />
+                    )}
                 </>
               ) : prepDraft.step === "target" ? (
                 <>
@@ -986,6 +992,7 @@ export function AdvancedCommandEditor({
     [initialPartyMembers]
   );
   const faces = useServantFaceImages(initialPartyLineup);
+  const skillIcons = useServantSkillIcons(initialPartyLineup);
 
   useEffect(() => {
     if (!projectId) return;
@@ -1029,6 +1036,7 @@ export function AdvancedCommandEditor({
           scene={scene}
           partyMembers={initialPartyMembers}
           faces={faces}
+          skillIcons={skillIcons}
           grandServants={grandServants}
           grandCardStrategy={grandCardStrategy}
           grandCardPriorityEnabled={grandCardPriorityEnabled}

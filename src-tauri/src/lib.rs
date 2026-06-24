@@ -260,6 +260,7 @@ pub fn run() {
             commands::catalog::get_servant_portrait_path,
             commands::catalog::get_servant_face_path,
             commands::catalog::get_craft_essence_card_path,
+            commands::catalog::get_skill_icon_paths,
             commands::catalog::get_template_asset_path,
             commands::projects::save_battle_scenes,
             commands::projects::load_battle_scenes,
