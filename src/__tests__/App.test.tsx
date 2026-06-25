@@ -217,7 +217,7 @@ describe("App active project restore", () => {
     expect(screen.getByText("CV 运行时")).toBeInTheDocument();
   });
 
-  it("blocks command setup when custom card rules reference removed servants", async () => {
+  it("allows command setup when custom card rules reference removed servants", async () => {
     const user = userEvent.setup();
     const slots = createInitialProjectSlots();
     slots[0] = { ...slots[0], servantId: 1 };
@@ -282,9 +282,8 @@ describe("App active project restore", () => {
     expect(await screen.findByText("～ 失效规则 ～")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "指令设置" }));
 
-    expect(await screen.findByText("需要修复出牌规则")).toBeInTheDocument();
-    expect(screen.getByText(/自定义规则 第 1 张/)).toBeInTheDocument();
-    expect(screen.queryByText("主力输出")).not.toBeInTheDocument();
+    expect(await screen.findByText("主力输出")).toBeInTheDocument();
+    expect(screen.queryByText("需要修复出牌规则")).not.toBeInTheDocument();
   });
 
   it("saves an adb screenshot from the menu event", async () => {

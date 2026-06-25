@@ -113,3 +113,72 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Portrait Select Dialog ── */
+
+.portrait-select-scroll-area {
+  overflow: hidden;
+}
+
+.portrait-select-scroll {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 4px 12px;
+  cursor: grab;
+  user-select: none;
+  scrollbar-width: none;
+}
+
+.portrait-select-scroll:active {
+  cursor: grabbing;
+}
+
+.portrait-select-card {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100px;
+  height: 248px;
+  padding: 0;
+  border: 2px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  background: var(--gray-2);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.portrait-select-card:hover {
+  border-color: var(--blue-7);
+}
+
+.portrait-select-card.selected {
+  border-color: var(--blue-9);
+  box-shadow: 0 0 0 2px var(--blue-7);
+}
+
+.portrait-select-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  display: block;
+  pointer-events: none;
+}
+
+.portrait-select-current-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  background: var(--blue-9);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: var(--radius-1);
+  pointer-events: none;
+  white-space: nowrap;
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke, convertFileSrc } from "../../tauri";
 import type { Servant } from "../../types/servant";
 
@@ -58,9 +58,19 @@ function useAssetPaths(
  * Resolve full-art portrait paths for servants that don't have a cached
  * entry yet. Variants share the same base servant id, so the cache is
  * keyed by `variantKey` and the backend receives the variant asset id.
+ *
+ * `refreshKey` can be incremented to invalidate all cached entries and
+ * force a re-fetch — use this after saving a global portrait selection.
+ * When it changes, all portraits for the current servant list are
+ * re-fetched and the cache is atomically replaced with the fresh results.
  */
-export function usePortraits(servants: Servant[]): Record<string, string | null | undefined> {
+export function usePortraits(
+  servants: Servant[],
+  refreshKey?: number,
+): Record<string, string | null | undefined> {
   const [cache, setCache] = useState<Record<string, string | null>>({});
+  const lastFetchedRefreshKey = useRef<number | undefined>(undefined);
+
   const byVariant = new Map<string, Servant>();
   for (const servant of servants) {
     byVariant.set(servant.variantKey, servant);
@@ -76,7 +86,11 @@ export function usePortraits(servants: Servant[]): Record<string, string | null 
 
   useEffect(() => {
     const parsed = JSON.parse(key) as typeof requests;
-    const missing = parsed.filter(({ variantKey }) => !(variantKey in cache));
+    const forceRefetch = refreshKey !== lastFetchedRefreshKey.current;
+    lastFetchedRefreshKey.current = refreshKey;
+    const missing = forceRefetch
+      ? parsed
+      : parsed.filter(({ variantKey }) => !(variantKey in cache));
     if (missing.length === 0) return;
     let cancelled = false;
     Promise.all(
@@ -84,6 +98,7 @@ export function usePortraits(servants: Servant[]): Record<string, string | null 
         invoke<string | null>("get_servant_portrait_path", {
           servantId: request.servantId,
           faceId: request.faceId,
+          variantKey: request.variantKey,
         })
           .then(
             (path) =>
@@ -97,20 +112,20 @@ export function usePortraits(servants: Servant[]): Record<string, string | null 
     ).then((results) => {
       if (cancelled) return;
       setCache((prev) => {
-        const next = { ...prev };
+        const base = forceRefetch ? {} : { ...prev };
         for (const [variantKey, src] of results) {
-          next[variantKey] = src;
+          base[variantKey] = src;
         }
-        return next;
+        return base;
       });
     });
     return () => {
       cancelled = true;
     };
     // `cache` intentionally excluded. The effect re-fires only when the
-    // servant variant set changes.
+    // servant variant set or refreshKey changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, refreshKey]);
 
   return cache;
 }

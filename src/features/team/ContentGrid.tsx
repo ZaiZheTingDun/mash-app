@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box } from "@radix-ui/themes";
+import { AlertDialog, Box, Button, Flex } from "@radix-ui/themes";
 import {
   DndContext,
   closestCenter,
@@ -18,6 +18,8 @@ import { CraftEssenceSelectDialog } from "./CraftEssenceSelectDialog";
 import { useCeCards, usePortraits } from "./contentGridAssets";
 import { SortableSlot } from "./ContentGridSlot";
 import { SupportSettingsDialog } from "./SupportSettingsDialog";
+import { PortraitSelectDialog } from "./PortraitSelectDialog";
+import { invoke } from "../../tauri";
 import {
   grandClassToServantClass,
   normalizeSupportAppendSkillLevels,
@@ -72,6 +74,11 @@ export function ContentGrid({
   >(null);
   const [supportSettingsOpen, setSupportSettingsOpen] = useState(false);
 
+  const [deleteTargetSlotId, setDeleteTargetSlotId] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [portraitSlotId, setPortraitSlotId] = useState<string | null>(null);
+  const [portraitRefreshKey, setPortraitRefreshKey] = useState(0);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
@@ -97,7 +104,8 @@ export function ContentGrid({
   const portraitMap = usePortraits(
     displaySlots
       .map((s) => s.servant)
-      .filter((servant): servant is Servant => servant != null)
+      .filter((servant): servant is Servant => servant != null),
+    portraitRefreshKey,
   );
 
   const ceCardMap = useCeCards(
@@ -321,6 +329,34 @@ export function ContentGrid({
     });
   };
 
+  const handleDeleteRequest = (slot: SlotItem) => {
+    if (!slot.servant && slot.type !== "support") return;
+    if (slot.type === "support" && !activeProject?.supportServantId) return;
+    setDeleteTargetSlotId(slot.id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = (slotId: string) => {
+    if (!activeProject) return Promise.resolve();
+    return invoke<{ project: Project }>("delete_slot_servant", {
+      projectId: activeProject.id,
+      slotId,
+    })
+      .then(({ project }) => {
+        void onUpdateActiveProject(project);
+      })
+      .catch(() => {});
+  };
+
+  const handlePortraitSettingsOpen = (slot: SlotItem) => {
+    if (!slot.servant) return;
+    setPortraitSlotId(slot.id);
+  };
+
+  const portraitSlot = portraitSlotId
+    ? displaySlots.find((s) => s.id === portraitSlotId) ?? null
+    : null;
+
   const renderSlot = (slot: SlotItem) => (
     <SortableSlot
       key={slot.id}
@@ -345,6 +381,10 @@ export function ContentGrid({
       onGrandCeSelect={handleGrandCeSlotClick}
       onGrandCeClear={handleGrandCeClear}
       onSupportSettingsOpen={() => setSupportSettingsOpen(true)}
+      onDeleteRequest={() => handleDeleteRequest(slot)}
+      onPortraitSettingsOpen={
+        slot.servant ? () => handlePortraitSettingsOpen(slot) : undefined
+      }
     />
   );
 
@@ -394,6 +434,55 @@ export function ContentGrid({
           project={activeProject}
           onOpenChange={setSupportSettingsOpen}
           onConfirm={handleSupportSettingsConfirm}
+        />
+      )}
+
+      <AlertDialog.Root
+        open={deleteConfirmOpen}
+        onOpenChange={(open) => {
+          setDeleteConfirmOpen(open);
+          if (!open) setDeleteTargetSlotId(null);
+        }}
+      >
+        <AlertDialog.Content maxWidth="420px">
+          <AlertDialog.Title>确认删除从者</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            从者及槽位设置会被清除，相关指令可能失效。
+          </AlertDialog.Description>
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" color="gray">
+                取消
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                color="red"
+                onClick={() => {
+                  if (deleteTargetSlotId) {
+                    void handleDeleteConfirm(deleteTargetSlotId);
+                  }
+                  setDeleteConfirmOpen(false);
+                  setDeleteTargetSlotId(null);
+                }}
+              >
+                确认删除
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+
+      {portraitSlot?.servant && (
+        <PortraitSelectDialog
+          open={portraitSlotId != null}
+          onOpenChange={(open) => {
+            if (!open) setPortraitSlotId(null);
+          }}
+          servantId={portraitSlot.servant.id}
+          variantKey={portraitSlot.servant.variantKey}
+          servantName={portraitSlot.servant.name_cn}
+          onSaved={() => setPortraitRefreshKey((k) => k + 1)}
         />
       )}
     </>

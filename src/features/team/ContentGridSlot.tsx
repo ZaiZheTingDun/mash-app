@@ -1,5 +1,6 @@
 import {
   Button,
+  ContextMenu,
   Flex,
   Text,
 } from "@radix-ui/themes";
@@ -43,6 +44,8 @@ interface SortableSlotProps {
   onGrandCeSelect: (index: number) => void;
   onGrandCeClear: (index: number) => void;
   onSupportSettingsOpen: () => void;
+  onDeleteRequest?: () => void;
+  onPortraitSettingsOpen?: () => void;
 }
 
 function rarityFrameClass(rarity: number): string {
@@ -78,6 +81,8 @@ export function SortableSlot({
   onGrandCeSelect,
   onGrandCeClear,
   onSupportSettingsOpen,
+  onDeleteRequest,
+  onPortraitSettingsOpen,
 }: SortableSlotProps) {
   const {
     attributes,
@@ -113,10 +118,12 @@ export function SortableSlot({
     >
       <Flex direction="column" className="slot-card">
         <div className="slot-header" />
-        <div
-          className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}${isSupport && supportGrandMode ? " grand-support" : ""}${rarityClass ? ` ${rarityClass}` : ""}`}
-          onClick={onSelect}
-        >
+        <ContextMenu.Root>
+          <ContextMenu.Trigger disabled={!servant}>
+            <div
+              className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}${isSupport && supportGrandMode ? " grand-support" : ""}${rarityClass ? ` ${rarityClass}` : ""}`}
+              onClick={onSelect}
+            >
           {servant ? (
             portraitSrc ? (
               <img
@@ -226,7 +233,23 @@ export function SortableSlot({
               onClear={onCeClear}
             />
           )}
-        </div>
+            </div>
+          </ContextMenu.Trigger>
+          <ContextMenu.Content>
+            <ContextMenu.Item
+              color="red"
+              onSelect={() => onDeleteRequest?.()}
+            >
+              删除
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              disabled={!onPortraitSettingsOpen}
+              onSelect={() => onPortraitSettingsOpen?.()}
+            >
+              立绘设置
+            </ContextMenu.Item>
+          </ContextMenu.Content>
+        </ContextMenu.Root>
       </Flex>
     </div>
   );

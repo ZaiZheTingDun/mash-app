@@ -238,6 +238,7 @@ fn app_ui_settings_persist_active_project_id() {
         &AppUiSettings {
             active_project_id: Some("project-2".into()),
             theme: Some("system".into()),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -285,6 +286,54 @@ fn test_battle_scene(id: &str) -> BattleScene {
         enemy_target: None,
         attack_priority: Vec::new(),
     }
+}
+
+#[test]
+fn clear_project_slot_servant_only_clears_slot_owned_settings() {
+    let mut project = test_project("project-1", "删除", false);
+    project.slots[0].servant_id = Some(100);
+    project.slots[0].servant_variant_key = Some("100:1".into());
+    project.slots[0].craft_essence_id = Some(200);
+    project.grand_servants.push(GrandServantConfig {
+        member_id: Some("slot-0".into()),
+        slot_index: 0,
+        servant_id: Some(100),
+        is_support: false,
+        np_card: "auto".into(),
+        priority: "damage".into(),
+    });
+
+    clear_project_slot_servant(&mut project, "slot-0").unwrap();
+
+    assert!(project.slots[0].servant_id.is_none());
+    assert!(project.slots[0].servant_variant_key.is_none());
+    assert!(project.slots[0].craft_essence_id.is_none());
+    assert_eq!(project.grand_servants.len(), 1);
+}
+
+#[test]
+fn portrait_preferences_prioritize_global_selection_and_sort_numerically() {
+    let tmp = tempfile::tempdir().unwrap();
+    for name in [
+        "narrow_servant_10.png",
+        "narrow_servant_2.png",
+        "narrow_servant_800170.png",
+    ] {
+        fs::write(tmp.path().join(name), b"png").unwrap();
+    }
+
+    let ids = list_portraits_in(tmp.path())
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect::<Vec<_>>();
+    assert_eq!(ids, vec![2, 10, 800170]);
+    assert_eq!(
+        pick_portrait_with_preferences_in(tmp.path(), Some(2), Some(800170))
+            .unwrap()
+            .file_name()
+            .unwrap(),
+        "narrow_servant_2.png"
+    );
 }
 
 #[test]

@@ -881,3 +881,65 @@ pub(crate) fn import_configurations(
 ) -> Result<ConfigImportResult, String> {
     import_configurations_from_path(&app_data_dir(&app), &PathBuf::from(file_path), &import_keys)
 }
+
+// ---------------------------------------------------------------------------
+// Slot-servant delete
+// ---------------------------------------------------------------------------
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DeleteSlotServantResult {
+    pub(crate) project: Project,
+}
+
+#[tauri::command]
+pub(crate) fn delete_slot_servant(
+    app: tauri::AppHandle,
+    project_id: String,
+    slot_id: String,
+) -> Result<DeleteSlotServantResult, String> {
+    let mut projects = read_projects(&app);
+    let idx = projects
+        .iter()
+        .position(|p| p.id == project_id)
+        .ok_or_else(|| format!("project not found: {project_id}"))?;
+    clear_project_slot_servant(&mut projects[idx], &slot_id)?;
+
+    let saved_project = normalize_project(projects[idx].clone());
+    projects[idx] = saved_project.clone();
+    write_projects(&app, &projects)?;
+
+    Ok(DeleteSlotServantResult {
+        project: saved_project,
+    })
+}
+
+pub(crate) fn clear_project_slot_servant(
+    project: &mut Project,
+    slot_id: &str,
+) -> Result<(), String> {
+    let slot = project
+        .slots
+        .iter_mut()
+        .find(|slot| slot.id == slot_id)
+        .ok_or_else(|| format!("slot not found: {slot_id}"))?;
+    let is_support = slot.kind == "support";
+    slot.servant_id = None;
+    slot.servant_variant_key = None;
+    slot.craft_essence_id = None;
+    slot.craft_essence_mlb_required = true;
+
+    if is_support {
+        project.support_servant_id = None;
+        project.support_servant_variant_key = None;
+        project.support_noble_phantasm_level_min = None;
+        project.support_skill_level_mins = default_support_skill_level_mins();
+        project.support_append_skill_level_mins = default_support_append_skill_level_mins();
+        project.support_grand_mode = false;
+        project.support_grand_craft_essence_ids = default_support_grand_craft_essence_ids();
+        project.support_grand_craft_essence_mlb_required =
+            default_support_grand_craft_essence_mlb_required();
+        project.support_grand_bond_ce_mode = SupportGrandBondCeMode::Any;
+    }
+    Ok(())
+}

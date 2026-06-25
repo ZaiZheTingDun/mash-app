@@ -89,10 +89,8 @@ function GrandRuleCardButton({
   const member = memberIndex >= 0 ? partyMembers[memberIndex] : null;
   const servant = member?.servant ?? null;
   const usesGrandServant = slot.grandServant === true;
-  const missingServant = !usesGrandServant && slot.servantId != null && servant == null;
   const color = slot.kind === "np" && servant?.noblePhantasmCard ? servant.noblePhantasmCard : slot.color;
   const faceSrc = servant ? faces[servant.variantKey] : null;
-  const warningText = missingServant ? "失效" : null;
   const style: CSSProperties | undefined =
     color === "buster" || color === "arts" || color === "quick"
       ? { backgroundImage: `url(${COMMAND_BG_BY_RULE_COLOR[color]})` }
@@ -101,7 +99,7 @@ function GrandRuleCardButton({
   return (
     <button
       type="button"
-      className={`grand-rule-card${ruleCardColorClass(color)}${missingServant ? " invalid" : ""}`}
+      className={`grand-rule-card${ruleCardColorClass(color)}`}
       aria-label={ruleCardLabel({ ...slot, color }, servant, slotIndex)}
       style={style}
       onClick={onClick}
@@ -120,9 +118,8 @@ function GrandRuleCardButton({
       ) : (
         <span className="grand-rule-card-empty">+</span>
       )}
-      <span className={`grand-rule-card-meta${warningText ? " warning" : ""}`}>
+      <span className="grand-rule-card-meta">
         <span>{RULE_KIND_LABELS[slot.kind]}</span>
-        {warningText ? <span>{warningText}</span> : null}
       </span>
     </button>
   );

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
@@ -320,6 +320,7 @@ describe("ContentGrid", () => {
     expect(invoke).toHaveBeenCalledWith("get_servant_portrait_path", {
       servantId: 1,
       faceId: 800170,
+      variantKey: "1:1",
     });
   });
 
@@ -344,6 +345,59 @@ describe("ContentGrid", () => {
     // No <img> for this servant, but the placeholder shows the name.
     expect(screen.queryByAltText("阿尔托莉雅·卡斯特")).not.toBeInTheDocument();
     expect(screen.getByText("阿尔托莉雅·卡斯特")).toBeInTheDocument();
+  });
+
+  it("always confirms before deleting a configured servant", async () => {
+    const user = userEvent.setup();
+    const onUpdateActiveProject = vi.fn();
+    const slots = buildSlots();
+    slots[0] = { ...slots[0], servant: MASH, craftEssence: CES[0] };
+    const savedProject: Project = {
+      ...PROJECT,
+      slots: PROJECT.slots.map((slot) =>
+        slot.id === "slot-0"
+          ? {
+              ...slot,
+              servantId: null,
+              servantVariantKey: null,
+              craftEssenceId: null,
+            }
+          : slot
+      ),
+    };
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "delete_slot_servant") return { project: savedProject };
+      return null;
+    });
+
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={slots}
+        onSlotsChange={vi.fn()}
+        activeProject={PROJECT}
+        onUpdateActiveProject={onUpdateActiveProject}
+      />
+    );
+
+    fireEvent.contextMenu(screen.getByText("玛修"));
+    await user.click(await screen.findByRole("menuitem", { name: "删除" }));
+
+    expect(screen.getByText("确认删除从者")).toBeInTheDocument();
+    expect(
+      vi.mocked(invoke).mock.calls.some(([cmd]) => cmd === "delete_slot_servant")
+    ).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "确认删除" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("delete_slot_servant", {
+        projectId: PROJECT.id,
+        slotId: "slot-0",
+      });
+      expect(onUpdateActiveProject).toHaveBeenCalledWith(savedProject);
+    });
   });
 
   it("defaults servant selection filter to Saber in default grand battle projects", async () => {

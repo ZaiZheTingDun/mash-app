@@ -1,6 +1,7 @@
 //! Servant, craft essence, and template catalog access.
 //! Localization rules live here so runners receive server-specific metadata.
 
+use super::projects::{read_app_ui_settings_from_path, write_app_ui_settings_to_path};
 use super::*;
 
 #[derive(serde::Serialize, Clone)]
@@ -491,31 +492,125 @@ pub(crate) fn pick_face_by_id_in(servant_dir: &std::path::Path, face_id: u32) ->
     }
 }
 
+/// Enumerate all `narrow_servant_*.png` files in `servant_dir` in
+/// natural numeric order, returning `(id, path)` pairs.
+pub(crate) fn list_portraits_in(servant_dir: &std::path::Path) -> Vec<(u32, PathBuf)> {
+    let Ok(entries) = fs::read_dir(servant_dir) else {
+        return Vec::new();
+    };
+    let mut portraits: Vec<(u32, PathBuf)> = entries
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter_map(|p| {
+            let name = p.file_name()?.to_str()?;
+            let stem = name.strip_prefix("narrow_servant_")?.strip_suffix(".png")?;
+            let id = stem.parse::<u32>().ok()?;
+            Some((id, p))
+        })
+        .collect();
+    portraits.sort_by_key(|(id, _)| *id);
+    portraits
+}
+
+pub(crate) fn pick_portrait_with_preferences_in(
+    servant_dir: &std::path::Path,
+    global_id: Option<u32>,
+    face_id: Option<u32>,
+) -> Option<PathBuf> {
+    global_id
+        .and_then(|id| pick_portrait_by_id_in(servant_dir, id))
+        .or_else(|| face_id.and_then(|id| pick_portrait_by_id_in(servant_dir, id)))
+        .or_else(|| pick_portrait_in(servant_dir))
+}
+
 /// Resolve the full-art portrait file for a single servant, returning
 /// the absolute path so the frontend can hand it to `convertFileSrc()`.
 ///
-/// Lookup chain mirrors [`resolve_servant_assets_dir`] (bundled
-/// `<resource_dir>/assets/servants/` first, dev-time
-/// `CARGO_MANIFEST_DIR/assets/servants/` second), then narrows to
-/// `{servant_id}/narrow_servant_*.png` and picks the highest ascension
-/// stage via [`pick_portrait_in`]. Returning `Ok(None)` (rather than an
-/// `Err`) on a missing file lets the UI fall back to a placeholder
-/// card without surfacing a scary error toast — a portrait being
-/// absent is the expected default state for most servants today.
+/// Priority: (1) global portrait selection stored in `app_ui_settings.json`
+/// for this `variant_key`, (2) explicit `face_id` variant default,
+/// (3) default "highest ascension" portrait via [`pick_portrait_in`].
+/// Returning `Ok(None)` on a missing file lets the UI fall back to a
+/// placeholder without surfacing an error toast.
 #[tauri::command]
 pub(crate) fn get_servant_portrait_path(
     app: tauri::AppHandle,
     servant_id: u32,
     face_id: Option<u32>,
+    variant_key: Option<String>,
 ) -> Result<Option<String>, String> {
     let Some(root) = resolve_servant_assets_dir(&app) else {
         return Ok(None);
     };
     let servant_dir = root.join(servant_id.to_string());
-    let picked = face_id
-        .and_then(|id| pick_portrait_by_id_in(&servant_dir, id))
-        .or_else(|| pick_portrait_in(&servant_dir));
+    let global_id = variant_key.as_deref().and_then(|vk| {
+        let settings = read_app_ui_settings_from_path(&app_ui_settings_path(&app));
+        settings.servant_portrait_selections.get(vk).copied()
+    });
+    let picked = pick_portrait_with_preferences_in(&servant_dir, global_id, face_id);
     Ok(picked.map(|p| p.to_string_lossy().into_owned()))
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PortraitOption {
+    pub(crate) id: u32,
+    pub(crate) path: String,
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ServantPortraitOptions {
+    pub(crate) options: Vec<PortraitOption>,
+    pub(crate) selected_id: Option<u32>,
+}
+
+/// List all available full-art portraits for `servant_id` in ascending
+/// numeric order, along with the currently-selected portrait id (if any)
+/// for this `variant_key` from the global settings.
+#[tauri::command]
+pub(crate) fn list_servant_portraits(
+    app: tauri::AppHandle,
+    servant_id: u32,
+    variant_key: String,
+) -> Result<ServantPortraitOptions, String> {
+    let Some(root) = resolve_servant_assets_dir(&app) else {
+        return Ok(ServantPortraitOptions {
+            options: Vec::new(),
+            selected_id: None,
+        });
+    };
+    let servant_dir = root.join(servant_id.to_string());
+    let options = list_portraits_in(&servant_dir)
+        .into_iter()
+        .map(|(id, path)| PortraitOption {
+            id,
+            path: path.to_string_lossy().into_owned(),
+        })
+        .collect();
+    let settings = read_app_ui_settings_from_path(&app_ui_settings_path(&app));
+    let selected_id = settings
+        .servant_portrait_selections
+        .get(&variant_key)
+        .copied();
+    Ok(ServantPortraitOptions {
+        options,
+        selected_id,
+    })
+}
+
+/// Persist a global portrait selection for `variant_key`. This overrides
+/// the default highest-ascension pick for all teams using this variant.
+#[tauri::command]
+pub(crate) fn save_servant_portrait_selection(
+    app: tauri::AppHandle,
+    variant_key: String,
+    portrait_id: u32,
+) -> Result<(), String> {
+    let path = app_ui_settings_path(&app);
+    let mut settings = read_app_ui_settings_from_path(&path);
+    settings
+        .servant_portrait_selections
+        .insert(variant_key, portrait_id);
+    write_app_ui_settings_to_path(&path, &settings)
 }
 
 #[tauri::command]
