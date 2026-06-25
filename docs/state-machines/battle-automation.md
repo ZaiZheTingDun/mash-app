@@ -366,9 +366,14 @@ changes (i.e. when the runner moves to a different row).
   ordinary cards are only used as fixed left-to-right fallback tap targets.
 - Advanced-mode teams store battle scenes in `advanced_battle_scenes.json`.
   The current strategy UI uses a three-stage flow. First, the runner enters
-  the attack-card screen and treats the scene as "waiting for startup": it
-  checks the configured five command-card startup conditions, unless the scene
-  enables Grand auto Order Change as its startup condition. In that Grand mode,
+  the attack-card screen and treats the scene as "waiting for startup" when it
+  has effective command-card startup conditions. A Grand scene without
+  effective startup conditions executes its first control action and
+  `startupActions` directly on the Battle screen before opening the attack-card
+  screen, avoiding the previous Attack → Battle → Attack round trip. The
+  optimization is not used when Grand auto Order Change needs to bring a
+  back-line main Grand servant forward, because that flow must first recognize
+  the current five cards to choose the front-line swap target. In that mode,
   the runner counts the current front line's recognized command cards, chooses
   the front servant with the highest count (leftmost on ties), uses Mystic Code
   `skill_3` to swap that servant with the back-line main Grand servant, then

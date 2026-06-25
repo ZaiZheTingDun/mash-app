@@ -646,6 +646,40 @@ fn advanced_startup_conditions_match_only_configured_command_cards() {
 }
 
 #[test]
+fn grand_startup_skips_precheck_without_conditions_or_backline_swap() {
+    let scene = empty_advanced_scene();
+    let front_main = grand_config_at(1, 10, "buster", "damage");
+
+    assert!(grand_startup_can_run_before_attack(&scene, &[front_main]));
+}
+
+#[test]
+fn grand_startup_keeps_attack_precheck_for_backline_auto_order_change() {
+    let mut scene = empty_advanced_scene();
+    scene.grand_auto_order_change = Some(true);
+    let back_main = grand_config_at(4, 10, "buster", "damage");
+
+    assert!(!grand_startup_can_run_before_attack(&scene, &[back_main]));
+}
+
+#[test]
+fn grand_startup_keeps_attack_precheck_for_command_card_conditions() {
+    let mut scene = empty_advanced_scene();
+    scene.command_conditions = vec![AdvancedCommandCardCondition {
+        slot: 0,
+        servant: "servant_1".into(),
+        member_id: None,
+        servant_id: Some(10),
+        is_support: false,
+        suit: "buster".into(),
+        min_crit_chance: None,
+    }];
+    let front_main = grand_config_at(1, 10, "buster", "damage");
+
+    assert!(!grand_startup_can_run_before_attack(&scene, &[front_main]));
+}
+
+#[test]
 fn advanced_startup_conditions_match_duplicate_servant_cards_in_any_slots() {
     let scene = AdvancedBattleScene {
         id: "advanced_scene_1".into(),

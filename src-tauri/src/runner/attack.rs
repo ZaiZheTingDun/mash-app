@@ -475,6 +475,30 @@ pub(crate) fn advanced_startup_conditions_match(
     )
 }
 
+pub(crate) fn has_advanced_startup_conditions(scene: &AdvancedBattleScene) -> bool {
+    scene
+        .command_conditions
+        .iter()
+        .any(|condition| condition.servant != "any" || condition.suit != "any")
+}
+
+pub(crate) fn grand_startup_can_run_before_attack(
+    scene: &AdvancedBattleScene,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> bool {
+    if grand_servants.is_empty()
+        || !(scene.rules.is_empty() || uses_advanced_strategy_flow(scene))
+        || has_advanced_startup_conditions(scene)
+    {
+        return false;
+    }
+    let backline_main_needs_swap = scene.grand_auto_order_change == Some(true)
+        && grand_servants
+            .first()
+            .is_some_and(|main| main.slot_index >= 3);
+    !backline_main_needs_swap
+}
+
 pub(crate) fn startup_conditions_match_from(
     condition_index: usize,
     conditions: &[&AdvancedCommandCardCondition],
@@ -614,6 +638,68 @@ pub(crate) fn rect_center(r: &NormRect) -> Point {
 }
 
 impl Runner {
+    pub(crate) fn prepare_grand_startup_before_attack(&mut self, scene: &AdvancedBattleScene) {
+        let scene_index = self.battle.current_scene_index;
+        if self.battle.advanced_startup_done.contains(&scene_index) {
+            return;
+        }
+        let executed_control_count = *self
+            .battle
+            .advanced_control_indices
+            .get(&scene_index)
+            .unwrap_or(&0);
+        let next_control_count = if executed_control_count < scene.control_actions.len() {
+            executed_control_count + 1
+        } else {
+            executed_control_count
+        };
+        if executed_control_count < scene.control_actions.len() {
+            self.emit(
+                "Battle",
+                &format!("无启动条件，执行本回合控制行动 {next_control_count}"),
+            );
+        } else {
+            self.emit("Battle", "无启动条件，直接执行启动阶段");
+        }
+        let pending_actions = scene
+            .control_actions
+            .iter()
+            .skip(executed_control_count)
+            .take(next_control_count.saturating_sub(executed_control_count))
+            .chain(scene.startup_actions.iter())
+            .cloned();
+        let (startup_actions, _) = self.advanced_actions_and_members_after(
+            scene
+                .control_actions
+                .iter()
+                .take(executed_control_count)
+                .cloned(),
+            pending_actions,
+        );
+        self.battle
+            .advanced_control_indices
+            .insert(scene_index, next_control_count);
+        self.battle
+            .advanced_startup_control_indices
+            .insert(scene_index, next_control_count);
+        self.battle.advanced_startup_done.insert(scene_index);
+
+        if startup_actions.is_empty() {
+            return;
+        }
+        let prep_turn = BattleTurn {
+            id: scene.id.clone(),
+            preparation_actions: startup_actions,
+            servant_actions: Vec::new(),
+            equipment_actions: Vec::new(),
+            command_spell_actions: Vec::new(),
+            enemy_target: None,
+            attack_priority: Vec::new(),
+        };
+        self.execute_turn_skills(&prep_turn);
+        self.emit("Battle", "启动阶段完成，进入自动战斗");
+    }
+
     pub(crate) fn handle_attack(&mut self) {
         if self.advanced_mode {
             let party_ids = self

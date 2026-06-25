@@ -30,9 +30,17 @@ the front line, that role is ignored for the current turn.
 
 ## Startup Order Change
 
+When a scene has no effective command-card startup conditions, the runner
+normally executes its first control action and `startupActions` directly from
+the Battle screen, then opens the attack-card screen once for the actual
+attack. This avoids opening the card page only to return immediately.
+
 When the main Grand servant is configured in a back-line slot, an advanced
 scene can set `grandAutoOrderChange` as its startup condition. This setting is
 per scene and does not change the configured control actions or startup actions.
+The direct-start optimization is disabled in this case because the runner still
+needs the first attack-card screen to count card ownership and choose which
+front-line servant to replace.
 
 On the first attack-card screen for that scene, the runner:
 

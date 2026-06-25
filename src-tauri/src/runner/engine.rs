@@ -309,6 +309,19 @@ impl Runner {
             }
         }
 
+        if self.advanced_mode {
+            if let Some(scene) = self
+                .advanced_scenes
+                .get(self.battle.current_scene_index)
+                .cloned()
+            {
+                let grand_servants = self.grand_servant_runtime_configs();
+                if grand_startup_can_run_before_attack(&scene, &grand_servants) {
+                    self.prepare_grand_startup_before_attack(&scene);
+                }
+            }
+        }
+
         // Click the attack button
         self.emit("Battle", "点击攻击按钮");
         if !self.tap_at("Battle", ATTACK_BUTTON) {
