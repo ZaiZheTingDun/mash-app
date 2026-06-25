@@ -48,7 +48,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
 
-const UNKNOWN_TIMEOUT: u32 = 10;
+/// Tolerate short-lived overlays and transitions for up to 24 seconds
+/// before treating an unrecognized screen as a fatal error.
+const UNKNOWN_TIMEOUT: u32 = 30;
 /// Tolerated streak of `Unknown` screens while a long animation / loading
 /// transition is playing -- raised from the default so a stacked NP chain
 /// (which can run 30s+ of cut-ins before the battle screen reappears)
