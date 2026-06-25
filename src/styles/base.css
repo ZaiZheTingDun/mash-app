@@ -66,6 +66,12 @@ body,
   overflow: hidden;
 }
 
+.radix-themes:where([data-panel-background="translucent"]) .rt-BaseDialogContent {
+  background-color: var(--color-panel);
+  backdrop-filter: var(--backdrop-filter-panel);
+  -webkit-backdrop-filter: var(--backdrop-filter-panel);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
