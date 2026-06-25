@@ -957,30 +957,21 @@ pub(crate) fn resolve_action_to_current_member_positions(
     }
 }
 
-pub(crate) fn action_frontline_label(action: &Action) -> String {
-    match action {
+pub(crate) fn skipped_action_log_meta(action: &Action) -> ActionLogMeta {
+    let servant_id = match action {
         Action::Servant {
-            servant, target, ..
-        } => servant
-            .as_deref()
-            .or(target.as_deref())
-            .unwrap_or("从者")
-            .to_string(),
-        Action::Equipment {
-            target,
-            order_change: Some(order_change),
+            servant_id,
+            target_servant_id,
             ..
-        } => order_change
-            .front
-            .as_deref()
-            .or(order_change.back.as_deref())
-            .or(target.as_deref())
-            .unwrap_or("从者")
-            .to_string(),
-        Action::Equipment { target, .. } | Action::CommandSpell { target, .. } => {
-            target.as_deref().unwrap_or("从者").to_string()
+        } => (*servant_id).or(*target_servant_id),
+        Action::Equipment {
+            target_servant_id, ..
         }
-    }
+        | Action::CommandSpell {
+            target_servant_id, ..
+        } => *target_servant_id,
+    };
+    ActionLogMeta::SkippedAction { servant_id }
 }
 
 pub(crate) fn advanced_startup_flow_actions(
@@ -1211,10 +1202,7 @@ impl Runner {
             let Some(resolved) =
                 resolve_available_member_action(&members, &original_members, action)
             else {
-                self.emit(
-                    "Battle",
-                    &format!("跳过行动：{} 不在前排", action_frontline_label(action)),
-                );
+                self.emit_action("跳过行动：目标不在前排", skipped_action_log_meta(action));
                 continue;
             };
             apply_party_member_lineup_change(&mut members, &resolved);
@@ -1353,10 +1341,7 @@ impl Runner {
             let Some(resolved) =
                 resolve_available_member_action(&members, &original_members, &action)
             else {
-                self.emit(
-                    "Battle",
-                    &format!("跳过行动：{} 不在前排", action_frontline_label(&action)),
-                );
+                self.emit_action("跳过行动：目标不在前排", skipped_action_log_meta(&action));
                 continue;
             };
             apply_party_member_lineup_change(&mut members, &resolved);

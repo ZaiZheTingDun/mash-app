@@ -1188,20 +1188,17 @@ impl Runner {
                             &original_members,
                             &action,
                         ) else {
-                            self.emit(
-                                "Battle",
-                                &format!(
-                                    "跳过行动：{} 不在当前可用位置",
-                                    action_frontline_label(&action)
-                                ),
+                            self.emit_action(
+                                "跳过行动：目标不在当前可用位置",
+                                skipped_action_log_meta(&action),
                             );
                             continue;
                         };
                         let ids = party_member_ids(&members);
                         if !action_frontline_available(&ids, &resolved_action) {
-                            self.emit(
-                                "Battle",
-                                &format!("跳过行动：{} 不在前排", action_frontline_label(&action)),
+                            self.emit_action(
+                                "跳过行动：目标不在前排",
+                                skipped_action_log_meta(&action),
                             );
                             continue;
                         }

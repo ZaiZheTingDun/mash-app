@@ -35,6 +35,7 @@ import type { AppTheme, AppThemePreference } from "./types/theme";
 import type { AdvancedBattleScene, BattleScene } from "./types/command";
 import {
   appendCoalescedOperationLog,
+  type ActionLogMeta,
   type AttackLogMeta,
   type LogLevel,
   type OperationLogEntry,
@@ -53,6 +54,7 @@ interface AutomationEvent {
   // emit a level; treat missing as "info".
   level?: LogLevel;
   attack?: AttackLogMeta | null;
+  action?: ActionLogMeta | null;
 }
 
 interface AppProps {
@@ -93,13 +95,18 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [selfCheckError, setSelfCheckError] = useState<string | null>(null);
 
   const appendOperationLog = useCallback(
-    (message: string, level: LogLevel = "info", attack?: AttackLogMeta | null) => {
+    (
+      message: string,
+      level: LogLevel = "info",
+      attack?: AttackLogMeta | null,
+      action?: ActionLogMeta | null,
+    ) => {
       const d = new Date();
       const time = [d.getHours(), d.getMinutes(), d.getSeconds()]
         .map((n) => String(n).padStart(2, "0"))
         .join(":");
       setOperationLogs((prev) =>
-        appendCoalescedOperationLog(prev, { time, message, level, attack })
+        appendCoalescedOperationLog(prev, { time, message, level, attack, action })
       );
     },
     [],
@@ -206,7 +213,8 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
       appendOperationLog(
         event.payload.message,
         event.payload.level ?? "info",
-        event.payload.attack ?? null
+        event.payload.attack ?? null,
+        event.payload.action ?? null,
       );
     });
     const unlistenEnhancement = listen<AutomationEvent>(

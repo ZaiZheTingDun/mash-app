@@ -12,7 +12,15 @@ import {
   GearIcon,
 } from "@radix-ui/react-icons";
 import { convertFileSrc, invoke, listen } from "../../tauri";
-import type { OperationLogEntry, AttackLogMeta } from "../../operationLog";
+import type {
+  ActionLogMeta,
+  OperationLogEntry,
+  AttackLogMeta,
+} from "../../operationLog";
+import {
+  useServantSkillIcons,
+  type SkillIcons,
+} from "../team/useServantSkillIcons";
 import { SERVER_LABELS, type Server } from "../../types/server";
 import type { Servant } from "../../types/servant";
 import type { AppTheme, AppThemePreference } from "../../types/theme";
@@ -60,15 +68,36 @@ function useOperationLogFaces(
     const ids = new Set<number>();
     for (const entry of operationLogs) {
       const attack = entry.attack;
-      if (!attack) continue;
-      attack.frontServantIds.forEach((id) => {
-        if (id != null) ids.add(id);
-      });
-      attack.candidateServantIds?.forEach((id) => ids.add(id));
-      attack.commandCards?.forEach((card) => {
-        if (card.servantId != null) ids.add(card.servantId);
-      });
-      if (attack.selectedPick?.servantId != null) ids.add(attack.selectedPick.servantId);
+      if (attack) {
+        attack.frontServantIds.forEach((id) => {
+          if (id != null) ids.add(id);
+        });
+        attack.candidateServantIds?.forEach((id) => ids.add(id));
+        attack.commandCards?.forEach((card) => {
+          if (card.servantId != null) ids.add(card.servantId);
+        });
+        if (attack.selectedPick?.servantId != null) ids.add(attack.selectedPick.servantId);
+      }
+      const action = entry.action;
+      if (!action) continue;
+      if (action.kind === "servantSkill" && action.servantId != null) {
+        ids.add(action.servantId);
+      }
+      if (
+        (action.kind === "servantSkill"
+          || action.kind === "equipmentSkill"
+          || action.kind === "commandSpell")
+        && action.targetServantId != null
+      ) {
+        ids.add(action.targetServantId);
+      }
+      if (action.kind === "orderChange") {
+        if (action.frontServantId != null) ids.add(action.frontServantId);
+        if (action.backServantId != null) ids.add(action.backServantId);
+      }
+      if (action.kind === "skippedAction" && action.servantId != null) {
+        ids.add(action.servantId);
+      }
     }
     return Array.from(ids)
       .map((servantId) => {
@@ -180,11 +209,24 @@ function OperationLogMessage({
   entry,
   servantById,
   faceSrcByServantId,
+  skillIcons,
 }: {
   entry: OperationLogEntry;
   servantById: Map<number, Servant>;
   faceSrcByServantId: Record<number, string | null>;
+  skillIcons: Record<string, SkillIcons>;
 }) {
+  if (entry.action) {
+    return (
+      <ActionLogMessage
+        action={entry.action}
+        message={entry.message}
+        servantById={servantById}
+        faceSrcByServantId={faceSrcByServantId}
+        skillIcons={skillIcons}
+      />
+    );
+  }
   const attack = entry.attack;
   if (!attack) return <>{entry.message}</>;
   if (attack.selectedPick) {
@@ -232,6 +274,157 @@ function OperationLogMessage({
     );
   }
   return <>{entry.message}</>;
+}
+
+function ActionLogMessage({
+  action,
+  message,
+  servantById,
+  faceSrcByServantId,
+  skillIcons,
+}: {
+  action: ActionLogMeta;
+  message: string;
+  servantById: Map<number, Servant>;
+  faceSrcByServantId: Record<number, string | null>;
+  skillIcons: Record<string, SkillIcons>;
+}) {
+  if (action.kind === "servantSkill") {
+    return (
+      <span className="operation-log-rich">
+        <span>从者技能:</span>
+        <OperationLogFace
+          servantId={action.servantId}
+          servantById={servantById}
+          faceSrcByServantId={faceSrcByServantId}
+        />
+        <OperationLogSkillIcon
+          servantId={action.servantId}
+          skillIndex={action.skillIndex}
+          servantById={servantById}
+          skillIcons={skillIcons}
+        />
+        <ActionTarget
+          servantId={action.targetServantId}
+          servantById={servantById}
+          faceSrcByServantId={faceSrcByServantId}
+        />
+      </span>
+    );
+  }
+  if (action.kind === "equipmentSkill") {
+    return (
+      <span className="operation-log-rich">
+        <span>御主技能:</span>
+        <span
+          className="operation-log-skill-icon operation-log-skill-icon--fallback"
+          aria-label={`御主技能 ${action.skillIndex + 1}`}
+          title={`御主技能 ${action.skillIndex + 1}`}
+        >
+          御{action.skillIndex + 1}
+        </span>
+        <ActionTarget
+          servantId={action.targetServantId}
+          servantById={servantById}
+          faceSrcByServantId={faceSrcByServantId}
+        />
+      </span>
+    );
+  }
+  if (action.kind === "commandSpell") {
+    return (
+      <span className="operation-log-rich">
+        <span>令咒:</span>
+        <span className="operation-log-skill-icon operation-log-skill-icon--command">
+          令
+        </span>
+        <span>{action.spell === "np_release" ? "宝具解放" : "灵基复原"}</span>
+        <ActionTarget
+          servantId={action.targetServantId}
+          servantById={servantById}
+          faceSrcByServantId={faceSrcByServantId}
+        />
+      </span>
+    );
+  }
+  if (action.kind === "orderChange") {
+    return (
+      <span className="operation-log-rich">
+        <span>Order Change:</span>
+        <OperationLogFace
+          servantId={action.frontServantId}
+          servantById={servantById}
+          faceSrcByServantId={faceSrcByServantId}
+        />
+        <span>↔</span>
+        <OperationLogFace
+          servantId={action.backServantId}
+          servantById={servantById}
+          faceSrcByServantId={faceSrcByServantId}
+        />
+      </span>
+    );
+  }
+  return (
+    <span className="operation-log-rich">
+      <span>{message}</span>
+      <OperationLogFace
+        servantId={action.servantId}
+        servantById={servantById}
+        faceSrcByServantId={faceSrcByServantId}
+      />
+    </span>
+  );
+}
+
+function OperationLogSkillIcon({
+  servantId,
+  skillIndex,
+  servantById,
+  skillIcons,
+}: {
+  servantId: number | null;
+  skillIndex: number;
+  servantById: Map<number, Servant>;
+  skillIcons: Record<string, SkillIcons>;
+}) {
+  const servant = servantId == null ? null : servantById.get(servantId) ?? null;
+  const entry = servant ? skillIcons[servant.variantKey]?.[skillIndex] : null;
+  const label = entry?.name || `技能 ${skillIndex + 1}`;
+  return (
+    <span className="operation-log-skill-icon" aria-label={label} title={label}>
+      <Avatar
+        src={entry?.src ?? undefined}
+        alt=""
+        fallback={String(skillIndex + 1)}
+        radius="small"
+        size="1"
+        draggable={false}
+      />
+    </span>
+  );
+}
+
+function ActionTarget({
+  servantId,
+  servantById,
+  faceSrcByServantId,
+}: {
+  servantId: number | null;
+  servantById: Map<number, Servant>;
+  faceSrcByServantId: Record<number, string | null>;
+}) {
+  if (servantId == null) return null;
+  return (
+    <>
+      <span>→</span>
+      <OperationLogFace
+        servantId={servantId}
+        servantById={servantById}
+        faceSrcByServantId={faceSrcByServantId}
+      />
+    </>
+  );
 }
 
 function CommandCardsLogMessage({
@@ -305,9 +498,14 @@ function SelectedPickLogMessage({
   const servantId = pick.servantId ?? attack.frontServantIds[pick.slot] ?? null;
   return (
     <span className="operation-log-rich">
-      <span>
-        {pick.step}/{pick.total} 选择 {pick.fromPriority ?? "补位"} →
-      </span>
+      <span>{pick.step}/{pick.total} 选择</span>
+      <PrioritySource
+        value={pick.fromPriority}
+        attack={attack}
+        servantById={servantById}
+        faceSrcByServantId={faceSrcByServantId}
+      />
+      <span>→</span>
       {pick.kind === "np" ? (
         <span className="operation-log-pick-result">
           <span>宝具</span>
@@ -328,6 +526,34 @@ function SelectedPickLogMessage({
           <SuitDot suit={pick.suit} />
         </span>
       )}
+    </span>
+  );
+}
+
+function PrioritySource({
+  value,
+  attack,
+  servantById,
+  faceSrcByServantId,
+}: {
+  value: string | null;
+  attack: AttackLogMeta;
+  servantById: Map<number, Servant>;
+  faceSrcByServantId: Record<number, string | null>;
+}) {
+  const match = value?.match(/^servant_(\d+)_(np|buster|arts|quick|all)$/);
+  if (!match) return <span>{value ?? "补位"}</span>;
+  const slot = Number(match[1]) - 1;
+  const kind = match[2];
+  const suit = kind === "buster" ? "b" : kind === "arts" ? "a" : kind === "quick" ? "q" : null;
+  return (
+    <span className="operation-log-pick-result">
+      <OperationLogFace
+        servantId={attack.frontServantIds[slot] ?? null}
+        servantById={servantById}
+        faceSrcByServantId={faceSrcByServantId}
+      />
+      {kind === "np" ? <span>宝具</span> : suit ? <SuitDot suit={suit} /> : <span>任意卡</span>}
     </span>
   );
 }
@@ -397,6 +623,18 @@ export function StatusBar({
     return byId;
   }, [servants]);
   const operationLogFaces = useOperationLogFaces(operationLogs, servantById);
+  const operationLogSkillServants = useMemo(() => {
+    const ids = new Set<number>();
+    for (const entry of operationLogs) {
+      if (entry.action?.kind === "servantSkill" && entry.action.servantId != null) {
+        ids.add(entry.action.servantId);
+      }
+    }
+    return Array.from(ids)
+      .map((id) => servantById.get(id) ?? null)
+      .filter((servant): servant is Servant => servant != null);
+  }, [operationLogs, servantById]);
+  const operationLogSkillIcons = useServantSkillIcons(operationLogSkillServants);
 
   const visibleOperationLogs = useMemo(
     () => {
@@ -585,6 +823,7 @@ export function StatusBar({
                     entry={entry}
                     servantById={servantById}
                     faceSrcByServantId={operationLogFaces}
+                    skillIcons={operationLogSkillIcons}
                   />
                 </span>
               </div>

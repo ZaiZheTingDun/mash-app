@@ -326,6 +326,37 @@ pub struct AutomationEvent {
     pub level: LogLevel,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attack: Option<AttackLogMeta>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<ActionLogMeta>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ActionLogMeta {
+    ServantSkill {
+        servant_id: Option<u32>,
+        skill_index: u32,
+        target_servant_id: Option<u32>,
+    },
+    EquipmentSkill {
+        skill_index: u32,
+        target_servant_id: Option<u32>,
+    },
+    CommandSpell {
+        spell: String,
+        target_servant_id: Option<u32>,
+    },
+    OrderChange {
+        front_servant_id: Option<u32>,
+        back_servant_id: Option<u32>,
+    },
+    SkippedAction {
+        servant_id: Option<u32>,
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]

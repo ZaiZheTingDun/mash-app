@@ -123,6 +123,40 @@
   height: 23px;
 }
 
+.operation-log-skill-icon {
+  width: 23px;
+  height: 23px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-1);
+  background: var(--gray-3);
+  overflow: hidden;
+  color: var(--gray-12);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.operation-log-skill-icon .rt-AvatarRoot {
+  width: 23px;
+  height: 23px;
+}
+
+.operation-log-skill-icon--fallback {
+  background: var(--blue-3);
+  border-color: var(--blue-6);
+}
+
+.operation-log-skill-icon--command {
+  color: var(--red-11);
+  background: var(--red-3);
+  border-color: var(--red-6);
+}
+
 .operation-log-face--muted {
   filter: grayscale(1);
   opacity: 0.42;

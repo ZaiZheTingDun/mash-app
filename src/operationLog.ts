@@ -25,11 +25,39 @@ export interface AttackLogMeta {
   selectedPick?: AttackLogSelectedPick | null;
 }
 
+export type ActionLogMeta =
+  | {
+      kind: "servantSkill";
+      servantId: number | null;
+      skillIndex: number;
+      targetServantId: number | null;
+    }
+  | {
+      kind: "equipmentSkill";
+      skillIndex: number;
+      targetServantId: number | null;
+    }
+  | {
+      kind: "commandSpell";
+      spell: string;
+      targetServantId: number | null;
+    }
+  | {
+      kind: "orderChange";
+      frontServantId: number | null;
+      backServantId: number | null;
+    }
+  | {
+      kind: "skippedAction";
+      servantId: number | null;
+    };
+
 export interface OperationLogEntry {
   time: string;
   message: string;
   level: LogLevel;
   attack?: AttackLogMeta | null;
+  action?: ActionLogMeta | null;
 }
 
 export const MAX_OPERATION_LOG_ENTRIES = 500;

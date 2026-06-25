@@ -38,19 +38,24 @@ impl Runner {
     }
 
     pub(crate) fn emit_with_level(&self, screen: &str, message: &str, level: LogLevel) {
-        self.emit_with_level_and_attack(screen, message, level, None);
+        self.emit_with_level_and_meta(screen, message, level, None, None);
     }
 
     pub(crate) fn emit_attack(&self, message: &str, attack: AttackLogMeta) {
-        self.emit_with_level_and_attack("Attack", message, LogLevel::Info, Some(attack));
+        self.emit_with_level_and_meta("Attack", message, LogLevel::Info, Some(attack), None);
     }
 
-    pub(crate) fn emit_with_level_and_attack(
+    pub(crate) fn emit_action(&self, message: &str, action: ActionLogMeta) {
+        self.emit_with_level_and_meta("Battle", message, LogLevel::Info, None, Some(action));
+    }
+
+    pub(crate) fn emit_with_level_and_meta(
         &self,
         screen: &str,
         message: &str,
         level: LogLevel,
         attack: Option<AttackLogMeta>,
+        action: Option<ActionLogMeta>,
     ) {
         let state_str = {
             let s = self.state.lock().unwrap();
@@ -64,6 +69,7 @@ impl Runner {
                 message: message.into(),
                 level,
                 attack,
+                action,
             },
         );
     }

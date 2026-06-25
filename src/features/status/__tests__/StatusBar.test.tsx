@@ -347,6 +347,69 @@ describe("StatusBar", () => {
     expect(container.querySelector(".operation-log-suit-dot--a")).not.toBeNull();
   });
 
+  it("renders servant skills, targets, and order changes with icons", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "get_servant_face_path") {
+        const { servantId } = args as { servantId: number };
+        return `/tmp/face-${servantId}.png`;
+      }
+      if (cmd === "get_skill_icon_paths") {
+        return [
+          { path: "/tmp/skill-1.png", name: "一技能" },
+          { path: "/tmp/skill-2.png", name: "二技能" },
+          { path: "/tmp/skill-3.png", name: "三技能" },
+        ];
+      }
+      return null;
+    });
+
+    renderWithTheme(
+      <StatusBar
+        servants={LOG_SERVANTS}
+        operationLogOpen
+        operationLogs={[
+          {
+            time: "19:53:25",
+            message: "从者技能: servant_3 使用 skill_2",
+            level: "info",
+            action: {
+              kind: "servantSkill",
+              servantId: 309,
+              skillIndex: 1,
+              targetServantId: 16,
+            },
+          },
+          {
+            time: "19:53:26",
+            message: "Order Change 选择从者: servant_1 ↔ servant_4",
+            level: "info",
+            action: {
+              kind: "orderChange",
+              frontServantId: 284,
+              backServantId: 309,
+            },
+          },
+        ]}
+      />
+    );
+
+    expect(screen.queryByText(/servant_3|skill_2/)).not.toBeInTheDocument();
+    expect(screen.getByText("从者技能:")).toBeInTheDocument();
+    expect(await screen.findByLabelText("二技能")).toBeInTheDocument();
+    expect(screen.getByText("Order Change:")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("从者三零九")).toHaveLength(2);
+    expect(screen.getByLabelText("从者十六")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("get_skill_icon_paths", {
+        servantId: 309,
+        variantKey: "309",
+      });
+    });
+  });
+
   it("renders ready NPs with muted faces and highlights ready slots", () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";
@@ -431,12 +494,13 @@ describe("StatusBar", () => {
       />
     );
 
-    expect(screen.getByText(/1\/3 选择 servant_3_np →/)).toBeInTheDocument();
-    expect(screen.getByText("宝具")).toBeInTheDocument();
-    expect(screen.getByText(/2\/3 选择 servant_3_all →/)).toBeInTheDocument();
+    expect(screen.getAllByText(/选择/)).toHaveLength(2);
+    expect(screen.queryByText(/servant_3_/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("宝具")).toHaveLength(2);
+    expect(screen.getByText("任意卡")).toBeInTheDocument();
     expect(screen.getByText("指令卡三")).toBeInTheDocument();
     expect(container.querySelector(".operation-log-suit-dot--q")).not.toBeNull();
-    expect(container.querySelectorAll(".operation-log-face")).toHaveLength(2);
+    expect(container.querySelectorAll(".operation-log-face")).toHaveLength(4);
   });
 
   it("calls the settings handler from the left status bar action", async () => {

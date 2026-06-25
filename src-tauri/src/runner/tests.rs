@@ -192,6 +192,25 @@ fn attack_log_meta_serializes_selected_pick_in_camel_case() {
     );
 }
 
+#[test]
+fn action_log_meta_serializes_skill_icons_in_camel_case() {
+    let meta = ActionLogMeta::ServantSkill {
+        servant_id: Some(309),
+        skill_index: 2,
+        target_servant_id: Some(16),
+    };
+
+    assert_eq!(
+        serde_json::to_value(meta).unwrap(),
+        serde_json::json!({
+            "kind": "servantSkill",
+            "servantId": 309,
+            "skillIndex": 2,
+            "targetServantId": 16,
+        })
+    );
+}
+
 fn empty_advanced_scene() -> AdvancedBattleScene {
     AdvancedBattleScene {
         id: "advanced_scene_1".into(),

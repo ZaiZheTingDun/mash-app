@@ -94,6 +94,7 @@ fn emit_automation_status(
             message: message.into(),
             level: LogLevel::Info,
             attack: None,
+            action: None,
         },
     );
 }

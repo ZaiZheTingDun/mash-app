@@ -11,21 +11,30 @@ impl Runner {
             match action {
                 Action::Servant {
                     servant,
+                    servant_id,
                     skill,
                     target,
+                    target_servant_id,
                     ..
                 } => {
                     let Some(pos) = skill_position(servant.as_deref(), skill.as_deref()) else {
                         continue;
                     };
+                    let Some(skill_index) = skill
+                        .as_deref()
+                        .and_then(|value| parse_index(value, "skill_"))
+                        .map(|index| index as u32)
+                    else {
+                        continue;
+                    };
 
-                    self.emit(
-                        "Battle",
-                        &format!(
-                            "从者技能: {} 使用 {}",
-                            servant.as_deref().unwrap_or("?"),
-                            skill.as_deref().unwrap_or("?"),
-                        ),
+                    self.emit_action(
+                        "从者技能",
+                        ActionLogMeta::ServantSkill {
+                            servant_id: *servant_id,
+                            skill_index,
+                            target_servant_id: *target_servant_id,
+                        },
                     );
                     if !self.tap_at("Battle", pos) {
                         return;
@@ -44,10 +53,6 @@ impl Runner {
                             return;
                         }
 
-                        self.emit(
-                            "Battle",
-                            &format!("选择目标: {}", target.as_deref().unwrap_or("?")),
-                        );
                         if !self.tap_at("Battle", target_pos) {
                             return;
                         }
@@ -76,10 +81,18 @@ impl Runner {
                 Action::Equipment {
                     skill,
                     target,
+                    target_servant_id,
                     order_change,
                     ..
                 } => {
                     let Some(pos) = equipment_skill_position(skill.as_deref()) else {
+                        continue;
+                    };
+                    let Some(skill_index) = skill
+                        .as_deref()
+                        .and_then(|value| parse_index(value, "skill_"))
+                        .map(|index| index as u32)
+                    else {
                         continue;
                     };
 
@@ -89,9 +102,12 @@ impl Runner {
                     }
                     thread::sleep(ACTION_DELAY);
 
-                    self.emit(
-                        "Battle",
-                        &format!("御主技能: {}", skill.as_deref().unwrap_or("?"),),
+                    self.emit_action(
+                        "御主技能",
+                        ActionLogMeta::EquipmentSkill {
+                            skill_index,
+                            target_servant_id: *target_servant_id,
+                        },
                     );
                     if !self.tap_at("Battle", pos) {
                         return;
@@ -99,10 +115,6 @@ impl Runner {
                     thread::sleep(ACTION_DELAY);
 
                     if let Some(change) = order_change {
-                        self.emit(
-                            "Battle",
-                            &format!("打开 Order Change: {}", skill.as_deref().unwrap_or("?")),
-                        );
                         if !self.execute_order_change(change) {
                             return;
                         }
@@ -118,10 +130,6 @@ impl Runner {
                             return;
                         }
 
-                        self.emit(
-                            "Battle",
-                            &format!("选择目标: {}", target.as_deref().unwrap_or("?")),
-                        );
                         if !self.tap_at("Battle", target_pos) {
                             return;
                         }
@@ -149,7 +157,12 @@ impl Runner {
                 // button → spell row → 决定 confirm → ally target picker,
                 // settling between each step because each tap pops or
                 // pushes a modal.
-                Action::CommandSpell { spell, target, .. } => {
+                Action::CommandSpell {
+                    spell,
+                    target,
+                    target_servant_id,
+                    ..
+                } => {
                     let Some(option_idx) = command_spell_index(spell.as_deref()) else {
                         continue;
                     };
@@ -157,9 +170,12 @@ impl Runner {
                         continue;
                     };
 
-                    self.emit(
-                        "Battle",
-                        &format!("令咒: {}", spell.as_deref().unwrap_or("?")),
+                    self.emit_action(
+                        "使用令咒",
+                        ActionLogMeta::CommandSpell {
+                            spell: spell.clone().unwrap_or_default(),
+                            target_servant_id: *target_servant_id,
+                        },
                     );
                     if !self.tap_at("Battle", COMMAND_SPELL_BUTTON) {
                         return;
@@ -188,10 +204,6 @@ impl Runner {
                         return;
                     }
 
-                    self.emit(
-                        "Battle",
-                        &format!("令咒目标: {}", target.as_deref().unwrap_or("?")),
-                    );
                     if !self.tap_at("Battle", target_pos) {
                         return;
                     }
@@ -218,22 +230,20 @@ impl Runner {
 
     pub(crate) fn execute_order_change(&mut self, change: &crate::OrderChangeSelection) -> bool {
         let Some(front_pos) = order_change_slot_position(change.front.as_deref(), 0..3) else {
-            self.emit(
-                "Battle",
-                &format!(
-                    "Order Change 前排目标无效: {}，跳过",
-                    change.front.as_deref().unwrap_or("?")
-                ),
+            self.emit_action(
+                "Order Change 前排目标无效，已跳过",
+                ActionLogMeta::SkippedAction {
+                    servant_id: change.front_servant_id,
+                },
             );
             return true;
         };
         let Some(back_pos) = order_change_slot_position(change.back.as_deref(), 3..6) else {
-            self.emit(
-                "Battle",
-                &format!(
-                    "Order Change 后排目标无效: {}，跳过",
-                    change.back.as_deref().unwrap_or("?")
-                ),
+            self.emit_action(
+                "Order Change 后排目标无效，已跳过",
+                ActionLogMeta::SkippedAction {
+                    servant_id: change.back_servant_id,
+                },
             );
             return true;
         };
@@ -249,13 +259,12 @@ impl Runner {
             return false;
         }
 
-        self.emit(
-            "Battle",
-            &format!(
-                "Order Change 选择从者: {} ↔ {}",
-                change.front.as_deref().unwrap_or("?"),
-                change.back.as_deref().unwrap_or("?")
-            ),
+        self.emit_action(
+            "Order Change",
+            ActionLogMeta::OrderChange {
+                front_servant_id: change.front_servant_id,
+                back_servant_id: change.back_servant_id,
+            },
         );
         if !self.tap_at("Battle", front_pos) {
             return false;
