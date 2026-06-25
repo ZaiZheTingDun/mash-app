@@ -154,7 +154,7 @@ function createProject(name: string, advancedMode = false): Project {
     advancedMode,
     supportServantId: null,
     supportServantVariantKey: null,
-    supportGrandMode: false,
+    supportGrandMode: advancedMode,
     supportGrandCraftEssenceIds: [null, null, null],
     supportGrandCraftEssenceMlbRequired: [true, true, true],
     supportGrandBondCeMode: "any",

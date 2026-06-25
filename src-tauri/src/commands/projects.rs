@@ -221,18 +221,30 @@ pub(crate) fn create_project(
     advanced_mode: Option<bool>,
     grand_class: Option<GrandClass>,
 ) -> Result<Project, String> {
-    let project = Project {
+    let project = new_project(
+        name,
+        advanced_mode.unwrap_or(false),
+        grand_class.unwrap_or_default(),
+    );
+    let mut projects = read_projects(&app);
+    projects.push(project.clone());
+    write_projects(&app, &projects)?;
+    Ok(project)
+}
+
+pub(crate) fn new_project(name: String, advanced_mode: bool, grand_class: GrandClass) -> Project {
+    Project {
         id: uuid::Uuid::new_v4().to_string(),
         name,
-        advanced_mode: advanced_mode.unwrap_or(false),
+        advanced_mode,
         support_servant_id: None,
         support_servant_variant_key: None,
-        support_grand_mode: false,
+        support_grand_mode: advanced_mode,
         support_grand_craft_essence_ids: default_support_grand_craft_essence_ids(),
         support_grand_craft_essence_mlb_required: default_support_grand_craft_essence_mlb_required(
         ),
         support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
-        grand_class: grand_class.unwrap_or_default(),
+        grand_class,
         grand_servants: Vec::new(),
         grand_card_strategy: GrandCardStrategy::default(),
         support_noble_phantasm_level_min: None,
@@ -244,11 +256,7 @@ pub(crate) fn create_project(
         repeat_mode: Some(ProjectRepeatMode::Single),
         repeat_count: None,
         ap_recovery_items: Vec::new(),
-    };
-    let mut projects = read_projects(&app);
-    projects.push(project.clone());
-    write_projects(&app, &projects)?;
-    Ok(project)
+    }
 }
 
 pub(crate) fn copy_project_dir(src: &Path, dst: &Path) -> Result<(), String> {

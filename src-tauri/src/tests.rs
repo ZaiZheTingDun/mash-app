@@ -662,6 +662,15 @@ fn project_legacy_json_without_slots_falls_back_to_defaults() {
 }
 
 #[test]
+fn new_advanced_project_enables_grand_support_by_default() {
+    let regular = new_project("Regular".to_string(), false, GrandClass::Saber);
+    let grand = new_project("Grand".to_string(), true, GrandClass::Berserker);
+
+    assert!(!regular.support_grand_mode);
+    assert!(grand.support_grand_mode);
+}
+
+#[test]
 fn project_grand_class_round_trips_as_camel_case() {
     let json = serde_json::json!({
         "id": "abc",
