@@ -124,129 +124,131 @@ export function SortableSlot({
               className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}${isSupport && supportGrandMode ? " grand-support" : ""}${rarityClass ? ` ${rarityClass}` : ""}`}
               onClick={onSelect}
             >
-          {servant ? (
-            portraitSrc ? (
-              <img
-                className="servant-portrait-img"
-                src={portraitSrc}
-                alt={servant.name_cn}
-                draggable={false}
-              />
-            ) : (
-              <Flex
-                direction="column"
-                align="center"
-                justify="center"
-                className="servant-portrait-placeholder"
-              >
-                <Text size="2" weight="bold" align="center">
-                  {servant.name_cn}
-                </Text>
-              </Flex>
-            )
-          ) : isSupport ? (
-            <Flex
-              direction="column"
-              align="center"
-              justify="center"
-              gap="1"
-              className="servant-portrait-placeholder"
-            >
-              <PersonIcon width={28} height={28} className="support-slot-icon" />
-              <Text size="1" weight="medium" className="support-slot-label">
-                助战
-              </Text>
-            </Flex>
-          ) : (
-            <Flex
-              direction="column"
-              align="center"
-              justify="center"
-              gap="1"
-              className="servant-portrait-placeholder"
-            >
-              <PlusIcon width={28} height={28} className="servant-slot-icon" />
-              <Text size="1" color="gray">
-                选择从者
-              </Text>
-            </Flex>
-          )}
-          {isSupport && (
-            <span className="support-corner-badge">SUPPORT</span>
-          )}
-          {isSupport && (
-            <button
-              type="button"
-              className={`support-grand-toggle${supportGrandMode ? " active" : ""}`}
-              aria-pressed={supportGrandMode}
-              aria-label={supportGrandMode ? "关闭冠位模式" : "开启冠位模式"}
-              onClick={(event) => {
-                event.stopPropagation();
-                onGrandModeToggle();
-              }}
-            >
-              冠位
-            </button>
-          )}
-          {isSupport && hasSupportRequirements && (
-            <SupportRequirementSummary
-              npLevel={supportNpLevel}
-              skillLevels={supportSkillLevels}
-              appendSkillLevels={supportAppendSkillLevels}
-              onOpen={onSupportSettingsOpen}
-            />
-          )}
-          {isSupport && !hasSupportRequirements && (
-            <Button
-              type="button"
-              size="1"
-              variant="surface"
-              color="gray"
-              className="support-settings-button support-settings-overlay-button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onSupportSettingsOpen();
-              }}
-            >
-              技能/宝具设置
-            </Button>
-          )}
-          {isSupport && supportGrandMode ? (
-            <GrandCraftEssenceOverlay
-              craftEssences={supportGrandCraftEssences}
-              cardSrcs={supportGrandCeCardSrcs}
-              mlbRequired={supportGrandCeMlbRequired}
-              mlbIconSrc={mlbIconSrc}
-              grandBondCeMode={supportGrandBondCeMode}
-              bondIconSrc={bondIconSrc}
-              bondNpIconSrc={bondNpIconSrc}
-              onSelect={onGrandCeSelect}
-              onClear={onGrandCeClear}
-            />
-          ) : (
-            <CraftEssenceOverlay
-              craftEssence={slot.craftEssence}
-              cardSrc={ceCardSrc}
-              mlbRequired={isSupport ? slot.craftEssenceMlbRequired ?? true : false}
-              mlbIconSrc={mlbIconSrc}
-              onSelect={onCeSelect}
-              onClear={onCeClear}
-            />
-          )}
+              {servant ? (
+                portraitSrc ? (
+                  <img
+                    className="servant-portrait-img"
+                    src={portraitSrc}
+                    alt={servant.name_cn}
+                    draggable={false}
+                  />
+                ) : (
+                  <Flex
+                    direction="column"
+                    align="center"
+                    justify="center"
+                    className="servant-portrait-placeholder"
+                  >
+                    <Text size="2" weight="bold" align="center">
+                      {servant.name_cn}
+                    </Text>
+                  </Flex>
+                )
+              ) : isSupport ? (
+                <Flex
+                  direction="column"
+                  align="center"
+                  justify="center"
+                  gap="1"
+                  className="servant-portrait-placeholder"
+                >
+                  <PersonIcon width={28} height={28} className="support-slot-icon" />
+                  <Text size="1" weight="medium" className="support-slot-label">
+                    助战
+                  </Text>
+                </Flex>
+              ) : (
+                <Flex
+                  direction="column"
+                  align="center"
+                  justify="center"
+                  gap="1"
+                  className="servant-portrait-placeholder"
+                >
+                  <PlusIcon width={28} height={28} className="servant-slot-icon" />
+                  <Text size="1" color="gray">
+                    选择从者
+                  </Text>
+                </Flex>
+              )}
+              {isSupport && (
+                <span className="support-corner-badge">SUPPORT</span>
+              )}
+              {isSupport && (
+                <button
+                  type="button"
+                  className={`support-grand-toggle${supportGrandMode ? " active" : ""}`}
+                  aria-pressed={supportGrandMode}
+                  aria-label={supportGrandMode ? "关闭冠位模式" : "开启冠位模式"}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onGrandModeToggle();
+                  }}
+                >
+                  冠位
+                </button>
+              )}
+              {isSupport && hasSupportRequirements && (
+                <SupportRequirementSummary
+                  npLevel={supportNpLevel}
+                  skillLevels={supportSkillLevels}
+                  appendSkillLevels={supportAppendSkillLevels}
+                  onOpen={onSupportSettingsOpen}
+                />
+              )}
+              {isSupport && !hasSupportRequirements && (
+                <Button
+                  type="button"
+                  size="1"
+                  variant="surface"
+                  color="gray"
+                  className="support-settings-button support-settings-overlay-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSupportSettingsOpen();
+                  }}
+                >
+                  技能/宝具设置
+                </Button>
+              )}
+              {isSupport && supportGrandMode ? (
+                <GrandCraftEssenceOverlay
+                  craftEssences={supportGrandCraftEssences}
+                  cardSrcs={supportGrandCeCardSrcs}
+                  mlbRequired={supportGrandCeMlbRequired}
+                  mlbIconSrc={mlbIconSrc}
+                  grandBondCeMode={supportGrandBondCeMode}
+                  bondIconSrc={bondIconSrc}
+                  bondNpIconSrc={bondNpIconSrc}
+                  onSelect={onGrandCeSelect}
+                  onClear={onGrandCeClear}
+                />
+              ) : (
+                <CraftEssenceOverlay
+                  craftEssence={slot.craftEssence}
+                  cardSrc={ceCardSrc}
+                  mlbRequired={isSupport ? slot.craftEssenceMlbRequired ?? true : false}
+                  mlbIconSrc={mlbIconSrc}
+                  onSelect={onCeSelect}
+                  onClear={onCeClear}
+                />
+              )}
             </div>
           </ContextMenu.Trigger>
           <ContextMenu.Content>
-            <ContextMenu.Item
-              color="red"
-              onSelect={() => onDeleteRequest?.()}
-            >
-              删除
-            </ContextMenu.Item>
+
             <ContextMenu.Item
               disabled={!onPortraitSettingsOpen}
               onSelect={() => onPortraitSettingsOpen?.()}
             >
               立绘设置
+            </ContextMenu.Item>
+            <ContextMenu.Separator />
+            <ContextMenu.Item
+              color="red"
+              onSelect={() => onDeleteRequest?.()}
+            >
+              删除
             </ContextMenu.Item>
           </ContextMenu.Content>
         </ContextMenu.Root>

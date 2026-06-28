@@ -447,7 +447,7 @@ export function ContentGrid({
         <AlertDialog.Content maxWidth="420px">
           <AlertDialog.Title>确认删除从者</AlertDialog.Title>
           <AlertDialog.Description size="2">
-            从者及槽位设置会被清除，相关指令可能失效。
+            删除从者会同步清楚所有指令设置，请自行检查指令设置是否需要重新配置。删除后无法撤销，请谨慎操作。
           </AlertDialog.Description>
           <Flex gap="3" mt="4" justify="end">
             <AlertDialog.Cancel>
@@ -466,7 +466,7 @@ export function ContentGrid({
                   setDeleteTargetSlotId(null);
                 }}
               >
-                确认删除
+                确认
               </Button>
             </AlertDialog.Action>
           </Flex>

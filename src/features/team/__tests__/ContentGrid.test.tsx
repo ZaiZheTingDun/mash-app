@@ -389,7 +389,7 @@ describe("ContentGrid", () => {
       vi.mocked(invoke).mock.calls.some(([cmd]) => cmd === "delete_slot_servant")
     ).toBe(false);
 
-    await user.click(screen.getByRole("button", { name: "确认删除" }));
+    await user.click(screen.getByRole("button", { name: "确认" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("delete_slot_servant", {

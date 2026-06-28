@@ -123,6 +123,7 @@
 .portrait-select-scroll {
   display: flex;
   flex-direction: row;
+  justify-content: center;
   gap: 10px;
   overflow-x: auto;
   overflow-y: hidden;

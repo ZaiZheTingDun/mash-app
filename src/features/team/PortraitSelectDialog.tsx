@@ -114,7 +114,7 @@ export function PortraitSelectDialog({
       <Dialog.Content maxWidth="550px" className="portrait-select-dialog">
         <Dialog.Title>立绘设置 — {servantName}</Dialog.Title>
         <Dialog.Description size="2" color="gray">
-          选择立绘后点击确认，对所有队伍生效。
+          选择立绘后点击确认
         </Dialog.Description>
 
         <div className="portrait-select-scroll-area" style={{ marginTop: 16 }}>
