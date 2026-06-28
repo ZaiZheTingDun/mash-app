@@ -42,7 +42,7 @@ impl Runner {
                     thread::sleep(ACTION_DELAY);
 
                     if let Some(target_pos) = skill_target_position(target.as_deref()) {
-                        self.emit("Battle", "等待目标选择框出现");
+                        self.emit_debug("Battle", "等待目标选择框出现");
                         if !self.wait_for_element_visible(
                             "Battle",
                             SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
@@ -56,7 +56,7 @@ impl Runner {
                         if !self.tap_at("Battle", target_pos) {
                             return;
                         }
-                        self.emit("Battle", "等待目标选择框关闭");
+                        self.emit_debug("Battle", "等待目标选择框关闭");
                         if !self.wait_for_element_hidden(
                             "Battle",
                             SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
@@ -119,7 +119,7 @@ impl Runner {
                             return;
                         }
                     } else if let Some(target_pos) = skill_target_position(target.as_deref()) {
-                        self.emit("Battle", "等待目标选择框出现");
+                        self.emit_debug("Battle", "等待目标选择框出现");
                         if !self.wait_for_element_visible(
                             "Battle",
                             SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
@@ -133,7 +133,7 @@ impl Runner {
                         if !self.tap_at("Battle", target_pos) {
                             return;
                         }
-                        self.emit("Battle", "等待目标选择框关闭");
+                        self.emit_debug("Battle", "等待目标选择框关闭");
                         if !self.wait_for_element_hidden(
                             "Battle",
                             SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
@@ -193,7 +193,7 @@ impl Runner {
                     }
                     thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
 
-                    self.emit("Battle", "等待令咒目标选择框出现");
+                    self.emit_debug("Battle", "等待令咒目标选择框出现");
                     if !self.wait_for_element_visible(
                         "Battle",
                         COMMAND_SPELL_CLOSE_BUTTON_ELEMENT,
@@ -207,7 +207,7 @@ impl Runner {
                     if !self.tap_at("Battle", target_pos) {
                         return;
                     }
-                    self.emit("Battle", "等待令咒目标选择框关闭");
+                    self.emit_debug("Battle", "等待令咒目标选择框关闭");
                     if !self.wait_for_element_hidden(
                         "Battle",
                         COMMAND_SPELL_CLOSE_BUTTON_ELEMENT,
@@ -248,7 +248,7 @@ impl Runner {
             return true;
         };
 
-        self.emit("Battle", "等待换人框出现");
+        self.emit_debug("Battle", "等待换人框出现");
         if !self.wait_for_element_visible(
             "Battle",
             ORDER_CHANGE_CLOSE_BUTTON_ELEMENT,
@@ -280,7 +280,7 @@ impl Runner {
         if !self.tap_at("Battle", ORDER_CHANGE_CONFIRM) {
             return false;
         }
-        self.emit("Battle", "等待换人框关闭");
+        self.emit_debug("Battle", "等待换人框关闭");
         if !self.wait_for_element_hidden(
             "Battle",
             ORDER_CHANGE_CLOSE_BUTTON_ELEMENT,

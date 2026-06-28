@@ -1,4 +1,4 @@
-export type LogLevel = "info" | "debug" | "localDebug";
+export type LogLevel = "info" | "warn" | "debug" | "localDebug";
 
 export interface AttackLogCommandCard {
   slot: number;

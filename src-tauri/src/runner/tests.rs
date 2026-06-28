@@ -762,6 +762,23 @@ fn command_card_owner_detection_retries_until_all_five_cards_have_owners() {
 }
 
 #[test]
+fn command_card_candidates_expand_from_frontline_to_all_six_members() {
+    let front = [Some(10), Some(20), Some(30)];
+    let full = [Some(10), Some(20), Some(30), Some(40), Some(20), Some(50)];
+
+    assert_eq!(command_card_candidate_ids(&front), vec![10, 20, 30]);
+    assert_eq!(command_card_candidate_ids(&full), vec![10, 20, 30, 40, 50]);
+}
+
+#[test]
+fn battle_state_starts_with_frontline_owner_detection_only() {
+    let battle = BattleState::new();
+
+    assert_eq!(battle.command_card_owner_failure_count, 0);
+    assert!(!battle.command_card_owner_fallback_to_full_party);
+}
+
+#[test]
 fn command_card_visibility_waits_for_all_five_suits_without_requiring_owner() {
     let partial = vec![
         command_card(0, None, Some("a"), None),

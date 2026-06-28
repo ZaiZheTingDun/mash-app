@@ -6,6 +6,8 @@
 use super::*;
 use crate::commands::settings::NoblePhantasmDetectionMode;
 
+const COMMAND_CARD_FRONTLINE_OWNER_FAILURE_LIMIT: u32 = 3;
+
 // ---------------------------------------------------------------------------
 // Attack pick logic
 // ---------------------------------------------------------------------------
@@ -95,6 +97,16 @@ pub(crate) fn should_retry_command_card_owner_detection(
 ) -> bool {
     !candidate_ids.is_empty()
         && (cards.len() < COMMAND_CARD_COUNT || cards.iter().any(|card| card.servant_id.is_none()))
+}
+
+pub(crate) fn command_card_candidate_ids(ids: &[Option<u32>]) -> Vec<u32> {
+    let mut candidates = Vec::with_capacity(ids.len());
+    for id in ids.iter().flatten() {
+        if !candidates.contains(id) {
+            candidates.push(*id);
+        }
+    }
+    candidates
 }
 
 pub(crate) fn command_cards_visible(cards: &[CommandCardMatch]) -> bool {
@@ -787,13 +799,15 @@ impl Runner {
         party_ids: &[Option<u32>; 3],
         recognize_command_cards: bool,
     ) -> Option<(Vec<CommandCardMatch>, Vec<NoblePhantasmMatch>)> {
-        // Unique candidate set, stable by party position.
-        let mut candidate_ids: Vec<u32> = Vec::with_capacity(3);
-        for id in party_ids.iter().flatten() {
-            if !candidate_ids.contains(id) {
-                candidate_ids.push(*id);
-            }
-        }
+        // Start with the expected front line for speed. If owner recognition
+        // repeatedly fails, a servant probably died and a back-line member
+        // moved forward, so broaden the template candidates to the full team.
+        let full_candidate_ids = command_card_candidate_ids(&self.build_full_party_ids());
+        let mut candidate_ids = if self.battle.command_card_owner_fallback_to_full_party {
+            full_candidate_ids.clone()
+        } else {
+            command_card_candidate_ids(party_ids)
+        };
 
         let cards = if recognize_command_cards {
             self.emit_attack(
@@ -834,7 +848,34 @@ impl Runner {
                     continue;
                 }
                 if !should_retry_command_card_owner_detection(&cards, &candidate_ids) {
+                    if !self.battle.command_card_owner_fallback_to_full_party {
+                        self.battle.command_card_owner_failure_count = 0;
+                    }
                     break cards;
+                }
+                if !self.battle.command_card_owner_fallback_to_full_party {
+                    self.battle.command_card_owner_failure_count += 1;
+                }
+                if self.battle.command_card_owner_failure_count
+                    >= COMMAND_CARD_FRONTLINE_OWNER_FAILURE_LIMIT
+                    && !self.battle.command_card_owner_fallback_to_full_party
+                {
+                    self.battle.command_card_owner_fallback_to_full_party = true;
+                    candidate_ids = full_candidate_ids.clone();
+                    self.emit_warn(
+                        "Attack",
+                        "警告：指令卡归属已连续 3 次识别失败，本场战斗后续将改为检测全队六人",
+                    );
+                    self.emit_attack(
+                        "指令卡归属连续识别失败，改用全队六人候选",
+                        AttackLogMeta {
+                            front_servant_ids: *party_ids,
+                            candidate_servant_ids: Some(candidate_ids.clone()),
+                            command_cards: None,
+                            ready_np_slots: None,
+                            selected_pick: None,
+                        },
+                    );
                 }
                 if self.is_cancelled() {
                     return None;

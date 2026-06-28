@@ -201,6 +201,11 @@
   color: var(--gray-9);
 }
 
+.operation-log-entry--warn .operation-log-time,
+.operation-log-entry--warn .operation-log-msg {
+  color: var(--amber-11);
+}
+
 .operation-log-debug-toggle {
   display: inline-flex;
   align-items: center;

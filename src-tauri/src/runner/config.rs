@@ -313,6 +313,7 @@ pub enum RunnerState {
 #[serde(rename_all = "camelCase")]
 pub enum LogLevel {
     Info,
+    Warn,
     Debug,
     LocalDebug,
 }

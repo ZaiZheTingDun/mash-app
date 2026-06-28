@@ -18,6 +18,10 @@ impl Runner {
         self.emit_with_level(screen, message, LogLevel::Info);
     }
 
+    pub(crate) fn emit_warn(&self, screen: &str, message: &str) {
+        self.emit_with_level(screen, message, LogLevel::Warn);
+    }
+
     /// Like [`emit`] but at `LogLevel::Debug`. Use for technical
     /// diagnostics that the user doesn't normally want to see — they
     /// stay hidden behind the operation-log "显示调试" toggle in the
@@ -261,12 +265,12 @@ impl Runner {
                 return true;
             }
             if start.elapsed() >= timeout {
-                self.emit(screen, timeout_text);
+                self.emit_warn(screen, timeout_text);
                 return false;
             }
             tick += 1;
             if tick % 4 == 1 {
-                self.emit(screen, status_text);
+                self.emit_debug(screen, status_text);
             }
             thread::sleep(SKILL_POLL_INTERVAL);
         }

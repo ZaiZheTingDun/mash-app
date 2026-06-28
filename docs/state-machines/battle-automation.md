@@ -364,6 +364,11 @@ changes (i.e. when the runner moves to a different row).
   ownership recognition on the attack screen after the five-card visibility
   gate. NP readiness is still detected with the same glow-cap path, and
   ordinary cards are only used as fixed left-to-right fallback tap targets.
+  When ownership recognition is enabled, the first three attempts use only the
+  expected front-line servant templates. If three consecutive complete card
+  reads still contain an unidentified owner, the runner assumes a servant may
+  have died and a back-line member entered the field; subsequent attempts use
+  the unique servant ids from all six configured team members.
 - Advanced-mode teams store battle scenes in `advanced_battle_scenes.json`.
   The current strategy UI uses a three-stage flow. First, the runner enters
   the attack-card screen and treats the scene as "waiting for startup" when it

@@ -25,7 +25,7 @@ import { SERVER_LABELS, type Server } from "../../types/server";
 import type { Servant } from "../../types/servant";
 import type { AppTheme, AppThemePreference } from "../../types/theme";
 
-type LogLevel = "info" | "debug" | "localDebug";
+type LogLevel = "info" | "warn" | "debug" | "localDebug";
 
 interface AdbStatus {
   connected: boolean;
@@ -647,11 +647,10 @@ export function StatusBar({
     },
     [operationLogs, showDebugLogs],
   );
-  // Show the count of user-facing (info) entries even when debug is on;
-  // the trigger label is meant to track "what the runner is doing", not
-  // raw event volume.
-  const infoLogCount = useMemo(
-    () => operationLogs.filter((entry) => entry.level === "info").length,
+  // Show the count of user-facing entries even when debug is on; keep
+  // diagnostics excluded, but include warnings because they are actionable.
+  const userFacingLogCount = useMemo(
+    () => operationLogs.filter((entry) => entry.level !== "debug" && entry.level !== "localDebug").length,
     [operationLogs],
   );
 
@@ -810,12 +809,13 @@ export function StatusBar({
             {visibleOperationLogs.map((entry, index) => (
               <div
                 key={index}
-                className={
-                  entry.level === "debug"
-                  || entry.level === "localDebug"
-                    ? "operation-log-entry operation-log-entry--debug"
-                    : "operation-log-entry"
-                }
+                className={[
+                  "operation-log-entry",
+                  entry.level === "warn" ? "operation-log-entry--warn" : "",
+                  entry.level === "debug" || entry.level === "localDebug"
+                    ? "operation-log-entry--debug"
+                    : "",
+                ].filter(Boolean).join(" ")}
               >
                 <span className="operation-log-time">{entry.time}</span>
                 <span className="operation-log-msg">
@@ -856,10 +856,10 @@ export function StatusBar({
             aria-pressed={operationLogOpen}
             onClick={() => onOperationLogOpenChange?.(!operationLogOpen)}
           >
-            <HamburgerMenuIcon width={14} height={14} />
-            <Text size="1">
-              操作日志{infoLogCount > 0 ? ` (${infoLogCount})` : ""}
-            </Text>
+              <HamburgerMenuIcon width={14} height={14} />
+              <Text size="1">
+                操作日志{userFacingLogCount > 0 ? ` (${userFacingLogCount})` : ""}
+              </Text>
           </Button>
         </Flex>
 

@@ -45,6 +45,14 @@ pub(crate) struct BattleState {
     /// While this is set, the runner has returned to an actionable Battle
     /// screen but is waiting for `BATTLE m/n` before advancing a turn.
     pub(crate) post_attack_hud_wait_started: Option<Instant>,
+    /// Consecutive command-card owner recognition failures across the current
+    /// battle. A successful front-line-only read resets this before we
+    /// permanently fall back to scanning the full six-member party.
+    pub(crate) command_card_owner_failure_count: u32,
+    /// Once owner recognition has failed three times in a row, keep scanning
+    /// against the full party for the rest of the current battle because a
+    /// back-line servant has likely rotated into the front line.
+    pub(crate) command_card_owner_fallback_to_full_party: bool,
     pub(crate) advanced_startup_done: HashSet<usize>,
     pub(crate) advanced_control_indices: HashMap<usize, usize>,
     pub(crate) advanced_startup_control_indices: HashMap<usize, usize>,
@@ -63,6 +71,8 @@ impl BattleState {
             waiting_for_battle: false,
             attack_submitted: false,
             post_attack_hud_wait_started: None,
+            command_card_owner_failure_count: 0,
+            command_card_owner_fallback_to_full_party: false,
             advanced_startup_done: HashSet::new(),
             advanced_control_indices: HashMap::new(),
             advanced_startup_control_indices: HashMap::new(),
