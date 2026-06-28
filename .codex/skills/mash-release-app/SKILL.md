@@ -18,14 +18,24 @@ Use this workflow to publish Mash end to end. It coordinates the Python CV sidec
 
 ## Required Environment
 
-Confirm these before publishing anything:
+Confirm these before publishing anything.
+
+The release-required environment variables are already defined in the repo's
+`.mise.toml`. Do not export them manually for release runs; execute the scripts
+inside `mise` so those values are injected consistently.
+
+For local preflight checks, verify the environment is available through `mise`
+and then run the checks in that same environment:
 
 ```bash
-git status --short
-pnpm install
-aws sts get-caller-identity --profile "${AWS_PROFILE:-mash}"
-test -n "${R2_ENDPOINT:-}" && test -n "${R2_BUCKET:-}" && test -n "${RELEASE_BASE_URL:-}"
-test -n "${TAURI_SIGNING_PRIVATE_KEY:-}" && test -n "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
+mise exec -- git status --short
+mise exec -- pnpm install
+mise exec -- aws sts get-caller-identity --profile "${AWS_PROFILE:-mash}"
+mise exec -- test -n "${R2_ENDPOINT:-}"
+mise exec -- test -n "${R2_BUCKET:-}"
+mise exec -- test -n "${RELEASE_BASE_URL:-}"
+mise exec -- test -n "${TAURI_SIGNING_PRIVATE_KEY:-}"
+mise exec -- test -n "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
 ```
 
 For app releases, default scripts assume `TAURI_TARGET=darwin-aarch64` and `RELEASE_CHANNEL=stable`. Override explicitly when publishing another target or channel.
@@ -89,7 +99,7 @@ Document any skipped test and the reason.
 Only when runtime changed:
 
 ```bash
-R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-cv-runtime.sh --platform darwin-aarch64 <runtime-version>
+mise exec -- scripts/release-cv-runtime.sh --platform darwin-aarch64 <runtime-version>
 ```
 
 This script updates `[mash_cv].runtime`, builds the runtime zip, uploads it, validates the URL, updates `runtime-manifest.json`, commits, and tags `cv-runtime/<platform>/<runtime-version>`.
@@ -108,8 +118,8 @@ node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync("src-tauri/r
 Only when CV code changed:
 
 ```bash
-scripts/bump-cv-code-version.sh <code-version>
-R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-cv-code.sh <code-version>
+mise exec -- scripts/bump-cv-code-version.sh <code-version>
+mise exec -- scripts/release-cv-code.sh <code-version>
 ```
 
 Capture the printed `artifact` URL and `sha256`, then update `src-tauri/resources/runtime-manifest.json`:
@@ -133,9 +143,9 @@ If publishing multiple app targets that share the same code artifact, update eac
 Before bumping the app, verify the app commit includes the intended CV runtime/code manifest:
 
 ```bash
-cat versions.toml
-node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync("src-tauri/resources/runtime-manifest.json","utf8")); console.log(JSON.stringify(m,null,2))'
-git diff --stat $(git describe --tags --abbrev=0 --match 'v*')..HEAD
+mise exec -- cat versions.toml
+mise exec -- node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync("src-tauri/resources/runtime-manifest.json","utf8")); console.log(JSON.stringify(m,null,2))'
+mise exec -- git diff --stat $(git describe --tags --abbrev=0 --match 'v*')..HEAD
 ```
 
 The app release must include the newest intended `runtime-manifest.json`, because installed apps use this file to discover sidecar runtime/code artifacts.
@@ -145,8 +155,8 @@ The app release must include the newest intended `runtime-manifest.json`, becaus
 After CV artifacts and manifest commits are in place:
 
 ```bash
-scripts/bump-app-version.sh <app-version>
-R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-tauri-updater.sh
+mise exec -- scripts/bump-app-version.sh <app-version>
+mise exec -- scripts/release-tauri-updater.sh
 ```
 
 `bump-app-version.sh` updates versions, commits, and tags `v<app-version>`. `release-tauri-updater.sh` must run from that exact clean tag; it builds the app, uploads immutable bundle/signature assets, publishes channel `latest.json`, and validates CDN URLs.
