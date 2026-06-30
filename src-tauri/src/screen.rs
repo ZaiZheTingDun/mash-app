@@ -73,7 +73,10 @@ impl SidecarClient {
         let servants_json = crate::resolve_servants_json_path(app)
             .ok_or_else(|| "无法解析从者元数据文件".to_string())?;
         if !servants_json.is_file() {
-            return Err(format!("未找到从者元数据文件 ({})", servants_json.display()));
+            return Err(format!(
+                "未找到从者元数据文件 ({})",
+                servants_json.display()
+            ));
         }
 
         let cmd = app
@@ -602,6 +605,26 @@ impl SidecarClient {
         }
         serde_json::from_value::<LevelDigitsResult>(resp)
             .map_err(|e| format!("invalid read_level_digits response: {e}"))
+    }
+
+    /// Read the bond level-up result overlay and return the post-upgrade
+    /// bond level when the sidecar can resolve it.
+    pub fn read_bond_level_up(
+        &mut self,
+        image_path: Option<&Path>,
+        debug: bool,
+    ) -> Result<BondLevelUpReadResult, String> {
+        let mut req = serde_json::json!({
+            "cmd": "read_bond_level_up",
+            "debug": debug,
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv_with_timeout(&req, Duration::from_secs(30))?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(err.to_string());
+        }
+        serde_json::from_value::<BondLevelUpReadResult>(resp)
+            .map_err(|e| format!("invalid read_bond_level_up response: {e}"))
     }
 
     /// Score a support row's CE icon against the bundled template.

@@ -79,6 +79,8 @@ export const DEFAULT_RECOGNITION_SETTINGS: RecognitionSettings = {
   supportCeFullGateThreshold: SUPPORT_FULL_GATE_THRESHOLD_DEFAULT,
   supportMlbIconThreshold: SUPPORT_THRESHOLD_DEFAULT,
   supportBondIconThreshold: SUPPORT_THRESHOLD_DEFAULT,
+  stopOnBondLevelUp: false,
+  stopOnBondMaxLevel: false,
 };
 
 export function clampThreshold(value: number, config: ThresholdConfig) {
@@ -86,23 +88,31 @@ export function clampThreshold(value: number, config: ThresholdConfig) {
   return Math.min(config.max, Math.max(config.min, value));
 }
 
-export function normalizeRecognitionSettings(settings: RecognitionSettings): RecognitionSettings {
+export function normalizeRecognitionSettings(
+  settings: Partial<RecognitionSettings>
+): RecognitionSettings {
+  const stopOnBondMaxLevel = settings.stopOnBondMaxLevel === true;
   return {
     noblePhantasmDetectionMode:
       settings.noblePhantasmDetectionMode === "gauge" ? "gauge" : "card",
-    supportCeThreshold: clampThreshold(settings.supportCeThreshold, THRESHOLD_CONFIGS[0]),
+    supportCeThreshold: clampThreshold(
+      settings.supportCeThreshold ?? SUPPORT_THRESHOLD_DEFAULT,
+      THRESHOLD_CONFIGS[0]
+    ),
     supportCeFullGateThreshold: clampThreshold(
-      settings.supportCeFullGateThreshold,
+      settings.supportCeFullGateThreshold ?? SUPPORT_FULL_GATE_THRESHOLD_DEFAULT,
       THRESHOLD_CONFIGS[1]
     ),
     supportMlbIconThreshold: clampThreshold(
-      settings.supportMlbIconThreshold,
+      settings.supportMlbIconThreshold ?? SUPPORT_THRESHOLD_DEFAULT,
       THRESHOLD_CONFIGS[2]
     ),
     supportBondIconThreshold: clampThreshold(
-      settings.supportBondIconThreshold,
+      settings.supportBondIconThreshold ?? SUPPORT_THRESHOLD_DEFAULT,
       THRESHOLD_CONFIGS[3]
     ),
+    stopOnBondLevelUp: settings.stopOnBondLevelUp === true && !stopOnBondMaxLevel,
+    stopOnBondMaxLevel,
   };
 }
 

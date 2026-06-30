@@ -46,9 +46,15 @@ function SettingsHarness({
   );
 }
 
+function argValue(args: unknown) {
+  return typeof args === "object" && args != null && "value" in args
+    ? (args as { value?: unknown }).value
+    : undefined;
+}
+
 describe("SettingsDialog", () => {
   beforeEach(() => {
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
       if (cmd === "get_self_check_status") return selfCheckStatus;
       if (cmd === "get_runtime_status") return { installed: true };
       if (cmd === "get_asset_bundle_status") return { installed: true };
@@ -59,6 +65,8 @@ describe("SettingsDialog", () => {
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
           supportBondIconThreshold: 0.7,
+          stopOnBondLevelUp: false,
+          stopOnBondMaxLevel: false,
         };
       }
       if (cmd === "set_noble_phantasm_detection_mode") {
@@ -68,6 +76,8 @@ describe("SettingsDialog", () => {
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
           supportBondIconThreshold: 0.7,
+          stopOnBondLevelUp: false,
+          stopOnBondMaxLevel: false,
         };
       }
       if (cmd === "set_support_ce_threshold") {
@@ -77,6 +87,8 @@ describe("SettingsDialog", () => {
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
           supportBondIconThreshold: 0.7,
+          stopOnBondLevelUp: false,
+          stopOnBondMaxLevel: false,
         };
       }
       if (cmd === "set_support_ce_full_gate_threshold") {
@@ -86,6 +98,8 @@ describe("SettingsDialog", () => {
           supportCeFullGateThreshold: 0.55,
           supportMlbIconThreshold: 0.7,
           supportBondIconThreshold: 0.7,
+          stopOnBondLevelUp: false,
+          stopOnBondMaxLevel: false,
         };
       }
       if (cmd === "set_support_mlb_icon_threshold") {
@@ -95,6 +109,8 @@ describe("SettingsDialog", () => {
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.76,
           supportBondIconThreshold: 0.7,
+          stopOnBondLevelUp: false,
+          stopOnBondMaxLevel: false,
         };
       }
       if (cmd === "set_support_bond_icon_threshold") {
@@ -104,6 +120,30 @@ describe("SettingsDialog", () => {
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
           supportBondIconThreshold: 0.78,
+          stopOnBondLevelUp: false,
+          stopOnBondMaxLevel: false,
+        };
+      }
+      if (cmd === "set_stop_on_bond_level_up") {
+        return {
+          noblePhantasmDetectionMode: "card",
+          supportCeThreshold: 0.7,
+          supportCeFullGateThreshold: 0.6,
+          supportMlbIconThreshold: 0.7,
+          supportBondIconThreshold: 0.7,
+          stopOnBondLevelUp: Boolean(argValue(args)),
+          stopOnBondMaxLevel: false,
+        };
+      }
+      if (cmd === "set_stop_on_bond_max_level") {
+        return {
+          noblePhantasmDetectionMode: "card",
+          supportCeThreshold: 0.7,
+          supportCeFullGateThreshold: 0.6,
+          supportMlbIconThreshold: 0.7,
+          supportBondIconThreshold: 0.7,
+          stopOnBondLevelUp: false,
+          stopOnBondMaxLevel: Boolean(argValue(args)),
         };
       }
       return null;
@@ -192,6 +232,59 @@ describe("SettingsDialog", () => {
         value: "gauge",
       });
     });
+  });
+
+  it("loads bond auto-stop switches disabled by default", async () => {
+    renderWithTheme(<SettingsHarness initialSection="basic" />);
+
+    expect(await screen.findByRole("switch", { name: "牵绊升级自动停止" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "牵绊满级自动停止" })).not.toBeChecked();
+  });
+
+  it("enabling bond max auto-stop disables bond level-up auto-stop with a tooltip", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="basic" />);
+
+    await screen.findByRole("switch", { name: "牵绊升级自动停止" });
+    const maxSwitch = screen.getByRole("switch", { name: "牵绊满级自动停止" });
+
+    await user.click(maxSwitch);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_stop_on_bond_max_level", {
+        value: true,
+      });
+    });
+    const levelUpSwitch = screen.getByRole("switch", { name: "牵绊升级自动停止" });
+    expect(levelUpSwitch).not.toBeChecked();
+    expect(levelUpSwitch).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "牵绊满级自动停止" })).toBeChecked();
+
+    await user.hover(levelUpSwitch.parentElement ?? levelUpSwitch);
+
+    expect(
+      await screen.findAllByText("牵绊满级自动停止已开启；关闭满级开关后可修改此项")
+    ).not.toHaveLength(0);
+  });
+
+  it("saves bond level-up auto-stop without changing bond max auto-stop", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="basic" />);
+
+    const levelUpSwitch = await screen.findByRole("switch", { name: "牵绊升级自动停止" });
+    const maxSwitch = screen.getByRole("switch", { name: "牵绊满级自动停止" });
+    expect(levelUpSwitch).not.toBeChecked();
+    expect(maxSwitch).not.toBeChecked();
+
+    await user.click(levelUpSwitch);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_stop_on_bond_level_up", {
+        value: true,
+      });
+    });
+    expect(screen.getByRole("switch", { name: "牵绊升级自动停止" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "牵绊满级自动停止" })).not.toBeChecked();
   });
 
   it("saves support CE icon recognition thresholds", async () => {

@@ -56,6 +56,10 @@ pub struct RecognitionSettings {
     pub support_mlb_icon_threshold: f64,
     #[serde(default = "default_support_icon_threshold")]
     pub support_bond_icon_threshold: f64,
+    #[serde(default)]
+    pub stop_on_bond_level_up: bool,
+    #[serde(default)]
+    pub stop_on_bond_max_level: bool,
 }
 
 impl Default for RecognitionSettings {
@@ -66,6 +70,8 @@ impl Default for RecognitionSettings {
             support_ce_full_gate_threshold: SUPPORT_CE_FULL_GATE_THRESHOLD_DEFAULT,
             support_mlb_icon_threshold: SUPPORT_ICON_THRESHOLD_DEFAULT,
             support_bond_icon_threshold: SUPPORT_ICON_THRESHOLD_DEFAULT,
+            stop_on_bond_level_up: false,
+            stop_on_bond_max_level: false,
         }
     }
 }
@@ -117,6 +123,17 @@ fn normalize_support_ce_full_gate_threshold(value: f64) -> Result<f64, String> {
         SUPPORT_CE_FULL_GATE_THRESHOLD_MIN,
         SUPPORT_CE_FULL_GATE_THRESHOLD_MAX,
     )
+}
+
+fn apply_stop_on_bond_level_up(settings: &mut RecognitionSettings, value: bool) {
+    settings.stop_on_bond_level_up = value;
+}
+
+fn apply_stop_on_bond_max_level(settings: &mut RecognitionSettings, value: bool) {
+    settings.stop_on_bond_max_level = value;
+    if value {
+        settings.stop_on_bond_level_up = false;
+    }
 }
 
 fn adb_settings_path(app: &tauri::AppHandle) -> PathBuf {
@@ -201,6 +218,9 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
                     "牵绊图标阈值",
                 )
                 .ok()?,
+                stop_on_bond_level_up: settings.stop_on_bond_level_up
+                    && !settings.stop_on_bond_max_level,
+                stop_on_bond_max_level: settings.stop_on_bond_max_level,
             })
         })
         .unwrap_or_default()
@@ -328,6 +348,32 @@ pub(crate) fn set_support_bond_icon_threshold(
 }
 
 #[tauri::command]
+pub(crate) fn set_stop_on_bond_level_up(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: bool,
+) -> Result<RecognitionSettings, String> {
+    let mut next = *state.lock().unwrap();
+    apply_stop_on_bond_level_up(&mut next, value);
+    *state.lock().unwrap() = next;
+    save_recognition_settings(&app, &next)?;
+    Ok(next)
+}
+
+#[tauri::command]
+pub(crate) fn set_stop_on_bond_max_level(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: bool,
+) -> Result<RecognitionSettings, String> {
+    let mut next = *state.lock().unwrap();
+    apply_stop_on_bond_max_level(&mut next, value);
+    *state.lock().unwrap() = next;
+    save_recognition_settings(&app, &next)?;
+    Ok(next)
+}
+
+#[tauri::command]
 pub(crate) async fn run_startup_migration(
     app: tauri::AppHandle,
     bluestack_state: tauri::State<'_, Mutex<bool>>,
@@ -407,6 +453,73 @@ mod tests {
         assert!(normalize_support_ce_full_gate_threshold(0.39).is_err());
         assert!(normalize_support_ce_full_gate_threshold(0.71).is_err());
         assert!(normalize_support_ce_full_gate_threshold(f64::NAN).is_err());
+    }
+
+    #[test]
+    fn recognition_settings_default_disables_bond_auto_stop() {
+        let settings = RecognitionSettings::default();
+
+        assert!(!settings.stop_on_bond_level_up);
+        assert!(!settings.stop_on_bond_max_level);
+    }
+
+    #[test]
+    fn recognition_settings_deserializes_legacy_json_with_bond_auto_stop_defaults() {
+        let settings: RecognitionSettings = serde_json::from_value(serde_json::json!({
+            "noblePhantasmDetectionMode": "card",
+            "supportCeThreshold": 0.7,
+            "supportCeFullGateThreshold": 0.6,
+            "supportMlbIconThreshold": 0.7,
+            "supportBondIconThreshold": 0.7
+        }))
+        .unwrap();
+
+        assert!(!settings.stop_on_bond_level_up);
+        assert!(!settings.stop_on_bond_max_level);
+    }
+
+    #[test]
+    fn enabling_bond_max_auto_stop_disables_level_up_auto_stop() {
+        let mut settings = RecognitionSettings {
+            stop_on_bond_level_up: true,
+            ..RecognitionSettings::default()
+        };
+
+        apply_stop_on_bond_max_level(&mut settings, true);
+
+        assert!(!settings.stop_on_bond_level_up);
+        assert!(settings.stop_on_bond_max_level);
+    }
+
+    #[test]
+    fn disabling_bond_level_up_auto_stop_does_not_affect_max_auto_stop() {
+        let mut settings = RecognitionSettings {
+            stop_on_bond_level_up: true,
+            stop_on_bond_max_level: true,
+            ..RecognitionSettings::default()
+        };
+
+        apply_stop_on_bond_level_up(&mut settings, false);
+
+        assert!(!settings.stop_on_bond_level_up);
+        assert!(settings.stop_on_bond_max_level);
+    }
+
+    #[test]
+    fn loading_normalizes_bond_max_auto_stop_to_disable_level_up() {
+        let settings = RecognitionSettings {
+            stop_on_bond_level_up: true,
+            stop_on_bond_max_level: true,
+            ..RecognitionSettings::default()
+        };
+        let normalized = RecognitionSettings {
+            stop_on_bond_level_up: settings.stop_on_bond_level_up
+                && !settings.stop_on_bond_max_level,
+            ..settings
+        };
+
+        assert!(!normalized.stop_on_bond_level_up);
+        assert!(normalized.stop_on_bond_max_level);
     }
 }
 

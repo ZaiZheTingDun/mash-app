@@ -12,10 +12,10 @@ use crate::enhancement_runner::{
 };
 use crate::runner::{self, merge_best_np_slots, RunnerHandle, RunnerState};
 use crate::screen::{
-    CommandCardMatch, ElementMatch, FindEnhancementServantGridResult, FindSupportsResult,
-    NoblePhantasmMatch, NormRect, Point, ServantGridAnchor, ServantGridCell, ServantGridFaceMatch,
-    SidecarClient, SupportCeArtworkCheck, SupportCeIconCheck, SupportCeVerificationOptions,
-    SupportDiagnostics, SupportRowMatch,
+    BondLevelUpReadResult, CommandCardMatch, ElementMatch, FindEnhancementServantGridResult,
+    FindSupportsResult, NoblePhantasmMatch, NormRect, Point, ServantGridAnchor, ServantGridCell,
+    ServantGridFaceMatch, SidecarClient, SupportCeArtworkCheck, SupportCeIconCheck,
+    SupportCeVerificationOptions, SupportDiagnostics, SupportRowMatch,
 };
 use crate::{
     app_data_dir, load_servant_metadata, resolve_ce_assets_dir, resolve_cv_config_path,
@@ -526,6 +526,39 @@ pub fn debug_find_element(
     eprintln!(
         "[debug_find_element] result: found={} score={:.3} xy=({:.3},{:.3})",
         result.found, result.score, result.x, result.y
+    );
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn debug_read_bond_level_up(
+    app: tauri::AppHandle,
+    server_state: tauri::State<'_, Mutex<Server>>,
+    debug_state: tauri::State<'_, DebugSidecar>,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+) -> Result<BondLevelUpReadResult, String> {
+    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+
+    let image_path = debug_image_path(&app);
+    if !image_path.exists() {
+        eprintln!(
+            "[debug_read_bond_level_up] no screenshot at {}",
+            image_path.display()
+        );
+        return Err("尚未截取画面，请先点击 截取画面".into());
+    }
+
+    ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))?;
+
+    let mut guard = debug_state.0.lock().unwrap();
+    let client = guard
+        .as_mut()
+        .ok_or_else(|| "debug sidecar not initialized".to_string())?;
+    let result = client.read_bond_level_up(Some(&image_path), true)?;
+    eprintln!(
+        "[debug_read_bond_level_up] ok={} reason={:?} level={:?} servant={:?}",
+        result.ok, result.reason, result.bond_level_after, result.servant_name_matched
     );
     Ok(result)
 }

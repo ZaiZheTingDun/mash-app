@@ -166,6 +166,8 @@ pub(crate) fn effective_recognition_settings(
         support_bond_icon_threshold: project
             .and_then(|settings| settings.support_bond_icon_threshold)
             .unwrap_or(global.support_bond_icon_threshold),
+        stop_on_bond_level_up: global.stop_on_bond_level_up && !global.stop_on_bond_max_level,
+        stop_on_bond_max_level: global.stop_on_bond_max_level,
     }
 }
 
@@ -227,6 +229,8 @@ pub(crate) fn start_automation(
     config.support_mlb_icon_threshold = recognition_settings.support_mlb_icon_threshold;
     config.support_bond_icon_threshold = recognition_settings.support_bond_icon_threshold;
     config.noble_phantasm_detection_mode = recognition_settings.noble_phantasm_detection_mode;
+    config.stop_on_bond_level_up = recognition_settings.stop_on_bond_level_up;
+    config.stop_on_bond_max_level = recognition_settings.stop_on_bond_max_level;
 
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));

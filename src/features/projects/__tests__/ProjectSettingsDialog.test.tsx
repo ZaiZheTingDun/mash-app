@@ -29,6 +29,8 @@ describe("ProjectSettingsDialog", () => {
           supportCeFullGateThreshold: 0.61,
           supportMlbIconThreshold: 0.72,
           supportBondIconThreshold: 0.73,
+          stopOnBondLevelUp: false,
+          stopOnBondMaxLevel: false,
         };
       }
       return null;

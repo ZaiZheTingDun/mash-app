@@ -90,6 +90,73 @@ fn np_slot_with_detectors(
     }
 }
 
+fn bond_level_read(level: Option<u32>) -> BondLevelUpReadResult {
+    BondLevelUpReadResult {
+        ok: level.is_some(),
+        bond_level_after: level,
+        servant_name: None,
+        servant_name_matched: None,
+        reason: None,
+        servant_match_score: None,
+        confidence: None,
+        diagnostics: None,
+    }
+}
+
+#[test]
+fn bond_result_stop_action_ignores_normal_bond_page() {
+    assert_eq!(
+        bond_result_stop_action(true, None, false, false),
+        BondResultStopAction::Continue
+    );
+    assert_eq!(
+        bond_result_stop_action(false, None, true, true),
+        BondResultStopAction::Continue
+    );
+}
+
+#[test]
+fn bond_result_stop_action_stops_on_any_level_up_when_enabled() {
+    assert_eq!(
+        bond_result_stop_action(true, None, true, false),
+        BondResultStopAction::StopOnLevelUp
+    );
+}
+
+#[test]
+fn bond_result_stop_action_stops_on_max_level_threshold() {
+    let below = bond_level_read(Some(9));
+    let max = bond_level_read(Some(10));
+    let above = bond_level_read(Some(11));
+
+    assert_eq!(
+        bond_result_stop_action(true, Some(&below), false, true),
+        BondResultStopAction::Continue
+    );
+    assert_eq!(
+        bond_result_stop_action(true, Some(&max), false, true),
+        BondResultStopAction::StopOnMaxLevel
+    );
+    assert_eq!(
+        bond_result_stop_action(true, Some(&above), false, true),
+        BondResultStopAction::StopOnMaxLevel
+    );
+}
+
+#[test]
+fn bond_result_stop_action_continues_when_max_level_read_fails() {
+    let failed = bond_level_read(None);
+
+    assert_eq!(
+        bond_result_stop_action(true, Some(&failed), false, true),
+        BondResultStopAction::Continue
+    );
+    assert_eq!(
+        bond_result_stop_action(true, None, false, true),
+        BondResultStopAction::Continue
+    );
+}
+
 #[test]
 fn card_np_detection_mode_uses_legacy_card_ready_signal() {
     let mut nps = vec![
@@ -414,6 +481,8 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
         cfg.support_bond_icon_threshold,
         crate::commands::settings::SUPPORT_ICON_THRESHOLD_DEFAULT
     );
+    assert!(!cfg.stop_on_bond_level_up);
+    assert!(!cfg.stop_on_bond_max_level);
     assert_eq!(cfg.support_craft_essence_mlb_required, true);
     assert_eq!(cfg.support_grand_mode, false);
     assert_eq!(cfg.support_grand_craft_essence_ids, [None; 3]);

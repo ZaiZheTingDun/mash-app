@@ -193,6 +193,12 @@ pub struct RunConfig {
     /// the same battle behavior unless they explicitly opt into the gauge path.
     #[serde(default)]
     pub noble_phantasm_detection_mode: NoblePhantasmDetectionMode,
+    /// Stop automation on any bond level-up result overlay.
+    #[serde(default)]
+    pub stop_on_bond_level_up: bool,
+    /// Stop automation only when a bond level-up result reaches level 10+.
+    #[serde(default)]
+    pub stop_on_bond_max_level: bool,
     #[serde(default = "default_true")]
     pub support_craft_essence_mlb_required: bool,
     #[serde(default)]

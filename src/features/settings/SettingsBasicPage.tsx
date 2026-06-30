@@ -1,33 +1,41 @@
 import { useCallback, useEffect, useState } from "react";
-import { Box, Flex, Select, Text } from "@radix-ui/themes";
+import { Box, Flex, Select, Switch, Text, Tooltip } from "@radix-ui/themes";
 import { invoke } from "../../tauri";
 import type { NoblePhantasmDetectionMode, RecognitionSettings } from "../../types/recognition";
 import { normalizeRecognitionSettings } from "./recognitionSettingsModel";
 
 export function SettingsBasicPage({ active }: { active: boolean }) {
   const [mode, setMode] = useState<NoblePhantasmDetectionMode>("card");
+  const [stopOnBondLevelUp, setStopOnBondLevelUp] = useState(false);
+  const [stopOnBondMaxLevel, setStopOnBondMaxLevel] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
-  const loadMode = useCallback(async () => {
+  const applySettings = useCallback((settings: RecognitionSettings) => {
+    setMode(settings.noblePhantasmDetectionMode);
+    setStopOnBondLevelUp(settings.stopOnBondLevelUp);
+    setStopOnBondMaxLevel(settings.stopOnBondMaxLevel);
+  }, []);
+
+  const loadSettings = useCallback(async () => {
     setError(null);
     setSavedMessage(null);
     try {
       const settings = normalizeRecognitionSettings(
         await invoke<RecognitionSettings>("get_recognition_settings")
       );
-      setMode(settings.noblePhantasmDetectionMode);
+      applySettings(settings);
     } catch (err) {
       setError(String(err));
     }
-  }, []);
+  }, [applySettings]);
 
   useEffect(() => {
     if (active) {
-      void loadMode();
+      void loadSettings();
     }
-  }, [active, loadMode]);
+  }, [active, loadSettings]);
 
   const saveMode = useCallback(async (value: NoblePhantasmDetectionMode) => {
     setSaving(true);
@@ -37,14 +45,34 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
       const settings = normalizeRecognitionSettings(
         await invoke<RecognitionSettings>("set_noble_phantasm_detection_mode", { value })
       );
-      setMode(settings.noblePhantasmDetectionMode);
+      applySettings(settings);
       setSavedMessage("已保存");
     } catch (err) {
       setError(String(err));
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [applySettings]);
+
+  const saveBondStopSetting = useCallback(
+    async (command: string, value: boolean) => {
+      setSaving(true);
+      setError(null);
+      setSavedMessage(null);
+      try {
+        const settings = normalizeRecognitionSettings(
+          await invoke<RecognitionSettings>(command, { value })
+        );
+        applySettings(settings);
+        setSavedMessage("已保存");
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [applySettings]
+  );
 
   return (
     <Box className="settings-section-panel">
@@ -76,6 +104,75 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
               <Select.Item value="gauge">底部宝具条识别（实验性）</Select.Item>
             </Select.Content>
           </Select.Root>
+        </Flex>
+
+        <Flex
+          align="start"
+          justify="between"
+          gap="4"
+          wrap="wrap"
+          className="basic-setting-row"
+        >
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              牵绊升级自动停止
+            </Text>
+            <Text size="1" color="gray">
+              出现牵绊等级提升页面时自动停止
+            </Text>
+          </Flex>
+
+          {stopOnBondMaxLevel ? (
+            <Tooltip content="牵绊满级自动停止已开启；关闭满级开关后可修改此项">
+              <Box tabIndex={0}>
+                <Switch
+                  checked={stopOnBondLevelUp}
+                  onCheckedChange={(value) =>
+                    void saveBondStopSetting("set_stop_on_bond_level_up", value)
+                  }
+                  disabled
+                  aria-label="牵绊升级自动停止"
+                />
+              </Box>
+            </Tooltip>
+          ) : (
+            <Box>
+              <Switch
+                checked={stopOnBondLevelUp}
+                onCheckedChange={(value) =>
+                  void saveBondStopSetting("set_stop_on_bond_level_up", value)
+                }
+                disabled={saving}
+                aria-label="牵绊升级自动停止"
+              />
+            </Box>
+          )}
+        </Flex>
+
+        <Flex
+          align="start"
+          justify="between"
+          gap="4"
+          wrap="wrap"
+          className="basic-setting-row"
+        >
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              牵绊满级自动停止
+            </Text>
+            <Text size="1" color="gray">
+              出现牵绊等级提升页面且等级达到 10 或以上时自动停止；开启后会关闭牵绊升级自动停止
+            </Text>
+          </Flex>
+
+          <Switch
+            checked={stopOnBondMaxLevel}
+            onCheckedChange={(value) =>
+              void saveBondStopSetting("set_stop_on_bond_max_level", value)
+            }
+            disabled={saving}
+            aria-label="牵绊满级自动停止"
+          />
         </Flex>
 
         <Flex align="center" gap="2">

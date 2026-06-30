@@ -41,6 +41,7 @@ import {
 import type {
   AttackButtonResultDto,
   BattleSceneResultDto,
+  BondLevelUpReadResultDto,
   CommandCardMatchDto,
   DebugCaptureResult,
   DebugStreamFrameResultDto,
@@ -97,6 +98,12 @@ function npAnyReady(slot: NoblePhantasmMatchDto) {
 
 function npAllUnknown(slot: NoblePhantasmMatchDto) {
   return slot.cardReady == null && slot.npGlowReady == null;
+}
+
+function debugPercent(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${(value * 100).toFixed(1)}%`
+    : "—";
 }
 
 export function DebugPage({
@@ -175,6 +182,9 @@ export function DebugPage({
   const [battleScene, setBattleScene] =
     useState<BattleSceneResultDto | null>(null);
   const [readingBattleScene, setReadingBattleScene] = useState(false);
+  const [bondLevelUpResult, setBondLevelUpResult] =
+    useState<BondLevelUpReadResultDto | null>(null);
+  const [readingBondLevelUp, setReadingBondLevelUp] = useState(false);
   const [attackButton, setAttackButton] =
     useState<AttackButtonResultDto | null>(null);
   const [findingAttackButton, setFindingAttackButton] = useState(false);
@@ -626,6 +636,7 @@ export function DebugPage({
     setCommandCards([]);
     setNpGaugeSlots([]);
     setBattleScene(null);
+    setBondLevelUpResult(null);
     setAttackButton(null);
     setSupportResult(null);
     setEnhancementServantResult(null);
@@ -853,6 +864,40 @@ export function DebugPage({
       log(`debug_read_battle_scene 失败: ${err}`, "error");
     } finally {
       setReadingBattleScene(false);
+    }
+  }, [capture, log]);
+
+  const handleReadBondLevelUp = useCallback(async () => {
+    if (!capture) return;
+    setReadingBondLevelUp(true);
+    log("调用 debug_read_bond_level_up");
+    try {
+      const result = await invoke<BondLevelUpReadResultDto>(
+        "debug_read_bond_level_up"
+      );
+      setBondLevelUpResult(result);
+      const confidence = result.confidence;
+      const scoreText = [
+        `anchor ${debugPercent(confidence?.anchor)}`,
+        `level ${debugPercent(confidence?.bondLevelAfter)}`,
+        `ocr ${debugPercent(confidence?.servantOcr)}`,
+      ].join(" · ");
+      if (result.ok) {
+        log(
+          `牵绊升级: Lv.${result.bondLevelAfter ?? "?"} · ${
+            result.servantNameMatched ?? result.servantName ?? "未知从者"
+          } | ${scoreText}`
+        );
+      } else {
+        log(
+          `牵绊升级: 未识别 (${result.reason ?? "unknown"}) | ${scoreText}`,
+          "warn"
+        );
+      }
+    } catch (err) {
+      log(`debug_read_bond_level_up 失败: ${err}`, "error");
+    } finally {
+      setReadingBondLevelUp(false);
     }
   }, [capture, log]);
 
@@ -1342,6 +1387,7 @@ export function DebugPage({
                 npGaugeSlots.length === 0 &&
                 supportResult === null &&
                 enhancementServantResult === null &&
+                bondLevelUpResult === null &&
                 battleScene === null &&
                 attackButton === null
               }
@@ -1539,6 +1585,31 @@ export function DebugPage({
                 onClick={handleReadBattleScene}
               >
                 {readingBattleScene ? "识别中…" : "识别战斗场景"}
+              </Button>
+            </Flex>
+          </DebugSection>
+
+          <DebugSection
+            title="牵绊升级识别"
+            badge={
+              bondLevelUpResult
+                ? bondLevelUpResult.ok
+                  ? `Lv.${bondLevelUpResult.bondLevelAfter ?? "?"}`
+                  : "未识别"
+                : undefined
+            }
+          >
+            <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
+              <Text size="2" color="gray">
+                调用生产逻辑 `read_bond_level_up`，使用配置 anchor、多尺度数字模板和从者币 OCR 行。
+              </Text>
+              <Button
+                type="button"
+                size="1"
+                disabled={readingBondLevelUp || !capture}
+                onClick={handleReadBondLevelUp}
+              >
+                {readingBondLevelUp ? "识别中…" : "识别牵绊升级"}
               </Button>
             </Flex>
           </DebugSection>
@@ -1945,6 +2016,68 @@ export function DebugPage({
                   </Text>
                 </Box>
               ))}
+            </Box>
+          </DebugSection>
+
+          <DebugSection
+            title="牵绊升级识别"
+            badge={
+              bondLevelUpResult
+                ? bondLevelUpResult.ok
+                  ? "ok"
+                  : bondLevelUpResult.reason || "failed"
+                : undefined
+            }
+          >
+            <Box className="debug-match-list">
+              {!bondLevelUpResult && (
+                <Text size="1" color="gray">
+                  暂无识别结果
+                </Text>
+              )}
+              {bondLevelUpResult && (
+                <Box
+                  className={`debug-match-entry ${bondLevelUpResult.ok ? "found" : "missed"}`}
+                >
+                  <Flex justify="between" align="center">
+                    <Text size="2" weight="medium">
+                      {bondLevelUpResult.ok ? "识别成功" : "识别失败"}
+                    </Text>
+                    <Text size="1" color={bondLevelUpResult.ok ? "green" : "red"}>
+                      {bondLevelUpResult.ok
+                        ? `Lv.${bondLevelUpResult.bondLevelAfter ?? "?"}`
+                        : bondLevelUpResult.reason || "unknown"}
+                    </Text>
+                  </Flex>
+                  <Text size="1" color="gray">
+                    matched:{" "}
+                    {bondLevelUpResult.servantNameMatched ??
+                      bondLevelUpResult.servantName ??
+                      "—"}
+                    {bondLevelUpResult.servantMatchScore != null
+                      ? ` (${debugPercent(bondLevelUpResult.servantMatchScore)})`
+                      : ""}
+                  </Text>
+                  {bondLevelUpResult.servantName &&
+                    bondLevelUpResult.servantNameMatched &&
+                    bondLevelUpResult.servantName !==
+                      bondLevelUpResult.servantNameMatched && (
+                      <Text size="1" color="gray">
+                        OCR raw: {bondLevelUpResult.servantName}
+                      </Text>
+                    )}
+                  <Text size="1" color="gray">
+                    anchor {debugPercent(bondLevelUpResult.confidence?.anchor)} · 数字{" "}
+                    {debugPercent(bondLevelUpResult.confidence?.bondLevelAfter)} · OCR{" "}
+                    {debugPercent(bondLevelUpResult.confidence?.servantOcr)}
+                  </Text>
+                  {bondLevelUpResult.diagnostics !== undefined && (
+                    <Text size="1" color="gray">
+                      diagnostics 已返回，可在 DevTools / Rust 日志中对照查看。
+                    </Text>
+                  )}
+                </Box>
+              )}
             </Box>
           </DebugSection>
 

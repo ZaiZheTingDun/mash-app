@@ -6,6 +6,8 @@ export interface RecognitionSettings {
   supportCeFullGateThreshold: number;
   supportMlbIconThreshold: number;
   supportBondIconThreshold: number;
+  stopOnBondLevelUp: boolean;
+  stopOnBondMaxLevel: boolean;
 }
 
 export interface ProjectRecognitionSettings {

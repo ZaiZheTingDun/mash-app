@@ -276,8 +276,10 @@ changes (i.e. when the runner moves to a different row).
 - `BattleAction` is a documentation-only status node for the actionable battle
   condition where `Battle.variants.main.elements.attack_button` is found.
 - `BattleResultBond` covers ordinary bond-points settlement. The separate
-  `BattleResultBondLevelUp` CV screen covers the bond-level-up overlay and
-  routes to the same next-button tap target.
+  `BattleResultBondLevelUp` CV screen covers the bond-level-up overlay. When
+  the global bond auto-stop setting matches the overlay (any level-up, or a
+  level read of 10+ for the max-level mode), the runner finishes without
+  tapping the next button; otherwise it uses the same next-button tap target.
 - `BattleResultExp` covers ordinary master / servant EXP settlement. The
   separate `BattleResultExpLevelUp` CV screen covers the equipment / skill
   level-up overlay and routes to the same next-button tap target.

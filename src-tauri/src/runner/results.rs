@@ -43,6 +43,36 @@ pub(crate) const BATTLE_RESULT_TAP_INTERVAL: Duration = Duration::from_millis(30
 /// longest measured bond / EXP animation (~5 s for a multi-servant
 /// level-up cascade).
 pub(crate) const BATTLE_RESULT_TAP_TIMEOUT: Duration = Duration::from_secs(10);
+const BATTLE_RESULT_BOND_LEVEL_UP_LABEL: &str = "BattleResultBondLevelUp";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BondResultStopAction {
+    Continue,
+    StopOnLevelUp,
+    StopOnMaxLevel,
+}
+
+pub(crate) fn bond_result_stop_action(
+    is_level_up_overlay: bool,
+    read: Option<&BondLevelUpReadResult>,
+    stop_on_bond_level_up: bool,
+    stop_on_bond_max_level: bool,
+) -> BondResultStopAction {
+    if !is_level_up_overlay {
+        return BondResultStopAction::Continue;
+    }
+    if stop_on_bond_level_up {
+        return BondResultStopAction::StopOnLevelUp;
+    }
+    if stop_on_bond_max_level
+        && read
+            .and_then(|result| result.bond_level_after)
+            .is_some_and(|level| level >= 10)
+    {
+        return BondResultStopAction::StopOnMaxLevel;
+    }
+    BondResultStopAction::Continue
+}
 
 pub(crate) fn is_battle_result_screen(screen: Screen) -> bool {
     matches!(
@@ -57,6 +87,70 @@ pub(crate) fn is_battle_result_screen(screen: Screen) -> bool {
 
 impl Runner {
     pub(crate) fn handle_battle_result_bond(&mut self) {
+        if self.config.stop_on_bond_level_up || self.config.stop_on_bond_max_level {
+            let is_level_up_overlay = match self.sidecar().detect_label_full(None) {
+                Ok((label, _score)) => label == BATTLE_RESULT_BOND_LEVEL_UP_LABEL,
+                Err(err) => {
+                    self.emit_warn(
+                        "BattleResultBond",
+                        &format!("牵绊升级页面识别失败，继续结算流程: {err}"),
+                    );
+                    false
+                }
+            };
+            let read = if is_level_up_overlay
+                && self.config.stop_on_bond_max_level
+                && !self.config.stop_on_bond_level_up
+            {
+                match self.sidecar().read_bond_level_up(None, false) {
+                    Ok(result) if result.ok => Some(result),
+                    Ok(result) => {
+                        let reason = result.reason.unwrap_or_else(|| "未知原因".into());
+                        self.emit_warn(
+                            "BattleResultBond",
+                            &format!("牵绊等级读取失败，继续结算流程: {reason}"),
+                        );
+                        None
+                    }
+                    Err(err) => {
+                        self.emit_warn(
+                            "BattleResultBond",
+                            &format!("牵绊等级读取失败，继续结算流程: {err}"),
+                        );
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            match bond_result_stop_action(
+                is_level_up_overlay,
+                read.as_ref(),
+                self.config.stop_on_bond_level_up,
+                self.config.stop_on_bond_max_level,
+            ) {
+                BondResultStopAction::StopOnLevelUp => {
+                    self.emit("BattleResultBond", "检测到牵绊等级提升，自动停止");
+                    self.set_state(RunnerState::Finished);
+                    return;
+                }
+                BondResultStopAction::StopOnMaxLevel => {
+                    let level = read
+                        .as_ref()
+                        .and_then(|result| result.bond_level_after)
+                        .unwrap_or(10);
+                    self.emit(
+                        "BattleResultBond",
+                        &format!("检测到牵绊等级达到 {level}，自动停止"),
+                    );
+                    self.set_state(RunnerState::Finished);
+                    return;
+                }
+                BondResultStopAction::Continue => {}
+            }
+        }
+
         self.emit("BattleResultBond", "羁绊点数结算，前往下一画面");
         self.tap_until_screen_changes(
             "BattleResultBond",

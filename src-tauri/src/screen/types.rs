@@ -466,6 +466,27 @@ pub struct LevelDigitsResult {
     pub fail_reason: Option<String>,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BondLevelUpReadResult {
+    #[serde(default)]
+    pub ok: bool,
+    #[serde(default)]
+    pub bond_level_after: Option<u32>,
+    #[serde(default)]
+    pub servant_name: Option<String>,
+    #[serde(default)]
+    pub servant_name_matched: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub servant_match_score: Option<f64>,
+    #[serde(default)]
+    pub confidence: Option<serde_json::Value>,
+    #[serde(default)]
+    pub diagnostics: Option<serde_json::Value>,
+}
+
 /// Diagnostic payload accompanying every ``find_supports`` response. Always
 /// returned (even when ``supports`` is empty) so the debug UI can show
 /// "OCR ran but matched nothing" vs. "OCR didn't find any candidates".

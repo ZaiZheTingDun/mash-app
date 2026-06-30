@@ -46,6 +46,24 @@ export interface ProbeResult {
   timestamp: string;
 }
 
+export interface BondLevelUpConfidenceDto {
+  anchor?: number;
+  bondLevelAfter?: number;
+  servantOcr?: number;
+  [key: string]: number | undefined;
+}
+
+export interface BondLevelUpReadResultDto {
+  ok: boolean;
+  bondLevelAfter?: number | null;
+  servantName?: string | null;
+  servantNameMatched?: string | null;
+  servantMatchScore?: number | null;
+  reason?: string | null;
+  confidence?: BondLevelUpConfidenceDto | null;
+  diagnostics?: unknown;
+}
+
 export interface PointDto {
   x: number;
   y: number;

@@ -90,6 +90,8 @@ let supportCeFullGateThreshold = 0.6;
 let supportMlbIconThreshold = 0.7;
 let supportBondIconThreshold = 0.7;
 let noblePhantasmDetectionMode: "card" | "gauge" = "card";
+let stopOnBondLevelUp = false;
+let stopOnBondMaxLevel = false;
 let nextProjectNumber = 2;
 let activeProjectId: string | null = "dev-project-1";
 let appTheme: "light" | "dark" | "system" | null = null;
@@ -348,6 +350,8 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         supportCeFullGateThreshold,
         supportMlbIconThreshold,
         supportBondIconThreshold,
+        stopOnBondLevelUp,
+        stopOnBondMaxLevel,
       } as T;
     case "set_noble_phantasm_detection_mode":
       if (args.value === "card" || args.value === "gauge") {
@@ -359,6 +363,8 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         supportCeFullGateThreshold,
         supportMlbIconThreshold,
         supportBondIconThreshold,
+        stopOnBondLevelUp,
+        stopOnBondMaxLevel,
       } as T;
     case "set_support_ce_threshold":
       supportCeThreshold =
@@ -371,6 +377,8 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         supportCeFullGateThreshold,
         supportMlbIconThreshold,
         supportBondIconThreshold,
+        stopOnBondLevelUp,
+        stopOnBondMaxLevel,
       } as T;
     case "set_support_ce_full_gate_threshold":
       supportCeFullGateThreshold =
@@ -383,6 +391,8 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         supportCeFullGateThreshold,
         supportMlbIconThreshold,
         supportBondIconThreshold,
+        stopOnBondLevelUp,
+        stopOnBondMaxLevel,
       } as T;
     case "set_support_mlb_icon_threshold":
       supportMlbIconThreshold =
@@ -395,6 +405,8 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         supportCeFullGateThreshold,
         supportMlbIconThreshold,
         supportBondIconThreshold,
+        stopOnBondLevelUp,
+        stopOnBondMaxLevel,
       } as T;
     case "set_support_bond_icon_threshold":
       supportBondIconThreshold =
@@ -407,6 +419,33 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         supportCeFullGateThreshold,
         supportMlbIconThreshold,
         supportBondIconThreshold,
+        stopOnBondLevelUp,
+        stopOnBondMaxLevel,
+      } as T;
+    case "set_stop_on_bond_level_up":
+      stopOnBondLevelUp = Boolean(args.value);
+      return {
+        noblePhantasmDetectionMode,
+        supportCeThreshold,
+        supportCeFullGateThreshold,
+        supportMlbIconThreshold,
+        supportBondIconThreshold,
+        stopOnBondLevelUp,
+        stopOnBondMaxLevel,
+      } as T;
+    case "set_stop_on_bond_max_level":
+      stopOnBondMaxLevel = Boolean(args.value);
+      if (stopOnBondMaxLevel) {
+        stopOnBondLevelUp = false;
+      }
+      return {
+        noblePhantasmDetectionMode,
+        supportCeThreshold,
+        supportCeFullGateThreshold,
+        supportMlbIconThreshold,
+        supportBondIconThreshold,
+        stopOnBondLevelUp,
+        stopOnBondMaxLevel,
       } as T;
     case "pick_asset_bundle":
     case "pick_runtime_bundle":
