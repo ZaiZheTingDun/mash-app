@@ -6,7 +6,7 @@
       "runtimeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/runtime/darwin-aarch64/mash-cv-runtime-darwin-aarch64-v2026.05.08-runtime1.zip",
       "runtimeSha256": "3a80a0d595cfa54e7d907ccfce335dc99ba29428e2970057476b0b973ff3bf88",
       "codeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/code/mash-cv-code-v0.4.0.zip",
-      "codeSha256": "cb832a42c35042665ab97ef5c839dce703ff344e3f49010ea8d2543b0ab23c7a"
+      "codeSha256": "523509bdf97218296bd3405f39b15b37c8c28b678195af1de18228a3f3ee6620"
     },
     "darwin-x86_64": {
       "runtimeUrl": "https://cdn.example.com/mash-cv-runtime-darwin-x86_64-v2026.05.08-runtime1.zip",
