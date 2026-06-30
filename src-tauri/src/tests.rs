@@ -25,6 +25,10 @@ fn tauri_bundle_resources_cover_template_subdirectories() {
         resources.contains("resources/servers/shared/templates/*"),
         "missing Tauri bundle resource glob for shared templates"
     );
+    assert!(
+        resources.contains("src/resources/servants.json"),
+        "missing Tauri bundle resource for sidecar-readable servants.json"
+    );
 
     for server in ["jp", "cn"] {
         let templates_dir = manifest_dir

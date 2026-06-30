@@ -65,6 +65,7 @@
       "resources/servers/cn/templates/items/*",
       "resources/adb/*",
       "resources/scrcpy/scrcpy-server.jar",
+      "src/resources/servants.json",
       "resources/assets-manifest.json",
       "resources/runtime-manifest.json"
     ],

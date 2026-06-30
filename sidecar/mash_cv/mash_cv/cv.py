@@ -54,6 +54,8 @@ stream frame is used):
                                                     ← {"fragments":[{"text":"...","region":{...},
                                                                       "ocrConfidence":0.98}, ...],
                                                        "fullText":"..."}
+→ {"cmd":"read_bond_level_up","debug":false}        ← {"ok":true,"bondLevelAfter":6,
+                                                       "servantNameMatched":"歌果",...}
 → {"cmd":"read_level_digits","region":{...},"debug":false}
                                                     ← {"found":true,"current":90,"max":90,
                                                        "text":"90/90"}
@@ -98,6 +100,7 @@ static_template_keys: set[str] = set()
 templates_dir: Optional[str] = None
 template_dirs: list[str] = []
 config: dict = {"screens": {}}
+_servant_catalog_cache: Optional[list[dict]] = None
 # Populated once start_stream succeeds. The stream module is imported lazily
 # inside _start_stream so commands that never touch live video don't load
 # PyAV's FFmpeg stack.
@@ -1067,6 +1070,14 @@ BATTLE_DIGIT_COHESION_GAP_RATIO = 0.6
 # scoring noise alone.
 BATTLE_DIGIT_SCORE_MARGIN = 0.08
 
+BOND_LEVEL_UP_SCREEN = "BattleResultBondLevelUp"
+BOND_LEVEL_DIGIT_TEMPLATE_PREFIX = "digit_"
+BOND_LEVEL_DIGIT_THRESHOLD = 0.85
+BOND_LEVEL_DIGIT_SCORE_MARGIN = 0.12
+BOND_LEVEL_DIGIT_MIN_HEIGHT = 0.04
+BOND_LEVEL_SERVANT_MATCH_THRESHOLD = 0.72
+BOND_LEVEL_TEMPLATE_SCALES = (1.0, 1.4, 1.8, 2.0, 2.2, 2.4, 2.5, 2.6, 2.8, 3.0)
+
 
 LEVEL_DIGIT_TEMPLATE_PREFIX = "digit_v2/digit_"
 LEVEL_DIGIT_TEMPLATE_SUFFIX = "_v2"
@@ -1337,6 +1348,339 @@ def _read_integer_digits(
     if value < 1 or value > 10:
         return None
     return value
+
+
+def _match_template_region_multiscale(
+    img: np.ndarray,
+    tmpl: np.ndarray,
+    region: dict,
+    threshold: float,
+    *,
+    scales: tuple[float, ...] = BOND_LEVEL_TEMPLATE_SCALES,
+) -> dict:
+    """Best normalized template match in ``region`` across explicit scales."""
+    if len(tmpl.shape) == 3:
+        tmpl = cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
+
+    h, w = img.shape[:2]
+    rx = max(0, int(round(float(region.get("x", 0.0)) * w)))
+    ry = max(0, int(round(float(region.get("y", 0.0)) * h)))
+    rw = max(1, min(int(round(float(region.get("w", 0.0)) * w)), w - rx))
+    rh = max(1, min(int(round(float(region.get("h", 0.0)) * h)), h - ry))
+    roi = img[ry : ry + rh, rx : rx + rw]
+    if roi.size == 0:
+        return {"found": False, "score": 0.0, "region": None, "x": 0.0, "y": 0.0}
+
+    gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    best: dict = {"found": False, "score": 0.0, "region": None, "x": 0.0, "y": 0.0}
+    seen_sizes: set[tuple[int, int]] = set()
+    for scale in scales:
+        if scale <= 0:
+            continue
+        tw = max(1, int(round(tmpl.shape[1] * float(scale))))
+        th = max(1, int(round(tmpl.shape[0] * float(scale))))
+        if (tw, th) in seen_sizes:
+            continue
+        seen_sizes.add((tw, th))
+        if tw > gray_roi.shape[1] or th > gray_roi.shape[0]:
+            continue
+        interpolation = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
+        scaled = cv2.resize(tmpl, (tw, th), interpolation=interpolation)
+        result = cv2.matchTemplate(gray_roi, scaled, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(result)
+        score = float(max_val)
+        if score <= float(best["score"]):
+            continue
+        left = rx + max_loc[0]
+        top = ry + max_loc[1]
+        best = {
+            "found": score >= threshold,
+            "x": (left + tw / 2.0) / w,
+            "y": (top + th / 2.0) / h,
+            "score": score,
+            "scale": float(scale),
+            "region": {
+                "x": left / w,
+                "y": top / h,
+                "w": tw / w,
+                "h": th / h,
+            },
+        }
+    return best
+
+
+def _bond_level_read_config() -> Optional[dict]:
+    screen = config.get("screens", {}).get(BOND_LEVEL_UP_SCREEN)
+    if not isinstance(screen, dict):
+        return None
+    read = screen.get("read")
+    return read if isinstance(read, dict) else None
+
+
+def _bond_level_digit_candidates(img: np.ndarray, region: dict) -> tuple[list[dict], list[int]]:
+    refs: list[tuple[int, np.ndarray]] = []
+    missing: list[int] = []
+    for digit in range(10):
+        tmpl = _get_template(f"{BOND_LEVEL_DIGIT_TEMPLATE_PREFIX}{digit}")
+        if tmpl is None:
+            missing.append(digit)
+        else:
+            refs.append((digit, tmpl))
+    if missing:
+        return [], missing
+
+    candidates: list[dict] = []
+    for digit, tmpl in refs:
+        match = _match_template_region_multiscale(
+            img,
+            tmpl,
+            region,
+            0.0,
+            scales=BOND_LEVEL_TEMPLATE_SCALES,
+        )
+        if match["score"] < BOND_LEVEL_DIGIT_THRESHOLD:
+            continue
+        if not match.get("region") or float(match["region"]["h"]) < BOND_LEVEL_DIGIT_MIN_HEIGHT:
+            continue
+        candidates.append(
+            {
+                "digit": digit,
+                "score": float(match["score"]),
+                "x": float(match["region"]["x"]),
+                "y": float(match["region"]["y"]),
+                "w": float(match["region"]["w"]),
+                "h": float(match["region"]["h"]),
+                "region": match["region"],
+                "scale": float(match.get("scale", 1.0)),
+            }
+        )
+    return candidates, []
+
+
+def _read_bond_level_after(img: np.ndarray, region: dict, debug: bool) -> dict:
+    candidates, missing = _bond_level_digit_candidates(img, region)
+    diag = {
+        "region": dict(region),
+        "missingDigitTemplates": missing,
+        "candidates": candidates,
+        "digits": [],
+        "failReason": None,
+    }
+    if missing:
+        diag["failReason"] = "missing_digit_templates"
+        return {"found": False, "value": None, "score": 0.0, "failReason": diag["failReason"], **({"diagnostics": diag} if debug else {})}
+    if not candidates:
+        diag["failReason"] = "no_digit_candidates"
+        return {"found": False, "value": None, "score": 0.0, "failReason": diag["failReason"], **({"diagnostics": diag} if debug else {})}
+
+    kept = _nms_candidates(candidates, overlap_w=0.018, overlap_h=0.08)
+    best_score = max(float(c["score"]) for c in kept)
+    kept = [c for c in kept if float(c["score"]) >= best_score - BOND_LEVEL_DIGIT_SCORE_MARGIN]
+    kept.sort(key=lambda c: float(c["x"]))
+    diag["digits"] = [
+        {"value": int(c["digit"]), "score": float(c["score"]), "region": c["region"]}
+        for c in kept
+    ]
+    if not kept:
+        diag["failReason"] = "no_digits_after_filter"
+        return {"found": False, "value": None, "score": 0.0, "failReason": diag["failReason"], **({"diagnostics": diag} if debug else {})}
+
+    value = int("".join(str(int(c["digit"])) for c in kept))
+    result = {
+        "found": True,
+        "value": value,
+        "score": min(float(c["score"]) for c in kept),
+    }
+    if debug:
+        result["diagnostics"] = diag
+    return result
+
+
+def _servants_json_path() -> Optional[str]:
+    env_path = os.environ.get("MASH_CV_SERVANTS_JSON_PATH")
+    if env_path and os.path.isfile(env_path):
+        return env_path
+    current = os.path.abspath(os.path.dirname(__file__))
+    for _ in range(6):
+        path = os.path.join(current, "src-tauri", "src", "resources", "servants.json")
+        if os.path.isfile(path):
+            return path
+        current = os.path.dirname(current)
+    return None
+
+
+def _load_servant_catalog() -> list[dict]:
+    global _servant_catalog_cache
+    if _servant_catalog_cache is not None:
+        return _servant_catalog_cache
+    path = _servants_json_path()
+    if not path:
+        _servant_catalog_cache = []
+        return _servant_catalog_cache
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[mash-cv] failed to load servants.json: {exc}", file=sys.stderr)
+        _servant_catalog_cache = []
+        return _servant_catalog_cache
+    _servant_catalog_cache = loaded if isinstance(loaded, list) else []
+    return _servant_catalog_cache
+
+
+def _bond_normalize_text(text: str) -> str:
+    text = unicodedata.normalize("NFKC", str(text))
+    drop = " \t\n\r\u3000・·.,。、;:!?-_／/|()（）[]【】「」『』〔〕×xX+"
+    return "".join(ch for ch in text if ch not in drop).lower()
+
+
+def _ocr_rows(fragments: list[dict]) -> list[dict]:
+    rows: list[dict] = []
+    for frag in sorted(fragments, key=lambda f: (float(f["region"]["y"]), float(f["region"]["x"]))):
+        region = frag.get("region") or {}
+        cy = float(region.get("y", 0.0)) + float(region.get("h", 0.0)) / 2.0
+        row = next((r for r in rows if abs(float(r["cy"]) - cy) <= 0.03), None)
+        if row is None:
+            row = {"cy": cy, "fragments": []}
+            rows.append(row)
+        row["fragments"].append(frag)
+        row["cy"] = sum(float(f["region"]["y"]) + float(f["region"]["h"]) / 2.0 for f in row["fragments"]) / len(row["fragments"])
+    for row in rows:
+        row["fragments"].sort(key=lambda f: float(f["region"]["x"]))
+        row["text"] = "".join(str(f.get("text", "")) for f in row["fragments"])
+        row["confidence"] = min((float(f.get("ocrConfidence", 0.0)) for f in row["fragments"]), default=0.0)
+    return rows
+
+
+def _row_matches_keyword(row_text: str, keywords: list[str]) -> bool:
+    normalized = _bond_normalize_text(row_text)
+    for keyword in keywords:
+        key = _bond_normalize_text(keyword)
+        if key and (key in normalized or _fuzzy_score(normalized, key) >= 0.72):
+            return True
+    return False
+
+
+def _extract_bond_servant_name(row_text: str, keywords: list[str]) -> str:
+    text = unicodedata.normalize("NFKC", str(row_text))
+    for keyword in keywords:
+        text = text.replace(unicodedata.normalize("NFKC", keyword), "")
+    text = re.sub(r"[xX×]\s*\d+\s*(?:获得|獲得|取得)?", "", text)
+    text = re.sub(r"(?:获得|獲得|取得).*$", "", text)
+    text = re.sub(r"サーヴァントコイ[ン]?|从者币", "", text)
+    text = text.strip(" \t\n\r()（）[]【】「」『』")
+    return text.strip()
+
+
+def _best_servant_match(candidate_text: str, name_field: str) -> dict:
+    catalog = _load_servant_catalog()
+    best = {"name": "", "id": None, "collectionNo": None, "score": 0.0}
+    candidate = _bond_normalize_text(candidate_text)
+    if not candidate:
+        return best
+    for servant in catalog:
+        if not isinstance(servant, dict):
+            continue
+        name = servant.get(name_field)
+        if not name and name_field == "nameCN":
+            name = servant.get("nameCNServer")
+        if not name:
+            continue
+        score = _fuzzy_score(candidate, _bond_normalize_text(str(name)))
+        if score > float(best["score"]):
+            best = {
+                "name": str(name),
+                "id": servant.get("id"),
+                "collectionNo": servant.get("collectionNo"),
+                "score": float(score),
+            }
+    return best
+
+
+def _read_bond_level_up(img: np.ndarray, debug: bool = False) -> dict:
+    read = _bond_level_read_config()
+    diag: dict = {"failReason": None}
+    if read is None:
+        return {"ok": False, "reason": "missing_read_config", **({"diagnostics": diag} if debug else {})}
+
+    anchor_cfg = read.get("anchor") or {}
+    anchor_key = str(anchor_cfg.get("template", ""))
+    anchor_tmpl = _get_template(anchor_key)
+    if anchor_tmpl is None:
+        diag["failReason"] = "anchor_template_not_loaded"
+        return {"ok": False, "reason": diag["failReason"], **({"diagnostics": diag} if debug else {})}
+    anchor = _match_template_region_multiscale(
+        img,
+        anchor_tmpl,
+        anchor_cfg.get("region", DEFAULT_REGION),
+        float(anchor_cfg.get("threshold", 0.9)),
+    )
+    diag["anchor"] = anchor
+    if not anchor.get("found"):
+        diag["failReason"] = "anchor_not_found"
+        return {"ok": False, "reason": diag["failReason"], **({"diagnostics": diag} if debug else {})}
+
+    after_cfg = read.get("afterLevelRegion") or {}
+    after_region = _clamp_norm_rect({
+        "x": float(after_cfg.get("x", 0.84)),
+        "y": float(anchor["y"]) + float(after_cfg.get("yOffsetFromAnchor", -0.065)),
+        "w": float(after_cfg.get("w", 0.073)),
+        "h": float(after_cfg.get("h", 0.13)),
+    })
+    level = _read_bond_level_after(img, after_region, debug)
+    diag["afterLevelRegion"] = after_region
+    if debug and "diagnostics" in level:
+        diag["bondLevelAfter"] = level["diagnostics"]
+    if not level.get("found"):
+        diag["failReason"] = "bond_level_not_found"
+        return {"ok": False, "reason": diag["failReason"], **({"diagnostics": diag} if debug else {})}
+
+    ocr = _ocr_region(img, read.get("servantOcrRegion", DEFAULT_REGION))
+    diag["ocr"] = ocr
+    keywords = [str(k) for k in read.get("servantCoinKeywords", []) if k]
+    name_field = str(read.get("servantNameField", "nameJP"))
+    rows = _ocr_rows(ocr.get("fragments", []))
+    diag["ocrRows"] = rows
+    coin_rows = [row for row in rows if _row_matches_keyword(str(row.get("text", "")), keywords)]
+    if not coin_rows:
+        diag["failReason"] = "servant_coin_row_not_found"
+        return {"ok": False, "reason": diag["failReason"], **({"diagnostics": diag} if debug else {})}
+
+    best_candidate: Optional[dict] = None
+    for row in coin_rows:
+        raw_name = _extract_bond_servant_name(str(row.get("text", "")), keywords)
+        match = _best_servant_match(raw_name, name_field)
+        candidate = {
+            "rowText": row.get("text", ""),
+            "rawName": raw_name,
+            "ocrConfidence": float(row.get("confidence", 0.0)),
+            "match": match,
+        }
+        if best_candidate is None or float(match["score"]) > float(best_candidate["match"]["score"]):
+            best_candidate = candidate
+    diag["servantCandidates"] = [best_candidate] if best_candidate else []
+    if best_candidate is None or float(best_candidate["match"]["score"]) < BOND_LEVEL_SERVANT_MATCH_THRESHOLD:
+        diag["failReason"] = "servant_match_low_confidence"
+        return {"ok": False, "reason": diag["failReason"], **({"diagnostics": diag} if debug else {})}
+
+    match = best_candidate["match"]
+    out = {
+        "ok": True,
+        "bondLevelAfter": int(level["value"]),
+        "servantName": best_candidate["rawName"],
+        "servantNameMatched": match["name"],
+        "servantId": match["id"],
+        "servantCollectionNo": match["collectionNo"],
+        "servantMatchScore": float(match["score"]),
+        "confidence": {
+            "anchor": float(anchor["score"]),
+            "bondLevelAfter": float(level["score"]),
+            "servantOcr": float(best_candidate["ocrConfidence"]),
+        },
+    }
+    if debug:
+        out["diagnostics"] = diag
+    return out
 
 
 def _load_crit_digit_templates(
@@ -4791,6 +5135,12 @@ def main() -> None:
                 _reply(req_id, {"fragments": [], "fullText": "", "error": err})
             else:
                 _reply(req_id, _ocr_region(img, cmd.get("region", DEFAULT_REGION)))
+        elif action == "read_bond_level_up":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(req_id, {"ok": False, "reason": "frame_unavailable", "error": err})
+            else:
+                _reply(req_id, _read_bond_level_up(img, bool(cmd.get("debug", False))))
         elif action == "read_level_digits":
             img, err = _load_frame(cmd)
             if img is None:

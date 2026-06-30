@@ -21,6 +21,7 @@ def _clear_state():
     mash_cv._icon_color_sig.clear()
     from mash_cv import cv as _cv_module
     _cv_module._ce_template_cache.clear()
+    _cv_module._servant_catalog_cache = None
     _cv_module.static_template_keys.clear()
     _cv_module.template_dirs.clear()
     _cv_module.templates_dir = None
@@ -30,6 +31,7 @@ def _clear_state():
     mash_cv._face_cache.clear()
     mash_cv._icon_color_sig.clear()
     _cv_module._ce_template_cache.clear()
+    _cv_module._servant_catalog_cache = None
     _cv_module.static_template_keys.clear()
     _cv_module.template_dirs.clear()
     _cv_module.templates_dir = None
@@ -466,6 +468,96 @@ class TestDetectScreen:
         ]
         assert "text_battle_result_bond_level_up" in level_up_keys
         assert level_up_detect["priority"] > 0
+
+    @pytest.mark.parametrize(
+        ("server", "expected_keyword", "expected_name_field"),
+        [
+            ("cn", "从者币", "nameCN"),
+            ("jp", "サーヴァントコイン", "nameJP"),
+        ],
+    )
+    def test_battle_result_bond_level_up_read_config_is_bundled(
+        self, server, expected_keyword, expected_name_field
+    ):
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", server, "templates"
+        )
+        cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", server, "cv.json"
+        )
+        if not (os.path.isdir(templates_dir) and os.path.isfile(cv_json)):
+            pytest.skip(f"{server} server resources not available in this checkout")
+
+        anchor_path = os.path.join(
+            templates_dir, "text_battle_result_bond_level_up_anchor.png"
+        )
+        assert os.path.isfile(anchor_path), anchor_path
+
+        with open(cv_json, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        read = cfg["screens"]["BattleResultBondLevelUp"]["read"]
+        assert read["anchor"]["template"] == "text_battle_result_bond_level_up_anchor"
+        assert read["anchor"]["threshold"] >= 0.9
+        assert read["servantOcrRegion"] == {
+            "x": 0.497,
+            "y": 0.526,
+            "w": 0.481,
+            "h": 0.342,
+        }
+        assert read["afterLevelRegion"] == {
+            "x": 0.84,
+            "yOffsetFromAnchor": -0.065,
+            "w": 0.073,
+            "h": 0.13,
+        }
+        assert expected_keyword in read["servantCoinKeywords"]
+        assert read["servantNameField"] == expected_name_field
+
+    @pytest.mark.parametrize(
+        ("server", "screenshot_rel", "expected_level", "expected_name"),
+        [
+            ("cn", (".screenshots", "cn", "bond_level_up_0_2.png"), 2, "贞德·Alter·Santa·Lily"),
+            ("cn", (".screenshots", "cn", "bond_level_up.png"), 6, "歌果"),
+            ("jp", (".screenshots", "jp", "bond_levelup.png"), 2, "スパルタクス"),
+        ],
+    )
+    def test_battle_result_bond_level_up_reader_real_captures(
+        self, server, screenshot_rel, expected_level, expected_name
+    ):
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", server, "templates"
+        )
+        cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", server, "cv.json"
+        )
+        screenshot = os.path.join(repo_root, *screenshot_rel)
+        if not (
+            os.path.isdir(templates_dir)
+            and os.path.isfile(cv_json)
+            and os.path.isfile(screenshot)
+        ):
+            pytest.skip(f"{server} resources or bond-level screenshot not available")
+
+        mash_cv._load_templates(templates_dir)
+        mash_cv._load_config(cv_json)
+        from mash_cv import cv as _cv_module
+        _cv_module._set_server(server.upper())
+        img = cv2.imread(screenshot)
+        assert img is not None
+
+        result = mash_cv._read_bond_level_up(img, debug=True)
+        assert result["ok"] is True, result.get("diagnostics")
+        assert result["bondLevelAfter"] == expected_level
+        assert result["servantNameMatched"] == expected_name
+        assert result["confidence"]["anchor"] >= 0.9
+        assert result["confidence"]["bondLevelAfter"] >= 0.85
+        assert result["servantMatchScore"] >= 0.72
 
     def test_cn_battle_result_bond_level_up_detects_real_capture(self):
         """The level-up overlay leaves the battle HUD visible, so the

@@ -70,6 +70,11 @@ impl SidecarClient {
                 models_dir.display()
             ));
         }
+        let servants_json = crate::resolve_servants_json_path(app)
+            .ok_or_else(|| "无法解析从者元数据文件".to_string())?;
+        if !servants_json.is_file() {
+            return Err(format!("未找到从者元数据文件 ({})", servants_json.display()));
+        }
 
         let cmd = app
             .shell()
@@ -78,6 +83,10 @@ impl SidecarClient {
             .env(
                 "MASH_CV_MODELS_DIR",
                 models_dir.to_string_lossy().to_string(),
+            )
+            .env(
+                "MASH_CV_SERVANTS_JSON_PATH",
+                servants_json.to_string_lossy().to_string(),
             )
             .env("PYTHONPATH", code_dir.to_string_lossy().to_string());
         let (mut rx, child) = cmd

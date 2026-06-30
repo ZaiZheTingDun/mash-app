@@ -886,6 +886,23 @@ pub(crate) fn resolve_cv_config_paths(app: &tauri::AppHandle, server: Server) ->
     paths
 }
 
+/// Resolve the servant metadata JSON as a real file for the Python sidecar.
+pub(crate) fn resolve_servants_json_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    {
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("resources")
+            .join("servants.json");
+        if dev.is_file() {
+            return Some(dev);
+        }
+    }
+
+    let base = app.path().resource_dir().ok()?;
+    Some(base.join("src").join("resources").join("servants.json"))
+}
+
 /// Resolve the bundled scrcpy-server.jar path.
 pub(crate) fn resolve_scrcpy_jar(app: &tauri::AppHandle) -> Option<PathBuf> {
     let base = app.path().resource_dir().ok()?;

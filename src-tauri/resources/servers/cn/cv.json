@@ -311,13 +311,41 @@
       "detect": {
         "template": "text_battle_result_bond_level_up",
         "region": {
-          "x": 0.25,
-          "y": 0.37,
-          "w": 0.55,
-          "h": 0.15
+          "x": 0.546,
+          "y": 0.36,
+          "w": 0.376,
+          "h": 0.16
         },
         "threshold": 0.85,
         "priority": 10
+      },
+      "read": {
+        "anchor": {
+          "template": "text_battle_result_bond_level_up_anchor",
+          "region": {
+            "x": 0.528,
+            "y": 0.456,
+            "w": 0.032,
+            "h": 0.181
+          },
+          "threshold": 0.9
+        },
+        "servantOcrRegion": {
+          "x": 0.497,
+          "y": 0.526,
+          "w": 0.481,
+          "h": 0.342
+        },
+        "afterLevelRegion": {
+          "x": 0.84,
+          "yOffsetFromAnchor": -0.065,
+          "w": 0.073,
+          "h": 0.13
+        },
+        "servantCoinKeywords": [
+          "从者币"
+        ],
+        "servantNameField": "nameCN"
       },
       "variants": {
         "main": {
