@@ -303,6 +303,13 @@ changes (i.e. when the runner moves to a different row).
   waits for the attack button before continuing. This overlay is not the
   pre-battle `TeamChange` screen and is not detected through the
   `Screen::TeamChange` route.
+- Preparation actions are fail-fast. If a servant skill, master skill,
+  Order Change, or Command Spell cannot finish its synchronized tap/wait chain,
+  the runner emits an Error-state log naming the actor and skill (for example,
+  `从者 servant_2 (#309) 技能 1 执行失败: 等待攻击按钮超时`) and stops instead of
+  marking the turn as executed or continuing to the attack button. The
+  post-action attack-button wait uses the shared skill timeout window, currently
+  15 seconds.
 - In normal mode, `battle_scenes.json` stores each Battle as `turns[]`. The
   runner still uses the `BATTLE m/n` HUD read to choose the Battle, then uses an
   internal 0-based turn counter for the current Battle. The counter resets when

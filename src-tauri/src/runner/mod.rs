@@ -65,7 +65,7 @@ const SKILL_POLL_INTERVAL: Duration = Duration::from_millis(300);
 /// (and a few skills push an NP-charge cut-in on top), so this needs
 /// to cover NP-length animations without hanging forever if something
 /// genuinely went wrong.
-const SKILL_WAIT_TIMEOUT: Duration = Duration::from_secs(3);
+const SKILL_WAIT_TIMEOUT: Duration = Duration::from_secs(15);
 /// After a submitted attack resolves back to Battle, wait briefly for a
 /// reliable `BATTLE m/n` HUD read before advancing the normal-mode turn
 /// counter. If CV keeps failing, fall back to the legacy turn-advance logic

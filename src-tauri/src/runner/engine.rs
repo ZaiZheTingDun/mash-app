@@ -279,7 +279,9 @@ impl Runner {
                         ),
                     );
                     let resolved_turn = self.resolve_normal_turn_for_current_members(&turn_cfg);
-                    self.execute_turn_skills(&resolved_turn);
+                    if !self.execute_turn_skills(&resolved_turn) {
+                        return;
+                    }
                     self.battle.executed_turn_key = Some(turn_key);
                     self.battle.scene_config_used = true;
                 } else {
@@ -317,7 +319,9 @@ impl Runner {
             {
                 let grand_servants = self.grand_servant_runtime_configs();
                 if grand_startup_can_run_before_attack(&scene, &grand_servants) {
-                    self.prepare_grand_startup_before_attack(&scene);
+                    if !self.prepare_grand_startup_before_attack(&scene) {
+                        return;
+                    }
                 }
             }
         }

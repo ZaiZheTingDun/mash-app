@@ -278,6 +278,19 @@ fn action_log_meta_serializes_skill_icons_in_camel_case() {
     );
 }
 
+#[test]
+fn skill_failure_labels_identify_actor_and_skill() {
+    assert_eq!(
+        servant_skill_failure_label(Some("servant_2"), Some(309), 0),
+        "从者 servant_2 (#309) 技能 1"
+    );
+    assert_eq!(
+        equipment_skill_failure_label(2, true),
+        "御主技能 3 / Order Change"
+    );
+    assert_eq!(command_spell_failure_label("restore"), "令咒 回复");
+}
+
 fn empty_advanced_scene() -> AdvancedBattleScene {
     AdvancedBattleScene {
         id: "advanced_scene_1".into(),

@@ -6,7 +6,7 @@
 use super::*;
 
 impl Runner {
-    pub(crate) fn execute_turn_skills(&mut self, turn: &BattleTurn) {
+    pub(crate) fn execute_turn_skills(&mut self, turn: &BattleTurn) -> bool {
         for action in turn_preparation_actions(turn) {
             match action {
                 Action::Servant {
@@ -27,6 +27,8 @@ impl Runner {
                     else {
                         continue;
                     };
+                    let action_label =
+                        servant_skill_failure_label(servant.as_deref(), *servant_id, skill_index);
 
                     self.emit_action(
                         "从者技能",
@@ -37,7 +39,7 @@ impl Runner {
                         },
                     );
                     if !self.tap_at("Battle", pos) {
-                        return;
+                        return self.fail_skill_execution(&action_label, "点击技能按钮失败");
                     }
                     thread::sleep(ACTION_DELAY);
 
@@ -50,11 +52,12 @@ impl Runner {
                             "等待目标选择框出现…",
                             "等待目标选择框出现超时",
                         ) {
-                            return;
+                            return self
+                                .fail_skill_execution(&action_label, "等待目标选择框出现超时");
                         }
 
                         if !self.tap_at("Battle", target_pos) {
-                            return;
+                            return self.fail_skill_execution(&action_label, "点击技能目标失败");
                         }
                         self.emit_debug("Battle", "等待目标选择框关闭");
                         if !self.wait_for_element_hidden(
@@ -64,7 +67,8 @@ impl Runner {
                             "等待目标选择框关闭…",
                             "等待目标选择框关闭超时",
                         ) {
-                            return;
+                            return self
+                                .fail_skill_execution(&action_label, "等待目标选择框关闭超时");
                         }
                     }
 
@@ -75,7 +79,7 @@ impl Runner {
                     // the next skill, otherwise rapid taps land on nothing
                     // or, worse, on whatever overlay is currently shown.
                     if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
-                        return;
+                        return self.fail_skill_execution(&action_label, "等待攻击按钮超时");
                     }
                 }
                 Action::Equipment {
@@ -95,10 +99,12 @@ impl Runner {
                     else {
                         continue;
                     };
+                    let action_label =
+                        equipment_skill_failure_label(skill_index, order_change.is_some());
 
                     self.emit("Battle", "打开御主技能面板");
                     if !self.tap_at("Battle", EQUIPMENT_BUTTON) {
-                        return;
+                        return self.fail_skill_execution(&action_label, "打开御主技能面板失败");
                     }
                     thread::sleep(ACTION_DELAY);
 
@@ -110,13 +116,14 @@ impl Runner {
                         },
                     );
                     if !self.tap_at("Battle", pos) {
-                        return;
+                        return self.fail_skill_execution(&action_label, "点击御主技能失败");
                     }
                     thread::sleep(ACTION_DELAY);
 
                     if let Some(change) = order_change {
                         if !self.execute_order_change(change) {
-                            return;
+                            return self
+                                .fail_skill_execution(&action_label, "Order Change 执行失败");
                         }
                     } else if let Some(target_pos) = skill_target_position(target.as_deref()) {
                         self.emit_debug("Battle", "等待目标选择框出现");
@@ -127,11 +134,12 @@ impl Runner {
                             "等待目标选择框出现…",
                             "等待目标选择框出现超时",
                         ) {
-                            return;
+                            return self
+                                .fail_skill_execution(&action_label, "等待目标选择框出现超时");
                         }
 
                         if !self.tap_at("Battle", target_pos) {
-                            return;
+                            return self.fail_skill_execution(&action_label, "点击技能目标失败");
                         }
                         self.emit_debug("Battle", "等待目标选择框关闭");
                         if !self.wait_for_element_hidden(
@@ -141,7 +149,8 @@ impl Runner {
                             "等待目标选择框关闭…",
                             "等待目标选择框关闭超时",
                         ) {
-                            return;
+                            return self
+                                .fail_skill_execution(&action_label, "等待目标选择框关闭超时");
                         }
                     }
 
@@ -150,7 +159,7 @@ impl Runner {
                     }
 
                     if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
-                        return;
+                        return self.fail_skill_execution(&action_label, "等待攻击按钮超时");
                     }
                 }
                 // Command Spell (令咒) walks four full-screen modals:
@@ -169,6 +178,8 @@ impl Runner {
                     let Some(target_pos) = skill_target_position(target.as_deref()) else {
                         continue;
                     };
+                    let action_label =
+                        command_spell_failure_label(spell.as_deref().unwrap_or_default());
 
                     self.emit_action(
                         "使用令咒",
@@ -178,18 +189,18 @@ impl Runner {
                         },
                     );
                     if !self.tap_at("Battle", COMMAND_SPELL_BUTTON) {
-                        return;
+                        return self.fail_skill_execution(&action_label, "点击令咒按钮失败");
                     }
                     thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
 
                     if !self.tap_at("Battle", COMMAND_SPELL_OPTIONS[option_idx]) {
-                        return;
+                        return self.fail_skill_execution(&action_label, "选择令咒行动失败");
                     }
                     thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
 
                     self.emit("Battle", "确认令咒");
                     if !self.tap_at("Battle", COMMAND_SPELL_CONFIRM) {
-                        return;
+                        return self.fail_skill_execution(&action_label, "确认令咒失败");
                     }
                     thread::sleep(COMMAND_SPELL_DIALOG_SETTLE);
 
@@ -201,11 +212,12 @@ impl Runner {
                         "等待令咒目标选择框出现…",
                         "等待令咒目标选择框出现超时",
                     ) {
-                        return;
+                        return self
+                            .fail_skill_execution(&action_label, "等待令咒目标选择框出现超时");
                     }
 
                     if !self.tap_at("Battle", target_pos) {
-                        return;
+                        return self.fail_skill_execution(&action_label, "点击令咒目标失败");
                     }
                     self.emit_debug("Battle", "等待令咒目标选择框关闭");
                     if !self.wait_for_element_hidden(
@@ -215,17 +227,28 @@ impl Runner {
                         "等待令咒目标选择框关闭…",
                         "等待令咒目标选择框关闭超时",
                     ) {
-                        return;
+                        return self
+                            .fail_skill_execution(&action_label, "等待令咒目标选择框关闭超时");
                     }
 
                     self.skip_after_skill();
 
                     if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
-                        return;
+                        return self.fail_skill_execution(&action_label, "等待攻击按钮超时");
                     }
                 }
             }
         }
+        true
+    }
+
+    fn fail_skill_execution(&self, action_label: &str, reason: &str) -> bool {
+        let message = format!("{action_label} 执行失败: {reason}");
+        self.set_state(RunnerState::Error {
+            message: message.clone(),
+        });
+        self.emit_warn("Battle", &message);
+        false
     }
 
     pub(crate) fn execute_order_change(&mut self, change: &crate::OrderChangeSelection) -> bool {
@@ -370,4 +393,33 @@ pub(crate) fn enemy_target_position(target: Option<&str>) -> Option<Point> {
     let t = target?;
     let ei = parse_index(t, "enemy_")?;
     ENEMY_TARGETS.get(ei).copied()
+}
+
+pub(crate) fn servant_skill_failure_label(
+    servant: Option<&str>,
+    servant_id: Option<u32>,
+    skill_index: u32,
+) -> String {
+    match (servant, servant_id) {
+        (Some(slot), Some(id)) => format!("从者 {slot} (#{id}) 技能 {}", skill_index + 1),
+        (Some(slot), None) => format!("从者 {slot} 技能 {}", skill_index + 1),
+        (None, Some(id)) => format!("从者 #{id} 技能 {}", skill_index + 1),
+        (None, None) => format!("从者技能 {}", skill_index + 1),
+    }
+}
+
+pub(crate) fn equipment_skill_failure_label(skill_index: u32, order_change: bool) -> String {
+    if order_change {
+        format!("御主技能 {} / Order Change", skill_index + 1)
+    } else {
+        format!("御主技能 {}", skill_index + 1)
+    }
+}
+
+pub(crate) fn command_spell_failure_label(spell: &str) -> String {
+    match spell {
+        "np_release" => "令咒 开放宝具".into(),
+        "restore" => "令咒 回复".into(),
+        _ => format!("令咒 {spell}"),
+    }
 }

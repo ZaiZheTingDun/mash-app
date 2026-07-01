@@ -650,10 +650,13 @@ pub(crate) fn rect_center(r: &NormRect) -> Point {
 }
 
 impl Runner {
-    pub(crate) fn prepare_grand_startup_before_attack(&mut self, scene: &AdvancedBattleScene) {
+    pub(crate) fn prepare_grand_startup_before_attack(
+        &mut self,
+        scene: &AdvancedBattleScene,
+    ) -> bool {
         let scene_index = self.battle.current_scene_index;
         if self.battle.advanced_startup_done.contains(&scene_index) {
-            return;
+            return true;
         }
         let executed_control_count = *self
             .battle
@@ -697,7 +700,7 @@ impl Runner {
         self.battle.advanced_startup_done.insert(scene_index);
 
         if startup_actions.is_empty() {
-            return;
+            return true;
         }
         let prep_turn = BattleTurn {
             id: scene.id.clone(),
@@ -708,8 +711,11 @@ impl Runner {
             enemy_target: None,
             attack_priority: Vec::new(),
         };
-        self.execute_turn_skills(&prep_turn);
+        if !self.execute_turn_skills(&prep_turn) {
+            return false;
+        }
         self.emit("Battle", "启动阶段完成，进入自动战斗");
+        true
     }
 
     pub(crate) fn handle_attack(&mut self) {
@@ -1348,6 +1354,11 @@ impl Runner {
                         }
                         thread::sleep(ACTION_DELAY);
                         if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                            self.fail_action(
+                                "Battle",
+                                "返回 Battle 执行启动行动",
+                                "等待攻击按钮超时".into(),
+                            );
                             return;
                         }
                         let prep_turn = BattleTurn {
@@ -1359,7 +1370,9 @@ impl Runner {
                             enemy_target: None,
                             attack_priority: Vec::new(),
                         };
-                        self.execute_turn_skills(&prep_turn);
+                        if !self.execute_turn_skills(&prep_turn) {
+                            return;
+                        }
 
                         self.emit("Battle", "启动阶段完成，进入自动战斗");
                         if !self.tap_at("Battle", ATTACK_BUTTON) {
@@ -1412,6 +1425,11 @@ impl Runner {
                         }
                         thread::sleep(ACTION_DELAY);
                         if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                            self.fail_action(
+                                "Battle",
+                                "返回 Battle 执行控制行动",
+                                "等待攻击按钮超时".into(),
+                            );
                             return;
                         }
                         let control_turn = BattleTurn {
@@ -1423,7 +1441,9 @@ impl Runner {
                             enemy_target: None,
                             attack_priority: Vec::new(),
                         };
-                        self.execute_turn_skills(&control_turn);
+                        if !self.execute_turn_skills(&control_turn) {
+                            return;
+                        }
                         self.battle
                             .advanced_control_indices
                             .insert(scene_index, control_index + 1);
@@ -1514,6 +1534,11 @@ impl Runner {
                     }
                     thread::sleep(ACTION_DELAY);
                     if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                        self.fail_action(
+                            "Battle",
+                            "返回 Battle 执行启动行动",
+                            "等待攻击按钮超时".into(),
+                        );
                         return;
                     }
                     let prep_turn = BattleTurn {
@@ -1525,7 +1550,9 @@ impl Runner {
                         enemy_target: None,
                         attack_priority: Vec::new(),
                     };
-                    self.execute_turn_skills(&prep_turn);
+                    if !self.execute_turn_skills(&prep_turn) {
+                        return;
+                    }
 
                     self.emit("Battle", "启动阶段完成，进入自动战斗");
                     if !self.tap_at("Battle", ATTACK_BUTTON) {
@@ -1611,6 +1638,11 @@ impl Runner {
                     }
                     thread::sleep(ACTION_DELAY);
                     if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                        self.fail_action(
+                            "Battle",
+                            "返回 Battle 执行控制行动",
+                            "等待攻击按钮超时".into(),
+                        );
                         return;
                     }
                     let control_turn = BattleTurn {
@@ -1622,7 +1654,9 @@ impl Runner {
                         enemy_target: None,
                         attack_priority: Vec::new(),
                     };
-                    self.execute_turn_skills(&control_turn);
+                    if !self.execute_turn_skills(&control_turn) {
+                        return;
+                    }
 
                     self.emit("Battle", "控制行动完成，返回指令卡攻击");
                     if !self.tap_at("Battle", ATTACK_BUTTON) {
@@ -1725,6 +1759,11 @@ impl Runner {
                 }
                 thread::sleep(ACTION_DELAY);
                 if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                    self.fail_action(
+                        "Battle",
+                        "返回 Battle 执行高级规则准备行动",
+                        "等待攻击按钮超时".into(),
+                    );
                     return;
                 }
                 let prep_turn = BattleTurn {
@@ -1736,7 +1775,9 @@ impl Runner {
                     enemy_target: None,
                     attack_priority: Vec::new(),
                 };
-                self.execute_turn_skills(&prep_turn);
+                if !self.execute_turn_skills(&prep_turn) {
+                    return;
+                }
 
                 self.emit("Battle", "高级规则准备行动完成，重新进入指令卡");
                 if !self.tap_at("Battle", ATTACK_BUTTON) {
