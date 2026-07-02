@@ -1289,7 +1289,7 @@ fn build_assets_remote_manifest(latest: u32, patches: &str) -> AssetsRemoteManif
 #[test]
 fn assets_app_manifest_parses_target_version_and_latest_url() {
     let manifest = parse_assets_app_manifest(ASSETS_MANIFEST_JSON).unwrap();
-    assert_eq!(manifest.assets_version, 3);
+    assert_eq!(manifest.assets_version, 4);
     assert_eq!(
         manifest.latest_url,
         "https://mash.xiaotongx.com/mash/assets/latest.json"
