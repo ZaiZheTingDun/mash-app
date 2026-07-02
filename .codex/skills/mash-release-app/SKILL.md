@@ -30,13 +30,25 @@ and then run the checks in that same environment:
 ```bash
 mise exec -- git status --short
 mise exec -- pnpm install
-mise exec -- aws sts get-caller-identity --profile "${AWS_PROFILE:-mash}"
 mise exec -- test -n "${R2_ENDPOINT:-}"
 mise exec -- test -n "${R2_BUCKET:-}"
 mise exec -- test -n "${RELEASE_BASE_URL:-}"
 mise exec -- test -n "${TAURI_SIGNING_PRIVATE_KEY:-}"
 mise exec -- test -n "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
+mise exec -- curl --fail --location --silent --show-error --head "${RELEASE_BASE_URL%/}/"
 ```
+
+Do not use `aws sts get-caller-identity` as a release preflight for this repo.
+The configured R2-backed AWS profile can reject STS even when artifact uploads are
+working. Prefer validating required environment variables up front and rely on the
+release scripts' real checks:
+
+- `scripts/release-cv-code.sh` uploads the code zip, runs `head-object`, and
+  validates the public artifact URL.
+- `scripts/release-cv-runtime.sh` uploads the runtime zip and validates the
+  public runtime URL after the upload completes.
+- `scripts/release-tauri-updater.sh` uploads immutable artifacts, publishes
+  channel `latest.json`, and verifies the remote JSON plus artifact URL.
 
 For app releases, default scripts assume `TAURI_TARGET=darwin-aarch64` and `RELEASE_CHANNEL=stable`. Override explicitly when publishing another target or channel.
 
