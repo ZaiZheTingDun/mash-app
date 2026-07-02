@@ -24241,7 +24241,7 @@
     "id": 9408600,
     "collectionNo": 2239,
     "name": "狂戦士の頂に立つもの",
-    "name_cn": null,
+    "name_cn": "立于狂战士之巅者",
     "rarity": 5,
     "flag": "svtEquipManaExchange",
     "flags": [
@@ -24252,7 +24252,7 @@
     "id": 9309150,
     "collectionNo": 2240,
     "name": "英霊星行：アントニオ・サリエリ",
-    "name_cn": null,
+    "name_cn": "英灵星行：安东尼奥·萨列里",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24263,7 +24263,7 @@
     "id": 9309250,
     "collectionNo": 2241,
     "name": "英霊星行：刑部姫",
-    "name_cn": null,
+    "name_cn": "英灵星行：刑部姬",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24274,7 +24274,7 @@
     "id": 9309230,
     "collectionNo": 2242,
     "name": "英霊星行：加藤段蔵＆果心居士",
-    "name_cn": null,
+    "name_cn": "英灵星行：加藤段藏＆果心居士",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24285,7 +24285,7 @@
     "id": 9309240,
     "collectionNo": 2243,
     "name": "英霊星行：曲亭馬琴",
-    "name_cn": null,
+    "name_cn": "英灵星行：曲亭马琴",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24296,7 +24296,7 @@
     "id": 9309260,
     "collectionNo": 2244,
     "name": "英霊星行：玄奘三蔵",
-    "name_cn": null,
+    "name_cn": "英灵星行：西行者",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24307,7 +24307,7 @@
     "id": 9309270,
     "collectionNo": 2245,
     "name": "英霊星行：子ギル",
-    "name_cn": null,
+    "name_cn": "英灵星行：幼吉尔",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24318,7 +24318,7 @@
     "id": 9309160,
     "collectionNo": 2246,
     "name": "英霊星行：ジャンヌ・ダルク",
-    "name_cn": null,
+    "name_cn": "英灵星行：贞德",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24329,7 +24329,7 @@
     "id": 9309280,
     "collectionNo": 2247,
     "name": "英霊星行：太公望",
-    "name_cn": null,
+    "name_cn": "英灵星行：太公望",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24340,7 +24340,7 @@
     "id": 9309290,
     "collectionNo": 2248,
     "name": "英霊星行：太歳星君",
-    "name_cn": null,
+    "name_cn": "英灵星行：太岁星君",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24351,7 +24351,7 @@
     "id": 9309170,
     "collectionNo": 2249,
     "name": "英霊星行：テスカトリポカ",
-    "name_cn": null,
+    "name_cn": "英灵星行：特斯卡特利波卡",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24362,7 +24362,7 @@
     "id": 9309180,
     "collectionNo": 2250,
     "name": "英霊星行：テノチティトラン",
-    "name_cn": null,
+    "name_cn": "英灵星行：特诺奇蒂特兰",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24373,7 +24373,7 @@
     "id": 9309300,
     "collectionNo": 2251,
     "name": "英霊星行：風魔小太郎＆耀星のハサン",
-    "name_cn": null,
+    "name_cn": "英灵星行：风魔小太郎＆耀星哈桑",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24384,7 +24384,7 @@
     "id": 9309190,
     "collectionNo": 2252,
     "name": "英霊星行：ヘラクレス",
-    "name_cn": null,
+    "name_cn": "英灵星行：赫拉克勒斯",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24395,7 +24395,7 @@
     "id": 9309200,
     "collectionNo": 2253,
     "name": "英霊星行：ボイジャー",
-    "name_cn": null,
+    "name_cn": "英灵星行：旅行者",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24406,7 +24406,7 @@
     "id": 9309130,
     "collectionNo": 2254,
     "name": "英霊星行：マシュ・キリエライト",
-    "name_cn": null,
+    "name_cn": "英灵星行：玛修·基列莱特",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24417,7 +24417,7 @@
     "id": 9309140,
     "collectionNo": 2255,
     "name": "英霊星行：ＵＤＫ－バーゲスト",
-    "name_cn": null,
+    "name_cn": "英灵星行：ＵＤＫ－巴格斯特",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24428,7 +24428,7 @@
     "id": 9309210,
     "collectionNo": 2256,
     "name": "英霊星行：ラーヴァ／ティアマト",
-    "name_cn": null,
+    "name_cn": "英灵星行：幼体／提亚马特",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24439,7 +24439,7 @@
     "id": 9309310,
     "collectionNo": 2257,
     "name": "英霊星行：蘭陵王",
-    "name_cn": null,
+    "name_cn": "英灵星行：兰陵王",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24450,7 +24450,7 @@
     "id": 9309220,
     "collectionNo": 2258,
     "name": "英霊星行：ロムルス＝クィリヌス",
-    "name_cn": null,
+    "name_cn": "英灵星行：罗穆路斯·奎里努斯",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -24461,7 +24461,7 @@
     "id": 9408610,
     "collectionNo": 2259,
     "name": "アマング・ザ・ニンファエア",
-    "name_cn": null,
+    "name_cn": "睡莲环绕之中",
     "rarity": 5,
     "flag": "svtEquipEvent",
     "flags": [
@@ -24472,7 +24472,7 @@
     "id": 9408620,
     "collectionNo": 2260,
     "name": "雷神の舞",
-    "name_cn": null,
+    "name_cn": "雷神之舞",
     "rarity": 4,
     "flag": "svtEquipEvent",
     "flags": [
@@ -24483,7 +24483,7 @@
     "id": 9408630,
     "collectionNo": 2261,
     "name": "光の祭典",
-    "name_cn": null,
+    "name_cn": "光之祭典",
     "rarity": 3,
     "flag": "svtEquipEvent",
     "flags": [
@@ -24494,7 +24494,7 @@
     "id": 9408640,
     "collectionNo": 2262,
     "name": "サン・シャワー",
-    "name_cn": null,
+    "name_cn": "太阳雨",
     "rarity": 5,
     "flag": "svtEquipEventReward",
     "flags": [
@@ -24505,7 +24505,7 @@
     "id": 9309120,
     "collectionNo": 2263,
     "name": "神が乗る象",
-    "name_cn": null,
+    "name_cn": "神骑之象",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -28313,6 +28313,61 @@
     "id": 9311830,
     "collectionNo": 2611,
     "name": "貴方への祈り",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipFriendShip",
+    "flags": [
+      "svtEquipFriendShip"
+    ]
+  },
+  {
+    "id": 9409330,
+    "collectionNo": 2612,
+    "name": "バイブレント・カラー",
+    "name_cn": null,
+    "rarity": 5,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409340,
+    "collectionNo": 2613,
+    "name": "彫姫の行進",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409350,
+    "collectionNo": 2614,
+    "name": "フォレスト・エデュケーター",
+    "name_cn": null,
+    "rarity": 3,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409360,
+    "collectionNo": 2615,
+    "name": "ドリーム・プール",
+    "name_cn": null,
+    "rarity": 5,
+    "flag": "svtEquipEventReward",
+    "flags": [
+      "svtEquipEventReward"
+    ]
+  },
+  {
+    "id": 9311840,
+    "collectionNo": 2616,
+    "name": "愛しき代償",
     "name_cn": null,
     "rarity": 4,
     "flag": "svtEquipFriendShip",

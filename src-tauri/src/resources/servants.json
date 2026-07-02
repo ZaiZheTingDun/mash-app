@@ -8652,7 +8652,7 @@
   {
     "id": 305900,
     "collectionNo": 442,
-    "nameCN": "インドラ",
+    "nameCN": "因陀罗",
     "nameJP": "インドラ",
     "classId": 3,
     "className": "lancer",
@@ -8660,9 +8660,9 @@
     "noblePhantasms": [
       {
         "id": 305901,
-        "name": "シャクラ・ヴァジュラ",
+        "name": "Śakra Vajra",
         "nameJP": "神の雷",
-        "nameCN": "神の雷",
+        "nameCN": "神之雷",
         "card": "3",
         "cardName": "quick"
       }
@@ -9213,6 +9213,25 @@
         "name": "ウルザルスラズル・フォルン",
         "nameJP": "旧き過去を紡ぐ糸",
         "nameCN": "旧き過去を紡ぐ糸",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 1002200,
+    "collectionNo": 471,
+    "nameCN": "アスカラポス",
+    "nameJP": "アスカラポス",
+    "classId": 10,
+    "className": "alterEgo",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 1002201,
+        "name": "プロミニマ・ティ・サティヒアス",
+        "nameJP": "我は告げる、逃れられぬ絶望を",
+        "nameCN": "我は告げる、逃れられぬ絶望を",
         "card": "1",
         "cardName": "arts"
       }
