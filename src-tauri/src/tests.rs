@@ -1859,6 +1859,20 @@ fn servants_data_expands_variants_with_last_cn_np_and_face_id() {
     );
 }
 
+#[test]
+fn servants_data_includes_latest_cn_catalog_updates() {
+    let indra = servants_data().iter().find(|s| s.id == 442).unwrap();
+    assert_eq!(indra.name_cn, "因陀罗");
+    assert_eq!(indra.noble_phantasm_name.as_deref(), Some("神之雷"));
+
+    let ascalaphus = servants_data().iter().find(|s| s.id == 471).unwrap();
+    assert_eq!(ascalaphus.name_jp, "アスカラポス");
+    assert_eq!(
+        ascalaphus.noble_phantasm_name.as_deref(),
+        Some("我は告げる、逃れられぬ絶望を")
+    );
+}
+
 // --- pick_ce_card_in -----------------------------------------------
 
 #[test]
@@ -1932,6 +1946,9 @@ fn craft_essences_data_uses_collection_no_and_cn_names() {
     assert!(ce_2236.name_aliases.is_empty());
     assert_eq!(ce_2237.name, "去往大海");
     assert!(ce_2237.name_aliases.is_empty());
+
+    let ce_2262 = ces.iter().find(|ce| ce.id == 2262).unwrap();
+    assert_eq!(ce_2262.name, "太阳雨");
 }
 
 #[test]
