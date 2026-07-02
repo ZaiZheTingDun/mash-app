@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Avatar, Box, Flex, Text, Popover, Button, Spinner, Checkbox, Select, IconButton } from "@radix-ui/themes";
+import { Avatar, Box, Flex, Text, Popover, Button, Spinner, Checkbox, Select, IconButton, Dialog, TextField } from "@radix-ui/themes";
 import {
   HamburgerMenuIcon,
   Link2Icon,
@@ -30,6 +30,13 @@ type LogLevel = "info" | "warn" | "debug" | "localDebug";
 interface AdbStatus {
   connected: boolean;
   deviceName: string | null;
+}
+
+interface AdbDevicePreview {
+  serial: string;
+  description: string;
+  previewPath: string;
+  selected: boolean;
 }
 
 interface AdbResetStep {
@@ -599,7 +606,15 @@ export function StatusBar({
   const [status, setStatus] = useState<AdbStatus>({ connected: false, deviceName: null });
   const [checking, setChecking] = useState(false);
   const [resettingAdb, setResettingAdb] = useState(false);
-  const [useBluestack, setUseBluestack] = useState(false);
+  const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
+  const [deviceScanState, setDeviceScanState] = useState<"idle" | "loading" | "ready" | "empty" | "error">("idle");
+  const [deviceScanError, setDeviceScanError] = useState<string | null>(null);
+  const [devicePreviews, setDevicePreviews] = useState<AdbDevicePreview[]>([]);
+  const [selectingSerial, setSelectingSerial] = useState<string | null>(null);
+  const [manualPortOpen, setManualPortOpen] = useState(false);
+  const [manualPort, setManualPort] = useState("5555");
+  const [manualPortBusy, setManualPortBusy] = useState(false);
+  const [manualPortError, setManualPortError] = useState<string | null>(null);
   const [server, setServer] = useState<Server>("JP");
   // The server selector must be locked while the runner is mid-run: the
   // sidecar already pinned templates / OCR for the previous server when
@@ -655,7 +670,6 @@ export function StatusBar({
   );
 
   useEffect(() => {
-    invoke<boolean>("get_use_bluestack").then(setUseBluestack).catch(() => {});
     invoke<Server>("get_server").then(setServer).catch(() => {});
   }, []);
 
@@ -714,6 +728,59 @@ export function StatusBar({
       .finally(() => setChecking(false));
   }, []);
 
+  const refreshDevicePreviews = useCallback((refresh = false) => {
+    setDeviceDialogOpen(true);
+    setDeviceScanState("loading");
+    setDeviceScanError(null);
+    setDevicePreviews([]);
+    invoke<AdbDevicePreview[]>("refresh_adb_devices_with_previews", { refresh })
+      .then((devices) => {
+        setDevicePreviews(devices);
+        setDeviceScanState(devices.length > 0 ? "ready" : "empty");
+        const selected = devices.find((device) => device.selected);
+        if (selected) {
+          setStatus({ connected: true, deviceName: selected.serial });
+        } else {
+          pollAdb();
+        }
+      })
+      .catch((err) => {
+        setDeviceScanError(String(err));
+        setDeviceScanState("error");
+      });
+  }, [pollAdb]);
+
+  const handleSelectDevice = useCallback((serial: string) => {
+    setSelectingSerial(serial);
+    invoke<AdbStatus>("select_adb_device", { serial })
+      .then((nextStatus) => {
+        setStatus(nextStatus);
+        setDeviceDialogOpen(false);
+      })
+      .catch((err) => {
+        setDeviceScanError(String(err));
+        setDeviceScanState("error");
+      })
+      .finally(() => setSelectingSerial(null));
+  }, []);
+
+  const handleManualAddDevice = useCallback(() => {
+    const port = Number.parseInt(manualPort.trim(), 10);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      setManualPortError("请输入 1-65535 之间的端口号");
+      return;
+    }
+    setManualPortBusy(true);
+    setManualPortError(null);
+    invoke<string>("connect_adb_port", { port })
+      .then(() => {
+        setManualPortOpen(false);
+        refreshDevicePreviews(false);
+      })
+      .catch((err) => setManualPortError(String(err)))
+      .finally(() => setManualPortBusy(false));
+  }, [manualPort, refreshDevicePreviews]);
+
   const handleResetAdb = useCallback(() => {
     setResettingAdb(true);
     onOperationLogOpenChange?.(true);
@@ -739,11 +806,6 @@ export function StatusBar({
         setResettingAdb(false);
       });
   }, [onLogEntry, onOperationLogOpenChange, pollAdb]);
-
-  const handleBluestackToggle = useCallback((checked: boolean) => {
-    setUseBluestack(checked);
-    invoke("set_use_bluestack", { value: checked }).catch(() => {});
-  }, []);
 
   const handleServerChange = useCallback((value: string) => {
     if (value !== "JP" && value !== "CN") return;
@@ -777,6 +839,140 @@ export function StatusBar({
 
   return (
     <>
+      <Dialog.Root open={deviceDialogOpen} onOpenChange={setDeviceDialogOpen}>
+        <Dialog.Content maxWidth="720px" className="adb-device-dialog">
+          <Flex align="center" justify="between" gap="3" mb="3">
+            <Box>
+              <Dialog.Title>选择 ADB 设备</Dialog.Title>
+              <Dialog.Description size="2" color="gray">
+                选择后会保存该连接，下次优先使用。
+              </Dialog.Description>
+            </Box>
+            <Flex align="center" gap="2">
+              <Button
+                size="1"
+                variant="soft"
+                color="gray"
+                disabled={deviceScanState === "loading" || selectingSerial != null || manualPortBusy}
+                onClick={() => {
+                  setManualPortOpen(true);
+                  setManualPortError(null);
+                }}
+              >
+                <Link2Icon width={14} height={14} />
+                手动添加
+              </Button>
+              <Button
+                size="1"
+                variant="soft"
+                color="gray"
+                disabled={deviceScanState === "loading" || selectingSerial != null}
+                onClick={() => refreshDevicePreviews(true)}
+              >
+                {deviceScanState === "loading" ? <Spinner size="1" /> : <Link2Icon width={14} height={14} />}
+                重新扫描
+              </Button>
+            </Flex>
+          </Flex>
+
+          {deviceScanState === "loading" && (
+            <Flex direction="column" align="center" justify="center" gap="3" className="adb-device-dialog-state">
+              <Spinner size="3" />
+              <Text size="2" color="gray">正在读取现有 ADB 设备…</Text>
+            </Flex>
+          )}
+
+          {deviceScanState === "empty" && (
+            <Flex direction="column" align="center" justify="center" gap="3" className="adb-device-dialog-state">
+              <DesktopIcon width={28} height={28} style={{ color: "var(--gray-9)" }} />
+              <Text size="2" color="gray">未检测到可用 ADB 设备</Text>
+              <Button size="1" variant="soft" onClick={() => refreshDevicePreviews(true)}>重新扫描</Button>
+            </Flex>
+          )}
+
+          {deviceScanState === "error" && (
+            <Flex direction="column" align="center" justify="center" gap="3" className="adb-device-dialog-state">
+              <Text size="2" color="red">{deviceScanError ?? "读取 ADB 设备失败"}</Text>
+              <Button size="1" variant="soft" onClick={() => refreshDevicePreviews(true)}>重新扫描</Button>
+            </Flex>
+          )}
+
+          {deviceScanState === "ready" && (
+            <Box>
+              {devicePreviews.length === 1 && devicePreviews[0].selected && (
+                <Text size="2" color="gray" as="p" mb="2">
+                  已自动选择：{devicePreviews[0].serial}
+                </Text>
+              )}
+              <div className="adb-device-grid">
+                {devicePreviews.map((device) => (
+                  <button
+                    key={device.serial}
+                    type="button"
+                    className={`adb-device-card ${device.selected ? "adb-device-card--selected" : ""}`}
+                    disabled={selectingSerial != null}
+                    onClick={() => handleSelectDevice(device.serial)}
+                  >
+                    <span className="adb-device-preview">
+                      <img src={convertFileSrc(device.previewPath)} alt={`${device.serial} 截图`} />
+                    </span>
+                    <span className="adb-device-meta">
+                      <span className="adb-device-serial">{device.serial}</span>
+                      {device.description && (
+                        <span className="adb-device-description">{device.description}</span>
+                      )}
+                      {device.selected && <span className="adb-device-selected">当前选择</span>}
+                    </span>
+                    {selectingSerial === device.serial && (
+                      <span className="adb-device-card-spinner"><Spinner size="1" /></span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </Box>
+          )}
+        </Dialog.Content>
+      </Dialog.Root>
+
+      <Dialog.Root open={manualPortOpen} onOpenChange={setManualPortOpen}>
+        <Dialog.Content maxWidth="360px" className="adb-manual-port-dialog">
+          <Dialog.Title>手动添加 ADB 设备</Dialog.Title>
+          <Dialog.Description size="2" color="gray">
+            输入 127.0.0.1 的 ADB 端口号。
+          </Dialog.Description>
+          <Flex align="center" gap="2" mt="3">
+            <Text size="2" color="gray">127.0.0.1:</Text>
+            <TextField.Root
+              size="2"
+              value={manualPort}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="5555"
+              disabled={manualPortBusy}
+              autoFocus
+              onChange={(event) => setManualPort(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleManualAddDevice();
+              }}
+            />
+          </Flex>
+          {manualPortError && (
+            <Text size="1" color="red" as="p" mt="2">{manualPortError}</Text>
+          )}
+          <Flex justify="end" gap="2" mt="4">
+            <Dialog.Close>
+              <Button size="2" variant="soft" color="gray" disabled={manualPortBusy}>
+                取消
+              </Button>
+            </Dialog.Close>
+            <Button size="2" disabled={manualPortBusy} onClick={handleManualAddDevice}>
+              {manualPortBusy ? <Spinner size="1" /> : null}
+              添加
+            </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
       {operationLogOpen && (
         <Box className="operation-log-panel">
           <Flex align="center" justify="between" className="operation-log-header">
@@ -957,14 +1153,15 @@ export function StatusBar({
                   </Select.Root>
                 </Flex>
 
-                <label className="bluestack-checkbox">
-                  <Checkbox
-                    size="1"
-                    checked={useBluestack}
-                    onCheckedChange={(checked) => handleBluestackToggle(checked === true)}
-                  />
-                  <Text size="2">使用 BlueStacks 模拟器</Text>
-                </label>
+                <Button
+                  size="1"
+                  variant="soft"
+                  disabled={deviceScanState === "loading"}
+                  onClick={() => refreshDevicePreviews(false)}
+                >
+                  {deviceScanState === "loading" ? <Spinner size="1" /> : <DesktopIcon width={14} height={14} />}
+                  选择设备
+                </Button>
 
                 <Button
                   size="1"
@@ -974,7 +1171,7 @@ export function StatusBar({
                   onClick={handleResetAdb}
                 >
                   {resettingAdb ? <Spinner size="1" /> : <Link2Icon width={14} height={14} />}
-                  {resettingAdb ? "重置中…" : "重置 ADB 链接"}
+                  {resettingAdb ? "重置中…" : "重置 ADB"}
                 </Button>
 
                 {status.connected ? (

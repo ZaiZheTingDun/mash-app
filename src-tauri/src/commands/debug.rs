@@ -5,7 +5,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::adb;
-use crate::commands::settings::RecognitionSettings;
+use crate::commands::settings::{AdbDeviceSettings, RecognitionSettings};
 use crate::enhancement_runner::{
     EnhancementRunnerHandle, EnhancementRunnerState, SERVANT_FACE_MATCH_CROP,
     SERVANT_FACE_TEMPLATE_SIZE, SERVANT_LIST_REGION,
@@ -162,13 +162,17 @@ fn ensure_debug_stream(
 
 fn ensure_debug_stream_for_current_device(
     app: &tauri::AppHandle,
-    bluestack_state: &Mutex<bool>,
+    adb_settings_state: &Mutex<AdbDeviceSettings>,
     server_state: &Mutex<Server>,
     debug_state: &DebugSidecar,
 ) -> Result<(), String> {
-    let use_bluestack = *bluestack_state.lock().unwrap();
+    let selected_adb_serial = adb_settings_state
+        .lock()
+        .unwrap()
+        .selected_adb_serial
+        .clone();
     let server = current_server(server_state);
-    let mut adb_dev = adb::Adb::new(app, use_bluestack);
+    let mut adb_dev = adb::Adb::new(app, selected_adb_serial);
     adb_dev.connect()?;
     let serial = adb_dev.serial().map(|s| s.to_string());
     ensure_debug_stream(app, debug_state, server, serial.as_deref())
@@ -304,7 +308,7 @@ fn find_cv_target_spec<'a>(
 #[tauri::command]
 pub fn debug_capture(
     app: tauri::AppHandle,
-    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
@@ -312,11 +316,17 @@ pub fn debug_capture(
 ) -> Result<DebugCaptureResult, String> {
     require_automation_idle(&handle_state, &enhancement_handle_state)?;
 
-    let use_bluestack = *bluestack_state.lock().unwrap();
+    let selected_adb_serial = adb_settings_state
+        .lock()
+        .unwrap()
+        .selected_adb_serial
+        .clone();
     let server = current_server(&server_state);
-    eprintln!("[debug_capture] begin (use_bluestack={use_bluestack}, server={server})");
+    eprintln!(
+        "[debug_capture] begin (selected_adb_serial={selected_adb_serial:?}, server={server})"
+    );
 
-    let mut adb_dev = adb::Adb::new(&app, use_bluestack);
+    let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
     adb_dev.connect().map_err(|e| {
         eprintln!("[debug_capture] adb connect failed: {e}");
         e
@@ -374,14 +384,14 @@ pub fn debug_capture(
 #[tauri::command]
 pub fn debug_stream_connect(
     app: tauri::AppHandle,
-    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
 ) -> Result<DebugStreamStatus, String> {
     require_automation_idle(&handle_state, &enhancement_handle_state)?;
-    ensure_debug_stream_for_current_device(&app, &bluestack_state, &server_state, &debug_state)?;
+    ensure_debug_stream_for_current_device(&app, &adb_settings_state, &server_state, &debug_state)?;
     Ok(debug_stream_status(&debug_state))
 }
 
@@ -403,7 +413,7 @@ pub fn debug_stream_disconnect(
 #[tauri::command]
 pub fn debug_stream_frame(
     app: tauri::AppHandle,
-    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
@@ -411,7 +421,7 @@ pub fn debug_stream_frame(
     detect_screen: Option<bool>,
 ) -> Result<DebugStreamFrameResult, String> {
     require_automation_idle(&handle_state, &enhancement_handle_state)?;
-    ensure_debug_stream_for_current_device(&app, &bluestack_state, &server_state, &debug_state)?;
+    ensure_debug_stream_for_current_device(&app, &adb_settings_state, &server_state, &debug_state)?;
 
     let (jpeg_base64, width, height, screen, score) = {
         let mut guard = debug_state.0.lock().unwrap();
@@ -446,14 +456,14 @@ pub fn debug_stream_frame(
 #[tauri::command]
 pub fn debug_read_noble_phantasm_gauges_live(
     app: tauri::AppHandle,
-    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
     server_state: tauri::State<'_, Mutex<Server>>,
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
 ) -> Result<Vec<NoblePhantasmMatch>, String> {
     require_automation_idle(&handle_state, &enhancement_handle_state)?;
-    ensure_debug_stream_for_current_device(&app, &bluestack_state, &server_state, &debug_state)?;
+    ensure_debug_stream_for_current_device(&app, &adb_settings_state, &server_state, &debug_state)?;
 
     let started = Instant::now();
     let sample_interval = Duration::from_millis(200);

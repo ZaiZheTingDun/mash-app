@@ -5,6 +5,7 @@
 //! switches also invalidate idle sidecars so future CV calls load the selected
 //! server resources.
 
+use crate::adb::BLUESTACKS_SERIAL;
 use crate::commands::debug;
 use crate::enhancement_runner::{EnhancementRunnerHandle, EnhancementRunnerState};
 use crate::paths::{migrate_legacy_app_data, StartupMigrationStatus};
@@ -136,6 +137,37 @@ fn apply_stop_on_bond_max_level(settings: &mut RecognitionSettings, value: bool)
     }
 }
 
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AdbDeviceSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) selected_adb_serial: Option<String>,
+}
+
+fn normalize_adb_serial(value: Option<String>) -> Option<String> {
+    value
+        .map(|serial| serial.trim().to_string())
+        .filter(|serial| !serial.is_empty())
+}
+
+fn adb_device_settings_from_value(v: &serde_json::Value) -> AdbDeviceSettings {
+    let selected_adb_serial = normalize_adb_serial(
+        v.get("selectedAdbSerial")
+            .and_then(|value| value.as_str())
+            .map(str::to_string),
+    )
+    .or_else(|| {
+        if v.get("useBluestack").and_then(|value| value.as_bool()) == Some(true) {
+            Some(BLUESTACKS_SERIAL.to_string())
+        } else {
+            None
+        }
+    });
+    AdbDeviceSettings {
+        selected_adb_serial,
+    }
+}
+
 fn adb_settings_path(app: &tauri::AppHandle) -> PathBuf {
     let dir = app
         .path()
@@ -145,13 +177,25 @@ fn adb_settings_path(app: &tauri::AppHandle) -> PathBuf {
     dir.join("adb_settings.json")
 }
 
-pub(crate) fn load_bluestack_setting(app: &tauri::AppHandle) -> bool {
+pub(crate) fn load_adb_device_settings(app: &tauri::AppHandle) -> AdbDeviceSettings {
     let path = adb_settings_path(app);
     fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .and_then(|v| v.get("useBluestack")?.as_bool())
-        .unwrap_or(false)
+        .map(|v| adb_device_settings_from_value(&v))
+        .unwrap_or_default()
+}
+
+pub(crate) fn save_adb_device_settings(
+    app: &tauri::AppHandle,
+    settings: &AdbDeviceSettings,
+) -> Result<(), String> {
+    let path = adb_settings_path(app);
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())
 }
 
 fn server_settings_path(app: &tauri::AppHandle) -> PathBuf {
@@ -246,24 +290,17 @@ fn load_last_update_check_date(app: &tauri::AppHandle) -> Option<String> {
 }
 
 #[tauri::command]
-pub(crate) fn get_use_bluestack(state: tauri::State<'_, Mutex<bool>>) -> bool {
-    *state.lock().unwrap()
+pub(crate) fn get_use_bluestack(_state: tauri::State<'_, Mutex<AdbDeviceSettings>>) -> bool {
+    false
 }
 
 #[tauri::command]
 pub(crate) fn set_use_bluestack(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, Mutex<bool>>,
-    value: bool,
+    _app: tauri::AppHandle,
+    _state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
+    _value: bool,
 ) -> Result<(), String> {
-    *state.lock().unwrap() = value;
-    let path = adb_settings_path(&app);
-    let json = serde_json::json!({ "useBluestack": value });
-    fs::write(
-        &path,
-        serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())
+    Ok(())
 }
 
 #[tauri::command]
@@ -376,7 +413,7 @@ pub(crate) fn set_stop_on_bond_max_level(
 #[tauri::command]
 pub(crate) async fn run_startup_migration(
     app: tauri::AppHandle,
-    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
     server_state: tauri::State<'_, Mutex<Server>>,
 ) -> Result<StartupMigrationStatus, String> {
     let migration_app = app.clone();
@@ -385,7 +422,7 @@ pub(crate) async fn run_startup_migration(
             .await
             .map_err(|e| format!("startup migration task failed: {e}"))??;
     if status.migrated {
-        *bluestack_state.lock().unwrap() = load_bluestack_setting(&app);
+        *adb_settings_state.lock().unwrap() = load_adb_device_settings(&app);
         *server_state.lock().unwrap() = load_server_setting(&app);
     }
     Ok(status)
@@ -476,6 +513,31 @@ mod tests {
 
         assert!(!settings.stop_on_bond_level_up);
         assert!(!settings.stop_on_bond_max_level);
+    }
+
+    #[test]
+    fn adb_device_settings_migrates_legacy_bluestack_setting() {
+        let settings = adb_device_settings_from_value(&serde_json::json!({
+            "useBluestack": true,
+        }));
+
+        assert_eq!(
+            settings.selected_adb_serial.as_deref(),
+            Some(BLUESTACKS_SERIAL)
+        );
+    }
+
+    #[test]
+    fn adb_device_settings_prefers_selected_serial_over_legacy_flag() {
+        let settings = adb_device_settings_from_value(&serde_json::json!({
+            "useBluestack": true,
+            "selectedAdbSerial": " emulator-5554 ",
+        }));
+
+        assert_eq!(
+            settings.selected_adb_serial.as_deref(),
+            Some("emulator-5554")
+        );
     }
 
     #[test]

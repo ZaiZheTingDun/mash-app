@@ -520,7 +520,7 @@ describe("StatusBar", () => {
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
-  it("resets the BlueStacks ADB connection from the status popover and logs each step", async () => {
+  it("resets the ADB connection from the status popover and logs each step", async () => {
     let resetHandler: AdbResetListener | null = null;
     vi.mocked(listen).mockImplementation(async (event, cb) => {
       if (event === "adb-reset-status") {
@@ -551,7 +551,7 @@ describe("StatusBar", () => {
     );
 
     await user.click(await screen.findByRole("button", { name: /游戏已连接/ }));
-    await user.click(screen.getByRole("button", { name: "重置 ADB 链接" }));
+    await user.click(screen.getByRole("button", { name: "重置 ADB" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("reset_bluestacks_adb_connection");
@@ -607,6 +607,145 @@ describe("StatusBar", () => {
     expect(onLogEntry).toHaveBeenCalledWith(
       expect.stringContaining("adb -s 127.0.0.1:5555 shell echo ok"),
     );
+  });
+
+  it("opens the device selection dialog with a loading state before showing previews", async () => {
+    let resolveDevices: (value: unknown) => void = () => {};
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "refresh_adb_devices_with_previews") {
+        return new Promise((resolve) => {
+          resolveDevices = resolve;
+        });
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<StatusBar />);
+
+    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
+    await user.click(screen.getByRole("button", { name: "选择设备" }));
+
+    expect(screen.getByText("正在读取现有 ADB 设备…")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("refresh_adb_devices_with_previews", { refresh: false });
+
+    act(() => {
+      resolveDevices([
+        {
+          serial: "127.0.0.1:5555",
+          description: "product:bluestacks",
+          previewPath: "/tmp/device.png",
+          selected: true,
+        },
+      ]);
+    });
+
+    expect(await screen.findByText("127.0.0.1:5555")).toBeInTheDocument();
+    expect(screen.getByText("已自动选择：127.0.0.1:5555")).toBeInTheDocument();
+  });
+
+  it("selects an adb device from the preview grid", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "refresh_adb_devices_with_previews") {
+        return [
+          {
+            serial: "emulator-5554",
+            description: "model:Pixel",
+            previewPath: "/tmp/emulator.png",
+            selected: false,
+          },
+        ];
+      }
+      if (cmd === "select_adb_device") {
+        const serial = typeof args === "object" && args != null && "serial" in args
+          ? (args as { serial: string }).serial
+          : null;
+        return { connected: true, deviceName: serial };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<StatusBar />);
+
+    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
+    await user.click(screen.getByRole("button", { name: "选择设备" }));
+    await user.click(await screen.findByRole("button", { name: /emulator-5554/ }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("select_adb_device", { serial: "emulator-5554" });
+    });
+    expect(await screen.findByText("游戏已连接")).toBeInTheDocument();
+  });
+
+  it("shows an empty adb device state with a rescan action", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "refresh_adb_devices_with_previews") return [];
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<StatusBar />);
+
+    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
+    await user.click(screen.getByRole("button", { name: "选择设备" }));
+
+    expect(await screen.findByText("未检测到可用 ADB 设备")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "重新扫描" }).length).toBeGreaterThan(0);
+  });
+
+  it("refreshes adb connections only when the rescan action is clicked", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "refresh_adb_devices_with_previews") return [];
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<StatusBar />);
+
+    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
+    await user.click(screen.getByRole("button", { name: "选择设备" }));
+    await screen.findByText("未检测到可用 ADB 设备");
+
+    expect(invoke).toHaveBeenCalledWith("refresh_adb_devices_with_previews", { refresh: false });
+
+    await user.click(screen.getAllByRole("button", { name: "重新扫描" })[0]);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("refresh_adb_devices_with_previews", { refresh: true });
+    });
+  });
+
+  it("connects a manually entered adb port and rereads the current device list", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "connect_adb_port") return "127.0.0.1:5565";
+      if (cmd === "refresh_adb_devices_with_previews") return [];
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<StatusBar />);
+
+    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
+    await user.click(screen.getByRole("button", { name: "选择设备" }));
+    await screen.findByText("未检测到可用 ADB 设备");
+    await user.click(screen.getByRole("button", { name: "手动添加" }));
+
+    expect(await screen.findByRole("dialog", { name: "手动添加 ADB 设备" })).toBeInTheDocument();
+    const input = screen.getByPlaceholderText("5555");
+    await user.clear(input);
+    await user.type(input, "5565");
+    await user.click(screen.getByRole("button", { name: "添加" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("connect_adb_port", { port: 5565 });
+    });
+    expect(invoke).toHaveBeenCalledWith("refresh_adb_devices_with_previews", { refresh: false });
   });
 
   it("hides debug-level entries by default and reveals them via the toggle", async () => {

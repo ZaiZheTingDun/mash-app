@@ -83,7 +83,7 @@ const craftEssences: CraftEssence[] = [
   { id: 1004, name: "虚数魔术" },
 ];
 
-let useBluestack = false;
+let selectedAdbSerial: string | null = null;
 let server: Server = "JP";
 let supportCeThreshold = 0.7;
 let supportCeFullGateThreshold = 0.6;
@@ -282,7 +282,25 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "import_configurations":
       return { importedProjects: [] } as T;
     case "check_adb":
-      return { connected: false, deviceName: null } as T;
+      return { connected: selectedAdbSerial != null, deviceName: selectedAdbSerial } as T;
+    case "get_selected_adb_device":
+      return selectedAdbSerial as T;
+    case "refresh_adb_devices_with_previews":
+      if (selectedAdbSerial == null) selectedAdbSerial = "127.0.0.1:5555";
+      return [
+        {
+          serial: "127.0.0.1:5555",
+          description: "product:bluestacks model:dev",
+          previewPath: "/tmp/mash-dev-adb-preview.png",
+          selected: selectedAdbSerial === "127.0.0.1:5555",
+        },
+      ] as T;
+    case "select_adb_device":
+      selectedAdbSerial = String(args.serial);
+      return { connected: true, deviceName: selectedAdbSerial } as T;
+    case "connect_adb_port":
+      selectedAdbSerial = `127.0.0.1:${Number(args.port)}`;
+      return selectedAdbSerial as T;
     case "reset_bluestacks_adb_connection":
       return {
         ok: true,
@@ -332,9 +350,8 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         ],
       } as T;
     case "get_use_bluestack":
-      return useBluestack as T;
+      return false as T;
     case "set_use_bluestack":
-      useBluestack = Boolean(args.value);
       return null as T;
     case "get_server":
       return server as T;

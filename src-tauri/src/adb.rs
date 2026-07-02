@@ -2,11 +2,20 @@ use std::path::PathBuf;
 use std::process::Command;
 use tauri::Manager;
 
+pub(crate) const BLUESTACKS_SERIAL: &str = "127.0.0.1:5555";
+
 #[derive(Clone)]
 pub struct Adb {
     adb_path: PathBuf,
     device: Option<String>,
-    use_bluestack: bool,
+    selected_serial: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AdbDevice {
+    pub(crate) serial: String,
+    pub(crate) status: String,
+    pub(crate) description: String,
 }
 
 #[cfg(windows)]
@@ -51,11 +60,11 @@ pub(crate) fn resolve_adb_path(app: &tauri::AppHandle) -> PathBuf {
 }
 
 impl Adb {
-    pub fn new(app: &tauri::AppHandle, use_bluestack: bool) -> Self {
+    pub fn new(app: &tauri::AppHandle, selected_serial: Option<String>) -> Self {
         Self {
             adb_path: resolve_adb_path(app),
             device: None,
-            use_bluestack,
+            selected_serial,
         }
     }
 
@@ -75,21 +84,98 @@ impl Adb {
         }
     }
 
-    fn parse_first_ready_device(output: &str) -> Option<String> {
-        output.lines().skip(1).find_map(|line| {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                return None;
+    pub(crate) fn parse_devices(output: &str) -> Vec<AdbDevice> {
+        output
+            .lines()
+            .skip(1)
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    return None;
+                }
+                let mut parts = trimmed.split_whitespace();
+                let serial = parts.next()?.trim().to_string();
+                let status = parts.next()?.trim().to_string();
+                let description = parts.collect::<Vec<_>>().join(" ");
+                Some(AdbDevice {
+                    serial,
+                    status,
+                    description,
+                })
+            })
+            .collect()
+    }
+
+    pub(crate) fn ready_devices_from_output(output: &str) -> Vec<AdbDevice> {
+        Self::parse_devices(output)
+            .into_iter()
+            .filter(|device| device.status == "device")
+            .collect()
+    }
+
+    pub(crate) fn select_ready_serial(
+        devices: &[AdbDevice],
+        selected_serial: Option<&str>,
+    ) -> Result<Option<String>, String> {
+        if let Some(serial) = selected_serial {
+            if devices.iter().any(|device| device.serial == serial) {
+                return Ok(Some(serial.to_string()));
             }
-            let mut parts = trimmed.split('\t');
-            let serial = parts.next()?.trim();
-            let status = parts.next()?.trim();
-            if status == "device" {
-                Some(serial.to_string())
-            } else {
-                None
-            }
-        })
+        }
+        if devices
+            .iter()
+            .any(|device| device.serial == BLUESTACKS_SERIAL)
+        {
+            return Ok(Some(BLUESTACKS_SERIAL.to_string()));
+        }
+        if devices.len() == 1 {
+            return Ok(Some(devices[0].serial.clone()));
+        }
+        if devices.is_empty() {
+            Ok(None)
+        } else {
+            Err("检测到多个 ADB 设备，请先选择要使用的设备".into())
+        }
+    }
+
+    pub(crate) fn refresh_connection(adb_path: &std::path::Path) {
+        for args in [
+            ["disconnect", BLUESTACKS_SERIAL].as_slice(),
+            ["kill-server"].as_slice(),
+            ["start-server"].as_slice(),
+            ["connect", BLUESTACKS_SERIAL].as_slice(),
+        ] {
+            Command::new(adb_path).args(args).output().ok();
+        }
+    }
+
+    pub(crate) fn connect_bluestacks(adb_path: &std::path::Path) {
+        Command::new(adb_path)
+            .args(["connect", BLUESTACKS_SERIAL])
+            .output()
+            .ok();
+    }
+
+    pub(crate) fn connect_serial(adb_path: &std::path::Path, serial: &str) {
+        let serial = serial.trim();
+        if serial.is_empty() {
+            return;
+        }
+        Command::new(adb_path)
+            .args(["connect", serial])
+            .output()
+            .ok();
+    }
+
+    pub(crate) fn connect_preferred_serial(
+        adb_path: &std::path::Path,
+        selected_serial: Option<&str>,
+    ) {
+        if let Some(serial) = selected_serial {
+            Self::connect_serial(adb_path, serial);
+        } else {
+            Self::connect_bluestacks(adb_path);
+        }
     }
 
     #[allow(dead_code)]
@@ -103,20 +189,17 @@ impl Adb {
 
     /// Detect and connect to a device. Must be called before other operations.
     pub fn connect(&mut self) -> Result<(), String> {
-        if self.use_bluestack {
-            Command::new(&self.adb_path)
-                .args(["connect", "127.0.0.1:5555"])
-                .output()
-                .ok();
-        }
+        Self::connect_preferred_serial(&self.adb_path, self.selected_serial.as_deref());
 
         let output = Command::new(&self.adb_path)
             .arg("devices")
+            .arg("-l")
             .output()
             .map_err(|e| format!("failed to run adb: {e}"))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        self.device = Self::parse_first_ready_device(&stdout);
+        let devices = Self::ready_devices_from_output(&stdout);
+        self.device = Self::select_ready_serial(&devices, self.selected_serial.as_deref())?;
 
         if self.device.is_some() {
             Ok(())
@@ -383,6 +466,105 @@ mod tests {
         assert_eq!(
             bundled_adb_candidates(base.clone())[offset + 1],
             base.join("resources/adb/adb")
+        );
+    }
+
+    #[test]
+    fn ready_devices_from_output_filters_unusable_rows() {
+        let devices = Adb::ready_devices_from_output(
+            "List of devices attached\n\
+             emulator-5554\tdevice product:sdk model:Pixel\n\
+             offline-1\toffline product:sdk\n\
+             unauthorized-1\tunauthorized product:sdk\n\
+             127.0.0.1:5555\tdevice product:bluestacks\n",
+        );
+        assert_eq!(
+            devices
+                .iter()
+                .map(|device| device.serial.as_str())
+                .collect::<Vec<_>>(),
+            vec!["emulator-5554", "127.0.0.1:5555"]
+        );
+        assert_eq!(devices[0].description, "product:sdk model:Pixel");
+    }
+
+    #[test]
+    fn select_ready_serial_prefers_saved_online_device() {
+        let devices = Adb::ready_devices_from_output(
+            "List of devices attached\n\
+             emulator-5554\tdevice\n\
+             127.0.0.1:5555\tdevice\n",
+        );
+        assert_eq!(
+            Adb::select_ready_serial(&devices, Some("127.0.0.1:5555")).unwrap(),
+            Some("127.0.0.1:5555".into())
+        );
+    }
+
+    #[test]
+    fn select_ready_serial_auto_selects_only_device() {
+        let devices =
+            Adb::ready_devices_from_output("List of devices attached\nemulator-5554\tdevice\n");
+        assert_eq!(
+            Adb::select_ready_serial(&devices, None).unwrap(),
+            Some("emulator-5554".into())
+        );
+    }
+
+    #[test]
+    fn select_ready_serial_prefers_bluestacks_when_no_saved_device() {
+        let devices = Adb::ready_devices_from_output(
+            "List of devices attached\n\
+             emulator-5554\tdevice\n\
+             127.0.0.1:5555\tdevice\n",
+        );
+        assert_eq!(
+            Adb::select_ready_serial(&devices, Some("missing")).unwrap(),
+            Some("127.0.0.1:5555".into())
+        );
+        assert_eq!(
+            Adb::select_ready_serial(&devices, None).unwrap(),
+            Some("127.0.0.1:5555".into())
+        );
+    }
+
+    #[test]
+    fn select_ready_serial_rejects_ambiguous_non_bluestacks_devices() {
+        let devices = Adb::ready_devices_from_output(
+            "List of devices attached\n\
+             emulator-5554\tdevice\n\
+             emulator-5556\tdevice\n",
+        );
+        assert!(Adb::select_ready_serial(&devices, Some("missing")).is_err());
+        assert!(Adb::select_ready_serial(&devices, None).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn connect_preferred_serial_attempts_saved_serial_first() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let log_path = dir.path().join("adb.log");
+        let adb_path = dir.path().join("adb");
+        std::fs::write(
+            &adb_path,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n",
+                log_path.display()
+            ),
+        )
+        .unwrap();
+        let mut permissions = std::fs::metadata(&adb_path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&adb_path, permissions).unwrap();
+
+        Adb::connect_preferred_serial(&adb_path, Some("127.0.0.1:5565"));
+        Adb::connect_preferred_serial(&adb_path, None);
+
+        assert_eq!(
+            std::fs::read_to_string(log_path).unwrap(),
+            "connect 127.0.0.1:5565\nconnect 127.0.0.1:5555\n"
         );
     }
 

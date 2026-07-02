@@ -229,13 +229,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let use_bluestack = load_bluestack_setting(&app.handle());
+            let adb_device_settings = load_adb_device_settings(&app.handle());
             let server = load_server_setting(&app.handle());
             let recognition_settings = load_recognition_settings(&app.handle());
             #[cfg(desktop)]
             configure_app_menu(app)?;
             refresh_asset_protocol_scope(&app.handle())?;
-            app.manage(Mutex::new(use_bluestack));
+            app.manage(Mutex::new(adb_device_settings));
             app.manage(Mutex::new(server));
             app.manage(Mutex::new(recognition_settings));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
@@ -284,8 +284,12 @@ pub fn run() {
             commands::projects::delete_project,
             commands::projects::delete_slot_servant,
             commands::adb::check_adb,
+            commands::adb::connect_adb_port,
+            commands::adb::get_selected_adb_device,
+            commands::adb::refresh_adb_devices_with_previews,
             commands::adb::reset_bluestacks_adb_connection,
             commands::adb::save_adb_screenshot,
+            commands::adb::select_adb_device,
             commands::settings::run_startup_migration,
             commands::settings::get_use_bluestack,
             commands::settings::set_use_bluestack,

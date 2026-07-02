@@ -13,7 +13,7 @@ use crate::commands::projects::{load_advanced_battle_scenes, load_battle_scenes,
 use crate::commands::runtime::{
     resolve_ce_assets_dir, resolve_scrcpy_jar, resolve_servant_assets_dir,
 };
-use crate::commands::settings::RecognitionSettings;
+use crate::commands::settings::{AdbDeviceSettings, RecognitionSettings};
 use crate::enhancement_runner::{
     server_supported as enhancement_server_supported, EnhancementAutomationEvent,
     EnhancementConfig, EnhancementRunner, EnhancementRunnerHandle, EnhancementRunnerState,
@@ -175,7 +175,7 @@ pub(crate) fn effective_recognition_settings(
 pub(crate) fn start_automation(
     app: tauri::AppHandle,
     mut config: RunConfig,
-    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
     server_state: tauri::State<'_, Mutex<Server>>,
     recognition_settings_state: tauri::State<'_, Mutex<RecognitionSettings>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
@@ -216,7 +216,11 @@ pub(crate) fn start_automation(
         Vec::new()
     };
 
-    let use_bluestack = *bluestack_state.lock().unwrap();
+    let selected_adb_serial = adb_settings_state
+        .lock()
+        .unwrap()
+        .selected_adb_serial
+        .clone();
     let server = *server_state.lock().unwrap();
     let recognition_settings = effective_recognition_settings(
         *recognition_settings_state.lock().unwrap(),
@@ -246,7 +250,7 @@ pub(crate) fn start_automation(
     let debug_sidecar = debug_state.0.clone();
     std::thread::spawn(move || {
         emit_automation_status(&app, &state, "", "正在连接 ADB…");
-        let mut adb_dev = adb::Adb::new(&app, use_bluestack);
+        let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
         if let Err(err) = adb_dev.connect() {
             fail_automation_start(&app, &state, err);
             return;
@@ -364,7 +368,7 @@ pub(crate) fn get_automation_status(
 pub(crate) fn start_enhancement_automation(
     app: tauri::AppHandle,
     config: EnhancementConfig,
-    bluestack_state: tauri::State<'_, Mutex<bool>>,
+    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
     server_state: tauri::State<'_, Mutex<Server>>,
     battle_handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
@@ -385,7 +389,11 @@ pub(crate) fn start_enhancement_automation(
         }
     }
 
-    let use_bluestack = *bluestack_state.lock().unwrap();
+    let selected_adb_serial = adb_settings_state
+        .lock()
+        .unwrap()
+        .selected_adb_serial
+        .clone();
     let server = *server_state.lock().unwrap();
     if !enhancement_server_supported(server) {
         return Err("当前仅支持日服强化自动化".into());
@@ -407,7 +415,7 @@ pub(crate) fn start_enhancement_automation(
     let debug_sidecar = debug_state.0.clone();
     std::thread::spawn(move || {
         emit_enhancement_status(&app, &state, "", "正在连接 ADB…");
-        let mut adb_dev = adb::Adb::new(&app, use_bluestack);
+        let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
         if let Err(err) = adb_dev.connect() {
             fail_enhancement_start(&app, &state, err);
             return;
