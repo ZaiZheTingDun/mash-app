@@ -653,6 +653,7 @@ pub(crate) fn download_runtime_artifact(
 pub(crate) fn download_and_install_runtime_bundles_inner(
     app: tauri::AppHandle,
     cancel: Arc<ResourceDownloadCancelState>,
+    force: bool,
 ) -> Result<RuntimeDownloadInstallResult, String> {
     let manifest = runtime_manifest(&app)?;
     let platform = runtime_platform_key();
@@ -665,7 +666,7 @@ pub(crate) fn download_and_install_runtime_bundles_inner(
     let downloads_dir = runtime_downloads_dir(&runtime_root);
     let mut installed = Vec::new();
 
-    if !status.runtime_installed {
+    if force || !status.runtime_installed {
         let filename = format!(
             "mash-cv-runtime-{platform}-v{}.zip",
             manifest.mash_cv_runtime_version
@@ -689,7 +690,7 @@ pub(crate) fn download_and_install_runtime_bundles_inner(
         emit_runtime_download_progress(&app, "runtime", "installed", 0, None, None, None);
     }
 
-    if !status.code_installed {
+    if force || !status.code_installed {
         let filename = format!("mash-cv-code-v{}.zip", manifest.mash_cv_code_version);
         let zip_path = downloads_dir.join(filename);
         download_runtime_artifact(&app, "code", &artifact.code_url, &zip_path, &cancel.runtime)?;
@@ -746,11 +747,13 @@ pub(crate) async fn import_runtime_bundle(
 pub(crate) async fn download_runtime_bundles(
     app: tauri::AppHandle,
     cancel_state: tauri::State<'_, Arc<ResourceDownloadCancelState>>,
+    force: Option<bool>,
 ) -> Result<RuntimeDownloadInstallResult, String> {
     let cancel_state = cancel_state.inner().clone();
     cancel_state.runtime.store(false, Ordering::Relaxed);
+    let force = force.unwrap_or(false);
     tauri::async_runtime::spawn_blocking(move || {
-        download_and_install_runtime_bundles_inner(app, cancel_state)
+        download_and_install_runtime_bundles_inner(app, cancel_state, force)
     })
     .await
     .map_err(|e| format!("runtime 下载任务失败: {e}"))?

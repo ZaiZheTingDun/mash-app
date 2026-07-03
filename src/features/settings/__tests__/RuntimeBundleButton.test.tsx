@@ -125,7 +125,120 @@ describe("RuntimeBundleButton", () => {
     expect(
       screen.getByText("CV 运行时已安装：base 2026.05.08-runtime1 / code 2026.05.08-code1")
     ).toBeInTheDocument();
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("download_runtime_bundles", { force: false });
     expect(onInstalled).toHaveBeenCalledTimes(1);
+  });
+
+  it("force-downloads installed runtime bundles when re-downloading", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") {
+        return runtimeStatus({
+          installedRuntimeVersion: "2026.05.08-runtime1",
+          runtimeInstalled: true,
+          installedCodeVersion: "2026.05.08-code1",
+          codeInstalled: true,
+          installed: true,
+        });
+      }
+      if (cmd === "download_runtime_bundles") {
+        return {
+          installed: [
+            {
+              installedKind: "runtime",
+              installedVersion: "2026.05.08-runtime1",
+              platform: "darwin-aarch64",
+              installDir: "/tmp/runtime",
+              executablePath: "/tmp/runtime/mash-cv/mash-cv",
+              codePath: null,
+            },
+            {
+              installedKind: "code",
+              installedVersion: "2026.05.08-code1",
+              platform: "darwin-aarch64",
+              installDir: "/tmp/code",
+              executablePath: null,
+              codePath: "/tmp/code/mash-cv-code",
+            },
+          ],
+        };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+
+    renderWithTheme(<RuntimeBundleButton />);
+
+    await user.click(await screen.findByRole("button", { name: "重新下载" }));
+
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("download_runtime_bundles", { force: true });
+    expect(
+      await screen.findByText("重新下载完成：base 2026.05.08-runtime1 / code 2026.05.08-code1")
+    ).toBeInTheDocument();
+  });
+
+  it("clears progress after a successful runtime download", async () => {
+    const progressHandlers: Array<(event: Event<RuntimeDownloadProgress>) => void> = [];
+    vi.mocked(listen).mockImplementation(async (_event, handler) => {
+      progressHandlers.push(handler as (event: Event<RuntimeDownloadProgress>) => void);
+      return () => {};
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") {
+        return runtimeStatus({
+          installedRuntimeVersion: "2026.05.08-runtime1",
+          runtimeInstalled: true,
+          installedCodeVersion: "2026.05.08-code1",
+          codeInstalled: true,
+          installed: true,
+        });
+      }
+      if (cmd === "download_runtime_bundles") {
+        progressHandlers[0]({
+          event: "runtime-download-progress",
+          id: 1,
+          payload: {
+            kind: "code",
+            phase: "installed",
+            downloadedBytes: 0,
+            totalBytes: null,
+            bytesPerSecond: null,
+            etaSeconds: null,
+          },
+        });
+        return {
+          installed: [
+            {
+              installedKind: "runtime",
+              installedVersion: "2026.05.08-runtime1",
+              platform: "darwin-aarch64",
+              installDir: "/tmp/runtime",
+              executablePath: "/tmp/runtime/mash-cv/mash-cv",
+              codePath: null,
+            },
+            {
+              installedKind: "code",
+              installedVersion: "2026.05.08-code1",
+              platform: "darwin-aarch64",
+              installDir: "/tmp/code",
+              executablePath: null,
+              codePath: "/tmp/code/mash-cv-code",
+            },
+          ],
+        };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+
+    renderWithTheme(<RuntimeBundleButton />);
+
+    await user.click(await screen.findByRole("button", { name: "重新下载" }));
+
+    expect(
+      await screen.findByText("重新下载完成：base 2026.05.08-runtime1 / code 2026.05.08-code1")
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.queryByText("code 安装完成")).not.toBeInTheDocument();
   });
 
   it("shows download progress speed and eta from runtime events", async () => {

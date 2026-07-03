@@ -113,6 +113,7 @@ export function RuntimeBundleButton({
   const [downloadProgress, setDownloadProgress] = useState<RuntimeDownloadProgress | null>(null);
   const status = controlledStatus !== undefined ? controlledStatus : localStatus;
   const usesControlledStatus = controlledStatus !== undefined;
+  const needsInstall = !status?.installed;
 
   const refreshStatus = useCallback(async () => {
     if (usesControlledStatus) return;
@@ -153,7 +154,9 @@ export function RuntimeBundleButton({
     setMessage(null);
     setDownloadProgress(null);
     try {
-      const result = await invoke<RuntimeDownloadInstallResult>("download_runtime_bundles");
+      const result = await invoke<RuntimeDownloadInstallResult>("download_runtime_bundles", {
+        force: !needsInstall,
+      });
       if (result.installed.length === 0) {
         setMessage("CV 运行时已是最新。");
       } else {
@@ -163,18 +166,18 @@ export function RuntimeBundleButton({
               `${item.installedKind === "runtime" ? "base" : "code"} ${item.installedVersion}`
           )
           .join(" / ");
-        setMessage(`安装完成：${installed}`);
+        setMessage(`${needsInstall ? "安装完成" : "重新下载完成"}：${installed}`);
       }
       await refreshStatus();
       onInstalled?.();
+      setDownloadProgress(null);
     } catch (err) {
       setMessage(`下载失败：${String(err)}`);
     } finally {
       setBusy(false);
     }
-  }, [onInstalled, refreshStatus]);
+  }, [needsInstall, onInstalled, refreshStatus]);
 
-  const needsInstall = !status?.installed;
   const progressValue = progressPercent(downloadProgress);
 
   return (
