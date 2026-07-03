@@ -646,6 +646,8 @@ pub struct ProjectRecognitionSettings {
     pub support_mlb_icon_threshold: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub support_bond_icon_threshold: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify_skill_activation: Option<bool>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

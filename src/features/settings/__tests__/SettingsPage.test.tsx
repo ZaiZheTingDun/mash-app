@@ -67,6 +67,7 @@ describe("SettingsDialog", () => {
           supportBondIconThreshold: 0.7,
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
+          verifySkillActivation: false,
         };
       }
       if (cmd === "set_noble_phantasm_detection_mode") {
@@ -78,6 +79,7 @@ describe("SettingsDialog", () => {
           supportBondIconThreshold: 0.7,
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
+          verifySkillActivation: false,
         };
       }
       if (cmd === "set_support_ce_threshold") {
@@ -89,6 +91,7 @@ describe("SettingsDialog", () => {
           supportBondIconThreshold: 0.7,
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
+          verifySkillActivation: false,
         };
       }
       if (cmd === "set_support_ce_full_gate_threshold") {
@@ -100,6 +103,7 @@ describe("SettingsDialog", () => {
           supportBondIconThreshold: 0.7,
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
+          verifySkillActivation: false,
         };
       }
       if (cmd === "set_support_mlb_icon_threshold") {
@@ -111,6 +115,7 @@ describe("SettingsDialog", () => {
           supportBondIconThreshold: 0.7,
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
+          verifySkillActivation: false,
         };
       }
       if (cmd === "set_support_bond_icon_threshold") {
@@ -122,6 +127,7 @@ describe("SettingsDialog", () => {
           supportBondIconThreshold: 0.78,
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
+          verifySkillActivation: false,
         };
       }
       if (cmd === "set_stop_on_bond_level_up") {
@@ -133,6 +139,7 @@ describe("SettingsDialog", () => {
           supportBondIconThreshold: 0.7,
           stopOnBondLevelUp: Boolean(argValue(args)),
           stopOnBondMaxLevel: false,
+          verifySkillActivation: false,
         };
       }
       if (cmd === "set_stop_on_bond_max_level") {
@@ -144,6 +151,19 @@ describe("SettingsDialog", () => {
           supportBondIconThreshold: 0.7,
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: Boolean(argValue(args)),
+          verifySkillActivation: false,
+        };
+      }
+      if (cmd === "set_verify_skill_activation") {
+        return {
+          noblePhantasmDetectionMode: "card",
+          supportCeThreshold: 0.7,
+          supportCeFullGateThreshold: 0.6,
+          supportMlbIconThreshold: 0.7,
+          supportBondIconThreshold: 0.7,
+          stopOnBondLevelUp: false,
+          stopOnBondMaxLevel: false,
+          verifySkillActivation: Boolean(argValue(args)),
         };
       }
       return null;
@@ -336,6 +356,23 @@ describe("SettingsDialog", () => {
         value: 0.55,
       });
     });
+  });
+
+  it("saves the global skill activation verification toggle", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="basic" />);
+
+    const toggle = await screen.findByRole("switch", { name: "技能使用确认" });
+    expect(toggle).not.toBeChecked();
+
+    await user.click(toggle);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_verify_skill_activation", {
+        value: true,
+      });
+    });
+    expect(screen.getByRole("switch", { name: "技能使用确认" })).toBeChecked();
   });
 
   it("shows export configs and disables export after deselecting all", async () => {

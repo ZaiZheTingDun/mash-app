@@ -29,6 +29,7 @@ impl Runner {
                     };
                     let action_label =
                         servant_skill_failure_label(servant.as_deref(), *servant_id, skill_index);
+                    let target_pos = skill_target_position(target.as_deref());
 
                     self.emit_action(
                         "从者技能",
@@ -38,38 +39,63 @@ impl Runner {
                             target_servant_id: *target_servant_id,
                         },
                     );
-                    if !self.tap_at("Battle", pos) {
-                        return self.fail_skill_execution(&action_label, "点击技能按钮失败");
+                    let mut triggered = false;
+                    for attempt in 0..=1 {
+                        if attempt > 0 {
+                            self.emit_warn("Battle", "技能点击未确认生效，重试一次");
+                        }
+                        self.emit_skill_tap_debug("点击从者技能", pos);
+                        if !self.tap_at("Battle", pos) {
+                            return self.fail_skill_execution(&action_label, "点击技能按钮失败");
+                        }
+                        thread::sleep(ACTION_DELAY);
+
+                        if let Some(target_pos) = target_pos {
+                            self.emit_debug("Battle", "等待目标选择框出现");
+                            if !self.wait_for_element_visible(
+                                "Battle",
+                                SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
+                                SKILL_WAIT_TIMEOUT,
+                                "等待目标选择框出现…",
+                                "等待目标选择框出现超时",
+                            ) {
+                                if attempt == 0 && self.config.verify_skill_activation {
+                                    continue;
+                                }
+                                return self
+                                    .fail_skill_execution(&action_label, "等待目标选择框出现超时");
+                            }
+
+                            self.emit_skill_tap_debug("点击技能目标", target_pos);
+                            if !self.tap_at("Battle", target_pos) {
+                                return self.fail_skill_execution(&action_label, "点击技能目标失败");
+                            }
+                            self.emit_debug("Battle", "等待目标选择框关闭");
+                            if !self.wait_for_element_hidden(
+                                "Battle",
+                                SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
+                                SKILL_WAIT_TIMEOUT,
+                                "等待目标选择框关闭…",
+                                "等待目标选择框关闭超时",
+                            ) {
+                                return self
+                                    .fail_skill_execution(&action_label, "等待目标选择框关闭超时");
+                            }
+                        } else if !self.wait_for_skill_activation_start() {
+                            if attempt == 0 {
+                                continue;
+                            }
+                            return self.fail_skill_execution(
+                                &action_label,
+                                "技能点击未观察到状态变化",
+                            );
+                        }
+                        triggered = true;
+                        break;
                     }
-                    thread::sleep(ACTION_DELAY);
-
-                    if let Some(target_pos) = skill_target_position(target.as_deref()) {
-                        self.emit_debug("Battle", "等待目标选择框出现");
-                        if !self.wait_for_element_visible(
-                            "Battle",
-                            SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
-                            SKILL_WAIT_TIMEOUT,
-                            "等待目标选择框出现…",
-                            "等待目标选择框出现超时",
-                        ) {
-                            return self
-                                .fail_skill_execution(&action_label, "等待目标选择框出现超时");
-                        }
-
-                        if !self.tap_at("Battle", target_pos) {
-                            return self.fail_skill_execution(&action_label, "点击技能目标失败");
-                        }
-                        self.emit_debug("Battle", "等待目标选择框关闭");
-                        if !self.wait_for_element_hidden(
-                            "Battle",
-                            SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
-                            SKILL_WAIT_TIMEOUT,
-                            "等待目标选择框关闭…",
-                            "等待目标选择框关闭超时",
-                        ) {
-                            return self
-                                .fail_skill_execution(&action_label, "等待目标选择框关闭超时");
-                        }
+                    if !triggered {
+                        return self
+                            .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
                     }
 
                     self.skip_after_skill();
@@ -103,6 +129,7 @@ impl Runner {
                         equipment_skill_failure_label(skill_index, order_change.is_some());
 
                     self.emit("Battle", "打开御主技能面板");
+                    self.emit_skill_tap_debug("点击御主技能面板", EQUIPMENT_BUTTON);
                     if !self.tap_at("Battle", EQUIPMENT_BUTTON) {
                         return self.fail_skill_execution(&action_label, "打开御主技能面板失败");
                     }
@@ -115,42 +142,80 @@ impl Runner {
                             target_servant_id: *target_servant_id,
                         },
                     );
-                    if !self.tap_at("Battle", pos) {
-                        return self.fail_skill_execution(&action_label, "点击御主技能失败");
-                    }
-                    thread::sleep(ACTION_DELAY);
-
                     if let Some(change) = order_change {
+                        self.emit_skill_tap_debug("点击御主技能", pos);
+                        if !self.tap_at("Battle", pos) {
+                            return self.fail_skill_execution(&action_label, "点击御主技能失败");
+                        }
+                        thread::sleep(ACTION_DELAY);
                         if !self.execute_order_change(change) {
                             return self
                                 .fail_skill_execution(&action_label, "Order Change 执行失败");
                         }
-                    } else if let Some(target_pos) = skill_target_position(target.as_deref()) {
-                        self.emit_debug("Battle", "等待目标选择框出现");
-                        if !self.wait_for_element_visible(
-                            "Battle",
-                            SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
-                            SKILL_WAIT_TIMEOUT,
-                            "等待目标选择框出现…",
-                            "等待目标选择框出现超时",
-                        ) {
-                            return self
-                                .fail_skill_execution(&action_label, "等待目标选择框出现超时");
-                        }
+                    } else {
+                        let target_pos = skill_target_position(target.as_deref());
+                        let mut triggered = false;
+                        for attempt in 0..=1 {
+                            if attempt > 0 {
+                                self.emit_warn("Battle", "技能点击未确认生效，重试一次");
+                            }
+                            self.emit_skill_tap_debug("点击御主技能", pos);
+                            if !self.tap_at("Battle", pos) {
+                                return self.fail_skill_execution(&action_label, "点击御主技能失败");
+                            }
+                            thread::sleep(ACTION_DELAY);
 
-                        if !self.tap_at("Battle", target_pos) {
-                            return self.fail_skill_execution(&action_label, "点击技能目标失败");
+                            if let Some(target_pos) = target_pos {
+                                self.emit_debug("Battle", "等待目标选择框出现");
+                                if !self.wait_for_element_visible(
+                                    "Battle",
+                                    SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
+                                    SKILL_WAIT_TIMEOUT,
+                                    "等待目标选择框出现…",
+                                    "等待目标选择框出现超时",
+                                ) {
+                                    if attempt == 0 && self.config.verify_skill_activation {
+                                        continue;
+                                    }
+                                    return self.fail_skill_execution(
+                                        &action_label,
+                                        "等待目标选择框出现超时",
+                                    );
+                                }
+
+                                self.emit_skill_tap_debug("点击技能目标", target_pos);
+                                if !self.tap_at("Battle", target_pos) {
+                                    return self
+                                        .fail_skill_execution(&action_label, "点击技能目标失败");
+                                }
+                                self.emit_debug("Battle", "等待目标选择框关闭");
+                                if !self.wait_for_element_hidden(
+                                    "Battle",
+                                    SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
+                                    SKILL_WAIT_TIMEOUT,
+                                    "等待目标选择框关闭…",
+                                    "等待目标选择框关闭超时",
+                                ) {
+                                    return self.fail_skill_execution(
+                                        &action_label,
+                                        "等待目标选择框关闭超时",
+                                    );
+                                }
+                            } else if !self.wait_for_skill_activation_start() {
+                                if attempt == 0 {
+                                    continue;
+                                }
+                                return self.fail_skill_execution(
+                                    &action_label,
+                                    "技能点击未观察到状态变化",
+                                );
+                            }
+                            triggered = true;
+                            break;
                         }
-                        self.emit_debug("Battle", "等待目标选择框关闭");
-                        if !self.wait_for_element_hidden(
-                            "Battle",
-                            SKILL_TARGET_CLOSE_BUTTON_ELEMENT,
-                            SKILL_WAIT_TIMEOUT,
-                            "等待目标选择框关闭…",
-                            "等待目标选择框关闭超时",
-                        ) {
+                        if !triggered {
                             return self
-                                .fail_skill_execution(&action_label, "等待目标选择框关闭超时");
+                                .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
                         }
                     }
 
@@ -251,6 +316,27 @@ impl Runner {
         false
     }
 
+    fn emit_skill_tap_debug(&self, label: &str, point: Point) {
+        self.emit_debug(
+            "Battle",
+            &format_skill_tap_debug(label, point, self.screen_w, self.screen_h),
+        );
+    }
+
+    fn wait_for_skill_activation_start(&mut self) -> bool {
+        if !self.config.verify_skill_activation {
+            return true;
+        }
+        self.emit_debug("Battle", "等待战斗菜单隐藏…");
+        self.wait_for_element_hidden(
+            "Battle",
+            BATTLE_ACTION_MENU_ELEMENT,
+            SKILL_ACTIVATION_START_TIMEOUT,
+            "等待战斗菜单隐藏…",
+            "技能点击未观察到状态变化",
+        )
+    }
+
     pub(crate) fn execute_order_change(&mut self, change: &crate::OrderChangeSelection) -> bool {
         let Some(front_pos) = order_change_slot_position(change.front.as_deref(), 0..3) else {
             self.emit_action(
@@ -340,6 +426,14 @@ impl Runner {
         thread::sleep(ACTION_DELAY);
         self.skip_after_skill();
     }
+}
+
+pub(crate) fn format_skill_tap_debug(label: &str, point: Point, width: u32, height: u32) -> String {
+    let (px, py) = point.to_physical(width, height);
+    format!(
+        "{label}: x={:.3}, y={:.3} ({px}, {py})",
+        point.x, point.y
+    )
 }
 
 pub(crate) fn skill_position(servant: Option<&str>, skill: Option<&str>) -> Option<Point> {

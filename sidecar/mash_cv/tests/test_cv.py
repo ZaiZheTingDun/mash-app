@@ -983,6 +983,57 @@ class TestFindElementByName:
         result = mash_cv._find_element_by_name(img, "Foo", "patch")
         assert result["found"] is True
 
+    def test_cn_battle_action_menu_detects_real_capture(self):
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "templates"
+        )
+        shared_templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "shared", "templates"
+        )
+        cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "cv.json"
+        )
+        screenshot = os.path.join(repo_root, ".screenshots", "cn", "np_test1.png")
+        if not (
+            os.path.isdir(templates_dir)
+            and os.path.isdir(shared_templates_dir)
+            and os.path.isfile(cv_json)
+            and os.path.isfile(screenshot)
+        ):
+            pytest.skip("CN battle action menu resources not available")
+
+        mash_cv._load_templates(shared_templates_dir, key_prefix="shared")
+        mash_cv._load_templates(templates_dir, append=True)
+        mash_cv._load_config(cv_json)
+        img = cv2.imread(screenshot)
+        assert img is not None
+
+        result = mash_cv._find_element_by_name(img, "Battle", "battle_action_menu")
+        assert result["found"] is True
+        assert result["score"] >= 0.7
+
+        scaled = cv2.resize(img, (1920, 1080), interpolation=cv2.INTER_AREA)
+        scaled_result = mash_cv._find_element_by_name(
+            scaled,
+            "Battle",
+            "battle_action_menu",
+        )
+        assert scaled_result["found"] is True
+        assert scaled_result["score"] >= 0.7
+
+        hidden = img.copy()
+        h, w = hidden.shape[:2]
+        hidden[int(0.21 * h): int(0.365 * h), int(0.859 * w): int(0.937 * w)] = 0
+        hidden_result = mash_cv._find_element_by_name(
+            hidden,
+            "Battle",
+            "battle_action_menu",
+        )
+        assert hidden_result["found"] is False
+
 
 def test_crop_template_uses_normalized_template_region():
     tmpl = np.arange(100, dtype=np.uint8).reshape((10, 10))

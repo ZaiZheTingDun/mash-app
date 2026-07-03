@@ -31,6 +31,7 @@ describe("ProjectSettingsDialog", () => {
           supportBondIconThreshold: 0.73,
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
+          verifySkillActivation: false,
         };
       }
       return null;
@@ -49,6 +50,7 @@ describe("ProjectSettingsDialog", () => {
 
     expect(await screen.findByText("游戏")).toBeInTheDocument();
     expect(await screen.findByText("项目甲")).toBeInTheDocument();
+    await userEvent.setup().click(await screen.findByRole("button", { name: "阈值设置" }));
     expect(screen.queryByText("当前队伍：项目甲")).not.toBeInTheDocument();
     expect(screen.getByText("低数值更容易命中，高数值更不容易误选；默认 0.71")).toBeInTheDocument();
     expect(
@@ -69,6 +71,7 @@ describe("ProjectSettingsDialog", () => {
       />
     );
 
+    await user.click(await screen.findByRole("button", { name: "阈值设置" }));
     const input = await screen.findByRole("spinbutton", {
       name: "助战礼装匹配阈值数值",
     });
@@ -105,6 +108,7 @@ describe("ProjectSettingsDialog", () => {
       />
     );
 
+    await user.click(await screen.findByRole("button", { name: "阈值设置" }));
     expect(
       await screen.findByRole("spinbutton", { name: "助战礼装匹配阈值数值" })
     ).toHaveValue(0.66);
@@ -120,5 +124,38 @@ describe("ProjectSettingsDialog", () => {
       });
     });
     expect(screen.getByRole("spinbutton", { name: "助战礼装匹配阈值数值" })).toHaveValue(0.71);
+  });
+
+  it("saves and clears the project skill activation verification override", async () => {
+    const user = userEvent.setup();
+    const onUpdateProject = vi.fn().mockResolvedValue(undefined);
+    const project = makeProject();
+    renderWithTheme(
+      <ProjectSettingsDialog
+        open
+        project={project}
+        onOpenChange={vi.fn()}
+        onUpdateProject={onUpdateProject}
+      />
+    );
+
+    await user.click(await screen.findByRole("button", { name: "基础设置" }));
+
+    const trigger = await screen.findByRole("combobox", {
+      name: "队伍技能使用确认",
+    });
+    expect(trigger).toHaveTextContent("继承全局（关闭）");
+
+    await user.click(trigger);
+    await user.click(await screen.findByRole("option", { name: "开启" }));
+
+    await waitFor(() => {
+      expect(onUpdateProject).toHaveBeenCalledWith({
+        ...project,
+        recognitionSettings: {
+          verifySkillActivation: true,
+        },
+      });
+    });
   });
 });

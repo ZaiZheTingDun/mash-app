@@ -61,6 +61,8 @@ pub struct RecognitionSettings {
     pub stop_on_bond_level_up: bool,
     #[serde(default)]
     pub stop_on_bond_max_level: bool,
+    #[serde(default)]
+    pub verify_skill_activation: bool,
 }
 
 impl Default for RecognitionSettings {
@@ -73,6 +75,7 @@ impl Default for RecognitionSettings {
             support_bond_icon_threshold: SUPPORT_ICON_THRESHOLD_DEFAULT,
             stop_on_bond_level_up: false,
             stop_on_bond_max_level: false,
+            verify_skill_activation: false,
         }
     }
 }
@@ -265,6 +268,7 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
                 stop_on_bond_level_up: settings.stop_on_bond_level_up
                     && !settings.stop_on_bond_max_level,
                 stop_on_bond_max_level: settings.stop_on_bond_max_level,
+                verify_skill_activation: settings.verify_skill_activation,
             })
         })
         .unwrap_or_default()
@@ -411,6 +415,19 @@ pub(crate) fn set_stop_on_bond_max_level(
 }
 
 #[tauri::command]
+pub(crate) fn set_verify_skill_activation(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: bool,
+) -> Result<RecognitionSettings, String> {
+    let mut next = *state.lock().unwrap();
+    next.verify_skill_activation = value;
+    *state.lock().unwrap() = next;
+    save_recognition_settings(&app, &next)?;
+    Ok(next)
+}
+
+#[tauri::command]
 pub(crate) async fn run_startup_migration(
     app: tauri::AppHandle,
     adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
@@ -498,6 +515,7 @@ mod tests {
 
         assert!(!settings.stop_on_bond_level_up);
         assert!(!settings.stop_on_bond_max_level);
+        assert!(!settings.verify_skill_activation);
     }
 
     #[test]
@@ -513,6 +531,7 @@ mod tests {
 
         assert!(!settings.stop_on_bond_level_up);
         assert!(!settings.stop_on_bond_max_level);
+        assert!(!settings.verify_skill_activation);
     }
 
     #[test]

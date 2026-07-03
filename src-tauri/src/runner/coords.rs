@@ -42,6 +42,7 @@ pub(crate) const SKIP_ANIMATION_BUTTON: Point = Point::new(0.685, 0.095);
 pub(crate) const BATTLE_SCREEN: &str = "Battle";
 pub(crate) const SUPPORT_SELECT_SCREEN: &str = "SupportSelect";
 pub(crate) const ATTACK_BUTTON_ELEMENT: &str = "attack_button";
+pub(crate) const BATTLE_ACTION_MENU_ELEMENT: &str = "battle_action_menu";
 pub(crate) const SKILL_TARGET_CLOSE_BUTTON_ELEMENT: &str = "skill_target_close_button";
 pub(crate) const COMMAND_SPELL_CLOSE_BUTTON_ELEMENT: &str = "command_spell_close_button";
 pub(crate) const ORDER_CHANGE_CLOSE_BUTTON_ELEMENT: &str = "order_change_close_button";

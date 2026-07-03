@@ -160,6 +160,16 @@
                 "h": 0.195
               },
               "threshold": 0.75
+            },
+            "battle_action_menu": {
+              "template": "shared/battle_action_menu",
+              "region": {
+                "x": 0.859,
+                "y": 0.21,
+                "w": 0.078,
+                "h": 0.155
+              },
+              "threshold": 0.7
             }
           }
         }

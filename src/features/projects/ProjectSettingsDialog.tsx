@@ -1,5 +1,5 @@
-import { useCallback } from "react";
-import { Box, Button, Dialog, Flex, IconButton, Text } from "@radix-ui/themes";
+import { useCallback, useEffect, useState } from "react";
+import { Box, Button, Dialog, Flex, IconButton, Select, Text } from "@radix-ui/themes";
 import { Cross1Icon, GearIcon } from "@radix-ui/react-icons";
 import { invoke } from "../../tauri";
 import {
@@ -10,6 +10,8 @@ import {
 import { RecognitionThresholdSettings } from "../settings/SettingsRecognitionPage";
 import type { Project } from "../../types/project";
 import type { ProjectRecognitionSettings, RecognitionSettings } from "../../types/recognition";
+
+type ProjectSettingsSection = "basic" | "recognition";
 
 interface ProjectSettingsDialogProps {
   open: boolean;
@@ -31,7 +33,7 @@ function projectRecognitionSettings(
 }
 
 function hasRecognitionOverrides(settings: ProjectRecognitionSettings) {
-  return Object.values(settings).some((value) => typeof value === "number");
+  return Object.values(settings).some((value) => value != null);
 }
 
 export function ProjectSettingsDialog({
@@ -40,6 +42,11 @@ export function ProjectSettingsDialog({
   onOpenChange,
   onUpdateProject,
 }: ProjectSettingsDialogProps) {
+  const [section, setSection] = useState<ProjectSettingsSection>("basic");
+  const [globalSettings, setGlobalSettings] = useState<RecognitionSettings>(
+    DEFAULT_RECOGNITION_SETTINGS
+  );
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const loadSettings = useCallback(async () => {
     const globalSettings = await invoke<RecognitionSettings>("get_recognition_settings");
     return projectRecognitionSettings(project, globalSettings);
@@ -79,6 +86,52 @@ export function ProjectSettingsDialog({
     [onUpdateProject, project]
   );
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    invoke<RecognitionSettings>("get_recognition_settings")
+      .then((settings) => {
+        if (!cancelled) setGlobalSettings(normalizeRecognitionSettings(settings));
+      })
+      .catch((err) => {
+        if (!cancelled) setSettingsError(String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const verifySkillActivationOverride =
+    project?.recognitionSettings?.verifySkillActivation;
+  const verifySkillActivationValue =
+    verifySkillActivationOverride == null
+      ? "inherit"
+      : verifySkillActivationOverride
+        ? "enabled"
+        : "disabled";
+  const inheritedVerifySkillActivationLabel = globalSettings.verifySkillActivation
+    ? "开启"
+    : "关闭";
+
+  const saveVerifySkillActivationOverride = useCallback(
+    async (value: string) => {
+      if (!project) return;
+      const recognitionSettings = { ...(project.recognitionSettings ?? {}) };
+      if (value === "inherit") {
+        delete recognitionSettings.verifySkillActivation;
+      } else {
+        recognitionSettings.verifySkillActivation = value === "enabled";
+      }
+      await onUpdateProject({
+        ...project,
+        recognitionSettings: hasRecognitionOverrides(recognitionSettings)
+          ? recognitionSettings
+          : null,
+      });
+    },
+    [onUpdateProject, project]
+  );
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content className="settings-dialog">
@@ -97,13 +150,28 @@ export function ProjectSettingsDialog({
                     type="button"
                     variant="ghost"
                     color="gray"
-                    data-active="true"
-                    aria-current="page"
+                    data-active={section === "basic" ? "true" : undefined}
+                    aria-current={section === "basic" ? "page" : undefined}
+                    onClick={() => setSection("basic")}
                     className="settings-nav-button"
                   >
                     <GearIcon width={14} height={14} />
                     <Text size="2" weight="medium">
-                      识别设置
+                      基础设置
+                    </Text>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    color="gray"
+                    data-active={section === "recognition" ? "true" : undefined}
+                    aria-current={section === "recognition" ? "page" : undefined}
+                    onClick={() => setSection("recognition")}
+                    className="settings-nav-button"
+                  >
+                    <GearIcon width={14} height={14} />
+                    <Text size="2" weight="medium">
+                      阈值设置
                     </Text>
                   </Button>
                 </Flex>
@@ -122,7 +190,7 @@ export function ProjectSettingsDialog({
             <Flex align="center" className="settings-content-header">
               <Flex direction="column" justify="center" className="settings-content-header-inner">
                 <Text size="5" weight="bold">
-                  识别设置
+                  {section === "basic" ? "基础设置" : "阈值设置"}
                 </Text>
               </Flex>
               <Dialog.Close>
@@ -134,13 +202,49 @@ export function ProjectSettingsDialog({
 
             <Box className="settings-content-scroll">
               <Box className="settings-content-body">
-                <RecognitionThresholdSettings
-                  active={open && project != null}
-                  helpText="此处只影响当前队伍；未保存队伍阈值时会继承全局设置。"
-                  loadSettings={loadSettings}
-                  loadDefaultSettings={loadDefaultSettings}
-                  saveThreshold={saveThreshold}
-                />
+                {section === "basic" ? (
+                  <Box className="settings-section-panel">
+                    <Flex align="center" justify="between" gap="4" wrap="wrap">
+                      <Flex direction="column" gap="1">
+                        <Text size="2" weight="bold">
+                          技能使用确认
+                        </Text>
+                        <Text size="1" color="gray">
+                          开启后会确认技能使用成功，失败会进行重试，一般无需开启
+                        </Text>
+                        <Text size="1" color="gray">
+                          全局当前：{inheritedVerifySkillActivationLabel}
+                        </Text>
+                      </Flex>
+                      <Select.Root
+                        value={verifySkillActivationValue}
+                        onValueChange={(value) => void saveVerifySkillActivationOverride(value)}
+                      >
+                        <Select.Trigger aria-label="队伍技能使用确认" />
+                        <Select.Content>
+                          <Select.Item value="inherit">
+                            继承全局（{inheritedVerifySkillActivationLabel}）
+                          </Select.Item>
+                          <Select.Item value="enabled">开启</Select.Item>
+                          <Select.Item value="disabled">关闭</Select.Item>
+                        </Select.Content>
+                      </Select.Root>
+                    </Flex>
+                    {settingsError && (
+                      <Text as="div" size="1" color="red" mt="2">
+                        {settingsError}
+                      </Text>
+                    )}
+                  </Box>
+                ) : (
+                  <RecognitionThresholdSettings
+                    active={open && project != null}
+                    helpText="此处只影响当前队伍；未保存队伍阈值时会继承全局设置。"
+                    loadSettings={loadSettings}
+                    loadDefaultSettings={loadDefaultSettings}
+                    saveThreshold={saveThreshold}
+                  />
+                )}
               </Box>
             </Box>
           </Flex>

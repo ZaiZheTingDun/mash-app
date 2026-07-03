@@ -199,6 +199,10 @@ pub struct RunConfig {
     /// Stop automation only when a bond level-up result reaches level 10+.
     #[serde(default)]
     pub stop_on_bond_max_level: bool,
+    /// Optional extra confirmation after skill taps. Disabled by default
+    /// because it adds CV polling between skill actions.
+    #[serde(default)]
+    pub verify_skill_activation: bool,
     #[serde(default = "default_true")]
     pub support_craft_essence_mlb_required: bool,
     #[serde(default)]

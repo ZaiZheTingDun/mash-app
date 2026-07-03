@@ -255,6 +255,7 @@ vi.mock("@tauri-apps/api/core", () => ({
           supportBondIconThreshold: 0.7,
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
+          verifySkillActivation: false,
         };
       case "set_noble_phantasm_detection_mode":
         return {
@@ -265,6 +266,7 @@ vi.mock("@tauri-apps/api/core", () => ({
           supportBondIconThreshold: 0.7,
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
+          verifySkillActivation: false,
         };
       case "set_support_ce_threshold":
       case "set_support_ce_full_gate_threshold":
@@ -272,6 +274,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "set_support_bond_icon_threshold":
       case "set_stop_on_bond_level_up":
       case "set_stop_on_bond_max_level":
+      case "set_verify_skill_activation":
         return {
           noblePhantasmDetectionMode: "card",
           supportCeThreshold: 0.7,
@@ -286,6 +289,8 @@ vi.mock("@tauri-apps/api/core", () => ({
                 : false,
           stopOnBondMaxLevel:
             cmd === "set_stop_on_bond_max_level" ? Boolean(args?.value) : false,
+          verifySkillActivation:
+            cmd === "set_verify_skill_activation" ? Boolean(args?.value) : false,
         };
       case "should_check_updates_today":
         return false;

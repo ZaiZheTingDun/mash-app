@@ -209,6 +209,8 @@ pub(crate) fn effective_recognition_settings(
     global: RecognitionSettings,
     project: Option<ProjectRecognitionSettings>,
 ) -> RecognitionSettings {
+    let project_verify_skill_activation =
+        project.and_then(|settings| settings.verify_skill_activation);
     RecognitionSettings {
         noble_phantasm_detection_mode: global.noble_phantasm_detection_mode,
         support_ce_threshold: project
@@ -225,6 +227,8 @@ pub(crate) fn effective_recognition_settings(
             .unwrap_or(global.support_bond_icon_threshold),
         stop_on_bond_level_up: global.stop_on_bond_level_up && !global.stop_on_bond_max_level,
         stop_on_bond_max_level: global.stop_on_bond_max_level,
+        verify_skill_activation: project_verify_skill_activation
+            .unwrap_or(global.verify_skill_activation),
     }
 }
 
@@ -292,6 +296,7 @@ pub(crate) fn start_automation(
     config.noble_phantasm_detection_mode = recognition_settings.noble_phantasm_detection_mode;
     config.stop_on_bond_level_up = recognition_settings.stop_on_bond_level_up;
     config.stop_on_bond_max_level = recognition_settings.stop_on_bond_max_level;
+    config.verify_skill_activation = recognition_settings.verify_skill_activation;
 
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -640,5 +645,33 @@ mod tests {
             Some(ADB_RESET_USER_MESSAGE)
         );
         assert_eq!(scrcpy_stream_start_user_message("decoder stopped"), None);
+    }
+
+    #[test]
+    fn effective_recognition_settings_inherit_global_skill_activation_verification() {
+        let global = RecognitionSettings {
+            verify_skill_activation: true,
+            ..RecognitionSettings::default()
+        };
+
+        let effective = effective_recognition_settings(global, None);
+
+        assert!(effective.verify_skill_activation);
+    }
+
+    #[test]
+    fn effective_recognition_settings_project_overrides_skill_activation_verification() {
+        let global = RecognitionSettings {
+            verify_skill_activation: true,
+            ..RecognitionSettings::default()
+        };
+        let project = ProjectRecognitionSettings {
+            verify_skill_activation: Some(false),
+            ..ProjectRecognitionSettings::default()
+        };
+
+        let effective = effective_recognition_settings(global, Some(project));
+
+        assert!(!effective.verify_skill_activation);
     }
 }

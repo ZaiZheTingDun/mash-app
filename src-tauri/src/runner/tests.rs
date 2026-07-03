@@ -517,6 +517,7 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     assert_eq!(cfg.repeat_mission, false);
     assert_eq!(cfg.max_mission_runs, None);
     assert!(cfg.ap_recovery_items.is_empty());
+    assert!(!cfg.verify_skill_activation);
 }
 
 #[test]
@@ -530,6 +531,7 @@ fn run_config_round_trips_support_craft_essence_id() {
     payload["supportCeFullGateThreshold"] = serde_json::json!(0.55);
     payload["supportMlbIconThreshold"] = serde_json::json!(0.76);
     payload["supportBondIconThreshold"] = serde_json::json!(0.78);
+    payload["verifySkillActivation"] = serde_json::json!(true);
     payload["supportGrandCraftEssenceMlbRequired"] = serde_json::json!([true, false, true]);
     payload["supportGrandBondCeMode"] = serde_json::json!("bondNp");
     payload["grandServants"] = serde_json::json!([
@@ -542,6 +544,7 @@ fn run_config_round_trips_support_craft_essence_id() {
     assert_eq!(cfg.support_ce_full_gate_threshold, 0.55);
     assert_eq!(cfg.support_mlb_icon_threshold, 0.76);
     assert_eq!(cfg.support_bond_icon_threshold, 0.78);
+    assert!(cfg.verify_skill_activation);
     assert_eq!(cfg.support_slot_index, Some(5));
     assert_eq!(cfg.support_grand_mode, true);
     assert_eq!(
@@ -3619,6 +3622,14 @@ fn enemy_target_position_maps_six_2k_reference_points() {
     assert!(enemy_target_position(None).is_none());
     assert!(enemy_target_position(Some("enemy_7")).is_none());
     assert!(enemy_target_position(Some("servant_1")).is_none());
+}
+
+#[test]
+fn format_skill_tap_debug_includes_normalized_and_physical_position() {
+    assert_eq!(
+        format_skill_tap_debug("点击从者技能", Point::new(0.25, 0.5), 2560, 1440),
+        "点击从者技能: x=0.250, y=0.500 (640, 720)"
+    );
 }
 
 #[test]

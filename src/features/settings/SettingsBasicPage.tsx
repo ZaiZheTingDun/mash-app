@@ -8,6 +8,7 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
   const [mode, setMode] = useState<NoblePhantasmDetectionMode>("card");
   const [stopOnBondLevelUp, setStopOnBondLevelUp] = useState(false);
   const [stopOnBondMaxLevel, setStopOnBondMaxLevel] = useState(false);
+  const [verifySkillActivation, setVerifySkillActivation] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -16,6 +17,7 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
     setMode(settings.noblePhantasmDetectionMode);
     setStopOnBondLevelUp(settings.stopOnBondLevelUp);
     setStopOnBondMaxLevel(settings.stopOnBondMaxLevel);
+    setVerifySkillActivation(settings.verifySkillActivation);
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -73,6 +75,23 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
     },
     [applySettings]
   );
+
+  const saveVerifySkillActivation = useCallback(async (value: boolean) => {
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
+    try {
+      const settings = normalizeRecognitionSettings(
+        await invoke<RecognitionSettings>("set_verify_skill_activation", { value })
+      );
+      applySettings(settings);
+      setSavedMessage("已保存");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, [applySettings]);
 
   return (
     <Box className="settings-section-panel">
@@ -172,6 +191,30 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
             }
             disabled={saving}
             aria-label="牵绊满级自动停止"
+          />
+        </Flex>
+
+        <Flex
+          align="start"
+          justify="between"
+          gap="4"
+          wrap="wrap"
+          className="basic-setting-row"
+        >
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              技能使用确认
+            </Text>
+            <Text size="1" color="gray">
+              开启后会确认技能使用成功，失败会进行重试，一般无需开启
+            </Text>
+          </Flex>
+
+          <Switch
+            checked={verifySkillActivation}
+            onCheckedChange={(value) => void saveVerifySkillActivation(value)}
+            disabled={saving}
+            aria-label="技能使用确认"
           />
         </Flex>
 

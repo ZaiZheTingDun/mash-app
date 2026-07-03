@@ -81,6 +81,7 @@ export const DEFAULT_RECOGNITION_SETTINGS: RecognitionSettings = {
   supportBondIconThreshold: SUPPORT_THRESHOLD_DEFAULT,
   stopOnBondLevelUp: false,
   stopOnBondMaxLevel: false,
+  verifySkillActivation: false,
 };
 
 export function clampThreshold(value: number, config: ThresholdConfig) {
@@ -113,6 +114,7 @@ export function normalizeRecognitionSettings(
     ),
     stopOnBondLevelUp: settings.stopOnBondLevelUp === true && !stopOnBondMaxLevel,
     stopOnBondMaxLevel,
+    verifySkillActivation: settings.verifySkillActivation === true,
   };
 }
 

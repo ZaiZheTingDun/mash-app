@@ -66,6 +66,10 @@ const SKILL_POLL_INTERVAL: Duration = Duration::from_millis(300);
 /// to cover NP-length animations without hanging forever if something
 /// genuinely went wrong.
 const SKILL_WAIT_TIMEOUT: Duration = Duration::from_secs(15);
+/// Short window after a skill tap where the Battle action menu should
+/// disappear if the game accepted the input. Keep this small so a missed
+/// tap retries promptly instead of stalling the whole turn.
+const SKILL_ACTIVATION_START_TIMEOUT: Duration = Duration::from_secs(2);
 /// After a submitted attack resolves back to Battle, wait briefly for a
 /// reliable `BATTLE m/n` HUD read before advancing the normal-mode turn
 /// counter. If CV keeps failing, fall back to the legacy turn-advance logic

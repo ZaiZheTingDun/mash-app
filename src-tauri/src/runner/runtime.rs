@@ -220,7 +220,14 @@ impl Runner {
         status_text: &str,
         timeout_text: &str,
     ) -> bool {
-        self.wait_for_element_state(screen, element, true, timeout, status_text, timeout_text)
+        self.wait_for_element_state(
+            screen,
+            element,
+            true,
+            timeout,
+            status_text,
+            timeout_text,
+        )
     }
 
     pub(crate) fn wait_for_element_hidden(
@@ -231,7 +238,14 @@ impl Runner {
         status_text: &str,
         timeout_text: &str,
     ) -> bool {
-        self.wait_for_element_state(screen, element, false, timeout, status_text, timeout_text)
+        self.wait_for_element_state(
+            screen,
+            element,
+            false,
+            timeout,
+            status_text,
+            timeout_text,
+        )
     }
 
     pub(crate) fn wait_for_element_state(

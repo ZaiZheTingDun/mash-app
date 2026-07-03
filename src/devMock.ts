@@ -92,6 +92,7 @@ let supportBondIconThreshold = 0.7;
 let noblePhantasmDetectionMode: "card" | "gauge" = "card";
 let stopOnBondLevelUp = false;
 let stopOnBondMaxLevel = false;
+let verifySkillActivation = false;
 let nextProjectNumber = 2;
 let activeProjectId: string | null = "dev-project-1";
 let appTheme: "light" | "dark" | "system" | null = null;
@@ -166,6 +167,19 @@ function createProject(name: string, advancedMode = false): Project {
     repeatCount: null,
     apRecoveryItems: [],
     slots: createInitialProjectSlots(),
+  };
+}
+
+function recognitionSettings() {
+  return {
+    noblePhantasmDetectionMode,
+    supportCeThreshold,
+    supportCeFullGateThreshold,
+    supportMlbIconThreshold,
+    supportBondIconThreshold,
+    stopOnBondLevelUp,
+    stopOnBondMaxLevel,
+    verifySkillActivation,
   };
 }
 
@@ -361,109 +375,48 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       }
       return null as T;
     case "get_recognition_settings":
-      return {
-        noblePhantasmDetectionMode,
-        supportCeThreshold,
-        supportCeFullGateThreshold,
-        supportMlbIconThreshold,
-        supportBondIconThreshold,
-        stopOnBondLevelUp,
-        stopOnBondMaxLevel,
-      } as T;
+      return recognitionSettings() as T;
     case "set_noble_phantasm_detection_mode":
       if (args.value === "card" || args.value === "gauge") {
         noblePhantasmDetectionMode = args.value;
       }
-      return {
-        noblePhantasmDetectionMode,
-        supportCeThreshold,
-        supportCeFullGateThreshold,
-        supportMlbIconThreshold,
-        supportBondIconThreshold,
-        stopOnBondLevelUp,
-        stopOnBondMaxLevel,
-      } as T;
+      return recognitionSettings() as T;
     case "set_support_ce_threshold":
       supportCeThreshold =
         typeof args.value === "number"
           ? Math.min(0.85, Math.max(0.6, args.value))
           : supportCeThreshold;
-      return {
-        noblePhantasmDetectionMode,
-        supportCeThreshold,
-        supportCeFullGateThreshold,
-        supportMlbIconThreshold,
-        supportBondIconThreshold,
-        stopOnBondLevelUp,
-        stopOnBondMaxLevel,
-      } as T;
+      return recognitionSettings() as T;
     case "set_support_ce_full_gate_threshold":
       supportCeFullGateThreshold =
         typeof args.value === "number"
           ? Math.min(0.7, Math.max(0.4, args.value))
           : supportCeFullGateThreshold;
-      return {
-        noblePhantasmDetectionMode,
-        supportCeThreshold,
-        supportCeFullGateThreshold,
-        supportMlbIconThreshold,
-        supportBondIconThreshold,
-        stopOnBondLevelUp,
-        stopOnBondMaxLevel,
-      } as T;
+      return recognitionSettings() as T;
     case "set_support_mlb_icon_threshold":
       supportMlbIconThreshold =
         typeof args.value === "number"
           ? Math.min(0.85, Math.max(0.6, args.value))
           : supportMlbIconThreshold;
-      return {
-        noblePhantasmDetectionMode,
-        supportCeThreshold,
-        supportCeFullGateThreshold,
-        supportMlbIconThreshold,
-        supportBondIconThreshold,
-        stopOnBondLevelUp,
-        stopOnBondMaxLevel,
-      } as T;
+      return recognitionSettings() as T;
     case "set_support_bond_icon_threshold":
       supportBondIconThreshold =
         typeof args.value === "number"
           ? Math.min(0.85, Math.max(0.6, args.value))
           : supportBondIconThreshold;
-      return {
-        noblePhantasmDetectionMode,
-        supportCeThreshold,
-        supportCeFullGateThreshold,
-        supportMlbIconThreshold,
-        supportBondIconThreshold,
-        stopOnBondLevelUp,
-        stopOnBondMaxLevel,
-      } as T;
+      return recognitionSettings() as T;
     case "set_stop_on_bond_level_up":
       stopOnBondLevelUp = Boolean(args.value);
-      return {
-        noblePhantasmDetectionMode,
-        supportCeThreshold,
-        supportCeFullGateThreshold,
-        supportMlbIconThreshold,
-        supportBondIconThreshold,
-        stopOnBondLevelUp,
-        stopOnBondMaxLevel,
-      } as T;
+      return recognitionSettings() as T;
     case "set_stop_on_bond_max_level":
       stopOnBondMaxLevel = Boolean(args.value);
       if (stopOnBondMaxLevel) {
         stopOnBondLevelUp = false;
       }
-      return {
-        noblePhantasmDetectionMode,
-        supportCeThreshold,
-        supportCeFullGateThreshold,
-        supportMlbIconThreshold,
-        supportBondIconThreshold,
-        stopOnBondLevelUp,
-        stopOnBondMaxLevel,
-      } as T;
+      return recognitionSettings() as T;
+    case "set_verify_skill_activation":
+      verifySkillActivation = Boolean(args.value);
+      return recognitionSettings() as T;
     case "pick_asset_bundle":
     case "pick_runtime_bundle":
     case "get_servant_portrait_path":
