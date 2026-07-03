@@ -76,6 +76,17 @@ fn enhancement_runner_is_busy(state: &EnhancementRunnerState) -> bool {
     )
 }
 
+const ADB_RESET_USER_MESSAGE: &str =
+    "ADB 设备离线，请点击状态栏的游戏连接按钮，并选择「重置 ADB」后重试。";
+
+fn scrcpy_stream_start_user_message(error: &str) -> Option<&'static str> {
+    if error.contains("device offline") || error.contains("failed to get feature set") {
+        Some(ADB_RESET_USER_MESSAGE)
+    } else {
+        None
+    }
+}
+
 fn emit_automation_status(
     app: &tauri::AppHandle,
     state: &Arc<Mutex<RunnerState>>,
@@ -348,7 +359,16 @@ pub(crate) fn start_automation(
         ) {
             Ok(size) => size,
             Err(err) => {
-                fail_automation_start(&app, &state, format!("启动 scrcpy 视频流失败: {err}"));
+                if let Some(user_message) = scrcpy_stream_start_user_message(&err) {
+                    fail_automation_start_with_debug(
+                        &app,
+                        &state,
+                        user_message.to_string(),
+                        format!("scrcpy 视频流启动失败详情: {err}"),
+                    );
+                } else {
+                    fail_automation_start(&app, &state, format!("启动 scrcpy 视频流失败: {err}"));
+                }
                 return;
             }
         };
@@ -521,7 +541,16 @@ pub(crate) fn start_enhancement_automation(
         ) {
             Ok(size) => size,
             Err(err) => {
-                fail_enhancement_start(&app, &state, format!("启动 scrcpy 视频流失败: {err}"));
+                if let Some(user_message) = scrcpy_stream_start_user_message(&err) {
+                    fail_enhancement_start_with_debug(
+                        &app,
+                        &state,
+                        user_message.to_string(),
+                        format!("scrcpy 视频流启动失败详情: {err}"),
+                    );
+                } else {
+                    fail_enhancement_start(&app, &state, format!("启动 scrcpy 视频流失败: {err}"));
+                }
                 return;
             }
         };
@@ -596,5 +625,20 @@ mod tests {
             input_size_for_taps(Some((1080, 1920)), (1920, 1080)),
             (1920, 1080)
         );
+    }
+
+    #[test]
+    fn scrcpy_stream_start_user_message_recommends_adb_reset_for_offline_device() {
+        let error = concat!(
+            "start_stream failed: failed to start stream: adb -s 127.0.0.1:5555 push ",
+            "/tmp/scrcpy-server.jar /data/local/tmp/scrcpy-server.jar failed (1): ",
+            "adb: error: failed to get feature set: device offline"
+        );
+
+        assert_eq!(
+            scrcpy_stream_start_user_message(error),
+            Some(ADB_RESET_USER_MESSAGE)
+        );
+        assert_eq!(scrcpy_stream_start_user_message("decoder stopped"), None);
     }
 }
