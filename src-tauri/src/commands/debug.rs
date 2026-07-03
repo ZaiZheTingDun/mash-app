@@ -103,7 +103,15 @@ fn ensure_debug_sidecar(
                 .collect::<Vec<_>>()
                 .join(","),
         );
-        let client = crate::commands::automation::spawn_configured_sidecar(app, server)?;
+        let client =
+            crate::commands::automation::spawn_configured_sidecar(app, server).map_err(|err| {
+                if let Some(user_message) = crate::screen::sidecar_startup_user_message(&err) {
+                    eprintln!("[debug] sidecar startup detail: {err}");
+                    user_message.to_string()
+                } else {
+                    err
+                }
+            })?;
         eprintln!("[debug] sidecar ready");
         *guard = Some(client);
     }

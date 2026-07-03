@@ -82,6 +82,16 @@ fn emit_automation_status(
     screen: &str,
     message: &str,
 ) {
+    emit_automation_status_with_level(app, state, screen, message, LogLevel::Info);
+}
+
+fn emit_automation_status_with_level(
+    app: &tauri::AppHandle,
+    state: &Arc<Mutex<RunnerState>>,
+    screen: &str,
+    message: &str,
+    level: LogLevel,
+) {
     let state_str = {
         let s = state.lock().unwrap();
         format!("{:?}", *s)
@@ -92,7 +102,7 @@ fn emit_automation_status(
             state: state_str,
             current_screen: screen.into(),
             message: message.into(),
-            level: LogLevel::Info,
+            level,
             attack: None,
             action: None,
         },
@@ -106,6 +116,19 @@ fn fail_automation_start(app: &tauri::AppHandle, state: &Arc<Mutex<RunnerState>>
     emit_automation_status(app, state, "", &format!("启动失败: {message}"));
 }
 
+fn fail_automation_start_with_debug(
+    app: &tauri::AppHandle,
+    state: &Arc<Mutex<RunnerState>>,
+    user_message: String,
+    debug_message: String,
+) {
+    *state.lock().unwrap() = RunnerState::Error {
+        message: user_message.clone(),
+    };
+    emit_automation_status_with_level(app, state, "CV", &debug_message, LogLevel::Debug);
+    emit_automation_status(app, state, "", &format!("启动失败: {user_message}"));
+}
+
 fn stop_automation_start(app: &tauri::AppHandle, state: &Arc<Mutex<RunnerState>>) {
     *state.lock().unwrap() = RunnerState::Idle;
     emit_automation_status(app, state, "", "自动化已停止");
@@ -117,6 +140,16 @@ fn emit_enhancement_status(
     screen: &str,
     message: &str,
 ) {
+    emit_enhancement_status_with_level(app, state, screen, message, LogLevel::Info);
+}
+
+fn emit_enhancement_status_with_level(
+    app: &tauri::AppHandle,
+    state: &Arc<Mutex<EnhancementRunnerState>>,
+    screen: &str,
+    message: &str,
+    level: LogLevel,
+) {
     let state_str = {
         let s = state.lock().unwrap();
         format!("{:?}", *s)
@@ -127,7 +160,7 @@ fn emit_enhancement_status(
             state: state_str,
             current_screen: screen.into(),
             message: message.into(),
-            level: LogLevel::Info,
+            level,
         },
     );
 }
@@ -141,6 +174,19 @@ fn fail_enhancement_start(
         message: message.clone(),
     };
     emit_enhancement_status(app, state, "", &format!("启动失败: {message}"));
+}
+
+fn fail_enhancement_start_with_debug(
+    app: &tauri::AppHandle,
+    state: &Arc<Mutex<EnhancementRunnerState>>,
+    user_message: String,
+    debug_message: String,
+) {
+    *state.lock().unwrap() = EnhancementRunnerState::Error {
+        message: user_message.clone(),
+    };
+    emit_enhancement_status_with_level(app, state, "CV", &debug_message, LogLevel::Debug);
+    emit_enhancement_status(app, state, "", &format!("启动失败: {user_message}"));
 }
 
 fn stop_enhancement_start(app: &tauri::AppHandle, state: &Arc<Mutex<EnhancementRunnerState>>) {
@@ -279,7 +325,16 @@ pub(crate) fn start_automation(
         let mut sidecar = match take_or_spawn_sidecar(&app, &debug_state, server) {
             Ok(sidecar) => sidecar,
             Err(err) => {
-                fail_automation_start(&app, &state, err);
+                if let Some(user_message) = screen::sidecar_startup_user_message(&err) {
+                    fail_automation_start_with_debug(
+                        &app,
+                        &state,
+                        user_message.to_string(),
+                        format!("CV 运行时启动失败详情: {err}"),
+                    );
+                } else {
+                    fail_automation_start(&app, &state, err);
+                }
                 return;
             }
         };
@@ -444,7 +499,16 @@ pub(crate) fn start_enhancement_automation(
         let mut sidecar = match take_or_spawn_sidecar(&app, &debug_state, server) {
             Ok(sidecar) => sidecar,
             Err(err) => {
-                fail_enhancement_start(&app, &state, err);
+                if let Some(user_message) = screen::sidecar_startup_user_message(&err) {
+                    fail_enhancement_start_with_debug(
+                        &app,
+                        &state,
+                        user_message.to_string(),
+                        format!("CV 运行时启动失败详情: {err}"),
+                    );
+                } else {
+                    fail_enhancement_start(&app, &state, err);
+                }
                 return;
             }
         };

@@ -8,6 +8,20 @@ use tauri_plugin_shell::ShellExt;
 mod types;
 pub use types::*;
 
+pub const SIDECAR_STARTUP_REDOWNLOAD_MESSAGE: &str =
+    "CV 运行时启动失败，请前往资源管理重新下载 CV 运行时。";
+
+pub fn sidecar_startup_user_message(error: &str) -> Option<&'static str> {
+    if error.contains("sidecar did not become ready")
+        || error.contains("OpenCV bindings requires")
+        || error.contains("invalid JSON from sidecar")
+    {
+        Some(SIDECAR_STARTUP_REDOWNLOAD_MESSAGE)
+    } else {
+        None
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Sidecar client — communicates with the Python mash-cv process
 // ---------------------------------------------------------------------------
@@ -139,7 +153,11 @@ impl SidecarClient {
         let ping = serde_json::json!({ "cmd": "ping" });
         match client.send_recv_with_timeout(&ping, Duration::from_secs(90)) {
             Ok(resp) => eprintln!("[mash-cv] ping -> {resp}"),
-            Err(e) => return Err(format!("sidecar did not become ready: {e}")),
+            Err(e) => {
+                let detail = format!("sidecar did not become ready: {e}");
+                eprintln!("[mash-cv startup] {detail}");
+                return Err(detail);
+            }
         }
 
         for (idx, dir) in template_dirs.iter().enumerate() {

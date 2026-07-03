@@ -42,6 +42,20 @@ fn add_image_path_does_nothing_when_request_is_not_an_object() {
 }
 
 #[test]
+fn sidecar_startup_user_message_recommends_runtime_redownload() {
+    let error = concat!(
+        "sidecar did not become ready: invalid JSON from sidecar: ",
+        "expected value at line 1 column 1: OpenCV bindings requires \"numpy\" package"
+    );
+
+    assert_eq!(
+        sidecar_startup_user_message(error),
+        Some(SIDECAR_STARTUP_REDOWNLOAD_MESSAGE)
+    );
+    assert_eq!(sidecar_startup_user_message("启动 scrcpy 视频流失败"), None);
+}
+
+#[test]
 fn ap_recovery_screen_round_trips_display_name() {
     assert_eq!(Screen::APRecovery.to_string(), "APRecovery");
     assert_eq!("APRecovery".parse::<Screen>().unwrap(), Screen::APRecovery);
