@@ -2,6 +2,9 @@
 
 use super::*;
 
+const AP_RECOVERY_CLOSE_POLL: Duration = Duration::from_millis(300);
+const AP_RECOVERY_CLOSE_TIMEOUT: Duration = Duration::from_secs(6);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApRecoveryPage {
     Top,
@@ -99,6 +102,39 @@ impl Runner {
             .is_some())
     }
 
+    fn tap_ap_recovery_item(&mut self, item: ApRecoveryTemplate, point: Point) -> bool {
+        self.emit("APRecovery", &format!("行动力不足，使用{}", item.label));
+        if !self.tap_at("APRecovery", point) {
+            return false;
+        }
+        thread::sleep(ACTION_DELAY);
+        if !self.tap_at("APRecovery", AP_RECOVERY_CONFIRM_BUTTON) {
+            return false;
+        }
+        self.wait_for_ap_recovery_to_close()
+    }
+
+    fn wait_for_ap_recovery_to_close(&mut self) -> bool {
+        let start = Instant::now();
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+            thread::sleep(AP_RECOVERY_CLOSE_POLL);
+            match self.sidecar().detect(None) {
+                Ok(Screen::APRecovery) => {}
+                Ok(_) => return true,
+                Err(err) => {
+                    eprintln!("[runner] APRecovery close wait detect failed: {err}");
+                }
+            }
+            if start.elapsed() >= AP_RECOVERY_CLOSE_TIMEOUT {
+                self.emit_warn("APRecovery", "等待行动力回复页面关闭超时，返回主循环重试");
+                return false;
+            }
+        }
+    }
+
     pub(crate) fn handle_ap_recovery(&mut self) {
         if self.config.ap_recovery_items.is_empty() {
             self.emit("APRecovery", "行动力不足且未配置自动吃苹果，停止");
@@ -122,15 +158,7 @@ impl Runner {
         for item in self.ap_recovery_candidates(ApRecoveryPage::Top) {
             match self.find_ap_recovery_item(item) {
                 Ok(Some(point)) => {
-                    self.emit("APRecovery", &format!("行动力不足，使用{}", item.label));
-                    if !self.tap_at("APRecovery", point) {
-                        return;
-                    }
-                    thread::sleep(ACTION_DELAY);
-                    if !self.tap_at("APRecovery", AP_RECOVERY_CONFIRM_BUTTON) {
-                        return;
-                    }
-                    thread::sleep(ACTION_DELAY);
+                    self.tap_ap_recovery_item(item, point);
                     return;
                 }
                 Ok(None) => {}
@@ -162,15 +190,7 @@ impl Runner {
         for item in bottom_items {
             match self.find_ap_recovery_item(item) {
                 Ok(Some(point)) => {
-                    self.emit("APRecovery", &format!("行动力不足，使用{}", item.label));
-                    if !self.tap_at("APRecovery", point) {
-                        return;
-                    }
-                    thread::sleep(ACTION_DELAY);
-                    if !self.tap_at("APRecovery", AP_RECOVERY_CONFIRM_BUTTON) {
-                        return;
-                    }
-                    thread::sleep(ACTION_DELAY);
+                    self.tap_ap_recovery_item(item, point);
                     return;
                 }
                 Ok(None) => {}
