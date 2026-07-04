@@ -72,6 +72,7 @@ impl Runner {
                 Screen::Attack => {
                     unknown_count = 0;
                     last_detected_screen = screen;
+                    self.battle.clear_waiting_for_attack_screen();
                     if self.battle.attack_submitted {
                         self.emit("Attack", "已提交本轮选卡，等待攻击动画");
                     } else {
@@ -151,6 +152,22 @@ impl Runner {
     // -- battle screen handlers ----------------------------------------------
 
     fn handle_battle(&mut self) {
+        match attack_screen_wait_gate(
+            self.battle.waiting_for_attack_screen_started_at,
+            Instant::now(),
+            ATTACK_SCREEN_WAIT_TIMEOUT,
+        ) {
+            AttackScreenWaitGate::Waiting => {
+                self.emit("Battle", "已点击攻击按钮，等待指令卡画面…");
+                return;
+            }
+            AttackScreenWaitGate::TimedOut => {
+                self.battle.clear_waiting_for_attack_screen();
+                self.emit_warn("Battle", "等待指令卡画面超时，恢复 Battle 处理");
+            }
+            AttackScreenWaitGate::NotWaiting => {}
+        }
+
         // Check if the attack button is present (our turn to act)
         let attack_present = self
             .sidecar()
@@ -328,7 +345,7 @@ impl Runner {
 
         // Click the attack button
         self.emit("Battle", "点击攻击按钮");
-        if !self.tap_at("Battle", ATTACK_BUTTON) {
+        if !self.tap_attack_button() {
             return;
         }
         thread::sleep(ACTION_DELAY);

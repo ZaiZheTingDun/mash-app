@@ -910,6 +910,7 @@ impl Runner {
             self.emit("Attack", "未配置普通指令卡，跳过指令卡归属识别");
             fallback_command_cards()
         };
+        self.battle.clear_waiting_for_attack_screen();
 
         let np_detection_mode = self.config.noble_phantasm_detection_mode;
         let nps = match np_detection_mode {
@@ -1375,7 +1376,7 @@ impl Runner {
                         }
 
                         self.emit("Battle", "启动阶段完成，进入自动战斗");
-                        if !self.tap_at("Battle", ATTACK_BUTTON) {
+                        if !self.tap_attack_button() {
                             return;
                         }
                         thread::sleep(ACTION_DELAY);
@@ -1449,7 +1450,7 @@ impl Runner {
                             .insert(scene_index, control_index + 1);
 
                         self.emit("Battle", "控制行动完成，返回指令卡攻击");
-                        if !self.tap_at("Battle", ATTACK_BUTTON) {
+                        if !self.tap_attack_button() {
                             return;
                         }
                         thread::sleep(ACTION_DELAY);
@@ -1555,7 +1556,7 @@ impl Runner {
                     }
 
                     self.emit("Battle", "启动阶段完成，进入自动战斗");
-                    if !self.tap_at("Battle", ATTACK_BUTTON) {
+                    if !self.tap_attack_button() {
                         return;
                     }
                     thread::sleep(ACTION_DELAY);
@@ -1659,7 +1660,7 @@ impl Runner {
                     }
 
                     self.emit("Battle", "控制行动完成，返回指令卡攻击");
-                    if !self.tap_at("Battle", ATTACK_BUTTON) {
+                    if !self.tap_attack_button() {
                         return;
                     }
                     thread::sleep(ACTION_DELAY);
@@ -1780,7 +1781,7 @@ impl Runner {
                 }
 
                 self.emit("Battle", "高级规则准备行动完成，重新进入指令卡");
-                if !self.tap_at("Battle", ATTACK_BUTTON) {
+                if !self.tap_attack_button() {
                     return;
                 }
                 thread::sleep(ACTION_DELAY);

@@ -114,6 +114,14 @@ impl Runner {
         }
     }
 
+    pub(crate) fn tap_attack_button(&mut self) -> bool {
+        if !self.tap_at("Battle", ATTACK_BUTTON) {
+            return false;
+        }
+        self.battle.mark_waiting_for_attack_screen(Instant::now());
+        true
+    }
+
     pub(crate) fn swipe_at(
         &mut self,
         screen: &str,

@@ -41,6 +41,11 @@ pub(crate) struct BattleState {
     /// can remain detectable for a short moment before the animation takes
     /// over; this prevents submitting another set of picks in that window.
     pub(crate) attack_submitted: bool,
+    /// Set after tapping the Battle-screen attack button while waiting for the
+    /// command-card screen to become detectable. During this transition the
+    /// classifier can still briefly report Battle; do not tap Attack again or
+    /// the second tap may land on the rightmost command card.
+    pub(crate) waiting_for_attack_screen_started_at: Option<Instant>,
     /// Start time for the normal-mode post-attack HUD-read grace period.
     /// While this is set, the runner has returned to an actionable Battle
     /// screen but is waiting for `BATTLE m/n` before advancing a turn.
@@ -70,6 +75,7 @@ impl BattleState {
             scene_config_used: false,
             waiting_for_battle: false,
             attack_submitted: false,
+            waiting_for_attack_screen_started_at: None,
             post_attack_hud_wait_started: None,
             command_card_owner_failure_count: 0,
             command_card_owner_fallback_to_full_party: false,
@@ -78,6 +84,14 @@ impl BattleState {
             advanced_startup_control_indices: HashMap::new(),
             advanced_auto_order_changes: HashMap::new(),
         }
+    }
+
+    pub(crate) fn mark_waiting_for_attack_screen(&mut self, now: Instant) {
+        self.waiting_for_attack_screen_started_at = Some(now);
+    }
+
+    pub(crate) fn clear_waiting_for_attack_screen(&mut self) {
+        self.waiting_for_attack_screen_started_at = None;
     }
 }
 
@@ -143,6 +157,28 @@ pub(crate) enum PostAttackHudReadGate {
     Ready,
     Waiting { started_at: Instant },
     TimedOut,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum AttackScreenWaitGate {
+    NotWaiting,
+    Waiting,
+    TimedOut,
+}
+
+pub(crate) fn attack_screen_wait_gate(
+    wait_started: Option<Instant>,
+    now: Instant,
+    timeout: Duration,
+) -> AttackScreenWaitGate {
+    let Some(started_at) = wait_started else {
+        return AttackScreenWaitGate::NotWaiting;
+    };
+    if now.duration_since(started_at) >= timeout {
+        AttackScreenWaitGate::TimedOut
+    } else {
+        AttackScreenWaitGate::Waiting
+    }
 }
 
 pub(crate) fn post_attack_hud_read_gate(

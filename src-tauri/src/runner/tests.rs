@@ -861,6 +861,22 @@ fn battle_state_starts_with_frontline_owner_detection_only() {
 
     assert_eq!(battle.command_card_owner_failure_count, 0);
     assert!(!battle.command_card_owner_fallback_to_full_party);
+    assert!(battle.waiting_for_attack_screen_started_at.is_none());
+}
+
+#[test]
+fn battle_state_tracks_waiting_for_attack_screen_transition() {
+    let mut battle = BattleState::new();
+    let started_at = Instant::now();
+
+    battle.mark_waiting_for_attack_screen(started_at);
+    assert_eq!(
+        battle.waiting_for_attack_screen_started_at,
+        Some(started_at)
+    );
+
+    battle.clear_waiting_for_attack_screen();
+    assert!(battle.waiting_for_attack_screen_started_at.is_none());
 }
 
 #[test]
@@ -3784,6 +3800,32 @@ fn post_attack_hud_read_gate_does_not_delay_advanced_mode() {
     let gate = post_attack_hud_read_gate(true, true, None, None, now, POST_ATTACK_HUD_READ_TIMEOUT);
 
     assert_eq!(gate, PostAttackHudReadGate::Ready);
+}
+
+#[test]
+fn attack_screen_wait_gate_allows_normal_battle_when_not_waiting() {
+    let now = Instant::now();
+    let gate = attack_screen_wait_gate(None, now, ATTACK_SCREEN_WAIT_TIMEOUT);
+
+    assert_eq!(gate, AttackScreenWaitGate::NotWaiting);
+}
+
+#[test]
+fn attack_screen_wait_gate_suppresses_duplicate_attack_tap_before_timeout() {
+    let started_at = Instant::now();
+    let now = started_at + ATTACK_SCREEN_WAIT_TIMEOUT - Duration::from_millis(1);
+    let gate = attack_screen_wait_gate(Some(started_at), now, ATTACK_SCREEN_WAIT_TIMEOUT);
+
+    assert_eq!(gate, AttackScreenWaitGate::Waiting);
+}
+
+#[test]
+fn attack_screen_wait_gate_recovers_after_timeout() {
+    let started_at = Instant::now();
+    let now = started_at + ATTACK_SCREEN_WAIT_TIMEOUT;
+    let gate = attack_screen_wait_gate(Some(started_at), now, ATTACK_SCREEN_WAIT_TIMEOUT);
+
+    assert_eq!(gate, AttackScreenWaitGate::TimedOut);
 }
 
 #[test]
