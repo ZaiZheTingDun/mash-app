@@ -79,7 +79,7 @@ impl Runner {
         &mut self,
         item: ApRecoveryTemplate,
     ) -> Result<Option<Point>, String> {
-        self.sidecar().find_element(
+        self.sidecar().find_enabled_ap_recovery_item(
             None,
             item.template_key,
             AP_RECOVERY_ITEMS_REGION,

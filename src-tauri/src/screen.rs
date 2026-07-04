@@ -356,6 +356,42 @@ impl SidecarClient {
         }
     }
 
+    /// Search for an AP recovery item icon, but only accept it when the
+    /// surrounding row is enabled. Depleted rows keep the item icon visible
+    /// under a dark overlay, so plain template matching is not enough.
+    pub fn find_enabled_ap_recovery_item(
+        &mut self,
+        image_path: Option<&Path>,
+        template_key: &str,
+        region: NormRect,
+        threshold: f64,
+    ) -> Result<Option<Point>, String> {
+        let mut req = serde_json::json!({
+            "cmd": "find_element",
+            "templateKey": template_key,
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+            "threshold": threshold,
+            "requireApRecoveryEnabled": true,
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(format!("find_element({template_key}): {err}"));
+        }
+        if resp["found"].as_bool().unwrap_or(false) {
+            let x = resp["x"].as_f64().unwrap_or(0.0);
+            let y = resp["y"].as_f64().unwrap_or(0.0);
+            Ok(Some(Point::new(x, y)))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Like `find_element`, but returns the full match (score + bounding box)
     /// for debug/visualization purposes.
     pub fn find_element_full(

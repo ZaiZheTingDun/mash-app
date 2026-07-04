@@ -890,6 +890,57 @@ class TestFindElement:
         assert result["region"]["w"] == pytest.approx(20 / 1280)
         assert result["region"]["h"] == pytest.approx(20 / 720)
 
+    def test_ap_recovery_enabled_filter_keeps_bright_row(self):
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        template_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "templates", "items"
+        )
+        image_path = os.path.join(repo_root, ".screenshots", "cn", "ap_recover_plenty.png")
+        assert mash_cv._load_templates(template_dir, key_prefix="items")["ok"] is True
+        img = cv2.imread(image_path)
+        assert img is not None
+
+        result = mash_cv._find_element(
+            img,
+            "items/item_apple_silver",
+            {"x": 0.244, "y": 0.142, "w": 0.095, "h": 0.659},
+            0.82,
+            require_ap_recovery_enabled=True,
+        )
+
+        assert result["found"] is True
+        assert result["apRecoveryRow"]["enabled"] is True
+        assert result["apRecoveryRow"]["darkFraction"] < 0.55
+
+    def test_ap_recovery_enabled_filter_rejects_dark_depleted_row(self):
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        template_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "jp", "templates", "items"
+        )
+        image_path = os.path.join(repo_root, ".screenshots", "jp", "ap_recover_exhaust.png")
+        assert mash_cv._load_templates(template_dir, key_prefix="items")["ok"] is True
+        img = cv2.imread(image_path)
+        assert img is not None
+
+        plain = mash_cv._find_element(
+            img,
+            "items/item_apple_bronzed_cobalt",
+            {"x": 0.244, "y": 0.142, "w": 0.095, "h": 0.659},
+            0.82,
+        )
+        filtered = mash_cv._find_element(
+            img,
+            "items/item_apple_bronzed_cobalt",
+            {"x": 0.244, "y": 0.142, "w": 0.095, "h": 0.659},
+            0.82,
+            require_ap_recovery_enabled=True,
+        )
+
+        assert plain["found"] is True
+        assert filtered["found"] is False
+        assert filtered["apRecoveryRow"]["enabled"] is False
+        assert filtered["apRecoveryRow"]["darkFraction"] >= 0.55
+
 
 # ── _find_element_by_name ───────────────────────────────────────────────
 

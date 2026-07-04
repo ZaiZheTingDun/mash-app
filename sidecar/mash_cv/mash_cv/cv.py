@@ -448,6 +448,46 @@ def _support_diagnostics_meta() -> dict:
 # Template matching
 # ---------------------------------------------------------------------------
 
+AP_RECOVERY_ENABLED_ROW_X = 0.35
+AP_RECOVERY_ENABLED_ROW_W = 0.40
+AP_RECOVERY_ENABLED_ROW_HALF_H = 0.055
+AP_RECOVERY_DISABLED_DARK_LUMA = 95
+AP_RECOVERY_DISABLED_DARK_FRACTION = 0.55
+
+
+def _ap_recovery_row_enabled(img: np.ndarray, match: dict) -> dict:
+    """Classify whether the AP recovery row around a matched icon is enabled.
+
+    Depleted rows keep the item icon on screen, but the game covers the whole
+    row with a stable dark overlay. Looking at the text/description band avoids
+    false positives from the icon artwork itself and works for both CN/JP text.
+    """
+    region = match.get("region") or {}
+    h, w = img.shape[:2]
+    cy = float(region.get("y", match.get("y", 0.0))) + float(region.get("h", 0.0)) / 2.0
+    x1 = max(0, int(round(AP_RECOVERY_ENABLED_ROW_X * w)))
+    x2 = min(w, int(round((AP_RECOVERY_ENABLED_ROW_X + AP_RECOVERY_ENABLED_ROW_W) * w)))
+    y1 = max(0, int(round((cy - AP_RECOVERY_ENABLED_ROW_HALF_H) * h)))
+    y2 = min(h, int(round((cy + AP_RECOVERY_ENABLED_ROW_HALF_H) * h)))
+    roi = img[y1:y2, x1:x2]
+    if roi.size == 0:
+        return {"enabled": False, "darkFraction": 1.0, "meanLuma": 0.0}
+
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    dark_fraction = float(np.mean(gray < AP_RECOVERY_DISABLED_DARK_LUMA))
+    mean_luma = float(np.mean(gray))
+    return {
+        "enabled": dark_fraction < AP_RECOVERY_DISABLED_DARK_FRACTION,
+        "darkFraction": dark_fraction,
+        "meanLuma": mean_luma,
+        "region": {
+            "x": x1 / w,
+            "y": y1 / h,
+            "w": (x2 - x1) / w,
+            "h": (y2 - y1) / h,
+        },
+    }
+
 
 def _match_template_region(
     img: np.ndarray,
@@ -899,11 +939,18 @@ def _find_element(
     template_key: str,
     region: dict,
     threshold: float,
+    require_ap_recovery_enabled: bool = False,
 ) -> dict:
     tmpl = _get_template(template_key)
     if tmpl is None:
         return {"found": False, "error": f"template not loaded: {template_key}"}
-    return _match_template_region(img, tmpl, region, threshold, template_key)
+    result = _match_template_region(img, tmpl, region, threshold, template_key)
+    if result.get("found") and require_ap_recovery_enabled:
+        enabled = _ap_recovery_row_enabled(img, result)
+        result["apRecoveryRow"] = enabled
+        if not enabled["enabled"]:
+            result["found"] = False
+    return result
 
 
 def _named_targets(screen: dict) -> list[tuple[str, dict]]:
@@ -5035,6 +5082,7 @@ def main() -> None:
                         cmd["templateKey"],
                         cmd.get("region", DEFAULT_REGION),
                         cmd.get("threshold", 0.8),
+                        bool(cmd.get("requireApRecoveryEnabled", False)),
                     ),
                 )
         elif action == "find_element_by_name":
