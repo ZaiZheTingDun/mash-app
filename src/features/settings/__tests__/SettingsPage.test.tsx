@@ -73,6 +73,7 @@ describe("SettingsDialog", () => {
       if (cmd === "get_debug_settings") {
         return {
           autoCaptureBattleResultLoot: false,
+          autoCaptureUnknownScreenTimeout: false,
         };
       }
       if (cmd === "set_noble_phantasm_detection_mode") {
@@ -174,6 +175,13 @@ describe("SettingsDialog", () => {
       if (cmd === "set_auto_capture_battle_result_loot") {
         return {
           autoCaptureBattleResultLoot: Boolean(argValue(args)),
+          autoCaptureUnknownScreenTimeout: false,
+        };
+      }
+      if (cmd === "set_auto_capture_unknown_screen_timeout") {
+        return {
+          autoCaptureBattleResultLoot: false,
+          autoCaptureUnknownScreenTimeout: Boolean(argValue(args)),
         };
       }
       return null;
@@ -226,12 +234,21 @@ describe("SettingsDialog", () => {
     renderWithTheme(<SettingsHarness initialSection="debug" />);
 
     expect(await screen.findByText("自动截图战利品页面")).toBeInTheDocument();
+    expect(screen.getByText("无法识别画面超时时截图")).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("get_debug_settings");
 
     await user.click(screen.getByRole("switch", { name: "自动截图战利品页面" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_auto_capture_battle_result_loot", {
+        value: true,
+      });
+    });
+
+    await user.click(screen.getByRole("switch", { name: "无法识别画面超时时截图" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_auto_capture_unknown_screen_timeout", {
         value: true,
       });
     });

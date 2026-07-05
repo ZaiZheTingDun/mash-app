@@ -70,6 +70,8 @@ pub struct RecognitionSettings {
 pub struct DebugSettings {
     #[serde(default)]
     pub auto_capture_battle_result_loot: bool,
+    #[serde(default)]
+    pub auto_capture_unknown_screen_timeout: bool,
 }
 
 impl Default for RecognitionSettings {
@@ -471,9 +473,36 @@ pub(crate) fn set_auto_capture_battle_result_loot(
     state: tauri::State<'_, Mutex<DebugSettings>>,
     value: bool,
 ) -> Result<DebugSettings, String> {
-    let next = DebugSettings {
-        auto_capture_battle_result_loot: value,
-    };
+    let next = debug_settings_with_auto_capture_battle_result_loot(*state.lock().unwrap(), value);
+    *state.lock().unwrap() = next;
+    save_debug_settings(&app, &next)?;
+    Ok(next)
+}
+
+fn debug_settings_with_auto_capture_battle_result_loot(
+    mut settings: DebugSettings,
+    value: bool,
+) -> DebugSettings {
+    settings.auto_capture_battle_result_loot = value;
+    settings
+}
+
+fn debug_settings_with_auto_capture_unknown_screen_timeout(
+    mut settings: DebugSettings,
+    value: bool,
+) -> DebugSettings {
+    settings.auto_capture_unknown_screen_timeout = value;
+    settings
+}
+
+#[tauri::command]
+pub(crate) fn set_auto_capture_unknown_screen_timeout(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<DebugSettings>>,
+    value: bool,
+) -> Result<DebugSettings, String> {
+    let next =
+        debug_settings_with_auto_capture_unknown_screen_timeout(*state.lock().unwrap(), value);
     *state.lock().unwrap() = next;
     save_debug_settings(&app, &next)?;
     Ok(next)
@@ -587,31 +616,65 @@ mod tests {
     }
 
     #[test]
-    fn debug_settings_default_disables_auto_loot_capture() {
+    fn debug_settings_default_disables_debug_captures() {
         let settings = DebugSettings::default();
 
         assert!(!settings.auto_capture_battle_result_loot);
+        assert!(!settings.auto_capture_unknown_screen_timeout);
     }
 
     #[test]
-    fn debug_settings_deserializes_legacy_json_with_auto_loot_capture_default() {
+    fn debug_settings_deserializes_legacy_json_with_debug_capture_defaults() {
         let settings: DebugSettings = serde_json::from_value(serde_json::json!({})).unwrap();
 
         assert!(!settings.auto_capture_battle_result_loot);
+        assert!(!settings.auto_capture_unknown_screen_timeout);
     }
 
     #[test]
-    fn debug_settings_round_trips_auto_loot_capture() {
+    fn debug_settings_round_trips_debug_capture_settings() {
         let settings: DebugSettings = serde_json::from_value(serde_json::json!({
             "autoCaptureBattleResultLoot": true,
+            "autoCaptureUnknownScreenTimeout": true,
         }))
         .unwrap();
 
         assert!(settings.auto_capture_battle_result_loot);
+        assert!(settings.auto_capture_unknown_screen_timeout);
         assert_eq!(
             serde_json::to_value(settings).unwrap()["autoCaptureBattleResultLoot"],
             serde_json::json!(true)
         );
+        assert_eq!(
+            serde_json::to_value(settings).unwrap()["autoCaptureUnknownScreenTimeout"],
+            serde_json::json!(true)
+        );
+    }
+
+    #[test]
+    fn debug_settings_auto_loot_update_preserves_unknown_timeout_capture() {
+        let settings = DebugSettings {
+            auto_capture_battle_result_loot: false,
+            auto_capture_unknown_screen_timeout: true,
+        };
+
+        let next = debug_settings_with_auto_capture_battle_result_loot(settings, true);
+
+        assert!(next.auto_capture_battle_result_loot);
+        assert!(next.auto_capture_unknown_screen_timeout);
+    }
+
+    #[test]
+    fn debug_settings_unknown_timeout_update_preserves_auto_loot_capture() {
+        let settings = DebugSettings {
+            auto_capture_battle_result_loot: true,
+            auto_capture_unknown_screen_timeout: false,
+        };
+
+        let next = debug_settings_with_auto_capture_unknown_screen_timeout(settings, true);
+
+        assert!(next.auto_capture_battle_result_loot);
+        assert!(next.auto_capture_unknown_screen_timeout);
     }
 
     #[test]

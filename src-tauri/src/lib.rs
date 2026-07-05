@@ -308,6 +308,7 @@ pub fn run() {
             commands::settings::set_stop_on_bond_max_level,
             commands::settings::set_verify_skill_activation,
             commands::settings::set_auto_capture_battle_result_loot,
+            commands::settings::set_auto_capture_unknown_screen_timeout,
             commands::settings::should_check_updates_today,
             commands::settings::mark_update_checked_today,
             commands::automation::start_automation,

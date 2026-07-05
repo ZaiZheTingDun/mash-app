@@ -212,6 +212,9 @@ pub struct RunConfig {
     /// Save each newly handled loot result page to the app debug directory.
     #[serde(default)]
     pub auto_capture_battle_result_loot: bool,
+    /// Save one current stream frame when Unknown screen detection times out.
+    #[serde(default)]
+    pub auto_capture_unknown_screen_timeout: bool,
     #[serde(default = "default_true")]
     pub support_craft_essence_mlb_required: bool,
     #[serde(default)]

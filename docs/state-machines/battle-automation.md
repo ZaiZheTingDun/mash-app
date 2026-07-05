@@ -208,6 +208,11 @@ the operator should always see.
   `BATTLE_RESULT_POPUP_SKIP` while waiting for detection to recover. The
   coordinate intentionally matches the battle animation-skip position but uses
   a separate constant so result-popup behavior can be tuned independently.
+- If `Unknown` persists until the runner's timeout and the global debug setting
+  "无法识别画面超时时截图" is enabled, the runner saves one current stream frame
+  under `app_data_dir()/debug/unknown-screen-timeouts/` before emitting the
+  terminal `无法识别当前画面，已超时停止` error. Screenshot failures emit a warning
+  and do not replace the timeout error.
 
 ## Support OCR Names
 

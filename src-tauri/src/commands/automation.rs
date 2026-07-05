@@ -298,10 +298,9 @@ pub(crate) fn start_automation(
     config.stop_on_bond_level_up = recognition_settings.stop_on_bond_level_up;
     config.stop_on_bond_max_level = recognition_settings.stop_on_bond_max_level;
     config.verify_skill_activation = recognition_settings.verify_skill_activation;
-    config.auto_capture_battle_result_loot = debug_settings_state
-        .lock()
-        .unwrap()
-        .auto_capture_battle_result_loot;
+    let debug_settings = *debug_settings_state.lock().unwrap();
+    config.auto_capture_battle_result_loot = debug_settings.auto_capture_battle_result_loot;
+    config.auto_capture_unknown_screen_timeout = debug_settings.auto_capture_unknown_screen_timeout;
 
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));

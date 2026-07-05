@@ -71,6 +71,7 @@ const FULL_TEMPLATE_CROP: NormRect = NormRect {
     h: 1.0,
 };
 const LOOT_SCREENSHOT_WAIT_SECONDS: f64 = 0.2;
+const UNKNOWN_SCREEN_TIMEOUT_SCREENSHOT_WAIT_SECONDS: f64 = 0.2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FiveStarCeDropStopAction {
@@ -178,6 +179,25 @@ pub(crate) fn battle_result_loot_screenshot_filename(
         .map(|duration| duration.as_millis())
         .unwrap_or(0);
     format!("loot-{millis:013}-run{:04}.jpg", completed_mission_runs + 1,)
+}
+
+pub(crate) fn unknown_screen_timeout_screenshot_dir(app: &tauri::AppHandle) -> PathBuf {
+    unknown_screen_timeout_screenshot_dir_in_root(&app_data_dir(app))
+}
+
+pub(crate) fn unknown_screen_timeout_screenshot_dir_in_root(root: &Path) -> PathBuf {
+    root.join("debug").join("unknown-screen-timeouts")
+}
+
+pub(crate) fn unknown_screen_timeout_screenshot_filename(
+    timestamp: std::time::SystemTime,
+    completed_mission_runs: u32,
+) -> String {
+    let millis = timestamp
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("unknown-{millis:013}-run{:04}.jpg", completed_mission_runs + 1,)
 }
 
 pub(crate) fn is_battle_result_screen(screen: Screen) -> bool {
@@ -383,6 +403,22 @@ impl Runner {
         let jpeg = self
             .sidecar()
             .get_frame_jpeg(LOOT_SCREENSHOT_WAIT_SECONDS)
+            .map_err(|err| format!("获取视频帧失败: {err}"))?;
+        std::fs::write(&path, jpeg).map_err(|err| format!("写入截图失败: {err}"))?;
+        Ok(path)
+    }
+
+    pub(crate) fn capture_unknown_screen_timeout_screenshot(&mut self) -> Result<PathBuf, String> {
+        let dir = unknown_screen_timeout_screenshot_dir(&self.app_handle);
+        std::fs::create_dir_all(&dir)
+            .map_err(|err| format!("创建无法识别画面截图目录失败: {err}"))?;
+        let path = dir.join(unknown_screen_timeout_screenshot_filename(
+            std::time::SystemTime::now(),
+            self.completed_mission_runs,
+        ));
+        let jpeg = self
+            .sidecar()
+            .get_frame_jpeg(UNKNOWN_SCREEN_TIMEOUT_SCREENSHOT_WAIT_SECONDS)
             .map_err(|err| format!("获取视频帧失败: {err}"))?;
         std::fs::write(&path, jpeg).map_err(|err| format!("写入截图失败: {err}"))?;
         Ok(path)

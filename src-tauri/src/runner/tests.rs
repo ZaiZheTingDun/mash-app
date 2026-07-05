@@ -373,6 +373,26 @@ fn battle_result_popup_skip_only_applies_to_result_screens() {
 }
 
 #[test]
+fn unknown_screen_timeout_screenshot_path_uses_debug_directory() {
+    let root = PathBuf::from("/tmp/mash-app-test");
+
+    assert_eq!(
+        unknown_screen_timeout_screenshot_dir_in_root(&root),
+        root.join("debug").join("unknown-screen-timeouts")
+    );
+}
+
+#[test]
+fn unknown_screen_timeout_screenshot_filename_includes_timestamp_and_run() {
+    let timestamp = std::time::UNIX_EPOCH + Duration::from_millis(12_345);
+
+    assert_eq!(
+        unknown_screen_timeout_screenshot_filename(timestamp, 2),
+        "unknown-0000000012345-run0003.jpg"
+    );
+}
+
+#[test]
 fn ce_search_region_identity_row_returns_offset() {
     // A unit row at the origin → the absolute window equals the
     // raw `SUPPORT_CE_OFFSET_IN_ROW` (it's already in unit-row coords).

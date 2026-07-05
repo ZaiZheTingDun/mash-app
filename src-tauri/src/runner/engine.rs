@@ -123,6 +123,18 @@ impl Runner {
                         self.set_state(RunnerState::Error {
                             message: "无法识别当前画面".into(),
                         });
+                        if self.config.auto_capture_unknown_screen_timeout {
+                            match self.capture_unknown_screen_timeout_screenshot() {
+                                Ok(path) => self.emit(
+                                    "Unknown",
+                                    &format!("无法识别画面截图已保存: {}", path.display()),
+                                ),
+                                Err(err) => self.emit_warn(
+                                    "Unknown",
+                                    &format!("无法识别画面截图保存失败: {err}"),
+                                ),
+                            }
+                        }
                         self.emit("Unknown", "无法识别当前画面，已超时停止");
                         return;
                     }
