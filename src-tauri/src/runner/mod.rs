@@ -46,7 +46,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 
 /// Tolerate short-lived overlays and transitions for up to 24 seconds
 /// before treating an unrecognized screen as a fatal error.

@@ -4,6 +4,7 @@
 //! pages, skipping friend requests, and deciding whether to repeat a quest.
 
 use super::*;
+use crate::commands::runtime::resolve_resource_image_path;
 use crate::paths::app_data_dir;
 
 // ---------------------------------------------------------------------------
@@ -45,7 +46,7 @@ pub(crate) const BATTLE_RESULT_TAP_INTERVAL: Duration = Duration::from_millis(30
 /// level-up cascade).
 pub(crate) const BATTLE_RESULT_TAP_TIMEOUT: Duration = Duration::from_secs(10);
 const BATTLE_RESULT_BOND_LEVEL_UP_LABEL: &str = "BattleResultBondLevelUp";
-const FIVE_STAR_CE_TEMPLATE_RELATIVE_PATH: &[&str] = &["images", "stars_5.png"];
+const FIVE_STAR_CE_TEMPLATE_FILE_NAME: &str = "stars_5.png";
 const FIVE_STAR_CE_THRESHOLD: f64 = 0.55;
 const FIVE_STAR_CE_REFERENCE_W: f64 = 1920.0;
 const FIVE_STAR_CE_REFERENCE_H: f64 = 1080.0;
@@ -197,7 +198,10 @@ pub(crate) fn unknown_screen_timeout_screenshot_filename(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis())
         .unwrap_or(0);
-    format!("unknown-{millis:013}-run{:04}.jpg", completed_mission_runs + 1,)
+    format!(
+        "unknown-{millis:013}-run{:04}.jpg",
+        completed_mission_runs + 1,
+    )
 }
 
 pub(crate) fn is_battle_result_screen(screen: Screen) -> bool {
@@ -360,17 +364,11 @@ impl Runner {
     }
 
     fn count_visible_five_star_ce_drops(&mut self) -> Result<u32, String> {
-        let mut path = self
-            .app_handle
-            .path()
-            .resource_dir()
-            .map_err(|err| format!("无法解析资源目录: {err}"))?;
-        for part in FIVE_STAR_CE_TEMPLATE_RELATIVE_PATH {
-            path.push(part);
-        }
-        if !path.is_file() {
-            return Err(format!("未找到五星礼装星级模板: {}", path.display()));
-        }
+        let path =
+            resolve_resource_image_path(&self.app_handle, FIVE_STAR_CE_TEMPLATE_FILE_NAME)
+                .ok_or_else(|| {
+                    format!("未找到五星礼装星级模板: {FIVE_STAR_CE_TEMPLATE_FILE_NAME}")
+                })?;
 
         let template_size = five_star_ce_template_size(self.frame_w, self.frame_h);
         let mut count = 0;

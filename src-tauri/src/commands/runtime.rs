@@ -889,6 +889,37 @@ pub(crate) fn resolve_cv_config_paths(app: &tauri::AppHandle, server: Server) ->
     paths
 }
 
+/// Resolve a shared image resource as a real file for the Python sidecar.
+pub(crate) fn resolve_resource_image_path(
+    app: &tauri::AppHandle,
+    file_name: &str,
+) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    {
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("images")
+            .join(file_name);
+        if dev.is_file() {
+            return Some(dev);
+        }
+    }
+
+    if let Ok(base) = app.path().resource_dir() {
+        let bundled = base.join("resources").join("images").join(file_name);
+        if bundled.is_file() {
+            return Some(bundled);
+        }
+
+        let legacy = base.join("images").join(file_name);
+        if legacy.is_file() {
+            return Some(legacy);
+        }
+    }
+
+    None
+}
+
 /// Resolve the servant metadata JSON as a real file for the Python sidecar.
 pub(crate) fn resolve_servants_json_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     #[cfg(debug_assertions)]
