@@ -15,11 +15,15 @@ use crate::commands::runtime::{
 };
 use crate::commands::settings::{AdbDeviceSettings, DebugSettings, RecognitionSettings};
 use crate::enhancement_runner::{
-    server_supported as enhancement_server_supported, EnhancementAutomationEvent,
-    EnhancementConfig, EnhancementRunner, EnhancementRunnerHandle, EnhancementRunnerState,
+    enhancement_lifecycle_transition, server_supported as enhancement_server_supported,
+    EnhancementAutomationEvent, EnhancementConfig, EnhancementLifecycleEvent, EnhancementRunner,
+    EnhancementRunnerHandle, EnhancementRunnerState,
 };
 use crate::models::ProjectRecognitionSettings;
-use crate::runner::{AutomationEvent, LogLevel, RunConfig, Runner, RunnerHandle, RunnerState};
+use crate::runner::{
+    runner_lifecycle_transition, AutomationEvent, LogLevel, RunConfig, Runner, RunnerHandle,
+    RunnerLifecycleEvent, RunnerState,
+};
 use crate::screen;
 use crate::server::{
     stream_meets_minimum_resolution, stream_resolution_error, Server, STREAM_BIT_RATE,
@@ -103,14 +107,15 @@ fn emit_automation_status_with_level(
     message: &str,
     level: LogLevel,
 ) {
-    let state_str = {
+    let (state_str, status) = {
         let s = state.lock().unwrap();
-        format!("{:?}", *s)
+        (format!("{:?}", *s), s.status())
     };
     let _ = app.emit(
         "automation-status",
         AutomationEvent {
             state: state_str,
+            status,
             current_screen: screen.into(),
             message: message.into(),
             level,
@@ -120,10 +125,32 @@ fn emit_automation_status_with_level(
     );
 }
 
+fn apply_runner_lifecycle_event(state: &Arc<Mutex<RunnerState>>, event: RunnerLifecycleEvent) {
+    let mut guard = state.lock().unwrap();
+    let transition = runner_lifecycle_transition(guard.clone(), event);
+    if transition.accepted {
+        *guard = transition.next;
+    }
+}
+
+fn apply_enhancement_lifecycle_event(
+    state: &Arc<Mutex<EnhancementRunnerState>>,
+    event: EnhancementLifecycleEvent,
+) {
+    let mut guard = state.lock().unwrap();
+    let transition = enhancement_lifecycle_transition(guard.clone(), event);
+    if transition.accepted {
+        *guard = transition.next;
+    }
+}
+
 fn fail_automation_start(app: &tauri::AppHandle, state: &Arc<Mutex<RunnerState>>, message: String) {
-    *state.lock().unwrap() = RunnerState::Error {
-        message: message.clone(),
-    };
+    apply_runner_lifecycle_event(
+        state,
+        RunnerLifecycleEvent::Failed {
+            message: message.clone(),
+        },
+    );
     emit_automation_status(app, state, "", &format!("启动失败: {message}"));
 }
 
@@ -133,15 +160,18 @@ fn fail_automation_start_with_debug(
     user_message: String,
     debug_message: String,
 ) {
-    *state.lock().unwrap() = RunnerState::Error {
-        message: user_message.clone(),
-    };
+    apply_runner_lifecycle_event(
+        state,
+        RunnerLifecycleEvent::Failed {
+            message: user_message.clone(),
+        },
+    );
     emit_automation_status_with_level(app, state, "CV", &debug_message, LogLevel::Debug);
     emit_automation_status(app, state, "", &format!("启动失败: {user_message}"));
 }
 
 fn stop_automation_start(app: &tauri::AppHandle, state: &Arc<Mutex<RunnerState>>) {
-    *state.lock().unwrap() = RunnerState::Idle;
+    apply_runner_lifecycle_event(state, RunnerLifecycleEvent::StopRequested);
     emit_automation_status(app, state, "", "自动化已停止");
 }
 
@@ -161,14 +191,15 @@ fn emit_enhancement_status_with_level(
     message: &str,
     level: LogLevel,
 ) {
-    let state_str = {
+    let (state_str, status) = {
         let s = state.lock().unwrap();
-        format!("{:?}", *s)
+        (format!("{:?}", *s), s.status())
     };
     let _ = app.emit(
         "enhancement-automation-status",
         EnhancementAutomationEvent {
             state: state_str,
+            status,
             current_screen: screen.into(),
             message: message.into(),
             level,
@@ -181,9 +212,12 @@ fn fail_enhancement_start(
     state: &Arc<Mutex<EnhancementRunnerState>>,
     message: String,
 ) {
-    *state.lock().unwrap() = EnhancementRunnerState::Error {
-        message: message.clone(),
-    };
+    apply_enhancement_lifecycle_event(
+        state,
+        EnhancementLifecycleEvent::Failed {
+            message: message.clone(),
+        },
+    );
     emit_enhancement_status(app, state, "", &format!("启动失败: {message}"));
 }
 
@@ -193,15 +227,18 @@ fn fail_enhancement_start_with_debug(
     user_message: String,
     debug_message: String,
 ) {
-    *state.lock().unwrap() = EnhancementRunnerState::Error {
-        message: user_message.clone(),
-    };
+    apply_enhancement_lifecycle_event(
+        state,
+        EnhancementLifecycleEvent::Failed {
+            message: user_message.clone(),
+        },
+    );
     emit_enhancement_status_with_level(app, state, "CV", &debug_message, LogLevel::Debug);
     emit_enhancement_status(app, state, "", &format!("启动失败: {user_message}"));
 }
 
 fn stop_enhancement_start(app: &tauri::AppHandle, state: &Arc<Mutex<EnhancementRunnerState>>) {
-    *state.lock().unwrap() = EnhancementRunnerState::Idle;
+    apply_enhancement_lifecycle_event(state, EnhancementLifecycleEvent::StopRequested);
     emit_enhancement_status(app, state, "", "强化自动化已停止");
 }
 

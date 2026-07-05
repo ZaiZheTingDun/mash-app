@@ -37,11 +37,13 @@ describe("EnhancementPage", () => {
   });
 
   it("recovers the start button when startup fails through the status event", async () => {
-    let enhancementHandler: ((event: Event<{ state: string; currentScreen: string; message: string }>) => void) | null = null;
+    let enhancementHandler:
+      | ((event: Event<{ status: "error"; currentScreen: string; message: string }>) => void)
+      | null = null;
     vi.mocked(listen).mockImplementationOnce(async (event, handler) => {
       if (event === "enhancement-automation-status") {
         enhancementHandler = handler as (
-          event: Event<{ state: string; currentScreen: string; message: string }>
+          event: Event<{ status: "error"; currentScreen: string; message: string }>
         ) => void;
       }
       return () => {};
@@ -57,11 +59,11 @@ describe("EnhancementPage", () => {
         event: "enhancement-automation-status",
         id: 0,
         payload: {
-          state: 'Error { message: "no device found" }',
+          status: "error",
           currentScreen: "",
           message: "启动失败: no device found",
         },
-      } as Event<{ state: string; currentScreen: string; message: string }>);
+      } as Event<{ status: "error"; currentScreen: string; message: string }>);
     });
 
     await waitFor(() => {

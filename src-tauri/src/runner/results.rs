@@ -262,7 +262,7 @@ impl Runner {
             ) {
                 BondResultStopAction::StopOnLevelUp => {
                     self.emit("BattleResultBond", "检测到牵绊等级提升，自动停止");
-                    self.set_state(RunnerState::Finished);
+                    self.transition_lifecycle(RunnerLifecycleEvent::Finished);
                     return;
                 }
                 BondResultStopAction::StopOnMaxLevel => {
@@ -274,7 +274,7 @@ impl Runner {
                         "BattleResultBond",
                         &format!("检测到牵绊等级达到 {level}，自动停止"),
                     );
-                    self.set_state(RunnerState::Finished);
+                    self.transition_lifecycle(RunnerLifecycleEvent::Finished);
                     return;
                 }
                 BondResultStopAction::Continue => {}
@@ -344,7 +344,7 @@ impl Runner {
                             "BattleResultLoot",
                             &format!("五星礼装掉落累计达到 {target} 个，自动停止"),
                         );
-                        self.set_state(RunnerState::Finished);
+                        self.transition_lifecycle(RunnerLifecycleEvent::Finished);
                         return;
                     }
                 }
@@ -364,11 +364,10 @@ impl Runner {
     }
 
     fn count_visible_five_star_ce_drops(&mut self) -> Result<u32, String> {
-        let path =
-            resolve_resource_image_path(&self.app_handle, FIVE_STAR_CE_TEMPLATE_FILE_NAME)
-                .ok_or_else(|| {
-                    format!("未找到五星礼装星级模板: {FIVE_STAR_CE_TEMPLATE_FILE_NAME}")
-                })?;
+        let path = resolve_resource_image_path(&self.app_handle, FIVE_STAR_CE_TEMPLATE_FILE_NAME)
+            .ok_or_else(|| {
+            format!("未找到五星礼装星级模板: {FIVE_STAR_CE_TEMPLATE_FILE_NAME}")
+        })?;
 
         let template_size = five_star_ce_template_size(self.frame_w, self.frame_h);
         let mut count = 0;
@@ -462,7 +461,6 @@ impl Runner {
             self.team_changed = false;
             self.servants_placed.clear();
             self.battle = BattleState::new();
-            self.battle.waiting_for_battle = true;
             thread::sleep(ACTION_DELAY);
         } else {
             self.emit(
@@ -472,7 +470,7 @@ impl Runner {
             if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_STOP) {
                 return;
             }
-            self.set_state(RunnerState::Finished);
+            self.transition_lifecycle(RunnerLifecycleEvent::Finished);
         }
     }
 }

@@ -1,8 +1,9 @@
 use super::{
-    classify_enhancement_route, norm_rect_area, normalize_text, parse_selected_count,
-    scale_level_3_decision, EnhancementRoute, EnhancementStatus, EnhancementTopScreen,
-    EnhancementVariant, ProbeSnapshot, ScaleLevel3Decision, ASCENSION_ENTRY_OCR_REGION,
-    DIALOG_CLASSIFIER_REGION, FILTER_DIALOG_REGION,
+    classify_enhancement_route, enhancement_lifecycle_transition, norm_rect_area, normalize_text,
+    parse_selected_count, scale_level_3_decision, EnhancementLifecycleEvent, EnhancementRoute,
+    EnhancementRunnerState, EnhancementStatus, EnhancementTopScreen, EnhancementVariant,
+    ProbeSnapshot, ScaleLevel3Decision, ASCENSION_ENTRY_OCR_REGION, DIALOG_CLASSIFIER_REGION,
+    FILTER_DIALOG_REGION,
 };
 
 #[test]
@@ -164,4 +165,48 @@ fn scale_level_3_retries_until_match_or_three_taps() {
         ScaleLevel3Decision::TapAndRetry
     );
     assert_eq!(scale_level_3_decision(3, false), ScaleLevel3Decision::Fail);
+}
+
+#[test]
+fn enhancement_lifecycle_accepts_normal_start_finish_path() {
+    let started = enhancement_lifecycle_transition(
+        EnhancementRunnerState::Starting,
+        EnhancementLifecycleEvent::WorkerStarted,
+    );
+    assert!(started.accepted);
+    assert_eq!(started.next, EnhancementRunnerState::Running);
+
+    let finished =
+        enhancement_lifecycle_transition(started.next, EnhancementLifecycleEvent::Finished);
+    assert!(finished.accepted);
+    assert_eq!(finished.next, EnhancementRunnerState::Finished);
+}
+
+#[test]
+fn enhancement_lifecycle_rejects_finish_before_running() {
+    let transition = enhancement_lifecycle_transition(
+        EnhancementRunnerState::Starting,
+        EnhancementLifecycleEvent::Finished,
+    );
+
+    assert!(!transition.accepted);
+    assert_eq!(transition.next, EnhancementRunnerState::Starting);
+}
+
+#[test]
+fn enhancement_lifecycle_allows_failure_from_any_state() {
+    let transition = enhancement_lifecycle_transition(
+        EnhancementRunnerState::Idle,
+        EnhancementLifecycleEvent::Failed {
+            message: "boom".into(),
+        },
+    );
+
+    assert!(transition.accepted);
+    assert_eq!(
+        transition.next,
+        EnhancementRunnerState::Error {
+            message: "boom".into()
+        }
+    );
 }

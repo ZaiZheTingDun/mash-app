@@ -240,7 +240,7 @@ pub struct EnhancementTarget {
     pub face_template_paths: Vec<PathBuf>,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum EnhancementRunnerState {
     Idle,
@@ -250,10 +250,69 @@ pub enum EnhancementRunnerState {
     Error { message: String },
 }
 
+impl EnhancementRunnerState {
+    pub(crate) fn status(&self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Starting => "starting",
+            Self::Running => "running",
+            Self::Finished => "finished",
+            Self::Error { .. } => "error",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum EnhancementLifecycleEvent {
+    WorkerStarted,
+    StopRequested,
+    Finished,
+    Failed { message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EnhancementLifecycleTransition {
+    pub(crate) previous: EnhancementRunnerState,
+    pub(crate) event: EnhancementLifecycleEvent,
+    pub(crate) next: EnhancementRunnerState,
+    pub(crate) accepted: bool,
+}
+
+pub(crate) fn enhancement_lifecycle_transition(
+    state: EnhancementRunnerState,
+    event: EnhancementLifecycleEvent,
+) -> EnhancementLifecycleTransition {
+    let next = match (&state, &event) {
+        (EnhancementRunnerState::Starting, EnhancementLifecycleEvent::WorkerStarted) => {
+            Some(EnhancementRunnerState::Running)
+        }
+        (
+            EnhancementRunnerState::Starting | EnhancementRunnerState::Running,
+            EnhancementLifecycleEvent::StopRequested,
+        ) => Some(EnhancementRunnerState::Idle),
+        (EnhancementRunnerState::Running, EnhancementLifecycleEvent::Finished) => {
+            Some(EnhancementRunnerState::Finished)
+        }
+        (_, EnhancementLifecycleEvent::Failed { message }) => Some(EnhancementRunnerState::Error {
+            message: message.clone(),
+        }),
+        _ => None,
+    };
+
+    let accepted = next.is_some();
+    EnhancementLifecycleTransition {
+        previous: state.clone(),
+        event,
+        next: next.unwrap_or(state),
+        accepted,
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnhancementAutomationEvent {
     pub state: String,
+    pub status: &'static str,
     pub current_screen: String,
     pub message: String,
     pub level: LogLevel,
@@ -398,7 +457,7 @@ impl EnhancementRunner {
     }
 
     pub fn run(mut self) {
-        self.set_state(EnhancementRunnerState::Running);
+        self.transition_lifecycle(EnhancementLifecycleEvent::WorkerStarted);
         self.emit(
             "",
             &format!(
@@ -413,7 +472,7 @@ impl EnhancementRunner {
         let mut unknown_count = 0_u32;
         loop {
             if self.is_cancelled() {
-                self.set_state(EnhancementRunnerState::Idle);
+                self.transition_lifecycle(EnhancementLifecycleEvent::StopRequested);
                 self.emit("", "强化自动化已停止");
                 return;
             }
@@ -504,8 +563,16 @@ impl EnhancementRunner {
         }
     }
 
-    fn set_state(&self, s: EnhancementRunnerState) {
-        *self.state.lock().unwrap() = s;
+    fn transition_lifecycle(
+        &self,
+        event: EnhancementLifecycleEvent,
+    ) -> EnhancementLifecycleTransition {
+        let mut state = self.state.lock().unwrap();
+        let transition = enhancement_lifecycle_transition(state.clone(), event);
+        if transition.accepted {
+            *state = transition.next.clone();
+        }
+        transition
     }
 
     fn emit(&self, screen: &str, message: &str) {
@@ -521,14 +588,15 @@ impl EnhancementRunner {
     }
 
     fn emit_with_level(&self, screen: &str, message: &str, level: LogLevel) {
-        let state_str = {
+        let (state_str, status) = {
             let s = self.state.lock().unwrap();
-            format!("{:?}", *s)
+            (format!("{:?}", *s), s.status())
         };
         let _ = self.app_handle.emit(
             ENHANCEMENT_EVENT_NAME,
             EnhancementAutomationEvent {
                 state: state_str,
+                status,
                 current_screen: screen.to_string(),
                 message: message.to_string(),
                 level,
@@ -545,7 +613,7 @@ impl EnhancementRunner {
     }
 
     fn fail(&self, screen: &str, message: String) {
-        self.set_state(EnhancementRunnerState::Error {
+        self.transition_lifecycle(EnhancementLifecycleEvent::Failed {
             message: message.clone(),
         });
         self.emit(screen, &message);
@@ -802,7 +870,7 @@ impl EnhancementRunner {
                 return;
             }
 
-            self.set_state(EnhancementRunnerState::Finished);
+            self.transition_lifecycle(EnhancementLifecycleEvent::Finished);
             self.emit(
                 "ServantEnhance",
                 &format!("强化完成，当前等级 {current}/{max}"),

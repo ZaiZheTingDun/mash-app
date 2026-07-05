@@ -410,9 +410,15 @@ pub(crate) fn mismatch_from_ce_result(
             "grandBondNp" => "冠位连接牵绊图标",
             other => other,
         };
-        Some(SupportCeMismatch::new(format!("{label} {kind}不匹配"), debug_summary))
+        Some(SupportCeMismatch::new(
+            format!("{label} {kind}不匹配"),
+            debug_summary,
+        ))
     } else {
-        Some(SupportCeMismatch::new(format!("{label} 不匹配"), debug_summary))
+        Some(SupportCeMismatch::new(
+            format!("{label} 不匹配"),
+            debug_summary,
+        ))
     }
 }
 
@@ -1183,7 +1189,9 @@ impl Runner {
             .map(|mismatch| {
                 if mismatch.reason.contains("完整匹配不足") {
                     SupportCeMismatch {
-                        reason: mismatch.reason.replace("礼装 完整匹配不足", "礼装完整匹配不足"),
+                        reason: mismatch
+                            .reason
+                            .replace("礼装 完整匹配不足", "礼装完整匹配不足"),
                         debug_summary: mismatch.debug_summary,
                     }
                 } else {

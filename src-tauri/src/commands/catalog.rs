@@ -768,10 +768,7 @@ fn variant_skill_ids(
         })
 }
 
-fn servant_skill_maps(
-    app: &tauri::AppHandle,
-    servant_id: u32,
-) -> Option<Arc<ServantSkillMaps>> {
+fn servant_skill_maps(app: &tauri::AppHandle, servant_id: u32) -> Option<Arc<ServantSkillMaps>> {
     static CACHE: OnceLock<Mutex<HashMap<u32, Arc<ServantSkillMaps>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     {
@@ -786,9 +783,10 @@ fn servant_skill_maps(
     let jp_raw = fs::read_to_string(servant_dir.join("servant.json")).ok()?;
     let jp_json: serde_json::Value = serde_json::from_str(&jp_raw).ok()?;
 
-    let cn_json: Option<serde_json::Value> = fs::read_to_string(servant_dir.join("servant-cn.json"))
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok());
+    let cn_json: Option<serde_json::Value> =
+        fs::read_to_string(servant_dir.join("servant-cn.json"))
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok());
     let arc = Arc::new(parse_servant_skill_maps(&jp_json, cn_json.as_ref()));
     cache.lock().unwrap().insert(servant_id, Arc::clone(&arc));
     Some(arc)
@@ -804,11 +802,22 @@ pub(crate) fn get_skill_icon_paths(
     servant_id: u32,
     variant_key: String,
 ) -> [SkillIconEntry; 3] {
-    let empty = || [
-        SkillIconEntry { path: None, name: String::new() },
-        SkillIconEntry { path: None, name: String::new() },
-        SkillIconEntry { path: None, name: String::new() },
-    ];
+    let empty = || {
+        [
+            SkillIconEntry {
+                path: None,
+                name: String::new(),
+            },
+            SkillIconEntry {
+                path: None,
+                name: String::new(),
+            },
+            SkillIconEntry {
+                path: None,
+                name: String::new(),
+            },
+        ]
+    };
 
     let Some(skill_ids) = variant_skill_ids(variants_raw_data(), servant_id, &variant_key) else {
         return empty();
@@ -853,8 +862,14 @@ mod tests {
 
         let maps = parse_servant_skill_maps(&jp, Some(&cn));
 
-        assert_eq!(maps.icon_map.get(&11).map(String::as_str), Some("skill_11.png"));
-        assert_eq!(maps.icon_map.get(&22).map(String::as_str), Some("skill_22.png"));
+        assert_eq!(
+            maps.icon_map.get(&11).map(String::as_str),
+            Some("skill_11.png")
+        );
+        assert_eq!(
+            maps.icon_map.get(&22).map(String::as_str),
+            Some("skill_22.png")
+        );
         assert_eq!(maps.name_map.get(&11).map(String::as_str), Some("CN 一技"));
         assert_eq!(maps.name_map.get(&22).map(String::as_str), Some("JP 二技"));
     }

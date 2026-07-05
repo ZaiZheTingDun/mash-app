@@ -910,8 +910,6 @@ impl Runner {
             self.emit("Attack", "未配置普通指令卡，跳过指令卡归属识别");
             fallback_command_cards()
         };
-        self.battle.clear_waiting_for_attack_screen();
-
         let np_detection_mode = self.config.noble_phantasm_detection_mode;
         let nps = match np_detection_mode {
             NoblePhantasmDetectionMode::Card => loop {
@@ -1171,13 +1169,8 @@ impl Runner {
             thread::sleep(ACTION_DELAY);
         }
 
-        // The 3 cards (especially when an NP is included) trigger a long
-        // attack cinematic before the battle screen comes back. While that
-        // animation plays the screen classifier returns Unknown, so flag
-        // the loop to use the longer Unknown tolerance until handle_battle
-        // sees a real Battle frame again.
-        self.battle.waiting_for_battle = true;
-        self.battle.attack_submitted = true;
+        self.battle
+            .transition(BattleFlowEvent::AttackCardsSubmitted);
 
         // Reset for next cycle
         self.battle.scene_config_used = false;

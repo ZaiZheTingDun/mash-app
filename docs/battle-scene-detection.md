@@ -10,7 +10,7 @@ each scene change.
 - **Rust client**: `SidecarClient::read_battle_scene` in
   `src-tauri/src/screen.rs`
 - **Runner usage**: `Runner::handle_battle` (around the
-  `tick_scene_state` call) in `src-tauri/src/runner.rs`
+  `tick_scene_state` call) in `src-tauri/src/runner/engine.rs`
 - **Debug surface**: `debug_read_battle_scene` Tauri command +
   `DebugPage.tsx`
 
@@ -274,7 +274,7 @@ fn tick_scene_state(
 ```
 
 The full transition table is pinned by the `tick_scene_state_*` tests in
-`runner.rs`; the key invariants:
+`src-tauri/src/runner/tests.rs`; the key invariants:
 
 1. **A failed CV read never advances.** `scene_m == None` keeps both the
    index and `last_screen_scene` exactly where they were.
@@ -348,7 +348,7 @@ BATTLE_DIGIT_COHESION_GAP_RATIO = 0.6   # Inside-number kerning tolerance (× av
 ```
 
 ```rust
-// runner.rs
+// src-tauri/src/runner/mod.rs
 pub const BATTLE_SCENE_REGION: NormRect = NormRect {
     x: 0.587, y: 0.000, w: 0.160, h: 0.062,
 };
@@ -368,7 +368,7 @@ pub const BATTLE_SCENE_REGION: NormRect = NormRect {
   - `test_cn_battle_scene_reads_two_of_three` — CN fixture
     (`battle_scene_cn.png`) reads `2/3`; pins both real-digit scores
     above 0.95 and the score floor above the 0.89 label-seam artefact.
-- `src-tauri/src/runner.rs::tests::tick_scene_state_*` — pure unit
+- `src-tauri/src/runner/tests.rs::tick_scene_state_*` — pure unit
   coverage of the state machine that consumes the read.
 
 Run with:

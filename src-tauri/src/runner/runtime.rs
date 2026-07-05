@@ -10,8 +10,16 @@ use super::*;
 impl Runner {
     // -- helpers -------------------------------------------------------------
 
-    pub(crate) fn set_state(&self, s: RunnerState) {
-        *self.state.lock().unwrap() = s;
+    pub(crate) fn transition_lifecycle(
+        &self,
+        event: RunnerLifecycleEvent,
+    ) -> RunnerLifecycleTransition {
+        let mut state = self.state.lock().unwrap();
+        let transition = runner_lifecycle_transition(state.clone(), event);
+        if transition.accepted {
+            *state = transition.next.clone();
+        }
+        transition
     }
 
     pub(crate) fn emit(&self, screen: &str, message: &str) {
@@ -61,14 +69,15 @@ impl Runner {
         attack: Option<AttackLogMeta>,
         action: Option<ActionLogMeta>,
     ) {
-        let state_str = {
+        let (state_str, status) = {
             let s = self.state.lock().unwrap();
-            format!("{:?}", *s)
+            (format!("{:?}", *s), s.status())
         };
         let _ = self.app_handle.emit(
             "automation-status",
             AutomationEvent {
                 state: state_str,
+                status,
                 current_screen: screen.into(),
                 message: message.into(),
                 level,
@@ -92,7 +101,7 @@ impl Runner {
 
     pub(crate) fn fail_action(&self, screen: &str, action: &str, err: String) {
         let message = format!("{action}失败: {err}");
-        self.set_state(RunnerState::Error {
+        self.transition_lifecycle(RunnerLifecycleEvent::Failed {
             message: message.clone(),
         });
         self.emit(screen, &message);
@@ -118,7 +127,8 @@ impl Runner {
         if !self.tap_at("Battle", ATTACK_BUTTON) {
             return false;
         }
-        self.battle.mark_waiting_for_attack_screen(Instant::now());
+        self.battle
+            .transition(BattleFlowEvent::AttackButtonTapped { at: Instant::now() });
         true
     }
 
@@ -228,14 +238,7 @@ impl Runner {
         status_text: &str,
         timeout_text: &str,
     ) -> bool {
-        self.wait_for_element_state(
-            screen,
-            element,
-            true,
-            timeout,
-            status_text,
-            timeout_text,
-        )
+        self.wait_for_element_state(screen, element, true, timeout, status_text, timeout_text)
     }
 
     pub(crate) fn wait_for_element_hidden(
@@ -246,14 +249,7 @@ impl Runner {
         status_text: &str,
         timeout_text: &str,
     ) -> bool {
-        self.wait_for_element_state(
-            screen,
-            element,
-            false,
-            timeout,
-            status_text,
-            timeout_text,
-        )
+        self.wait_for_element_state(screen, element, false, timeout, status_text, timeout_text)
     }
 
     pub(crate) fn wait_for_element_state(

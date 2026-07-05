@@ -7,6 +7,7 @@ import { renderWithTheme } from "../../../test/renderWithTheme";
 import { StatusBar } from "../StatusBar";
 import { SERVER_LABELS } from "../../../types/server";
 import type { Servant } from "../../../types/servant";
+import type { AutomationStatus } from "../../../types/automation";
 
 // The default `invoke` mock in `setup.ts` returns "JP" for `get_server`
 // and `false` for `get_use_bluestack`; individual tests below override
@@ -15,7 +16,7 @@ import type { Servant } from "../../../types/servant";
 
 // Capture the handler so tests can drive automation events through the
 // component the same way the runners do.
-type AutomationPayload = { state: string };
+type AutomationPayload = { status: AutomationStatus };
 type AutomationListener = (event: Event<AutomationPayload>) => void;
 type AdbResetPayload = {
   message: string;
@@ -59,7 +60,7 @@ const LOG_SERVANTS: Servant[] = [
 
 function captureAutomationListener(
   targetEvent = "automation-status"
-): { trigger: (state: string) => void } {
+): { trigger: (status: AutomationStatus) => void } {
   const ref: { current: AutomationListener | null } = { current: null };
   vi.mocked(listen).mockImplementation(async (event, cb) => {
     if (event === targetEvent) {
@@ -68,7 +69,7 @@ function captureAutomationListener(
     return () => {};
   });
   return {
-    trigger: (state: string) => {
+    trigger: (status: AutomationStatus) => {
       // The mock unsubscribe returns a no-op so we just invoke the
       // captured callback with the same shape Tauri's `emit` produces.
       // act() is required so React flushes the resulting state update
@@ -77,7 +78,7 @@ function captureAutomationListener(
         ref.current?.({
           event: targetEvent,
           id: 0,
-          payload: { state },
+          payload: { status },
         } as Event<AutomationPayload>);
       });
     },
@@ -184,22 +185,21 @@ describe("StatusBar", () => {
     const trigger = await screen.findByRole("combobox", { name: "服务器" });
     expect(trigger).not.toBeDisabled();
 
-    // Simulate the runner transitioning into Running — the lock kicks
+    // Simulate the runner transitioning into running — the lock kicks
     // in immediately because the listener fires in the same tick.
-    automation.trigger("Running");
+    automation.trigger("running");
     await waitFor(() => {
       expect(trigger).toBeDisabled();
     });
 
-    // And the lock releases the moment a non-Running state arrives
-    // (Idle, Stopped, Error all share the same heuristic — pick one).
-    automation.trigger("Idle");
+    // And the lock releases the moment a terminal state arrives.
+    automation.trigger("idle");
     await waitFor(() => {
       expect(trigger).not.toBeDisabled();
     });
   });
 
-  it("also disables the server selector while enhancement automation is Running", async () => {
+  it("also disables the server selector while enhancement automation is running", async () => {
     const enhancement = captureAutomationListener("enhancement-automation-status");
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";
@@ -215,12 +215,12 @@ describe("StatusBar", () => {
     const trigger = await screen.findByRole("combobox", { name: "服务器" });
     expect(trigger).not.toBeDisabled();
 
-    enhancement.trigger("Running");
+    enhancement.trigger("running");
     await waitFor(() => {
       expect(trigger).toBeDisabled();
     });
 
-    enhancement.trigger("Finished");
+    enhancement.trigger("finished");
     await waitFor(() => {
       expect(trigger).not.toBeDisabled();
     });

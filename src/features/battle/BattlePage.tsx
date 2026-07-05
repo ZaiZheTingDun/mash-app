@@ -35,9 +35,11 @@ import type {
   Project,
 } from "../../types/project";
 import type { Servant } from "../../types/servant";
+import { isAutomationTerminal, type AutomationStatus } from "../../types/automation";
 
 interface AutomationEvent {
   state: string;
+  status: AutomationStatus;
   currentScreen: string;
   message: string;
 }
@@ -387,9 +389,7 @@ export function BattlePage({
 
   useEffect(() => {
     const unlisten = listen<AutomationEvent>("automation-status", (event) => {
-      const { state } = event.payload;
-
-      if (state.includes("Idle") || state.includes("Finished") || state.includes("Error")) {
+      if (isAutomationTerminal(event.payload)) {
         setRunning(false);
         setStopAfterCurrentRequested(false);
       }

@@ -545,12 +545,11 @@ pub(crate) fn install_asset_directories(
     assets_root: &Path,
     replace_existing: bool,
 ) -> Result<(bool, bool, FileCopyStats, FileCopyStats), String> {
-    let any_present = ASSET_DIRS.iter().any(|name| import_root.join(name).is_dir());
+    let any_present = ASSET_DIRS
+        .iter()
+        .any(|name| import_root.join(name).is_dir());
     if !any_present {
-        return Err(format!(
-            "压缩包内未找到素材目录 ({})",
-            ASSET_DIRS.join("/")
-        ));
+        return Err(format!("压缩包内未找到素材目录 ({})", ASSET_DIRS.join("/")));
     }
 
     fs::create_dir_all(assets_root).map_err(|e| format!("创建素材目录失败: {e}"))?;

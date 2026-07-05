@@ -150,10 +150,10 @@ describe("BattlePage", () => {
   });
 
   it("recovers the start button when startup fails through the status event", async () => {
-    let automationHandler: ((event: Event<{ state: string }>) => void) | null = null;
+    let automationHandler: ((event: Event<{ status: "error" }>) => void) | null = null;
     vi.mocked(listen).mockImplementationOnce(async (event, handler) => {
       if (event === "automation-status") {
-        automationHandler = handler as (event: Event<{ state: string }>) => void;
+        automationHandler = handler as (event: Event<{ status: "error" }>) => void;
       }
       return () => {};
     });
@@ -168,8 +168,8 @@ describe("BattlePage", () => {
       automationHandler?.({
         event: "automation-status",
         id: 0,
-        payload: { state: 'Error { message: "no device found" }' },
-      } as Event<{ state: string }>);
+        payload: { status: "error" },
+      } as Event<{ status: "error" }>);
     });
 
     await waitFor(() => {

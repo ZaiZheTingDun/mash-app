@@ -880,24 +880,143 @@ fn command_card_candidates_expand_from_frontline_to_all_six_members() {
 fn battle_state_starts_with_frontline_owner_detection_only() {
     let battle = BattleState::new();
 
+    assert_eq!(battle.flow, BattleFlowState::PreBattle);
     assert_eq!(battle.command_card_owner_failure_count, 0);
     assert!(!battle.command_card_owner_fallback_to_full_party);
-    assert!(battle.waiting_for_attack_screen_started_at.is_none());
 }
 
 #[test]
-fn battle_state_tracks_waiting_for_attack_screen_transition() {
+fn battle_flow_runs_full_attack_cycle_through_explicit_states() {
     let mut battle = BattleState::new();
     let started_at = Instant::now();
 
-    battle.mark_waiting_for_attack_screen(started_at);
+    let loading = battle.transition(BattleFlowEvent::QuestStartTapped(
+        BattleLoadSource::TeamConfirm,
+    ));
+    assert!(loading.accepted);
     assert_eq!(
-        battle.waiting_for_attack_screen_started_at,
-        Some(started_at)
+        battle.flow,
+        BattleFlowState::AwaitingBattleLoad {
+            source: BattleLoadSource::TeamConfirm
+        }
+    );
+    assert!(battle.uses_loading_unknown_timeout());
+
+    let ready = battle.transition(BattleFlowEvent::BattleActionable);
+    assert!(ready.accepted);
+    assert_eq!(battle.flow, BattleFlowState::BattleReady);
+    assert!(!battle.uses_loading_unknown_timeout());
+
+    let waiting = battle.transition(BattleFlowEvent::AttackButtonTapped { at: started_at });
+    assert!(waiting.accepted);
+    assert_eq!(
+        battle.flow,
+        BattleFlowState::AwaitingAttackScreen { started_at }
+    );
+    assert_eq!(battle.attack_screen_wait_started_at(), Some(started_at));
+
+    let attack = battle.transition(BattleFlowEvent::AttackScreenDetected);
+    assert!(attack.accepted);
+    assert_eq!(battle.flow, BattleFlowState::AttackScreen);
+
+    let submitted = battle.transition(BattleFlowEvent::AttackCardsSubmitted);
+    assert!(submitted.accepted);
+    assert_eq!(battle.flow, BattleFlowState::AwaitingAttackResolution);
+    assert!(battle.awaiting_attack_resolution());
+    assert!(battle.uses_loading_unknown_timeout());
+
+    let hud_wait_started_at = started_at + Duration::from_secs(1);
+    let hud_wait = battle.transition(BattleFlowEvent::PostAttackHudWaitStarted {
+        at: hud_wait_started_at,
+    });
+    assert!(hud_wait.accepted);
+    assert_eq!(
+        battle.flow,
+        BattleFlowState::AwaitingPostAttackHud {
+            started_at: hud_wait_started_at
+        }
+    );
+    assert!(battle.awaiting_attack_resolution());
+    assert!(!battle.uses_loading_unknown_timeout());
+
+    let resolved = battle.transition(BattleFlowEvent::PostAttackHudResolved);
+    assert!(resolved.accepted);
+    assert_eq!(battle.flow, BattleFlowState::BattleReady);
+    assert!(!battle.awaiting_attack_resolution());
+}
+
+#[test]
+fn battle_flow_rejects_attack_submission_outside_attack_screen() {
+    let mut battle = BattleState::new();
+
+    let rejected = battle.transition(BattleFlowEvent::AttackCardsSubmitted);
+
+    assert!(!rejected.accepted);
+    assert_eq!(rejected.previous, BattleFlowState::PreBattle);
+    assert_eq!(rejected.next, BattleFlowState::PreBattle);
+    assert_eq!(battle.flow, BattleFlowState::PreBattle);
+}
+
+#[test]
+fn battle_flow_attack_wait_timeout_returns_to_battle_ready() {
+    let mut battle = BattleState::new();
+    let started_at = Instant::now();
+
+    battle.transition(BattleFlowEvent::BattleActionable);
+    battle.transition(BattleFlowEvent::AttackButtonTapped { at: started_at });
+    let timed_out = battle.transition(BattleFlowEvent::AttackScreenWaitTimedOut);
+
+    assert!(timed_out.accepted);
+    assert_eq!(battle.flow, BattleFlowState::BattleReady);
+}
+
+#[test]
+fn battle_flow_accepts_mid_quest_attack_screen_start() {
+    let mut battle = BattleState::new();
+
+    let detected = battle.transition(BattleFlowEvent::AttackScreenDetected);
+
+    assert!(detected.accepted);
+    assert_eq!(battle.flow, BattleFlowState::AttackScreen);
+}
+
+#[test]
+fn runner_lifecycle_accepts_normal_start_finish_path() {
+    let started =
+        runner_lifecycle_transition(RunnerState::Starting, RunnerLifecycleEvent::WorkerStarted);
+    assert!(started.accepted);
+    assert_eq!(started.next, RunnerState::Running);
+
+    let finished = runner_lifecycle_transition(started.next, RunnerLifecycleEvent::Finished);
+    assert!(finished.accepted);
+    assert_eq!(finished.next, RunnerState::Finished);
+}
+
+#[test]
+fn runner_lifecycle_rejects_finish_before_running() {
+    let transition =
+        runner_lifecycle_transition(RunnerState::Starting, RunnerLifecycleEvent::Finished);
+
+    assert!(!transition.accepted);
+    assert_eq!(transition.next, RunnerState::Starting);
+}
+
+#[test]
+fn runner_lifecycle_allows_failure_from_any_state() {
+    let transition = runner_lifecycle_transition(
+        RunnerState::Idle,
+        RunnerLifecycleEvent::Failed {
+            message: "boom".into(),
+        },
     );
 
-    battle.clear_waiting_for_attack_screen();
-    assert!(battle.waiting_for_attack_screen_started_at.is_none());
+    assert!(transition.accepted);
+    assert_eq!(
+        transition.next,
+        RunnerState::Error {
+            message: "boom".into()
+        }
+    );
 }
 
 #[test]

@@ -10,7 +10,7 @@ impl Runner {
     // -- main loop -----------------------------------------------------------
 
     pub fn run(mut self) {
-        self.set_state(RunnerState::Running);
+        self.transition_lifecycle(RunnerLifecycleEvent::WorkerStarted);
         self.emit("", "自动化已启动");
 
         let mut unknown_count: u32 = 0;
@@ -18,7 +18,7 @@ impl Runner {
 
         loop {
             if self.is_cancelled() {
-                self.set_state(RunnerState::Idle);
+                self.transition_lifecycle(RunnerLifecycleEvent::StopRequested);
                 self.emit("", "自动化已停止");
                 return;
             }
@@ -26,7 +26,7 @@ impl Runner {
             let screen = match self.sidecar().detect(None) {
                 Ok(s) => s,
                 Err(e) => {
-                    self.set_state(RunnerState::Error { message: e.clone() });
+                    self.transition_lifecycle(RunnerLifecycleEvent::Failed { message: e.clone() });
                     self.emit("", &format!("画面识别失败: {e}"));
                     return;
                 }
@@ -63,22 +63,16 @@ impl Runner {
                 Screen::Battle => {
                     unknown_count = 0;
                     last_detected_screen = screen;
-                    // NOTE: do NOT clear `waiting_for_battle` here. The
-                    // screen classifier briefly returns Battle between
-                    // taps and the NP cinematic, and clearing the flag
-                    // too early would shrink the Unknown tolerance back
-                    // to UNKNOWN_TIMEOUT mid-animation. handle_battle
-                    // clears it itself once the attack button is
-                    // actually visible (= we can really act).
                     self.handle_battle();
                 }
                 Screen::Attack => {
                     unknown_count = 0;
                     last_detected_screen = screen;
-                    self.battle.clear_waiting_for_attack_screen();
-                    if self.battle.attack_submitted {
+                    if self.battle.awaiting_attack_resolution() {
                         self.emit("Attack", "已提交本轮选卡，等待攻击动画");
                     } else {
+                        self.battle
+                            .transition(BattleFlowEvent::AttackScreenDetected);
                         self.handle_attack();
                     }
                 }
@@ -114,13 +108,13 @@ impl Runner {
                 }
                 Screen::Unknown => {
                     unknown_count += 1;
-                    let timeout = if self.battle.waiting_for_battle {
+                    let timeout = if self.battle.uses_loading_unknown_timeout() {
                         UNKNOWN_TIMEOUT_LOADING
                     } else {
                         UNKNOWN_TIMEOUT
                     };
                     if unknown_count >= timeout {
-                        self.set_state(RunnerState::Error {
+                        self.transition_lifecycle(RunnerLifecycleEvent::Failed {
                             message: "无法识别当前画面".into(),
                         });
                         if self.config.auto_capture_unknown_screen_timeout {
@@ -168,7 +162,7 @@ impl Runner {
 
     fn handle_battle(&mut self) {
         match attack_screen_wait_gate(
-            self.battle.waiting_for_attack_screen_started_at,
+            self.battle.attack_screen_wait_started_at(),
             Instant::now(),
             ATTACK_SCREEN_WAIT_TIMEOUT,
         ) {
@@ -177,7 +171,8 @@ impl Runner {
                 return;
             }
             AttackScreenWaitGate::TimedOut => {
-                self.battle.clear_waiting_for_attack_screen();
+                self.battle
+                    .transition(BattleFlowEvent::AttackScreenWaitTimedOut);
                 self.emit_warn("Battle", "等待指令卡画面超时，恢复 Battle 处理");
             }
             AttackScreenWaitGate::NotWaiting => {}
@@ -195,11 +190,10 @@ impl Runner {
             return;
         }
 
-        let attack_returned_after_submit = self.battle.attack_submitted;
-
-        // Attack button is back -- the prior NP / attack cinematic (if
-        // any) has finished. Drop back to the short Unknown tolerance.
-        self.battle.waiting_for_battle = false;
+        let attack_returned_after_submit = self.battle.awaiting_attack_resolution();
+        if !attack_returned_after_submit {
+            self.battle.transition(BattleFlowEvent::BattleActionable);
+        }
 
         // Read the current battle scene (m of n) from the BATTLE label HUD.
         let screen_scene = self
@@ -210,22 +204,25 @@ impl Runner {
             self.advanced_mode,
             attack_returned_after_submit,
             screen_scene,
-            self.battle.post_attack_hud_wait_started,
+            self.battle.post_attack_hud_wait_started_at(),
             Instant::now(),
             POST_ATTACK_HUD_READ_TIMEOUT,
         ) {
             PostAttackHudReadGate::Ready => {
-                self.battle.post_attack_hud_wait_started = None;
-                self.battle.attack_submitted = false;
+                if attack_returned_after_submit {
+                    self.battle
+                        .transition(BattleFlowEvent::PostAttackHudResolved);
+                }
             }
             PostAttackHudReadGate::Waiting { started_at } => {
-                self.battle.post_attack_hud_wait_started = Some(started_at);
+                self.battle
+                    .transition(BattleFlowEvent::PostAttackHudWaitStarted { at: started_at });
                 self.emit("Battle", "等待读取 Battle HUD…");
                 return;
             }
             PostAttackHudReadGate::TimedOut => {
-                self.battle.post_attack_hud_wait_started = None;
-                self.battle.attack_submitted = false;
+                self.battle
+                    .transition(BattleFlowEvent::PostAttackHudResolved);
                 self.emit("Battle", "Battle HUD 读取超时，沿用当前 Turn 推进逻辑");
             }
         }

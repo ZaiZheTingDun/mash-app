@@ -4,9 +4,11 @@ import { ChevronLeftIcon } from "@radix-ui/react-icons";
 import { invoke, listen } from "../../tauri";
 import { ServantSelectDialog } from "../team/ServantSelectDialog";
 import type { Servant } from "../../types/servant";
+import { isAutomationTerminal, type AutomationStatus } from "../../types/automation";
 
 interface EnhancementEvent {
   state: string;
+  status: AutomationStatus;
   currentScreen: string;
   message: string;
 }
@@ -49,10 +51,10 @@ export function EnhancementPage({
     const unlisten = listen<EnhancementEvent>(
       "enhancement-automation-status",
       (event) => {
-        const { currentScreen: nextScreen, message, state } = event.payload;
+        const { currentScreen: nextScreen, message } = event.payload;
         setCurrentScreen(nextScreen);
         setLogs((prev) => [...prev, { time: timestamp(), message }]);
-        if (state.includes("Idle") || state.includes("Finished") || state.includes("Error")) {
+        if (isAutomationTerminal(event.payload)) {
           setRunning(false);
         }
       }

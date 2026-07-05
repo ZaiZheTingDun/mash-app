@@ -1,7 +1,7 @@
 # Battle Automation Screen Relationships
 
 This diagram tracks the battle screen relationship model implemented by
-`src-tauri/src/runner.rs`. Screen identity comes from `SidecarClient::detect`,
+`src-tauri/src/runner/`. Screen identity comes from `SidecarClient::detect`,
 which is backed by `src-tauri/resources/servers/<server>/cv.json`.
 
 ```mermaid
@@ -51,7 +51,7 @@ stateDiagram-v2
     BattleResultLoot --> BattleResultContinue: no request
     BattleResultFriendRequest --> BattleResultContinue: skipped
 
-    BattleResultContinue --> TeamConfirm: repeat
+    BattleResultContinue --> SupportSelect: repeat
     TeamConfirm --> APRecovery: ap missing
     APRecovery --> TeamConfirm: recovered
 ```
@@ -60,6 +60,73 @@ Party servant auto-placement is intentionally disabled for now. The runner
 still accepts `servantSelections` in `RunConfig`, but `TeamConfirm` ignores
 them until that feature is adapted; it proceeds directly to starting the
 quest once the support and existing team state are ready.
+
+## Internal Flow State Machine
+
+`Screen` is the CV classifier output. The battle runner's authoritative
+flow state is `BattleFlowState` in `src-tauri/src/runner/state.rs`; screen
+observations and completed actions enter it as `BattleFlowEvent` values.
+The transition table is centralized in `battle_flow_transition`, and invalid
+events leave the current state unchanged.
+
+```mermaid
+stateDiagram-v2
+    [*] --> PreBattle
+    PreBattle --> AwaitingBattleLoad: QuestStartTapped(TeamConfirm)
+    AwaitingBattleLoad --> BattleReady: BattleActionable
+    PreBattle --> BattleReady: BattleActionable (mid-quest start)
+    BattleReady --> AwaitingAttackScreen: AttackButtonTapped
+    AwaitingAttackScreen --> AttackScreen: AttackScreenDetected
+    PreBattle --> AttackScreen: AttackScreenDetected (mid-quest start)
+    BattleReady --> AttackScreen: AttackScreenDetected
+    AwaitingAttackScreen --> BattleReady: AttackScreenWaitTimedOut
+    AttackScreen --> AwaitingAttackResolution: AttackCardsSubmitted
+    AwaitingAttackResolution --> AwaitingPostAttackHud: PostAttackHudWaitStarted
+    AwaitingPostAttackHud --> AwaitingPostAttackHud: PostAttackHudWaitStarted
+    AwaitingAttackResolution --> BattleReady: PostAttackHudResolved
+    AwaitingPostAttackHud --> BattleReady: PostAttackHudResolved
+```
+
+State ownership:
+
+- `BattleFlowState` owns transient flow facts such as loading, waiting for
+  the Attack screen, submitted cards, and post-attack HUD wait. These used to
+  be represented by independent booleans/timestamps.
+- `BattleState` still owns durable context: current battle index, current
+  turn index, last HUD scene read, already executed scene/turn keys,
+  command-card recognition fallback state, and advanced-mode control indices.
+- `uses_loading_unknown_timeout()` is true only while the flow is
+  `AwaitingBattleLoad` or `AwaitingAttackResolution`.
+- `awaiting_attack_resolution()` is true while the flow is
+  `AwaitingAttackResolution` or `AwaitingPostAttackHud`; this suppresses
+  duplicate card submission while the classifier still sees the Attack screen.
+- Result-settlement pages (`BattleResultBond`, `BattleResultExp`,
+  `BattleResultLoot`, `BattleResultFriendRequest`, and
+  `BattleResultContinue`) are screen-router states, not `BattleFlowState`
+  states. When `BattleResultContinue` repeats a quest, FGO returns to
+  `SupportSelect`; the runner resets `BattleState` to `PreBattle`, then the
+  next `TeamConfirm` start tap emits `QuestStartTapped(TeamConfirm)`.
+
+The state-machine contract is covered by `battle_flow_*` tests in
+`src-tauri/src/runner/tests.rs`.
+
+## Runner Lifecycle State Machine
+
+The externally visible battle automation lifecycle is still serialized as
+`RunnerState` (`Idle`, `Starting`, `Running`, `Finished`, `Error`), but runtime
+changes now enter through `RunnerLifecycleEvent` and
+`runner_lifecycle_transition`:
+
+- `Starting + WorkerStarted -> Running`
+- `Starting|Running + StopRequested -> Idle`
+- `Running + Finished -> Finished`
+- `* + Failed(message) -> Error(message)`
+
+Invalid lifecycle events leave the current state unchanged. Startup command
+plumbing creates the initial `Starting` state before the worker thread is
+spawned; worker code and startup-failure paths then use lifecycle events. The
+contract is covered by `runner_lifecycle_*` tests in
+`src-tauri/src/runner/tests.rs`.
 
 ## Template Probes
 
@@ -170,6 +237,12 @@ debug entries are styled dimmer and don't count toward the
 "操作日志 (N)" trigger badge. Add new debug-level emits via `emit_debug`
 when the message is only useful for triage; reserve `emit` for events
 the operator should always see.
+
+`AutomationEvent.status` (and `EnhancementAutomationEvent.status`) is the
+frontend-facing lifecycle state: `idle`, `starting`, `running`, `finished`,
+or `error`. The `state` string remains in the event for diagnostics, but
+frontend running/terminal decisions must use `status`.
+
 - `Battle.variants.main.elements.battle_scene_anchor`: exposes the
   `text_battle_label` region to debug; full
   `BATTLE m/n` reading still uses `read_battle_scene`.
@@ -449,12 +522,16 @@ changes (i.e. when the runner moves to a different row).
   `rules` are still supported:
   when a scene has rule entries, the older rule evaluator runs instead of the
   three-stage strategy flow.
-- `waiting_for_battle` extends Unknown tolerance during loading and long attack
-  animations.
+- Internal flow state extends Unknown tolerance during `AwaitingBattleLoad`
+  and `AwaitingAttackResolution`, matching loading screens and long attack
+  animations without relying on independent flags.
 - `APRecovery` now anchors on `label_item` and scans the item-column template
   region in priority order instead of tapping fixed rows. Top page scans
   rainbow / gold / silver items; after one downward swipe the runner scans bronze items. A missing
   template match is treated as "insufficient quantity" because the dimmed overlay suppresses
   the template score.
+- Template placeholders needed for future hardening: none are introduced by
+  the battle flow-state refactor. Existing fallback/template debt remains
+  documented where the fallback is described above.
 - Updating `Screen`, battle result handling, AP recovery behavior, or
   battle screen variant probes requires updating this document.

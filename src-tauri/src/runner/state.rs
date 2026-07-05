@@ -10,6 +10,10 @@ use super::*;
 // ---------------------------------------------------------------------------
 
 pub(crate) struct BattleState {
+    /// Explicit finite state for the battle runner's screen/action flow.
+    /// Counters below are context carried by this state machine; transient
+    /// "where are we in the flow?" facts live in `flow` instead of booleans.
+    pub(crate) flow: BattleFlowState,
     /// Which battle-scene config index we're executing (0-based into the
     /// `scenes` vec). One config block = one battle scene as labeled in
     /// the HUD's `BATTLE m/n`.
@@ -35,21 +39,6 @@ pub(crate) struct BattleState {
     pub(crate) executed_turn_key: Option<(usize, usize)>,
     /// Whether we used the scene config (vs fallback) — drives card selection
     pub(crate) scene_config_used: bool,
-    /// Set after clicking start on TeamConfirm; tolerates longer Unknown streaks
-    pub(crate) waiting_for_battle: bool,
-    /// Set after tapping the selected command cards. The attack-card screen
-    /// can remain detectable for a short moment before the animation takes
-    /// over; this prevents submitting another set of picks in that window.
-    pub(crate) attack_submitted: bool,
-    /// Set after tapping the Battle-screen attack button while waiting for the
-    /// command-card screen to become detectable. During this transition the
-    /// classifier can still briefly report Battle; do not tap Attack again or
-    /// the second tap may land on the rightmost command card.
-    pub(crate) waiting_for_attack_screen_started_at: Option<Instant>,
-    /// Start time for the normal-mode post-attack HUD-read grace period.
-    /// While this is set, the runner has returned to an actionable Battle
-    /// screen but is waiting for `BATTLE m/n` before advancing a turn.
-    pub(crate) post_attack_hud_wait_started: Option<Instant>,
     /// Consecutive command-card owner recognition failures across the current
     /// battle. A successful front-line-only read resets this before we
     /// permanently fall back to scanning the full six-member party.
@@ -67,16 +56,13 @@ pub(crate) struct BattleState {
 impl BattleState {
     pub(crate) fn new() -> Self {
         Self {
+            flow: BattleFlowState::PreBattle,
             current_scene_index: 0,
             current_turn_index: 0,
             last_screen_scene: None,
             executed_scene_index: None,
             executed_turn_key: None,
             scene_config_used: false,
-            waiting_for_battle: false,
-            attack_submitted: false,
-            waiting_for_attack_screen_started_at: None,
-            post_attack_hud_wait_started: None,
             command_card_owner_failure_count: 0,
             command_card_owner_fallback_to_full_party: false,
             advanced_startup_done: HashSet::new(),
@@ -86,12 +72,146 @@ impl BattleState {
         }
     }
 
-    pub(crate) fn mark_waiting_for_attack_screen(&mut self, now: Instant) {
-        self.waiting_for_attack_screen_started_at = Some(now);
+    pub(crate) fn transition(&mut self, event: BattleFlowEvent) -> BattleFlowTransition {
+        let transition = battle_flow_transition(self.flow, event);
+        if transition.accepted {
+            self.flow = transition.next;
+        }
+        transition
     }
 
-    pub(crate) fn clear_waiting_for_attack_screen(&mut self) {
-        self.waiting_for_attack_screen_started_at = None;
+    pub(crate) fn uses_loading_unknown_timeout(&self) -> bool {
+        matches!(
+            self.flow,
+            BattleFlowState::AwaitingBattleLoad { .. } | BattleFlowState::AwaitingAttackResolution
+        )
+    }
+
+    pub(crate) fn awaiting_attack_resolution(&self) -> bool {
+        matches!(
+            self.flow,
+            BattleFlowState::AwaitingAttackResolution
+                | BattleFlowState::AwaitingPostAttackHud { .. }
+        )
+    }
+
+    pub(crate) fn attack_screen_wait_started_at(&self) -> Option<Instant> {
+        match self.flow {
+            BattleFlowState::AwaitingAttackScreen { started_at } => Some(started_at),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn post_attack_hud_wait_started_at(&self) -> Option<Instant> {
+        match self.flow {
+            BattleFlowState::AwaitingPostAttackHud { started_at } => Some(started_at),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BattleFlowState {
+    /// No battle-start action has been submitted in this quest loop yet.
+    PreBattle,
+    /// The runner tapped a button that should eventually lead back to an
+    /// actionable Battle screen. Unknown frames are expected while loading.
+    AwaitingBattleLoad { source: BattleLoadSource },
+    /// Battle screen is actionable and the runner may execute skills or tap Attack.
+    BattleReady,
+    /// Attack was tapped on Battle; suppress duplicate taps until Attack appears
+    /// or the wait times out.
+    AwaitingAttackScreen { started_at: Instant },
+    /// Attack/card screen is visible and card selection can run.
+    AttackScreen,
+    /// Cards were submitted; wait through the attack animation until Battle returns.
+    AwaitingAttackResolution,
+    /// Battle returned after an attack, but normal mode is waiting briefly for a
+    /// reliable `BATTLE m/n` HUD read before advancing the turn counter.
+    AwaitingPostAttackHud { started_at: Instant },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BattleLoadSource {
+    TeamConfirm,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BattleFlowEvent {
+    QuestStartTapped(BattleLoadSource),
+    BattleActionable,
+    AttackButtonTapped { at: Instant },
+    AttackScreenDetected,
+    AttackScreenWaitTimedOut,
+    AttackCardsSubmitted,
+    PostAttackHudWaitStarted { at: Instant },
+    PostAttackHudResolved,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct BattleFlowTransition {
+    pub(crate) previous: BattleFlowState,
+    pub(crate) event: BattleFlowEvent,
+    pub(crate) next: BattleFlowState,
+    pub(crate) accepted: bool,
+}
+
+pub(crate) fn battle_flow_transition(
+    state: BattleFlowState,
+    event: BattleFlowEvent,
+) -> BattleFlowTransition {
+    let next = match (state, event) {
+        (_, BattleFlowEvent::QuestStartTapped(source)) => {
+            Some(BattleFlowState::AwaitingBattleLoad { source })
+        }
+        (
+            BattleFlowState::PreBattle
+            | BattleFlowState::AwaitingBattleLoad { .. }
+            | BattleFlowState::BattleReady
+            | BattleFlowState::AwaitingAttackResolution,
+            BattleFlowEvent::BattleActionable,
+        ) => Some(BattleFlowState::BattleReady),
+        (BattleFlowState::BattleReady, BattleFlowEvent::AttackButtonTapped { at }) => {
+            Some(BattleFlowState::AwaitingAttackScreen { started_at: at })
+        }
+        (
+            BattleFlowState::PreBattle
+            | BattleFlowState::BattleReady
+            | BattleFlowState::AwaitingAttackScreen { .. },
+            BattleFlowEvent::AttackScreenDetected,
+        ) => Some(BattleFlowState::AttackScreen),
+        (
+            BattleFlowState::AwaitingAttackScreen { .. },
+            BattleFlowEvent::AttackScreenWaitTimedOut,
+        ) => Some(BattleFlowState::BattleReady),
+        (BattleFlowState::AttackScreen, BattleFlowEvent::AttackCardsSubmitted) => {
+            Some(BattleFlowState::AwaitingAttackResolution)
+        }
+        (
+            BattleFlowState::AwaitingAttackResolution,
+            BattleFlowEvent::PostAttackHudWaitStarted { at },
+        )
+        | (
+            BattleFlowState::AwaitingPostAttackHud { .. },
+            BattleFlowEvent::PostAttackHudWaitStarted { at },
+        ) => Some(BattleFlowState::AwaitingPostAttackHud { started_at: at }),
+        (
+            BattleFlowState::AwaitingAttackResolution
+            | BattleFlowState::AwaitingPostAttackHud { .. },
+            BattleFlowEvent::PostAttackHudResolved,
+        ) => Some(BattleFlowState::BattleReady),
+        // Repeated observations from a polling loop are valid self transitions.
+        (BattleFlowState::AttackScreen, BattleFlowEvent::AttackScreenDetected) => {
+            Some(BattleFlowState::AttackScreen)
+        }
+        _ => None,
+    };
+
+    BattleFlowTransition {
+        previous: state,
+        event,
+        next: next.unwrap_or(state),
+        accepted: next.is_some(),
     }
 }
 

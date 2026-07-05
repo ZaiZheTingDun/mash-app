@@ -33,7 +33,9 @@ impl Runner {
         if !self.tap_at("TeamConfirm", Point::new(0.90, 0.93)) {
             return;
         }
-        self.battle.waiting_for_battle = true;
+        self.battle.transition(BattleFlowEvent::QuestStartTapped(
+            BattleLoadSource::TeamConfirm,
+        ));
         thread::sleep(ACTION_DELAY);
     }
 

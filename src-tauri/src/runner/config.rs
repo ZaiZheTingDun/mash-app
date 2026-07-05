@@ -317,7 +317,7 @@ impl Default for SupportGrandBondCeMode {
 // Runner state (shared with Tauri commands)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum RunnerState {
     Idle,
@@ -325,6 +325,59 @@ pub enum RunnerState {
     Running,
     Finished,
     Error { message: String },
+}
+
+impl RunnerState {
+    pub(crate) fn status(&self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Starting => "starting",
+            Self::Running => "running",
+            Self::Finished => "finished",
+            Self::Error { .. } => "error",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RunnerLifecycleEvent {
+    WorkerStarted,
+    StopRequested,
+    Finished,
+    Failed { message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RunnerLifecycleTransition {
+    pub(crate) previous: RunnerState,
+    pub(crate) event: RunnerLifecycleEvent,
+    pub(crate) next: RunnerState,
+    pub(crate) accepted: bool,
+}
+
+pub(crate) fn runner_lifecycle_transition(
+    state: RunnerState,
+    event: RunnerLifecycleEvent,
+) -> RunnerLifecycleTransition {
+    let next = match (&state, &event) {
+        (RunnerState::Starting, RunnerLifecycleEvent::WorkerStarted) => Some(RunnerState::Running),
+        (RunnerState::Starting | RunnerState::Running, RunnerLifecycleEvent::StopRequested) => {
+            Some(RunnerState::Idle)
+        }
+        (RunnerState::Running, RunnerLifecycleEvent::Finished) => Some(RunnerState::Finished),
+        (_, RunnerLifecycleEvent::Failed { message }) => Some(RunnerState::Error {
+            message: message.clone(),
+        }),
+        _ => None,
+    };
+
+    let accepted = next.is_some();
+    RunnerLifecycleTransition {
+        previous: state.clone(),
+        event,
+        next: next.unwrap_or(state),
+        accepted,
+    }
 }
 
 /// Severity of an automation status log entry. `Info` is the normal,
@@ -348,6 +401,7 @@ pub enum LogLevel {
 #[serde(rename_all = "camelCase")]
 pub struct AutomationEvent {
     pub state: String,
+    pub status: &'static str,
     pub current_screen: String,
     pub message: String,
     pub level: LogLevel,

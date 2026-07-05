@@ -25,7 +25,7 @@ src-tauri/                   # Tauri / Rust backend
     lib.rs                   # Tauri command registration & plugin wiring
     adb.rs                   # ADB device connection, tap, swipe
     screen.rs                # Python sidecar IPC (stream, detect, find_element, read_battle_scene)
-    runner.rs                # Automation main loop (state machine, UI coord constants)
+    runner/                  # Battle automation state machine and domain handlers
     debug.rs                 # Debug-page commands (screenshot capture, coord dump)
   resources/
     runtime-manifest.json    # Required mash-cv base/code versions + artifact metadata

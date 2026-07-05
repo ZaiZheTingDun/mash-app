@@ -68,7 +68,8 @@ impl Runner {
 
                             self.emit_skill_tap_debug("点击技能目标", target_pos);
                             if !self.tap_at("Battle", target_pos) {
-                                return self.fail_skill_execution(&action_label, "点击技能目标失败");
+                                return self
+                                    .fail_skill_execution(&action_label, "点击技能目标失败");
                             }
                             self.emit_debug("Battle", "等待目标选择框关闭");
                             if !self.wait_for_element_hidden(
@@ -85,10 +86,8 @@ impl Runner {
                             if attempt == 0 {
                                 continue;
                             }
-                            return self.fail_skill_execution(
-                                &action_label,
-                                "技能点击未观察到状态变化",
-                            );
+                            return self
+                                .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
                         }
                         triggered = true;
                         break;
@@ -161,7 +160,8 @@ impl Runner {
                             }
                             self.emit_skill_tap_debug("点击御主技能", pos);
                             if !self.tap_at("Battle", pos) {
-                                return self.fail_skill_execution(&action_label, "点击御主技能失败");
+                                return self
+                                    .fail_skill_execution(&action_label, "点击御主技能失败");
                             }
                             thread::sleep(ACTION_DELAY);
 
@@ -309,7 +309,7 @@ impl Runner {
 
     fn fail_skill_execution(&self, action_label: &str, reason: &str) -> bool {
         let message = format!("{action_label} 执行失败: {reason}");
-        self.set_state(RunnerState::Error {
+        self.transition_lifecycle(RunnerLifecycleEvent::Failed {
             message: message.clone(),
         });
         self.emit_warn("Battle", &message);
@@ -430,10 +430,7 @@ impl Runner {
 
 pub(crate) fn format_skill_tap_debug(label: &str, point: Point, width: u32, height: u32) -> String {
     let (px, py) = point.to_physical(width, height);
-    format!(
-        "{label}: x={:.3}, y={:.3} ({px}, {py})",
-        point.x, point.y
-    )
+    format!("{label}: x={:.3}, y={:.3} ({px}, {py})", point.x, point.y)
 }
 
 pub(crate) fn skill_position(servant: Option<&str>, skill: Option<&str>) -> Option<Point> {

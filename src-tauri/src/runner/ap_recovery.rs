@@ -138,7 +138,7 @@ impl Runner {
     pub(crate) fn handle_ap_recovery(&mut self) {
         if self.config.ap_recovery_items.is_empty() {
             self.emit("APRecovery", "行动力不足且未配置自动吃苹果，停止");
-            self.set_state(RunnerState::Finished);
+            self.transition_lifecycle(RunnerLifecycleEvent::Finished);
             return;
         }
 
@@ -172,7 +172,7 @@ impl Runner {
         let bottom_items = self.ap_recovery_candidates(ApRecoveryPage::Bottom);
         if bottom_items.is_empty() {
             self.emit("APRecovery", "已配置苹果数量不足，停止");
-            self.set_state(RunnerState::Finished);
+            self.transition_lifecycle(RunnerLifecycleEvent::Finished);
             return;
         }
 
@@ -202,6 +202,6 @@ impl Runner {
         }
 
         self.emit("APRecovery", "所有已配置苹果数量不足，停止");
-        self.set_state(RunnerState::Finished);
+        self.transition_lifecycle(RunnerLifecycleEvent::Finished);
     }
 }

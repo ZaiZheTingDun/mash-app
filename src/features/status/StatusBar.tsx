@@ -24,6 +24,7 @@ import {
 import { SERVER_LABELS, type Server } from "../../types/server";
 import type { Servant } from "../../types/servant";
 import type { AppTheme, AppThemePreference } from "../../types/theme";
+import { isAutomationRunning, type AutomationStatus } from "../../types/automation";
 
 type LogLevel = "info" | "warn" | "debug" | "localDebug";
 
@@ -61,6 +62,7 @@ interface AdbResetStatusEvent {
 
 interface AutomationStatusEvent {
   state: string;
+  status: AutomationStatus;
 }
 
 const POLL_INTERVAL_MS = 3000;
@@ -689,15 +691,13 @@ export function StatusBar({
     const unlistenBattle = listen<AutomationStatusEvent>(
       "automation-status",
       (event) => {
-        const state = event.payload.state ?? "";
-        setBattleRunnerRunning(state.includes("Starting") || state.includes("Running"));
+        setBattleRunnerRunning(isAutomationRunning(event.payload));
       }
     );
     const unlistenEnhancement = listen<AutomationStatusEvent>(
       "enhancement-automation-status",
       (event) => {
-        const state = event.payload.state ?? "";
-        setEnhancementRunnerRunning(state.includes("Starting") || state.includes("Running"));
+        setEnhancementRunnerRunning(isAutomationRunning(event.payload));
       }
     );
     return () => {

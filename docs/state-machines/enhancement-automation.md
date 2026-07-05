@@ -87,8 +87,29 @@ Variant detects and status elements:
 - `ServantEnhancement.variants.servantSelect.elements.button_scale_level_3`
   and material or ascension select equivalents: maximum list density status.
 
+## Runner Lifecycle State Machine
+
+The externally visible enhancement automation lifecycle is serialized as
+`EnhancementRunnerState` (`Idle`, `Starting`, `Running`, `Finished`, `Error`).
+Runtime changes enter through `EnhancementLifecycleEvent` and
+`enhancement_lifecycle_transition`:
+
+- `Starting + WorkerStarted -> Running`
+- `Starting|Running + StopRequested -> Idle`
+- `Running + Finished -> Finished`
+- `* + Failed(message) -> Error(message)`
+
+Invalid lifecycle events leave the current state unchanged. Startup command
+plumbing creates the initial `Starting` state before the worker thread is
+spawned; worker code and startup-failure paths then use lifecycle events. The
+contract is covered by `enhancement_lifecycle_*` tests in
+`src-tauri/src/enhancement_runner/tests.rs`.
+
 ## Notes
 
+- `EnhancementAutomationEvent.status` is the frontend-facing lifecycle state:
+  `idle`, `starting`, `running`, `finished`, or `error`. The `state` debug
+  string is still emitted for diagnostics.
 - Level and selected material count still use OCR.
 - Hot OCR paths are bounded to narrow purpose-specific regions: dialog
   classification reads the central dialog text area, and servant enhancement
@@ -96,6 +117,12 @@ Variant detects and status elements:
   max-level servant.
 - Confirm dialogs, profile update dialogs, and ascension result fallback still
   use OCR until dedicated templates are added.
+- Template placeholders still needed to remove OCR/fallbacks completely:
+  unique enhancement/ascension second-confirmation dialog template; unique
+  profile/data update dialog template; complete ascension-result return state
+  template; selected-material-count template; and three-state EXP filter
+  confirmation templates that prove the EXP option is active while adjacent
+  filter options are inactive.
 - Updating `EnhancementScreen`, `EnhancementTopScreen`, `EnhancementVariant`,
   `EnhancementStatus`, or enhancement screen variant/status probes requires
   updating this document.

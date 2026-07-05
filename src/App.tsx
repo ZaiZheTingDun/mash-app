@@ -33,6 +33,7 @@ import type { RuntimeStatus } from "./types/runtime";
 import type { SelfCheckStatus } from "./types/selfCheck";
 import type { AppTheme, AppThemePreference } from "./types/theme";
 import type { AdvancedBattleScene, BattleScene } from "./types/command";
+import type { AutomationStatus } from "./types/automation";
 import {
   appendCoalescedOperationLog,
   type ActionLogMeta,
@@ -48,11 +49,10 @@ type View = "team" | "command" | "battle" | "enhancement" | "debug";
 
 interface AutomationEvent {
   state: string;
+  status: AutomationStatus;
   currentScreen: string;
   message: string;
-  // Optional for backwards compatibility with older backends that don't
-  // emit a level; treat missing as "info".
-  level?: LogLevel;
+  level: LogLevel;
   attack?: AttackLogMeta | null;
   action?: ActionLogMeta | null;
 }
