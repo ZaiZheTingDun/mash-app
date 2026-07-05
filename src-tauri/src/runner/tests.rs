@@ -518,6 +518,7 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     assert_eq!(cfg.max_mission_runs, None);
     assert!(cfg.ap_recovery_items.is_empty());
     assert!(!cfg.verify_skill_activation);
+    assert!(!cfg.auto_capture_battle_result_loot);
 }
 
 #[test]

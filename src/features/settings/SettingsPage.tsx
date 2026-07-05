@@ -14,13 +14,15 @@ import { SettingsBasicPage } from "./SettingsBasicPage";
 import { SettingsRecognitionPage } from "./SettingsRecognitionPage";
 import { SettingsResourcesPage } from "./SettingsResourcesPage";
 import { SettingsSelfCheckPage } from "./SettingsSelfCheckPage";
+import { SettingsDebugPage } from "./SettingsDebugPage";
 
 export type SettingsSection =
   | "basic"
   | "selfCheck"
   | "resources"
   | "dataManagement"
-  | "recognition";
+  | "recognition"
+  | "debug";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -59,6 +61,13 @@ const navItems: Array<{
     render: (_active, props) => (
       <SettingsDataManagementPage onProjectsImported={props.onProjectsImported} />
     ),
+  },
+  {
+    group: "application",
+    section: "debug",
+    label: "调试",
+    icon: <GearIcon width={15} height={15} />,
+    render: (active) => <SettingsDebugPage active={active} />,
   },
   {
     group: "application",

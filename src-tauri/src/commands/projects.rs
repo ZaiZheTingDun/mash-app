@@ -33,7 +33,25 @@ pub(crate) fn normalize_project(mut project: Project) -> Project {
     }
     normalize_grand_card_rule_slots(&mut project);
     normalize_grand_servants(&mut project);
+    normalize_project_recognition_settings(&mut project);
     project
+}
+
+fn normalize_project_recognition_settings(project: &mut Project) {
+    if let Some(settings) = &mut project.recognition_settings {
+        if settings.stop_on_five_star_ce_drop == Some(true)
+            && settings
+                .five_star_ce_drop_target_count
+                .is_none_or(|count| count == 0)
+        {
+            settings.five_star_ce_drop_target_count = Some(1);
+        }
+        if settings.stop_on_five_star_ce_drop != Some(true)
+            && settings.five_star_ce_drop_target_count == Some(1)
+        {
+            settings.five_star_ce_drop_target_count = None;
+        }
+    }
 }
 
 fn slot_member_metadata(

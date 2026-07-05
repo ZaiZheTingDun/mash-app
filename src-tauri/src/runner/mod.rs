@@ -46,7 +46,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 /// Tolerate short-lived overlays and transitions for up to 24 seconds
 /// before treating an unrecognized screen as a fatal error.
@@ -87,6 +87,8 @@ const TAP_JITTER_PX: i32 = 6;
 
 const DEFAULT_W: u32 = 1080;
 const DEFAULT_H: u32 = 1920;
+const DEFAULT_FRAME_W: u32 = 1920;
+const DEFAULT_FRAME_H: u32 = 1080;
 
 pub struct Runner {
     sidecar: Option<SidecarClient>,
@@ -101,6 +103,8 @@ pub struct Runner {
     app_handle: tauri::AppHandle,
     screen_w: u32,
     screen_h: u32,
+    frame_w: u32,
+    frame_h: u32,
     /// Per-servant face assets (`{id}/card_servant_*.png`). When ``None`` the
     /// sidecar can still report suit + slot but cannot identify which
     /// servant owns each command card, which means priority entries can't
@@ -156,6 +160,8 @@ pub struct Runner {
     // Battle progress tracking
     battle: BattleState,
     completed_mission_runs: u32,
+    five_star_ce_drop_count: u32,
+    battle_result_loot_handled: bool,
     battle_result_continue_handled: bool,
     /// Pluggable touch-injection backend (see `touch::TouchBackend`).
     /// Currently always `adb-input`; the trait indirection is kept so
@@ -178,12 +184,14 @@ impl Runner {
         cancel: Arc<AtomicBool>,
         stop_after_current: Arc<AtomicBool>,
         screen_size: Option<(u32, u32)>,
+        frame_size: Option<(u32, u32)>,
         assets_dir: Option<PathBuf>,
         ce_assets_dir: Option<PathBuf>,
         server: Server,
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
+        let (frame_w, frame_h) = frame_size.unwrap_or((DEFAULT_FRAME_W, DEFAULT_FRAME_H));
         let touch = build_touch_backend(&adb);
         Self {
             touch,
@@ -199,6 +207,8 @@ impl Runner {
             app_handle,
             screen_w,
             screen_h,
+            frame_w,
+            frame_h,
             assets_dir,
             ce_assets_dir,
             server,
@@ -216,6 +226,8 @@ impl Runner {
             servants_placed: Vec::new(),
             battle: BattleState::new(),
             completed_mission_runs: 0,
+            five_star_ce_drop_count: 0,
+            battle_result_loot_handled: false,
             battle_result_continue_handled: false,
         }
     }

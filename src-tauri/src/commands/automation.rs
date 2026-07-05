@@ -13,7 +13,7 @@ use crate::commands::projects::{load_advanced_battle_scenes, load_battle_scenes,
 use crate::commands::runtime::{
     resolve_ce_assets_dir, resolve_scrcpy_jar, resolve_servant_assets_dir,
 };
-use crate::commands::settings::{AdbDeviceSettings, RecognitionSettings};
+use crate::commands::settings::{AdbDeviceSettings, DebugSettings, RecognitionSettings};
 use crate::enhancement_runner::{
     server_supported as enhancement_server_supported, EnhancementAutomationEvent,
     EnhancementConfig, EnhancementRunner, EnhancementRunnerHandle, EnhancementRunnerState,
@@ -239,6 +239,7 @@ pub(crate) fn start_automation(
     adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
     server_state: tauri::State<'_, Mutex<Server>>,
     recognition_settings_state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    debug_settings_state: tauri::State<'_, Mutex<DebugSettings>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
@@ -297,6 +298,10 @@ pub(crate) fn start_automation(
     config.stop_on_bond_level_up = recognition_settings.stop_on_bond_level_up;
     config.stop_on_bond_max_level = recognition_settings.stop_on_bond_max_level;
     config.verify_skill_activation = recognition_settings.verify_skill_activation;
+    config.auto_capture_battle_result_loot = debug_settings_state
+        .lock()
+        .unwrap()
+        .auto_capture_battle_result_loot;
 
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -392,6 +397,7 @@ pub(crate) fn start_automation(
             );
         }
         let screen_size = Some(input_size);
+        let frame_size = Some((w, h));
         let assets_dir = resolve_servant_assets_dir(&app);
         let ce_assets_dir = resolve_ce_assets_dir(&app);
         let runner = Runner::new(
@@ -406,6 +412,7 @@ pub(crate) fn start_automation(
             cancel,
             stop_after_current,
             screen_size,
+            frame_size,
             assets_dir,
             ce_assets_dir,
             server,

@@ -65,6 +65,13 @@ pub struct RecognitionSettings {
     pub verify_skill_activation: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DebugSettings {
+    #[serde(default)]
+    pub auto_capture_battle_result_loot: bool,
+}
+
 impl Default for RecognitionSettings {
     fn default() -> Self {
         Self {
@@ -227,6 +234,15 @@ fn recognition_settings_path(app: &tauri::AppHandle) -> PathBuf {
     dir.join("recognition_settings.json")
 }
 
+fn debug_settings_path(app: &tauri::AppHandle) -> PathBuf {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .expect("failed to resolve app data dir");
+    fs::create_dir_all(&dir).ok();
+    dir.join("debug_settings.json")
+}
+
 pub(crate) fn load_server_setting(app: &tauri::AppHandle) -> Server {
     let path = server_settings_path(app);
     fs::read_to_string(&path)
@@ -274,11 +290,28 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
         .unwrap_or_default()
 }
 
+pub(crate) fn load_debug_settings(app: &tauri::AppHandle) -> DebugSettings {
+    let path = debug_settings_path(app);
+    fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<DebugSettings>(&s).ok())
+        .unwrap_or_default()
+}
+
 fn save_recognition_settings(
     app: &tauri::AppHandle,
     settings: &RecognitionSettings,
 ) -> Result<(), String> {
     let path = recognition_settings_path(app);
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn save_debug_settings(app: &tauri::AppHandle, settings: &DebugSettings) -> Result<(), String> {
+    let path = debug_settings_path(app);
     fs::write(
         &path,
         serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?,
@@ -316,6 +349,11 @@ pub(crate) fn get_server(state: tauri::State<'_, Mutex<Server>>) -> Server {
 pub(crate) fn get_recognition_settings(
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
 ) -> RecognitionSettings {
+    *state.lock().unwrap()
+}
+
+#[tauri::command]
+pub(crate) fn get_debug_settings(state: tauri::State<'_, Mutex<DebugSettings>>) -> DebugSettings {
     *state.lock().unwrap()
 }
 
@@ -428,6 +466,20 @@ pub(crate) fn set_verify_skill_activation(
 }
 
 #[tauri::command]
+pub(crate) fn set_auto_capture_battle_result_loot(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<DebugSettings>>,
+    value: bool,
+) -> Result<DebugSettings, String> {
+    let next = DebugSettings {
+        auto_capture_battle_result_loot: value,
+    };
+    *state.lock().unwrap() = next;
+    save_debug_settings(&app, &next)?;
+    Ok(next)
+}
+
+#[tauri::command]
 pub(crate) async fn run_startup_migration(
     app: tauri::AppHandle,
     adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
@@ -532,6 +584,34 @@ mod tests {
         assert!(!settings.stop_on_bond_level_up);
         assert!(!settings.stop_on_bond_max_level);
         assert!(!settings.verify_skill_activation);
+    }
+
+    #[test]
+    fn debug_settings_default_disables_auto_loot_capture() {
+        let settings = DebugSettings::default();
+
+        assert!(!settings.auto_capture_battle_result_loot);
+    }
+
+    #[test]
+    fn debug_settings_deserializes_legacy_json_with_auto_loot_capture_default() {
+        let settings: DebugSettings = serde_json::from_value(serde_json::json!({})).unwrap();
+
+        assert!(!settings.auto_capture_battle_result_loot);
+    }
+
+    #[test]
+    fn debug_settings_round_trips_auto_loot_capture() {
+        let settings: DebugSettings = serde_json::from_value(serde_json::json!({
+            "autoCaptureBattleResultLoot": true,
+        }))
+        .unwrap();
+
+        assert!(settings.auto_capture_battle_result_loot);
+        assert_eq!(
+            serde_json::to_value(settings).unwrap()["autoCaptureBattleResultLoot"],
+            serde_json::json!(true)
+        );
     }
 
     #[test]

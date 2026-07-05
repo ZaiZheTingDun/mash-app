@@ -203,6 +203,15 @@ pub struct RunConfig {
     /// because it adds CV polling between skill actions.
     #[serde(default)]
     pub verify_skill_activation: bool,
+    /// Stop this automation run once cumulative five-star CE drops reach the target.
+    #[serde(default)]
+    pub stop_on_five_star_ce_drop: bool,
+    /// Cumulative five-star CE drop target for this automation run.
+    #[serde(default = "default_five_star_ce_drop_target_count")]
+    pub five_star_ce_drop_target_count: u32,
+    /// Save each newly handled loot result page to the app debug directory.
+    #[serde(default)]
+    pub auto_capture_battle_result_loot: bool,
     #[serde(default = "default_true")]
     pub support_craft_essence_mlb_required: bool,
     #[serde(default)]
@@ -269,6 +278,10 @@ fn default_support_icon_threshold() -> f64 {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_five_star_ce_drop_target_count() -> u32 {
+    1
 }
 
 fn default_support_append_skill_level_mins() -> [Option<u32>; 5] {

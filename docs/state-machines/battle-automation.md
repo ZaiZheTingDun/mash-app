@@ -190,6 +190,18 @@ the operator should always see.
   appear after the normal loot page (`text_battle_result_loot_event`) and
   routes to the same `BattleResultLoot` handler, so the runner taps the
   existing loot "Next" coordinate.
+- `BattleResultLoot` can run an optional current-project drop-stop probe before
+  tapping "Next". When the project enables "五星礼装掉落自动停止", the runner
+  checks the visible first two loot rows for the five-star CE star strip
+  (`resources/images/stars_5.png`), adds matches to an in-memory counter for
+  the current automation run, and stops once the cumulative total reaches the
+  project target. The counter is not persisted and resets on the next
+  `start_automation`.
+- `BattleResultLoot` can also auto-capture screenshots when the global debug
+  setting "自动截图战利品页面" is enabled. The runner saves one current stream
+  frame per newly handled loot page under `app_data_dir()/debug/loot-screenshots/`
+  before running optional drop detection. Screenshot failures emit a warning
+  and do not change the result-page state flow.
 - During the battle-result chain, an unrecognized frame (`Unknown`) can be a
   transient popup covering the settlement page. If the last recognized screen
   was a battle-result screen, the runner repeatedly taps

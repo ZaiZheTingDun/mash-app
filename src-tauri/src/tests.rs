@@ -29,6 +29,10 @@ fn tauri_bundle_resources_cover_template_subdirectories() {
         resources.contains("src/resources/servants.json"),
         "missing Tauri bundle resource for sidecar-readable servants.json"
     );
+    assert!(
+        resources.contains("resources/images/*"),
+        "missing Tauri bundle resource glob for shared image assets"
+    );
 
     for server in ["jp", "cn"] {
         let templates_dir = manifest_dir
@@ -745,6 +749,96 @@ fn project_recognition_settings_allows_partial_overrides() {
 }
 
 #[test]
+fn project_recognition_settings_allows_five_star_ce_drop_stop() {
+    let json = serde_json::json!({
+        "id": "abc",
+        "name": "Drop Stop Project",
+        "recognitionSettings": {
+            "stopOnFiveStarCeDrop": true,
+            "fiveStarCeDropTargetCount": 3,
+        },
+    });
+    let project: Project = serde_json::from_value(json).unwrap();
+    let settings = project.recognition_settings.unwrap();
+
+    assert_eq!(settings.stop_on_five_star_ce_drop, Some(true));
+    assert_eq!(settings.five_star_ce_drop_target_count, Some(3));
+
+    let serialized = serde_json::to_value(&project).unwrap();
+    assert_eq!(
+        serialized["recognitionSettings"]["stopOnFiveStarCeDrop"],
+        serde_json::json!(true)
+    );
+    assert_eq!(
+        serialized["recognitionSettings"]["fiveStarCeDropTargetCount"],
+        serde_json::json!(3)
+    );
+}
+
+#[test]
+fn normalize_project_defaults_enabled_five_star_ce_drop_target_to_one() {
+    let mut project = new_project("Drop Stop".into(), false, GrandClass::Saber);
+    project.recognition_settings = Some(ProjectRecognitionSettings {
+        stop_on_five_star_ce_drop: Some(true),
+        five_star_ce_drop_target_count: Some(0),
+        ..ProjectRecognitionSettings::default()
+    });
+
+    let project = normalize_project(project);
+
+    assert_eq!(
+        project
+            .recognition_settings
+            .unwrap()
+            .five_star_ce_drop_target_count,
+        Some(1)
+    );
+}
+
+#[test]
+fn five_star_ce_drop_regions_cover_first_two_loot_rows() {
+    let regions = runner::five_star_ce_drop_regions();
+
+    assert_eq!(regions.len(), 14);
+    assert!((regions[0].x - 0.160_934_895_833_333_34).abs() < 0.000_001);
+    assert!((regions[0].y - 0.253_683_333_333_333_3).abs() < 0.000_001);
+    assert!((regions[0].w - 0.050_518_75).abs() < 0.000_001);
+    assert!((regions[0].h - 0.028_740_740_740_740_74).abs() < 0.000_001);
+    assert!((regions[1].x - 0.268_226_562_5).abs() < 0.000_001);
+    assert!((regions[7].y - 0.450_905_555_555_555_56).abs() < 0.000_001);
+}
+
+#[test]
+fn five_star_ce_template_size_uses_stream_frame_dimensions() {
+    assert_eq!(runner::five_star_ce_template_size(1920, 1080), (88, 20));
+    assert_eq!(runner::five_star_ce_template_size(2560, 1440), (117, 27));
+}
+
+#[test]
+fn five_star_ce_drop_stop_action_uses_cumulative_total() {
+    let (total, action) = runner::five_star_ce_drop_stop_action(1, 1, 3);
+    assert_eq!(total, 2);
+    assert_eq!(action, runner::FiveStarCeDropStopAction::Continue);
+
+    let (total, action) = runner::five_star_ce_drop_stop_action(total, 1, 3);
+    assert_eq!(total, 3);
+    assert_eq!(action, runner::FiveStarCeDropStopAction::Stop);
+}
+
+#[test]
+fn battle_result_loot_screenshot_path_uses_debug_directory_and_sortable_name() {
+    let root = PathBuf::from("/tmp/mash-app-data");
+    let dir = runner::battle_result_loot_screenshot_dir_in_root(&root);
+    let filename = runner::battle_result_loot_screenshot_filename(
+        std::time::UNIX_EPOCH + std::time::Duration::from_millis(1_781_234_567_890),
+        2,
+    );
+
+    assert_eq!(dir, root.join("debug").join("loot-screenshots"));
+    assert_eq!(filename, "loot-1781234567890-run0003.jpg");
+}
+
+#[test]
 fn effective_recognition_settings_inherit_global_without_project_override() {
     let global = RecognitionSettings {
         noble_phantasm_detection_mode: commands::settings::NoblePhantasmDetectionMode::Card,
@@ -790,6 +884,7 @@ fn effective_recognition_settings_use_project_override() {
         support_mlb_icon_threshold: Some(0.77),
         support_bond_icon_threshold: None,
         verify_skill_activation: Some(false),
+        ..ProjectRecognitionSettings::default()
     };
 
     let effective = commands::automation::effective_recognition_settings(global, Some(project));

@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -53,6 +54,56 @@ def _save_image(img: np.ndarray, path: str):
 def _gradient_patch(size: int = 20) -> np.ndarray:
     """Grayscale patch with non-zero variance (so template matching is stable)."""
     return np.tile(np.arange(size, dtype=np.uint8) * 12, (size, 1))
+
+
+def test_five_star_ce_drop_template_hits_expected_loot_cells():
+    cases = [
+        (Path("/Users/xiaotong/Downloads/test.png"), [(0, 1), (0, 2)]),
+        (
+            Path(
+                "/Users/xiaotong/Library/Application Support/com.xiaotongx.mash/debug/"
+                "loot-screenshots/loot-1783259793253-run0012.jpg"
+            ),
+            [(0, 1)],
+        ),
+    ]
+    existing_cases = [(path, expected) for path, expected in cases if path.is_file()]
+    if not existing_cases:
+        pytest.skip("external loot screenshot fixtures are not available")
+    repo_root = Path(__file__).resolve().parents[3]
+    template_path = repo_root / "src-tauri" / "resources" / "images" / "stars_5.png"
+    tmpl = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
+    assert tmpl is not None
+
+    tmpl = cv2.resize(tmpl, (88, 20), interpolation=cv2.INTER_AREA)
+    cell_w, cell_h = 177, 194
+    x0, y0 = 232, 131
+    x_gaps = [29, 29, 30, 29, 29, 29]
+    row_gap = 19
+    search = {"x": 0.435, "y": 0.737, "w": 0.548, "h": 0.160}
+    cols = [x0]
+    for gap in x_gaps:
+        cols.append(cols[-1] + cell_w + gap)
+
+    for screenshot_path, expected_hits in existing_cases:
+        img = cv2.imread(str(screenshot_path), cv2.IMREAD_COLOR)
+        assert img is not None
+
+        hits: list[tuple[int, int]] = []
+        for row in range(2):
+            cell_y = y0 + row * (cell_h + row_gap)
+            for col, cell_x in enumerate(cols):
+                region = {
+                    "x": (cell_x + cell_w * search["x"]) / 1920,
+                    "y": (cell_y + cell_h * search["y"]) / 1080,
+                    "w": cell_w * search["w"] / 1920,
+                    "h": cell_h * search["h"] / 1080,
+                }
+                match = mash_cv._match_template_region(img, tmpl, region, 0.55)
+                if match["found"]:
+                    hits.append((row, col))
+
+        assert hits == expected_hits
 
 
 # ── _detect_screen ──────────────────────────────────────────────────────

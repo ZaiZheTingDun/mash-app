@@ -35,6 +35,9 @@ impl Runner {
             if screen != Screen::BattleResultContinue {
                 self.battle_result_continue_handled = false;
             }
+            if screen != Screen::BattleResultLoot {
+                self.battle_result_loot_handled = false;
+            }
 
             match screen {
                 Screen::TeamConfirm => {

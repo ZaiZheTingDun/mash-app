@@ -232,12 +232,14 @@ pub fn run() {
             let adb_device_settings = load_adb_device_settings(&app.handle());
             let server = load_server_setting(&app.handle());
             let recognition_settings = load_recognition_settings(&app.handle());
+            let debug_settings = commands::settings::load_debug_settings(&app.handle());
             #[cfg(desktop)]
             configure_app_menu(app)?;
             refresh_asset_protocol_scope(&app.handle())?;
             app.manage(Mutex::new(adb_device_settings));
             app.manage(Mutex::new(server));
             app.manage(Mutex::new(recognition_settings));
+            app.manage(Mutex::new(debug_settings));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
             app.manage(Mutex::new(EnhancementRunnerHandle::new_idle()));
             app.manage(Arc::new(ResourceDownloadCancelState::default()));
@@ -296,6 +298,7 @@ pub fn run() {
             commands::settings::get_server,
             commands::settings::set_server,
             commands::settings::get_recognition_settings,
+            commands::settings::get_debug_settings,
             commands::settings::set_noble_phantasm_detection_mode,
             commands::settings::set_support_ce_threshold,
             commands::settings::set_support_ce_full_gate_threshold,
@@ -304,6 +307,7 @@ pub fn run() {
             commands::settings::set_stop_on_bond_level_up,
             commands::settings::set_stop_on_bond_max_level,
             commands::settings::set_verify_skill_activation,
+            commands::settings::set_auto_capture_battle_result_loot,
             commands::settings::should_check_updates_today,
             commands::settings::mark_update_checked_today,
             commands::automation::start_automation,

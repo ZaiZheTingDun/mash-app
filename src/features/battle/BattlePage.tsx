@@ -4,12 +4,21 @@ import {
   Box,
   Button,
   CheckboxCards,
+  Dialog,
   Flex,
+  IconButton,
+  Switch,
   Text,
   TextField,
 } from "@radix-ui/themes";
 import { invoke, listen } from "../../tauri";
-import { ChevronLeftIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons";
+import {
+  ChevronLeftIcon,
+  Cross1Icon,
+  GearIcon,
+  MinusIcon,
+  PlusIcon,
+} from "@radix-ui/react-icons";
 import { ProjectBar } from "../projects/ProjectBar";
 import { OptionCardRadioGroup } from "../../components/common/OptionCardRadioGroup";
 import { SectionHeading } from "../../components/common/SectionHeading";
@@ -79,6 +88,7 @@ const DEFAULT_GRAND_CHAIN_PRIORITY: GrandChainPriorityItem[] = [
   "deputyColorChain",
   "fallback",
 ];
+const DEFAULT_FIVE_STAR_CE_DROP_TARGET_COUNT = 1;
 
 interface BattlePageProps {
   projects: Project[];
@@ -134,6 +144,225 @@ function projectDraftFromProject(project: Project): BattleProjectDraft {
   };
 }
 
+function normalizeFiveStarCeDropTargetCount(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : DEFAULT_FIVE_STAR_CE_DROP_TARGET_COUNT;
+}
+
+function projectStopsOnFiveStarCeDrop(project: Project | null | undefined) {
+  return project?.recognitionSettings?.stopOnFiveStarCeDrop === true;
+}
+
+function projectFiveStarCeDropTargetCount(project: Project | null | undefined) {
+  return normalizeFiveStarCeDropTargetCount(
+    project?.recognitionSettings?.fiveStarCeDropTargetCount
+  );
+}
+
+function recognitionSettingsFiveStarCeDropTargetCount(
+  settings: Project["recognitionSettings"]
+) {
+  return normalizeFiveStarCeDropTargetCount(settings?.fiveStarCeDropTargetCount);
+}
+
+interface BattleAdvancedSettingsDialogProps {
+  open: boolean;
+  project: Project | null;
+  disabled: boolean;
+  onOpenChange: (open: boolean) => void;
+  onUpdateProject: (updater: (project: Project) => Project) => void;
+}
+
+function BattleAdvancedSettingsDialog({
+  open,
+  project,
+  disabled,
+  onOpenChange,
+  onUpdateProject,
+}: BattleAdvancedSettingsDialogProps) {
+  const stopOnFiveStarCeDrop = projectStopsOnFiveStarCeDrop(project);
+  const targetCount = projectFiveStarCeDropTargetCount(project);
+
+  const updateRecognitionSettings = useCallback(
+    (
+      updater: (
+        settings: NonNullable<Project["recognitionSettings"]>
+      ) => Project["recognitionSettings"]
+    ) => {
+      if (!project || disabled) return;
+      onUpdateProject((current) => ({
+        ...current,
+        recognitionSettings: updater(current.recognitionSettings ?? {}),
+      }));
+    },
+    [disabled, onUpdateProject, project]
+  );
+
+  const setStopOnFiveStarCeDrop = useCallback(
+    (value: boolean) => {
+      updateRecognitionSettings((settings) => ({
+        ...settings,
+        stopOnFiveStarCeDrop: value,
+        fiveStarCeDropTargetCount: recognitionSettingsFiveStarCeDropTargetCount(settings),
+      }));
+    },
+    [updateRecognitionSettings]
+  );
+
+  const setTargetCount = useCallback(
+    (value: number) => {
+      const nextValue = normalizeFiveStarCeDropTargetCount(value);
+      updateRecognitionSettings((settings) => ({
+        ...settings,
+        fiveStarCeDropTargetCount: nextValue,
+      }));
+    },
+    [updateRecognitionSettings]
+  );
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Content className="settings-dialog">
+        <Flex className="settings-shell">
+          <Flex asChild direction="column" className="settings-nav">
+            <nav aria-label="高级设置导航">
+              <Box className="settings-nav-title">
+                <Dialog.Title size="4">高级设置</Dialog.Title>
+              </Box>
+              <Flex direction="column" gap="4">
+                <Flex direction="column" gap="3" className="settings-nav-group">
+                  <Text size="1" weight="bold" color="gray" className="settings-nav-group-label">
+                    战斗
+                  </Text>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    color="gray"
+                    data-active="true"
+                    aria-current="page"
+                    className="settings-nav-button"
+                  >
+                    <GearIcon width={15} height={15} />
+                    <Text size="2" weight="medium">
+                      战利品掉落
+                    </Text>
+                  </Button>
+                </Flex>
+              </Flex>
+            </nav>
+          </Flex>
+
+          <Flex direction="column" className="settings-content">
+            <Flex align="center" className="settings-content-header">
+              <Flex align="center" className="settings-content-header-inner">
+                <Text size="5" weight="bold">
+                  战利品掉落
+                </Text>
+              </Flex>
+              <Dialog.Close>
+                <IconButton type="button" variant="ghost" color="gray" aria-label="关闭高级设置">
+                  <Cross1Icon width={15} height={15} />
+                </IconButton>
+              </Dialog.Close>
+            </Flex>
+
+            <Box className="settings-content-scroll">
+              <Box className="settings-content-body">
+                <Box className="settings-section-panel">
+                  <Flex direction="column" gap="4" className="recognition-setting-block">
+                    <Flex
+                      align="start"
+                      justify="between"
+                      gap="4"
+                      wrap="wrap"
+                      className="basic-setting-row"
+                    >
+                      <Flex direction="column" gap="1" className="basic-setting-copy">
+                        <Text size="2" weight="bold">
+                          五星礼装掉落自动停止
+                        </Text>
+                        <Text size="1" color="gray">
+                          开启后在战利品结算页检测前两行，累计达到目标数量后停止
+                        </Text>
+                      </Flex>
+
+                      <Switch
+                        checked={stopOnFiveStarCeDrop}
+                        onCheckedChange={setStopOnFiveStarCeDrop}
+                        disabled={disabled || !project}
+                        aria-label="五星礼装掉落自动停止"
+                      />
+                    </Flex>
+
+                    {stopOnFiveStarCeDrop && (
+                      <Flex
+                        align="center"
+                        justify="between"
+                        gap="4"
+                        wrap="wrap"
+                        className="basic-setting-row"
+                      >
+                        <Flex direction="column" gap="1" className="basic-setting-copy">
+                          <Text size="2" weight="bold">
+                            掉落个数
+                          </Text>
+                          <Text size="1" color="gray">
+                            本次自动化运行内累计计算，默认 1
+                          </Text>
+                        </Flex>
+
+                        <Flex align="center" gap="2" className="battle-repeat-counter">
+                          <Button
+                            type="button"
+                            color="indigo"
+                            disabled={disabled || !project || targetCount <= 1}
+                            aria-label="减少五星礼装掉落个数"
+                            onClick={() => setTargetCount(targetCount - 1)}
+                          >
+                            <MinusIcon width={15} height={15} />
+                          </Button>
+                          <TextField.Root
+                            className="battle-counter-value"
+                            type="number"
+                            min="1"
+                            step="1"
+                            variant="soft"
+                            radius="none"
+                            inputMode="numeric"
+                            aria-label="五星礼装掉落个数"
+                            value={targetCount}
+                            disabled={disabled || !project}
+                            onChange={(event) => {
+                              const parsed = Number(event.currentTarget.value);
+                              if (Number.isInteger(parsed) && parsed > 0) {
+                                setTargetCount(parsed);
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            disabled={disabled || !project}
+                            color="indigo"
+                            aria-label="增加五星礼装掉落个数"
+                            onClick={() => setTargetCount(targetCount + 1)}
+                          >
+                            <PlusIcon width={15} height={15} />
+                          </Button>
+                        </Flex>
+                      </Flex>
+                    )}
+                  </Flex>
+                </Box>
+              </Box>
+            </Box>
+          </Flex>
+        </Flex>
+      </Dialog.Content>
+    </Dialog.Root>
+  );
+}
+
 export function BattlePage({
   projects,
   activeProjectId,
@@ -151,6 +380,7 @@ export function BattlePage({
   const [running, setRunning] = useState(false);
   const [rainbowConfirmOpen, setRainbowConfirmOpen] = useState(false);
   const [stopAfterCurrentRequested, setStopAfterCurrentRequested] = useState(false);
+  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
   const [draft, setDraft] = useState<BattleProjectDraft | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const draftRef = useRef<BattleProjectDraft | null>(null);
@@ -243,6 +473,7 @@ export function BattlePage({
         ) ?? [];
     const maxMissionRuns =
       latestDraft.repeatMode === "count" ? latestDraft.repeatCount : null;
+    const stopOnFiveStarCeDrop = projectStopsOnFiveStarCeDrop(selectedProject);
     const config = {
       projectId: selectedProject.id,
       partyOrder: null,
@@ -277,6 +508,10 @@ export function BattlePage({
       repeatMission: latestDraft.repeatMode === "infinite",
       maxMissionRuns,
       apRecoveryItems: latestDraft.apRecoveryItems,
+      stopOnFiveStarCeDrop,
+      fiveStarCeDropTargetCount: stopOnFiveStarCeDrop
+        ? projectFiveStarCeDropTargetCount(selectedProject)
+        : DEFAULT_FIVE_STAR_CE_DROP_TARGET_COUNT,
     };
 
     invoke("start_automation", { config }).catch((err) => {
@@ -517,6 +752,16 @@ export function BattlePage({
             <ChevronLeftIcon width={16} height={16} />
             <Text size="2">返回</Text>
           </Button>
+          <Button
+            type="button"
+            variant="soft"
+            color="gray"
+            disabled={running || !selectedProject}
+            onClick={() => setAdvancedSettingsOpen(true)}
+          >
+            <GearIcon width={16} height={16} />
+            <Text size="2">高级设置</Text>
+          </Button>
         </Flex>
         <Flex align="center" gap="3" wrap="wrap" justify="end">
           <Button
@@ -535,6 +780,14 @@ export function BattlePage({
           </Button>
         </Flex>
       </Flex>
+
+      <BattleAdvancedSettingsDialog
+        open={advancedSettingsOpen}
+        project={selectedProject}
+        disabled={running}
+        onOpenChange={setAdvancedSettingsOpen}
+        onUpdateProject={updateSelectedProject}
+      />
 
       <AlertDialog.Root open={rainbowConfirmOpen} onOpenChange={setRainbowConfirmOpen}>
         <AlertDialog.Content maxWidth="420px">

@@ -70,6 +70,11 @@ describe("SettingsDialog", () => {
           verifySkillActivation: false,
         };
       }
+      if (cmd === "get_debug_settings") {
+        return {
+          autoCaptureBattleResultLoot: false,
+        };
+      }
       if (cmd === "set_noble_phantasm_detection_mode") {
         return {
           noblePhantasmDetectionMode: "gauge",
@@ -166,6 +171,11 @@ describe("SettingsDialog", () => {
           verifySkillActivation: Boolean(argValue(args)),
         };
       }
+      if (cmd === "set_auto_capture_battle_result_loot") {
+        return {
+          autoCaptureBattleResultLoot: Boolean(argValue(args)),
+        };
+      }
       return null;
     });
   });
@@ -203,11 +213,29 @@ describe("SettingsDialog", () => {
     expect(screen.getByText("应用")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "基础设置" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "阈值设置" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "调试" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "队伍管理" }));
 
     expect(await screen.findByRole("button", { name: "导入队伍" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导出队伍" })).toBeInTheDocument();
+  });
+
+  it("loads and saves debug settings from the debug page", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="debug" />);
+
+    expect(await screen.findByText("自动截图战利品页面")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("get_debug_settings");
+
+    await user.click(screen.getByRole("switch", { name: "自动截图战利品页面" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_auto_capture_battle_result_loot", {
+        value: true,
+      });
+    });
+    expect(await screen.findByText("已保存")).toBeInTheDocument();
   });
 
   it("loads and saves the support CE recognition threshold", async () => {

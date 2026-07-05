@@ -352,6 +352,84 @@ describe("BattlePage", () => {
     });
   });
 
+  it("opens advanced loot settings and persists five-star CE drop options", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage(PROJECT);
+
+    await user.click(await screen.findByRole("button", { name: "高级设置" }));
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("战利品掉落");
+    await user.click(screen.getByRole("switch", { name: "五星礼装掉落自动停止" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("update_project", {
+        project: expect.objectContaining({
+          id: "project-1",
+          recognitionSettings: expect.objectContaining({
+            stopOnFiveStarCeDrop: true,
+            fiveStarCeDropTargetCount: 1,
+          }),
+        }),
+      });
+    });
+
+    expect(await screen.findByRole("spinbutton", { name: "五星礼装掉落个数" })).toHaveValue(1);
+    await user.click(screen.getByRole("button", { name: "增加五星礼装掉落个数" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("update_project", {
+        project: expect.objectContaining({
+          id: "project-1",
+          recognitionSettings: expect.objectContaining({
+            stopOnFiveStarCeDrop: true,
+            fiveStarCeDropTargetCount: 2,
+          }),
+        }),
+      });
+    });
+  });
+
+  it("passes enabled five-star CE drop stop settings to automation", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage({
+      ...PROJECT,
+      recognitionSettings: {
+        stopOnFiveStarCeDrop: true,
+        fiveStarCeDropTargetCount: 3,
+      },
+    });
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("start_automation", {
+        config: expect.objectContaining({
+          stopOnFiveStarCeDrop: true,
+          fiveStarCeDropTargetCount: 3,
+        }),
+      });
+    });
+  });
+
+  it("passes disabled five-star CE drop stop settings to automation by default", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage(PROJECT);
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("start_automation", {
+        config: expect.objectContaining({
+          stopOnFiveStarCeDrop: false,
+          fiveStarCeDropTargetCount: 1,
+        }),
+      });
+    });
+  });
+
   it("saves saint quartz on switch toggle and warns before start", async () => {
     const user = userEvent.setup();
     mockProjectCommands();

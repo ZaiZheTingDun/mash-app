@@ -63,6 +63,7 @@
       "resources/servers/cn/templates/digit-type-3/*",
       "resources/servers/cn/templates/digit-type-crit/*",
       "resources/servers/cn/templates/items/*",
+      "resources/images/*",
       "resources/adb/*",
       "resources/scrcpy/scrcpy-server.jar",
       "src/resources/servants.json",

@@ -4,6 +4,7 @@
 //! pages, skipping friend requests, and deciding whether to repeat a quest.
 
 use super::*;
+use crate::paths::app_data_dir;
 
 // ---------------------------------------------------------------------------
 // Battle-result tap targets. Each post-battle page has a single forward
@@ -44,6 +45,38 @@ pub(crate) const BATTLE_RESULT_TAP_INTERVAL: Duration = Duration::from_millis(30
 /// level-up cascade).
 pub(crate) const BATTLE_RESULT_TAP_TIMEOUT: Duration = Duration::from_secs(10);
 const BATTLE_RESULT_BOND_LEVEL_UP_LABEL: &str = "BattleResultBondLevelUp";
+const FIVE_STAR_CE_TEMPLATE_RELATIVE_PATH: &[&str] = &["images", "stars_5.png"];
+const FIVE_STAR_CE_THRESHOLD: f64 = 0.55;
+const FIVE_STAR_CE_REFERENCE_W: f64 = 1920.0;
+const FIVE_STAR_CE_REFERENCE_H: f64 = 1080.0;
+const FIVE_STAR_CE_GRID_COLS: usize = 7;
+const FIVE_STAR_CE_GRID_ROWS_TO_CHECK: usize = 2;
+const FIVE_STAR_CE_CELL_W: f64 = 177.0;
+const FIVE_STAR_CE_CELL_H: f64 = 194.0;
+const FIVE_STAR_CE_GRID_X0: f64 = 232.0;
+const FIVE_STAR_CE_GRID_Y0: f64 = 131.0;
+const FIVE_STAR_CE_GRID_X_GAPS: [f64; 6] = [29.0, 29.0, 30.0, 29.0, 29.0, 29.0];
+const FIVE_STAR_CE_GRID_Y_GAP: f64 = 19.0;
+const FIVE_STAR_CE_SEARCH_IN_CELL: NormRect = NormRect {
+    x: 0.435,
+    y: 0.737,
+    w: 0.548,
+    h: 0.160,
+};
+const FIVE_STAR_CE_TEMPLATE_REFERENCE_SIZE: (u32, u32) = (88, 20);
+const FULL_TEMPLATE_CROP: NormRect = NormRect {
+    x: 0.0,
+    y: 0.0,
+    w: 1.0,
+    h: 1.0,
+};
+const LOOT_SCREENSHOT_WAIT_SECONDS: f64 = 0.2;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FiveStarCeDropStopAction {
+    Continue,
+    Stop,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BondResultStopAction {
@@ -72,6 +105,79 @@ pub(crate) fn bond_result_stop_action(
         return BondResultStopAction::StopOnMaxLevel;
     }
     BondResultStopAction::Continue
+}
+
+pub(crate) fn five_star_ce_drop_target_count(value: u32) -> u32 {
+    value.max(1)
+}
+
+pub(crate) fn five_star_ce_drop_stop_action(
+    current_total: u32,
+    new_drops: u32,
+    target_count: u32,
+) -> (u32, FiveStarCeDropStopAction) {
+    let next_total = current_total.saturating_add(new_drops);
+    let action = if next_total >= five_star_ce_drop_target_count(target_count) {
+        FiveStarCeDropStopAction::Stop
+    } else {
+        FiveStarCeDropStopAction::Continue
+    };
+    (next_total, action)
+}
+
+pub(crate) fn five_star_ce_drop_regions() -> Vec<NormRect> {
+    let mut regions = Vec::with_capacity(FIVE_STAR_CE_GRID_COLS * FIVE_STAR_CE_GRID_ROWS_TO_CHECK);
+    let mut col_x = [0.0; FIVE_STAR_CE_GRID_COLS];
+    col_x[0] = FIVE_STAR_CE_GRID_X0;
+    for col in 1..FIVE_STAR_CE_GRID_COLS {
+        col_x[col] = col_x[col - 1] + FIVE_STAR_CE_CELL_W + FIVE_STAR_CE_GRID_X_GAPS[col - 1];
+    }
+
+    for row in 0..FIVE_STAR_CE_GRID_ROWS_TO_CHECK {
+        let cell_y =
+            FIVE_STAR_CE_GRID_Y0 + row as f64 * (FIVE_STAR_CE_CELL_H + FIVE_STAR_CE_GRID_Y_GAP);
+        for cell_x in col_x {
+            let x = cell_x + FIVE_STAR_CE_CELL_W * FIVE_STAR_CE_SEARCH_IN_CELL.x;
+            let y = cell_y + FIVE_STAR_CE_CELL_H * FIVE_STAR_CE_SEARCH_IN_CELL.y;
+            let w = FIVE_STAR_CE_CELL_W * FIVE_STAR_CE_SEARCH_IN_CELL.w;
+            let h = FIVE_STAR_CE_CELL_H * FIVE_STAR_CE_SEARCH_IN_CELL.h;
+            regions.push(NormRect {
+                x: x / FIVE_STAR_CE_REFERENCE_W,
+                y: y / FIVE_STAR_CE_REFERENCE_H,
+                w: w / FIVE_STAR_CE_REFERENCE_W,
+                h: h / FIVE_STAR_CE_REFERENCE_H,
+            });
+        }
+    }
+    regions
+}
+
+pub(crate) fn five_star_ce_template_size(screen_w: u32, screen_h: u32) -> (u32, u32) {
+    let width_scale = screen_w as f64 / FIVE_STAR_CE_REFERENCE_W;
+    let height_scale = screen_h as f64 / FIVE_STAR_CE_REFERENCE_H;
+    (
+        ((FIVE_STAR_CE_TEMPLATE_REFERENCE_SIZE.0 as f64 * width_scale).round() as u32).max(1),
+        ((FIVE_STAR_CE_TEMPLATE_REFERENCE_SIZE.1 as f64 * height_scale).round() as u32).max(1),
+    )
+}
+
+pub(crate) fn battle_result_loot_screenshot_dir(app: &tauri::AppHandle) -> PathBuf {
+    battle_result_loot_screenshot_dir_in_root(&app_data_dir(app))
+}
+
+pub(crate) fn battle_result_loot_screenshot_dir_in_root(root: &Path) -> PathBuf {
+    root.join("debug").join("loot-screenshots")
+}
+
+pub(crate) fn battle_result_loot_screenshot_filename(
+    timestamp: std::time::SystemTime,
+    completed_mission_runs: u32,
+) -> String {
+    let millis = timestamp
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("loot-{millis:013}-run{:04}.jpg", completed_mission_runs + 1,)
 }
 
 pub(crate) fn is_battle_result_screen(screen: Screen) -> bool {
@@ -173,10 +279,113 @@ impl Runner {
     }
 
     pub(crate) fn handle_battle_result_loot(&mut self) {
+        if self.battle_result_loot_handled {
+            self.emit("BattleResultLoot", "等待掉落结算页切换…");
+            thread::sleep(ACTION_DELAY);
+            return;
+        }
+        self.battle_result_loot_handled = true;
+
+        if self.config.auto_capture_battle_result_loot {
+            match self.capture_battle_result_loot_screenshot() {
+                Ok(path) => self.emit(
+                    "BattleResultLoot",
+                    &format!("战利品截图已保存: {}", path.display()),
+                ),
+                Err(err) => self.emit_warn(
+                    "BattleResultLoot",
+                    &format!("战利品截图保存失败，继续结算流程: {err}"),
+                ),
+            }
+        }
+
+        if self.config.stop_on_five_star_ce_drop {
+            let target = five_star_ce_drop_target_count(self.config.five_star_ce_drop_target_count);
+            match self.count_visible_five_star_ce_drops() {
+                Ok(new_drops) => {
+                    let (next_total, action) = five_star_ce_drop_stop_action(
+                        self.five_star_ce_drop_count,
+                        new_drops,
+                        target,
+                    );
+                    self.five_star_ce_drop_count = next_total;
+                    self.emit(
+                        "BattleResultLoot",
+                        &format!(
+                            "本场检测到五星礼装掉落 {new_drops} 个，累计 {next_total}/{target}"
+                        ),
+                    );
+                    if action == FiveStarCeDropStopAction::Stop {
+                        self.emit(
+                            "BattleResultLoot",
+                            &format!("五星礼装掉落累计达到 {target} 个，自动停止"),
+                        );
+                        self.set_state(RunnerState::Finished);
+                        return;
+                    }
+                }
+                Err(err) => {
+                    self.emit_warn(
+                        "BattleResultLoot",
+                        &format!("五星礼装掉落检测失败，继续结算流程: {err}"),
+                    );
+                }
+            }
+        }
+
         self.emit("BattleResultLoot", "掉落结算，前往下一画面");
         if self.tap_at("BattleResultLoot", BATTLE_RESULT_LOOT_NEXT) {
             thread::sleep(ACTION_DELAY);
         }
+    }
+
+    fn count_visible_five_star_ce_drops(&mut self) -> Result<u32, String> {
+        let mut path = self
+            .app_handle
+            .path()
+            .resource_dir()
+            .map_err(|err| format!("无法解析资源目录: {err}"))?;
+        for part in FIVE_STAR_CE_TEMPLATE_RELATIVE_PATH {
+            path.push(part);
+        }
+        if !path.is_file() {
+            return Err(format!("未找到五星礼装星级模板: {}", path.display()));
+        }
+
+        let template_size = five_star_ce_template_size(self.frame_w, self.frame_h);
+        let mut count = 0;
+        for region in five_star_ce_drop_regions() {
+            let found = self
+                .sidecar()
+                .find_region_with_template_crop(
+                    None,
+                    &path,
+                    region,
+                    FULL_TEMPLATE_CROP,
+                    Some(template_size),
+                    FIVE_STAR_CE_THRESHOLD,
+                )?
+                .is_some();
+            if found {
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
+
+    fn capture_battle_result_loot_screenshot(&mut self) -> Result<PathBuf, String> {
+        let dir = battle_result_loot_screenshot_dir(&self.app_handle);
+        std::fs::create_dir_all(&dir).map_err(|err| format!("创建战利品截图目录失败: {err}"))?;
+        let path = dir.join(battle_result_loot_screenshot_filename(
+            std::time::SystemTime::now(),
+            self.completed_mission_runs,
+        ));
+        let jpeg = self
+            .sidecar()
+            .get_frame_jpeg(LOOT_SCREENSHOT_WAIT_SECONDS)
+            .map_err(|err| format!("获取视频帧失败: {err}"))?;
+        std::fs::write(&path, jpeg).map_err(|err| format!("写入截图失败: {err}"))?;
+        Ok(path)
     }
 
     pub(crate) fn handle_battle_result_friend_request(&mut self) {

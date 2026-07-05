@@ -17,4 +17,6 @@ export interface ProjectRecognitionSettings {
   supportMlbIconThreshold?: number;
   supportBondIconThreshold?: number;
   verifySkillActivation?: boolean;
+  stopOnFiveStarCeDrop?: boolean;
+  fiveStarCeDropTargetCount?: number;
 }

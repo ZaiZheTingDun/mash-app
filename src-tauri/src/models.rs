@@ -648,6 +648,10 @@ pub struct ProjectRecognitionSettings {
     pub support_bond_icon_threshold: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verify_skill_activation: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop_on_five_star_ce_drop: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub five_star_ce_drop_target_count: Option<u32>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

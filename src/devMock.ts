@@ -93,6 +93,7 @@ let noblePhantasmDetectionMode: "card" | "gauge" = "card";
 let stopOnBondLevelUp = false;
 let stopOnBondMaxLevel = false;
 let verifySkillActivation = false;
+let autoCaptureBattleResultLoot = false;
 let nextProjectNumber = 2;
 let activeProjectId: string | null = "dev-project-1";
 let appTheme: "light" | "dark" | "system" | null = null;
@@ -180,6 +181,12 @@ function recognitionSettings() {
     stopOnBondLevelUp,
     stopOnBondMaxLevel,
     verifySkillActivation,
+  };
+}
+
+function debugSettings() {
+  return {
+    autoCaptureBattleResultLoot,
   };
 }
 
@@ -376,6 +383,8 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return null as T;
     case "get_recognition_settings":
       return recognitionSettings() as T;
+    case "get_debug_settings":
+      return debugSettings() as T;
     case "set_noble_phantasm_detection_mode":
       if (args.value === "card" || args.value === "gauge") {
         noblePhantasmDetectionMode = args.value;
@@ -417,6 +426,9 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "set_verify_skill_activation":
       verifySkillActivation = Boolean(args.value);
       return recognitionSettings() as T;
+    case "set_auto_capture_battle_result_loot":
+      autoCaptureBattleResultLoot = Boolean(args.value);
+      return debugSettings() as T;
     case "pick_asset_bundle":
     case "pick_runtime_bundle":
     case "get_servant_portrait_path":
