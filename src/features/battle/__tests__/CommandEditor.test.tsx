@@ -169,6 +169,162 @@ describe("CommandEditor pagination", () => {
     });
   });
 
+  it("shows advanced startup targets when the selected servant skill targets one ally", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      const servantId =
+        args && !Array.isArray(args) && typeof args === "object" && "servantId" in args
+          ? args.servantId
+          : null;
+      if (cmd === "get_servant_skill_targeting" && servantId === 1) {
+        return [
+          {
+            servantCollectionNo: 1,
+            skillId: 101,
+            skillNum: 1,
+            funcTargetTypes: ["ptOne"],
+          },
+        ];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    await screen.findByRole("button", { name: "添加启动行动" });
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_servant_skill_targeting", {
+        servantId: 1,
+        variantKey: "1",
+      });
+    });
+    await user.click(screen.getByRole("button", { name: "添加启动行动" }));
+    const sourceButtons = screen.getAllByRole("button", { name: "甲" });
+    await user.click(sourceButtons[sourceButtons.length - 1]);
+    await user.click(screen.getByRole("button", { name: "技能 1" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "无目标" })).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByRole("button", { name: "甲" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "乙" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "丙" }).length).toBeGreaterThan(0);
+  });
+
+  it("saves advanced startup servant skills without targets when targeting is not required", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_skill_targeting") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    await screen.findByRole("button", { name: "添加启动行动" });
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_servant_skill_targeting", {
+        servantId: 1,
+        variantKey: "1",
+      });
+    });
+    await user.click(screen.getByRole("button", { name: "添加启动行动" }));
+    const sourceButtons = screen.getAllByRole("button", { name: "甲" });
+    await user.click(sourceButtons[sourceButtons.length - 1]);
+    await user.click(screen.getByRole("button", { name: "技能 1" }));
+
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "save_advanced_battle_scenes",
+        expect.objectContaining({
+          projectId: "project_1",
+          scenes: [
+            expect.objectContaining({
+              startupActions: [
+                expect.objectContaining({
+                  type: "servant",
+                  servant: "servant_1",
+                  skill: "skill_1",
+                  target: null,
+                }),
+              ],
+            }),
+          ],
+        })
+      );
+    });
+    expect(screen.queryByRole("button", { name: "无目标" })).not.toBeInTheDocument();
+  });
+
+  it("keeps showing advanced startup targets when automatic skill target recognition is disabled", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [];
+      }
+      if (cmd === "get_servant_skill_targeting") {
+        return [];
+      }
+      if (cmd === "get_servant_face_path") {
+        return null;
+      }
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        disableAutoSkillTargetRecognition
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    await user.click(await screen.findByRole("button", { name: "添加启动行动" }));
+    const sourceButtons = screen.getAllByRole("button", { name: "甲" });
+    await user.click(sourceButtons[sourceButtons.length - 1]);
+    await user.click(screen.getByRole("button", { name: "技能 1" }));
+
+    expect(await screen.findByRole("button", { name: "无目标" })).toBeInTheDocument();
+  });
+
   it("renders advanced equipment actions with a square actor icon", async () => {
     const scene: AdvancedBattleScene = {
       id: "advanced_1",

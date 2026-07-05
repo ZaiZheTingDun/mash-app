@@ -269,6 +269,7 @@ pub(crate) fn new_project(name: String, advanced_mode: bool, grand_class: GrandC
         support_skill_level_mins: default_support_skill_level_mins(),
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
         recognition_settings: None,
+        disable_auto_skill_target_recognition: false,
         slots: default_project_slots(),
         repeat_mission: false,
         repeat_mode: Some(ProjectRepeatMode::Single),

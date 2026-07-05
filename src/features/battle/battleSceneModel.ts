@@ -13,7 +13,7 @@ export type EnemyTarget = `enemy_${1 | 2 | 3 | 4 | 5 | 6}`;
 export type PrepDraft =
   | { step: "source" }
   | { step: "option"; source: PrepSource }
-  | { step: "target"; source: PrepSource; option: string }
+  | { step: "target"; source: PrepSource; option: string; allowNoTarget?: boolean }
   | {
     step: "orderChange";
     source: "equipment";

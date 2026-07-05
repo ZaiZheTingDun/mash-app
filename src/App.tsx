@@ -694,6 +694,9 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
                     partyLineup={partyLineup}
                     partyMembers={partyMembers}
                     advancedMode={activeProject?.advancedMode === true}
+                    disableAutoSkillTargetRecognition={
+                      activeProject?.disableAutoSkillTargetRecognition === true
+                    }
                     grandServants={activeProject?.grandServants ?? []}
                     grandClass={activeProject?.grandClass ?? "saber"}
                     grandCardStrategy={activeProject?.grandCardStrategy}

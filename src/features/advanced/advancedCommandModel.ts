@@ -22,7 +22,7 @@ export type PrepSource = "equipment" | "commandSpell" | PartySlot;
 export type PrepDraft =
   | { step: "source" }
   | { step: "option"; source: PrepSource }
-  | { step: "target"; source: PrepSource; option: string }
+  | { step: "target"; source: PrepSource; option: string; allowNoTarget?: boolean }
   | { step: "orderChange"; source: "equipment"; option: string; front: PartySlot | null };
 
 export const SKILLS = ["skill_1", "skill_2", "skill_3"] as const;

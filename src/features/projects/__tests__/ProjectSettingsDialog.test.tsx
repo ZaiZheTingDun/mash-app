@@ -158,4 +158,33 @@ describe("ProjectSettingsDialog", () => {
       });
     });
   });
+
+  it("saves the project auto skill target recognition override", async () => {
+    const user = userEvent.setup();
+    const onUpdateProject = vi.fn().mockResolvedValue(undefined);
+    const project = makeProject();
+    renderWithTheme(
+      <ProjectSettingsDialog
+        open
+        project={project}
+        onOpenChange={vi.fn()}
+        onUpdateProject={onUpdateProject}
+      />
+    );
+
+    const trigger = await screen.findByRole("combobox", {
+      name: "关闭自动技能目标识别",
+    });
+    expect(trigger).toHaveTextContent("关闭");
+
+    await user.click(trigger);
+    await user.click(await screen.findByRole("option", { name: "开启" }));
+
+    await waitFor(() => {
+      expect(onUpdateProject).toHaveBeenCalledWith({
+        ...project,
+        disableAutoSkillTargetRecognition: true,
+      });
+    });
+  });
 });

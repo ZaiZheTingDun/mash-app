@@ -11,6 +11,7 @@ import { battleActorLabel, servantLabel } from "../../components/common/battleAc
 import { useServantFaceImages } from "../team/useServantFaceImages";
 import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIcons";
 import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
+import { useServantSkillTargeting } from "./useServantSkillTargeting";
 import {
   deriveMembersAfterAttackCards,
   deriveMembersAfterPreparationActions,
@@ -53,6 +54,7 @@ interface BattleSceneBlockProps {
   scene: BattleTurn;
   partyServants: (Servant | null)[];
   partyMembers?: PartyMember[];
+  disableAutoSkillTargetRecognition?: boolean;
   onChange: (updated: BattleTurn) => void;
 }
 
@@ -456,6 +458,7 @@ export function BattleSceneBlock({
   scene,
   partyServants,
   partyMembers,
+  disableAutoSkillTargetRecognition = false,
   onChange,
 }: BattleSceneBlockProps) {
   const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
@@ -467,6 +470,7 @@ export function BattleSceneBlock({
   const initialPartyServants = partyMembersToServants(initialPartyMembers);
   const faces = useServantFaceImages(initialPartyServants);
   const skillIcons = useServantSkillIcons(initialPartyServants);
+  const skillTargetStatus = useServantSkillTargeting(initialPartyServants);
   const preparationActions = useMemo(
     () =>
       scene.preparationActions ??
@@ -584,6 +588,24 @@ export function BattleSceneBlock({
     }
     updatePreparationActions([...preparationActions, action]);
     setPrepDraft(null);
+  };
+
+  const selectPrepSkill = (source: PrepSource, skill: string) => {
+    if (source === "equipment" || disableAutoSkillTargetRecognition) {
+      setPrepDraft({ step: "target", source, option: skill });
+      return;
+    }
+    const servant = currentPartyMembers[sourceIndex(source) ?? 0]?.servant ?? null;
+    const status = skillTargetStatus(servant, skill);
+    const draft = { step: "target", source, option: skill } satisfies Extract<
+      PrepDraft,
+      { step: "target" }
+    >;
+    if (status === "noTarget") {
+      finishPrepAction(draft, null);
+      return;
+    }
+    setPrepDraft(status === "needsTarget" ? { ...draft, allowNoTarget: false } : draft);
   };
 
   const finishOrderChangeAction = (
@@ -842,20 +864,22 @@ export function BattleSceneBlock({
                             : null
                         }
                         skillIcons={skillIcons}
-                        onSelect={(skill) => setPrepDraft({ step: "target", source: prepDraft.source, option: skill })}
+                        onSelect={(skill) => selectPrepSkill(prepDraft.source, skill)}
                       />
                     )}
                 </div>
               </div>
             ) : prepDraft.step === "target" ? (
               <div className="battle-choice-row">
-                <button
-                  type="button"
-                  className="battle-option-btn"
-                  onClick={() => finishPrepAction(prepDraft, null)}
-                >
-                  无目标
-                </button>
+                {prepDraft.allowNoTarget !== false && (
+                  <button
+                    type="button"
+                    className="battle-option-btn"
+                    onClick={() => finishPrepAction(prepDraft, null)}
+                  >
+                    无目标
+                  </button>
+                )}
                 {currentPartyMembers.slice(0, 3).map((member, index) => {
                   const servant = member.servant;
                   return (

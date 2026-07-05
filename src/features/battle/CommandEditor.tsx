@@ -24,6 +24,7 @@ interface CommandEditorProps {
   partyLineup: (Servant | null)[];
   partyMembers?: PartyMember[];
   advancedMode?: boolean;
+  disableAutoSkillTargetRecognition?: boolean;
   grandServants?: GrandServantConfig[];
   grandClass?: GrandClass;
   grandCardStrategy?: GrandCardStrategy;
@@ -127,6 +128,7 @@ export function CommandEditor({
   partyLineup,
   partyMembers,
   advancedMode = false,
+  disableAutoSkillTargetRecognition = false,
   grandServants = [],
   grandClass = "saber",
   grandCardStrategy,
@@ -255,6 +257,7 @@ export function CommandEditor({
         projectId={projectId}
         partyLineup={partyLineup}
         partyMembers={initialPartyMembers}
+        disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
         grandServants={grandServants}
         grandClass={grandClass}
         grandCardStrategy={grandCardStrategy}
@@ -370,6 +373,7 @@ export function CommandEditor({
           scene={activeTurn}
           partyServants={activeParty}
           partyMembers={activePartyMembers}
+          disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
           onChange={(updated) => handleTurnChange(activeScene.id, activeTurn.id, updated)}
         />
       </div>

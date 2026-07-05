@@ -119,6 +119,7 @@ export interface Project {
   supportSkillLevelMins?: SupportSkillLevelMins;
   supportAppendSkillLevelMins?: SupportAppendSkillLevelMins;
   recognitionSettings?: ProjectRecognitionSettings | null;
+  disableAutoSkillTargetRecognition?: boolean;
   /**
    * Team-builder grid layout (5 servant slots + 1 support slot, in
    * arrangement order). Persisted on the backend so selections and

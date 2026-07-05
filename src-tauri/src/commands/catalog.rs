@@ -685,9 +685,37 @@ pub(crate) struct SkillIconEntry {
     pub(crate) name: String,
 }
 
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SkillTargetingEntry {
+    pub(crate) servant_collection_no: u32,
+    pub(crate) skill_id: u32,
+    pub(crate) skill_num: u32,
+    pub(crate) func_target_types: Vec<String>,
+}
+
 struct ServantSkillMaps {
     icon_map: HashMap<u32, String>,
     name_map: HashMap<u32, String>,
+    target_type_map: HashMap<u32, Vec<String>>,
+}
+
+fn skill_target_types(skill: &serde_json::Value) -> Vec<String> {
+    let mut values = skill
+        .get("functions")
+        .and_then(|v| v.as_array())
+        .map(|functions| {
+            functions
+                .iter()
+                .filter_map(|func| func.get("funcTargetType").and_then(|v| v.as_str()))
+                .filter(|value| matches!(*value, "ptOne" | "ptOneOther"))
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    values.sort();
+    values.dedup();
+    values
 }
 
 fn parse_servant_skill_maps(
@@ -723,6 +751,19 @@ fn parse_servant_skill_maps(
         })
         .unwrap_or_default();
 
+    let target_type_map: HashMap<u32, Vec<String>> = skills
+        .map(|skills| {
+            skills
+                .iter()
+                .filter_map(|skill| {
+                    let id = skill.get("id")?.as_u64()? as u32;
+                    let target_types = skill_target_types(skill);
+                    (!target_types.is_empty()).then_some((id, target_types))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     if let Some(cn) = cn_json {
         if let Some(skills) = cn.get("skills").and_then(|v| v.as_array()) {
             for skill in skills {
@@ -736,7 +777,11 @@ fn parse_servant_skill_maps(
         }
     }
 
-    ServantSkillMaps { icon_map, name_map }
+    ServantSkillMaps {
+        icon_map,
+        name_map,
+        target_type_map,
+    }
 }
 
 fn variant_skill_ids(
@@ -841,6 +886,33 @@ pub(crate) fn get_skill_icon_paths(
     })
 }
 
+#[tauri::command]
+pub(crate) fn get_servant_skill_targeting(
+    app: tauri::AppHandle,
+    servant_id: u32,
+    variant_key: String,
+) -> Result<Vec<SkillTargetingEntry>, String> {
+    let skill_ids = variant_skill_ids(variants_raw_data(), servant_id, &variant_key)
+        .ok_or_else(|| format!("未找到从者技能配置: {servant_id} ({variant_key})"))?;
+    let maps = servant_skill_maps(&app, servant_id)
+        .ok_or_else(|| format!("未找到从者资源: {servant_id}"))?;
+
+    Ok(skill_ids
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, maybe_id)| {
+            let skill_id = maybe_id?;
+            let func_target_types = maps.target_type_map.get(&skill_id)?.clone();
+            Some(SkillTargetingEntry {
+                servant_collection_no: servant_id,
+                skill_id,
+                skill_num: index as u32 + 1,
+                func_target_types,
+            })
+        })
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -872,6 +944,42 @@ mod tests {
         );
         assert_eq!(maps.name_map.get(&11).map(String::as_str), Some("CN 一技"));
         assert_eq!(maps.name_map.get(&22).map(String::as_str), Some("JP 二技"));
+    }
+
+    #[test]
+    fn parse_servant_skill_maps_extracts_ally_target_skill_types() {
+        let jp = json!({
+            "skills": [
+                {
+                    "id": 11,
+                    "name": "target ally",
+                    "functions": [
+                        { "funcTargetType": "ptOneOther" },
+                        { "funcTargetType": "enemy" },
+                        { "funcTargetType": "ptOne" },
+                        { "funcTargetType": "ptOne" }
+                    ]
+                },
+                {
+                    "id": 22,
+                    "name": "no ally target",
+                    "functions": [
+                        { "funcTargetType": "enemy" },
+                        { "funcTargetType": "ptAll" }
+                    ]
+                },
+                { "id": 33, "name": "no functions" }
+            ]
+        });
+
+        let maps = parse_servant_skill_maps(&jp, None);
+
+        assert_eq!(
+            maps.target_type_map.get(&11),
+            Some(&vec!["ptOne".to_string(), "ptOneOther".to_string()])
+        );
+        assert!(!maps.target_type_map.contains_key(&22));
+        assert!(!maps.target_type_map.contains_key(&33));
     }
 
     #[test]

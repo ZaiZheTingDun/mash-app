@@ -702,6 +702,8 @@ pub struct Project {
     /// project inherits the global recognition settings.
     #[serde(default)]
     pub recognition_settings: Option<ProjectRecognitionSettings>,
+    #[serde(default)]
+    pub disable_auto_skill_target_recognition: bool,
     /// Team-builder grid layout (chosen servants + slot order). Persisted
     /// so the user's selections survive app restarts and project switches.
     /// Defaulted via `default_project_slots` for legacy rows.

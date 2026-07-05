@@ -132,6 +132,21 @@ export function ProjectSettingsDialog({
     [onUpdateProject, project]
   );
 
+  const autoSkillTargetRecognitionValue = project?.disableAutoSkillTargetRecognition
+    ? "disabled"
+    : "enabled";
+
+  const saveAutoSkillTargetRecognition = useCallback(
+    async (value: string) => {
+      if (!project) return;
+      await onUpdateProject({
+        ...project,
+        disableAutoSkillTargetRecognition: value === "disabled",
+      });
+    },
+    [onUpdateProject, project]
+  );
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content className="settings-dialog">
@@ -204,31 +219,53 @@ export function ProjectSettingsDialog({
               <Box className="settings-content-body">
                 {section === "basic" ? (
                   <Box className="settings-section-panel">
-                    <Flex align="center" justify="between" gap="4" wrap="wrap">
-                      <Flex direction="column" gap="1">
-                        <Text size="2" weight="bold">
-                          技能使用确认
-                        </Text>
-                        <Text size="1" color="gray">
-                          开启后会确认技能使用成功，失败会进行重试，一般无需开启
-                        </Text>
-                        <Text size="1" color="gray">
-                          全局当前：{inheritedVerifySkillActivationLabel}
-                        </Text>
+                    <Flex direction="column" gap="4">
+                      <Flex align="center" justify="between" gap="4" wrap="wrap">
+                        <Flex direction="column" gap="1">
+                          <Text size="2" weight="bold">
+                            技能使用确认
+                          </Text>
+                          <Text size="1" color="gray">
+                            开启后会确认技能使用成功，失败会进行重试，一般无需开启
+                          </Text>
+                          <Text size="1" color="gray">
+                            全局当前：{inheritedVerifySkillActivationLabel}
+                          </Text>
+                        </Flex>
+                        <Select.Root
+                          value={verifySkillActivationValue}
+                          onValueChange={(value) => void saveVerifySkillActivationOverride(value)}
+                        >
+                          <Select.Trigger aria-label="队伍技能使用确认" />
+                          <Select.Content>
+                            <Select.Item value="inherit">
+                              继承全局（{inheritedVerifySkillActivationLabel}）
+                            </Select.Item>
+                            <Select.Item value="enabled">开启</Select.Item>
+                            <Select.Item value="disabled">关闭</Select.Item>
+                          </Select.Content>
+                        </Select.Root>
                       </Flex>
-                      <Select.Root
-                        value={verifySkillActivationValue}
-                        onValueChange={(value) => void saveVerifySkillActivationOverride(value)}
-                      >
-                        <Select.Trigger aria-label="队伍技能使用确认" />
-                        <Select.Content>
-                          <Select.Item value="inherit">
-                            继承全局（{inheritedVerifySkillActivationLabel}）
-                          </Select.Item>
-                          <Select.Item value="enabled">开启</Select.Item>
-                          <Select.Item value="disabled">关闭</Select.Item>
-                        </Select.Content>
-                      </Select.Root>
+                      <Flex align="center" justify="between" gap="4" wrap="wrap">
+                        <Flex direction="column" gap="1">
+                          <Text size="2" weight="bold">
+                            关闭自动技能目标识别
+                          </Text>
+                          <Text size="1" color="gray">
+                            开启后选择技能时始终显示目标选择，不再根据技能数据自动跳过无目标技能。
+                          </Text>
+                        </Flex>
+                        <Select.Root
+                          value={autoSkillTargetRecognitionValue}
+                          onValueChange={(value) => void saveAutoSkillTargetRecognition(value)}
+                        >
+                          <Select.Trigger aria-label="关闭自动技能目标识别" />
+                          <Select.Content>
+                            <Select.Item value="enabled">关闭</Select.Item>
+                            <Select.Item value="disabled">开启</Select.Item>
+                          </Select.Content>
+                        </Select.Root>
+                      </Flex>
                     </Flex>
                     {settingsError && (
                       <Text as="div" size="1" color="red" mt="2">

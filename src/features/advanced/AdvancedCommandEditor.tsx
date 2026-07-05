@@ -24,6 +24,7 @@ import {
   type FrontServant,
   type PartySlot,
   type PrepDraft,
+  type PrepSource,
 } from "./advancedCommandModel";
 import {
   deriveMembersAfterPreparationActions,
@@ -38,6 +39,7 @@ import { useServantFaceImages } from "../team/useServantFaceImages";
 import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIcons";
 import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
 import { servantSlotIndex, skillSlotIndex } from "../battle/battleSceneModel";
+import { useServantSkillTargeting } from "../battle/useServantSkillTargeting";
 import type {
   AdvancedBattleScene,
   AdvancedCommandCardCondition,
@@ -59,6 +61,7 @@ interface AdvancedCommandEditorProps {
   projectId: string | null;
   partyLineup: (Servant | null)[];
   partyMembers?: PartyMember[];
+  disableAutoSkillTargetRecognition?: boolean;
   grandServants?: GrandServantConfig[];
   grandClass?: GrandClass;
   grandCardStrategy?: GrandCardStrategy;
@@ -257,6 +260,8 @@ function AdvancedStrategyEditor({
   partyMembers,
   faces,
   skillIcons,
+  skillTargetStatus,
+  disableAutoSkillTargetRecognition,
   grandServants,
   grandCardStrategy,
   grandCardPriorityEnabled,
@@ -268,6 +273,8 @@ function AdvancedStrategyEditor({
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   skillIcons: Record<string, SkillIcons>;
+  skillTargetStatus: ReturnType<typeof useServantSkillTargeting>;
+  disableAutoSkillTargetRecognition: boolean;
   grandServants: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
   grandCardPriorityEnabled: boolean;
@@ -472,6 +479,42 @@ function AdvancedStrategyEditor({
     setControlDraft(null);
   };
 
+  const selectControlSkill = (source: PrepSource, skill: string) => {
+    if (source === "equipment" || disableAutoSkillTargetRecognition) {
+      setControlDraft({ step: "target", source, option: skill });
+      return;
+    }
+    const servant = postControlMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
+    const status = skillTargetStatus(servant, skill);
+    const draft = { step: "target", source, option: skill } satisfies Extract<
+      PrepDraft,
+      { step: "target" }
+    >;
+    if (status === "noTarget") {
+      finishControlAction(draft, null);
+      return;
+    }
+    setControlDraft(status === "needsTarget" ? { ...draft, allowNoTarget: false } : draft);
+  };
+
+  const selectStartupSkill = (source: PrepSource, skill: string) => {
+    if (source === "equipment" || disableAutoSkillTargetRecognition) {
+      setPrepDraft({ step: "target", source, option: skill });
+      return;
+    }
+    const servant = currentPartyMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
+    const status = skillTargetStatus(servant, skill);
+    const draft = { step: "target", source, option: skill } satisfies Extract<
+      PrepDraft,
+      { step: "target" }
+    >;
+    if (status === "noTarget") {
+      finishPrepAction(draft, null);
+      return;
+    }
+    setPrepDraft(status === "needsTarget" ? { ...draft, allowNoTarget: false } : draft);
+  };
+
   return (
     <div className="advanced-strategy-editor">
       <section className="battle-phase advanced-strategy-section">
@@ -641,15 +684,17 @@ function AdvancedStrategyEditor({
                             : null
                         }
                         skillIcons={skillIcons}
-                        onSelect={(skill) => setControlDraft({ step: "target", source: controlDraft.source, option: skill })}
+                        onSelect={(skill) => selectControlSkill(controlDraft.source, skill)}
                       />
                     )}
                 </>
               ) : controlDraft.step === "target" ? (
                 <>
-                  <button type="button" className="battle-option-btn" onClick={() => finishControlAction(controlDraft, null)}>
-                    无目标
-                  </button>
+                  {controlDraft.allowNoTarget !== false && (
+                    <button type="button" className="battle-option-btn" onClick={() => finishControlAction(controlDraft, null)}>
+                      无目标
+                    </button>
+                  )}
                   {postControlMembers
                     .slice(0, 3)
                     .map((member, index) => {
@@ -810,15 +855,17 @@ function AdvancedStrategyEditor({
                             : null
                         }
                         skillIcons={skillIcons}
-                        onSelect={(skill) => setPrepDraft({ step: "target", source: prepDraft.source, option: skill })}
+                        onSelect={(skill) => selectStartupSkill(prepDraft.source, skill)}
                       />
                     )}
                 </>
               ) : prepDraft.step === "target" ? (
                 <>
-                  <button type="button" className="battle-option-btn" onClick={() => finishPrepAction(prepDraft, null)}>
-                    无目标
-                  </button>
+                  {prepDraft.allowNoTarget !== false && (
+                    <button type="button" className="battle-option-btn" onClick={() => finishPrepAction(prepDraft, null)}>
+                      无目标
+                    </button>
+                  )}
                   {startupSelectableSlots.map((index) => {
                     const member = currentPartyMembers[index] ?? { servant: null, isSupport: false };
                     const servant = member.servant;
@@ -985,6 +1032,7 @@ export function AdvancedCommandEditor({
   projectId,
   partyLineup,
   partyMembers,
+  disableAutoSkillTargetRecognition = false,
   grandServants = [],
   grandCardStrategy,
   grandCardPriorityEnabled = false,
@@ -1008,6 +1056,7 @@ export function AdvancedCommandEditor({
   );
   const faces = useServantFaceImages(initialPartyLineup);
   const skillIcons = useServantSkillIcons(initialPartyLineup);
+  const skillTargetStatus = useServantSkillTargeting(initialPartyLineup);
 
   useEffect(() => {
     if (!projectId) return;
@@ -1052,6 +1101,8 @@ export function AdvancedCommandEditor({
           partyMembers={initialPartyMembers}
           faces={faces}
           skillIcons={skillIcons}
+          skillTargetStatus={skillTargetStatus}
+          disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
           grandServants={grandServants}
           grandCardStrategy={grandCardStrategy}
           grandCardPriorityEnabled={grandCardPriorityEnabled}
