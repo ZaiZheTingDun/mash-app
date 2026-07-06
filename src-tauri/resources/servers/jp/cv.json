@@ -1,6 +1,24 @@
 {
   "$comment": "Screen + variant + element template mapping. All coordinates are normalized (0.0..1.0). 'template' refers to a PNG filename (without extension) in resources/templates/. Detection is template matching: for each screen, find its 'detect' template within its region at >= threshold; the highest-scoring screen wins. Every screen has at least variants.main. Variants describe alternate views of the same screen; elements are used for interactions and status probes.",
   "screens": {
+    "Battle": {
+      "variants": {
+        "main": {
+          "elements": {
+            "battle_action_menu": {
+              "template": "battle_action_menu",
+              "region": {
+                "x": 0.896,
+                "y": 0.235,
+                "w": 0.076,
+                "h": 0.107
+              },
+              "threshold": 0.7
+            }
+          }
+        }
+      }
+    },
     "TeamConfirm": {
       "variants": {
         "main": {

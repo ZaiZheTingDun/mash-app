@@ -88,7 +88,10 @@ fn shared_cv_defines_battle_close_button_elements() {
         0.074,
         0.1,
     );
-    assert_eq!(elements["attack_button"]["template"].as_str(), Some("shared/button_attack"));
+    assert_eq!(
+        elements["attack_button"]["template"].as_str(),
+        Some("shared/button_attack")
+    );
     assert_eq!(
         elements["battle_action_menu"]["template"].as_str(),
         Some("shared/battle_action_menu")
@@ -117,12 +120,84 @@ fn server_cv_inherits_battle_from_shared_config() {
             .join("cv.json");
         let config: serde_json::Value =
             serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+        let battle = config["screens"]["Battle"]
+            .as_object()
+            .expect("server Battle override should be an object");
+        let variants = battle["variants"]
+            .as_object()
+            .expect("server Battle override should define variants");
+        let main = variants["main"]
+            .as_object()
+            .expect("server Battle override should define main variant");
+        let elements = main["elements"]
+            .as_object()
+            .expect("server Battle override should define elements");
+
         assert_eq!(
-            config["screens"].get("Battle"),
-            None,
-            "{server} Battle screen should be inherited from shared cv.json"
+            battle.len(),
+            1,
+            "{server} Battle override should only customize variants"
+        );
+        assert_eq!(
+            variants.len(),
+            1,
+            "{server} Battle override should only customize main variant"
+        );
+        assert_eq!(
+            main.len(),
+            1,
+            "{server} Battle override should only customize elements"
+        );
+        assert_eq!(
+            elements.len(),
+            1,
+            "{server} Battle override should only customize battle_action_menu"
+        );
+        assert!(
+            elements.contains_key("battle_action_menu"),
+            "{server} Battle override should only customize battle_action_menu"
         );
     }
+}
+
+#[test]
+fn cn_cv_overrides_battle_action_menu_probe() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let config_path = manifest_dir
+        .join("resources")
+        .join("servers")
+        .join("cn")
+        .join("cv.json");
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+    let element = &config["screens"]["Battle"]["variants"]["main"]["elements"]["battle_action_menu"];
+
+    assert_eq!(element["template"].as_str(), Some("battle_action_menu"));
+    assert_close(element["region"]["x"].as_f64().unwrap(), 0.896);
+    assert_close(element["region"]["y"].as_f64().unwrap(), 0.235);
+    assert_close(element["region"]["w"].as_f64().unwrap(), 0.076);
+    assert_close(element["region"]["h"].as_f64().unwrap(), 0.107);
+    assert_close(element["threshold"].as_f64().unwrap(), 0.7);
+}
+
+#[test]
+fn jp_cv_overrides_battle_action_menu_probe() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let config_path = manifest_dir
+        .join("resources")
+        .join("servers")
+        .join("jp")
+        .join("cv.json");
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+    let element = &config["screens"]["Battle"]["variants"]["main"]["elements"]["battle_action_menu"];
+
+    assert_eq!(element["template"].as_str(), Some("battle_action_menu"));
+    assert_close(element["region"]["x"].as_f64().unwrap(), 0.896);
+    assert_close(element["region"]["y"].as_f64().unwrap(), 0.235);
+    assert_close(element["region"]["w"].as_f64().unwrap(), 0.076);
+    assert_close(element["region"]["h"].as_f64().unwrap(), 0.107);
+    assert_close(element["threshold"].as_f64().unwrap(), 0.7);
 }
 
 fn assert_battle_close_button_element(element: &serde_json::Value, x: f64, y: f64, w: f64, h: f64) {

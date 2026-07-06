@@ -294,20 +294,57 @@ impl Runner {
         }
     }
 
-    /// Block until the attack-button probe in `cv.json` matches, polling
-    /// every `SKILL_POLL_INTERVAL`. Used after firing a skill so
-    /// the next tap doesn't land during the cut-in / animation while the
-    /// button is hidden.
-    ///
-    /// Returns ``true`` when the button is detected, ``false`` on timeout
-    /// or cancellation. Emits status updates so the user can see the wait.
+    /// Block until the Battle HUD is reliably interactive again after a
+    /// skill or swap animation. We require both the attack button and the
+    /// battle action menu to be visible so a transient match in the
+    /// bottom-right corner does not release the runner while overlays are
+    /// still unwinding.
     pub(crate) fn wait_for_attack_button(&mut self, screen: &str, timeout: Duration) -> bool {
-        self.wait_for_element_visible(
-            screen,
-            ATTACK_BUTTON_ELEMENT,
-            timeout,
-            "等待技能动画结束…",
-            "等待攻击按钮超时",
-        )
+        let start = Instant::now();
+        let mut tick: u32 = 0;
+        let mut last_visibility: Option<(bool, bool)> = None;
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+            let attack_visible = self
+                .sidecar()
+                .find_element_by_name(None, BATTLE_SCREEN, ATTACK_BUTTON_ELEMENT)
+                .map(|matched| matched.found)
+                .unwrap_or(false);
+            let menu_visible = self
+                .sidecar()
+                .find_element_by_name(None, BATTLE_SCREEN, BATTLE_ACTION_MENU_ELEMENT)
+                .map(|matched| matched.found)
+                .unwrap_or(false);
+            let visibility = (attack_visible, menu_visible);
+            if last_visibility != Some(visibility) {
+                self.emit_local_debug(
+                    screen,
+                    &format!(
+                        "battle_ready_probe attack_visible={attack_visible} menu_visible={menu_visible}"
+                    ),
+                );
+                last_visibility = Some(visibility);
+            }
+            if attack_visible && menu_visible {
+                return true;
+            }
+            if start.elapsed() >= timeout {
+                self.emit_local_debug(
+                    screen,
+                    &format!(
+                        "battle_ready_probe timeout attack_visible={attack_visible} menu_visible={menu_visible}"
+                    ),
+                );
+                self.emit_warn(screen, "等待攻击按钮超时");
+                return false;
+            }
+            tick += 1;
+            if tick % 4 == 1 {
+                self.emit_debug(screen, "等待技能动画结束…");
+            }
+            thread::sleep(SKILL_POLL_INTERVAL);
+        }
     }
 }
