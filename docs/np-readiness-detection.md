@@ -140,13 +140,13 @@ debug and future configuration. They are not used for current readiness.
 `tests/test_cv.py::TestFindNoblePhantasms` covers the glow-cap path on CN
 fixtures:
 
-- `np_test1.png`: `50 / 40 / 70`
-- `np_test2.png`: `100 / obscured / 90`
-- `np_test3.png`: `100 / 60 / 190`
-- `np_test4.png`: `100 / 100 / 200`
-- `np_test5.png`: dimmed attack-card screen, `100 / 100 / 200`
-- `np_test8.jpg`: attack-card screen, `120 / 60 / 90`
-- `np_test9.jpg`: attack-card screen, `120 / 60 / 90`, covering `宝具` label
+- `battle_np_gauge_cn_50_40_70.png`: `50 / 40 / 70`
+- `battle_np_gauge_cn_100_obscured_90.png`: `100 / obscured / 90`
+- `battle_np_gauge_cn_100_60_190.png`: `100 / 60 / 190`
+- `battle_np_gauge_cn_100_100_200.png`: `100 / 100 / 200`
+- `battle_np_gauge_cn_dimmed_100_100_200.png`: dimmed attack-card screen, `100 / 100 / 200`
+- `battle_np_gauge_cn_120_60_90.jpg`: attack-card screen, `120 / 60 / 90`
+- `battle_np_gauge_cn_120_60_90_label_occluded.jpg`: attack-card screen, `120 / 60 / 90`, covering `宝具` label
   false-positive rejection in the hundreds slot
 
 The same test class also has synthetic coverage for two slot-level cases:

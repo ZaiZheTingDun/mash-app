@@ -88,6 +88,41 @@ fn shared_cv_defines_battle_close_button_elements() {
         0.074,
         0.1,
     );
+    assert_eq!(elements["attack_button"]["template"].as_str(), Some("shared/button_attack"));
+    assert_eq!(
+        elements["battle_action_menu"]["template"].as_str(),
+        Some("shared/battle_action_menu")
+    );
+    assert_eq!(
+        elements["battle_scene_anchor"]["template"].as_str(),
+        Some("text_battle_label")
+    );
+    let detect = &config["screens"]["Battle"]["detect"];
+    assert_eq!(detect["template"].as_str(), Some("screen_battle"));
+    assert_close(detect["region"]["x"].as_f64().unwrap(), 0.589);
+    assert_close(detect["region"]["y"].as_f64().unwrap(), 0.0);
+    assert_close(detect["region"]["w"].as_f64().unwrap(), 0.103);
+    assert_close(detect["region"]["h"].as_f64().unwrap(), 0.127);
+    assert_close(detect["threshold"].as_f64().unwrap(), 0.85);
+}
+
+#[test]
+fn server_cv_inherits_battle_from_shared_config() {
+    for server in ["jp", "cn"] {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let config_path = manifest_dir
+            .join("resources")
+            .join("servers")
+            .join(server)
+            .join("cv.json");
+        let config: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert_eq!(
+            config["screens"].get("Battle"),
+            None,
+            "{server} Battle screen should be inherited from shared cv.json"
+        );
+    }
 }
 
 fn assert_battle_close_button_element(element: &serde_json::Value, x: f64, y: f64, w: f64, h: f64) {

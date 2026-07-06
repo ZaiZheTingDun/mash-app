@@ -158,6 +158,10 @@ impl Runner {
                             return self
                                 .fail_skill_execution(&action_label, "Order Change 执行失败");
                         }
+                        if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                            return self.fail_skill_execution(&action_label, "等待攻击按钮超时");
+                        }
+                        thread::sleep(ORDER_CHANGE_EXTRA_SETTLE);
                     } else {
                         let target_pos = skill_target_position(target.as_deref());
                         let mut triggered = false;
@@ -228,10 +232,9 @@ impl Runner {
 
                     if order_change.is_none() {
                         self.skip_after_skill();
-                    }
-
-                    if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
-                        return self.fail_skill_execution(&action_label, "等待攻击按钮超时");
+                        if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
+                            return self.fail_skill_execution(&action_label, "等待攻击按钮超时");
+                        }
                     }
                 }
                 // Command Spell (令咒) walks four full-screen modals:

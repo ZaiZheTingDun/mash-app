@@ -105,9 +105,49 @@
       }
     },
     "Battle": {
+      "detect": {
+        "template": "screen_battle",
+        "region": {
+          "x": 0.589,
+          "y": 0,
+          "w": 0.103,
+          "h": 0.127
+        },
+        "threshold": 0.85
+      },
       "variants": {
         "main": {
           "elements": {
+            "battle_scene_anchor": {
+              "template": "text_battle_label",
+              "region": {
+                "x": 0.587,
+                "y": 0,
+                "w": 0.16,
+                "h": 0.062
+              },
+              "threshold": 0.7
+            },
+            "attack_button": {
+              "template": "shared/button_attack",
+              "region": {
+                "x": 0.875,
+                "y": 0.875,
+                "w": 0.091,
+                "h": 0.093
+              },
+              "threshold": 0.75
+            },
+            "battle_action_menu": {
+              "template": "shared/battle_action_menu",
+              "region": {
+                "x": 0.859,
+                "y": 0.21,
+                "w": 0.078,
+                "h": 0.155
+              },
+              "threshold": 0.7
+            },
             "skill_target_close_button": {
               "template": "shared/battle_close_button",
               "region": {

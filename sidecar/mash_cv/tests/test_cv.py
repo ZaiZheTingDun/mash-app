@@ -570,9 +570,24 @@ class TestDetectScreen:
     @pytest.mark.parametrize(
         ("server", "screenshot_rel", "expected_level", "expected_name"),
         [
-            ("cn", (".screenshots", "cn", "bond_level_up_0_2.png"), 2, "贞德·Alter·Santa·Lily"),
-            ("cn", (".screenshots", "cn", "bond_level_up.png"), 6, "歌果"),
-            ("jp", (".screenshots", "jp", "bond_levelup.png"), 2, "スパルタクス"),
+            (
+                "cn",
+                ("test_data", "screenshots", "battle_result_bond_level_up_cn_level_2_jalter_santa_lily.png"),
+                2,
+                "贞德·Alter·Santa·Lily",
+            ),
+            (
+                "cn",
+                ("test_data", "screenshots", "battle_result_bond_level_up_cn_level_6.png"),
+                6,
+                "歌果",
+            ),
+            (
+                "jp",
+                ("test_data", "screenshots", "battle_result_bond_level_up_jp_level_2_spartacus.png"),
+                2,
+                "スパルタクス",
+            ),
         ],
     )
     def test_battle_result_bond_level_up_reader_real_captures(
@@ -587,7 +602,7 @@ class TestDetectScreen:
         cv_json = os.path.join(
             repo_root, "src-tauri", "resources", "servers", server, "cv.json"
         )
-        screenshot = os.path.join(repo_root, *screenshot_rel)
+        screenshot = os.path.join(os.path.dirname(__file__), *screenshot_rel)
         if not (
             os.path.isdir(templates_dir)
             and os.path.isfile(cv_json)
@@ -657,7 +672,10 @@ class TestDetectScreen:
             repo_root, "src-tauri", "resources", "servers", "jp", "cv.json"
         )
         screenshot = os.path.join(
-            repo_root, ".screenshots", "jp", "bond_levelup.png"
+            os.path.dirname(__file__),
+            "test_data",
+            "screenshots",
+            "battle_result_bond_level_up_jp_level_2_spartacus.png",
         )
         if not (
             os.path.isdir(templates_dir)
@@ -724,13 +742,18 @@ class TestDetectScreen:
         cv_json = os.path.join(
             repo_root, "src-tauri", "resources", "servers", "cn", "cv.json"
         )
-        screenshot = os.path.join(repo_root, ".screenshots", "cn", "loot_new.png")
+        screenshot = os.path.join(
+            os.path.dirname(__file__),
+            "test_data",
+            "screenshots",
+            "battle_result_loot_event_cn.png",
+        )
         if not (
             os.path.isdir(templates_dir)
             and os.path.isfile(cv_json)
             and os.path.isfile(screenshot)
         ):
-            pytest.skip("CN production resources or loot_new fixture not available")
+            pytest.skip("CN production resources or loot-event fixture not available")
 
         mash_cv._load_templates(templates_dir)
         mash_cv._load_config(cv_json)
@@ -946,7 +969,12 @@ class TestFindElement:
         template_dir = os.path.join(
             repo_root, "src-tauri", "resources", "servers", "cn", "templates", "items"
         )
-        image_path = os.path.join(repo_root, ".screenshots", "cn", "ap_recover_plenty.png")
+        image_path = os.path.join(
+            os.path.dirname(__file__),
+            "test_data",
+            "screenshots",
+            "ap_recovery_cn_enabled_row.png",
+        )
         assert mash_cv._load_templates(template_dir, key_prefix="items")["ok"] is True
         img = cv2.imread(image_path)
         assert img is not None
@@ -968,7 +996,12 @@ class TestFindElement:
         template_dir = os.path.join(
             repo_root, "src-tauri", "resources", "servers", "jp", "templates", "items"
         )
-        image_path = os.path.join(repo_root, ".screenshots", "jp", "ap_recover_exhaust.png")
+        image_path = os.path.join(
+            os.path.dirname(__file__),
+            "test_data",
+            "screenshots",
+            "ap_recovery_jp_disabled_row.png",
+        )
         assert mash_cv._load_templates(template_dir, key_prefix="items")["ok"] is True
         img = cv2.imread(image_path)
         assert img is not None
@@ -1095,13 +1128,22 @@ class TestFindElementByName:
         shared_templates_dir = os.path.join(
             repo_root, "src-tauri", "resources", "servers", "shared", "templates"
         )
+        shared_cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "shared", "cv.json"
+        )
         cv_json = os.path.join(
             repo_root, "src-tauri", "resources", "servers", "cn", "cv.json"
         )
-        screenshot = os.path.join(repo_root, ".screenshots", "cn", "np_test1.png")
+        screenshot = os.path.join(
+            os.path.dirname(__file__),
+            "test_data",
+            "screenshots",
+            "battle_action_menu_cn_real_capture.png",
+        )
         if not (
             os.path.isdir(templates_dir)
             and os.path.isdir(shared_templates_dir)
+            and os.path.isfile(shared_cv_json)
             and os.path.isfile(cv_json)
             and os.path.isfile(screenshot)
         ):
@@ -1109,7 +1151,8 @@ class TestFindElementByName:
 
         mash_cv._load_templates(shared_templates_dir, key_prefix="shared")
         mash_cv._load_templates(templates_dir, append=True)
-        mash_cv._load_config(cv_json)
+        mash_cv._load_config(shared_cv_json)
+        mash_cv._load_config(cv_json, merge=True)
         img = cv2.imread(screenshot)
         assert img is not None
 
@@ -1135,6 +1178,67 @@ class TestFindElementByName:
             "battle_action_menu",
         )
         assert hidden_result["found"] is False
+
+    def test_cn_attack_button_detects_real_captures(self):
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "templates"
+        )
+        shared_templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "shared", "templates"
+        )
+        shared_cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "shared", "cv.json"
+        )
+        cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "cv.json"
+        )
+        screenshots = [
+            os.path.join(
+                os.path.dirname(__file__),
+                "test_data",
+                "screenshots",
+                "battle_attack_button_cn_six_enemies.png",
+            ),
+            os.path.join(
+                os.path.dirname(__file__),
+                "test_data",
+                "screenshots",
+                "battle_attack_button_cn_alt_layout.png",
+            ),
+        ]
+        if not (
+            os.path.isdir(templates_dir)
+            and os.path.isdir(shared_templates_dir)
+            and os.path.isfile(shared_cv_json)
+            and os.path.isfile(cv_json)
+            and all(os.path.isfile(path) for path in screenshots)
+        ):
+            pytest.skip("CN attack button resources not available")
+
+        mash_cv._load_templates(shared_templates_dir, key_prefix="shared")
+        mash_cv._load_templates(templates_dir, append=True)
+        mash_cv._load_config(shared_cv_json)
+        mash_cv._load_config(cv_json, merge=True)
+
+        for screenshot in screenshots:
+            img = cv2.imread(screenshot)
+            assert img is not None
+
+            result = mash_cv._find_element_by_name(img, "Battle", "attack_button")
+            assert result["found"] is True, screenshot
+            assert result["score"] >= 0.75, screenshot
+
+            scaled = cv2.resize(img, (1920, 1080), interpolation=cv2.INTER_AREA)
+            scaled_result = mash_cv._find_element_by_name(
+                scaled,
+                "Battle",
+                "attack_button",
+            )
+            assert scaled_result["found"] is True, screenshot
+            assert scaled_result["score"] >= 0.75, screenshot
 
 
 def test_crop_template_uses_normalized_template_region():
@@ -1953,20 +2057,17 @@ class TestFindNoblePhantasms:
     @pytest.mark.parametrize(
         ("filename", "expected_counts"),
         [
-            ("np_test1.png", [2, 2, 2]),
-            ("np_test2.png", [3, None, 2]),
-            ("np_test3.png", [3, 2, 3]),
-            ("np_test4.png", [3, 3, 3]),
-            ("np_test5.png", [3, 3, 3]),
-            ("np_test8.jpg", [3, 2, 2]),
-            ("np_test9.jpg", [3, 3, 2]),
+            ("battle_np_gauge_cn_50_40_70.png", [2, 2, 2]),
+            ("battle_np_gauge_cn_100_obscured_90.png", [3, None, 2]),
+            ("battle_np_gauge_cn_100_60_190.png", [3, 2, 3]),
+            ("battle_np_gauge_cn_100_100_200.png", [3, 3, 3]),
+            ("battle_np_gauge_cn_dimmed_100_100_200.png", [3, 3, 3]),
+            ("battle_np_gauge_cn_120_60_90.jpg", [3, 2, 2]),
+            ("battle_np_gauge_cn_120_60_90_label_occluded.jpg", [3, 3, 2]),
         ],
     )
     def test_cn_bottom_np_glow_drives_readiness(self, filename, expected_counts):
-        repo_root = os.path.normpath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..")
-        )
-        screenshot = os.path.join(repo_root, ".screenshots", "cn", filename)
+        screenshot = os.path.join(_TEST_SCREENSHOTS_DIR, filename)
         if not os.path.isfile(screenshot):
             pytest.skip(f"{filename} fixture not available")
 

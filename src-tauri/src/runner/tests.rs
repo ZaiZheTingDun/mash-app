@@ -3761,6 +3761,11 @@ fn battle_close_button_element_names_are_stable() {
 }
 
 #[test]
+fn order_change_extra_settle_matches_expected_delay() {
+    assert_eq!(ORDER_CHANGE_EXTRA_SETTLE, Duration::from_secs(1));
+}
+
+#[test]
 fn command_spell_index_returns_none_for_unknown_or_missing() {
     // Unknown / missing spell names cause the runner's loop to
     // `continue` instead of tapping a phantom row; mirrors how

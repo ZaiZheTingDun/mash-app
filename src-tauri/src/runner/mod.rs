@@ -66,6 +66,10 @@ const SKILL_POLL_INTERVAL: Duration = Duration::from_millis(300);
 /// to cover NP-length animations without hanging forever if something
 /// genuinely went wrong.
 const SKILL_WAIT_TIMEOUT: Duration = Duration::from_secs(15);
+/// Order Change has an extra servant-swap settle window after the Battle
+/// HUD becomes visible again. Without this, the next skill tap can land
+/// while the swap animation is still unwinding.
+const ORDER_CHANGE_EXTRA_SETTLE: Duration = Duration::from_secs(1);
 /// Maximum time to suppress duplicate Battle-screen attack taps after tapping
 /// Attack and before the Attack screen classifier catches up.
 const ATTACK_SCREEN_WAIT_TIMEOUT: Duration = Duration::from_secs(3);

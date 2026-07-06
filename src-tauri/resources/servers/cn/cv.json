@@ -127,54 +127,6 @@
         }
       }
     },
-    "Battle": {
-      "detect": {
-        "template": "screen_battle",
-        "region": {
-          "x": 0.589,
-          "y": 0,
-          "w": 0.103,
-          "h": 0.127
-        },
-        "threshold": 0.85
-      },
-      "variants": {
-        "main": {
-          "elements": {
-            "battle_scene_anchor": {
-              "template": "text_battle_label",
-              "region": {
-                "x": 0.587,
-                "y": 0,
-                "w": 0.16,
-                "h": 0.062
-              },
-              "threshold": 0.7
-            },
-            "attack_button": {
-              "template": "button_attack",
-              "region": {
-                "x": 0.799,
-                "y": 0.746,
-                "w": 0.177,
-                "h": 0.195
-              },
-              "threshold": 0.75
-            },
-            "battle_action_menu": {
-              "template": "shared/battle_action_menu",
-              "region": {
-                "x": 0.859,
-                "y": 0.21,
-                "w": 0.078,
-                "h": 0.155
-              },
-              "threshold": 0.7
-            }
-          }
-        }
-      }
-    },
     "Attack": {
       "detect": {
         "template": "button_battle_speed",
