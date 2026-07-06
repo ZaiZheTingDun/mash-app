@@ -101,6 +101,7 @@ pub(crate) fn support_grand_section_exhausted_after_probe(
 
 pub(crate) const POLL_INTERVAL: Duration = Duration::from_millis(500);
 pub(crate) const ACTION_DELAY: Duration = Duration::from_millis(300);
+pub(crate) const SKILL_TAP_DELAY: Duration = Duration::from_millis(500);
 
 /// Hard cap on friend-list refreshes inside `handle_support_select`. After
 /// this many refreshes (each preceded by a full scroll cycle) without

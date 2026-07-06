@@ -338,6 +338,7 @@ pub(crate) fn start_automation(
     let debug_settings = *debug_settings_state.lock().unwrap();
     config.auto_capture_battle_result_loot = debug_settings.auto_capture_battle_result_loot;
     config.auto_capture_unknown_screen_timeout = debug_settings.auto_capture_unknown_screen_timeout;
+    config.auto_capture_skill_use_probe = debug_settings.auto_capture_skill_use_probe;
 
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));

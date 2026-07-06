@@ -136,6 +136,16 @@ pub struct ElementMatch {
     pub region: Option<NormRect>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillUseDialogProbe {
+    pub found: bool,
+    pub score: f64,
+    pub mean_luma: f64,
+    pub region: Option<NormRect>,
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServantGridAnchor {

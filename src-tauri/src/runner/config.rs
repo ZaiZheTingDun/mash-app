@@ -215,6 +215,9 @@ pub struct RunConfig {
     /// Save one current stream frame when Unknown screen detection times out.
     #[serde(default)]
     pub auto_capture_unknown_screen_timeout: bool,
+    /// Save the exact frame used by the skill-use dialog probe.
+    #[serde(default)]
+    pub auto_capture_skill_use_probe: bool,
     #[serde(default = "default_true")]
     pub support_craft_essence_mlb_required: bool,
     #[serde(default)]

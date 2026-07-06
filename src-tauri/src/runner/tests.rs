@@ -539,6 +539,8 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     assert!(cfg.ap_recovery_items.is_empty());
     assert!(!cfg.verify_skill_activation);
     assert!(!cfg.auto_capture_battle_result_loot);
+    assert!(!cfg.auto_capture_unknown_screen_timeout);
+    assert!(!cfg.auto_capture_skill_use_probe);
 }
 
 #[test]
@@ -3758,6 +3760,8 @@ fn battle_close_button_element_names_are_stable() {
         ORDER_CHANGE_CLOSE_BUTTON_ELEMENT,
         "order_change_close_button"
     );
+    assert_eq!(ATTACK_BUTTON_ELEMENT, "attack_button");
+    assert_eq!(BATTLE_ACTION_MENU_ELEMENT, "battle_action_menu");
 }
 
 #[test]
@@ -3813,6 +3817,65 @@ fn skill_selection_option_position_maps_supported_dialogs() {
     assert_eq!(point("SelectAddInfo", 2, 2), None);
     assert_eq!(point("SelectAddInfo", 0, 4), None);
     assert_eq!(point("unknown", 0, 2), None);
+}
+
+#[test]
+fn classify_skill_use_dialog_luma_separates_confirm_and_already_used() {
+    assert_eq!(
+        classify_skill_use_dialog_luma(236.0, 210.0),
+        SkillUseDialogState::Confirm
+    );
+    assert_eq!(
+        classify_skill_use_dialog_luma(182.0, 210.0),
+        SkillUseDialogState::AlreadyUsed
+    );
+}
+
+#[test]
+fn skill_selection_close_region_maps_supported_dialogs() {
+    assert_eq!(
+        skill_selection_close_region(SelectionDialogKind::AddInfo).x,
+        SELECT_ADD_INFO_CLOSE.x
+    );
+    assert_eq!(
+        skill_selection_close_region(SelectionDialogKind::TreasureDevice).y,
+        SELECT_TREASURE_DEVICE_CLOSE.y
+    );
+    assert_eq!(
+        skill_selection_close_region(SelectionDialogKind::SelfTreasureDevice).w,
+        COMMAND_TYPE_SELF_TREASURE_DEVICE_CLOSE.w
+    );
+    assert_eq!(
+        selection_dialog_kind("SelectAddInfo"),
+        Some(SelectionDialogKind::AddInfo)
+    );
+    assert!(selection_dialog_kind("unknown").is_none());
+}
+
+#[test]
+fn skill_post_tap_expectation_prefers_selection_before_target_or_activation() {
+    let selection = crate::SkillSelection {
+        selection_type: "SelectAddInfo".into(),
+        index: 0,
+        option_count: Some(2),
+        label: None,
+    };
+    assert!(matches!(
+        skill_post_tap_expectation(Some(&selection), Some(SKILL_TARGETS[0]), false),
+        SkillPostTapExpectation::SelectionDialog(SelectionDialogKind::AddInfo)
+    ));
+    assert!(matches!(
+        skill_post_tap_expectation(None, Some(SKILL_TARGETS[0]), false),
+        SkillPostTapExpectation::TargetPicker
+    ));
+    assert!(matches!(
+        skill_post_tap_expectation(None, None, true),
+        SkillPostTapExpectation::OrderChange
+    ));
+    assert!(matches!(
+        skill_post_tap_expectation(None, None, false),
+        SkillPostTapExpectation::ActivationStart
+    ));
 }
 
 #[test]

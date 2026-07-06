@@ -311,6 +311,7 @@ pub fn run() {
             commands::settings::set_verify_skill_activation,
             commands::settings::set_auto_capture_battle_result_loot,
             commands::settings::set_auto_capture_unknown_screen_timeout,
+            commands::settings::set_auto_capture_skill_use_probe,
             commands::settings::should_check_updates_today,
             commands::settings::mark_update_checked_today,
             commands::automation::start_automation,

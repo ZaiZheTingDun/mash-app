@@ -33,6 +33,23 @@ fn add_image_path_preserves_existing_fields() {
 }
 
 #[test]
+fn add_image_path_preserves_probe_skill_use_dialog_request_shape() {
+    let mut req = serde_json::json!({
+        "cmd": "probe_skill_use_dialog",
+        "templateKey": "dialog_skill_use",
+        "dialogRegion": { "x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4 },
+        "dialogThreshold": 0.8,
+        "confirmRegion": { "x": 0.5, "y": 0.6, "w": 0.7, "h": 0.8 },
+    });
+    SidecarClient::add_image_path(&mut req, Some(Path::new("/tmp/probe.png")));
+    assert_eq!(req["cmd"], serde_json::json!("probe_skill_use_dialog"));
+    assert_eq!(req["templateKey"], serde_json::json!("dialog_skill_use"));
+    assert_eq!(req["dialogRegion"]["x"], serde_json::json!(0.1));
+    assert_eq!(req["confirmRegion"]["h"], serde_json::json!(0.8));
+    assert_eq!(req["imagePath"], serde_json::json!("/tmp/probe.png"));
+}
+
+#[test]
 fn add_image_path_does_nothing_when_request_is_not_an_object() {
     // The early-return on `as_object_mut` keeps the helper safe to
     // call against arbitrary `serde_json::Value` payloads.

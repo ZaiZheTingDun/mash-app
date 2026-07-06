@@ -6,12 +6,14 @@ import type { DebugSettings } from "../../types/debug";
 const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   autoCaptureBattleResultLoot: false,
   autoCaptureUnknownScreenTimeout: false,
+  autoCaptureSkillUseProbe: false,
 };
 
 function normalizeDebugSettings(settings: Partial<DebugSettings>): DebugSettings {
   return {
     autoCaptureBattleResultLoot: settings.autoCaptureBattleResultLoot === true,
     autoCaptureUnknownScreenTimeout: settings.autoCaptureUnknownScreenTimeout === true,
+    autoCaptureSkillUseProbe: settings.autoCaptureSkillUseProbe === true,
   };
 }
 
@@ -76,6 +78,23 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
     }
   }, []);
 
+  const saveAutoCaptureSkillUseProbe = useCallback(async (value: boolean) => {
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
+    try {
+      const next = normalizeDebugSettings(
+        await invoke<DebugSettings>("set_auto_capture_skill_use_probe", { value })
+      );
+      setSettings(next);
+      setSavedMessage("已保存");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
   return (
     <Box className="settings-section-panel">
       <Flex direction="column" gap="4" className="recognition-setting-block">
@@ -112,6 +131,24 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
             onCheckedChange={(value) => void saveAutoCaptureUnknownScreenTimeout(value)}
             disabled={loading || saving}
             aria-label="无法识别画面超时时截图"
+          />
+        </Flex>
+
+        <Flex align="start" justify="between" gap="4" wrap="wrap" className="basic-setting-row">
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              保存技能确认 probe 截图
+            </Text>
+            <Text size="1" color="gray">
+              开启后技能确认弹窗识别会保存实际送进 sidecar 的那一帧，用于排查误判；关闭后不保存。
+            </Text>
+          </Flex>
+
+          <Switch
+            checked={settings.autoCaptureSkillUseProbe}
+            onCheckedChange={(value) => void saveAutoCaptureSkillUseProbe(value)}
+            disabled={loading || saving}
+            aria-label="保存技能确认 probe 截图"
           />
         </Flex>
 

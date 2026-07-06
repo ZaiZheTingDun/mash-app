@@ -5,6 +5,34 @@
 
 use super::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SkillUseDialogState {
+    Confirm,
+    AlreadyUsed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SkillPostTapOutcome {
+    Confirmed,
+    AlreadyUsed,
+    ProceedWithoutDialog,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SkillPostTapExpectation {
+    ActivationStart,
+    TargetPicker,
+    OrderChange,
+    SelectionDialog(SelectionDialogKind),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SelectionDialogKind {
+    AddInfo,
+    TreasureDevice,
+    SelfTreasureDevice,
+}
+
 impl Runner {
     pub(crate) fn execute_turn_skills(&mut self, turn: &BattleTurn) -> bool {
         for action in turn_preparation_actions(turn) {
@@ -31,6 +59,8 @@ impl Runner {
                     let action_label =
                         servant_skill_failure_label(servant.as_deref(), *servant_id, skill_index);
                     let target_pos = skill_target_position(target.as_deref());
+                    let expectation =
+                        skill_post_tap_expectation(skill_selection.as_ref(), target_pos, false);
 
                     self.emit_action(
                         "从者技能",
@@ -41,6 +71,7 @@ impl Runner {
                         },
                     );
                     let mut triggered = false;
+                    let mut skipped = false;
                     for attempt in 0..=1 {
                         if attempt > 0 {
                             self.emit_warn("Battle", "技能点击未确认生效，重试一次");
@@ -49,7 +80,20 @@ impl Runner {
                         if !self.tap_at("Battle", pos) {
                             return self.fail_skill_execution(&action_label, "点击技能按钮失败");
                         }
-                        thread::sleep(ACTION_DELAY);
+                        thread::sleep(SKILL_TAP_DELAY);
+                        let Some(outcome) = self.handle_skill_post_tap(&action_label, expectation)
+                        else {
+                            if attempt == 0 && self.config.verify_skill_activation {
+                                continue;
+                            }
+                            return self
+                                .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
+                        };
+                        if matches!(outcome, SkillPostTapOutcome::AlreadyUsed) {
+                            skipped = true;
+                            triggered = true;
+                            break;
+                        }
 
                         if let Some(selection) = skill_selection {
                             if !self.execute_skill_selection(selection, &action_label) {
@@ -103,6 +147,9 @@ impl Runner {
                         return self
                             .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
                     }
+                    if skipped {
+                        continue;
+                    }
 
                     self.skip_after_skill();
 
@@ -153,7 +200,17 @@ impl Runner {
                         if !self.tap_at("Battle", pos) {
                             return self.fail_skill_execution(&action_label, "点击御主技能失败");
                         }
-                        thread::sleep(ACTION_DELAY);
+                        thread::sleep(SKILL_TAP_DELAY);
+                        let Some(outcome) = self.handle_skill_post_tap(
+                            &action_label,
+                            SkillPostTapExpectation::OrderChange,
+                        ) else {
+                            return self
+                                .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
+                        };
+                        if matches!(outcome, SkillPostTapOutcome::AlreadyUsed) {
+                            continue;
+                        }
                         if !self.execute_order_change(change) {
                             return self
                                 .fail_skill_execution(&action_label, "Order Change 执行失败");
@@ -164,7 +221,9 @@ impl Runner {
                         thread::sleep(ORDER_CHANGE_EXTRA_SETTLE);
                     } else {
                         let target_pos = skill_target_position(target.as_deref());
+                        let expectation = skill_post_tap_expectation(None, target_pos, false);
                         let mut triggered = false;
+                        let mut skipped = false;
                         for attempt in 0..=1 {
                             if attempt > 0 {
                                 self.emit_warn("Battle", "技能点击未确认生效，重试一次");
@@ -174,7 +233,23 @@ impl Runner {
                                 return self
                                     .fail_skill_execution(&action_label, "点击御主技能失败");
                             }
-                            thread::sleep(ACTION_DELAY);
+                            thread::sleep(SKILL_TAP_DELAY);
+                            let Some(outcome) =
+                                self.handle_skill_post_tap(&action_label, expectation)
+                            else {
+                                if attempt == 0 && self.config.verify_skill_activation {
+                                    continue;
+                                }
+                                return self.fail_skill_execution(
+                                    &action_label,
+                                    "技能点击未观察到状态变化",
+                                );
+                            };
+                            if matches!(outcome, SkillPostTapOutcome::AlreadyUsed) {
+                                skipped = true;
+                                triggered = true;
+                                break;
+                            }
 
                             if let Some(target_pos) = target_pos {
                                 self.emit_debug("Battle", "等待目标选择框出现");
@@ -227,6 +302,9 @@ impl Runner {
                         if !triggered {
                             return self
                                 .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
+                        }
+                        if skipped {
+                            continue;
                         }
                     }
 
@@ -347,6 +425,155 @@ impl Runner {
         )
     }
 
+    fn handle_skill_post_tap(
+        &mut self,
+        action_label: &str,
+        expectation: SkillPostTapExpectation,
+    ) -> Option<SkillPostTapOutcome> {
+        let start = Instant::now();
+        let mut tick: u32 = 0;
+        let mut logged_template_error = false;
+        loop {
+            if self.is_cancelled() {
+                return None;
+            }
+
+            let probe_started = Instant::now();
+            let probe_result = self.probe_skill_use_dialog();
+            let probe_elapsed_ms = probe_started.elapsed().as_millis();
+            match probe_result {
+                Ok((probe, image_path)) => {
+                    if let Some(state) = classify_skill_use_dialog_probe(&probe) {
+                        self.emit_local_debug(
+                            "Battle",
+                            &format!(
+                                "技能确认 probe: score={:.3}, meanLuma={:.1}, image={}",
+                                probe.score,
+                                probe.mean_luma,
+                                display_skill_use_probe_image_path(image_path.as_ref())
+                            ),
+                        );
+                        match state {
+                            SkillUseDialogState::AlreadyUsed => {
+                                self.emit(
+                                    "Battle",
+                                    &format!(
+                                        "{action_label}: 技能确认弹窗显示该技能已使用，已跳过"
+                                    ),
+                                );
+                                let _ = self
+                                    .tap_skip_animation_button("技能确认弹窗已使用，跳过该技能");
+                                thread::sleep(ACTION_DELAY);
+                                return Some(SkillPostTapOutcome::AlreadyUsed);
+                            }
+                            SkillUseDialogState::Confirm => {
+                                self.emit_debug("Battle", "检测到技能确认弹窗，已点击确认");
+                                if !self.tap_at("Battle", SKILL_USE_CONFIRM_POINT) {
+                                    return None;
+                                }
+                                thread::sleep(ACTION_DELAY);
+                                return Some(SkillPostTapOutcome::Confirmed);
+                            }
+                        }
+                    } else if let Some(err) = probe.error.as_deref() {
+                        if !logged_template_error {
+                            self.emit_debug(
+                                "Battle",
+                                &format!("技能确认弹窗模板不可用，回退到原有流程: {err}"),
+                            );
+                            logged_template_error = true;
+                        }
+                    }
+                }
+                Err(err) => {
+                    if !logged_template_error {
+                        self.emit_debug(
+                            "Battle",
+                            &format!("技能确认弹窗探测失败，回退到原有流程: {err}"),
+                        );
+                        logged_template_error = true;
+                    }
+                }
+            }
+
+            let expectation_started = Instant::now();
+            let expectation_reached = self.skill_post_tap_expectation_reached(expectation);
+            let expectation_elapsed_ms = expectation_started.elapsed().as_millis();
+            if expectation_reached {
+                return Some(SkillPostTapOutcome::ProceedWithoutDialog);
+            }
+
+            if start.elapsed() >= SKILL_ACTIVATION_START_TIMEOUT {
+                self.emit_local_debug(
+                    "Battle",
+                    &format!(
+                        "技能点击后未观察到状态变化: elapsed={}ms, polls={}, lastProbe={}ms, lastExpectation={}ms",
+                        start.elapsed().as_millis(),
+                        tick + 1,
+                        probe_elapsed_ms,
+                        expectation_elapsed_ms
+                    ),
+                );
+                return None;
+            }
+            tick += 1;
+            if tick % 4 == 1 {
+                self.emit_debug("Battle", "等待技能点击后的弹窗或后续状态…");
+            }
+            thread::sleep(SKILL_POLL_INTERVAL);
+        }
+    }
+
+    fn probe_skill_use_dialog(&mut self) -> Result<(SkillUseDialogProbe, Option<PathBuf>), String> {
+        if self.config.auto_capture_skill_use_probe {
+            let image_path = self.capture_skill_use_probe_frame()?;
+            let probe = self.sidecar().probe_skill_use_dialog(
+                Some(&image_path),
+                SKILL_USE_DIALOG_TEMPLATE,
+                SKILL_USE_DIALOG_REGION,
+                SKILL_USE_DIALOG_THRESHOLD,
+                SKILL_USE_CONFIRM_REGION,
+            )?;
+            Ok((probe, Some(image_path)))
+        } else {
+            let probe = self.sidecar().probe_skill_use_dialog(
+                None,
+                SKILL_USE_DIALOG_TEMPLATE,
+                SKILL_USE_DIALOG_REGION,
+                SKILL_USE_DIALOG_THRESHOLD,
+                SKILL_USE_CONFIRM_REGION,
+            )?;
+            Ok((probe, None))
+        }
+    }
+
+    fn skill_post_tap_expectation_reached(&mut self, expectation: SkillPostTapExpectation) -> bool {
+        match expectation {
+            SkillPostTapExpectation::ActivationStart => self
+                .sidecar()
+                .find_element_by_name(None, BATTLE_SCREEN, BATTLE_ACTION_MENU_ELEMENT)
+                .map(|matched| !matched.found)
+                .unwrap_or(false),
+            SkillPostTapExpectation::TargetPicker => self
+                .sidecar()
+                .find_element_by_name(None, BATTLE_SCREEN, SKILL_TARGET_CLOSE_BUTTON_ELEMENT)
+                .map(|matched| matched.found)
+                .unwrap_or(false),
+            SkillPostTapExpectation::OrderChange => self
+                .sidecar()
+                .find_element_by_name(None, BATTLE_SCREEN, ORDER_CHANGE_CLOSE_BUTTON_ELEMENT)
+                .map(|matched| matched.found)
+                .unwrap_or(false),
+            SkillPostTapExpectation::SelectionDialog(kind) => {
+                let region = skill_selection_close_region(kind);
+                self.sidecar()
+                    .find_element(None, "shared/battle_close_button", region, 0.8)
+                    .map(|matched| matched.is_some())
+                    .unwrap_or(false)
+            }
+        }
+    }
+
     pub(crate) fn execute_order_change(&mut self, change: &crate::OrderChangeSelection) -> bool {
         let Some(front_pos) = order_change_slot_position(change.front.as_deref(), 0..3) else {
             self.emit_action(
@@ -418,8 +645,93 @@ impl Runner {
     /// playing -- on a normal Battle frame this region is the turn-counter
     /// pill which has no interactive effect.
     pub(crate) fn skip_after_skill(&mut self) {
-        let _ = self.tap_at("Battle", SKIP_ANIMATION_BUTTON);
+        if self.handle_pending_skill_use_dialog_before_skip() {
+            return;
+        }
+        let _ = self.tap_skip_animation_button("普通技能后跳过");
         thread::sleep(ACTION_DELAY);
+    }
+
+    fn handle_pending_skill_use_dialog_before_skip(&mut self) -> bool {
+        if self.is_cancelled() {
+            return false;
+        }
+
+        match self.probe_skill_use_dialog() {
+            Ok((probe, image_path)) => match classify_skill_use_dialog_probe(&probe) {
+                Some(SkillUseDialogState::AlreadyUsed) => {
+                    self.emit_local_debug(
+                        "Battle",
+                        &format!(
+                            "技能确认 probe: score={:.3}, meanLuma={:.1}, image={}",
+                            probe.score,
+                            probe.mean_luma,
+                            display_skill_use_probe_image_path(image_path.as_ref())
+                        ),
+                    );
+                    self.emit("Battle", "检测到技能确认弹窗已使用状态，先执行战斗跳过");
+                    let _ = self.tap_skip_animation_button("技能确认弹窗已使用，执行战斗跳过");
+                    thread::sleep(ACTION_DELAY);
+                    true
+                }
+                Some(SkillUseDialogState::Confirm) => {
+                    self.emit_local_debug(
+                        "Battle",
+                        &format!(
+                            "技能确认 probe: score={:.3}, meanLuma={:.1}, image={}",
+                            probe.score,
+                            probe.mean_luma,
+                            display_skill_use_probe_image_path(image_path.as_ref())
+                        ),
+                    );
+                    self.emit_debug("Battle", "通用跳过前检测到技能确认弹窗，先点确认");
+                    if self.tap_at("Battle", SKILL_USE_CONFIRM_POINT) {
+                        thread::sleep(ACTION_DELAY);
+                    }
+                    false
+                }
+                None => {
+                    if let Some(err) = probe.error.as_deref() {
+                        self.emit_debug(
+                            "Battle",
+                            &format!("通用跳过前技能确认弹窗模板不可用，继续原流程: {err}"),
+                        );
+                    }
+                    false
+                }
+            },
+            Err(err) => {
+                self.emit_debug(
+                    "Battle",
+                    &format!("通用跳过前技能确认弹窗探测失败，继续原流程: {err}"),
+                );
+                false
+            }
+        }
+    }
+
+    fn tap_skip_animation_button(&mut self, reason: &str) -> bool {
+        self.emit_local_debug("Battle", &format!("点击战斗跳过区: {reason}"));
+        self.tap_at("Battle", SKIP_ANIMATION_BUTTON)
+    }
+
+    fn capture_skill_use_probe_frame(&mut self) -> Result<PathBuf, String> {
+        let dir = crate::app_data_dir(&self.app_handle)
+            .join("debug")
+            .join("skill-use-probes");
+        std::fs::create_dir_all(&dir)
+            .map_err(|err| format!("创建技能确认 probe 截图目录失败: {err}"))?;
+        let timestamp_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|err| format!("获取技能确认 probe 时间戳失败: {err}"))?
+            .as_millis();
+        let path = dir.join(format!("skill-use-probe-{timestamp_ms}.jpg"));
+        let jpeg = self
+            .sidecar()
+            .get_frame_jpeg(0.0)
+            .map_err(|err| format!("获取技能确认 probe 视频帧失败: {err}"))?;
+        std::fs::write(&path, jpeg).map_err(|err| format!("写入技能确认 probe 截图失败: {err}"))?;
+        Ok(path)
     }
 
     pub(crate) fn select_enemy_target(&mut self, target: Option<&str>) {
@@ -516,6 +828,69 @@ pub(crate) fn skill_selection_option_position(selection: &crate::SkillSelection)
             _ => None,
         },
         _ => None,
+    }
+}
+
+pub(crate) fn classify_skill_use_dialog_luma(
+    mean_luma: f64,
+    threshold: f64,
+) -> SkillUseDialogState {
+    if mean_luma < threshold {
+        SkillUseDialogState::AlreadyUsed
+    } else {
+        SkillUseDialogState::Confirm
+    }
+}
+
+pub(crate) fn classify_skill_use_dialog_probe(
+    probe: &SkillUseDialogProbe,
+) -> Option<SkillUseDialogState> {
+    if !probe.found {
+        return None;
+    }
+    Some(classify_skill_use_dialog_luma(
+        probe.mean_luma,
+        SKILL_USE_CONFIRM_LUMA_THRESHOLD,
+    ))
+}
+
+fn display_skill_use_probe_image_path(path: Option<&PathBuf>) -> String {
+    path.map(|path| path.display().to_string())
+        .unwrap_or_else(|| "<live-frame>".to_string())
+}
+
+pub(crate) fn selection_dialog_kind(selection_type: &str) -> Option<SelectionDialogKind> {
+    match selection_type {
+        "SelectAddInfo" => Some(SelectionDialogKind::AddInfo),
+        "selectTreasureDeviceInfo" => Some(SelectionDialogKind::TreasureDevice),
+        "commandTypeSelfTreasureDevice" => Some(SelectionDialogKind::SelfTreasureDevice),
+        _ => None,
+    }
+}
+
+pub(crate) fn skill_selection_close_region(kind: SelectionDialogKind) -> NormRect {
+    match kind {
+        SelectionDialogKind::AddInfo => SELECT_ADD_INFO_CLOSE,
+        SelectionDialogKind::TreasureDevice => SELECT_TREASURE_DEVICE_CLOSE,
+        SelectionDialogKind::SelfTreasureDevice => COMMAND_TYPE_SELF_TREASURE_DEVICE_CLOSE,
+    }
+}
+
+pub(crate) fn skill_post_tap_expectation(
+    selection: Option<&crate::SkillSelection>,
+    target_pos: Option<Point>,
+    order_change: bool,
+) -> SkillPostTapExpectation {
+    if order_change {
+        SkillPostTapExpectation::OrderChange
+    } else if let Some(selection) =
+        selection.and_then(|selection| selection_dialog_kind(selection.selection_type.as_str()))
+    {
+        SkillPostTapExpectation::SelectionDialog(selection)
+    } else if target_pos.is_some() {
+        SkillPostTapExpectation::TargetPicker
+    } else {
+        SkillPostTapExpectation::ActivationStart
     }
 }
 

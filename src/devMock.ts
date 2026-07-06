@@ -95,6 +95,7 @@ let stopOnBondMaxLevel = false;
 let verifySkillActivation = false;
 let autoCaptureBattleResultLoot = false;
 let autoCaptureUnknownScreenTimeout = false;
+let autoCaptureSkillUseProbe = false;
 let nextProjectNumber = 2;
 let activeProjectId: string | null = "dev-project-1";
 let appTheme: "light" | "dark" | "system" | null = null;
@@ -189,6 +190,7 @@ function debugSettings() {
   return {
     autoCaptureBattleResultLoot,
     autoCaptureUnknownScreenTimeout,
+    autoCaptureSkillUseProbe,
   };
 }
 
@@ -433,6 +435,9 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return debugSettings() as T;
     case "set_auto_capture_unknown_screen_timeout":
       autoCaptureUnknownScreenTimeout = Boolean(args.value);
+      return debugSettings() as T;
+    case "set_auto_capture_skill_use_probe":
+      autoCaptureSkillUseProbe = Boolean(args.value);
       return debugSettings() as T;
     case "pick_asset_bundle":
     case "pick_runtime_bundle":

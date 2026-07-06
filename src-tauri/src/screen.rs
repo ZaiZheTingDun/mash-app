@@ -479,6 +479,58 @@ impl SidecarClient {
         })
     }
 
+    /// Return the mean grayscale luma for a normalized region.
+    pub fn probe_skill_use_dialog(
+        &mut self,
+        image_path: Option<&Path>,
+        template_key: &str,
+        dialog_region: NormRect,
+        dialog_threshold: f64,
+        confirm_region: NormRect,
+    ) -> Result<SkillUseDialogProbe, String> {
+        let mut req = serde_json::json!({
+            "cmd": "probe_skill_use_dialog",
+            "templateKey": template_key,
+            "dialogRegion": {
+                "x": dialog_region.x,
+                "y": dialog_region.y,
+                "w": dialog_region.w,
+                "h": dialog_region.h,
+            },
+            "dialogThreshold": dialog_threshold,
+            "confirmRegion": {
+                "x": confirm_region.x,
+                "y": confirm_region.y,
+                "w": confirm_region.w,
+                "h": confirm_region.h,
+            },
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        let found = resp["found"].as_bool().unwrap_or(false);
+        let score = resp["score"].as_f64().unwrap_or(0.0);
+        let mean_luma = resp["meanLuma"].as_f64().unwrap_or(0.0);
+        let region = resp.get("region").and_then(|r| {
+            Some(NormRect {
+                x: r.get("x")?.as_f64()?,
+                y: r.get("y")?.as_f64()?,
+                w: r.get("w")?.as_f64()?,
+                h: r.get("h")?.as_f64()?,
+            })
+        });
+        let error = resp
+            .get("error")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        Ok(SkillUseDialogProbe {
+            found,
+            score,
+            mean_luma,
+            region,
+            error,
+        })
+    }
+
     /// Identify the suit and (optionally) servant occupying each fixed
     /// command-card slot on the attack screen.
     ///

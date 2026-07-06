@@ -1026,6 +1026,79 @@ class TestFindElement:
         assert filtered["apRecoveryRow"]["darkFraction"] >= 0.55
 
 
+class TestReadRegionLuma:
+    def test_reads_bright_and_dark_regions(self):
+        img = _make_bgr_image(100, 100, bgr=(0, 0, 0))
+        img[0:50, 0:50] = (240, 240, 240)
+        bright = mash_cv._read_region_luma(img, {"x": 0.0, "y": 0.0, "w": 0.5, "h": 0.5})
+        dark = mash_cv._read_region_luma(img, {"x": 0.5, "y": 0.5, "w": 0.5, "h": 0.5})
+
+        assert bright["ok"] is True
+        assert dark["ok"] is True
+        assert bright["meanLuma"] > 230.0
+        assert dark["meanLuma"] < 10.0
+
+    def test_cn_skill_use_screenshots_separate_used_and_confirm_states(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        use_path = repo_root / ".screenshots" / "cn" / "skill_use.png"
+        used_path = repo_root / ".screenshots" / "cn" / "skill_used.png"
+        if not use_path.is_file() or not used_path.is_file():
+            pytest.skip("CN skill-use screenshots are not available")
+
+        use_img = cv2.imread(str(use_path))
+        used_img = cv2.imread(str(used_path))
+        assert use_img is not None
+        assert used_img is not None
+
+        region = {"x": 0.566, "y": 0.565, "w": 0.039, "h": 0.044}
+        use_result = mash_cv._read_region_luma(use_img, region)
+        used_result = mash_cv._read_region_luma(used_img, region)
+
+        assert use_result["meanLuma"] > 210.0
+        assert used_result["meanLuma"] < 210.0
+
+
+class TestProbeSkillUseDialog:
+    def test_missing_template_key_returns_error(self):
+        img = _make_bgr_image(100, 100)
+        result = mash_cv._probe_skill_use_dialog(
+            img,
+            "missing",
+            {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+            0.8,
+            {"x": 0.0, "y": 0.0, "w": 0.5, "h": 0.5},
+        )
+
+        assert result["found"] is False
+        assert "template not loaded" in result["error"]
+
+    def test_cn_skill_use_screenshots_return_confirm_luma_on_same_probe(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        template_dir = repo_root / "src-tauri" / "resources" / "servers" / "cn" / "templates"
+        use_path = repo_root / ".screenshots" / "cn" / "skill_use.png"
+        used_path = repo_root / ".screenshots" / "cn" / "skill_used.png"
+        if not use_path.is_file() or not used_path.is_file():
+            pytest.skip("CN skill-use screenshots are not available")
+
+        assert mash_cv._load_templates(str(template_dir))["ok"] is True
+        dialog_region = {"x": 0.421, "y": 0.211, "w": 0.135, "h": 0.08}
+        confirm_region = {"x": 0.566, "y": 0.565, "w": 0.039, "h": 0.044}
+
+        use_img = cv2.imread(str(use_path))
+        used_img = cv2.imread(str(used_path))
+        use_result = mash_cv._probe_skill_use_dialog(
+            use_img, "dialog_skill_use", dialog_region, 0.8, confirm_region
+        )
+        used_result = mash_cv._probe_skill_use_dialog(
+            used_img, "dialog_skill_use", dialog_region, 0.8, confirm_region
+        )
+
+        assert use_result["found"] is True
+        assert used_result["found"] is True
+        assert use_result["meanLuma"] > 210.0
+        assert used_result["meanLuma"] < 210.0
+
+
 # ── _find_element_by_name ───────────────────────────────────────────────
 
 

@@ -74,6 +74,7 @@ describe("SettingsDialog", () => {
         return {
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
+          autoCaptureSkillUseProbe: false,
         };
       }
       if (cmd === "set_noble_phantasm_detection_mode") {
@@ -176,12 +177,21 @@ describe("SettingsDialog", () => {
         return {
           autoCaptureBattleResultLoot: Boolean(argValue(args)),
           autoCaptureUnknownScreenTimeout: false,
+          autoCaptureSkillUseProbe: false,
         };
       }
       if (cmd === "set_auto_capture_unknown_screen_timeout") {
         return {
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: Boolean(argValue(args)),
+          autoCaptureSkillUseProbe: false,
+        };
+      }
+      if (cmd === "set_auto_capture_skill_use_probe") {
+        return {
+          autoCaptureBattleResultLoot: false,
+          autoCaptureUnknownScreenTimeout: false,
+          autoCaptureSkillUseProbe: Boolean(argValue(args)),
         };
       }
       return null;
@@ -235,6 +245,7 @@ describe("SettingsDialog", () => {
 
     expect(await screen.findByText("自动截图战利品页面")).toBeInTheDocument();
     expect(screen.getByText("无法识别画面超时时截图")).toBeInTheDocument();
+    expect(screen.getByText("保存技能确认 probe 截图")).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("get_debug_settings");
 
     await user.click(screen.getByRole("switch", { name: "自动截图战利品页面" }));
@@ -249,6 +260,14 @@ describe("SettingsDialog", () => {
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_auto_capture_unknown_screen_timeout", {
+        value: true,
+      });
+    });
+
+    await user.click(screen.getByRole("switch", { name: "保存技能确认 probe 截图" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_auto_capture_skill_use_probe", {
         value: true,
       });
     });

@@ -38,6 +38,25 @@ pub(crate) const ATTACK_SCREEN_RETURN: Point = Point::new(0.938, 0.947);
 /// game skip ahead to the next actionable frame. Same physical button
 /// works after every skill on the battle screen.
 pub(crate) const SKIP_ANIMATION_BUTTON: Point = Point::new(0.685, 0.095);
+pub(crate) const SKILL_USE_DIALOG_TEMPLATE: &str = "dialog_skill_use";
+pub(crate) const SKILL_USE_DIALOG_THRESHOLD: f64 = 0.8;
+pub(crate) const SKILL_USE_CONFIRM_LUMA_THRESHOLD: f64 = 210.0;
+pub(crate) const SKILL_USE_DIALOG_REGION: NormRect = NormRect {
+    x: 0.421,
+    y: 0.211,
+    w: 0.135,
+    h: 0.08,
+};
+pub(crate) const SKILL_USE_CONFIRM_REGION: NormRect = NormRect {
+    x: 0.566,
+    y: 0.565,
+    w: 0.039,
+    h: 0.044,
+};
+pub(crate) const SKILL_USE_CONFIRM_POINT: Point = Point::new(
+    SKILL_USE_CONFIRM_REGION.x + SKILL_USE_CONFIRM_REGION.w / 2.0,
+    SKILL_USE_CONFIRM_REGION.y + SKILL_USE_CONFIRM_REGION.h / 2.0,
+);
 
 pub(crate) const BATTLE_SCREEN: &str = "Battle";
 pub(crate) const SUPPORT_SELECT_SCREEN: &str = "SupportSelect";

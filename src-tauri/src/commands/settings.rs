@@ -72,6 +72,8 @@ pub struct DebugSettings {
     pub auto_capture_battle_result_loot: bool,
     #[serde(default)]
     pub auto_capture_unknown_screen_timeout: bool,
+    #[serde(default)]
+    pub auto_capture_skill_use_probe: bool,
 }
 
 impl Default for RecognitionSettings {
@@ -495,6 +497,14 @@ fn debug_settings_with_auto_capture_unknown_screen_timeout(
     settings
 }
 
+fn debug_settings_with_auto_capture_skill_use_probe(
+    mut settings: DebugSettings,
+    value: bool,
+) -> DebugSettings {
+    settings.auto_capture_skill_use_probe = value;
+    settings
+}
+
 #[tauri::command]
 pub(crate) fn set_auto_capture_unknown_screen_timeout(
     app: tauri::AppHandle,
@@ -503,6 +513,18 @@ pub(crate) fn set_auto_capture_unknown_screen_timeout(
 ) -> Result<DebugSettings, String> {
     let next =
         debug_settings_with_auto_capture_unknown_screen_timeout(*state.lock().unwrap(), value);
+    *state.lock().unwrap() = next;
+    save_debug_settings(&app, &next)?;
+    Ok(next)
+}
+
+#[tauri::command]
+pub(crate) fn set_auto_capture_skill_use_probe(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<DebugSettings>>,
+    value: bool,
+) -> Result<DebugSettings, String> {
+    let next = debug_settings_with_auto_capture_skill_use_probe(*state.lock().unwrap(), value);
     *state.lock().unwrap() = next;
     save_debug_settings(&app, &next)?;
     Ok(next)
@@ -621,6 +643,7 @@ mod tests {
 
         assert!(!settings.auto_capture_battle_result_loot);
         assert!(!settings.auto_capture_unknown_screen_timeout);
+        assert!(!settings.auto_capture_skill_use_probe);
     }
 
     #[test]
@@ -629,6 +652,7 @@ mod tests {
 
         assert!(!settings.auto_capture_battle_result_loot);
         assert!(!settings.auto_capture_unknown_screen_timeout);
+        assert!(!settings.auto_capture_skill_use_probe);
     }
 
     #[test]
@@ -636,17 +660,23 @@ mod tests {
         let settings: DebugSettings = serde_json::from_value(serde_json::json!({
             "autoCaptureBattleResultLoot": true,
             "autoCaptureUnknownScreenTimeout": true,
+            "autoCaptureSkillUseProbe": true,
         }))
         .unwrap();
 
         assert!(settings.auto_capture_battle_result_loot);
         assert!(settings.auto_capture_unknown_screen_timeout);
+        assert!(settings.auto_capture_skill_use_probe);
         assert_eq!(
             serde_json::to_value(settings).unwrap()["autoCaptureBattleResultLoot"],
             serde_json::json!(true)
         );
         assert_eq!(
             serde_json::to_value(settings).unwrap()["autoCaptureUnknownScreenTimeout"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            serde_json::to_value(settings).unwrap()["autoCaptureSkillUseProbe"],
             serde_json::json!(true)
         );
     }
@@ -656,12 +686,14 @@ mod tests {
         let settings = DebugSettings {
             auto_capture_battle_result_loot: false,
             auto_capture_unknown_screen_timeout: true,
+            auto_capture_skill_use_probe: false,
         };
 
         let next = debug_settings_with_auto_capture_battle_result_loot(settings, true);
 
         assert!(next.auto_capture_battle_result_loot);
         assert!(next.auto_capture_unknown_screen_timeout);
+        assert!(!next.auto_capture_skill_use_probe);
     }
 
     #[test]
@@ -669,12 +701,29 @@ mod tests {
         let settings = DebugSettings {
             auto_capture_battle_result_loot: true,
             auto_capture_unknown_screen_timeout: false,
+            auto_capture_skill_use_probe: false,
         };
 
         let next = debug_settings_with_auto_capture_unknown_screen_timeout(settings, true);
 
         assert!(next.auto_capture_battle_result_loot);
         assert!(next.auto_capture_unknown_screen_timeout);
+        assert!(!next.auto_capture_skill_use_probe);
+    }
+
+    #[test]
+    fn debug_settings_skill_use_probe_update_preserves_other_captures() {
+        let settings = DebugSettings {
+            auto_capture_battle_result_loot: true,
+            auto_capture_unknown_screen_timeout: true,
+            auto_capture_skill_use_probe: false,
+        };
+
+        let next = debug_settings_with_auto_capture_skill_use_probe(settings, true);
+
+        assert!(next.auto_capture_battle_result_loot);
+        assert!(next.auto_capture_unknown_screen_timeout);
+        assert!(next.auto_capture_skill_use_probe);
     }
 
     #[test]

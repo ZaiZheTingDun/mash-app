@@ -489,6 +489,70 @@ def _ap_recovery_row_enabled(img: np.ndarray, match: dict) -> dict:
     }
 
 
+def _read_region_luma(img: np.ndarray, region: dict) -> dict:
+    h, w = img.shape[:2]
+    rx = max(0, int(round(float(region.get("x", 0.0)) * w)))
+    ry = max(0, int(round(float(region.get("y", 0.0)) * h)))
+    rw = max(1, min(int(round(float(region.get("w", 0.0)) * w)), w - rx))
+    rh = max(1, min(int(round(float(region.get("h", 0.0)) * h)), h - ry))
+    roi = img[ry : ry + rh, rx : rx + rw]
+    if roi.size == 0:
+        return {"ok": False, "error": "empty_region", "meanLuma": 0.0}
+
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    return {
+        "ok": True,
+        "meanLuma": float(np.mean(gray)),
+        "region": {
+            "x": rx / w,
+            "y": ry / h,
+            "w": rw / w,
+            "h": rh / h,
+        },
+    }
+
+
+def _probe_skill_use_dialog(
+    img: np.ndarray,
+    template_key: str,
+    dialog_region: dict,
+    dialog_threshold: float,
+    confirm_region: dict,
+) -> dict:
+    tmpl = _get_template(template_key)
+    if tmpl is None:
+        return {
+            "found": False,
+            "score": 0.0,
+            "meanLuma": 0.0,
+            "error": f"template not loaded: {template_key}",
+        }
+
+    match = _match_template_region(
+        img,
+        tmpl,
+        dialog_region,
+        dialog_threshold,
+        template_key,
+    )
+    if not match.get("found"):
+        return {
+            "found": False,
+            "score": float(match.get("score", 0.0)),
+            "meanLuma": 0.0,
+            "region": match.get("region"),
+        }
+
+    luma = _read_region_luma(img, confirm_region)
+    return {
+        "found": True,
+        "score": float(match.get("score", 0.0)),
+        "meanLuma": float(luma.get("meanLuma", 0.0)),
+        "region": match.get("region"),
+        "lumaRegion": luma.get("region"),
+    }
+
+
 def _match_template_region(
     img: np.ndarray,
     tmpl: np.ndarray,
@@ -5096,6 +5160,27 @@ def main() -> None:
                         img,
                         cmd["screen"],
                         cmd["element"],
+                    ),
+                )
+        elif action == "read_region_luma":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(req_id, {"ok": False, "meanLuma": 0.0, "error": err})
+            else:
+                _reply(req_id, _read_region_luma(img, cmd.get("region", DEFAULT_REGION)))
+        elif action == "probe_skill_use_dialog":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(req_id, {"found": False, "score": 0.0, "meanLuma": 0.0, "error": err})
+            else:
+                _reply(
+                    req_id,
+                    _probe_skill_use_dialog(
+                        img,
+                        cmd["templateKey"],
+                        cmd.get("dialogRegion", DEFAULT_REGION),
+                        float(cmd.get("dialogThreshold", 0.8)),
+                        cmd.get("confirmRegion", DEFAULT_REGION),
                     ),
                 )
         elif action == "read_battle_scene":
