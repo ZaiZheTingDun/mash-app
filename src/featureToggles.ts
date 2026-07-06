@@ -9,6 +9,7 @@ export interface FeatureToggles {
   servantEnhancement: boolean;
   cvDebug: boolean;
   grandCardPriority: boolean;
+  settingsDebug: boolean;
 }
 
 function envFlag(value: string | undefined, fallback: boolean): boolean {
@@ -25,6 +26,7 @@ export function createFeatureToggles(env: FeatureToggleEnv): FeatureToggles {
     ),
     cvDebug: envFlag(env.VITE_FEATURE_CV_DEBUG, env.DEV),
     grandCardPriority: envFlag(env.VITE_FEATURE_GRAND_CARD_PRIORITY, env.DEV),
+    settingsDebug: env.DEV,
   };
 }
 

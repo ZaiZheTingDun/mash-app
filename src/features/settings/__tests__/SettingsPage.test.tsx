@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
@@ -53,6 +53,10 @@ function argValue(args: unknown) {
 }
 
 describe("SettingsDialog", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeEach(() => {
     vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
       if (cmd === "get_self_check_status") return selfCheckStatus;
@@ -237,6 +241,25 @@ describe("SettingsDialog", () => {
 
     expect(await screen.findByRole("button", { name: "导入队伍" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导出队伍" })).toBeInTheDocument();
+  });
+
+  it("hides debug settings outside local development", async () => {
+    vi.stubEnv("DEV", false);
+    vi.resetModules();
+    const { SettingsDialog: ProductionSettingsDialog } = await import("../SettingsPage");
+
+    renderWithTheme(
+      <ProductionSettingsDialog
+        open
+        section="debug"
+        onOpenChange={vi.fn()}
+        onSectionChange={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "调试" })).not.toBeInTheDocument();
+    expect(screen.queryByText("自动截图战利品页面")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "基础设置" })).toBeInTheDocument();
   });
 
   it("loads and saves debug settings from the debug page", async () => {

@@ -8,6 +8,7 @@ import {
   MixerHorizontalIcon,
 } from "@radix-ui/react-icons";
 import { invoke } from "../../tauri";
+import { featureToggles } from "../../featureToggles";
 import type { Project } from "../../types/project";
 import { SettingsDataManagementPage } from "./SettingsDataManagementPage";
 import { SettingsBasicPage } from "./SettingsBasicPage";
@@ -85,6 +86,10 @@ const navItems: Array<{
   },
 ];
 
+function visibleNavItems() {
+  return navItems.filter((item) => item.section !== "debug" || featureToggles.settingsDebug);
+}
+
 export function SettingsDialog({
   open,
   section,
@@ -92,7 +97,8 @@ export function SettingsDialog({
   onSectionChange,
   onProjectsImported,
 }: SettingsDialogProps) {
-  const activeItem = navItems.find((item) => item.section === section) ?? navItems[0];
+  const items = visibleNavItems();
+  const activeItem = items.find((item) => item.section === section) ?? items[0];
   const groupedItems = [
     { group: "game", label: "游戏" },
     { group: "application", label: "应用" },
@@ -122,7 +128,7 @@ export function SettingsDialog({
                     <Text size="1" weight="bold" color="gray" className="settings-nav-group-label">
                       {group.label}
                     </Text>
-                    {navItems
+                    {items
                       .filter((item) => item.group === group.group)
                       .map((item) => (
                         <Button

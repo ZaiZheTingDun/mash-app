@@ -296,10 +296,11 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
 
 pub(crate) fn load_debug_settings(app: &tauri::AppHandle) -> DebugSettings {
     let path = debug_settings_path(app);
-    fs::read_to_string(&path)
+    let settings = fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str::<DebugSettings>(&s).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    debug_settings_for_current_build(settings)
 }
 
 fn save_recognition_settings(
@@ -321,6 +322,21 @@ fn save_debug_settings(app: &tauri::AppHandle, settings: &DebugSettings) -> Resu
         serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())
+}
+
+fn debug_settings_for_current_build(settings: DebugSettings) -> DebugSettings {
+    debug_settings_for_runtime(settings, cfg!(debug_assertions))
+}
+
+fn debug_settings_for_runtime(
+    settings: DebugSettings,
+    allow_debug_settings: bool,
+) -> DebugSettings {
+    if allow_debug_settings {
+        settings
+    } else {
+        DebugSettings::default()
+    }
 }
 
 fn load_last_update_check_date(app: &tauri::AppHandle) -> Option<String> {
@@ -358,7 +374,7 @@ pub(crate) fn get_recognition_settings(
 
 #[tauri::command]
 pub(crate) fn get_debug_settings(state: tauri::State<'_, Mutex<DebugSettings>>) -> DebugSettings {
-    *state.lock().unwrap()
+    debug_settings_for_current_build(*state.lock().unwrap())
 }
 
 #[tauri::command]
@@ -475,7 +491,9 @@ pub(crate) fn set_auto_capture_battle_result_loot(
     state: tauri::State<'_, Mutex<DebugSettings>>,
     value: bool,
 ) -> Result<DebugSettings, String> {
-    let next = debug_settings_with_auto_capture_battle_result_loot(*state.lock().unwrap(), value);
+    let next = debug_settings_for_current_build(
+        debug_settings_with_auto_capture_battle_result_loot(*state.lock().unwrap(), value),
+    );
     *state.lock().unwrap() = next;
     save_debug_settings(&app, &next)?;
     Ok(next)
@@ -511,8 +529,9 @@ pub(crate) fn set_auto_capture_unknown_screen_timeout(
     state: tauri::State<'_, Mutex<DebugSettings>>,
     value: bool,
 ) -> Result<DebugSettings, String> {
-    let next =
-        debug_settings_with_auto_capture_unknown_screen_timeout(*state.lock().unwrap(), value);
+    let next = debug_settings_for_current_build(
+        debug_settings_with_auto_capture_unknown_screen_timeout(*state.lock().unwrap(), value),
+    );
     *state.lock().unwrap() = next;
     save_debug_settings(&app, &next)?;
     Ok(next)
@@ -524,7 +543,10 @@ pub(crate) fn set_auto_capture_skill_use_probe(
     state: tauri::State<'_, Mutex<DebugSettings>>,
     value: bool,
 ) -> Result<DebugSettings, String> {
-    let next = debug_settings_with_auto_capture_skill_use_probe(*state.lock().unwrap(), value);
+    let next = debug_settings_for_current_build(debug_settings_with_auto_capture_skill_use_probe(
+        *state.lock().unwrap(),
+        value,
+    ));
     *state.lock().unwrap() = next;
     save_debug_settings(&app, &next)?;
     Ok(next)
@@ -679,6 +701,36 @@ mod tests {
             serde_json::to_value(settings).unwrap()["autoCaptureSkillUseProbe"],
             serde_json::json!(true)
         );
+    }
+
+    #[test]
+    fn debug_settings_runtime_filter_forces_debug_captures_off_when_disallowed() {
+        let settings = DebugSettings {
+            auto_capture_battle_result_loot: true,
+            auto_capture_unknown_screen_timeout: true,
+            auto_capture_skill_use_probe: true,
+        };
+
+        let filtered = debug_settings_for_runtime(settings, false);
+
+        assert!(!filtered.auto_capture_battle_result_loot);
+        assert!(!filtered.auto_capture_unknown_screen_timeout);
+        assert!(!filtered.auto_capture_skill_use_probe);
+    }
+
+    #[test]
+    fn debug_settings_runtime_filter_preserves_debug_captures_when_allowed() {
+        let settings = DebugSettings {
+            auto_capture_battle_result_loot: true,
+            auto_capture_unknown_screen_timeout: true,
+            auto_capture_skill_use_probe: true,
+        };
+
+        let filtered = debug_settings_for_runtime(settings, true);
+
+        assert!(filtered.auto_capture_battle_result_loot);
+        assert!(filtered.auto_capture_unknown_screen_timeout);
+        assert!(filtered.auto_capture_skill_use_probe);
     }
 
     #[test]

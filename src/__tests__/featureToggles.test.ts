@@ -7,6 +7,7 @@ describe("feature toggles", () => {
       servantEnhancement: true,
       cvDebug: true,
       grandCardPriority: true,
+      settingsDebug: true,
     });
   });
 
@@ -15,6 +16,7 @@ describe("feature toggles", () => {
       servantEnhancement: false,
       cvDebug: false,
       grandCardPriority: false,
+      settingsDebug: false,
     });
   });
 
@@ -30,6 +32,7 @@ describe("feature toggles", () => {
       servantEnhancement: true,
       cvDebug: true,
       grandCardPriority: true,
+      settingsDebug: false,
     });
   });
 });
