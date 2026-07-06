@@ -705,6 +705,7 @@ pub(crate) fn resolve_action_to_current_positions(
         Action::Servant {
             id,
             servant,
+            skill_selection,
             target,
             ..
         } => Some(Action::Servant {
@@ -722,6 +723,7 @@ pub(crate) fn resolve_action_to_current_positions(
                 Action::Servant { skill, .. } => skill.clone(),
                 _ => None,
             },
+            skill_selection: skill_selection.clone(),
             target: resolve_optional_slot_to_current_position(
                 ids,
                 original_ids,
@@ -817,6 +819,7 @@ pub(crate) fn resolve_action_to_current_member_positions(
             servant_member_id,
             servant_id,
             servant_is_support,
+            skill_selection,
             target,
             target_member_id,
             target_servant_id,
@@ -840,6 +843,7 @@ pub(crate) fn resolve_action_to_current_member_positions(
                 Action::Servant { skill, .. } => skill.clone(),
                 _ => None,
             },
+            skill_selection: skill_selection.clone(),
             target: current_slot_for_member_ref(
                 members,
                 original_members,

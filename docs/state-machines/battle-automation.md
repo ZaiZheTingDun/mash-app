@@ -39,7 +39,7 @@ stateDiagram-v2
     TeamChange --> Battle: party confirmed
 
     Battle --> BattleAction: attack available
-    BattleAction --> Battle: scene skills and optional enemy target handled
+    BattleAction --> Battle: scene skills, optional skill sub-selection, and optional enemy target handled
     BattleAction --> BattleAction: Order Change overlay handled
     BattleAction --> Attack: attack tapped
     Attack --> Battle: cards resolved
@@ -109,6 +109,25 @@ State ownership:
 
 The state-machine contract is covered by `battle_flow_*` tests in
 `src-tauri/src/runner/tests.rs`.
+
+## Skill Sub-Selection Dialogs
+
+Some servant skills open a second in-battle choice dialog immediately after
+the skill button is tapped. The runner treats these as part of `BattleAction`
+before the normal ally target picker:
+
+- `SelectAddInfo`: generic option popup. Two-option dialogs use
+  `(0.498, 0.584)` / `(0.749, 0.584)`; three-option dialogs use
+  `(0.414, 0.584)` / `(0.592, 0.584)` / `(0.780, 0.584)`.
+- `selectTreasureDeviceInfo`: Noble Phantasm candidate switch popup. Two
+  options use `(0.372, 0.522)` / `(0.613, 0.522)`; three options use
+  `(0.248, 0.522)` / `(0.496, 0.522)` / `(0.741, 0.522)`.
+- `commandTypeSelfTreasureDevice`: low-level NP card-type switch mechanism.
+  It uses the same option coordinates as `selectTreasureDeviceInfo`.
+
+The configured action stores the selection type, option index, option count,
+and display label. Unsupported option counts fail the action instead of
+tapping an ambiguous coordinate.
 
 ## Runner Lifecycle State Machine
 

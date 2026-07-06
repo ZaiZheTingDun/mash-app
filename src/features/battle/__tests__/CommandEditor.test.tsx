@@ -790,6 +790,91 @@ describe("CommandEditor pagination", () => {
     expect(screen.getAllByRole("button", { name: "丁" }).length).toBeGreaterThan(0);
   });
 
+  it("saves advanced startup servant skills with skill selections", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd, args) => {
+      if (cmd === "load_advanced_battle_scenes") return [];
+      if (cmd === "get_servant_face_path") return null;
+      if (cmd === "get_skill_icon_paths") {
+        return [
+          { path: null, name: "技能 1" },
+          { path: null, name: "技能 2" },
+          { path: null, name: "技能 3" },
+        ];
+      }
+      if (cmd === "get_servant_skill_selection") {
+        const invokeArgs = args as { servantId?: number } | undefined;
+        if (invokeArgs?.servantId !== 1) return [];
+        return [
+          {
+            servantCollectionNo: 1,
+            skillId: 101,
+            skillNum: 1,
+            selectionType: "SelectAddInfo",
+            supplementaryTypes: [],
+            options: [
+              { index: 0, label: "攻击" },
+              { index: 1, label: "防御" },
+            ],
+          },
+        ];
+      }
+      if (cmd === "get_servant_skill_targeting") return [];
+      if (cmd === "save_advanced_battle_scenes") return null;
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_servant_skill_selection", {
+        servantId: 1,
+        variantKey: "1",
+      })
+    );
+    await user.click(await screen.findByRole("button", { name: "添加启动行动" }));
+    const sourceButtons = screen.getAllByRole("button", { name: "甲" });
+    await user.click(sourceButtons[sourceButtons.length - 1]);
+    await user.click(screen.getByRole("button", { name: "技能 1" }));
+    await user.click(screen.getByRole("button", { name: "防御" }));
+
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "save_advanced_battle_scenes",
+        expect.objectContaining({
+          projectId: "project_1",
+          scenes: [
+            expect.objectContaining({
+              startupActions: [
+                expect.objectContaining({
+                  type: "servant",
+                  skill: "skill_1",
+                  skillSelection: {
+                    type: "SelectAddInfo",
+                    index: 1,
+                    optionCount: 2,
+                    label: "防御",
+                  },
+                }),
+              ],
+            }),
+          ],
+        })
+      )
+    );
+    expect(screen.getByLabelText(/并选择 防御/)).toBeInTheDocument();
+  });
+
   it("shows startup action targets for backline grand servants", async () => {
     const advancedScene: AdvancedBattleScene = {
       id: "advanced_scene_1",

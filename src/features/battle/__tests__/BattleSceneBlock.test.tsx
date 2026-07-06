@@ -137,6 +137,69 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(next.servantActions).toEqual([]);
   });
 
+  it("asks for a servant skill selection before saving the action", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd, args) => {
+      if (cmd === "get_servant_skill_selection") {
+        const invokeArgs = args as { servantId?: number } | undefined;
+        if (invokeArgs?.servantId !== 1) return [];
+        return [
+          {
+            servantCollectionNo: 1,
+            skillId: 101,
+            skillNum: 1,
+            selectionType: "selectTreasureDeviceInfo",
+            supplementaryTypes: ["commandTypeSelfTreasureDevice"],
+            options: [
+              { index: 0, label: "攻击" },
+              { index: 1, label: "防御" },
+            ],
+          },
+        ];
+      }
+      if (cmd === "get_servant_skill_targeting") return [];
+      if (cmd === "get_skill_icon_paths") {
+        return [
+          { path: null, name: "技能 1" },
+          { path: null, name: "技能 2" },
+          { path: null, name: "技能 3" },
+        ];
+      }
+      return null;
+    });
+    renderWithTheme(
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
+    );
+
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_servant_skill_selection", {
+        servantId: 1,
+        variantKey: "1",
+      })
+    );
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "甲" }));
+    await user.click(screen.getByRole("button", { name: "技能 1" }));
+
+    expect(screen.getByRole("button", { name: "攻击" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "防御" }));
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+    const next = onChange.mock.calls[0][0] as BattleTurn;
+    expect(next.preparationActions[0]).toMatchObject({
+      type: "servant",
+      skill: "skill_1",
+      skillSelection: {
+        type: "selectTreasureDeviceInfo",
+        index: 1,
+        optionCount: 2,
+        label: "防御",
+      },
+      target: null,
+    });
+  });
+
   it("adds an equipment Order Change action from one front slot and one back slot", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

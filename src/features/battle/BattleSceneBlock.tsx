@@ -12,6 +12,7 @@ import { useServantFaceImages } from "../team/useServantFaceImages";
 import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIcons";
 import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
 import { useServantSkillTargeting } from "./useServantSkillTargeting";
+import { useServantSkillSelections } from "./useServantSkillSelections";
 import {
   deriveMembersAfterAttackCards,
   deriveMembersAfterPreparationActions,
@@ -197,6 +198,9 @@ function PreparationActionSummary({
     skillLabel = skillEntry?.name || (SKILL_LABELS[action.skill ?? ""] ?? "技能");
     skillSlot = idx >= 0 ? idx : 0;
     actionText = `释放 ${skillLabel}`;
+    if (action.skillSelection) {
+      actionText += `并选择 ${action.skillSelection.label ?? `选项 ${action.skillSelection.index + 1}`}`;
+    }
   } else {
     const kind = action.type === "equipment" ? "equipment" : "commandSpell";
     sourceFace = (
@@ -220,6 +224,9 @@ function PreparationActionSummary({
         {action.type === "servant"
           ? <>释放{" "}<span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span></>
           : actionText}
+        {action.type === "servant" && action.skillSelection
+          ? `并选择 ${action.skillSelection.label ?? `选项 ${action.skillSelection.index + 1}`}`
+          : ""}
       </Text>
       {orderChangeSlots?.front != null && orderChangeSlots.back != null ? (
         <>
@@ -389,9 +396,12 @@ function actionSummary(
       action.targetIsSupport
     );
     const sourceLabel = src == null ? "从者" : servantLabel(src, partyServants[src] ?? null);
+    const selection = action.skillSelection
+      ? `并选择 ${action.skillSelection.label ?? `选项 ${action.skillSelection.index + 1}`}`
+      : "";
     return target == null
-      ? `${sourceLabel} 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`
-      : `${sourceLabel} 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"} to ${servantLabel(target, partyServants[target] ?? null)}`;
+      ? `${sourceLabel} 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}${selection}`
+      : `${sourceLabel} 释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}${selection} to ${servantLabel(target, partyServants[target] ?? null)}`;
   }
 
   if (action.type === "equipment") {
@@ -471,6 +481,7 @@ export function BattleSceneBlock({
   const faces = useServantFaceImages(initialPartyServants);
   const skillIcons = useServantSkillIcons(initialPartyServants);
   const skillTargetStatus = useServantSkillTargeting(initialPartyServants);
+  const skillSelection = useServantSkillSelections(initialPartyServants);
   const preparationActions = useMemo(
     () =>
       scene.preparationActions ??
@@ -582,6 +593,7 @@ export function BattleSceneBlock({
         servant: draft.source,
         ...servantRef(draft.source),
         skill: draft.option,
+        skillSelection: draft.skillSelection ?? null,
         target,
         ...targetRef(target),
       } satisfies ServantAction;
@@ -591,12 +603,25 @@ export function BattleSceneBlock({
   };
 
   const selectPrepSkill = (source: PrepSource, skill: string) => {
-    if (source === "equipment" || disableAutoSkillTargetRecognition) {
+    if (source === "equipment") {
       setPrepDraft({ step: "target", source, option: skill });
       return;
     }
     const servant = currentPartyMembers[sourceIndex(source) ?? 0]?.servant ?? null;
-    const status = skillTargetStatus(servant, skill);
+    const selection = skillSelection(servant, skill);
+    if (selection) {
+      setPrepDraft({
+        step: "skillSelection",
+        source,
+        option: skill,
+        selectionType: selection.selectionType,
+        options: selection.options,
+      });
+      return;
+    }
+    const status = disableAutoSkillTargetRecognition
+      ? "unknown"
+      : skillTargetStatus(servant, skill);
     const draft = { step: "target", source, option: skill } satisfies Extract<
       PrepDraft,
       { step: "target" }
@@ -606,6 +631,32 @@ export function BattleSceneBlock({
       return;
     }
     setPrepDraft(status === "needsTarget" ? { ...draft, allowNoTarget: false } : draft);
+  };
+
+  const finishSkillSelection = (
+    draft: Extract<PrepDraft, { step: "skillSelection" }>,
+    option: { index: number; label: string }
+  ) => {
+    const targetDraft = {
+      step: "target",
+      source: draft.source,
+      option: draft.option,
+      skillSelection: {
+        type: draft.selectionType,
+        index: option.index,
+        optionCount: draft.options.length,
+        label: option.label,
+      },
+    } satisfies Extract<PrepDraft, { step: "target" }>;
+    const servant = currentPartyMembers[sourceIndex(draft.source) ?? 0]?.servant ?? null;
+    const status = disableAutoSkillTargetRecognition
+      ? "unknown"
+      : skillTargetStatus(servant, draft.option);
+    if (status === "noTarget") {
+      finishPrepAction(targetDraft, null);
+      return;
+    }
+    setPrepDraft(status === "needsTarget" ? { ...targetDraft, allowNoTarget: false } : targetDraft);
   };
 
   const finishOrderChangeAction = (
@@ -867,6 +918,21 @@ export function BattleSceneBlock({
                         onSelect={(skill) => selectPrepSkill(prepDraft.source, skill)}
                       />
                     )}
+                </div>
+              </div>
+            ) : prepDraft.step === "skillSelection" ? (
+              <div className="battle-choice-row">
+                <div className="battle-option-group">
+                  {prepDraft.options.map((option) => (
+                    <button
+                      type="button"
+                      key={option.index}
+                      className="battle-option-btn"
+                      onClick={() => finishSkillSelection(prepDraft, option)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             ) : prepDraft.step === "target" ? (

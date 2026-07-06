@@ -1,3 +1,15 @@
+export type SkillSelectionType =
+  | "SelectAddInfo"
+  | "selectTreasureDeviceInfo"
+  | "commandTypeSelfTreasureDevice";
+
+export interface SkillSelection {
+  type: SkillSelectionType;
+  index: number;
+  optionCount?: number | null;
+  label?: string | null;
+}
+
 export interface ServantAction {
   type: "servant";
   id: string;
@@ -6,6 +18,7 @@ export interface ServantAction {
   servantId?: number | null;
   servantIsSupport?: boolean;
   skill: string | null;
+  skillSelection?: SkillSelection | null;
   target: string | null;
   targetMemberId?: string | null;
   targetServantId?: number | null;

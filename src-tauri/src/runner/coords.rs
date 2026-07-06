@@ -71,6 +71,40 @@ pub(crate) const SKILL_TARGETS: [Point; 3] = [
     Point::new(0.744, 0.474),
 ];
 
+pub(crate) const SELECT_ADD_INFO_CLOSE: NormRect = NormRect {
+    x: 0.829,
+    y: 0.196,
+    w: 0.077,
+    h: 0.106,
+};
+pub(crate) const SELECT_ADD_INFO_OPTIONS_2: [Point; 2] =
+    [Point::new(0.498, 0.584), Point::new(0.749, 0.584)];
+pub(crate) const SELECT_ADD_INFO_OPTIONS_3: [Point; 3] = [
+    Point::new(0.414, 0.584),
+    Point::new(0.592, 0.584),
+    Point::new(0.780, 0.584),
+];
+
+pub(crate) const SELECT_TREASURE_DEVICE_CLOSE: NormRect = NormRect {
+    x: 0.820,
+    y: 0.141,
+    w: 0.077,
+    h: 0.099,
+};
+pub(crate) const COMMAND_TYPE_SELF_TREASURE_DEVICE_CLOSE: NormRect = NormRect {
+    x: 0.820,
+    y: 0.158,
+    w: 0.076,
+    h: 0.102,
+};
+pub(crate) const NP_SELECTION_OPTIONS_2: [Point; 2] =
+    [Point::new(0.372, 0.522), Point::new(0.613, 0.522)];
+pub(crate) const NP_SELECTION_OPTIONS_3: [Point; 3] = [
+    Point::new(0.248, 0.522),
+    Point::new(0.496, 0.522),
+    Point::new(0.741, 0.522),
+];
+
 /// Enemy target positions for attack targeting (enemy_1..enemy_6).
 /// Coordinates are normalized from 2560x1440 screenshots.
 pub(crate) const ENEMY_TARGETS: [Point; 6] = [
@@ -244,6 +278,66 @@ pub(crate) fn debug_coordinates() -> DebugCoordinates {
                 })
                 .collect(),
             regions: Vec::new(),
+        },
+        CoordGroup {
+            id: "skillSelections".into(),
+            label: "技能二次选择".into(),
+            points: vec![
+                LabeledPoint {
+                    label: "SelectAddInfo 2-1".into(),
+                    point: SELECT_ADD_INFO_OPTIONS_2[0],
+                },
+                LabeledPoint {
+                    label: "SelectAddInfo 2-2".into(),
+                    point: SELECT_ADD_INFO_OPTIONS_2[1],
+                },
+                LabeledPoint {
+                    label: "SelectAddInfo 3-1".into(),
+                    point: SELECT_ADD_INFO_OPTIONS_3[0],
+                },
+                LabeledPoint {
+                    label: "SelectAddInfo 3-2".into(),
+                    point: SELECT_ADD_INFO_OPTIONS_3[1],
+                },
+                LabeledPoint {
+                    label: "SelectAddInfo 3-3".into(),
+                    point: SELECT_ADD_INFO_OPTIONS_3[2],
+                },
+                LabeledPoint {
+                    label: "NP 2-1".into(),
+                    point: NP_SELECTION_OPTIONS_2[0],
+                },
+                LabeledPoint {
+                    label: "NP 2-2".into(),
+                    point: NP_SELECTION_OPTIONS_2[1],
+                },
+                LabeledPoint {
+                    label: "NP 3-1".into(),
+                    point: NP_SELECTION_OPTIONS_3[0],
+                },
+                LabeledPoint {
+                    label: "NP 3-2".into(),
+                    point: NP_SELECTION_OPTIONS_3[1],
+                },
+                LabeledPoint {
+                    label: "NP 3-3".into(),
+                    point: NP_SELECTION_OPTIONS_3[2],
+                },
+            ],
+            regions: vec![
+                LabeledRegion {
+                    label: "SelectAddInfo close".into(),
+                    region: SELECT_ADD_INFO_CLOSE,
+                },
+                LabeledRegion {
+                    label: "selectTreasureDeviceInfo close".into(),
+                    region: SELECT_TREASURE_DEVICE_CLOSE,
+                },
+                LabeledRegion {
+                    label: "commandTypeSelfTreasureDevice close".into(),
+                    region: COMMAND_TYPE_SELF_TREASURE_DEVICE_CLOSE,
+                },
+            ],
         },
         CoordGroup {
             id: "enemyTargets".into(),

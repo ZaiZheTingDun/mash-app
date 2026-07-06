@@ -1709,6 +1709,7 @@ fn normal_current_party_ids_apply_previous_scene_end_of_turn_skill_exit() {
                 servant_id: None,
                 servant_is_support: false,
                 skill: Some("skill_3".into()),
+                skill_selection: None,
                 target: None,
                 target_member_id: None,
                 target_servant_id: None,
@@ -1891,6 +1892,7 @@ fn startup_action_selected_slot_resolves_to_current_position_after_auto_order_ch
         servant_id: None,
         servant_is_support: false,
         skill: Some("skill_1".into()),
+        skill_selection: None,
         target: None,
         target_member_id: None,
         target_servant_id: None,
@@ -1903,6 +1905,7 @@ fn startup_action_selected_slot_resolves_to_current_position_after_auto_order_ch
         servant_id: None,
         servant_is_support: false,
         skill: Some("skill_1".into()),
+        skill_selection: None,
         target: Some("servant_2".into()),
         target_member_id: None,
         target_servant_id: None,
@@ -1915,6 +1918,7 @@ fn startup_action_selected_slot_resolves_to_current_position_after_auto_order_ch
         servant_id: None,
         servant_is_support: false,
         skill: Some("skill_1".into()),
+        skill_selection: None,
         target: None,
         target_member_id: None,
         target_servant_id: None,
@@ -2000,6 +2004,12 @@ fn startup_action_member_id_resolves_after_team_reorder() {
         servant_id: Some(20),
         servant_is_support: false,
         skill: Some("skill_1".into()),
+        skill_selection: Some(crate::SkillSelection {
+            selection_type: "SelectAddInfo".into(),
+            index: 1,
+            option_count: Some(2),
+            label: Some("测试选项".into()),
+        }),
         target: Some("servant_1".into()),
         target_member_id: Some("slot-a".into()),
         target_servant_id: Some(10),
@@ -2012,10 +2022,19 @@ fn startup_action_member_id_resolves_after_team_reorder() {
 
     match resolved {
         Action::Servant {
-            servant, target, ..
+            servant,
+            target,
+            skill_selection,
+            ..
         } => {
             assert_eq!(servant.as_deref(), Some("servant_1"));
             assert_eq!(target.as_deref(), Some("servant_2"));
+            assert_eq!(
+                skill_selection
+                    .as_ref()
+                    .and_then(|selection| selection.label.as_deref()),
+                Some("测试选项")
+            );
         }
         _ => panic!("expected servant action"),
     }
@@ -2076,6 +2095,7 @@ fn normal_battle_order_change_keeps_waver_actions_on_waver_member() {
         servant_id: Some(WAVER),
         servant_is_support: false,
         skill: Some("skill_1".into()),
+        skill_selection: None,
         target: Some("servant_1".into()),
         target_member_id: Some("slot-typhon".into()),
         target_servant_id: Some(TYPHON),
@@ -2088,6 +2108,7 @@ fn normal_battle_order_change_keeps_waver_actions_on_waver_member() {
         servant_id: Some(WAVER),
         servant_is_support: false,
         skill: Some("skill_2".into()),
+        skill_selection: None,
         target: None,
         target_member_id: None,
         target_servant_id: None,
@@ -2100,6 +2121,7 @@ fn normal_battle_order_change_keeps_waver_actions_on_waver_member() {
         servant_id: Some(WAVER),
         servant_is_support: false,
         skill: Some("skill_3".into()),
+        skill_selection: None,
         target: None,
         target_member_id: None,
         target_servant_id: None,
@@ -2177,6 +2199,7 @@ fn member_action_does_not_fall_back_to_same_position_when_member_is_backline() {
         servant_id: Some(WAVER),
         servant_is_support: false,
         skill: Some("skill_1".into()),
+        skill_selection: None,
         target: None,
         target_member_id: None,
         target_servant_id: None,
@@ -2234,6 +2257,7 @@ fn auto_order_change_startup_flow_replays_control_after_swap() {
         servant_id: None,
         servant_is_support: false,
         skill: Some("skill_1".into()),
+        skill_selection: None,
         target: None,
         target_member_id: None,
         target_servant_id: None,
@@ -2302,6 +2326,7 @@ fn party_lineup_change_does_not_apply_end_of_turn_skill_by_default() {
         servant_id: None,
         servant_is_support: false,
         skill: Some("skill_2".into()),
+        skill_selection: None,
         target: None,
         target_member_id: None,
         target_servant_id: None,
@@ -2326,6 +2351,7 @@ fn party_lineup_change_applies_end_of_turn_servant_skill_withdraw_rule() {
         servant_id: None,
         servant_is_support: false,
         skill: Some("skill_2".into()),
+        skill_selection: None,
         target: None,
         target_member_id: None,
         target_servant_id: None,
@@ -2350,6 +2376,7 @@ fn party_lineup_change_removes_habetrot_at_end_of_turn_after_third_skill() {
         servant_id: None,
         servant_is_support: false,
         skill: Some("skill_3".into()),
+        skill_selection: None,
         target: None,
         target_member_id: None,
         target_servant_id: None,
@@ -2371,6 +2398,7 @@ fn party_lineup_change_removes_ultimate_elisabeth_at_end_of_turn_after_third_ski
         servant_id: None,
         servant_is_support: false,
         skill: Some("skill_3".into()),
+        skill_selection: None,
         target: None,
         target_member_id: None,
         target_servant_id: None,
@@ -2392,6 +2420,7 @@ fn action_frontline_available_rejects_source_out_of_frontline() {
         servant_id: None,
         servant_is_support: false,
         skill: Some("skill_1".into()),
+        skill_selection: None,
         target: None,
         target_member_id: None,
         target_servant_id: None,
@@ -2411,6 +2440,7 @@ fn action_frontline_available_rejects_missing_frontline_target() {
         servant_id: None,
         servant_is_support: false,
         skill: Some("skill_1".into()),
+        skill_selection: None,
         target: Some("servant_2".into()),
         target_member_id: None,
         target_servant_id: None,
@@ -3741,6 +3771,46 @@ fn command_spell_index_returns_none_for_unknown_or_missing() {
 }
 
 #[test]
+fn skill_selection_option_position_maps_supported_dialogs() {
+    let selection = |selection_type: &str, index: u32, option_count: u32| crate::SkillSelection {
+        selection_type: selection_type.into(),
+        index,
+        option_count: Some(option_count),
+        label: None,
+    };
+    let point = |selection_type: &str, index: u32, option_count: u32| {
+        skill_selection_option_position(&selection(selection_type, index, option_count))
+            .map(|point| (point.x, point.y))
+    };
+
+    assert_eq!(
+        point("SelectAddInfo", 0, 2),
+        Some((
+            SELECT_ADD_INFO_OPTIONS_2[0].x,
+            SELECT_ADD_INFO_OPTIONS_2[0].y
+        ))
+    );
+    assert_eq!(
+        point("SelectAddInfo", 2, 3),
+        Some((
+            SELECT_ADD_INFO_OPTIONS_3[2].x,
+            SELECT_ADD_INFO_OPTIONS_3[2].y
+        ))
+    );
+    assert_eq!(
+        point("selectTreasureDeviceInfo", 1, 2),
+        Some((NP_SELECTION_OPTIONS_2[1].x, NP_SELECTION_OPTIONS_2[1].y))
+    );
+    assert_eq!(
+        point("commandTypeSelfTreasureDevice", 2, 3),
+        Some((NP_SELECTION_OPTIONS_3[2].x, NP_SELECTION_OPTIONS_3[2].y))
+    );
+    assert_eq!(point("SelectAddInfo", 2, 2), None);
+    assert_eq!(point("SelectAddInfo", 0, 4), None);
+    assert_eq!(point("unknown", 0, 2), None);
+}
+
+#[test]
 fn order_change_slot_position_requires_one_front_and_one_back_range() {
     let front = order_change_slot_position(Some("servant_1"), 0..3).unwrap();
     assert_eq!(
@@ -3829,6 +3899,7 @@ fn turn_preparation_actions_preserves_configured_row_order() {
                 servant_id: None,
                 servant_is_support: false,
                 skill: Some("skill_3".into()),
+                skill_selection: None,
                 target: Some("servant_2".into()),
                 target_member_id: None,
                 target_servant_id: None,

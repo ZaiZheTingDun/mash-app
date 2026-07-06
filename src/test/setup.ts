@@ -100,6 +100,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "get_craft_essences":
       case "list_projects":
       case "load_battle_scenes":
+      case "get_servant_skill_selection":
         return [];
       case "get_active_project_id":
         return null;

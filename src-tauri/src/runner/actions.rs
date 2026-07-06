@@ -13,6 +13,7 @@ impl Runner {
                     servant,
                     servant_id,
                     skill,
+                    skill_selection,
                     target,
                     target_servant_id,
                     ..
@@ -49,6 +50,12 @@ impl Runner {
                             return self.fail_skill_execution(&action_label, "点击技能按钮失败");
                         }
                         thread::sleep(ACTION_DELAY);
+
+                        if let Some(selection) = skill_selection {
+                            if !self.execute_skill_selection(selection, &action_label) {
+                                return false;
+                            }
+                        }
 
                         if let Some(target_pos) = target_pos {
                             self.emit_debug("Battle", "等待目标选择框出现");
@@ -426,6 +433,30 @@ impl Runner {
         thread::sleep(ACTION_DELAY);
         self.skip_after_skill();
     }
+
+    fn execute_skill_selection(
+        &mut self,
+        selection: &crate::SkillSelection,
+        action_label: &str,
+    ) -> bool {
+        let Some(point) = skill_selection_option_position(selection) else {
+            return self
+                .fail_skill_execution(action_label, "技能二次选择配置无效或暂不支持该选项数量");
+        };
+        self.emit(
+            "Battle",
+            &format!(
+                "选择技能选项: {}",
+                selection.label.as_deref().unwrap_or("未命名选项")
+            ),
+        );
+        self.emit_skill_tap_debug("点击技能二次选择", point);
+        if !self.tap_at("Battle", point) {
+            return self.fail_skill_execution(action_label, "点击技能二次选择失败");
+        }
+        thread::sleep(ACTION_DELAY);
+        true
+    }
 }
 
 pub(crate) fn format_skill_tap_debug(label: &str, point: Point, width: u32, height: u32) -> String {
@@ -465,6 +496,24 @@ pub(crate) fn skill_target_position(target: Option<&str>) -> Option<Point> {
     let t = target?;
     let si = parse_index(t, "servant_")?;
     SKILL_TARGETS.get(si).copied()
+}
+
+pub(crate) fn skill_selection_option_position(selection: &crate::SkillSelection) -> Option<Point> {
+    let option_count = selection.option_count?;
+    let index = selection.index as usize;
+    match selection.selection_type.as_str() {
+        "SelectAddInfo" => match option_count {
+            2 => SELECT_ADD_INFO_OPTIONS_2.get(index).copied(),
+            3 => SELECT_ADD_INFO_OPTIONS_3.get(index).copied(),
+            _ => None,
+        },
+        "selectTreasureDeviceInfo" | "commandTypeSelfTreasureDevice" => match option_count {
+            2 => NP_SELECTION_OPTIONS_2.get(index).copied(),
+            3 => NP_SELECTION_OPTIONS_3.get(index).copied(),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 pub(crate) fn order_change_slot_position(

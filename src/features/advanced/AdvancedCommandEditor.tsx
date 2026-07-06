@@ -40,6 +40,7 @@ import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIc
 import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
 import { servantSlotIndex, skillSlotIndex } from "../battle/battleSceneModel";
 import { useServantSkillTargeting } from "../battle/useServantSkillTargeting";
+import { useServantSkillSelections } from "../battle/useServantSkillSelections";
 import type {
   AdvancedBattleScene,
   AdvancedCommandCardCondition,
@@ -183,6 +184,9 @@ function AdvancedPreparationActionSummary({
     skillLabel = skillEntry?.name || (SKILL_LABELS[resolvedAction.skill ?? ""] ?? "技能");
     skillSlot = idx >= 0 ? idx : 0;
     actionText = `释放 ${skillLabel}`;
+    if (resolvedAction.skillSelection) {
+      actionText += `并选择 ${resolvedAction.skillSelection.label ?? `选项 ${resolvedAction.skillSelection.index + 1}`}`;
+    }
   } else {
     const kind = action.type === "equipment" ? "equipment" : "commandSpell";
     sourceFace = (
@@ -203,6 +207,9 @@ function AdvancedPreparationActionSummary({
         {resolvedAction.type === "servant"
           ? <>释放{" "}<span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span></>
           : actionText}
+        {resolvedAction.type === "servant" && resolvedAction.skillSelection
+          ? `并选择 ${resolvedAction.skillSelection.label ?? `选项 ${resolvedAction.skillSelection.index + 1}`}`
+          : ""}
       </Text>
       {orderChangeSlots?.front != null && orderChangeSlots.back != null ? (
         <>
@@ -261,6 +268,7 @@ function AdvancedStrategyEditor({
   faces,
   skillIcons,
   skillTargetStatus,
+  skillSelection,
   disableAutoSkillTargetRecognition,
   grandServants,
   grandCardStrategy,
@@ -274,6 +282,7 @@ function AdvancedStrategyEditor({
   faces: Record<string, string | null>;
   skillIcons: Record<string, SkillIcons>;
   skillTargetStatus: ReturnType<typeof useServantSkillTargeting>;
+  skillSelection: ReturnType<typeof useServantSkillSelections>;
   disableAutoSkillTargetRecognition: boolean;
   grandServants: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
@@ -412,6 +421,7 @@ function AdvancedStrategyEditor({
       servant: draft.source,
       ...servantRef(members, draft.source),
       skill: draft.option,
+      skillSelection: draft.skillSelection ?? null,
       target,
       ...targetRef(members, target),
     } satisfies ServantAction;
@@ -480,12 +490,25 @@ function AdvancedStrategyEditor({
   };
 
   const selectControlSkill = (source: PrepSource, skill: string) => {
-    if (source === "equipment" || disableAutoSkillTargetRecognition) {
+    if (source === "equipment") {
       setControlDraft({ step: "target", source, option: skill });
       return;
     }
     const servant = postControlMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
-    const status = skillTargetStatus(servant, skill);
+    const selection = skillSelection(servant, skill);
+    if (selection) {
+      setControlDraft({
+        step: "skillSelection",
+        source,
+        option: skill,
+        selectionType: selection.selectionType,
+        options: selection.options,
+      });
+      return;
+    }
+    const status = disableAutoSkillTargetRecognition
+      ? "unknown"
+      : skillTargetStatus(servant, skill);
     const draft = { step: "target", source, option: skill } satisfies Extract<
       PrepDraft,
       { step: "target" }
@@ -498,12 +521,25 @@ function AdvancedStrategyEditor({
   };
 
   const selectStartupSkill = (source: PrepSource, skill: string) => {
-    if (source === "equipment" || disableAutoSkillTargetRecognition) {
+    if (source === "equipment") {
       setPrepDraft({ step: "target", source, option: skill });
       return;
     }
     const servant = currentPartyMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
-    const status = skillTargetStatus(servant, skill);
+    const selection = skillSelection(servant, skill);
+    if (selection) {
+      setPrepDraft({
+        step: "skillSelection",
+        source,
+        option: skill,
+        selectionType: selection.selectionType,
+        options: selection.options,
+      });
+      return;
+    }
+    const status = disableAutoSkillTargetRecognition
+      ? "unknown"
+      : skillTargetStatus(servant, skill);
     const draft = { step: "target", source, option: skill } satisfies Extract<
       PrepDraft,
       { step: "target" }
@@ -513,6 +549,60 @@ function AdvancedStrategyEditor({
       return;
     }
     setPrepDraft(status === "needsTarget" ? { ...draft, allowNoTarget: false } : draft);
+  };
+
+  const finishControlSkillSelection = (
+    draft: Extract<PrepDraft, { step: "skillSelection" }>,
+    option: { index: number; label: string }
+  ) => {
+    const targetDraft = {
+      step: "target",
+      source: draft.source,
+      option: draft.option,
+      skillSelection: {
+        type: draft.selectionType,
+        index: option.index,
+        optionCount: draft.options.length,
+        label: option.label,
+      },
+    } satisfies Extract<PrepDraft, { step: "target" }>;
+    const servant = postControlMembers[servantSlotIndex(draft.source) ?? 0]?.servant ?? null;
+    const status = disableAutoSkillTargetRecognition
+      ? "unknown"
+      : skillTargetStatus(servant, draft.option);
+    if (status === "noTarget") {
+      finishControlAction(targetDraft, null);
+      return;
+    }
+    setControlDraft(
+      status === "needsTarget" ? { ...targetDraft, allowNoTarget: false } : targetDraft
+    );
+  };
+
+  const finishStartupSkillSelection = (
+    draft: Extract<PrepDraft, { step: "skillSelection" }>,
+    option: { index: number; label: string }
+  ) => {
+    const targetDraft = {
+      step: "target",
+      source: draft.source,
+      option: draft.option,
+      skillSelection: {
+        type: draft.selectionType,
+        index: option.index,
+        optionCount: draft.options.length,
+        label: option.label,
+      },
+    } satisfies Extract<PrepDraft, { step: "target" }>;
+    const servant = currentPartyMembers[servantSlotIndex(draft.source) ?? 0]?.servant ?? null;
+    const status = disableAutoSkillTargetRecognition
+      ? "unknown"
+      : skillTargetStatus(servant, draft.option);
+    if (status === "noTarget") {
+      finishPrepAction(targetDraft, null);
+      return;
+    }
+    setPrepDraft(status === "needsTarget" ? { ...targetDraft, allowNoTarget: false } : targetDraft);
   };
 
   return (
@@ -688,6 +778,19 @@ function AdvancedStrategyEditor({
                       />
                     )}
                 </>
+              ) : controlDraft.step === "skillSelection" ? (
+                <>
+                  {controlDraft.options.map((option) => (
+                    <button
+                      type="button"
+                      className="battle-option-btn"
+                      key={option.index}
+                      onClick={() => finishControlSkillSelection(controlDraft, option)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </>
               ) : controlDraft.step === "target" ? (
                 <>
                   {controlDraft.allowNoTarget !== false && (
@@ -858,6 +961,19 @@ function AdvancedStrategyEditor({
                         onSelect={(skill) => selectStartupSkill(prepDraft.source, skill)}
                       />
                     )}
+                </>
+              ) : prepDraft.step === "skillSelection" ? (
+                <>
+                  {prepDraft.options.map((option) => (
+                    <button
+                      type="button"
+                      className="battle-option-btn"
+                      key={option.index}
+                      onClick={() => finishStartupSkillSelection(prepDraft, option)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </>
               ) : prepDraft.step === "target" ? (
                 <>
@@ -1057,6 +1173,7 @@ export function AdvancedCommandEditor({
   const faces = useServantFaceImages(initialPartyLineup);
   const skillIcons = useServantSkillIcons(initialPartyLineup);
   const skillTargetStatus = useServantSkillTargeting(initialPartyLineup);
+  const skillSelection = useServantSkillSelections(initialPartyLineup);
 
   useEffect(() => {
     if (!projectId) return;
@@ -1102,6 +1219,7 @@ export function AdvancedCommandEditor({
           faces={faces}
           skillIcons={skillIcons}
           skillTargetStatus={skillTargetStatus}
+          skillSelection={skillSelection}
           disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
           grandServants={grandServants}
           grandCardStrategy={grandCardStrategy}

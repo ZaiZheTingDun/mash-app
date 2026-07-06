@@ -1,5 +1,11 @@
 import { servantLabel } from "../../components/common/battleActorLabels";
-import type { AdvancedBattleScene, AdvancedCommandCardCondition, PreparationAction } from "../../types/command";
+import type {
+  AdvancedBattleScene,
+  AdvancedCommandCardCondition,
+  PreparationAction,
+  SkillSelection,
+  SkillSelectionType,
+} from "../../types/command";
 import type {
   GrandCardPriority,
   GrandCardRuleConfig,
@@ -22,7 +28,20 @@ export type PrepSource = "equipment" | "commandSpell" | PartySlot;
 export type PrepDraft =
   | { step: "source" }
   | { step: "option"; source: PrepSource }
-  | { step: "target"; source: PrepSource; option: string; allowNoTarget?: boolean }
+  | {
+    step: "skillSelection";
+    source: PrepSource;
+    option: string;
+    selectionType: SkillSelectionType;
+    options: { index: number; label: string }[];
+  }
+  | {
+    step: "target";
+    source: PrepSource;
+    option: string;
+    allowNoTarget?: boolean;
+    skillSelection?: SkillSelection | null;
+  }
   | { step: "orderChange"; source: "equipment"; option: string; front: PartySlot | null };
 
 export const SKILLS = ["skill_1", "skill_2", "skill_3"] as const;
@@ -291,7 +310,10 @@ export function prepSummary(action: PreparationAction, partyLineup: (Servant | n
   const source = servantSlotIndex(action.servant) ?? 0;
   const target = servantSlotIndex(action.target);
   const suffix = target == null ? "" : ` to ${servantLabel(target, partyLineup[target] ?? null)}`;
-  return `${servantLabel(source, partyLineup[source] ?? null)} ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}${suffix}`;
+  const selection = action.skillSelection
+    ? `并选择 ${action.skillSelection.label ?? `选项 ${action.skillSelection.index + 1}`}`
+    : "";
+  return `${servantLabel(source, partyLineup[source] ?? null)} ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}${selection}${suffix}`;
 }
 
 export function commandCardSummary(card: AdvancedCommandCardCondition): string {

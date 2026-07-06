@@ -249,6 +249,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::catalog::get_servants,
             commands::catalog::get_craft_essences,
+            commands::catalog::get_servant_skill_selection,
             commands::catalog::get_servant_skill_targeting,
             commands::assets::get_self_check_status,
             commands::assets::get_asset_bundle_status,

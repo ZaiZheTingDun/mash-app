@@ -3,6 +3,18 @@
 
 use crate::runner::ApRecoveryItem;
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillSelection {
+    #[serde(rename = "type")]
+    pub selection_type: String,
+    pub index: u32,
+    #[serde(rename = "optionCount", default)]
+    pub option_count: Option<u32>,
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
 pub enum Action {
@@ -17,6 +29,8 @@ pub enum Action {
         #[serde(rename = "servantIsSupport", default)]
         servant_is_support: bool,
         skill: Option<String>,
+        #[serde(rename = "skillSelection", default)]
+        skill_selection: Option<SkillSelection>,
         target: Option<String>,
         #[serde(rename = "targetMemberId", default)]
         target_member_id: Option<String>,
@@ -239,6 +253,8 @@ pub enum AdvancedAction {
         #[serde(rename = "servantIsSupport", default)]
         servant_is_support: bool,
         skill: Option<String>,
+        #[serde(rename = "skillSelection", default)]
+        skill_selection: Option<SkillSelection>,
         target: Option<String>,
         #[serde(rename = "targetMemberId", default)]
         target_member_id: Option<String>,
@@ -298,6 +314,7 @@ impl AdvancedAction {
                 servant_id,
                 servant_is_support,
                 skill,
+                skill_selection,
                 target,
                 target_member_id,
                 target_servant_id,
@@ -309,6 +326,7 @@ impl AdvancedAction {
                 servant_id: *servant_id,
                 servant_is_support: *servant_is_support,
                 skill: skill.clone(),
+                skill_selection: skill_selection.clone(),
                 target: target.clone(),
                 target_member_id: target_member_id.clone(),
                 target_servant_id: *target_servant_id,

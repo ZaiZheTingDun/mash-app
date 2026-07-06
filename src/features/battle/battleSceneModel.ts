@@ -3,6 +3,8 @@ import type {
   AttackCard,
   BattleTurn,
   OrderChangeSelection,
+  SkillSelection,
+  SkillSelectionType,
 } from "../../types/command";
 import type { Servant } from "../../types/servant";
 
@@ -13,7 +15,20 @@ export type EnemyTarget = `enemy_${1 | 2 | 3 | 4 | 5 | 6}`;
 export type PrepDraft =
   | { step: "source" }
   | { step: "option"; source: PrepSource }
-  | { step: "target"; source: PrepSource; option: string; allowNoTarget?: boolean }
+  | {
+    step: "skillSelection";
+    source: PrepSource;
+    option: string;
+    selectionType: SkillSelectionType;
+    options: { index: number; label: string }[];
+  }
+  | {
+    step: "target";
+    source: PrepSource;
+    option: string;
+    allowNoTarget?: boolean;
+    skillSelection?: SkillSelection | null;
+  }
   | {
     step: "orderChange";
     source: "equipment";
