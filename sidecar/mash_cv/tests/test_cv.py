@@ -1039,11 +1039,9 @@ class TestReadRegionLuma:
         assert dark["meanLuma"] < 10.0
 
     def test_cn_skill_use_screenshots_separate_used_and_confirm_states(self):
-        repo_root = Path(__file__).resolve().parents[3]
-        use_path = repo_root / ".screenshots" / "cn" / "skill_use.png"
-        used_path = repo_root / ".screenshots" / "cn" / "skill_used.png"
-        if not use_path.is_file() or not used_path.is_file():
-            pytest.skip("CN skill-use screenshots are not available")
+        screenshots_dir = Path(__file__).resolve().parent / "test_data" / "screenshots"
+        use_path = screenshots_dir / "battle_skill_use_dialog_cn_confirm.png"
+        used_path = screenshots_dir / "battle_skill_use_dialog_cn_already_used.png"
 
         use_img = cv2.imread(str(use_path))
         used_img = cv2.imread(str(used_path))
@@ -1075,10 +1073,9 @@ class TestProbeSkillUseDialog:
     def test_cn_skill_use_screenshots_return_confirm_luma_on_same_probe(self):
         repo_root = Path(__file__).resolve().parents[3]
         template_dir = repo_root / "src-tauri" / "resources" / "servers" / "cn" / "templates"
-        use_path = repo_root / ".screenshots" / "cn" / "skill_use.png"
-        used_path = repo_root / ".screenshots" / "cn" / "skill_used.png"
-        if not use_path.is_file() or not used_path.is_file():
-            pytest.skip("CN skill-use screenshots are not available")
+        screenshots_dir = Path(__file__).resolve().parent / "test_data" / "screenshots"
+        use_path = screenshots_dir / "battle_skill_use_dialog_cn_confirm.png"
+        used_path = screenshots_dir / "battle_skill_use_dialog_cn_already_used.png"
 
         assert mash_cv._load_templates(str(template_dir))["ok"] is True
         dialog_region = {"x": 0.421, "y": 0.211, "w": 0.135, "h": 0.08}

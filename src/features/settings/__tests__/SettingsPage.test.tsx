@@ -260,6 +260,7 @@ describe("SettingsDialog", () => {
     expect(screen.queryByRole("button", { name: "调试" })).not.toBeInTheDocument();
     expect(screen.queryByText("自动截图战利品页面")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "基础设置" })).toBeInTheDocument();
+    expect(await screen.findByText("宝具识别方式")).toBeInTheDocument();
   });
 
   it("loads and saves debug settings from the debug page", async () => {

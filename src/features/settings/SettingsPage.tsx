@@ -99,6 +99,7 @@ export function SettingsDialog({
 }: SettingsDialogProps) {
   const items = visibleNavItems();
   const activeItem = items.find((item) => item.section === section) ?? items[0];
+  const activeSection = activeItem.section;
   const groupedItems = [
     { group: "game", label: "游戏" },
     { group: "application", label: "应用" },
@@ -136,8 +137,8 @@ export function SettingsDialog({
                           type="button"
                           variant="ghost"
                           color="gray"
-                          data-active={section === item.section ? "true" : undefined}
-                          aria-current={section === item.section ? "page" : undefined}
+                          data-active={activeSection === item.section ? "true" : undefined}
+                          aria-current={activeSection === item.section ? "page" : undefined}
                           onClick={() => onSectionChange(item.section)}
                           className="settings-nav-button"
                         >
@@ -169,7 +170,9 @@ export function SettingsDialog({
 
             <Box className="settings-content-scroll">
               <Box className="settings-content-body">
-                {activeItem.render(open && activeItem.section === section, { onProjectsImported })}
+                {activeItem.render(open && activeItem.section === activeSection, {
+                  onProjectsImported,
+                })}
               </Box>
             </Box>
           </Flex>
