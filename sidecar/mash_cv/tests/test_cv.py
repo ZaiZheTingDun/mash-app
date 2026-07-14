@@ -760,9 +760,64 @@ class TestDetectScreen:
         img = cv2.imread(screenshot)
         assert img is not None
 
-        result = mash_cv._detect_screen(img)
-        assert result["screen"] == "BattleResultLootEvent"
-        assert result["score"] >= 0.85
+        for frame in (
+            img,
+            cv2.resize(img, (1920, 1080), interpolation=cv2.INTER_AREA),
+        ):
+            result = mash_cv._detect_screen(frame)
+            assert result["screen"] == "BattleResultLootEvent"
+            assert result["score"] >= 0.85
+
+    def test_jp_battle_result_loot_event_detects_real_capture(self):
+        """JP event rewards use a localized label and search region."""
+        repo_root = Path(__file__).resolve().parents[3]
+        templates_dir = (
+            repo_root
+            / "src-tauri"
+            / "resources"
+            / "servers"
+            / "jp"
+            / "templates"
+        )
+        cv_json = (
+            repo_root
+            / "src-tauri"
+            / "resources"
+            / "servers"
+            / "jp"
+            / "cv.json"
+        )
+        template = templates_dir / "text_battle_result_loot_event.png"
+        screenshot = (
+            Path(__file__).resolve().parent
+            / "test_data"
+            / "screenshots"
+            / "battle_result_loot_event_jp.png"
+        )
+
+        assert template.is_file(), template
+        with cv_json.open(encoding="utf-8") as f:
+            detect = json.load(f)["screens"]["BattleResultLootEvent"]["detect"]
+        assert detect == {
+            "template": "text_battle_result_loot_event",
+            "region": {"x": 0.12, "y": 0.681, "w": 0.282, "h": 0.091},
+            "threshold": 0.85,
+        }
+
+        assert screenshot.is_file(), screenshot
+
+        mash_cv._load_templates(str(templates_dir))
+        mash_cv._load_config(str(cv_json))
+        img = cv2.imread(str(screenshot))
+        assert img is not None
+
+        for frame in (
+            img,
+            cv2.resize(img, (1920, 1080), interpolation=cv2.INTER_AREA),
+        ):
+            result = mash_cv._detect_screen(frame)
+            assert result["screen"] == "BattleResultLootEvent"
+            assert result["score"] >= 0.85
 
 
 # ── _load_templates ─────────────────────────────────────────────────────

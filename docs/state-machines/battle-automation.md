@@ -278,10 +278,11 @@ frontend running/terminal decisions must use `status`.
   (`text_battle_result_master_level_up`) and routes to the same
   `BattleResultExp` handler. It also uses elevated priority because the
   battle HUD can remain visible behind the overlay.
-- `BattleResultLootEvent.detect`: detects the CN event rewards page that can
-  appear after the normal loot page (`text_battle_result_loot_event`) and
-  routes to the same `BattleResultLoot` handler, so the runner taps the
-  existing loot "Next" coordinate.
+- `BattleResultLootEvent.detect`: detects the localized CN and JP event
+  rewards page that can appear after the normal loot page
+  (`text_battle_result_loot_event`) and routes to the same
+  `BattleResultLoot` handler, so the runner taps the existing loot "Next"
+  coordinate.
 - `BattleResultLoot` can run an optional current-project drop-stop probe before
   tapping "Next". When the project enables "五星礼装掉落自动停止", the runner
   checks the visible first two loot rows for the five-star CE star strip
