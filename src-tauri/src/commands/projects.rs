@@ -164,6 +164,15 @@ fn normalize_grand_servants(project: &mut Project) {
             }
         }
     }
+    if project.grand_class == GrandClass::Lancer {
+        project
+            .grand_servants
+            .sort_by_key(|config| match config.lancer_role {
+                Some(LancerGrandRole::Single) => 0,
+                Some(LancerGrandRole::Aoe) => 1,
+                None => 2,
+            });
+    }
 }
 
 pub(crate) fn write_projects(app: &tauri::AppHandle, projects: &[Project]) -> Result<(), String> {

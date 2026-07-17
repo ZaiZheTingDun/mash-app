@@ -537,6 +537,7 @@ impl Default for SupportGrandBondCeMode {
 #[serde(rename_all = "camelCase")]
 pub enum GrandClass {
     Saber,
+    Lancer,
     Berserker,
 }
 
@@ -651,6 +652,15 @@ pub struct GrandServantConfig {
     pub np_card: String,
     #[serde(default = "default_grand_card_priority")]
     pub priority: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lancer_role: Option<LancerGrandRole>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum LancerGrandRole {
+    Single,
+    Aoe,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default)]

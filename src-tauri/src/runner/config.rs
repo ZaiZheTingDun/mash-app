@@ -108,12 +108,22 @@ pub struct GrandServantConfig {
     pub np_card: String,
     #[serde(default = "default_grand_card_priority")]
     pub priority: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lancer_role: Option<LancerGrandRole>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LancerGrandRole {
+    Single,
+    Aoe,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum GrandClass {
     Saber,
+    Lancer,
     Berserker,
 }
 

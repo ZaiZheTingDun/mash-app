@@ -183,6 +183,18 @@
   cursor: pointer;
 }
 
+.advanced-grand-output .grand-servant-role-empty {
+  border-style: dashed;
+  border-color: var(--gray-8);
+  color: var(--gray-12);
+}
+
+.advanced-grand-output .grand-servant-role-empty.selected {
+  border-style: solid;
+  border-color: var(--amber-9);
+  box-shadow: 0 0 0 2px var(--amber-a5);
+}
+
 .advanced-grand-output .grand-servant-empty {
   width: 80px;
   height: 60px;

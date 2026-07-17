@@ -238,6 +238,24 @@ describe("BattlePage", () => {
     expect(vi.mocked(invoke).mock.calls.some(([cmd]) => cmd === "start_automation")).toBe(false);
   });
 
+  it("requires both single and aoe roles before starting a lancer grand battle", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    const callbacks = renderBattlePage({
+      ...PROJECT,
+      advancedMode: true,
+      grandClass: "lancer",
+      grandServants: [
+        { slotIndex: 0, npCard: "auto", priority: "damage", lancerRole: "single" },
+      ],
+    });
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    expect(screen.getByText("枪阶戴冠战需要分别选择单体和光炮从者")).toBeInTheDocument();
+    expect(callbacks.onAutomationStart).not.toHaveBeenCalled();
+  });
+
   it("defaults legacy grand battle projects to saber without blocking other classes", async () => {
     const user = userEvent.setup();
     mockProjectCommands();

@@ -293,6 +293,7 @@ export function ProjectBar({
                         <Select.Trigger aria-label="冠位职阶" />
                         <Select.Content>
                           <Select.Item value="saber">剑阶冠位</Select.Item>
+                          <Select.Item value="lancer">枪阶冠位</Select.Item>
                           <Select.Item value="berserker">狂阶冠位</Select.Item>
                         </Select.Content>
                       </Select.Root>

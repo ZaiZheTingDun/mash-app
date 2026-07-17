@@ -12,6 +12,7 @@ import {
   type PartyMember,
 } from "../team/partyServants";
 import type {
+  GrandClass,
   GrandCardPriority,
   GrandNpCard,
   GrandServantConfig,
@@ -21,6 +22,7 @@ interface GrandOutputSettingsProps {
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   grandServants: GrandServantConfig[];
+  grandClass: GrandClass;
   onChange?: (grandServants: GrandServantConfig[]) => void;
 }
 
@@ -28,11 +30,17 @@ export function GrandOutputSettings({
   partyMembers,
   faces,
   grandServants,
+  grandClass,
   onChange,
 }: GrandOutputSettingsProps) {
   const [settingsIndex, setSettingsIndex] = useState<number | null>(null);
   const partyLineup = partyMembersToServants(partyMembers);
-  const normalized = normalizeGrandServants(grandServants);
+  const [selectedLancerRole, setSelectedLancerRole] = useState<"single" | "aoe">("single");
+  const normalized = normalizeGrandServants(grandServants, grandClass);
+  const lancerMode = grandClass === "lancer";
+  const activeLancerRole = normalized.some((config) => config.lancerRole === selectedLancerRole)
+    ? selectedLancerRole === "single" ? "aoe" : "single"
+    : selectedLancerRole;
   const selectedSlots = new Set(normalized.map((item) => item.slotIndex));
   const settings =
     settingsIndex == null ? null : normalized[settingsIndex] ?? null;
@@ -40,7 +48,7 @@ export function GrandOutputSettings({
     settings == null ? null : partyLineup[settings.slotIndex] ?? null;
 
   const persist = (next: GrandServantConfig[]) => {
-    onChange?.(normalizeGrandServants(next));
+    onChange?.(normalizeGrandServants(next, grandClass));
   };
   const addGrandServant = (slotIndex: number) => {
     const member = partyMembers[slotIndex];
@@ -60,8 +68,12 @@ export function GrandOutputSettings({
         isSupport: member.isSupport,
         npCard: "auto",
         priority: "damage",
+        ...(lancerMode ? { lancerRole: activeLancerRole } : {}),
       },
     ]);
+    if (lancerMode) {
+      setSelectedLancerRole(activeLancerRole === "single" ? "aoe" : "single");
+    }
   };
   const removeGrandServant = (index: number) => {
     persist(normalized.filter((_, itemIndex) => itemIndex !== index));
@@ -94,20 +106,45 @@ export function GrandOutputSettings({
             冠位
           </Text>
           <div className="advanced-grand-output-slots">
-            {normalized.map((config, index) => {
+            {(lancerMode
+              ? (["single", "aoe"] as const).map((role) => ({
+                  role,
+                  index: normalized.findIndex((config) => config.lancerRole === role),
+                }))
+              : normalized.map((_, index) => ({ role: null, index }))
+            ).map(({ role, index }) => {
+              const config = index >= 0 ? normalized[index] : null;
+              if (!config && role) {
+                const label = role === "single" ? "单体" : "光炮";
+                return (
+                  <button
+                    key={role}
+                    type="button"
+                    className={`grand-servant-tile grand-servant-role-empty${activeLancerRole === role ? " selected" : ""}`}
+                    aria-label={`选择${label}冠位`}
+                    aria-pressed={activeLancerRole === role}
+                    onClick={() => setSelectedLancerRole(role)}
+                  >
+                    <span className="grand-role-badge">{label}</span>
+                    <span className="grand-servant-placeholder">未选择</span>
+                  </button>
+                );
+              }
+              if (!config) return null;
               const servant = partyLineup[config.slotIndex] ?? null;
+              const roleLabel = role === "single" ? "单体" : role === "aoe" ? "光炮" : index === 0 ? "主" : "副";
               return (
                 <button
                   key={`${config.slotIndex}-${index}`}
                   type="button"
                   className="grand-servant-tile"
-                  aria-label={`${index === 0 ? "主" : "副"}冠位${
+                  aria-label={`${roleLabel}冠位${
                     servant ? `：${servant.name_cn}` : ""
                   }`}
                   onClick={() => setSettingsIndex(index)}
                 >
                   <span className="grand-role-badge">
-                    {index === 0 ? "主" : "副"}
+                    {roleLabel}
                   </span>
                   {servant && faces[servant.variantKey] ? (
                     <img
@@ -123,13 +160,15 @@ export function GrandOutputSettings({
                   <span className="grand-np-badge">
                     {npCardLabel(config.npCard, servant?.noblePhantasmCard)}
                   </span>
-                  <span className="grand-priority-badge">
-                    {priorityLabel(config.priority)}
-                  </span>
+                  {!lancerMode && (
+                    <span className="grand-priority-badge">
+                      {priorityLabel(config.priority)}
+                    </span>
+                  )}
                 </button>
               );
             })}
-            {normalized.length < 2 && (
+            {!lancerMode && normalized.length < 2 && (
               <div className="grand-servant-empty">选择冠位从者</div>
             )}
           </div>
@@ -195,7 +234,7 @@ export function GrandOutputSettings({
                   </Select.Content>
                 </Select.Root>
               </label>
-              <label className="grand-setting-field">
+              {!lancerMode && <label className="grand-setting-field">
                 <Text size="2" weight="medium">
                   出卡策略
                 </Text>
@@ -213,7 +252,7 @@ export function GrandOutputSettings({
                     <Select.Item value="np">NP 优先</Select.Item>
                   </Select.Content>
                 </Select.Root>
-              </label>
+              </label>}
               <Flex justify="between" gap="3">
                 <Button
                   type="button"
@@ -224,7 +263,7 @@ export function GrandOutputSettings({
                   移除
                 </Button>
                 <Flex gap="3">
-                  {settingsIndex > 0 && (
+                  {!lancerMode && settingsIndex > 0 && (
                     <Button
                       type="button"
                       variant="soft"

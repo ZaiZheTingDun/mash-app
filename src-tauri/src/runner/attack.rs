@@ -1268,12 +1268,13 @@ impl Runner {
                         &party_ids,
                         &party_supports,
                         &grand_servants,
+                        self.config.grand_class,
                     );
                     let original_members = self.build_full_party_members();
                     let mut members = original_members.clone();
                     let mut startup_actions = Vec::new();
                     if let Some(action) = auto_order_change.clone() {
-                        self.emit("Attack", "启动条件：自动将后排主冠位换至前排");
+                        self.emit("Attack", "启动条件：自动将后排冠位从者换至前排");
                         let ids = party_member_ids(&members);
                         if action_frontline_available(&ids, &action) {
                             apply_party_member_lineup_change(&mut members, &action);

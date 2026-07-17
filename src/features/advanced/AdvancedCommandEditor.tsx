@@ -271,6 +271,7 @@ function AdvancedStrategyEditor({
   skillSelection,
   disableAutoSkillTargetRecognition,
   grandServants,
+  grandClass,
   grandCardStrategy,
   grandCardPriorityEnabled,
   onGrandServantsChange,
@@ -285,6 +286,7 @@ function AdvancedStrategyEditor({
   skillSelection: ReturnType<typeof useServantSkillSelections>;
   disableAutoSkillTargetRecognition: boolean;
   grandServants: GrandServantConfig[];
+  grandClass: GrandClass;
   grandCardStrategy?: GrandCardStrategy;
   grandCardPriorityEnabled: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
@@ -296,8 +298,14 @@ function AdvancedStrategyEditor({
   const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
   const partyLineup = useMemo(() => partyMembersToServants(partyMembers), [partyMembers]);
   const grandAutoOrderChange = scene.grandAutoOrderChange ?? null;
-  const mainGrandSlot = mainGrandBackSlot(grandServants);
+  const mainGrandSlot = mainGrandBackSlot(grandServants, grandClass);
   const mainGrandServant = mainGrandSlot == null ? null : partyLineup[mainGrandSlot] ?? null;
+  const orderChangeRole = grandClass === "lancer"
+    ? grandServants.find((config) => config.slotIndex === mainGrandSlot)?.lancerRole
+    : null;
+  const orderChangeLabel = grandClass === "lancer"
+    ? orderChangeRole === "aoe" ? "光炮冠位从者" : "单体冠位从者"
+    : "主冠位从者";
   const startupSelectableSlots = useMemo(() => {
     const slots = [0, 1, 2];
     if (mainGrandSlot != null && grandAutoOrderChange === true) {
@@ -615,6 +623,7 @@ function AdvancedStrategyEditor({
             partyMembers={partyMembers}
             faces={faces}
             grandServants={grandServants}
+            grandClass={grandClass}
             onChange={onGrandServantsChange}
           />
         </div>
@@ -627,7 +636,7 @@ function AdvancedStrategyEditor({
           {mainGrandSlot != null && grandAutoOrderChange == null ? (
             <div className="advanced-grand-order-choice">
               <Text size="2" weight="medium">
-                主冠位从者配置在后排，是否自动换位至前排？
+                {orderChangeLabel}配置在后排，是否自动换位至前排？
               </Text>
               <div className="battle-choice-row">
                 <button
@@ -650,7 +659,7 @@ function AdvancedStrategyEditor({
             <div className="advanced-grand-order-note">
               <Text size="2" weight="medium">
                 第一回合会自动将
-                {mainGrandServant ? ` ${mainGrandServant.name_cn} ` : "主冠位从者"}
+                {mainGrandServant ? ` ${mainGrandServant.name_cn} ` : orderChangeLabel}
                 和前排指令卡最多的从者交换。
               </Text>
               <button
@@ -1150,6 +1159,7 @@ export function AdvancedCommandEditor({
   partyMembers,
   disableAutoSkillTargetRecognition = false,
   grandServants = [],
+  grandClass = "saber",
   grandCardStrategy,
   grandCardPriorityEnabled = false,
   onGrandServantsChange,
@@ -1213,7 +1223,7 @@ export function AdvancedCommandEditor({
   return (
     <Flex direction="column" className="command-editor advanced-command-editor">
       <div className="command-scroll-region">
-        <AdvancedStrategyEditor
+      <AdvancedStrategyEditor
           scene={scene}
           partyMembers={initialPartyMembers}
           faces={faces}
@@ -1221,7 +1231,8 @@ export function AdvancedCommandEditor({
           skillTargetStatus={skillTargetStatus}
           skillSelection={skillSelection}
           disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
-          grandServants={grandServants}
+        grandServants={grandServants}
+        grandClass={grandClass}
           grandCardStrategy={grandCardStrategy}
           grandCardPriorityEnabled={grandCardPriorityEnabled}
           onGrandServantsChange={onGrandServantsChange}

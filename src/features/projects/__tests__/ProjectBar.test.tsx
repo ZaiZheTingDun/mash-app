@@ -123,6 +123,22 @@ describe("ProjectBar", () => {
     expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "berserker");
   });
 
+  it("creates a lancer grand project from the create dialog", async () => {
+    const user = userEvent.setup();
+    const onCreateProject = vi.fn();
+    renderProjectBar({ onCreateProject });
+
+    await user.click(screen.getByRole("button", { name: /队伍操作/ }));
+    await user.click(await screen.findByRole("menuitem", { name: /新建队伍/ }));
+    await user.click(await screen.findByRole("combobox", { name: "队伍模式" }));
+    await user.click(await screen.findByRole("option", { name: "戴冠战模式" }));
+    await user.click(screen.getByRole("combobox", { name: "冠位职阶" }));
+    await user.click(await screen.findByRole("option", { name: "枪阶冠位" }));
+    await user.click(screen.getByRole("button", { name: "新建" }));
+
+    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "lancer");
+  });
+
   it("renames the active project from the action menu", async () => {
     const user = userEvent.setup();
     const onRenameProject = vi.fn();

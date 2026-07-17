@@ -16,6 +16,7 @@ import type {
   GrandRuleColor,
   GrandRuleKind,
   GrandServantConfig,
+  GrandClass,
 } from "../../types/project";
 import type { Servant } from "../../types/servant";
 import commandBgArts from "../../../src-tauri/resources/images/command_bg/command_bg_a.png";
@@ -158,12 +159,25 @@ export function servantSlotIndex(source: string | null | undefined): number | nu
   return match ? Number(match[1]) - 1 : null;
 }
 
-export function mainGrandBackSlot(grandServants: GrandServantConfig[]): number | null {
-  const slotIndex = grandServants[0]?.slotIndex;
-  return Number.isInteger(slotIndex) && slotIndex >= 3 && slotIndex < 6 ? slotIndex : null;
+export function mainGrandBackSlot(
+  grandServants: GrandServantConfig[],
+  grandClass?: GrandClass
+): number | null {
+  const preferred =
+    grandClass === "lancer"
+      ? grandServants.find((config) => config.lancerRole === "single" && config.slotIndex >= 3) ??
+        grandServants.find((config) => config.lancerRole === "aoe" && config.slotIndex >= 3)
+      : grandServants[0];
+  const slotIndex = preferred?.slotIndex;
+  return typeof slotIndex === "number" && Number.isInteger(slotIndex) && slotIndex >= 3 && slotIndex < 6
+    ? slotIndex
+    : null;
 }
 
-export function normalizeGrandServants(values: GrandServantConfig[] | undefined): GrandServantConfig[] {
+export function normalizeGrandServants(
+  values: GrandServantConfig[] | undefined,
+  grandClass?: GrandClass
+): GrandServantConfig[] {
   const seen = new Set<number>();
   return (values ?? [])
     .filter((item) => Number.isInteger(item.slotIndex) && item.slotIndex >= 0 && item.slotIndex < 6)
@@ -180,7 +194,16 @@ export function normalizeGrandServants(values: GrandServantConfig[] | undefined)
       isSupport: item.isSupport === true,
       npCard: item.npCard ?? "auto",
       priority: item.priority ?? "damage",
-    }));
+      ...(item.lancerRole != null || grandClass === "lancer"
+        ? { lancerRole: item.lancerRole ?? null }
+        : {}),
+    }))
+    .sort((left, right) => {
+      if (grandClass !== "lancer") return 0;
+      const rank = (role: GrandServantConfig["lancerRole"]) =>
+        role === "single" ? 0 : role === "aoe" ? 1 : 2;
+      return rank(left.lancerRole) - rank(right.lancerRole);
+    });
 }
 
 export function normalizeGrandCardStrategy(strategy: GrandCardStrategy | undefined): GrandCardStrategy {

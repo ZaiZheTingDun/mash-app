@@ -1054,10 +1054,83 @@ pub(crate) fn grand_card_rules_for_class(
     let mut rules = custom_grand_card_rules(strategy);
     let mut built_in_rules = match grand_class {
         GrandClass::Saber => saber_grand_card_rules(strategy),
+        GrandClass::Lancer => Vec::new(),
         GrandClass::Berserker => berserker_grand_card_rules(),
     };
     rules.append(&mut built_in_rules);
     rules
+}
+
+fn lancer_filler_key(
+    candidate: &AdvancedPickCandidate,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> (u8, u8, u32) {
+    let owner = match grand_role_for_candidate(candidate, grand_servants) {
+        GrandRole::Main => 0,
+        GrandRole::Deputy => 1,
+        GrandRole::Other => 2,
+    };
+    let color = match candidate.color.as_deref() {
+        Some("a") => 0,
+        Some("q") => 1,
+        Some("b") => 2,
+        _ => 3,
+    };
+    (owner, color, candidate.original_order)
+}
+
+pub(crate) fn choose_lancer_auto_picks(
+    candidates: &[AdvancedPickCandidate],
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> Vec<Pick> {
+    let mut commands: Vec<&AdvancedPickCandidate> = candidates
+        .iter()
+        .filter(|candidate| !candidate.is_np)
+        .collect();
+    commands.sort_by_key(|candidate| lancer_filler_key(candidate, grand_servants));
+
+    let ready_np = |role| {
+        candidates
+            .iter()
+            .filter(|candidate| candidate.is_np)
+            .filter(|candidate| grand_role_for_candidate(candidate, grand_servants) == role)
+            .min_by_key(|candidate| candidate.original_order)
+    };
+    let single_np = ready_np(GrandRole::Main);
+    let aoe_np = ready_np(GrandRole::Deputy);
+
+    if let (Some(aoe), Some(single)) = (aoe_np, single_np) {
+        let filler = commands
+            .iter()
+            .copied()
+            .find(|command| combo_is_exquisite(&[aoe, single, command]))
+            .or_else(|| {
+                commands
+                    .iter()
+                    .copied()
+                    .find(|command| combo_same_color(&[aoe, single, command]))
+            })
+            .or_else(|| commands.first().copied());
+        if let Some(filler) = filler {
+            return vec![aoe.pick.clone(), single.pick.clone(), filler.pick.clone()];
+        }
+    }
+
+    if let Some(np) = single_np.or(aoe_np) {
+        if commands.len() >= 2 {
+            return vec![
+                np.pick.clone(),
+                commands[0].pick.clone(),
+                commands[1].pick.clone(),
+            ];
+        }
+    }
+
+    commands
+        .into_iter()
+        .take(3)
+        .map(|candidate| candidate.pick.clone())
+        .collect()
 }
 
 pub(crate) fn choose_grand_auto_picks(
@@ -1066,6 +1139,36 @@ pub(crate) fn choose_grand_auto_picks(
     strategy: &GrandCardStrategy,
     grand_class: GrandClass,
 ) -> Vec<Pick> {
+    if grand_class == GrandClass::Lancer {
+        for rule in custom_grand_card_rules(strategy) {
+            let mut best: Option<GrandRuleMatch> = None;
+            for i in 0..candidates.len() {
+                for j in (i + 1)..candidates.len() {
+                    for k in (j + 1)..candidates.len() {
+                        let combo = vec![&candidates[i], &candidates[j], &candidates[k]];
+                        let Some(rule_match) = match_grand_rule(&combo, &rule, grand_servants)
+                        else {
+                            continue;
+                        };
+                        if best
+                            .as_ref()
+                            .is_none_or(|current| rule_match.score > current.score)
+                        {
+                            best = Some(rule_match);
+                        }
+                    }
+                }
+            }
+            if let Some(best) = best {
+                return best
+                    .ordered
+                    .into_iter()
+                    .map(|candidate| candidate.pick)
+                    .collect();
+            }
+        }
+        return choose_lancer_auto_picks(candidates, grand_servants);
+    }
     for rule in grand_card_rules_for_class(grand_class, strategy) {
         let mut best: Option<GrandRuleMatch> = None;
         for i in 0..candidates.len() {
@@ -1174,6 +1277,13 @@ pub(crate) fn choose_advanced_auto_picks_with_grand_class(
         let mut selected = candidates;
         if grand_servants.is_empty() {
             sort_advanced_picks(scene, &mut selected);
+        } else if grand_class == GrandClass::Lancer {
+            return choose_grand_auto_picks(
+                &selected,
+                grand_servants,
+                grand_card_strategy,
+                grand_class,
+            );
         } else if selected.len() == 3 {
             return choose_grand_auto_picks(
                 &selected,

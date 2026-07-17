@@ -538,7 +538,18 @@ changes (i.e. when the runner moves to a different row).
   the second free/command slot is configured to prefer a ready deputy Grand NP;
   for the same-color chain that deputy NP must also match the main NP color.
   Berserker built-in rule slots whose owner is any servant prefer main Grand
-  attacks, then deputy Grand attacks, then non-Grand attacks. Legacy advanced
+  attacks, then deputy Grand attacks, then non-Grand attacks.
+  Lancer mode stores explicit `lancerRole` values for one single-target and one
+  AoE Grand servant, normalized in that order. Its fixed picker first attempts
+  AoE NP, single-target NP, and one command card, preferring an exquisite B/A/Q
+  chain, then a same-color chain, then a filler. If both NPs cannot be released,
+  it releases a ready configured Grand NP (single-target before AoE) and fills
+  with command cards; non-Grand NPs are ignored. All Lancer filler cards prefer
+  the single-target servant, then the AoE servant, then other servants, with
+  Arts / Quick / Buster and left-to-right order as tie breakers. Automatic
+  Order Change likewise prefers the single-target servant, then the AoE servant,
+  and never swaps out the other Lancer Grand already on the front line.
+  Legacy advanced
   `rules` are still supported:
   when a scene has rule entries, the older rule evaluator runs instead of the
   three-stage strategy flow.

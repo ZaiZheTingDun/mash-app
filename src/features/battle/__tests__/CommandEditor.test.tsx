@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { CommandEditor } from "../CommandEditor";
 import type { AdvancedBattleScene, BattleScene } from "../../../types/command";
-import type { GrandCardStrategy } from "../../../types/project";
+import type { GrandCardStrategy, GrandServantConfig } from "../../../types/project";
 import type { Servant } from "../../../types/servant";
 
 function makeServant(
@@ -508,6 +508,56 @@ describe("CommandEditor pagination", () => {
       { memberId: null, slotIndex: 0, servantId: null, isSupport: false, npCard: "auto", priority: "damage" },
       { memberId: null, slotIndex: 1, servantId: 2, isSupport: false, npCard: "auto", priority: "damage" },
     ]);
+  });
+
+  it("assigns explicit single and aoe roles for lancer grand servants", async () => {
+    const user = userEvent.setup();
+    const onGrandServantsChange = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") return [];
+      if (cmd === "get_servant_face_path") return null;
+      return [];
+    });
+
+    function LancerHarness() {
+      const [grandServants, setGrandServants] = useState<GrandServantConfig[]>([]);
+      return (
+        <CommandEditor
+          projectId="project_1"
+          advancedMode
+          grandClass="lancer"
+          grandServants={grandServants}
+          onGrandServantsChange={(next) => {
+            onGrandServantsChange(next);
+            setGrandServants(next);
+          }}
+          partyLineup={[
+            makeServant(1, "单体甲", "buster", "lancer"),
+            makeServant(2, "光炮乙", "arts", "lancer"),
+            makeServant(3, "丙"),
+          ]}
+        />
+      );
+    }
+
+    renderWithTheme(<LancerHarness />);
+    expect(await screen.findByRole("button", { name: "选择单体冠位" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "选择光炮冠位" })).toBeInTheDocument();
+    expect(screen.queryByText("主")).not.toBeInTheDocument();
+    expect(screen.queryByText("副")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "单体甲" }));
+    expect(screen.getByRole("button", { name: "单体冠位：单体甲" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "光炮乙" }));
+    expect(screen.getByRole("button", { name: "光炮冠位：光炮乙" })).toBeInTheDocument();
+    expect(onGrandServantsChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ slotIndex: 0, lancerRole: "single" }),
+      expect.objectContaining({ slotIndex: 1, lancerRole: "aoe" }),
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "单体冠位：单体甲" }));
+    expect(screen.queryByRole("combobox", { name: "出卡策略" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "设为主" })).not.toBeInTheDocument();
   });
 
   it("marks the support servant avatar in advanced command settings", async () => {

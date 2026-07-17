@@ -45,5 +45,7 @@ export function normalizeSupportGrandCraftEssenceMlbRequired(
 }
 
 export function grandClassToServantClass(grandClass: GrandClass | undefined): string {
-  return grandClass === "berserker" ? "Berserker" : "Saber";
+  if (grandClass === "berserker") return "Berserker";
+  if (grandClass === "lancer") return "Lancer";
+  return "Saber";
 }

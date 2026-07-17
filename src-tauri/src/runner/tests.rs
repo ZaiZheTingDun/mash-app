@@ -1747,6 +1747,7 @@ fn grand_auto_order_change_targets_front_servant_with_most_cards() {
         &[Some(10), Some(20), Some(30)],
         &[false, false, false],
         &[grand_config_at(4, 99, "buster", "damage")],
+        GrandClass::Saber,
     )
     .unwrap();
 
@@ -1772,8 +1773,42 @@ fn grand_auto_order_change_skips_when_main_grand_is_frontline() {
         &[Some(99), Some(20), Some(30)],
         &[false, false, false],
         &[grand_config_at(0, 99, "buster", "damage")],
+        GrandClass::Saber,
     )
     .is_none());
+}
+
+#[test]
+fn lancer_auto_order_change_brings_aoe_forward_without_removing_front_single() {
+    let cards = vec![
+        command_card(0, Some(10), Some("a"), None),
+        command_card(1, Some(10), Some("q"), None),
+        command_card(2, Some(10), Some("b"), None),
+        command_card(3, Some(30), Some("a"), None),
+        command_card(4, Some(40), Some("a"), None),
+    ];
+    let action = grand_auto_order_change_action(
+        &cards,
+        &[Some(10), Some(30), Some(40)],
+        &[false, false, false],
+        &[
+            grand_config_at(0, 10, "buster", "damage"),
+            grand_config_at(4, 20, "arts", "damage"),
+        ],
+        GrandClass::Lancer,
+    )
+    .unwrap();
+
+    match action {
+        Action::Equipment {
+            order_change: Some(order_change),
+            ..
+        } => {
+            assert_eq!(order_change.front.as_deref(), Some("servant_2"));
+            assert_eq!(order_change.back.as_deref(), Some("servant_5"));
+        }
+        _ => panic!("expected Lancer auto Order Change action"),
+    }
 }
 
 #[test]
@@ -1868,6 +1903,7 @@ fn grand_auto_order_change_uses_support_ownership_when_counting_cards() {
         &[Some(20), Some(10), Some(30)],
         &[false, true, false],
         &[grand_config_at(4, 99, "buster", "damage")],
+        GrandClass::Saber,
     )
     .unwrap();
 
@@ -2721,6 +2757,106 @@ fn berserker_grand_auto_main_np_color_chain_clicks_np_last() {
     assert_eq!(pick_labels(&picks), vec!["C0", "C1", "NP0"]);
 }
 
+fn lancer_picks(
+    cards: Vec<CommandCardMatch>,
+    nps: Vec<NoblePhantasmMatch>,
+    single_color: &str,
+    aoe_color: &str,
+) -> Vec<Pick> {
+    choose_advanced_auto_picks_with_grand_class(
+        &empty_advanced_scene(),
+        &cards,
+        &nps,
+        &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
+        &[
+            grand_config_at(0, 10, single_color, "damage"),
+            grand_config_at(1, 20, aoe_color, "damage"),
+        ],
+        &GrandCardStrategy::default(),
+        GrandClass::Lancer,
+    )
+}
+
+#[test]
+fn lancer_grand_dual_np_prefers_exquisite_chain_and_fixed_np_order() {
+    let picks = lancer_picks(
+        vec![
+            command_card(0, Some(30), Some("b"), None),
+            command_card(1, Some(20), Some("q"), None),
+            command_card(2, Some(10), Some("q"), None),
+        ],
+        vec![np_slot(0, true), np_slot(1, true), np_slot(2, false)],
+        "buster",
+        "arts",
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["NP1", "NP0", "C2"]);
+}
+
+#[test]
+fn lancer_grand_dual_np_prefers_same_color_then_owner_priority() {
+    let same_color = lancer_picks(
+        vec![
+            command_card(0, Some(20), Some("a"), None),
+            command_card(1, Some(10), Some("a"), None),
+            command_card(2, Some(10), Some("b"), None),
+        ],
+        vec![np_slot(0, true), np_slot(1, true), np_slot(2, false)],
+        "arts",
+        "arts",
+    );
+    assert_eq!(pick_labels(&same_color), vec!["NP1", "NP0", "C1"]);
+
+    let fallback = lancer_picks(
+        vec![
+            command_card(0, Some(20), Some("a"), None),
+            command_card(1, Some(10), Some("b"), None),
+            command_card(2, Some(30), Some("a"), None),
+        ],
+        vec![np_slot(0, true), np_slot(1, true), np_slot(2, false)],
+        "buster",
+        "arts",
+    );
+    assert_eq!(pick_labels(&fallback), vec!["NP1", "NP0", "C1"]);
+}
+
+#[test]
+fn lancer_grand_single_ready_np_uses_single_aoe_other_and_a_q_b_filler_order() {
+    let picks = lancer_picks(
+        vec![
+            command_card(0, Some(20), Some("a"), None),
+            command_card(1, Some(10), Some("b"), None),
+            command_card(2, Some(10), Some("q"), None),
+            command_card(3, Some(10), Some("a"), None),
+            command_card(4, Some(30), Some("a"), None),
+        ],
+        vec![np_slot(0, false), np_slot(1, true), np_slot(2, false)],
+        "buster",
+        "arts",
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["NP1", "C3", "C2"]);
+}
+
+#[test]
+fn lancer_grand_ignores_non_grand_np_and_uses_command_cards_when_grand_nps_unready() {
+    let picks = lancer_picks(
+        vec![
+            command_card(0, Some(20), Some("a"), None),
+            command_card(1, Some(10), Some("b"), None),
+            command_card(2, Some(10), Some("q"), None),
+            command_card(3, Some(10), Some("a"), None),
+            command_card(4, Some(30), Some("a"), None),
+        ],
+        vec![np_slot(0, false), np_slot(1, false), np_slot(2, true)],
+        "buster",
+        "arts",
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["C3", "C2", "C1"]);
+}
+
 #[test]
 fn berserker_grand_auto_main_np_color_chain_prioritizes_grand_any_slots() {
     let scene = empty_advanced_scene();
@@ -3311,6 +3447,30 @@ fn run_config_round_trips_grand_class() {
     assert_eq!(cfg.grand_class, GrandClass::Berserker);
     let serialized = serde_json::to_value(&cfg).unwrap();
     assert_eq!(serialized["grandClass"], serde_json::json!("berserker"));
+}
+
+#[test]
+fn run_config_round_trips_lancer_roles() {
+    let mut payload = minimal_run_config_json();
+    payload["grandClass"] = serde_json::json!("lancer");
+    payload["grandServants"] = serde_json::json!([
+        { "slotIndex": 0, "lancerRole": "single" },
+        { "slotIndex": 1, "lancerRole": "aoe" }
+    ]);
+
+    let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+    assert_eq!(cfg.grand_class, GrandClass::Lancer);
+    assert_eq!(
+        cfg.grand_servants[0].lancer_role,
+        Some(LancerGrandRole::Single)
+    );
+    assert_eq!(
+        cfg.grand_servants[1].lancer_role,
+        Some(LancerGrandRole::Aoe)
+    );
+    let serialized = serde_json::to_value(&cfg).unwrap();
+    assert_eq!(serialized["grandServants"][0]["lancerRole"], "single");
+    assert_eq!(serialized["grandServants"][1]["lancerRole"], "aoe");
 }
 
 #[test]

@@ -170,7 +170,8 @@ fn cn_cv_overrides_battle_action_menu_probe() {
         .join("cv.json");
     let config: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
-    let element = &config["screens"]["Battle"]["variants"]["main"]["elements"]["battle_action_menu"];
+    let element =
+        &config["screens"]["Battle"]["variants"]["main"]["elements"]["battle_action_menu"];
 
     assert_eq!(element["template"].as_str(), Some("battle_action_menu"));
     assert_close(element["region"]["x"].as_f64().unwrap(), 0.896);
@@ -190,7 +191,8 @@ fn jp_cv_overrides_battle_action_menu_probe() {
         .join("cv.json");
     let config: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
-    let element = &config["screens"]["Battle"]["variants"]["main"]["elements"]["battle_action_menu"];
+    let element =
+        &config["screens"]["Battle"]["variants"]["main"]["elements"]["battle_action_menu"];
 
     assert_eq!(element["template"].as_str(), Some("battle_action_menu"));
     assert_close(element["region"]["x"].as_f64().unwrap(), 0.896);
@@ -420,6 +422,7 @@ fn clear_project_slot_servant_only_clears_slot_owned_settings() {
         is_support: false,
         np_card: "auto".into(),
         priority: "damage".into(),
+        lancer_role: None,
     });
 
     clear_project_slot_servant(&mut project, "slot-0").unwrap();
@@ -801,6 +804,53 @@ fn project_grand_class_round_trips_as_camel_case() {
 
     let serialized = serde_json::to_value(&project).unwrap();
     assert_eq!(serialized["grandClass"], serde_json::json!("berserker"));
+}
+
+#[test]
+fn lancer_project_roles_round_trip_and_normalize_single_before_aoe() {
+    let mut project = new_project("Lancer".to_string(), true, GrandClass::Lancer);
+    project.slots[0].servant_id = Some(10);
+    project.slots[1].servant_id = Some(20);
+    project.grand_servants = vec![
+        GrandServantConfig {
+            member_id: Some(project.slots[1].id.clone()),
+            slot_index: 1,
+            servant_id: Some(20),
+            is_support: false,
+            np_card: "arts".into(),
+            priority: "damage".into(),
+            lancer_role: Some(LancerGrandRole::Aoe),
+        },
+        GrandServantConfig {
+            member_id: Some(project.slots[0].id.clone()),
+            slot_index: 0,
+            servant_id: Some(10),
+            is_support: false,
+            np_card: "buster".into(),
+            priority: "damage".into(),
+            lancer_role: Some(LancerGrandRole::Single),
+        },
+    ];
+
+    let normalized = normalize_project(project);
+    assert_eq!(
+        normalized.grand_servants[0].lancer_role,
+        Some(LancerGrandRole::Single)
+    );
+    assert_eq!(
+        normalized.grand_servants[1].lancer_role,
+        Some(LancerGrandRole::Aoe)
+    );
+    let json = serde_json::to_value(normalized).unwrap();
+    assert_eq!(json["grandClass"], serde_json::json!("lancer"));
+    assert_eq!(
+        json["grandServants"][0]["lancerRole"],
+        serde_json::json!("single")
+    );
+    assert_eq!(
+        json["grandServants"][1]["lancerRole"],
+        serde_json::json!("aoe")
+    );
 }
 
 #[test]

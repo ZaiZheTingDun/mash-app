@@ -47,7 +47,8 @@ export type SupportGrandCraftEssenceMlbRequired = [boolean, boolean, boolean];
 export type SupportGrandBondCeMode = "any" | "bond" | "bondNp";
 export type GrandNpCard = "auto" | "buster" | "arts" | "quick";
 export type GrandCardPriority = "damage" | "np";
-export type GrandClass = "saber" | "berserker";
+export type GrandClass = "saber" | "lancer" | "berserker";
+export type LancerGrandRole = "single" | "aoe";
 export type GrandChainPriorityItem =
   | "mainBraveChain"
   | "mainReadyNp"
@@ -87,6 +88,7 @@ export interface GrandServantConfig {
   isSupport?: boolean;
   npCard?: GrandNpCard;
   priority?: GrandCardPriority;
+  lancerRole?: LancerGrandRole | null;
 }
 
 export type BattleApRecoveryItem =

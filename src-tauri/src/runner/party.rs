@@ -462,10 +462,11 @@ pub(crate) fn apply_attack_card_member_lineup_change(
     }
 }
 
-pub(crate) fn front_slot_with_most_cards(
+fn front_slot_with_most_cards_excluding(
     cards: &[CommandCardMatch],
     party_ids: &[Option<u32>; 3],
     party_supports: &[bool; 3],
+    excluded: &HashSet<(u32, bool)>,
 ) -> Option<usize> {
     let mut counts = [0usize; 3];
     for card in cards {
@@ -481,7 +482,9 @@ pub(crate) fn front_slot_with_most_cards(
         }
     }
     (0..3)
-        .filter(|index| party_ids[*index].is_some())
+        .filter(|index| {
+            party_ids[*index].is_some_and(|id| !excluded.contains(&(id, party_supports[*index])))
+        })
         .max_by_key(|index| (counts[*index], std::cmp::Reverse(*index)))
 }
 
@@ -490,12 +493,26 @@ pub(crate) fn grand_auto_order_change_action(
     party_ids: &[Option<u32>; 3],
     party_supports: &[bool; 3],
     grand_servants: &[GrandServantRuntimeConfig],
+    grand_class: GrandClass,
 ) -> Option<Action> {
-    let main = grand_servants.first()?;
-    if !(3..6).contains(&main.slot_index) {
-        return None;
-    }
-    let front_index = front_slot_with_most_cards(cards, party_ids, party_supports)?;
+    let target = if grand_class == GrandClass::Lancer {
+        grand_servants
+            .iter()
+            .find(|config| (3..6).contains(&config.slot_index))?
+    } else {
+        let main = grand_servants.first()?;
+        if !(3..6).contains(&main.slot_index) {
+            return None;
+        }
+        main
+    };
+    let protected_front: HashSet<(u32, bool)> = grand_servants
+        .iter()
+        .filter(|config| config.slot_index < 3)
+        .map(|config| (config.servant_id, config.is_support))
+        .collect();
+    let front_index =
+        front_slot_with_most_cards_excluding(cards, party_ids, party_supports, &protected_front)?;
     Some(Action::Equipment {
         id: "auto_grand_order_change".into(),
         skill: Some("skill_3".into()),
@@ -508,10 +525,10 @@ pub(crate) fn grand_auto_order_change_action(
             front_member_id: None,
             front_servant_id: party_ids[front_index],
             front_is_support: party_supports[front_index],
-            back: Some(format!("servant_{}", main.slot_index + 1)),
+            back: Some(format!("servant_{}", target.slot_index + 1)),
             back_member_id: None,
-            back_servant_id: Some(main.servant_id),
-            back_is_support: main.is_support,
+            back_servant_id: Some(target.servant_id),
+            back_is_support: target.is_support,
         }),
     })
 }
@@ -1227,9 +1244,16 @@ impl Runner {
     pub(crate) fn grand_servant_runtime_configs(&self) -> Vec<GrandServantRuntimeConfig> {
         let full = self.build_full_party_members();
         let mut seen = HashSet::new();
-        self.config
-            .grand_servants
-            .iter()
+        let mut configs: Vec<_> = self.config.grand_servants.iter().collect();
+        if self.config.grand_class == GrandClass::Lancer {
+            configs.sort_by_key(|config| match config.lancer_role {
+                Some(LancerGrandRole::Single) => 0,
+                Some(LancerGrandRole::Aoe) => 1,
+                None => 2,
+            });
+        }
+        configs
+            .into_iter()
             .filter_map(|config| {
                 let slot = usize::try_from(config.slot_index).ok()?;
                 if !seen.insert(slot) {

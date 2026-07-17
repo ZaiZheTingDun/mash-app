@@ -430,7 +430,15 @@ export function BattlePage({
       seen.add(item.slotIndex);
       return true;
     }).length;
-    if (grandCount < 1 || grandCount > 2) {
+    if (selectedProject.grandClass === "lancer") {
+      const roles = new Set(
+        (selectedProject.grandServants ?? []).map((item) => item.lancerRole)
+      );
+      if (grandCount !== 2 || !roles.has("single") || !roles.has("aoe")) {
+        setStartError("枪阶戴冠战需要分别选择单体和光炮从者");
+        return false;
+      }
+    } else if (grandCount < 1 || grandCount > 2) {
       setStartError("戴冠战需要选择 1 到 2 名冠位从者");
       return false;
     }
