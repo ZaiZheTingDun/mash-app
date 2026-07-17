@@ -474,6 +474,7 @@ pub struct AttackLogCommandCard {
     pub suit: Option<String>,
     pub servant_id: Option<u32>,
     pub is_support: bool,
+    pub is_stunned: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]

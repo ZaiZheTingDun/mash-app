@@ -108,6 +108,14 @@ stream: Optional["ScrcpyStream"] = None
 
 DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 STATIC_TEMPLATE_REFERENCE_WIDTH = 2560
+COMMAND_CARD_STATUS_TEMPLATE_REFERENCE_WIDTH = 1920
+COMMAND_CARD_STATUS_TEMPLATE_SCALES = {
+    "shared/command_seal_a": 1.75,
+    "shared/command_seal_b": 1.75,
+    "shared/command_seal_q": 1.75,
+    "shared/command_sleep": 0.75,
+    "shared/command_stun": 1.875,
+}
 
 # ---------------------------------------------------------------------------
 # Command-card layout
@@ -164,6 +172,23 @@ COMMAND_CARD_SUPPORT_ICON_REGION = {
     "y": 0.25,
     "w": 0.175,
     "h": 0.145,
+}
+COMMAND_CARD_STUN_TEMPLATE_KEYS = (
+    # Command-card seal varies with the card suit; sleep and stun use their
+    # own icons. The templates are shared by the JP and CN clients.
+    "shared/command_seal_a",
+    "shared/command_seal_b",
+    "shared/command_seal_q",
+    "shared/command_sleep",
+    "shared/command_stun",
+)
+COMMAND_CARD_STUN_THRESHOLD = 0.70
+
+COMMAND_CARD_STUN_REGION = {
+    "x": 0.0,
+    "y": 0.465,
+    "w": 248.0 / 512.0,
+    "h": 188.0 / 576.0,
 }
 # Valid crit chances: 10, 20, ..., 100. Always multiples of 10, so the
 # ones slot is always "0" in a real reading and the hundreds slot is
@@ -610,6 +635,7 @@ def _score_template_region(
     region: dict,
     threshold: float,
     template_key: Optional[str] = None,
+    template_scale: float = 1.0,
 ) -> dict:
     """Find the best template location and always return its normalized box."""
     if len(tmpl.shape) == 3:
@@ -624,6 +650,15 @@ def _score_template_region(
         # frame, it does not corrupt scoring.
         if mask.shape[:2] != tmpl.shape[:2]:
             mask = None
+
+    if template_scale != 1.0:
+        height, width = tmpl.shape[:2]
+        scaled_w = max(1, int(round(width * template_scale)))
+        scaled_h = max(1, int(round(height * template_scale)))
+        interpolation = cv2.INTER_AREA if template_scale < 1.0 else cv2.INTER_CUBIC
+        tmpl = cv2.resize(tmpl, (scaled_w, scaled_h), interpolation=interpolation)
+        if mask is not None:
+            mask = cv2.resize(mask, (scaled_w, scaled_h), interpolation=interpolation)
 
     h, w = img.shape[:2]
     rx = max(0, int(round(region["x"] * w)))
@@ -704,7 +739,12 @@ def _scale_static_template_for_image(
     frame_w = int(img.shape[1])
     if frame_w <= 0:
         return tmpl
-    scale = frame_w / float(STATIC_TEMPLATE_REFERENCE_WIDTH)
+    reference_width = (
+        COMMAND_CARD_STATUS_TEMPLATE_REFERENCE_WIDTH
+        if template_key in COMMAND_CARD_STATUS_TEMPLATE_SCALES
+        else STATIC_TEMPLATE_REFERENCE_WIDTH
+    )
+    scale = frame_w / float(reference_width)
     if abs(scale - 1.0) < 0.02:
         return tmpl
     height, width = tmpl.shape[:2]
@@ -2493,6 +2533,44 @@ def _command_card_support_icon_region_bbox(
     )
 
 
+def _command_card_stun_region_bbox(
+    slot_px: tuple[int, int, int, int],
+    img_w: int,
+    img_h: int,
+    offset_x_screen: float = 0.0,
+) -> tuple[int, int, int, int]:
+    """Return the card-local region containing the unable-to-act marker."""
+    return _relative_region_bbox(
+        slot_px,
+        COMMAND_CARD_STUN_REGION,
+        img_w=img_w,
+        img_h=img_h,
+        pad_y_screen=COMMAND_CARD_Y_WOBBLE_SCREEN,
+        offset_x_screen=offset_x_screen,
+    )
+
+
+def _command_card_is_stunned(
+    img: np.ndarray,
+    region: dict,
+) -> bool:
+    """Whether any shared unable-to-act marker appears in ``region``."""
+    for template_key in COMMAND_CARD_STUN_TEMPLATE_KEYS:
+        tmpl = _get_template(template_key)
+        if tmpl is None:
+            continue
+        if _score_template_region(
+            img,
+            tmpl,
+            region,
+            COMMAND_CARD_STUN_THRESHOLD,
+            template_key=template_key,
+            template_scale=COMMAND_CARD_STATUS_TEMPLATE_SCALES.get(template_key, 1.0),
+        ).get("found", False):
+            return True
+    return False
+
+
 def _resize_command_card_support_template(
     tmpl: np.ndarray,
     img: np.ndarray,
@@ -2641,6 +2719,15 @@ def _find_command_cards(
                 "h": sh / h,
             },
         }
+
+        stun_region = _norm_rect_from_pixels(
+            _command_card_stun_region_bbox(
+                slot_px, w, h, subregion_x_offset
+            ),
+            w,
+            h,
+        )
+        record["isStunned"] = _command_card_is_stunned(img, stun_region)
 
         suit_match = _classify_suit_in_slot(img, slot_px, subregion_x_offset)
         if suit_match is not None:

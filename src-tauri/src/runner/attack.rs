@@ -50,6 +50,7 @@ pub(crate) fn command_cards_log_meta(cards: &[CommandCardMatch]) -> Vec<AttackLo
             suit: card.suit.clone(),
             servant_id: card.servant_id,
             is_support: card.is_support,
+            is_stunned: card.is_stunned,
         })
         .collect()
 }
@@ -114,6 +115,13 @@ pub(crate) fn command_cards_visible(cards: &[CommandCardMatch]) -> bool {
         && cards
             .iter()
             .all(|card| card.suit.is_some() && card.icon_region.is_some())
+}
+
+/// Return only command cards that can currently act. Normal-mode selection
+/// runs its configured priority and ordinary fill pass against this pool
+/// before falling back to stunned cards when fewer than three picks exist.
+pub(crate) fn actionable_command_cards(cards: &[CommandCardMatch]) -> Vec<CommandCardMatch> {
+    cards.iter().filter(|card| !card.is_stunned).cloned().collect()
 }
 
 pub(crate) fn np_card_read_complete(nps: &[NoblePhantasmMatch]) -> bool {
@@ -386,7 +394,7 @@ pub(crate) fn pick_one_priority(
         } else if c.suit.is_none() {
             continue;
         }
-        if best.map_or(true, |b| c.slot < b.slot) {
+        if best.map_or(true, |b| (c.is_stunned, c.slot) < (b.is_stunned, b.slot)) {
             best = Some(c);
         }
     }
@@ -410,7 +418,7 @@ pub(crate) fn fill_empty_pick_slots(
     used_card_slots: &mut HashSet<u32>,
 ) {
     let mut sorted: Vec<&CommandCardMatch> = cards.iter().collect();
-    sorted.sort_by_key(|c| c.slot);
+    sorted.sort_by_key(|c| (c.is_stunned, c.slot));
 
     let mut next_card_idx = 0;
     for pick in picks.iter_mut().filter(|pick| pick.is_none()) {
@@ -443,7 +451,7 @@ pub(crate) fn fill_remaining(
     used_card_slots: &mut HashSet<u32>,
 ) {
     let mut sorted: Vec<&CommandCardMatch> = cards.iter().collect();
-    sorted.sort_by_key(|c| c.slot);
+    sorted.sort_by_key(|c| (c.is_stunned, c.slot));
     for c in sorted {
         if picks.len() >= 3 {
             break;
@@ -605,42 +613,6 @@ pub(crate) fn normal_scenes_need_command_card_recognition(scenes: &[BattleScene]
                 .any(attack_card_requires_command_card_recognition)
         })
     })
-}
-
-pub(crate) fn fallback_command_cards() -> Vec<CommandCardMatch> {
-    COMMAND_CARDS
-        .iter()
-        .enumerate()
-        .map(|(slot, point)| CommandCardMatch {
-            slot: slot as u32,
-            x: point.x,
-            y: point.y,
-            card_region: NormRect {
-                x: point.x,
-                y: point.y,
-                w: 0.0,
-                h: 0.0,
-            },
-            face_region: NormRect {
-                x: point.x,
-                y: point.y,
-                w: 0.0,
-                h: 0.0,
-            },
-            crit_digit_regions: None,
-            crit_digit_reads: None,
-            suit: None,
-            icon_score: None,
-            icon_region: None,
-            servant_id: None,
-            is_support: false,
-            ascension: None,
-            face_score: None,
-            crit_chance: None,
-            support_icon_score: None,
-            support_icon_region: None,
-        })
-        .collect()
 }
 
 /// Center of a normalized rectangle (used to derive a tap point from a
@@ -890,7 +862,7 @@ impl Runner {
                 thread::sleep(ACTION_DELAY);
             }
         } else {
-            loop {
+            let cards = loop {
                 let cards = match self.sidecar().find_command_cards(None, None, &[], None) {
                     Ok(c) => c,
                     Err(err) => {
@@ -899,16 +871,16 @@ impl Runner {
                     }
                 };
                 if command_cards_visible(&cards) {
-                    break;
+                    break cards;
                 }
                 if self.is_cancelled() {
                     return None;
                 }
                 self.emit("Attack", "指令卡尚未完全出现，等待卡面稳定后重试");
                 thread::sleep(ACTION_DELAY);
-            }
+            };
             self.emit("Attack", "未配置普通指令卡，跳过指令卡归属识别");
-            fallback_command_cards()
+            cards
         };
         let np_detection_mode = self.config.noble_phantasm_detection_mode;
         let nps = match np_detection_mode {
@@ -1042,11 +1014,12 @@ impl Runner {
         let mut used_card_slots: HashSet<u32> = HashSet::new();
         let mut used_np_slots: HashSet<u32> = HashSet::new();
         let mut picks: Vec<Pick> = Vec::with_capacity(3);
+        let actionable_cards = actionable_command_cards(cards);
 
         if let Some(priority) = attack_priority_override {
             picks = pick_by_priority(
                 priority,
-                cards,
+                &actionable_cards,
                 nps,
                 party_ids,
                 party_supports,
@@ -1062,7 +1035,7 @@ impl Runner {
         ) {
             picks = pick_by_priority(
                 priority,
-                cards,
+                &actionable_cards,
                 nps,
                 party_ids,
                 party_supports,
@@ -1074,7 +1047,12 @@ impl Runner {
         }
 
         if picks.len() < 3 {
-            fill_remaining(&mut picks, &cards, &mut used_card_slots);
+            fill_remaining(&mut picks, &actionable_cards, &mut used_card_slots);
+        }
+        if picks.len() < 3 {
+            // Preserve the historical "always submit a chain" fallback only
+            // after every actionable command card has been considered.
+            fill_remaining(&mut picks, cards, &mut used_card_slots);
         }
 
         if picks.is_empty() {

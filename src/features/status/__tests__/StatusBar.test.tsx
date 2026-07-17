@@ -323,9 +323,9 @@ describe("StatusBar", () => {
             attack: {
               frontServantIds: [284, 16, 309],
               commandCards: [
-                { slot: 0, suit: "q", servantId: 309, isSupport: false },
-                { slot: 1, suit: "b", servantId: 309, isSupport: false },
-                { slot: 2, suit: "a", servantId: 16, isSupport: false },
+                { slot: 0, suit: "q", servantId: 309, isSupport: false, isStunned: false },
+                { slot: 1, suit: "b", servantId: 309, isSupport: false, isStunned: true },
+                { slot: 2, suit: "a", servantId: 16, isSupport: false, isStunned: false },
               ],
             },
           },
@@ -335,7 +335,10 @@ describe("StatusBar", () => {
 
     expect(screen.getByText("指令卡候选从者:")).toBeInTheDocument();
     expect(screen.getByLabelText("从者二八四")).toBeInTheDocument();
-    expect(screen.getAllByLabelText("从者三零九")).toHaveLength(3);
+    expect(screen.getAllByLabelText("从者三零九")).toHaveLength(2);
+    expect(screen.getByLabelText("无法行动：从者三零九")).toHaveClass(
+      "operation-log-face--stunned"
+    );
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("get_servant_face_path", {
         servantId: 309,

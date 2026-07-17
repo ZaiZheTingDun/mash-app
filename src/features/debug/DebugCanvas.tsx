@@ -198,6 +198,7 @@ export function DebugCanvas({
                 C{c.slot + 1}
                 {c.suit ? `·${c.suit.toUpperCase()}` : ""}
                 {c.isSupport ? " · 助战✓" : c.supportIconScore != null ? " · 助战✗" : ""}
+                {c.isStunned ? " · 无法行动" : ""}
                 {c.supportIconScore != null ? ` ${c.supportIconScore.toFixed(2)}` : ""}
                 {c.servantId !== undefined
                   ? ` · ${c.servantId}@${c.ascension ?? "?"} (${(c.faceScore ?? 0).toFixed(2)})`

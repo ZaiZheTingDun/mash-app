@@ -26,13 +26,24 @@ fn command_card(
     suit: Option<&str>,
     crit: Option<u32>,
 ) -> CommandCardMatch {
-    command_card_with_support(slot, servant_id, false, suit, crit)
+    command_card_with_state(slot, servant_id, false, false, suit, crit)
 }
 
 fn command_card_with_support(
     slot: u32,
     servant_id: Option<u32>,
     is_support: bool,
+    suit: Option<&str>,
+    crit: Option<u32>,
+) -> CommandCardMatch {
+    command_card_with_state(slot, servant_id, is_support, false, suit, crit)
+}
+
+fn command_card_with_state(
+    slot: u32,
+    servant_id: Option<u32>,
+    is_support: bool,
+    is_stunned: bool,
     suit: Option<&str>,
     crit: Option<u32>,
 ) -> CommandCardMatch {
@@ -49,6 +60,7 @@ fn command_card_with_support(
         icon_region: None,
         servant_id,
         is_support,
+        is_stunned,
         ascension: None,
         face_score: None,
         crit_chance: crit,
@@ -190,11 +202,12 @@ fn gauge_np_detection_mode_preserves_current_glow_signal() {
 
 #[test]
 fn attack_log_command_cards_keep_slot_suit_and_servant_id() {
-    let cards = vec![
+    let mut cards = vec![
         command_card(0, Some(309), Some("q"), None),
         command_card(1, None, Some("b"), None),
         command_card(2, Some(16), None, None),
     ];
+    cards[1].is_stunned = true;
 
     assert_eq!(
         command_cards_log_meta(&cards),
@@ -204,18 +217,21 @@ fn attack_log_command_cards_keep_slot_suit_and_servant_id() {
                 suit: Some("q".into()),
                 servant_id: Some(309),
                 is_support: false,
+                is_stunned: false,
             },
             AttackLogCommandCard {
                 slot: 1,
                 suit: Some("b".into()),
                 servant_id: None,
                 is_support: false,
+                is_stunned: true,
             },
             AttackLogCommandCard {
                 slot: 2,
                 suit: None,
                 servant_id: Some(16),
                 is_support: false,
+                is_stunned: false,
             },
         ]
     );
@@ -1519,20 +1535,6 @@ fn normal_scenes_need_command_card_recognition_when_regular_card_is_configured()
 }
 
 #[test]
-fn fallback_command_cards_use_fixed_attack_screen_positions() {
-    let cards = fallback_command_cards();
-
-    assert_eq!(cards.len(), COMMAND_CARDS.len());
-    for (card, point) in cards.iter().zip(COMMAND_CARDS.iter()) {
-        assert_eq!(card.servant_id, None);
-        assert!(!card.is_support);
-        assert_eq!(card.suit, None);
-        approx(card.x, point.x);
-        approx(card.y, point.y);
-    }
-}
-
-#[test]
 fn normal_turn_for_current_state_marks_over_configured_turns() {
     let mut first = normal_turn(vec![], vec![]);
     first.id = "turn_1".into();
@@ -1847,6 +1849,138 @@ fn pick_by_priority_distinguishes_owned_and_support_cards_with_same_servant_id()
         }
         _ => panic!("expected command card pick"),
     }
+}
+
+#[test]
+fn command_card_picks_postpone_stunned_cards_until_needed() {
+    let cards = vec![
+        command_card_with_state(0, Some(309), false, true, Some("a"), None),
+        command_card_with_state(1, Some(309), false, false, Some("a"), None),
+        command_card_with_state(2, Some(309), false, false, Some("b"), None),
+    ];
+    let priority = vec![AttackCard {
+        id: "atk_1".into(),
+        card: Some("servant_1_arts".into()),
+        member_id: None,
+        servant_id: Some(309),
+        is_support: false,
+    }];
+    let mut used_cards = HashSet::new();
+    let mut used_nps = HashSet::new();
+
+    let picks = pick_by_priority(
+        &priority,
+        &cards,
+        &[],
+        &[Some(309), None, None],
+        &[false, false, false],
+        &mut used_cards,
+        &mut used_nps,
+    );
+
+    assert!(matches!(picks.first(), Some(Pick::Card { slot: 1, .. })));
+
+    let mut used_cards = HashSet::new();
+    let mut used_nps = HashSet::new();
+    let only_stunned = vec![command_card_with_state(
+        0,
+        Some(309),
+        false,
+        true,
+        Some("a"),
+        None,
+    )];
+    let picks = pick_by_priority(
+        &priority,
+        &only_stunned,
+        &[],
+        &[Some(309), None, None],
+        &[false, false, false],
+        &mut used_cards,
+        &mut used_nps,
+    );
+    assert!(matches!(picks.first(), Some(Pick::Card { slot: 0, .. })));
+}
+
+#[test]
+fn command_card_fillers_postpone_stunned_cards_until_needed() {
+    let cards = vec![
+        command_card_with_state(0, Some(1), false, true, Some("a"), None),
+        command_card_with_state(1, Some(1), false, false, Some("a"), None),
+        command_card_with_state(2, Some(1), false, false, Some("a"), None),
+    ];
+    let mut used_cards = HashSet::new();
+    let mut fixed = [None, None, None];
+
+    fill_empty_pick_slots(&mut fixed, &cards, &mut used_cards);
+    assert!(matches!(fixed[0], Some(Pick::Card { slot: 1, .. })));
+    assert!(matches!(fixed[1], Some(Pick::Card { slot: 2, .. })));
+    assert!(matches!(fixed[2], Some(Pick::Card { slot: 0, .. })));
+
+    let mut remaining = Vec::new();
+    let mut used_cards = HashSet::new();
+    fill_remaining(&mut remaining, &cards, &mut used_cards);
+    assert!(matches!(remaining[0], Pick::Card { slot: 1, .. }));
+    assert!(matches!(remaining[1], Pick::Card { slot: 2, .. }));
+    assert!(matches!(remaining[2], Pick::Card { slot: 0, .. }));
+}
+
+#[test]
+fn normal_mode_uses_other_actionable_cards_before_a_stunned_priority_target() {
+    let all_cards = vec![
+        // C1 Oberon Arts; C2/C3 Morgan Arts/Quick (stunned); C4 Oberon
+        // Buster; C5 Nocnaree Quick. With a "Morgan, any card" rule, the
+        // normal cards must fill left-to-right as C1, C4, C5.
+        command_card_with_state(0, Some(304), false, false, Some("a"), None),
+        command_card_with_state(1, Some(309), false, true, Some("a"), None),
+        command_card_with_state(2, Some(309), false, true, Some("q"), None),
+        command_card_with_state(3, Some(304), false, false, Some("b"), None),
+        command_card_with_state(4, Some(383), false, false, Some("q"), None),
+    ];
+    let actionable = actionable_command_cards(&all_cards);
+    let priority = vec![AttackCard {
+        id: "atk_1".into(),
+        card: Some("servant_1_all".into()),
+        member_id: None,
+        servant_id: Some(309),
+        is_support: false,
+    }];
+    let mut used_cards = HashSet::new();
+    let mut used_nps = HashSet::new();
+    let mut picks = pick_by_priority(
+        &priority,
+        &actionable,
+        &[],
+        &[Some(309), Some(304), Some(383)],
+        &[false, false, false],
+        &mut used_cards,
+        &mut used_nps,
+    );
+    fill_remaining(&mut picks, &actionable, &mut used_cards);
+
+    assert_eq!(pick_labels(&picks), vec!["C0", "C3", "C4"]);
+}
+
+#[test]
+fn advanced_auto_picks_exclude_stunned_command_cards() {
+    let scene = empty_advanced_scene();
+    let cards = vec![
+        command_card_with_state(0, Some(10), false, true, Some("b"), None),
+        command_card_with_state(1, Some(10), false, false, Some("a"), None),
+        command_card_with_state(2, Some(20), false, false, Some("q"), None),
+        command_card_with_state(3, Some(20), false, false, Some("b"), None),
+    ];
+    let picks = choose_advanced_auto_picks(
+        &scene,
+        &cards,
+        &[],
+        &[Some(10), Some(20), None],
+        &[false, false, false],
+        &[],
+        &GrandCardStrategy::default(),
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["C2", "C3", "C1"]);
 }
 
 #[test]

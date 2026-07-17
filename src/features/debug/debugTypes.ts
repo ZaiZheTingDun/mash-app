@@ -103,6 +103,7 @@ export interface CommandCardMatchDto {
   iconRegion?: NormRectDto;
   servantId?: number;
   isSupport?: boolean;
+  isStunned: boolean;
   ascension?: number;
   faceScore?: number;
   critChance?: number;

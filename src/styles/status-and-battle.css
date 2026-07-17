@@ -167,6 +167,11 @@
   box-shadow: 0 0 0 1px var(--amber-9);
 }
 
+.operation-log-face--stunned {
+  border-color: var(--yellow-9);
+  box-shadow: 0 0 0 1px var(--yellow-9);
+}
+
 .operation-log-suit-dot {
   width: 4px;
   height: 4px;

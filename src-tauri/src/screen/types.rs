@@ -296,6 +296,7 @@ pub struct CommandCardMatch {
     pub servant_id: Option<u32>,
     #[serde(default)]
     pub is_support: bool,
+    pub is_stunned: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ascension: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

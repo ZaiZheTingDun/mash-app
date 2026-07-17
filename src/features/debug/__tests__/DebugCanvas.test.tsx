@@ -181,6 +181,7 @@ describe("DebugCanvas", () => {
               suit: "a",
               servantId: 309,
               isSupport: true,
+              isStunned: true,
               supportIconScore: 0.82,
               supportIconRegion: { x: 0.35, y: 0.56, w: 0.035, h: 0.058 },
             },
@@ -190,6 +191,7 @@ describe("DebugCanvas", () => {
     );
 
     expect(container.textContent).toContain("助战✓");
+    expect(container.textContent).toContain("无法行动");
     expect(container.textContent).toContain("助战 ✓ 0.82");
   });
 

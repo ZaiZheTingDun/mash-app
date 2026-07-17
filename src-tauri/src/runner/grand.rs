@@ -1247,7 +1247,10 @@ pub(crate) fn choose_advanced_auto_picks_with_grand_class(
         });
     }
 
-    for card in cards {
+    // Unlike normal mode, advanced and Grand strategies build and score all
+    // three-card combinations up front. Exclude unable-to-act cards before
+    // that search so no rule or score can select them.
+    for card in cards.iter().filter(|card| !card.is_stunned) {
         let servant_index = card.servant_id.and_then(|id| {
             party_ids
                 .iter()

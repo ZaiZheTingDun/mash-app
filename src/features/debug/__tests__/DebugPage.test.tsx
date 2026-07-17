@@ -223,6 +223,7 @@ describe("DebugPage", () => {
             ascension: 1,
             faceScore: 0.88,
             isSupport: true,
+            isStunned: true,
           },
         ];
       }
@@ -234,6 +235,8 @@ describe("DebugPage", () => {
     await user.click(screen.getByRole("button", { name: "截取画面" }));
     await user.click(screen.getByRole("button", { name: "识别指令卡" }));
 
-    expect(await screen.findByText(/C2:a 150@1\(0.88\) \[S\]/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/C2:a 150@1\(0.88\) \[S\] \[无法行动\]/)
+    ).toBeInTheDocument();
   });
 });

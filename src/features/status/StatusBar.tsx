@@ -165,14 +165,17 @@ function OperationLogFace({
   faceSrcByServantId,
   muted = false,
   highlighted = false,
+  stunned = false,
 }: {
   servantId: number | null | undefined;
   servantById: Map<number, Servant>;
   faceSrcByServantId: Record<number, string | null>;
   muted?: boolean;
   highlighted?: boolean;
+  stunned?: boolean;
 }) {
-  const label = servantName(servantById, servantId);
+  const name = servantName(servantById, servantId);
+  const label = stunned ? `无法行动：${name}` : name;
   const src = servantId != null ? faceSrcByServantId[servantId] : null;
   return (
     <span
@@ -180,6 +183,7 @@ function OperationLogFace({
         "operation-log-face",
         muted ? "operation-log-face--muted" : "",
         highlighted ? "operation-log-face--highlighted" : "",
+        stunned ? "operation-log-face--stunned" : "",
       ].filter(Boolean).join(" ")}
       aria-label={label}
       title={label}
@@ -455,6 +459,7 @@ function CommandCardsLogMessage({
               servantId={card.servantId}
               servantById={servantById}
               faceSrcByServantId={faceSrcByServantId}
+              stunned={card.isStunned}
             />
             <SuitDot suit={card.suit} />
           </span>

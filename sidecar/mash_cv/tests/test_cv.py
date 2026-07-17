@@ -1658,6 +1658,150 @@ class TestFindEnhancementServantGrid:
 # ── _find_command_cards ─────────────────────────────────────────────────
 
 
+@pytest.mark.parametrize(
+    "template_key",
+    (
+        "shared/command_seal_a",
+        "shared/command_seal_b",
+        "shared/command_seal_q",
+        "shared/command_sleep",
+        "shared/command_stun",
+    ),
+)
+@pytest.mark.parametrize("size", ((2560, 1440), (1920, 1080)))
+def test_command_card_stun_templates_mark_only_the_matching_slot(template_key, size):
+    """Shared unable-to-act templates work at both reference resolutions."""
+    from mash_cv import cv as cv_module
+
+    shared_templates = os.path.join(
+        _REPO_ROOT, "src-tauri", "resources", "servers", "shared", "templates"
+    )
+    assert mash_cv._load_templates(shared_templates, key_prefix="shared")["ok"] is True
+    assert template_key in mash_cv.templates
+
+    width, height = size
+    img = _make_bgr_image(width, height)
+    slot_px = mash_cv._slot_to_pixels(
+        mash_cv.DEFAULT_COMMAND_CARD_SLOTS[2], width, height
+    )
+    bbox = cv_module._command_card_stun_region_bbox(slot_px, width, height)
+    x, y, region_w, region_h = bbox
+    tmpl = cv_module._scale_static_template_for_image(
+        mash_cv.templates[template_key], img, template_key
+    )
+    template_scale = cv_module.COMMAND_CARD_STATUS_TEMPLATE_SCALES.get(
+        template_key, 1.0
+    )
+    if template_scale != 1.0:
+        tmpl = cv2.resize(
+            tmpl,
+            (
+                round(tmpl.shape[1] * template_scale),
+                round(tmpl.shape[0] * template_scale),
+            ),
+            interpolation=cv2.INTER_CUBIC,
+        )
+    tmpl_h, tmpl_w = tmpl.shape[:2]
+    assert tmpl_w <= region_w and tmpl_h <= region_h
+    left = x + (region_w - tmpl_w) // 2
+    top = y + (region_h - tmpl_h) // 2
+    img[top : top + tmpl_h, left : left + tmpl_w] = cv2.cvtColor(
+        tmpl, cv2.COLOR_GRAY2BGR
+    )
+
+    result = mash_cv._find_command_cards(
+        img, list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS), [], None
+    )
+
+    assert [card["isStunned"] for card in result["cards"]] == [
+        False,
+        False,
+        True,
+        False,
+        False,
+    ]
+
+
+def test_command_cards_are_not_stunned_when_shared_templates_are_unavailable():
+    mash_cv.templates.clear()
+    img = _make_bgr_image(2560, 1440)
+
+    result = mash_cv._find_command_cards(
+        img, list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS), [], None
+    )
+
+    assert all(card["isStunned"] is False for card in result["cards"])
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "expected_stunned"),
+    (
+        ("battle_command_cn_seal.png", [False, True, False, True, False]),
+        ("battle_command_cn_sleep.png", [True, True, False, True, False]),
+    ),
+)
+def test_detects_cn_command_card_unable_to_act_markers(
+    fixture_name, expected_stunned
+):
+    """Resource-extracted unable-to-act icons match real CN card overlays."""
+    shared_templates = os.path.join(
+        _REPO_ROOT, "src-tauri", "resources", "servers", "shared", "templates"
+    )
+    assert mash_cv._load_templates(shared_templates, key_prefix="shared")["ok"] is True
+    assert mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR, append=True)["ok"] is True
+    img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, fixture_name))
+    assert img is not None
+
+    result = mash_cv._find_command_cards(
+        img, list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS), [], None
+    )
+
+    assert [card["isStunned"] for card in result["cards"]] == expected_stunned
+
+
+def test_cn_stun_template_marks_the_stunned_card_not_the_sleep_template():
+    """The combined fixture pins the distinct stun icon on the second card."""
+    from mash_cv import cv as cv_module
+
+    shared_templates = os.path.join(
+        _REPO_ROOT, "src-tauri", "resources", "servers", "shared", "templates"
+    )
+    assert mash_cv._load_templates(shared_templates, key_prefix="shared")["ok"] is True
+    img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command_cn_sleep.png"))
+    assert img is not None
+
+    height, width = img.shape[:2]
+    slot = 1  # C2 in the screenshot, displaying the yellow stun marker.
+    slot_px = mash_cv._slot_to_pixels(
+        mash_cv.DEFAULT_COMMAND_CARD_SLOTS[slot], width, height
+    )
+    region = cv_module._norm_rect_from_pixels(
+        cv_module._command_card_stun_region_bbox(
+            slot_px,
+            width,
+            height,
+            cv_module.COMMAND_CARD_SUBREGION_X_OFFSETS[slot],
+        ),
+        width,
+        height,
+    )
+
+    def marker_found(template_key):
+        return cv_module._score_template_region(
+            img,
+            mash_cv.templates[template_key],
+            region,
+            cv_module.COMMAND_CARD_STUN_THRESHOLD,
+            template_key=template_key,
+            template_scale=cv_module.COMMAND_CARD_STATUS_TEMPLATE_SCALES.get(
+                template_key, 1.0
+            ),
+        )["found"]
+
+    assert marker_found("shared/command_stun") is True
+    assert marker_found("shared/command_sleep") is False
+
+
 @pytest.mark.skipif(
     not os.path.isdir(_PROD_TEMPLATES_DIR),
     reason="production templates dir not available",

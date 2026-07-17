@@ -5,6 +5,7 @@ export interface AttackLogCommandCard {
   suit: string | null;
   servantId: number | null;
   isSupport: boolean;
+  isStunned: boolean;
 }
 
 export interface AttackLogSelectedPick {
