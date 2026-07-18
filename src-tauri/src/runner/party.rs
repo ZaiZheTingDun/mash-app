@@ -495,17 +495,7 @@ pub(crate) fn grand_auto_order_change_action(
     grand_servants: &[GrandServantRuntimeConfig],
     grand_class: GrandClass,
 ) -> Option<Action> {
-    let target = if grand_class == GrandClass::Lancer {
-        grand_servants
-            .iter()
-            .find(|config| (3..6).contains(&config.slot_index))?
-    } else {
-        let main = grand_servants.first()?;
-        if !(3..6).contains(&main.slot_index) {
-            return None;
-        }
-        main
-    };
+    let target = grand_strategy(grand_class).auto_order_change_target(grand_servants)?;
     let protected_front: HashSet<(u32, bool)> = grand_servants
         .iter()
         .filter(|config| config.slot_index < 3)
@@ -1245,13 +1235,14 @@ impl Runner {
         let full = self.build_full_party_members();
         let mut seen = HashSet::new();
         let mut configs: Vec<_> = self.config.grand_servants.iter().collect();
-        if self.config.grand_class == GrandClass::Lancer {
-            configs.sort_by_key(|config| match config.lancer_role {
-                Some(LancerGrandRole::Single) => 0,
-                Some(LancerGrandRole::Aoe) => 1,
-                None => 2,
-            });
-        }
+        let roles = grand_strategy(self.config.grand_class).definition().roles;
+        configs.sort_by_key(|config| {
+            config
+                .role
+                .as_deref()
+                .and_then(|role| roles.iter().position(|candidate| candidate.role == role))
+                .unwrap_or(usize::MAX)
+        });
         configs
             .into_iter()
             .filter_map(|config| {
@@ -1267,6 +1258,7 @@ impl Runner {
                     is_support: member.is_support,
                     np_card: config.np_card.clone(),
                     priority: config.priority.clone(),
+                    role: config.role.clone().unwrap_or_default(),
                 })
             })
             .take(2)

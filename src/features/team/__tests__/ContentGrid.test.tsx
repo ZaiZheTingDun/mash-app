@@ -3,11 +3,22 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
-import { ContentGrid, type SlotItem } from "../ContentGrid";
+import { ContentGrid as ActualContentGrid, type SlotItem } from "../ContentGrid";
+import type { ComponentProps } from "react";
 import { createInitialProjectSlots } from "../projectSlots";
 import type { Servant } from "../../../types/servant";
 import type { CraftEssence } from "../../../types/craftEssence";
-import type { Project } from "../../../types/project";
+import type { GrandClassDefinition, Project } from "../../../types/project";
+
+const GRAND_CLASS_DEFINITIONS: GrandClassDefinition[] = [
+  { id: "saber", label: "剑阶冠位", servantClass: "Saber", roles: [], cardPriorityEnabled: true, autoOrderChangeRoles: [], validationMessage: "" },
+  { id: "lancer", label: "枪阶冠位", servantClass: "Lancer", roles: [], cardPriorityEnabled: false, autoOrderChangeRoles: [], validationMessage: "" },
+  { id: "berserker", label: "狂阶冠位", servantClass: "Berserker", roles: [], cardPriorityEnabled: true, autoOrderChangeRoles: [], validationMessage: "" },
+];
+
+function ContentGrid(props: ComponentProps<typeof ActualContentGrid>) {
+  return <ActualContentGrid {...props} grandClassDefinitions={GRAND_CLASS_DEFINITIONS} />;
+}
 
 function buildSlots(): SlotItem[] {
   return createInitialProjectSlots().map((s) => ({

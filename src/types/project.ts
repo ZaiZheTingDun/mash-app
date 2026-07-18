@@ -47,8 +47,24 @@ export type SupportGrandCraftEssenceMlbRequired = [boolean, boolean, boolean];
 export type SupportGrandBondCeMode = "any" | "bond" | "bondNp";
 export type GrandNpCard = "auto" | "buster" | "arts" | "quick";
 export type GrandCardPriority = "damage" | "np";
-export type GrandClass = "saber" | "lancer" | "berserker";
+export type GrandClass = string;
 export type LancerGrandRole = "single" | "aoe";
+
+export interface GrandRoleDefinition {
+  role: string;
+  label: string;
+  required: boolean;
+}
+
+export interface GrandClassDefinition {
+  id: GrandClass;
+  label: string;
+  servantClass: string;
+  roles: GrandRoleDefinition[];
+  cardPriorityEnabled: boolean;
+  autoOrderChangeRoles: string[];
+  validationMessage: string;
+}
 export type GrandChainPriorityItem =
   | "mainBraveChain"
   | "mainReadyNp"
@@ -88,6 +104,8 @@ export interface GrandServantConfig {
   isSupport?: boolean;
   npCard?: GrandNpCard;
   priority?: GrandCardPriority;
+  role?: string | null;
+  /** @deprecated Read-only compatibility for projects saved before generic roles. */
   lancerRole?: LancerGrandRole | null;
 }
 

@@ -21,8 +21,8 @@ use crate::enhancement_runner::{
 };
 use crate::models::ProjectRecognitionSettings;
 use crate::runner::{
-    runner_lifecycle_transition, AutomationEvent, LogLevel, RunConfig, Runner, RunnerHandle,
-    RunnerLifecycleEvent, RunnerState,
+    grand_strategy, runner_lifecycle_transition, AutomationEvent, LogLevel, RunConfig, Runner,
+    RunnerHandle, RunnerLifecycleEvent, RunnerState,
 };
 use crate::screen;
 use crate::server::{
@@ -304,6 +304,11 @@ pub(crate) fn start_automation(
         .as_ref()
         .map(|project| project.advanced_mode)
         .unwrap_or(false);
+    if advanced_mode {
+        let strategy = grand_strategy(config.grand_class);
+        strategy.normalize_servants(&mut config.grand_servants);
+        strategy.validate_servants(&config.grand_servants)?;
+    }
     let scenes = if advanced_mode {
         Vec::new()
     } else {

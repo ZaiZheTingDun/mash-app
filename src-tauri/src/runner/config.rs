@@ -17,122 +17,6 @@ pub struct ServantSlotConfig {
     pub servant_id: u32,
 }
 
-fn default_grand_np_card() -> String {
-    "auto".into()
-}
-
-fn default_grand_card_priority() -> String {
-    "damage".into()
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum GrandChainPriorityItem {
-    MainBraveChain,
-    MainReadyNp,
-    DeputyBraveChain,
-    MainColorChain,
-    DeputyColorChain,
-    Fallback,
-}
-
-pub(super) fn default_grand_chain_priority() -> Vec<GrandChainPriorityItem> {
-    vec![
-        GrandChainPriorityItem::MainBraveChain,
-        GrandChainPriorityItem::MainReadyNp,
-        GrandChainPriorityItem::DeputyBraveChain,
-        GrandChainPriorityItem::MainColorChain,
-        GrandChainPriorityItem::DeputyColorChain,
-        GrandChainPriorityItem::Fallback,
-    ]
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GrandCardStrategy {
-    #[serde(default = "default_grand_chain_priority")]
-    pub chain_priority: Vec<GrandChainPriorityItem>,
-    #[serde(default)]
-    pub custom_rules: Vec<GrandCardRuleConfig>,
-}
-
-impl Default for GrandCardStrategy {
-    fn default() -> Self {
-        Self {
-            chain_priority: default_grand_chain_priority(),
-            custom_rules: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GrandCardRuleSlotConfig {
-    #[serde(default)]
-    pub member_id: Option<String>,
-    #[serde(default)]
-    pub slot_index: Option<u32>,
-    #[serde(default)]
-    pub servant_id: Option<u32>,
-    #[serde(default)]
-    pub is_support: bool,
-    #[serde(default)]
-    pub grand_servant: bool,
-    #[serde(default)]
-    pub kind: String,
-    #[serde(default)]
-    pub color: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GrandCardRuleConfig {
-    pub id: String,
-    #[serde(default)]
-    pub name: String,
-    #[serde(default)]
-    pub slots: Vec<GrandCardRuleSlotConfig>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GrandServantConfig {
-    #[serde(default)]
-    pub member_id: Option<String>,
-    pub slot_index: u32,
-    #[serde(default)]
-    pub servant_id: Option<u32>,
-    #[serde(default)]
-    pub is_support: bool,
-    #[serde(default = "default_grand_np_card")]
-    pub np_card: String,
-    #[serde(default = "default_grand_card_priority")]
-    pub priority: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lancer_role: Option<LancerGrandRole>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum LancerGrandRole {
-    Single,
-    Aoe,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum GrandClass {
-    Saber,
-    Lancer,
-    Berserker,
-}
-
-impl Default for GrandClass {
-    fn default() -> Self {
-        Self::Saber
-    }
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct GrandServantRuntimeConfig {
     pub(crate) slot_index: usize,
@@ -140,6 +24,7 @@ pub(crate) struct GrandServantRuntimeConfig {
     pub(crate) is_support: bool,
     pub(crate) np_card: String,
     pub(crate) priority: String,
+    pub(crate) role: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

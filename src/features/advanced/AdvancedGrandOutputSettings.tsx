@@ -12,7 +12,7 @@ import {
   type PartyMember,
 } from "../team/partyServants";
 import type {
-  GrandClass,
+  GrandClassDefinition,
   GrandCardPriority,
   GrandNpCard,
   GrandServantConfig,
@@ -22,7 +22,7 @@ interface GrandOutputSettingsProps {
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   grandServants: GrandServantConfig[];
-  grandClass: GrandClass;
+  grandClassDefinition?: GrandClassDefinition;
   onChange?: (grandServants: GrandServantConfig[]) => void;
 }
 
@@ -30,17 +30,20 @@ export function GrandOutputSettings({
   partyMembers,
   faces,
   grandServants,
-  grandClass,
+  grandClassDefinition,
   onChange,
 }: GrandOutputSettingsProps) {
   const [settingsIndex, setSettingsIndex] = useState<number | null>(null);
   const partyLineup = partyMembersToServants(partyMembers);
-  const [selectedLancerRole, setSelectedLancerRole] = useState<"single" | "aoe">("single");
-  const normalized = normalizeGrandServants(grandServants, grandClass);
-  const lancerMode = grandClass === "lancer";
-  const activeLancerRole = normalized.some((config) => config.lancerRole === selectedLancerRole)
-    ? selectedLancerRole === "single" ? "aoe" : "single"
-    : selectedLancerRole;
+  const roles = grandClassDefinition?.roles ?? [
+    { role: "main", label: "主", required: true },
+    { role: "deputy", label: "副", required: false },
+  ];
+  const [selectedRole, setSelectedRole] = useState(roles[0]?.role ?? "main");
+  const normalized = normalizeGrandServants(grandServants, grandClassDefinition);
+  const activeRole = normalized.some((config) => config.role === selectedRole)
+    ? roles.find((role) => !normalized.some((config) => config.role === role.role))?.role ?? selectedRole
+    : selectedRole;
   const selectedSlots = new Set(normalized.map((item) => item.slotIndex));
   const settings =
     settingsIndex == null ? null : normalized[settingsIndex] ?? null;
@@ -48,12 +51,12 @@ export function GrandOutputSettings({
     settings == null ? null : partyLineup[settings.slotIndex] ?? null;
 
   const persist = (next: GrandServantConfig[]) => {
-    onChange?.(normalizeGrandServants(next, grandClass));
+    onChange?.(normalizeGrandServants(next, grandClassDefinition));
   };
   const addGrandServant = (slotIndex: number) => {
     const member = partyMembers[slotIndex];
     if (
-      normalized.length >= 2 ||
+      normalized.length >= roles.length ||
       selectedSlots.has(slotIndex) ||
       member?.servant == null
     ) {
@@ -68,12 +71,11 @@ export function GrandOutputSettings({
         isSupport: member.isSupport,
         npCard: "auto",
         priority: "damage",
-        ...(lancerMode ? { lancerRole: activeLancerRole } : {}),
+        role: activeRole,
       },
     ]);
-    if (lancerMode) {
-      setSelectedLancerRole(activeLancerRole === "single" ? "aoe" : "single");
-    }
+    const nextRole = roles.find((role) => role.role !== activeRole && !normalized.some((config) => config.role === role.role));
+    if (nextRole) setSelectedRole(nextRole.role);
   };
   const removeGrandServant = (index: number) => {
     persist(normalized.filter((_, itemIndex) => itemIndex !== index));
@@ -90,12 +92,15 @@ export function GrandOutputSettings({
     );
   };
   const moveToMain = (index: number) => {
-    if (index <= 0) return;
-    const next = [...normalized];
-    const [item] = next.splice(index, 1);
-    next.unshift(item);
+    const primaryRole = roles[0]?.role;
+    if (!primaryRole || normalized[index]?.role === primaryRole) return;
+    const next = normalized.map((item) => ({ ...item }));
+    const primaryIndex = next.findIndex((item) => item.role === primaryRole);
+    const previousRole = next[index].role;
+    next[index].role = primaryRole;
+    if (primaryIndex >= 0) next[primaryIndex].role = previousRole;
     persist(next);
-    setSettingsIndex(0);
+    setSettingsIndex(primaryIndex >= 0 ? primaryIndex : index);
   };
 
   return (
@@ -106,33 +111,28 @@ export function GrandOutputSettings({
             冠位
           </Text>
           <div className="advanced-grand-output-slots">
-            {(lancerMode
-              ? (["single", "aoe"] as const).map((role) => ({
-                  role,
-                  index: normalized.findIndex((config) => config.lancerRole === role),
-                }))
-              : normalized.map((_, index) => ({ role: null, index }))
-            ).map(({ role, index }) => {
+            {roles.map((roleDefinition) => {
+              const role = roleDefinition.role;
+              const index = normalized.findIndex((config) => config.role === role);
               const config = index >= 0 ? normalized[index] : null;
-              if (!config && role) {
-                const label = role === "single" ? "单体" : "光炮";
+              if (!config) {
+                const label = roleDefinition.label;
                 return (
                   <button
                     key={role}
                     type="button"
-                    className={`grand-servant-tile grand-servant-role-empty${activeLancerRole === role ? " selected" : ""}`}
+                    className={`grand-servant-tile grand-servant-role-empty${activeRole === role ? " selected" : ""}`}
                     aria-label={`选择${label}冠位`}
-                    aria-pressed={activeLancerRole === role}
-                    onClick={() => setSelectedLancerRole(role)}
+                    aria-pressed={activeRole === role}
+                    onClick={() => setSelectedRole(role)}
                   >
                     <span className="grand-role-badge">{label}</span>
                     <span className="grand-servant-placeholder">未选择</span>
                   </button>
                 );
               }
-              if (!config) return null;
               const servant = partyLineup[config.slotIndex] ?? null;
-              const roleLabel = role === "single" ? "单体" : role === "aoe" ? "光炮" : index === 0 ? "主" : "副";
+              const roleLabel = roleDefinition.label;
               return (
                 <button
                   key={`${config.slotIndex}-${index}`}
@@ -160,7 +160,7 @@ export function GrandOutputSettings({
                   <span className="grand-np-badge">
                     {npCardLabel(config.npCard, servant?.noblePhantasmCard)}
                   </span>
-                  {!lancerMode && (
+                  {grandClassDefinition?.cardPriorityEnabled !== false && (
                     <span className="grand-priority-badge">
                       {priorityLabel(config.priority)}
                     </span>
@@ -168,9 +168,6 @@ export function GrandOutputSettings({
                 </button>
               );
             })}
-            {!lancerMode && normalized.length < 2 && (
-              <div className="grand-servant-empty">选择冠位从者</div>
-            )}
           </div>
         </div>
         <div className="advanced-grand-output-row">
@@ -188,7 +185,7 @@ export function GrandOutputSettings({
                 disabled={
                   servant == null ||
                   selectedSlots.has(index) ||
-                  normalized.length >= 2
+                  normalized.length >= roles.length
                 }
                 isSupport={partyMembers[index]?.isSupport ?? false}
                 onClick={() => addGrandServant(index)}
@@ -234,7 +231,7 @@ export function GrandOutputSettings({
                   </Select.Content>
                 </Select.Root>
               </label>
-              {!lancerMode && <label className="grand-setting-field">
+              {grandClassDefinition?.cardPriorityEnabled !== false && <label className="grand-setting-field">
                 <Text size="2" weight="medium">
                   出卡策略
                 </Text>
@@ -263,7 +260,7 @@ export function GrandOutputSettings({
                   移除
                 </Button>
                 <Flex gap="3">
-                  {!lancerMode && settingsIndex > 0 && (
+                  {grandClassDefinition?.cardPriorityEnabled !== false && settings.role !== roles[0]?.role && (
                     <Button
                       type="button"
                       variant="soft"

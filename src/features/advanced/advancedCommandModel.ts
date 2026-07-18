@@ -16,7 +16,7 @@ import type {
   GrandRuleColor,
   GrandRuleKind,
   GrandServantConfig,
-  GrandClass,
+  GrandClassDefinition,
 } from "../../types/project";
 import type { Servant } from "../../types/servant";
 import commandBgArts from "../../../src-tauri/resources/images/command_bg/command_bg_a.png";
@@ -163,13 +163,11 @@ export function servantSlotIndex(source: string | null | undefined): number | nu
 
 export function mainGrandBackSlot(
   grandServants: GrandServantConfig[],
-  grandClass?: GrandClass
+  definition?: GrandClassDefinition,
 ): number | null {
-  const preferred =
-    grandClass === "lancer"
-      ? grandServants.find((config) => config.lancerRole === "single" && config.slotIndex >= 3) ??
-        grandServants.find((config) => config.lancerRole === "aoe" && config.slotIndex >= 3)
-      : grandServants[0];
+  const preferred = definition?.autoOrderChangeRoles
+    .map((role) => grandServants.find((config) => (config.role ?? config.lancerRole) === role && config.slotIndex >= 3))
+    .find((config) => config != null) ?? grandServants[0];
   const slotIndex = preferred?.slotIndex;
   return typeof slotIndex === "number" && Number.isInteger(slotIndex) && slotIndex >= 3 && slotIndex < 6
     ? slotIndex
@@ -178,8 +176,12 @@ export function mainGrandBackSlot(
 
 export function normalizeGrandServants(
   values: GrandServantConfig[] | undefined,
-  grandClass?: GrandClass
+  definition?: GrandClassDefinition,
 ): GrandServantConfig[] {
+  const roleDefinitions = definition?.roles ?? [
+    { role: "main", label: "主", required: true },
+    { role: "deputy", label: "副", required: false },
+  ];
   const seen = new Set<number>();
   return (values ?? [])
     .filter((item) => Number.isInteger(item.slotIndex) && item.slotIndex >= 0 && item.slotIndex < 6)
@@ -188,23 +190,23 @@ export function normalizeGrandServants(
       seen.add(item.slotIndex);
       return true;
     })
-    .slice(0, 2)
-    .map((item) => ({
+    .slice(0, roleDefinitions.length)
+    .map((item, index) => ({
       memberId: item.memberId ?? null,
       slotIndex: item.slotIndex,
       servantId: item.servantId ?? null,
       isSupport: item.isSupport === true,
       npCard: item.npCard ?? "auto",
       priority: item.priority ?? "damage",
-      ...(item.lancerRole != null || grandClass === "lancer"
-        ? { lancerRole: item.lancerRole ?? null }
-        : {}),
+      role:
+        [item.role, item.lancerRole].find((role) =>
+          roleDefinitions.some((definition) => definition.role === role),
+        ) ?? roleDefinitions[index]?.role ?? null,
     }))
     .sort((left, right) => {
-      if (grandClass !== "lancer") return 0;
-      const rank = (role: GrandServantConfig["lancerRole"]) =>
-        role === "single" ? 0 : role === "aoe" ? 1 : 2;
-      return rank(left.lancerRole) - rank(right.lancerRole);
+      const rank = (role: string | null | undefined) =>
+        roleDefinitions.findIndex((definition) => definition.role === role);
+      return rank(left.role) - rank(right.role);
     });
 }
 

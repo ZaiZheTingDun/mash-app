@@ -2,6 +2,7 @@
 //! This module owns the persisted project JSON shape and scene-file round trips.
 
 use super::*;
+use crate::runner::{grand_class_definitions, grand_strategy};
 
 pub(crate) fn read_projects(app: &tauri::AppHandle) -> Vec<Project> {
     read_projects_from_path(&projects_file_path(app))
@@ -164,15 +165,7 @@ fn normalize_grand_servants(project: &mut Project) {
             }
         }
     }
-    if project.grand_class == GrandClass::Lancer {
-        project
-            .grand_servants
-            .sort_by_key(|config| match config.lancer_role {
-                Some(LancerGrandRole::Single) => 0,
-                Some(LancerGrandRole::Aoe) => 1,
-                None => 2,
-            });
-    }
+    grand_strategy(project.grand_class).normalize_servants(&mut project.grand_servants);
 }
 
 pub(crate) fn write_projects(app: &tauri::AppHandle, projects: &[Project]) -> Result<(), String> {
@@ -239,6 +232,11 @@ pub(crate) fn set_app_theme(app: tauri::AppHandle, theme: String) -> Result<(), 
 #[tauri::command]
 pub(crate) fn list_projects(app: tauri::AppHandle) -> Vec<Project> {
     read_projects(&app)
+}
+
+#[tauri::command]
+pub(crate) fn get_grand_class_definitions() -> Vec<GrandClassDefinition> {
+    grand_class_definitions()
 }
 
 #[tauri::command]

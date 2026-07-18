@@ -31,10 +31,15 @@ import type {
   BattleApRecoveryItem,
   BattleRepeatMode,
   GrandClass,
+  GrandClassDefinition,
   GrandChainPriorityItem,
   Project,
 } from "../../types/project";
 import type { Servant } from "../../types/servant";
+import {
+  grandClassDefinition,
+  validateGrandServants as grandServantsAreValid,
+} from "../advanced/grandClassModel";
 import { isAutomationTerminal, type AutomationStatus } from "../../types/automation";
 
 interface AutomationEvent {
@@ -94,6 +99,7 @@ const DEFAULT_FIVE_STAR_CE_DROP_TARGET_COUNT = 1;
 
 interface BattlePageProps {
   projects: Project[];
+  grandClassDefinitions: GrandClassDefinition[];
   servants: Servant[];
   activeProjectId: string | null;
   onProjectSelect: (id: string) => void;
@@ -367,6 +373,7 @@ function BattleAdvancedSettingsDialog({
 
 export function BattlePage({
   projects,
+  grandClassDefinitions,
   activeProjectId,
   onProjectSelect,
   onCreateProject,
@@ -421,29 +428,13 @@ export function BattlePage({
 
   const validateGrandServants = useCallback(() => {
     if (selectedProject?.advancedMode !== true) return true;
-    const seen = new Set<number>();
-    const grandCount = (selectedProject.grandServants ?? []).filter((item) => {
-      if (!Number.isInteger(item.slotIndex) || item.slotIndex < 0 || item.slotIndex >= 6) {
-        return false;
-      }
-      if (seen.has(item.slotIndex)) return false;
-      seen.add(item.slotIndex);
-      return true;
-    }).length;
-    if (selectedProject.grandClass === "lancer") {
-      const roles = new Set(
-        (selectedProject.grandServants ?? []).map((item) => item.lancerRole)
-      );
-      if (grandCount !== 2 || !roles.has("single") || !roles.has("aoe")) {
-        setStartError("枪阶戴冠战需要分别选择单体和光炮从者");
-        return false;
-      }
-    } else if (grandCount < 1 || grandCount > 2) {
-      setStartError("戴冠战需要选择 1 到 2 名冠位从者");
+    const definition = grandClassDefinition(grandClassDefinitions, selectedProject.grandClass);
+    if (!definition || !grandServantsAreValid(selectedProject.grandServants ?? [], definition)) {
+      setStartError(definition?.validationMessage ?? "无法读取冠位职阶定义");
       return false;
     }
     return true;
-  }, [selectedProject]);
+  }, [grandClassDefinitions, selectedProject]);
 
   const updateSelectedProject = useCallback(
     (updater: (project: Project) => Project) => {
@@ -645,6 +636,7 @@ export function BattlePage({
       <Box className="battle-topbar">
         <ProjectBar
           projects={projects}
+          grandClassDefinitions={grandClassDefinitions}
           activeProjectId={activeProjectId}
           disabled={running}
           onProjectSelect={onProjectSelect}

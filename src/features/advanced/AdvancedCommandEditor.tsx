@@ -54,6 +54,7 @@ import type {
 import type {
   GrandCardStrategy,
   GrandClass,
+  GrandClassDefinition,
   GrandServantConfig,
 } from "../../types/project";
 import type { Servant } from "../../types/servant";
@@ -66,6 +67,7 @@ interface AdvancedCommandEditorProps {
   disableAutoSkillTargetRecognition?: boolean;
   grandServants?: GrandServantConfig[];
   grandClass?: GrandClass;
+  grandClassDefinition?: GrandClassDefinition;
   grandCardStrategy?: GrandCardStrategy;
   grandCardPriorityEnabled?: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
@@ -272,7 +274,7 @@ function AdvancedStrategyEditor({
   skillSelection,
   disableAutoSkillTargetRecognition,
   grandServants,
-  grandClass,
+  grandClassDefinition,
   grandCardStrategy,
   grandCardPriorityEnabled,
   onGrandServantsChange,
@@ -287,7 +289,7 @@ function AdvancedStrategyEditor({
   skillSelection: ReturnType<typeof useServantSkillSelections>;
   disableAutoSkillTargetRecognition: boolean;
   grandServants: GrandServantConfig[];
-  grandClass: GrandClass;
+  grandClassDefinition?: GrandClassDefinition;
   grandCardStrategy?: GrandCardStrategy;
   grandCardPriorityEnabled: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
@@ -299,14 +301,11 @@ function AdvancedStrategyEditor({
   const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
   const partyLineup = useMemo(() => partyMembersToServants(partyMembers), [partyMembers]);
   const grandAutoOrderChange = scene.grandAutoOrderChange ?? null;
-  const mainGrandSlot = mainGrandBackSlot(grandServants, grandClass);
+  const mainGrandSlot = mainGrandBackSlot(grandServants, grandClassDefinition);
   const mainGrandServant = mainGrandSlot == null ? null : partyLineup[mainGrandSlot] ?? null;
-  const orderChangeRole = grandClass === "lancer"
-    ? grandServants.find((config) => config.slotIndex === mainGrandSlot)?.lancerRole
-    : null;
-  const orderChangeLabel = grandClass === "lancer"
-    ? orderChangeRole === "aoe" ? "光炮冠位从者" : "单体冠位从者"
-    : "主冠位从者";
+  const orderChangeConfig = grandServants.find((config) => config.slotIndex === mainGrandSlot);
+  const orderChangeRole = orderChangeConfig?.role ?? orderChangeConfig?.lancerRole;
+  const orderChangeLabel = `${grandClassDefinition?.roles.find((role) => role.role === orderChangeRole)?.label ?? "主"}冠位从者`;
   const startupSelectableSlots = useMemo(() => {
     const slots = [0, 1, 2];
     if (mainGrandSlot != null && grandAutoOrderChange === true) {
@@ -624,7 +623,7 @@ function AdvancedStrategyEditor({
             partyMembers={partyMembers}
             faces={faces}
             grandServants={grandServants}
-            grandClass={grandClass}
+            grandClassDefinition={grandClassDefinition}
             onChange={onGrandServantsChange}
           />
         </div>
@@ -1166,7 +1165,7 @@ export function AdvancedCommandEditor({
   partyMembers,
   disableAutoSkillTargetRecognition = false,
   grandServants = [],
-  grandClass = "saber",
+  grandClassDefinition,
   grandCardStrategy,
   grandCardPriorityEnabled = false,
   onGrandServantsChange,
@@ -1239,7 +1238,7 @@ export function AdvancedCommandEditor({
           skillSelection={skillSelection}
           disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
         grandServants={grandServants}
-        grandClass={grandClass}
+        grandClassDefinition={grandClassDefinition}
           grandCardStrategy={grandCardStrategy}
           grandCardPriorityEnabled={grandCardPriorityEnabled}
           onGrandServantsChange={onGrandServantsChange}

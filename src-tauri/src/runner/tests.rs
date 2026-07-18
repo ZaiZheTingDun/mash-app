@@ -361,6 +361,7 @@ fn grand_config_at(
         is_support: false,
         np_card: np_card.into(),
         priority: priority.into(),
+        role: if servant_id == 20 { "deputy" } else { "main" }.into(),
     }
 }
 
@@ -1821,8 +1822,14 @@ fn lancer_auto_order_change_brings_aoe_forward_without_removing_front_single() {
         &[Some(10), Some(30), Some(40)],
         &[false, false, false],
         &[
-            grand_config_at(0, 10, "buster", "damage"),
-            grand_config_at(4, 20, "arts", "damage"),
+            GrandServantRuntimeConfig {
+                role: "single".into(),
+                ..grand_config_at(0, 10, "buster", "damage")
+            },
+            GrandServantRuntimeConfig {
+                role: "aoe".into(),
+                ..grand_config_at(4, 20, "arts", "damage")
+            },
         ],
         GrandClass::Lancer,
     )
@@ -3022,6 +3029,21 @@ fn lancer_grand_ignores_non_grand_np_and_uses_command_cards_when_grand_nps_unrea
 }
 
 #[test]
+fn lancer_grand_incomplete_hand_keeps_owner_and_a_q_b_priority() {
+    let picks = lancer_picks(
+        vec![
+            command_card(0, Some(10), Some("b"), None),
+            command_card(1, Some(10), Some("a"), None),
+        ],
+        Vec::new(),
+        "buster",
+        "arts",
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["C1", "C0"]);
+}
+
+#[test]
 fn berserker_grand_auto_main_np_color_chain_prioritizes_grand_any_slots() {
     let scene = empty_advanced_scene();
     let cards = vec![
@@ -3473,6 +3495,7 @@ fn grand_role_for_candidate_prefers_slot_over_duplicate_servant_id() {
             is_support: false,
             np_card: "buster".into(),
             priority: "damage".into(),
+            role: "main".into(),
         },
         GrandServantRuntimeConfig {
             slot_index: 1,
@@ -3480,6 +3503,7 @@ fn grand_role_for_candidate_prefers_slot_over_duplicate_servant_id() {
             is_support: true,
             np_card: "arts".into(),
             priority: "damage".into(),
+            role: "deputy".into(),
         },
     ];
     let candidate = AdvancedPickCandidate {
@@ -3622,19 +3646,15 @@ fn run_config_round_trips_lancer_roles() {
         { "slotIndex": 1, "lancerRole": "aoe" }
     ]);
 
-    let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+    let mut cfg: RunConfig = serde_json::from_value(payload).unwrap();
     assert_eq!(cfg.grand_class, GrandClass::Lancer);
-    assert_eq!(
-        cfg.grand_servants[0].lancer_role,
-        Some(LancerGrandRole::Single)
-    );
-    assert_eq!(
-        cfg.grand_servants[1].lancer_role,
-        Some(LancerGrandRole::Aoe)
-    );
+    grand_strategy(cfg.grand_class).normalize_servants(&mut cfg.grand_servants);
+    assert_eq!(cfg.grand_servants[0].role.as_deref(), Some("single"));
+    assert_eq!(cfg.grand_servants[1].role.as_deref(), Some("aoe"));
     let serialized = serde_json::to_value(&cfg).unwrap();
-    assert_eq!(serialized["grandServants"][0]["lancerRole"], "single");
-    assert_eq!(serialized["grandServants"][1]["lancerRole"], "aoe");
+    assert_eq!(serialized["grandServants"][0]["role"], "single");
+    assert_eq!(serialized["grandServants"][1]["role"], "aoe");
+    assert!(serialized["grandServants"][0].get("lancerRole").is_none());
 }
 
 #[test]

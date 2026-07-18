@@ -16,7 +16,7 @@ Frontend code lives under `src/`.
   - `battleActorLabels`
 - `features/team/` owns team setup, support requirements, servant/CE selection, party-member helpers, and team tests.
 - `features/battle/` owns legacy battle-scene editing, command editing, battle-page shell, and related tests.
-- `features/advanced/` owns advanced battle-scene editing, Grand card strategy editing, Grand rule slot helpers, and related tests.
+- `features/advanced/` owns advanced battle-scene editing, Grand card strategy editing, backend-defined Grand class/role helpers, Grand rule slot helpers, and related tests.
 - `features/debug/` owns the debug page, canvas, popout window, debug DTOs/helpers, and related tests.
 - `features/settings/` owns settings pages, runtime/assets/self-check controls, and settings tests.
 - `features/setup/`, `features/enhancement/`, `features/status/`, and `features/projects/` own their corresponding screens/components and tests.
@@ -41,7 +41,7 @@ Backend code lives under `src-tauri/src/`.
   - `projects.rs` for project CRUD and config import/export.
   - `runtime.rs` for CV runtime status/import/download and runtime resource resolution.
   - `settings.rs` for app settings, startup migration, server selection, and update-check settings.
-- `runner/` contains the battle automation state machine split by domain: config, coordinates, state, support, AP recovery, party mutation, attack selection, Grand strategy, runtime helpers, prebattle routing, result handling, and tests.
+- `runner/` contains the battle automation state machine split by domain: config, coordinates, state, support, AP recovery, party mutation, attack selection, runtime helpers, prebattle routing, result handling, and tests. `runner/grand.rs` is the shared Grand rule engine and strategy registry; `runner/grand/` contains one strategy module per Grand class.
 - `touch/` contains low-level touch input construction.
 - `screen.rs` owns the Python sidecar client/IPC; `screen/types.rs` owns screen/CV DTOs re-exported through `crate::screen`.
 - `enhancement_runner.rs` owns enhancement automation.

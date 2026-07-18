@@ -7,6 +7,25 @@ import { useState } from "react";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { BattlePage } from "../BattlePage";
 import type { Project } from "../../../types/project";
+import type { GrandClassDefinition } from "../../../types/project";
+
+const GRAND_CLASS_DEFINITIONS: GrandClassDefinition[] = [
+  {
+    id: "saber", label: "剑阶冠位", servantClass: "Saber",
+    roles: [{ role: "main", label: "主", required: true }, { role: "deputy", label: "副", required: false }],
+    cardPriorityEnabled: true, autoOrderChangeRoles: ["main"], validationMessage: "戴冠战需要选择 1 到 2 名冠位从者",
+  },
+  {
+    id: "lancer", label: "枪阶冠位", servantClass: "Lancer",
+    roles: [{ role: "single", label: "单体", required: true }, { role: "aoe", label: "光炮", required: true }],
+    cardPriorityEnabled: false, autoOrderChangeRoles: ["single", "aoe"], validationMessage: "枪阶戴冠战需要分别选择单体和光炮从者",
+  },
+  {
+    id: "berserker", label: "狂阶冠位", servantClass: "Berserker",
+    roles: [{ role: "main", label: "主", required: true }, { role: "deputy", label: "副", required: false }],
+    cardPriorityEnabled: true, autoOrderChangeRoles: ["main"], validationMessage: "戴冠战需要选择 1 到 2 名冠位从者",
+  },
+];
 import type { Servant } from "../../../types/servant";
 
 const SABER: Servant = {
@@ -91,6 +110,7 @@ function renderBattlePage(initialProject: Project, servants: Servant[] = [SABER,
     return (
       <BattlePage
         projects={projects}
+        grandClassDefinitions={GRAND_CLASS_DEFINITIONS}
         servants={servants}
         activeProjectId={activeProjectId}
         onProjectSelect={setActiveProjectId}

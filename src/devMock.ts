@@ -204,6 +204,12 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return clone(craftEssences) as T;
     case "list_projects":
       return clone(projects) as T;
+    case "get_grand_class_definitions":
+      return [
+        { id: "saber", label: "剑阶冠位", servantClass: "Saber", roles: [{ role: "main", label: "主", required: true }, { role: "deputy", label: "副", required: false }], cardPriorityEnabled: true, autoOrderChangeRoles: ["main"], validationMessage: "戴冠战需要选择 1 到 2 名冠位从者" },
+        { id: "lancer", label: "枪阶冠位", servantClass: "Lancer", roles: [{ role: "single", label: "单体", required: true }, { role: "aoe", label: "光炮", required: true }], cardPriorityEnabled: false, autoOrderChangeRoles: ["single", "aoe"], validationMessage: "枪阶戴冠战需要分别选择单体和光炮从者" },
+        { id: "berserker", label: "狂阶冠位", servantClass: "Berserker", roles: [{ role: "main", label: "主", required: true }, { role: "deputy", label: "副", required: false }], cardPriorityEnabled: true, autoOrderChangeRoles: ["main"], validationMessage: "戴冠战需要选择 1 到 2 名冠位从者" },
+      ] as T;
     case "get_active_project_id":
       return activeProjectId as T;
     case "set_active_project_id":

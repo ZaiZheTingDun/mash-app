@@ -1,5 +1,6 @@
 import type {
   GrandClass,
+  GrandClassDefinition,
   Project,
   SupportAppendSkillLevelMins,
   SupportGrandCraftEssenceIds,
@@ -44,8 +45,9 @@ export function normalizeSupportGrandCraftEssenceMlbRequired(
   return [0, 1, 2].map((index) => values?.[index] ?? true) as SupportGrandCraftEssenceMlbRequired;
 }
 
-export function grandClassToServantClass(grandClass: GrandClass | undefined): string {
-  if (grandClass === "berserker") return "Berserker";
-  if (grandClass === "lancer") return "Lancer";
-  return "Saber";
+export function grandClassToServantClass(
+  grandClass: GrandClass | undefined,
+  definitions: GrandClassDefinition[] | null | undefined,
+): string | undefined {
+  return definitions?.find((definition) => definition.id === (grandClass ?? "saber"))?.servantClass;
 }

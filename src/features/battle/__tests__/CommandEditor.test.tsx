@@ -1,13 +1,26 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { describe, it, expect, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
-import { CommandEditor } from "../CommandEditor";
+import { CommandEditor as ActualCommandEditor } from "../CommandEditor";
 import type { AdvancedBattleScene, BattleScene } from "../../../types/command";
-import type { GrandCardStrategy, GrandServantConfig } from "../../../types/project";
+import type { GrandCardStrategy, GrandClassDefinition, GrandServantConfig } from "../../../types/project";
 import type { Servant } from "../../../types/servant";
+
+const GRAND_CLASS_DEFINITIONS: GrandClassDefinition[] = [
+  { id: "saber", label: "剑阶冠位", servantClass: "Saber", roles: [{ role: "main", label: "主", required: true }, { role: "deputy", label: "副", required: false }], cardPriorityEnabled: true, autoOrderChangeRoles: ["main"], validationMessage: "" },
+  { id: "lancer", label: "枪阶冠位", servantClass: "Lancer", roles: [{ role: "single", label: "单体", required: true }, { role: "aoe", label: "光炮", required: true }], cardPriorityEnabled: false, autoOrderChangeRoles: ["single", "aoe"], validationMessage: "" },
+  { id: "berserker", label: "狂阶冠位", servantClass: "Berserker", roles: [{ role: "main", label: "主", required: true }, { role: "deputy", label: "副", required: false }], cardPriorityEnabled: true, autoOrderChangeRoles: ["main"], validationMessage: "" },
+];
+
+function CommandEditor(props: ComponentProps<typeof ActualCommandEditor>) {
+  const definition = GRAND_CLASS_DEFINITIONS.find(
+    (candidate) => candidate.id === (props.grandClass ?? "saber"),
+  );
+  return <ActualCommandEditor {...props} grandClassDefinition={definition} />;
+}
 
 function makeServant(
   id: number,
@@ -472,7 +485,7 @@ describe("CommandEditor pagination", () => {
     await user.click(screen.getByRole("button", { name: "甲" }));
 
     expect(onGrandServantsChange).toHaveBeenCalledWith([
-      { memberId: null, slotIndex: 0, servantId: 1, isSupport: false, npCard: "auto", priority: "damage" },
+      { memberId: null, slotIndex: 0, servantId: 1, isSupport: false, npCard: "auto", priority: "damage", role: "main" },
     ]);
   });
 
@@ -510,7 +523,7 @@ describe("CommandEditor pagination", () => {
     await user.click(screen.getByRole("button", { name: "剑阶甲" }));
 
     expect(onGrandServantsChange).toHaveBeenCalledWith([
-      { memberId: null, slotIndex: 0, servantId: 1, isSupport: false, npCard: "auto", priority: "damage" },
+      { memberId: null, slotIndex: 0, servantId: 1, isSupport: false, npCard: "auto", priority: "damage", role: "main" },
     ]);
   });
 
@@ -579,8 +592,8 @@ describe("CommandEditor pagination", () => {
     await user.click(screen.getByRole("button", { name: "狂阶乙" }));
 
     expect(onGrandServantsChange).toHaveBeenCalledWith([
-      { memberId: null, slotIndex: 0, servantId: null, isSupport: false, npCard: "auto", priority: "damage" },
-      { memberId: null, slotIndex: 1, servantId: 2, isSupport: false, npCard: "auto", priority: "damage" },
+      { memberId: null, slotIndex: 0, servantId: null, isSupport: false, npCard: "auto", priority: "damage", role: "main" },
+      { memberId: null, slotIndex: 1, servantId: 2, isSupport: false, npCard: "auto", priority: "damage", role: "deputy" },
     ]);
   });
 
@@ -625,8 +638,8 @@ describe("CommandEditor pagination", () => {
     await user.click(screen.getByRole("button", { name: "光炮乙" }));
     expect(screen.getByRole("button", { name: "光炮冠位：光炮乙" })).toBeInTheDocument();
     expect(onGrandServantsChange).toHaveBeenLastCalledWith([
-      expect.objectContaining({ slotIndex: 0, lancerRole: "single" }),
-      expect.objectContaining({ slotIndex: 1, lancerRole: "aoe" }),
+      expect.objectContaining({ slotIndex: 0, role: "single" }),
+      expect.objectContaining({ slotIndex: 1, role: "aoe" }),
     ]);
 
     await user.click(screen.getByRole("button", { name: "单体冠位：单体甲" }));

@@ -22,10 +22,11 @@ import {
   TrashIcon,
   CheckIcon,
 } from "@radix-ui/react-icons";
-import type { GrandClass, Project } from "../../types/project";
+import type { GrandClass, GrandClassDefinition, Project } from "../../types/project";
 
 interface ProjectBarProps {
   projects: Project[];
+  grandClassDefinitions?: GrandClassDefinition[];
   activeProjectId: string | null;
   disabled?: boolean;
   onProjectSelect: (id: string) => void;
@@ -49,6 +50,7 @@ type NameDialogMode = "create" | "rename" | "duplicate";
  */
 export function ProjectBar({
   projects,
+  grandClassDefinitions = [],
   activeProjectId,
   disabled = false,
   onProjectSelect,
@@ -81,9 +83,9 @@ export function ProjectBar({
         setDraftName(`队伍 ${projects.length + 1}`);
       }
       setDraftAdvancedMode(false);
-      setDraftGrandClass("saber");
+      setDraftGrandClass(grandClassDefinitions[0]?.id ?? "saber");
     },
-    [activeProject, projects.length]
+    [activeProject, grandClassDefinitions, projects.length]
   );
 
   const handleNameSubmit = useCallback(
@@ -292,9 +294,11 @@ export function ProjectBar({
                       >
                         <Select.Trigger aria-label="冠位职阶" />
                         <Select.Content>
-                          <Select.Item value="saber">剑阶冠位</Select.Item>
-                          <Select.Item value="lancer">枪阶冠位</Select.Item>
-                          <Select.Item value="berserker">狂阶冠位</Select.Item>
+                          {grandClassDefinitions.map((definition) => (
+                            <Select.Item key={definition.id} value={definition.id}>
+                              {definition.label}
+                            </Select.Item>
+                          ))}
                         </Select.Content>
                       </Select.Root>
                     </Box>

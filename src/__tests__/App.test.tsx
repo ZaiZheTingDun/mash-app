@@ -53,6 +53,8 @@ function installAppMock(
         return [];
       case "list_projects":
         return projects;
+      case "get_grand_class_definitions":
+        return [];
       case "get_active_project_id":
         return savedActiveProjectId;
       case "check_adb":
@@ -262,6 +264,8 @@ describe("App active project restore", () => {
           return [];
         case "list_projects":
           return [invalidProject];
+        case "get_grand_class_definitions":
+          return [];
         case "get_active_project_id":
           return invalidProject.id;
         case "check_adb":
@@ -310,6 +314,8 @@ describe("App active project restore", () => {
           return [];
         case "list_projects":
           return projects;
+        case "get_grand_class_definitions":
+          return [];
         case "get_active_project_id":
           return "project-1";
         case "check_adb":

@@ -520,9 +520,11 @@ changes (i.e. when the runner moves to a different row).
   ready NPs and command cards are scored together with the configured
   main-output servant, output type, and NP color (`npCard`, or the servant
   resource's `noblePhantasmCard` when set to automatic). In Grand battle mode,
-  the project stores `grandClass` plus one or two `grandServants`; the first is
-  the main output and the second is the deputy. Missing legacy `grandClass`
-  values default to Saber. The automatic picker uses rule templates where each
+  the project stores `grandClass` plus class-defined `grandServants` roles.
+  Saber/Berserker use main and optional deputy roles; Lancer requires single
+  and AoE roles. Missing legacy `grandClass` values default to Saber, and legacy
+  `lancerRole` values are normalized into the generic `role` field. The
+  automatic picker uses rule templates where each
   rule defines three slots, and those slots are the final click order. When
   `grandCardStrategy.customRules` is non-empty, user rules are tried first; each
   user rule binds its three slots to exact servant ids, or optionally any Grand
@@ -539,8 +541,9 @@ changes (i.e. when the runner moves to a different row).
   for the same-color chain that deputy NP must also match the main NP color.
   Berserker built-in rule slots whose owner is any servant prefer main Grand
   attacks, then deputy Grand attacks, then non-Grand attacks.
-  Lancer mode stores explicit `lancerRole` values for one single-target and one
-  AoE Grand servant, normalized in that order. Its fixed picker first attempts
+  Lancer mode stores explicit `single` and `aoe` roles for one single-target
+  and one AoE Grand servant, normalized by its registered strategy in that
+  order. Its built-in `GrandCardRule` sequence first attempts
   AoE NP, single-target NP, and one command card, preferring an exquisite B/A/Q
   chain, then a same-color chain, then a filler. If both NPs cannot be released,
   it releases a ready configured Grand NP (single-target before AoE) and fills

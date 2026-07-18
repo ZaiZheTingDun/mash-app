@@ -535,12 +535,16 @@ impl Default for SupportGrandBondCeMode {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum GrandClass {
     Saber,
     Lancer,
     Berserker,
+}
+
+impl GrandClass {
+    pub const ALL: [Self; 3] = [Self::Saber, Self::Lancer, Self::Berserker];
 }
 
 impl Default for GrandClass {
@@ -655,6 +659,10 @@ pub struct GrandServantConfig {
     #[serde(default = "default_grand_card_priority")]
     pub priority: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// Legacy persisted field. Normalization migrates it into `role`, and
+    /// serialization intentionally omits it from newly saved projects.
+    #[serde(default, skip_serializing)]
     pub lancer_role: Option<LancerGrandRole>,
 }
 
@@ -663,6 +671,26 @@ pub struct GrandServantConfig {
 pub enum LancerGrandRole {
     Single,
     Aoe,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GrandRoleDefinition {
+    pub role: String,
+    pub label: String,
+    pub required: bool,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GrandClassDefinition {
+    pub id: GrandClass,
+    pub label: String,
+    pub servant_class: String,
+    pub roles: Vec<GrandRoleDefinition>,
+    pub card_priority_enabled: bool,
+    pub auto_order_change_roles: Vec<String>,
+    pub validation_message: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default)]

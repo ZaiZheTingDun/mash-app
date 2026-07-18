@@ -422,6 +422,7 @@ fn clear_project_slot_servant_only_clears_slot_owned_settings() {
         is_support: false,
         np_card: "auto".into(),
         priority: "damage".into(),
+        role: Some("main".into()),
         lancer_role: None,
     });
 
@@ -820,6 +821,7 @@ fn lancer_project_roles_round_trip_and_normalize_single_before_aoe() {
             is_support: false,
             np_card: "arts".into(),
             priority: "damage".into(),
+            role: None,
             lancer_role: Some(LancerGrandRole::Aoe),
         },
         GrandServantConfig {
@@ -829,29 +831,21 @@ fn lancer_project_roles_round_trip_and_normalize_single_before_aoe() {
             is_support: false,
             np_card: "buster".into(),
             priority: "damage".into(),
+            role: None,
             lancer_role: Some(LancerGrandRole::Single),
         },
     ];
 
     let normalized = normalize_project(project);
-    assert_eq!(
-        normalized.grand_servants[0].lancer_role,
-        Some(LancerGrandRole::Single)
-    );
-    assert_eq!(
-        normalized.grand_servants[1].lancer_role,
-        Some(LancerGrandRole::Aoe)
-    );
+    assert_eq!(normalized.grand_servants[0].role.as_deref(), Some("single"));
+    assert_eq!(normalized.grand_servants[1].role.as_deref(), Some("aoe"));
     let json = serde_json::to_value(normalized).unwrap();
     assert_eq!(json["grandClass"], serde_json::json!("lancer"));
     assert_eq!(
-        json["grandServants"][0]["lancerRole"],
+        json["grandServants"][0]["role"],
         serde_json::json!("single")
     );
-    assert_eq!(
-        json["grandServants"][1]["lancerRole"],
-        serde_json::json!("aoe")
-    );
+    assert_eq!(json["grandServants"][1]["role"], serde_json::json!("aoe"));
 }
 
 #[test]

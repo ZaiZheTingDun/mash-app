@@ -5,8 +5,10 @@ enables advanced mode and configures `grandServants`.
 
 ## Inputs
 
-- `grandServants[0]` is the main output servant.
-- `grandServants[1]`, when present, is the deputy output servant.
+- Each configured servant carries a class-defined `role`. Saber and Berserker
+  use `main` / `deputy`; Lancer uses `single` / `aoe`.
+- Legacy Lancer `lancerRole` values are migrated into `role` during project
+  normalization and are not written back.
 - The user configures these roles in the advanced command editor's main-output
   section, not on the team lineup page.
 - Each Grand servant stores:
@@ -27,6 +29,20 @@ enables advanced mode and configures `grandServants`.
 If `npCard` is `auto`, the runner uses the servant resource's
 `noblePhantasmCard` value. If the configured Grand servant is not currently in
 the front line, that role is ignored for the current turn.
+
+## Strategy Modules
+
+The generic candidate builder, custom-rule matcher, and scoring engine live in
+`runner/grand.rs`. Class-owned metadata and built-in behavior live in
+`runner/grand/saber.rs`, `lancer.rs`, and `berserker.rs`, behind the
+`GrandClassStrategy` interface. The same registered strategy supplies project
+normalization, startup validation, runtime role order, automatic Order Change
+targets, and the `get_grand_class_definitions` UI payload.
+
+To add a class, add the `GrandClass` enum value, implement one strategy module,
+and register it in `grand_class_strategies`. React renders its class option,
+role slots, support filter, validation message, and settings from the returned
+definition without class-specific branches.
 
 ## Startup Order Change
 
@@ -160,6 +176,16 @@ the generic matcher.
    buster, arts, quick; includes at least one Grand servant attack.
 7. Fallback:
    any three attacks.
+
+## Lancer Rules
+
+Lancer mode also uses the shared `GrandCardRule` matcher. Its fixed rule order
+is dual-NP exquisite chain, dual-NP same-color chain, dual-NP fallback,
+single-target NP, AoE NP, then three command cards. Dual-NP rules click AoE NP,
+single-target NP, and the filler in that order. Command-card slots use the
+reusable main/deputy/other then Arts/Quick/Buster candidate priority, which
+preserves the former Lancer filler order. Non-Grand NPs never satisfy these
+command-card slots.
 
 ## Non-Grand Behavior
 

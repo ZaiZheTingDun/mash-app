@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { ProjectBar } from "../ProjectBar";
 import type { Project } from "../../../types/project";
+import type { GrandClassDefinition } from "../../../types/project";
 import { createInitialProjectSlots } from "../../team/projectSlots";
 
 function makeProject(id: string, name: string): Project {
@@ -19,9 +20,15 @@ function makeProject(id: string, name: string): Project {
 }
 
 describe("ProjectBar", () => {
+  const definitions: GrandClassDefinition[] = [
+    { id: "saber", label: "剑阶冠位", servantClass: "Saber", roles: [], cardPriorityEnabled: true, autoOrderChangeRoles: [], validationMessage: "" },
+    { id: "lancer", label: "枪阶冠位", servantClass: "Lancer", roles: [], cardPriorityEnabled: false, autoOrderChangeRoles: [], validationMessage: "" },
+    { id: "berserker", label: "狂阶冠位", servantClass: "Berserker", roles: [], cardPriorityEnabled: true, autoOrderChangeRoles: [], validationMessage: "" },
+  ];
   function renderProjectBar(overrides?: Partial<ComponentProps<typeof ProjectBar>>) {
     const props: ComponentProps<typeof ProjectBar> = {
       projects: [makeProject("p1", "项目甲")],
+      grandClassDefinitions: definitions,
       activeProjectId: "p1",
       onProjectSelect: vi.fn(),
       onCreateProject: vi.fn(),

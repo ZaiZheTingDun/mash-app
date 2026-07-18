@@ -19,8 +19,8 @@ pub(crate) use actions::*;
 #[cfg(test)]
 pub(crate) use ap_recovery::*;
 pub(crate) use attack::*;
+use config::GrandServantRuntimeConfig;
 pub use config::*;
-use config::{default_grand_chain_priority, GrandServantRuntimeConfig};
 pub(crate) use coords::*;
 pub(crate) use grand::*;
 pub(crate) use party::*;
@@ -35,10 +35,14 @@ use crate::screen::{
     SupportCeVerificationOptions, SupportCeVerificationResult, SupportRowMatch,
 };
 use crate::touch::{self, TouchBackend};
+#[cfg(test)]
+use crate::GrandCardRuleSlotConfig;
 use crate::{
-    load_servant_metadata, servant_np_card, Action, AdvancedBattleScene,
-    AdvancedCommandCardCondition, AdvancedOutputType, AdvancedRule, AttackCard, BattleScene,
-    BattleTurn, ServantMetadata, Server,
+    default_grand_chain_priority, load_servant_metadata, servant_np_card, Action,
+    AdvancedBattleScene, AdvancedCommandCardCondition, AdvancedOutputType, AdvancedRule,
+    AttackCard, BattleScene, BattleTurn, GrandCardRuleConfig, GrandCardStrategy,
+    GrandChainPriorityItem, GrandClass, GrandClassDefinition, GrandRoleDefinition,
+    GrandServantConfig, LancerGrandRole, ServantMetadata, Server,
 };
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

@@ -278,6 +278,7 @@ pub fn run() {
             commands::projects::preview_config_import,
             commands::projects::import_configurations,
             commands::projects::list_projects,
+            commands::projects::get_grand_class_definitions,
             commands::projects::get_active_project_id,
             commands::projects::set_active_project_id,
             commands::projects::get_app_theme,

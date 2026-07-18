@@ -27,7 +27,7 @@ import { featureToggles } from "./featureToggles";
 import type { SlotItem } from "./features/team/ContentGrid";
 import type { Servant } from "./types/servant";
 import type { CraftEssence } from "./types/craftEssence";
-import type { GrandClass, Project } from "./types/project";
+import type { GrandClass, GrandClassDefinition, Project } from "./types/project";
 import type { AssetBundleStatus } from "./types/assets";
 import type { RuntimeStatus } from "./types/runtime";
 import type { SelfCheckStatus } from "./types/selfCheck";
@@ -77,6 +77,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("basic");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [grandClassDefinitions, setGrandClassDefinitions] = useState<GrandClassDefinition[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
   const [craftEssences, setCraftEssences] = useState<CraftEssence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -322,11 +323,13 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   );
 
   const refreshProjects = useCallback(async () => {
-    const [list, savedActiveProjectId] = await Promise.all([
+    const [list, savedActiveProjectId, definitions] = await Promise.all([
       invoke<Project[]>("list_projects"),
       invoke<string | null>("get_active_project_id"),
+      invoke<GrandClassDefinition[]>("get_grand_class_definitions"),
     ]);
     setProjects(list);
+    setGrandClassDefinitions(definitions ?? []);
     if (list.length > 0) {
       const savedProject = list.find((project) => project.id === savedActiveProjectId);
       const nextActiveProjectId = savedProject?.id ?? list[0].id;
@@ -628,6 +631,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
           {view === "battle" ? (
             <BattlePage
               projects={projects}
+              grandClassDefinitions={grandClassDefinitions}
               servants={servants}
               activeProjectId={activeProjectId}
               onProjectSelect={handleProjectSelect}
@@ -659,6 +663,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
             <Box className="main-content-inner">
               <ProjectBar
                 projects={projects}
+                grandClassDefinitions={grandClassDefinitions}
                 activeProjectId={activeProjectId}
                 onProjectSelect={handleProjectSelect}
                 onCreateProject={handleCreateProject}
@@ -699,6 +704,9 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
                     }
                     grandServants={activeProject?.grandServants ?? []}
                     grandClass={activeProject?.grandClass ?? "saber"}
+                    grandClassDefinition={grandClassDefinitions.find(
+                      (definition) => definition.id === (activeProject?.grandClass ?? "saber"),
+                    )}
                     grandCardStrategy={activeProject?.grandCardStrategy}
                     grandCardPriorityEnabled
                     onGrandServantsChange={(grandServants) => {
@@ -737,6 +745,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
                         slots={slots}
                         onSlotsChange={handleSlotsChange}
                         activeProject={activeProject}
+                        grandClassDefinitions={grandClassDefinitions}
                         onUpdateActiveProject={handleUpdateProject}
                       />
                     </Box>

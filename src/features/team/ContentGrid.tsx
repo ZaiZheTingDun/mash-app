@@ -37,6 +37,7 @@ import type {
   SupportGrandCraftEssenceMlbRequired,
   SupportAppendSkillLevelMins,
   SupportSkillLevelMins,
+  GrandClassDefinition,
 } from "../../types/project";
 import mlbIconSrc from "../../../src-tauri/resources/images/icon_mlb_mark.png";
 import grandBondIconSrc from "../../../src-tauri/resources/images/icon_grand_bond_ce.png";
@@ -55,6 +56,7 @@ interface ContentGridProps {
    * is a no-op until a project is created/selected.
   */
   activeProject: Project | null;
+  grandClassDefinitions?: GrandClassDefinition[];
   onUpdateActiveProject: (next: Project) => Promise<void> | void;
 }
 
@@ -64,6 +66,7 @@ export function ContentGrid({
   slots,
   onSlotsChange,
   activeProject,
+  grandClassDefinitions = [],
   onUpdateActiveProject,
 }: ContentGridProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -150,7 +153,7 @@ export function ContentGrid({
   const supportGrandBondCeMode = activeProject?.supportGrandBondCeMode ?? "any";
   const defaultServantClassFilter =
     activeProject?.advancedMode === true
-      ? grandClassToServantClass(activeProject.grandClass)
+      ? grandClassToServantClass(activeProject.grandClass, grandClassDefinitions)
       : undefined;
 
   const handleGrandModeToggle = () => {
