@@ -2487,7 +2487,8 @@ fn auto_order_change_startup_flow_replays_control_after_swap() {
         .map(|action| match action {
             Action::Servant { id, .. }
             | Action::Equipment { id, .. }
-            | Action::CommandSpell { id, .. } => id.as_str(),
+            | Action::CommandSpell { id, .. }
+            | Action::EnemyTarget { id, .. } => id.as_str(),
         })
         .collect();
 
@@ -4345,6 +4346,7 @@ fn turn_preparation_actions_preserves_configured_row_order() {
             Action::Servant { .. } => "servant",
             Action::Equipment { .. } => "equipment",
             Action::CommandSpell { .. } => "commandSpell",
+            Action::EnemyTarget { .. } => "enemyTarget",
         })
         .collect();
 

@@ -67,6 +67,8 @@ pub enum Action {
         #[serde(rename = "targetIsSupport", default)]
         target_is_support: bool,
     },
+    #[serde(rename = "enemyTarget")]
+    EnemyTarget { id: String, target: Option<String> },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -291,6 +293,8 @@ pub enum AdvancedAction {
         #[serde(rename = "targetIsSupport", default)]
         target_is_support: bool,
     },
+    #[serde(rename = "enemyTarget")]
+    EnemyTarget { id: String, target: Option<String> },
     #[serde(rename = "attack")]
     Attack {
         id: String,
@@ -363,6 +367,10 @@ impl AdvancedAction {
                 target_member_id: target_member_id.clone(),
                 target_servant_id: *target_servant_id,
                 target_is_support: *target_is_support,
+            }),
+            Self::EnemyTarget { id, target } => Some(Action::EnemyTarget {
+                id: id.clone(),
+                target: target.clone(),
             }),
             Self::Attack { .. } => None,
         }

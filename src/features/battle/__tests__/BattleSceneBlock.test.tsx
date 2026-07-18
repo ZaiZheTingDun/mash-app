@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
@@ -111,6 +111,25 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(screen.getByRole("button", { name: "丙" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /御主/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "令咒" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /敌方/ })).toBeInTheDocument();
+  });
+
+  it("appends an enemy target preparation action", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithTheme(
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: /敌方/ }));
+    await user.click(within(screen.getByRole("group", { name: "选择敌方目标" })).getByRole("button", { name: "敌人 3" }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect((onChange.mock.calls[0][0] as BattleTurn).preparationActions[0]).toMatchObject({
+      type: "enemyTarget",
+      target: "enemy_3",
+    });
   });
 
   it("appends an ordered servant preparation action after source, skill, and target are selected", async () => {

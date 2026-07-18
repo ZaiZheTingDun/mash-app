@@ -425,6 +425,11 @@ changes (i.e. when the runner moves to a different row).
   marking the turn as executed or continuing to the attack button. The
   post-action attack-button wait uses the shared skill timeout window, currently
   15 seconds.
+- A preparation action may also be `enemyTarget`. It taps the configured
+  `enemy_1..6` target immediately at its configured position in the action
+  sequence; this is available for normal preparation and Grand control/startup
+  actions. The existing turn-level `enemyTarget` remains a separate,
+  pre-attack selection after all preparation actions complete.
 - In normal mode, `battle_scenes.json` stores each Battle as `turns[]`. The
   runner still uses the `BATTLE m/n` HUD read to choose the Battle, then uses an
   internal 0-based turn counter for the current Battle. The counter resets when

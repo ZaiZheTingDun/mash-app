@@ -25,7 +25,7 @@ import commandBgQuick from "../../../src-tauri/resources/images/command_bg/comma
 
 export type PartySlot = `servant_${1 | 2 | 3 | 4 | 5 | 6}`;
 export type FrontServant = Extract<PartySlot, "servant_1" | "servant_2" | "servant_3">;
-export type PrepSource = "equipment" | "commandSpell" | PartySlot;
+export type PrepSource = "enemyTarget" | "equipment" | "commandSpell" | PartySlot;
 export type PrepDraft =
   | { step: "source" }
   | { step: "option"; source: PrepSource }
@@ -315,6 +315,9 @@ export function priorityLabel(priority: GrandCardPriority | undefined): string {
 }
 
 export function prepSummary(action: PreparationAction, partyLineup: (Servant | null)[]): string {
+  if (action.type === "enemyTarget") {
+    return `选择敌方目标 ${action.target?.replace("enemy_", "") ?? "?"}`;
+  }
   if (action.type === "commandSpell") {
     const target = servantSlotIndex(action.target);
     const suffix = target == null ? "" : ` to ${servantLabel(target, partyLineup[target] ?? null)}`;

@@ -564,6 +564,7 @@ pub(crate) fn action_frontline_available(ids: &[Option<u32>; 6], action: &Action
         Action::Equipment { target, .. } | Action::CommandSpell { target, .. } => {
             optional_front_target_available(ids, target.as_deref())
         }
+        Action::EnemyTarget { .. } => true,
     }
 }
 
@@ -811,6 +812,10 @@ pub(crate) fn resolve_action_to_current_positions(
             target_servant_id: None,
             target_is_support: false,
         }),
+        Action::EnemyTarget { id, target } => Some(Action::EnemyTarget {
+            id: id.clone(),
+            target: target.clone(),
+        }),
     }
 }
 
@@ -965,6 +970,10 @@ pub(crate) fn resolve_action_to_current_member_positions(
             target_servant_id: *target_servant_id,
             target_is_support: *target_is_support,
         }),
+        Action::EnemyTarget { id, target } => Some(Action::EnemyTarget {
+            id: id.clone(),
+            target: target.clone(),
+        }),
     }
 }
 
@@ -981,6 +990,7 @@ pub(crate) fn skipped_action_log_meta(action: &Action) -> ActionLogMeta {
         | Action::CommandSpell {
             target_servant_id, ..
         } => *target_servant_id,
+        Action::EnemyTarget { .. } => None,
     };
     ActionLogMeta::SkippedAction { servant_id }
 }

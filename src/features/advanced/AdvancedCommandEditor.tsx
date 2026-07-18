@@ -38,7 +38,7 @@ import {
 import { useServantFaceImages } from "../team/useServantFaceImages";
 import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIcons";
 import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
-import { EnemyTargetSelector } from "../battle/EnemyTargetSelector";
+import { EnemyTargetButtons, EnemyTargetSelector } from "../battle/EnemyTargetSelector";
 import { servantSlotIndex, skillSlotIndex } from "../battle/battleSceneModel";
 import { useServantSkillTargeting } from "../battle/useServantSkillTargeting";
 import { useServantSkillSelections } from "../battle/useServantSkillSelections";
@@ -46,6 +46,7 @@ import type {
   AdvancedBattleScene,
   AdvancedCommandCardCondition,
   CommandSpellAction,
+  EnemyTargetAction,
   EquipmentAction,
   OrderChangeSelection,
   PreparationAction,
@@ -107,6 +108,15 @@ function AdvancedPreparationActionSummary({
   faces: Record<string, string | null>;
   skillIcons: Record<string, SkillIcons>;
 }) {
+  if (action.type === "enemyTarget") {
+    return (
+      <span className="battle-action-summary" aria-label={prepSummary(action, partyMembersToServants(partyMembers))}>
+        <Text size="2" weight="medium" className="battle-action-name">
+          选择敌方目标 {action.target?.replace("enemy_", "") ?? "?"}
+        </Text>
+      </span>
+    );
+  }
   const partyLineup = partyMembersToServants(partyMembers);
   const resolvedAction = resolvePreparationAction(action, partyMembers);
   // TODO: duplicate
@@ -199,7 +209,9 @@ function AdvancedPreparationActionSummary({
     actionText =
       resolvedAction.type === "equipment"
         ? `释放 ${SKILL_LABELS[resolvedAction.skill ?? ""] ?? "技能"}`
-        : COMMAND_SPELL_LABELS[resolvedAction.spell ?? ""] ?? "行动";
+        : resolvedAction.type === "commandSpell"
+          ? COMMAND_SPELL_LABELS[resolvedAction.spell ?? ""] ?? "行动"
+          : "选择敌方目标";
   }
 
   return (
@@ -404,6 +416,13 @@ function AdvancedStrategyEditor({
     target: string | null,
     members: PartyMember[]
   ): PreparationAction => {
+    if (draft.source === "enemyTarget") {
+      return {
+        type: "enemyTarget",
+        id: createId("enemy_target"),
+        target,
+      } satisfies EnemyTargetAction;
+    }
     if (draft.source === "equipment") {
       return {
         type: "equipment",
@@ -761,6 +780,9 @@ function AdvancedStrategyEditor({
                   <button type="button" className="battle-option-btn" onClick={() => setControlDraft({ step: "option", source: "commandSpell" })}>
                     令咒
                   </button>
+                  <button type="button" className="battle-option-btn" onClick={() => setControlDraft({ step: "target", source: "enemyTarget", option: "select" })}>
+                    敌方目标
+                  </button>
                 </>
               ) : controlDraft.step === "option" ? (
                 <>
@@ -802,6 +824,12 @@ function AdvancedStrategyEditor({
                 </>
               ) : controlDraft.step === "target" ? (
                 <>
+                  {controlDraft.source === "enemyTarget" ? (
+                    <EnemyTargetButtons
+                      ariaLabel="选择敌方目标"
+                      onChange={(target) => { if (target) finishControlAction(controlDraft, target); }}
+                    />
+                  ) : <>
                   {controlDraft.allowNoTarget !== false && (
                     <button type="button" className="battle-option-btn" onClick={() => finishControlAction(controlDraft, null)}>
                       无目标
@@ -842,6 +870,7 @@ function AdvancedStrategyEditor({
                       </button>
                     </>
                   )}
+                  </>}
                 </>
               ) : (
                 <>
@@ -945,6 +974,9 @@ function AdvancedStrategyEditor({
                   <button type="button" className="battle-option-btn" onClick={() => setPrepDraft({ step: "option", source: "commandSpell" })}>
                     令咒
                   </button>
+                  <button type="button" className="battle-option-btn" onClick={() => setPrepDraft({ step: "target", source: "enemyTarget", option: "select" })}>
+                    敌方目标
+                  </button>
                 </>
               ) : prepDraft.step === "option" ? (
                 <>
@@ -986,6 +1018,12 @@ function AdvancedStrategyEditor({
                 </>
               ) : prepDraft.step === "target" ? (
                 <>
+                  {prepDraft.source === "enemyTarget" ? (
+                    <EnemyTargetButtons
+                      ariaLabel="选择敌方目标"
+                      onChange={(target) => { if (target) finishPrepAction(prepDraft, target); }}
+                    />
+                  ) : <>
                   {prepDraft.allowNoTarget !== false && (
                     <button type="button" className="battle-option-btn" onClick={() => finishPrepAction(prepDraft, null)}>
                       无目标
@@ -1025,6 +1063,7 @@ function AdvancedStrategyEditor({
                       </button>
                     </>
                   )}
+                  </>}
                 </>
               ) : (
                 <>

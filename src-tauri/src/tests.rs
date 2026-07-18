@@ -2505,6 +2505,20 @@ fn action_equipment_order_change_round_trips() {
 }
 
 #[test]
+fn action_enemy_target_round_trips() {
+    let json = serde_json::json!({
+        "type": "enemyTarget",
+        "id": "enemy_target_1",
+        "target": "enemy_3"
+    });
+    let action: Action = serde_json::from_value(json).unwrap();
+    match action {
+        Action::EnemyTarget { target, .. } => assert_eq!(target.as_deref(), Some("enemy_3")),
+        _ => panic!("expected Action::EnemyTarget"),
+    }
+}
+
+#[test]
 fn battle_scene_legacy_json_merges_old_action_buckets_in_fixed_order() {
     // Pre-ordered-action configs stored three separate preparation
     // buckets. Normalization preserves their historical execution

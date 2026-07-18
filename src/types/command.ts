@@ -59,10 +59,17 @@ export interface CommandSpellAction {
   targetIsSupport?: boolean;
 }
 
+export interface EnemyTargetAction {
+  type: "enemyTarget";
+  id: string;
+  target: string | null;
+}
+
 export type PreparationAction =
   | ServantAction
   | EquipmentAction
-  | CommandSpellAction;
+  | CommandSpellAction
+  | EnemyTargetAction;
 
 export interface AttackCard {
   id: string;

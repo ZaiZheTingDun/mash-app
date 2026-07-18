@@ -390,6 +390,9 @@ impl Runner {
                         return self.fail_skill_execution(&action_label, "等待攻击按钮超时");
                     }
                 }
+                Action::EnemyTarget { target, .. } => {
+                    self.select_enemy_target(target.as_deref());
+                }
             }
         }
         true

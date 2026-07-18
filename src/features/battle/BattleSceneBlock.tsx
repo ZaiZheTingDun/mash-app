@@ -11,7 +11,7 @@ import { battleActorLabel, servantLabel } from "../../components/common/battleAc
 import { useServantFaceImages } from "../team/useServantFaceImages";
 import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIcons";
 import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
-import { EnemyTargetSelector } from "./EnemyTargetSelector";
+import { EnemyTargetButtons, EnemyTargetSelector } from "./EnemyTargetSelector";
 import { useServantSkillTargeting } from "./useServantSkillTargeting";
 import { useServantSkillSelections } from "./useServantSkillSelections";
 import {
@@ -46,6 +46,7 @@ import type {
   BattleTurn,
   CommandSpellAction,
   EquipmentAction,
+  EnemyTargetAction,
   PreparationAction,
   ServantAction,
 } from "../../types/command";
@@ -124,6 +125,15 @@ function PreparationActionSummary({
   faces: Record<string, string | null>;
   skillIcons: Record<string, SkillIcons>;
 }) {
+  if (action.type === "enemyTarget") {
+    return (
+      <span className="battle-action-summary" aria-label={actionSummary(action, partyMembers)}>
+        <Text size="2" weight="medium" className="battle-action-name">
+          选择敌方目标 {action.target?.replace("enemy_", "") ?? "?"}
+        </Text>
+      </span>
+    );
+  }
   const partyServants = partyMembersToServants(partyMembers);
   const targetIndex = frontMemberIndex(
     partyMembers,
@@ -379,6 +389,9 @@ function actionSummary(
   action: PreparationAction,
   partyMembers: PartyMember[]
 ): string {
+  if (action.type === "enemyTarget") {
+    return `选择敌方目标 ${action.target?.replace("enemy_", "") ?? "?"}`;
+  }
   const partyServants = partyMembersToServants(partyMembers);
   if (action.type === "servant") {
     const src = frontMemberIndex(
@@ -569,7 +582,13 @@ export function BattleSceneBlock({
 
   const finishPrepAction = (draft: Extract<PrepDraft, { step: "target" }>, target: string | null) => {
     let action: PreparationAction;
-    if (draft.source === "equipment") {
+    if (draft.source === "enemyTarget") {
+      action = {
+        type: "enemyTarget",
+        id: createId("enemy_target"),
+        target,
+      } satisfies EnemyTargetAction;
+    } else if (draft.source === "equipment") {
       action = {
         type: "equipment",
         id: createId("eq"),
@@ -851,6 +870,15 @@ export function BattleSceneBlock({
                 >
                   令咒
                 </button>
+                <button
+                  type="button"
+                  className="battle-square-btn"
+                  onClick={() =>
+                    setPrepDraft({ step: "target", source: "enemyTarget", option: "select" })
+                  }
+                >
+                  敌方<br />目标
+                </button>
               </div>
             ) : prepDraft.step === "option" ? (
               <div className="battle-choice-row">
@@ -937,6 +965,14 @@ export function BattleSceneBlock({
               </div>
             ) : prepDraft.step === "target" ? (
               <div className="battle-choice-row">
+                {prepDraft.source === "enemyTarget" ? (
+                  <EnemyTargetButtons
+                    ariaLabel="选择敌方目标"
+                    onChange={(target) => {
+                      if (target) finishPrepAction(prepDraft, target);
+                    }}
+                  />
+                ) : <>
                 {prepDraft.allowNoTarget !== false && (
                   <button
                     type="button"
@@ -979,6 +1015,7 @@ export function BattleSceneBlock({
                     </button>
                   </>
                 )}
+                </>}
               </div>
             ) : (
               <div className="battle-choice-row order-change">

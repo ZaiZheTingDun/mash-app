@@ -8,7 +8,7 @@ import type {
 } from "../../types/command";
 import type { Servant } from "../../types/servant";
 
-export type PrepSource = "equipment" | "commandSpell" | `servant_${1 | 2 | 3}`;
+export type PrepSource = "enemyTarget" | "equipment" | "commandSpell" | `servant_${1 | 2 | 3}`;
 export type AttackSource = `servant_${1 | 2 | 3}`;
 export type PartySlot = `servant_${1 | 2 | 3 | 4 | 5 | 6}`;
 export type EnemyTarget = `enemy_${1 | 2 | 3 | 4 | 5 | 6}`;

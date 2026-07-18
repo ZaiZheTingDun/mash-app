@@ -223,6 +223,9 @@ export function resolvePreparationAction(action: PreparationAction, members: Par
         : action.orderChange,
     };
   }
+  if (action.type === "enemyTarget") {
+    return action;
+  }
   return {
     ...action,
     target: resolveActionSlot(
