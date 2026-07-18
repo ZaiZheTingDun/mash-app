@@ -5,8 +5,8 @@
     "darwin-aarch64": {
       "runtimeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/runtime/darwin-aarch64/mash-cv-runtime-darwin-aarch64-v2026.05.08-runtime1.zip",
       "runtimeSha256": "3a80a0d595cfa54e7d907ccfce335dc99ba29428e2970057476b0b973ff3bf88",
-      "codeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/code/mash-cv-code-v0.4.5.zip",
-      "codeSha256": "61e23cc966ca59a00281e4aed1f6d88a52ecf24e8477a99d5fd83ed79791967d"
+      "codeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/code/mash-cv-code-v0.4.6.zip",
+      "codeSha256": "0f3a850c0002fbcff2d99af96f89ea0a9f43e57ad305b842a107a49ea4f8ff0a"
     },
     "darwin-x86_64": {
       "runtimeUrl": "https://cdn.example.com/mash-cv-runtime-darwin-x86_64-v2026.05.08-runtime1.zip",
