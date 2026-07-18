@@ -121,7 +121,11 @@ pub(crate) fn command_cards_visible(cards: &[CommandCardMatch]) -> bool {
 /// runs its configured priority and ordinary fill pass against this pool
 /// before falling back to stunned cards when fewer than three picks exist.
 pub(crate) fn actionable_command_cards(cards: &[CommandCardMatch]) -> Vec<CommandCardMatch> {
-    cards.iter().filter(|card| !card.is_stunned).cloned().collect()
+    cards
+        .iter()
+        .filter(|card| !card.is_stunned)
+        .cloned()
+        .collect()
 }
 
 pub(crate) fn np_card_read_complete(nps: &[NoblePhantasmMatch]) -> bool {
@@ -704,6 +708,10 @@ impl Runner {
     }
 
     pub(crate) fn handle_attack(&mut self) {
+        if !self.ensure_battle_speed_level_two() {
+            return;
+        }
+
         if self.advanced_mode {
             let party_ids = self
                 .advanced_scenes
@@ -757,6 +765,48 @@ impl Runner {
             return;
         };
         self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, &party_supports, None);
+    }
+
+    fn ensure_battle_speed_level_two(&mut self) -> bool {
+        let mut switch_requested = false;
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+            let speed_two = match self.sidecar().find_element_by_name(
+                None,
+                ATTACK_SCREEN,
+                ATTACK_SCREEN_SPEED_2_ELEMENT,
+            ) {
+                Ok(matched) => matched.found,
+                Err(err) => {
+                    self.fail_action("Attack", "检测战斗速度", err);
+                    return false;
+                }
+            };
+            if speed_two {
+                return true;
+            }
+            let speed_one = match self.sidecar().find_element_by_name(
+                None,
+                ATTACK_SCREEN,
+                ATTACK_SCREEN_SPEED_1_ELEMENT,
+            ) {
+                Ok(matched) => matched.found,
+                Err(err) => {
+                    self.fail_action("Attack", "检测战斗速度", err);
+                    return false;
+                }
+            };
+            if speed_one && !switch_requested {
+                self.emit("Attack", "检测到战斗速度为一级，现在切换为二级。");
+                if !self.tap_at("Attack", ATTACK_SCREEN_SPEED_BUTTON) {
+                    return false;
+                }
+                switch_requested = true;
+            }
+            thread::sleep(SKILL_POLL_INTERVAL);
+        }
     }
 
     pub(crate) fn advanced_current_party_ids(

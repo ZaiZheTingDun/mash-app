@@ -34,6 +34,13 @@ pub(crate) const ATTACK_BUTTON: Point = Point::new(0.887, 0.844);
 /// inspection when the runner needs to go back to Battle and run skills.
 pub(crate) const ATTACK_SCREEN_RETURN: Point = Point::new(0.938, 0.947);
 
+/// Battle-speed button on the attack-card screen.
+pub(crate) const ATTACK_SCREEN_SPEED_BUTTON: Point = Point::new(0.882, 0.075);
+
+pub(crate) const ATTACK_SCREEN: &str = "Attack";
+pub(crate) const ATTACK_SCREEN_SPEED_1_ELEMENT: &str = "battle_speed_1";
+pub(crate) const ATTACK_SCREEN_SPEED_2_ELEMENT: &str = "battle_speed_2";
+
 /// Tap target that, when pressed during a skill / NP animation, makes the
 /// game skip ahead to the next actionable frame. Same physical button
 /// works after every skill on the battle screen.

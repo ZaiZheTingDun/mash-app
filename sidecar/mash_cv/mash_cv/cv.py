@@ -108,6 +108,11 @@ stream: Optional["ScrcpyStream"] = None
 
 DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 STATIC_TEMPLATE_REFERENCE_WIDTH = 2560
+BATTLE_SPEED_TEMPLATE_REFERENCE_WIDTH = 1920
+BATTLE_SPEED_TEMPLATE_KEYS = {
+    "button_battle_speed_1",
+    "button_battle_speed_2",
+}
 COMMAND_CARD_STATUS_TEMPLATE_REFERENCE_WIDTH = 1920
 COMMAND_CARD_STATUS_TEMPLATE_SCALES = {
     "shared/command_seal_a": 1.75,
@@ -740,9 +745,13 @@ def _scale_static_template_for_image(
     if frame_w <= 0:
         return tmpl
     reference_width = (
-        COMMAND_CARD_STATUS_TEMPLATE_REFERENCE_WIDTH
-        if template_key in COMMAND_CARD_STATUS_TEMPLATE_SCALES
-        else STATIC_TEMPLATE_REFERENCE_WIDTH
+        BATTLE_SPEED_TEMPLATE_REFERENCE_WIDTH
+        if template_key in BATTLE_SPEED_TEMPLATE_KEYS
+        else (
+            COMMAND_CARD_STATUS_TEMPLATE_REFERENCE_WIDTH
+            if template_key in COMMAND_CARD_STATUS_TEMPLATE_SCALES
+            else STATIC_TEMPLATE_REFERENCE_WIDTH
+        )
     )
     scale = frame_w / float(reference_width)
     if abs(scale - 1.0) < 0.02:
@@ -1112,6 +1121,21 @@ def _find_element_by_name(
     template_key = element.get("template")
     if not template_key:
         return {"found": False, "error": "element missing 'template'"}
+    if element.get("masked"):
+        tmpl = _get_template(template_key)
+        if tmpl is None:
+            return {
+                "found": False,
+                "error": f"template not loaded: {template_key}",
+            }
+        return _score_template_region(
+            img,
+            tmpl,
+            element.get("region", DEFAULT_REGION),
+            float(element.get("threshold", 0.8)),
+            template_key,
+            template_scale=float(element.get("templateScale", 1.0)),
+        )
     return _find_element(
         img,
         template_key,
@@ -1135,8 +1159,46 @@ def _detect_screen(img: np.ndarray) -> dict:
             continue
         threshold = float(det.get("threshold", 0.85))
         region = det.get("region", DEFAULT_REGION)
-        required_templates = det.get("requiredTemplates")
-        if isinstance(required_templates, list) and required_templates:
+        template_options = det.get("templateOptions")
+        if isinstance(template_options, list) and template_options:
+            screen_score = 0.0
+            # Options are intentionally ordered. The battle-speed detector,
+            # for example, must accept the double-arrow template before the
+            # single arrow that is also present inside it.
+            for option in template_options:
+                if not isinstance(option, dict) or not option.get("template"):
+                    continue
+                key = str(option["template"])
+                tmpl = _get_template(key)
+                if tmpl is None:
+                    continue
+                if option.get("masked"):
+                    result = _score_template_region(
+                        img,
+                        tmpl,
+                        option.get("region", region),
+                        float(option.get("threshold", threshold)),
+                        key,
+                        template_scale=float(option.get("templateScale", 1.0)),
+                    )
+                else:
+                    result = _match_template_region(
+                        img,
+                        tmpl,
+                        option.get("region", region),
+                        float(option.get("threshold", threshold)),
+                        key,
+                    )
+                if result.get("found"):
+                    screen_score = float(result.get("score", 0.0))
+                    break
+        else:
+            required_templates = det.get("requiredTemplates")
+        if (
+            not (isinstance(template_options, list) and template_options)
+            and isinstance(required_templates, list)
+            and required_templates
+        ):
             required_scores: list[float] = []
             for required in required_templates:
                 if not isinstance(required, dict):
@@ -1168,7 +1230,7 @@ def _detect_screen(img: np.ndarray) -> dict:
         # a dark background skin) — we run all variants and keep the
         # highest score, treating them as alternatives. Falls back to the
         # legacy single-template form if neither is present.
-        else:
+        elif not (isinstance(template_options, list) and template_options):
             keys: list[str] = []
             if isinstance(det.get("templates"), list):
                 keys = [str(k) for k in det["templates"] if k]

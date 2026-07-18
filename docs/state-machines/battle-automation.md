@@ -42,6 +42,7 @@ stateDiagram-v2
     BattleAction --> Battle: scene skills, optional skill sub-selection, and optional enemy target handled
     BattleAction --> BattleAction: Order Change overlay handled
     BattleAction --> Attack: attack tapped
+    Attack --> Attack: speed 1 detected; tap speed button and wait for speed 2
     Attack --> Battle: cards resolved
 
     Battle --> BattleResultBond: quest cleared
@@ -100,6 +101,10 @@ State ownership:
 - `awaiting_attack_resolution()` is true while the flow is
   `AwaitingAttackResolution` or `AwaitingPostAttackHud`; this suppresses
   duplicate card submission while the classifier still sees the Attack screen.
+- Both one-arrow and two-arrow battle-speed templates classify the card screen
+  as `Attack`. Before reading cards, the runner probes the masked two-arrow
+  template first, then the one-arrow template; if speed is level one it logs
+  the switch, taps the speed button, and waits until level two is visible.
 - Result-settlement pages (`BattleResultBond`, `BattleResultExp`,
   `BattleResultLoot`, `BattleResultFriendRequest`, and
   `BattleResultContinue`) are screen-router states, not `BattleFlowState`

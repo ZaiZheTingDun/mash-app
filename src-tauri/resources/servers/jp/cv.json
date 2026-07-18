@@ -147,19 +147,62 @@
     },
     "Attack": {
       "detect": {
-        "template": "button_battle_speed",
-        "region": {
-          "x": 0.803,
-          "y": 0.02,
-          "w": 0.167,
-          "h": 0.141
-        },
-        "threshold": 0.85,
+        "templateOptions": [
+          {
+            "template": "button_battle_speed_2",
+            "region": {
+              "x": 0.862,
+              "y": 0.056,
+              "w": 0.05,
+              "h": 0.06
+            },
+            "threshold": 0.8,
+            "templateScale": 1.86,
+            "masked": true
+          },
+          {
+            "template": "button_battle_speed_1",
+            "region": {
+              "x": 0.873,
+              "y": 0.056,
+              "w": 0.026,
+              "h": 0.06
+            },
+            "threshold": 0.8,
+            "templateScale": 1.82,
+            "masked": true
+          }
+        ],
         "priority": 10
       },
       "variants": {
         "main": {
-          "elements": {}
+          "elements": {
+            "battle_speed_2": {
+              "template": "button_battle_speed_2",
+              "region": {
+                "x": 0.862,
+                "y": 0.056,
+                "w": 0.05,
+                "h": 0.06
+              },
+              "threshold": 0.8,
+              "templateScale": 1.86,
+              "masked": true
+            },
+            "battle_speed_1": {
+              "template": "button_battle_speed_1",
+              "region": {
+                "x": 0.873,
+                "y": 0.056,
+                "w": 0.026,
+                "h": 0.06
+              },
+              "threshold": 0.8,
+              "templateScale": 1.82,
+              "masked": true
+            }
+          }
         }
       }
     },

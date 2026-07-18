@@ -4109,6 +4109,13 @@ fn battle_close_button_element_names_are_stable() {
 }
 
 #[test]
+fn attack_speed_element_names_are_stable() {
+    assert_eq!(ATTACK_SCREEN, "Attack");
+    assert_eq!(ATTACK_SCREEN_SPEED_2_ELEMENT, "battle_speed_2");
+    assert_eq!(ATTACK_SCREEN_SPEED_1_ELEMENT, "battle_speed_1");
+}
+
+#[test]
 fn order_change_extra_settle_matches_expected_delay() {
     assert_eq!(ORDER_CHANGE_EXTRA_SETTLE, Duration::from_secs(1));
 }

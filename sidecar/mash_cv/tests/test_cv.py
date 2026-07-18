@@ -223,6 +223,101 @@ class TestDetectScreen:
         result = mash_cv._detect_screen(img)
         assert result["screen"] == "Attack"
 
+    def test_cn_speed_one_card_screen_detects_as_attack(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        templates_dir = repo_root / "src-tauri/resources/servers/cn/templates"
+        cv_json = repo_root / "src-tauri/resources/servers/cn/cv.json"
+        screenshot = (
+            Path(__file__).parent
+            / "test_data/screenshots/battle_speed_1_cn.png"
+        )
+
+        mash_cv._load_templates(str(templates_dir))
+        mash_cv._load_config(str(cv_json))
+        img = cv2.imread(str(screenshot))
+        assert img is not None
+
+        for frame in (
+            img,
+            cv2.resize(img, (2560, 1440), interpolation=cv2.INTER_CUBIC),
+        ):
+            result = mash_cv._detect_screen(frame)
+            assert result["screen"] == "Attack"
+            assert result["score"] >= 0.30
+
+    def test_battle_speed_templates_probe_level_two_before_level_one(self):
+        screenshots = Path(__file__).parent / "test_data/screenshots"
+        speed_one = cv2.imread(str(screenshots / "battle_speed_1_cn.png"))
+        speed_two = cv2.imread(str(screenshots / "battle_command.png"))
+        assert speed_one is not None
+        assert speed_two is not None
+
+        repo_root = Path(__file__).resolve().parents[3]
+        cn_resources = repo_root / "src-tauri/resources/servers/cn"
+        mash_cv._load_templates(str(cn_resources / "templates"))
+        mash_cv._load_config(str(cn_resources / "cv.json"))
+        assert not mash_cv._find_element_by_name(
+            speed_one, "Attack", "battle_speed_2"
+        )["found"]
+        assert mash_cv._find_element_by_name(
+            speed_one, "Attack", "battle_speed_1"
+        )["found"]
+
+        jp_resources = repo_root / "src-tauri/resources/servers/jp"
+        mash_cv._load_templates(str(jp_resources / "templates"))
+        mash_cv._load_config(str(jp_resources / "cv.json"))
+        assert mash_cv._find_element_by_name(
+            speed_two, "Attack", "battle_speed_2"
+        )["found"]
+        assert mash_cv._detect_screen(speed_two)["screen"] == "Attack"
+
+    @pytest.mark.parametrize(
+        ("server", "screenshot_name", "level", "optimal_scale"),
+        [
+            ("cn", "battle_speed_1_cn.png", 1, 1.82),
+            ("jp", "battle_command.png", 2, 1.86),
+        ],
+    )
+    def test_battle_speed_template_scale_is_best_across_resolutions(
+        self, server, screenshot_name, level, optimal_scale
+    ):
+        from mash_cv import cv as cv_module
+
+        repo_root = Path(__file__).resolve().parents[3]
+        resources = repo_root / "src-tauri/resources/servers" / server
+        mash_cv._load_templates(str(resources / "templates"))
+        key = f"button_battle_speed_{level}"
+        template = mash_cv.templates[key]
+        region = (
+            {"x": 0.873, "y": 0.056, "w": 0.026, "h": 0.060}
+            if level == 1
+            else {"x": 0.862, "y": 0.056, "w": 0.050, "h": 0.060}
+        )
+        screenshot = Path(__file__).parent / "test_data/screenshots" / screenshot_name
+        original = cv2.imread(str(screenshot))
+        assert original is not None
+        alternate_size = (2560, 1440) if original.shape[1] == 1920 else (1920, 1080)
+        interpolation = cv2.INTER_CUBIC if alternate_size[0] > original.shape[1] else cv2.INTER_AREA
+        alternate = cv2.resize(original, alternate_size, interpolation=interpolation)
+
+        candidate_scales = [1.0, 1.5, 1.7, 1.8, optimal_scale, 1.9, 2.0]
+        minimum_scores = {}
+        for scale in candidate_scales:
+            minimum_scores[scale] = min(
+                cv_module._score_template_region(
+                    frame,
+                    template,
+                    region,
+                    0.0,
+                    key,
+                    template_scale=scale,
+                )["score"]
+                for frame in (original, alternate)
+            )
+
+        assert max(minimum_scores, key=minimum_scores.get) == optimal_scale
+        assert minimum_scores[optimal_scale] >= 0.97
+
     def test_templates_list_takes_best_variant(self):
         """A screen carrying multiple variant templates should match when
         *any* variant is present in the frame, and the reported score
