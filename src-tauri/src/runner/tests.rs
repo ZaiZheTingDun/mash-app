@@ -310,6 +310,7 @@ fn skill_failure_labels_identify_actor_and_skill() {
 fn empty_advanced_scene() -> AdvancedBattleScene {
     AdvancedBattleScene {
         id: "advanced_scene_1".into(),
+        enemy_target: None,
         main_output: None,
         grand_auto_order_change: None,
         command_conditions: Vec::new(),
@@ -729,6 +730,7 @@ fn advanced_rule_rejects_when_command_group_misses_even_if_np_matches() {
 fn advanced_startup_conditions_match_only_configured_command_cards() {
     let scene = AdvancedBattleScene {
         id: "advanced_scene_1".into(),
+        enemy_target: None,
         main_output: None,
         grand_auto_order_change: None,
         command_conditions: vec![
@@ -807,6 +809,7 @@ fn grand_startup_keeps_attack_precheck_for_command_card_conditions() {
 fn advanced_startup_conditions_match_duplicate_servant_cards_in_any_slots() {
     let scene = AdvancedBattleScene {
         id: "advanced_scene_1".into(),
+        enemy_target: None,
         main_output: None,
         grand_auto_order_change: None,
         command_conditions: vec![
@@ -1549,6 +1552,30 @@ fn normal_turn_for_current_state_marks_over_configured_turns() {
 }
 
 #[test]
+fn advanced_enemy_target_is_selected_only_when_scene_first_executes() {
+    let mut first = empty_advanced_scene();
+    first.enemy_target = Some("enemy_5".into());
+    let scenes = [first, empty_advanced_scene()];
+
+    assert_eq!(
+        advanced_enemy_target_for_current_scene(&scenes, 0, true),
+        Some("enemy_5")
+    );
+    assert_eq!(
+        advanced_enemy_target_for_current_scene(&scenes, 0, false),
+        None
+    );
+    assert_eq!(
+        advanced_enemy_target_for_current_scene(&scenes, 1, true),
+        None
+    );
+    assert_eq!(
+        advanced_enemy_target_for_current_scene(&scenes, 2, true),
+        None
+    );
+}
+
+#[test]
 fn advanced_attack_priority_still_requires_scene_config_used() {
     let scene = normal_scene(
         "scene_1",
@@ -1987,6 +2014,7 @@ fn advanced_auto_picks_exclude_stunned_command_cards() {
 fn advanced_startup_conditions_match_respects_support_flag() {
     let scene = AdvancedBattleScene {
         id: "scene".into(),
+        enemy_target: None,
         main_output: None,
         grand_auto_order_change: None,
         command_conditions: vec![AdvancedCommandCardCondition {
@@ -2437,6 +2465,7 @@ fn auto_order_change_startup_flow_replays_control_after_swap() {
     };
     let scene = AdvancedBattleScene {
         id: "advanced_scene_1".into(),
+        enemy_target: None,
         main_output: None,
         grand_auto_order_change: Some(true),
         command_conditions: Vec::new(),
@@ -2626,6 +2655,7 @@ fn action_frontline_available_rejects_missing_frontline_target() {
 fn advanced_auto_np_output_prefers_ready_np_and_arts_cards() {
     let scene = AdvancedBattleScene {
         id: "advanced_scene_1".into(),
+        enemy_target: None,
         main_output: Some(crate::AdvancedMainOutput {
             member_id: None,
             servant: Some("servant_1".into()),

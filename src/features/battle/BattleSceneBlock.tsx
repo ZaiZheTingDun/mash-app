@@ -11,6 +11,7 @@ import { battleActorLabel, servantLabel } from "../../components/common/battleAc
 import { useServantFaceImages } from "../team/useServantFaceImages";
 import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIcons";
 import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
+import { EnemyTargetSelector } from "./EnemyTargetSelector";
 import { useServantSkillTargeting } from "./useServantSkillTargeting";
 import { useServantSkillSelections } from "./useServantSkillSelections";
 import {
@@ -26,7 +27,6 @@ import {
   ATTACK_OPTIONS,
   CARD_LABELS,
   COMMAND_SPELL_LABELS,
-  ENEMY_TARGETS,
   FIXED_ATTACK_CARD_COUNT,
   SKILL_LABELS,
   skillSlotIndex,
@@ -1019,37 +1019,10 @@ export function BattleSceneBlock({
         </div>
       </section>
 
-      <section className="battle-phase">
-        <div className="battle-phase-label">敌方目标选择</div>
-        <div className="battle-action-list">
-          <div className="battle-action-row committed">
-            <span className="battle-action-delete-placeholder" aria-hidden />
-            <div
-              className="battle-enemy-target-row"
-              role="group"
-              aria-label="敌方目标选择"
-            >
-              <div className="battle-enemy-target-grid">
-                {ENEMY_TARGETS.map((target) => (
-                  <button
-                    type="button"
-                    key={target.value}
-                    aria-label={target.label}
-                    className={`battle-enemy-target${scene.enemyTarget === target.value ? " selected" : ""}`}
-                    onClick={() =>
-                      updateEnemyTarget(
-                        scene.enemyTarget === target.value ? null : target.value
-                      )
-                    }
-                  >
-                    <span>{target.text}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <EnemyTargetSelector
+        value={scene.enemyTarget}
+        onChange={updateEnemyTarget}
+      />
 
       <section className="battle-phase">
         <div className="battle-phase-label">攻击阶段</div>

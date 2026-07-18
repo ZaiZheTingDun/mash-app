@@ -38,6 +38,7 @@ import {
 import { useServantFaceImages } from "../team/useServantFaceImages";
 import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIcons";
 import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
+import { EnemyTargetSelector } from "../battle/EnemyTargetSelector";
 import { servantSlotIndex, skillSlotIndex } from "../battle/battleSceneModel";
 import { useServantSkillTargeting } from "../battle/useServantSkillTargeting";
 import { useServantSkillSelections } from "../battle/useServantSkillSelections";
@@ -1068,6 +1069,12 @@ function AdvancedStrategyEditor({
           )}
         </div>
       </section>
+
+      <EnemyTargetSelector
+        className="advanced-strategy-section"
+        value={scene.enemyTarget}
+        onChange={(enemyTarget) => onChange({ ...scene, enemyTarget })}
+      />
 
       {grandCardPriorityEnabled && (
         <GrandCardStrategyPanel

@@ -578,6 +578,19 @@ pub(crate) fn normal_turn_for_current_state(
         .map(|turn| (turn, over_configured_turns))
 }
 
+pub(crate) fn advanced_enemy_target_for_current_scene(
+    scenes: &[AdvancedBattleScene],
+    current_scene_index: usize,
+    should_select: bool,
+) -> Option<&str> {
+    if !should_select {
+        return None;
+    }
+    scenes
+        .get(current_scene_index)
+        .and_then(|scene| scene.enemy_target.as_deref())
+}
+
 pub(crate) fn attack_priority_for_current_scene<'a>(
     advanced_mode: bool,
     scene_config_used: bool,
@@ -1171,6 +1184,7 @@ impl Runner {
                 self.emit("Attack", "无高级指令配置，按冠位自动策略攻击");
                 let scene = AdvancedBattleScene {
                     id: "__grand_auto_default__".into(),
+                    enemy_target: None,
                     main_output: None,
                     grand_auto_order_change: None,
                     command_conditions: Vec::new(),

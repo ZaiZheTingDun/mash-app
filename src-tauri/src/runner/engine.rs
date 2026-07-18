@@ -355,6 +355,16 @@ impl Runner {
             }
         }
 
+        if self.advanced_mode {
+            let target = advanced_enemy_target_for_current_scene(
+                &self.advanced_scenes,
+                self.battle.current_scene_index,
+                tick.needs_exec,
+            )
+            .map(str::to_owned);
+            self.select_enemy_target(target.as_deref());
+        }
+
         // Click the attack button
         self.emit("Battle", "点击攻击按钮");
         if !self.tap_attack_button() {

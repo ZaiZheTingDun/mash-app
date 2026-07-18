@@ -429,6 +429,8 @@ pub struct AdvancedMainOutput {
 pub struct AdvancedBattleScene {
     pub id: String,
     #[serde(default)]
+    pub enemy_target: Option<String>,
+    #[serde(default)]
     pub main_output: Option<AdvancedMainOutput>,
     #[serde(default)]
     pub grand_auto_order_change: Option<bool>,

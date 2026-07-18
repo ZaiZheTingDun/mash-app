@@ -119,6 +119,7 @@ export function createId(prefix: string): string {
 export function createDefaultScene(): AdvancedBattleScene {
   return {
     id: `advanced_scene_${nextAdvancedSceneId++}_${Date.now()}`,
+    enemyTarget: null,
     mainOutput: { servant: null, outputType: null, npCard: "auto" },
     grandAutoOrderChange: null,
     commandConditions: [0, 1, 2, 3, 4].map(defaultCommandCard),
@@ -131,6 +132,7 @@ export function createDefaultScene(): AdvancedBattleScene {
 export function normalizeScene(scene: AdvancedBattleScene): AdvancedBattleScene {
   return {
     ...scene,
+    enemyTarget: scene.enemyTarget ?? null,
     mainOutput: scene.mainOutput
       ? { npCard: "auto", ...scene.mainOutput }
       : { servant: null, outputType: null, npCard: "auto" },

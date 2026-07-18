@@ -169,6 +169,80 @@ describe("CommandEditor pagination", () => {
     });
   });
 
+  it("saves and clears one enemy target for the advanced battle", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") return [];
+      if (cmd === "get_servant_face_path") return null;
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    expect(await screen.findByText("敌方目标选择")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /敌人/ })).toHaveLength(6);
+
+    await user.click(screen.getByRole("button", { name: "敌人 5" }));
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "save_advanced_battle_scenes",
+        expect.objectContaining({
+          projectId: "project_1",
+          scenes: [expect.objectContaining({ enemyTarget: "enemy_5" })],
+        })
+      );
+    });
+
+    await user.click(screen.getByRole("button", { name: "敌人 5" }));
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenLastCalledWith(
+        "save_advanced_battle_scenes",
+        expect.objectContaining({
+          projectId: "project_1",
+          scenes: [expect.objectContaining({ enemyTarget: null })],
+        })
+      );
+    });
+  });
+
+  it("restores the saved advanced enemy target", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [{
+          id: "advanced_scene_1",
+          enemyTarget: "enemy_3",
+          rules: [],
+        } satisfies AdvancedBattleScene];
+      }
+      if (cmd === "get_servant_face_path") return null;
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    expect(await screen.findByRole("button", { name: "敌人 3" })).toHaveClass("selected");
+  });
+
   it("shows advanced startup targets when the selected servant skill targets one ally", async () => {
     const user = userEvent.setup();
     vi.mocked(invoke).mockImplementation(async (cmd: string, args) => {

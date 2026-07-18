@@ -152,6 +152,7 @@ export interface AdvancedMainOutput {
 
 export interface AdvancedBattleScene {
   id: string;
+  enemyTarget?: string | null;
   mainOutput?: AdvancedMainOutput | null;
   grandAutoOrderChange?: boolean | null;
   commandConditions?: AdvancedCommandCardCondition[];

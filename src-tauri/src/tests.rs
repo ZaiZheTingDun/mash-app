@@ -508,6 +508,7 @@ fn normalize_project_migrates_grand_rule_servant_id_to_first_matching_slot() {
 fn test_advanced_scene(id: &str) -> AdvancedBattleScene {
     AdvancedBattleScene {
         id: id.into(),
+        enemy_target: None,
         main_output: None,
         grand_auto_order_change: None,
         command_conditions: Vec::new(),
@@ -2631,6 +2632,7 @@ fn battle_scene_defaults_missing_enemy_target_to_none() {
 fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
     let scene = AdvancedBattleScene {
         id: "advanced_scene_1".into(),
+        enemy_target: Some("enemy_5".into()),
         main_output: Some(AdvancedMainOutput {
             member_id: None,
             servant: Some("servant_1".into()),
@@ -2721,6 +2723,7 @@ fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
     };
 
     let json = serde_json::to_value(&scene).unwrap();
+    assert_eq!(json["enemyTarget"], serde_json::json!("enemy_5"));
     assert_eq!(
         json["rules"][0]["npConditionGroups"][0]["slots"][0]["ready"],
         true
@@ -2735,7 +2738,23 @@ fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
     );
 
     let parsed: AdvancedBattleScene = serde_json::from_value(json).unwrap();
+    assert_eq!(parsed.enemy_target.as_deref(), Some("enemy_5"));
     assert_eq!(parsed.grand_auto_order_change, Some(true));
     assert_eq!(parsed.rules.len(), 1);
     assert_eq!(parsed.rules[0].actions.len(), 2);
+}
+
+#[test]
+fn advanced_battle_scene_defaults_missing_enemy_target_to_none() {
+    let scene: AdvancedBattleScene = serde_json::from_value(serde_json::json!({
+        "id": "advanced_scene_legacy",
+        "mainOutput": null,
+        "commandConditions": [],
+        "controlActions": [],
+        "startupActions": [],
+        "rules": []
+    }))
+    .unwrap();
+
+    assert!(scene.enemy_target.is_none());
 }
