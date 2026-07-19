@@ -25,6 +25,18 @@ fn tauri_bundle_resources_cover_template_subdirectories() {
         resources.contains("resources/servers/shared/templates/*"),
         "missing Tauri bundle resource glob for shared templates"
     );
+    for entry in fs::read_dir(manifest_dir.join("resources/servers/shared/templates")).unwrap() {
+        let entry = entry.unwrap();
+        if !entry.file_type().unwrap().is_dir() {
+            continue;
+        }
+        let dir_name = entry.file_name().to_string_lossy().into_owned();
+        let glob = format!("resources/servers/shared/templates/{dir_name}/*");
+        assert!(
+            resources.contains(&glob),
+            "missing Tauri bundle resource glob for {glob}"
+        );
+    }
     assert!(
         resources.contains("src/resources/servants.json"),
         "missing Tauri bundle resource for sidecar-readable servants.json"
@@ -94,19 +106,36 @@ fn shared_cv_defines_battle_close_button_elements() {
     );
     assert_eq!(
         elements["battle_action_menu"]["template"].as_str(),
-        Some("shared/battle_action_menu")
+        Some("shared/battle/battle_action_menu")
     );
     assert_eq!(
         elements["battle_scene_anchor"]["template"].as_str(),
-        Some("text_battle_label")
+        Some("battle/text_battle_label")
     );
     let detect = &config["screens"]["Battle"]["detect"];
-    assert_eq!(detect["template"].as_str(), Some("screen_battle"));
+    assert_eq!(detect["template"].as_str(), Some("battle/screen_battle"));
     assert_close(detect["region"]["x"].as_f64().unwrap(), 0.589);
     assert_close(detect["region"]["y"].as_f64().unwrap(), 0.0);
     assert_close(detect["region"]["w"].as_f64().unwrap(), 0.103);
     assert_close(detect["region"]["h"].as_f64().unwrap(), 0.127);
     assert_close(detect["threshold"].as_f64().unwrap(), 0.85);
+}
+
+#[test]
+fn shared_cv_uses_the_server_team_confirm_template_path() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let config_path = manifest_dir
+        .join("resources")
+        .join("servers")
+        .join("shared")
+        .join("cv.json");
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+
+    assert_eq!(
+        config["screens"]["TeamConfirm"]["detect"]["requiredTemplates"][1]["template"],
+        "screen_team_confirm/button_mission_start"
+    );
 }
 
 #[test]
@@ -173,7 +202,10 @@ fn cn_cv_overrides_battle_action_menu_probe() {
     let element =
         &config["screens"]["Battle"]["variants"]["main"]["elements"]["battle_action_menu"];
 
-    assert_eq!(element["template"].as_str(), Some("battle_action_menu"));
+    assert_eq!(
+        element["template"].as_str(),
+        Some("battle/battle_action_menu")
+    );
     assert_close(element["region"]["x"].as_f64().unwrap(), 0.896);
     assert_close(element["region"]["y"].as_f64().unwrap(), 0.235);
     assert_close(element["region"]["w"].as_f64().unwrap(), 0.076);
@@ -194,7 +226,10 @@ fn jp_cv_overrides_battle_action_menu_probe() {
     let element =
         &config["screens"]["Battle"]["variants"]["main"]["elements"]["battle_action_menu"];
 
-    assert_eq!(element["template"].as_str(), Some("battle_action_menu"));
+    assert_eq!(
+        element["template"].as_str(),
+        Some("battle/battle_action_menu")
+    );
     assert_close(element["region"]["x"].as_f64().unwrap(), 0.896);
     assert_close(element["region"]["y"].as_f64().unwrap(), 0.235);
     assert_close(element["region"]["w"].as_f64().unwrap(), 0.076);

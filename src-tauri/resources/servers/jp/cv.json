@@ -6,7 +6,7 @@
         "main": {
           "elements": {
             "battle_action_menu": {
-              "template": "battle_action_menu",
+              "template": "battle/battle_action_menu",
               "region": {
                 "x": 0.896,
                 "y": 0.235,
@@ -24,7 +24,7 @@
         "main": {
           "elements": {
             "mission_start": {
-              "template": "button_mission_start",
+              "template": "screen_team_confirm/button_mission_start",
               "region": {
                 "x": 0.818,
                 "y": 0.851,
@@ -93,7 +93,7 @@
         },
         "refreshConfirm": {
           "detect": {
-            "template": "dialog_refresh_support",
+            "template": "screen_support/dialog_refresh_support",
             "region": {
               "x": 0.411,
               "y": 0.142,
@@ -104,7 +104,7 @@
           },
           "elements": {
             "dialog_refresh_support": {
-              "template": "dialog_refresh_support",
+              "template": "screen_support/dialog_refresh_support",
               "region": {
                 "x": 0.411,
                 "y": 0.142,
@@ -149,7 +149,7 @@
       "detect": {
         "templateOptions": [
           {
-            "template": "button_battle_speed_2",
+            "template": "battle/button_battle_speed_2",
             "region": {
               "x": 0.862,
               "y": 0.056,
@@ -161,7 +161,7 @@
             "masked": true
           },
           {
-            "template": "button_battle_speed_1",
+            "template": "battle/button_battle_speed_1",
             "region": {
               "x": 0.873,
               "y": 0.056,
@@ -179,7 +179,7 @@
         "main": {
           "elements": {
             "battle_speed_2": {
-              "template": "button_battle_speed_2",
+              "template": "battle/button_battle_speed_2",
               "region": {
                 "x": 0.862,
                 "y": 0.056,
@@ -191,7 +191,7 @@
               "masked": true
             },
             "battle_speed_1": {
-              "template": "button_battle_speed_1",
+              "template": "battle/button_battle_speed_1",
               "region": {
                 "x": 0.873,
                 "y": 0.056,
@@ -208,7 +208,7 @@
     },
     "BattleResultLoot": {
       "detect": {
-        "template": "text_battle_result_loot",
+        "template": "battle-result/text_battle_result_loot",
         "region": {
           "x": 0.06,
           "y": 0.683,
@@ -225,7 +225,7 @@
     },
     "BattleResultLootEvent": {
       "detect": {
-        "template": "text_battle_result_loot_event",
+        "template": "battle-result/text_battle_result_loot_event",
         "region": {
           "x": 0.12,
           "y": 0.681,
@@ -243,8 +243,8 @@
     "BattleResultFriendRequest": {
       "detect": {
         "templates": [
-          "text_battle_result_friend_request",
-          "text_battle_result_friend_request_dark"
+          "battle-result/text_battle_result_friend_request",
+          "battle-result/text_battle_result_friend_request_dark"
         ],
         "region": {
           "x": 0.62,
@@ -262,7 +262,7 @@
     },
     "BattleResultExp": {
       "detect": {
-        "template": "text_battle_result_exp",
+        "template": "battle-result/text_battle_result_exp",
         "region": {
           "x": 0.519,
           "y": 0.233,
@@ -279,7 +279,7 @@
     },
     "BattleResultExpLevelUp": {
       "detect": {
-        "template": "text_battle_result_equip_level_up",
+        "template": "battle-result/text_battle_result_equip_level_up",
         "region": {
           "x": 0.577,
           "y": 0.351,
@@ -297,7 +297,7 @@
     },
     "BattleResultBond": {
       "detect": {
-        "template": "text_battle_result_bond",
+        "template": "battle-result/text_battle_result_bond",
         "region": {
           "x": 0.072,
           "y": 0.21,
@@ -314,7 +314,7 @@
     },
     "BattleResultBondLevelUp": {
       "detect": {
-        "template": "text_battle_result_bond_level_up",
+        "template": "battle-result/text_battle_result_bond_level_up",
         "region": {
           "x": 0.546,
           "y": 0.36,
@@ -326,7 +326,7 @@
       },
       "read": {
         "anchor": {
-          "template": "text_battle_result_bond_level_up_anchor",
+          "template": "battle-result/text_battle_result_bond_level_up_anchor",
           "region": {
             "x": 0.529,
             "y": 0.456,
@@ -360,7 +360,7 @@
     },
     "BattleResultContinue": {
       "detect": {
-        "template": "text_battle_result_continue",
+        "template": "battle-result/text_battle_result_continue",
         "region": {
           "x": 0.576,
           "y": 0.76,
@@ -377,7 +377,7 @@
     },
     "APRecovery": {
       "detect": {
-        "template": "dialog_ap_recovery",
+        "template": "battle-result/dialog_ap_recovery",
         "region": {
           "x": 0.423,
           "y": 0.031,
@@ -394,7 +394,7 @@
     },
     "Main": {
       "detect": {
-        "template": "button_notification",
+        "template": "enhancement/button_notification",
         "region": {
           "x": 0.032,
           "y": 0.015,
@@ -407,7 +407,7 @@
         "main": {
           "elements": {
             "button_menu": {
-              "template": "button_menu",
+              "template": "enhancement/button_menu",
               "region": {
                 "x": 0.868,
                 "y": 0.858,
@@ -417,7 +417,7 @@
               "threshold": 0.8
             },
             "button_enhancement": {
-              "template": "button_enhancement",
+              "template": "enhancement/button_enhancement",
               "region": {
                 "x": 0.326,
                 "y": 0.85,
@@ -432,7 +432,7 @@
     },
     "Enhancement": {
       "detect": {
-        "template": "text_enhancement",
+        "template": "enhancement/text_enhancement",
         "region": {
           "x": 0.886,
           "y": 0,
@@ -449,7 +449,7 @@
     },
     "ServantEnhancement": {
       "detect": {
-        "template": "text_enhancement_servant",
+        "template": "enhancement/text_enhancement_servant",
         "region": {
           "x": 0.641,
           "y": 0,
@@ -461,7 +461,7 @@
       "variants": {
         "main": {
           "detect": {
-            "template": "text_enhancement_result",
+            "template": "enhancement/text_enhancement_result",
             "region": {
               "x": 0.317,
               "y": 0.539,
@@ -474,7 +474,7 @@
         },
         "servantSelect": {
           "detect": {
-            "template": "text_enhancement_servant_select",
+            "template": "enhancement/text_enhancement_servant_select",
             "region": {
               "x": 0.123,
               "y": 0.021,
@@ -485,7 +485,7 @@
           },
           "elements": {
             "button_scale_level_3": {
-              "template": "button_scale_level_3",
+              "template": "enhancement/button_scale_level_3",
               "region": {
                 "x": 0,
                 "y": 0.89,
@@ -498,7 +498,7 @@
         },
         "materialSelect": {
           "detect": {
-            "template": "text_enhancement_material",
+            "template": "enhancement/text_enhancement_material",
             "region": {
               "x": 0.122,
               "y": 0.011,
@@ -509,7 +509,7 @@
           },
           "elements": {
             "button_scale_level_3": {
-              "template": "button_scale_level_3",
+              "template": "enhancement/button_scale_level_3",
               "region": {
                 "x": 0,
                 "y": 0.89,
@@ -519,7 +519,7 @@
               "threshold": 0.8
             },
             "dialog_filter_setting": {
-              "template": "dialog_filter_setting",
+              "template": "enhancement/dialog_filter_setting",
               "region": {
                 "x": 0.398,
                 "y": 0.047,
@@ -529,7 +529,7 @@
               "threshold": 0.8
             },
             "text_filter_setting_type": {
-              "template": "text_filter_setting_type",
+              "template": "enhancement/text_filter_setting_type",
               "region": {
                 "x": 0.457,
                 "y": 0.37,
@@ -544,7 +544,7 @@
     },
     "Ascension": {
       "detect": {
-        "template": "screen_enhancement_ascension",
+        "template": "enhancement/screen_enhancement_ascension",
         "region": {
           "x": 0.793,
           "y": 0,
@@ -556,7 +556,7 @@
       "variants": {
         "main": {
           "detect": {
-            "template": "text_ascension_main_variant",
+            "template": "enhancement/text_ascension_main_variant",
             "region": {
               "x": 0.305,
               "y": 0.515,
@@ -567,7 +567,7 @@
           },
           "elements": {
             "button_enhancement_ascension_to_servant": {
-              "template": "button_enhancement_ascension_to_servant",
+              "template": "enhancement/button_enhancement_ascension_to_servant",
               "region": {
                 "x": 0.722,
                 "y": 0.358,
@@ -577,7 +577,7 @@
               "threshold": 0.8
             },
             "enhancement_ascension_not_ready": {
-              "template": "enhancement_ascension_not_ready",
+              "template": "enhancement/enhancement_ascension_not_ready",
               "region": {
                 "x": 0.822,
                 "y": 0.883,
@@ -590,7 +590,7 @@
         },
         "servantSelect": {
           "detect": {
-            "template": "text_enhancement_ascension_servant_select",
+            "template": "enhancement/text_enhancement_ascension_servant_select",
             "region": {
               "x": 0.121,
               "y": 0.011,
@@ -601,7 +601,7 @@
           },
           "elements": {
             "button_scale_level_3": {
-              "template": "button_scale_level_3",
+              "template": "enhancement/button_scale_level_3",
               "region": {
                 "x": 0,
                 "y": 0.89,

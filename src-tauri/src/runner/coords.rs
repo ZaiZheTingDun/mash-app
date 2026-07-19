@@ -45,7 +45,7 @@ pub(crate) const ATTACK_SCREEN_SPEED_2_ELEMENT: &str = "battle_speed_2";
 /// game skip ahead to the next actionable frame. Same physical button
 /// works after every skill on the battle screen.
 pub(crate) const SKIP_ANIMATION_BUTTON: Point = Point::new(0.685, 0.095);
-pub(crate) const SKILL_USE_DIALOG_TEMPLATE: &str = "dialog_skill_use";
+pub(crate) const SKILL_USE_DIALOG_TEMPLATE: &str = "battle/dialog_skill_use";
 pub(crate) const SKILL_USE_DIALOG_THRESHOLD: f64 = 0.8;
 pub(crate) const SKILL_USE_CONFIRM_LUMA_THRESHOLD: f64 = 210.0;
 pub(crate) const SKILL_USE_DIALOG_REGION: NormRect = NormRect {

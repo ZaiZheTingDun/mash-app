@@ -110,16 +110,16 @@ DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 STATIC_TEMPLATE_REFERENCE_WIDTH = 2560
 BATTLE_SPEED_TEMPLATE_REFERENCE_WIDTH = 1920
 BATTLE_SPEED_TEMPLATE_KEYS = {
-    "button_battle_speed_1",
-    "button_battle_speed_2",
+    "battle/button_battle_speed_1",
+    "battle/button_battle_speed_2",
 }
 COMMAND_CARD_STATUS_TEMPLATE_REFERENCE_WIDTH = 1920
 COMMAND_CARD_STATUS_TEMPLATE_SCALES = {
-    "shared/command_seal_a": 1.75,
-    "shared/command_seal_b": 1.75,
-    "shared/command_seal_q": 1.75,
-    "shared/command_sleep": 0.75,
-    "shared/command_stun": 1.875,
+    "shared/battle/command_seal_a": 1.75,
+    "shared/battle/command_seal_b": 1.75,
+    "shared/battle/command_seal_q": 1.75,
+    "shared/battle/command_sleep": 0.75,
+    "shared/battle/command_stun": 1.875,
 }
 
 # ---------------------------------------------------------------------------
@@ -164,7 +164,7 @@ COMMAND_CARD_CRIT_DIGIT_REGIONS: tuple[dict, ...] = (
     {"x": 0.311, "y": 0.09, "w": 0.117, "h": 0.118},
     {"x": 0.428, "y": 0.09, "w": 0.105, "h": 0.118},
 )
-COMMAND_CARD_SUPPORT_ICON_TEMPLATE = "icon_support"
+COMMAND_CARD_SUPPORT_ICON_TEMPLATE = "battle/icon_support"
 COMMAND_CARD_SUPPORT_ICON_THRESHOLD = 0.70
 COMMAND_CARD_SUPPORT_ICON_REFERENCE_SIZE = (1920, 1080)
 COMMAND_CARD_SUPPORT_ICON_SIZE = (50, 36)
@@ -181,11 +181,11 @@ COMMAND_CARD_SUPPORT_ICON_REGION = {
 COMMAND_CARD_STUN_TEMPLATE_KEYS = (
     # Command-card seal varies with the card suit; sleep and stun use their
     # own icons. The templates are shared by the JP and CN clients.
-    "shared/command_seal_a",
-    "shared/command_seal_b",
-    "shared/command_seal_q",
-    "shared/command_sleep",
-    "shared/command_stun",
+    "shared/battle/command_seal_a",
+    "shared/battle/command_seal_b",
+    "shared/battle/command_seal_q",
+    "shared/battle/command_sleep",
+    "shared/battle/command_stun",
 )
 COMMAND_CARD_STUN_THRESHOLD = 0.70
 
@@ -354,7 +354,7 @@ SUPPORT_CONFIRM_BUTTON_MAX_H = 0.082
 SUPPORT_CONFIRM_BUTTON_MIN_ASPECT = 1.5
 SUPPORT_CONFIRM_BUTTON_MAX_ASPECT = 3.5
 SUPPORT_CONFIRM_BUTTON_MIN_AREA = 1800.0
-SUPPORT_CONFIRM_BUTTON_TEMPLATE = "button_support_form_confirm"
+SUPPORT_CONFIRM_BUTTON_TEMPLATE = "screen_support/button_support_form_confirm"
 SUPPORT_CONFIRM_BUTTON_TEMPLATE_THRESHOLD = 0.70
 SUPPORT_CONFIRM_BUTTON_TO_ROW_TOP_DY = 0.116
 SUPPORT_CONFIRM_BUTTON_ROW_MATCH_TOLERANCE = 0.035
@@ -386,8 +386,8 @@ SUPPORT_BUTTON_ANCHOR_TO_SCORE_TOP_DY = 0.147
 # variant is "drop a PNG in templates/ and append the stem here";
 # missing files are skipped silently at probe time.
 SUPPORT_GRAND_BADGE_TEMPLATES = (
-    "text_grand_servant_support_bottom_line",
-    "text_grand_servant_support_bottom_line_2",
+    "screen_support/text_grand_servant_support_bottom_line",
+    "screen_support/text_grand_servant_support_bottom_line_2",
 )
 SUPPORT_GRAND_BADGE_DX = -0.811
 SUPPORT_GRAND_BADGE_DY = 0.201
@@ -1284,7 +1284,7 @@ BATTLE_DIGIT_COHESION_GAP_RATIO = 0.6
 BATTLE_DIGIT_SCORE_MARGIN = 0.08
 
 BOND_LEVEL_UP_SCREEN = "BattleResultBondLevelUp"
-BOND_LEVEL_DIGIT_TEMPLATE_PREFIX = "digit_"
+BOND_LEVEL_DIGIT_TEMPLATE_PREFIX = "digit/digit_"
 BOND_LEVEL_DIGIT_THRESHOLD = 0.85
 BOND_LEVEL_DIGIT_SCORE_MARGIN = 0.12
 BOND_LEVEL_DIGIT_MIN_HEIGHT = 0.04
@@ -1516,7 +1516,7 @@ def _read_integer_digits(
     """
     refs, missing = _load_digit_template_masks(prefix, suffix)
     if missing:
-        refs, missing = _load_digit_template_masks("digit_", "")
+        refs, missing = _load_digit_template_masks("digit/digit_", "")
         if missing:
             return None
     h, w = img.shape[:2]
@@ -2090,11 +2090,15 @@ def _read_battle_scene(
         return _wrap(None, None, fail="empty_region")
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
 
-    label = templates.get("text_battle_label")
+    label_key = "battle/text_battle_label"
+    label = _get_template(label_key)
+    if label is None:
+        label_key = "text_battle_label"
+        label = templates.get("text_battle_label")
     if label is None:
         return _wrap(None, None, fail="missing_label_template")
     diag["labelTemplateLoaded"] = True
-    label = _scale_static_template_for_image(label, img, "text_battle_label")
+    label = _scale_static_template_for_image(label, img, label_key)
 
     if label.shape[0] > gray.shape[0] or label.shape[1] > gray.shape[1]:
         return _wrap(None, None, fail="region_smaller_than_label")
@@ -2124,11 +2128,16 @@ def _read_battle_scene(
     cands: list[tuple[int, int, float, int, int, int]] = []
     # (x, digit, score, w, h, y)
     for d in range(10):
-        tmpl = templates.get(f"digit_{d}")
+        template_key = f"digit/digit_{d}"
+        tmpl = templates.get(template_key)
+        if tmpl is None:
+            # Lightweight test fixtures still expose the legacy flat keys.
+            template_key = f"digit_{d}"
+            tmpl = templates.get(template_key)
         if tmpl is None:
             diag["missingDigitTemplates"].append(d)
             continue
-        tmpl = _scale_static_template_for_image(tmpl, img, f"digit_{d}")
+        tmpl = _scale_static_template_for_image(tmpl, img, template_key)
         th, tw = tmpl.shape[:2]
         if tw > strip.shape[1] or th > strip.shape[0]:
             continue
@@ -2301,6 +2310,16 @@ def _ensure_icon_color_sigs(templates_dir_hint: Optional[str] = None) -> None:
     candidate_dirs: list[str] = []
     if templates_dir_hint and os.path.isdir(templates_dir_hint):
         candidate_dirs.append(templates_dir_hint)
+    candidate_dirs.extend(
+        directory
+        for directory in reversed(template_dirs)
+        if directory not in candidate_dirs and os.path.isdir(directory)
+    )
+    candidate_dirs.extend(
+        os.path.join(directory, "battle")
+        for directory in list(candidate_dirs)
+        if os.path.isdir(os.path.join(directory, "battle"))
+    )
 
     for suit in COMMAND_CARD_SUITS:
         if suit in _icon_color_sig:
@@ -2918,7 +2937,7 @@ def _np_gauge_hundreds_slot_visible(img: np.ndarray, region: dict) -> bool:
     if not _np_gauge_digit_slot_visible(img, region):
         return False
 
-    template_refs = _load_crit_digit_templates("digit_", "")
+    template_refs = _load_crit_digit_templates("digit/digit_", "")
     if template_refs is None:
         return True
 
@@ -4274,7 +4293,7 @@ def _support_attach_score_anchors(
 def _support_level_template_refs() -> list[tuple[int, np.ndarray]]:
     refs: list[tuple[int, np.ndarray]] = []
     for digit in range(1, 10):
-        tmpl = _get_template(_digit_template_key(digit, "digit_", ""))
+        tmpl = _get_template(_digit_template_key(digit, "digit/digit_", ""))
         if tmpl is None:
             continue
         _, mask = cv2.threshold(tmpl, 180, 255, cv2.THRESH_BINARY)
@@ -4306,7 +4325,7 @@ def _support_dedicated_digit_template(digit: int) -> Optional[np.ndarray]:
 
 
 def _support_digit_template_mask(digit: int) -> Optional[np.ndarray]:
-    tmpl = _get_template(_digit_template_key(digit, "digit_", ""))
+    tmpl = _get_template(_digit_template_key(digit, "digit/digit_", ""))
     if tmpl is None:
         return None
     _, mask = cv2.threshold(tmpl, 180, 255, cv2.THRESH_BINARY)
@@ -4556,9 +4575,9 @@ CE_TEMPLATE_RIGHT_CROP = 0
 # (312/88 = 3.545).
 CE_ICON_W_FRAC = 312.0 / 2560.0
 CE_ICON_H_FRAC = 88.0 / 1440.0
-CE_MLB_ICON_TEMPLATE = "icon_mlb_mark"
-CE_GRAND_BOND_TEMPLATE = "icon_grand_bond_ce"
-CE_GRAND_BOND_NP_TEMPLATE = "icon_grand_bond_ce_np"
+CE_MLB_ICON_TEMPLATE = "shared/icon_mlb_mark"
+CE_GRAND_BOND_TEMPLATE = "shared/icon_grand_bond_ce"
+CE_GRAND_BOND_NP_TEMPLATE = "shared/icon_grand_bond_ce_np"
 CE_DECORATION_ICON_THRESHOLD = 0.70
 
 # Event bonus badges sit over the lower-left corner of the support CE strip.
@@ -5006,21 +5025,23 @@ def _load_templates(directory: str, append: bool = False, key_prefix: str = "") 
     if not os.path.isdir(directory):
         return {"ok": False, "error": f"directory not found: {directory}"}
     directory = os.path.abspath(directory)
-    for fname in os.listdir(directory):
-        path = os.path.join(directory, fname)
-        if not os.path.isfile(path) or not fname.lower().endswith(".png"):
-            continue
-        key = f"{key_prefix}{os.path.splitext(fname)[0]}"
-        gray, mask = _read_template_png(path)
-        if gray is None:
-            continue
-        templates[key] = gray
-        if mask is not None:
-            template_masks[key] = mask
-        else:
-            template_masks.pop(key, None)
-        static_template_keys.add(key)
-        count += 1
+    for root, _, files in os.walk(directory):
+        for fname in files:
+            if not fname.lower().endswith(".png"):
+                continue
+            path = os.path.join(root, fname)
+            relative = os.path.relpath(path, directory).replace(os.sep, "/")
+            key = f"{key_prefix}{os.path.splitext(relative)[0]}"
+            gray, mask = _read_template_png(path)
+            if gray is None:
+                continue
+            templates[key] = gray
+            if mask is not None:
+                template_masks[key] = mask
+            else:
+                template_masks.pop(key, None)
+            static_template_keys.add(key)
+            count += 1
     templates_dir = directory
     if directory in template_dirs:
         template_dirs.remove(directory)

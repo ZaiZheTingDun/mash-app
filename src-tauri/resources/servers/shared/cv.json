@@ -14,7 +14,7 @@
             "threshold": 0.75
           },
           {
-            "template": "button_mission_start",
+            "template": "screen_team_confirm/button_mission_start",
             "region": {
               "x": 0.818,
               "y": 0.851,
@@ -106,7 +106,7 @@
     },
     "Battle": {
       "detect": {
-        "template": "screen_battle",
+        "template": "battle/screen_battle",
         "region": {
           "x": 0.589,
           "y": 0,
@@ -119,7 +119,7 @@
         "main": {
           "elements": {
             "battle_scene_anchor": {
-              "template": "text_battle_label",
+              "template": "battle/text_battle_label",
               "region": {
                 "x": 0.587,
                 "y": 0,
@@ -129,7 +129,7 @@
               "threshold": 0.7
             },
             "attack_button": {
-              "template": "shared/button_attack",
+              "template": "shared/battle/button_attack",
               "region": {
                 "x": 0.875,
                 "y": 0.875,
@@ -139,7 +139,7 @@
               "threshold": 0.75
             },
             "battle_action_menu": {
-              "template": "shared/battle_action_menu",
+              "template": "shared/battle/battle_action_menu",
               "region": {
                 "x": 0.859,
                 "y": 0.21,
@@ -149,7 +149,7 @@
               "threshold": 0.7
             },
             "skill_target_close_button": {
-              "template": "shared/battle_close_button",
+              "template": "shared/battle/battle_close_button",
               "region": {
                 "x": 0.822,
                 "y": 0.161,
@@ -159,7 +159,7 @@
               "threshold": 0.8
             },
             "command_spell_close_button": {
-              "template": "shared/battle_close_button",
+              "template": "shared/battle/battle_close_button",
               "region": {
                 "x": 0.826,
                 "y": 0.159,
@@ -169,7 +169,7 @@
               "threshold": 0.8
             },
             "order_change_close_button": {
-              "template": "shared/battle_close_button",
+              "template": "shared/battle/battle_close_button",
               "region": {
                 "x": 0.918,
                 "y": 0.138,

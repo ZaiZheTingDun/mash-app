@@ -286,7 +286,7 @@ class TestDetectScreen:
         repo_root = Path(__file__).resolve().parents[3]
         resources = repo_root / "src-tauri/resources/servers" / server
         mash_cv._load_templates(str(resources / "templates"))
-        key = f"button_battle_speed_{level}"
+        key = f"battle/button_battle_speed_{level}"
         template = mash_cv.templates[key]
         region = (
             {"x": 0.873, "y": 0.056, "w": 0.026, "h": 0.060}
@@ -564,10 +564,10 @@ class TestDetectScreen:
             pytest.skip("CN server resources not available in this checkout")
 
         light_path = os.path.join(
-            cn_templates, "text_battle_result_friend_request.png"
+            cn_templates, "battle-result/text_battle_result_friend_request.png"
         )
         dark_path = os.path.join(
-            cn_templates, "text_battle_result_friend_request_dark.png"
+            cn_templates, "battle-result/text_battle_result_friend_request_dark.png"
         )
         assert os.path.isfile(light_path), light_path
         assert os.path.isfile(dark_path), dark_path
@@ -576,8 +576,8 @@ class TestDetectScreen:
             cfg = json.load(f)
         detect = cfg["screens"]["BattleResultFriendRequest"]["detect"]
         keys = detect.get("templates") or [detect.get("template")]
-        assert "text_battle_result_friend_request" in keys
-        assert "text_battle_result_friend_request_dark" in keys
+        assert "battle-result/text_battle_result_friend_request" in keys
+        assert "battle-result/text_battle_result_friend_request_dark" in keys
 
     @pytest.mark.parametrize("server", ["cn", "jp"])
     def test_battle_result_bond_level_up_template_is_bundled(self, server):
@@ -595,9 +595,9 @@ class TestDetectScreen:
         if not (os.path.isdir(templates_dir) and os.path.isfile(cv_json)):
             pytest.skip(f"{server} server resources not available in this checkout")
 
-        normal_path = os.path.join(templates_dir, "text_battle_result_bond.png")
+        normal_path = os.path.join(templates_dir, "battle-result/text_battle_result_bond.png")
         level_up_path = os.path.join(
-            templates_dir, "text_battle_result_bond_level_up.png"
+            templates_dir, "battle-result/text_battle_result_bond_level_up.png"
         )
         assert os.path.isfile(normal_path), normal_path
         assert os.path.isfile(level_up_path), level_up_path
@@ -606,13 +606,13 @@ class TestDetectScreen:
             cfg = json.load(f)
         bond_detect = cfg["screens"]["BattleResultBond"]["detect"]
         bond_keys = bond_detect.get("templates") or [bond_detect.get("template")]
-        assert "text_battle_result_bond" in bond_keys
+        assert "battle-result/text_battle_result_bond" in bond_keys
 
         level_up_detect = cfg["screens"]["BattleResultBondLevelUp"]["detect"]
         level_up_keys = level_up_detect.get("templates") or [
             level_up_detect.get("template")
         ]
-        assert "text_battle_result_bond_level_up" in level_up_keys
+        assert "battle-result/text_battle_result_bond_level_up" in level_up_keys
         assert level_up_detect["priority"] > 0
 
     @pytest.mark.parametrize(
@@ -638,14 +638,14 @@ class TestDetectScreen:
             pytest.skip(f"{server} server resources not available in this checkout")
 
         anchor_path = os.path.join(
-            templates_dir, "text_battle_result_bond_level_up_anchor.png"
+            templates_dir, "battle-result/text_battle_result_bond_level_up_anchor.png"
         )
         assert os.path.isfile(anchor_path), anchor_path
 
         with open(cv_json, "r", encoding="utf-8") as f:
             cfg = json.load(f)
         read = cfg["screens"]["BattleResultBondLevelUp"]["read"]
-        assert read["anchor"]["template"] == "text_battle_result_bond_level_up_anchor"
+        assert read["anchor"]["template"] == "battle-result/text_battle_result_bond_level_up_anchor"
         assert read["anchor"]["threshold"] >= 0.9
         assert read["servantOcrRegion"] == {
             "x": 0.497,
@@ -882,7 +882,7 @@ class TestDetectScreen:
             / "jp"
             / "cv.json"
         )
-        template = templates_dir / "text_battle_result_loot_event.png"
+        template = templates_dir / "battle-result/text_battle_result_loot_event.png"
         screenshot = (
             Path(__file__).resolve().parent
             / "test_data"
@@ -894,7 +894,7 @@ class TestDetectScreen:
         with cv_json.open(encoding="utf-8") as f:
             detect = json.load(f)["screens"]["BattleResultLootEvent"]["detect"]
         assert detect == {
-            "template": "text_battle_result_loot_event",
+            "template": "battle-result/text_battle_result_loot_event",
             "region": {"x": 0.12, "y": 0.681, "w": 0.282, "h": 0.091},
             "threshold": 0.85,
         }
@@ -982,9 +982,9 @@ class TestOcrRegion:
         cv2.imwrite(str(sub / "deep.png"), tmpl)
 
         result = mash_cv._load_templates(str(tmp_path))
-        assert result["count"] == 0
+        assert result["count"] == 1
         assert "deep" not in mash_cv.templates
-        assert "sub/deep" not in mash_cv.templates
+        assert "sub/deep" in mash_cv.templates
 
         loaded = mash_cv._get_template("sub/deep")
         assert loaded is not None
@@ -1117,7 +1117,13 @@ class TestFindElement:
     def test_ap_recovery_enabled_filter_keeps_bright_row(self):
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         template_dir = os.path.join(
-            repo_root, "src-tauri", "resources", "servers", "cn", "templates", "items"
+            repo_root,
+            "src-tauri",
+            "resources",
+            "servers",
+            "shared",
+            "templates",
+            "items",
         )
         image_path = os.path.join(
             os.path.dirname(__file__),
@@ -1144,7 +1150,13 @@ class TestFindElement:
     def test_ap_recovery_enabled_filter_rejects_dark_depleted_row(self):
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         template_dir = os.path.join(
-            repo_root, "src-tauri", "resources", "servers", "jp", "templates", "items"
+            repo_root,
+            "src-tauri",
+            "resources",
+            "servers",
+            "shared",
+            "templates",
+            "items",
         )
         image_path = os.path.join(
             os.path.dirname(__file__),
@@ -1234,10 +1246,10 @@ class TestProbeSkillUseDialog:
         use_img = cv2.imread(str(use_path))
         used_img = cv2.imread(str(used_path))
         use_result = mash_cv._probe_skill_use_dialog(
-            use_img, "dialog_skill_use", dialog_region, 0.8, confirm_region
+            use_img, "battle/dialog_skill_use", dialog_region, 0.8, confirm_region
         )
         used_result = mash_cv._probe_skill_use_dialog(
-            used_img, "dialog_skill_use", dialog_region, 0.8, confirm_region
+            used_img, "battle/dialog_skill_use", dialog_region, 0.8, confirm_region
         )
 
         assert use_result["found"] is True
@@ -1756,11 +1768,11 @@ class TestFindEnhancementServantGrid:
 @pytest.mark.parametrize(
     "template_key",
     (
-        "shared/command_seal_a",
-        "shared/command_seal_b",
-        "shared/command_seal_q",
-        "shared/command_sleep",
-        "shared/command_stun",
+        "shared/battle/command_seal_a",
+        "shared/battle/command_seal_b",
+        "shared/battle/command_seal_q",
+        "shared/battle/command_sleep",
+        "shared/battle/command_stun",
     ),
 )
 @pytest.mark.parametrize("size", ((2560, 1440), (1920, 1080)))
@@ -1893,8 +1905,8 @@ def test_cn_stun_template_marks_the_stunned_card_not_the_sleep_template():
             ),
         )["found"]
 
-    assert marker_found("shared/command_stun") is True
-    assert marker_found("shared/command_sleep") is False
+    assert marker_found("shared/battle/command_stun") is True
+    assert marker_found("shared/battle/command_sleep") is False
 
 
 @pytest.mark.skipif(
@@ -1907,10 +1919,13 @@ class TestFindCommandCards:
     because the alpha channel is critical for icon matching."""
 
     def _load(self):
-        result = mash_cv._load_templates(_PROD_TEMPLATES_DIR)
+        shared_templates = os.path.join(
+            _REPO_ROOT, "src-tauri", "resources", "servers", "shared", "templates"
+        )
+        result = mash_cv._load_templates(shared_templates, key_prefix="shared")
         assert result["ok"] is True
         for suit in ("a", "b", "q"):
-            assert f"command_icon_{suit}" in mash_cv.templates
+            assert f"shared/battle/command_icon_{suit}" in mash_cv.templates
 
     def test_returns_empty_when_no_regions(self):
         self._load()
@@ -2023,7 +2038,7 @@ class TestFindCommandCards:
 
         img = _make_bgr_image(1920, 1080)
         tmpl = _gradient_patch(18)
-        mash_cv.templates["icon_support"] = tmpl
+        mash_cv.templates["battle/icon_support"] = tmpl
         rendered_tmpl = _cv_module._resize_command_card_support_template(tmpl, img)
 
         slot_px = _cv_module._slot_to_pixels(
@@ -2067,7 +2082,7 @@ class TestFindCommandCards:
 
     def test_reports_support_icon_region_even_when_match_misses(self):
         img = _make_bgr_image(2560, 1440)
-        mash_cv.templates["icon_support"] = _gradient_patch(18)
+        mash_cv.templates["battle/icon_support"] = _gradient_patch(18)
 
         result = mash_cv._find_command_cards(
             img,
@@ -2128,7 +2143,11 @@ class TestFindCommandCards:
     def test_identifies_cn_no_np_attack_screen_from_real_assets(self):
         """Regression for a CN attack screen where transparent portrait
         corners used to suppress Arash/Habetrot face scores."""
-        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+        shared_templates = os.path.join(
+            _REPO_ROOT, "src-tauri", "resources", "servers", "shared", "templates"
+        )
+        assert mash_cv._load_templates(shared_templates, key_prefix="shared")["ok"] is True
+        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR, append=True)
         assert result["ok"] is True
         img = cv2.imread(
             os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command_cn_no_np.jpg")
@@ -2156,7 +2175,11 @@ class TestFindCommandCards:
         """Regression for Merlin's command card when the upper portrait is
         covered by buff icons and NP/card text. The fallback crop matches
         the middle face band instead of lowering the global threshold."""
-        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+        shared_templates = os.path.join(
+            _REPO_ROOT, "src-tauri", "resources", "servers", "shared", "templates"
+        )
+        assert mash_cv._load_templates(shared_templates, key_prefix="shared")["ok"] is True
+        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR, append=True)
         assert result["ok"] is True
         img = cv2.imread(
             os.path.join(
@@ -2184,7 +2207,11 @@ class TestFindCommandCards:
         reason="production CN templates or servants assets dir not available",
     )
     def test_reads_cn_command_card_crit_chances(self):
-        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+        shared_templates = os.path.join(
+            _REPO_ROOT, "src-tauri", "resources", "servers", "shared", "templates"
+        )
+        assert mash_cv._load_templates(shared_templates, key_prefix="shared")["ok"] is True
+        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR, append=True)
         assert result["ok"] is True
         img = cv2.imread(
             os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command_cn_crit.jpg")
@@ -3873,7 +3900,12 @@ class TestGrandBondDecorationIcons:
 
         mash_cv.templates.clear()
         mash_cv.template_masks.clear()
-        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+        shared_templates = os.path.join(
+            _REPO_ROOT, "src-tauri", "resources", "servers", "shared", "templates"
+        )
+        result = mash_cv._load_templates(shared_templates, key_prefix="shared")
+        assert result["ok"], result
+        result = mash_cv._load_templates(_PROD_CN_TEMPLATES_DIR, append=True)
         assert result["ok"], result
         # The decoration icons must actually be present — a missing PNG
         # would silently zero out the score and look like a calibration

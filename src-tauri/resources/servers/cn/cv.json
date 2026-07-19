@@ -6,7 +6,7 @@
         "main": {
           "elements": {
             "battle_action_menu": {
-              "template": "battle_action_menu",
+              "template": "battle/battle_action_menu",
               "region": {
                 "x": 0.896,
                 "y": 0.235,
@@ -24,7 +24,7 @@
         "main": {
           "elements": {
             "mission_start": {
-              "template": "button_mission_start",
+              "template": "screen_team_confirm/button_mission_start",
               "region": {
                 "x": 0.818,
                 "y": 0.851,
@@ -93,7 +93,7 @@
         },
         "refreshConfirm": {
           "detect": {
-            "template": "dialog_refresh_support",
+            "template": "screen_support/dialog_refresh_support",
             "region": {
               "x": 0.423,
               "y": 0.144,
@@ -104,7 +104,7 @@
           },
           "elements": {
             "dialog_refresh_support": {
-              "template": "dialog_refresh_support",
+              "template": "screen_support/dialog_refresh_support",
               "region": {
                 "x": 0.423,
                 "y": 0.144,
@@ -149,7 +149,7 @@
       "detect": {
         "templateOptions": [
           {
-            "template": "button_battle_speed_2",
+            "template": "battle/button_battle_speed_2",
             "region": {
               "x": 0.862,
               "y": 0.056,
@@ -161,7 +161,7 @@
             "masked": true
           },
           {
-            "template": "button_battle_speed_1",
+            "template": "battle/button_battle_speed_1",
             "region": {
               "x": 0.873,
               "y": 0.056,
@@ -179,7 +179,7 @@
         "main": {
           "elements": {
             "battle_speed_2": {
-              "template": "button_battle_speed_2",
+              "template": "battle/button_battle_speed_2",
               "region": {
                 "x": 0.862,
                 "y": 0.056,
@@ -191,7 +191,7 @@
               "masked": true
             },
             "battle_speed_1": {
-              "template": "button_battle_speed_1",
+              "template": "battle/button_battle_speed_1",
               "region": {
                 "x": 0.873,
                 "y": 0.056,
@@ -208,7 +208,7 @@
     },
     "BattleResultLoot": {
       "detect": {
-        "template": "text_battle_result_loot",
+        "template": "battle-result/text_battle_result_loot",
         "region": {
           "x": 0.06,
           "y": 0.683,
@@ -225,7 +225,7 @@
     },
     "BattleResultLootEvent": {
       "detect": {
-        "template": "text_battle_result_loot_event",
+        "template": "battle-result/text_battle_result_loot_event",
         "region": {
           "x": 0.153,
           "y": 0.688,
@@ -243,8 +243,8 @@
     "BattleResultFriendRequest": {
       "detect": {
         "templates": [
-          "text_battle_result_friend_request",
-          "text_battle_result_friend_request_dark"
+          "battle-result/text_battle_result_friend_request",
+          "battle-result/text_battle_result_friend_request_dark"
         ],
         "region": {
           "x": 0.62,
@@ -262,7 +262,7 @@
     },
     "BattleResultExp": {
       "detect": {
-        "template": "text_battle_result_exp",
+        "template": "battle-result/text_battle_result_exp",
         "region": {
           "x": 0.519,
           "y": 0.233,
@@ -279,7 +279,7 @@
     },
     "BattleResultExpLevelUp": {
       "detect": {
-        "template": "text_battle_result_equip_level_up",
+        "template": "battle-result/text_battle_result_equip_level_up",
         "region": {
           "x": 0.555,
           "y": 0.329,
@@ -297,7 +297,7 @@
     },
     "BattleResultMasterLevelUp": {
       "detect": {
-        "template": "text_battle_result_master_level_up",
+        "template": "battle-result/text_battle_result_master_level_up",
         "region": {
           "x": 0.558,
           "y": 0.357,
@@ -315,7 +315,7 @@
     },
     "BattleResultBond": {
       "detect": {
-        "template": "text_battle_result_bond",
+        "template": "battle-result/text_battle_result_bond",
         "region": {
           "x": 0.072,
           "y": 0.21,
@@ -332,7 +332,7 @@
     },
     "BattleResultBondLevelUp": {
       "detect": {
-        "template": "text_battle_result_bond_level_up",
+        "template": "battle-result/text_battle_result_bond_level_up",
         "region": {
           "x": 0.546,
           "y": 0.36,
@@ -344,7 +344,7 @@
       },
       "read": {
         "anchor": {
-          "template": "text_battle_result_bond_level_up_anchor",
+          "template": "battle-result/text_battle_result_bond_level_up_anchor",
           "region": {
             "x": 0.528,
             "y": 0.456,
@@ -378,7 +378,7 @@
     },
     "BattleResultContinue": {
       "detect": {
-        "template": "text_battle_result_continue",
+        "template": "battle-result/text_battle_result_continue",
         "region": {
           "x": 0.576,
           "y": 0.76,
@@ -395,7 +395,7 @@
     },
     "APRecovery": {
       "detect": {
-        "template": "dialog_ap_recovery",
+        "template": "battle-result/dialog_ap_recovery",
         "region": {
           "x": 0.423,
           "y": 0.031,
