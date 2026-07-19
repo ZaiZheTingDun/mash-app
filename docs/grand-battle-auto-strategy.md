@@ -1,194 +1,105 @@
-# Grand Battle Auto Strategy
+# 冠位战自动策略
 
-This document describes the automatic attack-card strategy used when a project
-enables advanced mode and configures `grandServants`.
+本文说明项目启用 advanced mode 并配置 `grandServants` 时使用的自动指令卡策略。
 
-## Inputs
+## 输入
 
-- Each configured servant carries a class-defined `role`. Saber and Berserker
-  use `main` / `deputy`; Lancer uses `single` / `aoe`.
-- Legacy Lancer `lancerRole` values are migrated into `role` during project
-  normalization and are not written back.
-- The user configures these roles in the advanced command editor's main-output
-  section, not on the team lineup page.
-- Each Grand servant stores:
-  - `slotIndex`: project team slot, resolved to the current front-line servant id.
-  - `npCard`: `auto`, `buster`, `arts`, or `quick`.
-  - `priority`: `damage` or `np`.
-- Ready Noble Phantasms and recognized command cards are scored together.
-- Hand-written advanced `rules` still take precedence. This strategy only runs
-  for the automatic advanced flow.
-- `grandClass` selects the automatic rule set. Missing legacy values default to
-  `saber`.
-- The project-level `grandCardStrategy.chainPriority` list can reorder the
-  Saber automatic rule order. Berserker uses its fixed rule order.
-- When `grandCardStrategy.customRules` is non-empty, those user rules are tried
-  before the class-specific built-in rules. Built-in Saber/Berserker rules
-  always remain as the fallback.
+- 每个已配置从者均携带由职阶定义的 `role`。Saber 使用 `main` / `deputy`；Lancer 使用 `single` / `aoe`。
+- 旧版 Lancer `lancerRole` 会在项目规范化时迁移至 `role`，且不会回写。
+- 用户在 advanced command editor 的主输出区域配置这些 role，而非在队伍阵容页面配置。
+- 每个 Grand servant 存储：
+  - `slotIndex`：项目队伍 slot，解析为当前前排从者 id。
+  - `npCard`：`auto`、`buster`、`arts` 或 `quick`。
+  - `priority`：`damage` 或 `np`。
+- 已就绪的 Noble Phantasm 与已识别的指令卡会一并评分。
+- 手写的 advanced `rules` 始终优先；本策略仅用于自动 advanced 流程。
+- `grandClass` 选择自动规则集；缺失的旧版值默认 `saber`。
+- 项目级 `grandCardStrategy.chainPriority` 列表可以重排 Saber 自动规则顺序；Berserker 使用固定顺序。
+- 当 `grandCardStrategy.customRules` 非空时，先尝试用户规则，再尝试按职阶内置规则；内置 Saber/Berserker 规则始终保留为 fallback。
 
-If `npCard` is `auto`, the runner uses the servant resource's
-`noblePhantasmCard` value. If the configured Grand servant is not currently in
-the front line, that role is ignored for the current turn.
+若 `npCard` 为 `auto`，runner 使用从者资源中的 `noblePhantasmCard` 值。若已配置的 Grand servant 当前不在前排，该 role 在本回合会被忽略。
 
-## Strategy Modules
+## 策略模块
 
-The generic candidate builder, custom-rule matcher, and scoring engine live in
-`runner/grand.rs`. Class-owned metadata and built-in behavior live in
-`runner/grand/saber.rs`, `lancer.rs`, and `berserker.rs`, behind the
-`GrandClassStrategy` interface. The same registered strategy supplies project
-normalization, startup validation, runtime role order, automatic Order Change
-targets, and the `get_grand_class_definitions` UI payload.
+通用的 candidate builder、custom-rule matcher 与评分引擎位于 `runner/grand.rs`。职阶专属元数据与内置行为通过 `GrandClassStrategy` 接口，位于 `runner/grand/saber.rs`、`lancer.rs` 与 `berserker.rs`。同一个已注册策略还会提供项目规范化、启动校验、运行时 role 顺序、自动 Order Change 目标，以及 `get_grand_class_definitions` UI payload。
 
-To add a class, add the `GrandClass` enum value, implement one strategy module,
-and register it in `grand_class_strategies`. React renders its class option,
-role slots, support filter, validation message, and settings from the returned
-definition without class-specific branches.
+若要新增职阶，请添加 `GrandClass` enum 值、实现一个策略模块，并将其注册到 `grand_class_strategies`。React 会根据返回的 definition 渲染职阶选项、role slot、助战筛选、校验信息与设置，无需按职阶分支。
 
-## Startup Order Change
+## 启动时的 Order Change
 
-When a scene has no effective command-card startup conditions, the runner
-normally executes its first control action and `startupActions` directly from
-the Battle screen, then opens the attack-card screen once for the actual
-attack. This avoids opening the card page only to return immediately.
+若一个场景没有生效的指令卡启动条件，runner 通常会直接在 Battle 画面执行第一个 control action 和 `startupActions`，然后仅在实际攻击时打开一次指令卡画面。这样避免仅为立刻返回而打开卡片页面。
 
-When the main Grand servant is configured in a back-line slot, an advanced
-scene can set `grandAutoOrderChange` as its startup condition. This setting is
-per scene and does not change the configured control actions or startup actions.
-The direct-start optimization is disabled in this case because the runner still
-needs the first attack-card screen to count card ownership and choose which
-front-line servant to replace.
+当主 Grand servant 配置在后排 slot 时，advanced 场景可将 `grandAutoOrderChange` 设为启动条件。该设置按场景生效，不改变已配置的 control action 或 startup action。此时会禁用直接启动优化，因为 runner 仍需先进入一次指令卡画面，统计卡片归属并选择要换下的前排从者。
 
-On the first attack-card screen for that scene, the runner:
+在该场景第一次进入指令卡画面时，runner 会：
 
-1. Counts recognized command cards owned by each current front-line servant.
-2. Selects the front-line servant with the highest count; ties use the leftmost
-   servant.
-3. Uses Mystic Code `skill_3` to Order Change that front-line servant with the
-   back-line main Grand servant.
-4. Re-reads the attack-card screen, treats startup as satisfied, then executes
-   the scene's configured startup actions.
+1. 统计当前每个前排从者拥有的已识别指令卡数量。
+2. 选择数量最多的前排从者；并列时选择最左侧从者。
+3. 使用 Mystic Code `skill_3`，让该前排从者与后排主 Grand servant 执行 Order Change。
+4. 重新读取指令卡画面，将启动视为已满足，然后执行场景配置的 startup action。
 
-Startup actions configured against the back-line main Grand servant are resolved
-by servant identity at runtime, then rewritten to that servant's current
-front-line position. Actions configured against a servant that was moved out of
-the front line are skipped instead of being applied to the new occupant of that
-position.
+针对后排主 Grand servant 配置的 startup action，会在运行时按从者身份解析，再改写为该从者当前的前排位置。针对已被换出前排从者的 action 将被跳过，不会错误地作用于该位置的新成员。
 
-If the main Grand servant is already in the front line, cannot be located, or
-the swap target cannot be resolved, the runner skips the automatic swap without
-failing the battle loop.
+若主 Grand servant 已在前排、无法定位，或无法解析换位目标，runner 会跳过自动换位而不中断战斗循环。
 
-## Rule Model
+## 规则模型
 
-Grand automatic card selection is rule-based. Each rule has exactly three
-slots, and the slot order is the click order. A candidate combo must satisfy
-the rule's slot constraints plus any rule-wide constraints:
+Grand 自动选卡基于规则。每条规则恰有三个 slot，slot 顺序即点击顺序。候选组合必须满足 slot 约束及规则级约束：
 
-- Owner: main Grand, deputy Grand, any Grand, or any servant.
-- Kind: command card, Noble Phantasm, or either.
-- Color: exact B/A/Q, any color, or the configured NP color of a Grand role.
-- `sameColor`: all three chosen attacks have the same color.
-- `colorSetBAQ`: the three chosen attacks contain one buster, one arts, and one
-  quick. This is the "exquisite" chain.
-- `include` / `exclude`: required or forbidden attacks in the three-card combo.
+- Owner：主 Grand、副 Grand、任意 Grand 或任意从者。
+- Kind：指令卡、Noble Phantasm 或两者皆可。
+- Color：精确 B/A/Q、任意颜色，或 Grand role 配置的 NP 颜色。
+- `sameColor`：选出的三次攻击颜色相同。
+- `colorSetBAQ`：三次攻击恰含一张 buster、一张 arts 和一张 quick，即「极致」chain。
+- `include` / `exclude`：三卡组合中必须包含或不得包含的攻击。
 
-When several combos match the same rule, the picker prefers the combo with more
-target-role attacks, then main/deputy Grand attacks, then NPs and lower original
-card order. When a rule's slots allow multiple valid attack orders, non-Grand
-command cards are placed before Grand servant command cards where possible.
+多组组合匹配同一规则时，picker 依次偏好含更多目标 role 攻击、更多主／副 Grand 攻击、更多 NP，以及原始卡序更靠前的组合。规则 slot 允许多个有效攻击顺序时，尽可能将非 Grand 指令卡置于 Grand servant 指令卡之前。
 
-## User Custom Rules
+## 用户自定义规则
 
-User custom rules use the same three-slot matcher as the built-in rules. Each
-rule has exactly three slots, and each slot can either bind to a concrete
-servant id from the configured team or to any configured Grand servant:
+用户 custom rule 与内置规则共用三 slot matcher。每条规则恰有三个 slot，每个 slot 可绑定到配置队伍中的具体从者 id，也可绑定任意已配置 Grand servant：
 
-- Servant: the exact `servantId` that must own the selected attack, or
-  `grandServant: true` for any Grand servant.
-- Kind: any attack, command-card-only, or Noble Phantasm.
-- Color: any color, buster, arts, or quick. NP slots do not use color for
-  runtime matching.
+- Servant：拥有选定攻击的精确 `servantId`，或 `grandServant: true` 表示任意 Grand servant。
+- Kind：任意攻击、仅指令卡或 Noble Phantasm。
+- Color：任意颜色、buster、arts 或 quick。NP slot 不使用颜色作运行时匹配。
 
-Slots using `grandServant: true` also carry the hidden owner priority used by
-Berserker broad slots: main Grand attacks first, then deputy Grand attacks.
+使用 `grandServant: true` 的 slot 还携带 Berserker 宽泛 slot 所用的隐藏 owner priority：主 Grand 攻击优先，其次是副 Grand 攻击。
 
-The row order in the UI is the matching order. Invalid or incomplete custom
-rules are ignored at runtime, so the picker proceeds to the next custom rule or
-the built-in fallback rules.
+UI 中的行顺序即匹配顺序。无效或不完整的 custom rule 会在运行时忽略，picker 将继续尝试下一条 custom rule 或内置 fallback rule。
 
-## Saber Rules
+## Saber 规则
 
-Saber mode keeps the user-configurable `grandCardStrategy.chainPriority` order.
-Each priority item expands to rule templates:
+Saber mode 保留用户可配置的 `grandCardStrategy.chainPriority` 顺序。每个 priority item 会展开为规则模板：
 
-1. Main exquisite brave chain with NP:
-   main command, main command, main NP; rule-wide color set must be B/A/Q.
-2. Main exquisite brave chain without NP:
-   main buster command, main arts command, main quick command; main NP excluded.
-3. Main ready NP:
-   any attack, any attack, main NP.
-4. Deputy exquisite brave chain with NP:
-   deputy command, deputy command, deputy NP; rule-wide color set must be B/A/Q.
-5. Deputy exquisite brave chain without NP:
-   deputy buster command, deputy arts command, deputy quick command; deputy NP
-   excluded.
-6. Main same-color chain:
-   any three attacks of the same color, including at least one main Grand
-   attack.
-7. Deputy same-color chain:
-   any three attacks of the same color, including at least one deputy Grand
-   attack.
-8. Fallback:
-   any three attacks.
+1. 含 NP 的主极致 brave chain：主指令卡、主指令卡、主 NP；规则级颜色集合必须为 B/A/Q。
+2. 不含 NP 的主极致 brave chain：主 buster 指令卡、主 arts 指令卡、主 quick 指令卡；排除主 NP。
+3. 主已就绪 NP：任意攻击、任意攻击、主 NP。
+4. 含 NP 的副极致 brave chain：副指令卡、副指令卡、副 NP；规则级颜色集合必须为 B/A/Q。
+5. 不含 NP 的副极致 brave chain：副 buster 指令卡、副 arts 指令卡、副 quick 指令卡；排除副 NP。
+6. 主同色 chain：任意三次同色攻击，且至少包含一次主 Grand 攻击。
+7. 副同色 chain：任意三次同色攻击，且至少包含一次副 Grand 攻击。
+8. Fallback：任意三次攻击。
 
-The default Saber priority order is main exquisite brave chain, main ready NP,
-deputy exquisite brave chain, main same-color chain, deputy same-color chain,
-then fallback.
+默认 Saber priority 顺序为：主极致 brave chain、主已就绪 NP、副极致 brave chain、主同色 chain、副同色 chain、最后 fallback。
 
-## Berserker Rules
+## Berserker 规则
 
-Berserker mode uses a fixed order:
+Berserker mode 使用固定顺序。
 
-For every built-in Berserker slot whose owner is "any servant", matching combos
-prefer main Grand attacks first, then deputy Grand attacks, then non-Grand
-attacks. This preference is configured on those rule slots, not hard-coded in
-the generic matcher.
+对每个 owner 为「任意从者」的内置 Berserker slot，匹配组合依次偏好主 Grand 攻击、副 Grand 攻击和非 Grand 攻击。这一偏好配置在规则 slot 上，而非硬编码于通用 matcher。
 
-1. Main Grand NP same-color chain:
-   command card matching the main NP color, command card matching the main NP
-   color, main NP. The second command slot is configured to accept a ready
-   deputy Grand NP as a command-equivalent attack when its NP color also matches
-   the main NP color, and prefers placing that deputy NP as the second attack.
-2. Main Grand NP:
-   any attack, any attack, main NP. The second free slot is configured to prefer
-   a ready deputy Grand NP, so the click order becomes ordinary/free attack,
-   deputy NP, main NP when that combo is available.
-3. Deputy Grand NP same-color chain:
-   command card matching the deputy NP color, command card matching the deputy
-   NP color, deputy NP.
-4. Main Grand other same-color chain:
-   any three attacks of the same color, including the main Grand servant, but
-   excluding the main Grand NP.
-5. Deputy Grand other same-color chain:
-   any three attacks of the same color, including the deputy Grand servant, but
-   excluding the deputy Grand NP.
-6. Grand exquisite chain:
-   buster, arts, quick; includes at least one Grand servant attack.
-7. Fallback:
-   any three attacks.
+1. 主 Grand NP 同色 chain：匹配主 NP 颜色的指令卡、匹配主 NP 颜色的指令卡、主 NP。第二个指令卡 slot 可将就绪且 NP 颜色同样匹配主 NP 颜色的副 Grand NP 作为等同指令卡的攻击接受，并优先将该副 NP 放在第二次攻击。
+2. 主 Grand NP：任意攻击、任意攻击、主 NP。第二个自由 slot 优先就绪的副 Grand NP；可用时点击顺序为普通／自由攻击、副 NP、主 NP。
+3. 副 Grand NP 同色 chain：匹配副 NP 颜色的指令卡、匹配副 NP 颜色的指令卡、副 NP。
+4. 主 Grand 其他同色 chain：任意三次同色攻击，包含主 Grand servant，但排除主 Grand NP。
+5. 副 Grand 其他同色 chain：任意三次同色攻击，包含副 Grand servant，但排除副 Grand NP。
+6. Grand 极致 chain：buster、arts、quick，且至少包含一次 Grand servant 攻击。
+7. Fallback：任意三次攻击。
 
-## Lancer Rules
+## Lancer 规则
 
-Lancer mode also uses the shared `GrandCardRule` matcher. Its fixed rule order
-is dual-NP exquisite chain, dual-NP same-color chain, dual-NP fallback,
-single-target NP, AoE NP, then three command cards. Dual-NP rules click AoE NP,
-single-target NP, and the filler in that order. Command-card slots use the
-reusable main/deputy/other then Arts/Quick/Buster candidate priority, which
-preserves the former Lancer filler order. Non-Grand NPs never satisfy these
-command-card slots.
+Lancer mode 同样使用共享的 `GrandCardRule` matcher。固定规则顺序为双 NP 极致 chain、双 NP 同色 chain、双 NP fallback、单体 NP、AoE NP，最后为三张指令卡。双 NP 规则按 AoE NP、单体 NP、填充卡的顺序点击。指令卡 slot 采用可复用的主／副／其他、随后 Arts/Quick/Buster 的 candidate priority，从而保持旧版 Lancer 填充卡顺序。非 Grand NP 永不满足这些指令卡 slot。
 
-## Non-Grand Behavior
+## 非 Grand 行为
 
-When no `grandServants` are configured, the runner keeps the legacy advanced
-automatic scoring based on the configured `mainOutput`, output type, and NP
-color.
+未配置 `grandServants` 时，runner 保留基于 `mainOutput`、输出类型和 NP 颜色的旧版 advanced 自动评分逻辑。

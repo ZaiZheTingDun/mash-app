@@ -1,22 +1,15 @@
-# NP Readiness Detection
+# NP 就绪检测
 
-How `find_noble_phantasms` decides whether each front-line servant's Noble
-Phantasm is ready.
+本文说明 `find_noble_phantasms` 如何判断前排各从者的 Noble Phantasm 是否就绪。
 
-- **Sidecar entry point**: `_find_noble_phantasms` in
-  `sidecar/mash_cv/mash_cv/cv.py`
-- **Rust client**: `SidecarClient::find_noble_phantasms` in
-  `src-tauri/src/screen.rs`
-- **Runner usage**: `Runner::read_attack_state` in
-  `src-tauri/src/runner/attack.rs`
-- **Debug surface**: `readNpGauges` / `动态检测端帽` in
-  `src/features/debug/DebugPage.tsx`
+- **Sidecar 入口**：`sidecar/mash_cv/mash_cv/cv.py` 中的 `_find_noble_phantasms`
+- **Rust 客户端**：`src-tauri/src/screen.rs` 中的 `SidecarClient::find_noble_phantasms`
+- **Runner 使用处**：`src-tauri/src/runner/attack.rs` 中的 `Runner::read_attack_state`
+- **调试界面**：`src/features/debug/DebugPage.tsx` 中的 `readNpGauges` / `动态检测端帽`
 
-## Signal
+## 信号
 
-Readiness is driven by the bright cap near the right end of each bottom
-NP-gauge slot. The detector starts from the three bottom NP-gauge percentage
-regions, one per front-line servant:
+就绪状态由每个底部 NP 槽位右端附近的亮色端帽判断。检测器先从三个底部 NP 槽位百分比区域开始，每个前排从者各一个：
 
 ```python
 DEFAULT_NP_GAUGE_DIGIT_REGIONS = (
@@ -26,7 +19,7 @@ DEFAULT_NP_GAUGE_DIGIT_REGIONS = (
 )
 ```
 
-The actual readiness probe is offset from each gauge ROI:
+实际的就绪 probe 相对每个 gauge ROI 有以下偏移：
 
 ```python
 NP_GAUGE_GLOW_OFFSET_X = 0.05329166666666668
@@ -36,21 +29,19 @@ NP_GAUGE_GLOW_H = 0.011111111111111112
 NP_GAUGE_GLOW_READY_THRESHOLD = 0.5
 ```
 
-`npGlowScore` is the grayscale mean of that glow-cap ROI normalized to
-`0.0..1.0`. The final readiness rule is:
+`npGlowScore` 是端帽 ROI 灰度均值归一化至 `0.0..1.0` 的结果。最终规则为：
 
-- `npGlowScore >= 0.5` means ready
-- `npGlowScore < 0.5` means not ready
-- a missing glow score means incomplete/unknown and the runner retries
+- `npGlowScore >= 0.5`：已就绪
+- `npGlowScore < 0.5`：未就绪
+- 缺少端帽分数：读取不完整／未知，runner 会重试
 
-The exact NP percentage is not needed for readiness. The sidecar still reads
-the digit layout for debugging. In FGO's gauge display:
+判断就绪不需要精确 NP 百分比；sidecar 仍会读取数字布局以供调试。FGO 的槽位显示具有以下特征：
 
-- the number is right-aligned inside a fixed gauge ROI
-- values below 100 populate only the tens and ones digit slots
-- values at or above 100 also populate the hundreds digit slot
+- 数字在固定 gauge ROI 内右对齐；
+- 小于 100 的值只占用十位和个位数字槽；
+- 大于等于 100 的值还会占用百位数字槽。
 
-Each gauge ROI is split into three slot-relative digit regions:
+每个 gauge ROI 会分为三个相对数字槽区域：
 
 ```python
 DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS = (
@@ -60,22 +51,13 @@ DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS = (
 )
 ```
 
-The sidecar detects whether each fixed digit slot contains a plausible white
-digit body. Tens and ones are presence-only checks. The hundreds slot has one
-extra guard: after the shape check, it must also match an existing generic
-`digit_` template as a plausible hundreds digit. This rejects the vertical
-stroke from the nearby `宝具` label, which otherwise looks like a narrow `1`.
-No NP-gauge-specific templates are required.
+Sidecar 会检测每个固定数字槽是否含有可信的白色数字主体。十位和个位只检查是否存在；百位额外进行一道保护：形状检查后还必须匹配现有通用 `digit_` 模板，确认是可信的百位数字。此举会排除附近 `宝具` 标签的竖笔画——该笔画原本会像一个狭窄的 `1`。无需 NP gauge 专用模板。
 
-Bottom gauge lines, HP bars, percent-sign fragments, and subtitle text are
-filtered out by requiring a tall component that starts in the upper part of the
-slot and spans enough of the digit height.
+检测通过以下条件滤除底部 gauge 线、HP 条、百分号残片及字幕文字：组件必须较高、起始于数字槽的上半部分，且跨越足够的数字高度。
 
-The digit result is surfaced as `gaugeDigitCount` only. It does not change
-`ready`.
+数字结果仅通过 `gaugeDigitCount` 暴露，不影响 `ready`。
 
-The upper NP-card slot rectangles remain in the response as tap regions and as
-legacy debug measurements (`edgeFrac`, `stdBgr`, `edgeThreshold`, `cardReady`):
+上方 NP 卡片槽位矩形仍保留在响应中，既作为点击区域，也作为旧版调试测量（`edgeFrac`、`stdBgr`、`edgeThreshold`、`cardReady`）：
 
 ```python
 DEFAULT_NP_CARD_SLOTS = (
@@ -85,9 +67,9 @@ DEFAULT_NP_CARD_SLOTS = (
 )
 ```
 
-## Retry Behavior
+## 重试行为
 
-The runner treats missing glow scores as an incomplete read. It returns:
+Runner 将缺少端帽分数视为不完整读取，返回：
 
 ```python
 {
@@ -97,17 +79,11 @@ The runner treats missing glow scores as an incomplete read. It returns:
 }
 ```
 
-`Runner::read_attack_state` treats any `None` `npGlowScore` as an
-incomplete read, waits `ACTION_DELAY`, and calls `find_noble_phantasms` again.
-It starts this gauge loop only after all five command-card slots expose a
-suit/icon signal, so transient attack-button animation over the bottom gauges
-can clear before NP is read. Cancellation still exits the loop.
+`Runner::read_attack_state` 会将任意 `None` 的 `npGlowScore` 视为不完整读取，等待 `ACTION_DELAY` 后再次调用 `find_noble_phantasms`。它只会在全部五个指令卡槽均出现 suit/icon 信号后启动 gauge 循环，从而让指令卡按钮切换动画离开底部 gauge 后再读取 NP；取消操作仍会退出该循环。
 
-The debug-only live command `debug_read_noble_phantasm_gauges_live` samples for
-one second and returns the highest `npGlowScore` seen for each slot, which
-captures the breathing-light peak without writing a screenshot file.
+仅供调试的实时命令 `debug_read_noble_phantasm_gauges_live` 会采样一秒，并返回每个槽位所见的最高 `npGlowScore`，以捕获呼吸灯的峰值，无需写入截图文件。
 
-## Response Shape
+## 响应结构
 
 ```python
 {
@@ -132,29 +108,26 @@ captures the breathing-light peak without writing a screenshot file.
 }
 ```
 
-The `edge*` and `cardReady` fields are legacy upper-card detector outputs for
-debug and future configuration. They are not used for current readiness.
+`edge*` 与 `cardReady` 字段是供调试和后续配置使用的旧版上方卡片检测器输出，不参与当前的就绪判断。
 
-## Tests
+## 测试
 
-`tests/test_cv.py::TestFindNoblePhantasms` covers the glow-cap path on CN
-fixtures:
+`tests/test_cv.py::TestFindNoblePhantasms` 覆盖 CN fixture 上的端帽检测路径：
 
-- `battle_np_gauge_cn_50_40_70.png`: `50 / 40 / 70`
-- `battle_np_gauge_cn_100_obscured_90.png`: `100 / obscured / 90`
-- `battle_np_gauge_cn_100_60_190.png`: `100 / 60 / 190`
-- `battle_np_gauge_cn_100_100_200.png`: `100 / 100 / 200`
-- `battle_np_gauge_cn_dimmed_100_100_200.png`: dimmed attack-card screen, `100 / 100 / 200`
-- `battle_np_gauge_cn_120_60_90.jpg`: attack-card screen, `120 / 60 / 90`
-- `battle_np_gauge_cn_120_60_90_label_occluded.jpg`: attack-card screen, `120 / 60 / 90`, covering `宝具` label
-  false-positive rejection in the hundreds slot
+- `battle_np_gauge_cn_50_40_70.png`：`50 / 40 / 70`
+- `battle_np_gauge_cn_100_obscured_90.png`：`100 / obscured / 90`
+- `battle_np_gauge_cn_100_60_190.png`：`100 / 60 / 190`
+- `battle_np_gauge_cn_100_100_200.png`：`100 / 100 / 200`
+- `battle_np_gauge_cn_dimmed_100_100_200.png`：变暗的指令卡画面，`100 / 100 / 200`
+- `battle_np_gauge_cn_120_60_90.jpg`：指令卡画面，`120 / 60 / 90`
+- `battle_np_gauge_cn_120_60_90_label_occluded.jpg`：指令卡画面，`120 / 60 / 90`，覆盖 `宝具` 标签，并验证百位槽的误匹配排除
 
-The same test class also has synthetic coverage for two slot-level cases:
+同一测试类还以合成数据覆盖两个槽位级场景：
 
-- a broken hundreds digit body still counts as present
-- a bottom gauge line in an empty hundreds slot does not count as present
+- 损坏的百位数字主体仍会被计为存在；
+- 空百位槽中的底部 gauge 线不会被计为存在。
 
-Run with:
+运行方式：
 
 ```bash
 cd sidecar/mash_cv

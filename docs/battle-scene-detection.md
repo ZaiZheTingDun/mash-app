@@ -1,90 +1,63 @@
-# Battle-Scene Detection
+# 战斗场景检测
 
-How `read_battle_scene` recognises the `m / n` indicator drawn next to the
-gold **BATTLE** label in the top-right HUD of the attack screen, and how
-the runner uses it to decide which configured skill block to execute on
-each scene change.
+本文说明 `read_battle_scene` 如何识别攻击画面右上 HUD、金色 **BATTLE** 标签旁的 `m / n` 指示器，以及 runner 如何在每次场景切换时选择对应的已配置技能块。
 
-- **Sidecar entry point**: `_read_battle_scene` in
-  `sidecar/mash_cv/mash_cv/cv.py`
-- **Rust client**: `SidecarClient::read_battle_scene` in
-  `src-tauri/src/screen.rs`
-- **Runner usage**: `Runner::handle_battle` (around the
-  `tick_scene_state` call) in `src-tauri/src/runner/engine.rs`
-- **Debug surface**: `debug_read_battle_scene` Tauri command +
-  `DebugPage.tsx`
+- **Sidecar 入口**：`sidecar/mash_cv/mash_cv/cv.py` 中的 `_read_battle_scene`
+- **Rust 客户端**：`src-tauri/src/screen.rs` 中的 `SidecarClient::read_battle_scene`
+- **Runner 使用处**：`src-tauri/src/runner/engine.rs` 中 `tick_scene_state` 调用附近的 `Runner::handle_battle`
+- **调试界面**：`debug_read_battle_scene` Tauri command 与 `DebugPage.tsx`
 
-## What problem this solves
+## 解决的问题
 
-A quest is composed of one or more battle scenes. The HUD displays the
-current scene as `m / n` (`1/3`, `2/3`, `3/3`). The runner needs to know
-two things:
+一个 quest 由一个或多个 Battle 组成。HUD 将当前 Battle 显示为 `m / n`（例如 `1/3`、`2/3`、`3/3`）。Runner 需要知道两件事：
 
-1. **Which scene am I on?** — to pick the matching configured skill /
-   target / NP block.
-2. **Did the scene just change?** — to fire the new block exactly once
-   per transition, even if the CV temporarily can't read the strip
-   (NP cinematic overlay, attack animation, etc.).
+1. **当前是哪个 Battle？** 用于选择匹配的已配置技能／目标／NP 块。
+2. **Battle 是否刚切换？** 即使 CV 暂时无法读取该区域（NP 演出遮挡、攻击动画等），也要确保每次切换仅执行一次新块。
 
-`(m, n)` solves both: `m` is the scene id, and a change in `m` between
-ticks is the transition signal.
+`(m, n)` 同时提供这两个信息：`m` 是 Battle id，而两个 tick 间 `m` 的变化就是切换信号。
 
-We deliberately do **not** parse the digits with the OCR sidecar
-(`mash-cv` ships RapidOCR for support-name reading). The strip is a
-fixed-position 5-character widget rendered in a hand-crafted bitmap font
-— template matching against a `digit_0`..`digit_9` set is roughly an
-order of magnitude faster, has no model-loading cost, and gives us
-per-glyph match scores that we can use to filter out artefacts.
+这里刻意**不**使用 OCR sidecar 解析数字（`mash-cv` 的 RapidOCR 用于助战名读取）。该区域是固定位置、由手工位图字体渲染的五字符 widget；相较加载模型，使用 `digit_0`…`digit_9` 的模板匹配约快一个数量级，并能提供每个 glyph 的分数以过滤伪匹配。
 
-## The pipeline
+## 流程
 
 ```text
-frame ──► crop BATTLE_SCENE_REGION ──► matchTemplate(text_battle_label)
+frame ──► 裁剪 BATTLE_SCENE_REGION ──► matchTemplate(text_battle_label)
                                               │
-                                              ▼  anchor score ≥ 0.7
-                       strip = pixels right of the matched label box
-                                              │
-                                              ▼
-                  for d in 0..=9: matchTemplate(digit_d) ≥ 0.8
-                                              │
-                                              ▼  greedy x-NMS
-                            score-margin filter (best - 0.08)
-                                              │
-                                              ▼  ≥ 2 kept
-              split at largest x-gap (must exceed avg_w / 2)
+                                              ▼  anchor 分数 ≥ 0.7
+                       strip = 匹配到的标签框右侧像素
                                               │
                                               ▼
-              cohesion-trim each side (drop digits separated
-                       by > 0.6 × avg_w from their cluster)
+                  对 d in 0..=9：matchTemplate(digit_d) ≥ 0.8
+                                              │
+                                              ▼  贪心 x-NMS
+                            score-margin 过滤（最佳分数 - 0.08）
+                                              │
+                                              ▼  至少保留 2 个
+              在最大的 x 间隙处分割（必须大于 avg_w / 2）
+                                              │
+                                              ▼
+              两侧分别 cohesion-trim（丢弃与簇间隔
+                       大于 0.6 × avg_w 的数字）
                                               │
                                               ▼
                         ("".join(left), "".join(right)) → (m, n)
 ```
 
-Any step can short-circuit with `(None, None)` and a `failReason` string;
-the runner treats this as "scene unchanged" (see [State machine](#state-machine)
-below).
+任一步都可带 `failReason` 短路返回 `(None, None)`；runner 将其视为「Battle 未变化」（见[状态机](#状态机)）。
 
-## cv.json Integration
+## `cv.json` 集成
 
-Ordinary battle template probes live under their real screens in
-`src-tauri/resources/servers/<server>/cv.json`:
+常规战斗模板 probe 位于 `src-tauri/resources/servers/<server>/cv.json` 的对应 screen 中：
 
-- `Battle.variants.main.elements.attack_button`: used by `Runner::handle_battle`,
-  `Runner::wait_for_attack_button`, and the debug attack-button probe.
-- `SupportSelect.variants.main.elements.support_scroll_start` /
-  `.support_scroll_end`: used by support-list scrolling to detect whether the
-  list is at the top, bottom, or has no scroll bar at all.
-- `Battle.variants.main.elements.battle_scene_anchor`: exposes the
-  `text_battle_label` search window to the debug template probe UI.
+- `Battle.variants.main.elements.attack_button`：供 `Runner::handle_battle`、`Runner::wait_for_attack_button` 和调试攻击按钮 probe 使用。
+- `SupportSelect.variants.main.elements.support_scroll_start` / `.support_scroll_end`：用于判定助战列表位于顶部、底部或没有滚动条。
+- `Battle.variants.main.elements.battle_scene_anchor`：将 `text_battle_label` 的搜索窗口暴露给调试模板 probe UI。
 
-The full `m/n` read still uses `SidecarClient::read_battle_scene` because
-it runs custom digit matching after anchoring on `text_battle_label`.
+完整的 `m/n` 读取仍由 `SidecarClient::read_battle_scene` 完成，因为它在以 `text_battle_label` 定位后执行自定义数字匹配。
 
-## Region
+## 区域与 Anchor
 
-`BATTLE_SCENE_REGION` is still passed to the custom `read_battle_scene`
-pipeline:
+自定义 `read_battle_scene` 流程使用以下 `BATTLE_SCENE_REGION`：
 
 ```rust
 pub const BATTLE_SCENE_REGION: NormRect = NormRect {
@@ -92,78 +65,32 @@ pub const BATTLE_SCENE_REGION: NormRect = NormRect {
 };
 ```
 
-Resolution-independent (0–1 fractions of the screen) so the same
-constant works at 1080p, 1440p and 2K across JP and CN streams. It is
-deliberately wider than the label alone — it has to cover the label
-**and** the `m / n` strip to its right.
+该常量使用屏幕 0–1 比例，因而可在 JP/CN 的 1080p、1440p 与 2K stream 上复用。区域刻意比标签更宽，必须同时容纳标签及其右侧 `m / n` strip。
 
-## Anchor: `text_battle_label`
+`templates.matchTemplate(roi, text_battle_label, TM_CCOEFF_NORMED)` 在区域内定位标签，返回左上角位置和分数。标签 glyph 因 server 而异：
 
-`templates.matchTemplate(roi, text_battle_label, TM_CCOEFF_NORMED)`
-locates the label inside the region and returns its top-left position +
-score. The label glyphs differ between servers:
-
-| Server | Template content |
+| Server | 模板内容 |
 |---|---|
-| JP | `BATTLE` (gold Latin word) |
-| CN | battle-scene label (four CN characters in the game UI) |
+| JP | `BATTLE`（金色拉丁文字） |
+| CN | 游戏 UI 中的四个战斗场景中文字符 |
 
-Both live under `src-tauri/resources/servers/<server>/templates/text_battle_label.png`
-and are loaded into the per-server template bundle at startup, so the
-matcher just sees one `text_battle_label` key regardless of which
-server's bundle is active.
-
-### Constants
+二者均位于 `src-tauri/resources/servers/<server>/templates/battle/text_battle_label.png`，启动时载入对应 server template bundle，因此 matcher 始终使用 `text_battle_label` 这一个 key。
 
 ```python
 BATTLE_LABEL_THRESHOLD = 0.7
 ```
 
-The label is a high-contrast solid-colour glyph against a dark gradient
-band — real matches are typically **0.99+**. The 0.7 cutoff is a wide
-moat: anything between 0.7 and 0.95 means the label is partially
-occluded (NP cinematic, attack animation, popup) and we should bail
-rather than read garbage.
+标签是深色渐变带上的高对比实色 glyph，真实匹配通常为 **0.99+**。`0.7` 是宽松但安全的阈值；`0.7` 至 `0.95` 常意味着标签被 NP 演出、攻击动画或 popup 部分遮挡，应直接放弃而非读取错误数字。anchor 缺失时返回 `failReason = "anchor_below_threshold"`。strip 起点为 `x_start = match_x + label.shape[1]`，即已匹配标签框右侧紧邻的像素列。
 
-If the anchor misses, the function returns `(None, None)` with
-`failReason = "anchor_below_threshold"`.
+## 数字候选、去重与过滤
 
-The strip then starts at `x_start = match_x + label.shape[1]` — the
-pixel column immediately to the right of the matched label box.
+对于每个 `digit_d`（`d ∈ 0..=9`），在灰度 strip 上运行 `matchTemplate(strip, digit_d, TM_CCOEFF_NORMED)`，保留分数 `≥ BATTLE_DIGIT_THRESHOLD = 0.8` 的 `(x, y)`。
 
-## Digit candidates
+CN bundle 对 `0`、`1`、`4`–`9` 复用与 JP byte-identical 的模板；`digit_2.png` 和 `digit_3.png` 则是从真实 CN BATTLE strip 截取的原生模板。JP 模板与 CN 字体仅得到 `0.76`–`0.77`，低于 `0.80` 阈值。
 
-For each `digit_d` template (`d ∈ 0..=9`) we run
-`matchTemplate(strip, digit_d, TM_CCOEFF_NORMED)` over the gray strip
-and keep every `(x, y)` whose score `≥ BATTLE_DIGIT_THRESHOLD = 0.8`.
+单个渲染数字会触发多个略有重叠的候选，因此按分数从高到低执行仅基于 x 坐标的贪心 NMS：与已保留候选相距小于半个 glyph 宽度者丢弃。这既保留每个数字槽的一个检测，也不会合并 `2/3` 中相距约 1.5 个 glyph 宽度的两个数字。
 
-The CN bundle re-uses the JP digit templates for `0`, `1`, `4`–`9`
-(byte-identical) but ships **CN-native** crops for `digit_2.png` and
-`digit_3.png` (taken from a real CN BATTLE strip). The JP-derived
-templates only scored 0.76–0.77 against the CN font — below the 0.80
-threshold. See [Known calibration debt](#known-calibration-debt) below.
-
-### Greedy x-NMS
-
-A single rendered digit will fire dozens of slightly-overlapping
-candidates (a few pixels left, a few right, etc.). We dedup with greedy
-non-max suppression on the x-coordinate alone:
-
-```python
-cands.sort(key=lambda c: -c[2])  # best score first
-kept = []
-for c in cands:
-    if any(abs(c[0] - k[0]) < max(c[3], k[3]) * 0.5 for k in kept):
-        continue
-    kept.append(c)
-```
-
-The half-glyph overlap test is enough to keep one detection per glyph
-slot without merging neighbouring digits — `2` and `3` in `2/3` are
-~1.5 glyph-widths apart (the slash takes the middle), well outside the
-suppression radius.
-
-### Score-margin filter
+随后执行 score-margin 过滤：
 
 ```python
 BATTLE_DIGIT_SCORE_MARGIN = 0.08
@@ -171,207 +98,98 @@ score_floor = max(k[2] for k in kept) - BATTLE_DIGIT_SCORE_MARGIN
 kept = [k for k in kept if k[2] >= score_floor]
 ```
 
-Real `m/n` digits in the same frame match at very similar scores —
-typically within 1–2 % of each other. A detection that's noticeably
-worse than the best surviving one is almost always an artefact:
+同一 frame 内真实 `m/n` 数字的分数通常只差 1–2%。明显低于最佳值的候选几乎都是伪匹配，例如狭窄 `digit_1` 匹配到标签背景的竖缝，或相邻 UI 元素边缘进入 strip。`0.08` 足以吸收字体笔画宽度与次像素抗锯齿造成的真实噪声，也能在真实数字约为 `0.999` 时丢弃 `0.89` 的伪匹配。
 
-- A narrow `digit_1` template lighting up on a vertical seam in the
-  label background or a UI border (CN bug that motivated this filter:
-  real `2`/`3` at 0.999, label-seam `digit_1` at 0.89 — the artefact
-  would have been split out as a leading "1" turning `2/3` into
-  `12/3`).
-- The right edge of an adjacent UI element clipped into the strip.
+## 分割与结果
 
-The 0.08 margin is loose enough to absorb genuine in-frame scoring
-noise (digits rendered slightly off the template's nominal stroke width,
-sub-pixel anti-aliasing differences) but tight enough to drop a 0.89
-artefact when the real digits sit at 0.999.
-
-## Splitting `m` from `n`
-
-After the filters we sort by x and look for the slash gap:
+过滤后按 x 排序，在最大间隙处分割：
 
 ```python
 avg_w = mean(c.w for c in kept)
 best_gap = max(kept[i+1].x - (kept[i].x + kept[i].w) for i in range(len(kept)-1))
 ```
 
-If `best_gap < avg_w * 0.5` there is no separator — every kept digit is
-kerned tight, which means we matched something other than `m/n` (e.g. a
-multi-digit HP number that bled into the strip). Returns `(None, None)`
-with `failReason = "no_separator_gap"`.
+若 `best_gap < avg_w * 0.5`，表示没有斜杠分隔符，保留的数字均紧密排版，可能是溢入 strip 的多位 HP 数字；返回 `failReason = "no_separator_gap"`。否则将最大间隙后的索引作为 `split_at`，得到 `left = kept[:split_at]` 与 `right = kept[split_at:]`。
 
-Otherwise the digits split into `left = kept[:split_at]` and
-`right = kept[split_at:]`, where `split_at` is the index immediately
-after the largest gap (the slash).
-
-### Cohesion trim
-
-Once split, each side undergoes one more pass:
+每一侧随后进行 cohesion trim：
 
 ```python
 cohesion_threshold = avg_w * 0.6  # BATTLE_DIGIT_COHESION_GAP_RATIO
 ```
 
-- `_trim_left(side)` drops leading digits whose gap to their right
-  neighbour exceeds the threshold.
-- `_trim_right(side)` drops trailing digits whose gap to their left
-  neighbour exceeds the threshold.
+`_trim_left(side)` 丢弃与右邻居间隙超过阈值的前导数字；`_trim_right(side)` 丢弃与左邻居间隙超过阈值的尾随数字。清理方向由外向内，因此斜杠附近数字始终保留，可清除恰好匹配到相邻 UI 文本的孤立数字。
 
-The trim direction is "outer edge inward" so the digit closest to the
-slash on each side stays anchored. This catches the case where a
-digit_N template happens to match a glyph in adjacent UI text (e.g. an
-HP digit just past the strip boundary) — the stray sits well outside
-its cluster's natural kerning, so the gap test removes it.
-
-## Result
+成功结果：
 
 ```python
 {"scene": int("".join(left)), "total": int("".join(right))}
 ```
 
-On any short-circuit path:
+任意短路路径返回：
 
 ```python
 {"scene": None, "total": None}
-# (debug payload also carries `diagnostics.failReason`)
+# 调试 payload 还含 diagnostics.failReason
 ```
 
-The Rust client maps this to `Option<(u32, u32)>` via `Option::zip`, so
-a partial failure (e.g. left side parses, right side empty) collapses to
-`None` and never reaches the runner as a half-formed pair.
+Rust 客户端通过 `Option::zip` 将结果映射为 `Option<(u32, u32)>`；任意一侧失败均折叠为 `None`，不会以不完整 pair 进入 runner。
 
-## Failure modes (`failReason` enum)
+## 失败模式（`failReason` enum）
 
-| `failReason` | Cause | Caller behaviour |
+| `failReason` | 原因 | 调用方行为 |
 |---|---|---|
-| `empty_region` | The crop is 0 pixels (region off-screen). | Configuration bug. |
-| `missing_label_template` | Template bundle didn't load `text_battle_label`. | Bundle bug. |
-| `region_smaller_than_label` | `BATTLE_SCENE_REGION` shrank below the label dims. | Configuration bug. |
-| `anchor_below_threshold` | Label match < 0.7 (NP cinematic, attack animation, popup). | Treat as "scene unchanged" — runner does not advance. |
-| `strip_too_narrow` | < 5 px to the right of the label match. | Region likely mis-aimed. |
-| `no_digit_candidates` | No digit cleared 0.8. | Strip is blank (between transitions) or template font drifted from runtime font. |
-| `fewer_than_two_digits` | After NMS + score-margin filter only one survived. | Same — usually a font-drift / template-quality issue. |
-| `no_separator_gap` | All kept digits kerned tight (no slash). | Strip didn't actually contain `m/n`. |
-| `cohesion_trim_emptied_side` | One side trimmed to empty by the cohesion pass. | Edge case — open an issue with the screenshot. |
-| `parse_error` | `int()` failed (shouldn't happen given the above). | Open an issue. |
+| `empty_region` | 裁剪结果为 0 像素。 | 配置错误。 |
+| `missing_label_template` | bundle 未载入 `text_battle_label`。 | Bundle 错误。 |
+| `region_smaller_than_label` | `BATTLE_SCENE_REGION` 小于标签尺寸。 | 配置错误。 |
+| `anchor_below_threshold` | 标签匹配低于 `0.7`。 | 视为 Battle 未变化。 |
+| `strip_too_narrow` | 标签右侧不足 5 px。 | 区域可能偏移。 |
+| `no_digit_candidates` | 没有数字达到 `0.8`。 | strip 为空或运行时字体漂移。 |
+| `fewer_than_two_digits` | NMS 与 score-margin 后仅剩一个。 | 通常是字体漂移或模板质量问题。 |
+| `no_separator_gap` | 保留数字间没有斜杠间隔。 | strip 并非 `m/n`。 |
+| `cohesion_trim_emptied_side` | cohesion trim 清空了一侧。 | 记录截图后提交 issue。 |
+| `parse_error` | `int()` 失败。 | 记录 issue。 |
 
-All of these collapse to `Ok(None)` from the runner's perspective; the
-state machine keeps the previous scene index.
+对 runner 而言，以上全部等价于 `Ok(None)`，状态机保持上一 Battle index。
 
-## State machine
+## 状态机
 
-The Rust runner calls `read_battle_scene` once per `handle_battle` tick
-and feeds the result into a pure helper:
+Rust runner 每个 `handle_battle` tick 调用一次 `read_battle_scene`，并将结果传入纯 helper：
 
 ```rust
 fn tick_scene_state(
-    last_screen_scene: Option<u32>,   // last value of `m` we successfully read
-    current_scene_index: usize,       // which configured block we're on
-    executed_scene_index: Option<usize>, // last block we actually ran
-    scene_m: Option<u32>,             // this tick's CV result
+    last_screen_scene: Option<u32>,
+    current_scene_index: usize,
+    executed_scene_index: Option<usize>,
+    scene_m: Option<u32>,
 ) -> SceneTick { ... }
 ```
 
-The full transition table is pinned by the `tick_scene_state_*` tests in
-`src-tauri/src/runner/tests.rs`; the key invariants:
+完整转换表由 `src-tauri/src/runner/tests.rs` 中的 `tick_scene_state_*` 固定；关键不变量如下：
 
-1. **A failed CV read never advances.** `scene_m == None` keeps both the
-   index and `last_screen_scene` exactly where they were.
-2. **A successful read of the same `m` never re-fires.** Once we've
-   executed scene index `k`, we won't run it again until `m` actually
-   changes on screen.
-3. **First successful read snaps the index to `m - 1`.** If we boot
-   into a quest mid-flight (screen already shows `2/3`), the first read
-   anchors `current_scene_index` to `1` so we run the user's *second*
-   configured block, not the first. This also covers "delayed first
-   read" — if the very first poll fails and the runner emits the
-   default block 0, the next successful read of `m=2` snaps the index
-   to 1 and re-fires immediately rather than waiting for `m` to change
-   again.
-4. **Subsequent transitions advance by one.** Once an anchor is in
-   place, every observed `prev → curr` (with `prev != curr`) bumps
-   `current_scene_index` by 1 — we never trust an arbitrary `curr`
-   value to advance, because skip-the-line jumps can't really happen
-   on a real quest.
-5. **Failed first read still executes the default block.** If CV is
-   broken from the very start, we still run scene index 0 once so the
-   runner doesn't stall waiting for a read that never lands.
+1. **CV 读取失败绝不推进。** `scene_m == None` 时 index 和 `last_screen_scene` 保持不变。
+2. **重复读取相同 `m` 不会重复触发。** 已执行 scene index `k` 后，只有画面上的 `m` 真正变化才会再次执行。
+3. **第一次成功读取会将 index 对齐到 `m - 1`。** 中途进入 quest、画面已是 `2/3` 时，首次读取会将 index 定为 `1`，执行用户的第二块配置。首次 poll 失败后，首次成功读到 `m=2` 同样会立即对齐并重新触发。
+4. **后续转换每次只前进一格。** 锚定后，每次观察到 `prev → curr`（且不同）仅使 index `+1`；真实 quest 不会发生跳关，因此不会信任任意 `curr` 来跳跃。
+5. **首次读取失败仍执行默认块。** 若 CV 从一开始就不可用，仍会执行 scene index `0` 一次，避免自动化无限等待。
 
-Combined, this means a CV-read failure looks exactly like:
+因此，CV 失败会表现为「Battle 未变化，使用下一个默认块」；runner 会保守地按顺序 fallback，而非基于误读触发错误块。相反，中途首次成功读取会直接对齐到正确块。
 
-```
-12:14:18 scene unchanged; using next default block <- read_battle_scene returned None
-```
+## CN 回归与校准
 
-— even when the screen has clearly changed. The runner is being
-conservative: it would rather fall back to the next configured block in
-order than mis-fire the wrong block based on a misread. A *successful*
-read mid-quest, on the other hand, will snap straight to the right
-block (invariant 3) rather than starting from scratch.
+CN `2/3` screenshot（`tests/test_data/screenshots/battle_scene_cn.png`）曾出现：JP `digit_2` 得分 `0.760`、JP `digit_3` 得分 `0.772`，而标签竖缝上的 JP `digit_1` 得分 `0.890`。前两者低于阈值，导致 `fewer_than_two_digits`，画面已在 Battle 2 时 runner 却使用默认顺序。
 
-## CN regression that motivated the score-margin filter
+将 `digit_2.png`、`digit_3.png` 重新从 CN HUD 字体裁剪后，真实 `2`/`3` 得分为 `0.998`/`0.999`。NMS 会保留三者；score-margin（`floor = 0.999 - 0.08 = 0.919`）会在分割前移除 `0.89` 伪匹配，从而正确解析 `2/3`。
 
-The `2/3` strip from a CN battle (saved as
-`tests/test_data/screenshots/battle_scene_cn.png`):
-
-| Source | Template | Match score | Outcome |
-|---|---|---|---|
-| Real `2` | JP-derived `digit_2` | 0.760 | Below 0.80, dropped. |
-| Real `3` | JP-derived `digit_3` | 0.772 | Below 0.80, dropped. |
-| Label seam | JP-derived `digit_1` | 0.890 | Survived NMS. |
-
-→ `fewer_than_two_digits`, scene unchanged, runner used the default
-order, but the screen was already on scene 2.
-
-After re-cropping `digit_2.png` and `digit_3.png` from the CN HUD font:
-
-| Real `2` | CN-native `digit_2` | 0.998 |
-| Real `3` | CN-native `digit_3` | 0.999 |
-| Label seam | JP-derived `digit_1` | 0.890 |
-
-NMS keeps all three. Without the score-margin filter the largest gap
-sits between the label-seam `1` and the real `2`, which would split as
-`1` / `23` — and then `_trim_right` (gap between `2` and `3` exceeds
-the cohesion threshold because of the slash kerning) would further
-collapse it to `1` / `2`. With the score-margin filter
-(`floor = 0.999 - 0.08 = 0.919`), the 0.89 artefact is dropped before
-the split, and the strip parses cleanly as `2/3`.
-
-## Constants summary
+## 常量与测试
 
 ```python
-BATTLE_LABEL_THRESHOLD = 0.7            # Anchor confidence
-BATTLE_DIGIT_THRESHOLD = 0.8            # Per-digit absolute floor
-BATTLE_DIGIT_SCORE_MARGIN = 0.08        # Drop digits this far below the best in-frame
-BATTLE_DIGIT_COHESION_GAP_RATIO = 0.6   # Inside-number kerning tolerance (× avg_w)
+BATTLE_LABEL_THRESHOLD = 0.7            # Anchor 置信度
+BATTLE_DIGIT_THRESHOLD = 0.8            # 单数字绝对下限
+BATTLE_DIGIT_SCORE_MARGIN = 0.08        # 与 frame 最佳分数相差超过此值则丢弃
+BATTLE_DIGIT_COHESION_GAP_RATIO = 0.6   # 数字内部 kerning 容差（× avg_w）
 ```
 
-```rust
-// src-tauri/src/runner/mod.rs
-pub const BATTLE_SCENE_REGION: NormRect = NormRect {
-    x: 0.587, y: 0.000, w: 0.160, h: 0.062,
-};
-```
-
-## Tests
-
-- `sidecar/mash_cv/tests/test_cv.py::TestReadBattleScene`
-  - `test_returns_none_when_anchor_missing` — blank frame → `None`.
-  - `test_battle_screenshot_reads_one_of_three` — JP fixture
-    (`battle.png`) reads `1/3`.
-  - `test_np_overlay_returns_none` — NP cinematic covers the strip,
-    anchor below threshold.
-  - `test_cohesion_trim_drops_stray_digit_on_outer_edge` — synthesised
-    strip with a stray digit pasted just past the n-cluster; trim
-    removes it.
-  - `test_cn_battle_scene_reads_two_of_three` — CN fixture
-    (`battle_scene_cn.png`) reads `2/3`; pins both real-digit scores
-    above 0.95 and the score floor above the 0.89 label-seam artefact.
-- `src-tauri/src/runner/tests.rs::tick_scene_state_*` — pure unit
-  coverage of the state machine that consumes the read.
-
-Run with:
+`sidecar/mash_cv/tests/test_cv.py::TestReadBattleScene` 覆盖 anchor 缺失、JP `1/3`、NP 遮挡、外缘孤立数字 trim，以及 CN `2/3` 回归。`src-tauri/src/runner/tests.rs::tick_scene_state_*` 覆盖消费读取结果的状态机。
 
 ```bash
 cd sidecar/mash_cv
@@ -381,44 +199,4 @@ cd ../..
 cargo test --manifest-path src-tauri/Cargo.toml tick_scene_state
 ```
 
-## Known calibration debt
-
-The CN bundle currently has CN-native `digit_2.png` and `digit_3.png`
-re-cropped from the live HUD. `digit_0`, `digit_1`, `digit_4`–`digit_9`
-are still byte-identical to the JP set — they may or may not match
-above the 0.80 threshold against the CN font. Quests with `m` or `n`
-in `{0, 1, 4..9}` can still misread.
-
-When the runner reports `scene unchanged; using next default block` on a frame whose
-strip clearly contains a different digit:
-
-1. Save the raw screenshot under
-   `sidecar/mash_cv/tests/test_data/screenshots/battle_scene_<tag>.png`.
-2. Run the diagnostic command (`debug_read_battle_scene`) to find the
-   exact `(x, y)` of the missing-digit match attempt and check its
-   score.
-3. Crop the digit from the screenshot at the dimensions of the existing
-   template (e.g. `digit_4` is 39×30) and overwrite the CN template:
-
-   ```python
-   import cv2
-   img = cv2.imread('battle_scene_<tag>.png', cv2.IMREAD_GRAYSCALE)
-   # x, y from the diagnostic; W, H from src-tauri/.../digit_<n>.png shape
-   crop = img[y:y+H, x:x+W]
-   cv2.imwrite(
-       'src-tauri/resources/servers/cn/templates/digit_<n>.png',
-       crop,
-   )
-   ```
-
-4. Add the screenshot to `TestReadBattleScene` as a regression case so
-   future template tweaks don't silently re-break it.
-5. No sidecar runtime rebuild is needed for template-only changes: the
-   templates live in the Tauri app resources and are passed to the installed
-   `mash-cv` runtime at startup. Rebuild the app bundle so the updated
-   `resources/servers/<jp|cn>/templates/` files ship with the app.
-
-Do **not** lower `BATTLE_DIGIT_THRESHOLD` to paper over a font
-mismatch — the threshold is what stops random texture matches from
-parading as digits. Re-cropping the affected template is always the
-right fix.
+目前 CN bundle 只有原生 `digit_2.png`、`digit_3.png`；`digit_0`、`digit_1`、`digit_4`–`digit_9` 与 JP 模板仍 byte-identical，未必均能以 `0.80` 以上分数匹配 CN 字体。若截图中的数字明显存在却仍报告「scene unchanged」，应保存截图、用 `debug_read_battle_scene` 定位缺失数字的 `(x, y)` 和分数，以现有模板尺寸重新裁剪 CN 模板，并加入 `TestReadBattleScene` 回归 case。仅修改模板不需重建 sidecar runtime；模板由 Tauri app resource 在启动时传给已安装 runtime，但需要重建 app bundle 才能随 app 发布。不要降低 `BATTLE_DIGIT_THRESHOLD` 来掩盖字体不匹配；应重新裁剪受影响的模板。

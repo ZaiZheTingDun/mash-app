@@ -1,9 +1,6 @@
-# Enhancement Automation Screen Relationships
+# 强化自动化画面关系
 
-This diagram tracks the enhancement screen and variant relationship model
-implemented by `src-tauri/src/enhancement_runner.rs`. Screen routing is
-template-first and uses each screen's `detect` and `variants` entries from
-`src-tauri/resources/servers/<server>/cv.json`.
+本图描述 `src-tauri/src/enhancement_runner.rs` 实现的强化画面及 variant 关系。画面路由采用 template-first 方式，使用 `src-tauri/resources/servers/<server>/cv.json` 中各 screen 的 `detect` 和 `variants` 配置。
 
 ```mermaid
 stateDiagram-v2
@@ -32,97 +29,69 @@ stateDiagram-v2
         AscensionResult
     }
 
-    MainMain --> EnhancementMain: menu open
-    EnhancementMain --> ServantEnhancementMain: servant enhancement
+    MainMain --> EnhancementMain: 打开菜单
+    EnhancementMain --> ServantEnhancementMain: 从者强化
 
-    ServantEnhancementMain --> ServantSelect: choose servant
-    ServantSelect --> ServantEnhancementMain: servant selected
-    ServantEnhancementMain --> MaterialSelect: choose material
-    MaterialSelect --> MaterialSelect: filter dialog
-    MaterialSelect --> ServantEnhancementMain: material selected
+    ServantEnhancementMain --> ServantSelect: 选择从者
+    ServantSelect --> ServantEnhancementMain: 已选择从者
+    ServantEnhancementMain --> MaterialSelect: 选择素材
+    MaterialSelect --> MaterialSelect: 筛选对话框
+    MaterialSelect --> ServantEnhancementMain: 已选择素材
 
-    ServantEnhancementMain --> ConfirmDialog: enhance
-    ConfirmDialog --> ServantEnhancementMain: enhancement done
+    ServantEnhancementMain --> ConfirmDialog: 强化
+    ConfirmDialog --> ServantEnhancementMain: 强化完成
 
-    ServantEnhancementMain --> AscensionMain: ascension available
-    AscensionMain --> AscensionServantSelect: choose servant
-    AscensionServantSelect --> AscensionMain: servant selected
-    AscensionMain --> ConfirmDialog: ascend
-    ConfirmDialog --> AscensionResult: ascension done
-    AscensionResult --> AscensionMain: close result
-    AscensionMain --> ServantEnhancementMain: return
+    ServantEnhancementMain --> AscensionMain: 可灵基再临
+    AscensionMain --> AscensionServantSelect: 选择从者
+    AscensionServantSelect --> AscensionMain: 已选择从者
+    AscensionMain --> ConfirmDialog: 灵基再临
+    ConfirmDialog --> AscensionResult: 灵基再临完成
+    AscensionResult --> AscensionMain: 关闭结果
+    AscensionMain --> ServantEnhancementMain: 返回
 
-    ProfileUpdateDialog --> ServantEnhancementMain: close
+    ProfileUpdateDialog --> ServantEnhancementMain: 关闭
 ```
 
-## Template Probes
+## 模板 Probe
 
-Enhancement-specific probes live in `cv.json` under
-their real screens and variants.
+强化专用 probe 位于 `cv.json` 中对应的 screen 和 variant 下。
 
-Screen anchors:
+Screen anchor：
 
-- `Main.detect`: `button_notification`.
-- `Enhancement.detect`: `text_enhancement`.
-- `ServantEnhancement.detect`: `text_enhancement_servant`.
-- `Ascension.detect`: `screen_enhancement_ascension`.
+- `Main.detect`：`button_notification`。
+- `Enhancement.detect`：`text_enhancement`。
+- `ServantEnhancement.detect`：`text_enhancement_servant`。
+- `Ascension.detect`：`screen_enhancement_ascension`。
 
-Variant detects and status elements:
+Variant detection 与 status element：
 
-- `Main.variants.main.elements.button_enhancement`: menu-open status and
-  enhancement action.
-- `Main.variants.main.elements.button_menu`: menu button for collapsed status.
-- `ServantEnhancement.variants.main.detect`: `text_enhancement_result`.
-- `ServantEnhancement.variants.servantSelect.detect`:
-  `text_enhancement_servant_select`.
-- `ServantEnhancement.variants.materialSelect.detect`:
-  `text_enhancement_material`.
-- `ServantEnhancement.variants.materialSelect.elements.dialog_filter_setting`:
-  `dialog_filter_setting`.
-- `Ascension.variants.main.detect`: `text_ascension_main_variant`.
-- `Ascension.variants.servantSelect.detect`:
-  `text_enhancement_ascension_servant_select`.
-- `Ascension.variants.main.elements.enhancement_ascension_not_ready`:
-  not-ready status.
-- `ServantEnhancement.variants.servantSelect.elements.button_scale_level_3`
-  and material or ascension select equivalents: maximum list density status.
+- `Main.variants.main.elements.button_enhancement`：menu-open status 与强化 action。
+- `Main.variants.main.elements.button_menu`：collapsed status 的菜单按钮。
+- `ServantEnhancement.variants.main.detect`：`text_enhancement_result`。
+- `ServantEnhancement.variants.servantSelect.detect`：`text_enhancement_servant_select`。
+- `ServantEnhancement.variants.materialSelect.detect`：`text_enhancement_material`。
+- `ServantEnhancement.variants.materialSelect.elements.dialog_filter_setting`：`dialog_filter_setting`。
+- `Ascension.variants.main.detect`：`text_ascension_main_variant`。
+- `Ascension.variants.servantSelect.detect`：`text_enhancement_ascension_servant_select`。
+- `Ascension.variants.main.elements.enhancement_ascension_not_ready`：not-ready status。
+- `ServantEnhancement.variants.servantSelect.elements.button_scale_level_3` 以及素材／灵基再临选择页面的同类元素：最大列表密度 status。
 
-## Runner Lifecycle State Machine
+## Runner 生命周期状态机
 
-The externally visible enhancement automation lifecycle is serialized as
-`EnhancementRunnerState` (`Idle`, `Starting`, `Running`, `Finished`, `Error`).
-Runtime changes enter through `EnhancementLifecycleEvent` and
-`enhancement_lifecycle_transition`:
+对外可见的强化自动化生命周期仍由 `EnhancementRunnerState`（`Idle`、`Starting`、`Running`、`Finished`、`Error`）序列化。运行时变化通过 `EnhancementLifecycleEvent` 与 `enhancement_lifecycle_transition` 进入：
 
 - `Starting + WorkerStarted -> Running`
 - `Starting|Running + StopRequested -> Idle`
 - `Running + Finished -> Finished`
 - `* + Failed(message) -> Error(message)`
 
-Invalid lifecycle events leave the current state unchanged. Startup command
-plumbing creates the initial `Starting` state before the worker thread is
-spawned; worker code and startup-failure paths then use lifecycle events. The
-contract is covered by `enhancement_lifecycle_*` tests in
-`src-tauri/src/enhancement_runner/tests.rs`.
+无效的 lifecycle event 会保持当前状态不变。启动 command 在 worker thread 创建前生成初始 `Starting` 状态；worker 代码与启动失败路径随后使用 lifecycle event。该约定由 `src-tauri/src/enhancement_runner/tests.rs` 的 `enhancement_lifecycle_*` 测试覆盖。
 
-## Notes
+## 说明
 
-- `EnhancementAutomationEvent.status` is the frontend-facing lifecycle state:
-  `idle`, `starting`, `running`, `finished`, or `error`. The `state` debug
-  string is still emitted for diagnostics.
-- Level and selected material count still use OCR.
-- Hot OCR paths are bounded to narrow purpose-specific regions: dialog
-  classification reads the central dialog text area, and servant enhancement
-  reads only the ascension-entry button area after level digits indicate a
-  max-level servant.
-- Confirm dialogs, profile update dialogs, and ascension result fallback still
-  use OCR until dedicated templates are added.
-- Template placeholders still needed to remove OCR/fallbacks completely:
-  unique enhancement/ascension second-confirmation dialog template; unique
-  profile/data update dialog template; complete ascension-result return state
-  template; selected-material-count template; and three-state EXP filter
-  confirmation templates that prove the EXP option is active while adjacent
-  filter options are inactive.
-- Updating `EnhancementScreen`, `EnhancementTopScreen`, `EnhancementVariant`,
-  `EnhancementStatus`, or enhancement screen variant/status probes requires
-  updating this document.
+- `EnhancementAutomationEvent.status` 是面向前端的生命周期状态：`idle`、`starting`、`running`、`finished` 或 `error`；`state` 调试字符串仍会输出供诊断使用。
+- 等级与已选素材数量仍通过 OCR 读取。
+- 高频 OCR 路径被限制在用途明确的窄区域：对话框分类读取中间的对话框文字区域；从者强化会在等级数字表明从者满级后，仅读取灵基再临入口按钮区域。
+- 确认对话框、资料更新对话框和灵基再临结果 fallback 仍使用 OCR，直至加入专用模板。
+- 若要完全移除 OCR/fallback，仍需以下模板占位：强化／灵基再临二次确认对话框唯一模板、资料更新对话框唯一模板、完整灵基再临结果返回状态模板、已选素材数量模板，以及可证明 EXP 选项启用而相邻筛选项未启用的三态 EXP 筛选确认模板。
+- 修改 `EnhancementScreen`、`EnhancementTopScreen`、`EnhancementVariant`、`EnhancementStatus` 或强化画面的 variant/status probe 时，必须同步更新本文档。

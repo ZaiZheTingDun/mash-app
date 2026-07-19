@@ -1,8 +1,6 @@
-# Battle Automation Screen Relationships
+# 战斗自动化画面关系
 
-This diagram tracks the battle screen relationship model implemented by
-`src-tauri/src/runner/`. Screen identity comes from `SidecarClient::detect`,
-which is backed by `src-tauri/resources/servers/<server>/cv.json`.
+本图描述 `src-tauri/src/runner/` 实现的战斗画面关系模型。画面身份来自 `SidecarClient::detect`，其配置来源为 `src-tauri/resources/servers/<server>/cv.json`。
 
 ```mermaid
 stateDiagram-v2
@@ -12,13 +10,11 @@ stateDiagram-v2
         TeamChange
         ServantSelect
     }
-
     state BattleLoop {
         Battle
         BattleAction
         Attack
     }
-
     state BattleResults {
         BattleResultBond
         BattleResultExp
@@ -26,59 +22,46 @@ stateDiagram-v2
         BattleResultFriendRequest
         BattleResultContinue
     }
+    state SpecialScreens { APRecovery }
 
-    state SpecialScreens {
-        APRecovery
-    }
-
-    TeamConfirm --> SupportSelect: start quest
-    SupportSelect --> TeamChange: support chosen
-    SupportSelect --> SupportSelect: refresh or scroll
-    TeamChange --> ServantSelect: choose member (currently disabled)
-    ServantSelect --> TeamChange: member placed (currently disabled)
-    TeamChange --> Battle: party confirmed
-
-    Battle --> BattleAction: attack available
-    BattleAction --> Battle: scene skills, optional skill sub-selection, and optional enemy target handled
-    BattleAction --> BattleAction: Order Change overlay handled
-    BattleAction --> Attack: attack tapped
-    Attack --> Attack: speed 1 detected; tap speed button and wait for speed 2
-    Attack --> Battle: cards resolved
-
-    Battle --> BattleResultBond: quest cleared
-    BattleResultBond --> BattleResultExp: continue
-    BattleResultExp --> BattleResultLoot: continue
-    BattleResultLoot --> BattleResultFriendRequest: optional request
-    BattleResultLoot --> BattleResultContinue: no request
-    BattleResultFriendRequest --> BattleResultContinue: skipped
-
-    BattleResultContinue --> SupportSelect: repeat
-    TeamConfirm --> APRecovery: ap missing
-    APRecovery --> TeamConfirm: recovered
+    TeamConfirm --> SupportSelect: 开始关卡
+    SupportSelect --> TeamChange: 已选择助战
+    SupportSelect --> SupportSelect: 刷新或滚动
+    TeamChange --> ServantSelect: 选择成员（当前禁用）
+    ServantSelect --> TeamChange: 已放置成员（当前禁用）
+    TeamChange --> Battle: 队伍确认
+    Battle --> BattleAction: 攻击可用
+    BattleAction --> Battle: 完成场景技能、可选子选择与可选敌方目标
+    BattleAction --> BattleAction: 完成 Order Change overlay
+    BattleAction --> Attack: 已点击攻击
+    Attack --> Attack: 检测到速度 1；点击速度按钮并等待速度 2
+    Attack --> Battle: 卡片结算
+    Battle --> BattleResultBond: 通关
+    BattleResultBond --> BattleResultExp: 继续
+    BattleResultExp --> BattleResultLoot: 继续
+    BattleResultLoot --> BattleResultFriendRequest: 可选好友申请
+    BattleResultLoot --> BattleResultContinue: 无好友申请
+    BattleResultFriendRequest --> BattleResultContinue: 已跳过
+    BattleResultContinue --> SupportSelect: 重复
+    TeamConfirm --> APRecovery: AP 不足
+    APRecovery --> TeamConfirm: 已恢复
 ```
 
-Party servant auto-placement is intentionally disabled for now. The runner
-still accepts `servantSelections` in `RunConfig`, but `TeamConfirm` ignores
-them until that feature is adapted; it proceeds directly to starting the
-quest once the support and existing team state are ready.
+从者自动放置目前刻意禁用。Runner 仍在 `RunConfig` 接受 `servantSelections`，但在功能完成适配前，`TeamConfirm` 会忽略它们；助战与现有队伍状态准备好后即直接开始关卡。
 
-## Internal Flow State Machine
+## 内部流程状态机
 
-`Screen` is the CV classifier output. The battle runner's authoritative
-flow state is `BattleFlowState` in `src-tauri/src/runner/state.rs`; screen
-observations and completed actions enter it as `BattleFlowEvent` values.
-The transition table is centralized in `battle_flow_transition`, and invalid
-events leave the current state unchanged.
+`Screen` 是 CV classifier 输出。战斗 runner 的权威流程状态是 `src-tauri/src/runner/state.rs` 的 `BattleFlowState`；screen observation 和已完成 action 以 `BattleFlowEvent` 进入。转换表集中在 `battle_flow_transition`，无效 event 不改变当前状态。
 
 ```mermaid
 stateDiagram-v2
     [*] --> PreBattle
     PreBattle --> AwaitingBattleLoad: QuestStartTapped(TeamConfirm)
     AwaitingBattleLoad --> BattleReady: BattleActionable
-    PreBattle --> BattleReady: BattleActionable (mid-quest start)
+    PreBattle --> BattleReady: BattleActionable（中途启动）
     BattleReady --> AwaitingAttackScreen: AttackButtonTapped
     AwaitingAttackScreen --> AttackScreen: AttackScreenDetected
-    PreBattle --> AttackScreen: AttackScreenDetected (mid-quest start)
+    PreBattle --> AttackScreen: AttackScreenDetected（中途启动）
     BattleReady --> AttackScreen: AttackScreenDetected
     AwaitingAttackScreen --> BattleReady: AttackScreenWaitTimedOut
     AttackScreen --> AwaitingAttackResolution: AttackCardsSubmitted
@@ -88,494 +71,86 @@ stateDiagram-v2
     AwaitingPostAttackHud --> BattleReady: PostAttackHudResolved
 ```
 
-State ownership:
+- `BattleFlowState` 管理加载、等待 Attack 画面、已提交卡片和攻击后 HUD 等短暂流程事实；此前这些事实由独立 boolean/timestamp 表示。
+- `BattleState` 管理持久上下文：当前 Battle/turn index、上次 HUD 场景读取、已执行的 scene/turn key、指令卡识别 fallback 状态及 advanced-mode control index。
+- `uses_loading_unknown_timeout()` 仅在 `AwaitingBattleLoad` 或 `AwaitingAttackResolution` 时为真。
+- `awaiting_attack_resolution()` 在 `AwaitingAttackResolution` 或 `AwaitingPostAttackHud` 时为真，避免 classifier 仍显示 Attack 时重复提交卡片。
+- 单箭头和双箭头战斗速度模板都会将卡片画面分类为 `Attack`。读取卡片前先 probe mask 后的双箭头模板，再 probe 单箭头；若速度为 level 1，则记录切换、点击速度按钮并等待 level 2。
+- 结算页是 screen-router state 而非 `BattleFlowState`。`BattleResultContinue` 重复关卡时 FGO 回到 `SupportSelect`；runner 将 `BattleState` 重置为 `PreBattle`，下次 `TeamConfirm` 开始点击发出 `QuestStartTapped(TeamConfirm)`。
 
-- `BattleFlowState` owns transient flow facts such as loading, waiting for
-  the Attack screen, submitted cards, and post-attack HUD wait. These used to
-  be represented by independent booleans/timestamps.
-- `BattleState` still owns durable context: current battle index, current
-  turn index, last HUD scene read, already executed scene/turn keys,
-  command-card recognition fallback state, and advanced-mode control indices.
-- `uses_loading_unknown_timeout()` is true only while the flow is
-  `AwaitingBattleLoad` or `AwaitingAttackResolution`.
-- `awaiting_attack_resolution()` is true while the flow is
-  `AwaitingAttackResolution` or `AwaitingPostAttackHud`; this suppresses
-  duplicate card submission while the classifier still sees the Attack screen.
-- Both one-arrow and two-arrow battle-speed templates classify the card screen
-  as `Attack`. Before reading cards, the runner probes the masked two-arrow
-  template first, then the one-arrow template; if speed is level one it logs
-  the switch, taps the speed button, and waits until level two is visible.
-- Result-settlement pages (`BattleResultBond`, `BattleResultExp`,
-  `BattleResultLoot`, `BattleResultFriendRequest`, and
-  `BattleResultContinue`) are screen-router states, not `BattleFlowState`
-  states. When `BattleResultContinue` repeats a quest, FGO returns to
-  `SupportSelect`; the runner resets `BattleState` to `PreBattle`, then the
-  next `TeamConfirm` start tap emits `QuestStartTapped(TeamConfirm)`.
+状态机约定由 `src-tauri/src/runner/tests.rs` 的 `battle_flow_*` 测试覆盖。
 
-The state-machine contract is covered by `battle_flow_*` tests in
-`src-tauri/src/runner/tests.rs`.
+## 技能子选择对话框与生命周期
 
-## Skill Sub-Selection Dialogs
+部分从者技能在点击后会立即打开第二层战斗选择对话框；runner 在普通己方目标选择器之前将其作为 `BattleAction` 一部分处理：
 
-Some servant skills open a second in-battle choice dialog immediately after
-the skill button is tapped. The runner treats these as part of `BattleAction`
-before the normal ally target picker:
+- `SelectAddInfo`：通用选项 popup。两项使用 `(0.498, 0.584)` / `(0.749, 0.584)`；三项使用 `(0.414, 0.584)` / `(0.592, 0.584)` / `(0.780, 0.584)`。
+- `selectTreasureDeviceInfo`：Noble Phantasm 候选切换 popup。两项使用 `(0.372, 0.522)` / `(0.613, 0.522)`；三项使用 `(0.248, 0.522)` / `(0.496, 0.522)` / `(0.741, 0.522)`。
+- `commandTypeSelfTreasureDevice`：底层 NP 卡牌类型切换机制，使用与 `selectTreasureDeviceInfo` 相同的坐标。
 
-- `SelectAddInfo`: generic option popup. Two-option dialogs use
-  `(0.498, 0.584)` / `(0.749, 0.584)`; three-option dialogs use
-  `(0.414, 0.584)` / `(0.592, 0.584)` / `(0.780, 0.584)`.
-- `selectTreasureDeviceInfo`: Noble Phantasm candidate switch popup. Two
-  options use `(0.372, 0.522)` / `(0.613, 0.522)`; three options use
-  `(0.248, 0.522)` / `(0.496, 0.522)` / `(0.741, 0.522)`.
-- `commandTypeSelfTreasureDevice`: low-level NP card-type switch mechanism.
-  It uses the same option coordinates as `selectTreasureDeviceInfo`.
+配置 action 保存 selection type、option index、option count 与 display label。无法支持的 option count 会使 action 失败，而非点击含糊坐标。
 
-The configured action stores the selection type, option index, option count,
-and display label. Unsupported option counts fail the action instead of
-tapping an ambiguous coordinate.
-
-## Runner Lifecycle State Machine
-
-The externally visible battle automation lifecycle is still serialized as
-`RunnerState` (`Idle`, `Starting`, `Running`, `Finished`, `Error`), but runtime
-changes now enter through `RunnerLifecycleEvent` and
-`runner_lifecycle_transition`:
+对外可见的 lifecycle 仍由 `RunnerState`（`Idle`、`Starting`、`Running`、`Finished`、`Error`）序列化。运行时变更经 `RunnerLifecycleEvent` 和 `runner_lifecycle_transition` 进入：
 
 - `Starting + WorkerStarted -> Running`
 - `Starting|Running + StopRequested -> Idle`
 - `Running + Finished -> Finished`
 - `* + Failed(message) -> Error(message)`
 
-Invalid lifecycle events leave the current state unchanged. Startup command
-plumbing creates the initial `Starting` state before the worker thread is
-spawned; worker code and startup-failure paths then use lifecycle events. The
-contract is covered by `runner_lifecycle_*` tests in
-`src-tauri/src/runner/tests.rs`.
+无效 lifecycle event 保持当前状态。启动 command 在创建 worker thread 前设为 `Starting`；worker 及启动失败路径随后使用 lifecycle event。`runner_lifecycle_*` 测试覆盖该约定。
 
-## Template Probes
+## 模板 Probe 与结算处理
 
-Battle-specific template probes live in `cv.json` under
-their real screens:
+战斗专用模板 probe 位于 `cv.json` 的实际 screen 下：
 
-- `Battle.variants.main.elements.attack_button`: determines when the battle
-  screen is actionable status.
-- `TeamConfirm.detect` / `TeamChange.detect`: shared two-probe screen
-  detection. Both screens match `shared/screen_team_party` in the class-filter
-  strip, then disambiguate with the lower-right action button:
-  `button_mission_start` for TeamConfirm and `button_confirm` for TeamChange.
-  The class-filter strip alone is shared by both screens, so it is not unique
-  enough.
-- `SupportSelect.detect`: shared single-probe screen detection. The sidecar
-  matches `shared/screen_support_select` in the left-side support-page chrome;
-  this template includes enough support-select-specific chrome to distinguish
-  the page without depending on the refresh button state.
-- `SupportSelect.variants.main.elements.refresh_available`: detects the
-  enabled support refresh button. The game disables refresh for roughly ten
-  seconds after use, so the runner waits for this element before tapping the
-  fixed refresh coordinate.
-- `SupportSelect.variants.main.elements.support_scroll_start` /
-  `.support_scroll_end`: detect the top and bottom scroll-bar indicators.
-  The runner uses `support_scroll_end` as the normal bottom-of-list signal.
-  On a fresh, unscrolled list, if `support_scroll_start` is also absent, the
-  list has no scroll bar and is treated as already exhausted.
-- "冠位从者" ribbon probe (CN-only, surfaced as
-  `FindSupportsResult.diagnostics.isGrandSectionVisible` plus the per-row
-  `diagnostics.grandRibbonAnchorScores` aligned 1-1 with
-  `confirmButtonAnchors`). Grand servants are ordered before ordinary
-  servants, so the runner needs to know when the Grand section has
-  scrolled off-screen. The sidecar template-matches the gold-on-blue
-  ribbon (`text_grand_servant_support_bottom_line` PNG) inside a tight
-  ROI at a fixed offset to the left of every detected
-  `confirm_button_anchors` entry. Each anchor records its own
-  TM_CCOEFF_NORMED score; the aggregate flag is `any(score ≥ threshold)`.
-  After the first visible ribbon has been seen in the current refreshed
-  list, two consecutive misses mean the runner treats the Grand section
-  as exhausted and refreshes instead of scrolling through ordinary
-  supports. Per-anchor scores are required by the debug overlay — a
-  partly-Grand list ("row 1 is Grand, row 2 is ordinary") would
-  otherwise paint both rows green from the single aggregate bool and
-  hide the false positive. The earlier implementation scanned the
-  entire avatar column for the ribbon, which kept false-matching other
-  gold-on-blue chrome (登录顺序 button, score banners) and either kept
-  the runner scrolling past an exhausted section or stopped scrolling
-  too early.
-- `SupportSelect.variants.refreshConfirm.detect` / `.elements.dialog_refresh_support`:
-  detects the JP refresh-confirm modal that appears after tapping the support
-  refresh button; the runner confirms it, then waits for the modal to vanish
-  before resuming OCR/scroll.
-- Support-list scroll distance is adaptive. The sidecar surfaces every visible
-  `button_support_form_confirm` anchor in `FindSupportsResult.diagnostics.confirmButtonAnchors`;
-  the runner sets the swipe delta from the last detected anchor to the
-  first-row target y: `last_anchor.y - SUPPORT_SCROLL_TARGET_TOP_ANCHOR_Y`,
-  clamped to `[SUPPORT_SCROLL_MIN_DELTA, SUPPORT_SCROLL_MAX_DELTA]`. It does
-  not extrapolate hidden/partial rows from row pitch, because that can skip a
-  servant that is already partly visible at the bottom. When no anchors are
-  visible — usually a template/shape detector glitch — the runner falls back to
-  `SUPPORT_SCROLL_FALLBACK_DELTA` so it still makes forward progress.
-- Support-list scroll gestures go through the pluggable
-  **`TouchBackend`** trait (`src-tauri/src/touch/`) rather than calling
-  `adb shell input swipe` directly. A plain linear swipe lifts off at
-  the average swipe velocity, which Android's `VelocityTracker`
-  interprets as a *fling* once it crosses the per-device threshold
-  (≈100–300 px/s on most modern devices) — so even when the runner's
-  intended Δ was correct, the list kept scrolling after lift-off and
-  overshot. `TouchBackend::swipe_with_settle` therefore holds contact
-  at the destination long enough that the velocity tracker's sliding
-  window sees ~0 px/s right before UP, so the system never enters
-  fling mode.
+- `Battle.variants.main.elements.attack_button` 判定战斗画面是否可执行。
+- `TeamConfirm.detect` / `TeamChange.detect` 使用共享的两 probe 检测：二者先在 class-filter strip 匹配 `shared/screen_team_party`，再通过右下 action button 区分 `button_mission_start`（TeamConfirm）和 `button_confirm`（TeamChange）。仅凭共享 strip 无法唯一识别。
+- `SupportSelect.detect` 在助战页左侧 chrome 匹配 `shared/screen_support_select`；其专属 chrome 足以区分页面，不依赖刷新按钮状态。
+- `refresh_available` 检测可用的助战刷新按钮。游戏在使用后约十秒禁用刷新，runner 会等待该 element 后才点击固定刷新坐标。
+- `support_scroll_start` / `support_scroll_end` 检测滚动条顶部和底部；新列表若二者都不存在，表示无滚动条，视为已穷尽。
+- CN 的「冠位从者」ribbon probe 通过 `FindSupportsResult.diagnostics.isGrandSectionVisible` 与逐行的 `grandRibbonAnchorScores` 暴露。sidecar 在每个 `confirm_button_anchors` 左侧固定偏移的紧凑 ROI 内匹配 `text_grand_servant_support_bottom_line`。刷新后的列表一旦见过 ribbon，连续两次未命中便认定冠位区已结束并刷新，避免滚入普通助战。逐 anchor 分数供调试 overlay 正确绘制混合的冠位／普通行，避免旧版全头像列扫描产生的金蓝 UI chrome 误匹配。
+- `SupportSelect.variants.refreshConfirm` 及 `dialog_refresh_support` 检测点击刷新后出现的 JP 确认 modal；runner 确认并等待 modal 消失后才恢复 OCR/滚动。
+- 助战滚动距离自适应：以最后一个 `confirmButtonAnchors` 的 y 到第一行目标 y 的差计算，限制在 `[SUPPORT_SCROLL_MIN_DELTA, SUPPORT_SCROLL_MAX_DELTA]`。没有 anchor 时使用 `SUPPORT_SCROLL_FALLBACK_DELTA`，以便持续前进而不根据行距猜测隐藏行。
+- 滚动通过可插拔 `TouchBackend`（`src-tauri/src/touch/`）的 `swipe_with_settle`，而非直接调用线性 `adb shell input swipe`。该方法在终点保持触点，让 Android `VelocityTracker` 在 UP 前观察到近零速度，避免达到约 100–300 px/s 的 fling 阈值后继续滑动。当前实现 `adb-input` 用单次 `adb shell` 内链式 `input motionevent` 完成 DOWN/MOVE/settle/UP；MOVE 事件按约 20 ms、范围 `[4, 30]` 选取，完整滚动约 1 秒。每次滚动会记录带 backend 名称的 debug 日志。
+- `battle_scene_anchor` 将 `text_battle_label` 暴露给调试；完整 `BATTLE m/n` 读取仍使用 `read_battle_scene`。
+- `BattleResultBondLevelUp`、`BattleResultExpLevelUp` 与 `BattleResultMasterLevelUp` 分别识别羁绊、装备／技能和御主等级提升 overlay，并路由至普通 Bond/Exp handler。后两者优先级较高，以免 overlay 背后可见 HUD 时被误识别为 `Battle`。
+- `BattleResultLootEvent` 识别 CN/JP 活动奖励页并路由至 `BattleResultLoot`，继续点击现有战利品「Next」坐标。
+- 项目开启「五星礼装掉落自动停止」时，`BattleResultLoot` 在点击 Next 前检查前两行战利品的 `resources/images/stars_5.png`，累计当前运行中的命中数，达到项目目标即停止；计数不持久化。
+- 全局调试设置「自动截图战利品页面」开启时，每个新处理的战利品页会在可选掉落检测前保存当前 stream frame 到 `app_data_dir()/debug/loot-screenshots/`。截图失败仅记录 warning。
+- 结算链中，若上一已识别画面是结算页，临时 `Unknown` 会反复点击 `BATTLE_RESULT_POPUP_SKIP` 等待恢复；该常量虽与战斗动画跳过位置相同，但独立保留以便调优。若超时且开启「无法识别画面超时时截图」，会先保存到 `app_data_dir()/debug/unknown-screen-timeouts/`，随后发出终止错误。
 
-  The only implementation today is **`adb-input`** (`touch/adb_input.rs`),
-  which wraps `Adb::tap` / `Adb::swipe` / `Adb::swipe_with_settle`.
-  `swipe_with_settle` drives the DOWN / MOVE / settle / UP shape via
-  chained `input motionevent` commands in a single `adb shell`
-  invocation. The MOVE event count is picked by
-  `settle_swipe_move_steps(swipe_ms)` to target ~20 ms between events
-  (≈50 Hz), clamped to `[4, 30]` so a short swipe still gets a few
-  events and a long one doesn't pile on hundreds. On real devices
-  each `input motionevent` runs in <10 ms (measured), so the full
-  scroll cycle — active MOVE phase (~280 ms at the current 2.0
-  norm/s velocity), settle hold (250 ms), post-swipe wait for the
-  list to redraw (450 ms) — finishes in roughly 1 s. The trait
-  indirection stays so a faster transport (minitouch, raw
-  `sendevent`, native helper, …) can be added without changing
-  runner call sites; earlier prototypes of both lived under `touch/`
-  and were removed once `adb-input` proved fast and reliable enough.
+## 助战 OCR、CE 与等级筛选
 
-  Each scroll emits a debug-level operation log entry tagged with the
-  backend that actually fired
-  (`滚动助战列表: 按钮 y=[…] (n=…) Δ=… swipe=…→… (Xms+Yms settle) [adb-input]`),
-  so an operator can tell at a glance which gesture path produced the
-  scroll they're triaging. Debug-level entries are hidden by default
-  behind the status-bar "显示调试" toggle.
+选择助战前，runner 通过 `load_servant_metadata` 加载目标从者资料，再调用 sidecar `find_supports`。CN server 会用 `src-tauri/src/resources/servants.json` 将 Atlas JP 的从者与 Noble Phantasm 名称转换为 CN 服务器显示名称。`name_cn_server` 非空时优先用它作为 OCR target，否则使用 `name_cn`；`name_jp == name_cn` 仍保留，因为合法名称可相同，也可被 `name_cn_server` 覆盖。
 
-## Operation log levels
+Sidecar 按布局而非只按文字配对助战行：NP 匹配必须是同一行中、位于从者名 fragment 下方的独立 OCR fragment，避免从者名和 NP 文本相同而误用名称行。
 
-`AutomationEvent.level` (and the matching `EnhancementAutomationEvent.level`)
-classifies each runner status emit as `info` or `debug`. The `Runner::emit`
-helper defaults to `info` — the existing user-facing operation log entries
-("找到助战 …", "刷新助战列表 …", "{action}失败: …"). `Runner::emit_debug`
-sends technical diagnostics (CV anchor positions, swipe distances) that
-the frontend filters out of the operation log panel by default. The
-status-bar "显示调试" checkbox flips the filter so both levels render —
-debug entries are styled dimmer and don't count toward the
-"操作日志 (N)" trigger badge. Add new debug-level emits via `emit_debug`
-when the message is only useful for triage; reserve `emit` for events
-the operator should always see.
+配置助战 CE 时，runner 先将行内 CE art 与 `assets/ces/{id}/card_ce.png` 匹配。slot 启用 MLB 要求（默认启用）时，同一次 `verify_support_ce` 还需在 CE 右下找到 `icon_mlb_mark`。Grand support 则逐个执行三个位置型 CE 检查；未配置 slot 跳过，每个 slot 可独立要求 MLB，第二个 Grand slot 还可要求 `icon_grand_bond_ce` 或 `icon_grand_bond_ce_np`。启用的 CE art 与图标检查必须全部通过。
 
-`AutomationEvent.status` (and `EnhancementAutomationEvent.status`) is the
-frontend-facing lifecycle state: `idle`, `starting`, `running`, `finished`,
-or `error`. The `state` string remains in the event for diagnostics, but
-frontend running/terminal decisions must use `status`.
+CN Grand 助战若未选中匹配行，会先等待当前刷新列表出现至少一个 ribbon；出现后连续两次未命中即刷新而非继续滚动。若从未出现 marker，或 server bundle 不含该 probe，则保留旧的滚至底部行为。
 
-- `Battle.variants.main.elements.battle_scene_anchor`: exposes the
-  `text_battle_label` region to debug; full
-  `BATTLE m/n` reading still uses `read_battle_scene`.
-- `BattleResultBond.detect`: detects the normal bond-points label
-  (`text_battle_result_bond`). `BattleResultBondLevelUp.detect` uses a
-  separate center-dialog region for the bond-level-up overlay label
-  (`text_battle_result_bond_level_up`); Rust routes it to the same
-  `BattleResultBond` handler.
-- `BattleResultExpLevelUp.detect`: detects the CN equipment / skill level-up
-  overlay (`text_battle_result_equip_level_up`) and routes to the same
-  `BattleResultExp` handler. It has elevated priority because the overlay
-  leaves the battle HUD visible and can otherwise be classified as `Battle`.
-- `BattleResultMasterLevelUp.detect`: detects the CN master level-up overlay
-  (`text_battle_result_master_level_up`) and routes to the same
-  `BattleResultExp` handler. It also uses elevated priority because the
-  battle HUD can remain visible behind the overlay.
-- `BattleResultLootEvent.detect`: detects the localized CN and JP event
-  rewards page that can appear after the normal loot page
-  (`text_battle_result_loot_event`) and routes to the same
-  `BattleResultLoot` handler, so the runner taps the existing loot "Next"
-  coordinate.
-- `BattleResultLoot` can run an optional current-project drop-stop probe before
-  tapping "Next". When the project enables "五星礼装掉落自动停止", the runner
-  checks the visible first two loot rows for the five-star CE star strip
-  (`resources/images/stars_5.png`), adds matches to an in-memory counter for
-  the current automation run, and stops once the cumulative total reaches the
-  project target. The counter is not persisted and resets on the next
-  `start_automation`.
-- `BattleResultLoot` can also auto-capture screenshots when the global debug
-  setting "自动截图战利品页面" is enabled. The runner saves one current stream
-  frame per newly handled loot page under `app_data_dir()/debug/loot-screenshots/`
-  before running optional drop detection. Screenshot failures emit a warning
-  and do not change the result-page state flow.
-- During the battle-result chain, an unrecognized frame (`Unknown`) can be a
-  transient popup covering the settlement page. If the last recognized screen
-  was a battle-result screen, the runner repeatedly taps
-  `BATTLE_RESULT_POPUP_SKIP` while waiting for detection to recover. The
-  coordinate intentionally matches the battle animation-skip position but uses
-  a separate constant so result-popup behavior can be tuned independently.
-- If `Unknown` persists until the runner's timeout and the global debug setting
-  "无法识别画面超时时截图" is enabled, the runner saves one current stream frame
-  under `app_data_dir()/debug/unknown-screen-timeouts/` before emitting the
-  terminal `无法识别当前画面，已超时停止` error. Screenshot failures emit a warning
-  and do not replace the timeout error.
+项目配置任意 `supportNoblePhantasmLevelMin`、`supportSkillLevelMins` 或 `supportAppendSkillLevelMins` 时，runner 在点击前调用 `support_row_matches_level_requirements_with_progress`：`Pass` 表示名称、NP 和全部等级达标；`Fail` 表示可见面板至少一项不足；`WaitingForPanel` 表示当前面板达标但尚未观察到另一面板。自有和 append 技能图标共享行；游戏的显示切换是固定自有／固定 append／间隔切换三态，runner 无法知道用户锁定状态。因此遇到 `WaitingForPanel` 会点击 `SUPPORT_SKILL_PANEL_TOGGLE_BUTTON` 并重做 OCR；每个候选最多 `SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS` 次，避免无法验证的行困住循环，候选变化时计数自然重置。
 
-## Support OCR Names
+## 操作日志
 
-Support selection loads the target servant metadata through
-`load_servant_metadata` before calling sidecar `find_supports`. On the CN
-server, Rust translates Atlas JP servant and Noble Phantasm names with
-`src-tauri/src/resources/servants.json` so OCR matches the text rendered
-by the CN client.
+`AutomationEvent.level`（以及 `EnhancementAutomationEvent.level`）将 runner 状态输出分类为 `info` 或 `debug`。`Runner::emit` 默认输出 `info`，用于「找到助战」「刷新助战列表」「{action}失败」等用户应始终看到的事件；`Runner::emit_debug` 输出 CV anchor、滑动距离等排障信息，前端默认隐藏。状态栏「显示调试」开关会显示两类信息；debug 样式更淡，且不计入「操作日志 (N)」触发徽标。仅排障有用的信息应使用 `emit_debug`。
 
-When a servant or NP entry has a non-empty `name_cn_server`, that value is
-the OCR match target. `name_cn` remains the fallback. This handles CN
-server renames where the in-game support row no longer matches the wiki
-Chinese name. The mapper keeps `name_jp == name_cn` entries instead of
-treating them as untranslated placeholders, because legitimate names can
-be identical across JP/CN and can still be overridden by `name_cn_server`.
+`AutomationEvent.status` 与 `EnhancementAutomationEvent.status` 是前端生命周期状态，取值 `idle`、`starting`、`running`、`finished` 或 `error`；事件中的 `state` 字符串仅用于诊断，前端判断运行／终止状态必须使用 `status`。
 
-The sidecar pairs support rows by layout, not by text alone: the NP match
-must be a distinct OCR fragment below the servant-name fragment in the
-same row. This prevents servants whose displayed name and NP text are the
-same from reusing the name line as a false NP match.
+## 战斗执行说明
 
-## Support Craft Essence Filter
+- `BattleSceneTick` 是内部状态，不是 `Screen` enum variant；它通过 `tick_scene_state` 映射最近的 `BATTLE m/n` 读取，并控制技能执行。
+- `BattleAction` 是文档中的可执行战斗状态节点，条件为检测到 `attack_button`。
+- `BattleResultBond` 覆盖普通羁绊结算；`BattleResultBondLevelUp` 覆盖羁绊等级提升 overlay。全局羁绊自动停止命中 overlay（任意升级，或最大等级模式下等级读数 `10+`）时直接结束，否则点击同一 next 目标。`BattleResultExp` 同理覆盖普通 EXP 结算，`BattleResultExpLevelUp` 覆盖装备／技能提升 overlay。
+- 定向从者／装备技能以共享 battle close-button probe 作为同步门：点击技能后等待 `skill_target_close_button`，点击已配置己方目标，等待 close button 消失，再点击动画跳过点。picker 未出现或不关闭时停止当前 action chain，不以固定延迟猜测。Command Spell 在确认对话框后通过 `command_spell_close_button` 使用同一门；此前的按钮、spell row 和确认 dialog 仍使用固定 modal-settle 延迟。
+- 战斗内 Order Change 存储在装备 action 的 `orderChange.front` + `orderChange.back`。Runner 点击御主技能，等待 `order_change_close_button`，各选择一个前排（`servant_1..3`）和后排（`servant_4..6`）slot，确认后等待 close button 消失及攻击按钮。这不是战前 `TeamChange`，不经过 `Screen::TeamChange` route。
+- preparation action 为 fail-fast：从者技能、御主技能、Order Change 或 Command Spell 无法完成同步点击／等待链时，runner 会输出包含行动者和技能的 Error 日志并停止，不会将回合标记为已执行。action 后攻击按钮等待使用共享技能超时窗口，当前为 15 秒。
+- preparation action 可为 `enemyTarget`，按动作序列中的配置位置立即点击 `enemy_1..6`；适用于普通 preparation 和 Grand control/startup action。现有 turn-level `enemyTarget` 仍是所有 preparation 完成后的独立攻击前选择。
+- 普通模式中 `battle_scenes.json` 的每个 Battle 存储 `turns[]`。HUD `m/n` 选择 Battle，内部从 0 开始的 turn counter 选择 turn；HUD 进入新 Battle 时 counter 重置。攻击回到可执行 Battle 后，runner 短暂等待 HUD 成功读取再增加 counter，读取长期失败时回退既有推进逻辑。counter 超出配置后仅复用最后一回合 `attackPriority`，不重跑 preparation 或 enemy target。
+- `attackPriority` 保存攻击选择，`enemyTarget` 保存该 turn 的攻击前敌方目标。前三行是固定最终卡位；未就绪 NP 或未出现的指令卡让该位置留空，随后 fallback 从左到右填补空位。空固定 chain 行继承前一条非 NP 固定行；NP 行不继承。前三行之后的 fallback 行在可匹配时重复使用。读取 NP 前，五个指令卡固定 slot 必须都出现 suit/icon 信号；NP 就绪由底部 gauge 右端亮色端帽判定，分数 `≥ 0.5` 即就绪。数字计数和旧版上方 NP 卡纹理结果仅供调试，不作 fallback；任一端帽分数不可用时持续重试。
+- 普通模式在指令卡识别前应用当前 turn 已执行且 `change_order_servants.json` timing 为 `immediate` 的 preparation effect；对先前 turn/Battle 还应用触发 `immediate` 撤退规则的 NP attack row，再应用 `endOfTurn` preparation rule。当前 turn 的 NP 和 `endOfTurn` 退出不会过早应用。`servant_{i}_all` 匹配该前排从者最左侧未使用的指令卡，不限 B/A/Q。没有普通指令卡 row 时，跳过归属识别而仍检测 NP；普通卡只作为从左到右 fallback 点击目标。归属识别开启时，前三次只使用预期前排模板；连续三次完整读取仍有未知归属，才假定有人死亡并让后排入场，随后尝试所有六名配置成员的唯一 servant id。
+- Advanced mode 使用 `advanced_battle_scenes.json`。具有生效指令卡 startup condition 时先进入 Attack 等待 startup；无生效条件的 Grand scene 会直接在 Battle 执行第一个 control action 与 `startupActions`，避免 Attack → Battle → Attack 往返。若必须将后排主 Grand 自动 Order Change 到前排，则必须先识别五张卡、按当前前排拥有卡数选择换下目标（并列选最左），用 Mystic Code `skill_3` 换位，再满足 startup。action 按原选中从者身份解析：后排主 Grand action 改写为其当前前排 slot，已换到后排的原成员 action 跳过。没有匹配 startup 时，可返回 Battle 依序执行每 turn 一个 `controlActions`，再进入 Attack 以空 NP list 使用自动策略；所有 control action 用完后，后续非匹配 turn 保持同样的无 NP 自动攻击。存在旧版 advanced `rules` 时，仍使用旧 rule evaluator，而非三阶段策略。
+- 内部 flow 在 `AwaitingBattleLoad` 和 `AwaitingAttackResolution` 延长 Unknown 容忍时间，以覆盖加载画面和长攻击动画，不再依赖独立 flags。
+- `APRecovery` 以 `label_item` 为 anchor，按优先级扫描道具列模板而非点击固定行：顶页扫描彩虹／金／银道具，下滑一次后扫描铜苹果。模板未命中视为数量不足，因为变暗 overlay 会压低模板分数。
 
-When a support CE is configured, the runner first matches the row's CE
-art against `assets/ces/{id}/card_ce.png`. If the slot's MLB requirement
-is enabled (default), the same `verify_support_ce` call also requires
-`icon_mlb_mark` in the CE's lower-right area.
-
-Grand support mode replaces the single CE check with three positional CE
-checks. Unconfigured Grand slots are skipped. Each configured slot can
-require MLB independently. The second Grand slot can additionally require
-one of the Grand bond icons: `icon_grand_bond_ce` for the original bond
-CE, or `icon_grand_bond_ce_np` for the Grand-linked bond CE. Enabled CE
-art and icon checks must all pass before the row can be selected.
-
-On CN Grand support lists, the runner also watches the per-anchor
-"冠位从者" ribbon probe surfaced as
-`SupportDiagnostics.isGrandSectionVisible` (see the Template Probes
-section). If no matching support row was selected, the runner first needs
-to see at least one visible ribbon in the current refreshed list. Once
-seen, two consecutive missing probes mean the remaining visible rows are
-ordinary supports, so it refreshes
-instead of continuing to the scroll-bar bottom. If the marker was never seen,
-the runner keeps the older scroll-to-bottom behavior for that refreshed list.
-Server bundles without this probe also keep the older scroll-to-bottom
-behavior.
-
-## Support Skill / NP Level Filter (CN)
-
-When the active project sets any of `supportNoblePhantasmLevelMin`,
-`supportSkillLevelMins`, or `supportAppendSkillLevelMins`, the runner
-runs the OCR'd row through `support_row_matches_level_requirements_with_progress`
-before tapping it. The function returns:
-
-- `Pass` — name + NP + every required level meets its threshold.
-- `Fail` — at least one level is below the configured minimum (with the
-  panel that's currently visible). The runner moves on to the next row.
-- `WaitingForPanel` — the visible panel matches its slice of the
-  requirements, but the *other* panel (owned vs append) hasn't been
-  observed for this candidate yet.
-
-Owned and append skill icons share the same row strip; the game decides
-which panel is shown via the skill-display toggle (a 3-state cycle:
-fixed owned / fixed append / interval switching). The runner can't tell which mode the
-user has the toggle locked into — and fixed modes never auto-flip — so
-on `WaitingForPanel` it actively taps `SUPPORT_SKILL_PANEL_TOGGLE_BUTTON`
-and re-OCRs after a short settle. `SupportLevelPanelProgress.panel_toggle_taps`
-caps this at `SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS` per candidate; once
-the cap is hit, the runner falls through to the scroll/refresh branch
-so a row that genuinely can't be verified doesn't trap the loop. The
-counter resets implicitly whenever `support_level_candidate_key`
-changes (i.e. when the runner moves to a different row).
-
-## Notes
-
-- `BattleSceneTick` is internal state, not a `Screen` enum variant. It maps the
-  latest `BATTLE m/n` read through `tick_scene_state` and gates skill execution.
-- `BattleAction` is a documentation-only status node for the actionable battle
-  condition where `Battle.variants.main.elements.attack_button` is found.
-- `BattleResultBond` covers ordinary bond-points settlement. The separate
-  `BattleResultBondLevelUp` CV screen covers the bond-level-up overlay. When
-  the global bond auto-stop setting matches the overlay (any level-up, or a
-  level read of 10+ for the max-level mode), the runner finishes without
-  tapping the next button; otherwise it uses the same next-button tap target.
-- `BattleResultExp` covers ordinary master / servant EXP settlement. The
-  separate `BattleResultExpLevelUp` CV screen covers the equipment / skill
-  level-up overlay and routes to the same next-button tap target.
-- Targeted servant and equipment skills use the shared battle close-button
-  probe as a synchronization gate. After tapping the skill, the runner waits
-  for `Battle.variants.main.elements.skill_target_close_button`, taps the
-  configured ally target, then waits for that close button to disappear before
-  tapping the animation-skip point. If the picker never appears or never
-  closes, the current action chain stops instead of falling back to a fixed
-  delay and guessing.
-- Command Spell target selection uses the same gate with
-  `Battle.variants.main.elements.command_spell_close_button` after the spell
-  confirmation dialog. The earlier command-spell button, spell-row, and confirm
-  dialogs still use fixed modal-settle delays; only the final ally target
-  picker is close-button synchronized.
-- In-battle Order Change is stored on an equipment action as
-  `orderChange.front` + `orderChange.back`. The runner taps the master skill,
-  waits for `Battle.variants.main.elements.order_change_close_button`, selects
-  exactly one front-line slot (`servant_1..3`) and one back-line slot
-  (`servant_4..6`), confirms, waits for that close button to disappear, then
-  waits for the attack button before continuing. This overlay is not the
-  pre-battle `TeamChange` screen and is not detected through the
-  `Screen::TeamChange` route.
-- Preparation actions are fail-fast. If a servant skill, master skill,
-  Order Change, or Command Spell cannot finish its synchronized tap/wait chain,
-  the runner emits an Error-state log naming the actor and skill (for example,
-  `从者 servant_2 (#309) 技能 1 执行失败: 等待攻击按钮超时`) and stops instead of
-  marking the turn as executed or continuing to the attack button. The
-  post-action attack-button wait uses the shared skill timeout window, currently
-  15 seconds.
-- A preparation action may also be `enemyTarget`. It taps the configured
-  `enemy_1..6` target immediately at its configured position in the action
-  sequence; this is available for normal preparation and Grand control/startup
-  actions. The existing turn-level `enemyTarget` remains a separate,
-  pre-attack selection after all preparation actions complete.
-- In normal mode, `battle_scenes.json` stores each Battle as `turns[]`. The
-  runner still uses the `BATTLE m/n` HUD read to choose the Battle, then uses an
-  internal 0-based turn counter for the current Battle. The counter resets when
-  the HUD moves to a new Battle. After a submitted attack resolves back to an
-  actionable Battle screen, the runner waits briefly for a successful HUD read
-  before incrementing the turn counter; if the HUD read keeps failing past the
-  timeout, it falls back to the existing turn-advance behavior so automation
-  does not stall. While the counter is within the configured `turns[]`, that
-  turn's preparation actions, optional `enemyTarget`, and `attackPriority` are
-  used. Once the counter exceeds the last configured turn, normal mode reuses
-  only the last turn's `attackPriority`; it does not re-run preparation actions
-  or enemy targeting, because those may depend on one-shot skills or cooldown
-  state.
-- Known limitation: when deriving party state for a later Battle, the runner and
-  editor currently assume every configured turn in previous Battles has already
-  executed. If a Battle ends before its later configured turns run, lineup
-  previews and subsequent command-card ownership inference can apply effects
-  that did not happen in-game. This is recorded for a future change; current
-  behavior is unchanged.
-- In normal mode, `attackPriority` stores attack selection and `enemyTarget`
-  stores optional pre-attack enemy targeting for a configured turn. When
-  `enemyTarget` is set to `enemy_1..6`, the runner taps that enemy on the
-  Battle screen after preparation actions have settled and before tapping the
-  attack button, then taps the normal animation-skip point once to dismiss any
-  already-selected target popup. The first three `attackPriority` rows are the
-  intended card chain order (first, second, third card); rows after that are
-  fallback priorities. The first three rows are fixed final card positions:
-  if a fixed row's NP is not ready or its matching command card did not appear,
-  that position remains empty until fallback rows fill empty positions from
-  left to right. So a configured `Buster / NP / Buster` chain remains
-  `Buster, NP, Buster` when two Buster cards are visible, while a missing
-  first card can be replaced by the first matching fallback before the fixed
-  second and third cards. Empty fixed chain rows inherit the previous non-NP
-  fixed row, so `NP / All / empty` chooses NP plus two command cards when
-  available; NP rows are never inherited because one NP slot can only be used
-  once per turn. It
-  does not regroup duplicate colors ahead of the NP. Fallback rows after the
-  first three repeat while they can still match before the next fallback row is
-  considered. Before reading NP readiness, the runner waits until all five
-  command cards are visibly present by requiring each fixed slot to expose a
-  card suit/icon signal; this does not require servant ownership recognition.
-  NP readiness is then read from the bright cap near the right end of each
-  bottom NP-gauge slot. A cap brightness score of `0.5` or higher means ready.
-  The sidecar still returns the bottom digit count and the legacy upper
-  NP-card texture result for debugging/future configuration, but neither is
-  used as a fallback. If a glow score is unavailable, the runner keeps retrying
-  until all three front-line glow scores are readable.
-  Before command-card recognition, normal mode applies already
-  executed current-turn preparation actions whose `change_order_servants.json`
-  timing is `immediate` (for example Order Change) to the front-line servant id
-  map. For previous turns and previous Battles, it also applies configured NP
-  attack rows that trigger `immediate` retreat/removal rules, then applies
-  preparation-action rules whose timing is `endOfTurn` (for example skill-based
-  end-of-turn retreat/death). Current-turn NP rows and `endOfTurn` skill exits
-  are not applied until the turn is past, so the runner does not remove a
-  servant before selecting that servant's NP or remaining same-turn cards.
-  A normal-mode attack entry may also use `servant_{i}_all`, which matches the
-  leftmost unused command card owned by that front-line servant regardless of
-  B/A/Q color. If no normal-mode Battle/turn config contains a regular command
-  card row (`Buster`, `Arts`, `Quick`, or `All`), the runner skips command-card
-  ownership recognition on the attack screen after the five-card visibility
-  gate. NP readiness is still detected with the same glow-cap path, and
-  ordinary cards are only used as fixed left-to-right fallback tap targets.
-  When ownership recognition is enabled, the first three attempts use only the
-  expected front-line servant templates. If three consecutive complete card
-  reads still contain an unidentified owner, the runner assumes a servant may
-  have died and a back-line member entered the field; subsequent attempts use
-  the unique servant ids from all six configured team members.
-- Advanced-mode teams store battle scenes in `advanced_battle_scenes.json`.
-  The current strategy UI uses a three-stage flow. First, the runner enters
-  the attack-card screen and treats the scene as "waiting for startup" when it
-  has effective command-card startup conditions. A Grand scene without
-  effective startup conditions executes its first control action and
-  `startupActions` directly on the Battle screen before opening the attack-card
-  screen, avoiding the previous Attack → Battle → Attack round trip. The
-  optimization is not used when Grand auto Order Change needs to bring a
-  back-line main Grand servant forward, because that flow must first recognize
-  the current five cards to choose the front-line swap target. In that mode,
-  the runner counts the current front line's recognized command cards, chooses
-  the front servant with the highest count (leftmost on ties), uses Mystic Code
-  `skill_3` to swap that servant with the back-line main Grand servant, then
-  treats startup as satisfied. It still executes the current turn's next
-  `controlActions` entry before `startupActions`, so the first post-swap turn
-  consumes the same per-turn control slot as ordinary startup matching. Those
-  actions are resolved by the originally selected servant identity: a configured
-  back-line main Grand action is rewritten to its current front-line slot, while
-  an action whose selected servant was moved to the back line is skipped. If ordinary
-  command-card startup conditions do not match, it optionally taps the
-  bottom-right attack-screen return button and executes one `controlActions` entry per
-  turn in configured order, then re-enters the attack-card screen and attacks
-  with the automatic priority strategy while passing an empty NP list so no
-  Noble Phantasm is released. Once all control actions have been consumed,
-  later non-matching turns keep using the same no-NP automatic attack. When
-  the startup condition matches, the runner taps the bottom-right return button,
-  executes `startupActions`, reapplies explicit Order Change effects to the
-  active front-line id map, then re-enters the attack-card screen. From that
-  point the scene is in automatic battle mode. In ordinary advanced scenes,
-  ready NPs and command cards are scored together with the configured
-  main-output servant, output type, and NP color (`npCard`, or the servant
-  resource's `noblePhantasmCard` when set to automatic). In Grand battle mode,
-  the project stores `grandClass` plus class-defined `grandServants` roles.
-  Saber/Berserker use main and optional deputy roles; Lancer requires single
-  and AoE roles. Missing legacy `grandClass` values default to Saber, and legacy
-  `lancerRole` values are normalized into the generic `role` field. The
-  automatic picker uses rule templates where each
-  rule defines three slots, and those slots are the final click order. When
-  `grandCardStrategy.customRules` is non-empty, user rules are tried first; each
-  user rule binds its three slots to exact servant ids, or optionally any Grand
-  servant, plus an attack kind (`any`, command-card-only, or NP) and optional
-  color. Custom slots targeting any Grand servant also prefer main Grand before
-  deputy Grand. Invalid user rules are skipped. Saber mode then expands the
-  user-configurable chain priority into built-in rules such as main/deputy
-  exquisite brave chain, main ready NP, same-color chain, and fallback.
-  Berserker mode uses fixed built-in rules: main NP same-color chain, main
-  ready NP, deputy NP same-color chain, main other same-color chain excluding
-  that main NP, deputy other same-color chain excluding that deputy NP, Grand
-  exquisite B/A/Q chain, then fallback. In the two main-NP Berserker rules,
-  the second free/command slot is configured to prefer a ready deputy Grand NP;
-  for the same-color chain that deputy NP must also match the main NP color.
-  Berserker built-in rule slots whose owner is any servant prefer main Grand
-  attacks, then deputy Grand attacks, then non-Grand attacks.
-  Lancer mode stores explicit `single` and `aoe` roles for one single-target
-  and one AoE Grand servant, normalized by its registered strategy in that
-  order. Its built-in `GrandCardRule` sequence first attempts
-  AoE NP, single-target NP, and one command card, preferring an exquisite B/A/Q
-  chain, then a same-color chain, then a filler. If both NPs cannot be released,
-  it releases a ready configured Grand NP (single-target before AoE) and fills
-  with command cards; non-Grand NPs are ignored. All Lancer filler cards prefer
-  the single-target servant, then the AoE servant, then other servants, with
-  Arts / Quick / Buster and left-to-right order as tie breakers. Automatic
-  Order Change likewise prefers the single-target servant, then the AoE servant,
-  and never swaps out the other Lancer Grand already on the front line.
-  Legacy advanced
-  `rules` are still supported:
-  when a scene has rule entries, the older rule evaluator runs instead of the
-  three-stage strategy flow.
-- Internal flow state extends Unknown tolerance during `AwaitingBattleLoad`
-  and `AwaitingAttackResolution`, matching loading screens and long attack
-  animations without relying on independent flags.
-- `APRecovery` now anchors on `label_item` and scans the item-column template
-  region in priority order instead of tapping fixed rows. Top page scans
-  rainbow / gold / silver items; after one downward swipe the runner scans bronze items. A missing
-  template match is treated as "insufficient quantity" because the dimmed overlay suppresses
-  the template score.
-- Template placeholders needed for future hardening: none are introduced by
-  the battle flow-state refactor. Existing fallback/template debt remains
-  documented where the fallback is described above.
-- Updating `Screen`, battle result handling, AP recovery behavior, or
-  battle screen variant probes requires updating this document.
+修改 `Screen`、战斗结果处理、AP recovery 行为或战斗 screen variant probe 时，必须同步更新本文档。
