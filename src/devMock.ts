@@ -563,6 +563,8 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "stop_automation_after_current":
     case "start_enhancement_automation":
     case "stop_enhancement_automation":
+    case "start_craft_essence_enhancement_automation":
+    case "stop_craft_essence_enhancement_automation":
     case "debug_shutdown":
     case "debug_reload_sidecar":
       return null as T;

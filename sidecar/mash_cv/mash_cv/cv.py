@@ -589,11 +589,14 @@ def _match_template_region(
     region: dict,
     threshold: float,
     template_key: Optional[str] = None,
+    template_reference_width: Optional[float] = None,
 ) -> dict:
     """Find template region and return a normalized box."""
     if len(tmpl.shape) == 3:
         tmpl = cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
-    tmpl = _scale_static_template_for_image(tmpl, img, template_key)
+    tmpl = _scale_static_template_for_image(
+        tmpl, img, template_key, template_reference_width
+    )
 
     h, w = img.shape[:2]
     rx = int(region["x"] * w)
@@ -641,14 +644,19 @@ def _score_template_region(
     threshold: float,
     template_key: Optional[str] = None,
     template_scale: float = 1.0,
+    template_reference_width: Optional[float] = None,
 ) -> dict:
     """Find the best template location and always return its normalized box."""
     if len(tmpl.shape) == 3:
         tmpl = cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
-    tmpl = _scale_static_template_for_image(tmpl, img, template_key)
+    tmpl = _scale_static_template_for_image(
+        tmpl, img, template_key, template_reference_width
+    )
     mask = template_masks.get(template_key) if template_key else None
     if mask is not None:
-        mask = _scale_static_template_for_image(mask, img, template_key)
+        mask = _scale_static_template_for_image(
+            mask, img, template_key, template_reference_width
+        )
         # Defensive: if the rescaled mask diverges in shape from the rescaled
         # template (rounding mismatch), fall back to no-mask matching rather
         # than throw — the bug only suppresses the alpha-aware boost on that
@@ -737,22 +745,25 @@ def _scale_static_template_for_image(
     tmpl: np.ndarray,
     img: np.ndarray,
     template_key: Optional[str],
+    template_reference_width: Optional[float] = None,
 ) -> np.ndarray:
-    """Scale bundled 2560px-reference templates to the current frame width."""
+    """Scale bundled templates from their configured reference width."""
     if not template_key or template_key not in static_template_keys:
         return tmpl
     frame_w = int(img.shape[1])
     if frame_w <= 0:
         return tmpl
-    reference_width = (
-        BATTLE_SPEED_TEMPLATE_REFERENCE_WIDTH
-        if template_key in BATTLE_SPEED_TEMPLATE_KEYS
-        else (
-            COMMAND_CARD_STATUS_TEMPLATE_REFERENCE_WIDTH
-            if template_key in COMMAND_CARD_STATUS_TEMPLATE_SCALES
-            else STATIC_TEMPLATE_REFERENCE_WIDTH
+    reference_width = template_reference_width
+    if reference_width is None or reference_width <= 0:
+        reference_width = (
+            BATTLE_SPEED_TEMPLATE_REFERENCE_WIDTH
+            if template_key in BATTLE_SPEED_TEMPLATE_KEYS
+            else (
+                COMMAND_CARD_STATUS_TEMPLATE_REFERENCE_WIDTH
+                if template_key in COMMAND_CARD_STATUS_TEMPLATE_SCALES
+                else STATIC_TEMPLATE_REFERENCE_WIDTH
+            )
         )
-    )
     scale = frame_w / float(reference_width)
     if abs(scale - 1.0) < 0.02:
         return tmpl
@@ -801,16 +812,16 @@ def _get_template(template_key: str) -> Optional[np.ndarray]:
     return gray
 
 
-SERVANT_GRID_ANCHOR_TEMPLATE = "text_servant_avatar_bottom_line"
-SERVANT_GRID_COLUMNS = 7
-SERVANT_GRID_COL_PITCH = 266.25 / 2560.0
-SERVANT_GRID_ROW_PITCH = 284.0 / 1440.0
-SERVANT_GRID_ANCHOR_COL0_X = 157.0 / 2560.0
-SERVANT_GRID_CARD_W = 234.0 / 2560.0
-SERVANT_GRID_CARD_H = 258.0 / 1440.0
-SERVANT_GRID_ANCHOR_OFFSET_X = 9.0 / 2560.0
-SERVANT_GRID_ANCHOR_OFFSET_Y = 234.0 / 1440.0
-SERVANT_GRID_DEFAULT_REGION = {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747}
+ITEM_GRID_DEFAULT_ANCHOR_TEMPLATE = "text_servant_avatar_bottom_line"
+ITEM_GRID_COLUMNS = 7
+ITEM_GRID_COL_PITCH = 266.25 / 2560.0
+ITEM_GRID_ROW_PITCH = 284.0 / 1440.0
+ITEM_GRID_ANCHOR_COL0_X = 157.0 / 2560.0
+ITEM_GRID_CARD_W = 234.0 / 2560.0
+ITEM_GRID_CARD_H = 258.0 / 1440.0
+ITEM_GRID_ANCHOR_OFFSET_X = 9.0 / 2560.0
+ITEM_GRID_ANCHOR_OFFSET_Y = 234.0 / 1440.0
+ITEM_GRID_DEFAULT_REGION = {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747}
 
 
 def _norm_rect_from_px(x: float, y: float, width: float, height: float, img_w: int, img_h: int) -> dict:
@@ -842,12 +853,13 @@ def _nms_candidates(candidates: list[dict], overlap_w: float, overlap_h: float) 
     return kept
 
 
-def _detect_servant_grid_anchors(
+def _detect_item_grid_anchors(
     img: np.ndarray,
     anchor_template_key: str,
     region: dict,
     edge_threshold: float,
     gray_threshold: float,
+    template_reference_width: Optional[float] = None,
 ) -> tuple[list[dict], Optional[str]]:
     tmpl = templates.get(anchor_template_key)
     if tmpl is None:
@@ -864,7 +876,9 @@ def _detect_servant_grid_anchors(
 
     gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     tgray = tmpl if len(tmpl.shape) == 2 else cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
-    tgray = _scale_static_template_for_image(tgray, img, anchor_template_key)
+    tgray = _scale_static_template_for_image(
+        tgray, img, anchor_template_key, template_reference_width
+    )
     th, tw = tgray.shape[:2]
     if tw > gray_roi.shape[1] or th > gray_roi.shape[0]:
         return [], "region_smaller_than_anchor"
@@ -896,7 +910,7 @@ def _detect_servant_grid_anchors(
     return anchors, None
 
 
-def _infer_servant_grid_cells(anchors: list[dict], region: dict, img_w: int, img_h: int) -> tuple[list[dict], Optional[dict], Optional[str]]:
+def _infer_item_grid_cells(anchors: list[dict], region: dict, img_w: int, img_h: int) -> tuple[list[dict], Optional[dict], Optional[str]]:
     if not anchors:
         return [], None, "no_anchors"
 
@@ -907,26 +921,26 @@ def _infer_servant_grid_cells(anchors: list[dict], region: dict, img_w: int, img
     ]
     ref_candidates = stable_refs or anchors
     ref = min(ref_candidates, key=lambda a: (float(a["y"]), float(a["x"])))
-    ref_col = int(round((float(ref["x"]) - SERVANT_GRID_ANCHOR_COL0_X) / SERVANT_GRID_COL_PITCH))
-    ref_col = max(0, min(SERVANT_GRID_COLUMNS - 1, ref_col))
-    ref_card_x = float(ref["x"]) - SERVANT_GRID_ANCHOR_OFFSET_X
-    ref_card_y = float(ref["y"]) - SERVANT_GRID_ANCHOR_OFFSET_Y
+    ref_col = int(round((float(ref["x"]) - ITEM_GRID_ANCHOR_COL0_X) / ITEM_GRID_COL_PITCH))
+    ref_col = max(0, min(ITEM_GRID_COLUMNS - 1, ref_col))
+    ref_card_x = float(ref["x"]) - ITEM_GRID_ANCHOR_OFFSET_X
+    ref_card_y = float(ref["y"]) - ITEM_GRID_ANCHOR_OFFSET_Y
     list_top = float(region["y"])
     if ref_card_y < list_top:
-        ref_card_y += SERVANT_GRID_ROW_PITCH
+        ref_card_y += ITEM_GRID_ROW_PITCH
 
     row0_y = ref_card_y
-    col0_x = ref_card_x - ref_col * SERVANT_GRID_COL_PITCH
+    col0_x = ref_card_x - ref_col * ITEM_GRID_COL_PITCH
     cells: list[dict] = []
     row = 0
-    while row0_y + row * SERVANT_GRID_ROW_PITCH + SERVANT_GRID_CARD_H <= float(region["y"]) + float(region["h"]) + 0.002:
-        y = row0_y + row * SERVANT_GRID_ROW_PITCH
+    while row0_y + row * ITEM_GRID_ROW_PITCH + ITEM_GRID_CARD_H <= float(region["y"]) + float(region["h"]) + 0.002:
+        y = row0_y + row * ITEM_GRID_ROW_PITCH
         if y < float(region["y"]) - 0.001:
             row += 1
             continue
-        for col in range(SERVANT_GRID_COLUMNS):
-            x = col0_x + col * SERVANT_GRID_COL_PITCH
-            if x + SERVANT_GRID_CARD_W < float(region["x"]) or x > float(region["x"]) + float(region["w"]):
+        for col in range(ITEM_GRID_COLUMNS):
+            x = col0_x + col * ITEM_GRID_COL_PITCH
+            if x + ITEM_GRID_CARD_W < float(region["x"]) or x > float(region["x"]) + float(region["w"]):
                 continue
             cells.append(
                 {
@@ -935,8 +949,8 @@ def _infer_servant_grid_cells(anchors: list[dict], region: dict, img_w: int, img
                     "region": {
                         "x": max(0.0, x),
                         "y": max(0.0, y),
-                        "w": SERVANT_GRID_CARD_W,
-                        "h": SERVANT_GRID_CARD_H,
+                        "w": ITEM_GRID_CARD_W,
+                        "h": ITEM_GRID_CARD_H,
                     },
                 }
             )
@@ -950,9 +964,48 @@ def _infer_servant_grid_cells(anchors: list[dict], region: dict, img_w: int, img
     return cells, ref_out, None
 
 
+def _find_item_grid(img: np.ndarray, cmd: dict) -> dict:
+    """Detect a seven-column inventory grid from a caller-provided row anchor."""
+    region = cmd.get("region", ITEM_GRID_DEFAULT_REGION)
+    anchor_key = str(cmd.get("anchorTemplateKey", ITEM_GRID_DEFAULT_ANCHOR_TEMPLATE))
+    edge_threshold = float(cmd.get("anchorEdgeThreshold", 0.50))
+    gray_threshold = float(cmd.get("anchorGrayThreshold", 0.85))
+    reference_width = cmd.get("anchorTemplateReferenceWidth")
+
+    h, w = img.shape[:2]
+    anchors, anchor_error = _detect_item_grid_anchors(
+        img,
+        anchor_key,
+        region,
+        edge_threshold,
+        gray_threshold,
+        reference_width,
+    )
+    cells, reference_anchor, grid_error = _infer_item_grid_cells(
+        anchors, region, w, h
+    )
+    fail_reason = anchor_error or grid_error
+    return {
+        "found": bool(cells),
+        "anchors": anchors,
+        "referenceAnchor": reference_anchor,
+        "gridCells": cells,
+        "diagnostics": {
+            "failReason": fail_reason,
+            "anchorTemplateKey": anchor_key,
+            "anchorTemplateReferenceWidth": reference_width,
+            "anchorEdgeThreshold": edge_threshold,
+            "anchorGrayThreshold": gray_threshold,
+            "region": dict(region),
+            "anchorCount": len(anchors),
+            "gridCellCount": len(cells),
+        },
+    }
+
+
 def _find_enhancement_servant_grid(img: np.ndarray, cmd: dict) -> dict:
-    region = cmd.get("region", SERVANT_GRID_DEFAULT_REGION)
-    anchor_key = str(cmd.get("anchorTemplateKey", SERVANT_GRID_ANCHOR_TEMPLATE))
+    region = cmd.get("region", ITEM_GRID_DEFAULT_REGION)
+    anchor_key = str(cmd.get("anchorTemplateKey", ITEM_GRID_DEFAULT_ANCHOR_TEMPLATE))
     edge_threshold = float(cmd.get("anchorEdgeThreshold", 0.50))
     gray_threshold = float(cmd.get("anchorGrayThreshold", 0.85))
     face_threshold = float(cmd.get("faceThreshold", cmd.get("threshold", 0.85)))
@@ -960,15 +1013,15 @@ def _find_enhancement_servant_grid(img: np.ndarray, cmd: dict) -> dict:
     template_size = cmd.get("templateSize")
     template_crop = cmd.get("templateCrop")
 
-    h, w = img.shape[:2]
-    anchors, anchor_error = _detect_servant_grid_anchors(
-        img, anchor_key, region, edge_threshold, gray_threshold
-    )
-    cells, reference_anchor, grid_error = _infer_servant_grid_cells(anchors, region, w, h)
+    grid = _find_item_grid(img, cmd)
+    anchors = grid["anchors"]
+    cells = grid["gridCells"]
+    reference_anchor = grid["referenceAnchor"]
+    grid_fail_reason = grid["diagnostics"].get("failReason")
 
     matches: list[dict] = []
     best: Optional[dict] = None
-    if not anchor_error and not grid_error and template_paths:
+    if not grid_fail_reason and template_paths:
         for template_path in template_paths:
             raw = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE)
             if raw is None:
@@ -1015,10 +1068,8 @@ def _find_enhancement_servant_grid(img: np.ndarray, cmd: dict) -> dict:
 
     found = bool(best and best.get("found"))
     fail_reason = None
-    if anchor_error:
-        fail_reason = anchor_error
-    elif grid_error:
-        fail_reason = grid_error
+    if grid_fail_reason:
+        fail_reason = grid_fail_reason
     elif not template_paths:
         fail_reason = "no_face_templates"
     elif not found:
@@ -1053,11 +1104,19 @@ def _find_element(
     region: dict,
     threshold: float,
     require_ap_recovery_enabled: bool = False,
+    template_reference_width: Optional[float] = None,
 ) -> dict:
     tmpl = _get_template(template_key)
     if tmpl is None:
         return {"found": False, "error": f"template not loaded: {template_key}"}
-    result = _match_template_region(img, tmpl, region, threshold, template_key)
+    result = _match_template_region(
+        img,
+        tmpl,
+        region,
+        threshold,
+        template_key,
+        template_reference_width,
+    )
     if result.get("found") and require_ap_recovery_enabled:
         enabled = _ap_recovery_row_enabled(img, result)
         result["apRecoveryRow"] = enabled
@@ -1135,12 +1194,14 @@ def _find_element_by_name(
             float(element.get("threshold", 0.8)),
             template_key,
             template_scale=float(element.get("templateScale", 1.0)),
+            template_reference_width=element.get("templateReferenceWidth"),
         )
     return _find_element(
         img,
         template_key,
         element.get("region", DEFAULT_REGION),
         float(element.get("threshold", 0.8)),
+        template_reference_width=element.get("templateReferenceWidth"),
     )
 
 
@@ -1180,6 +1241,7 @@ def _detect_screen(img: np.ndarray) -> dict:
                         float(option.get("threshold", threshold)),
                         key,
                         template_scale=float(option.get("templateScale", 1.0)),
+                        template_reference_width=option.get("templateReferenceWidth"),
                     )
                 else:
                     result = _match_template_region(
@@ -1218,6 +1280,7 @@ def _detect_screen(img: np.ndarray) -> dict:
                     required.get("region", DEFAULT_REGION),
                     float(required.get("threshold", threshold)),
                     str(key),
+                    required.get("templateReferenceWidth"),
                 )
                 if not result.get("found"):
                     required_scores = []
@@ -1241,7 +1304,14 @@ def _detect_screen(img: np.ndarray) -> dict:
                 tmpl = _get_template(key)
                 if tmpl is None:
                     continue
-                result = _match_template_region(img, tmpl, region, threshold, key)
+                result = _match_template_region(
+                    img,
+                    tmpl,
+                    region,
+                    threshold,
+                    key,
+                    det.get("templateReferenceWidth"),
+                )
                 if result.get("found"):
                     score = float(result.get("score", 0.0))
                     if score > screen_score:
@@ -5317,6 +5387,7 @@ def main() -> None:
                         cmd.get("region", DEFAULT_REGION),
                         cmd.get("threshold", 0.8),
                         bool(cmd.get("requireApRecoveryEnabled", False)),
+                        cmd.get("templateReferenceWidth"),
                     ),
                 )
         elif action == "find_element_by_name":
@@ -5510,7 +5581,7 @@ def main() -> None:
                     cmd.get("threshold", 0.8),
                 ),
             )
-        elif action == "find_enhancement_servant_grid":
+        elif action in ("find_item_grid", "find_enhancement_servant_grid"):
             deadline = time.monotonic() + float(cmd.get("retrySeconds", 0.0))
             interval = float(cmd.get("retryIntervalSeconds", 0.15))
             attempts = 0
@@ -5521,7 +5592,11 @@ def main() -> None:
                 if img is None:
                     _reply(req_id, {"found": False, "error": err})
                     break
-                last_result = _find_enhancement_servant_grid(img, cmd)
+                last_result = (
+                    _find_item_grid(img, cmd)
+                    if action == "find_item_grid"
+                    else _find_enhancement_servant_grid(img, cmd)
+                )
                 last_result["diagnostics"]["attempts"] = attempts
                 if last_result["diagnostics"].get("anchorCount", 0) > 0:
                     _reply(req_id, last_result)

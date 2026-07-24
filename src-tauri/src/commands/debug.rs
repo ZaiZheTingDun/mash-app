@@ -6,6 +6,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::adb;
 use crate::commands::settings::{AdbDeviceSettings, RecognitionSettings};
+use crate::craft_essence_enhancement_runner::{
+    CraftEssenceEnhancementRunnerHandle, CraftEssenceEnhancementRunnerState,
+};
 use crate::enhancement_runner::{
     EnhancementRunnerHandle, EnhancementRunnerState, SERVANT_FACE_MATCH_CROP,
     SERVANT_FACE_TEMPLATE_SIZE, SERVANT_LIST_REGION,
@@ -206,6 +209,7 @@ fn debug_stream_status(debug_state: &DebugSidecar) -> DebugStreamStatus {
 fn require_automation_idle(
     handle_state: &Mutex<RunnerHandle>,
     enhancement_handle_state: &Mutex<EnhancementRunnerHandle>,
+    ce_enhancement_handle_state: &Mutex<CraftEssenceEnhancementRunnerHandle>,
 ) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
     let state = handle.state.lock().unwrap().clone();
@@ -216,6 +220,14 @@ fn require_automation_idle(
     let state = handle.state.lock().unwrap().clone();
     if matches!(state, EnhancementRunnerState::Running) {
         return Err("强化自动化正在运行中，请先停止后再使用调试功能".into());
+    }
+    let handle = ce_enhancement_handle_state.lock().unwrap();
+    let state = handle.state.lock().unwrap().clone();
+    if matches!(
+        state,
+        CraftEssenceEnhancementRunnerState::Starting | CraftEssenceEnhancementRunnerState::Running
+    ) {
+        return Err("概念礼装强化自动化正在运行中，请先停止后再使用调试功能".into());
     }
     Ok(())
 }
@@ -321,8 +333,13 @@ pub fn debug_capture(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
 ) -> Result<DebugCaptureResult, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
 
     let selected_adb_serial = adb_settings_state
         .lock()
@@ -397,8 +414,13 @@ pub fn debug_stream_connect(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
 ) -> Result<DebugStreamStatus, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
     ensure_debug_stream_for_current_device(&app, &adb_settings_state, &server_state, &debug_state)?;
     Ok(debug_stream_status(&debug_state))
 }
@@ -426,9 +448,14 @@ pub fn debug_stream_frame(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
     detect_screen: Option<bool>,
 ) -> Result<DebugStreamFrameResult, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
     ensure_debug_stream_for_current_device(&app, &adb_settings_state, &server_state, &debug_state)?;
 
     let (jpeg_base64, width, height, screen, score) = {
@@ -469,8 +496,13 @@ pub fn debug_read_noble_phantasm_gauges_live(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
 ) -> Result<Vec<NoblePhantasmMatch>, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
     ensure_debug_stream_for_current_device(&app, &adb_settings_state, &server_state, &debug_state)?;
 
     let started = Instant::now();
@@ -507,11 +539,16 @@ pub fn debug_find_element(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
     template_key: String,
     region: Option<NormRect>,
     threshold: Option<f64>,
 ) -> Result<ElementMatch, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -555,8 +592,13 @@ pub fn debug_read_bond_level_up(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
 ) -> Result<BondLevelUpReadResult, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -656,10 +698,15 @@ pub fn debug_find_element_by_name(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
     screen: String,
     element: String,
 ) -> Result<ElementMatch, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -704,8 +751,13 @@ pub fn debug_reload_sidecar(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
 ) -> Result<(), String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
     {
         let mut guard = debug_state.0.lock().unwrap();
         guard.take();
@@ -738,9 +790,14 @@ pub fn debug_find_command_cards(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
     servant_ids: Vec<u32>,
 ) -> Result<Vec<CommandCardMatch>, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -774,8 +831,13 @@ fn read_noble_phantasm_gauges(
     debug_state: &tauri::State<'_, DebugSidecar>,
     handle_state: &tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: &tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: &tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
 ) -> Result<Vec<NoblePhantasmMatch>, String> {
-    require_automation_idle(handle_state, enhancement_handle_state)?;
+    require_automation_idle(
+        handle_state,
+        enhancement_handle_state,
+        ce_enhancement_handle_state,
+    )?;
 
     let image_path = debug_image_path(app);
     if !image_path.exists() {
@@ -801,6 +863,7 @@ pub fn debug_read_noble_phantasm_gauges(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
 ) -> Result<Vec<NoblePhantasmMatch>, String> {
     let slots = read_noble_phantasm_gauges(
         &app,
@@ -808,6 +871,7 @@ pub fn debug_read_noble_phantasm_gauges(
         &debug_state,
         &handle_state,
         &enhancement_handle_state,
+        &ce_enhancement_handle_state,
     )?;
     eprintln!(
         "[debug_read_noble_phantasm_gauges] {} slot(s) found, ready={}",
@@ -881,10 +945,15 @@ pub fn debug_find_enhancement_servant(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
     servant_id: u32,
     threshold: Option<f64>,
 ) -> Result<DebugEnhancementServantMatchResult, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -1035,8 +1104,13 @@ pub fn debug_read_battle_scene(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
 ) -> Result<DebugBattleSceneResult, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -1173,8 +1247,13 @@ pub fn debug_find_attack_button(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
 ) -> Result<DebugAttackButtonResult, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -1318,6 +1397,7 @@ pub fn debug_find_supports(
     recognition_settings_state: tauri::State<'_, Mutex<RecognitionSettings>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
     servant_id: u32,
     craft_essence_id: Option<u32>,
     grand_craft_essence_ids: Option<[Option<u32>; 3]>,
@@ -1325,7 +1405,11 @@ pub fn debug_find_supports(
     grand_craft_essence_mlb_required: Option<[bool; 3]>,
     grand_bond_ce_mode: Option<String>,
 ) -> Result<DebugFindSupportsResult, String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
     let recognition_settings = *recognition_settings_state.lock().unwrap();
     let support_ce_threshold = recognition_settings.support_ce_threshold;
     let support_ce_full_gate_threshold = recognition_settings.support_ce_full_gate_threshold;
@@ -1641,7 +1725,12 @@ pub fn warm_sidecar(
     debug_state: tauri::State<'_, DebugSidecar>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
 ) -> Result<(), String> {
-    require_automation_idle(&handle_state, &enhancement_handle_state)?;
+    require_automation_idle(
+        &handle_state,
+        &enhancement_handle_state,
+        &ce_enhancement_handle_state,
+    )?;
     ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))
 }

@@ -104,6 +104,126 @@
         }
       }
     },
+    "CraftEssenceEnhancement": {
+      "variants": {
+        "main": {
+          "elements": {
+            "icon_enhancement_result": {
+              "template": "shared/enhancement_ce/icon_enhancement_result",
+              "region": { "x": 0.28, "y": 0.51, "w": 0.09, "h": 0.12 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "element_enhancement_ce_stripe": {
+              "template": "shared/enhancement_ce/element_enhancement_ce_stripe",
+              "region": { "x": 0.07, "y": 0.51, "w": 0.15, "h": 0.12 },
+              "threshold": 0.55,
+              "templateReferenceWidth": 1920
+            },
+            "element_enhancement_new": {
+              "template": "shared/enhancement_ce/element_enhancement_new",
+              "region": { "x": 0.09, "y": 0.44, "w": 0.15, "h": 0.23 },
+              "threshold": 0.85,
+              "templateReferenceWidth": 1920
+            },
+            "button_enhancement_ready": {
+              "template": "shared/enhancement_ce/button_enhancement_ready",
+              "region": { "x": 0.9, "y": 0.87, "w": 0.09, "h": 0.12 },
+              "threshold": 0.98,
+              "templateReferenceWidth": 1920
+            }
+          }
+        },
+        "ceSelect": {
+          "elements": {
+            "button_enhancement_ce_select_ce_mark": {
+              "template": "shared/enhancement_ce/button_enhancement_ce_select_ce_mark",
+              "region": { "x": 0, "y": 0.56, "w": 0.08, "h": 0.15 },
+              "threshold": 0.85,
+              "templateReferenceWidth": 1920
+            },
+            "button_enhancement_ce_clean_all_select": {
+              "template": "shared/enhancement_ce/button_enhancement_ce_clean_all_select",
+              "region": { "x": 0.91, "y": 0.2, "w": 0.08, "h": 0.16 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "button_enhancement_ce_clean_all_select_ready": {
+              "template": "shared/enhancement_ce/button_enhancement_ce_clean_all_select_ready",
+              "region": { "x": 0.91, "y": 0.2, "w": 0.08, "h": 0.16 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "button_enhancement_ce_select_ce_desc": {
+              "template": "shared/enhancement_ce/button_enhancement_ce_select_ce_desc",
+              "region": { "x": 0.93, "y": 0.12, "w": 0.07, "h": 0.13 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "rarity_5_filter_on": {
+              "template": "shared/enhancement_ce/toggle_enhancement_filter_on",
+              "region": { "x": 0.231, "y": 0.305, "w": 0.03, "h": 0.041 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "rarity_5_filter_off": {
+              "template": "shared/enhancement_ce/toggle_enhancement_filter_off",
+              "region": { "x": 0.231, "y": 0.305, "w": 0.03, "h": 0.041 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "rarity_4_filter_on": {
+              "template": "shared/enhancement_ce/toggle_enhancement_filter_on",
+              "region": { "x": 0.38, "y": 0.305, "w": 0.03, "h": 0.041 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "rarity_4_filter_off": {
+              "template": "shared/enhancement_ce/toggle_enhancement_filter_off",
+              "region": { "x": 0.38, "y": 0.305, "w": 0.03, "h": 0.041 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "rarity_3_filter_on": {
+              "template": "shared/enhancement_ce/toggle_enhancement_filter_on",
+              "region": { "x": 0.525, "y": 0.305, "w": 0.03, "h": 0.041 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "rarity_3_filter_off": {
+              "template": "shared/enhancement_ce/toggle_enhancement_filter_off",
+              "region": { "x": 0.525, "y": 0.305, "w": 0.03, "h": 0.041 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "rarity_2_filter_on": {
+              "template": "shared/enhancement_ce/toggle_enhancement_filter_on",
+              "region": { "x": 0.675, "y": 0.305, "w": 0.03, "h": 0.041 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "rarity_2_filter_off": {
+              "template": "shared/enhancement_ce/toggle_enhancement_filter_off",
+              "region": { "x": 0.675, "y": 0.305, "w": 0.03, "h": 0.041 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "rarity_1_filter_on": {
+              "template": "shared/enhancement_ce/toggle_enhancement_filter_on",
+              "region": { "x": 0.82, "y": 0.305, "w": 0.03, "h": 0.041 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "rarity_1_filter_off": {
+              "template": "shared/enhancement_ce/toggle_enhancement_filter_off",
+              "region": { "x": 0.82, "y": 0.305, "w": 0.03, "h": 0.041 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            }
+          }
+        }
+      }
+    },
     "Battle": {
       "detect": {
         "template": "battle/screen_battle",

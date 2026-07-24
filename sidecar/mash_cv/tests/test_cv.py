@@ -4844,3 +4844,136 @@ class TestRegionTool:
         assert result["paddedRoi"]["y"] == pytest.approx(0.0)
         assert result["paddedRoi"]["w"] == pytest.approx(0.15)
         assert result["paddedRoi"]["h"] == pytest.approx(0.13)
+# ── Craft essence enhancement ────────────────────────────────────────────
+
+
+def _load_craft_essence_enhancement_assets():
+    shared = os.path.join(_REPO_ROOT, "src-tauri", "resources", "servers", "shared")
+    cn = os.path.join(_REPO_ROOT, "src-tauri", "resources", "servers", "cn")
+    assert mash_cv._load_templates(
+        os.path.join(shared, "templates"), key_prefix="shared"
+    )["ok"]
+    assert mash_cv._load_templates(os.path.join(cn, "templates"), append=True)["ok"]
+    assert mash_cv._load_config(os.path.join(shared, "cv.json"))["ok"]
+    assert mash_cv._load_config(os.path.join(cn, "cv.json"), merge=True)["ok"]
+
+
+def _ce_enhancement_fixture(name):
+    return cv2.imread(
+        os.path.join(
+            _TEST_SCREENSHOTS_DIR,
+            "enhancement_ce",
+            name,
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    ("fixture", "element"),
+    (
+        ("enhancement_ce_main.png", "icon_enhancement_result"),
+        ("enhancement_ce_main.png", "element_enhancement_ce_stripe"),
+        ("enhancement_ce_main.png", "element_enhancement_new"),
+        ("enhancement_ce_ready.png", "element_enhancement_ce_stripe"),
+        ("enhancement_ce_ready.png", "button_enhancement_ready"),
+        ("enhancement_ce_select_ce.png", "button_enhancement_ce_select_ce_mark"),
+        ("enhancement_ce_select_ce.png", "button_scale_level_3"),
+        ("enhancement_ce_select_ce.png", "button_enhancement_ce_select_ce_desc"),
+        ("enhancement_ce_select_exp.png", "button_enhancement_ce_clean_all_select"),
+        ("enhancement_ce_select_ce_filter.png", "dialog_enhancement_ce_filter"),
+        ("enhancement_ce_select_ce_filter.png", "button_enhancement_ce_filter_init"),
+        ("enhancement_ce_select_ce_order.png", "dialog_enhancement_ce_order"),
+        (
+            "enhancement_ce_select_ce_order.png",
+            "toggle_enhancement_ce_intelligent_order_off",
+        ),
+        (
+            "enhancement_ce_select_ce_on.png",
+            "toggle_enhancement_ce_intelligent_order_on",
+        ),
+    ),
+)
+@pytest.mark.parametrize("width", (1920, 2560))
+def test_craft_essence_enhancement_templates_respect_reference_width(
+    fixture, element, width
+):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture(fixture)
+    assert img is not None
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    result = mash_cv._find_element_by_name(
+        img, "CraftEssenceEnhancement", element
+    )
+
+    assert result["found"], (fixture, element, width, result)
+
+
+def test_craft_essence_filter_toggle_scores_pin_target_states():
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_select_ce_filter.png")
+    expected = {5: "off", 4: "off", 3: "off", 2: "on", 1: "on"}
+
+    for rarity, target in expected.items():
+        opposite = "off" if target == "on" else "on"
+        target_result = mash_cv._find_element_by_name(
+            img,
+            "CraftEssenceEnhancement",
+            f"rarity_{rarity}_filter_{target}",
+        )
+        opposite_result = mash_cv._find_element_by_name(
+            img,
+            "CraftEssenceEnhancement",
+            f"rarity_{rarity}_filter_{opposite}",
+        )
+        assert target_result["score"] >= 0.9
+        assert target_result["score"] >= opposite_result["score"] + 0.04
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+def test_craft_essence_filter_toggle_luma_separates_blue_and_white_states(width):
+    img = _ce_enhancement_fixture("enhancement_ce_select_ce_filter.png")
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+    expected = {5: False, 4: False, 3: False, 2: True, 1: True}
+    regions = {
+        5: {"x": 0.231, "y": 0.305, "w": 0.030, "h": 0.041},
+        4: {"x": 0.380, "y": 0.305, "w": 0.030, "h": 0.041},
+        3: {"x": 0.525, "y": 0.305, "w": 0.030, "h": 0.041},
+        2: {"x": 0.675, "y": 0.305, "w": 0.030, "h": 0.041},
+        1: {"x": 0.820, "y": 0.305, "w": 0.030, "h": 0.041},
+    }
+
+    for rarity, is_on in expected.items():
+        result = mash_cv._read_region_luma(img, regions[rarity])
+        assert result["ok"] is True
+        if is_on:
+            assert result["meanLuma"] >= 180.0
+        else:
+            assert result["meanLuma"] <= 145.0
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+def test_find_item_grid_returns_first_craft_essence_cell(width):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_select_ce.png")
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    result = mash_cv._find_item_grid(
+        img,
+        {
+            "anchorTemplateKey": "enhancement_ce/item_ce_bar_bronze",
+            "anchorTemplateReferenceWidth": 1920,
+            "region": {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747},
+        },
+    )
+
+    assert result["found"]
+    assert len(result["anchors"]) == 21
+    assert len(result["gridCells"]) == 21
+    first = result["gridCells"][0]
+    assert (first["row"], first["col"]) == (0, 0)
+    assert first["region"]["x"] == pytest.approx(0.0564, abs=0.002)
+    assert first["region"]["y"] == pytest.approx(0.2616, abs=0.002)

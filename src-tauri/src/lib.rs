@@ -1,5 +1,6 @@
 mod adb;
 mod commands;
+mod craft_essence_enhancement_runner;
 mod enhancement_runner;
 mod models;
 mod paths;
@@ -21,6 +22,7 @@ use std::sync::{Arc, Mutex};
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
 
+use craft_essence_enhancement_runner::CraftEssenceEnhancementRunnerHandle;
 use enhancement_runner::EnhancementRunnerHandle;
 use runner::RunnerHandle;
 
@@ -242,6 +244,7 @@ pub fn run() {
             app.manage(Mutex::new(debug_settings));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
             app.manage(Mutex::new(EnhancementRunnerHandle::new_idle()));
+            app.manage(Mutex::new(CraftEssenceEnhancementRunnerHandle::new_idle()));
             app.manage(Arc::new(ResourceDownloadCancelState::default()));
             app.manage(commands::debug::DebugSidecar::new());
             Ok(())
@@ -322,6 +325,9 @@ pub fn run() {
             commands::automation::start_enhancement_automation,
             commands::automation::stop_enhancement_automation,
             commands::automation::get_enhancement_automation_status,
+            commands::automation::start_craft_essence_enhancement_automation,
+            commands::automation::stop_craft_essence_enhancement_automation,
+            commands::automation::get_craft_essence_enhancement_automation_status,
             commands::debug::debug_capture,
             commands::debug::debug_stream_connect,
             commands::debug::debug_stream_disconnect,

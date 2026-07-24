@@ -14,6 +14,7 @@ import {
 import { CommandEditor } from "./features/battle/CommandEditor";
 import { BattlePage } from "./features/battle/BattlePage";
 import { EnhancementPage } from "./features/enhancement/EnhancementPage";
+import { CraftEssenceEnhancementPage } from "./features/craft-essence-enhancement/CraftEssenceEnhancementPage";
 import { DebugPage } from "./features/debug/DebugPage";
 import { StatusBar } from "./features/status/StatusBar";
 import { ProjectBar } from "./features/projects/ProjectBar";
@@ -45,7 +46,13 @@ import {
 // triggered by the bottom-right primary button on the previous page;
 // `debug` is reached out-of-band from the sidebar. Replaces the older
 // horizontal `StageNavigator` (queue/support/command tabs).
-type View = "team" | "command" | "battle" | "enhancement" | "debug";
+type View =
+  | "team"
+  | "command"
+  | "battle"
+  | "enhancement"
+  | "craftEssenceEnhancement"
+  | "debug";
 
 interface AutomationEvent {
   state: string;
@@ -224,9 +231,16 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         appendOperationLog(event.payload.message, event.payload.level ?? "info");
       }
     );
+    const unlistenCraftEssenceEnhancement = listen<AutomationEvent>(
+      "craft-essence-enhancement-automation-status",
+      (event) => {
+        appendOperationLog(event.payload.message, event.payload.level ?? "info");
+      }
+    );
     return () => {
       unlistenBattle.then((fn) => fn());
       unlistenEnhancement.then((fn) => fn());
+      unlistenCraftEssenceEnhancement.then((fn) => fn());
     };
   }, [appendOperationLog]);
 
@@ -561,6 +575,11 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     setView("enhancement");
   }, []);
 
+  const handleOpenCraftEssenceEnhancement = useCallback(() => {
+    if (!featureToggles.craftEssenceEnhancement) return;
+    setView("craftEssenceEnhancement");
+  }, []);
+
   const handleOpenSettings = useCallback(() => {
     setSettingsSection("basic");
     setSettingsOpen(true);
@@ -648,6 +667,13 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
           ) : view === "enhancement" && featureToggles.servantEnhancement ? (
             <EnhancementPage
               servants={servants}
+              onBack={handleBackToConfig}
+              onAutomationStart={handleAutomationStart}
+              onLogEntry={appendOperationLog}
+            />
+          ) : view === "craftEssenceEnhancement" &&
+            featureToggles.craftEssenceEnhancement ? (
+            <CraftEssenceEnhancementPage
               onBack={handleBackToConfig}
               onAutomationStart={handleAutomationStart}
               onLogEntry={appendOperationLog}
@@ -751,7 +777,20 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
                     </Box>
                   </Box>
                   <Flex justify="between" align="center" className="page-footer" gap="3">
-                    <Box />
+                    <Box>
+                      {featureToggles.craftEssenceEnhancement && (
+                        <Button
+                          type="button"
+                          variant="soft"
+                          color="gray"
+                          onClick={handleOpenCraftEssenceEnhancement}
+                        >
+                          <Text size="2" weight="medium">
+                            强化概念礼装
+                          </Text>
+                        </Button>
+                      )}
+                    </Box>
                     <Flex align="center" gap="3">
                       {featureToggles.servantEnhancement && (
                         <Button

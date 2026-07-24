@@ -5,6 +5,7 @@ describe("feature toggles", () => {
   it("enables unfinished tools by default during development", () => {
     expect(createFeatureToggles({ DEV: true })).toEqual({
       servantEnhancement: true,
+      craftEssenceEnhancement: true,
       cvDebug: true,
       grandCardPriority: true,
       settingsDebug: true,
@@ -14,6 +15,7 @@ describe("feature toggles", () => {
   it("hides unfinished tools by default in production builds", () => {
     expect(createFeatureToggles({ DEV: false })).toEqual({
       servantEnhancement: false,
+      craftEssenceEnhancement: false,
       cvDebug: false,
       grandCardPriority: false,
       settingsDebug: false,
@@ -25,14 +27,29 @@ describe("feature toggles", () => {
       createFeatureToggles({
         DEV: false,
         VITE_FEATURE_SERVANT_ENHANCEMENT: "true",
+        VITE_FEATURE_CRAFT_ESSENCE_ENHANCEMENT: "yes",
         VITE_FEATURE_CV_DEBUG: "1",
         VITE_FEATURE_GRAND_CARD_PRIORITY: "on",
       })
     ).toEqual({
       servantEnhancement: true,
+      craftEssenceEnhancement: true,
       cvDebug: true,
       grandCardPriority: true,
       settingsDebug: false,
+    });
+  });
+
+  it("keeps craft essence enhancement independent from servant enhancement", () => {
+    expect(
+      createFeatureToggles({
+        DEV: false,
+        VITE_FEATURE_SERVANT_ENHANCEMENT: "false",
+        VITE_FEATURE_CRAFT_ESSENCE_ENHANCEMENT: "true",
+      })
+    ).toMatchObject({
+      servantEnhancement: false,
+      craftEssenceEnhancement: true,
     });
   });
 });

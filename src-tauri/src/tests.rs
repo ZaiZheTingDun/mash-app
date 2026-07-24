@@ -102,7 +102,7 @@ fn shared_cv_defines_battle_close_button_elements() {
     );
     assert_eq!(
         elements["attack_button"]["template"].as_str(),
-        Some("shared/button_attack")
+        Some("shared/battle/button_attack")
     );
     assert_eq!(
         elements["battle_action_menu"]["template"].as_str(),
@@ -240,7 +240,7 @@ fn jp_cv_overrides_battle_action_menu_probe() {
 fn assert_battle_close_button_element(element: &serde_json::Value, x: f64, y: f64, w: f64, h: f64) {
     assert_eq!(
         element["template"].as_str(),
-        Some("shared/battle_close_button")
+        Some("shared/battle/battle_close_button")
     );
     assert_close(element["region"]["x"].as_f64().unwrap(), x);
     assert_close(element["region"]["y"].as_f64().unwrap(), y);

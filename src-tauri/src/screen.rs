@@ -480,6 +480,34 @@ impl SidecarClient {
     }
 
     /// Return the mean grayscale luma for a normalized region.
+    pub fn read_region_luma(
+        &mut self,
+        image_path: Option<&Path>,
+        region: NormRect,
+    ) -> Result<f64, String> {
+        let mut req = serde_json::json!({
+            "cmd": "read_region_luma",
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|value| value.as_str()) {
+            return Err(err.to_string());
+        }
+        if !resp["ok"].as_bool().unwrap_or(false) {
+            return Err("read_region_luma failed".into());
+        }
+        resp["meanLuma"]
+            .as_f64()
+            .ok_or_else(|| "read_region_luma response missing meanLuma".into())
+    }
+
+    /// Match a skill-use dialog and return the confirm button luma.
     pub fn probe_skill_use_dialog(
         &mut self,
         image_path: Option<&Path>,
@@ -963,6 +991,36 @@ impl SidecarClient {
         }
         serde_json::from_value::<FindEnhancementServantGridResult>(resp)
             .map_err(|e| format!("invalid find_enhancement_servant_grid response: {e}"))
+    }
+
+    pub fn find_item_grid(
+        &mut self,
+        image_path: Option<&Path>,
+        anchor_template_key: &str,
+        anchor_template_reference_width: f64,
+        region: NormRect,
+        retry_seconds: f64,
+    ) -> Result<FindItemGridResult, String> {
+        let mut req = serde_json::json!({
+            "cmd": "find_item_grid",
+            "anchorTemplateKey": anchor_template_key,
+            "anchorTemplateReferenceWidth": anchor_template_reference_width,
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+            "retrySeconds": retry_seconds,
+            "retryIntervalSeconds": 0.15,
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(err.to_string());
+        }
+        serde_json::from_value::<FindItemGridResult>(resp)
+            .map_err(|e| format!("invalid find_item_grid response: {e}"))
     }
 
     /// Send a `read_battle_scene` request to the sidecar and return the

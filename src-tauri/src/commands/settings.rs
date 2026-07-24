@@ -7,6 +7,9 @@
 
 use crate::adb::BLUESTACKS_SERIAL;
 use crate::commands::debug;
+use crate::craft_essence_enhancement_runner::{
+    CraftEssenceEnhancementRunnerHandle, CraftEssenceEnhancementRunnerState,
+};
 use crate::enhancement_runner::{EnhancementRunnerHandle, EnhancementRunnerState};
 use crate::paths::{migrate_legacy_app_data, StartupMigrationStatus};
 use crate::runner::{RunnerHandle, RunnerState};
@@ -854,6 +857,7 @@ pub(crate) fn set_server(
     state: tauri::State<'_, Mutex<Server>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
     value: Server,
 ) -> Result<(), String> {
@@ -875,6 +879,17 @@ pub(crate) fn set_server(
         );
         if running {
             return Err("强化自动化正在运行中，请先停止后再切换服务器".into());
+        }
+    }
+    {
+        let handle = ce_enhancement_handle_state.lock().unwrap();
+        let running = matches!(
+            *handle.state.lock().unwrap(),
+            CraftEssenceEnhancementRunnerState::Starting
+                | CraftEssenceEnhancementRunnerState::Running
+        );
+        if running {
+            return Err("概念礼装强化自动化正在运行中，请先停止后再切换服务器".into());
         }
     }
 

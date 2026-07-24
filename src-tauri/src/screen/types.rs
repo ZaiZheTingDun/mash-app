@@ -148,7 +148,7 @@ pub struct SkillUseDialogProbe {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ServantGridAnchor {
+pub struct ItemGridAnchor {
     pub x: f64,
     pub y: f64,
     pub w: f64,
@@ -168,7 +168,7 @@ pub struct ServantGridAnchor {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ServantGridCell {
+pub struct ItemGridCell {
     pub row: u32,
     pub col: u32,
     pub region: NormRect,
@@ -192,6 +192,9 @@ pub struct ServantGridFaceMatch {
     #[serde(default)]
     pub error: Option<String>,
 }
+
+pub type ServantGridAnchor = ItemGridAnchor;
+pub type ServantGridCell = ItemGridCell;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -226,14 +229,50 @@ pub struct FindEnhancementServantGridResult {
     #[serde(default)]
     pub best: Option<ServantGridFaceMatch>,
     #[serde(default)]
-    pub anchors: Vec<ServantGridAnchor>,
+    pub anchors: Vec<ItemGridAnchor>,
     #[serde(default)]
-    pub reference_anchor: Option<ServantGridAnchor>,
+    pub reference_anchor: Option<ItemGridAnchor>,
     #[serde(default)]
-    pub grid_cells: Vec<ServantGridCell>,
+    pub grid_cells: Vec<ItemGridCell>,
     #[serde(default)]
     pub matches: Vec<ServantGridFaceMatch>,
     pub diagnostics: ServantGridDiagnostics,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemGridDiagnostics {
+    #[serde(default)]
+    pub fail_reason: Option<String>,
+    #[serde(default)]
+    pub anchor_template_key: String,
+    #[serde(default)]
+    pub anchor_template_reference_width: Option<f64>,
+    #[serde(default)]
+    pub anchor_edge_threshold: f64,
+    #[serde(default)]
+    pub anchor_gray_threshold: f64,
+    #[serde(default)]
+    pub region: Option<NormRect>,
+    #[serde(default)]
+    pub anchor_count: u32,
+    #[serde(default)]
+    pub grid_cell_count: u32,
+    #[serde(default)]
+    pub attempts: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindItemGridResult {
+    pub found: bool,
+    #[serde(default)]
+    pub anchors: Vec<ItemGridAnchor>,
+    #[serde(default)]
+    pub reference_anchor: Option<ItemGridAnchor>,
+    #[serde(default)]
+    pub grid_cells: Vec<ItemGridCell>,
+    pub diagnostics: ItemGridDiagnostics,
 }
 
 /// Per-digit recognition signal for one crit-percentage slot. Surfaced
