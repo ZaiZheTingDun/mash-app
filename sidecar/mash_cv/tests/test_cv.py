@@ -4909,6 +4909,16 @@ def _ce_enhancement_fixture(name):
             "enhancement_ce_recommend_dialog_auto_on.png",
             "dialog_enhancement_ce_recommend_material",
         ),
+        ("enhancement_ce_confirm.png", "dialog_enhancement_ce_confirm"),
+        ("enhancement_ce_success.png", "element_enhancement_ce_success"),
+        (
+            "enhancement_ce_after_enhancement_ready.png",
+            "element_enhancement_ce_stripe",
+        ),
+        (
+            "enhancement_ce_after_enhancement_ready.png",
+            "button_enhancement_ready",
+        ),
     ),
 )
 @pytest.mark.parametrize("width", (1920, 2560))
@@ -4950,6 +4960,101 @@ def test_craft_essence_recommend_dialog_probe_rejects_other_states(fixture, widt
     )
 
     assert result["found"] is False
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+@pytest.mark.parametrize(
+    ("fixture", "element"),
+    (
+        ("enhancement_ce_main_selected_not_ready.png", "dialog_enhancement_ce_confirm"),
+        ("enhancement_ce_recommend_dialog_auto_on.png", "dialog_enhancement_ce_confirm"),
+        ("enhancement_ce_main_selected_not_ready.png", "element_enhancement_ce_success"),
+        ("enhancement_ce_confirm.png", "element_enhancement_ce_success"),
+    ),
+)
+def test_craft_essence_enhancement_cycle_probes_reject_other_states(
+    fixture, element, width
+):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture(fixture)
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    result = mash_cv._find_element_by_name(
+        img,
+        "CraftEssenceEnhancement",
+        element,
+    )
+
+    assert result["found"] is False
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+def test_craft_essence_success_result_is_not_ready(width):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_success.png")
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    result = mash_cv._find_element_by_name(
+        img,
+        "CraftEssenceEnhancement",
+        "button_enhancement_ready",
+    )
+
+    assert result["found"] is False
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+@pytest.mark.parametrize(
+    ("fixture", "is_ready"),
+    (
+        ("enhancement_ce_main.png", False),
+        ("enhancement_ce_main_selected_not_ready.png", False),
+        ("enhancement_ce_recommend_executed_ready.png", True),
+        ("enhancement_ce_after_enhancement_ready.png", True),
+    ),
+)
+def test_craft_essence_enhancement_button_luma_separates_ready_state(
+    fixture, is_ready, width
+):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture(fixture)
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    result = mash_cv._read_region_luma(
+        img,
+        {"x": 0.8, "y": 0.87, "w": 0.19, "h": 0.12},
+    )
+    button = mash_cv._find_element_by_name(
+        img,
+        "CraftEssenceEnhancement",
+        "button_enhancement_ready",
+    )
+
+    assert result["ok"] is True
+    assert button["score"] >= 0.9
+    if is_ready:
+        assert result["meanLuma"] >= 145.0
+    else:
+        assert result["meanLuma"] <= 125.0
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+def test_craft_essence_success_result_has_no_enhancement_button_shape(width):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_success.png")
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    button = mash_cv._find_element_by_name(
+        img,
+        "CraftEssenceEnhancement",
+        "button_enhancement_ready",
+    )
+
+    assert button["score"] < 0.9
 
 
 def test_craft_essence_filter_toggle_scores_pin_target_states():

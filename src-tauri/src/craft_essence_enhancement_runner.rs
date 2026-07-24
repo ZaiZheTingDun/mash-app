@@ -18,10 +18,22 @@ const FILTER_TOGGLE_OFF_MAX_LUMA: f64 = 145.0;
 const FILTER_TOGGLE_ON_MIN_LUMA: f64 = 180.0;
 const AUTO_CONFIG_OFF_MAX_SATURATION: f64 = 70.0;
 const AUTO_CONFIG_ON_MIN_SATURATION: f64 = 110.0;
+const ENHANCE_BUTTON_PRESENT_MIN_SCORE: f64 = 0.9;
+const ENHANCE_BUTTON_NOT_READY_MAX_LUMA: f64 = 125.0;
+const ENHANCE_BUTTON_READY_MIN_LUMA: f64 = 145.0;
 const RECOMMEND_OPEN_MAX_ATTEMPTS: u8 = 5;
+const RECOMMEND_READY_MAX_WAITS: u8 = 8;
+const ENHANCE_OPEN_MAX_ATTEMPTS: u8 = 5;
+const POST_ENHANCEMENT_NOT_READY_CONFIRMATIONS: u8 = 3;
+const ENHANCEMENT_RETURN_MAX_WAITS: u8 = 40;
+const ENHANCEMENT_MAIN_RETURN_CONFIRMATIONS: u8 = 2;
+const ENHANCE_BUTTON_ABSENT_MAX_RECOVERY_TAPS: u8 = 8;
 
 const TARGET_SELECT_BUTTON: Point = Point::new(0.153, 0.555);
 const RECOMMEND_MATERIAL_BUTTON: Point = Point::new(0.846, 0.233);
+const ENHANCE_BUTTON: Point = Point::new(0.896, 0.931);
+const ENHANCE_CONFIRM_BUTTON: Point = Point::new(0.656, 0.819);
+const ENHANCEMENT_SKIP_BUTTON: Point = Point::new(0.5, 0.055);
 const GRID_DENSITY_BUTTON: Point = Point::new(0.023, 0.938);
 const FILTER_BUTTON: Point = Point::new(0.7635, 0.180);
 const FILTER_CONFIRM_BUTTON: Point = Point::new(0.8235, 0.8855);
@@ -37,6 +49,12 @@ const RECOMMEND_AUTO_CONFIG_REGION: NormRect = NormRect {
     y: 0.685,
     w: 0.047,
     h: 0.09,
+};
+const ENHANCE_BUTTON_REGION: NormRect = NormRect {
+    x: 0.8,
+    y: 0.87,
+    w: 0.19,
+    h: 0.12,
 };
 const ITEM_GRID_REGION: NormRect = NormRect {
     x: 0.055,
@@ -148,6 +166,8 @@ pub(crate) enum Screen {
     FilterDialog,
     OrderDialog,
     RecommendMaterialDialog,
+    EnhancementConfirmDialog,
+    EnhancementSuccess,
     Unknown,
 }
 
@@ -170,6 +190,12 @@ impl ProbeSnapshot {
 }
 
 pub(crate) fn classify_screen(snapshot: &ProbeSnapshot) -> Screen {
+    if snapshot.has("dialog_enhancement_ce_confirm") {
+        return Screen::EnhancementConfirmDialog;
+    }
+    if snapshot.has("element_enhancement_ce_success") {
+        return Screen::EnhancementSuccess;
+    }
     if snapshot.has("dialog_enhancement_ce_recommend_material") {
         return Screen::RecommendMaterialDialog;
     }
@@ -204,19 +230,94 @@ pub(crate) fn classify_screen(snapshot: &ProbeSnapshot) -> Screen {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TerminalOutcome {
-    Finished,
     MaterialUnsupported,
 }
 
 fn terminal_outcome(screen: Screen) -> Option<TerminalOutcome> {
     match screen {
-        Screen::Main {
-            target_selected: true,
-            ready: true,
-        } => Some(TerminalOutcome::Finished),
         Screen::MaterialSelect => Some(TerminalOutcome::MaterialUnsupported),
         _ => None,
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SelectedMainAction {
+    OpenRecommendation,
+    WaitForAutoSelection,
+    Enhance,
+    Finished,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EnhancementReadyState {
+    Absent,
+    NotReady,
+    Ready,
+    Transitioning,
+}
+
+fn classify_enhancement_button(score: f64, mean_luma: f64) -> EnhancementReadyState {
+    if score < ENHANCE_BUTTON_PRESENT_MIN_SCORE {
+        EnhancementReadyState::Absent
+    } else if mean_luma <= ENHANCE_BUTTON_NOT_READY_MAX_LUMA {
+        EnhancementReadyState::NotReady
+    } else if mean_luma >= ENHANCE_BUTTON_READY_MIN_LUMA {
+        EnhancementReadyState::Ready
+    } else {
+        EnhancementReadyState::Transitioning
+    }
+}
+
+fn selected_main_action(
+    ready: bool,
+    recommendation_executed: bool,
+    completed_enhancements: u32,
+    not_ready_observations: u8,
+) -> SelectedMainAction {
+    if ready {
+        return SelectedMainAction::Enhance;
+    }
+    if completed_enhancements > 0 {
+        return if not_ready_observations >= POST_ENHANCEMENT_NOT_READY_CONFIRMATIONS {
+            SelectedMainAction::Finished
+        } else {
+            SelectedMainAction::WaitForAutoSelection
+        };
+    }
+    if recommendation_executed {
+        return if not_ready_observations >= RECOMMEND_READY_MAX_WAITS {
+            SelectedMainAction::Finished
+        } else {
+            SelectedMainAction::WaitForAutoSelection
+        };
+    }
+    SelectedMainAction::OpenRecommendation
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EnhancementReturnAction {
+    ObserveReturnedMain,
+    WaitForConfirmationClose,
+    TapSkip { mark_left_main: bool },
+    Unexpected,
+}
+
+fn enhancement_return_action(screen: Screen, left_main: bool) -> EnhancementReturnAction {
+    match screen {
+        Screen::Main { .. } if left_main => EnhancementReturnAction::ObserveReturnedMain,
+        Screen::EnhancementConfirmDialog => EnhancementReturnAction::WaitForConfirmationClose,
+        Screen::Unknown | Screen::EnhancementSuccess => EnhancementReturnAction::TapSkip {
+            mark_left_main: true,
+        },
+        Screen::Main { .. } => EnhancementReturnAction::TapSkip {
+            mark_left_main: false,
+        },
+        _ => EnhancementReturnAction::Unexpected,
+    }
+}
+
+fn enhancement_main_return_confirmed(observations: u8) -> bool {
+    observations >= ENHANCEMENT_MAIN_RETURN_CONFIRMATIONS
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -297,7 +398,7 @@ struct Probe {
     element: &'static str,
 }
 
-const PROBES: [Probe; 11] = [
+const PROBES: [Probe; 13] = [
     Probe::new("icon_enhancement_result"),
     Probe::new("element_enhancement_ce_stripe"),
     Probe::new("element_enhancement_new"),
@@ -309,6 +410,8 @@ const PROBES: [Probe; 11] = [
     Probe::new("button_enhancement_ce_filter_init"),
     Probe::new("dialog_enhancement_ce_order"),
     Probe::new("dialog_enhancement_ce_recommend_material"),
+    Probe::new("dialog_enhancement_ce_confirm"),
+    Probe::new("element_enhancement_ce_success"),
 ];
 
 impl Probe {
@@ -386,6 +489,14 @@ pub struct CraftEssenceEnhancementRunner {
     recommend_open_attempts: u8,
     recommend_execute_tapped: bool,
     recommend_ready_waits: u8,
+    enhance_open_attempts: u8,
+    awaiting_enhancement_return: bool,
+    enhancement_left_main: bool,
+    enhancement_return_waits: u8,
+    enhancement_main_return_checks: u8,
+    completed_enhancements: u32,
+    post_enhancement_not_ready_checks: u8,
+    enhance_button_absent_recovery_taps: u8,
 }
 
 impl CraftEssenceEnhancementRunner {
@@ -421,6 +532,14 @@ impl CraftEssenceEnhancementRunner {
             recommend_open_attempts: 0,
             recommend_execute_tapped: false,
             recommend_ready_waits: 0,
+            enhance_open_attempts: 0,
+            awaiting_enhancement_return: false,
+            enhancement_left_main: false,
+            enhancement_return_waits: 0,
+            enhancement_main_return_checks: 0,
+            completed_enhancements: 0,
+            post_enhancement_not_ready_checks: 0,
+            enhance_button_absent_recovery_taps: 0,
         }
     }
 
@@ -435,6 +554,12 @@ impl CraftEssenceEnhancementRunner {
                 return;
             }
             let screen = self.detect_screen();
+            if self.awaiting_enhancement_return {
+                if !self.handle_enhancement_return(screen) {
+                    return;
+                }
+                continue;
+            }
             if screen == Screen::Unknown {
                 unknown_count += 1;
                 self.emit(
@@ -454,11 +579,6 @@ impl CraftEssenceEnhancementRunner {
             unknown_count = 0;
 
             match terminal_outcome(screen) {
-                Some(TerminalOutcome::Finished) => {
-                    self.transition(LifecycleEvent::Finished);
-                    self.emit("CraftEssenceEnhancement", "强化按钮已就绪，本阶段完成");
-                    return;
-                }
                 Some(TerminalOutcome::MaterialUnsupported) => {
                     self.fail(
                         "MaterialSelect",
@@ -472,31 +592,10 @@ impl CraftEssenceEnhancementRunner {
             match screen {
                 Screen::Main {
                     target_selected: true,
-                    ready: false,
+                    ready,
                 } => {
-                    if self.recommend_execute_tapped {
-                        self.recommend_ready_waits += 1;
-                        if self.recommend_ready_waits >= 8 {
-                            self.fail(
-                                "CraftEssenceEnhancement",
-                                "执行推荐素材选择后，强化按钮仍未就绪".into(),
-                            );
-                            return;
-                        }
-                        thread::sleep(Duration::from_millis(700));
-                        continue;
-                    }
-                    if self.recommend_open_attempts >= RECOMMEND_OPEN_MAX_ATTEMPTS {
-                        self.fail(
-                            "CraftEssenceEnhancement",
-                            "多次点击推荐选择后，对话框仍未打开".into(),
-                        );
+                    if !self.handle_selected_main(ready) {
                         return;
-                    }
-                    self.emit("CraftEssenceEnhancement", "打开推荐强化素材设置");
-                    if self.tap_at("CraftEssenceEnhancement", RECOMMEND_MATERIAL_BUTTON) {
-                        self.recommend_open_attempts += 1;
-                        thread::sleep(Duration::from_millis(800));
                     }
                 }
                 Screen::Main {
@@ -539,12 +638,275 @@ impl CraftEssenceEnhancementRunner {
                         return;
                     }
                 }
-                Screen::Main {
-                    target_selected: true,
-                    ready: true,
+                Screen::EnhancementConfirmDialog => {
+                    if !self.handle_enhancement_confirm_dialog() {
+                        return;
+                    }
                 }
-                | Screen::MaterialSelect => unreachable!(),
+                Screen::EnhancementSuccess => {
+                    self.awaiting_enhancement_return = true;
+                    self.enhancement_left_main = true;
+                    self.enhancement_return_waits = 0;
+                    self.enhancement_main_return_checks = 0;
+                    if !self.handle_enhancement_return(screen) {
+                        return;
+                    }
+                }
+                Screen::MaterialSelect => unreachable!(),
                 Screen::Unknown => unreachable!(),
+            }
+        }
+    }
+
+    fn handle_selected_main(&mut self, template_ready: bool) -> bool {
+        let ready = if template_ready {
+            self.enhance_button_absent_recovery_taps = 0;
+            true
+        } else {
+            let button_match = match self.sidecar().find_element_by_name(
+                None,
+                SCREEN_NAME,
+                "button_enhancement_ready",
+            ) {
+                Ok(button_match) => button_match,
+                Err(err) => {
+                    self.fail(
+                        "CraftEssenceEnhancement",
+                        format!("识别强化按钮失败: {err}"),
+                    );
+                    return false;
+                }
+            };
+            let mean_luma = match self.sidecar().read_region_luma(None, ENHANCE_BUTTON_REGION) {
+                Ok(mean_luma) => mean_luma,
+                Err(err) => {
+                    self.fail(
+                        "CraftEssenceEnhancement",
+                        format!("读取强化按钮亮度失败: {err}"),
+                    );
+                    return false;
+                }
+            };
+            match classify_enhancement_button(button_match.score, mean_luma) {
+                EnhancementReadyState::Absent => {
+                    self.enhance_button_absent_recovery_taps += 1;
+                    if self.enhance_button_absent_recovery_taps
+                        >= ENHANCE_BUTTON_ABSENT_MAX_RECOVERY_TAPS
+                    {
+                        self.fail(
+                            "CraftEssenceEnhancement",
+                            format!(
+                                "主页面状态中未检测到强化按钮（形状分数 {:.3}）",
+                                button_match.score
+                            ),
+                        );
+                        return false;
+                    }
+                    self.emit(
+                        "EnhancementResultRecovery",
+                        &format!(
+                            "未检测到强化按钮，尝试点击顶部返回（形状分数 {:.3}）",
+                            button_match.score
+                        ),
+                    );
+                    if !self.tap_at("EnhancementResultRecovery", ENHANCEMENT_SKIP_BUTTON) {
+                        return false;
+                    }
+                    thread::sleep(Duration::from_millis(700));
+                    return true;
+                }
+                EnhancementReadyState::Ready => {
+                    self.enhance_button_absent_recovery_taps = 0;
+                    self.emit(
+                        "CraftEssenceEnhancement",
+                        &format!(
+                            "通过按钮形状和亮度确认强化已就绪（分数 {:.3}，亮度 {mean_luma:.1}）",
+                            button_match.score
+                        ),
+                    );
+                    true
+                }
+                EnhancementReadyState::NotReady => {
+                    self.enhance_button_absent_recovery_taps = 0;
+                    false
+                }
+                EnhancementReadyState::Transitioning => {
+                    self.enhance_button_absent_recovery_taps = 0;
+                    self.emit(
+                        "CraftEssenceEnhancement",
+                        &format!(
+                            "强化按钮状态正在变化，继续等待（分数 {:.3}，亮度 {mean_luma:.1}）",
+                            button_match.score
+                        ),
+                    );
+                    thread::sleep(Duration::from_millis(500));
+                    return true;
+                }
+            }
+        };
+
+        if ready {
+            self.post_enhancement_not_ready_checks = 0;
+        } else {
+            self.post_enhancement_not_ready_checks =
+                self.post_enhancement_not_ready_checks.saturating_add(1);
+        }
+
+        match selected_main_action(
+            ready,
+            self.recommend_execute_tapped,
+            self.completed_enhancements,
+            self.post_enhancement_not_ready_checks,
+        ) {
+            SelectedMainAction::OpenRecommendation => {
+                if self.recommend_open_attempts >= RECOMMEND_OPEN_MAX_ATTEMPTS {
+                    self.fail(
+                        "CraftEssenceEnhancement",
+                        "多次点击推荐选择后，对话框仍未打开".into(),
+                    );
+                    return false;
+                }
+                self.emit("CraftEssenceEnhancement", "打开推荐强化素材设置");
+                if !self.tap_at("CraftEssenceEnhancement", RECOMMEND_MATERIAL_BUTTON) {
+                    return false;
+                }
+                self.recommend_open_attempts += 1;
+                thread::sleep(Duration::from_millis(800));
+                true
+            }
+            SelectedMainAction::WaitForAutoSelection => {
+                self.emit("CraftEssenceEnhancement", "等待自动配置强化素材");
+                thread::sleep(Duration::from_millis(700));
+                true
+            }
+            SelectedMainAction::Enhance => {
+                if self.enhance_open_attempts >= ENHANCE_OPEN_MAX_ATTEMPTS {
+                    self.fail(
+                        "CraftEssenceEnhancement",
+                        "多次点击强化按钮后，确认对话框仍未打开".into(),
+                    );
+                    return false;
+                }
+                self.emit(
+                    "CraftEssenceEnhancement",
+                    &format!("开始第 {} 次强化", self.completed_enhancements + 1),
+                );
+                if !self.tap_probe_or_point(
+                    "CraftEssenceEnhancement",
+                    "button_enhancement_ready",
+                    ENHANCE_BUTTON,
+                ) {
+                    return false;
+                }
+                self.enhance_open_attempts += 1;
+                thread::sleep(Duration::from_millis(800));
+                true
+            }
+            SelectedMainAction::Finished => {
+                self.transition(LifecycleEvent::Finished);
+                self.emit(
+                    "CraftEssenceEnhancement",
+                    &format!(
+                        "自动强化结束：概念礼装已满级或没有可用强化素材（共完成 {} 次强化）",
+                        self.completed_enhancements
+                    ),
+                );
+                false
+            }
+        }
+    }
+
+    fn handle_enhancement_confirm_dialog(&mut self) -> bool {
+        self.emit("EnhancementConfirmDialog", "确认执行概念礼装强化");
+        if !self.tap_at("EnhancementConfirmDialog", ENHANCE_CONFIRM_BUTTON) {
+            return false;
+        }
+        self.awaiting_enhancement_return = true;
+        self.enhancement_left_main = false;
+        self.enhancement_return_waits = 0;
+        self.enhancement_main_return_checks = 0;
+        thread::sleep(Duration::from_millis(900));
+        true
+    }
+
+    fn handle_enhancement_return(&mut self, screen: Screen) -> bool {
+        match enhancement_return_action(screen, self.enhancement_left_main) {
+            EnhancementReturnAction::ObserveReturnedMain => {
+                self.enhancement_main_return_checks =
+                    self.enhancement_main_return_checks.saturating_add(1);
+                self.emit("EnhancementAnimation", "确认已返回概念礼装强化页面");
+                if !self.tap_at("EnhancementAnimation", ENHANCEMENT_SKIP_BUTTON) {
+                    return false;
+                }
+                thread::sleep(Duration::from_millis(700));
+                if !enhancement_main_return_confirmed(self.enhancement_main_return_checks) {
+                    return true;
+                }
+                self.awaiting_enhancement_return = false;
+                self.enhancement_left_main = false;
+                self.enhancement_return_waits = 0;
+                self.enhancement_main_return_checks = 0;
+                self.enhance_open_attempts = 0;
+                self.completed_enhancements += 1;
+                self.post_enhancement_not_ready_checks = 0;
+                self.emit(
+                    "CraftEssenceEnhancement",
+                    &format!(
+                        "第 {} 次强化完成，检查下一轮素材",
+                        self.completed_enhancements
+                    ),
+                );
+                true
+            }
+            EnhancementReturnAction::WaitForConfirmationClose => {
+                self.enhancement_main_return_checks = 0;
+                self.enhancement_return_waits = self.enhancement_return_waits.saturating_add(1);
+                if self.enhancement_return_waits >= ENHANCEMENT_RETURN_MAX_WAITS {
+                    self.fail(
+                        "EnhancementConfirmDialog",
+                        "点击决定后，强化确认对话框仍未关闭".into(),
+                    );
+                    return false;
+                }
+                thread::sleep(Duration::from_millis(500));
+                true
+            }
+            EnhancementReturnAction::TapSkip { mark_left_main } => {
+                self.enhancement_main_return_checks = 0;
+                self.enhancement_left_main |= mark_left_main;
+                self.enhancement_return_waits = self.enhancement_return_waits.saturating_add(1);
+                if self.enhancement_return_waits >= ENHANCEMENT_RETURN_MAX_WAITS {
+                    self.fail(
+                        "EnhancementAnimation",
+                        if self.enhancement_left_main {
+                            "等待概念礼装强化结束超时"
+                        } else {
+                            "点击决定后未能确认进入强化动画"
+                        }
+                        .into(),
+                    );
+                    return false;
+                }
+                self.emit(
+                    "EnhancementAnimation",
+                    if self.enhancement_left_main {
+                        "点击页面顶部跳过强化动画"
+                    } else {
+                        "等待进入强化动画"
+                    },
+                );
+                if !self.tap_at("EnhancementAnimation", ENHANCEMENT_SKIP_BUTTON) {
+                    return false;
+                }
+                thread::sleep(Duration::from_millis(700));
+                true
+            }
+            EnhancementReturnAction::Unexpected => {
+                self.fail(
+                    "EnhancementAnimation",
+                    format!("强化动画期间进入了意外页面: {screen:?}"),
+                );
+                false
             }
         }
     }
@@ -791,6 +1153,7 @@ impl CraftEssenceEnhancementRunner {
                 self.emit("RecommendMaterialDialog", "执行推荐素材选择");
                 if self.tap_at("RecommendMaterialDialog", RECOMMEND_EXECUTE_BUTTON) {
                     self.recommend_execute_tapped = true;
+                    self.post_enhancement_not_ready_checks = 0;
                     thread::sleep(Duration::from_millis(900));
                     return true;
                 }
@@ -1070,6 +1433,23 @@ mod tests {
             ])),
             Screen::RecommendMaterialDialog
         );
+        assert_eq!(
+            classify_screen(&ProbeSnapshot::from_keys(&[
+                "icon_enhancement_result",
+                "element_enhancement_ce_stripe",
+                "button_enhancement_ready",
+                "dialog_enhancement_ce_confirm"
+            ])),
+            Screen::EnhancementConfirmDialog
+        );
+        assert_eq!(
+            classify_screen(&ProbeSnapshot::from_keys(&[
+                "icon_enhancement_result",
+                "element_enhancement_ce_stripe",
+                "element_enhancement_ce_success"
+            ])),
+            Screen::EnhancementSuccess
+        );
     }
 
     #[test]
@@ -1107,17 +1487,17 @@ mod tests {
     }
 
     #[test]
-    fn entry_terminal_outcomes_finish_selected_target_and_reject_materials() {
+    fn entry_terminal_outcome_only_rejects_manual_material_selection() {
+        assert_eq!(
+            terminal_outcome(Screen::MaterialSelect),
+            Some(TerminalOutcome::MaterialUnsupported)
+        );
         assert_eq!(
             terminal_outcome(Screen::Main {
                 target_selected: true,
                 ready: true,
             }),
-            Some(TerminalOutcome::Finished)
-        );
-        assert_eq!(
-            terminal_outcome(Screen::MaterialSelect),
-            Some(TerminalOutcome::MaterialUnsupported)
+            None
         );
         assert_eq!(
             terminal_outcome(Screen::Main {
@@ -1133,6 +1513,78 @@ mod tests {
             }),
             None
         );
+    }
+
+    #[test]
+    fn selected_main_repeats_ready_enhancement_and_stops_after_stable_not_ready() {
+        assert_eq!(
+            selected_main_action(true, true, 2, 0),
+            SelectedMainAction::Enhance
+        );
+        assert_eq!(
+            selected_main_action(false, true, 2, 1),
+            SelectedMainAction::WaitForAutoSelection
+        );
+        assert_eq!(
+            selected_main_action(false, true, 2, POST_ENHANCEMENT_NOT_READY_CONFIRMATIONS),
+            SelectedMainAction::Finished
+        );
+    }
+
+    #[test]
+    fn selected_main_configures_recommendation_once_before_first_enhancement() {
+        assert_eq!(
+            selected_main_action(false, false, 0, 1),
+            SelectedMainAction::OpenRecommendation
+        );
+        assert_eq!(
+            selected_main_action(false, true, 0, RECOMMEND_READY_MAX_WAITS - 1),
+            SelectedMainAction::WaitForAutoSelection
+        );
+        assert_eq!(
+            selected_main_action(false, true, 0, RECOMMEND_READY_MAX_WAITS),
+            SelectedMainAction::Finished
+        );
+    }
+
+    #[test]
+    fn enhancement_return_requires_leaving_main_before_accepting_main_again() {
+        let main = Screen::Main {
+            target_selected: true,
+            ready: true,
+        };
+        assert_eq!(
+            enhancement_return_action(main, false),
+            EnhancementReturnAction::TapSkip {
+                mark_left_main: false
+            }
+        );
+        assert_eq!(
+            enhancement_return_action(Screen::Unknown, false),
+            EnhancementReturnAction::TapSkip {
+                mark_left_main: true
+            }
+        );
+        assert_eq!(
+            enhancement_return_action(Screen::EnhancementSuccess, true),
+            EnhancementReturnAction::TapSkip {
+                mark_left_main: true
+            }
+        );
+        assert_eq!(
+            enhancement_return_action(main, true),
+            EnhancementReturnAction::ObserveReturnedMain
+        );
+        assert_eq!(
+            enhancement_return_action(Screen::EnhancementConfirmDialog, false),
+            EnhancementReturnAction::WaitForConfirmationClose
+        );
+        assert_eq!(
+            enhancement_return_action(Screen::RecommendMaterialDialog, true),
+            EnhancementReturnAction::Unexpected
+        );
+        assert!(!enhancement_main_return_confirmed(1));
+        assert!(enhancement_main_return_confirmed(2));
     }
 
     #[test]
@@ -1181,6 +1633,30 @@ mod tests {
         assert_eq!(
             classify_auto_config_saturation(90.0),
             AutoConfigState::Ambiguous
+        );
+    }
+
+    #[test]
+    fn enhancement_button_requires_shape_before_using_luma_state() {
+        assert_eq!(
+            classify_enhancement_button(0.585, 88.0),
+            EnhancementReadyState::Absent
+        );
+        assert_eq!(
+            classify_enhancement_button(0.929, 102.0),
+            EnhancementReadyState::NotReady
+        );
+        assert_eq!(
+            classify_enhancement_button(0.978, 165.0),
+            EnhancementReadyState::Ready
+        );
+        assert_eq!(
+            classify_enhancement_button(0.94, 135.0),
+            EnhancementReadyState::Transitioning
+        );
+        assert_eq!(
+            classify_enhancement_button(0.85, 165.0),
+            EnhancementReadyState::Absent
         );
     }
 
