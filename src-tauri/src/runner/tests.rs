@@ -3944,6 +3944,50 @@ fn ap_recovery_candidates_for_page_preserves_priority_within_page() {
 }
 
 #[test]
+fn ap_recovery_waits_half_a_second_between_item_and_confirmation_steps() {
+    assert_eq!(AP_RECOVERY_TAP_SETTLE, Duration::from_millis(500));
+}
+
+#[test]
+fn ap_recovery_confirm_region_uses_dialog_layout_for_each_item_group() {
+    for item in [ApRecoveryItem::Rainbow, ApRecoveryItem::Gold] {
+        let region = ap_recovery_confirm_region(item);
+        approx(region.x, AP_RECOVERY_CONFIRM_UPPER_REGION.x);
+        approx(region.y, AP_RECOVERY_CONFIRM_UPPER_REGION.y);
+        approx(region.w, AP_RECOVERY_CONFIRM_UPPER_REGION.w);
+        approx(region.h, AP_RECOVERY_CONFIRM_UPPER_REGION.h);
+    }
+    for item in [
+        ApRecoveryItem::Silver,
+        ApRecoveryItem::Bronze,
+        ApRecoveryItem::Copper,
+    ] {
+        let region = ap_recovery_confirm_region(item);
+        approx(region.x, AP_RECOVERY_CONFIRM_LOWER_REGION.x);
+        approx(region.y, AP_RECOVERY_CONFIRM_LOWER_REGION.y);
+        approx(region.w, AP_RECOVERY_CONFIRM_LOWER_REGION.w);
+        approx(region.h, AP_RECOVERY_CONFIRM_LOWER_REGION.h);
+    }
+    assert_eq!(AP_RECOVERY_CONFIRM_TEMPLATE, "shared/button_dialog");
+}
+
+#[test]
+fn ap_recovery_close_observation_yields_unknown_to_the_main_loop() {
+    assert_eq!(
+        classify_ap_recovery_close_observation(Screen::APRecovery),
+        ApRecoveryCloseObservation::StillOpen
+    );
+    assert_eq!(
+        classify_ap_recovery_close_observation(Screen::Unknown),
+        ApRecoveryCloseObservation::Obscured
+    );
+    assert_eq!(
+        classify_ap_recovery_close_observation(Screen::Battle),
+        ApRecoveryCloseObservation::Closed
+    );
+}
+
+#[test]
 fn unknown_element_error_helper_matches_exact_lookup() {
     assert!(is_unknown_element_error(
         "unknown element: SupportSelect.dialog_refresh_support",

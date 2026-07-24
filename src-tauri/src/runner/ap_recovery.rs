@@ -4,6 +4,9 @@ use super::*;
 
 const AP_RECOVERY_CLOSE_POLL: Duration = Duration::from_millis(300);
 const AP_RECOVERY_CLOSE_TIMEOUT: Duration = Duration::from_secs(6);
+const AP_RECOVERY_CONFIRM_APPEAR_POLL: Duration = Duration::from_millis(200);
+const AP_RECOVERY_CONFIRM_APPEAR_TIMEOUT: Duration = Duration::from_secs(3);
+pub(crate) const AP_RECOVERY_TAP_SETTLE: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApRecoveryPage {
@@ -17,6 +20,30 @@ pub(crate) struct ApRecoveryTemplate {
     pub(crate) page: ApRecoveryPage,
     pub(crate) label: &'static str,
     pub(crate) template_key: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ApRecoveryCloseObservation {
+    StillOpen,
+    Closed,
+    Obscured,
+}
+
+pub(crate) fn classify_ap_recovery_close_observation(screen: Screen) -> ApRecoveryCloseObservation {
+    match screen {
+        Screen::APRecovery => ApRecoveryCloseObservation::StillOpen,
+        Screen::Unknown => ApRecoveryCloseObservation::Obscured,
+        _ => ApRecoveryCloseObservation::Closed,
+    }
+}
+
+pub(crate) fn ap_recovery_confirm_region(item: ApRecoveryItem) -> NormRect {
+    match item {
+        ApRecoveryItem::Rainbow | ApRecoveryItem::Gold => AP_RECOVERY_CONFIRM_UPPER_REGION,
+        ApRecoveryItem::Silver | ApRecoveryItem::Bronze | ApRecoveryItem::Copper => {
+            AP_RECOVERY_CONFIRM_LOWER_REGION
+        }
+    }
 }
 
 pub(crate) fn ap_recovery_template(item: ApRecoveryItem) -> ApRecoveryTemplate {
@@ -107,11 +134,43 @@ impl Runner {
         if !self.tap_at("APRecovery", point) {
             return false;
         }
-        thread::sleep(ACTION_DELAY);
-        if !self.tap_at("APRecovery", AP_RECOVERY_CONFIRM_BUTTON) {
+        thread::sleep(AP_RECOVERY_TAP_SETTLE);
+
+        let Some(confirm_point) = self.wait_for_ap_recovery_confirm(item.item) else {
+            return false;
+        };
+        if !self.tap_at("APRecovery", confirm_point) {
             return false;
         }
+        thread::sleep(AP_RECOVERY_TAP_SETTLE);
         self.wait_for_ap_recovery_to_close()
+    }
+
+    fn wait_for_ap_recovery_confirm(&mut self, item: ApRecoveryItem) -> Option<Point> {
+        let start = Instant::now();
+        loop {
+            if self.is_cancelled() {
+                return None;
+            }
+            match self.sidecar().find_element(
+                None,
+                AP_RECOVERY_CONFIRM_TEMPLATE,
+                ap_recovery_confirm_region(item),
+                0.8,
+            ) {
+                Ok(Some(point)) => return Some(point),
+                Ok(None) => {}
+                Err(err) => {
+                    self.fail_action("APRecovery", "识别苹果使用确认弹窗", err);
+                    return None;
+                }
+            }
+            if start.elapsed() >= AP_RECOVERY_CONFIRM_APPEAR_TIMEOUT {
+                self.emit_warn("APRecovery", "未检测到苹果使用确认弹窗，返回主循环重试");
+                return None;
+            }
+            thread::sleep(AP_RECOVERY_CONFIRM_APPEAR_POLL);
+        }
     }
 
     fn wait_for_ap_recovery_to_close(&mut self) -> bool {
@@ -120,10 +179,15 @@ impl Runner {
             if self.is_cancelled() {
                 return false;
             }
-            thread::sleep(AP_RECOVERY_CLOSE_POLL);
             match self.sidecar().detect(None) {
-                Ok(Screen::APRecovery) => {}
-                Ok(_) => return true,
+                Ok(screen) => match classify_ap_recovery_close_observation(screen) {
+                    ApRecoveryCloseObservation::StillOpen => {}
+                    ApRecoveryCloseObservation::Closed => return true,
+                    ApRecoveryCloseObservation::Obscured => {
+                        self.emit_debug("APRecovery", "确认后画面暂时无法识别，交回主循环处理");
+                        return true;
+                    }
+                },
                 Err(err) => {
                     eprintln!("[runner] APRecovery close wait detect failed: {err}");
                 }
@@ -132,6 +196,7 @@ impl Runner {
                 self.emit_warn("APRecovery", "等待行动力回复页面关闭超时，返回主循环重试");
                 return false;
             }
+            thread::sleep(AP_RECOVERY_CLOSE_POLL);
         }
     }
 

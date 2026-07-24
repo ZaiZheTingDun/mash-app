@@ -200,7 +200,19 @@ pub(crate) const AP_RECOVERY_ITEMS_REGION: NormRect = NormRect {
 };
 pub(crate) const AP_RECOVERY_SCROLL_FROM: Point = Point::new(0.780, 0.166);
 pub(crate) const AP_RECOVERY_SCROLL_TO: Point = Point::new(0.780, 0.426);
-pub(crate) const AP_RECOVERY_CONFIRM_BUTTON: Point = Point::new(0.663, 0.795);
+pub(crate) const AP_RECOVERY_CONFIRM_UPPER_REGION: NormRect = NormRect {
+    x: 0.676,
+    y: 0.736,
+    w: 0.079,
+    h: 0.092,
+};
+pub(crate) const AP_RECOVERY_CONFIRM_LOWER_REGION: NormRect = NormRect {
+    x: 0.675,
+    y: 0.763,
+    w: 0.079,
+    h: 0.092,
+};
+pub(crate) const AP_RECOVERY_CONFIRM_TEMPLATE: &str = "shared/button_dialog";
 pub(crate) const AP_RECOVERY_LIST_LABEL_TEMPLATE: &str = "items/label_item";
 pub(crate) const AP_RECOVERY_ITEM_THRESHOLD: f64 = 0.82;
 

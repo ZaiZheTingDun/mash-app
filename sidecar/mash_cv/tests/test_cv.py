@@ -1187,6 +1187,63 @@ class TestFindElement:
         assert filtered["apRecoveryRow"]["enabled"] is False
         assert filtered["apRecoveryRow"]["darkFraction"] >= 0.55
 
+    @pytest.mark.parametrize(
+        ("screenshot", "region"),
+        (
+            (
+                "ap_recovery_cn_saint_quartz_dialog.png",
+                {"x": 0.676, "y": 0.736, "w": 0.079, "h": 0.092},
+            ),
+            (
+                "ap_recovery_cn_gold_dialog.png",
+                {"x": 0.676, "y": 0.736, "w": 0.079, "h": 0.092},
+            ),
+            (
+                "ap_recovery_cn_copper_dialog.png",
+                {"x": 0.675, "y": 0.763, "w": 0.079, "h": 0.092},
+            ),
+            (
+                "ap_recovery_cn_bronze_dialog.png",
+                {"x": 0.675, "y": 0.763, "w": 0.079, "h": 0.092},
+            ),
+            (
+                "ap_recovery_cn_silver_dialog.png",
+                {"x": 0.675, "y": 0.763, "w": 0.079, "h": 0.092},
+            ),
+        ),
+    )
+    def test_ap_recovery_dialog_button_matches_each_item_layout(self, screenshot, region):
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        template_dir = os.path.join(
+            repo_root,
+            "src-tauri",
+            "resources",
+            "servers",
+            "shared",
+            "templates",
+        )
+        image_path = os.path.join(
+            os.path.dirname(__file__),
+            "test_data",
+            "screenshots",
+            screenshot,
+        )
+        assert mash_cv._load_templates(template_dir, key_prefix="shared")["ok"] is True
+        img = cv2.imread(image_path)
+        assert img is not None
+
+        result = mash_cv._find_element(
+            img,
+            "shared/button_dialog",
+            region,
+            0.8,
+        )
+
+        assert result["found"] is True
+        assert result["score"] >= 0.8
+        assert region["x"] <= result["x"] <= region["x"] + region["w"]
+        assert region["y"] <= result["y"] <= region["y"] + region["h"]
+
 
 class TestReadRegionLuma:
     def test_reads_bright_and_dark_regions(self):
