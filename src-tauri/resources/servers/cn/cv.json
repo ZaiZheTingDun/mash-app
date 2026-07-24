@@ -562,6 +562,16 @@
     },
     "CraftEssenceEnhancement": {
       "variants": {
+        "main": {
+          "elements": {
+            "dialog_enhancement_ce_recommend_material": {
+              "template": "enhancement_ce/dialog_enhancement_ce_recommend_material",
+              "region": { "x": 0.4, "y": 0.04, "w": 0.2, "h": 0.08 },
+              "threshold": 0.85,
+              "templateReferenceWidth": 1920
+            }
+          }
+        },
         "ceSelect": {
           "elements": {
             "button_scale_level_3": {

@@ -16,8 +16,12 @@ const BINARY_CONTROL_MIN_SCORE: f64 = 0.9;
 const BINARY_CONTROL_SCORE_MARGIN: f64 = 0.04;
 const FILTER_TOGGLE_OFF_MAX_LUMA: f64 = 145.0;
 const FILTER_TOGGLE_ON_MIN_LUMA: f64 = 180.0;
+const AUTO_CONFIG_OFF_MAX_SATURATION: f64 = 70.0;
+const AUTO_CONFIG_ON_MIN_SATURATION: f64 = 110.0;
+const RECOMMEND_OPEN_MAX_ATTEMPTS: u8 = 5;
 
 const TARGET_SELECT_BUTTON: Point = Point::new(0.153, 0.555);
+const RECOMMEND_MATERIAL_BUTTON: Point = Point::new(0.846, 0.233);
 const GRID_DENSITY_BUTTON: Point = Point::new(0.023, 0.938);
 const FILTER_BUTTON: Point = Point::new(0.7635, 0.180);
 const FILTER_CONFIRM_BUTTON: Point = Point::new(0.8235, 0.8855);
@@ -25,6 +29,15 @@ const ORDER_BUTTON: Point = Point::new(0.8795, 0.176);
 const ORDER_LEVEL_BUTTON: Point = Point::new(0.255, 0.323);
 const ORDER_CONFIRM_BUTTON: Point = Point::new(0.6735, 0.884);
 const ORDER_DIRECTION_BUTTON: Point = Point::new(0.9748, 0.1833);
+const RECOMMEND_INIT_BUTTON: Point = Point::new(0.1755, 0.8815);
+const RECOMMEND_AUTO_CONFIG_BUTTON: Point = Point::new(0.6245, 0.733);
+const RECOMMEND_EXECUTE_BUTTON: Point = Point::new(0.8295, 0.8815);
+const RECOMMEND_AUTO_CONFIG_REGION: NormRect = NormRect {
+    x: 0.601,
+    y: 0.685,
+    w: 0.047,
+    h: 0.09,
+};
 const ITEM_GRID_REGION: NormRect = NormRect {
     x: 0.055,
     y: 0.251,
@@ -38,6 +51,16 @@ const RARITY_FILTERS: [RarityFilter; 5] = [
     RarityFilter::new(3, false, 0.525, 0.305, 0.030, 0.041),
     RarityFilter::new(2, true, 0.675, 0.305, 0.030, 0.041),
     RarityFilter::new(1, true, 0.820, 0.305, 0.030, 0.041),
+];
+
+const RECOMMEND_FILTERS: [RecommendFilter; 7] = [
+    RecommendFilter::new("1 星", true, 0.225, 0.472, 0.025, 0.040),
+    RecommendFilter::new("2 星", true, 0.363, 0.472, 0.025, 0.040),
+    RecommendFilter::new("3 星", false, 0.505, 0.472, 0.025, 0.040),
+    RecommendFilter::new("4 星", false, 0.637, 0.472, 0.025, 0.040),
+    RecommendFilter::new("5 星", false, 0.775, 0.472, 0.025, 0.040),
+    RecommendFilter::new("未强化", true, 0.225, 0.580, 0.025, 0.040),
+    RecommendFilter::new("已强化", false, 0.363, 0.580, 0.025, 0.040),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -124,6 +147,7 @@ pub(crate) enum Screen {
     MaterialSelect,
     FilterDialog,
     OrderDialog,
+    RecommendMaterialDialog,
     Unknown,
 }
 
@@ -146,6 +170,9 @@ impl ProbeSnapshot {
 }
 
 pub(crate) fn classify_screen(snapshot: &ProbeSnapshot) -> Screen {
+    if snapshot.has("dialog_enhancement_ce_recommend_material") {
+        return Screen::RecommendMaterialDialog;
+    }
     let select_mark = snapshot.has("button_enhancement_ce_select_ce_mark");
     if select_mark
         && snapshot.has("dialog_enhancement_ce_filter")
@@ -185,7 +212,7 @@ fn terminal_outcome(screen: Screen) -> Option<TerminalOutcome> {
     match screen {
         Screen::Main {
             target_selected: true,
-            ..
+            ready: true,
         } => Some(TerminalOutcome::Finished),
         Screen::MaterialSelect => Some(TerminalOutcome::MaterialUnsupported),
         _ => None,
@@ -231,6 +258,23 @@ fn classify_filter_toggle_luma(mean_luma: f64) -> FilterToggleState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AutoConfigState {
+    Off,
+    On,
+    Ambiguous,
+}
+
+fn classify_auto_config_saturation(mean_saturation: f64) -> AutoConfigState {
+    if mean_saturation <= AUTO_CONFIG_OFF_MAX_SATURATION {
+        AutoConfigState::Off
+    } else if mean_saturation >= AUTO_CONFIG_ON_MIN_SATURATION {
+        AutoConfigState::On
+    } else {
+        AutoConfigState::Ambiguous
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DensityDecision {
     Confirmed,
     Toggle,
@@ -253,7 +297,7 @@ struct Probe {
     element: &'static str,
 }
 
-const PROBES: [Probe; 10] = [
+const PROBES: [Probe; 11] = [
     Probe::new("icon_enhancement_result"),
     Probe::new("element_enhancement_ce_stripe"),
     Probe::new("element_enhancement_new"),
@@ -264,6 +308,7 @@ const PROBES: [Probe; 10] = [
     Probe::new("dialog_enhancement_ce_filter"),
     Probe::new("button_enhancement_ce_filter_init"),
     Probe::new("dialog_enhancement_ce_order"),
+    Probe::new("dialog_enhancement_ce_recommend_material"),
 ];
 
 impl Probe {
@@ -296,6 +341,30 @@ impl RarityFilter {
     }
 }
 
+#[derive(Clone, Copy)]
+struct RecommendFilter {
+    label: &'static str,
+    target_on: bool,
+    region: NormRect,
+}
+
+impl RecommendFilter {
+    const fn new(label: &'static str, target_on: bool, x: f64, y: f64, w: f64, h: f64) -> Self {
+        Self {
+            label,
+            target_on,
+            region: NormRect { x, y, w, h },
+        }
+    }
+
+    fn center(self) -> Point {
+        Point::new(
+            self.region.x + self.region.w / 2.0,
+            self.region.y + self.region.h / 2.0,
+        )
+    }
+}
+
 pub struct CraftEssenceEnhancementRunner {
     sidecar: Option<SidecarClient>,
     sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
@@ -313,6 +382,10 @@ pub struct CraftEssenceEnhancementRunner {
     descending_checked: bool,
     target_tapped: bool,
     target_return_waits: u8,
+    recommend_reset_done: bool,
+    recommend_open_attempts: u8,
+    recommend_execute_tapped: bool,
+    recommend_ready_waits: u8,
 }
 
 impl CraftEssenceEnhancementRunner {
@@ -344,6 +417,10 @@ impl CraftEssenceEnhancementRunner {
             descending_checked: false,
             target_tapped: false,
             target_return_waits: 0,
+            recommend_reset_done: false,
+            recommend_open_attempts: 0,
+            recommend_execute_tapped: false,
+            recommend_ready_waits: 0,
         }
     }
 
@@ -378,18 +455,8 @@ impl CraftEssenceEnhancementRunner {
 
             match terminal_outcome(screen) {
                 Some(TerminalOutcome::Finished) => {
-                    let Screen::Main { ready, .. } = screen else {
-                        unreachable!()
-                    };
                     self.transition(LifecycleEvent::Finished);
-                    self.emit(
-                        "CraftEssenceEnhancement",
-                        if ready {
-                            "已选择目标概念礼装并返回强化页面（强化按钮已就绪），本阶段完成"
-                        } else {
-                            "已选择目标概念礼装并返回强化页面，本阶段完成"
-                        },
-                    );
+                    self.emit("CraftEssenceEnhancement", "强化按钮已就绪，本阶段完成");
                     return;
                 }
                 Some(TerminalOutcome::MaterialUnsupported) => {
@@ -403,6 +470,35 @@ impl CraftEssenceEnhancementRunner {
             }
 
             match screen {
+                Screen::Main {
+                    target_selected: true,
+                    ready: false,
+                } => {
+                    if self.recommend_execute_tapped {
+                        self.recommend_ready_waits += 1;
+                        if self.recommend_ready_waits >= 8 {
+                            self.fail(
+                                "CraftEssenceEnhancement",
+                                "执行推荐素材选择后，强化按钮仍未就绪".into(),
+                            );
+                            return;
+                        }
+                        thread::sleep(Duration::from_millis(700));
+                        continue;
+                    }
+                    if self.recommend_open_attempts >= RECOMMEND_OPEN_MAX_ATTEMPTS {
+                        self.fail(
+                            "CraftEssenceEnhancement",
+                            "多次点击推荐选择后，对话框仍未打开".into(),
+                        );
+                        return;
+                    }
+                    self.emit("CraftEssenceEnhancement", "打开推荐强化素材设置");
+                    if self.tap_at("CraftEssenceEnhancement", RECOMMEND_MATERIAL_BUTTON) {
+                        self.recommend_open_attempts += 1;
+                        thread::sleep(Duration::from_millis(800));
+                    }
+                }
                 Screen::Main {
                     target_selected: false,
                     ready,
@@ -438,9 +534,14 @@ impl CraftEssenceEnhancementRunner {
                         return;
                     }
                 }
+                Screen::RecommendMaterialDialog => {
+                    if !self.handle_recommend_material_dialog() {
+                        return;
+                    }
+                }
                 Screen::Main {
                     target_selected: true,
-                    ..
+                    ready: true,
                 }
                 | Screen::MaterialSelect => unreachable!(),
                 Screen::Unknown => unreachable!(),
@@ -599,6 +700,113 @@ impl CraftEssenceEnhancementRunner {
             return true;
         }
         false
+    }
+
+    fn handle_recommend_material_dialog(&mut self) -> bool {
+        if self.recommend_execute_tapped {
+            self.recommend_ready_waits += 1;
+            if self.recommend_ready_waits >= 8 {
+                self.fail(
+                    "RecommendMaterialDialog",
+                    "点击执行后推荐素材对话框仍未关闭".into(),
+                );
+                return false;
+            }
+            thread::sleep(Duration::from_millis(700));
+            return true;
+        }
+
+        if !self.recommend_reset_done {
+            self.emit("RecommendMaterialDialog", "初始化推荐素材筛选");
+            if self.tap_at("RecommendMaterialDialog", RECOMMEND_INIT_BUTTON) {
+                self.recommend_reset_done = true;
+                thread::sleep(Duration::from_millis(600));
+                return true;
+            }
+            return false;
+        }
+
+        for filter in RECOMMEND_FILTERS {
+            let mean_luma = match self.sidecar().read_region_luma(None, filter.region) {
+                Ok(mean_luma) => mean_luma,
+                Err(err) => {
+                    self.fail(
+                        "RecommendMaterialDialog",
+                        format!("读取推荐素材“{}”颜色失败: {err}", filter.label),
+                    );
+                    return false;
+                }
+            };
+            let current_state = classify_filter_toggle_luma(mean_luma);
+            match current_state {
+                FilterToggleState::On if filter.target_on => continue,
+                FilterToggleState::Off if !filter.target_on => continue,
+                FilterToggleState::On | FilterToggleState::Off => {
+                    self.emit(
+                        "RecommendMaterialDialog",
+                        &format!("调整推荐素材“{}”筛选状态", filter.label),
+                    );
+                    if self.tap_at("RecommendMaterialDialog", filter.center()) {
+                        thread::sleep(Duration::from_millis(450));
+                        return true;
+                    }
+                    return false;
+                }
+                FilterToggleState::Ambiguous => {
+                    self.fail(
+                        "RecommendMaterialDialog",
+                        format!(
+                            "无法明确识别推荐素材“{}”开关颜色（平均亮度 {:.1}）",
+                            filter.label, mean_luma
+                        ),
+                    );
+                    return false;
+                }
+            }
+        }
+
+        let auto_color = match self
+            .sidecar()
+            .read_region_color(None, RECOMMEND_AUTO_CONFIG_REGION)
+        {
+            Ok(color) => color,
+            Err(err) => {
+                self.fail(
+                    "RecommendMaterialDialog",
+                    format!("读取自动配置开关颜色失败: {err}"),
+                );
+                return false;
+            }
+        };
+        match classify_auto_config_saturation(auto_color.mean_saturation) {
+            AutoConfigState::Off => {
+                self.emit("RecommendMaterialDialog", "开启自动配置");
+                if self.tap_at("RecommendMaterialDialog", RECOMMEND_AUTO_CONFIG_BUTTON) {
+                    thread::sleep(Duration::from_millis(500));
+                    return true;
+                }
+                false
+            }
+            AutoConfigState::On => {
+                self.emit("RecommendMaterialDialog", "执行推荐素材选择");
+                if self.tap_at("RecommendMaterialDialog", RECOMMEND_EXECUTE_BUTTON) {
+                    self.recommend_execute_tapped = true;
+                    thread::sleep(Duration::from_millis(900));
+                    return true;
+                }
+                false
+            }
+            AutoConfigState::Ambiguous => {
+                self.fail(
+                    "RecommendMaterialDialog",
+                    format!(
+                        "无法明确识别自动配置开关颜色（平均饱和度 {:.1}）",
+                        auto_color.mean_saturation
+                    ),
+                );
+                false
+            }
+        }
     }
 
     fn handle_order_dialog(&mut self) -> bool {
@@ -854,6 +1062,14 @@ mod tests {
             ])),
             Screen::OrderDialog
         );
+        assert_eq!(
+            classify_screen(&ProbeSnapshot::from_keys(&[
+                "icon_enhancement_result",
+                "element_enhancement_ce_stripe",
+                "dialog_enhancement_ce_recommend_material"
+            ])),
+            Screen::RecommendMaterialDialog
+        );
     }
 
     #[test]
@@ -895,7 +1111,7 @@ mod tests {
         assert_eq!(
             terminal_outcome(Screen::Main {
                 target_selected: true,
-                ready: false,
+                ready: true,
             }),
             Some(TerminalOutcome::Finished)
         );
@@ -905,8 +1121,15 @@ mod tests {
         );
         assert_eq!(
             terminal_outcome(Screen::Main {
-                target_selected: false,
+                target_selected: true,
                 ready: false,
+            }),
+            None
+        );
+        assert_eq!(
+            terminal_outcome(Screen::Main {
+                target_selected: false,
+                ready: true,
             }),
             None
         );
@@ -949,5 +1172,25 @@ mod tests {
             classify_filter_toggle_luma(160.0),
             FilterToggleState::Ambiguous
         );
+    }
+
+    #[test]
+    fn auto_config_color_separates_gray_off_from_blue_on() {
+        assert_eq!(classify_auto_config_saturation(37.5), AutoConfigState::Off);
+        assert_eq!(classify_auto_config_saturation(150.3), AutoConfigState::On);
+        assert_eq!(
+            classify_auto_config_saturation(90.0),
+            AutoConfigState::Ambiguous
+        );
+    }
+
+    #[test]
+    fn recommended_material_targets_only_low_rarity_and_unenhanced() {
+        let selected = RECOMMEND_FILTERS
+            .iter()
+            .filter(|filter| filter.target_on)
+            .map(|filter| filter.label)
+            .collect::<Vec<_>>();
+        assert_eq!(selected, vec!["1 星", "2 星", "未强化"]);
     }
 }

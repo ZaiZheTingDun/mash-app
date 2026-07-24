@@ -1256,6 +1256,8 @@ class TestReadRegionLuma:
         assert dark["ok"] is True
         assert bright["meanLuma"] > 230.0
         assert dark["meanLuma"] < 10.0
+        assert bright["meanSaturation"] < 1.0
+        assert bright["meanValue"] > 230.0
 
     def test_cn_skill_use_screenshots_separate_used_and_confirm_states(self):
         screenshots_dir = Path(__file__).resolve().parent / "test_data" / "screenshots"
@@ -4876,6 +4878,14 @@ def _ce_enhancement_fixture(name):
         ("enhancement_ce_main.png", "element_enhancement_new"),
         ("enhancement_ce_ready.png", "element_enhancement_ce_stripe"),
         ("enhancement_ce_ready.png", "button_enhancement_ready"),
+        (
+            "enhancement_ce_recommend_executed_ready.png",
+            "element_enhancement_ce_stripe",
+        ),
+        (
+            "enhancement_ce_recommend_executed_ready.png",
+            "button_enhancement_ready",
+        ),
         ("enhancement_ce_select_ce.png", "button_enhancement_ce_select_ce_mark"),
         ("enhancement_ce_select_ce.png", "button_scale_level_3"),
         ("enhancement_ce_select_ce.png", "button_enhancement_ce_select_ce_desc"),
@@ -4890,6 +4900,14 @@ def _ce_enhancement_fixture(name):
         (
             "enhancement_ce_select_ce_on.png",
             "toggle_enhancement_ce_intelligent_order_on",
+        ),
+        (
+            "enhancement_ce_recommend_dialog_auto_off.png",
+            "dialog_enhancement_ce_recommend_material",
+        ),
+        (
+            "enhancement_ce_recommend_dialog_auto_on.png",
+            "dialog_enhancement_ce_recommend_material",
         ),
     ),
 )
@@ -4908,6 +4926,30 @@ def test_craft_essence_enhancement_templates_respect_reference_width(
     )
 
     assert result["found"], (fixture, element, width, result)
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+@pytest.mark.parametrize(
+    "fixture",
+    (
+        "enhancement_ce_main_selected_not_ready.png",
+        "enhancement_ce_select_ce_filter.png",
+        "enhancement_ce_select_ce_order.png",
+    ),
+)
+def test_craft_essence_recommend_dialog_probe_rejects_other_states(fixture, width):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture(fixture)
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    result = mash_cv._find_element_by_name(
+        img,
+        "CraftEssenceEnhancement",
+        "dialog_enhancement_ce_recommend_material",
+    )
+
+    assert result["found"] is False
 
 
 def test_craft_essence_filter_toggle_scores_pin_target_states():
@@ -4952,6 +4994,77 @@ def test_craft_essence_filter_toggle_luma_separates_blue_and_white_states(width)
             assert result["meanLuma"] >= 180.0
         else:
             assert result["meanLuma"] <= 145.0
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+def test_craft_essence_recommend_material_filters_use_expected_states(width):
+    img = _ce_enhancement_fixture("enhancement_ce_recommend_dialog_auto_off.png")
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+    expected = {
+        "1-star": (True, {"x": 0.225, "y": 0.472, "w": 0.025, "h": 0.040}),
+        "2-star": (True, {"x": 0.363, "y": 0.472, "w": 0.025, "h": 0.040}),
+        "3-star": (False, {"x": 0.505, "y": 0.472, "w": 0.025, "h": 0.040}),
+        "4-star": (False, {"x": 0.637, "y": 0.472, "w": 0.025, "h": 0.040}),
+        "5-star": (False, {"x": 0.775, "y": 0.472, "w": 0.025, "h": 0.040}),
+        "unenhanced": (True, {"x": 0.225, "y": 0.580, "w": 0.025, "h": 0.040}),
+        "enhanced": (False, {"x": 0.363, "y": 0.580, "w": 0.025, "h": 0.040}),
+    }
+
+    for label, (is_on, region) in expected.items():
+        result = mash_cv._read_region_luma(img, region)
+        assert result["ok"] is True, label
+        if is_on:
+            assert result["meanLuma"] >= 180.0, (label, result)
+        else:
+            assert result["meanLuma"] <= 145.0, (label, result)
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+def test_craft_essence_recommend_auto_config_saturation_separates_states(width):
+    region = {"x": 0.601, "y": 0.685, "w": 0.047, "h": 0.090}
+    results = {}
+    for state in ("off", "on"):
+        img = _ce_enhancement_fixture(
+            f"enhancement_ce_recommend_dialog_auto_{state}.png"
+        )
+        if width != img.shape[1]:
+            img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+        results[state] = mash_cv._read_region_luma(img, region)
+
+    assert results["off"]["meanSaturation"] <= 70.0
+    assert results["on"]["meanSaturation"] >= 110.0
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+@pytest.mark.parametrize(
+    "fixture",
+    ("enhancement_ce_main.png", "enhancement_ce_main_selected_not_ready.png"),
+)
+def test_craft_essence_main_without_materials_is_not_ready(width, fixture):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture(fixture)
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    results = {
+        element: mash_cv._find_element_by_name(
+            img, "CraftEssenceEnhancement", element
+        )
+        for element in (
+            "icon_enhancement_result",
+            "element_enhancement_ce_stripe",
+            "element_enhancement_new",
+            "button_enhancement_ready",
+        )
+    }
+
+    assert results["icon_enhancement_result"]["found"] is True
+    assert results["element_enhancement_ce_stripe"]["found"] is True
+    assert results["element_enhancement_new"]["found"] is (
+        fixture == "enhancement_ce_main.png"
+    )
+    assert results["button_enhancement_ready"]["found"] is False
 
 
 @pytest.mark.parametrize("width", (1920, 2560))

@@ -136,6 +136,14 @@ pub struct ElementMatch {
     pub region: Option<NormRect>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegionColorStats {
+    pub mean_luma: f64,
+    pub mean_saturation: f64,
+    pub mean_value: f64,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillUseDialogProbe {

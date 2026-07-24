@@ -129,7 +129,7 @@
             "button_enhancement_ready": {
               "template": "shared/enhancement_ce/button_enhancement_ready",
               "region": { "x": 0.9, "y": 0.87, "w": 0.09, "h": 0.12 },
-              "threshold": 0.98,
+              "threshold": 0.97,
               "templateReferenceWidth": 1920
             }
           }

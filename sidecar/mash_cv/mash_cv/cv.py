@@ -527,12 +527,21 @@ def _read_region_luma(img: np.ndarray, region: dict) -> dict:
     rh = max(1, min(int(round(float(region.get("h", 0.0)) * h)), h - ry))
     roi = img[ry : ry + rh, rx : rx + rw]
     if roi.size == 0:
-        return {"ok": False, "error": "empty_region", "meanLuma": 0.0}
+        return {
+            "ok": False,
+            "error": "empty_region",
+            "meanLuma": 0.0,
+            "meanSaturation": 0.0,
+            "meanValue": 0.0,
+        }
 
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     return {
         "ok": True,
         "meanLuma": float(np.mean(gray)),
+        "meanSaturation": float(np.mean(hsv[:, :, 1])),
+        "meanValue": float(np.mean(hsv[:, :, 2])),
         "region": {
             "x": rx / w,
             "y": ry / h,
@@ -5406,7 +5415,16 @@ def main() -> None:
         elif action == "read_region_luma":
             img, err = _load_frame(cmd)
             if img is None:
-                _reply(req_id, {"ok": False, "meanLuma": 0.0, "error": err})
+                _reply(
+                    req_id,
+                    {
+                        "ok": False,
+                        "meanLuma": 0.0,
+                        "meanSaturation": 0.0,
+                        "meanValue": 0.0,
+                        "error": err,
+                    },
+                )
             else:
                 _reply(req_id, _read_region_luma(img, cmd.get("region", DEFAULT_REGION)))
         elif action == "probe_skill_use_dialog":

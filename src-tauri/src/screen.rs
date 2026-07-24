@@ -504,7 +504,46 @@ impl SidecarClient {
         }
         resp["meanLuma"]
             .as_f64()
-            .ok_or_else(|| "read_region_luma response missing meanLuma".into())
+            .ok_or_else(|| "read_region_luma response missing meanLuma".to_string())
+    }
+
+    /// Return mean grayscale luma and HSV saturation/value for a normalized region.
+    pub fn read_region_color(
+        &mut self,
+        image_path: Option<&Path>,
+        region: NormRect,
+    ) -> Result<RegionColorStats, String> {
+        let mut req = serde_json::json!({
+            "cmd": "read_region_luma",
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|value| value.as_str()) {
+            return Err(err.to_string());
+        }
+        if !resp["ok"].as_bool().unwrap_or(false) {
+            return Err("read_region_luma failed".into());
+        }
+        let mean_luma = resp["meanLuma"]
+            .as_f64()
+            .ok_or_else(|| "read_region_luma response missing meanLuma".to_string())?;
+        let mean_saturation = resp["meanSaturation"]
+            .as_f64()
+            .ok_or_else(|| "read_region_luma response missing meanSaturation".to_string())?;
+        let mean_value = resp["meanValue"]
+            .as_f64()
+            .ok_or_else(|| "read_region_luma response missing meanValue".to_string())?;
+        Ok(RegionColorStats {
+            mean_luma,
+            mean_saturation,
+            mean_value,
+        })
     }
 
     /// Match a skill-use dialog and return the confirm button luma.
