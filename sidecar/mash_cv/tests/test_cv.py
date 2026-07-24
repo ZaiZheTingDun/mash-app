@@ -3356,6 +3356,72 @@ def test_support_skill_details_split_merged_owned_skill_contours(monkeypatch):
         cv._set_server("JP")
 
 
+def _load_cn_support_select_assets():
+    repo_root = Path(__file__).resolve().parents[3]
+    shared = repo_root / "src-tauri" / "resources" / "servers" / "shared"
+    cn = repo_root / "src-tauri" / "resources" / "servers" / "cn"
+    mash_cv._load_templates(str(shared / "templates"), key_prefix="shared")
+    mash_cv._load_templates(str(cn / "templates"), append=True)
+    assert mash_cv._load_config(str(shared / "cv.json"))["ok"]
+    assert mash_cv._load_config(str(cn / "cv.json"), merge=True)["ok"]
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+def test_cn_extra_class_filter_dialog_probe_hits_real_capture(width):
+    _load_cn_support_select_assets()
+    fixture = (
+        Path(__file__).parent
+        / "test_data"
+        / "screenshots"
+        / "support_extra_class_filter_cn.png"
+    )
+    img = cv2.imread(str(fixture))
+    assert img is not None
+    if width != img.shape[1]:
+        img = cv2.resize(
+            img,
+            (width, int(img.shape[0] * width / img.shape[1])),
+            interpolation=cv2.INTER_CUBIC,
+        )
+
+    result = mash_cv._find_element_by_name(
+        img,
+        "SupportSelect",
+        "dialog_extra_class_filter",
+    )
+
+    assert result["found"] is True
+    assert result["score"] >= 0.98
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+def test_cn_extra_class_filter_dialog_probe_rejects_closed_support_page(width):
+    _load_cn_support_select_assets()
+    fixture = (
+        Path(__file__).parent
+        / "test_data"
+        / "screenshots"
+        / "support_extra_class_filter_closed_cn.png"
+    )
+    img = cv2.imread(str(fixture))
+    assert img is not None
+    if width != img.shape[1]:
+        img = cv2.resize(
+            img,
+            (width, int(img.shape[0] * width / img.shape[1])),
+            interpolation=cv2.INTER_CUBIC,
+        )
+
+    result = mash_cv._find_element_by_name(
+        img,
+        "SupportSelect",
+        "dialog_extra_class_filter",
+    )
+
+    assert result["found"] is False
+    assert result["score"] < 0.2
+
+
 _RAPIDOCR_AVAILABLE = True
 try:
     import rapidocr_onnxruntime  # noqa: F401

@@ -3659,6 +3659,71 @@ fn run_config_round_trips_lancer_roles() {
 }
 
 #[test]
+fn support_class_filter_keeps_single_tap_for_jp_extra_and_cn_standard_classes() {
+    let jp_extra = support_class_filter_action(Server::Jp, "ruler", false).unwrap();
+    let cn_standard = support_class_filter_action(Server::Cn, "caster", false).unwrap();
+
+    for (action, expected) in [
+        (jp_extra, SUPPORT_TAB_EXTRA),
+        (cn_standard, SUPPORT_TAB_CASTER),
+    ] {
+        let SupportClassFilterAction::Tap(point) = action else {
+            panic!("expected a single class-tab tap");
+        };
+        approx(point.x, expected.x);
+        approx(point.y, expected.y);
+    }
+}
+
+#[test]
+fn support_class_filter_uses_cn_extra_dialog_slots() {
+    let expected = [
+        ("shielder", "盾兵", 0.260, 0.427),
+        ("ruler", "裁定者", 0.420, 0.427),
+        ("avenger", "复仇者", 0.580, 0.427),
+        ("mooncancer", "月之癌", 0.740, 0.427),
+        ("alterego", "他人格", 0.260, 0.649),
+        ("foreigner", "降临者", 0.420, 0.649),
+        ("pretender", "身披角色者", 0.580, 0.649),
+        ("beasteresh", "兽", 0.740, 0.649),
+    ];
+
+    for (class_name, label, x, y) in expected {
+        let action = support_class_filter_action(Server::Cn, class_name, false).unwrap();
+        let SupportClassFilterAction::CnExtra(extra) = action else {
+            panic!("expected CN EXTRA dialog action for {class_name}");
+        };
+        assert_eq!(extra.label, label);
+        approx(extra.point.x, x);
+        approx(extra.point.y, y);
+    }
+}
+
+#[test]
+fn support_class_filter_reuses_saved_cn_extra_choice_after_first_configuration() {
+    let action = support_class_filter_action(Server::Cn, "foreigner", true).unwrap();
+    let SupportClassFilterAction::Tap(point) = action else {
+        panic!("expected saved CN EXTRA choice to reuse the ordinary tab");
+    };
+    approx(point.x, SUPPORT_TAB_EXTRA.x);
+    approx(point.y, SUPPORT_TAB_EXTRA.y);
+}
+
+#[test]
+fn support_class_filter_rejects_non_support_beast_variants() {
+    assert!(support_class_filter_action(Server::Jp, "beasteresh", false).is_none());
+    assert!(support_class_filter_action(Server::Cn, "beastii", false).is_none());
+    assert!(support_class_filter_action(Server::Cn, "unbeastolgamarie", false).is_none());
+}
+
+#[test]
+fn cn_extra_filter_uses_human_press_and_waits_for_result_overlay() {
+    assert_eq!(SUPPORT_EXTRA_FILTER_LONG_PRESS_MS, 900);
+    assert_eq!(SUPPORT_EXTRA_FILTER_CONFIRM_PRESS_MS, 100);
+    assert_eq!(SUPPORT_EXTRA_FILTER_RESULT_SETTLE, Duration::from_secs(2));
+}
+
+#[test]
 fn support_level_meets_treats_none_requirement_as_any() {
     assert!(support_level_meets(None, None));
     assert!(support_level_meets(Some(1), None));

@@ -603,6 +603,14 @@ mod tests {
     }
 
     #[test]
+    fn settle_swipe_script_models_stationary_long_press() {
+        let script = build_settle_swipe_script((948, 192), (948, 192), 0, 900);
+        assert!(script.starts_with("input motionevent DOWN 948 192"));
+        assert!(script.contains("sleep 0.900; input motionevent MOVE 948 192"));
+        assert!(script.ends_with("input motionevent UP 948 192"));
+    }
+
+    #[test]
     fn settle_swipe_script_interpolates_intermediate_moves() {
         // 600-ms swipe → 30 evenly-spaced MOVE steps from y=1500 to
         // y=500 → step size of (1500 - 500) / 30 ≈ 33.33 px.

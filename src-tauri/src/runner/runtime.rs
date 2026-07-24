@@ -123,6 +123,25 @@ impl Runner {
         }
     }
 
+    /// Hold a stationary touch at `point` for a controlled duration. The
+    /// settle-style backend emits a real DOWN/MOVE/UP stream, which supports
+    /// both long presses and short human-like presses that must not use
+    /// Android's instantaneous `input tap`.
+    pub(crate) fn press_at(&mut self, screen: &str, point: Point, duration_ms: u32) -> bool {
+        let (px, py) = point.to_physical(self.screen_w, self.screen_h);
+        let (jx, jy) = jitter_offset();
+        let press_x = (px as i32 + jx).clamp(0, self.screen_w.saturating_sub(1) as i32) as u32;
+        let press_y = (py as i32 + jy).clamp(0, self.screen_h.saturating_sub(1) as i32) as u32;
+        let press = (press_x, press_y);
+        match self.touch.swipe_with_settle(press, press, 0, duration_ms) {
+            Ok(()) => true,
+            Err(err) => {
+                self.fail_action(screen, "按压", err);
+                false
+            }
+        }
+    }
+
     pub(crate) fn tap_attack_button(&mut self) -> bool {
         if !self.tap_at("Battle", ATTACK_BUTTON) {
             return false;

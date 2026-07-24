@@ -88,6 +88,17 @@
                 "h": 0.131
               },
               "threshold": 0.8
+            },
+            "dialog_extra_class_filter": {
+              "template": "screen_support/dialog_extra_class_filter",
+              "region": {
+                "x": 0.36,
+                "y": 0.13,
+                "w": 0.28,
+                "h": 0.1
+              },
+              "threshold": 0.85,
+              "templateReferenceWidth": 1920
             }
           }
         },

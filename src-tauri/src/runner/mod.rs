@@ -141,6 +141,10 @@ pub struct Runner {
     /// snaps the UI back to "all") so we always re-confirm the filter
     /// after a friend-list reload.
     support_class_tab_done: bool,
+    /// True after this run has saved CN's second-level EXTRA class choice.
+    /// The game persists that choice, so later refreshes / repeated quests
+    /// only need to tap the ordinary EXTRA tab again.
+    support_extra_class_filter_configured: bool,
     /// Cached `(name, np_names, class_name)` for the pinned support
     /// servant. Loaded lazily on the first `handle_support_select` poll so
     /// we don't do disk I/O at 500ms cadence (and cleared between runs
@@ -225,6 +229,7 @@ impl Runner {
             support_scroll_count: 0,
             support_refresh_count: 0,
             support_class_tab_done: false,
+            support_extra_class_filter_configured: false,
             support_meta: None,
             support_ce_template: None,
             support_grand_ce_templates: None,

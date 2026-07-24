@@ -202,6 +202,15 @@ pub(crate) const SUPPORT_REFRESH_BUTTON: Point = Point::new(0.726, 0.178);
 pub(crate) const SUPPORT_REFRESH_CONFIRM_BUTTON: Point = Point::new(0.650, 0.779);
 pub(crate) const SUPPORT_REFRESH_AVAILABLE_ELEMENT: &str = "refresh_available";
 pub(crate) const SUPPORT_REFRESH_DIALOG_ELEMENT: &str = "dialog_refresh_support";
+pub(crate) const SUPPORT_EXTRA_FILTER_DIALOG_ELEMENT: &str = "dialog_extra_class_filter";
+pub(crate) const SUPPORT_EXTRA_FILTER_LONG_PRESS_MS: u32 = 900;
+pub(crate) const SUPPORT_EXTRA_FILTER_CONFIRM_PRESS_MS: u32 = 100;
+pub(crate) const SUPPORT_EXTRA_FILTER_DIALOG_TIMEOUT: Duration = Duration::from_secs(3);
+pub(crate) const SUPPORT_EXTRA_FILTER_DIALOG_POLL: Duration = Duration::from_millis(200);
+pub(crate) const SUPPORT_EXTRA_FILTER_ACTION_SETTLE: Duration = Duration::from_millis(300);
+pub(crate) const SUPPORT_EXTRA_FILTER_RESULT_SETTLE: Duration = Duration::from_secs(2);
+pub(crate) const SUPPORT_EXTRA_FILTER_RESET_BUTTON: Point = Point::new(0.292, 0.778);
+pub(crate) const SUPPORT_EXTRA_FILTER_CONFIRM_BUTTON: Point = Point::new(0.742, 0.778);
 
 /// "技能显示切换" toggle on the support-select screen — the button that
 /// cycles which skill panel (owned vs append) is shown for every support
@@ -238,6 +247,27 @@ pub(crate) const SUPPORT_TAB_CASTER: Point = Point::new(0.3355, SUPPORT_CLASS_TA
 pub(crate) const SUPPORT_TAB_ASSASSIN: Point = Point::new(0.3883, SUPPORT_CLASS_TAB_Y);
 pub(crate) const SUPPORT_TAB_BERSERKER: Point = Point::new(0.4410, SUPPORT_CLASS_TAB_Y);
 pub(crate) const SUPPORT_TAB_EXTRA: Point = Point::new(0.4938, SUPPORT_CLASS_TAB_Y);
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ExtraClassFilter {
+    pub(crate) label: &'static str,
+    pub(crate) point: Point,
+}
+
+impl ExtraClassFilter {
+    const fn new(label: &'static str, x: f64, y: f64) -> Self {
+        Self {
+            label,
+            point: Point::new(x, y),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SupportClassFilterAction {
+    Tap(Point),
+    CnExtra(ExtraClassFilter),
+}
 
 /// Settle time after tapping a class tab. The list animates a quick fade
 /// when filtering; ~600ms is enough for the new rows to render before we
@@ -686,7 +716,7 @@ pub(crate) fn support_skill_diag_message(row: &SupportRowMatch) -> String {
 
 /// Map an Atlas Academy `className` (already lowercased by
 /// `load_servant_metadata`) to the support-select class-filter tab.
-/// Returns `None` for unknown / boss-only classes (beasts, etc.) so the
+/// Returns `None` for unknown / boss-only class variants so the
 /// caller can skip the tap and log it instead of guessing wrong.
 pub(crate) fn class_tab_for(class_name: &str) -> Option<Point> {
     match class_name {
@@ -705,6 +735,36 @@ pub(crate) fn class_tab_for(class_name: &str) -> Option<Point> {
         | "pretender" => Some(SUPPORT_TAB_EXTRA),
         _ => None,
     }
+}
+
+/// CN exposes a second-level EXTRA class dialog on long press. Other
+/// servers retain the original single-tap EXTRA behaviour.
+pub(crate) fn support_class_filter_action(
+    server: Server,
+    class_name: &str,
+    cn_extra_configured: bool,
+) -> Option<SupportClassFilterAction> {
+    if server == Server::Cn {
+        let extra = match class_name {
+            "shielder" => Some(ExtraClassFilter::new("盾兵", 0.260, 0.427)),
+            "ruler" => Some(ExtraClassFilter::new("裁定者", 0.420, 0.427)),
+            "avenger" => Some(ExtraClassFilter::new("复仇者", 0.580, 0.427)),
+            "mooncancer" => Some(ExtraClassFilter::new("月之癌", 0.740, 0.427)),
+            "alterego" => Some(ExtraClassFilter::new("他人格", 0.260, 0.649)),
+            "foreigner" => Some(ExtraClassFilter::new("降临者", 0.420, 0.649)),
+            "pretender" => Some(ExtraClassFilter::new("身披角色者", 0.580, 0.649)),
+            "beast" | "beasteresh" => Some(ExtraClassFilter::new("兽", 0.740, 0.649)),
+            _ => None,
+        };
+        if let Some(extra) = extra {
+            return Some(if cn_extra_configured {
+                SupportClassFilterAction::Tap(SUPPORT_TAB_EXTRA)
+            } else {
+                SupportClassFilterAction::CnExtra(extra)
+            });
+        }
+    }
+    class_tab_for(class_name).map(SupportClassFilterAction::Tap)
 }
 
 impl Runner {
@@ -739,8 +799,12 @@ impl Runner {
         // and lengthen every OCR pass; the class tab restricts the list to
         // exactly the rows we care about.
         if !self.support_class_tab_done {
-            match class_tab_for(&meta.class_name) {
-                Some(tab) => {
+            match support_class_filter_action(
+                self.server,
+                &meta.class_name,
+                self.support_extra_class_filter_configured,
+            ) {
+                Some(SupportClassFilterAction::Tap(tab)) => {
                     self.emit(
                         "SupportSelect",
                         &format!("切换职阶筛选 -> {}", meta.class_name),
@@ -750,6 +814,19 @@ impl Runner {
                     }
                     self.support_class_tab_done = true;
                     thread::sleep(SUPPORT_CLASS_TAB_SETTLE);
+                    return;
+                }
+                Some(SupportClassFilterAction::CnExtra(extra)) => {
+                    self.emit(
+                        "SupportSelect",
+                        &format!("设置 EXTRA 具体职阶筛选 -> {}", extra.label),
+                    );
+                    if !self.configure_cn_extra_class_filter(extra) {
+                        return;
+                    }
+                    self.support_extra_class_filter_configured = true;
+                    self.support_class_tab_done = true;
+                    thread::sleep(SUPPORT_EXTRA_FILTER_RESULT_SETTLE);
                     return;
                 }
                 None => {
@@ -1004,6 +1081,72 @@ impl Runner {
                 "查找助战",
                 format!("刷新 {} 次仍未找到 {}", SUPPORT_MAX_REFRESHES, meta.name),
             );
+        }
+    }
+
+    fn configure_cn_extra_class_filter(&mut self, extra: ExtraClassFilter) -> bool {
+        if !self.press_at(
+            "SupportSelect",
+            SUPPORT_TAB_EXTRA,
+            SUPPORT_EXTRA_FILTER_LONG_PRESS_MS,
+        ) {
+            return false;
+        }
+        if !self.wait_for_support_extra_filter_dialog(true) {
+            return false;
+        }
+        thread::sleep(SUPPORT_EXTRA_FILTER_ACTION_SETTLE);
+
+        if !self.tap_at("SupportSelect", SUPPORT_EXTRA_FILTER_RESET_BUTTON) {
+            return false;
+        }
+        thread::sleep(SUPPORT_EXTRA_FILTER_ACTION_SETTLE);
+        if !self.tap_at("SupportSelect", extra.point) {
+            return false;
+        }
+        thread::sleep(SUPPORT_EXTRA_FILTER_ACTION_SETTLE);
+        // `adb input tap` is effectively a zero-duration press. On this
+        // modal it can dismiss on DOWN and leak the UP into the support row
+        // underneath, selecting a servant before OCR runs. A 100-ms
+        // stationary press matches a human tap and is consumed by the modal.
+        if !self.press_at(
+            "SupportSelect",
+            SUPPORT_EXTRA_FILTER_CONFIRM_BUTTON,
+            SUPPORT_EXTRA_FILTER_CONFIRM_PRESS_MS,
+        ) {
+            return false;
+        }
+        self.wait_for_support_extra_filter_dialog(false)
+    }
+
+    fn wait_for_support_extra_filter_dialog(&mut self, expected_visible: bool) -> bool {
+        let deadline = Instant::now() + SUPPORT_EXTRA_FILTER_DIALOG_TIMEOUT;
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+            match self.sidecar().find_element_by_name(
+                None,
+                SUPPORT_SELECT_SCREEN,
+                SUPPORT_EXTRA_FILTER_DIALOG_ELEMENT,
+            ) {
+                Ok(matched) if matched.found == expected_visible => return true,
+                Ok(_) => {}
+                Err(err) => {
+                    self.fail_action("SupportSelect", "识别 EXTRA 职阶筛选弹窗", err);
+                    return false;
+                }
+            }
+            if Instant::now() >= deadline {
+                let state = if expected_visible { "打开" } else { "关闭" };
+                self.fail_action(
+                    "SupportSelect",
+                    &format!("等待 EXTRA 职阶筛选弹窗{state}"),
+                    "超时".into(),
+                );
+                return false;
+            }
+            thread::sleep(SUPPORT_EXTRA_FILTER_DIALOG_POLL);
         }
     }
 
