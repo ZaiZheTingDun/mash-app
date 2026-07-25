@@ -14,6 +14,8 @@ pub(crate) struct ServantNameAlias {
 #[derive(serde::Serialize, Clone)]
 pub(crate) struct ServantInfo {
     pub(crate) id: u32,
+    #[serde(skip_serializing)]
+    pub(crate) servant_type: String,
     #[serde(rename = "variantKey")]
     pub(crate) variant_key: String,
     #[serde(rename = "faceId")]
@@ -137,7 +139,7 @@ pub(crate) fn display_class_name(raw: &str) -> String {
         "uOlgaMarieFlareCollection" => "U-Olga Marie Flare".into(),
         "uOlgaMarieGrandCollection" => "U-Olga Marie Grand".into(),
         "uOlgaMarieStellarCollection" => "U-Olga Marie Stellar".into(),
-        "unBeastOlgaMarie" => "U-Olga Marie".into(),
+        "beastEresh" | "unBeastOlgaMarie" => "Beast".into(),
         other if other.is_empty() => String::new(),
         other => {
             let mut chars = other.chars();
@@ -147,6 +149,10 @@ pub(crate) fn display_class_name(raw: &str) -> String {
             }
         }
     }
+}
+
+pub(crate) fn is_selectable_servant_type(servant_type: &str) -> bool {
+    matches!(servant_type, "normal" | "heroine")
 }
 
 pub(crate) fn normalize_np_card(card: &str) -> Option<String> {
@@ -235,6 +241,7 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                     let name_en = string_field(s, &["nameEN", "name_en", "name"]).unwrap_or_default();
                     let name_other = string_field(s, &["nameOther", "name_other"]);
                     let over_write_servant_names = servant_name_aliases(s);
+                    let servant_type = string_field(s, &["type"])?;
 
                     let (class, rarity) = if let Some(class_name) =
                         string_field(s, &["className", "class"])
@@ -269,6 +276,7 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                                     .unwrap_or(variant);
                                 ServantInfo {
                                     id,
+                                    servant_type: servant_type.clone(),
                                     variant_key: format!("{id}:{}", variant_idx + 1),
                                     face_id: variant_face_id(variant),
                                     name_cn: name_cn.clone(),
@@ -288,6 +296,7 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                     } else {
                         vec![ServantInfo {
                             id,
+                            servant_type,
                             variant_key: id.to_string(),
                             face_id: None,
                             name_cn,
@@ -327,9 +336,20 @@ pub(crate) fn servant_np_card(id: u32) -> Option<String> {
         .and_then(|servant| servant.noble_phantasm_card.clone())
 }
 
+pub(crate) fn selectable_servants_data() -> &'static [ServantInfo] {
+    static SELECTABLE_SERVANTS: OnceLock<Vec<ServantInfo>> = OnceLock::new();
+    SELECTABLE_SERVANTS.get_or_init(|| {
+        servants_data()
+            .iter()
+            .filter(|servant| is_selectable_servant_type(&servant.servant_type))
+            .cloned()
+            .collect()
+    })
+}
+
 #[tauri::command]
 pub(crate) fn get_servants() -> &'static [ServantInfo] {
-    servants_data()
+    selectable_servants_data()
 }
 
 /// One craft-essence entry exposed to the frontend. Mirrors the shape of

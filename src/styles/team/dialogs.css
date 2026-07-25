@@ -10,11 +10,91 @@
 
 .servant-filter-row {
   margin-top: 10px;
+  align-items: flex-start;
 }
 
-.servant-filter-trigger {
+.servant-class-filter-grid {
   flex: 1;
   min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.servant-class-filter-button {
+  appearance: none;
+  min-width: 0;
+  height: 38px;
+  padding: 2px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  background: var(--gray-2);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+}
+
+.servant-class-filter-button:hover {
+  border-color: var(--blue-7);
+  background: var(--blue-3);
+}
+
+.servant-class-filter-button:focus-visible {
+  outline: 2px solid var(--blue-8);
+  outline-offset: 1px;
+}
+
+.servant-class-filter-button img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.servant-rarity-filter-grid {
+  flex: 0 0 112px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.servant-rarity-filter-button {
+  appearance: none;
+  min-width: 0;
+  height: 38px;
+  padding: 0 2px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  background: var(--gray-2);
+  color: var(--gray-11);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background 0.12s,
+    color 0.12s;
+}
+
+.servant-rarity-filter-button:hover {
+  border-color: var(--amber-7);
+  background: var(--amber-3);
+}
+
+.servant-rarity-filter-button.selected {
+  border-color: var(--amber-9);
+  background: var(--amber-3);
+  color: var(--amber-11);
+}
+
+.servant-rarity-filter-button:focus-visible {
+  outline: 2px solid var(--amber-8);
+  outline-offset: 1px;
 }
 
 .servant-list-scroll {

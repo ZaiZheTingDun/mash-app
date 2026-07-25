@@ -6,6 +6,7 @@
     "nameJP": "マシュ・キリエライト",
     "classId": 8,
     "className": "shielder",
+    "type": "heroine",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -65,6 +66,7 @@
     "nameJP": "アルトリア・ペンドラゴン",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -84,6 +86,7 @@
     "nameJP": "アルトリア・ペンドラゴン〔オルタ〕",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -103,6 +106,7 @@
     "nameJP": "アルトリア・ペンドラゴン〔リリィ〕",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -122,6 +126,7 @@
     "nameJP": "ネロ・クラウディウス",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -141,6 +146,7 @@
     "nameJP": "ジークフリート",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -160,6 +166,7 @@
     "nameJP": "ガイウス・ユリウス・カエサル",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -179,6 +186,7 @@
     "nameJP": "アルテラ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -198,6 +206,7 @@
     "nameJP": "ジル・ド・レェ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -217,6 +226,7 @@
     "nameJP": "シュヴァリエ・デオン",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -236,6 +246,7 @@
     "nameJP": "エミヤ",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -263,6 +274,7 @@
     "nameJP": "ギルガメッシュ",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -282,6 +294,7 @@
     "nameJP": "ロビンフッド",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -301,6 +314,7 @@
     "nameJP": "アタランテ",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -320,6 +334,7 @@
     "nameJP": "エウリュアレ",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -339,6 +354,7 @@
     "nameJP": "アーラシュ",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -358,6 +374,7 @@
     "nameJP": "クー・フーリン",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -377,6 +394,7 @@
     "nameJP": "エリザベート・バートリー",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -396,6 +414,7 @@
     "nameJP": "武蔵坊弁慶",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -415,6 +434,7 @@
     "nameJP": "クー・フーリン〔プロトタイプ〕",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -434,6 +454,7 @@
     "nameJP": "レオニダス一世",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -453,6 +474,7 @@
     "nameJP": "ロムルス",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -472,6 +494,7 @@
     "nameJP": "メドゥーサ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -491,6 +514,7 @@
     "nameJP": "ゲオルギウス",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -510,6 +534,7 @@
     "nameJP": "エドワード・ティーチ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -529,6 +554,7 @@
     "nameJP": "ブーディカ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -548,6 +574,7 @@
     "nameJP": "牛若丸",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -567,6 +594,7 @@
     "nameJP": "アレキサンダー",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -586,6 +614,7 @@
     "nameJP": "マリー・アントワネット",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -605,6 +634,7 @@
     "nameJP": "マルタ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -624,6 +654,7 @@
     "nameJP": "メディア",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -643,6 +674,7 @@
     "nameJP": "ジル・ド・レェ",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -662,6 +694,7 @@
     "nameJP": "ハンス・クリスチャン・アンデルセン",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -681,6 +714,7 @@
     "nameJP": "ウィリアム・シェイクスピア",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -700,6 +734,7 @@
     "nameJP": "メフィストフェレス",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -719,6 +754,7 @@
     "nameJP": "ヴォルフガング・アマデウス・モーツァルト",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -738,6 +774,7 @@
     "nameJP": "諸葛孔明〔エルメロイⅡ世〕",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -757,6 +794,7 @@
     "nameJP": "クー・フーリン",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -776,6 +814,7 @@
     "nameJP": "佐々木小次郎",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -795,6 +834,7 @@
     "nameJP": "呪腕のハサン",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -814,6 +854,7 @@
     "nameJP": "ステンノ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -833,6 +874,7 @@
     "nameJP": "荊軻",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -852,6 +894,7 @@
     "nameJP": "シャルル＝アンリ・サンソン",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -871,6 +914,7 @@
     "nameJP": "ファントム・オブ・ジ・オペラ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -890,6 +934,7 @@
     "nameJP": "マタ・ハリ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -909,6 +954,7 @@
     "nameJP": "カーミラ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -928,6 +974,7 @@
     "nameJP": "ヘラクレス",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -947,6 +994,7 @@
     "nameJP": "ランスロット",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -966,6 +1014,7 @@
     "nameJP": "呂布奉先",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -985,6 +1034,7 @@
     "nameJP": "スパルタクス",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -1004,6 +1054,7 @@
     "nameJP": "坂田金時",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1023,6 +1074,7 @@
     "nameJP": "ヴラド三世",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1042,6 +1094,7 @@
     "nameJP": "アステリオス",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -1061,6 +1114,7 @@
     "nameJP": "カリギュラ",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -1080,6 +1134,7 @@
     "nameJP": "ダレイオス三世",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -1099,6 +1154,7 @@
     "nameJP": "清姫",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -1118,6 +1174,7 @@
     "nameJP": "エイリーク・ブラッドアクス",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -1137,6 +1194,7 @@
     "nameJP": "タマモキャット",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1156,6 +1214,7 @@
     "nameJP": "ジャンヌ・ダルク",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1175,6 +1234,7 @@
     "nameJP": "オリオン",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1194,6 +1254,7 @@
     "nameJP": "エリザベート・バートリー〔ハロウィン〕",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1221,6 +1282,7 @@
     "nameJP": "玉藻の前",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1240,6 +1302,7 @@
     "nameJP": "ダビデ",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -1259,6 +1322,7 @@
     "nameJP": "ヘクトール",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -1278,6 +1342,7 @@
     "nameJP": "フランシス・ドレイク",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1297,6 +1362,7 @@
     "nameJP": "アン・ボニー＆メアリー・リード",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1316,6 +1382,7 @@
     "nameJP": "メディア〔リリィ〕",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1335,6 +1402,7 @@
     "nameJP": "沖田総司",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1362,6 +1430,7 @@
     "nameJP": "織田信長",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1381,6 +1450,7 @@
     "nameJP": "スカサハ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1400,6 +1470,7 @@
     "nameJP": "ディルムッド・オディナ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -1419,6 +1490,7 @@
     "nameJP": "フェルグス・マック・ロイ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -1438,6 +1510,7 @@
     "nameJP": "アルトリア・ペンドラゴン〔サンタオルタ〕",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1457,6 +1530,7 @@
     "nameJP": "ナーサリー・ライム",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1476,6 +1550,7 @@
     "nameJP": "ジャック・ザ・リッパー",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1495,6 +1570,7 @@
     "nameJP": "モードレッド",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1514,6 +1590,7 @@
     "nameJP": "ニコラ・テスラ",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1533,6 +1610,7 @@
     "nameJP": "アルトリア・ペンドラゴン〔オルタ〕",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1552,6 +1630,7 @@
     "nameJP": "ヴァン・ホーエンハイム・パラケルスス",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -1571,6 +1650,7 @@
     "nameJP": "チャールズ・バベッジ",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -1590,6 +1670,7 @@
     "nameJP": "ヘンリー・ジキル＆ハイド",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -1609,6 +1690,7 @@
     "nameJP": "フランケンシュタイン",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1628,6 +1710,7 @@
     "nameJP": "ソロモン",
     "classId": 17,
     "className": "loreGrandCaster",
+    "type": "enemyCollectionDetail",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1647,6 +1730,7 @@
     "nameJP": "アルジュナ",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1666,6 +1750,7 @@
     "nameJP": "カルナ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1685,6 +1770,7 @@
     "nameJP": "謎のヒロインX",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1704,6 +1790,7 @@
     "nameJP": "フィン・マックール",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1723,6 +1810,7 @@
     "nameJP": "ブリュンヒルデ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1742,6 +1830,7 @@
     "nameJP": "ベオウルフ",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1761,6 +1850,7 @@
     "nameJP": "ネロ・クラウディウス〔ブライド〕",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1780,6 +1870,7 @@
     "nameJP": "両儀式",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1799,6 +1890,7 @@
     "nameJP": "両儀式",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1818,6 +1910,7 @@
     "nameJP": "天草四郎",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1837,6 +1930,7 @@
     "nameJP": "アストルフォ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1856,6 +1950,7 @@
     "nameJP": "子ギル",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -1875,6 +1970,7 @@
     "nameJP": "巌窟王",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1894,6 +1990,7 @@
     "nameJP": "ナイチンゲール",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1913,6 +2010,7 @@
     "nameJP": "クー・フーリン〔オルタ〕",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1932,6 +2030,7 @@
     "nameJP": "女王メイヴ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -1951,6 +2050,7 @@
     "nameJP": "エレナ・ブラヴァツキー",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1970,6 +2070,7 @@
     "nameJP": "ラーマ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -1989,6 +2090,7 @@
     "nameJP": "李書文",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2008,6 +2110,7 @@
     "nameJP": "トーマス・エジソン",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2027,6 +2130,7 @@
     "nameJP": "ジェロニモ",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -2046,6 +2150,7 @@
     "nameJP": "ビリー・ザ・キッド",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -2065,6 +2170,7 @@
     "nameJP": "ジャンヌ・ダルク〔オルタ〕",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2084,6 +2190,7 @@
     "nameJP": "アンリマユ",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 0,
     "noblePhantasms": [
       {
@@ -2103,6 +2210,7 @@
     "nameJP": "イスカンダル",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2122,6 +2230,7 @@
     "nameJP": "エミヤ〔アサシン〕",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2141,6 +2250,7 @@
     "nameJP": "百貌のハサン",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -2160,6 +2270,7 @@
     "nameJP": "アイリスフィール〔天の衣〕",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2179,6 +2290,7 @@
     "nameJP": "酒呑童子",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2198,6 +2310,7 @@
     "nameJP": "玄奘三蔵",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2217,6 +2330,7 @@
     "nameJP": "源頼光",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2236,6 +2350,7 @@
     "nameJP": "坂田金時",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2255,6 +2370,7 @@
     "nameJP": "茨木童子",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2274,6 +2390,7 @@
     "nameJP": "風魔小太郎",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -2293,6 +2410,7 @@
     "nameJP": "オジマンディアス",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2312,6 +2430,7 @@
     "nameJP": "アルトリア・ペンドラゴン",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2331,6 +2450,7 @@
     "nameJP": "ニトクリス",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2350,6 +2470,7 @@
     "nameJP": "ランスロット",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2369,6 +2490,7 @@
     "nameJP": "トリスタン",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2388,6 +2510,7 @@
     "nameJP": "ガウェイン",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2407,6 +2530,7 @@
     "nameJP": "静謐のハサン",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -2426,6 +2550,7 @@
     "nameJP": "俵藤太",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -2445,6 +2570,7 @@
     "nameJP": "ベディヴィエール",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -2464,6 +2590,7 @@
     "nameJP": "レオナルド・ダ・ヴィンチ",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2483,6 +2610,7 @@
     "nameJP": "玉藻の前",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2502,6 +2630,7 @@
     "nameJP": "アルトリア・ペンドラゴン",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2521,6 +2650,7 @@
     "nameJP": "マリー・アントワネット",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2540,6 +2670,7 @@
     "nameJP": "アン・ボニー＆メアリー・リード",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2559,6 +2690,7 @@
     "nameJP": "モードレッド",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2586,6 +2718,7 @@
     "nameJP": "スカサハ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2605,6 +2738,7 @@
     "nameJP": "清姫",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2624,6 +2758,7 @@
     "nameJP": "マルタ",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2643,6 +2778,7 @@
     "nameJP": "イリヤスフィール・フォン・アインツベルン",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2662,6 +2798,7 @@
     "nameJP": "クロエ・フォン・アインツベルン",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2681,6 +2818,7 @@
     "nameJP": "エリザベート・バートリー〔ブレイブ〕",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2700,6 +2838,7 @@
     "nameJP": "クレオパトラ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2719,6 +2858,7 @@
     "nameJP": "ヴラド三世〔EXTRA〕",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2738,6 +2878,7 @@
     "nameJP": "ジャンヌ・ダルク・オルタ・サンタ・リリィ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2757,6 +2898,7 @@
     "nameJP": "イシュタル",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2776,6 +2918,7 @@
     "nameJP": "エルキドゥ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2795,6 +2938,7 @@
     "nameJP": "ケツァル・コアトル",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2814,6 +2958,7 @@
     "nameJP": "ギルガメッシュ",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2833,6 +2978,7 @@
     "nameJP": "メドゥーサ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2852,6 +2998,7 @@
     "nameJP": "ゴルゴーン",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -2871,6 +3018,7 @@
     "nameJP": "ジャガーマン",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -2890,6 +3038,7 @@
     "nameJP": "ティアマト",
     "classId": 20,
     "className": "beastII",
+    "type": "enemyCollectionDetail",
     "rarity": 5,
     "noblePhantasms": []
   },
@@ -2900,6 +3049,7 @@
     "nameJP": "マーリン",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2919,6 +3069,7 @@
     "nameJP": "ゲーティア",
     "classId": 22,
     "className": "beastI",
+    "type": "enemyCollectionDetail",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2938,6 +3089,7 @@
     "nameJP": "ソロモン",
     "classId": 5,
     "className": "caster",
+    "type": "enemyCollectionDetail",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2957,6 +3109,7 @@
     "nameJP": "宮本武蔵",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2976,6 +3129,7 @@
     "nameJP": "“山の翁”",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -2995,6 +3149,7 @@
     "nameJP": "謎のヒロインX〔オルタ〕",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3014,6 +3169,7 @@
     "nameJP": "ジェームズ・モリアーティ",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3033,6 +3189,7 @@
     "nameJP": "エミヤ〔オルタ〕",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3052,6 +3209,7 @@
     "nameJP": "ヘシアン・ロボ",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3071,6 +3229,7 @@
     "nameJP": "燕青",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3090,6 +3249,7 @@
     "nameJP": "アーサー・ペンドラゴン〔プロトタイプ〕",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3109,6 +3269,7 @@
     "nameJP": "土方歳三",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3128,6 +3289,7 @@
     "nameJP": "茶々",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3147,6 +3309,7 @@
     "nameJP": "メルトリリス",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3166,6 +3329,7 @@
     "nameJP": "パッションリップ",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3185,6 +3349,7 @@
     "nameJP": "鈴鹿御前",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3204,6 +3369,7 @@
     "nameJP": "ＢＢ",
     "classId": 23,
     "className": "moonCancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3223,6 +3389,7 @@
     "nameJP": "殺生院キアラ",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3242,6 +3409,7 @@
     "nameJP": "ビーストⅢ／Ｒ",
     "classId": 24,
     "className": "beastIIIR",
+    "type": "enemyCollectionDetail",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3261,6 +3429,7 @@
     "nameJP": "シェヘラザード",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3280,6 +3449,7 @@
     "nameJP": "武則天",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3299,6 +3469,7 @@
     "nameJP": "ペンテシレイア",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3318,6 +3489,7 @@
     "nameJP": "クリストファー・コロンブス",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -3337,6 +3509,7 @@
     "nameJP": "シャーロック・ホームズ",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3356,6 +3529,7 @@
     "nameJP": "ポール・バニヤン",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -3375,6 +3549,7 @@
     "nameJP": "ネロ・クラウディウス",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3402,6 +3577,7 @@
     "nameJP": "フランケンシュタイン",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3421,6 +3597,7 @@
     "nameJP": "ニトクリス",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3440,6 +3617,7 @@
     "nameJP": "織田信長",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3459,6 +3637,7 @@
     "nameJP": "アルトリア・ペンドラゴン〔オルタ〕",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3478,6 +3657,7 @@
     "nameJP": "エレナ・ブラヴァツキー",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3497,6 +3677,7 @@
     "nameJP": "源頼光",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3516,6 +3697,7 @@
     "nameJP": "イシュタル",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3535,6 +3717,7 @@
     "nameJP": "パールヴァティー",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3554,6 +3737,7 @@
     "nameJP": "巴御前",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3573,6 +3757,7 @@
     "nameJP": "望月千代女",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3592,6 +3777,7 @@
     "nameJP": "宝蔵院胤舜",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -3611,6 +3797,7 @@
     "nameJP": "柳生但馬守宗矩",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3630,6 +3817,7 @@
     "nameJP": "加藤段蔵",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3649,6 +3837,7 @@
     "nameJP": "刑部姫",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3668,6 +3857,7 @@
     "nameJP": "メカエリチャン",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3687,6 +3877,7 @@
     "nameJP": "メカエリチャンⅡ号機",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3706,6 +3897,7 @@
     "nameJP": "キルケー",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3725,6 +3917,7 @@
     "nameJP": "哪吒",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3744,6 +3937,7 @@
     "nameJP": "シバの女王",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3763,6 +3957,7 @@
     "nameJP": "アビゲイル・ウィリアムズ",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3782,6 +3977,7 @@
     "nameJP": "エレシュキガル",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3801,6 +3997,7 @@
     "nameJP": "アルテラ・ザ・サン〔タ〕",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3820,6 +4017,7 @@
     "nameJP": "葛飾北斎",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3839,6 +4037,7 @@
     "nameJP": "セミラミス",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3858,6 +4057,7 @@
     "nameJP": "浅上藤乃",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3877,6 +4077,7 @@
     "nameJP": "アナスタシア",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3896,6 +4097,7 @@
     "nameJP": "アタランテ〔オルタ〕",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -3915,6 +4117,7 @@
     "nameJP": "アヴィケブロン",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -3934,6 +4137,7 @@
     "nameJP": "アントニオ・サリエリ",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -3953,6 +4157,7 @@
     "nameJP": "イヴァン雷帝",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3972,6 +4177,7 @@
     "nameJP": "アキレウス",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -3991,6 +4197,7 @@
     "nameJP": "ケイローン",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4010,6 +4217,7 @@
     "nameJP": "ジーク",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4029,6 +4237,7 @@
     "nameJP": "沖田総司〔オルタ〕",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4048,6 +4257,7 @@
     "nameJP": "岡田以蔵",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -4067,6 +4277,7 @@
     "nameJP": "坂本龍馬",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4086,6 +4297,7 @@
     "nameJP": "ナポレオン",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4105,6 +4317,7 @@
     "nameJP": "シグルド",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4124,6 +4337,7 @@
     "nameJP": "ワルキューレ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4143,6 +4357,7 @@
     "nameJP": "スカサハ＝スカディ",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4162,6 +4377,7 @@
     "nameJP": "ジャンヌ・ダルク",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4181,6 +4397,7 @@
     "nameJP": "茨木童子",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4200,6 +4417,7 @@
     "nameJP": "牛若丸",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4219,6 +4437,7 @@
     "nameJP": "ジャンヌ・ダルク〔オルタ〕",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4238,6 +4457,7 @@
     "nameJP": "ＢＢ",
     "classId": 23,
     "className": "moonCancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4257,6 +4477,7 @@
     "nameJP": "女王メイヴ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4276,6 +4497,7 @@
     "nameJP": "謎のヒロインXX",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4295,6 +4517,7 @@
     "nameJP": "ディルムッド・オディナ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4314,6 +4537,7 @@
     "nameJP": "シトナイ",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4333,6 +4557,7 @@
     "nameJP": "酒呑童子",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4352,6 +4577,7 @@
     "nameJP": "項羽",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4371,6 +4597,7 @@
     "nameJP": "蘭陵王",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4390,6 +4617,7 @@
     "nameJP": "秦良玉",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4409,6 +4637,7 @@
     "nameJP": "始皇帝",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4428,6 +4657,7 @@
     "nameJP": "虞美人",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4447,6 +4677,7 @@
     "nameJP": "赤兎馬",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -4466,6 +4697,7 @@
     "nameJP": "ブラダマンテ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4485,6 +4717,7 @@
     "nameJP": "ケツァル・コアトル〔サンバ／サンタ〕",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4504,6 +4737,7 @@
     "nameJP": "紅閻魔",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4523,6 +4757,7 @@
     "nameJP": "李書文",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4542,6 +4777,7 @@
     "nameJP": "美遊・エーデルフェルト",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4561,6 +4797,7 @@
     "nameJP": "紫式部",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4580,6 +4817,7 @@
     "nameJP": "キングプロテア",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4599,6 +4837,7 @@
     "nameJP": "カーマ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4618,6 +4857,7 @@
     "nameJP": "ビーストⅢ／L",
     "classId": 26,
     "className": "beastIIIL",
+    "type": "enemyCollectionDetail",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4637,6 +4877,7 @@
     "nameJP": "司馬懿〔ライネス〕",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4656,6 +4897,7 @@
     "nameJP": "アストライア",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4675,6 +4917,7 @@
     "nameJP": "グレイ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4694,6 +4937,7 @@
     "nameJP": "ジナコ＝カリギリ",
     "classId": 23,
     "className": "moonCancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4719,6 +4963,7 @@
     "nameJP": "ラクシュミー・バーイー",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4738,6 +4983,7 @@
     "nameJP": "ウィリアム・テル",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -4757,6 +5003,7 @@
     "nameJP": "アルジュナ〔オルタ〕",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4776,6 +5023,7 @@
     "nameJP": "アシュヴァッターマン",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4795,6 +5043,7 @@
     "nameJP": "アスクレピオス",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -4814,6 +5063,7 @@
     "nameJP": "魔王信長",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4843,6 +5093,7 @@
     "nameJP": "森長可",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -4862,6 +5113,7 @@
     "nameJP": "長尾景虎",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -4881,6 +5133,7 @@
     "nameJP": "レオナルド・ダ・ヴィンチ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -4900,6 +5153,7 @@
     "nameJP": "イアソン",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -4919,6 +5173,7 @@
     "nameJP": "パリス",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -4938,6 +5193,7 @@
     "nameJP": "ガレス",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -4957,6 +5213,7 @@
     "nameJP": "バーソロミュー・ロバーツ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -4976,6 +5233,7 @@
     "nameJP": "陳宮",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -4995,6 +5253,7 @@
     "nameJP": "シャルロット・コルデー",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -5014,6 +5273,7 @@
     "nameJP": "サロメ",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 2,
     "noblePhantasms": [
       {
@@ -5033,6 +5293,7 @@
     "nameJP": "宮本武蔵",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5052,6 +5313,7 @@
     "nameJP": "刑部姫",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5071,6 +5333,7 @@
     "nameJP": "カーミラ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5090,6 +5353,7 @@
     "nameJP": "葛飾北斎",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5109,6 +5373,7 @@
     "nameJP": "アルトリア・ペンドラゴン",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5128,6 +5393,7 @@
     "nameJP": "謎のアルターエゴ・Λ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5147,6 +5413,7 @@
     "nameJP": "沖田総司",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5172,6 +5439,7 @@
     "nameJP": "スペース・イシュタル",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5207,6 +5475,7 @@
     "nameJP": "カラミティ・ジェーン",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5226,6 +5495,7 @@
     "nameJP": "アストルフォ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5245,6 +5515,7 @@
     "nameJP": "ナイチンゲール〔サンタ〕",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5264,6 +5535,7 @@
     "nameJP": "超人オリオン",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5283,6 +5555,7 @@
     "nameJP": "マンドリカルド",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -5302,6 +5575,7 @@
     "nameJP": "エウロペ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5321,6 +5595,7 @@
     "nameJP": "楊貴妃",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5340,6 +5615,7 @@
     "nameJP": "清少納言",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5359,6 +5635,7 @@
     "nameJP": "オデュッセウス",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5378,6 +5655,7 @@
     "nameJP": "ディオスクロイ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5397,6 +5675,7 @@
     "nameJP": "カイニス",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5416,6 +5695,7 @@
     "nameJP": "ロムルス＝クィリヌス",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5435,6 +5715,7 @@
     "nameJP": "ボイジャー",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5454,6 +5735,7 @@
     "nameJP": "鬼女紅葉",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5473,6 +5755,7 @@
     "nameJP": "宇津見エリセ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5492,6 +5775,7 @@
     "nameJP": "アルトリア・キャスター",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5511,6 +5795,7 @@
     "nameJP": "殺生院キアラ",
     "classId": 23,
     "className": "moonCancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5530,6 +5815,7 @@
     "nameJP": "イリヤスフィール・フォン・アインツベルン",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5549,6 +5835,7 @@
     "nameJP": "ブリュンヒルデ",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5568,6 +5855,7 @@
     "nameJP": "虞美人",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5587,6 +5875,7 @@
     "nameJP": "アビゲイル・ウィリアムズ〔夏〕",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5606,6 +5895,7 @@
     "nameJP": "巴御前",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5625,6 +5915,7 @@
     "nameJP": "紫式部",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5644,6 +5935,7 @@
     "nameJP": "卑弥呼",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5663,6 +5955,7 @@
     "nameJP": "斎藤一",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5682,6 +5975,7 @@
     "nameJP": "織田信勝",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -5701,6 +5995,7 @@
     "nameJP": "ヴァン・ゴッホ",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5720,6 +6015,7 @@
     "nameJP": "ネモ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5739,6 +6035,7 @@
     "nameJP": "蘆屋道満",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5758,6 +6055,7 @@
     "nameJP": "渡辺綱",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5777,6 +6075,7 @@
     "nameJP": "伊吹童子",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5796,6 +6095,7 @@
     "nameJP": "ヴリトラ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5815,6 +6115,7 @@
     "nameJP": "カルナ〔サンタ〕",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5834,6 +6135,7 @@
     "nameJP": "千子村正",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5861,6 +6163,7 @@
     "nameJP": "平景清",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5880,6 +6183,7 @@
     "nameJP": "鬼一法眼",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5899,6 +6203,7 @@
     "nameJP": "アムール〔カレン〕",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5918,6 +6223,7 @@
     "nameJP": "ガラテア",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5937,6 +6243,7 @@
     "nameJP": "ミス・クレーン",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5956,6 +6263,7 @@
     "nameJP": "謎のアイドルX〔オルタ〕",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -5975,6 +6283,7 @@
     "nameJP": "モルガン",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -5994,6 +6303,7 @@
     "nameJP": "バーゲスト",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6019,6 +6329,7 @@
     "nameJP": "バーヴァン・シー",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6044,6 +6355,7 @@
     "nameJP": "メリュジーヌ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6077,6 +6389,7 @@
     "nameJP": "パーシヴァル",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6096,6 +6409,7 @@
     "nameJP": "光のコヤンスカヤ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6115,6 +6429,7 @@
     "nameJP": "ハベトロット",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6134,6 +6449,7 @@
     "nameJP": "オベロン",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6153,6 +6469,7 @@
     "nameJP": "沖田総司〔オルタ〕",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6172,6 +6489,7 @@
     "nameJP": "アナスタシア＆ヴィイ",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6191,6 +6509,7 @@
     "nameJP": "シャルロット・コルデー",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6210,6 +6529,7 @@
     "nameJP": "レオナルド・ダ・ヴィンチ",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6229,6 +6549,7 @@
     "nameJP": "カーマ",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6248,6 +6569,7 @@
     "nameJP": "カイニス",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6267,6 +6589,7 @@
     "nameJP": "清少納言",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6286,6 +6609,7 @@
     "nameJP": "ジャック・ド・モレー",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6305,6 +6629,7 @@
     "nameJP": "ゼノビア",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6324,6 +6649,7 @@
     "nameJP": "エリザベート・バートリー〔シンデレラ〕",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6343,6 +6669,7 @@
     "nameJP": "出雲阿国",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6362,6 +6689,7 @@
     "nameJP": "謎の蘭丸X",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6381,6 +6709,7 @@
     "nameJP": "坂本龍馬",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6400,6 +6729,7 @@
     "nameJP": "マルタ〔サンタ〕",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6419,6 +6749,7 @@
     "nameJP": "太公望",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6438,6 +6769,7 @@
     "nameJP": "ドブルイニャ・ニキチッチ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6457,6 +6789,7 @@
     "nameJP": "ビーストⅣ",
     "classId": 29,
     "className": "beastIV",
+    "type": "enemyCollectionDetail",
     "rarity": 5,
     "noblePhantasms": []
   },
@@ -6467,6 +6800,7 @@
     "nameJP": "闇のコヤンスカヤ",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6486,6 +6820,7 @@
     "nameJP": "ヘファイスティオン",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6505,6 +6840,7 @@
     "nameJP": "マナナン・マク・リール〔バゼット〕",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6524,6 +6860,7 @@
     "nameJP": "徴姉妹",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6543,6 +6880,7 @@
     "nameJP": "太歳星君",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6562,6 +6900,7 @@
     "nameJP": "スーパーバニヤン",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6581,6 +6920,7 @@
     "nameJP": "大黒天",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6600,6 +6940,7 @@
     "nameJP": "メアリー・アニング",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 1,
     "noblePhantasms": [
       {
@@ -6619,6 +6960,7 @@
     "nameJP": "コンスタンティノス11世",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6638,6 +6980,7 @@
     "nameJP": "シャルルマーニュ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6657,6 +7000,7 @@
     "nameJP": "ローラン",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6676,6 +7020,7 @@
     "nameJP": "クリームヒルト",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6695,6 +7040,7 @@
     "nameJP": "ジェームズ・モリアーティ",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6714,6 +7060,7 @@
     "nameJP": "ドン・キホーテ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6733,6 +7080,7 @@
     "nameJP": "張角",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -6760,6 +7108,7 @@
     "nameJP": "曲亭馬琴",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6779,6 +7128,7 @@
     "nameJP": "源為朝",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6798,6 +7148,7 @@
     "nameJP": "アーキタイプ：アース",
     "classId": 23,
     "className": "moonCancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6823,6 +7174,7 @@
     "nameJP": "徐福",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -6842,6 +7194,7 @@
     "nameJP": "レディ・アヴァロン",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6861,6 +7214,7 @@
     "nameJP": "ガレス",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6880,6 +7234,7 @@
     "nameJP": "伊吹童子",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6899,6 +7254,7 @@
     "nameJP": "宇津見エリセ",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6918,6 +7274,7 @@
     "nameJP": "スカサハ＝スカディ",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -6937,6 +7294,7 @@
     "nameJP": "武則天",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6956,6 +7314,7 @@
     "nameJP": "スルーズ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6975,6 +7334,7 @@
     "nameJP": "ヒルド",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -6994,6 +7354,7 @@
     "nameJP": "オルトリンデ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7013,6 +7374,7 @@
     "nameJP": "千利休",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7032,6 +7394,7 @@
     "nameJP": "山南敬助",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7051,6 +7414,7 @@
     "nameJP": "壱与",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7070,6 +7434,7 @@
     "nameJP": "呼延灼",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7089,6 +7454,7 @@
     "nameJP": "黄飛虎",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7108,6 +7474,7 @@
     "nameJP": "九紋竜エリザ",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7127,6 +7494,7 @@
     "nameJP": "ブリトマート",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7146,6 +7514,7 @@
     "nameJP": "言峰綺礼",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7175,6 +7544,7 @@
     "nameJP": "ニトクリス〔オルタ〕",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7194,6 +7564,7 @@
     "nameJP": "テスカトリポカ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7213,6 +7584,7 @@
     "nameJP": "テノチティトラン",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7242,6 +7614,7 @@
     "nameJP": "ククルカン",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7261,6 +7634,7 @@
     "nameJP": "女教皇ヨハンナ",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7280,6 +7654,7 @@
     "nameJP": "高杉晋作",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7299,6 +7674,7 @@
     "nameJP": "ラーヴァ／ティアマト",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7318,6 +7694,7 @@
     "nameJP": "ソドムズビースト／ドラコー",
     "classId": 33,
     "className": "beast",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7337,6 +7714,7 @@
     "nameJP": "ロクスタ",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7356,6 +7734,7 @@
     "nameJP": "セタンタ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7375,6 +7754,7 @@
     "nameJP": "果心居士",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7394,6 +7774,7 @@
     "nameJP": "ビーマ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7413,6 +7794,7 @@
     "nameJP": "ドゥリーヨダナ",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7432,6 +7814,7 @@
     "nameJP": "ドゥルガー",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7457,6 +7840,7 @@
     "nameJP": "メドゥーサ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7476,6 +7860,7 @@
     "nameJP": "雨の魔女トネリコ",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7505,6 +7890,7 @@
     "nameJP": "アルトリア・キャスター",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7524,6 +7910,7 @@
     "nameJP": "鈴鹿御前〔サマバケ〕",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7543,6 +7930,7 @@
     "nameJP": "クロエ・フォン・アインツベルン",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7562,6 +7950,7 @@
     "nameJP": "ノクナレア・ヤラアーンドゥ",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7581,6 +7970,7 @@
     "nameJP": "メリュジーヌ",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7606,6 +7996,7 @@
     "nameJP": "ＵＤＫ－バーゲスト",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7639,6 +8030,7 @@
     "nameJP": "ケット・クー・ミコケル",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7668,6 +8060,7 @@
     "nameJP": "ワンジナ",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7687,6 +8080,7 @@
     "nameJP": "プトレマイオス",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7714,6 +8108,7 @@
     "nameJP": "杉谷善住坊",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -7733,6 +8128,7 @@
     "nameJP": "テセウス",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 3,
     "noblePhantasms": [
       {
@@ -7752,6 +8148,7 @@
     "nameJP": "武田晴信",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7777,6 +8174,7 @@
     "nameJP": "永倉新八",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7796,6 +8194,7 @@
     "nameJP": "雑賀孫一",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7815,6 +8214,7 @@
     "nameJP": "上杉謙信",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7834,6 +8234,7 @@
     "nameJP": "ネモ〔サンタ〕",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7853,6 +8254,7 @@
     "nameJP": "ヤマトタケル",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7872,6 +8274,7 @@
     "nameJP": "源頼光／丑御前",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7891,6 +8294,7 @@
     "nameJP": "由井正雪",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7910,6 +8314,7 @@
     "nameJP": "宮本伊織",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7929,6 +8334,7 @@
     "nameJP": "アンドロメダ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7948,6 +8354,7 @@
     "nameJP": "マリー・アントワネット〔オルタ〕",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -7967,6 +8374,7 @@
     "nameJP": "耀星のハサン",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -7986,6 +8394,7 @@
     "nameJP": "巌窟王　モンテ・クリスト",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8005,6 +8414,7 @@
     "nameJP": "アレッサンドロ・ディ・カリオストロ",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8024,6 +8434,7 @@
     "nameJP": "Ｅ－フレアマリー",
     "classId": 9001,
     "className": "uOlgaMarieFlareCollection",
+    "type": "enemyCollectionDetail",
     "rarity": 0,
     "noblePhantasms": []
   },
@@ -8034,6 +8445,7 @@
     "nameJP": "Ｅ－アクアマリー",
     "classId": 9002,
     "className": "uOlgaMarieAquaCollection",
+    "type": "enemyCollectionDetail",
     "rarity": 0,
     "noblePhantasms": []
   },
@@ -8044,6 +8456,7 @@
     "nameJP": "蒼崎青子",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8063,6 +8476,7 @@
     "nameJP": "静希草十郎",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8082,6 +8496,7 @@
     "nameJP": "久遠寺有珠",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8101,6 +8516,7 @@
     "nameJP": "ひびき＆千鍵",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8130,6 +8546,7 @@
     "nameJP": "エレシュキガル",
     "classId": 38,
     "className": "beastEresh",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8159,6 +8576,7 @@
     "nameJP": "謎の代行者C.I.E.L",
     "classId": 23,
     "className": "moonCancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8188,6 +8606,7 @@
     "nameJP": "ドブルイニャ・ニキチッチ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8207,6 +8626,7 @@
     "nameJP": "徐福",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8226,6 +8646,7 @@
     "nameJP": "ＢＢドバイ",
     "classId": 23,
     "className": "moonCancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8263,6 +8684,7 @@
     "nameJP": "テノチティトラン",
     "classId": 23,
     "className": "moonCancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8282,6 +8704,7 @@
     "nameJP": "謎のヒロインXX〔オルタ〕",
     "classId": 25,
     "className": "foreigner",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8301,6 +8724,7 @@
     "nameJP": "岸波白野",
     "classId": 23,
     "className": "moonCancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8320,6 +8744,7 @@
     "nameJP": "岸波白野",
     "classId": 23,
     "className": "moonCancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8339,6 +8764,7 @@
     "nameJP": "カズラドロップ",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8358,6 +8784,7 @@
     "nameJP": "ツタンカーメン",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8377,6 +8804,7 @@
     "nameJP": "ヴァン・ゴッホ〔マイナー〕",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8396,6 +8824,7 @@
     "nameJP": "ロウヒ",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8415,6 +8844,7 @@
     "nameJP": "アビゲイル・ウィリアムズ〔サンタ〕",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8434,6 +8864,7 @@
     "nameJP": "ファンタズムーン",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8463,6 +8894,7 @@
     "nameJP": "リチャードⅠ世",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8488,6 +8920,7 @@
     "nameJP": "ビショーネ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8513,6 +8946,7 @@
     "nameJP": "黒姫",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8532,6 +8966,7 @@
     "nameJP": "小野小町",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8551,6 +8986,7 @@
     "nameJP": "Ｅ－グランマリー",
     "classId": 9003,
     "className": "uOlgaMarieGrandCollection",
+    "type": "enemyCollectionDetail",
     "rarity": 0,
     "noblePhantasms": []
   },
@@ -8561,6 +8997,7 @@
     "nameJP": "ダンテ・アリギエーリ",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8580,6 +9017,7 @@
     "nameJP": "メタトロン・ジャンヌ",
     "classId": 9,
     "className": "ruler",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8599,6 +9037,7 @@
     "nameJP": "アショカ王",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8618,6 +9057,7 @@
     "nameJP": "リリス",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8637,6 +9077,7 @@
     "nameJP": "テュフォン・エフェメロス",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8656,6 +9097,7 @@
     "nameJP": "インドラ",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8675,6 +9117,7 @@
     "nameJP": "Ｅ－ステラマリー",
     "classId": 9004,
     "className": "uOlgaMarieStellarCollection",
+    "type": "enemyCollectionDetail",
     "rarity": 0,
     "noblePhantasms": []
   },
@@ -8685,6 +9128,7 @@
     "nameJP": "Ｕ－オルガマリー",
     "classId": 40,
     "className": "unBeastOlgaMarie",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8710,6 +9154,7 @@
     "nameJP": "パッションリップ",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8729,6 +9174,7 @@
     "nameJP": "クリームヒルト",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8748,6 +9194,7 @@
     "nameJP": "呼延灼",
     "classId": 7,
     "className": "berserker",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8767,6 +9214,7 @@
     "nameJP": "玉兎",
     "classId": 23,
     "className": "moonCancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8796,6 +9244,7 @@
     "nameJP": "美遊・エーデルフェルト",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8821,6 +9270,7 @@
     "nameJP": "ラーヴァ／ティアマト",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8840,6 +9290,7 @@
     "nameJP": "ジュネス・クレーン",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8859,6 +9310,7 @@
     "nameJP": "ネモ／ノア",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8878,6 +9330,7 @@
     "nameJP": "河上彦斎",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8897,6 +9350,7 @@
     "nameJP": "藤堂平助",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8916,6 +9370,7 @@
     "nameJP": "原田左之助",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -8935,6 +9390,7 @@
     "nameJP": "近藤勇",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8954,6 +9410,7 @@
     "nameJP": "エリザベート・バートリー",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -8981,6 +9438,7 @@
     "nameJP": "終わりのエリザベート",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -9000,6 +9458,7 @@
     "nameJP": "ソロモン",
     "classId": 28,
     "className": "pretender",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -9019,6 +9478,7 @@
     "nameJP": "マリス・カルデアス",
     "classId": 43,
     "className": "beastVII",
+    "type": "enemyCollectionDetail",
     "rarity": 0,
     "noblePhantasms": []
   },
@@ -9029,6 +9489,7 @@
     "nameJP": "ロード・ログレス",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -9048,6 +9509,7 @@
     "nameJP": "花咲翁",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -9067,6 +9529,7 @@
     "nameJP": "蛇女房",
     "classId": 6,
     "className": "assassin",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -9086,6 +9549,7 @@
     "nameJP": "フローラ",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -9105,6 +9569,7 @@
     "nameJP": "デメテル",
     "classId": 3,
     "className": "lancer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -9130,6 +9595,7 @@
     "nameJP": "ジャック・ド・モレー",
     "classId": 1,
     "className": "saber",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -9149,6 +9615,7 @@
     "nameJP": "フランソワ・プレラーティ",
     "classId": 5,
     "className": "caster",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -9168,6 +9635,7 @@
     "nameJP": "ヒッポリュテ",
     "classId": 4,
     "className": "rider",
+    "type": "normal",
     "rarity": 4,
     "noblePhantasms": [
       {
@@ -9187,6 +9655,7 @@
     "nameJP": "ジョン・ラックランド",
     "classId": 11,
     "className": "avenger",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -9206,6 +9675,7 @@
     "nameJP": "ウルズ",
     "classId": 2,
     "className": "archer",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {
@@ -9225,6 +9695,7 @@
     "nameJP": "アスカラポス",
     "classId": 10,
     "className": "alterEgo",
+    "type": "normal",
     "rarity": 5,
     "noblePhantasms": [
       {

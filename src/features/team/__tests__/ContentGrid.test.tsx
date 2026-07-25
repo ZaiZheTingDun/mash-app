@@ -427,13 +427,15 @@ describe("ContentGrid", () => {
     await user.click(screen.getAllByText("选择从者")[0]);
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByLabelText("职介筛选")).toHaveTextContent("Saber");
+    expect(within(dialog).getByRole("button", { name: "剑阶" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
     expect(within(dialog).getByText("阿尔托莉雅")).toBeInTheDocument();
     expect(within(dialog).queryByText("赫拉克勒斯")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("阿尔托莉雅·卡斯特")).not.toBeInTheDocument();
 
-    await user.click(within(dialog).getByRole("combobox", { name: "职介筛选" }));
-    await user.click(await screen.findByRole("option", { name: "全部职介" }));
+    await user.click(within(dialog).getByRole("button", { name: "全部职阶" }));
 
     expect(within(dialog).getByText("阿尔托莉雅")).toBeInTheDocument();
     expect(within(dialog).getByText("赫拉克勒斯")).toBeInTheDocument();
@@ -456,13 +458,15 @@ describe("ContentGrid", () => {
     await user.click(screen.getByText("助战"));
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByLabelText("职介筛选")).toHaveTextContent("Berserker");
+    expect(within(dialog).getByRole("button", { name: "狂阶" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
     expect(within(dialog).getByText("赫拉克勒斯")).toBeInTheDocument();
     expect(within(dialog).queryByText("阿尔托莉雅")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("阿尔托莉雅·卡斯特")).not.toBeInTheDocument();
 
-    await user.click(within(dialog).getByRole("combobox", { name: "职介筛选" }));
-    await user.click(await screen.findByRole("option", { name: "全部职介" }));
+    await user.click(within(dialog).getByRole("button", { name: "全部职阶" }));
 
     expect(within(dialog).getByText("阿尔托莉雅")).toBeInTheDocument();
     expect(within(dialog).getByText("赫拉克勒斯")).toBeInTheDocument();

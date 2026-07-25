@@ -2165,6 +2165,36 @@ fn servants_data_includes_latest_cn_catalog_updates() {
     );
 }
 
+#[test]
+fn selectable_servants_use_catalog_type_and_group_playable_beasts() {
+    let servants = selectable_servants_data();
+
+    for id in [83, 149, 151, 152, 168, 240, 333, 411, 412, 436, 443, 460] {
+        assert!(
+            servants.iter().all(|servant| servant.id != id),
+            "non-selectable servant {id} leaked into the picker catalog"
+        );
+    }
+
+    assert!(
+        servants.iter().any(|servant| servant.id == 1),
+        "the heroine type used by Mash must remain selectable"
+    );
+    assert!(
+        servants.iter().any(|servant| servant.id == 377),
+        "the playable Beast class must remain selectable"
+    );
+    assert!(
+        servants.iter().any(|servant| servant.id == 417),
+        "the playable BeastEresh class must remain selectable"
+    );
+    let u_olga = servants
+        .iter()
+        .find(|servant| servant.id == 444)
+        .expect("the normal U-Olga entry must remain selectable");
+    assert_eq!(u_olga.class, "Beast");
+}
+
 // --- pick_ce_card_in -----------------------------------------------
 
 #[test]

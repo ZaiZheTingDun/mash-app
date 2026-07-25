@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
@@ -150,7 +150,7 @@ describe("ServantSelectDialog", () => {
     expect(screen.queryByText("梅林")).not.toBeInTheDocument();
   });
 
-  it("filters by class and rarity", async () => {
+  it("filters by class icon and rarity", async () => {
     const user = userEvent.setup();
     setup({
       servants: [
@@ -168,12 +168,123 @@ describe("ServantSelectDialog", () => {
       ],
     });
 
-    await user.click(screen.getByRole("combobox", { name: "职介筛选" }));
-    await user.click(await screen.findByRole("option", { name: "Archer" }));
-    await user.click(screen.getByRole("combobox", { name: "稀有度筛选" }));
-    await user.click(await screen.findByRole("option", { name: "★1" }));
+    await user.click(screen.getByRole("button", { name: "弓阶" }));
+    await user.click(screen.getByRole("button", { name: "★1" }));
     expect(screen.getByText("阿拉什")).toBeInTheDocument();
     expect(screen.queryByText("梅林")).not.toBeInTheDocument();
+  });
+
+  it("renders all plus five rarity buttons on the right", async () => {
+    const user = userEvent.setup();
+    setup({
+      servants: [
+        ...FIXTURE,
+        {
+          id: 16,
+          variantKey: "16",
+          name_cn: "阿拉什",
+          name_jp: "アーラシュ",
+          name_en: "Arash",
+          class: "Archer",
+          rarity: 1,
+        },
+      ],
+    });
+
+    const rarityGroup = screen.getByRole("group", { name: "稀有度筛选" });
+    expect(within(rarityGroup).getAllByRole("button")).toHaveLength(6);
+    expect(
+      within(rarityGroup).getByRole("button", { name: "全部稀有度" })
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(rarityGroup).queryByRole("button", { name: "★0" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "稀有度筛选" })
+    ).not.toBeInTheDocument();
+
+    await user.click(within(rarityGroup).getByRole("button", { name: "★1" }));
+    expect(screen.getByText("阿拉什")).toBeInTheDocument();
+    expect(screen.queryByText("梅林")).not.toBeInTheDocument();
+    await user.click(
+      within(rarityGroup).getByRole("button", { name: "全部稀有度" })
+    );
+    expect(screen.getByText("梅林")).toBeInTheDocument();
+  });
+
+  it("renders available classes as a flat icon group", () => {
+    setup();
+
+    expect(screen.getByRole("group", { name: "职阶筛选" })).toBeInTheDocument();
+    const allClasses = screen.getByRole("button", { name: "全部职阶" });
+    expect(allClasses).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(allClasses.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("gold_all.png")
+    );
+    expect(screen.getByRole("button", { name: "术阶" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "枪阶" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "职阶筛选" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("switches the selected class from its silver icon to its gold icon", async () => {
+    const user = userEvent.setup();
+    setup();
+
+    const allClasses = screen.getByRole("button", { name: "全部职阶" });
+    const caster = screen.getByRole("button", { name: "术阶" });
+    expect(caster.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("silver_caster.png")
+    );
+
+    await user.click(caster);
+
+    expect(allClasses.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("silver_all.png")
+    );
+    expect(caster.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("gold_caster.png")
+    );
+  });
+
+  it("groups playable Beast variants under the Beast icon", async () => {
+    const user = userEvent.setup();
+    setup({
+      servants: [
+        {
+          id: 377,
+          variantKey: "377",
+          name_cn: "所多玛之兽／德拉科",
+          name_jp: "ソドムズビースト／ドラコー",
+          name_en: "Sodom's Beast/Draco",
+          class: "Beast",
+          rarity: 5,
+        },
+        {
+          id: 417,
+          variantKey: "417",
+          name_cn: "埃列什基伽勒",
+          name_jp: "エレシュキガル",
+          name_en: "Ereshkigal",
+          class: "BeastEresh",
+          rarity: 5,
+        },
+        FIXTURE[0],
+      ],
+    });
+
+    await user.click(screen.getByRole("button", { name: "兽阶" }));
+    expect(screen.getByText("所多玛之兽／德拉科")).toBeInTheDocument();
+    expect(screen.getByText("埃列什基伽勒")).toBeInTheDocument();
+    expect(screen.queryByText("阿尔托莉雅·卡斯特")).not.toBeInTheDocument();
   });
 
   it("renders noble phantasm names in the second row", () => {
