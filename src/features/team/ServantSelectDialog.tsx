@@ -490,7 +490,13 @@ export function ServantSelectDialog({
                   }}
                 >
                   <img
-                    src={selected ? option.selectedIcon : option.icon}
+                    className="servant-class-filter-icon silver"
+                    src={option.icon}
+                    alt=""
+                  />
+                  <img
+                    className="servant-class-filter-icon gold"
+                    src={option.selectedIcon}
                     alt=""
                   />
                 </button>

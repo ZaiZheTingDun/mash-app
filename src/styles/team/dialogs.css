@@ -26,33 +26,41 @@
   min-width: 0;
   height: 38px;
   padding: 2px;
-  border: 1px solid var(--gray-6);
+  border: none;
   border-radius: var(--radius-2);
-  background: var(--gray-2);
+  background: transparent;
   cursor: pointer;
   display: grid;
   place-items: center;
-  transition:
-    border-color 0.12s,
-    background 0.12s;
-}
-
-.servant-class-filter-button:hover {
-  border-color: var(--blue-7);
-  background: var(--blue-3);
 }
 
 .servant-class-filter-button:focus-visible {
-  outline: 2px solid var(--blue-8);
+  outline: 2px solid var(--amber-8);
   outline-offset: 1px;
 }
 
-.servant-class-filter-button img {
+.servant-class-filter-icon {
+  grid-area: 1 / 1;
   width: 32px;
   height: 32px;
   object-fit: contain;
   display: block;
   pointer-events: none;
+  transition: opacity 0.12s;
+}
+
+.servant-class-filter-icon.gold {
+  opacity: 0;
+}
+
+.servant-class-filter-button[aria-pressed="true"]
+  .servant-class-filter-icon.silver {
+  opacity: 0;
+}
+
+.servant-class-filter-button[aria-pressed="true"]
+  .servant-class-filter-icon.gold {
+  opacity: 1;
 }
 
 .servant-rarity-filter-grid {

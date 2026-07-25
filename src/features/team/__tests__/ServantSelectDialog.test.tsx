@@ -221,7 +221,9 @@ describe("ServantSelectDialog", () => {
       "aria-pressed",
       "true"
     );
-    expect(allClasses.querySelector("img")).toHaveAttribute(
+    expect(
+      allClasses.querySelector(".servant-class-filter-icon.gold")
+    ).toHaveAttribute(
       "src",
       expect.stringContaining("gold_all.png")
     );
@@ -232,27 +234,29 @@ describe("ServantSelectDialog", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("switches the selected class from its silver icon to its gold icon", async () => {
+  it("layers silver and gold class icons and updates the selected state", async () => {
     const user = userEvent.setup();
     setup();
 
     const allClasses = screen.getByRole("button", { name: "全部职阶" });
     const caster = screen.getByRole("button", { name: "术阶" });
-    expect(caster.querySelector("img")).toHaveAttribute(
+    expect(
+      caster.querySelector(".servant-class-filter-icon.silver")
+    ).toHaveAttribute(
       "src",
       expect.stringContaining("silver_caster.png")
+    );
+    expect(
+      caster.querySelector(".servant-class-filter-icon.gold")
+    ).toHaveAttribute(
+      "src",
+      expect.stringContaining("gold_caster.png")
     );
 
     await user.click(caster);
 
-    expect(allClasses.querySelector("img")).toHaveAttribute(
-      "src",
-      expect.stringContaining("silver_all.png")
-    );
-    expect(caster.querySelector("img")).toHaveAttribute(
-      "src",
-      expect.stringContaining("gold_caster.png")
-    );
+    expect(allClasses).toHaveAttribute("aria-pressed", "false");
+    expect(caster).toHaveAttribute("aria-pressed", "true");
   });
 
   it("groups playable Beast variants under the Beast icon", async () => {
