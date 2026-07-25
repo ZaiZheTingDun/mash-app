@@ -292,6 +292,20 @@ describe("ServantSelectDialog", () => {
     expect(screen.getByText("永久关闭的理想乡")).toBeInTheDocument();
   });
 
+  it("overlays the rarity on the servant face", () => {
+    setup();
+
+    const option = screen.getByText("梅林").closest('[role="option"]');
+    const face = option?.querySelector(".servant-face-frame");
+    const rarity = within(option as HTMLElement).getByLabelText("稀有度 5 星");
+
+    expect(face).toContainElement(rarity);
+    expect(rarity).toHaveTextContent("★★★★★");
+    expect(
+      screen.getByText("梅林").parentElement
+    ).not.toContainElement(rarity);
+  });
+
   it("renders the class icon before the servant name with rarity-based color", () => {
     setup({
       servants: [

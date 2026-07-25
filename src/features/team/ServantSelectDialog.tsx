@@ -572,6 +572,12 @@ export function ServantSelectDialog({
                         ) : (
                           <span>{servant.class.slice(0, 2)}</span>
                         )}
+                        <Text
+                          className="servant-rarity"
+                          aria-label={`稀有度 ${servant.rarity} 星`}
+                        >
+                          {"★".repeat(servant.rarity)}
+                        </Text>
                       </div>
                       <Flex direction="column" align="start" gap="1" className="servant-option-text">
                         <Flex align="center" gap="2" wrap="wrap" className="servant-option-name-row">
@@ -583,9 +589,6 @@ export function ServantSelectDialog({
                           />
                           <Text size="2" weight="medium">
                             {displayCnName(servant)}
-                          </Text>
-                          <Text size="1" className="servant-rarity">
-                            {"★".repeat(servant.rarity)}
                           </Text>
                         </Flex>
                         <Text size="1" className="servant-np-name">

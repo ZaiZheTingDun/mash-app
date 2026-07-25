@@ -134,6 +134,7 @@
 }
 
 .servant-face-frame {
+  position: relative;
   width: 54px;
   height: 54px;
   flex: 0 0 54px;
@@ -186,7 +187,19 @@
 }
 
 .servant-rarity {
-  color: #d4a537;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 1;
+  padding: 0 2px 1px;
+  border-radius: var(--radius-1);
+  background: rgb(0 0 0 / 30%);
+  color: #f5cf58;
+  font-size: 9px;
+  line-height: 1.2;
+  letter-spacing: -1.5px;
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 80%);
 }
 
 .servant-np-name {
