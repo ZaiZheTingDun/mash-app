@@ -292,6 +292,43 @@ describe("ServantSelectDialog", () => {
     expect(screen.getByText("永久关闭的理想乡")).toBeInTheDocument();
   });
 
+  it("renders the class icon before the servant name with rarity-based color", () => {
+    setup({
+      servants: [
+        FIXTURE[0],
+        {
+          id: 16,
+          variantKey: "16",
+          name_cn: "阿拉什",
+          name_jp: "アーラシュ",
+          name_en: "Arash",
+          class: "Archer",
+          rarity: 1,
+          noblePhantasmName: "流星一条",
+        },
+      ],
+    });
+
+    const goldOption = screen.getByText("阿尔托莉雅·卡斯特").closest('[role="option"]');
+    const goldIcon = within(goldOption as HTMLElement).getByRole("img", {
+      name: "术阶",
+    });
+    expect(goldIcon).toHaveAttribute(
+      "src",
+      expect.stringContaining("gold_caster.png")
+    );
+    expect(
+      goldIcon.compareDocumentPosition(screen.getByText("阿尔托莉雅·卡斯特")) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
+    const silverOption = screen.getByText("阿拉什").closest('[role="option"]');
+    expect(
+      within(silverOption as HTMLElement).getByRole("img", { name: "弓阶" })
+    ).toHaveAttribute("src", expect.stringContaining("silver_archer.png"));
+    expect(goldOption?.querySelector(".servant-class-badge")).toBeNull();
+  });
+
   it("renders multiple variants for the same servant id", () => {
     setup({
       servants: [

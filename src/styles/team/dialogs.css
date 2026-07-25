@@ -160,6 +160,17 @@
   flex: 1;
 }
 
+.servant-option-name-row {
+  min-height: 28px;
+}
+
+.servant-option-class-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 20px;
+  object-fit: contain;
+}
+
 .servant-option:hover,
 .servant-option.focused {
   background: var(--blue-3);
@@ -172,14 +183,6 @@
 .servant-option:focus-visible {
   outline: 2px solid var(--blue-8);
   outline-offset: -2px;
-}
-
-.servant-class-badge {
-  padding: 2px 8px;
-  border-radius: var(--radius-1);
-  min-width: 48px;
-  text-align: center;
-  flex-shrink: 0;
 }
 
 .servant-rarity {

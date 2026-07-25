@@ -4,7 +4,6 @@ import {
   Flex,
   Text,
   TextField,
-  Box,
 } from "@radix-ui/themes";
 import { invoke, convertFileSrc } from "../../tauri";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
@@ -41,6 +40,8 @@ import classAlteregoSelectedIcon from "../../../src-tauri/resources/images/class
 import classForeignerSelectedIcon from "../../../src-tauri/resources/images/class/gold_forigner.png";
 import classPretenderSelectedIcon from "../../../src-tauri/resources/images/class/gold_prentender.png";
 import classBeastSelectedIcon from "../../../src-tauri/resources/images/class/gold_beast.png";
+import classUnknownIcon from "../../../src-tauri/resources/images/class/silver_unknown.png";
+import classUnknownSelectedIcon from "../../../src-tauri/resources/images/class/gold_unknown.png";
 
 interface ServantSelectDialogProps {
   open: boolean;
@@ -56,24 +57,6 @@ interface ServantSelectDialogProps {
   disabledIds?: number[];
   defaultClassFilter?: string;
 }
-
-const CLASS_COLORS: Record<string, string> = {
-  Saber: "#edc637",
-  Archer: "#6dc88e",
-  Lancer: "#3d9be0",
-  Rider: "#d46cce",
-  Caster: "#5db3d1",
-  Assassin: "#8b8b8b",
-  Berserker: "#d34545",
-  Ruler: "#d4a537",
-  Avenger: "#6a4bad",
-  "Moon Cancer": "#60c5d8",
-  Foreigner: "#b0a0d0",
-  Pretender: "#a0d070",
-  Beast: "#c04040",
-  Shielder: "#a0a0a0",
-  Alterego: "#a050a0",
-};
 
 const RARITY_FILTER_OPTIONS = [null, 1, 2, 3, 4, 5] as const;
 const ROW_HEIGHT = 72;
@@ -212,12 +195,26 @@ function normalizeClassFilter(className: string | undefined): string {
   );
 }
 
-function getClassColor(cls: string): string {
-  if (CLASS_COLORS[cls]) return CLASS_COLORS[cls];
-  for (const [key, color] of Object.entries(CLASS_COLORS)) {
-    if (cls.includes(key)) return color;
-  }
-  return "var(--gray-9)";
+function getServantClassIcon(servant: Servant): {
+  icon: string;
+  label: string;
+} {
+  const option = CLASS_FILTER_OPTIONS.find(
+    (candidate) =>
+      candidate.value !== "" &&
+      candidate.servantClasses.includes(servant.class)
+  );
+  const isGold = servant.rarity === 4 || servant.rarity === 5;
+  return {
+    icon: option
+      ? isGold
+        ? option.selectedIcon
+        : option.icon
+      : isGold
+        ? classUnknownSelectedIcon
+        : classUnknownIcon,
+    label: option?.label ?? servant.class,
+  };
 }
 
 function displayCnName(servant: Servant): string {
@@ -551,6 +548,7 @@ export function ServantSelectDialog({
             >
               {visible.map((servant, i) => {
                 const index = startIndex + i;
+                const classIcon = getServantClassIcon(servant);
                 return (
                   <button
                     key={servant.variantKey}
@@ -576,18 +574,16 @@ export function ServantSelectDialog({
                         )}
                       </div>
                       <Flex direction="column" align="start" gap="1" className="servant-option-text">
-                        <Flex align="center" gap="2" wrap="wrap">
+                        <Flex align="center" gap="2" wrap="wrap" className="servant-option-name-row">
+                          <img
+                            src={classIcon.icon}
+                            alt={classIcon.label}
+                            title={classIcon.label}
+                            className="servant-option-class-icon"
+                          />
                           <Text size="2" weight="medium">
                             {displayCnName(servant)}
                           </Text>
-                          <Box
-                            className="servant-class-badge"
-                            style={{ background: getClassColor(servant.class) }}
-                          >
-                            <Text size="1" weight="bold" style={{ color: "#fff" }}>
-                              {servant.class.split(" ")[0]}
-                            </Text>
-                          </Box>
                           <Text size="1" className="servant-rarity">
                             {"★".repeat(servant.rarity)}
                           </Text>
