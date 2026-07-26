@@ -59,6 +59,11 @@ stream frame is used):
 → {"cmd":"read_level_digits","region":{...},"debug":false}
                                                     ← {"found":true,"current":90,"max":90,
                                                        "text":"90/90"}
+→ {"cmd":"read_craft_essence_grid","region":{...}}
+                                                    ← {"found":true,"cells":[{"row":0,"col":0,
+                                                       "level":32,"levelCap":50,"rarity":1,
+                                                       "limitBreaks":4,"locked":true,
+                                                       "lockScore":0.99,"artFingerprint":"..."}]}
 → {"cmd":"verify_support_ce","region":{...},
     "templatePath":"/.../assets/ces/{id}/card_ce.png","threshold":0.7}
                                                     ← {"score":0.81,"passed":true}
@@ -831,6 +836,26 @@ ITEM_GRID_CARD_H = 258.0 / 1440.0
 ITEM_GRID_ANCHOR_OFFSET_X = 9.0 / 2560.0
 ITEM_GRID_ANCHOR_OFFSET_Y = 234.0 / 1440.0
 ITEM_GRID_DEFAULT_REGION = {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747}
+CE_GRID_LOCK_TEMPLATE = "shared/enhancement_ce/icon_ce_locked"
+CE_GRID_LOCK_TEMPLATE_REFERENCE_WIDTH = 1920.0
+CE_GRID_LOCK_THRESHOLD = 0.70
+CE_GRID_UNLOCKED_MAX_SCORE = 0.50
+CE_GRID_SAME_TARGET_MIN_SCORE = 0.02
+CE_GRID_SAME_TARGET_OCR_MIN_CONFIDENCE = 0.70
+CE_GRID_LEVEL_CAPS = {
+    10: (1, 0),
+    20: (1, 1),
+    30: (1, 2),
+    40: (1, 3),
+    50: (1, 4),
+    15: (2, 0),
+    25: (2, 1),
+    35: (2, 2),
+    45: (2, 3),
+    55: (2, 4),
+    100: (5, 4),
+}
+CE_MAIN_TARGET_LEVEL_CAPS = frozenset({10, 20, 50, 100})
 
 
 def _norm_rect_from_px(x: float, y: float, width: float, height: float, img_w: int, img_h: int) -> dict:
@@ -1009,6 +1034,517 @@ def _find_item_grid(img: np.ndarray, cmd: dict) -> dict:
             "anchorCount": len(anchors),
             "gridCellCount": len(cells),
         },
+    }
+
+
+def _parse_ce_level_text(text: str) -> Optional[tuple[int, int]]:
+    """Parse the tiny ``等级 current/cap`` label shown on CE inventory cards.
+
+    RapidOCR reads the slash reliably on isolated cards, but on a full grid it
+    may turn the slash into ``7`` (``1/15`` -> ``1715``) or omit it.  Limit the
+    recovery path to the exact 1★/2★ cap whitelist so an unrelated OCR fragment
+    can never become a selectable material.
+    """
+
+    compact = re.sub(r"\s+", "", str(text))
+    caps = "|".join(str(cap) for cap in sorted(CE_GRID_LEVEL_CAPS))
+    direct = re.search(rf"(?<!\d)(\d{{1,2}})[/／]({caps})(?!\d)", compact)
+    if direct:
+        current, cap = int(direct.group(1)), int(direct.group(2))
+        if cap in CE_GRID_LEVEL_CAPS and 1 <= current <= cap:
+            return current, cap
+
+    digits = "".join(re.findall(r"\d", compact))
+    candidates: list[tuple[int, int]] = []
+    for cap in CE_GRID_LEVEL_CAPS:
+        cap_text = str(cap)
+        if not digits.endswith(cap_text):
+            continue
+        prefix = digits[: -len(cap_text)]
+        # The grid OCR consistently substitutes the diagonal slash with 7.
+        # Requiring a real current-level prefix before that 7 avoids treating
+        # truncated reads such as ``755`` as a valid ``7/55``.
+        current_text = prefix[:-1] if prefix.endswith("7") else ""
+        if not current_text:
+            continue
+        current = int(current_text)
+        if 1 <= current <= cap:
+            candidates.append((current, cap))
+    if not candidates:
+        return None
+    current, cap = min(candidates, key=lambda item: len(str(item[0])))
+    return current, cap
+
+
+def _parse_ce_main_level_text(text: str) -> Optional[tuple[int, int]]:
+    parsed = _parse_ce_level_text(text)
+    if parsed is not None and parsed[1] in CE_MAIN_TARGET_LEVEL_CAPS:
+        return parsed
+
+    raw_text = str(text)
+    split_duplicate = re.fullmatch(
+        r"\D*(\d{1,3})[/／](\d{1,3})\s+(\d{2,4})\D*",
+        raw_text,
+    )
+    if split_duplicate:
+        current = int(split_duplicate.group(1))
+        cap_prefix = split_duplicate.group(2)
+        repeated_tail = split_duplicate.group(3)
+        split_candidates = [
+            cap
+            for cap in CE_MAIN_TARGET_LEVEL_CAPS
+            if str(cap).startswith(cap_prefix)
+            and repeated_tail == f"1{cap}"
+            and 1 <= current <= cap
+        ]
+        if len(split_candidates) == 1:
+            return current, split_candidates[0]
+
+    compact = re.sub(r"\s+", "", raw_text)
+    caps = "|".join(str(cap) for cap in sorted(CE_MAIN_TARGET_LEVEL_CAPS))
+    direct = re.search(rf"(?<!\d)(\d{{1,3}})[/／]({caps})(?!\d)", compact)
+    if direct:
+        current, cap = int(direct.group(1)), int(direct.group(2))
+        if 1 <= current <= cap:
+            return current, cap
+
+    digits = "".join(re.findall(r"\d", compact))
+    candidates: list[tuple[int, int]] = []
+    for cap in CE_MAIN_TARGET_LEVEL_CAPS:
+        cap_text = str(cap)
+        if not digits.endswith(cap_text):
+            continue
+        prefix = digits[: -len(cap_text)]
+        # On the large result panel RapidOCR consistently reads the slash as 1
+        # (``32/50`` -> ``32150``).  Keep this recovery limited to the four
+        # caps used by the enhancement strategy.
+        current_text = prefix[:-1] if prefix.endswith("1") else ""
+        if not current_text:
+            continue
+        current = int(current_text)
+        if 1 <= current <= cap:
+            candidates.append((current, cap))
+    if not candidates:
+        return None
+    return min(candidates, key=lambda item: len(str(item[0])))
+
+
+def _parse_ce_main_cap_only_text(text: str) -> Optional[int]:
+    """Read only a known cap from an isolated slash-as-``1`` OCR token."""
+
+    tokens = re.split(r"\s+", str(text).strip())
+    candidates = {
+        cap
+        for cap in CE_MAIN_TARGET_LEVEL_CAPS
+        if f"1{cap}" in tokens
+    }
+    return next(iter(candidates)) if len(candidates) == 1 else None
+
+
+def _read_craft_essence_main_target(img: np.ndarray) -> dict:
+    region = {"x": 0.34, "y": 0.61, "w": 0.12, "h": 0.07}
+    default_text = ""
+    cap_only_evidence: dict[int, str] = {}
+    for scale in (1.0, 1.5, 2.5):
+        ocr = (
+            _ocr_region(img, region)
+            if scale == 1.0
+            else _ocr_region(img, region, scale=scale)
+        )
+        if scale == 1.0:
+            default_text = str(ocr.get("fullText", ""))
+        candidates = [str(ocr.get("fullText", ""))]
+        candidates.extend(
+            str(fragment.get("text", ""))
+            for fragment in ocr.get("fragments", [])
+        )
+        for text in candidates:
+            parsed = _parse_ce_main_level_text(text)
+            if parsed is not None:
+                return {
+                    "found": True,
+                    "level": parsed[0],
+                    "levelCap": parsed[1],
+                    "text": text,
+                    "region": region,
+                }
+            cap_only = _parse_ce_main_cap_only_text(text)
+            if cap_only is not None:
+                cap_only_evidence.setdefault(cap_only, text)
+    if len(cap_only_evidence) == 1:
+        cap, text = next(iter(cap_only_evidence.items()))
+        return {
+            "found": False,
+            "level": None,
+            "levelCap": cap,
+            "text": text,
+            "region": region,
+        }
+    return {
+        "found": False,
+        "level": None,
+        "levelCap": None,
+        "text": default_text,
+        "region": region,
+    }
+
+
+def _ce_cell_level_region(cell_region: dict) -> dict:
+    return _clamp_norm_rect(
+        {
+            "x": float(cell_region["x"]) + float(cell_region["w"]) * 0.48,
+            "y": float(cell_region["y"]) + float(cell_region["h"]) * 0.02,
+            "w": float(cell_region["w"]) * 0.54,
+            "h": float(cell_region["h"]) * 0.22,
+        }
+    )
+
+
+def _ce_cell_level_fallback_region(cell_region: dict) -> dict:
+    return _clamp_norm_rect(
+        {
+            "x": float(cell_region["x"]) + float(cell_region["w"]) * 0.24,
+            "y": float(cell_region["y"]) + float(cell_region["h"]) * 0.02,
+            "w": float(cell_region["w"]) * 0.78,
+            "h": float(cell_region["h"]) * 0.22,
+        }
+    )
+
+
+def _best_ce_level_read(ocr: dict) -> tuple[Optional[tuple[int, int]], float, str]:
+    level_read: Optional[tuple[int, int]] = None
+    level_confidence = 0.0
+    level_text = ""
+    full_text = str(ocr.get("fullText", ""))
+    full_parsed = _parse_ce_level_text(full_text)
+    if full_parsed is not None:
+        fragments = list(ocr.get("fragments", []))
+        level_read = full_parsed
+        level_confidence = min(
+            (float(fragment.get("ocrConfidence", 0.0)) for fragment in fragments),
+            default=0.0,
+        )
+        level_text = full_text
+    for fragment in ocr.get("fragments", []):
+        parsed = _parse_ce_level_text(str(fragment.get("text", "")))
+        if parsed is None:
+            continue
+        confidence = float(fragment.get("ocrConfidence", 0.0))
+        if confidence >= level_confidence:
+            level_read = parsed
+            level_confidence = confidence
+            level_text = str(fragment.get("text", ""))
+    return level_read, level_confidence, level_text
+
+
+def _ce_cell_lock_region(cell_region: dict) -> dict:
+    return _clamp_norm_rect(
+        {
+            "x": float(cell_region["x"]) - 0.012,
+            "y": float(cell_region["y"]) + float(cell_region["h"]) * 0.25,
+            "w": 0.025,
+            "h": float(cell_region["h"]) * 0.67,
+        }
+    )
+
+
+def _ce_art_fingerprint(img: np.ndarray, cell_region: dict) -> str:
+    h, w = img.shape[:2]
+    x1 = max(0, int(round((float(cell_region["x"]) + float(cell_region["w"]) * 0.10) * w)))
+    y1 = max(0, int(round((float(cell_region["y"]) + float(cell_region["h"]) * 0.22) * h)))
+    x2 = min(w, int(round((float(cell_region["x"]) + float(cell_region["w"]) * 0.90) * w)))
+    y2 = min(h, int(round((float(cell_region["y"]) + float(cell_region["h"]) * 0.70) * h)))
+    crop = img[y1:y2, x1:x2]
+    if crop.size == 0:
+        return ""
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    tiny = cv2.resize(gray, (9, 8), interpolation=cv2.INTER_AREA)
+    bits = tiny[:, 1:] > tiny[:, :-1]
+    value = 0
+    for bit in bits.flatten():
+        value = (value << 1) | int(bool(bit))
+    return f"{value:016x}"
+
+
+def _ce_same_target_marker_region(cell_region: dict) -> dict:
+    return _clamp_norm_rect(
+        {
+            "x": float(cell_region["x"]) + float(cell_region["w"]) * 0.08,
+            "y": float(cell_region["y"]) + float(cell_region["h"]) * 0.20,
+            "w": float(cell_region["w"]) * 0.84,
+            "h": float(cell_region["h"]) * 0.36,
+        }
+    )
+
+
+def _ce_same_target_score(img: np.ndarray, cell_region: dict) -> float:
+    """Measure the yellow ``突破极限`` marker shown on same-target materials."""
+
+    h, w = img.shape[:2]
+    marker_region = _ce_same_target_marker_region(cell_region)
+    x1 = max(0, int(round(float(marker_region["x"]) * w)))
+    y1 = max(0, int(round(float(marker_region["y"]) * h)))
+    x2 = min(
+        w,
+        int(round((float(marker_region["x"]) + float(marker_region["w"])) * w)),
+    )
+    y2 = min(
+        h,
+        int(round((float(marker_region["y"]) + float(marker_region["h"])) * h)),
+    )
+    crop = img[y1:y2, x1:x2]
+    if crop.size == 0:
+        return 0.0
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    yellow = (
+        (hsv[:, :, 0] >= 15)
+        & (hsv[:, :, 0] <= 38)
+        & (hsv[:, :, 1] >= 120)
+        & (hsv[:, :, 2] >= 150)
+    )
+    return float(np.mean(yellow))
+
+
+def _ce_same_target_marker_text(
+    grid_ocr: dict, cell_region: dict
+) -> tuple[str, float]:
+    """Return an explicit same-target marker read within one CE card.
+
+    The bundled JP recognition model consistently renders ``极`` as ``板`` on
+    the CN marker, so normalize only that observed one-character substitution.
+    Missing or low-confidence text deliberately remains a negative result.
+    """
+
+    marker_region = _ce_same_target_marker_region(cell_region)
+    best_text = ""
+    best_confidence = 0.0
+    for fragment in grid_ocr.get("fragments", []):
+        fragment_region = fragment.get("region", {})
+        center_x = float(fragment_region.get("x", 0.0)) + float(
+            fragment_region.get("w", 0.0)
+        ) / 2.0
+        center_y = float(fragment_region.get("y", 0.0)) + float(
+            fragment_region.get("h", 0.0)
+        ) / 2.0
+        if not (
+            float(marker_region["x"])
+            <= center_x
+            <= float(marker_region["x"]) + float(marker_region["w"])
+            and float(marker_region["y"])
+            <= center_y
+            <= float(marker_region["y"]) + float(marker_region["h"])
+        ):
+            continue
+        text = re.sub(r"\s+", "", str(fragment.get("text", "")))
+        normalized = text.replace("極", "极").replace("板", "极")
+        confidence = float(fragment.get("ocrConfidence", 0.0))
+        if (
+            "突破极限" in normalized
+            and confidence >= CE_GRID_SAME_TARGET_OCR_MIN_CONFIDENCE
+            and confidence >= best_confidence
+        ):
+            best_text = text
+            best_confidence = confidence
+    return best_text, best_confidence
+
+
+def _ce_cell_has_anchor(cell: dict, anchors: list[dict]) -> bool:
+    region = cell["region"]
+    expected_x = float(region["x"]) + ITEM_GRID_ANCHOR_OFFSET_X
+    expected_y = float(region["y"]) + ITEM_GRID_ANCHOR_OFFSET_Y
+    return any(
+        abs(float(anchor.get("x", 0.0)) - expected_x) <= 0.012
+        and abs(float(anchor.get("y", 0.0)) - expected_y) <= 0.025
+        for anchor in anchors
+    )
+
+
+def _ce_cell_fully_visible(cell: dict, list_region: dict) -> bool:
+    region = cell["region"]
+    top = float(region["y"])
+    bottom = top + float(region["h"])
+    list_top = float(list_region["y"])
+    list_bottom = list_top + float(list_region["h"])
+    return top >= list_top - 0.01 and bottom <= list_bottom + 0.005
+
+
+def _ce_scrollbar_thumb_geometry(
+    img: np.ndarray,
+) -> tuple[Optional[float], Optional[float]]:
+    """Return normalized ``(center_y, top_y)`` for the CE scrollbar thumb."""
+
+    h, w = img.shape[:2]
+    x1, x2 = int(round(w * 0.775)), int(round(w * 0.805))
+    y1, y2 = int(round(h * 0.25)), int(round(h * 0.98))
+    roi = img[y1:y2, x1:x2]
+    if roi.size == 0:
+        return None, None
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    mask = (
+        (hsv[:, :, 1] < 100)
+        & (hsv[:, :, 2] > 190)
+    ).astype(np.uint8)
+    count, _, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+    candidates: list[tuple[int, int, int]] = []
+    min_width = max(8, int(round(w * 0.010)))
+    min_height = max(20, int(round(h * 0.035)))
+    for index in range(1, count):
+        _, component_y, component_w, component_h, area = stats[index]
+        if component_w < min_width or component_h < min_height:
+            continue
+        candidates.append((int(area), int(component_y), int(component_h)))
+    if not candidates:
+        return None, None
+    _, component_y, component_h = max(candidates)
+    return (
+        (y1 + component_y + component_h / 2.0) / h,
+        (y1 + component_y) / h,
+    )
+
+
+def _ce_scrollbar_thumb_y(img: np.ndarray) -> Optional[float]:
+    """Return the normalized center Y of the CE inventory scrollbar thumb."""
+
+    return _ce_scrollbar_thumb_geometry(img)[0]
+
+
+def _read_craft_essence_grid(img: np.ndarray, cmd: dict) -> dict:
+    """Read safety-critical metadata for each visible CE inventory cell."""
+
+    grid = _find_item_grid(img, cmd)
+    anchors = list(grid.get("anchors", []))
+    list_region = cmd.get("region", ITEM_GRID_DEFAULT_REGION)
+    cells = [
+        cell
+        for cell in grid.get("gridCells", [])
+        if _ce_cell_has_anchor(cell, anchors)
+        and _ce_cell_fully_visible(cell, list_region)
+    ]
+    lock_template = _get_template(CE_GRID_LOCK_TEMPLATE)
+    grid_ocr = _ocr_region(img, list_region)
+    output_cells: list[dict] = []
+    invalid_cells = 0
+
+    for cell in cells:
+        region = cell["region"]
+        level_region = _ce_cell_level_region(region)
+        ocr = _ocr_region(img, level_region)
+        level_read, level_confidence, level_text = _best_ce_level_read(ocr)
+        if level_read is None:
+            fallback_region = _ce_cell_level_fallback_region(region)
+            for scale in (1.5, 2.5):
+                fallback_ocr = _ocr_region(img, fallback_region, scale=scale)
+                level_read, level_confidence, level_text = _best_ce_level_read(
+                    fallback_ocr
+                )
+                if level_read is not None:
+                    break
+        if level_read is None:
+            for fragment in grid_ocr.get("fragments", []):
+                fragment_region = fragment.get("region", {})
+                center_x = float(fragment_region.get("x", 0.0)) + float(
+                    fragment_region.get("w", 0.0)
+                ) / 2.0
+                center_y = float(fragment_region.get("y", 0.0)) + float(
+                    fragment_region.get("h", 0.0)
+                ) / 2.0
+                if not (
+                    float(region["x"]) <= center_x <= float(region["x"]) + float(region["w"])
+                    and float(region["y"]) - float(region["h"]) * 0.04
+                    <= center_y
+                    <= float(region["y"]) + float(region["h"]) * 0.25
+                ):
+                    continue
+                parsed = _parse_ce_level_text(str(fragment.get("text", "")))
+                if parsed is None:
+                    continue
+                level_read = parsed
+                level_confidence = float(fragment.get("ocrConfidence", 0.0))
+                level_text = str(fragment.get("text", ""))
+                break
+
+        lock_score = 0.0
+        if lock_template is not None:
+            lock_match = _score_template_region(
+                img,
+                lock_template,
+                _ce_cell_lock_region(region),
+                CE_GRID_LOCK_THRESHOLD,
+                template_key=CE_GRID_LOCK_TEMPLATE,
+                template_reference_width=CE_GRID_LOCK_TEMPLATE_REFERENCE_WIDTH,
+            )
+            lock_score = float(lock_match.get("score", 0.0))
+
+        level = level_read[0] if level_read else None
+        cap = level_read[1] if level_read else None
+        rarity_breaks = CE_GRID_LEVEL_CAPS.get(cap) if cap is not None else None
+        rarity = rarity_breaks[0] if rarity_breaks else None
+        limit_breaks = rarity_breaks[1] if rarity_breaks else None
+        same_target_score = _ce_same_target_score(img, region)
+        same_target_text, same_target_confidence = _ce_same_target_marker_text(
+            grid_ocr, region
+        )
+        valid = (
+            level is not None
+            and cap is not None
+            and rarity is not None
+            and 1 <= int(level) <= int(cap)
+            and level_confidence >= 0.50
+            and lock_template is not None
+            and (
+                lock_score >= CE_GRID_LOCK_THRESHOLD
+                or lock_score <= CE_GRID_UNLOCKED_MAX_SCORE
+            )
+        )
+        if not valid:
+            invalid_cells += 1
+        output_cells.append(
+            {
+                "row": int(cell["row"]),
+                "col": int(cell["col"]),
+                "region": dict(region),
+                "level": level,
+                "levelCap": cap,
+                "rarity": rarity,
+                "limitBreaks": limit_breaks,
+                "locked": bool(lock_score >= CE_GRID_LOCK_THRESHOLD),
+                "lockScore": lock_score,
+                "levelText": level_text,
+                "levelConfidence": level_confidence,
+                "artFingerprint": _ce_art_fingerprint(img, region),
+                "sameAsTarget": bool(
+                    same_target_score >= CE_GRID_SAME_TARGET_MIN_SCORE
+                    and same_target_text
+                ),
+                "sameAsTargetScore": same_target_score,
+                "sameAsTargetText": same_target_text,
+                "sameAsTargetConfidence": same_target_confidence,
+                "valid": bool(valid),
+            }
+        )
+
+    scrollbar_thumb_y, scrollbar_thumb_top_y = _ce_scrollbar_thumb_geometry(img)
+    diagnostics = dict(grid.get("diagnostics", {}))
+    diagnostics.update(
+        {
+            "lockTemplateKey": CE_GRID_LOCK_TEMPLATE,
+            "lockTemplateLoaded": lock_template is not None,
+            "lockThreshold": CE_GRID_LOCK_THRESHOLD,
+            "unlockedMaxScore": CE_GRID_UNLOCKED_MAX_SCORE,
+            "sameTargetMinScore": CE_GRID_SAME_TARGET_MIN_SCORE,
+            "sameTargetOcrMinConfidence": (
+                CE_GRID_SAME_TARGET_OCR_MIN_CONFIDENCE
+            ),
+            "scrollbarThumbY": scrollbar_thumb_y,
+            "scrollbarThumbTopY": scrollbar_thumb_top_y,
+            "visibleCellCount": len(output_cells),
+            "invalidCellCount": invalid_cells,
+        }
+    )
+    return {
+        "found": bool(output_cells) and invalid_cells == 0,
+        "cells": output_cells,
+        "diagnostics": diagnostics,
     }
 
 
@@ -3419,7 +3955,7 @@ def _poly_to_norm_rect(box: Any, img_w: int, img_h: int) -> dict:
     }
 
 
-def _ocr_region(img: np.ndarray, region: dict) -> dict:
+def _ocr_region(img: np.ndarray, region: dict, *, scale: float = 1.0) -> dict:
     """Run OCR inside ``region`` and return raw fragments + joined text."""
     h, w = img.shape[:2]
     if h == 0 or w == 0:
@@ -3441,14 +3977,21 @@ def _ocr_region(img: np.ndarray, region: dict) -> dict:
             "error": "rapidocr_onnxruntime not available",
         }
 
-    raw, _ = ocr(crop)
+    scale = max(1.0, float(scale))
+    ocr_crop = (
+        cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        if scale > 1.0
+        else crop
+    )
+    raw, _ = ocr(ocr_crop)
     if not raw:
         return {"fragments": [], "fullText": ""}
 
     fragments: list[dict] = []
     texts: list[str] = []
     for box, text, conf in raw:
-        pts = np.asarray(box, dtype=np.float32) + np.array([rx, ry], dtype=np.float32)
+        pts = np.asarray(box, dtype=np.float32) / scale
+        pts += np.array([rx, ry], dtype=np.float32)
         norm_region = _poly_to_norm_rect(pts, w, h)
         text_str = str(text).strip()
         if text_str:
@@ -5599,7 +6142,11 @@ def main() -> None:
                     cmd.get("threshold", 0.8),
                 ),
             )
-        elif action in ("find_item_grid", "find_enhancement_servant_grid"):
+        elif action in (
+            "find_item_grid",
+            "find_enhancement_servant_grid",
+            "read_craft_essence_grid",
+        ):
             deadline = time.monotonic() + float(cmd.get("retrySeconds", 0.0))
             interval = float(cmd.get("retryIntervalSeconds", 0.15))
             attempts = 0
@@ -5610,11 +6157,12 @@ def main() -> None:
                 if img is None:
                     _reply(req_id, {"found": False, "error": err})
                     break
-                last_result = (
-                    _find_item_grid(img, cmd)
-                    if action == "find_item_grid"
-                    else _find_enhancement_servant_grid(img, cmd)
-                )
+                if action == "find_item_grid":
+                    last_result = _find_item_grid(img, cmd)
+                elif action == "read_craft_essence_grid":
+                    last_result = _read_craft_essence_grid(img, cmd)
+                else:
+                    last_result = _find_enhancement_servant_grid(img, cmd)
                 last_result["diagnostics"]["attempts"] = attempts
                 if last_result["diagnostics"].get("anchorCount", 0) > 0:
                     _reply(req_id, last_result)
@@ -5623,5 +6171,11 @@ def main() -> None:
                     _reply(req_id, last_result)
                     break
                 time.sleep(max(0.02, interval))
+        elif action == "read_craft_essence_main_target":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(req_id, {"found": False, "error": err})
+                continue
+            _reply(req_id, _read_craft_essence_main_target(img))
         else:
             _reply(req_id, {"error": f"unknown command: {action}"})

@@ -96,6 +96,28 @@ describe("App active project restore", () => {
     expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
   });
 
+  it("keeps the shared operation log collapsed when CE automation starts", async () => {
+    installAppMock("project-1");
+    const user = userEvent.setup();
+
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /操作日志/ }));
+    expect(
+      screen.getByRole("button", { name: "关闭操作日志" })
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "强化概念礼装" }));
+    await user.click(screen.getByRole("button", { name: "制作 8 个丸子" }));
+
+    expect(
+      screen.queryByRole("button", { name: "关闭操作日志" })
+    ).not.toBeInTheDocument();
+  });
+
   it("opens the self-check dialog from the menu event", async () => {
     let selfCheckHandler: (() => void) | null = null;
     vi.mocked(listen).mockImplementation(async (event, handler) => {

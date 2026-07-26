@@ -581,10 +581,28 @@
               "threshold": 0.85,
               "templateReferenceWidth": 1920
             },
+            "dialog_enhancement_ce_recommend_empty": {
+              "template": "enhancement_ce/dialog_enhancement_ce_recommend_empty",
+              "region": { "x": 0.25, "y": 0.3, "w": 0.5, "h": 0.2 },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
             "dialog_enhancement_ce_confirm": {
               "template": "enhancement_ce/dialog_enhancement_ce_confirm",
-              "region": { "x": 0.35, "y": 0.65, "w": 0.3, "h": 0.15 },
+              "region": { "x": 0.3, "y": 0.62, "w": 0.45, "h": 0.22 },
               "threshold": 0.88,
+              "templateReferenceWidth": 1920
+            },
+            "dialog_enhancement_ce_confirm_compact": {
+              "template": "enhancement_ce/dialog_enhancement_ce_confirm_compact",
+              "region": { "x": 0.3, "y": 0.62, "w": 0.45, "h": 0.22 },
+              "threshold": 0.88,
+              "templateReferenceWidth": 1920
+            },
+            "dialog_enhancement_ce_enhanced_material_warning": {
+              "template": "enhancement_ce/dialog_enhancement_ce_enhanced_material_warning",
+              "region": { "x": 0.3, "y": 0.02, "w": 0.4, "h": 0.11 },
+              "threshold": 0.82,
               "templateReferenceWidth": 1920
             },
             "element_enhancement_ce_success": {
@@ -597,6 +615,12 @@
         },
         "ceSelect": {
           "elements": {
+            "button_enhancement_ce_lock_mode_active": {
+              "template": "enhancement_ce/button_enhancement_ce_lock_mode_active",
+              "region": { "x": 0, "y": 0.452, "w": 0.05, "h": 0.153 },
+              "threshold": 0.9,
+              "templateReferenceWidth": 1920
+            },
             "button_scale_level_3": {
               "template": "enhancement_ce/button_scale_level_3",
               "region": { "x": 0, "y": 0.89, "w": 0.061, "h": 0.104 },

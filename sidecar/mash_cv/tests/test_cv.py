@@ -4936,11 +4936,34 @@ def _ce_enhancement_fixture(name):
     )
 
 
+def test_craft_essence_target_list_with_existing_target_is_not_material_list():
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_select_ce_with_existing_target.png")
+
+    assert mash_cv._find_element_by_name(
+        img,
+        "CraftEssenceEnhancement",
+        "button_enhancement_ce_select_ce_mark",
+    )["found"]
+    assert not mash_cv._find_element_by_name(
+        img,
+        "CraftEssenceEnhancement",
+        "button_enhancement_ce_clean_all_select",
+    )["found"]
+    assert not mash_cv._find_element_by_name(
+        img,
+        "CraftEssenceEnhancement",
+        "button_enhancement_ce_clean_all_select_ready",
+    )["found"]
+
+
 @pytest.mark.parametrize(
     ("fixture", "element"),
     (
         ("enhancement_ce_main.png", "icon_enhancement_result"),
         ("enhancement_ce_main.png", "element_enhancement_ce_stripe"),
+        ("enhancement_ce_main_yellow_target.png", "icon_enhancement_result"),
+        ("enhancement_ce_main_yellow_target.png", "element_enhancement_ce_stripe"),
         ("enhancement_ce_main.png", "element_enhancement_new"),
         ("enhancement_ce_ready.png", "element_enhancement_ce_stripe"),
         ("enhancement_ce_ready.png", "button_enhancement_ready"),
@@ -4955,6 +4978,10 @@ def _ce_enhancement_fixture(name):
         ("enhancement_ce_select_ce.png", "button_enhancement_ce_select_ce_mark"),
         ("enhancement_ce_select_ce.png", "button_scale_level_3"),
         ("enhancement_ce_select_ce.png", "button_enhancement_ce_select_ce_desc"),
+        (
+            "enhancement_ce_inventory_bottom_sparse.png",
+            "element_enhancement_ce_scroll_end",
+        ),
         ("enhancement_ce_select_exp.png", "button_enhancement_ce_clean_all_select"),
         ("enhancement_ce_select_ce_filter.png", "dialog_enhancement_ce_filter"),
         ("enhancement_ce_select_ce_filter.png", "button_enhancement_ce_filter_init"),
@@ -4975,7 +5002,19 @@ def _ce_enhancement_fixture(name):
             "enhancement_ce_recommend_dialog_auto_on.png",
             "dialog_enhancement_ce_recommend_material",
         ),
+        (
+            "enhancement_ce_recommend_empty.png",
+            "dialog_enhancement_ce_recommend_empty",
+        ),
+        (
+            "enhancement_ce_enhanced_material_warning.png",
+            "dialog_enhancement_ce_enhanced_material_warning",
+        ),
         ("enhancement_ce_confirm.png", "dialog_enhancement_ce_confirm"),
+        (
+            "enhancement_ce_confirm_live_inventory_batch.png",
+            "dialog_enhancement_ce_confirm_compact",
+        ),
         ("enhancement_ce_success.png", "element_enhancement_ce_success"),
         (
             "enhancement_ce_after_enhancement_ready.png",
@@ -5029,6 +5068,22 @@ def test_craft_essence_recommend_dialog_probe_rejects_other_states(fixture, widt
 
 
 @pytest.mark.parametrize("width", (1920, 2560))
+def test_craft_essence_scroll_end_probe_rejects_top_of_list(width):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_inventory_ascending.png")
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    result = mash_cv._find_element_by_name(
+        img,
+        "CraftEssenceEnhancement",
+        "element_enhancement_ce_scroll_end",
+    )
+
+    assert result["found"] is False
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
 @pytest.mark.parametrize(
     ("fixture", "element"),
     (
@@ -5053,6 +5108,81 @@ def test_craft_essence_enhancement_cycle_probes_reject_other_states(
     )
 
     assert result["found"] is False
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+@pytest.mark.parametrize(
+    "normal_fixture",
+    (
+        "enhancement_ce_confirm.png",
+        "enhancement_ce_main_selected_not_ready.png",
+        "enhancement_ce_recommend_dialog_auto_on.png",
+    ),
+)
+def test_craft_essence_enhanced_material_warning_probe_is_strict(
+    normal_fixture, width
+):
+    _load_craft_essence_enhancement_assets()
+    warning = _ce_enhancement_fixture(
+        "enhancement_ce_enhanced_material_warning.png"
+    )
+    normal = _ce_enhancement_fixture(normal_fixture)
+    if width != warning.shape[1]:
+        warning = cv2.resize(
+            warning, (width, int(warning.shape[0] * width / warning.shape[1]))
+        )
+        normal = cv2.resize(
+            normal, (width, int(normal.shape[0] * width / normal.shape[1]))
+        )
+
+    warning_result = mash_cv._find_element_by_name(
+        warning,
+        "CraftEssenceEnhancement",
+        "dialog_enhancement_ce_enhanced_material_warning",
+    )
+    normal_result = mash_cv._find_element_by_name(
+        normal,
+        "CraftEssenceEnhancement",
+        "dialog_enhancement_ce_enhanced_material_warning",
+    )
+
+    assert warning_result["found"] is True
+    assert normal_result["found"] is False
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+@pytest.mark.parametrize(
+    "normal_fixture",
+    (
+        "enhancement_ce_inventory_ascending.png",
+        "enhancement_ce_inventory_strategy.png",
+        "enhancement_ce_select_exp.png",
+    ),
+)
+def test_craft_essence_lock_mode_probe_is_strict(width, normal_fixture):
+    _load_craft_essence_enhancement_assets()
+    active = _ce_enhancement_fixture("enhancement_ce_lock_mode.png")
+    normal = _ce_enhancement_fixture(normal_fixture)
+    if width != active.shape[1]:
+        height = int(active.shape[0] * width / active.shape[1])
+        active = cv2.resize(active, (width, height))
+        normal = cv2.resize(normal, (width, height))
+
+    active_result = mash_cv._find_element_by_name(
+        active,
+        "CraftEssenceEnhancement",
+        "button_enhancement_ce_lock_mode_active",
+    )
+    normal_result = mash_cv._find_element_by_name(
+        normal,
+        "CraftEssenceEnhancement",
+        "button_enhancement_ce_lock_mode_active",
+    )
+
+    assert active_result["found"] is True
+    assert active_result["score"] >= 0.95
+    assert normal_result["found"] is False
+    assert active_result["score"] >= normal_result["score"] + 0.1
 
 
 @pytest.mark.parametrize("width", (1920, 2560))
@@ -5261,3 +5391,426 @@ def test_find_item_grid_returns_first_craft_essence_cell(width):
     assert (first["row"], first["col"]) == (0, 0)
     assert first["region"]["x"] == pytest.approx(0.0564, abs=0.002)
     assert first["region"]["y"] == pytest.approx(0.2616, abs=0.002)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    (
+        ("等级44/50", (44, 50)),
+        ("等级11/\n55", (11, 55)),
+        ("等级9755", (9, 55)),
+        ("等级1715", (1, 15)),
+        ("等级6/550", None),
+        ("755", None),
+        ("等级1/100", (1, 100)),
+        ("999/100", None),
+    ),
+)
+def test_parse_ce_level_text_is_limited_to_known_strategy_caps(text, expected):
+    assert mash_cv.cv._parse_ce_level_text(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    (
+        ("等级1/10", (1, 10)),
+        ("1110", (1, 10)),
+        ("32150", (32, 50)),
+        ("等级15/100", (15, 100)),
+        ("151100", (15, 100)),
+        ("991100", (99, 100)),
+        ("100/100", (100, 100)),
+        ("10/2 120", (10, 20)),
+        ("等级10/2\n120", (10, 20)),
+        ("等级1/15", None),
+        ("32/55", None),
+        ("32155", None),
+        ("999/100", None),
+        ("10/3 120", None),
+        ("10/2 150", None),
+        ("10/2 125", None),
+        ("10/2120", None),
+        ("10/2 120 50", None),
+        ("30/2 120", None),
+    ),
+)
+def test_parse_ce_main_level_text_only_accepts_strategy_target_caps(text, expected):
+    assert mash_cv.cv._parse_ce_main_level_text(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    (
+        ("110", 10),
+        ("120", 20),
+        ("31 120", 20),
+        ("150", 50),
+        ("1100", 100),
+        ("31 120 120", 20),
+        ("110 120", None),
+        ("199", None),
+        ("3120", None),
+        ("1203", None),
+        ("等级120", None),
+        ("120/20", None),
+    ),
+)
+def test_parse_ce_main_cap_only_requires_unique_exact_token(text, expected):
+    assert mash_cv.cv._parse_ce_main_cap_only_text(text) == expected
+
+
+def test_read_craft_essence_main_reads_non_five_star_target():
+    img = _ce_enhancement_fixture("enhancement_ce_main_selected_not_ready.png")
+    result = mash_cv._read_craft_essence_main_target(img)
+
+    assert result["found"] is True
+    assert result["level"] == 32
+    assert result["levelCap"] == 50
+
+
+def test_read_craft_essence_main_reads_one_star_base(monkeypatch):
+    monkeypatch.setattr(
+        mash_cv.cv,
+        "_ocr_region",
+        lambda _img, _region, **_kwargs: {
+            "fragments": [{"text": "等级1/10", "ocrConfidence": 0.99}],
+            "fullText": "等级1/10",
+        },
+    )
+
+    result = mash_cv._read_craft_essence_main_target(
+        np.zeros((1080, 1920, 3), dtype=np.uint8)
+    )
+
+    assert result["found"] is True
+    assert result["level"] == 1
+    assert result["levelCap"] == 10
+
+
+def test_read_craft_essence_main_recovers_split_repeated_level_ocr(monkeypatch):
+    monkeypatch.setattr(
+        mash_cv.cv,
+        "_ocr_region",
+        lambda _img, _region, **_kwargs: {
+            "fragments": [
+                {"text": "10/2", "ocrConfidence": 0.99},
+                {"text": "120", "ocrConfidence": 0.99},
+            ],
+            "fullText": "10/2 120",
+        },
+    )
+
+    result = mash_cv._read_craft_essence_main_target(
+        np.zeros((1080, 1920, 3), dtype=np.uint8)
+    )
+
+    assert result["found"] is True
+    assert result["level"] == 10
+    assert result["levelCap"] == 20
+
+
+def test_read_craft_essence_main_retries_incomplete_ocr_with_upscale(
+    monkeypatch,
+):
+    scales = []
+
+    def fake_ocr(_img, _region, *, scale=1.0):
+        scales.append(scale)
+        text = "120" if scale == 1.0 else "等级13/20"
+        return {
+            "fragments": [{"text": text, "ocrConfidence": 0.99}],
+            "fullText": text,
+        }
+
+    monkeypatch.setattr(mash_cv.cv, "_ocr_region", fake_ocr)
+
+    result = mash_cv._read_craft_essence_main_target(
+        np.zeros((1080, 1920, 3), dtype=np.uint8)
+    )
+
+    assert result["found"] is True
+    assert result["level"] == 13
+    assert result["levelCap"] == 20
+    assert scales == [1.0, 1.5]
+
+
+def test_read_craft_essence_main_reports_cap_from_incomplete_upscaled_reads(
+    monkeypatch,
+):
+    scales = []
+
+    def fake_ocr(_img, _region, *, scale=1.0):
+        scales.append(scale)
+        return {
+            "fragments": [{"text": "120", "ocrConfidence": 0.99}],
+            "fullText": "120",
+        }
+
+    monkeypatch.setattr(mash_cv.cv, "_ocr_region", fake_ocr)
+
+    result = mash_cv._read_craft_essence_main_target(
+        np.zeros((1080, 1920, 3), dtype=np.uint8)
+    )
+
+    assert result["found"] is False
+    assert result["level"] is None
+    assert result["levelCap"] == 20
+    assert result["text"] == "120"
+    assert scales == [1.0, 1.5, 2.5]
+
+
+def test_read_craft_essence_main_reports_cap_from_split_ocr_tokens(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        mash_cv.cv,
+        "_ocr_region",
+        lambda _img, _region, **_kwargs: {
+            "fragments": [
+                {"text": "31", "ocrConfidence": 0.99},
+                {"text": "120", "ocrConfidence": 0.99},
+            ],
+            "fullText": "31 120",
+        },
+    )
+
+    result = mash_cv._read_craft_essence_main_target(
+        np.zeros((1080, 1920, 3), dtype=np.uint8)
+    )
+
+    assert result["found"] is False
+    assert result["level"] is None
+    assert result["levelCap"] == 20
+    assert result["text"] == "31 120"
+
+
+def test_read_craft_essence_main_rejects_ambiguous_cap_only_evidence(
+    monkeypatch,
+):
+    def fake_ocr(_img, _region, *, scale=1.0):
+        text = "120" if scale == 1.0 else "150"
+        return {
+            "fragments": [{"text": text, "ocrConfidence": 0.99}],
+            "fullText": text,
+        }
+
+    monkeypatch.setattr(mash_cv.cv, "_ocr_region", fake_ocr)
+
+    result = mash_cv._read_craft_essence_main_target(
+        np.zeros((1080, 1920, 3), dtype=np.uint8)
+    )
+
+    assert result["found"] is False
+    assert result["level"] is None
+    assert result["levelCap"] is None
+
+
+def test_read_craft_essence_main_rejects_unknown_cap(monkeypatch):
+    monkeypatch.setattr(
+        mash_cv.cv,
+        "_ocr_region",
+        lambda _img, _region, **_kwargs: {
+            "fragments": [{"text": "等级1/99", "ocrConfidence": 0.99}],
+            "fullText": "等级1/99",
+        },
+    )
+
+    result = mash_cv._read_craft_essence_main_target(
+        np.zeros((1080, 1920, 3), dtype=np.uint8)
+    )
+
+    assert result["found"] is False
+    assert result["level"] is None
+    assert result["levelCap"] is None
+
+
+def test_read_craft_essence_grid_reads_level_breaks_lock_and_art():
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_inventory_strategy.png")
+
+    result = mash_cv._read_craft_essence_grid(
+        img,
+        {
+            "anchorTemplateKey": "enhancement_ce/item_ce_bar_bronze",
+            "anchorTemplateReferenceWidth": 1920,
+            "region": {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747},
+        },
+    )
+
+    assert result["found"] is True
+    assert result["diagnostics"]["invalidCellCount"] == 0
+    assert len(result["cells"]) == 21
+    assert [
+        (cell["level"], cell["levelCap"], cell["rarity"], cell["limitBreaks"])
+        for cell in result["cells"][:11]
+    ] == [
+        (44, 50, 1, 4),
+        (11, 55, 2, 4),
+        (11, 55, 2, 4),
+        (9, 55, 2, 4),
+        (9, 55, 2, 4),
+        (9, 55, 2, 4),
+        (6, 50, 1, 4),
+        (6, 50, 1, 4),
+        (6, 50, 1, 4),
+        (6, 50, 1, 4),
+        (6, 50, 1, 4),
+    ]
+    assert [cell["locked"] for cell in result["cells"]] == [True] * 11 + [False] * 10
+    assert min(cell["lockScore"] for cell in result["cells"][:11]) >= 0.70
+    assert max(cell["lockScore"] for cell in result["cells"][11:]) <= 0.45
+    assert result["cells"][0]["artFingerprint"] == result["cells"][6]["artFingerprint"]
+    assert result["cells"][0]["artFingerprint"] != result["cells"][1]["artFingerprint"]
+    assert result["diagnostics"]["scrollbarThumbY"] < 0.40
+    assert result["diagnostics"]["scrollbarThumbTopY"] == pytest.approx(
+        0.275, abs=0.005
+    )
+
+
+def test_read_craft_essence_material_grid_never_marks_unlocked_food_as_locked():
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_select_exp.png")
+
+    result = mash_cv._read_craft_essence_grid(
+        img,
+        {
+            "anchorTemplateKey": "enhancement_ce/item_ce_bar_bronze",
+            "anchorTemplateReferenceWidth": 1920,
+            "region": {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747},
+        },
+    )
+
+    assert result["found"] is True
+    assert (result["cells"][0]["level"], result["cells"][0]["levelCap"]) == (6, 50)
+    assert result["cells"][0]["locked"] is True
+    for cell in result["cells"][1:]:
+        assert (cell["level"], cell["levelCap"], cell["rarity"]) == (1, 10, 1)
+        assert cell["locked"] is False
+        assert cell["lockScore"] < 0.70
+
+
+def test_read_craft_essence_grid_drops_extrapolated_empty_bottom_slots():
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_inventory_bottom_sparse.png")
+
+    result = mash_cv._read_craft_essence_grid(
+        img,
+        {
+            "anchorTemplateKey": "enhancement_ce/item_ce_bar_bronze",
+            "anchorTemplateReferenceWidth": 1920,
+            "region": {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747},
+        },
+    )
+
+    assert result["found"] is True
+    assert result["diagnostics"]["gridCellCount"] == 21
+    assert result["diagnostics"]["visibleCellCount"] == 15
+    assert result["diagnostics"]["invalidCellCount"] == 0
+    assert result["diagnostics"]["scrollbarThumbY"] > 0.85
+    assert result["diagnostics"]["scrollbarThumbTopY"] > 0.75
+    assert len(result["cells"]) == 15
+    assert sum(
+        cell["level"] == 1
+        and cell["levelCap"] == 10
+        and cell["rarity"] == 1
+        and not cell["locked"]
+        for cell in result["cells"]
+    ) == 5
+
+
+def test_read_craft_essence_material_grid_marks_only_same_target_food():
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_material_same_target_markers.png")
+
+    result = mash_cv._read_craft_essence_grid(
+        img,
+        {
+            "anchorTemplateKey": "enhancement_ce/item_ce_bar_bronze",
+            "anchorTemplateReferenceWidth": 1920,
+            "region": {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747},
+        },
+    )
+
+    assert result["found"] is True
+    same_target = [cell for cell in result["cells"] if cell["sameAsTarget"]]
+    assert len(same_target) == 4
+    assert all(
+        cell["level"] == 1
+        and cell["levelCap"] == 10
+        and cell["rarity"] == 1
+        and not cell["locked"]
+        and cell["sameAsTargetText"] == "突破板限"
+        and cell["sameAsTargetConfidence"]
+        >= result["diagnostics"]["sameTargetOcrMinConfidence"]
+        and cell["sameAsTargetScore"]
+        >= result["diagnostics"]["sameTargetMinScore"]
+        for cell in same_target
+    )
+    assert max(
+        cell["sameAsTargetScore"]
+        for cell in result["cells"]
+        if not cell["sameAsTarget"]
+    ) < result["diagnostics"]["sameTargetMinScore"]
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    (
+        "enhancement_ce_inventory_strategy.png",
+        "enhancement_ce_select_ce_with_existing_target.png",
+    ),
+)
+def test_read_craft_essence_grid_rejects_yellow_art_without_same_target_text(
+    fixture,
+):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture(fixture)
+
+    result = mash_cv._read_craft_essence_grid(
+        img,
+        {
+            "anchorTemplateKey": "enhancement_ce/item_ce_bar_bronze",
+            "anchorTemplateReferenceWidth": 1920,
+            "region": {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747},
+        },
+    )
+
+    assert result["found"] is True
+    assert max(cell["sameAsTargetScore"] for cell in result["cells"]) >= (
+        result["diagnostics"]["sameTargetMinScore"]
+    )
+    assert all(not cell["sameAsTarget"] for cell in result["cells"])
+    assert all(cell["sameAsTargetText"] == "" for cell in result["cells"])
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    (
+        "enhancement_ce_inventory_clipped_rows.png",
+        "enhancement_ce_inventory_clipped_rows_live.png",
+        "enhancement_ce_inventory_clipped_rows_next.png",
+    ),
+)
+def test_read_craft_essence_grid_drops_clipped_rows_during_scroll(fixture):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture(fixture)
+
+    result = mash_cv._read_craft_essence_grid(
+        img,
+        {
+            "anchorTemplateKey": "enhancement_ce/item_ce_bar_bronze",
+            "anchorTemplateReferenceWidth": 1920,
+            "region": {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747},
+        },
+    )
+
+    assert result["found"] is True
+    assert result["diagnostics"]["invalidCellCount"] == 0
+    assert len(result["cells"]) == 21
+    assert all(
+        cell["level"] == 1
+        and cell["levelCap"] == 15
+        and cell["rarity"] == 2
+        and not cell["locked"]
+        for cell in result["cells"]
+    )

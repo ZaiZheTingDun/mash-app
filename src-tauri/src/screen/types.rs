@@ -136,6 +136,7 @@ pub struct ElementMatch {
     pub region: Option<NormRect>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegionColorStats {
@@ -224,6 +225,8 @@ pub struct ServantGridDiagnostics {
     #[serde(default)]
     pub grid_cell_count: u32,
     #[serde(default)]
+    pub visible_cell_count: u32,
+    #[serde(default)]
     pub attempts: u32,
 }
 
@@ -247,6 +250,7 @@ pub struct FindEnhancementServantGridResult {
     pub diagnostics: ServantGridDiagnostics,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemGridDiagnostics {
@@ -270,6 +274,7 @@ pub struct ItemGridDiagnostics {
     pub attempts: u32,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FindItemGridResult {
@@ -281,6 +286,88 @@ pub struct FindItemGridResult {
     #[serde(default)]
     pub grid_cells: Vec<ItemGridCell>,
     pub diagnostics: ItemGridDiagnostics,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CraftEssenceGridCell {
+    pub row: u32,
+    pub col: u32,
+    pub region: NormRect,
+    #[serde(default)]
+    pub level: Option<u32>,
+    #[serde(default)]
+    pub level_cap: Option<u32>,
+    #[serde(default)]
+    pub rarity: Option<u8>,
+    #[serde(default)]
+    pub limit_breaks: Option<u8>,
+    pub locked: bool,
+    pub lock_score: f64,
+    #[serde(default)]
+    pub level_text: String,
+    #[serde(default)]
+    pub level_confidence: f64,
+    #[serde(default)]
+    pub art_fingerprint: String,
+    #[serde(default)]
+    pub same_as_target: bool,
+    #[serde(default)]
+    pub same_as_target_score: f64,
+    #[serde(default)]
+    pub valid: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CraftEssenceGridDiagnostics {
+    #[serde(default)]
+    pub fail_reason: Option<String>,
+    #[serde(default)]
+    pub anchor_count: u32,
+    #[serde(default)]
+    pub grid_cell_count: u32,
+    #[serde(default)]
+    pub visible_cell_count: u32,
+    #[serde(default)]
+    pub invalid_cell_count: u32,
+    #[serde(default)]
+    pub lock_template_loaded: bool,
+    #[serde(default)]
+    pub lock_threshold: f64,
+    #[serde(default)]
+    pub unlocked_max_score: f64,
+    #[serde(default)]
+    pub same_target_min_score: f64,
+    #[serde(default)]
+    pub scrollbar_thumb_y: Option<f64>,
+    #[serde(default)]
+    pub scrollbar_thumb_top_y: Option<f64>,
+    #[serde(default)]
+    pub attempts: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadCraftEssenceGridResult {
+    pub found: bool,
+    #[serde(default)]
+    pub cells: Vec<CraftEssenceGridCell>,
+    pub diagnostics: CraftEssenceGridDiagnostics,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadCraftEssenceMainTargetResult {
+    pub found: bool,
+    #[serde(default)]
+    pub level: Option<u32>,
+    #[serde(default)]
+    pub level_cap: Option<u32>,
+    #[serde(default)]
+    pub text: String,
+    #[serde(default)]
+    pub region: Option<NormRect>,
 }
 
 /// Per-digit recognition signal for one crit-percentage slot. Surfaced

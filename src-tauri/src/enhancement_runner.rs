@@ -1590,43 +1590,49 @@ fn normalize_text(s: &str) -> String {
         .to_lowercase()
 }
 
-fn parse_selected_count(text: &str) -> Option<u32> {
+pub(crate) fn parse_selected_count(text: &str) -> Option<u32> {
     let normalized = normalize_text(text);
-    for marker in ["選択済", "20/20", "/20"] {
-        if let Some(start) = normalized.find(marker) {
-            let slice = &normalized[start..];
-            let bytes: Vec<char> = slice.chars().collect();
-            for idx in 0..bytes.len() {
-                if !bytes[idx].is_ascii_digit() {
-                    continue;
-                }
-                let mut digits = String::new();
-                let mut j = idx;
-                while j < bytes.len() && bytes[j].is_ascii_digit() {
-                    digits.push(bytes[j]);
-                    j += 1;
-                }
-                if !digits.is_empty() && j < bytes.len() && bytes[j] == '/' {
-                    return digits.parse().ok();
-                }
+    let chars = normalized.chars().collect::<Vec<_>>();
+    for slash in 0..chars.len() {
+        if chars[slash] != '/'
+            || chars.get(slash + 1) != Some(&'2')
+            || chars.get(slash + 2) != Some(&'0')
+        {
+            continue;
+        }
+        let start = (0..slash)
+            .rev()
+            .find(|&index| !chars[index].is_ascii_digit())
+            .map_or(0, |index| index + 1);
+        if start < slash {
+            let selected = chars[start..slash]
+                .iter()
+                .collect::<String>()
+                .parse()
+                .ok()?;
+            if selected <= 20 {
+                return Some(selected);
             }
         }
     }
-    if let Some(start) = normalized.find("選択済") {
-        let slice = &normalized[start..];
-        let chars: Vec<char> = slice.chars().collect();
-        for idx in 0..chars.len() {
-            if !chars[idx].is_ascii_digit() {
-                continue;
+
+    for digits in normalized
+        .split(|character: char| !character.is_ascii_digit())
+        .filter(|digits| digits.len() > 2 && digits.ends_with("20"))
+    {
+        let numerator = &digits[..digits.len() - 2];
+        // The OCR model frequently reads the slash in "17/20" as "1",
+        // producing "17120". Remove that trailing false digit first.
+        if let Some(without_false_slash) = numerator.strip_suffix('1') {
+            if let Ok(selected) = without_false_slash.parse::<u32>() {
+                if selected <= 20 {
+                    return Some(selected);
+                }
             }
-            let mut digits = String::new();
-            let mut j = idx;
-            while j < chars.len() && chars[j].is_ascii_digit() {
-                digits.push(chars[j]);
-                j += 1;
-            }
-            if digits.len() > 2 && digits.ends_with("20") {
-                return digits[..digits.len() - 2].parse().ok();
+        }
+        if let Ok(selected) = numerator.parse::<u32>() {
+            if selected <= 20 {
+                return Some(selected);
             }
         }
     }

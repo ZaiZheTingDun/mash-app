@@ -508,6 +508,7 @@ impl SidecarClient {
     }
 
     /// Return mean grayscale luma and HSV saturation/value for a normalized region.
+    #[allow(dead_code)] // Retained as a generic sidecar primitive for other automation flows.
     pub fn read_region_color(
         &mut self,
         image_path: Option<&Path>,
@@ -1032,6 +1033,7 @@ impl SidecarClient {
             .map_err(|e| format!("invalid find_enhancement_servant_grid response: {e}"))
     }
 
+    #[allow(dead_code)] // Kept for compatibility with the generic item-grid CV command.
     pub fn find_item_grid(
         &mut self,
         image_path: Option<&Path>,
@@ -1060,6 +1062,52 @@ impl SidecarClient {
         }
         serde_json::from_value::<FindItemGridResult>(resp)
             .map_err(|e| format!("invalid find_item_grid response: {e}"))
+    }
+
+    pub fn read_craft_essence_grid(
+        &mut self,
+        image_path: Option<&Path>,
+        anchor_template_key: &str,
+        anchor_template_reference_width: f64,
+        region: NormRect,
+        retry_seconds: f64,
+    ) -> Result<ReadCraftEssenceGridResult, String> {
+        let mut req = serde_json::json!({
+            "cmd": "read_craft_essence_grid",
+            "anchorTemplateKey": anchor_template_key,
+            "anchorTemplateReferenceWidth": anchor_template_reference_width,
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+            "retrySeconds": retry_seconds,
+            "retryIntervalSeconds": 0.15,
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(err.to_string());
+        }
+        serde_json::from_value::<ReadCraftEssenceGridResult>(resp)
+            .map_err(|e| format!("invalid read_craft_essence_grid response: {e}"))
+    }
+
+    pub fn read_craft_essence_main_target(
+        &mut self,
+        image_path: Option<&Path>,
+    ) -> Result<ReadCraftEssenceMainTargetResult, String> {
+        let mut req = serde_json::json!({
+            "cmd": "read_craft_essence_main_target",
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(err.to_string());
+        }
+        serde_json::from_value::<ReadCraftEssenceMainTargetResult>(resp)
+            .map_err(|e| format!("invalid read_craft_essence_main_target response: {e}"))
     }
 
     /// Send a `read_battle_scene` request to the sidecar and return the

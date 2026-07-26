@@ -14,6 +14,10 @@ fn parse_selected_count_reads_counter() {
     assert_eq!(parse_selected_count("選択済み：\n020"), Some(0));
     assert_eq!(parse_selected_count("選択済み：\n720"), Some(7));
     assert_eq!(parse_selected_count("選択済み：\n2020"), Some(20));
+    assert_eq!(parse_selected_count("已选中: 17/20"), Some(17));
+    assert_eq!(parse_selected_count("己逸中:\n17120"), Some(17));
+    assert_eq!(parse_selected_count("已选中:\n0120"), Some(0));
+    assert_eq!(parse_selected_count("已选中:\n20120"), Some(20));
 }
 
 #[test]

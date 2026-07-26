@@ -16,9 +16,10 @@ use crate::commands::runtime::{
 use crate::commands::settings::{AdbDeviceSettings, DebugSettings, RecognitionSettings};
 use crate::craft_essence_enhancement_runner::{
     lifecycle_transition as ce_lifecycle_transition, server_supported as ce_server_supported,
-    CraftEssenceEnhancementAutomationEvent, CraftEssenceEnhancementRunner,
-    CraftEssenceEnhancementRunnerHandle, CraftEssenceEnhancementRunnerState,
-    LifecycleEvent as CeLifecycleEvent, EVENT_NAME as CE_EVENT_NAME,
+    CraftEssenceEnhancementAutomationEvent, CraftEssenceEnhancementMode,
+    CraftEssenceEnhancementRunner, CraftEssenceEnhancementRunnerHandle,
+    CraftEssenceEnhancementRunnerState, LifecycleEvent as CeLifecycleEvent,
+    EVENT_NAME as CE_EVENT_NAME,
 };
 use crate::enhancement_runner::{
     enhancement_lifecycle_transition, server_supported as enhancement_server_supported,
@@ -744,6 +745,7 @@ pub(crate) fn start_craft_essence_enhancement_automation(
     servant_enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
+    mode: Option<CraftEssenceEnhancementMode>,
 ) -> Result<(), String> {
     {
         let handle = handle_state.lock().unwrap();
@@ -782,6 +784,7 @@ pub(crate) fn start_craft_essence_enhancement_automation(
     }
 
     let debug_sidecar = debug_state.0.clone();
+    let mode = mode.unwrap_or_default();
     std::thread::spawn(move || {
         emit_ce_enhancement_status(&app, &state, "", "正在连接 ADB…");
         let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
@@ -843,6 +846,7 @@ pub(crate) fn start_craft_essence_enhancement_automation(
             cancel,
             input_size,
             Some(debug_sidecar),
+            mode,
         );
         runner.run();
     });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Box, Button, Flex, Text } from "@radix-ui/themes";
 import { ChevronLeftIcon } from "@radix-ui/react-icons";
 import { invoke, listen } from "../../tauri";
@@ -11,23 +11,13 @@ interface CraftEssenceEnhancementEvent {
   message: string;
 }
 
-interface LogEntry {
-  time: string;
-  message: string;
-}
-
 interface CraftEssenceEnhancementPageProps {
   onBack: () => void;
   onAutomationStart?: () => void;
   onLogEntry?: (message: string) => void;
 }
 
-function timestamp(): string {
-  const now = new Date();
-  return [now.getHours(), now.getMinutes(), now.getSeconds()]
-    .map((value) => String(value).padStart(2, "0"))
-    .join(":");
-}
+type CraftEssenceEnhancementMode = "makeBombs" | "feedBombs";
 
 export function CraftEssenceEnhancementPage({
   onBack,
@@ -36,16 +26,13 @@ export function CraftEssenceEnhancementPage({
 }: CraftEssenceEnhancementPageProps) {
   const [running, setRunning] = useState(false);
   const [currentScreen, setCurrentScreen] = useState("");
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unlisten = listen<CraftEssenceEnhancementEvent>(
       "craft-essence-enhancement-automation-status",
       (event) => {
-        const { currentScreen: nextScreen, message } = event.payload;
+        const { currentScreen: nextScreen } = event.payload;
         setCurrentScreen(nextScreen);
-        setLogs((previous) => [...previous, { time: timestamp(), message }]);
         if (isAutomationTerminal(event.payload)) {
           setRunning(false);
         }
@@ -56,18 +43,12 @@ export function CraftEssenceEnhancementPage({
     };
   }, []);
 
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
-
-  const handleStart = useCallback(() => {
-    setLogs([]);
+  const handleStart = useCallback((mode: CraftEssenceEnhancementMode) => {
     setCurrentScreen("");
     setRunning(true);
     onAutomationStart?.();
-    invoke("start_craft_essence_enhancement_automation").catch((error) => {
+    invoke("start_craft_essence_enhancement_automation", { mode }).catch((error) => {
       const message = `启动失败: ${String(error)}`;
-      setLogs((previous) => [...previous, { time: timestamp(), message }]);
       onLogEntry?.(message);
       setRunning(false);
     });
@@ -94,36 +75,30 @@ export function CraftEssenceEnhancementPage({
           <Text size="2" color="gray">
             当前页面：{currentScreen || "等待启动"}
           </Text>
+          <Text size="1" color="gray" style={{ display: "block", marginTop: 4 }}>
+            只消耗未锁定的 1/2 星礼装；程序不会解锁任何礼装。
+          </Text>
+          <Text size="1" color="gray" style={{ display: "block", marginTop: 2 }}>
+            缺少满破底卡时会用 5 张同名 1 星制作并锁定新底卡；最终阶段请手动解锁
+            8 个丸子并选中满破 5 星目标。
+          </Text>
         </Box>
 
-        <Flex gap="3" className="battle-controls">
-          <Button disabled={running} onClick={handleStart}>
-            开始
+        <Flex gap="3" wrap="wrap" className="battle-controls">
+          <Button disabled={running} onClick={() => handleStart("makeBombs")}>
+            制作 8 个丸子
+          </Button>
+          <Button
+            disabled={running}
+            variant="soft"
+            onClick={() => handleStart("feedBombs")}
+          >
+            喂丸子到当前五星
           </Button>
           <Button color="red" variant="soft" disabled={!running} onClick={handleStop}>
             停止
           </Button>
         </Flex>
-
-        <Box className="battle-log-container">
-          <Text size="2" weight="medium" style={{ marginBottom: 6, display: "block" }}>
-            运行日志
-          </Text>
-          <Box className="battle-log">
-            {logs.length === 0 && (
-              <Text size="1" className="battle-log-placeholder">
-                等待启动…
-              </Text>
-            )}
-            {logs.map((entry, index) => (
-              <div key={index} className="battle-log-entry">
-                <span className="battle-log-time">{entry.time}</span>
-                <span className="battle-log-msg">{entry.message}</span>
-              </div>
-            ))}
-            <div ref={logEndRef} />
-          </Box>
-        </Box>
       </Flex>
     </Flex>
   );

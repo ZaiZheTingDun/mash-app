@@ -125,6 +125,11 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     setOperationLogOpen(true);
   }, []);
 
+  const handleCraftEssenceAutomationStart = useCallback(() => {
+    setOperationLogs([]);
+    setOperationLogOpen(false);
+  }, []);
+
   const checkForUpdates = useCallback(async (manual: boolean) => {
     setUpdateChecking(true);
     setUpdateProgressText(null);
@@ -675,7 +680,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
             featureToggles.craftEssenceEnhancement ? (
             <CraftEssenceEnhancementPage
               onBack={handleBackToConfig}
-              onAutomationStart={handleAutomationStart}
+              onAutomationStart={handleCraftEssenceAutomationStart}
               onLogEntry={appendOperationLog}
             />
           ) : view === "debug" && featureToggles.cvDebug ? (

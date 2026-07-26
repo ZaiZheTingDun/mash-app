@@ -11,14 +11,29 @@ describe("CraftEssenceEnhancementPage", () => {
     const user = userEvent.setup();
     renderWithTheme(<CraftEssenceEnhancementPage onBack={() => {}} />);
 
-    await user.click(screen.getByRole("button", { name: "开始" }));
+    await user.click(screen.getByRole("button", { name: "制作 8 个丸子" }));
     expect(invoke).toHaveBeenCalledWith(
-      "start_craft_essence_enhancement_automation"
+      "start_craft_essence_enhancement_automation",
+      { mode: "makeBombs" }
     );
 
     await user.click(screen.getByRole("button", { name: "停止" }));
     expect(invoke).toHaveBeenCalledWith(
       "stop_craft_essence_enhancement_automation"
+    );
+  });
+
+  it("starts the final five-star feeding mode separately", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<CraftEssenceEnhancementPage onBack={() => {}} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "喂丸子到当前五星" })
+    );
+
+    expect(invoke).toHaveBeenCalledWith(
+      "start_craft_essence_enhancement_automation",
+      { mode: "feedBombs" }
     );
   });
 
@@ -34,7 +49,7 @@ describe("CraftEssenceEnhancementPage", () => {
     });
     const user = userEvent.setup();
     renderWithTheme(<CraftEssenceEnhancementPage onBack={() => {}} />);
-    await user.click(screen.getByRole("button", { name: "开始" }));
+    await user.click(screen.getByRole("button", { name: "制作 8 个丸子" }));
 
     act(() => {
       handler?.({
@@ -49,21 +64,44 @@ describe("CraftEssenceEnhancementPage", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "开始" })).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: "制作 8 个丸子" })
+      ).toBeEnabled();
     });
-    expect(screen.getByText("本阶段完成")).toBeInTheDocument();
+    expect(
+      screen.getByText("当前页面：CraftEssenceEnhancement")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("本阶段完成")).not.toBeInTheDocument();
   });
 
   it("recovers when startup fails", async () => {
     vi.mocked(invoke).mockRejectedValueOnce(new Error("unsupported server"));
+    const onLogEntry = vi.fn();
     const user = userEvent.setup();
-    renderWithTheme(<CraftEssenceEnhancementPage onBack={() => {}} />);
+    renderWithTheme(
+      <CraftEssenceEnhancementPage
+        onBack={() => {}}
+        onLogEntry={onLogEntry}
+      />
+    );
 
-    await user.click(screen.getByRole("button", { name: "开始" }));
+    await user.click(screen.getByRole("button", { name: "制作 8 个丸子" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "开始" })).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: "制作 8 个丸子" })
+      ).toBeEnabled();
     });
-    expect(screen.getByText(/启动失败/)).toBeInTheDocument();
+    expect(onLogEntry).toHaveBeenCalledWith(
+      "启动失败: Error: unsupported server"
+    );
+    expect(screen.queryByText(/启动失败/)).not.toBeInTheDocument();
+  });
+
+  it("uses only the shared bottom status log", () => {
+    renderWithTheme(<CraftEssenceEnhancementPage onBack={() => {}} />);
+
+    expect(screen.queryByText("运行日志")).not.toBeInTheDocument();
+    expect(screen.queryByText("等待启动…")).not.toBeInTheDocument();
   });
 });
