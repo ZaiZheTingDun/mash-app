@@ -3974,6 +3974,24 @@ fn ap_recovery_template_maps_frontend_items_to_template_keys() {
 }
 
 #[test]
+fn ap_recovery_list_label_probes_keep_old_cn_template_and_add_new_one() {
+    assert_eq!(
+        ap_recovery_list_label_probes(Server::Cn),
+        &[
+            (AP_RECOVERY_LIST_LABEL_TEMPLATE, None),
+            (
+                AP_RECOVERY_LIST_LABEL_NEW_TEMPLATE,
+                Some(AP_RECOVERY_LIST_LABEL_NEW_REFERENCE_WIDTH),
+            ),
+        ]
+    );
+    assert_eq!(
+        ap_recovery_list_label_probes(Server::Jp),
+        &[(AP_RECOVERY_LIST_LABEL_TEMPLATE, None)]
+    );
+}
+
+#[test]
 fn ap_recovery_candidates_for_page_preserves_priority_within_page() {
     let top = ap_recovery_candidates_for_page(
         &[

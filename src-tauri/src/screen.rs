@@ -327,6 +327,43 @@ impl SidecarClient {
         region: NormRect,
         threshold: f64,
     ) -> Result<Option<Point>, String> {
+        self.find_element_with_optional_reference_width(
+            image_path,
+            template_key,
+            region,
+            threshold,
+            None,
+        )
+    }
+
+    /// Search for a template extracted from a frame with a known reference
+    /// width. This keeps newer 1080p captures from being scaled as if they
+    /// came from the default 2560px template set.
+    pub fn find_element_with_reference_width(
+        &mut self,
+        image_path: Option<&Path>,
+        template_key: &str,
+        region: NormRect,
+        threshold: f64,
+        template_reference_width: f64,
+    ) -> Result<Option<Point>, String> {
+        self.find_element_with_optional_reference_width(
+            image_path,
+            template_key,
+            region,
+            threshold,
+            Some(template_reference_width),
+        )
+    }
+
+    fn find_element_with_optional_reference_width(
+        &mut self,
+        image_path: Option<&Path>,
+        template_key: &str,
+        region: NormRect,
+        threshold: f64,
+        template_reference_width: Option<f64>,
+    ) -> Result<Option<Point>, String> {
         let mut req = serde_json::json!({
             "cmd": "find_element",
             "templateKey": template_key,
@@ -338,6 +375,9 @@ impl SidecarClient {
             },
             "threshold": threshold,
         });
+        if let Some(reference_width) = template_reference_width {
+            req["templateReferenceWidth"] = serde_json::json!(reference_width);
+        }
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         // Sidecar surfaces hard errors (e.g. ``template not loaded: <key>``)

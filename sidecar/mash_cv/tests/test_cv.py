@@ -1114,6 +1114,43 @@ class TestFindElement:
         assert result["region"]["w"] == pytest.approx(20 / 1280)
         assert result["region"]["h"] == pytest.approx(20 / 720)
 
+    @pytest.mark.parametrize("frame_width", (1920, 1280))
+    def test_ap_recovery_new_cn_item_label_matches_current_ui(self, frame_width):
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        template_dir = os.path.join(
+            repo_root,
+            "src-tauri",
+            "resources",
+            "servers",
+            "cn",
+            "templates",
+            "items",
+        )
+        image_path = os.path.join(
+            os.path.dirname(__file__),
+            "test_data",
+            "screenshots",
+            "ap_recovery_cn_new_item_label.png",
+        )
+        assert mash_cv._load_templates(template_dir, key_prefix="items")["ok"] is True
+        img = cv2.imread(image_path)
+        assert img is not None
+        if frame_width != img.shape[1]:
+            frame_height = round(img.shape[0] * frame_width / img.shape[1])
+            img = cv2.resize(img, (frame_width, frame_height), interpolation=cv2.INTER_AREA)
+
+        region = {"x": 0.244, "y": 0.142, "w": 0.095, "h": 0.659}
+        result = mash_cv._find_element(
+            img,
+            "items/label_item_new",
+            region,
+            0.8,
+            template_reference_width=1920,
+        )
+
+        assert result["found"] is True
+        assert result["score"] >= 0.9
+
     def test_ap_recovery_enabled_filter_keeps_bright_row(self):
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         template_dir = os.path.join(

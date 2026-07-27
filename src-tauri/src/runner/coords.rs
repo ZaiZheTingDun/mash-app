@@ -214,6 +214,8 @@ pub(crate) const AP_RECOVERY_CONFIRM_LOWER_REGION: NormRect = NormRect {
 };
 pub(crate) const AP_RECOVERY_CONFIRM_TEMPLATE: &str = "shared/button_dialog";
 pub(crate) const AP_RECOVERY_LIST_LABEL_TEMPLATE: &str = "items/label_item";
+pub(crate) const AP_RECOVERY_LIST_LABEL_NEW_TEMPLATE: &str = "items/label_item_new";
+pub(crate) const AP_RECOVERY_LIST_LABEL_NEW_REFERENCE_WIDTH: f64 = 1920.0;
 pub(crate) const AP_RECOVERY_ITEM_THRESHOLD: f64 = 0.82;
 
 // ---------------------------------------------------------------------------

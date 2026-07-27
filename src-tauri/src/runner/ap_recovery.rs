@@ -22,6 +22,24 @@ pub(crate) struct ApRecoveryTemplate {
     pub(crate) template_key: &'static str,
 }
 
+pub(crate) fn ap_recovery_list_label_probes(
+    server: Server,
+) -> &'static [(&'static str, Option<f64>)] {
+    const JP_PROBES: &[(&str, Option<f64>)] = &[(AP_RECOVERY_LIST_LABEL_TEMPLATE, None)];
+    const CN_PROBES: &[(&str, Option<f64>)] = &[
+        (AP_RECOVERY_LIST_LABEL_TEMPLATE, None),
+        (
+            AP_RECOVERY_LIST_LABEL_NEW_TEMPLATE,
+            Some(AP_RECOVERY_LIST_LABEL_NEW_REFERENCE_WIDTH),
+        ),
+    ];
+
+    match server {
+        Server::Jp => JP_PROBES,
+        Server::Cn => CN_PROBES,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApRecoveryCloseObservation {
     StillOpen,
@@ -118,15 +136,27 @@ impl Runner {
     }
 
     pub(crate) fn ap_recovery_list_visible(&mut self) -> Result<bool, String> {
-        Ok(self
-            .sidecar()
-            .find_element(
-                None,
-                AP_RECOVERY_LIST_LABEL_TEMPLATE,
-                AP_RECOVERY_ITEMS_REGION,
-                0.8,
-            )?
-            .is_some())
+        for &(template_key, reference_width) in ap_recovery_list_label_probes(self.server) {
+            let found = match reference_width {
+                Some(reference_width) => self.sidecar().find_element_with_reference_width(
+                    None,
+                    template_key,
+                    AP_RECOVERY_ITEMS_REGION,
+                    0.8,
+                    reference_width,
+                )?,
+                None => self.sidecar().find_element(
+                    None,
+                    template_key,
+                    AP_RECOVERY_ITEMS_REGION,
+                    0.8,
+                )?,
+            };
+            if found.is_some() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn tap_ap_recovery_item(&mut self, item: ApRecoveryTemplate, point: Point) -> bool {
