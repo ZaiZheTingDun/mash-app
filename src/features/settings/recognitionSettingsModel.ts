@@ -6,6 +6,10 @@ const SUPPORT_THRESHOLD_MAX = 0.85;
 const SUPPORT_FULL_GATE_THRESHOLD_DEFAULT = 0.6;
 const SUPPORT_FULL_GATE_THRESHOLD_MIN = 0.4;
 const SUPPORT_FULL_GATE_THRESHOLD_MAX = 0.7;
+export const UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT = 100;
+export const UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN = 50;
+export const UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX = 1_000;
+export const UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED = 9_999;
 
 export const SUPPORT_THRESHOLD_STEP = 0.01;
 
@@ -82,6 +86,7 @@ export const DEFAULT_RECOGNITION_SETTINGS: RecognitionSettings = {
   stopOnBondLevelUp: false,
   stopOnBondMaxLevel: false,
   verifySkillActivation: false,
+  unknownScreenTimeoutCount: UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
 };
 
 export function clampThreshold(value: number, config: ThresholdConfig) {
@@ -93,6 +98,18 @@ export function normalizeRecognitionSettings(
   settings: Partial<RecognitionSettings>
 ): RecognitionSettings {
   const stopOnBondMaxLevel = settings.stopOnBondMaxLevel === true;
+  const normalizeTimeoutCount = (value: number | undefined) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT;
+    }
+    if (value === UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED) {
+      return UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED;
+    }
+    return Math.min(
+      UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX,
+      Math.max(UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN, Math.trunc(value))
+    );
+  };
   return {
     noblePhantasmDetectionMode:
       settings.noblePhantasmDetectionMode === "gauge" ? "gauge" : "card",
@@ -115,6 +132,7 @@ export function normalizeRecognitionSettings(
     stopOnBondLevelUp: settings.stopOnBondLevelUp === true && !stopOnBondMaxLevel,
     stopOnBondMaxLevel,
     verifySkillActivation: settings.verifySkillActivation === true,
+    unknownScreenTimeoutCount: normalizeTimeoutCount(settings.unknownScreenTimeoutCount),
   };
 }
 

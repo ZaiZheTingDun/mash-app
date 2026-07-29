@@ -1040,6 +1040,7 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
         stop_on_bond_level_up: true,
         stop_on_bond_max_level: false,
         verify_skill_activation: true,
+        unknown_screen_timeout_count: 120,
     };
 
     let effective = commands::automation::effective_recognition_settings(global, None);
@@ -1051,6 +1052,7 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
     assert!(effective.stop_on_bond_level_up);
     assert!(!effective.stop_on_bond_max_level);
     assert!(effective.verify_skill_activation);
+    assert_eq!(effective.unknown_screen_timeout_count, 120);
     assert_eq!(
         effective.noble_phantasm_detection_mode,
         commands::settings::NoblePhantasmDetectionMode::Card
@@ -1068,6 +1070,7 @@ fn effective_recognition_settings_use_project_override() {
         stop_on_bond_level_up: false,
         stop_on_bond_max_level: true,
         verify_skill_activation: true,
+        unknown_screen_timeout_count: 120,
     };
     let project = ProjectRecognitionSettings {
         support_ce_threshold: Some(0.66),
@@ -1087,6 +1090,7 @@ fn effective_recognition_settings_use_project_override() {
     assert!(!effective.stop_on_bond_level_up);
     assert!(effective.stop_on_bond_max_level);
     assert!(!effective.verify_skill_activation);
+    assert_eq!(effective.unknown_screen_timeout_count, 120);
     assert_eq!(
         effective.noble_phantasm_detection_mode,
         commands::settings::NoblePhantasmDetectionMode::Gauge

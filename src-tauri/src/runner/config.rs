@@ -98,6 +98,9 @@ pub struct RunConfig {
     /// because it adds CV polling between skill actions.
     #[serde(default)]
     pub verify_skill_activation: bool,
+    /// Consecutive Unknown detections allowed during ordinary screen transitions.
+    #[serde(default = "default_unknown_screen_timeout_count")]
+    pub unknown_screen_timeout_count: u32,
     /// Stop this automation run once cumulative five-star CE drops reach the target.
     #[serde(default)]
     pub stop_on_five_star_ce_drop: bool,
@@ -175,6 +178,10 @@ fn default_support_ce_full_gate_threshold() -> f64 {
 
 fn default_support_icon_threshold() -> f64 {
     crate::commands::settings::SUPPORT_ICON_THRESHOLD_DEFAULT
+}
+
+fn default_unknown_screen_timeout_count() -> u32 {
+    crate::commands::settings::UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
 }
 
 fn default_true() -> bool {

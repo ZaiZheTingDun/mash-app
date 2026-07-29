@@ -556,6 +556,10 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     assert_eq!(cfg.max_mission_runs, None);
     assert!(cfg.ap_recovery_items.is_empty());
     assert!(!cfg.verify_skill_activation);
+    assert_eq!(
+        cfg.unknown_screen_timeout_count,
+        crate::commands::settings::UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
+    );
     assert!(!cfg.auto_capture_battle_result_loot);
     assert!(!cfg.auto_capture_unknown_screen_timeout);
     assert!(!cfg.auto_capture_skill_use_probe);
@@ -922,12 +926,10 @@ fn battle_flow_runs_full_attack_cycle_through_explicit_states() {
             source: BattleLoadSource::TeamConfirm
         }
     );
-    assert!(battle.uses_loading_unknown_timeout());
 
     let ready = battle.transition(BattleFlowEvent::BattleActionable);
     assert!(ready.accepted);
     assert_eq!(battle.flow, BattleFlowState::BattleReady);
-    assert!(!battle.uses_loading_unknown_timeout());
 
     let waiting = battle.transition(BattleFlowEvent::AttackButtonTapped { at: started_at });
     assert!(waiting.accepted);
@@ -945,7 +947,6 @@ fn battle_flow_runs_full_attack_cycle_through_explicit_states() {
     assert!(submitted.accepted);
     assert_eq!(battle.flow, BattleFlowState::AwaitingAttackResolution);
     assert!(battle.awaiting_attack_resolution());
-    assert!(battle.uses_loading_unknown_timeout());
 
     let hud_wait_started_at = started_at + Duration::from_secs(1);
     let hud_wait = battle.transition(BattleFlowEvent::PostAttackHudWaitStarted {
@@ -959,7 +960,6 @@ fn battle_flow_runs_full_attack_cycle_through_explicit_states() {
         }
     );
     assert!(battle.awaiting_attack_resolution());
-    assert!(!battle.uses_loading_unknown_timeout());
 
     let resolved = battle.transition(BattleFlowEvent::PostAttackHudResolved);
     assert!(resolved.accepted);

@@ -72,6 +72,7 @@ describe("SettingsDialog", () => {
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
           verifySkillActivation: false,
+          unknownScreenTimeoutCount: 100,
         };
       }
       if (cmd === "get_debug_settings") {
@@ -175,6 +176,11 @@ describe("SettingsDialog", () => {
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
           verifySkillActivation: Boolean(argValue(args)),
+        };
+      }
+      if (cmd === "set_unknown_screen_timeout_count") {
+        return {
+          unknownScreenTimeoutCount: Number(argValue(args)),
         };
       }
       if (cmd === "set_auto_capture_battle_result_loot") {
@@ -461,6 +467,53 @@ describe("SettingsDialog", () => {
       });
     });
     expect(screen.getByRole("switch", { name: "技能使用确认" })).toBeChecked();
+  });
+
+  it("auto-saves the shared timeout count and disables the limit with a toggle", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="basic" />);
+
+    const timeoutInput = await screen.findByRole("spinbutton", {
+      name: "识别超时次数",
+    });
+    expect(timeoutInput).toHaveValue(100);
+    expect(timeoutInput).toHaveAttribute("min", "50");
+    expect(timeoutInput).toHaveAttribute("max", "1000");
+    expect(
+      screen.queryByRole("button", { name: "保存识别超时" })
+    ).not.toBeInTheDocument();
+
+    await user.clear(timeoutInput);
+    await user.type(timeoutInput, "120");
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_unknown_screen_timeout_count", {
+        value: 120,
+      });
+    });
+
+    const timeoutLimit = screen.getByRole("switch", {
+      name: "识别超时限制",
+    });
+    expect(timeoutLimit).toBeChecked();
+
+    await user.click(timeoutLimit);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_unknown_screen_timeout_count", {
+        value: 9999,
+      });
+    });
+    expect(timeoutInput).toBeDisabled();
+
+    await user.click(timeoutLimit);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_unknown_screen_timeout_count", {
+        value: 120,
+      });
+    });
+    expect(timeoutInput).toBeEnabled();
   });
 
   it("shows export configs and disables export after deselecting all", async () => {

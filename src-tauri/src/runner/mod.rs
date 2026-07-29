@@ -52,15 +52,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
 
-/// Tolerate short-lived overlays and transitions for up to 24 seconds
-/// before treating an unrecognized screen as a fatal error.
-const UNKNOWN_TIMEOUT: u32 = 30;
-/// Tolerated streak of `Unknown` screens while a long animation / loading
-/// transition is playing -- raised from the default so a stacked NP chain
-/// (which can run 30s+ of cut-ins before the battle screen reappears)
-/// doesn't trip the "无法识别当前画面" error. 75 * 800ms = 60s.
-const UNKNOWN_TIMEOUT_LOADING: u32 = 75;
-
 /// Poll cadence for `wait_for_attack_button` while a skill animation
 /// (cut-in, NP charge effect, etc.) is hiding the attack button.
 const SKILL_POLL_INTERVAL: Duration = Duration::from_millis(300);

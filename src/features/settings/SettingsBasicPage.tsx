@@ -1,14 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
-import { Box, Flex, Select, Switch, Text, Tooltip } from "@radix-ui/themes";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Box, Flex, Select, Switch, Text, TextField, Tooltip } from "@radix-ui/themes";
 import { invoke } from "../../tauri";
 import type { NoblePhantasmDetectionMode, RecognitionSettings } from "../../types/recognition";
-import { normalizeRecognitionSettings } from "./recognitionSettingsModel";
+import {
+  normalizeRecognitionSettings,
+  UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
+  UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX,
+  UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN,
+  UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED,
+} from "./recognitionSettingsModel";
+
+const TIMEOUT_COMMAND = "set_unknown_screen_timeout_count";
 
 export function SettingsBasicPage({ active }: { active: boolean }) {
   const [mode, setMode] = useState<NoblePhantasmDetectionMode>("card");
   const [stopOnBondLevelUp, setStopOnBondLevelUp] = useState(false);
   const [stopOnBondMaxLevel, setStopOnBondMaxLevel] = useState(false);
   const [verifySkillActivation, setVerifySkillActivation] = useState(false);
+  const [timeoutCount, setTimeoutCount] = useState(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT);
+  const [timeoutDraft, setTimeoutDraft] = useState(
+    String(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT)
+  );
+  const [timeoutEnabled, setTimeoutEnabled] = useState(true);
+  const timeoutSaveSequence = useRef(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -18,7 +32,114 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
     setStopOnBondLevelUp(settings.stopOnBondLevelUp);
     setStopOnBondMaxLevel(settings.stopOnBondMaxLevel);
     setVerifySkillActivation(settings.verifySkillActivation);
+    setTimeoutCount(settings.unknownScreenTimeoutCount);
+    setTimeoutEnabled(
+      settings.unknownScreenTimeoutCount !== UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED
+    );
+    if (settings.unknownScreenTimeoutCount !== UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED) {
+      setTimeoutDraft(String(settings.unknownScreenTimeoutCount));
+    }
   }, []);
+
+  const saveTimeoutCount = useCallback(async (value: number) => {
+    const sequence = timeoutSaveSequence.current + 1;
+    timeoutSaveSequence.current = sequence;
+    setError(null);
+    setSavedMessage(null);
+    try {
+      const settings = normalizeRecognitionSettings(
+        await invoke<RecognitionSettings>(TIMEOUT_COMMAND, { value })
+      );
+      if (timeoutSaveSequence.current !== sequence) return;
+
+      const savedValue = settings.unknownScreenTimeoutCount;
+      setTimeoutCount(savedValue);
+      setTimeoutEnabled(savedValue !== UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED);
+      if (savedValue !== UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED) {
+        setTimeoutDraft(String(savedValue));
+      }
+      setSavedMessage("已自动保存");
+    } catch (err) {
+      if (timeoutSaveSequence.current !== sequence) return;
+      setError(String(err));
+    }
+  }, []);
+
+  const updateTimeoutDraft = useCallback(
+    (rawValue: string) => {
+      if (!timeoutEnabled) return;
+
+      const parsed = Number(rawValue);
+      if (
+        rawValue !== "" &&
+        Number.isFinite(parsed) &&
+        parsed > UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX
+      ) {
+        setTimeoutDraft(String(UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX));
+        void saveTimeoutCount(UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX);
+        return;
+      }
+
+      setTimeoutDraft(rawValue);
+      setSavedMessage(null);
+      setError(null);
+      if (
+        Number.isInteger(parsed) &&
+        parsed >= UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN &&
+        parsed <= UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX
+      ) {
+        void saveTimeoutCount(parsed);
+      }
+    },
+    [saveTimeoutCount, timeoutEnabled]
+  );
+
+  const normalizeTimeoutDraft = useCallback(() => {
+    if (!timeoutEnabled) return;
+
+    const parsed = Number(timeoutDraft);
+    if (
+      Number.isInteger(parsed) &&
+      parsed >= UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN &&
+      parsed <= UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX
+    ) {
+      return;
+    }
+
+    const fallback =
+      timeoutCount === UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED
+        ? UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
+        : timeoutCount;
+    const normalized = Number.isFinite(parsed)
+      ? Math.min(
+          UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX,
+          Math.max(UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN, Math.round(parsed))
+        )
+      : fallback;
+    setTimeoutDraft(String(normalized));
+    void saveTimeoutCount(normalized);
+  }, [saveTimeoutCount, timeoutCount, timeoutDraft, timeoutEnabled]);
+
+  const toggleTimeoutLimit = useCallback(
+    (enabled: boolean) => {
+      setTimeoutEnabled(enabled);
+      if (!enabled) {
+        void saveTimeoutCount(UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED);
+        return;
+      }
+
+      const parsed = Number(timeoutDraft);
+      const value =
+        Number.isInteger(parsed) &&
+        parsed >= UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN &&
+        parsed <= UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX
+          ? parsed
+          : UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT;
+      setTimeoutDraft(String(value));
+      void saveTimeoutCount(value);
+    },
+    [saveTimeoutCount, timeoutDraft]
+  );
 
   const loadSettings = useCallback(async () => {
     setError(null);
@@ -216,6 +337,47 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
             disabled={saving}
             aria-label="技能使用确认"
           />
+        </Flex>
+
+        <Flex
+          align="start"
+          justify="between"
+          gap="4"
+          wrap="wrap"
+          className="basic-setting-row"
+        >
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              识别超时限制
+            </Text>
+            <Text size="1" color="gray">
+              连续无法识别达到此次数后停止
+            </Text>
+          </Flex>
+
+          <Flex align="center" gap="2">
+            <TextField.Root
+              type="number"
+              min={UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN}
+              max={UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX}
+              step={1}
+              value={timeoutDraft}
+              onChange={(event) => updateTimeoutDraft(event.currentTarget.value)}
+              onBlur={normalizeTimeoutDraft}
+              aria-label="识别超时次数"
+              className="recognition-threshold-input"
+              disabled={saving || !timeoutEnabled}
+            />
+            <Text size="2" color="gray">
+              次
+            </Text>
+            <Switch
+              checked={timeoutEnabled}
+              onCheckedChange={toggleTimeoutLimit}
+              disabled={saving}
+              aria-label="识别超时限制"
+            />
+          </Flex>
         </Flex>
 
         <Flex align="center" gap="2">

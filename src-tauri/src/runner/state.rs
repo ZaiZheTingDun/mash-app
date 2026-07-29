@@ -80,13 +80,6 @@ impl BattleState {
         transition
     }
 
-    pub(crate) fn uses_loading_unknown_timeout(&self) -> bool {
-        matches!(
-            self.flow,
-            BattleFlowState::AwaitingBattleLoad { .. } | BattleFlowState::AwaitingAttackResolution
-        )
-    }
-
     pub(crate) fn awaiting_attack_resolution(&self) -> bool {
         matches!(
             self.flow,

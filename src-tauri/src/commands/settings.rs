@@ -29,6 +29,10 @@ pub(crate) const SUPPORT_ICON_THRESHOLD_MAX: f64 = 0.85;
 pub(crate) const SUPPORT_CE_FULL_GATE_THRESHOLD_DEFAULT: f64 = 0.60;
 pub(crate) const SUPPORT_CE_FULL_GATE_THRESHOLD_MIN: f64 = 0.40;
 pub(crate) const SUPPORT_CE_FULL_GATE_THRESHOLD_MAX: f64 = 0.70;
+pub(crate) const UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT: u32 = 100;
+pub(crate) const UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN: u32 = 50;
+pub(crate) const UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX: u32 = 1_000;
+pub(crate) const UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED: u32 = 9_999;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +70,8 @@ pub struct RecognitionSettings {
     pub stop_on_bond_max_level: bool,
     #[serde(default)]
     pub verify_skill_activation: bool,
+    #[serde(default = "default_unknown_screen_timeout_count")]
+    pub unknown_screen_timeout_count: u32,
 }
 
 #[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
@@ -90,6 +96,7 @@ impl Default for RecognitionSettings {
             stop_on_bond_level_up: false,
             stop_on_bond_max_level: false,
             verify_skill_activation: false,
+            unknown_screen_timeout_count: UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
         }
     }
 }
@@ -104,6 +111,35 @@ fn default_support_icon_threshold() -> f64 {
 
 fn default_support_ce_full_gate_threshold() -> f64 {
     SUPPORT_CE_FULL_GATE_THRESHOLD_DEFAULT
+}
+
+fn default_unknown_screen_timeout_count() -> u32 {
+    UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
+}
+
+fn normalize_unknown_screen_timeout_count(value: u32, label: &str) -> Result<u32, String> {
+    if value == UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED {
+        return Ok(value);
+    }
+    if !(UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN..=UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX).contains(&value) {
+        return Err(format!(
+            "{label}必须在 {UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN} 到 {UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX} 次之间，或关闭限制"
+        ));
+    }
+    Ok(value)
+}
+
+fn update_unknown_screen_timeout_count(
+    state: &Mutex<RecognitionSettings>,
+    value: u32,
+    persist: impl FnOnce(&RecognitionSettings) -> Result<(), String>,
+) -> Result<RecognitionSettings, String> {
+    let mut guard = state.lock().unwrap();
+    let mut next = *guard;
+    next.unknown_screen_timeout_count = value;
+    persist(&next)?;
+    *guard = next;
+    Ok(next)
 }
 
 fn normalize_threshold(value: f64, label: &str, min: f64, max: f64) -> Result<f64, String> {
@@ -292,6 +328,11 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
                     && !settings.stop_on_bond_max_level,
                 stop_on_bond_max_level: settings.stop_on_bond_max_level,
                 verify_skill_activation: settings.verify_skill_activation,
+                unknown_screen_timeout_count: normalize_unknown_screen_timeout_count(
+                    settings.unknown_screen_timeout_count,
+                    "识别超时次数",
+                )
+                .ok()?,
             })
         })
         .unwrap_or_default()
@@ -489,6 +530,18 @@ pub(crate) fn set_verify_skill_activation(
 }
 
 #[tauri::command]
+pub(crate) fn set_unknown_screen_timeout_count(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: u32,
+) -> Result<RecognitionSettings, String> {
+    let value = normalize_unknown_screen_timeout_count(value, "识别超时次数")?;
+    update_unknown_screen_timeout_count(state.inner(), value, |next| {
+        save_recognition_settings(&app, next)
+    })
+}
+
+#[tauri::command]
 pub(crate) fn set_auto_capture_battle_result_loot(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<DebugSettings>>,
@@ -644,6 +697,10 @@ mod tests {
         assert!(!settings.stop_on_bond_level_up);
         assert!(!settings.stop_on_bond_max_level);
         assert!(!settings.verify_skill_activation);
+        assert_eq!(
+            settings.unknown_screen_timeout_count,
+            UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
+        );
     }
 
     #[test]
@@ -660,6 +717,72 @@ mod tests {
         assert!(!settings.stop_on_bond_level_up);
         assert!(!settings.stop_on_bond_max_level);
         assert!(!settings.verify_skill_activation);
+        assert_eq!(
+            settings.unknown_screen_timeout_count,
+            UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
+        );
+    }
+
+    #[test]
+    fn unknown_screen_timeout_count_accepts_configured_range() {
+        assert_eq!(
+            normalize_unknown_screen_timeout_count(
+                UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN,
+                "识别超时次数"
+            )
+            .unwrap(),
+            UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN
+        );
+        assert_eq!(
+            normalize_unknown_screen_timeout_count(
+                UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX,
+                "识别超时次数"
+            )
+            .unwrap(),
+            UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX
+        );
+        assert_eq!(
+            normalize_unknown_screen_timeout_count(
+                UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED,
+                "识别超时次数"
+            )
+            .unwrap(),
+            UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED
+        );
+    }
+
+    #[test]
+    fn unknown_screen_timeout_count_rejects_values_outside_range() {
+        assert!(normalize_unknown_screen_timeout_count(0, "识别超时次数").is_err());
+        assert!(normalize_unknown_screen_timeout_count(
+            UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX + 1,
+            "识别超时次数"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn failed_timeout_persistence_keeps_shared_state_unchanged() {
+        let state = Mutex::new(RecognitionSettings::default());
+
+        let result =
+            update_unknown_screen_timeout_count(&state, 200, |_| Err("write failed".to_string()));
+
+        assert_eq!(result.unwrap_err(), "write failed");
+        assert_eq!(
+            state.lock().unwrap().unknown_screen_timeout_count,
+            UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
+        );
+    }
+
+    #[test]
+    fn successful_timeout_persistence_updates_shared_state() {
+        let state = Mutex::new(RecognitionSettings::default());
+
+        let result = update_unknown_screen_timeout_count(&state, 200, |_| Ok(())).unwrap();
+
+        assert_eq!(result.unknown_screen_timeout_count, 200);
+        assert_eq!(state.lock().unwrap().unknown_screen_timeout_count, 200);
     }
 
     #[test]

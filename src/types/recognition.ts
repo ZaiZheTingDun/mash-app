@@ -9,6 +9,7 @@ export interface RecognitionSettings {
   stopOnBondLevelUp: boolean;
   stopOnBondMaxLevel: boolean;
   verifySkillActivation: boolean;
+  unknownScreenTimeoutCount: number;
 }
 
 export interface ProjectRecognitionSettings {

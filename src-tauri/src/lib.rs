@@ -313,6 +313,7 @@ pub fn run() {
             commands::settings::set_stop_on_bond_level_up,
             commands::settings::set_stop_on_bond_max_level,
             commands::settings::set_verify_skill_activation,
+            commands::settings::set_unknown_screen_timeout_count,
             commands::settings::set_auto_capture_battle_result_loot,
             commands::settings::set_auto_capture_unknown_screen_timeout,
             commands::settings::set_auto_capture_skill_use_probe,

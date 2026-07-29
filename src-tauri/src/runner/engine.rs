@@ -108,11 +108,7 @@ impl Runner {
                 }
                 Screen::Unknown => {
                     unknown_count += 1;
-                    let timeout = if self.battle.uses_loading_unknown_timeout() {
-                        UNKNOWN_TIMEOUT_LOADING
-                    } else {
-                        UNKNOWN_TIMEOUT
-                    };
+                    let timeout = self.config.unknown_screen_timeout_count;
                     if unknown_count >= timeout {
                         self.transition_lifecycle(RunnerLifecycleEvent::Failed {
                             message: "无法识别当前画面".into(),
