@@ -1586,7 +1586,7 @@ fn build_assets_remote_manifest(latest: u32, patches: &str) -> AssetsRemoteManif
 #[test]
 fn assets_app_manifest_parses_target_version_and_latest_url() {
     let manifest = parse_assets_app_manifest(ASSETS_MANIFEST_JSON).unwrap();
-    assert_eq!(manifest.assets_version, 4);
+    assert_eq!(manifest.assets_version, 5);
     assert_eq!(
         manifest.latest_url,
         "https://mash.xiaotongx.com/mash/assets/latest.json"
@@ -2157,6 +2157,22 @@ fn servants_data_expands_variants_with_last_cn_np_and_face_id() {
 }
 
 #[test]
+fn servants_data_uses_variant_face_id_to_select_overwrite_name() {
+    let olga_variants: Vec<&ServantInfo> = servants_data().iter().filter(|s| s.id == 444).collect();
+    assert_eq!(olga_variants.len(), 2);
+
+    assert_eq!(olga_variants[0].variant_key, "444:1");
+    assert_eq!(olga_variants[0].face_id, Some(4000130));
+    assert_eq!(olga_variants[0].name_cn, "Ｕ－奥尔加玛丽");
+    assert_eq!(olga_variants[0].name_jp, "Ｕ－オルガマリー");
+
+    assert_eq!(olga_variants[1].variant_key, "444:2");
+    assert_eq!(olga_variants[1].face_id, Some(4));
+    assert_eq!(olga_variants[1].name_cn, "奥尔加玛丽·阿尼姆斯菲亚");
+    assert_eq!(olga_variants[1].name_jp, "オルガマリー・アニムスフィア");
+}
+
+#[test]
 fn servants_data_includes_latest_cn_catalog_updates() {
     let indra = servants_data().iter().find(|s| s.id == 442).unwrap();
     assert_eq!(indra.name_cn, "因陀罗");
@@ -2376,7 +2392,8 @@ fn servants_data_exposes_overwrite_servant_names() {
     assert!(jinako
         .over_write_servant_names
         .iter()
-        .any(|alias| alias.name_cn.as_deref() == Some("伟大的石像神")
+        .any(|alias| alias.ids == [1]
+            && alias.name_cn.as_deref() == Some("伟大的石像神")
             && alias.name_jp.as_deref() == Some("大いなる石像神")));
 }
 

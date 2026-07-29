@@ -4951,6 +4951,9 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          1
+        ],
         "nameJP": "大いなる石像神",
         "nameCN": "伟大的石像神"
       }
@@ -5077,10 +5080,16 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          1
+        ],
         "nameJP": "織田信長",
         "nameCN": "织田信长"
       },
       {
+        "ids": [
+          2
+        ],
         "nameJP": "織田吉法師",
         "nameCN": "织田吉法师"
       }
@@ -5427,6 +5436,10 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          1,
+          2
+        ],
         "nameJP": "オキタ・Ｊ・ソウジ",
         "nameCN": "冲田·J·总司"
       }
@@ -6317,6 +6330,9 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          1
+        ],
         "nameJP": "妖精騎士ガウェイン",
         "nameCN": "妖精骑士高文"
       }
@@ -6343,6 +6359,9 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          1
+        ],
         "nameJP": "妖精騎士トリスタン",
         "nameCN": "妖精骑士崔斯坦"
       }
@@ -6377,6 +6396,10 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          1,
+          304830
+        ],
         "nameJP": "妖精騎士ランスロット",
         "nameCN": "妖精骑士兰斯洛特"
       }
@@ -7162,6 +7185,9 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          2
+        ],
         "nameJP": "アルクェイド・ブリュンスタッド",
         "nameCN": "爱尔奎特·布伦史塔德"
       }
@@ -7528,10 +7554,16 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          1
+        ],
         "nameJP": "グレゴリー・ラスプーチン",
         "nameCN": "格里戈里·拉斯普京"
       },
       {
+        "ids": [
+          2
+        ],
         "nameJP": "言峰神父",
         "nameCN": "言峰神父"
       }
@@ -7598,10 +7630,16 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          1
+        ],
         "nameJP": "トラロック",
         "nameCN": "特拉洛克"
       },
       {
+        "ids": [
+          2
+        ],
         "nameJP": "ウィツィロポチトリ",
         "nameCN": "维齐洛波奇特利"
       }
@@ -7828,6 +7866,10 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          3,
+          4
+        ],
         "nameJP": "カーリー",
         "nameCN": "迦梨"
       }
@@ -7874,10 +7916,17 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          2
+        ],
         "nameJP": "救世主トネリコ",
         "nameCN": "救世主梣"
       },
       {
+        "ids": [
+          3,
+          4
+        ],
         "nameJP": "水妃モルガン",
         "nameCN": "水妃摩根"
       }
@@ -7984,6 +8033,10 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          3,
+          4
+        ],
         "nameJP": "メリュジーヌ・オンディーヌ",
         "nameCN": "梅柳齐娜·翁蒂娜"
       }
@@ -8010,14 +8063,23 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          2
+        ],
         "nameJP": "バーゲスト",
         "nameCN": "巴格斯特"
       },
       {
+        "ids": [
+          3
+        ],
         "nameJP": "妖精騎士バーゲスト",
         "nameCN": "妖精骑士巴格斯特"
       },
       {
+        "ids": [
+          4
+        ],
         "nameJP": "ＵＤＫ－バーゲスト",
         "nameCN": "ＵＤＫ－巴格斯特"
       }
@@ -8044,10 +8106,17 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          2,
+          4
+        ],
         "nameJP": "バーヴァン・シー",
         "nameCN": "芭万·希"
       },
       {
+        "ids": [
+          3
+        ],
         "nameJP": "妖精騎士トリスタン",
         "nameCN": "妖精骑士崔斯坦"
       }
@@ -8162,6 +8231,10 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          3,
+          4
+        ],
         "nameJP": "武田信玄",
         "nameCN": "武田信玄"
       }
@@ -8530,10 +8603,17 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          2,
+          4
+        ],
         "nameJP": "阿曇磯良",
         "nameCN": "阿昙矶良"
       },
       {
+        "ids": [
+          3
+        ],
         "nameJP": "シリウス",
         "nameCN": "天狼星"
       }
@@ -8560,10 +8640,17 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          2
+        ],
         "nameJP": "アンキ・エレシュキガル",
         "nameCN": "安基埃列什基伽勒"
       },
       {
+        "ids": [
+          3,
+          4
+        ],
         "nameJP": "スペース・エレシュキガル",
         "nameCN": "太空埃列什基伽勒"
       }
@@ -8590,10 +8677,18 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          2,
+          2300940
+        ],
         "nameJP": "教えて！シエル先生",
         "nameCN": "教教我吧！希耶尔老师"
       },
       {
+        "ids": [
+          3,
+          4
+        ],
         "nameJP": "スターシエル",
         "nameCN": "星之希耶尔"
       }
@@ -8668,10 +8763,17 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          2
+        ],
         "nameJP": "ＢＢコスモ",
         "nameCN": "ＢＢ宇宙"
       },
       {
+        "ids": [
+          3,
+          4
+        ],
         "nameJP": "ゴールデンＢＢ",
         "nameCN": "黄金ＢＢ"
       }
@@ -8878,10 +8980,16 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          2
+        ],
         "nameJP": "スペース・ファンタズムーンＶ",
         "nameCN": "Space PhantasmoonＶ"
       },
       {
+        "ids": [
+          3
+        ],
         "nameJP": "サンタズムーン",
         "nameCN": "Santasmoon"
       }
@@ -8908,6 +9016,9 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          3
+        ],
         "nameJP": "獅子心王リチャード",
         "nameCN": "狮心王理查"
       }
@@ -8934,6 +9045,10 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          3,
+          4
+        ],
         "nameJP": "ビショーネ〔ウロボロスシフト〕",
         "nameCN": "比肖内〔乌洛波洛斯转变〕"
       }
@@ -9113,7 +9228,7 @@
   {
     "id": 9946760,
     "collectionNo": 443,
-    "nameCN": "Ｅ－ステラマリー",
+    "nameCN": "Ｅ－星玛丽",
     "nameJP": "Ｅ－ステラマリー",
     "classId": 9004,
     "className": "uOlgaMarieStellarCollection",
@@ -9124,7 +9239,7 @@
   {
     "id": 4000100,
     "collectionNo": 444,
-    "nameCN": "Ｕ－オルガマリー",
+    "nameCN": "Ｕ－奥尔加玛丽",
     "nameJP": "Ｕ－オルガマリー",
     "classId": 40,
     "className": "unBeastOlgaMarie",
@@ -9133,17 +9248,21 @@
     "noblePhantasms": [
       {
         "id": 4000101,
-        "name": "プラネット・オルガマリー",
+        "name": "Planet Olgamarie",
         "nameJP": "すでに過ぎし人理の終",
-        "nameCN": "すでに過ぎし人理の終",
+        "nameCN": "既已过去的人理之终",
         "card": "2",
         "cardName": "buster"
       }
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          3,
+          4
+        ],
         "nameJP": "オルガマリー・アニムスフィア",
-        "nameCN": "オルガマリー・アニムスフィア"
+        "nameCN": "奥尔加玛丽·阿尼姆斯菲亚"
       }
     ]
   },
@@ -9228,10 +9347,17 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          2
+        ],
         "nameJP": "両儀式",
         "nameCN": "両儀式"
       },
       {
+        "ids": [
+          3,
+          4
+        ],
         "nameJP": "玉兎輝夜",
         "nameCN": "玉兎輝夜"
       }
@@ -9258,6 +9384,9 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          3
+        ],
         "nameJP": "朔月美遊",
         "nameCN": "朔月美遊"
       }
@@ -9583,6 +9712,10 @@
     ],
     "overWriteServantNames": [
       {
+        "ids": [
+          3,
+          4
+        ],
         "nameJP": "デメテル・エリニュス",
         "nameCN": "デメテル・エリニュス"
       }
@@ -9705,6 +9838,46 @@
         "nameCN": "我は告げる、逃れられぬ絶望を",
         "card": "1",
         "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 106700,
+    "collectionNo": 472,
+    "nameCN": "グレイ・リリィ",
+    "nameJP": "グレイ・リリィ",
+    "classId": 1,
+    "className": "saber",
+    "type": "normal",
+    "rarity": 4,
+    "noblePhantasms": [
+      {
+        "id": 106701,
+        "name": "エクスカリバー・ロゴス",
+        "nameJP": "巡り来たる宿命の剣",
+        "nameCN": "巡り来たる宿命の剣",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ]
+  },
+  {
+    "id": 306300,
+    "collectionNo": 473,
+    "nameCN": "グレイ・リリィ",
+    "nameJP": "グレイ・リリィ",
+    "classId": 3,
+    "className": "lancer",
+    "type": "normal",
+    "rarity": 4,
+    "noblePhantasms": [
+      {
+        "id": 306301,
+        "name": "ロンゴミニアド・ミュトス",
+        "nameJP": "最果てにて礎なる夢の塔",
+        "nameCN": "最果てにて礎なる夢の塔",
+        "card": "2",
+        "cardName": "buster"
       }
     ]
   }

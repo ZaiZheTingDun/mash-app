@@ -7,6 +7,7 @@ use super::*;
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ServantNameAlias {
+    pub(crate) ids: Vec<u32>,
     pub(crate) name_jp: Option<String>,
     pub(crate) name_cn: Option<String>,
 }
@@ -112,6 +113,7 @@ pub(crate) fn servant_name_aliases(value: &serde_json::Value) -> Vec<ServantName
     arr.iter()
         .filter_map(|entry| {
             let alias = ServantNameAlias {
+                ids: u32_array_field(entry, &["ids"]),
                 name_jp: string_field(entry, &["nameJP", "name_jp"]),
                 name_cn: string_field(entry, &["nameCN", "name_cn"]),
             };
@@ -129,6 +131,16 @@ pub(crate) fn u32_field(value: &serde_json::Value, keys: &[&str]) -> Option<u32>
         .filter_map(|key| value.get(key))
         .find_map(|v| v.as_u64())
         .map(|n| n as u32)
+}
+
+pub(crate) fn u32_array_field(value: &serde_json::Value, keys: &[&str]) -> Vec<u32> {
+    keys.iter()
+        .filter_map(|key| value.get(key))
+        .find_map(|v| v.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.as_u64().map(|n| n as u32))
+        .collect()
 }
 
 pub(crate) fn display_class_name(raw: &str) -> String {
@@ -193,12 +205,17 @@ pub(crate) fn last_variant_np_name(variant: &serde_json::Value) -> Option<String
 }
 
 pub(crate) fn variant_face_id(variant: &serde_json::Value) -> Option<u32> {
-    variant
-        .get("ids")?
-        .as_array()?
-        .iter()
-        .filter_map(|v| v.as_u64().map(|n| n as u32))
-        .max()
+    u32_array_field(variant, &["ids"]).into_iter().max()
+}
+
+/// Keep the displayed name aligned with the same ascension/costume ID chosen
+/// as this variant's representative portrait.
+pub(crate) fn variant_name_alias<'a>(
+    aliases: &'a [ServantNameAlias],
+    face_id: Option<u32>,
+) -> Option<&'a ServantNameAlias> {
+    let face_id = face_id?;
+    aliases.iter().find(|alias| alias.ids.contains(&face_id))
 }
 
 pub(crate) fn servants_data() -> &'static [ServantInfo] {
@@ -274,14 +291,30 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                                 let np_variant = cn_variants
                                     .and_then(|entries| entries.get(variant_idx))
                                     .unwrap_or(variant);
+                                let face_id = variant_face_id(variant);
+                                let name_alias =
+                                    variant_name_alias(&over_write_servant_names, face_id);
+                                let variant_name_cn = name_alias
+                                    .and_then(|alias| alias.name_cn.clone())
+                                    .unwrap_or_else(|| name_cn.clone());
+                                let variant_name_jp = name_alias
+                                    .and_then(|alias| alias.name_jp.clone())
+                                    .unwrap_or_else(|| name_jp.clone());
+                                let variant_name_cn_server = if name_alias
+                                    .is_some_and(|alias| alias.name_cn.is_some())
+                                {
+                                    None
+                                } else {
+                                    name_cn_server.clone()
+                                };
                                 ServantInfo {
                                     id,
                                     servant_type: servant_type.clone(),
                                     variant_key: format!("{id}:{}", variant_idx + 1),
-                                    face_id: variant_face_id(variant),
-                                    name_cn: name_cn.clone(),
-                                    name_cn_server: name_cn_server.clone(),
-                                    name_jp: name_jp.clone(),
+                                    face_id,
+                                    name_cn: variant_name_cn,
+                                    name_cn_server: variant_name_cn_server,
+                                    name_jp: variant_name_jp,
                                     name_en: name_en.clone(),
                                     name_other: name_other.clone(),
                                     over_write_servant_names: over_write_servant_names.clone(),

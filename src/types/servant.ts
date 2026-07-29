@@ -1,4 +1,5 @@
 export interface ServantNameAlias {
+  ids: number[];
   nameJp?: string | null;
   nameCn?: string | null;
 }

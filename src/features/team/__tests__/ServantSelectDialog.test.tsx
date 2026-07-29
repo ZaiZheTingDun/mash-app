@@ -118,6 +118,7 @@ describe("ServantSelectDialog", () => {
           name_en: "Jinako Carigiri",
           overWriteServantNames: [
             {
+              ids: [1],
               nameCn: "伟大的石像神",
               nameJp: "大いなる石像神",
             },
