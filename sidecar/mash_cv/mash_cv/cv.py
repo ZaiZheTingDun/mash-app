@@ -4337,7 +4337,18 @@ def _find_supports(
 
 
 def _support_parse_np_level_text(text: str) -> Optional[int]:
-    m = re.search(r"等级\s*([1-5])", text)
+    normalized = unicodedata.normalize("NFKC", text)
+    m = re.search(r"等级\s*([1-5])", normalized)
+    if not m:
+        # JP renders NP levels as ``Lv.5``. Whole-list OCR may lose the
+        # narrow ``v`` or punctuation, so accept the observed ``LV5`` /
+        # ``L5`` variants as long as the level is the final digit in the
+        # fragment (apart from decorations such as the NP-strength arrow).
+        m = re.search(
+            r"L(?:V)?\s*\.?\s*([1-5])(?=\D*$)",
+            normalized,
+            flags=re.IGNORECASE,
+        )
     if m:
         return int(m.group(1))
     return None

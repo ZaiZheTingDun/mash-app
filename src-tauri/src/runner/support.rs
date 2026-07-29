@@ -616,6 +616,10 @@ pub(crate) fn support_level_wait_diagnostic(
     )
 }
 
+pub(crate) fn support_level_filtering_enabled(server: Server) -> bool {
+    matches!(server, Server::Jp | Server::Cn)
+}
+
 pub(crate) fn support_row_matches_level_requirements_with_progress(
     server: Server,
     config: &RunConfig,
@@ -628,7 +632,7 @@ pub(crate) fn support_row_matches_level_requirements_with_progress(
         .support_append_skill_level_mins
         .iter()
         .any(Option::is_some);
-    if server != Server::Cn || (!needs_np && !needs_owned && !needs_append) {
+    if !support_level_filtering_enabled(server) || (!needs_np && !needs_owned && !needs_append) {
         return SupportLevelFilter::Pass;
     }
     if let Some(min) = config.support_noble_phantasm_level_min {
@@ -844,7 +848,7 @@ impl Runner {
         // OCR the current (class-filtered) screen and look for a row
         // whose name + NP both fuzzy-match the pinned servant.
         let include_support_details =
-            self.server == crate::Server::Cn && self.has_support_level_requirements();
+            support_level_filtering_enabled(self.server) && self.has_support_level_requirements();
         let result = match self.sidecar().find_supports(
             None,
             &meta.name,

@@ -2653,6 +2653,9 @@ def test_support_detail_extracts_np_level_from_row_fragments():
 
     row_region = {"x": 0.177, "y": 0.32, "w": 0.466, "h": 0.12}
     assert _support_extract_np_level([], row_region, "为你纺织的时光之轮等级5") == 5
+    assert _support_extract_np_level([], row_region, "第七聖典・断罪死 Lv.5") == 5
+    assert _support_extract_np_level([], row_region, "第七聖典・断罪死ＬＶ.4") == 4
+    assert _support_extract_np_level([], row_region, "第七聖典・断罪死Ｌ5") == 5
 
     fragments = [
         {
@@ -2662,6 +2665,14 @@ def test_support_detail_extracts_np_level_from_row_fragments():
     ]
 
     assert _support_extract_np_level(fragments, row_region) == 2
+
+
+def test_support_np_level_parser_rejects_non_level_digits():
+    from mash_cv.cv import _support_parse_np_level_text
+
+    assert _support_parse_np_level_text("第七聖典・断罪死") is None
+    assert _support_parse_np_level_text("第七聖典・断罪死 Lv.10") is None
+    assert _support_parse_np_level_text("サーヴァント Lv.120") is None
 
 
 def test_support_skill_details_distinguish_owned_and_append_panels(monkeypatch):

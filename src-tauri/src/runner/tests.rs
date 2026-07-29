@@ -3888,6 +3888,12 @@ fn support_level_meets_treats_none_requirement_as_any() {
     assert!(support_level_meets(Some(10), Some(5)));
 }
 
+#[test]
+fn support_level_filtering_is_enabled_for_jp_and_cn() {
+    assert!(support_level_filtering_enabled(Server::Jp));
+    assert!(support_level_filtering_enabled(Server::Cn));
+}
+
 fn support_row(
     panel: Option<&str>,
     skills: Vec<Option<u32>>,
@@ -4060,15 +4066,17 @@ fn support_level_filter_reports_first_mismatch_per_panel() {
     let mut progress = SupportLevelPanelProgress::default();
     let mut np_low = support_row(Some("owned"), vec![Some(10), Some(10), Some(10)], vec![]);
     np_low.np_level = Some(3);
-    assert_eq!(
-        support_row_matches_level_requirements_with_progress(
-            Server::Cn,
-            &cfg,
-            &np_low,
-            &mut progress,
-        ),
-        SupportLevelFilter::Fail("宝具 ≥ 5（实际 3）".into())
-    );
+    for server in [Server::Jp, Server::Cn] {
+        assert_eq!(
+            support_row_matches_level_requirements_with_progress(
+                server,
+                &cfg,
+                &np_low,
+                &mut progress,
+            ),
+            SupportLevelFilter::Fail("宝具 ≥ 5（实际 3）".into())
+        );
+    }
 
     // Owned miss reports the first failing slot — slot 2 here —
     // even though slot 3 also fails downstream.

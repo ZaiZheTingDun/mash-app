@@ -130,7 +130,7 @@ Sidecar 按布局而非只按文字配对助战行：NP 匹配必须是同一行
 
 CN Grand 助战若未选中匹配行，会先等待当前刷新列表出现至少一个 ribbon；出现后连续两次未命中即刷新而非继续滚动。若从未出现 marker，或 server bundle 不含该 probe，则保留旧的滚至底部行为。
 
-项目配置任意 `supportNoblePhantasmLevelMin`、`supportSkillLevelMins` 或 `supportAppendSkillLevelMins` 时，runner 在点击前调用 `support_row_matches_level_requirements_with_progress`：`Pass` 表示名称、NP 和全部等级达标；`Fail` 表示可见面板至少一项不足；`WaitingForPanel` 表示当前面板达标但尚未观察到另一面板。自有和 append 技能图标共享行；游戏的显示切换是固定自有／固定 append／间隔切换三态，runner 无法知道用户锁定状态。因此遇到 `WaitingForPanel` 会点击 `SUPPORT_SKILL_PANEL_TOGGLE_BUTTON` 并重做 OCR；每个候选最多 `SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS` 次，避免无法验证的行困住循环，候选变化时计数自然重置。
+JP 与 CN 项目配置任意 `supportNoblePhantasmLevelMin`、`supportSkillLevelMins` 或 `supportAppendSkillLevelMins` 时，runner 都会请求助战等级详情，并在点击前调用 `support_row_matches_level_requirements_with_progress`：`Pass` 表示名称、NP 和全部等级达标；`Fail` 表示可见面板至少一项不足；`WaitingForPanel` 表示当前面板达标但尚未观察到另一面板。宝具等级解析同时接受 CN 的“等级5”和 JP OCR 常见的 `Lv.5`、全角 `ＬＶ.5`、漏读窄字符后的 `Ｌ5`。自有和 append 技能图标共享行；游戏的显示切换是固定自有／固定 append／间隔切换三态，runner 无法知道用户锁定状态。因此遇到 `WaitingForPanel` 会点击 `SUPPORT_SKILL_PANEL_TOGGLE_BUTTON` 并重做 OCR；每个候选最多 `SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS` 次，避免无法验证的行困住循环，候选变化时计数自然重置。
 
 ## 操作日志
 
