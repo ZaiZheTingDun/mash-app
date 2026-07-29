@@ -281,10 +281,10 @@
       "detect": {
         "template": "battle-result/text_battle_result_equip_level_up",
         "region": {
-          "x": 0.577,
-          "y": 0.351,
-          "w": 0.17,
-          "h": 0.052
+          "x": 0.553,
+          "y": 0.327,
+          "w": 0.216,
+          "h": 0.101
         },
         "threshold": 0.85,
         "priority": 10
