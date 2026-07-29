@@ -822,6 +822,44 @@ class TestDetectScreen:
         assert result["screen"] == "BattleResultExpLevelUp"
         assert result["score"] >= 0.85
 
+    def test_jp_battle_result_master_level_up_detects_real_capture(self):
+        """The JP master-level template comes from a 1920-wide capture and
+        must detect at both its native size and a 2560-wide stream."""
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "jp", "templates"
+        )
+        cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "jp", "cv.json"
+        )
+        screenshot = os.path.join(
+            os.path.dirname(__file__),
+            "test_data",
+            "screenshots",
+            "battle_result_master_level_up_jp.png",
+        )
+        if not (
+            os.path.isdir(templates_dir)
+            and os.path.isfile(cv_json)
+            and os.path.isfile(screenshot)
+        ):
+            pytest.skip("JP production resources or fixture not available")
+
+        mash_cv._load_templates(templates_dir)
+        mash_cv._load_config(cv_json)
+        img = cv2.imread(screenshot)
+        assert img is not None
+
+        for frame in (
+            img,
+            cv2.resize(img, (2560, 1440), interpolation=cv2.INTER_CUBIC),
+        ):
+            result = mash_cv._detect_screen(frame)
+            assert result["screen"] == "BattleResultMasterLevelUp"
+            assert result["score"] >= 0.85
+
     def test_cn_battle_result_loot_event_detects_real_capture(self):
         """CN events can insert a rewards page after the normal loot page.
 
