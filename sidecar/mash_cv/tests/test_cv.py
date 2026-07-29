@@ -1711,6 +1711,33 @@ class TestReadBattleScene:
         result = mash_cv._read_battle_scene(downsampled, BATTLE_SCENE_REGION)
         assert result == {"scene": 1, "total": 3}
 
+    def test_jp_three_of_three_trims_false_leading_one(self):
+        """A JP HUD seam must not turn the real ``3/3`` into ``13/3``."""
+        mash_cv._load_templates(_PROD_TEMPLATES_DIR)
+        roi = cv2.imread(
+            os.path.join(
+                _TEST_SCREENSHOTS_DIR,
+                "battle_scene_jp_three_of_three.png",
+            )
+        )
+        assert roi is not None, "battle_scene_jp_three_of_three.png fixture missing"
+
+        img = _make_bgr_image(1920, 1080)
+        rx = int(BATTLE_SCENE_REGION["x"] * img.shape[1])
+        ry = int(BATTLE_SCENE_REGION["y"] * img.shape[0])
+        rw = int(BATTLE_SCENE_REGION["w"] * img.shape[1])
+        rh = int(BATTLE_SCENE_REGION["h"] * img.shape[0])
+        assert roi.shape[:2] == (rh, rw)
+        img[ry : ry + rh, rx : rx + rw] = roi
+
+        result = mash_cv._read_battle_scene(img, BATTLE_SCENE_REGION, debug=True)
+        assert result["scene"] == 3, result
+        assert result["total"] == 3, result
+        diag = result["diagnostics"]
+        assert [match["value"] for match in diag["kept"]] == [1, 3, 3]
+        assert diag["trimmedLeft"] == 1
+        assert diag["failReason"] is None
+
     def test_np_overlay_returns_none(self):
         # battle_np.png has the noble-phantasm splash covering the HUD,
         # so the BATTLE anchor falls below threshold and the function bails

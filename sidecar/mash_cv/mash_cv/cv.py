@@ -2883,11 +2883,39 @@ def _read_battle_scene(
     if not trimmed_left or not trimmed_right:
         return _wrap(None, None, fail="cohesion_trim_emptied_side")
 
+    def _digits_value(side: list) -> int:
+        return int("".join(str(c[1]) for c in side))
+
     try:
-        scene = int("".join(str(c[1]) for c in trimmed_left))
-        total = int("".join(str(c[1]) for c in trimmed_right))
+        total = _digits_value(trimmed_right)
     except ValueError:
         return _wrap(None, None, fail="parse_error")
+
+    # Semantic trim: ``BATTLE m/n`` can never have m > n. A narrow
+    # ``digit_1`` template can occasionally match a HUD seam immediately
+    # before the real scene digit, close enough to survive both the
+    # score-margin and cohesion filters (observed as ``3/3`` → ``13/3`` on
+    # the JP client). When the parsed scene is impossible, discard leading
+    # digits from the outer edge of the left cluster until the suffix nearest
+    # the slash becomes valid. Legitimate multi-digit readings such as
+    # ``10/10`` remain untouched because they already satisfy the range.
+    if total >= 1:
+        while len(trimmed_left) > 1:
+            try:
+                scene = _digits_value(trimmed_left)
+            except ValueError:
+                return _wrap(None, None, fail="parse_error")
+            if 1 <= scene <= total:
+                break
+            trimmed_left = trimmed_left[1:]
+
+    diag["trimmedLeft"] = len(left_digits) - len(trimmed_left)
+    try:
+        scene = _digits_value(trimmed_left)
+    except ValueError:
+        return _wrap(None, None, fail="parse_error")
+    if not (1 <= scene <= total):
+        return _wrap(None, None, fail="invalid_scene_range")
     return _wrap(scene, total)
 
 
