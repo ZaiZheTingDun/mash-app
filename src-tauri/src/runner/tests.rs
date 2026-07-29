@@ -549,6 +549,7 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     // Other defaults travel through the same path; sanity-check
     // them so legacy `projects.json` rows keep deserializing.
     assert!(cfg.support_servant_id.is_none());
+    assert!(cfg.support_servant_variant_key.is_none());
     assert!(cfg.support_slot_index.is_none());
     assert!(cfg.support_noble_phantasm_level_min.is_none());
     assert_eq!(cfg.support_skill_level_mins, [None; 3]);
@@ -3758,6 +3759,7 @@ fn invalid_custom_grand_rule_falls_back_to_builtin_rules() {
 fn run_config_round_trips_support_servant_id_and_repeat_flag() {
     let mut payload = minimal_run_config_json();
     payload["supportServantId"] = serde_json::json!(284);
+    payload["supportServantVariantKey"] = serde_json::json!("284:2");
     payload["supportNoblePhantasmLevelMin"] = serde_json::json!(2);
     payload["supportSkillLevelMins"] = serde_json::json!([10, null, 9]);
     payload["supportAppendSkillLevelMins"] = serde_json::json!([null, 10, null, null, 6]);
@@ -3766,6 +3768,7 @@ fn run_config_round_trips_support_servant_id_and_repeat_flag() {
     payload["apRecoveryItems"] = serde_json::json!(["gold", "bronze"]);
     let cfg: RunConfig = serde_json::from_value(payload).unwrap();
     assert_eq!(cfg.support_servant_id, Some(284));
+    assert_eq!(cfg.support_servant_variant_key.as_deref(), Some("284:2"));
     assert_eq!(cfg.grand_class, GrandClass::Saber);
     assert_eq!(cfg.support_noble_phantasm_level_min, Some(2));
     assert_eq!(cfg.support_skill_level_mins, [Some(10), None, Some(9)]);

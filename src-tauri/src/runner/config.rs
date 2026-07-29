@@ -54,6 +54,11 @@ pub struct RunConfig {
     /// behaviour (tap top of the list).
     #[serde(default)]
     pub support_servant_id: Option<u32>,
+    /// Exact servant variant selected in the team builder. Servants that
+    /// share one collection id can still have different in-game names and
+    /// skill sets, so support OCR must not search every alias for the id.
+    #[serde(default)]
+    pub support_servant_variant_key: Option<String>,
     /// Actual 0-based team-builder slot index of the pinned support.
     /// The support can sit in front or back line, and Order Change needs
     /// the full 1-6 position map to stay accurate after a swap.

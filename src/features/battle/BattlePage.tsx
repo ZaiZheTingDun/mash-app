@@ -479,6 +479,7 @@ export function BattlePage({
       supportClassFilter: null,
       supportServantName: null,
       supportServantId: selectedProject.supportServantId ?? null,
+      supportServantVariantKey: selectedProject.supportServantVariantKey ?? null,
       supportSlotIndex:
         supportSlot != null ? selectedProject.slots?.indexOf(supportSlot) ?? null : null,
       supportMemberId: supportSlot?.id ?? null,

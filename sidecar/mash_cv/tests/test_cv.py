@@ -2810,6 +2810,52 @@ def test_find_supports_name_only_fallback_uses_overwrite_name_alias(monkeypatch)
     assert result["supports"][0]["nameMatchedName"] == "大いなる石像神"
 
 
+@pytest.mark.parametrize(
+    ("target_name", "excluded_name", "observed_name", "should_match"),
+    [
+        ("Ｕ－奥尔加玛丽", "奥尔加玛丽·阿尼姆斯菲亚", "Ｕ－奥尔加玛丽", True),
+        ("Ｕ－奥尔加玛丽", "奥尔加玛丽·阿尼姆斯菲亚", "奥尔加玛丽·阿尼姆斯菲亚", False),
+        ("Ｕ－奥尔加玛丽", "奥尔加玛丽·阿尼姆斯菲亚", "奥尔加玛丽", False),
+        ("Ｕ－オルガマリー", "オルガマリー・アニムスフィア", "Ｕ－オルガマリー", True),
+        ("Ｕ－オルガマリー", "オルガマリー・アニムスフィア", "オルガマリー・アニムスフィア", False),
+        ("Ｕ－オルガマリー", "オルガマリー・アニムスフィア", "オルガマリー", False),
+    ],
+)
+def test_find_supports_distinguishes_sibling_servant_variants(
+    monkeypatch,
+    target_name,
+    excluded_name,
+    observed_name,
+    should_match,
+):
+    import mash_cv.cv as cv
+
+    img = np.zeros((1000, 1000, 3), dtype=np.uint8)
+    box_name = [[100, 100], [340, 100], [340, 130], [100, 130]]
+
+    def fake_ocr(_crop):
+        return ([(box_name, observed_name, 0.98)], None)
+
+    monkeypatch.setattr(cv, "_get_ocr", lambda: fake_ocr)
+    monkeypatch.setattr(cv, "_support_find_confirm_button_anchors", lambda _img: [])
+    monkeypatch.setattr(cv, "_support_grand_badge_scores_per_anchor", lambda _img, _anchors: None)
+
+    result = cv._find_supports(
+        img,
+        {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+        target_name,
+        [],
+        0.65,
+        0.7,
+        0.2,
+        expected_names=[target_name],
+        excluded_names=[excluded_name],
+    )
+
+    assert bool(result["supports"]) is should_match
+    assert result["diagnostics"]["fragments"][0]["excludedVariant"] is (not should_match)
+
+
 @pytest.mark.skipif(
     not os.path.isfile(
         os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "skill.png"))

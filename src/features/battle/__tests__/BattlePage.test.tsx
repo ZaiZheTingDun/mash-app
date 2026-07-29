@@ -220,6 +220,27 @@ describe("BattlePage", () => {
     });
   });
 
+  it("passes the selected support servant variant to automation", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage({
+      ...PROJECT,
+      supportServantId: 444,
+      supportServantVariantKey: "444:1",
+    });
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("start_automation", {
+        config: expect.objectContaining({
+          supportServantId: 444,
+          supportServantVariantKey: "444:1",
+        }),
+      });
+    });
+  });
+
   it("passes grand support craft essence requirements to automation", async () => {
     const user = userEvent.setup();
     mockProjectCommands();

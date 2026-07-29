@@ -784,7 +784,12 @@ impl Runner {
         // static cache in `lib.rs` makes this cheap, but caching on the
         // runner avoids even hashing it at every poll.
         if self.support_meta.is_none() {
-            match load_servant_metadata(&self.app_handle, servant_id, self.server) {
+            match load_servant_metadata_for_variant(
+                &self.app_handle,
+                servant_id,
+                self.server,
+                self.config.support_servant_variant_key.as_deref(),
+            ) {
                 Ok(meta) => self.support_meta = Some(meta),
                 Err(e) => {
                     self.fail_action(
@@ -853,6 +858,7 @@ impl Runner {
             None,
             &meta.name,
             &meta.names,
+            &meta.excluded_names,
             &meta.np_names,
             include_support_details,
         ) {

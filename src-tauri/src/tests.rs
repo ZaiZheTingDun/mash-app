@@ -2480,6 +2480,30 @@ fn localized_servant_names_dedupe_primary_alias_overlap() {
 }
 
 #[test]
+fn servant_variant_name_candidates_distinguish_olga_variants_by_server() {
+    let (cn_target, cn_excluded) =
+        servant_variant_name_candidates(444, "444:1", Server::Cn).unwrap();
+    assert_eq!(cn_target, "Ｕ－奥尔加玛丽");
+    assert_eq!(cn_excluded, ["奥尔加玛丽·阿尼姆斯菲亚"]);
+
+    let (jp_target, jp_excluded) =
+        servant_variant_name_candidates(444, "444:1", Server::Jp).unwrap();
+    assert_eq!(jp_target, "Ｕ－オルガマリー");
+    assert_eq!(jp_excluded, ["オルガマリー・アニムスフィア"]);
+
+    let (cn_alias_target, cn_alias_excluded) =
+        servant_variant_name_candidates(444, "444:2", Server::Cn).unwrap();
+    assert_eq!(cn_alias_target, "奥尔加玛丽·阿尼姆斯菲亚");
+    assert_eq!(cn_alias_excluded, ["Ｕ－奥尔加玛丽"]);
+}
+
+#[test]
+fn servant_variant_name_candidates_reject_mismatched_variant_key() {
+    let err = servant_variant_name_candidates(444, "1:1", Server::Cn).unwrap_err();
+    assert!(err.contains("从者 #444 不包含立绘集合 1:1"));
+}
+
+#[test]
 fn servant_id_cn_index_keeps_same_jp_names_distinct() {
     let idx = servant_id_to_cn_index();
     assert_eq!(idx.get(&23).map(|s| s.as_str()), Some("歌果"));

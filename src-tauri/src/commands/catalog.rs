@@ -1603,6 +1603,12 @@ pub struct ServantMetadata {
     pub name: String,
     #[serde(default)]
     pub names: Vec<String>,
+    /// Other localized display names belonging to the same servant id but
+    /// not to the selected variant. The sidecar uses these as negative
+    /// candidates so a short target name cannot match inside a longer
+    /// sibling-variant name.
+    #[serde(skip_serializing)]
+    pub excluded_names: Vec<String>,
     pub np_names: Vec<String>,
     /// Atlas Academy `className`, lowercased (e.g. `caster`, `alterego`,
     /// `mooncancer`). Drives the support-select class-tab tap so the
@@ -1770,6 +1776,65 @@ pub(crate) fn localized_servant_names_by_id(
     names
 }
 
+fn localized_variant_name(servant: &ServantInfo, server: Server) -> String {
+    match server {
+        Server::Jp => servant.name_jp.trim().to_string(),
+        Server::Cn => servant
+            .name_cn_server
+            .as_deref()
+            .unwrap_or(&servant.name_cn)
+            .trim()
+            .to_string(),
+    }
+}
+
+pub(crate) fn servant_variant_name_candidates(
+    id: u32,
+    variant_key: &str,
+    server: Server,
+) -> Result<(String, Vec<String>), String> {
+    let target = servants_data()
+        .iter()
+        .find(|servant| servant.id == id && servant.variant_key == variant_key)
+        .ok_or_else(|| format!("从者 #{id} 不包含立绘集合 {variant_key}"))?;
+    let target_name = localized_variant_name(target, server);
+    if target_name.is_empty() {
+        return Err(format!(
+            "从者 #{id} 的立绘集合 {variant_key} 缺少本地化名称"
+        ));
+    }
+
+    let mut excluded_names = Vec::new();
+    for sibling in servants_data().iter().filter(|servant| servant.id == id) {
+        if sibling.variant_key == variant_key {
+            continue;
+        }
+        let sibling_name = localized_variant_name(sibling, server);
+        if sibling_name != target_name {
+            push_unique_nonempty(&mut excluded_names, sibling_name);
+        }
+    }
+    Ok((target_name, excluded_names))
+}
+
+pub(crate) fn load_servant_metadata_for_variant(
+    app: &tauri::AppHandle,
+    id: u32,
+    server: Server,
+    variant_key: Option<&str>,
+) -> Result<ServantMetadata, String> {
+    let mut meta = load_servant_metadata(app, id, server)?;
+    let Some(variant_key) = variant_key.filter(|key| !key.trim().is_empty()) else {
+        return Ok(meta);
+    };
+
+    let (target_name, excluded_names) = servant_variant_name_candidates(id, variant_key, server)?;
+    meta.name = target_name.clone();
+    meta.names = vec![target_name];
+    meta.excluded_names = excluded_names;
+    Ok(meta)
+}
+
 pub(crate) fn localize_servant_name_by_id(id: u32, jp: &str) -> String {
     servant_id_to_cn_index()
         .get(&id)
@@ -1900,6 +1965,7 @@ pub(crate) fn load_servant_metadata(
         id,
         name,
         names,
+        excluded_names: Vec::new(),
         np_names,
         class_name,
     };

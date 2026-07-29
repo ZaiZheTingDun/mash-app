@@ -38,7 +38,7 @@ use crate::touch::{self, TouchBackend};
 #[cfg(test)]
 use crate::GrandCardRuleSlotConfig;
 use crate::{
-    default_grand_chain_priority, load_servant_metadata, servant_np_card, Action,
+    default_grand_chain_priority, load_servant_metadata_for_variant, servant_np_card, Action,
     AdvancedBattleScene, AdvancedCommandCardCondition, AdvancedOutputType, AdvancedRule,
     AttackCard, BattleScene, BattleTurn, GrandCardRuleConfig, GrandCardStrategy,
     GrandChainPriorityItem, GrandClass, GrandClassDefinition, GrandRoleDefinition,

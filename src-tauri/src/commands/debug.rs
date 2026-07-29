@@ -1462,6 +1462,7 @@ pub fn debug_find_supports(
         Some(&image_path),
         &meta.name,
         &meta.names,
+        &meta.excluded_names,
         &meta.np_names,
         true,
     )?;

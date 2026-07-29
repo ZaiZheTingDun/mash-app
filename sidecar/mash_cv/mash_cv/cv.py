@@ -3953,6 +3953,43 @@ def _best_fuzzy_name(text: str, expected_names: list[str]) -> tuple[float, str]:
     return best_score, best_name
 
 
+def _name_matches_excluded_variant(
+    text: str,
+    matched_name: str,
+    positive_score: float,
+    excluded_names: list[str],
+) -> tuple[bool, float, str]:
+    """Reject text that identifies a sibling variant more strongly.
+
+    Some servants share one collection id while their variants have
+    different display names and skills. The ordinary sliding-window score
+    intentionally accepts extra OCR text, but that also lets a short name
+    such as ``Ｕ－オルガマリー`` match inside the longer sibling name
+    ``オルガマリー・アニムスフィア``. Negative candidates preserve the
+    tolerant OCR behavior while requiring evidence unique to the selected
+    variant whenever the OCR fragment is common to both names.
+    """
+    if not excluded_names:
+        return False, 0.0, ""
+
+    excluded_score, excluded_name = _best_fuzzy_name(text, excluded_names)
+    if excluded_score > positive_score + 1e-6:
+        return True, excluded_score, excluded_name
+
+    normalized_text = _normalize_jp_text(text)
+    normalized_match = _normalize_jp_text(matched_name)
+    if normalized_text and normalized_text in normalized_match:
+        for name in excluded_names:
+            normalized_excluded = _normalize_jp_text(name)
+            if (
+                normalized_excluded != normalized_match
+                and normalized_text in normalized_excluded
+            ):
+                return True, excluded_score, name
+
+    return False, excluded_score, excluded_name
+
+
 def _support_np_can_pair_with_name(name_cand: dict, np_cand: dict) -> bool:
     """Return whether an NP OCR fragment can belong to a name fragment's row."""
     nr = name_cand["region"]
@@ -4045,6 +4082,7 @@ def _find_supports(
     pair_dy: float,
     include_support_details: bool = False,
     expected_names: Optional[list[str]] = None,
+    excluded_names: Optional[list[str]] = None,
 ) -> dict:
     """OCR the support-select list region and return matched support rows.
 
@@ -4060,6 +4098,15 @@ def _find_supports(
     misses as well as hits.
     """
     expected_name_candidates = _expected_names_or_single(expected_name, expected_names)
+    normalized_expected_names = {
+        _normalize_jp_text(name) for name in expected_name_candidates if name
+    }
+    excluded_name_candidates = [
+        str(name).strip()
+        for name in excluded_names or []
+        if str(name).strip()
+        and _normalize_jp_text(str(name)) not in normalized_expected_names
+    ]
     h, w = img.shape[:2]
     diag: dict = {
         "listRegion": dict(list_region),
@@ -4160,7 +4207,13 @@ def _find_supports(
         region = _poly_to_norm_rect(pts, w, h)
 
         ns, matched_name = _best_fuzzy_name(text, expected_name_candidates)
-        if ns >= name_threshold:
+        is_excluded, excluded_score, excluded_name = _name_matches_excluded_variant(
+            str(text),
+            matched_name,
+            ns,
+            excluded_name_candidates,
+        )
+        if ns >= name_threshold and not is_excluded:
             name_cands.append(
                 {
                     "text": str(text),
@@ -4203,6 +4256,9 @@ def _find_supports(
                 "ocrConfidence": float(conf) if conf is not None else 0.0,
                 "nameScore": float(ns),
                 "matchedName": matched_name,
+                "excludedNameScore": float(excluded_score),
+                "excludedMatchedName": excluded_name,
+                "excludedVariant": bool(is_excluded),
                 "bestNpScore": float(best_np_score),
                 "bestNpName": best_np_text,
             }
@@ -6101,6 +6157,7 @@ def main() -> None:
                         float(cmd.get("pairDy", SUPPORT_ROW_PAIR_DY)),
                         bool(cmd.get("includeSupportDetails", False)),
                         [str(n) for n in (cmd.get("expectedNames") or []) if n],
+                        [str(n) for n in (cmd.get("excludedNames") or []) if n],
                     ),
                 )
         elif action == "ocr_region":

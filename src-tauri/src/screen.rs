@@ -740,14 +740,16 @@ impl SidecarClient {
     /// OCR the support-select screen's list region and return rows whose
     /// servant-name + NP-name fragments fuzzy-match one of ``expected_names`` and
     /// any of ``expected_np_names`` and sit close enough vertically to be
-    /// part of the same row. Defaults (list region, thresholds, pair_dy)
-    /// are owned by the sidecar; this binding stays minimal so retuning
-    /// happens on the Python side.
+    /// part of the same row. ``excluded_names`` identifies sibling servant
+    /// variants that must not win the name match. Defaults (list region,
+    /// thresholds, pair_dy) are owned by the sidecar; this binding stays
+    /// minimal so retuning happens on the Python side.
     pub fn find_supports(
         &mut self,
         image_path: Option<&Path>,
         expected_name: &str,
         expected_names: &[String],
+        excluded_names: &[String],
         expected_np_names: &[String],
         include_support_details: bool,
     ) -> Result<FindSupportsResult, String> {
@@ -755,6 +757,7 @@ impl SidecarClient {
             "cmd": "find_supports",
             "expectedName": expected_name,
             "expectedNames": expected_names,
+            "excludedNames": excluded_names,
             "expectedNpNames": expected_np_names,
             "includeSupportDetails": include_support_details,
         });
