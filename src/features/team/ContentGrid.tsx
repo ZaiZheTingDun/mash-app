@@ -413,6 +413,8 @@ export function ContentGrid({
         servants={servants}
         disabledIds={disabledIds}
         defaultClassFilter={defaultServantClassFilter}
+        portraitRefreshKey={portraitRefreshKey}
+        onPortraitSaved={() => setPortraitRefreshKey((key) => key + 1)}
       />
 
       <CraftEssenceSelectDialog

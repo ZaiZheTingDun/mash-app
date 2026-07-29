@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
@@ -44,6 +44,8 @@ function setup(overrides?: {
   disabledIds?: number[];
   onSelect?: (s: Servant) => void;
   onOpenChange?: (open: boolean) => void;
+  onPortraitSaved?: () => void;
+  portraitRefreshKey?: number;
 }) {
   const onSelect = overrides?.onSelect ?? vi.fn();
   const onOpenChange = overrides?.onOpenChange ?? vi.fn();
@@ -54,6 +56,8 @@ function setup(overrides?: {
       onSelect={onSelect}
       servants={overrides?.servants ?? FIXTURE}
       disabledIds={overrides?.disabledIds}
+      onPortraitSaved={overrides?.onPortraitSaved}
+      portraitRefreshKey={overrides?.portraitRefreshKey}
     />
   );
   return { ...utils, onSelect, onOpenChange };
@@ -413,11 +417,89 @@ describe("ServantSelectDialog", () => {
       expect(invoke).toHaveBeenCalledWith("get_servant_face_path", {
         servantId: 1,
         faceId: 800170,
+        variantKey: "1:1",
       });
       expect(invoke).toHaveBeenCalledWith("get_servant_face_path", {
         servantId: 1,
         faceId: 800151,
+        variantKey: "1:2",
       });
+    });
+  });
+
+  it("opens portrait settings on right click and refreshes the picker avatar", async () => {
+    const user = userEvent.setup();
+    const onPortraitSaved = vi.fn();
+    let selectedPortraitId = 4_000_130;
+    vi.mocked(invoke).mockImplementation(
+      async (cmd: string, args) => {
+        if (cmd === "get_servant_face_path") {
+          return `/tmp/face_servant_${selectedPortraitId}.png`;
+        }
+        if (cmd === "list_servant_portraits") {
+          return {
+            options: [
+              { id: 1, path: "/tmp/narrow_servant_1.png" },
+              { id: 2, path: "/tmp/narrow_servant_2.png" },
+              { id: 4_000_130, path: "/tmp/narrow_servant_4000130.png" },
+            ],
+            selectedId: 4_000_130,
+          };
+        }
+        if (cmd === "save_servant_portrait_selection") {
+          selectedPortraitId = (args as Record<string, unknown> | undefined)
+            ?.portraitId as number;
+        }
+        return null;
+      }
+    );
+    const { onSelect } = setup({
+      servants: [
+        {
+          id: 444,
+          variantKey: "444:1",
+          faceId: 4_000_130,
+          name_cn: "Ｕ－奥尔加玛丽",
+          name_jp: "Ｕ－オルガマリー",
+          name_en: "U-Olga Marie",
+          class: "Beast",
+          rarity: 5,
+        },
+      ],
+      onPortraitSaved,
+    });
+
+    const option = screen.getByText("Ｕ－奥尔加玛丽").closest('[role="option"]');
+    await waitFor(() => {
+      expect(option?.querySelector(".servant-face-frame img")).toHaveAttribute(
+        "src",
+        "asset:///tmp/face_servant_4000130.png"
+      );
+    });
+
+    fireEvent.contextMenu(option as HTMLElement);
+    expect(
+      await screen.findByText("立绘设置 — Ｕ－奥尔加玛丽")
+    ).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("list_servant_portraits", {
+      servantId: 444,
+      variantKey: "444:1",
+    });
+    expect(onSelect).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "立绘 2" }));
+    await user.click(screen.getByRole("button", { name: "确认" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("save_servant_portrait_selection", {
+        variantKey: "444:1",
+        portraitId: 2,
+      });
+      expect(onPortraitSaved).toHaveBeenCalledTimes(1);
+      expect(option?.querySelector(".servant-face-frame img")).toHaveAttribute(
+        "src",
+        "asset:///tmp/face_servant_2.png"
+      );
     });
   });
 

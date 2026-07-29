@@ -21,6 +21,8 @@ pub(crate) struct ServantInfo {
     pub(crate) variant_key: String,
     #[serde(rename = "faceId")]
     pub(crate) face_id: Option<u32>,
+    #[serde(skip_serializing)]
+    pub(crate) portrait_ids: Vec<u32>,
     pub(crate) name_cn: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) name_cn_server: Option<String>,
@@ -291,6 +293,7 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                                 let np_variant = cn_variants
                                     .and_then(|entries| entries.get(variant_idx))
                                     .unwrap_or(variant);
+                                let portrait_ids = u32_array_field(variant, &["ids"]);
                                 let face_id = variant_face_id(variant);
                                 let name_alias =
                                     variant_name_alias(&over_write_servant_names, face_id);
@@ -312,6 +315,7 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                                     servant_type: servant_type.clone(),
                                     variant_key: format!("{id}:{}", variant_idx + 1),
                                     face_id,
+                                    portrait_ids,
                                     name_cn: variant_name_cn,
                                     name_cn_server: variant_name_cn_server,
                                     name_jp: variant_name_jp,
@@ -332,6 +336,7 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                             servant_type,
                             variant_key: id.to_string(),
                             face_id: None,
+                            portrait_ids: Vec::new(),
                             name_cn,
                             name_cn_server,
                             name_jp,
@@ -564,15 +569,91 @@ pub(crate) fn list_portraits_in(servant_dir: &std::path::Path) -> Vec<(u32, Path
     portraits
 }
 
+pub(crate) fn portrait_id_is_allowed(allowed_ids: &[u32], portrait_id: u32) -> bool {
+    allowed_ids.is_empty() || allowed_ids.contains(&portrait_id)
+}
+
+pub(crate) fn list_portraits_for_ids_in(
+    servant_dir: &std::path::Path,
+    allowed_ids: &[u32],
+) -> Vec<(u32, PathBuf)> {
+    list_portraits_in(servant_dir)
+        .into_iter()
+        .filter(|(id, _)| portrait_id_is_allowed(allowed_ids, *id))
+        .collect()
+}
+
+pub(crate) fn pick_portrait_for_ids_with_preferences_in(
+    servant_dir: &std::path::Path,
+    global_id: Option<u32>,
+    face_id: Option<u32>,
+    allowed_ids: &[u32],
+) -> Option<PathBuf> {
+    global_id
+        .filter(|id| portrait_id_is_allowed(allowed_ids, *id))
+        .and_then(|id| pick_portrait_by_id_in(servant_dir, id))
+        .or_else(|| {
+            face_id
+                .filter(|id| portrait_id_is_allowed(allowed_ids, *id))
+                .and_then(|id| pick_portrait_by_id_in(servant_dir, id))
+        })
+        .or_else(|| {
+            if allowed_ids.is_empty() {
+                pick_portrait_in(servant_dir)
+            } else {
+                list_portraits_for_ids_in(servant_dir, allowed_ids)
+                    .into_iter()
+                    .next_back()
+                    .map(|(_, path)| path)
+            }
+        })
+}
+
 pub(crate) fn pick_portrait_with_preferences_in(
     servant_dir: &std::path::Path,
     global_id: Option<u32>,
     face_id: Option<u32>,
 ) -> Option<PathBuf> {
+    pick_portrait_for_ids_with_preferences_in(servant_dir, global_id, face_id, &[])
+}
+
+pub(crate) fn pick_face_for_ids_with_preferences_in(
+    servant_dir: &std::path::Path,
+    global_id: Option<u32>,
+    face_id: Option<u32>,
+    allowed_ids: &[u32],
+) -> Option<PathBuf> {
     global_id
-        .and_then(|id| pick_portrait_by_id_in(servant_dir, id))
-        .or_else(|| face_id.and_then(|id| pick_portrait_by_id_in(servant_dir, id)))
-        .or_else(|| pick_portrait_in(servant_dir))
+        .filter(|id| portrait_id_is_allowed(allowed_ids, *id))
+        .and_then(|id| pick_face_by_id_in(servant_dir, id))
+        .or_else(|| {
+            face_id
+                .filter(|id| portrait_id_is_allowed(allowed_ids, *id))
+                .and_then(|id| pick_face_by_id_in(servant_dir, id))
+        })
+        .or_else(|| {
+            if allowed_ids.is_empty() {
+                pick_face_in(servant_dir)
+            } else {
+                pick_faces_desc_in(servant_dir)
+                    .into_iter()
+                    .find(|path| portrait_id_is_allowed(allowed_ids, face_template_stage(path)))
+            }
+        })
+}
+
+fn servant_for_variant(servant_id: u32, variant_key: &str) -> Result<&'static ServantInfo, String> {
+    servants_data()
+        .iter()
+        .find(|servant| servant.id == servant_id && servant.variant_key == variant_key)
+        .ok_or_else(|| format!("从者 #{servant_id} 不包含立绘集合 {variant_key}"))
+}
+
+fn servant_by_variant_key(variant_key: &str) -> Result<&'static ServantInfo, String> {
+    servants_data()
+        .iter()
+        .find(|servant| servant.variant_key == variant_key)
+        .ok_or_else(|| format!("未找到立绘集合 {variant_key}"))
 }
 
 /// Resolve the full-art portrait file for a single servant, returning
@@ -594,11 +675,22 @@ pub(crate) fn get_servant_portrait_path(
         return Ok(None);
     };
     let servant_dir = root.join(servant_id.to_string());
+    let variant = variant_key
+        .as_deref()
+        .map(|vk| servant_for_variant(servant_id, vk))
+        .transpose()?;
+    let allowed_ids = variant
+        .map(|servant| servant.portrait_ids.as_slice())
+        .unwrap_or_default();
     let global_id = variant_key.as_deref().and_then(|vk| {
         let settings = read_app_ui_settings_from_path(&app_ui_settings_path(&app));
         settings.servant_portrait_selections.get(vk).copied()
     });
-    let picked = pick_portrait_with_preferences_in(&servant_dir, global_id, face_id);
+    let picked = if allowed_ids.is_empty() {
+        pick_portrait_with_preferences_in(&servant_dir, global_id, face_id)
+    } else {
+        pick_portrait_for_ids_with_preferences_in(&servant_dir, global_id, face_id, allowed_ids)
+    };
     Ok(picked.map(|p| p.to_string_lossy().into_owned()))
 }
 
@@ -625,6 +717,7 @@ pub(crate) fn list_servant_portraits(
     servant_id: u32,
     variant_key: String,
 ) -> Result<ServantPortraitOptions, String> {
+    let servant = servant_for_variant(servant_id, &variant_key)?;
     let Some(root) = resolve_servant_assets_dir(&app) else {
         return Ok(ServantPortraitOptions {
             options: Vec::new(),
@@ -632,18 +725,23 @@ pub(crate) fn list_servant_portraits(
         });
     };
     let servant_dir = root.join(servant_id.to_string());
-    let options = list_portraits_in(&servant_dir)
-        .into_iter()
-        .map(|(id, path)| PortraitOption {
-            id,
-            path: path.to_string_lossy().into_owned(),
-        })
-        .collect();
+    let options: Vec<PortraitOption> =
+        list_portraits_for_ids_in(&servant_dir, &servant.portrait_ids)
+            .into_iter()
+            .map(|(id, path)| PortraitOption {
+                id,
+                path: path.to_string_lossy().into_owned(),
+            })
+            .collect();
     let settings = read_app_ui_settings_from_path(&app_ui_settings_path(&app));
     let selected_id = settings
         .servant_portrait_selections
         .get(&variant_key)
-        .copied();
+        .copied()
+        .filter(|id| {
+            portrait_id_is_allowed(&servant.portrait_ids, *id)
+                && options.iter().any(|option| option.id == *id)
+        });
     Ok(ServantPortraitOptions {
         options,
         selected_id,
@@ -658,6 +756,18 @@ pub(crate) fn save_servant_portrait_selection(
     variant_key: String,
     portrait_id: u32,
 ) -> Result<(), String> {
+    let servant = servant_by_variant_key(&variant_key)?;
+    if !portrait_id_is_allowed(&servant.portrait_ids, portrait_id) {
+        return Err(format!(
+            "立绘 {portrait_id} 不属于从者 {} 的当前集合",
+            servant.name_cn
+        ));
+    }
+    let root =
+        resolve_servant_assets_dir(&app).ok_or_else(|| "未找到从者立绘资源目录".to_string())?;
+    if pick_portrait_by_id_in(&root.join(servant.id.to_string()), portrait_id).is_none() {
+        return Err(format!("从者 {} 缺少立绘 {portrait_id}", servant.name_cn));
+    }
     let path = app_ui_settings_path(&app);
     let mut settings = read_app_ui_settings_from_path(&path);
     settings
@@ -671,14 +781,25 @@ pub(crate) fn get_servant_face_path(
     app: tauri::AppHandle,
     servant_id: u32,
     face_id: Option<u32>,
+    variant_key: Option<String>,
 ) -> Result<Option<String>, String> {
     let Some(root) = resolve_servant_assets_dir(&app) else {
         return Ok(None);
     };
     let servant_dir = root.join(servant_id.to_string());
-    let picked = face_id
-        .and_then(|id| pick_face_by_id_in(&servant_dir, id))
-        .or_else(|| pick_face_in(&servant_dir));
+    let variant = variant_key
+        .as_deref()
+        .map(|vk| servant_for_variant(servant_id, vk))
+        .transpose()?;
+    let allowed_ids = variant
+        .map(|servant| servant.portrait_ids.as_slice())
+        .unwrap_or_default();
+    let global_id = variant_key.as_deref().and_then(|vk| {
+        let settings = read_app_ui_settings_from_path(&app_ui_settings_path(&app));
+        settings.servant_portrait_selections.get(vk).copied()
+    });
+    let picked =
+        pick_face_for_ids_with_preferences_in(&servant_dir, global_id, face_id, allowed_ids);
     Ok(picked.map(|p| p.to_string_lossy().into_owned()))
 }
 

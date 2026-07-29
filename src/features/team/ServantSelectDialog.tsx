@@ -8,6 +8,7 @@ import {
 import { invoke, convertFileSrc } from "../../tauri";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import type { Servant } from "../../types/servant";
+import { PortraitSelectDialog } from "./PortraitSelectDialog";
 import classAllIcon from "../../../src-tauri/resources/images/class/silver_all.png";
 import classSaberIcon from "../../../src-tauri/resources/images/class/silver_saber.png";
 import classArcherIcon from "../../../src-tauri/resources/images/class/silver_archer.png";
@@ -56,6 +57,8 @@ interface ServantSelectDialogProps {
    */
   disabledIds?: number[];
   defaultClassFilter?: string;
+  portraitRefreshKey?: number;
+  onPortraitSaved?: () => void;
 }
 
 const RARITY_FILTER_OPTIONS = [null, 1, 2, 3, 4, 5] as const;
@@ -236,6 +239,8 @@ export function ServantSelectDialog({
   servants,
   disabledIds,
   defaultClassFilter,
+  portraitRefreshKey,
+  onPortraitSaved,
 }: ServantSelectDialogProps) {
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState(
@@ -245,7 +250,10 @@ export function ServantSelectDialog({
   const [activeIndex, setActiveIndex] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
   const [faceSrcByKey, setFaceSrcByKey] = useState<Record<string, string | null>>({});
+  const [portraitTarget, setPortraitTarget] = useState<Servant | null>(null);
+  const [localPortraitRefreshKey, setLocalPortraitRefreshKey] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastFaceRefreshToken = useRef<string | null>(null);
 
   const classOptions = useMemo(
     () => [
@@ -327,7 +335,12 @@ export function ServantSelectDialog({
   );
 
   useEffect(() => {
-    const missing = faceEntries.filter((entry) => !(entry.variantKey in faceSrcByKey));
+    const refreshToken = `${portraitRefreshKey ?? 0}:${localPortraitRefreshKey}`;
+    const forceRefresh = lastFaceRefreshToken.current !== refreshToken;
+    lastFaceRefreshToken.current = refreshToken;
+    const missing = forceRefresh
+      ? faceEntries
+      : faceEntries.filter((entry) => !(entry.variantKey in faceSrcByKey));
     if (missing.length === 0) return;
     let cancelled = false;
     Promise.all(
@@ -335,6 +348,7 @@ export function ServantSelectDialog({
         invoke<string | null>("get_servant_face_path", {
           servantId: entry.id,
           faceId: entry.faceId,
+          variantKey: entry.variantKey,
         })
           .then((path) => [entry.variantKey, path ? convertFileSrc(path) : null] as const)
           .catch(() => [entry.variantKey, null] as const)
@@ -342,7 +356,7 @@ export function ServantSelectDialog({
     ).then((results) => {
       if (cancelled) return;
       setFaceSrcByKey((prev) => {
-        const next = { ...prev };
+        const next = forceRefresh ? {} : { ...prev };
         for (const [variantKey, src] of results) {
           next[variantKey] = src;
         }
@@ -353,9 +367,9 @@ export function ServantSelectDialog({
       cancelled = true;
     };
     // `faceSrcByKey` is intentionally excluded; this effect should fetch
-    // only when the visible id set changes.
+    // only when the visible id set or a portrait refresh key changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [faceEntries]);
+  }, [faceEntries, portraitRefreshKey, localPortraitRefreshKey]);
 
   const resetScroll = useCallback(() => {
     setScrollTop(0);
@@ -569,6 +583,11 @@ export function ServantSelectDialog({
                       height: ROW_HEIGHT,
                     }}
                     onClick={() => handleSelect(servant)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setPortraitTarget(servant);
+                    }}
                     onMouseEnter={() => setActiveIndex(index)}
                   >
                     <div className="servant-option-content">
@@ -609,6 +628,22 @@ export function ServantSelectDialog({
           )}
         </div>
       </Dialog.Content>
+
+      {portraitTarget && (
+        <PortraitSelectDialog
+          open
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setPortraitTarget(null);
+          }}
+          servantId={portraitTarget.id}
+          variantKey={portraitTarget.variantKey}
+          servantName={displayCnName(portraitTarget)}
+          onSaved={() => {
+            setLocalPortraitRefreshKey((key) => key + 1);
+            onPortraitSaved?.();
+          }}
+        />
+      )}
     </Dialog.Root>
   );
 }

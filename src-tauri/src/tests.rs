@@ -495,6 +495,57 @@ fn portrait_preferences_prioritize_global_selection_and_sort_numerically() {
 }
 
 #[test]
+fn portrait_preferences_are_limited_to_the_servant_variant_collection() {
+    let tmp = tempfile::tempdir().unwrap();
+    for id in [1, 2, 3, 4, 4_000_130] {
+        fs::write(
+            tmp.path().join(format!("narrow_servant_{id}.png")),
+            b"portrait",
+        )
+        .unwrap();
+        fs::write(tmp.path().join(format!("face_servant_{id}.png")), b"face").unwrap();
+    }
+    let olga = servants_data()
+        .iter()
+        .find(|servant| servant.variant_key == "444:1")
+        .unwrap();
+
+    assert_eq!(olga.portrait_ids, vec![1, 2, 4_000_130]);
+    assert_eq!(
+        list_portraits_for_ids_in(tmp.path(), &olga.portrait_ids)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect::<Vec<_>>(),
+        vec![1, 2, 4_000_130]
+    );
+    assert!(!portrait_id_is_allowed(&olga.portrait_ids, 3));
+    assert_eq!(
+        pick_portrait_for_ids_with_preferences_in(
+            tmp.path(),
+            Some(3),
+            olga.face_id,
+            &olga.portrait_ids,
+        )
+        .unwrap()
+        .file_name()
+        .unwrap(),
+        "narrow_servant_4000130.png"
+    );
+    assert_eq!(
+        pick_face_for_ids_with_preferences_in(
+            tmp.path(),
+            Some(2),
+            olga.face_id,
+            &olga.portrait_ids,
+        )
+        .unwrap()
+        .file_name()
+        .unwrap(),
+        "face_servant_2.png"
+    );
+}
+
+#[test]
 fn normalize_project_migrates_grand_rule_servant_id_to_first_matching_slot() {
     let mut project = test_project("project-1", "重复从者", true);
     project.support_servant_id = Some(10);
