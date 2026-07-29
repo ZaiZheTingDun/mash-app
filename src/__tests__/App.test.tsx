@@ -2,6 +2,7 @@ import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { renderWithTheme } from "../test/renderWithTheme";
@@ -74,6 +75,7 @@ describe("App active project restore", () => {
     vi.mocked(invoke).mockReset();
     vi.mocked(listen).mockReset();
     vi.mocked(listen).mockResolvedValue(() => {});
+    vi.mocked(check).mockResolvedValue(null);
   });
 
   it("opens the last selected project on startup", async () => {
@@ -208,6 +210,58 @@ describe("App active project restore", () => {
 
     expect(invoke).toHaveBeenCalledWith("cancel_resource_downloads");
     expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+  });
+
+  it("opens the software update dialog over resource management after a manual check", async () => {
+    let resourceHandler: (() => void) | null = null;
+    let updateHandler: (() => void) | null = null;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "resource-manager-requested") {
+        resourceHandler = () =>
+          handler({
+            event: "resource-manager-requested",
+            id: 0,
+            payload: null,
+          } as Parameters<typeof handler>[0]);
+      }
+      if (event === "updater-check-requested") {
+        updateHandler = () =>
+          handler({
+            event: "updater-check-requested",
+            id: 0,
+            payload: null,
+          } as Parameters<typeof handler>[0]);
+      }
+      return () => {};
+    });
+    const downloadAndInstall = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(check).mockResolvedValue({
+      version: "0.8.0",
+      currentVersion: "0.7.26",
+      downloadAndInstall,
+    } as unknown as Update);
+    installAppMock("project-1");
+    const user = userEvent.setup();
+
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    await act(async () => {
+      resourceHandler?.();
+    });
+    expect(await screen.findByText("CV 运行时")).toBeInTheDocument();
+
+    await act(async () => {
+      updateHandler?.();
+    });
+
+    expect(await screen.findByText("发现软件更新")).toBeInTheDocument();
+    expect(screen.getByText("Mash 0.8.0 已可用，当前版本为 0.7.26。")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "立即更新" }));
+
+    expect(downloadAndInstall).toHaveBeenCalledTimes(1);
   });
 
   it("opens the settings dialog from the status bar and switches sections", async () => {

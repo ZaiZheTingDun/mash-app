@@ -22,6 +22,7 @@ import { ProjectSettingsDialog } from "./features/projects/ProjectSettingsDialog
 import { SetupPage } from "./features/setup/SetupPage";
 import { SettingsDialog, type SettingsSection } from "./features/settings/SettingsPage";
 import { SelfCheckDialog } from "./features/settings/SelfCheckDialog";
+import { SoftwareUpdateDialog } from "./features/settings/SoftwareUpdateDialog";
 import { createInitialProjectSlots } from "./features/team/projectSlots";
 import { relocateGrandCardStrategySlots, relocateGrandServants } from "./features/advanced/grandRuleSlots";
 import { featureToggles } from "./featureToggles";
@@ -94,9 +95,11 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [operationLogs, setOperationLogs] = useState<OperationLogEntry[]>([]);
   const [operationLogOpen, setOperationLogOpen] = useState(false);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [softwareUpdateOpen, setSoftwareUpdateOpen] = useState(false);
   const [updateChecking, setUpdateChecking] = useState(false);
   const [updateInstalling, setUpdateInstalling] = useState(false);
   const [updateProgressText, setUpdateProgressText] = useState<string | null>(null);
+  const [updateInstallError, setUpdateInstallError] = useState<string | null>(null);
   const [selfCheckOpen, setSelfCheckOpen] = useState(false);
   const [selfCheckLoading, setSelfCheckLoading] = useState(false);
   const [selfCheckStatus, setSelfCheckStatus] = useState<SelfCheckStatus | null>(null);
@@ -142,6 +145,10 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
       if (update) {
         setAvailableUpdate(update);
         setOperationLogOpen(true);
+        if (manual) {
+          setUpdateInstallError(null);
+          setSoftwareUpdateOpen(true);
+        }
         appendOperationLog(
           `发现新版本 ${update.version}（当前 ${update.currentVersion}）`
         );
@@ -189,6 +196,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   const handleInstallUpdate = useCallback(async () => {
     if (!availableUpdate || updateInstalling) return;
     setUpdateInstalling(true);
+    setUpdateInstallError(null);
     setOperationLogOpen(true);
     setUpdateProgressText("准备下载");
     appendOperationLog(`开始下载更新 ${availableUpdate.version}…`);
@@ -214,8 +222,10 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
       appendOperationLog("更新已安装，重启软件后生效");
       setAvailableUpdate(null);
       setUpdateProgressText(null);
+      setSoftwareUpdateOpen(false);
     } catch (err) {
       appendOperationLog(`安装更新失败: ${String(err)}`);
+      setUpdateInstallError(String(err));
     } finally {
       setUpdateInstalling(false);
     }
@@ -858,6 +868,16 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         status={selfCheckStatus}
         error={selfCheckError}
         onOpenChange={setSelfCheckOpen}
+      />
+      <SoftwareUpdateDialog
+        open={softwareUpdateOpen}
+        currentVersion={availableUpdate?.currentVersion ?? null}
+        version={availableUpdate?.version ?? null}
+        installing={updateInstalling}
+        progressText={updateProgressText}
+        error={updateInstallError}
+        onOpenChange={setSoftwareUpdateOpen}
+        onInstall={handleInstallUpdate}
       />
     </Flex>
   );
