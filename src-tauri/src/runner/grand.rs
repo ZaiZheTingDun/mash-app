@@ -580,8 +580,10 @@ pub(crate) fn custom_rule_config_to_rule(config: &GrandCardRuleConfig) -> Option
                 RuleOwner::AnyGrand
             } else if let Some(slot_index) = slot_config.slot_index {
                 RuleOwner::ExactSlot(slot_index as usize)
+            } else if let Some(servant_id) = slot_config.servant_id {
+                RuleOwner::ExactServant(servant_id)
             } else {
-                RuleOwner::ExactServant(slot_config.servant_id?)
+                RuleOwner::Any
             };
             let rule_slot = slot(owner, kind, color);
             Some(if slot_config.grand_servant {

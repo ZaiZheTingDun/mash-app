@@ -3364,7 +3364,7 @@ fn custom_grand_rule_config_maps_supported_constraints() {
         id: "custom_1".into(),
         name: "约束".into(),
         slots: vec![
-            custom_rule_slot(Some(10), "any", "buster"),
+            custom_rule_slot(None, "any", "buster"),
             custom_rule_slot(Some(20), "np", "quick"),
             custom_grand_rule_slot("command", "arts"),
         ],
@@ -3375,13 +3375,48 @@ fn custom_grand_rule_config_maps_supported_constraints() {
     assert!(!rule.color_set_baq);
     assert!(rule.include.is_empty());
     assert!(rule.exclude.is_empty());
-    assert_eq!(rule.slots[0].owner, RuleOwner::ExactServant(10));
+    assert_eq!(rule.slots[0].owner, RuleOwner::Any);
     assert_eq!(rule.slots[0].kind, RuleKind::Any);
     assert_eq!(rule.slots[1].owner, RuleOwner::ExactServant(20));
     assert_eq!(rule.slots[1].kind, RuleKind::Np);
     assert_eq!(rule.slots[2].owner, RuleOwner::AnyGrand);
     assert_eq!(rule.slots[2].kind, RuleKind::Command);
     assert_eq!(rule.target_role, None);
+}
+
+#[test]
+fn custom_grand_rule_accepts_any_servant_slots() {
+    let scene = empty_advanced_scene();
+    let cards = vec![
+        command_card(0, Some(10), Some("q"), None),
+        command_card(1, Some(20), Some("b"), None),
+        command_card(2, Some(30), Some("a"), None),
+        command_card(3, Some(20), Some("q"), None),
+        command_card(4, Some(30), Some("b"), None),
+    ];
+    let nps = vec![np_slot(0, true), np_slot(1, false), np_slot(2, false)];
+    let grands = vec![grand_config(10, "buster", "damage")];
+    let strategy = custom_strategy(GrandCardRuleConfig {
+        id: "custom_any".into(),
+        name: "指定宝具加任意两张".into(),
+        slots: vec![
+            custom_rule_slot(Some(10), "np", "any"),
+            custom_rule_slot(None, "any", "any"),
+            custom_rule_slot(None, "any", "any"),
+        ],
+    });
+
+    let picks = choose_advanced_auto_picks(
+        &scene,
+        &cards,
+        &nps,
+        &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
+        &grands,
+        &strategy,
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["NP0", "C1", "C0"]);
 }
 
 #[test]
@@ -3580,7 +3615,7 @@ fn invalid_custom_grand_rule_falls_back_to_builtin_rules() {
         id: "invalid".into(),
         name: "无效".into(),
         slots: vec![
-            custom_rule_slot(None, "any", "buster"),
+            custom_rule_slot(Some(20), "invalid", "buster"),
             custom_rule_slot(Some(10), "any", "quick"),
             custom_rule_slot(Some(10), "np", "any"),
         ],

@@ -60,7 +60,7 @@ function ruleCardColorClass(color: GrandRuleColor): string {
 }
 
 function ruleCardLabel(slot: GrandCardRuleSlotConfig, servant: Servant | null, slotIndex: number): string {
-  const servantText = slot.grandServant ? "冠位从者" : servant?.name_cn ?? "未选择从者";
+  const servantText = slot.grandServant ? "冠位从者" : servant?.name_cn ?? "任意从者";
   const kindText = RULE_KIND_LABELS[slot.kind];
   const colorText = RULE_COLOR_LABELS[slot.color];
   return `第 ${slotIndex + 1} 张，${servantText}，${kindText}，${colorText}`;
@@ -116,7 +116,7 @@ function GrandRuleCardButton({
           className="grand-rule-card-face"
         />
       ) : (
-        <span className="grand-rule-card-empty">+</span>
+        <span className="grand-rule-card-empty">任</span>
       )}
       <span className="grand-rule-card-meta">
         <span>{RULE_KIND_LABELS[slot.kind]}</span>
@@ -137,10 +137,31 @@ function GrandRuleEditorServantPicker({
   onSelect: (patch: Partial<GrandCardRuleSlotConfig>) => void;
 }) {
   const grandSelected = editingCard.grandServant === true;
+  const anyServantSelected =
+    !grandSelected &&
+    editingCard.memberId == null &&
+    editingCard.slotIndex == null &&
+    editingCard.servantId == null;
   return (
     <div className="grand-rule-editor-section">
       <SectionHeading className="grand-rule-section-heading">从者</SectionHeading>
       <div className="grand-rule-editor-servants">
+        <button
+          type="button"
+          className={`grand-rule-editor-grand-option${anyServantSelected ? " selected" : ""}`}
+          aria-pressed={anyServantSelected}
+          onClick={() =>
+            onSelect({
+              grandServant: false,
+              memberId: null,
+              slotIndex: null,
+              servantId: null,
+              isSupport: false,
+            })
+          }
+        >
+          任意从者
+        </button>
         <button
           type="button"
           className={`grand-rule-editor-grand-option${grandSelected ? " selected" : ""}`}

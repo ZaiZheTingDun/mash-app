@@ -832,11 +832,14 @@ describe("CommandEditor pagination", () => {
     await user.click(screen.getByRole("button", { name: "添加规则" }));
 
     expect(await screen.findByRole("dialog", { name: "设置策略" })).toBeInTheDocument();
+    const anyServantOption = screen.getByRole("button", { name: "任意从者" });
+    expect(anyServantOption).toHaveAttribute("aria-pressed", "true");
     const grandOption = screen.getByRole("button", { name: "冠位从者" });
     await user.click(grandOption);
     expect(grandOption).toHaveAttribute("aria-pressed", "true");
     await user.click(grandOption);
     expect(grandOption).toHaveAttribute("aria-pressed", "false");
+    expect(anyServantOption).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByRole("button", { name: "甲" }));
     await user.click(screen.getByRole("radio", { name: "宝具" }));
     expect(screen.queryByRole("radio", { name: "红" })).not.toBeInTheDocument();
@@ -859,7 +862,7 @@ describe("CommandEditor pagination", () => {
       ],
     });
 
-    expect(screen.getAllByRole("button", { name: /未选择从者/ })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /任意从者/ })).toHaveLength(2);
     await user.click(screen.getByRole("button", { name: "删除自定义规则" }));
     const deleteCall = onGrandCardStrategyChange.mock.calls[
       onGrandCardStrategyChange.mock.calls.length - 1
