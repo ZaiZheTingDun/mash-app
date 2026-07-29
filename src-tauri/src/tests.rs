@@ -549,6 +549,7 @@ fn test_advanced_scene(id: &str) -> AdvancedBattleScene {
         grand_auto_order_change: None,
         command_conditions: Vec::new(),
         control_actions: Vec::new(),
+        turns: Vec::new(),
         startup_actions: Vec::new(),
         rules: Vec::new(),
     }
@@ -2741,15 +2742,25 @@ fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
             target_servant_id: None,
             target_is_support: false,
         }],
-        startup_actions: vec![Action::Equipment {
-            id: "eq_start".into(),
-            skill: Some("skill_2".into()),
-            target: None,
-            target_member_id: None,
-            target_servant_id: None,
-            target_is_support: false,
-            order_change: None,
-        }],
+        turns: vec![
+            AdvancedBattleTurn {
+                id: "turn_1".into(),
+                actions: vec![Action::Equipment {
+                    id: "eq_start".into(),
+                    skill: Some("skill_2".into()),
+                    target: None,
+                    target_member_id: None,
+                    target_servant_id: None,
+                    target_is_support: false,
+                    order_change: None,
+                }],
+            },
+            AdvancedBattleTurn {
+                id: "turn_2".into(),
+                actions: Vec::new(),
+            },
+        ],
+        startup_actions: Vec::new(),
         rules: vec![AdvancedRule {
             id: "rule_1".into(),
             np_condition_groups: vec![AdvancedNpConditionGroup {
@@ -2813,12 +2824,14 @@ fn advanced_battle_scene_round_trips_rule_groups_and_actions() {
         json["rules"][0]["actions"][1]["type"],
         serde_json::json!("attack")
     );
+    assert_eq!(json["turns"][0]["actions"][0]["id"], "eq_start");
 
     let parsed: AdvancedBattleScene = serde_json::from_value(json).unwrap();
     assert_eq!(parsed.enemy_target.as_deref(), Some("enemy_5"));
     assert_eq!(parsed.grand_auto_order_change, Some(true));
     assert_eq!(parsed.rules.len(), 1);
     assert_eq!(parsed.rules[0].actions.len(), 2);
+    assert_eq!(parsed.turns.len(), 2);
 }
 
 #[test]
@@ -2834,4 +2847,5 @@ fn advanced_battle_scene_defaults_missing_enemy_target_to_none() {
     .unwrap();
 
     assert!(scene.enemy_target.is_none());
+    assert!(scene.turns.is_empty());
 }

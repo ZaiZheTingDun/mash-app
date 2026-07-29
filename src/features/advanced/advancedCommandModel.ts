@@ -1,6 +1,7 @@
 import { servantLabel } from "../../components/common/battleActorLabels";
 import type {
   AdvancedBattleScene,
+  AdvancedBattleTurn,
   AdvancedCommandCardCondition,
   PreparationAction,
   SkillSelection,
@@ -116,6 +117,13 @@ export function createId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export function createDefaultAdvancedTurn(): AdvancedBattleTurn {
+  return {
+    id: createId("advanced_turn"),
+    actions: [],
+  };
+}
+
 export function createDefaultScene(): AdvancedBattleScene {
   return {
     id: `advanced_scene_${nextAdvancedSceneId++}_${Date.now()}`,
@@ -124,12 +132,25 @@ export function createDefaultScene(): AdvancedBattleScene {
     grandAutoOrderChange: null,
     commandConditions: [0, 1, 2, 3, 4].map(defaultCommandCard),
     controlActions: [],
+    turns: [createDefaultAdvancedTurn()],
     startupActions: [],
     rules: [],
   };
 }
 
 export function normalizeScene(scene: AdvancedBattleScene): AdvancedBattleScene {
+  const turns =
+    scene.turns && scene.turns.length > 0
+      ? scene.turns.map((turn) => ({
+          ...turn,
+          actions: turn.actions ?? [],
+        }))
+      : [
+          {
+            id: `${scene.id}_turn_1`,
+            actions: scene.startupActions ?? [],
+          },
+        ];
   return {
     ...scene,
     enemyTarget: scene.enemyTarget ?? null,
@@ -142,7 +163,8 @@ export function normalizeScene(scene: AdvancedBattleScene): AdvancedBattleScene 
         ? scene.commandConditions.map((card) => ({ ...card, minCritChance: null }))
         : [0, 1, 2, 3, 4].map(defaultCommandCard),
     controlActions: scene.controlActions ?? [],
-    startupActions: scene.startupActions ?? [],
+    turns,
+    startupActions: [],
     rules: [],
   };
 }

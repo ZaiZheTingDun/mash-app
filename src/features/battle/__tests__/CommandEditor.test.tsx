@@ -173,13 +173,82 @@ describe("CommandEditor pagination", () => {
     expect(await screen.findByText("主力输出")).toBeInTheDocument();
     expect(screen.getByText("启动条件")).toBeInTheDocument();
     expect(screen.getByText("控制栏")).toBeInTheDocument();
-    expect(screen.getByText("启动阶段")).toBeInTheDocument();
+    expect(screen.getByText("使用技能")).toBeInTheDocument();
     expect(vi.mocked(invoke)).toHaveBeenCalledWith("load_advanced_battle_scenes", {
       projectId: "project_1",
     });
     expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("load_battle_scenes", {
       projectId: "project_1",
     });
+  });
+
+  it("adds and switches Grand Battle turns beside the action control", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "load_advanced_battle_scenes") {
+        return [{
+          id: "advanced_scene_1",
+          startupActions: [{
+            type: "equipment",
+            id: "legacy_action",
+            skill: "skill_1",
+            target: null,
+          }],
+          rules: [],
+        } satisfies AdvancedBattleScene];
+      }
+      if (cmd === "get_servant_face_path") return null;
+      return [];
+    });
+
+    renderWithTheme(
+      <CommandEditor
+        projectId="project_1"
+        advancedMode
+        partyLineup={[
+          makeServant(1, "甲"),
+          makeServant(2, "乙"),
+          makeServant(3, "丙"),
+        ]}
+      />
+    );
+
+    expect(await screen.findByText("使用技能")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "添加行动" })).toBeInTheDocument();
+    const firstTurn = screen.getByRole("button", { name: "Turn 1" });
+    expect(firstTurn).toBeInTheDocument();
+    expect(
+      firstTurn.compareDocumentPosition(screen.getByRole("button", { name: "添加行动" }))
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByRole("button", { name: "删除当前 Turn" })).toBeDisabled();
+    expect(screen.getByText("御主礼装 释放 技能 1")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "添加 Turn" }));
+
+    expect(screen.getByRole("button", { name: "Turn 2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除当前 Turn" })).toBeEnabled();
+    expect(screen.queryByText("御主礼装 释放 技能 1")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "save_advanced_battle_scenes",
+        expect.objectContaining({
+          scenes: [
+            expect.objectContaining({
+              startupActions: [],
+              turns: [
+                expect.objectContaining({
+                  actions: [expect.objectContaining({ id: "legacy_action" })],
+                }),
+                expect.objectContaining({ actions: [] }),
+              ],
+            }),
+          ],
+        })
+      );
+    });
+
+    await user.click(screen.getByRole("button", { name: "Turn 1" }));
+    expect(screen.getByText("御主礼装 释放 技能 1")).toBeInTheDocument();
   });
 
   it("saves and clears one enemy target for the advanced battle", async () => {
@@ -294,14 +363,14 @@ describe("CommandEditor pagination", () => {
       />
     );
 
-    await screen.findByRole("button", { name: "添加启动行动" });
+    await screen.findByRole("button", { name: "添加行动" });
     await waitFor(() => {
       expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_servant_skill_targeting", {
         servantId: 1,
         variantKey: "1",
       });
     });
-    await user.click(screen.getByRole("button", { name: "添加启动行动" }));
+    await user.click(screen.getByRole("button", { name: "添加行动" }));
     const sourceButtons = screen.getAllByRole("button", { name: "甲" });
     await user.click(sourceButtons[sourceButtons.length - 1]);
     await user.click(screen.getByRole("button", { name: "技能 1" }));
@@ -341,14 +410,14 @@ describe("CommandEditor pagination", () => {
       />
     );
 
-    await screen.findByRole("button", { name: "添加启动行动" });
+    await screen.findByRole("button", { name: "添加行动" });
     await waitFor(() => {
       expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_servant_skill_targeting", {
         servantId: 1,
         variantKey: "1",
       });
     });
-    await user.click(screen.getByRole("button", { name: "添加启动行动" }));
+    await user.click(screen.getByRole("button", { name: "添加行动" }));
     const sourceButtons = screen.getAllByRole("button", { name: "甲" });
     await user.click(sourceButtons[sourceButtons.length - 1]);
     await user.click(screen.getByRole("button", { name: "技能 1" }));
@@ -360,12 +429,16 @@ describe("CommandEditor pagination", () => {
           projectId: "project_1",
           scenes: [
             expect.objectContaining({
-              startupActions: [
+              turns: [
                 expect.objectContaining({
-                  type: "servant",
-                  servant: "servant_1",
-                  skill: "skill_1",
-                  target: null,
+                  actions: [
+                    expect.objectContaining({
+                      type: "servant",
+                      servant: "servant_1",
+                      skill: "skill_1",
+                      target: null,
+                    }),
+                  ],
                 }),
               ],
             }),
@@ -404,7 +477,7 @@ describe("CommandEditor pagination", () => {
       />
     );
 
-    await user.click(await screen.findByRole("button", { name: "添加启动行动" }));
+    await user.click(await screen.findByRole("button", { name: "添加行动" }));
     const sourceButtons = screen.getAllByRole("button", { name: "甲" });
     await user.click(sourceButtons[sourceButtons.length - 1]);
     await user.click(screen.getByRole("button", { name: "技能 1" }));
@@ -749,7 +822,7 @@ describe("CommandEditor pagination", () => {
 
     const strategyToggle = await screen.findByRole("button", { name: /指令卡策略/ });
     expect(strategyToggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByText("启动阶段").compareDocumentPosition(strategyToggle)).toBe(
+    expect(screen.getByText("使用技能").compareDocumentPosition(strategyToggle)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
 
@@ -786,7 +859,7 @@ describe("CommandEditor pagination", () => {
       />
     );
 
-    await screen.findByText("启动阶段");
+    await screen.findByText("使用技能");
 
     expect(screen.queryByRole("button", { name: /指令卡策略/ })).not.toBeInTheDocument();
   });
@@ -925,7 +998,7 @@ describe("CommandEditor pagination", () => {
     expect(screen.getByText("甲")).toBeInTheDocument();
     expect(screen.getByText("丁")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "添加启动行动" }));
+    await user.click(screen.getByRole("button", { name: "添加行动" }));
 
     expect(screen.getAllByRole("button", { name: "丁" }).length).toBeGreaterThan(0);
   });
@@ -982,7 +1055,7 @@ describe("CommandEditor pagination", () => {
         variantKey: "1",
       })
     );
-    await user.click(await screen.findByRole("button", { name: "添加启动行动" }));
+    await user.click(await screen.findByRole("button", { name: "添加行动" }));
     const sourceButtons = screen.getAllByRole("button", { name: "甲" });
     await user.click(sourceButtons[sourceButtons.length - 1]);
     await user.click(screen.getByRole("button", { name: "技能 1" }));
@@ -995,16 +1068,20 @@ describe("CommandEditor pagination", () => {
           projectId: "project_1",
           scenes: [
             expect.objectContaining({
-              startupActions: [
+              turns: [
                 expect.objectContaining({
-                  type: "servant",
-                  skill: "skill_1",
-                  skillSelection: {
-                    type: "SelectAddInfo",
-                    index: 1,
-                    optionCount: 2,
-                    label: "防御",
-                  },
+                  actions: [
+                    expect.objectContaining({
+                      type: "servant",
+                      skill: "skill_1",
+                      skillSelection: {
+                        type: "SelectAddInfo",
+                        index: 1,
+                        optionCount: 2,
+                        label: "防御",
+                      },
+                    }),
+                  ],
                 }),
               ],
             }),
@@ -1120,7 +1197,7 @@ describe("CommandEditor pagination", () => {
       />
     );
 
-    await screen.findByText("启动阶段");
+    await screen.findByText("使用技能");
     const summary = container.querySelector(".battle-action-summary");
     expect(summary).toHaveAccessibleName("甲 技能 2");
     const skillIcon = summary?.querySelector(".battle-inline-skill-icon");
@@ -1160,7 +1237,7 @@ describe("CommandEditor pagination", () => {
       await screen.findByText("主冠位从者配置在后排，是否自动换位至前排？")
     ).toBeInTheDocument();
     expect(screen.getByText("控制栏")).toBeInTheDocument();
-    expect(screen.getByText("启动阶段")).toBeInTheDocument();
+    expect(screen.getByText("使用技能")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "是" }));
 
@@ -1212,7 +1289,7 @@ describe("CommandEditor pagination", () => {
     expect(screen.getByRole("button", { name: "设置指令卡 1，ANYANY" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "改为自动换位" })).toBeInTheDocument();
     expect(screen.getByText("控制栏")).toBeInTheDocument();
-    expect(screen.getByText("启动阶段")).toBeInTheDocument();
+    expect(screen.getByText("使用技能")).toBeInTheDocument();
     await waitFor(() => {
       expect(vi.mocked(invoke)).toHaveBeenCalledWith(
         "save_advanced_battle_scenes",

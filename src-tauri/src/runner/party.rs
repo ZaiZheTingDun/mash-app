@@ -999,6 +999,7 @@ pub(crate) fn advanced_startup_flow_actions(
     scene: &AdvancedBattleScene,
     control_count: usize,
     startup_control_count: usize,
+    completed_turn_count: usize,
     auto_order_change: Option<&Action>,
 ) -> Vec<Action> {
     let control_count = control_count.min(scene.control_actions.len());
@@ -1014,16 +1015,35 @@ pub(crate) fn advanced_startup_flow_actions(
             .take(startup_control_count)
             .cloned(),
     );
-    actions.extend(scene.startup_actions.iter().cloned());
-    actions.extend(
-        scene
-            .control_actions
-            .iter()
-            .skip(startup_control_count)
-            .take(control_count.saturating_sub(startup_control_count))
-            .cloned(),
-    );
+    let mut remaining_control_actions = scene
+        .control_actions
+        .iter()
+        .skip(startup_control_count)
+        .take(control_count.saturating_sub(startup_control_count));
+    for turn_index in 0..completed_turn_count {
+        let Some(turn_actions) = advanced_turn_actions(scene, turn_index) else {
+            break;
+        };
+        actions.extend(turn_actions.iter().cloned());
+        if let Some(control_action) = remaining_control_actions.next() {
+            actions.push(control_action.clone());
+        }
+    }
+    actions.extend(remaining_control_actions.cloned());
     actions
+}
+
+pub(crate) fn advanced_turn_actions(
+    scene: &AdvancedBattleScene,
+    turn_index: usize,
+) -> Option<&[Action]> {
+    if scene.turns.is_empty() {
+        return (turn_index == 0).then_some(scene.startup_actions.as_slice());
+    }
+    scene
+        .turns
+        .get(turn_index)
+        .map(|turn| turn.actions.as_slice())
 }
 
 #[cfg(test)]
@@ -1296,6 +1316,11 @@ impl Runner {
             scene,
             control_count,
             startup_control_count,
+            *self
+                .battle
+                .advanced_turn_indices
+                .get(&self.battle.current_scene_index)
+                .unwrap_or(&0),
             self.battle
                 .advanced_auto_order_changes
                 .get(&self.battle.current_scene_index),
@@ -1326,6 +1351,11 @@ impl Runner {
             scene,
             control_count,
             startup_control_count,
+            *self
+                .battle
+                .advanced_turn_indices
+                .get(&self.battle.current_scene_index)
+                .unwrap_or(&0),
             self.battle
                 .advanced_auto_order_changes
                 .get(&self.battle.current_scene_index),

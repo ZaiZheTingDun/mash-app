@@ -336,6 +336,18 @@ impl Runner {
             }
         }
 
+        if self.advanced_mode && attack_returned_after_submit {
+            if let Some(scene) = self
+                .advanced_scenes
+                .get(self.battle.current_scene_index)
+                .cloned()
+            {
+                if !self.execute_next_grand_turn_skills(&scene) {
+                    return;
+                }
+            }
+        }
+
         if self.advanced_mode {
             if let Some(scene) = self
                 .advanced_scenes

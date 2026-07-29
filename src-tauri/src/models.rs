@@ -434,6 +434,14 @@ pub struct AdvancedMainOutput {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct AdvancedBattleTurn {
+    pub id: String,
+    #[serde(default)]
+    pub actions: Vec<Action>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct AdvancedBattleScene {
     pub id: String,
     #[serde(default)]
@@ -446,6 +454,9 @@ pub struct AdvancedBattleScene {
     pub command_conditions: Vec<AdvancedCommandCardCondition>,
     #[serde(default)]
     pub control_actions: Vec<Action>,
+    #[serde(default)]
+    pub turns: Vec<AdvancedBattleTurn>,
+    /// Legacy single-turn field. Empty `turns` treats these as Turn 1.
     #[serde(default)]
     pub startup_actions: Vec<Action>,
     #[serde(default)]

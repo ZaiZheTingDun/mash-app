@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Avatar, Dialog, Flex, Text, Button, Select } from "@radix-ui/themes";
+import { Avatar, Dialog, Flex, Text, Button, IconButton, Select } from "@radix-ui/themes";
 import {
   Cross2Icon,
   PlusIcon,
+  TrashIcon,
 } from "@radix-ui/react-icons";
 import { invoke } from "../../tauri";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
@@ -16,6 +17,7 @@ import {
   EMPTY_STARTUP_ACTIONS,
   SKILL_LABELS,
   createId,
+  createDefaultAdvancedTurn,
   createDefaultScene,
   defaultCommandCard,
   mainGrandBackSlot,
@@ -291,6 +293,8 @@ function AdvancedStrategyEditor({
   grandCardPriorityEnabled,
   onGrandServantsChange,
   onGrandCardStrategyChange,
+  activeTurnIndex,
+  onActiveTurnIndexChange,
   onChange,
 }: {
   scene: AdvancedBattleScene;
@@ -306,6 +310,8 @@ function AdvancedStrategyEditor({
   grandCardPriorityEnabled: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
   onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
+  activeTurnIndex: number;
+  onActiveTurnIndexChange: (index: number) => void;
   onChange: (scene: AdvancedBattleScene) => void;
 }) {
   const [editingCardSlot, setEditingCardSlot] = useState<number | null>(null);
@@ -327,7 +333,16 @@ function AdvancedStrategyEditor({
   }, [grandAutoOrderChange, mainGrandSlot]);
   const commandConditions = scene.commandConditions ?? [0, 1, 2, 3, 4].map(defaultCommandCard);
   const controlActions = scene.controlActions ?? EMPTY_STARTUP_ACTIONS;
-  const startupActions = scene.startupActions ?? EMPTY_STARTUP_ACTIONS;
+  const turns = useMemo(
+    () => scene.turns?.length ? scene.turns : [createDefaultAdvancedTurn()],
+    [scene.turns]
+  );
+  const activeTurn = turns[activeTurnIndex] ?? turns[0];
+  const startupActions = activeTurn.actions;
+  const previousTurnActions = useMemo(
+    () => turns.slice(0, activeTurnIndex).flatMap((turn) => turn.actions),
+    [activeTurnIndex, turns]
+  );
   const controlActionLineups = useMemo(() => {
     const lineups: PartyMember[][] = [];
     let lineup = partyMembers;
@@ -341,18 +356,22 @@ function AdvancedStrategyEditor({
     () => deriveMembersAfterPreparationActions(partyMembers, controlActions),
     [partyMembers, controlActions]
   );
+  const turnStartMembers = useMemo(
+    () => deriveMembersAfterPreparationActions(postControlMembers, previousTurnActions),
+    [postControlMembers, previousTurnActions]
+  );
   const startupActionLineups = useMemo(() => {
     const lineups: PartyMember[][] = [];
-    let lineup = postControlMembers;
+    let lineup = turnStartMembers;
     for (const action of startupActions) {
       lineups.push(lineup);
       lineup = deriveMembersAfterPreparationActions(lineup, [action]);
     }
     return lineups;
-  }, [postControlMembers, startupActions]);
+  }, [turnStartMembers, startupActions]);
   const currentPartyMembers = useMemo(
-    () => deriveMembersAfterPreparationActions(postControlMembers, startupActions),
-    [postControlMembers, startupActions]
+    () => deriveMembersAfterPreparationActions(turnStartMembers, startupActions),
+    [turnStartMembers, startupActions]
   );
   const editingCard =
     editingCardSlot == null
@@ -373,7 +392,28 @@ function AdvancedStrategyEditor({
   };
 
   const updateStartupActions = (actions: PreparationAction[]) => {
-    onChange({ ...scene, startupActions: actions });
+    onChange({
+      ...scene,
+      turns: turns.map((turn) =>
+        turn.id === activeTurn.id ? { ...turn, actions } : turn
+      ),
+      startupActions: [],
+    });
+  };
+
+  const addTurn = () => {
+    const nextTurns = [...turns, createDefaultAdvancedTurn()];
+    onChange({ ...scene, turns: nextTurns, startupActions: [] });
+    onActiveTurnIndexChange(nextTurns.length - 1);
+    setPrepDraft(null);
+  };
+
+  const deleteTurn = () => {
+    if (activeTurnIndex === 0) return;
+    const nextTurns = turns.filter((_, index) => index !== activeTurnIndex);
+    onChange({ ...scene, turns: nextTurns, startupActions: [] });
+    onActiveTurnIndexChange(activeTurnIndex - 1);
+    setPrepDraft(null);
   };
 
   const updateControlActions = (actions: PreparationAction[]) => {
@@ -912,14 +952,50 @@ function AdvancedStrategyEditor({
       </section>
 
       <section className="battle-phase advanced-strategy-section">
-        <div className="battle-phase-label">启动阶段</div>
+        <div className="battle-phase-label">使用技能</div>
         <div className="advanced-rule-section">
+          <Flex align="center" gap="2" className="advanced-turn-controls">
+            <Text size="2" weight="bold">Turn:</Text>
+            {turns.map((turn, index) => (
+              <button
+                type="button"
+                key={turn.id}
+                className={`battle-turn-tab${activeTurn.id === turn.id ? " is-selected" : ""}`}
+                aria-label={`Turn ${index + 1}`}
+                onClick={() => {
+                  onActiveTurnIndexChange(index);
+                  setPrepDraft(null);
+                }}
+              >
+                {index + 1}
+              </button>
+            ))}
+            <IconButton
+              type="button"
+              variant="surface"
+              color="gray"
+              aria-label="添加 Turn"
+              onClick={addTurn}
+            >
+              <PlusIcon width={16} height={16} />
+            </IconButton>
+            <IconButton
+              type="button"
+              variant="surface"
+              color="red"
+              aria-label="删除当前 Turn"
+              disabled={activeTurnIndex === 0}
+              onClick={deleteTurn}
+            >
+              <TrashIcon width={16} height={16} />
+            </IconButton>
+          </Flex>
           {startupActions.map((action, index) => (
             <div className="battle-action-row committed advanced-action-row" key={action.id}>
               <button
                 type="button"
                 className="advanced-inline-delete"
-                aria-label="删除启动行动"
+                aria-label="删除行动"
                 onClick={() => updateStartupActions(startupActions.filter((_, i) => i !== index))}
               >
                 <Cross2Icon width={13} height={13} />
@@ -942,7 +1018,7 @@ function AdvancedStrategyEditor({
               <span className="battle-plus-box">
                 <PlusIcon width={16} height={16} />
               </span>
-              <Text size="2" weight="medium">添加启动行动</Text>
+              <Text size="2" weight="medium">添加行动</Text>
             </button>
           ) : (
             <div className="battle-choice-row">
@@ -1216,6 +1292,7 @@ export function AdvancedCommandEditor({
   // with existing project files; older multi-scene drafts collapse to
   // the first scene.
   const [scene, setScene] = useState<AdvancedBattleScene>(() => createDefaultScene());
+  const [activeTurnIndex, setActiveTurnIndex] = useState(0);
   const [loaded, setLoaded] = useState(() => !projectId);
   const initialPartyMembers = useMemo(
     () => partyMembers ?? toPartyMembers(partyLineup),
@@ -1238,10 +1315,12 @@ export function AdvancedCommandEditor({
         if (cancelled) return;
         const first = saved.length > 0 ? normalizeScene(saved[0]) : createDefaultScene();
         setScene(first);
+        setActiveTurnIndex(0);
       })
       .catch(() => {
         if (cancelled) return;
         setScene(createDefaultScene());
+        setActiveTurnIndex(0);
       })
       .finally(() => {
         if (!cancelled) setLoaded(true);
@@ -1282,6 +1361,8 @@ export function AdvancedCommandEditor({
           grandCardPriorityEnabled={grandCardPriorityEnabled}
           onGrandServantsChange={onGrandServantsChange}
           onGrandCardStrategyChange={onGrandCardStrategyChange}
+          activeTurnIndex={activeTurnIndex}
+          onActiveTurnIndexChange={setActiveTurnIndex}
           onChange={handleSceneChange}
         />
       </div>

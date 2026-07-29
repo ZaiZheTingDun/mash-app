@@ -315,6 +315,7 @@ fn empty_advanced_scene() -> AdvancedBattleScene {
         grand_auto_order_change: None,
         command_conditions: Vec::new(),
         control_actions: Vec::new(),
+        turns: Vec::new(),
         startup_actions: Vec::new(),
         rules: Vec::new(),
     }
@@ -759,6 +760,7 @@ fn advanced_startup_conditions_match_only_configured_command_cards() {
             },
         ],
         control_actions: Vec::new(),
+        turns: Vec::new(),
         startup_actions: Vec::new(),
         rules: Vec::new(),
     };
@@ -838,6 +840,7 @@ fn advanced_startup_conditions_match_duplicate_servant_cards_in_any_slots() {
             },
         ],
         control_actions: Vec::new(),
+        turns: Vec::new(),
         startup_actions: Vec::new(),
         rules: Vec::new(),
     };
@@ -2034,6 +2037,7 @@ fn advanced_startup_conditions_match_respects_support_flag() {
             min_crit_chance: None,
         }],
         control_actions: vec![],
+        turns: Vec::new(),
         startup_actions: vec![],
         rules: vec![],
     };
@@ -2477,11 +2481,15 @@ fn auto_order_change_startup_flow_replays_control_after_swap() {
         grand_auto_order_change: Some(true),
         command_conditions: Vec::new(),
         control_actions: vec![first_control, second_control],
-        startup_actions: vec![startup],
+        turns: vec![crate::AdvancedBattleTurn {
+            id: "turn_1".into(),
+            actions: vec![startup],
+        }],
+        startup_actions: Vec::new(),
         rules: Vec::new(),
     };
 
-    let actions = advanced_startup_flow_actions(&scene, 2, 1, Some(&auto_order_change));
+    let actions = advanced_startup_flow_actions(&scene, 2, 1, 1, Some(&auto_order_change));
     let ids: Vec<&str> = actions
         .iter()
         .map(|action| match action {
@@ -2493,6 +2501,117 @@ fn auto_order_change_startup_flow_replays_control_after_swap() {
         .collect();
 
     assert_eq!(ids, vec!["auto_oc", "control_1", "startup_1", "control_2"]);
+}
+
+#[test]
+fn advanced_startup_flow_interleaves_multi_turn_actions_and_later_controls() {
+    let turn_action = |id: &str| Action::EnemyTarget {
+        id: id.into(),
+        target: None,
+    };
+    let control_action = |id: &str, order_change| Action::Equipment {
+        id: id.into(),
+        skill: Some("skill_3".into()),
+        target: None,
+        target_member_id: None,
+        target_servant_id: None,
+        target_is_support: false,
+        order_change,
+    };
+    let scene = AdvancedBattleScene {
+        id: "advanced_scene_1".into(),
+        enemy_target: None,
+        main_output: None,
+        grand_auto_order_change: None,
+        command_conditions: Vec::new(),
+        control_actions: vec![
+            control_action("control_1", None),
+            control_action(
+                "order_change_control_2",
+                Some(crate::OrderChangeSelection {
+                    front: Some("servant_1".into()),
+                    front_member_id: None,
+                    front_servant_id: None,
+                    front_is_support: false,
+                    back: Some("servant_4".into()),
+                    back_member_id: None,
+                    back_servant_id: None,
+                    back_is_support: false,
+                }),
+            ),
+            control_action("control_3", None),
+        ],
+        turns: vec![
+            crate::AdvancedBattleTurn {
+                id: "turn_1".into(),
+                actions: vec![turn_action("turn_1")],
+            },
+            crate::AdvancedBattleTurn {
+                id: "turn_2".into(),
+                actions: vec![turn_action("turn_2")],
+            },
+            crate::AdvancedBattleTurn {
+                id: "turn_3".into(),
+                actions: vec![turn_action("turn_3")],
+            },
+        ],
+        startup_actions: Vec::new(),
+        rules: Vec::new(),
+    };
+
+    let actions = advanced_startup_flow_actions(&scene, 3, 1, 3, None);
+    let ids: Vec<&str> = actions
+        .iter()
+        .map(|action| match action {
+            Action::Servant { id, .. }
+            | Action::Equipment { id, .. }
+            | Action::CommandSpell { id, .. }
+            | Action::EnemyTarget { id, .. } => id.as_str(),
+        })
+        .collect();
+
+    assert_eq!(
+        ids,
+        vec![
+            "control_1",
+            "turn_1",
+            "order_change_control_2",
+            "turn_2",
+            "control_3",
+            "turn_3",
+        ]
+    );
+}
+
+#[test]
+fn advanced_turn_actions_supports_legacy_and_multi_turn_scenes() {
+    let legacy_action = Action::EnemyTarget {
+        id: "legacy".into(),
+        target: Some("enemy_1".into()),
+    };
+    let mut scene = empty_advanced_scene();
+    scene.startup_actions = vec![legacy_action];
+
+    assert_eq!(advanced_turn_actions(&scene, 0).unwrap().len(), 1);
+    assert!(advanced_turn_actions(&scene, 1).is_none());
+
+    scene.turns = vec![
+        crate::AdvancedBattleTurn {
+            id: "turn_1".into(),
+            actions: Vec::new(),
+        },
+        crate::AdvancedBattleTurn {
+            id: "turn_2".into(),
+            actions: vec![Action::EnemyTarget {
+                id: "second".into(),
+                target: Some("enemy_2".into()),
+            }],
+        },
+    ];
+
+    assert!(advanced_turn_actions(&scene, 0).unwrap().is_empty());
+    assert_eq!(advanced_turn_actions(&scene, 1).unwrap().len(), 1);
+    assert!(advanced_turn_actions(&scene, 2).is_none());
 }
 
 #[test]
@@ -2675,6 +2794,7 @@ fn advanced_auto_np_output_prefers_ready_np_and_arts_cards() {
         grand_auto_order_change: None,
         command_conditions: Vec::new(),
         control_actions: Vec::new(),
+        turns: Vec::new(),
         startup_actions: Vec::new(),
         rules: Vec::new(),
     };

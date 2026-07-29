@@ -72,7 +72,7 @@ stateDiagram-v2
 ```
 
 - `BattleFlowState` 管理加载、等待 Attack 画面、已提交卡片和攻击后 HUD 等短暂流程事实；此前这些事实由独立 boolean/timestamp 表示。
-- `BattleState` 管理持久上下文：当前 Battle/turn index、上次 HUD 场景读取、已执行的 scene/turn key、指令卡识别 fallback 状态及 advanced-mode control index。
+- `BattleState` 管理持久上下文：当前 Battle/turn index、上次 HUD 场景读取、已执行的 scene/turn key、指令卡识别 fallback 状态，以及 advanced-mode control/skill-turn index。
 - 连续 `Unknown` 的停止阈值来自「游戏 → 基础设置」中的“识别超时”，所有流程共用同一个检测次数。每次主循环约 0.8 秒，范围为 50–1000 次，默认 100 次；关闭限制时内部阈值写为 9999 次。
 - `awaiting_attack_resolution()` 在 `AwaitingAttackResolution` 或 `AwaitingPostAttackHud` 时为真，避免 classifier 仍显示 Attack 时重复提交卡片。
 - 单箭头和双箭头战斗速度模板都会将卡片画面分类为 `Attack`。读取卡片前先 probe mask 后的双箭头模板，再 probe 单箭头；若速度为 level 1，则记录切换、点击速度按钮并等待 level 2。
@@ -150,7 +150,7 @@ CN Grand 助战若未选中匹配行，会先等待当前刷新列表出现至�
 - 普通模式中 `battle_scenes.json` 的每个 Battle 存储 `turns[]`。HUD `m/n` 选择 Battle，内部从 0 开始的 turn counter 选择 turn；HUD 进入新 Battle 时 counter 重置。攻击回到可执行 Battle 后，runner 短暂等待 HUD 成功读取再增加 counter，读取长期失败时回退既有推进逻辑。counter 超出配置后仅复用最后一回合 `attackPriority`，不重跑 preparation 或 enemy target。
 - `attackPriority` 保存攻击选择，`enemyTarget` 保存该 turn 的攻击前敌方目标。前三行是固定最终卡位；未就绪 NP 或未出现的指令卡让该位置留空，随后 fallback 从左到右填补空位。空固定 chain 行继承前一条非 NP 固定行；NP 行不继承。前三行之后的 fallback 行在可匹配时重复使用。读取 NP 前，五个指令卡固定 slot 必须都出现 suit/icon 信号；NP 就绪由底部 gauge 右端亮色端帽判定，分数 `≥ 0.5` 即就绪。数字计数和旧版上方 NP 卡纹理结果仅供调试，不作 fallback；任一端帽分数不可用时持续重试。
 - 普通模式在指令卡识别前应用当前 turn 已执行且 `change_order_servants.json` timing 为 `immediate` 的 preparation effect；对先前 turn/Battle 还应用触发 `immediate` 撤退规则的 NP attack row，再应用 `endOfTurn` preparation rule。当前 turn 的 NP 和 `endOfTurn` 退出不会过早应用。`servant_{i}_all` 匹配该前排从者最左侧未使用的指令卡，不限 B/A/Q。没有普通指令卡 row 时，跳过归属识别而仍检测 NP；普通卡只作为从左到右 fallback 点击目标。归属识别开启时，前三次只使用预期前排模板；连续三次完整读取仍有未知归属，才假定有人死亡并让后排入场，随后尝试所有六名配置成员的唯一 servant id。
-- Advanced mode 使用 `advanced_battle_scenes.json`。具有生效指令卡 startup condition 时先进入 Attack 等待 startup；无生效条件的 Grand scene 会直接在 Battle 执行第一个 control action 与 `startupActions`，避免 Attack → Battle → Attack 往返。若必须将后排主 Grand 自动 Order Change 到前排，则必须先识别五张卡、按当前前排拥有卡数选择换下目标（并列选最左），用 Mystic Code `skill_3` 换位，再满足 startup。action 按原选中从者身份解析：后排主 Grand action 改写为其当前前排 slot，已换到后排的原成员 action 跳过。没有匹配 startup 时，可返回 Battle 依序执行每 turn 一个 `controlActions`，再进入 Attack 以空 NP list 使用自动策略；所有 control action 用完后，后续非匹配 turn 保持同样的无 NP 自动攻击。存在旧版 advanced `rules` 时，仍使用旧 rule evaluator，而非三阶段策略。
+- Advanced mode 使用 `advanced_battle_scenes.json`。Grand scene 的技能配置存储在 `turns[]`；旧配置若只有 `startupActions`，运行时仍将其视为 Turn 1。具有生效指令卡 startup condition 时先进入 Attack 等待启动；无生效条件时直接在 Battle 执行首个 control action 与 Turn 1，避免 Attack → Battle → Attack 往返。之后每次攻击结算返回 Battle，先执行下一个已配置 Turn 的技能，再进入 Attack；尚有 control action 时，每次指令卡攻击前执行一条。历史阵容按实际顺序重建：启动控制行动、Turn 1、后续控制行动、Turn 2，依次交错，确保中途 Order Change 后的技能仍解析到正确成员。若必须将后排主 Grand 自动 Order Change 到前排，则必须先识别五张卡、按当前前排拥有卡数选择换下目标（并列选最左），用 Mystic Code `skill_3` 换位，再满足启动条件。action 按原选中从者身份解析：后排主 Grand action 改写为其当前前排 slot，已换到后排的原成员 action 跳过。没有匹配启动条件时，可返回 Battle 依序执行每次一条 `controlActions`，再进入 Attack 以空 NP list 使用自动策略；所有 control action 用完后，后续未匹配回合保持同样的无 NP 自动攻击。存在旧版 advanced `rules` 时，仍使用旧 rule evaluator，而非三阶段策略。
 - 内部 flow 在 `AwaitingBattleLoad` 和 `AwaitingAttackResolution` 延长 Unknown 容忍时间，以覆盖加载画面和长攻击动画，不再依赖独立 flags。
 - `APRecovery` 以道具图标下方的标签为 anchor：国服依次检测旧版“物品” `label_item` 与新版“道具” `label_item_new`，日服继续检测原 `label_item`；任一命中即可进入道具扫描。随后按优先级扫描道具列模板而非点击固定行：顶页扫描彩虹／金／银道具，下滑一次后扫描铜苹果。模板未命中视为数量不足，因为变暗 overlay 会压低模板分数。点击道具后至少等待 500ms，再用共享 `button_dialog` 模板定位并点击确认按钮；圣晶石／黄金苹果使用上方弹窗 ROI，白银／青铜／赤铜苹果使用下方 ROI。确认后再等待 500ms：仍识别为 `APRecovery` 时继续等待，明确切换到其他页面时完成，`Unknown` 则立即交回主循环，以保留结算 banner 的跳过处理。
 

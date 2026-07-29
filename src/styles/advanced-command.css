@@ -71,6 +71,11 @@
   gap: 8px;
 }
 
+.advanced-turn-controls {
+  flex-wrap: wrap;
+  min-height: 42px;
+}
+
 .advanced-condition-row {
   min-height: 54px;
   display: flex;

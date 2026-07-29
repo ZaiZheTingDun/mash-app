@@ -564,6 +564,7 @@ pub(crate) fn uses_advanced_strategy_flow(scene: &AdvancedBattleScene) -> bool {
         || scene.grand_auto_order_change == Some(true)
         || !scene.command_conditions.is_empty()
         || !scene.control_actions.is_empty()
+        || !scene.turns.is_empty()
         || !scene.startup_actions.is_empty()
 }
 
@@ -639,6 +640,64 @@ pub(crate) fn rect_center(r: &NormRect) -> Point {
 }
 
 impl Runner {
+    pub(crate) fn execute_next_grand_turn_skills(&mut self, scene: &AdvancedBattleScene) -> bool {
+        let scene_index = self.battle.current_scene_index;
+        if !self.battle.advanced_startup_done.contains(&scene_index) {
+            return true;
+        }
+        let completed_turn_count = *self
+            .battle
+            .advanced_turn_indices
+            .get(&scene_index)
+            .unwrap_or(&0);
+        let Some(turn_actions) = advanced_turn_actions(scene, completed_turn_count) else {
+            return true;
+        };
+        let executed_control_count = *self
+            .battle
+            .advanced_control_indices
+            .get(&scene_index)
+            .unwrap_or(&0);
+        let startup_control_count = *self
+            .battle
+            .advanced_startup_control_indices
+            .get(&scene_index)
+            .unwrap_or(&executed_control_count);
+        let active_actions = advanced_startup_flow_actions(
+            scene,
+            executed_control_count,
+            startup_control_count,
+            completed_turn_count,
+            self.battle.advanced_auto_order_changes.get(&scene_index),
+        );
+        let (resolved_actions, _) = self.advanced_actions_and_members_after(
+            active_actions.into_iter(),
+            turn_actions.iter().cloned(),
+        );
+        let turn_number = completed_turn_count + 1;
+
+        if !resolved_actions.is_empty() {
+            self.emit("Battle", &format!("执行 Turn {turn_number} 技能"));
+            let turn = BattleTurn {
+                id: format!("{}_turn_{turn_number}", scene.id),
+                preparation_actions: resolved_actions,
+                servant_actions: Vec::new(),
+                equipment_actions: Vec::new(),
+                command_spell_actions: Vec::new(),
+                enemy_target: None,
+                attack_priority: Vec::new(),
+            };
+            if !self.execute_turn_skills(&turn) {
+                return false;
+            }
+        }
+
+        self.battle
+            .advanced_turn_indices
+            .insert(scene_index, turn_number);
+        true
+    }
+
     pub(crate) fn prepare_grand_startup_before_attack(
         &mut self,
         scene: &AdvancedBattleScene,
@@ -663,14 +722,15 @@ impl Runner {
                 &format!("无启动条件，执行本回合控制行动 {next_control_count}"),
             );
         } else {
-            self.emit("Battle", "无启动条件，直接执行启动阶段");
+            self.emit("Battle", "无启动条件，直接执行 Turn 1 技能");
         }
+        let first_turn_actions = advanced_turn_actions(scene, 0).unwrap_or_default();
         let pending_actions = scene
             .control_actions
             .iter()
             .skip(executed_control_count)
             .take(next_control_count.saturating_sub(executed_control_count))
-            .chain(scene.startup_actions.iter())
+            .chain(first_turn_actions.iter())
             .cloned();
         let (startup_actions, _) = self.advanced_actions_and_members_after(
             scene
@@ -687,6 +747,7 @@ impl Runner {
             .advanced_startup_control_indices
             .insert(scene_index, next_control_count);
         self.battle.advanced_startup_done.insert(scene_index);
+        self.battle.advanced_turn_indices.insert(scene_index, 1);
 
         if startup_actions.is_empty() {
             return true;
@@ -703,7 +764,7 @@ impl Runner {
         if !self.execute_turn_skills(&prep_turn) {
             return false;
         }
-        self.emit("Battle", "启动阶段完成，进入自动战斗");
+        self.emit("Battle", "Turn 1 技能完成，进入自动战斗");
         true
     }
 
@@ -1239,6 +1300,7 @@ impl Runner {
                     grand_auto_order_change: None,
                     command_conditions: Vec::new(),
                     control_actions: Vec::new(),
+                    turns: Vec::new(),
                     startup_actions: Vec::new(),
                     rules: Vec::new(),
                 };
@@ -1330,7 +1392,7 @@ impl Runner {
                     } else {
                         self.emit(
                             "Attack",
-                            "启动条件：主冠位不需要或无法自动换位，直接进入启动阶段",
+                            "启动条件：主冠位不需要或无法自动换位，直接执行 Turn 1 技能",
                         );
                     }
                     let next_control_count = if executed_control_count < scene.control_actions.len()
@@ -1342,15 +1404,16 @@ impl Runner {
                     if executed_control_count < scene.control_actions.len() {
                         self.emit(
                             "Attack",
-                            &format!("启动阶段执行本回合控制行动 {next_control_count}"),
+                            &format!("Turn 1 执行本回合控制行动 {next_control_count}"),
                         );
                     }
+                    let first_turn_actions = advanced_turn_actions(&scene, 0).unwrap_or_default();
                     let pending_actions = scene
                         .control_actions
                         .iter()
                         .skip(executed_control_count)
                         .take(next_control_count.saturating_sub(executed_control_count))
-                        .chain(scene.startup_actions.iter())
+                        .chain(first_turn_actions.iter())
                         .cloned();
                     for action in pending_actions {
                         let Some(resolved_action) = resolve_action_to_current_member_positions(
@@ -1385,6 +1448,7 @@ impl Runner {
                         .advanced_startup_control_indices
                         .insert(scene_index, next_control_count);
                     self.battle.advanced_startup_done.insert(scene_index);
+                    self.battle.advanced_turn_indices.insert(scene_index, 1);
                     if !startup_actions.is_empty() {
                         if !self.tap_at("Attack", ATTACK_SCREEN_RETURN) {
                             return;
@@ -1411,7 +1475,7 @@ impl Runner {
                             return;
                         }
 
-                        self.emit("Battle", "启动阶段完成，进入自动战斗");
+                        self.emit("Battle", "Turn 1 技能完成，进入自动战斗");
                         if !self.tap_attack_button() {
                             return;
                         }
@@ -1528,7 +1592,7 @@ impl Runner {
                     return;
                 }
 
-                self.emit("Attack", "启动条件满足，进入启动阶段");
+                self.emit("Attack", "启动条件满足，执行 Turn 1 技能");
                 let next_control_count = if executed_control_count < scene.control_actions.len() {
                     executed_control_count + 1
                 } else {
@@ -1537,15 +1601,16 @@ impl Runner {
                 if executed_control_count < scene.control_actions.len() {
                     self.emit(
                         "Attack",
-                        &format!("启动阶段执行本回合控制行动 {next_control_count}"),
+                        &format!("Turn 1 执行本回合控制行动 {next_control_count}"),
                     );
                 }
+                let first_turn_actions = advanced_turn_actions(&scene, 0).unwrap_or_default();
                 let pending_actions = scene
                     .control_actions
                     .iter()
                     .skip(executed_control_count)
                     .take(next_control_count.saturating_sub(executed_control_count))
-                    .chain(scene.startup_actions.iter())
+                    .chain(first_turn_actions.iter())
                     .cloned();
                 let (startup_actions, startup_party_members) = self
                     .advanced_actions_and_members_after(
@@ -1565,6 +1630,7 @@ impl Runner {
                     .advanced_startup_control_indices
                     .insert(scene_index, next_control_count);
                 self.battle.advanced_startup_done.insert(scene_index);
+                self.battle.advanced_turn_indices.insert(scene_index, 1);
                 if !startup_actions.is_empty() {
                     if !self.tap_at("Attack", ATTACK_SCREEN_RETURN) {
                         return;
@@ -1591,7 +1657,7 @@ impl Runner {
                         return;
                     }
 
-                    self.emit("Battle", "启动阶段完成，进入自动战斗");
+                    self.emit("Battle", "Turn 1 技能完成，进入自动战斗");
                     if !self.tap_attack_button() {
                         return;
                     }
@@ -1644,6 +1710,11 @@ impl Runner {
                     &scene,
                     executed_control_count,
                     startup_control_count,
+                    *self
+                        .battle
+                        .advanced_turn_indices
+                        .get(&self.battle.current_scene_index)
+                        .unwrap_or(&0),
                     self.battle
                         .advanced_auto_order_changes
                         .get(&self.battle.current_scene_index),

@@ -377,6 +377,12 @@ export function relocateAdvancedBattleSceneMembers(
     controlActions: scene.controlActions?.map((action) =>
       relocatePreparationActionMembers(action, previousMembers, nextMembers)
     ),
+    turns: scene.turns?.map((turn) => ({
+      ...turn,
+      actions: turn.actions.map((action) =>
+        relocatePreparationActionMembers(action, previousMembers, nextMembers)
+      ),
+    })),
     startupActions: scene.startupActions?.map((action) =>
       relocatePreparationActionMembers(action, previousMembers, nextMembers)
     ),

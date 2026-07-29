@@ -157,6 +157,11 @@ export interface AdvancedMainOutput {
   npCard?: "auto" | "buster" | "arts" | "quick" | null;
 }
 
+export interface AdvancedBattleTurn {
+  id: string;
+  actions: PreparationAction[];
+}
+
 export interface AdvancedBattleScene {
   id: string;
   enemyTarget?: string | null;
@@ -164,6 +169,8 @@ export interface AdvancedBattleScene {
   grandAutoOrderChange?: boolean | null;
   commandConditions?: AdvancedCommandCardCondition[];
   controlActions?: PreparationAction[];
+  turns?: AdvancedBattleTurn[];
+  /** Legacy single-turn field. Normalization migrates it to turns[0]. */
   startupActions?: PreparationAction[];
   rules: AdvancedRule[];
 }
