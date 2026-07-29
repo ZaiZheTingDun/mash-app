@@ -341,6 +341,7 @@ pub(crate) fn fetch_assets_remote_manifest(
 
 pub(crate) fn asset_update_plan(
     current_version: Option<u32>,
+    assets_complete: bool,
     app_assets_version: u32,
     remote: &AssetsRemoteManifest,
     force_base: bool,
@@ -355,6 +356,8 @@ pub(crate) fn asset_update_plan(
             patches,
         };
     }
+
+    let current_version = assets_complete.then_some(current_version).flatten();
 
     if current_version.is_some_and(|version| version >= target_version) {
         return AssetInstallPlan::None;
@@ -802,7 +805,8 @@ pub(crate) fn asset_bundle_status_from_root(
     let imported_craft_essences = craft_essence_files > 0;
     let current_version =
         local_asset_version(assets_root, imported_servants, imported_craft_essences);
-    let version_installed = current_version == Some(app_manifest.assets_version);
+    let version_installed =
+        current_version.is_some_and(|version| version >= app_manifest.assets_version);
     let update_available =
         current_version.is_some_and(|version| version < app_manifest.assets_version);
     AssetBundleStatus {
@@ -1090,6 +1094,7 @@ pub(crate) fn download_and_install_asset_bundles_inner(
         fetch_assets_remote_manifest(&app_manifest.latest_url)?;
     let plan = asset_update_plan(
         local_status.current_version,
+        local_status.imported_servants && local_status.imported_craft_essences,
         app_manifest.assets_version,
         &remote,
         force_base,

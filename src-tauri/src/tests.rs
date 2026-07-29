@@ -1545,6 +1545,13 @@ fn asset_bundle_status_requires_servants_and_craft_essences() {
     assert_eq!(installed.current_version, Some(2));
     assert_eq!(installed.target_version, None);
     assert!(!installed.update_available);
+
+    write_asset_version(&assets_root, 3).unwrap();
+    let newer = asset_bundle_status_from_root(&assets_root, &app_manifest);
+    assert!(newer.installed);
+    assert_eq!(newer.current_version, Some(3));
+    assert_eq!(newer.target_version, None);
+    assert!(!newer.update_available);
 }
 
 #[test]
@@ -1654,7 +1661,7 @@ fn asset_update_plan_caps_target_to_app_configured_version() {
             ]"#,
     );
 
-    let plan = asset_update_plan(Some(1), 2, &remote, false);
+    let plan = asset_update_plan(Some(1), true, 2, &remote, false);
 
     assert_eq!(plan.target_version(), Some(2));
     assert_eq!(plan.plan_type(), "patch");
@@ -1668,7 +1675,21 @@ fn asset_update_plan_installs_base_then_patches_for_missing_assets() {
         r#"[{"from": 1, "to": 2, "file": "patches/v1-to-v2.zip", "sha256": "p12", "size": 7}]"#,
     );
 
-    let plan = asset_update_plan(None, 2, &remote, false);
+    let plan = asset_update_plan(None, false, 2, &remote, false);
+
+    assert_eq!(plan.target_version(), Some(2));
+    assert_eq!(plan.plan_type(), "base");
+    assert_eq!(plan.download_size(), 37);
+}
+
+#[test]
+fn asset_update_plan_reinstalls_base_when_latest_local_assets_are_incomplete() {
+    let remote = build_assets_remote_manifest(
+        2,
+        r#"[{"from": 1, "to": 2, "file": "patches/v1-to-v2.zip", "sha256": "p12", "size": 7}]"#,
+    );
+
+    let plan = asset_update_plan(Some(2), false, 2, &remote, false);
 
     assert_eq!(plan.target_version(), Some(2));
     assert_eq!(plan.plan_type(), "base");
@@ -1685,7 +1706,7 @@ fn asset_update_plan_chains_patches_to_target() {
             ]"#,
     );
 
-    let plan = asset_update_plan(Some(1), 3, &remote, false);
+    let plan = asset_update_plan(Some(1), true, 3, &remote, false);
 
     assert_eq!(plan.target_version(), Some(3));
     assert_eq!(plan.plan_type(), "patch");
@@ -1699,7 +1720,7 @@ fn asset_update_plan_falls_back_to_base_when_patch_chain_is_missing() {
         r#"[{"from": 2, "to": 3, "file": "patches/v2-to-v3.zip", "sha256": "p23", "size": 9}]"#,
     );
 
-    let plan = asset_update_plan(Some(1), 3, &remote, false);
+    let plan = asset_update_plan(Some(1), true, 3, &remote, false);
 
     assert_eq!(plan.target_version(), Some(1));
     assert_eq!(plan.plan_type(), "base");
@@ -1713,7 +1734,7 @@ fn asset_update_plan_force_base_reinstalls_even_when_current_is_latest() {
         r#"[{"from": 1, "to": 2, "file": "patches/v1-to-v2.zip", "sha256": "p12", "size": 7}]"#,
     );
 
-    let plan = asset_update_plan(Some(2), 2, &remote, true);
+    let plan = asset_update_plan(Some(2), true, 2, &remote, true);
 
     assert_eq!(plan.target_version(), Some(2));
     assert_eq!(plan.plan_type(), "force-base");
