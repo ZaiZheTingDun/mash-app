@@ -11,10 +11,12 @@ describe("CraftEssenceEnhancementPage", () => {
     const user = userEvent.setup();
     renderWithTheme(<CraftEssenceEnhancementPage onBack={() => {}} />);
 
-    await user.click(screen.getByRole("button", { name: "制作 8 个丸子" }));
+    await user.click(
+      screen.getByRole("button", { name: "制作丸子（节省 QP 策略）" })
+    );
     expect(invoke).toHaveBeenCalledWith(
       "start_craft_essence_enhancement_automation",
-      { mode: "makeBombs" }
+      { mode: "qpEfficient" }
     );
 
     await user.click(screen.getByRole("button", { name: "停止" }));
@@ -23,17 +25,17 @@ describe("CraftEssenceEnhancementPage", () => {
     );
   });
 
-  it("starts the final five-star feeding mode separately", async () => {
+  it("starts the fast bomb strategy separately", async () => {
     const user = userEvent.setup();
     renderWithTheme(<CraftEssenceEnhancementPage onBack={() => {}} />);
 
     await user.click(
-      screen.getByRole("button", { name: "喂丸子到当前五星" })
+      screen.getByRole("button", { name: "制作丸子（快速策略）" })
     );
 
     expect(invoke).toHaveBeenCalledWith(
       "start_craft_essence_enhancement_automation",
-      { mode: "feedBombs" }
+      { mode: "fast" }
     );
   });
 
@@ -49,7 +51,9 @@ describe("CraftEssenceEnhancementPage", () => {
     });
     const user = userEvent.setup();
     renderWithTheme(<CraftEssenceEnhancementPage onBack={() => {}} />);
-    await user.click(screen.getByRole("button", { name: "制作 8 个丸子" }));
+    await user.click(
+      screen.getByRole("button", { name: "制作丸子（节省 QP 策略）" })
+    );
 
     act(() => {
       handler?.({
@@ -65,7 +69,7 @@ describe("CraftEssenceEnhancementPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: "制作 8 个丸子" })
+        screen.getByRole("button", { name: "制作丸子（节省 QP 策略）" })
       ).toBeEnabled();
     });
     expect(
@@ -85,11 +89,13 @@ describe("CraftEssenceEnhancementPage", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "制作 8 个丸子" }));
+    await user.click(
+      screen.getByRole("button", { name: "制作丸子（节省 QP 策略）" })
+    );
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: "制作 8 个丸子" })
+        screen.getByRole("button", { name: "制作丸子（节省 QP 策略）" })
       ).toBeEnabled();
     });
     expect(onLogEntry).toHaveBeenCalledWith(

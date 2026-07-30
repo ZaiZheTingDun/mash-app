@@ -17,7 +17,7 @@ interface CraftEssenceEnhancementPageProps {
   onLogEntry?: (message: string) => void;
 }
 
-type CraftEssenceEnhancementMode = "makeBombs" | "feedBombs";
+type CraftEssenceEnhancementMode = "qpEfficient" | "fast";
 
 export function CraftEssenceEnhancementPage({
   onBack,
@@ -79,21 +79,20 @@ export function CraftEssenceEnhancementPage({
             只消耗未锁定的 1/2 星礼装；程序不会解锁任何礼装。
           </Text>
           <Text size="1" color="gray" style={{ display: "block", marginTop: 2 }}>
-            缺少满破底卡时会用 5 张同名 1 星制作并锁定新底卡；最终阶段请手动解锁
-            8 个丸子并选中满破 5 星目标。
+            找不到丸子时会先制作并锁定新底卡；节省 QP 策略制作经验包，快速策略直接使用推荐素材。
           </Text>
         </Box>
 
         <Flex gap="3" wrap="wrap" className="battle-controls">
-          <Button disabled={running} onClick={() => handleStart("makeBombs")}>
-            制作 8 个丸子
+          <Button disabled={running} onClick={() => handleStart("qpEfficient")}>
+            制作丸子（节省 QP 策略）
           </Button>
           <Button
             disabled={running}
             variant="soft"
-            onClick={() => handleStart("feedBombs")}
+            onClick={() => handleStart("fast")}
           >
-            喂丸子到当前五星
+            制作丸子（快速策略）
           </Button>
           <Button color="red" variant="soft" disabled={!running} onClick={handleStop}>
             停止

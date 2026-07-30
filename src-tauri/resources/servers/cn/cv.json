@@ -605,6 +605,12 @@
               "threshold": 0.82,
               "templateReferenceWidth": 1920
             },
+            "text_exp_overflow": {
+              "template": "enhancement_ce/text_exp_overflow",
+              "region": { "x": 0.627, "y": 0.133, "w": 0.088, "h": 0.086 },
+              "threshold": 0.85,
+              "templateReferenceWidth": 1920
+            },
             "element_enhancement_ce_success": {
               "template": "enhancement_ce/element_enhancement_ce_success",
               "region": { "x": 0.32, "y": 0.84, "w": 0.36, "h": 0.15 },

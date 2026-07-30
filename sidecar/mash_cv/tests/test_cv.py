@@ -5174,6 +5174,7 @@ def test_craft_essence_target_list_with_existing_target_is_not_material_list():
             "enhancement_ce_confirm_live_inventory_batch.png",
             "dialog_enhancement_ce_confirm_compact",
         ),
+        ("enhancement_ce_exp_overflow.png", "text_exp_overflow"),
         ("enhancement_ce_success.png", "element_enhancement_ce_success"),
         (
             "enhancement_ce_after_enhancement_ready.png",
@@ -5250,6 +5251,8 @@ def test_craft_essence_scroll_end_probe_rejects_top_of_list(width):
         ("enhancement_ce_recommend_dialog_auto_on.png", "dialog_enhancement_ce_confirm"),
         ("enhancement_ce_main_selected_not_ready.png", "element_enhancement_ce_success"),
         ("enhancement_ce_confirm.png", "element_enhancement_ce_success"),
+        ("enhancement_ce_success.png", "text_exp_overflow"),
+        ("enhancement_ce_confirm.png", "text_exp_overflow"),
     ),
 )
 def test_craft_essence_enhancement_cycle_probes_reject_other_states(

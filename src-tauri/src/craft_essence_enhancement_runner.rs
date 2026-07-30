@@ -52,6 +52,7 @@ const ENHANCE_CONFIRM_BUTTON: Point = Point::new(0.656, 0.819);
 const ENHANCED_MATERIAL_WARNING_SLIDER_FROM: Point = Point::new(0.292, 0.727);
 const ENHANCED_MATERIAL_WARNING_SLIDER_TO: Point = Point::new(0.704, 0.727);
 const ENHANCED_MATERIAL_WARNING_DECIDE_BUTTON: Point = Point::new(0.650, 0.875);
+const EXP_OVERFLOW_CLOSE_BUTTON: Point = Point::new(0.5, 0.78);
 const ENHANCEMENT_SKIP_BUTTON: Point = Point::new(0.5, 0.055);
 const LIST_SWIPE_FROM: Point = Point::new(0.70, 0.88);
 const LIST_SWIPE_TO: Point = Point::new(0.70, 0.31);
@@ -118,13 +119,13 @@ const RECOMMEND_FILTERS: [RecommendFilter; 7] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum CraftEssenceEnhancementMode {
-    MakeBombs,
-    FeedBombs,
+    QpEfficient,
+    Fast,
 }
 
 impl Default for CraftEssenceEnhancementMode {
     fn default() -> Self {
-        Self::MakeBombs
+        Self::QpEfficient
     }
 }
 
@@ -217,6 +218,7 @@ pub(crate) enum Screen {
     RecommendMaterialEmptyDialog,
     EnhancedMaterialWarningDialog,
     EnhancementConfirmDialog,
+    ExpOverflowDialog,
     EnhancementSuccess,
     Unknown,
 }
@@ -234,35 +236,66 @@ enum StrategyStage {
     SelectPacketBase,
     PacketSelected,
     PacketAutoFeedPending,
+    FastAutoFeedPending,
     SelectBombForTransfer,
     BombSelectedForFeed,
     InspectBomb,
-    ManualUnlockCheckpoint,
-    VerifyFinalTarget,
-    FinalTargetSelected,
-    VerifyFinalResult,
+    QpEfficientComplete,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AutoMaterialRarity {
-    TwoStar,
-    OneStar,
+enum RecommendMaterialProfile {
+    TwoStarOnly,
+    OneStarOnly,
+    OneAndTwoStar,
 }
 
-impl AutoMaterialRarity {
-    fn rarity(self) -> u8 {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AutoFeedStrategy {
+    QpEfficientPacket,
+    FastBomb,
+}
+
+impl RecommendMaterialProfile {
+    fn includes_rarity(self, rarity: u8) -> bool {
         match self {
-            Self::TwoStar => 2,
-            Self::OneStar => 1,
+            Self::TwoStarOnly => rarity == 2,
+            Self::OneStarOnly => rarity == 1,
+            Self::OneAndTwoStar => matches!(rarity, 1 | 2),
         }
     }
 
     fn label(self) -> &'static str {
         match self {
-            Self::TwoStar => "2 星",
-            Self::OneStar => "1 星",
+            Self::TwoStarOnly => "仅 2 星未强化礼装",
+            Self::OneStarOnly => "仅 1 星未强化礼装",
+            Self::OneAndTwoStar => "1 星、2 星未强化礼装",
         }
     }
+}
+
+fn recommend_profile_for_mode(mode: CraftEssenceEnhancementMode) -> RecommendMaterialProfile {
+    if mode == CraftEssenceEnhancementMode::Fast {
+        RecommendMaterialProfile::OneAndTwoStar
+    } else {
+        RecommendMaterialProfile::TwoStarOnly
+    }
+}
+
+fn stage_after_bomb_selection(mode: CraftEssenceEnhancementMode) -> StrategyStage {
+    if mode == CraftEssenceEnhancementMode::Fast {
+        StrategyStage::FastAutoFeedPending
+    } else {
+        StrategyStage::BombSelected
+    }
+}
+
+fn stage_after_missing_bomb() -> StrategyStage {
+    StrategyStage::SelectBombBase
+}
+
+fn fast_bomb_is_complete(target: &ReadCraftEssenceMainTargetResult) -> bool {
+    target.level == Some(50) && target.level_cap == Some(50)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -341,19 +374,16 @@ fn same_copy_counter_update_pending(pending: bool, recorded: u8, displayed: u8) 
     pending && displayed.saturating_add(1) == recorded
 }
 
-fn recommendation_must_execute_for_packet(
-    executed_for_packet: bool,
-    configured_rarity: Option<AutoMaterialRarity>,
-    desired_rarity: AutoMaterialRarity,
+fn recommendation_needs_execution(
+    executed_for_target: bool,
+    configured_profile: Option<RecommendMaterialProfile>,
+    desired_profile: RecommendMaterialProfile,
 ) -> bool {
-    !executed_for_packet || configured_rarity != Some(desired_rarity)
+    !executed_for_target || configured_profile != Some(desired_profile)
 }
 
 fn material_accepts_level_max(stage: StrategyStage) -> bool {
-    matches!(
-        stage,
-        StrategyStage::BombSelectedForFeed | StrategyStage::FinalTargetSelected
-    )
+    stage == StrategyStage::BombSelectedForFeed
 }
 
 fn material_level_max_text_detected(text: &str) -> bool {
@@ -364,8 +394,8 @@ fn expected_post_enhancement_cap(stage: StrategyStage) -> Option<u32> {
     match stage {
         StrategyStage::BombBaseSelected => Some(50),
         StrategyStage::PacketSelected | StrategyStage::PacketAutoFeedPending => Some(20),
+        StrategyStage::FastAutoFeedPending => Some(50),
         StrategyStage::BombSelectedForFeed => Some(50),
-        StrategyStage::FinalTargetSelected => Some(100),
         _ => None,
     }
 }
@@ -403,6 +433,9 @@ fn complete_pending_enhancement(
     target: &ReadCraftEssenceMainTargetResult,
 ) -> Result<StrategyStage, EnhancementCompletionError> {
     let stage = pending.ok_or(EnhancementCompletionError::MissingPending)?;
+    if stage == StrategyStage::FastAutoFeedPending && (!target.found || target.level.is_none()) {
+        return Err(EnhancementCompletionError::TargetUnreadable);
+    }
     let Some(expected) = expected_post_enhancement_cap(stage) else {
         return Err(EnhancementCompletionError::IllegalStage(stage));
     };
@@ -680,6 +713,9 @@ pub(crate) fn classify_screen(snapshot: &ProbeSnapshot) -> Screen {
     if snapshot.has("dialog_enhancement_ce_enhanced_material_warning") {
         return Screen::EnhancedMaterialWarningDialog;
     }
+    if snapshot.has("text_exp_overflow") {
+        return Screen::ExpOverflowDialog;
+    }
     if snapshot.has("dialog_enhancement_ce_confirm")
         || snapshot.has("dialog_enhancement_ce_confirm_compact")
     {
@@ -750,6 +786,7 @@ fn classify_enhancement_button(score: f64, mean_luma: f64) -> EnhancementReadySt
 enum EnhancementReturnAction {
     ObserveReturnedMain,
     WaitForConfirmationClose,
+    CloseExpOverflow,
     TapSkip { mark_left_main: bool },
     Unexpected,
 }
@@ -758,6 +795,7 @@ fn enhancement_return_action(screen: Screen, left_main: bool) -> EnhancementRetu
     match screen {
         Screen::Main { .. } if left_main => EnhancementReturnAction::ObserveReturnedMain,
         Screen::EnhancementConfirmDialog => EnhancementReturnAction::WaitForConfirmationClose,
+        Screen::ExpOverflowDialog => EnhancementReturnAction::CloseExpOverflow,
         Screen::Unknown | Screen::EnhancementSuccess => EnhancementReturnAction::TapSkip {
             mark_left_main: true,
         },
@@ -850,7 +888,7 @@ struct Probe {
     element: &'static str,
 }
 
-const PROBES: [Probe; 17] = [
+const PROBES: [Probe; 18] = [
     Probe::new("icon_enhancement_result"),
     Probe::new("element_enhancement_ce_stripe"),
     Probe::new("element_enhancement_new"),
@@ -867,6 +905,7 @@ const PROBES: [Probe; 17] = [
     Probe::new("dialog_enhancement_ce_enhanced_material_warning"),
     Probe::new("dialog_enhancement_ce_confirm"),
     Probe::new("dialog_enhancement_ce_confirm_compact"),
+    Probe::new("text_exp_overflow"),
     Probe::new("element_enhancement_ce_success"),
 ];
 
@@ -927,9 +966,9 @@ impl RecommendFilter {
         }
     }
 
-    fn target_on(self, rarity: AutoMaterialRarity) -> bool {
+    fn target_on(self, profile: RecommendMaterialProfile) -> bool {
         self.rarity
-            .is_some_and(|filter_rarity| filter_rarity == rarity.rarity())
+            .is_some_and(|filter_rarity| profile.includes_rarity(filter_rarity))
             || (self.rarity.is_none() && self.fixed_target_on)
     }
 
@@ -963,9 +1002,9 @@ pub struct CraftEssenceEnhancementRunner {
     recommend_reset_done: bool,
     recommend_open_attempts: u8,
     recommend_execute_tapped: bool,
-    recommend_executed_for_packet: bool,
-    recommend_configured_rarity: Option<AutoMaterialRarity>,
-    auto_material_rarity: AutoMaterialRarity,
+    recommend_executed_for_target: bool,
+    recommend_configured_profile: Option<RecommendMaterialProfile>,
+    recommend_profile: RecommendMaterialProfile,
     recommend_ready_waits: u8,
     enhance_open_attempts: u8,
     awaiting_enhancement_return: bool,
@@ -976,7 +1015,6 @@ pub struct CraftEssenceEnhancementRunner {
     post_enhancement_target_read_failures: u8,
     residual_enhancement_checks: u8,
     completed_enhancements: u32,
-    post_enhancement_not_ready_checks: u8,
     strategy_stage: StrategyStage,
     current_bomb_fingerprint: String,
     current_bomb_level: u32,
@@ -1042,9 +1080,9 @@ impl CraftEssenceEnhancementRunner {
             recommend_reset_done: false,
             recommend_open_attempts: 0,
             recommend_execute_tapped: false,
-            recommend_executed_for_packet: false,
-            recommend_configured_rarity: None,
-            auto_material_rarity: AutoMaterialRarity::TwoStar,
+            recommend_executed_for_target: false,
+            recommend_configured_profile: None,
+            recommend_profile: recommend_profile_for_mode(mode),
             recommend_ready_waits: 0,
             enhance_open_attempts: 0,
             awaiting_enhancement_return: false,
@@ -1055,12 +1093,7 @@ impl CraftEssenceEnhancementRunner {
             post_enhancement_target_read_failures: 0,
             residual_enhancement_checks: 0,
             completed_enhancements: 0,
-            post_enhancement_not_ready_checks: 0,
-            strategy_stage: if mode == CraftEssenceEnhancementMode::MakeBombs {
-                StrategyStage::SelectBomb
-            } else {
-                StrategyStage::VerifyFinalTarget
-            },
+            strategy_stage: StrategyStage::SelectBomb,
             current_bomb_fingerprint: String::new(),
             current_bomb_level: 0,
             packet_fingerprint: String::new(),
@@ -1095,10 +1128,10 @@ impl CraftEssenceEnhancementRunner {
         self.transition(LifecycleEvent::WorkerStarted);
         self.emit(
             "",
-            if self.mode == CraftEssenceEnhancementMode::MakeBombs {
-                "丸子制作自动化已启动"
+            if self.mode == CraftEssenceEnhancementMode::QpEfficient {
+                "丸子制作自动化已启动（节省 QP 策略）"
             } else {
-                "五星礼装丸子强化已启动"
+                "丸子制作自动化已启动（快速策略）"
             },
         );
         let mut unknown_count = 0_u8;
@@ -1148,14 +1181,6 @@ impl CraftEssenceEnhancementRunner {
                     target_selected: false,
                     ready,
                 } => {
-                    if self.mode == CraftEssenceEnhancementMode::FeedBombs {
-                        self.fail(
-                            "CraftEssenceEnhancement",
-                            "请先在游戏中选择要强化的满破 5 星礼装，再启动“喂丸子到当前五星”"
-                                .into(),
-                        );
-                        return;
-                    }
                     self.emit(
                         "CraftEssenceEnhancement",
                         if ready {
@@ -1231,6 +1256,16 @@ impl CraftEssenceEnhancementRunner {
                         return;
                     }
                 }
+                Screen::ExpOverflowDialog => {
+                    self.emit(
+                        "EnhancementAnimation",
+                        "检测到大成功或极大成功导致经验值溢出，关闭未使用素材提示",
+                    );
+                    if !self.tap_at("EnhancementAnimation", EXP_OVERFLOW_CLOSE_BUTTON) {
+                        return;
+                    }
+                    thread::sleep(Duration::from_millis(700));
+                }
                 Screen::EnhancementSuccess => {
                     if unawaited_success_action(self.pending_enhancement_stage)
                         == UnawaitedSuccessAction::IgnoreResidual
@@ -1289,80 +1324,13 @@ impl CraftEssenceEnhancementRunner {
             StrategyStage::SelectBomb
             | StrategyStage::SelectBombBase
             | StrategyStage::SelectPacketBase => self.open_target_select("重新识别目标概念礼装"),
-            StrategyStage::VerifyFinalTarget => {
-                let target = match self.sidecar().read_craft_essence_main_target(None) {
-                    Ok(target) => target,
-                    Err(err) => {
-                        self.fail(
-                            "CraftEssenceEnhancement",
-                            format!("读取当前五星礼装等级失败: {err}"),
-                        );
-                        return false;
-                    }
-                };
-                if !target.found || target.level_cap != Some(100) {
-                    self.fail(
-                        "CraftEssenceEnhancement",
-                        "当前目标不是可升至 100 级的满破 5 星礼装，拒绝选择丸子".into(),
-                    );
-                    return false;
-                }
-                if target.level == Some(100) {
-                    self.transition(LifecycleEvent::Finished);
-                    self.emit(
-                        "CraftEssenceEnhancement",
-                        "当前满破 5 星礼装已经达到 100 级",
-                    );
-                    return false;
-                }
-                self.strategy_stage = StrategyStage::FinalTargetSelected;
-                self.reset_material_selection();
-                self.emit(
-                    "CraftEssenceEnhancement",
-                    &format!(
-                        "已确认当前目标为满破 5 星礼装（{}/100），选择 8 个已手动解锁的丸子",
-                        target.level.unwrap_or(0)
-                    ),
-                );
-                if !self.tap_at("CraftEssenceEnhancement", MATERIAL_SELECT_BUTTON) {
-                    return false;
-                }
-                thread::sleep(Duration::from_millis(850));
-                true
-            }
-            StrategyStage::VerifyFinalResult => {
-                let target = match self.sidecar().read_craft_essence_main_target(None) {
-                    Ok(target) => target,
-                    Err(err) => {
-                        self.fail(
-                            "CraftEssenceEnhancement",
-                            format!("读取五星礼装强化结果失败: {err}"),
-                        );
-                        return false;
-                    }
-                };
-                if target.found && target.level == Some(100) && target.level_cap == Some(100) {
-                    self.transition(LifecycleEvent::Finished);
-                    self.emit("CraftEssenceEnhancement", "满破 5 星礼装已强化至 100 级");
-                } else {
-                    self.fail(
-                        "CraftEssenceEnhancement",
-                        format!(
-                            "丸子强化后未确认达到 100 级（识别结果：{}/{})",
-                            target.level.unwrap_or(0),
-                            target.level_cap.unwrap_or(0)
-                        ),
-                    );
-                }
-                false
-            }
             StrategyStage::PacketAutoFeedPending => {
                 self.handle_packet_auto_feed_main(template_ready)
             }
+            StrategyStage::FastAutoFeedPending => self.handle_fast_auto_feed_main(template_ready),
             StrategyStage::BombBaseSelected
             | StrategyStage::PacketSelected
-            | StrategyStage::BombSelectedForFeed
-            | StrategyStage::FinalTargetSelected => {
+            | StrategyStage::BombSelectedForFeed => {
                 if !self.materials_committed {
                     self.reset_material_selection();
                     self.emit(
@@ -1380,9 +1348,6 @@ impl CraftEssenceEnhancementRunner {
                                 } else {
                                     "打开素材列表：丸子只吃本批刚制作的至少 1 破 1 星经验包"
                                 }
-                            }
-                            StrategyStage::FinalTargetSelected => {
-                                "打开素材列表：只选择未锁定、50 级、满破的 1 星丸子"
                             }
                             _ => unreachable!(),
                         },
@@ -1450,7 +1415,6 @@ impl CraftEssenceEnhancementRunner {
                         StrategyStage::BombSelectedForFeed => {
                             "将未锁定、已升级的 1 星经验包喂给丸子"
                         }
-                        StrategyStage::FinalTargetSelected => "用 8 个丸子强化当前满破 5 星礼装",
                         _ => unreachable!(),
                     },
                 );
@@ -1475,15 +1439,23 @@ impl CraftEssenceEnhancementRunner {
             StrategyStage::LockBombBaseActive
             | StrategyStage::VerifyBombBaseLock
             | StrategyStage::ExitBombBaseLockMode
-            | StrategyStage::ManualUnlockCheckpoint => false,
+            | StrategyStage::QpEfficientComplete => false,
         }
     }
 
     fn handle_packet_auto_feed_main(&mut self, template_ready: bool) -> bool {
-        if recommendation_must_execute_for_packet(
-            self.recommend_executed_for_packet,
-            self.recommend_configured_rarity,
-            self.auto_material_rarity,
+        self.handle_auto_feed_main(template_ready, AutoFeedStrategy::QpEfficientPacket)
+    }
+
+    fn handle_fast_auto_feed_main(&mut self, template_ready: bool) -> bool {
+        self.handle_auto_feed_main(template_ready, AutoFeedStrategy::FastBomb)
+    }
+
+    fn handle_auto_feed_main(&mut self, template_ready: bool, strategy: AutoFeedStrategy) -> bool {
+        if recommendation_needs_execution(
+            self.recommend_executed_for_target,
+            self.recommend_configured_profile,
+            self.recommend_profile,
         ) {
             if self.recommend_open_attempts >= RECOMMEND_OPEN_MAX_ATTEMPTS {
                 self.fail(
@@ -1493,14 +1465,11 @@ impl CraftEssenceEnhancementRunner {
                 return false;
             }
             self.recommend_reset_done =
-                self.recommend_configured_rarity == Some(self.auto_material_rarity);
+                self.recommend_configured_profile == Some(self.recommend_profile);
             self.recommend_execute_tapped = false;
             self.emit(
                 "CraftEssenceEnhancement",
-                &format!(
-                    "打开推荐选择，设置为仅使用{}未强化礼装",
-                    self.auto_material_rarity.label()
-                ),
+                &format!("打开推荐选择，设置为{}", self.recommend_profile.label()),
             );
             if !self.tap_at("CraftEssenceEnhancement", RECOMMEND_MATERIAL_BUTTON) {
                 return false;
@@ -1550,7 +1519,7 @@ impl CraftEssenceEnhancementRunner {
                     "CraftEssenceEnhancement",
                     &format!(
                         "等待游戏用{}自动配置强化素材（{}/{RECOMMEND_READY_MAX_WAITS}）",
-                        self.auto_material_rarity.label(),
+                        self.recommend_profile.label(),
                         self.recommend_ready_waits
                     ),
                 );
@@ -1558,9 +1527,11 @@ impl CraftEssenceEnhancementRunner {
                 return true;
             }
             self.recommend_ready_waits = 0;
-            if self.auto_material_rarity == AutoMaterialRarity::TwoStar {
-                self.auto_material_rarity = AutoMaterialRarity::OneStar;
-                self.recommend_executed_for_packet = false;
+            if strategy == AutoFeedStrategy::QpEfficientPacket
+                && self.recommend_profile == RecommendMaterialProfile::TwoStarOnly
+            {
+                self.recommend_profile = RecommendMaterialProfile::OneStarOnly;
+                self.recommend_executed_for_target = false;
                 self.recommend_open_attempts = 0;
                 self.emit(
                     "CraftEssenceEnhancement",
@@ -1571,7 +1542,11 @@ impl CraftEssenceEnhancementRunner {
             self.transition(LifecycleEvent::Finished);
             self.emit(
                 "CraftEssenceEnhancement",
-                "一星和二星推荐素材均已耗尽，丸子制作结束",
+                if strategy == AutoFeedStrategy::FastBomb {
+                    "没有可用的 1 星、2 星未强化素材，快速策略结束"
+                } else {
+                    "一星和二星推荐素材均已耗尽，丸子制作结束"
+                },
             );
             return false;
         }
@@ -1580,10 +1555,11 @@ impl CraftEssenceEnhancementRunner {
         self.materials_committed = true;
         self.emit(
             "CraftEssenceEnhancement",
-            &format!(
-                "游戏已用{}自动配置素材，本经验包只执行这一次自动配置强化",
-                self.auto_material_rarity.label()
-            ),
+            if strategy == AutoFeedStrategy::FastBomb {
+                "游戏已为当前丸子自动配置 1 星、2 星未强化素材，继续强化"
+            } else {
+                "游戏已自动配置当前经验包素材，本经验包只执行这一次自动配置强化"
+            },
         );
         if self.enhance_open_attempts >= ENHANCE_OPEN_MAX_ATTEMPTS {
             self.fail(
@@ -1738,7 +1714,6 @@ impl CraftEssenceEnhancementRunner {
             StrategyStage::BombBaseSelected
                 | StrategyStage::PacketSelected
                 | StrategyStage::BombSelectedForFeed
-                | StrategyStage::FinalTargetSelected
         ) {
             self.unexpected_material_checks = self.unexpected_material_checks.saturating_add(1);
             if self.unexpected_material_checks < GRID_READ_MAX_FAILURES {
@@ -1992,7 +1967,10 @@ impl CraftEssenceEnhancementRunner {
         }
         self.material_grid_read_failures = 0;
 
-        if self.strategy_stage == StrategyStage::SelectBomb && !self.initial_bombs_counted {
+        if self.mode == CraftEssenceEnhancementMode::QpEfficient
+            && self.strategy_stage == StrategyStage::SelectBomb
+            && !self.initial_bombs_counted
+        {
             self.completed_bombs = u8::try_from(
                 grid.cells
                     .iter()
@@ -2003,11 +1981,11 @@ impl CraftEssenceEnhancementRunner {
             .min(TARGET_BOMB_COUNT);
             self.initial_bombs_counted = true;
             if self.completed_bombs >= TARGET_BOMB_COUNT {
-                self.strategy_stage = StrategyStage::ManualUnlockCheckpoint;
+                self.strategy_stage = StrategyStage::QpEfficientComplete;
                 self.transition(LifecycleEvent::Finished);
                 self.emit(
-                    "ManualUnlockCheckpoint",
-                    "已识别到 8 个锁定的 50 级丸子。程序不会解锁任何礼装；请仅手动解锁这 8 个丸子，再选择要升到 100 级的满破 5 星礼装",
+                    "QpEfficientComplete",
+                    "已识别到 8 个锁定的 50 级丸子，节省 QP 策略完成；程序不会解锁任何礼装",
                 );
                 return false;
             }
@@ -2061,27 +2039,6 @@ impl CraftEssenceEnhancementRunner {
             } else {
                 plan_packet_feed(&available, &self.packet_feed_remaining)
             };
-        } else {
-            for cell in &grid.cells {
-                if cell.valid
-                    && !cell.locked
-                    && cell.rarity == Some(1)
-                    && cell.level == Some(50)
-                    && cell.level_cap == Some(50)
-                    && cell.limit_breaks == Some(4)
-                {
-                    let key = format!("{signature}:{}:{}", cell.row, cell.col);
-                    if !self.material_seen_cells.contains(&key) {
-                        choices.push(cell);
-                    }
-                    if self.material_selected_count
-                        + u8::try_from(choices.len()).unwrap_or(TARGET_BOMB_COUNT)
-                        >= TARGET_BOMB_COUNT
-                    {
-                        break;
-                    }
-                }
-            }
         }
 
         let required = match self.strategy_stage {
@@ -2094,7 +2051,6 @@ impl CraftEssenceEnhancementRunner {
                     u8::try_from(self.packet_fingerprints.len()).unwrap_or(PACKET_BATCH_SIZE)
                 }
             }
-            StrategyStage::FinalTargetSelected => TARGET_BOMB_COUNT,
             _ => unreachable!(),
         };
         // Use one CV/grid read to click the current page's whole safe batch, then
@@ -2281,12 +2237,6 @@ impl CraftEssenceEnhancementRunner {
                                 self.packet_fingerprints.len()
                             )
                         }
-                    }
-                    StrategyStage::FinalTargetSelected => {
-                        format!(
-                            "只找到 {} / {} 个未锁定的 50 级满破 1 星丸子",
-                            self.material_selected_count, TARGET_BOMB_COUNT
-                        )
                     }
                     _ => unreachable!(),
                 },
@@ -2640,7 +2590,6 @@ impl CraftEssenceEnhancementRunner {
                 self.post_enhancement_target_read_failures = 0;
                 self.enhance_open_attempts = 0;
                 self.completed_enhancements += 1;
-                self.post_enhancement_not_ready_checks = 0;
                 self.materials_committed = false;
                 self.material_seen_cells.clear();
                 match completed_stage {
@@ -2654,7 +2603,7 @@ impl CraftEssenceEnhancementRunner {
                         )
                         .expect("packet break stage must advance to automatic feed");
                         self.recommend_ready_waits = 0;
-                        self.recommend_executed_for_packet = false;
+                        self.recommend_executed_for_target = false;
                         self.enhance_open_attempts = 0;
                         self.emit(
                             "CraftEssenceEnhancement",
@@ -2671,14 +2620,36 @@ impl CraftEssenceEnhancementRunner {
                         )
                         .expect("packet automatic feed stage must advance after one enhancement");
                     }
+                    StrategyStage::FastAutoFeedPending => {
+                        self.current_bomb_level = target
+                            .level
+                            .expect("fast strategy requires a readable level");
+                        if fast_bomb_is_complete(&target) {
+                            self.transition(LifecycleEvent::Finished);
+                            self.emit(
+                                "CraftEssenceEnhancement",
+                                &format!(
+                                    "当前丸子已强化至 50 级（共完成 {} 次强化）",
+                                    self.completed_enhancements
+                                ),
+                            );
+                            return false;
+                        }
+                        self.recommend_ready_waits = 0;
+                        self.enhance_open_attempts = 0;
+                        self.emit(
+                            "CraftEssenceEnhancement",
+                            &format!(
+                                "当前丸子已强化至 {}/50，等待自动配置下一批素材",
+                                self.current_bomb_level
+                            ),
+                        );
+                    }
                     StrategyStage::BombSelectedForFeed => {
                         self.packet_fingerprints.clear();
                         self.packet_feed_remaining.clear();
                         self.feed_inventory_packets = false;
                         self.strategy_stage = StrategyStage::InspectBomb;
-                    }
-                    StrategyStage::FinalTargetSelected => {
-                        self.strategy_stage = StrategyStage::VerifyFinalResult;
                     }
                     _ => unreachable!("completed stage was validated before state transition"),
                 }
@@ -2702,6 +2673,27 @@ impl CraftEssenceEnhancementRunner {
                     return false;
                 }
                 thread::sleep(Duration::from_millis(500));
+                true
+            }
+            EnhancementReturnAction::CloseExpOverflow => {
+                self.enhancement_main_return_checks = 0;
+                self.enhancement_left_main = true;
+                self.enhancement_return_waits = self.enhancement_return_waits.saturating_add(1);
+                if self.enhancement_return_waits >= ENHANCEMENT_RETURN_MAX_WAITS {
+                    self.fail(
+                        "EnhancementAnimation",
+                        "经验值溢出提示持续未关闭，等待概念礼装强化结束超时".into(),
+                    );
+                    return false;
+                }
+                self.emit(
+                    "EnhancementAnimation",
+                    "检测到大成功或极大成功导致经验值溢出，关闭未使用素材提示",
+                );
+                if !self.tap_at("EnhancementAnimation", EXP_OVERFLOW_CLOSE_BUTTON) {
+                    return false;
+                }
+                thread::sleep(Duration::from_millis(700));
                 true
             }
             EnhancementReturnAction::TapSkip { mark_left_main } => {
@@ -2906,11 +2898,11 @@ impl CraftEssenceEnhancementRunner {
                         ),
                     );
                     if self.completed_bombs >= TARGET_BOMB_COUNT {
-                        self.strategy_stage = StrategyStage::ManualUnlockCheckpoint;
+                        self.strategy_stage = StrategyStage::QpEfficientComplete;
                         self.transition(LifecycleEvent::Finished);
                         self.emit(
-                            "ManualUnlockCheckpoint",
-                            "8 个丸子已完成。为遵守安全规则，程序不会解锁任何礼装；请仅手动解锁这 8 个丸子，再选择要升到 100 级的满破 5 星礼装",
+                            "QpEfficientComplete",
+                            "8 个丸子已完成，节省 QP 策略结束；程序不会解锁任何礼装",
                         );
                         return false;
                     }
@@ -2974,7 +2966,7 @@ impl CraftEssenceEnhancementRunner {
                         "CraftEssenceSelect",
                         "没有更多已锁定的未满级丸子底卡，开始制作新的 1 星满破底卡",
                     );
-                    self.strategy_stage = StrategyStage::SelectBombBase;
+                    self.strategy_stage = stage_after_missing_bomb();
                     self.target_scrolls = 0;
                     self.target_scroll_reset_needed = true;
                     self.target_scroll_reset_attempts = 0;
@@ -3048,10 +3040,18 @@ impl CraftEssenceEnhancementRunner {
             StrategyStage::SelectBomb => {
                 self.current_bomb_fingerprint = candidate.art_fingerprint.clone();
                 self.current_bomb_level = candidate.level.unwrap_or(0);
-                self.strategy_stage = StrategyStage::BombSelected;
+                self.enter_bomb_enhancement_strategy();
                 self.emit(
                     "CraftEssenceSelect",
-                    &format!("选择锁定的 1 星满破丸子（{}/50）", self.current_bomb_level),
+                    &format!(
+                        "选择锁定的 1 星满破丸子（{}/50）{}",
+                        self.current_bomb_level,
+                        if self.mode == CraftEssenceEnhancementMode::Fast {
+                            "，准备使用快速策略"
+                        } else {
+                            ""
+                        }
+                    ),
                 );
             }
             StrategyStage::SelectBombBase => {
@@ -3081,7 +3081,7 @@ impl CraftEssenceEnhancementRunner {
             }
             StrategyStage::ExitBombBaseLockMode => {
                 self.current_bomb_level = candidate.level.unwrap_or(0);
-                self.strategy_stage = StrategyStage::BombSelected;
+                self.enter_bomb_enhancement_strategy();
                 self.emit(
                     "CraftEssenceSelect",
                     &format!(
@@ -3112,6 +3112,19 @@ impl CraftEssenceEnhancementRunner {
             return true;
         }
         false
+    }
+
+    fn enter_bomb_enhancement_strategy(&mut self) {
+        if self.mode == CraftEssenceEnhancementMode::Fast {
+            self.recommend_profile = RecommendMaterialProfile::OneAndTwoStar;
+            self.recommend_configured_profile = None;
+            self.recommend_reset_done = false;
+            self.recommend_executed_for_target = false;
+            self.recommend_execute_tapped = false;
+            self.recommend_ready_waits = 0;
+            self.recommend_open_attempts = 0;
+        }
+        self.strategy_stage = stage_after_bomb_selection(self.mode);
     }
 
     fn handle_filter_dialog(&mut self) -> bool {
@@ -3191,7 +3204,10 @@ impl CraftEssenceEnhancementRunner {
     }
 
     fn handle_recommend_material_empty_dialog(&mut self) -> bool {
-        if self.strategy_stage != StrategyStage::PacketAutoFeedPending {
+        if !matches!(
+            self.strategy_stage,
+            StrategyStage::PacketAutoFeedPending | StrategyStage::FastAutoFeedPending
+        ) {
             self.fail(
                 "RecommendMaterialEmptyDialog",
                 format!(
@@ -3201,25 +3217,24 @@ impl CraftEssenceEnhancementRunner {
             );
             return false;
         }
-        let exhausted_rarity = self.auto_material_rarity;
+        let exhausted_profile = self.recommend_profile;
         self.emit(
             "RecommendMaterialEmptyDialog",
-            &format!(
-                "游戏确认没有可用{}推荐素材，关闭提示",
-                exhausted_rarity.label()
-            ),
+            &format!("游戏确认没有可用的{}，关闭提示", exhausted_profile.label()),
         );
         if !self.tap_at("RecommendMaterialEmptyDialog", RECOMMEND_EMPTY_CLOSE_BUTTON) {
             return false;
         }
         self.recommend_execute_tapped = false;
-        self.recommend_executed_for_packet = false;
+        self.recommend_executed_for_target = false;
         self.recommend_ready_waits = 0;
         self.recommend_open_attempts = 0;
         thread::sleep(Duration::from_millis(800));
 
-        if exhausted_rarity == AutoMaterialRarity::TwoStar {
-            self.auto_material_rarity = AutoMaterialRarity::OneStar;
+        if self.strategy_stage == StrategyStage::PacketAutoFeedPending
+            && exhausted_profile == RecommendMaterialProfile::TwoStarOnly
+        {
+            self.recommend_profile = RecommendMaterialProfile::OneStarOnly;
             self.recommend_reset_done = false;
             self.emit(
                 "RecommendMaterialEmptyDialog",
@@ -3231,13 +3246,20 @@ impl CraftEssenceEnhancementRunner {
         self.transition(LifecycleEvent::Finished);
         self.emit(
             "RecommendMaterialEmptyDialog",
-            "一星和二星推荐素材均已耗尽，丸子制作结束",
+            if self.strategy_stage == StrategyStage::FastAutoFeedPending {
+                "没有可用的 1 星、2 星未强化素材，快速策略结束"
+            } else {
+                "一星和二星推荐素材均已耗尽，丸子制作结束"
+            },
         );
         false
     }
 
     fn handle_recommend_material_dialog(&mut self) -> bool {
-        if self.strategy_stage != StrategyStage::PacketAutoFeedPending {
+        if !matches!(
+            self.strategy_stage,
+            StrategyStage::PacketAutoFeedPending | StrategyStage::FastAutoFeedPending
+        ) {
             self.fail(
                 "RecommendMaterialDialog",
                 format!("当前策略阶段不允许使用推荐选择: {:?}", self.strategy_stage),
@@ -3268,7 +3290,7 @@ impl CraftEssenceEnhancementRunner {
         }
 
         for filter in RECOMMEND_FILTERS {
-            let target_on = filter.target_on(self.auto_material_rarity);
+            let target_on = filter.target_on(self.recommend_profile);
             let mean_luma = match self.sidecar().read_region_luma(None, filter.region) {
                 Ok(mean_luma) => mean_luma,
                 Err(err) => {
@@ -3332,15 +3354,12 @@ impl CraftEssenceEnhancementRunner {
             AutoConfigState::On => {
                 self.emit(
                     "RecommendMaterialDialog",
-                    &format!(
-                        "执行推荐素材选择：仅{}未强化礼装",
-                        self.auto_material_rarity.label()
-                    ),
+                    &format!("执行推荐素材选择：{}", self.recommend_profile.label()),
                 );
                 if self.tap_at("RecommendMaterialDialog", RECOMMEND_EXECUTE_BUTTON) {
                     self.recommend_execute_tapped = true;
-                    self.recommend_executed_for_packet = true;
-                    self.recommend_configured_rarity = Some(self.auto_material_rarity);
+                    self.recommend_executed_for_target = true;
+                    self.recommend_configured_profile = Some(self.recommend_profile);
                     self.recommend_open_attempts = 0;
                     self.recommend_ready_waits = 0;
                     thread::sleep(Duration::from_millis(900));
@@ -3699,9 +3718,6 @@ mod tests {
         assert!(material_accepts_level_max(
             StrategyStage::BombSelectedForFeed
         ));
-        assert!(material_accepts_level_max(
-            StrategyStage::FinalTargetSelected
-        ));
         assert!(!material_accepts_level_max(StrategyStage::BombBaseSelected));
     }
 
@@ -3790,6 +3806,15 @@ mod tests {
             classify_screen(&ProbeSnapshot::from_keys(&[
                 "icon_enhancement_result",
                 "element_enhancement_ce_stripe",
+                "text_exp_overflow",
+                "element_enhancement_ce_success"
+            ])),
+            Screen::ExpOverflowDialog
+        );
+        assert_eq!(
+            classify_screen(&ProbeSnapshot::from_keys(&[
+                "icon_enhancement_result",
+                "element_enhancement_ce_stripe",
                 "element_enhancement_ce_success"
             ])),
             Screen::EnhancementSuccess
@@ -3828,6 +3853,36 @@ mod tests {
     fn only_cn_server_is_supported() {
         assert!(server_supported(Server::Cn));
         assert!(!server_supported(Server::Jp));
+    }
+
+    #[test]
+    fn automation_modes_deserialize_to_the_two_bomb_strategies() {
+        assert_eq!(
+            serde_json::from_str::<CraftEssenceEnhancementMode>("\"qpEfficient\"").unwrap(),
+            CraftEssenceEnhancementMode::QpEfficient
+        );
+        assert_eq!(
+            serde_json::from_str::<CraftEssenceEnhancementMode>("\"fast\"").unwrap(),
+            CraftEssenceEnhancementMode::Fast
+        );
+        assert!(serde_json::from_str::<CraftEssenceEnhancementMode>("\"feedBombs\"").is_err());
+        assert_eq!(
+            stage_after_bomb_selection(CraftEssenceEnhancementMode::QpEfficient),
+            StrategyStage::BombSelected
+        );
+        assert_eq!(
+            stage_after_bomb_selection(CraftEssenceEnhancementMode::Fast),
+            StrategyStage::FastAutoFeedPending
+        );
+        assert_eq!(
+            stage_after_missing_bomb(),
+            StrategyStage::SelectBombBase,
+            "both strategies must create a new max-limit-break base when no bomb exists"
+        );
+        assert_eq!(
+            recommend_profile_for_mode(CraftEssenceEnhancementMode::Fast),
+            RecommendMaterialProfile::OneAndTwoStar
+        );
     }
 
     #[test]
@@ -4041,9 +4096,6 @@ mod tests {
         assert!(!material_selection_descending(
             StrategyStage::BombSelectedForFeed
         ));
-        assert!(!material_selection_descending(
-            StrategyStage::FinalTargetSelected
-        ));
         assert_eq!(
             material_batch_click_limit(StrategyStage::PacketSelected, 0, 1),
             1
@@ -4076,23 +4128,12 @@ mod tests {
             scrollbar_reset_drag_y(Some(0.93), Some(0.82), 15, 21, 0),
             Ok(Some(0.93))
         );
-        assert_eq!(
-            scrollbar_reset_drag_y(None, None, 12, 21, 0),
-            Ok(None)
-        );
+        assert_eq!(scrollbar_reset_drag_y(None, None, 12, 21, 0), Ok(None));
         assert!(scrollbar_reset_drag_y(None, Some(0.276), 21, 21, 0).is_err());
+        assert!(scrollbar_reset_drag_y(Some(0.35), Some(1.2), 21, 21, 0).is_err());
         assert!(
-            scrollbar_reset_drag_y(Some(0.35), Some(1.2), 21, 21, 0).is_err()
-        );
-        assert!(
-            scrollbar_reset_drag_y(
-                Some(0.93),
-                Some(0.82),
-                15,
-                21,
-                LIST_RESET_MAX_ATTEMPTS
-            )
-            .is_err()
+            scrollbar_reset_drag_y(Some(0.93), Some(0.82), 15, 21, LIST_RESET_MAX_ATTEMPTS)
+                .is_err()
         );
     }
 
@@ -4104,10 +4145,15 @@ mod tests {
     }
 
     #[test]
-    fn recommendation_filters_select_only_the_requested_low_rarity() {
+    fn recommendation_filters_cover_qp_efficient_and_fast_profiles() {
         let two_star_targets = RECOMMEND_FILTERS
             .iter()
-            .map(|filter| (filter.label, filter.target_on(AutoMaterialRarity::TwoStar)))
+            .map(|filter| {
+                (
+                    filter.label,
+                    filter.target_on(RecommendMaterialProfile::TwoStarOnly),
+                )
+            })
             .collect::<Vec<_>>();
         assert_eq!(
             two_star_targets,
@@ -4124,13 +4170,40 @@ mod tests {
 
         let one_star_targets = RECOMMEND_FILTERS
             .iter()
-            .map(|filter| (filter.label, filter.target_on(AutoMaterialRarity::OneStar)))
+            .map(|filter| {
+                (
+                    filter.label,
+                    filter.target_on(RecommendMaterialProfile::OneStarOnly),
+                )
+            })
             .collect::<Vec<_>>();
         assert_eq!(
             one_star_targets,
             vec![
                 ("1 星", true),
                 ("2 星", false),
+                ("3 星", false),
+                ("4 星", false),
+                ("5 星", false),
+                ("未强化", true),
+                ("已强化", false),
+            ]
+        );
+
+        let fast_targets = RECOMMEND_FILTERS
+            .iter()
+            .map(|filter| {
+                (
+                    filter.label,
+                    filter.target_on(RecommendMaterialProfile::OneAndTwoStar),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            fast_targets,
+            vec![
+                ("1 星", true),
+                ("2 星", true),
                 ("3 星", false),
                 ("4 星", false),
                 ("5 星", false),
@@ -4161,20 +4234,20 @@ mod tests {
             next_packet_stage_after_enhancement(StrategyStage::SelectPacketBase, 0),
             None
         );
-        assert!(recommendation_must_execute_for_packet(
+        assert!(recommendation_needs_execution(
             false,
-            Some(AutoMaterialRarity::TwoStar),
-            AutoMaterialRarity::TwoStar
+            Some(RecommendMaterialProfile::TwoStarOnly),
+            RecommendMaterialProfile::TwoStarOnly
         ));
-        assert!(!recommendation_must_execute_for_packet(
+        assert!(!recommendation_needs_execution(
             true,
-            Some(AutoMaterialRarity::TwoStar),
-            AutoMaterialRarity::TwoStar
+            Some(RecommendMaterialProfile::TwoStarOnly),
+            RecommendMaterialProfile::TwoStarOnly
         ));
-        assert!(recommendation_must_execute_for_packet(
+        assert!(recommendation_needs_execution(
             true,
-            Some(AutoMaterialRarity::TwoStar),
-            AutoMaterialRarity::OneStar
+            Some(RecommendMaterialProfile::TwoStarOnly),
+            RecommendMaterialProfile::OneStarOnly
         ));
     }
 
@@ -4201,6 +4274,10 @@ mod tests {
             EnhancementReturnAction::TapSkip {
                 mark_left_main: true
             }
+        );
+        assert_eq!(
+            enhancement_return_action(Screen::ExpOverflowDialog, false),
+            EnhancementReturnAction::CloseExpOverflow
         );
         assert_eq!(
             enhancement_return_action(main, true),
@@ -4237,8 +4314,8 @@ mod tests {
             Some(50)
         );
         assert_eq!(
-            expected_post_enhancement_cap(StrategyStage::FinalTargetSelected),
-            Some(100)
+            expected_post_enhancement_cap(StrategyStage::FastAutoFeedPending),
+            Some(50)
         );
         assert_eq!(
             expected_post_enhancement_cap(StrategyStage::SelectPacketBase),
@@ -4250,6 +4327,10 @@ mod tests {
         ));
         assert!(enhancement_confirm_can_arm(
             StrategyStage::PacketAutoFeedPending,
+            true
+        ));
+        assert!(enhancement_confirm_can_arm(
+            StrategyStage::FastAutoFeedPending,
             true
         ));
         assert!(!enhancement_confirm_can_arm(
@@ -4281,6 +4362,46 @@ mod tests {
             complete_pending_enhancement(&mut pending, &target),
             Err(EnhancementCompletionError::MissingPending)
         );
+    }
+
+    #[test]
+    fn fast_strategy_requires_a_readable_level_and_finishes_only_at_fifty() {
+        let unreadable = ReadCraftEssenceMainTargetResult {
+            found: false,
+            level: None,
+            level_cap: Some(50),
+            text: "/50".into(),
+            region: None,
+        };
+        let mut pending = Some(StrategyStage::FastAutoFeedPending);
+        assert_eq!(
+            complete_pending_enhancement(&mut pending, &unreadable),
+            Err(EnhancementCompletionError::TargetUnreadable)
+        );
+        assert_eq!(pending, Some(StrategyStage::FastAutoFeedPending));
+
+        let level_49 = ReadCraftEssenceMainTargetResult {
+            found: true,
+            level: Some(49),
+            level_cap: Some(50),
+            text: "等级49/50".into(),
+            region: None,
+        };
+        let mut pending = Some(StrategyStage::FastAutoFeedPending);
+        assert_eq!(
+            complete_pending_enhancement(&mut pending, &level_49),
+            Ok(StrategyStage::FastAutoFeedPending)
+        );
+        assert!(!fast_bomb_is_complete(&level_49));
+
+        let level_50 = ReadCraftEssenceMainTargetResult {
+            found: true,
+            level: Some(50),
+            level_cap: Some(50),
+            text: "等级50/50".into(),
+            region: None,
+        };
+        assert!(fast_bomb_is_complete(&level_50));
     }
 
     #[test]

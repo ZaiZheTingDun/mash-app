@@ -113,7 +113,9 @@ describe("App active project restore", () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "强化概念礼装" }));
-    await user.click(screen.getByRole("button", { name: "制作 8 个丸子" }));
+    await user.click(
+      screen.getByRole("button", { name: "制作丸子（节省 QP 策略）" })
+    );
 
     expect(
       screen.queryByRole("button", { name: "关闭操作日志" })
