@@ -550,6 +550,7 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     // them so legacy `projects.json` rows keep deserializing.
     assert!(cfg.support_servant_id.is_none());
     assert!(cfg.support_servant_variant_key.is_none());
+    assert!(cfg.enable_extra_class_filter);
     assert!(cfg.support_slot_index.is_none());
     assert!(cfg.support_noble_phantasm_level_min.is_none());
     assert_eq!(cfg.support_skill_level_mins, [None; 3]);
@@ -3760,6 +3761,7 @@ fn run_config_round_trips_support_servant_id_and_repeat_flag() {
     let mut payload = minimal_run_config_json();
     payload["supportServantId"] = serde_json::json!(284);
     payload["supportServantVariantKey"] = serde_json::json!("284:2");
+    payload["enableExtraClassFilter"] = serde_json::json!(false);
     payload["supportNoblePhantasmLevelMin"] = serde_json::json!(2);
     payload["supportSkillLevelMins"] = serde_json::json!([10, null, 9]);
     payload["supportAppendSkillLevelMins"] = serde_json::json!([null, 10, null, null, 6]);
@@ -3769,6 +3771,7 @@ fn run_config_round_trips_support_servant_id_and_repeat_flag() {
     let cfg: RunConfig = serde_json::from_value(payload).unwrap();
     assert_eq!(cfg.support_servant_id, Some(284));
     assert_eq!(cfg.support_servant_variant_key.as_deref(), Some("284:2"));
+    assert!(!cfg.enable_extra_class_filter);
     assert_eq!(cfg.grand_class, GrandClass::Saber);
     assert_eq!(cfg.support_noble_phantasm_level_min, Some(2));
     assert_eq!(cfg.support_skill_level_mins, [Some(10), None, Some(9)]);
@@ -3818,8 +3821,8 @@ fn run_config_round_trips_lancer_roles() {
 
 #[test]
 fn support_class_filter_keeps_single_tap_for_jp_extra_and_cn_standard_classes() {
-    let jp_extra = support_class_filter_action(Server::Jp, "ruler", false).unwrap();
-    let cn_standard = support_class_filter_action(Server::Cn, "caster", false).unwrap();
+    let jp_extra = support_class_filter_action(Server::Jp, "ruler", true, false).unwrap();
+    let cn_standard = support_class_filter_action(Server::Cn, "caster", true, false).unwrap();
 
     for (action, expected) in [
         (jp_extra, SUPPORT_TAB_EXTRA),
@@ -3844,10 +3847,11 @@ fn support_class_filter_uses_cn_extra_dialog_slots() {
         ("foreigner", "降临者", 0.420, 0.649),
         ("pretender", "身披角色者", 0.580, 0.649),
         ("beasteresh", "兽", 0.740, 0.649),
+        ("unbeastolgamarie", "兽", 0.740, 0.649),
     ];
 
     for (class_name, label, x, y) in expected {
-        let action = support_class_filter_action(Server::Cn, class_name, false).unwrap();
+        let action = support_class_filter_action(Server::Cn, class_name, true, false).unwrap();
         let SupportClassFilterAction::CnExtra(extra) = action else {
             panic!("expected CN EXTRA dialog action for {class_name}");
         };
@@ -3859,7 +3863,7 @@ fn support_class_filter_uses_cn_extra_dialog_slots() {
 
 #[test]
 fn support_class_filter_reuses_saved_cn_extra_choice_after_first_configuration() {
-    let action = support_class_filter_action(Server::Cn, "foreigner", true).unwrap();
+    let action = support_class_filter_action(Server::Cn, "foreigner", true, true).unwrap();
     let SupportClassFilterAction::Tap(point) = action else {
         panic!("expected saved CN EXTRA choice to reuse the ordinary tab");
     };
@@ -3869,9 +3873,18 @@ fn support_class_filter_reuses_saved_cn_extra_choice_after_first_configuration()
 
 #[test]
 fn support_class_filter_rejects_non_support_beast_variants() {
-    assert!(support_class_filter_action(Server::Jp, "beasteresh", false).is_none());
-    assert!(support_class_filter_action(Server::Cn, "beastii", false).is_none());
-    assert!(support_class_filter_action(Server::Cn, "unbeastolgamarie", false).is_none());
+    assert!(support_class_filter_action(Server::Jp, "beasteresh", true, false).is_none());
+    assert!(support_class_filter_action(Server::Cn, "beastii", true, false).is_none());
+}
+
+#[test]
+fn support_class_filter_uses_plain_extra_tab_when_cn_extra_filter_is_disabled() {
+    let action = support_class_filter_action(Server::Cn, "unbeastolgamarie", false, false).unwrap();
+    let SupportClassFilterAction::Tap(point) = action else {
+        panic!("expected disabled CN EXTRA filtering to use the ordinary tab");
+    };
+    approx(point.x, SUPPORT_TAB_EXTRA.x);
+    approx(point.y, SUPPORT_TAB_EXTRA.y);
 }
 
 #[test]

@@ -187,4 +187,68 @@ describe("ProjectSettingsDialog", () => {
       });
     });
   });
+
+  it("enables Extra class filtering by default and persists the switch", async () => {
+    const user = userEvent.setup();
+    const onUpdateProject = vi.fn().mockResolvedValue(undefined);
+    const project = makeProject();
+    renderWithTheme(
+      <ProjectSettingsDialog
+        open
+        project={project}
+        onOpenChange={vi.fn()}
+        onUpdateProject={onUpdateProject}
+      />
+    );
+
+    const extraFilter = await screen.findByRole("switch", {
+      name: "Extra 职阶筛选",
+    });
+    expect(extraFilter).toBeChecked();
+
+    await user.click(extraFilter);
+
+    await waitFor(() => {
+      expect(onUpdateProject).toHaveBeenCalledWith({
+        ...project,
+        recognitionSettings: {
+          enableExtraClassFilter: false,
+        },
+      });
+    });
+  });
+
+  it("inherits the global Extra class filter setting before a project override", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_recognition_settings") {
+        return {
+          noblePhantasmDetectionMode: "card",
+          supportCeThreshold: 0.71,
+          supportCeFullGateThreshold: 0.61,
+          supportMlbIconThreshold: 0.72,
+          supportBondIconThreshold: 0.73,
+          stopOnBondLevelUp: false,
+          stopOnBondMaxLevel: false,
+          verifySkillActivation: false,
+          enableExtraClassFilter: false,
+          unknownScreenTimeoutCount: 100,
+        };
+      }
+      return null;
+    });
+
+    renderWithTheme(
+      <ProjectSettingsDialog
+        open
+        project={makeProject()}
+        onOpenChange={vi.fn()}
+        onUpdateProject={vi.fn()}
+      />
+    );
+
+    expect(
+      await screen.findByRole("switch", { name: "Extra 职阶筛选" })
+    ).not.toBeChecked();
+    expect(screen.getAllByText("全局当前：关闭")).not.toHaveLength(0);
+  });
 });

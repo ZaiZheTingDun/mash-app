@@ -726,6 +726,8 @@ pub struct ProjectRecognitionSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verify_skill_activation: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enable_extra_class_filter: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop_on_five_star_ce_drop: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub five_star_ce_drop_target_count: Option<u32>,

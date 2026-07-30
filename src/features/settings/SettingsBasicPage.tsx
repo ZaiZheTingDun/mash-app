@@ -17,6 +17,7 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
   const [stopOnBondLevelUp, setStopOnBondLevelUp] = useState(false);
   const [stopOnBondMaxLevel, setStopOnBondMaxLevel] = useState(false);
   const [verifySkillActivation, setVerifySkillActivation] = useState(false);
+  const [enableExtraClassFilter, setEnableExtraClassFilter] = useState(true);
   const [timeoutCount, setTimeoutCount] = useState(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT);
   const [timeoutDraft, setTimeoutDraft] = useState(
     String(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT)
@@ -32,6 +33,7 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
     setStopOnBondLevelUp(settings.stopOnBondLevelUp);
     setStopOnBondMaxLevel(settings.stopOnBondMaxLevel);
     setVerifySkillActivation(settings.verifySkillActivation);
+    setEnableExtraClassFilter(settings.enableExtraClassFilter);
     setTimeoutCount(settings.unknownScreenTimeoutCount);
     setTimeoutEnabled(
       settings.unknownScreenTimeoutCount !== UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED
@@ -214,6 +216,23 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
     }
   }, [applySettings]);
 
+  const saveEnableExtraClassFilter = useCallback(async (value: boolean) => {
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
+    try {
+      const settings = normalizeRecognitionSettings(
+        await invoke<RecognitionSettings>("set_enable_extra_class_filter", { value })
+      );
+      applySettings(settings);
+      setSavedMessage("已保存");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, [applySettings]);
+
   return (
     <Box className="settings-section-panel">
       <Flex direction="column" gap="4" className="recognition-setting-block">
@@ -312,6 +331,30 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
             }
             disabled={saving}
             aria-label="牵绊满级自动停止"
+          />
+        </Flex>
+
+        <Flex
+          align="start"
+          justify="between"
+          gap="4"
+          wrap="wrap"
+          className="basic-setting-row"
+        >
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              Extra 职阶筛选
+            </Text>
+            <Text size="1" color="gray">
+              国服助战目标为 Extra 职阶时，长按并选择具体职阶；队伍可以单独覆盖此设置
+            </Text>
+          </Flex>
+
+          <Switch
+            checked={enableExtraClassFilter}
+            onCheckedChange={(value) => void saveEnableExtraClassFilter(value)}
+            disabled={saving}
+            aria-label="全局 Extra 职阶筛选"
           />
         </Flex>
 

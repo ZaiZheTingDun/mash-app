@@ -314,6 +314,8 @@ pub(crate) fn effective_recognition_settings(
 ) -> RecognitionSettings {
     let project_verify_skill_activation =
         project.and_then(|settings| settings.verify_skill_activation);
+    let project_enable_extra_class_filter =
+        project.and_then(|settings| settings.enable_extra_class_filter);
     RecognitionSettings {
         noble_phantasm_detection_mode: global.noble_phantasm_detection_mode,
         support_ce_threshold: project
@@ -332,6 +334,8 @@ pub(crate) fn effective_recognition_settings(
         stop_on_bond_max_level: global.stop_on_bond_max_level,
         verify_skill_activation: project_verify_skill_activation
             .unwrap_or(global.verify_skill_activation),
+        enable_extra_class_filter: project_enable_extra_class_filter
+            .unwrap_or(global.enable_extra_class_filter),
         unknown_screen_timeout_count: global.unknown_screen_timeout_count,
     }
 }
@@ -414,6 +418,7 @@ pub(crate) fn start_automation(
     config.stop_on_bond_level_up = recognition_settings.stop_on_bond_level_up;
     config.stop_on_bond_max_level = recognition_settings.stop_on_bond_max_level;
     config.verify_skill_activation = recognition_settings.verify_skill_activation;
+    config.enable_extra_class_filter = recognition_settings.enable_extra_class_filter;
     config.unknown_screen_timeout_count = recognition_settings.unknown_screen_timeout_count;
     let debug_settings = *debug_settings_state.lock().unwrap();
     config.auto_capture_battle_result_loot = debug_settings.auto_capture_battle_result_loot;

@@ -59,6 +59,11 @@ pub struct RunConfig {
     /// skill sets, so support OCR must not search every alias for the id.
     #[serde(default)]
     pub support_servant_variant_key: Option<String>,
+    /// Enables the CN-only second-level EXTRA class dialog. Defaults to true
+    /// so projects and start payloads saved before this option retain the
+    /// existing concrete-class filtering behavior.
+    #[serde(default = "default_true")]
+    pub enable_extra_class_filter: bool,
     /// Actual 0-based team-builder slot index of the pinned support.
     /// The support can sit in front or back line, and Order Change needs
     /// the full 1-6 position map to stay accurate after a swap.

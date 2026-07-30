@@ -93,6 +93,7 @@ let noblePhantasmDetectionMode: "card" | "gauge" = "card";
 let stopOnBondLevelUp = false;
 let stopOnBondMaxLevel = false;
 let verifySkillActivation = false;
+let enableExtraClassFilter = true;
 let autoCaptureBattleResultLoot = false;
 let autoCaptureUnknownScreenTimeout = false;
 let autoCaptureSkillUseProbe = false;
@@ -183,6 +184,7 @@ function recognitionSettings() {
     stopOnBondLevelUp,
     stopOnBondMaxLevel,
     verifySkillActivation,
+    enableExtraClassFilter,
   };
 }
 
@@ -435,6 +437,9 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return recognitionSettings() as T;
     case "set_verify_skill_activation":
       verifySkillActivation = Boolean(args.value);
+      return recognitionSettings() as T;
+    case "set_enable_extra_class_filter":
+      enableExtraClassFilter = Boolean(args.value);
       return recognitionSettings() as T;
     case "set_auto_capture_battle_result_loot":
       autoCaptureBattleResultLoot = Boolean(args.value);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Box, Button, Dialog, Flex, IconButton, Select, Text } from "@radix-ui/themes";
+import { Box, Button, Dialog, Flex, IconButton, Select, Switch, Text } from "@radix-ui/themes";
 import { Cross1Icon, GearIcon } from "@radix-ui/react-icons";
 import { invoke } from "../../tauri";
 import {
@@ -135,6 +135,10 @@ export function ProjectSettingsDialog({
   const autoSkillTargetRecognitionValue = project?.disableAutoSkillTargetRecognition
     ? "disabled"
     : "enabled";
+  const extraClassFilterOverride =
+    project?.recognitionSettings?.enableExtraClassFilter;
+  const extraClassFilterEnabled =
+    extraClassFilterOverride ?? globalSettings.enableExtraClassFilter;
 
   const saveAutoSkillTargetRecognition = useCallback(
     async (value: string) => {
@@ -142,6 +146,20 @@ export function ProjectSettingsDialog({
       await onUpdateProject({
         ...project,
         disableAutoSkillTargetRecognition: value === "disabled",
+      });
+    },
+    [onUpdateProject, project]
+  );
+
+  const saveExtraClassFilter = useCallback(
+    async (enabled: boolean) => {
+      if (!project) return;
+      await onUpdateProject({
+        ...project,
+        recognitionSettings: {
+          ...(project.recognitionSettings ?? {}),
+          enableExtraClassFilter: enabled,
+        },
       });
     },
     [onUpdateProject, project]
@@ -245,6 +263,25 @@ export function ProjectSettingsDialog({
                             <Select.Item value="disabled">关闭</Select.Item>
                           </Select.Content>
                         </Select.Root>
+                      </Flex>
+                      <Flex align="center" justify="between" gap="4" wrap="wrap">
+                        <Flex direction="column" gap="1">
+                          <Text size="2" weight="bold">
+                            Extra 职阶筛选
+                          </Text>
+                          <Text size="1" color="gray">
+                            国服助战目标为 Extra 职阶时，长按并选择具体职阶；关闭后只点击 Extra
+                            页签。
+                          </Text>
+                          <Text size="1" color="gray">
+                            全局当前：{globalSettings.enableExtraClassFilter ? "开启" : "关闭"}
+                          </Text>
+                        </Flex>
+                        <Switch
+                          checked={extraClassFilterEnabled}
+                          onCheckedChange={(enabled) => void saveExtraClassFilter(enabled)}
+                          aria-label="Extra 职阶筛选"
+                        />
                       </Flex>
                       <Flex align="center" justify="between" gap="4" wrap="wrap">
                         <Flex direction="column" gap="1">

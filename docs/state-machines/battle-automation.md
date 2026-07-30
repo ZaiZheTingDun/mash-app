@@ -106,7 +106,7 @@ stateDiagram-v2
 - `Battle.variants.main.elements.attack_button` 判定战斗画面是否可执行。
 - `TeamConfirm.detect` / `TeamChange.detect` 使用共享的两 probe 检测：二者先在 class-filter strip 匹配 `shared/screen_team_party`，再通过右下 action button 区分 `button_mission_start`（TeamConfirm）和 `button_confirm`（TeamChange）。仅凭共享 strip 无法唯一识别。
 - `SupportSelect.detect` 在助战页左侧 chrome 匹配 `shared/screen_support_select`；其专属 chrome 足以区分页面，不依赖刷新按钮状态。
-- 助战职阶筛选通常点击目标职阶页签。国服目标为 EXTRA 职阶时，每次 runner 运行只在首次进入助战页时真实长按 EXTRA 页签并等待 `dialog_extra_class_filter`，随后依次点击「回到初始设定」、目标具体职阶，并以 100ms 短按点击「决定」；游戏会保存具体职阶，后续刷新或重复关卡只普通点击 EXTRA 页签。瞬时 ADB tap 会在弹窗关闭时穿透到底层助战行，必须避免。盾兵、裁定者、复仇者、月之癌、他人格、降临者、身披角色者与兽分别使用弹窗固定槽位。日服及普通七职阶仍保持单击页签。
+- 助战职阶筛选通常点击目标职阶页签。国服目标为 EXTRA 职阶且最终生效的「Extra 职阶筛选」开启时（队伍未覆盖则继承全局基础设置），每次 runner 运行只在首次进入助战页时真实长按 EXTRA 页签并等待 `dialog_extra_class_filter`，随后依次点击「回到初始设定」、目标具体职阶，并以 100ms 短按点击「决定」；游戏会保存具体职阶，后续刷新或重复关卡只普通点击 EXTRA 页签。关闭该设置时只普通点击 EXTRA，不打开二级职阶弹窗。瞬时 ADB tap 会在弹窗关闭时穿透到底层助战行，必须避免。盾兵、裁定者、复仇者、月之癌、他人格、降临者、身披角色者与兽分别使用弹窗固定槽位。日服及普通七职阶仍保持单击页签。
 - `refresh_available` 检测可用的助战刷新按钮。游戏在使用后约十秒禁用刷新，runner 会等待该 element 后才点击固定刷新坐标。
 - `support_scroll_start` / `support_scroll_end` 检测滚动条顶部和底部；新列表若二者都不存在，表示无滚动条，视为已穷尽。
 - CN 的「冠位从者」ribbon probe 通过 `FindSupportsResult.diagnostics.isGrandSectionVisible` 与逐行的 `grandRibbonAnchorScores` 暴露。sidecar 在每个 `confirm_button_anchors` 左侧固定偏移的紧凑 ROI 内匹配 `text_grand_servant_support_bottom_line`。刷新后的列表一旦见过 ribbon，连续两次未命中便认定冠位区已结束并刷新，避免滚入普通助战。逐 anchor 分数供调试 overlay 正确绘制混合的冠位／普通行，避免旧版全头像列扫描产生的金蓝 UI chrome 误匹配。

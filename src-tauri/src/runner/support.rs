@@ -746,6 +746,7 @@ pub(crate) fn class_tab_for(class_name: &str) -> Option<Point> {
 pub(crate) fn support_class_filter_action(
     server: Server,
     class_name: &str,
+    cn_extra_filter_enabled: bool,
     cn_extra_configured: bool,
 ) -> Option<SupportClassFilterAction> {
     if server == Server::Cn {
@@ -757,11 +758,13 @@ pub(crate) fn support_class_filter_action(
             "alterego" => Some(ExtraClassFilter::new("他人格", 0.260, 0.649)),
             "foreigner" => Some(ExtraClassFilter::new("降临者", 0.420, 0.649)),
             "pretender" => Some(ExtraClassFilter::new("身披角色者", 0.580, 0.649)),
-            "beast" | "beasteresh" => Some(ExtraClassFilter::new("兽", 0.740, 0.649)),
+            "beast" | "beasteresh" | "unbeastolgamarie" => {
+                Some(ExtraClassFilter::new("兽", 0.740, 0.649))
+            }
             _ => None,
         };
         if let Some(extra) = extra {
-            return Some(if cn_extra_configured {
+            return Some(if !cn_extra_filter_enabled || cn_extra_configured {
                 SupportClassFilterAction::Tap(SUPPORT_TAB_EXTRA)
             } else {
                 SupportClassFilterAction::CnExtra(extra)
@@ -811,6 +814,7 @@ impl Runner {
             match support_class_filter_action(
                 self.server,
                 &meta.class_name,
+                self.config.enable_extra_class_filter,
                 self.support_extra_class_filter_configured,
             ) {
                 Some(SupportClassFilterAction::Tap(tab)) => {

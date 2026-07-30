@@ -178,6 +178,11 @@ describe("SettingsDialog", () => {
           verifySkillActivation: Boolean(argValue(args)),
         };
       }
+      if (cmd === "set_enable_extra_class_filter") {
+        return {
+          enableExtraClassFilter: Boolean(argValue(args)),
+        };
+      }
       if (cmd === "set_unknown_screen_timeout_count") {
         return {
           unknownScreenTimeoutCount: Number(argValue(args)),
@@ -467,6 +472,27 @@ describe("SettingsDialog", () => {
       });
     });
     expect(screen.getByRole("switch", { name: "技能使用确认" })).toBeChecked();
+  });
+
+  it("saves the global Extra class filter toggle", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="basic" />);
+
+    const toggle = await screen.findByRole("switch", {
+      name: "全局 Extra 职阶筛选",
+    });
+    expect(toggle).toBeChecked();
+
+    await user.click(toggle);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_enable_extra_class_filter", {
+        value: false,
+      });
+    });
+    expect(
+      screen.getByRole("switch", { name: "全局 Extra 职阶筛选" })
+    ).not.toBeChecked();
   });
 
   it("auto-saves the shared timeout count and disables the limit with a toggle", async () => {

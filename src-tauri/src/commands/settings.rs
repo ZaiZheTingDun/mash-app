@@ -70,6 +70,8 @@ pub struct RecognitionSettings {
     pub stop_on_bond_max_level: bool,
     #[serde(default)]
     pub verify_skill_activation: bool,
+    #[serde(default = "default_true")]
+    pub enable_extra_class_filter: bool,
     #[serde(default = "default_unknown_screen_timeout_count")]
     pub unknown_screen_timeout_count: u32,
 }
@@ -96,6 +98,7 @@ impl Default for RecognitionSettings {
             stop_on_bond_level_up: false,
             stop_on_bond_max_level: false,
             verify_skill_activation: false,
+            enable_extra_class_filter: true,
             unknown_screen_timeout_count: UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
         }
     }
@@ -115,6 +118,10 @@ fn default_support_ce_full_gate_threshold() -> f64 {
 
 fn default_unknown_screen_timeout_count() -> u32 {
     UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn normalize_unknown_screen_timeout_count(value: u32, label: &str) -> Result<u32, String> {
@@ -328,6 +335,7 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
                     && !settings.stop_on_bond_max_level,
                 stop_on_bond_max_level: settings.stop_on_bond_max_level,
                 verify_skill_activation: settings.verify_skill_activation,
+                enable_extra_class_filter: settings.enable_extra_class_filter,
                 unknown_screen_timeout_count: normalize_unknown_screen_timeout_count(
                     settings.unknown_screen_timeout_count,
                     "识别超时次数",
@@ -530,6 +538,19 @@ pub(crate) fn set_verify_skill_activation(
 }
 
 #[tauri::command]
+pub(crate) fn set_enable_extra_class_filter(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: bool,
+) -> Result<RecognitionSettings, String> {
+    let mut next = *state.lock().unwrap();
+    next.enable_extra_class_filter = value;
+    *state.lock().unwrap() = next;
+    save_recognition_settings(&app, &next)?;
+    Ok(next)
+}
+
+#[tauri::command]
 pub(crate) fn set_unknown_screen_timeout_count(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
@@ -697,6 +718,7 @@ mod tests {
         assert!(!settings.stop_on_bond_level_up);
         assert!(!settings.stop_on_bond_max_level);
         assert!(!settings.verify_skill_activation);
+        assert!(settings.enable_extra_class_filter);
         assert_eq!(
             settings.unknown_screen_timeout_count,
             UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
@@ -717,10 +739,28 @@ mod tests {
         assert!(!settings.stop_on_bond_level_up);
         assert!(!settings.stop_on_bond_max_level);
         assert!(!settings.verify_skill_activation);
+        assert!(settings.enable_extra_class_filter);
         assert_eq!(
             settings.unknown_screen_timeout_count,
             UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
         );
+    }
+
+    #[test]
+    fn recognition_settings_round_trips_disabled_extra_class_filter() {
+        let settings = RecognitionSettings {
+            enable_extra_class_filter: false,
+            ..RecognitionSettings::default()
+        };
+
+        let serialized = serde_json::to_value(settings).unwrap();
+        assert_eq!(
+            serialized["enableExtraClassFilter"],
+            serde_json::json!(false)
+        );
+
+        let restored: RecognitionSettings = serde_json::from_value(serialized).unwrap();
+        assert!(!restored.enable_extra_class_filter);
     }
 
     #[test]

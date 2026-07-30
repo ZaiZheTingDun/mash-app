@@ -882,6 +882,30 @@ fn new_advanced_project_enables_grand_support_by_default() {
 }
 
 #[test]
+fn project_extra_class_filter_round_trips_disabled() {
+    let mut project = test_project("project-1", "Extra filter", false);
+    project.recognition_settings = Some(ProjectRecognitionSettings {
+        enable_extra_class_filter: Some(false),
+        ..ProjectRecognitionSettings::default()
+    });
+
+    let serialized = serde_json::to_value(&project).unwrap();
+    assert_eq!(
+        serialized["recognitionSettings"]["enableExtraClassFilter"],
+        serde_json::json!(false)
+    );
+
+    let restored: Project = serde_json::from_value(serialized).unwrap();
+    assert_eq!(
+        restored
+            .recognition_settings
+            .unwrap()
+            .enable_extra_class_filter,
+        Some(false)
+    );
+}
+
+#[test]
 fn project_grand_class_round_trips_as_camel_case() {
     let json = serde_json::json!({
         "id": "abc",
@@ -1092,6 +1116,7 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
         stop_on_bond_level_up: true,
         stop_on_bond_max_level: false,
         verify_skill_activation: true,
+        enable_extra_class_filter: false,
         unknown_screen_timeout_count: 120,
     };
 
@@ -1104,6 +1129,7 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
     assert!(effective.stop_on_bond_level_up);
     assert!(!effective.stop_on_bond_max_level);
     assert!(effective.verify_skill_activation);
+    assert!(!effective.enable_extra_class_filter);
     assert_eq!(effective.unknown_screen_timeout_count, 120);
     assert_eq!(
         effective.noble_phantasm_detection_mode,
@@ -1122,6 +1148,7 @@ fn effective_recognition_settings_use_project_override() {
         stop_on_bond_level_up: false,
         stop_on_bond_max_level: true,
         verify_skill_activation: true,
+        enable_extra_class_filter: false,
         unknown_screen_timeout_count: 120,
     };
     let project = ProjectRecognitionSettings {
@@ -1130,6 +1157,7 @@ fn effective_recognition_settings_use_project_override() {
         support_mlb_icon_threshold: Some(0.77),
         support_bond_icon_threshold: None,
         verify_skill_activation: Some(false),
+        enable_extra_class_filter: Some(true),
         ..ProjectRecognitionSettings::default()
     };
 
@@ -1142,6 +1170,7 @@ fn effective_recognition_settings_use_project_override() {
     assert!(!effective.stop_on_bond_level_up);
     assert!(effective.stop_on_bond_max_level);
     assert!(!effective.verify_skill_activation);
+    assert!(effective.enable_extra_class_filter);
     assert_eq!(effective.unknown_screen_timeout_count, 120);
     assert_eq!(
         effective.noble_phantasm_detection_mode,

@@ -86,6 +86,7 @@ export const DEFAULT_RECOGNITION_SETTINGS: RecognitionSettings = {
   stopOnBondLevelUp: false,
   stopOnBondMaxLevel: false,
   verifySkillActivation: false,
+  enableExtraClassFilter: true,
   unknownScreenTimeoutCount: UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
 };
 
@@ -132,6 +133,7 @@ export function normalizeRecognitionSettings(
     stopOnBondLevelUp: settings.stopOnBondLevelUp === true && !stopOnBondMaxLevel,
     stopOnBondMaxLevel,
     verifySkillActivation: settings.verifySkillActivation === true,
+    enableExtraClassFilter: settings.enableExtraClassFilter !== false,
     unknownScreenTimeoutCount: normalizeTimeoutCount(settings.unknownScreenTimeoutCount),
   };
 }

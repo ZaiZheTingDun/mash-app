@@ -9,6 +9,7 @@ export interface RecognitionSettings {
   stopOnBondLevelUp: boolean;
   stopOnBondMaxLevel: boolean;
   verifySkillActivation: boolean;
+  enableExtraClassFilter: boolean;
   unknownScreenTimeoutCount: number;
 }
 
@@ -18,6 +19,7 @@ export interface ProjectRecognitionSettings {
   supportMlbIconThreshold?: number;
   supportBondIconThreshold?: number;
   verifySkillActivation?: boolean;
+  enableExtraClassFilter?: boolean;
   stopOnFiveStarCeDrop?: boolean;
   fiveStarCeDropTargetCount?: number;
 }
