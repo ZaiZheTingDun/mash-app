@@ -6,6 +6,7 @@ describe("feature toggles", () => {
     expect(createFeatureToggles({ DEV: true })).toEqual({
       servantEnhancement: true,
       craftEssenceEnhancement: true,
+      friendPointSummon: true,
       cvDebug: true,
       grandCardPriority: true,
       settingsDebug: true,
@@ -16,6 +17,7 @@ describe("feature toggles", () => {
     expect(createFeatureToggles({ DEV: false })).toEqual({
       servantEnhancement: false,
       craftEssenceEnhancement: false,
+      friendPointSummon: false,
       cvDebug: false,
       grandCardPriority: false,
       settingsDebug: false,
@@ -28,12 +30,14 @@ describe("feature toggles", () => {
         DEV: false,
         VITE_FEATURE_SERVANT_ENHANCEMENT: "true",
         VITE_FEATURE_CRAFT_ESSENCE_ENHANCEMENT: "yes",
+        VITE_FEATURE_FRIEND_POINT_SUMMON: "enabled",
         VITE_FEATURE_CV_DEBUG: "1",
         VITE_FEATURE_GRAND_CARD_PRIORITY: "on",
       })
     ).toEqual({
       servantEnhancement: true,
       craftEssenceEnhancement: true,
+      friendPointSummon: true,
       cvDebug: true,
       grandCardPriority: true,
       settingsDebug: false,

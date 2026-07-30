@@ -571,6 +571,62 @@
         }
       }
     },
+    "FriendPointSummon": {
+      "variants": {
+        "main": {
+          "elements": {
+            "screen_grand_summon": {
+              "template": "summon_friends_point/screen_grand_summon",
+              "region": {
+                "x": 0.802,
+                "y": 0,
+                "w": 0.198,
+                "h": 0.107
+              },
+              "threshold": 0.8,
+              "templateReferenceWidth": 1920
+            },
+            "text_grand_summon_friends_point": {
+              "template": "summon_friends_point/text_grand_summon_friends_point",
+              "region": {
+                "x": 0.403,
+                "y": 0.482,
+                "w": 0.196,
+                "h": 0.135
+              },
+              "threshold": 0.85,
+              "templateReferenceWidth": 1920
+            },
+            "dialog_grand_summon_friends_point_confirmation": {
+              "template": "summon_friends_point/dialog_grand_summon_friends_point_confirmation",
+              "region": {
+                "x": 0.418,
+                "y": 0.237,
+                "w": 0.136,
+                "h": 0.087
+              },
+              "threshold": 0.85,
+              "templateReferenceWidth": 1920
+            }
+          }
+        },
+        "result": {
+          "elements": {
+            "button_grand_summon_friends_point_continue_100": {
+              "template": "summon_friends_point/button_grand_summon_friends_point_continue_100",
+              "region": {
+                "x": 0.5,
+                "y": 0.889,
+                "w": 0.194,
+                "h": 0.091
+              },
+              "threshold": 0.82,
+              "templateReferenceWidth": 1920
+            }
+          }
+        }
+      }
+    },
     "CraftEssenceEnhancement": {
       "variants": {
         "main": {

@@ -11,6 +11,9 @@ use crate::craft_essence_enhancement_runner::{
     CraftEssenceEnhancementRunnerHandle, CraftEssenceEnhancementRunnerState,
 };
 use crate::enhancement_runner::{EnhancementRunnerHandle, EnhancementRunnerState};
+use crate::friend_point_summon_runner::{
+    FriendPointSummonRunnerHandle, FriendPointSummonRunnerState,
+};
 use crate::paths::{migrate_legacy_app_data, StartupMigrationStatus};
 use crate::runner::{RunnerHandle, RunnerState};
 use crate::Server;
@@ -1021,6 +1024,7 @@ pub(crate) fn set_server(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
     value: Server,
 ) -> Result<(), String> {
@@ -1053,6 +1057,16 @@ pub(crate) fn set_server(
         );
         if running {
             return Err("概念礼装强化自动化正在运行中，请先停止后再切换服务器".into());
+        }
+    }
+    {
+        let handle = friend_point_summon_handle_state.lock().unwrap();
+        let running = matches!(
+            *handle.state.lock().unwrap(),
+            FriendPointSummonRunnerState::Starting | FriendPointSummonRunnerState::Running
+        );
+        if running {
+            return Err("友情点抽取自动化正在运行中，请先停止后再切换服务器".into());
         }
     }
 

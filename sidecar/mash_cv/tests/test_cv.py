@@ -56,6 +56,73 @@ def _gradient_patch(size: int = 20) -> np.ndarray:
     return np.tile(np.arange(size, dtype=np.uint8) * 12, (size, 1))
 
 
+@pytest.mark.parametrize(
+    ("element", "raw_roi", "padded_roi"),
+    [
+        (
+            "screen_grand_summon",
+            (0.822, 0.005, 0.172, 0.082),
+            (0.802, 0.0, 0.198, 0.107),
+        ),
+        (
+            "text_grand_summon_friends_point",
+            (0.423, 0.502, 0.156, 0.095),
+            (0.403, 0.482, 0.196, 0.135),
+        ),
+        (
+            "dialog_grand_summon_friends_point_confirmation",
+            (0.438, 0.257, 0.096, 0.047),
+            (0.418, 0.237, 0.136, 0.087),
+        ),
+        (
+            "button_grand_summon_friends_point_continue_100",
+            (0.520, 0.909, 0.154, 0.051),
+            (0.500, 0.889, 0.194, 0.091),
+        ),
+    ],
+)
+def test_friend_point_summon_elements_use_padded_roi_across_resolutions(
+    element, raw_roi, padded_roi
+):
+    from mash_cv import cv as cv_module
+
+    repo_root = Path(__file__).resolve().parents[3]
+    resources = repo_root / "src-tauri" / "resources" / "servers" / "cn"
+    mash_cv._load_templates(str(resources / "templates"))
+    assert mash_cv._load_config(str(resources / "cv.json"))["ok"]
+
+    spec = cv_module._find_named_target(
+        cv_module.config["screens"]["FriendPointSummon"],
+        element,
+    )
+    assert spec is not None
+    assert spec["region"] == {
+        "x": padded_roi[0],
+        "y": padded_roi[1],
+        "w": padded_roi[2],
+        "h": padded_roi[3],
+    }
+    assert spec["templateReferenceWidth"] == 1920
+
+    template = mash_cv.templates[spec["template"]]
+    frame = _make_bgr_image(1920, 1080)
+    x = round(raw_roi[0] * 1920)
+    y = round(raw_roi[1] * 1080)
+    template_bgr = cv2.cvtColor(template, cv2.COLOR_GRAY2BGR)
+    frame[y : y + template.shape[0], x : x + template.shape[1]] = template_bgr
+
+    for candidate in (
+        frame,
+        cv2.resize(frame, (1280, 720), interpolation=cv2.INTER_AREA),
+    ):
+        result = mash_cv._find_element_by_name(
+            candidate,
+            "FriendPointSummon",
+            element,
+        )
+        assert result["found"], (element, candidate.shape, result)
+
+
 def test_five_star_ce_drop_template_hits_expected_loot_cells():
     cases = [
         (Path("/Users/xiaotong/Downloads/test.png"), [(0, 1), (0, 2)]),

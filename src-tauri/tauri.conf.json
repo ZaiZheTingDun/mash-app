@@ -78,6 +78,7 @@
       "resources/servers/cn/templates/enhancement_ce/*",
       "resources/servers/cn/templates/screen_support/*",
       "resources/servers/cn/templates/screen_team_confirm/*",
+      "resources/servers/cn/templates/summon_friends_point/*",
       "resources/images/*",
       "resources/adb/*",
       "resources/scrcpy/scrcpy-server.jar",

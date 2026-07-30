@@ -122,6 +122,25 @@ describe("App active project restore", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("opens the independent friend point summon page", async () => {
+    installAppMock("project-1");
+    const user = userEvent.setup();
+
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "友情点抽取" }));
+
+    expect(
+      screen.getByRole("button", { name: "开始友情点抽取" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/程序只执行“100次召唤”流程，并在无法继续时停止。/)
+    ).toBeInTheDocument();
+  });
+
   it("opens the self-check dialog from the menu event", async () => {
     let selfCheckHandler: (() => void) | null = null;
     vi.mocked(listen).mockImplementation(async (event, handler) => {

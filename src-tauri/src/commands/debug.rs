@@ -13,6 +13,9 @@ use crate::enhancement_runner::{
     EnhancementRunnerHandle, EnhancementRunnerState, SERVANT_FACE_MATCH_CROP,
     SERVANT_FACE_TEMPLATE_SIZE, SERVANT_LIST_REGION,
 };
+use crate::friend_point_summon_runner::{
+    FriendPointSummonRunnerHandle, FriendPointSummonRunnerState,
+};
 use crate::runner::{self, merge_best_np_slots, RunnerHandle, RunnerState};
 use crate::screen::{
     BondLevelUpReadResult, CommandCardMatch, ElementMatch, FindEnhancementServantGridResult,
@@ -210,6 +213,7 @@ fn require_automation_idle(
     handle_state: &Mutex<RunnerHandle>,
     enhancement_handle_state: &Mutex<EnhancementRunnerHandle>,
     ce_enhancement_handle_state: &Mutex<CraftEssenceEnhancementRunnerHandle>,
+    friend_point_summon_handle_state: &Mutex<FriendPointSummonRunnerHandle>,
 ) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
     let state = handle.state.lock().unwrap().clone();
@@ -228,6 +232,14 @@ fn require_automation_idle(
         CraftEssenceEnhancementRunnerState::Starting | CraftEssenceEnhancementRunnerState::Running
     ) {
         return Err("概念礼装强化自动化正在运行中，请先停止后再使用调试功能".into());
+    }
+    let handle = friend_point_summon_handle_state.lock().unwrap();
+    let state = handle.state.lock().unwrap().clone();
+    if matches!(
+        state,
+        FriendPointSummonRunnerState::Starting | FriendPointSummonRunnerState::Running
+    ) {
+        return Err("友情点抽取自动化正在运行中，请先停止后再使用调试功能".into());
     }
     Ok(())
 }
@@ -334,11 +346,13 @@ pub fn debug_capture(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
 ) -> Result<DebugCaptureResult, String> {
     require_automation_idle(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
 
     let selected_adb_serial = adb_settings_state
@@ -415,11 +429,13 @@ pub fn debug_stream_connect(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
 ) -> Result<DebugStreamStatus, String> {
     require_automation_idle(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
     ensure_debug_stream_for_current_device(&app, &adb_settings_state, &server_state, &debug_state)?;
     Ok(debug_stream_status(&debug_state))
@@ -449,12 +465,14 @@ pub fn debug_stream_frame(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
     detect_screen: Option<bool>,
 ) -> Result<DebugStreamFrameResult, String> {
     require_automation_idle(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
     ensure_debug_stream_for_current_device(&app, &adb_settings_state, &server_state, &debug_state)?;
 
@@ -497,11 +515,13 @@ pub fn debug_read_noble_phantasm_gauges_live(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
 ) -> Result<Vec<NoblePhantasmMatch>, String> {
     require_automation_idle(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
     ensure_debug_stream_for_current_device(&app, &adb_settings_state, &server_state, &debug_state)?;
 
@@ -540,6 +560,7 @@ pub fn debug_find_element(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
     template_key: String,
     region: Option<NormRect>,
     threshold: Option<f64>,
@@ -548,6 +569,7 @@ pub fn debug_find_element(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
 
     let image_path = debug_image_path(&app);
@@ -593,11 +615,13 @@ pub fn debug_read_bond_level_up(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
 ) -> Result<BondLevelUpReadResult, String> {
     require_automation_idle(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
 
     let image_path = debug_image_path(&app);
@@ -699,6 +723,7 @@ pub fn debug_find_element_by_name(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
     screen: String,
     element: String,
 ) -> Result<ElementMatch, String> {
@@ -706,6 +731,7 @@ pub fn debug_find_element_by_name(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
 
     let image_path = debug_image_path(&app);
@@ -752,11 +778,13 @@ pub fn debug_reload_sidecar(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
 ) -> Result<(), String> {
     require_automation_idle(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
     {
         let mut guard = debug_state.0.lock().unwrap();
@@ -791,12 +819,14 @@ pub fn debug_find_command_cards(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
     servant_ids: Vec<u32>,
 ) -> Result<Vec<CommandCardMatch>, String> {
     require_automation_idle(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
 
     let image_path = debug_image_path(&app);
@@ -832,11 +862,13 @@ fn read_noble_phantasm_gauges(
     handle_state: &tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: &tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: &tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: &tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
 ) -> Result<Vec<NoblePhantasmMatch>, String> {
     require_automation_idle(
         handle_state,
         enhancement_handle_state,
         ce_enhancement_handle_state,
+        friend_point_summon_handle_state,
     )?;
 
     let image_path = debug_image_path(app);
@@ -864,6 +896,7 @@ pub fn debug_read_noble_phantasm_gauges(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
 ) -> Result<Vec<NoblePhantasmMatch>, String> {
     let slots = read_noble_phantasm_gauges(
         &app,
@@ -872,6 +905,7 @@ pub fn debug_read_noble_phantasm_gauges(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
     eprintln!(
         "[debug_read_noble_phantasm_gauges] {} slot(s) found, ready={}",
@@ -946,6 +980,7 @@ pub fn debug_find_enhancement_servant(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
     servant_id: u32,
     threshold: Option<f64>,
 ) -> Result<DebugEnhancementServantMatchResult, String> {
@@ -953,6 +988,7 @@ pub fn debug_find_enhancement_servant(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
 
     let image_path = debug_image_path(&app);
@@ -1105,11 +1141,13 @@ pub fn debug_read_battle_scene(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
 ) -> Result<DebugBattleSceneResult, String> {
     require_automation_idle(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
 
     let image_path = debug_image_path(&app);
@@ -1248,11 +1286,13 @@ pub fn debug_find_attack_button(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
 ) -> Result<DebugAttackButtonResult, String> {
     require_automation_idle(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
 
     let image_path = debug_image_path(&app);
@@ -1398,6 +1438,7 @@ pub fn debug_find_supports(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
     servant_id: u32,
     craft_essence_id: Option<u32>,
     grand_craft_essence_ids: Option<[Option<u32>; 3]>,
@@ -1409,6 +1450,7 @@ pub fn debug_find_supports(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
     let recognition_settings = *recognition_settings_state.lock().unwrap();
     let support_ce_threshold = recognition_settings.support_ce_threshold;
@@ -1727,11 +1769,13 @@ pub fn warm_sidecar(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
 ) -> Result<(), String> {
     require_automation_idle(
         &handle_state,
         &enhancement_handle_state,
         &ce_enhancement_handle_state,
+        &friend_point_summon_handle_state,
     )?;
     ensure_debug_sidecar(&app, &debug_state, current_server(&server_state))
 }

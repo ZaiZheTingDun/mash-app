@@ -15,6 +15,7 @@ import { CommandEditor } from "./features/battle/CommandEditor";
 import { BattlePage } from "./features/battle/BattlePage";
 import { EnhancementPage } from "./features/enhancement/EnhancementPage";
 import { CraftEssenceEnhancementPage } from "./features/craft-essence-enhancement/CraftEssenceEnhancementPage";
+import { FriendPointSummonPage } from "./features/friend-point-summon/FriendPointSummonPage";
 import { DebugPage } from "./features/debug/DebugPage";
 import { StatusBar } from "./features/status/StatusBar";
 import { ProjectBar } from "./features/projects/ProjectBar";
@@ -53,6 +54,7 @@ type View =
   | "battle"
   | "enhancement"
   | "craftEssenceEnhancement"
+  | "friendPointSummon"
   | "debug";
 
 interface AutomationEvent {
@@ -128,7 +130,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     setOperationLogOpen(true);
   }, []);
 
-  const handleCraftEssenceAutomationStart = useCallback(() => {
+  const handleStandaloneAutomationStart = useCallback(() => {
     setOperationLogs([]);
     setOperationLogOpen(false);
   }, []);
@@ -252,10 +254,17 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         appendOperationLog(event.payload.message, event.payload.level ?? "info");
       }
     );
+    const unlistenFriendPointSummon = listen<AutomationEvent>(
+      "friend-point-summon-automation-status",
+      (event) => {
+        appendOperationLog(event.payload.message, event.payload.level ?? "info");
+      }
+    );
     return () => {
       unlistenBattle.then((fn) => fn());
       unlistenEnhancement.then((fn) => fn());
       unlistenCraftEssenceEnhancement.then((fn) => fn());
+      unlistenFriendPointSummon.then((fn) => fn());
     };
   }, [appendOperationLog]);
 
@@ -595,6 +604,11 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     setView("craftEssenceEnhancement");
   }, []);
 
+  const handleOpenFriendPointSummon = useCallback(() => {
+    if (!featureToggles.friendPointSummon) return;
+    setView("friendPointSummon");
+  }, []);
+
   const handleOpenSettings = useCallback(() => {
     setSettingsSection("basic");
     setSettingsOpen(true);
@@ -690,7 +704,14 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
             featureToggles.craftEssenceEnhancement ? (
             <CraftEssenceEnhancementPage
               onBack={handleBackToConfig}
-              onAutomationStart={handleCraftEssenceAutomationStart}
+              onAutomationStart={handleStandaloneAutomationStart}
+              onLogEntry={appendOperationLog}
+            />
+          ) : view === "friendPointSummon" &&
+            featureToggles.friendPointSummon ? (
+            <FriendPointSummonPage
+              onBack={handleBackToConfig}
+              onAutomationStart={handleStandaloneAutomationStart}
               onLogEntry={appendOperationLog}
             />
           ) : view === "debug" && featureToggles.cvDebug ? (
@@ -792,7 +813,19 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
                     </Box>
                   </Box>
                   <Flex justify="between" align="center" className="page-footer" gap="3">
-                    <Box>
+                    <Flex align="center" gap="3">
+                      {featureToggles.friendPointSummon && (
+                        <Button
+                          type="button"
+                          variant="soft"
+                          color="gray"
+                          onClick={handleOpenFriendPointSummon}
+                        >
+                          <Text size="2" weight="medium">
+                            友情点抽取
+                          </Text>
+                        </Button>
+                      )}
                       {featureToggles.craftEssenceEnhancement && (
                         <Button
                           type="button"
@@ -805,7 +838,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
                           </Text>
                         </Button>
                       )}
-                    </Box>
+                    </Flex>
                     <Flex align="center" gap="3">
                       {featureToggles.servantEnhancement && (
                         <Button

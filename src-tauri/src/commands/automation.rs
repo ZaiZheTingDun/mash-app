@@ -26,6 +26,13 @@ use crate::enhancement_runner::{
     EnhancementAutomationEvent, EnhancementConfig, EnhancementLifecycleEvent, EnhancementRunner,
     EnhancementRunnerHandle, EnhancementRunnerState,
 };
+use crate::friend_point_summon_runner::{
+    lifecycle_transition as friend_point_summon_lifecycle_transition,
+    server_supported as friend_point_summon_server_supported, FriendPointSummonAutomationEvent,
+    FriendPointSummonRunner, FriendPointSummonRunnerHandle, FriendPointSummonRunnerState,
+    LifecycleEvent as FriendPointSummonLifecycleEvent,
+    EVENT_NAME as FRIEND_POINT_SUMMON_EVENT_NAME,
+};
 use crate::models::ProjectRecognitionSettings;
 use crate::runner::{
     grand_strategy, runner_lifecycle_transition, AutomationEvent, LogLevel, RunConfig, Runner,
@@ -91,6 +98,13 @@ fn ce_enhancement_runner_is_busy(state: &CraftEssenceEnhancementRunnerState) -> 
     matches!(
         state,
         CraftEssenceEnhancementRunnerState::Starting | CraftEssenceEnhancementRunnerState::Running
+    )
+}
+
+fn friend_point_summon_runner_is_busy(state: &FriendPointSummonRunnerState) -> bool {
+    matches!(
+        state,
+        FriendPointSummonRunnerState::Starting | FriendPointSummonRunnerState::Running
     )
 }
 
@@ -308,6 +322,63 @@ fn stop_ce_enhancement_start(
     emit_ce_enhancement_status(app, state, "", "概念礼装强化自动化已停止");
 }
 
+fn apply_friend_point_summon_lifecycle_event(
+    state: &Arc<Mutex<FriendPointSummonRunnerState>>,
+    event: FriendPointSummonLifecycleEvent,
+) {
+    let mut guard = state.lock().unwrap();
+    *guard = friend_point_summon_lifecycle_transition(guard.clone(), event);
+}
+
+fn emit_friend_point_summon_status(
+    app: &tauri::AppHandle,
+    state: &Arc<Mutex<FriendPointSummonRunnerState>>,
+    screen: &str,
+    message: &str,
+) {
+    let (state_str, status) = {
+        let state = state.lock().unwrap();
+        (format!("{:?}", *state), state.status())
+    };
+    let _ = app.emit(
+        FRIEND_POINT_SUMMON_EVENT_NAME,
+        FriendPointSummonAutomationEvent {
+            state: state_str,
+            status,
+            current_screen: screen.into(),
+            message: message.into(),
+            level: LogLevel::Info,
+            completed_batches: 0,
+            summoned_count: 0,
+        },
+    );
+}
+
+fn fail_friend_point_summon_start(
+    app: &tauri::AppHandle,
+    state: &Arc<Mutex<FriendPointSummonRunnerState>>,
+    message: String,
+) {
+    apply_friend_point_summon_lifecycle_event(
+        state,
+        FriendPointSummonLifecycleEvent::Failed {
+            message: message.clone(),
+        },
+    );
+    emit_friend_point_summon_status(app, state, "", &format!("启动失败: {message}"));
+}
+
+fn stop_friend_point_summon_start(
+    app: &tauri::AppHandle,
+    state: &Arc<Mutex<FriendPointSummonRunnerState>>,
+) {
+    apply_friend_point_summon_lifecycle_event(
+        state,
+        FriendPointSummonLifecycleEvent::StopRequested,
+    );
+    emit_friend_point_summon_status(app, state, "", "友情点抽取自动化已停止");
+}
+
 pub(crate) fn effective_recognition_settings(
     global: RecognitionSettings,
     project: Option<ProjectRecognitionSettings>,
@@ -351,6 +422,7 @@ pub(crate) fn start_automation(
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
     let is_running = {
@@ -372,6 +444,12 @@ pub(crate) fn start_automation(
         let handle = ce_enhancement_handle_state.lock().unwrap();
         if ce_enhancement_runner_is_busy(&handle.state.lock().unwrap()) {
             return Err("概念礼装强化自动化正在运行中".into());
+        }
+    }
+    {
+        let handle = friend_point_summon_handle_state.lock().unwrap();
+        if friend_point_summon_runner_is_busy(&handle.state.lock().unwrap()) {
+            return Err("友情点抽取自动化正在运行中".into());
         }
     }
 
@@ -582,6 +660,7 @@ pub(crate) fn start_enhancement_automation(
     battle_handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
     {
@@ -602,6 +681,12 @@ pub(crate) fn start_enhancement_automation(
         let handle = ce_enhancement_handle_state.lock().unwrap();
         if ce_enhancement_runner_is_busy(&handle.state.lock().unwrap()) {
             return Err("概念礼装强化自动化正在运行中，请先停止".into());
+        }
+    }
+    {
+        let handle = friend_point_summon_handle_state.lock().unwrap();
+        if friend_point_summon_runner_is_busy(&handle.state.lock().unwrap()) {
+            return Err("友情点抽取自动化正在运行中，请先停止".into());
         }
     }
 
@@ -751,6 +836,7 @@ pub(crate) fn start_craft_essence_enhancement_automation(
     battle_handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     servant_enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
     mode: Option<CraftEssenceEnhancementMode>,
 ) -> Result<(), String> {
@@ -770,6 +856,12 @@ pub(crate) fn start_craft_essence_enhancement_automation(
         let handle = servant_enhancement_handle_state.lock().unwrap();
         if enhancement_runner_is_busy(&handle.state.lock().unwrap()) {
             return Err("从者强化自动化正在运行中，请先停止".into());
+        }
+    }
+    {
+        let handle = friend_point_summon_handle_state.lock().unwrap();
+        if friend_point_summon_runner_is_busy(&handle.state.lock().unwrap()) {
+            return Err("友情点抽取自动化正在运行中，请先停止".into());
         }
     }
 
@@ -873,6 +965,149 @@ pub(crate) fn stop_craft_essence_enhancement_automation(
 pub(crate) fn get_craft_essence_enhancement_automation_status(
     handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
 ) -> CraftEssenceEnhancementRunnerState {
+    let handle = handle_state.lock().unwrap();
+    let state = handle.state.lock().unwrap().clone();
+    state
+}
+
+#[tauri::command]
+pub(crate) fn start_friend_point_summon_automation(
+    app: tauri::AppHandle,
+    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
+    server_state: tauri::State<'_, Mutex<Server>>,
+    battle_handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    servant_enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
+    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
+    handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
+    debug_state: tauri::State<'_, debug::DebugSidecar>,
+) -> Result<(), String> {
+    {
+        let handle = handle_state.lock().unwrap();
+        if friend_point_summon_runner_is_busy(&handle.state.lock().unwrap()) {
+            return Err("友情点抽取自动化正在运行中".into());
+        }
+    }
+    {
+        let handle = battle_handle_state.lock().unwrap();
+        if runner_is_busy(&handle.state.lock().unwrap()) {
+            return Err("战斗自动化正在运行中，请先停止".into());
+        }
+    }
+    {
+        let handle = servant_enhancement_handle_state.lock().unwrap();
+        if enhancement_runner_is_busy(&handle.state.lock().unwrap()) {
+            return Err("从者强化自动化正在运行中，请先停止".into());
+        }
+    }
+    {
+        let handle = ce_enhancement_handle_state.lock().unwrap();
+        if ce_enhancement_runner_is_busy(&handle.state.lock().unwrap()) {
+            return Err("概念礼装强化自动化正在运行中，请先停止".into());
+        }
+    }
+
+    let server = *server_state.lock().unwrap();
+    if !friend_point_summon_server_supported(server) {
+        return Err("当前仅支持国服友情点抽取自动化".into());
+    }
+    let selected_adb_serial = adb_settings_state
+        .lock()
+        .unwrap()
+        .selected_adb_serial
+        .clone();
+    let state = Arc::new(Mutex::new(FriendPointSummonRunnerState::Starting));
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    {
+        let mut handle = handle_state.lock().unwrap();
+        handle.state = state.clone();
+        handle.cancel = cancel.clone();
+    }
+
+    let debug_sidecar = debug_state.0.clone();
+    std::thread::spawn(move || {
+        emit_friend_point_summon_status(&app, &state, "", "正在连接 ADB…");
+        let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
+        if let Err(error) = adb_dev.connect() {
+            fail_friend_point_summon_start(&app, &state, error);
+            return;
+        }
+        if cancel.load(Ordering::Relaxed) {
+            stop_friend_point_summon_start(&app, &state);
+            return;
+        }
+        let serial = adb_dev.serial().map(str::to_string);
+        let Some(jar_path) = resolve_scrcpy_jar(&app) else {
+            fail_friend_point_summon_start(&app, &state, "找不到 scrcpy-server.jar 资源".into());
+            return;
+        };
+        if !jar_path.exists() {
+            fail_friend_point_summon_start(
+                &app,
+                &state,
+                format!("scrcpy-server.jar 不存在: {}", jar_path.display()),
+            );
+            return;
+        }
+
+        emit_friend_point_summon_status(&app, &state, "", "正在启动视频流…");
+        let debug_state = debug::DebugSidecar(debug_sidecar.clone());
+        let mut sidecar = match take_or_spawn_sidecar(&app, &debug_state, server) {
+            Ok(sidecar) => sidecar,
+            Err(error) => {
+                fail_friend_point_summon_start(&app, &state, error);
+                return;
+            }
+        };
+        let (w, h) = match sidecar.start_stream(
+            adb_dev.path(),
+            &jar_path,
+            serial.as_deref(),
+            STREAM_MAX_SIZE,
+            STREAM_BIT_RATE,
+        ) {
+            Ok(size) => size,
+            Err(error) => {
+                fail_friend_point_summon_start(
+                    &app,
+                    &state,
+                    format!("启动 scrcpy 视频流失败: {error}"),
+                );
+                return;
+            }
+        };
+        if !stream_meets_minimum_resolution(w, h) {
+            let _ = sidecar.stop_stream();
+            fail_friend_point_summon_start(&app, &state, stream_resolution_error(w, h));
+            return;
+        }
+        let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
+        let runner = FriendPointSummonRunner::new(
+            adb_dev,
+            sidecar,
+            app,
+            state,
+            cancel,
+            input_size,
+            Some(debug_sidecar),
+        );
+        runner.run();
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn stop_friend_point_summon_automation(
+    handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
+) -> Result<(), String> {
+    let handle = handle_state.lock().unwrap();
+    handle.cancel.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn get_friend_point_summon_automation_status(
+    handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
+) -> FriendPointSummonRunnerState {
     let handle = handle_state.lock().unwrap();
     let state = handle.state.lock().unwrap().clone();
     state

@@ -2,6 +2,7 @@ interface FeatureToggleEnv {
   DEV: boolean;
   VITE_FEATURE_SERVANT_ENHANCEMENT?: string;
   VITE_FEATURE_CRAFT_ESSENCE_ENHANCEMENT?: string;
+  VITE_FEATURE_FRIEND_POINT_SUMMON?: string;
   VITE_FEATURE_CV_DEBUG?: string;
   VITE_FEATURE_GRAND_CARD_PRIORITY?: string;
 }
@@ -9,6 +10,7 @@ interface FeatureToggleEnv {
 export interface FeatureToggles {
   servantEnhancement: boolean;
   craftEssenceEnhancement: boolean;
+  friendPointSummon: boolean;
   cvDebug: boolean;
   grandCardPriority: boolean;
   settingsDebug: boolean;
@@ -28,6 +30,10 @@ export function createFeatureToggles(env: FeatureToggleEnv): FeatureToggles {
     ),
     craftEssenceEnhancement: envFlag(
       env.VITE_FEATURE_CRAFT_ESSENCE_ENHANCEMENT,
+      env.DEV
+    ),
+    friendPointSummon: envFlag(
+      env.VITE_FEATURE_FRIEND_POINT_SUMMON,
       env.DEV
     ),
     cvDebug: envFlag(env.VITE_FEATURE_CV_DEBUG, env.DEV),

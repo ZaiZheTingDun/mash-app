@@ -226,6 +226,53 @@ describe("StatusBar", () => {
     });
   });
 
+  it("locks the server selector for CE enhancement and friend point summon", async () => {
+    const listeners = new Map<string, AutomationListener>();
+    vi.mocked(listen).mockImplementation(async (event, callback) => {
+      if (
+        event === "craft-essence-enhancement-automation-status" ||
+        event === "friend-point-summon-automation-status"
+      ) {
+        listeners.set(event, callback as AutomationListener);
+      }
+      return () => {};
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "CN";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      return null;
+    });
+
+    const user = userEvent.setup();
+    renderWithTheme(<StatusBar />);
+    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
+    const trigger = await screen.findByRole("combobox", { name: "服务器" });
+
+    for (const event of [
+      "craft-essence-enhancement-automation-status",
+      "friend-point-summon-automation-status",
+    ]) {
+      act(() => {
+        listeners.get(event)?.({
+          event,
+          id: 0,
+          payload: { status: "running" },
+        } as Event<AutomationPayload>);
+      });
+      await waitFor(() => expect(trigger).toBeDisabled());
+
+      act(() => {
+        listeners.get(event)?.({
+          event,
+          id: 1,
+          payload: { status: "finished" },
+        } as Event<AutomationPayload>);
+      });
+      await waitFor(() => expect(trigger).not.toBeDisabled());
+    }
+  });
+
   it("cycles theme preference through light, dark, and system", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";

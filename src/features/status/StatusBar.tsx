@@ -626,17 +626,23 @@ export function StatusBar({
   // The server selector must be locked while the runner is mid-run: the
   // sidecar already pinned templates / OCR for the previous server when
   // it spawned, so flipping the global setting now would silently
-  // desync. Both battle automation and servant-enhancement automation
-  // pin server-specific OCR/templates, so either one should lock the
-  // selector until it exits.
+  // desync. Every automation runner pins server-specific OCR/templates,
+  // so any active runner should lock the selector until it exits.
   const [battleRunnerRunning, setBattleRunnerRunning] = useState(false);
   const [enhancementRunnerRunning, setEnhancementRunnerRunning] = useState(false);
+  const [ceEnhancementRunnerRunning, setCeEnhancementRunnerRunning] = useState(false);
+  const [friendPointSummonRunnerRunning, setFriendPointSummonRunnerRunning] =
+    useState(false);
   // Debug entries (CV anchor positions, swipe distances, …) are
   // hidden by default to keep the operation log readable during a
   // normal run; flip this toggle to surface them for triage.
   const [showDebugLogs, setShowDebugLogs] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
-  const runnerRunning = battleRunnerRunning || enhancementRunnerRunning;
+  const runnerRunning =
+    battleRunnerRunning ||
+    enhancementRunnerRunning ||
+    ceEnhancementRunnerRunning ||
+    friendPointSummonRunnerRunning;
   const servantById = useMemo(() => {
     const byId = new Map<number, Servant>();
     for (const servant of servants) {
@@ -705,9 +711,23 @@ export function StatusBar({
         setEnhancementRunnerRunning(isAutomationRunning(event.payload));
       }
     );
+    const unlistenCeEnhancement = listen<AutomationStatusEvent>(
+      "craft-essence-enhancement-automation-status",
+      (event) => {
+        setCeEnhancementRunnerRunning(isAutomationRunning(event.payload));
+      }
+    );
+    const unlistenFriendPointSummon = listen<AutomationStatusEvent>(
+      "friend-point-summon-automation-status",
+      (event) => {
+        setFriendPointSummonRunnerRunning(isAutomationRunning(event.payload));
+      }
+    );
     return () => {
       unlistenBattle.then((fn) => fn());
       unlistenEnhancement.then((fn) => fn());
+      unlistenCeEnhancement.then((fn) => fn());
+      unlistenFriendPointSummon.then((fn) => fn());
     };
   }, []);
 
