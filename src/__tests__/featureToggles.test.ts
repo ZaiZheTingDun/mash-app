@@ -13,10 +13,10 @@ describe("feature toggles", () => {
     });
   });
 
-  it("hides unfinished tools by default in production builds", () => {
+  it("keeps released tools available in production builds", () => {
     expect(createFeatureToggles({ DEV: false })).toEqual({
       servantEnhancement: false,
-      craftEssenceEnhancement: false,
+      craftEssenceEnhancement: true,
       friendPointSummon: false,
       cvDebug: false,
       grandCardPriority: false,

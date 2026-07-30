@@ -30,7 +30,7 @@ export function createFeatureToggles(env: FeatureToggleEnv): FeatureToggles {
     ),
     craftEssenceEnhancement: envFlag(
       env.VITE_FEATURE_CRAFT_ESSENCE_ENHANCEMENT,
-      env.DEV
+      true
     ),
     friendPointSummon: envFlag(
       env.VITE_FEATURE_FRIEND_POINT_SUMMON,
