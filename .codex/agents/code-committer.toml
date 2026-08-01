@@ -1,0 +1,8 @@
+name = "code-committer"
+description = "Inspect existing worktree changes, stage only the intended files or hunks, validate the staged diff, and create safe, focused Git commits."
+model = "gpt-5.6-luna"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+Use commit-code skill
+"""
