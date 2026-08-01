@@ -116,8 +116,8 @@
             },
             "element_enhancement_ce_stripe": {
               "template": "shared/enhancement_ce/element_enhancement_ce_stripe",
-              "region": { "x": 0.07, "y": 0.51, "w": 0.15, "h": 0.12 },
-              "threshold": 0.5,
+              "region": { "x": 0.649, "y": 0.769, "w": 0.128, "h": 0.076 },
+              "threshold": 0.85,
               "templateReferenceWidth": 1920
             },
             "element_enhancement_new": {
@@ -165,6 +165,12 @@
               "region": { "x": 0.76, "y": 0.88, "w": 0.065, "h": 0.12 },
               "threshold": 0.85,
               "templateReferenceWidth": 2560
+            },
+            "scroll_bar_enhancement_filter": {
+              "template": "shared/enhancement_ce/scroll_bar_enhancement_filter_top",
+              "region": { "x": 0.848, "y": 0.109, "w": 0.08, "h": 0.69 },
+              "threshold": 0.85,
+              "templateReferenceWidth": 1920
             },
             "rarity_5_filter_on": {
               "template": "shared/enhancement_ce/toggle_enhancement_filter_on",

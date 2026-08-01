@@ -5251,6 +5251,10 @@ def test_craft_essence_target_list_with_existing_target_is_not_material_list():
         ("enhancement_ce_select_ce.png", "button_scale_level_3"),
         ("enhancement_ce_select_ce.png", "button_enhancement_ce_select_ce_desc"),
         (
+            "enhancement_ce_select_ce_filter.png",
+            "scroll_bar_enhancement_filter",
+        ),
+        (
             "enhancement_ce_inventory_bottom_sparse.png",
             "element_enhancement_ce_scroll_end",
         ),

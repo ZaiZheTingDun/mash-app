@@ -61,6 +61,7 @@ const LIST_SCROLLBAR_OVERSHOOT_Y: f64 = 0.20;
 const LIST_SCROLLBAR_TOP_MAX_TOP_Y: f64 = 0.28;
 const LIST_SCROLLBAR_LEGACY_TOP_MAX_CENTER_Y: f64 = 0.36;
 const LIST_RESET_MAX_ATTEMPTS: u8 = 3;
+const FILTER_SCROLLBAR_TOP: Point = Point::new(0.888, 0.115);
 const GRID_READ_MAX_FAILURES: u8 = 3;
 const GRID_DENSITY_BUTTON: Point = Point::new(0.023, 0.938);
 const FILTER_BUTTON: Point = Point::new(0.7635, 0.180);
@@ -992,6 +993,7 @@ pub struct CraftEssenceEnhancementRunner {
     density_checked: bool,
     filter_reset_done: bool,
     filter_configured: bool,
+    filter_scroll_reset_done: bool,
     filter_two_star_enabled: Option<bool>,
     filter_two_star_desired: bool,
     order_level_selected: bool,
@@ -1070,6 +1072,7 @@ impl CraftEssenceEnhancementRunner {
             density_checked: false,
             filter_reset_done: false,
             filter_configured: false,
+            filter_scroll_reset_done: false,
             filter_two_star_enabled: None,
             filter_two_star_desired: false,
             order_level_selected: false,
@@ -3128,6 +3131,38 @@ impl CraftEssenceEnhancementRunner {
     }
 
     fn handle_filter_dialog(&mut self) -> bool {
+        if !self.filter_scroll_reset_done {
+            let thumb = match self.sidecar().find_element_by_name(
+                None,
+                SCREEN_NAME,
+                "scroll_bar_enhancement_filter",
+            ) {
+                Ok(result) if result.found => Some(Point::new(result.x, result.y)),
+                Ok(_) => None,
+                Err(err) => {
+                    self.fail("FilterDialog", format!("识别礼装筛选列表滚动条失败: {err}"));
+                    return false;
+                }
+            }
+            .filter(|point| {
+                point.x.is_finite()
+                    && point.y.is_finite()
+                    && (0.0..=1.0).contains(&point.x)
+                    && (0.0..=1.0).contains(&point.y)
+            });
+            let Some(from) = thumb else {
+                self.fail("FilterDialog", "未识别到礼装筛选列表滚动条位置".into());
+                return false;
+            };
+            self.emit("FilterDialog", "先将筛选列表滚动条拖到最顶端");
+            if self.swipe_at("FilterDialog", from, FILTER_SCROLLBAR_TOP, 250) {
+                self.filter_scroll_reset_done = true;
+                thread::sleep(Duration::from_millis(350));
+                return true;
+            }
+            return false;
+        }
+
         if self.filter_configured {
             if self.tap_at("FilterDialog", FILTER_CONFIRM_BUTTON) {
                 thread::sleep(Duration::from_millis(700));
