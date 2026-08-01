@@ -239,4 +239,40 @@ describe("DebugPage", () => {
       await screen.findByText(/C2:a 150@1\(0.88\) \[S\] \[无法行动\]/)
     ).toBeInTheDocument();
   });
+
+  it("prints the raw template match center after a successful probe", async () => {
+    const user = userEvent.setup();
+    mockDebugPageBootstrap((cmd) => {
+      if (cmd === "debug_capture") {
+        return {
+          imagePath: "/tmp/debug.png",
+          screen: "CraftEssenceEnhancement",
+          score: 0.95,
+          screenSize: { w: 1920, h: 1080 },
+        };
+      }
+      if (cmd === "debug_find_element") {
+        return {
+          found: true,
+          x: 0.888,
+          y: 0.145,
+          score: 0.998,
+          region: { x: 0.868, y: 0.129, w: 0.04, h: 0.034 },
+        };
+      }
+      return null;
+    });
+
+    renderDebugPage();
+
+    await user.click(screen.getByRole("button", { name: "截取画面" }));
+    await user.type(screen.getByPlaceholderText("模板 key"), "shared/test");
+    await user.click(screen.getByRole("button", { name: "查找" }));
+
+    expect(
+      await screen.findByText(
+        "命中: shared/test | score=0.998 | 中心=(0.888, 0.145)"
+      )
+    ).toBeInTheDocument();
+  });
 });

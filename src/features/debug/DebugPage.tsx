@@ -617,7 +617,9 @@ export function DebugPage({
         ...prev,
       ]);
       if (match.found) {
-        log(`命中: ${key} | score=${match.score.toFixed(3)}`);
+        log(
+          `命中: ${key} | score=${match.score.toFixed(3)} | 中心=(${match.x.toFixed(3)}, ${match.y.toFixed(3)})`
+        );
       } else {
         log(
           `未命中: ${key} | score=${match.score.toFixed(3)} (阈值=${threshold})`,
