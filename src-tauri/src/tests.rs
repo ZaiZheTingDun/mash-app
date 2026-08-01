@@ -2531,20 +2531,44 @@ fn localized_servant_names_dedupe_primary_alias_overlap() {
 
 #[test]
 fn servant_variant_name_candidates_distinguish_olga_variants_by_server() {
-    let (cn_target, cn_excluded) =
+    let (cn_target, cn_names, cn_excluded) =
         servant_variant_name_candidates(444, "444:1", Server::Cn).unwrap();
     assert_eq!(cn_target, "Ｕ－奥尔加玛丽");
+    assert_eq!(cn_names, ["Ｕ－奥尔加玛丽"]);
     assert_eq!(cn_excluded, ["奥尔加玛丽·阿尼姆斯菲亚"]);
 
-    let (jp_target, jp_excluded) =
+    let (jp_target, jp_names, jp_excluded) =
         servant_variant_name_candidates(444, "444:1", Server::Jp).unwrap();
     assert_eq!(jp_target, "Ｕ－オルガマリー");
+    assert_eq!(jp_names, ["Ｕ－オルガマリー"]);
     assert_eq!(jp_excluded, ["オルガマリー・アニムスフィア"]);
 
-    let (cn_alias_target, cn_alias_excluded) =
+    let (cn_alias_target, cn_alias_names, cn_alias_excluded) =
         servant_variant_name_candidates(444, "444:2", Server::Cn).unwrap();
     assert_eq!(cn_alias_target, "奥尔加玛丽·阿尼姆斯菲亚");
+    assert_eq!(cn_alias_names, ["奥尔加玛丽·阿尼姆斯菲亚"]);
     assert_eq!(cn_alias_excluded, ["Ｕ－奥尔加玛丽"]);
+}
+
+#[test]
+fn servant_variant_name_candidates_include_all_names_within_one_variant() {
+    let (cn_target, cn_names, cn_excluded) =
+        servant_variant_name_candidates(418, "418:1", Server::Cn).unwrap();
+    assert_eq!(cn_target, "教教我吧！希耶尔老师");
+    assert_eq!(
+        cn_names,
+        ["谜之代行者C.I.E.L", "教教我吧！希耶尔老师", "星之希耶尔"]
+    );
+    assert!(cn_excluded.is_empty());
+
+    let (jp_target, jp_names, jp_excluded) =
+        servant_variant_name_candidates(418, "418:1", Server::Jp).unwrap();
+    assert_eq!(jp_target, "教えて！シエル先生");
+    assert_eq!(
+        jp_names,
+        ["謎の代行者C.I.E.L", "教えて！シエル先生", "スターシエル"]
+    );
+    assert!(jp_excluded.is_empty());
 }
 
 #[test]
