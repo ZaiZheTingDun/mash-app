@@ -5362,6 +5362,33 @@ def test_craft_essence_scroll_end_probe_rejects_top_of_list(width):
 
 @pytest.mark.parametrize("width", (1920, 2560))
 @pytest.mark.parametrize(
+    ("fixture", "expected_y", "expected_at_top"),
+    (
+        ("enhancement_ce_select_ce_filter.png", 0.145, True),
+        ("enhancement_ce_select_ce_filter_non_top.png", 0.269, False),
+    ),
+)
+def test_craft_essence_filter_scrollbar_probe_distinguishes_top_position(
+    width, fixture, expected_y, expected_at_top
+):
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture(fixture)
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    result = mash_cv._find_element_by_name(
+        img,
+        "CraftEssenceEnhancement",
+        "scroll_bar_enhancement_filter",
+    )
+
+    assert result["found"] is True
+    assert result["y"] == pytest.approx(expected_y, abs=0.002)
+    assert (result["y"] <= 0.16) is expected_at_top
+
+
+@pytest.mark.parametrize("width", (1920, 2560))
+@pytest.mark.parametrize(
     ("fixture", "element"),
     (
         ("enhancement_ce_main_selected_not_ready.png", "dialog_enhancement_ce_confirm"),

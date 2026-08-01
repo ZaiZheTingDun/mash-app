@@ -62,6 +62,7 @@ const LIST_SCROLLBAR_TOP_MAX_TOP_Y: f64 = 0.28;
 const LIST_SCROLLBAR_LEGACY_TOP_MAX_CENTER_Y: f64 = 0.36;
 const LIST_RESET_MAX_ATTEMPTS: u8 = 3;
 const FILTER_SCROLLBAR_TOP: Point = Point::new(0.888, 0.115);
+const FILTER_SCROLLBAR_TOP_MAX_Y: f64 = 0.16;
 const GRID_READ_MAX_FAILURES: u8 = 3;
 const GRID_DENSITY_BUTTON: Point = Point::new(0.023, 0.938);
 const FILTER_BUTTON: Point = Point::new(0.7635, 0.180);
@@ -547,6 +548,10 @@ fn next_page_scan_count(current: u8, maximum: u8, at_bottom: bool) -> u8 {
     } else {
         current.saturating_add(1)
     }
+}
+
+fn filter_scrollbar_at_top(y: f64) -> bool {
+    y.is_finite() && (0.0..=FILTER_SCROLLBAR_TOP_MAX_Y).contains(&y)
 }
 
 fn choose_incomplete_bomb(cells: &[CraftEssenceGridCell]) -> Option<&CraftEssenceGridCell> {
@@ -3154,13 +3159,17 @@ impl CraftEssenceEnhancementRunner {
                 self.fail("FilterDialog", "未识别到礼装筛选列表滚动条位置".into());
                 return false;
             };
-            self.emit("FilterDialog", "先将筛选列表滚动条拖到最顶端");
-            if self.swipe_at("FilterDialog", from, FILTER_SCROLLBAR_TOP, 250) {
-                self.filter_scroll_reset_done = true;
-                thread::sleep(Duration::from_millis(350));
-                return true;
+            self.filter_scroll_reset_done = true;
+            if filter_scrollbar_at_top(from.y) {
+                self.emit("FilterDialog", "筛选列表滚动条已在顶部");
+            } else {
+                self.emit("FilterDialog", "先将筛选列表滚动条拖到最顶端");
+                if self.swipe_at("FilterDialog", from, FILTER_SCROLLBAR_TOP, 250) {
+                    thread::sleep(Duration::from_millis(350));
+                    return true;
+                }
+                return false;
             }
-            return false;
         }
 
         if self.filter_configured {
@@ -4170,6 +4179,14 @@ mod tests {
             scrollbar_reset_drag_y(Some(0.93), Some(0.82), 15, 21, LIST_RESET_MAX_ATTEMPTS)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn filter_scrollbar_top_threshold_allows_small_match_drift() {
+        assert!(filter_scrollbar_at_top(0.145));
+        assert!(filter_scrollbar_at_top(FILTER_SCROLLBAR_TOP_MAX_Y));
+        assert!(!filter_scrollbar_at_top(0.161));
+        assert!(!filter_scrollbar_at_top(f64::NAN));
     }
 
     #[test]
