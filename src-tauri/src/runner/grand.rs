@@ -6,16 +6,22 @@
 use super::*;
 
 mod berserker;
+mod extra;
 mod lancer;
 mod saber;
 
 use berserker::BerserkerStrategy;
+use extra::ExtraStrategy;
 use lancer::LancerStrategy;
 use saber::SaberStrategy;
 
 static SABER_STRATEGY: SaberStrategy = SaberStrategy;
 static LANCER_STRATEGY: LancerStrategy = LancerStrategy;
 static BERSERKER_STRATEGY: BerserkerStrategy = BerserkerStrategy;
+static EXTRA1_FIRE_STRATEGY: ExtraStrategy = ExtraStrategy::fire();
+static EXTRA1_EARTH_STRATEGY: ExtraStrategy = ExtraStrategy::earth();
+static EXTRA2_WIND_STRATEGY: ExtraStrategy = ExtraStrategy::wind();
+static EXTRA2_WATER_STRATEGY: ExtraStrategy = ExtraStrategy::water();
 
 pub(crate) trait GrandClassStrategy: Sync {
     fn class(&self) -> GrandClass;
@@ -121,8 +127,16 @@ pub(crate) trait GrandClassStrategy: Sync {
     }
 }
 
-pub(crate) fn grand_class_strategies() -> [&'static dyn GrandClassStrategy; 3] {
-    [&SABER_STRATEGY, &LANCER_STRATEGY, &BERSERKER_STRATEGY]
+pub(crate) fn grand_class_strategies() -> [&'static dyn GrandClassStrategy; 7] {
+    [
+        &SABER_STRATEGY,
+        &LANCER_STRATEGY,
+        &BERSERKER_STRATEGY,
+        &EXTRA1_FIRE_STRATEGY,
+        &EXTRA1_EARTH_STRATEGY,
+        &EXTRA2_WIND_STRATEGY,
+        &EXTRA2_WATER_STRATEGY,
+    ]
 }
 
 pub(crate) fn grand_strategy(grand_class: GrandClass) -> &'static dyn GrandClassStrategy {
@@ -150,6 +164,9 @@ pub(crate) fn standard_definition(
         id,
         label: label.into(),
         servant_class: servant_class.into(),
+        selection_group: None,
+        selection_group_label: None,
+        selection_option_label: None,
         roles: vec![
             GrandRoleDefinition {
                 role: "main".into(),
@@ -420,6 +437,7 @@ pub(crate) enum RuleOwnerPriority {
 #[derive(Clone, Copy)]
 pub(crate) enum RuleCandidatePriority {
     MainDeputyOtherThenArtsQuickBuster,
+    MainDeputyOtherThenBusterArtsQuick,
 }
 
 #[derive(Clone, Copy)]
@@ -814,6 +832,20 @@ pub(crate) fn candidate_priority_rank(
                 Some("a") => 3,
                 Some("q") => 2,
                 Some("b") => 1,
+                _ => 0,
+            };
+            (owner, color)
+        }
+        RuleCandidatePriority::MainDeputyOtherThenBusterArtsQuick => {
+            let owner = match grand_role_for_candidate(candidate, grand_servants) {
+                GrandRole::Main => 3,
+                GrandRole::Deputy => 2,
+                GrandRole::Other => 1,
+            };
+            let color = match candidate.color.as_deref() {
+                Some("b") => 3,
+                Some("a") => 2,
+                Some("q") => 1,
                 _ => 0,
             };
             (owner, color)
@@ -1310,5 +1342,31 @@ mod registry_tests {
         assert!(grand_strategy(GrandClass::Lancer)
             .validate_servants(&[servant(0, "single")])
             .is_err());
+        assert!(grand_strategy(GrandClass::Extra1Earth)
+            .validate_servants(&[servant(0, "aoe")])
+            .is_ok());
+        assert!(grand_strategy(GrandClass::Extra1Earth)
+            .validate_servants(&[servant(0, "single")])
+            .is_err());
+    }
+
+    #[test]
+    fn extra_definitions_group_stage_options_and_keep_single_optional() {
+        let definitions = grand_class_definitions();
+        let earth = definitions
+            .iter()
+            .find(|definition| definition.id == GrandClass::Extra1Earth)
+            .expect("Extra1 earth definition");
+        assert_eq!(earth.selection_group.as_deref(), Some("extra1"));
+        assert_eq!(
+            earth.selection_group_label.as_deref(),
+            Some("额外职阶 Ⅰ 冠位")
+        );
+        assert_eq!(earth.selection_option_label.as_deref(), Some("地"));
+        assert_eq!(earth.servant_class, "Extra1");
+        assert_eq!(earth.roles[0].role, "aoe");
+        assert!(earth.roles[0].required);
+        assert_eq!(earth.roles[1].role, "single");
+        assert!(!earth.roles[1].required);
     }
 }

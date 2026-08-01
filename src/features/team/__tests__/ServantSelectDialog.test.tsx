@@ -46,6 +46,7 @@ function setup(overrides?: {
   onOpenChange?: (open: boolean) => void;
   onPortraitSaved?: () => void;
   portraitRefreshKey?: number;
+  defaultClassFilter?: string;
 }) {
   const onSelect = overrides?.onSelect ?? vi.fn();
   const onOpenChange = overrides?.onOpenChange ?? vi.fn();
@@ -58,6 +59,7 @@ function setup(overrides?: {
       disabledIds={overrides?.disabledIds}
       onPortraitSaved={overrides?.onPortraitSaved}
       portraitRefreshKey={overrides?.portraitRefreshKey}
+      defaultClassFilter={overrides?.defaultClassFilter}
     />
   );
   return { ...utils, onSelect, onOpenChange };
@@ -294,6 +296,46 @@ describe("ServantSelectDialog", () => {
     expect(screen.getByText("所多玛之兽／德拉科")).toBeInTheDocument();
     expect(screen.getByText("埃列什基伽勒")).toBeInTheDocument();
     expect(screen.queryByText("阿尔托莉雅·卡斯特")).not.toBeInTheDocument();
+  });
+
+  it("uses the Extra1 grouped filter for Grand projects", () => {
+    setup({
+      defaultClassFilter: "Extra1",
+      servants: [
+        {
+          id: 1,
+          variantKey: "1",
+          name_cn: "玛修",
+          name_jp: "マシュ",
+          name_en: "Mash",
+          class: "Shielder",
+          rarity: 4,
+        },
+        {
+          id: 2,
+          variantKey: "2",
+          name_cn: "贞德",
+          name_jp: "ジャンヌ",
+          name_en: "Jeanne",
+          class: "Ruler",
+          rarity: 5,
+        },
+        {
+          id: 3,
+          variantKey: "3",
+          name_cn: "阿比盖尔",
+          name_jp: "アビゲイル",
+          name_en: "Abigail",
+          class: "Foreigner",
+          rarity: 5,
+        },
+      ],
+    });
+
+    expect(screen.getByRole("button", { name: "Extra1" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("玛修")).toBeInTheDocument();
+    expect(screen.getByText("贞德")).toBeInTheDocument();
+    expect(screen.queryByText("阿比盖尔")).not.toBeInTheDocument();
   });
 
   it("renders noble phantasm names in the second row", () => {

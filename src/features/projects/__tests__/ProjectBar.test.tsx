@@ -24,6 +24,10 @@ describe("ProjectBar", () => {
     { id: "saber", label: "剑阶冠位", servantClass: "Saber", roles: [], cardPriorityEnabled: true, autoOrderChangeRoles: [], validationMessage: "" },
     { id: "lancer", label: "枪阶冠位", servantClass: "Lancer", roles: [], cardPriorityEnabled: false, autoOrderChangeRoles: [], validationMessage: "" },
     { id: "berserker", label: "狂阶冠位", servantClass: "Berserker", roles: [], cardPriorityEnabled: true, autoOrderChangeRoles: [], validationMessage: "" },
+    { id: "extra1Fire", label: "Extra1 · 火", servantClass: "Extra1", selectionGroup: "extra1", selectionGroupLabel: "额外职阶 Ⅰ 冠位", selectionOptionLabel: "火", roles: [], cardPriorityEnabled: false, autoOrderChangeRoles: [], validationMessage: "" },
+    { id: "extra1Earth", label: "Extra1 · 地", servantClass: "Extra1", selectionGroup: "extra1", selectionGroupLabel: "额外职阶 Ⅰ 冠位", selectionOptionLabel: "地", roles: [], cardPriorityEnabled: false, autoOrderChangeRoles: [], validationMessage: "" },
+    { id: "extra2Wind", label: "Extra2 · 风", servantClass: "Extra2", selectionGroup: "extra2", selectionGroupLabel: "额外职阶 Ⅱ 冠位", selectionOptionLabel: "风", roles: [], cardPriorityEnabled: false, autoOrderChangeRoles: [], validationMessage: "" },
+    { id: "extra2Water", label: "Extra2 · 水", servantClass: "Extra2", selectionGroup: "extra2", selectionGroupLabel: "额外职阶 Ⅱ 冠位", selectionOptionLabel: "水", roles: [], cardPriorityEnabled: false, autoOrderChangeRoles: [], validationMessage: "" },
   ];
   function renderProjectBar(overrides?: Partial<ComponentProps<typeof ProjectBar>>) {
     const props: ComponentProps<typeof ProjectBar> = {
@@ -144,6 +148,45 @@ describe("ProjectBar", () => {
     await user.click(screen.getByRole("button", { name: "新建" }));
 
     expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "lancer");
+  });
+
+  it("selects Extra group first and then its stage attribute", async () => {
+    const user = userEvent.setup();
+    const onCreateProject = vi.fn();
+    renderProjectBar({ onCreateProject });
+
+    await user.click(screen.getByRole("button", { name: /队伍操作/ }));
+    await user.click(await screen.findByRole("menuitem", { name: /新建队伍/ }));
+    await user.click(await screen.findByRole("combobox", { name: "队伍模式" }));
+    await user.click(await screen.findByRole("option", { name: "戴冠战模式" }));
+    await user.click(screen.getByRole("combobox", { name: "冠位职阶" }));
+    expect(screen.queryByRole("option", { name: "Extra1 · 火" })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("option", { name: "额外职阶 Ⅰ 冠位" }));
+    expect(screen.queryByText("副本属性")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("combobox", { name: "副本属性" }));
+    await user.click(await screen.findByRole("option", { name: "地" }));
+    await user.click(screen.getByRole("button", { name: "新建" }));
+
+    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "extra1Earth");
+  });
+
+  it("resets the stage attribute when switching from Extra1 to Extra2", async () => {
+    const user = userEvent.setup();
+    renderProjectBar();
+
+    await user.click(screen.getByRole("button", { name: /队伍操作/ }));
+    await user.click(await screen.findByRole("menuitem", { name: /新建队伍/ }));
+    await user.click(await screen.findByRole("combobox", { name: "队伍模式" }));
+    await user.click(await screen.findByRole("option", { name: "戴冠战模式" }));
+
+    const classSelect = screen.getByRole("combobox", { name: "冠位职阶" });
+    await user.click(classSelect);
+    await user.click(await screen.findByRole("option", { name: "额外职阶 Ⅰ 冠位" }));
+    expect(screen.getByRole("combobox", { name: "副本属性" })).toHaveTextContent("火");
+
+    await user.click(classSelect);
+    await user.click(await screen.findByRole("option", { name: "额外职阶 Ⅱ 冠位" }));
+    expect(screen.getByRole("combobox", { name: "副本属性" })).toHaveTextContent("风");
   });
 
   it("renames the active project from the action menu", async () => {

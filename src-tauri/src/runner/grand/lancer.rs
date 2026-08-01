@@ -12,6 +12,9 @@ impl GrandClassStrategy for LancerStrategy {
             id: GrandClass::Lancer,
             label: "枪阶冠位".into(),
             servant_class: "Lancer".into(),
+            selection_group: None,
+            selection_group_label: None,
+            selection_option_label: None,
             roles: vec![
                 GrandRoleDefinition {
                     role: "single".into(),

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
   AlertDialog,
@@ -71,6 +71,30 @@ export function ProjectBar({
 
   const triggerLabel = activeProject?.name ?? "选择队伍";
   const trimmedDraftName = draftName.trim();
+  const draftGrandDefinition = grandClassDefinitions.find(
+    (definition) => definition.id === draftGrandClass,
+  );
+  const draftGrandSelection = draftGrandDefinition?.selectionGroup ?? draftGrandClass;
+  const grandClassPrimaryOptions = useMemo(() => {
+    const seenGroups = new Set<string>();
+    return grandClassDefinitions.flatMap((definition) => {
+      const group = definition.selectionGroup;
+      if (!group) {
+        return [{ value: definition.id, label: definition.label }];
+      }
+      if (seenGroups.has(group)) return [];
+      seenGroups.add(group);
+      return [{
+        value: group,
+        label: definition.selectionGroupLabel ?? definition.label,
+      }];
+    });
+  }, [grandClassDefinitions]);
+  const grandClassVariantOptions = draftGrandDefinition?.selectionGroup
+    ? grandClassDefinitions.filter(
+        (definition) => definition.selectionGroup === draftGrandDefinition.selectionGroup,
+      )
+    : [];
 
   const openNameDialog = useCallback(
     (mode: NameDialogMode) => {
@@ -288,19 +312,45 @@ export function ProjectBar({
                       <Text as="div" size="2" mb="2" weight="medium">
                         冠位职阶
                       </Text>
-                      <Select.Root
-                        value={draftGrandClass}
-                        onValueChange={(value) => setDraftGrandClass(value as GrandClass)}
-                      >
-                        <Select.Trigger aria-label="冠位职阶" />
-                        <Select.Content>
-                          {grandClassDefinitions.map((definition) => (
-                            <Select.Item key={definition.id} value={definition.id}>
-                              {definition.label}
-                            </Select.Item>
-                          ))}
-                        </Select.Content>
-                      </Select.Root>
+                      <Flex align="center" gap="2">
+                        <Select.Root
+                          value={draftGrandSelection}
+                          onValueChange={(value) => {
+                            const direct = grandClassDefinitions.find(
+                              (definition) => definition.id === value,
+                            );
+                            const grouped = grandClassDefinitions.find(
+                              (definition) => definition.selectionGroup === value,
+                            );
+                            setDraftGrandClass((direct ?? grouped)?.id ?? value);
+                          }}
+                        >
+                          <Select.Trigger aria-label="冠位职阶" />
+                          <Select.Content>
+                            {grandClassPrimaryOptions.map((option) => (
+                              <Select.Item key={option.value} value={option.value}>
+                                {option.label}
+                              </Select.Item>
+                            ))}
+                          </Select.Content>
+                        </Select.Root>
+                        {grandClassVariantOptions.length > 0 && (
+                          <Select.Root
+                            key={draftGrandDefinition?.selectionGroup}
+                            value={draftGrandClass}
+                            onValueChange={(value) => setDraftGrandClass(value as GrandClass)}
+                          >
+                            <Select.Trigger aria-label="副本属性" />
+                            <Select.Content>
+                              {grandClassVariantOptions.map((definition) => (
+                                <Select.Item key={definition.id} value={definition.id}>
+                                  {definition.selectionOptionLabel ?? definition.label}
+                                </Select.Item>
+                              ))}
+                            </Select.Content>
+                          </Select.Root>
+                        )}
+                      </Flex>
                     </Box>
                   )}
                 </>

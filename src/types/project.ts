@@ -60,6 +60,9 @@ export interface GrandClassDefinition {
   id: GrandClass;
   label: string;
   servantClass: string;
+  selectionGroup?: string;
+  selectionGroupLabel?: string;
+  selectionOptionLabel?: string;
   roles: GrandRoleDefinition[];
   cardPriorityEnabled: boolean;
   autoOrderChangeRoles: string[];

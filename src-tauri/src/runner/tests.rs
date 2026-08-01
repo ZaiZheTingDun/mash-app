@@ -3166,6 +3166,101 @@ fn lancer_grand_incomplete_hand_keeps_owner_and_a_q_b_priority() {
     assert_eq!(pick_labels(&picks), vec!["C1", "C0"]);
 }
 
+fn extra_picks(
+    grand_class: GrandClass,
+    cards: Vec<CommandCardMatch>,
+    nps: Vec<NoblePhantasmMatch>,
+    grands: Vec<GrandServantRuntimeConfig>,
+) -> Vec<Pick> {
+    choose_advanced_auto_picks_with_grand_class(
+        &empty_advanced_scene(),
+        &cards,
+        &nps,
+        &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
+        &grands,
+        &GrandCardStrategy::default(),
+        grand_class,
+    )
+}
+
+#[test]
+fn extra_grand_dual_np_prefers_same_color_and_main_deputy_order() {
+    let picks = extra_picks(
+        GrandClass::Extra1Fire,
+        vec![
+            command_card(0, Some(30), Some("q"), None),
+            command_card(1, Some(10), Some("a"), None),
+            command_card(2, Some(20), Some("a"), None),
+        ],
+        vec![np_slot(0, true), np_slot(1, true), np_slot(2, false)],
+        vec![
+            grand_config(10, "arts", "damage"),
+            grand_config_at(1, 20, "arts", "damage"),
+        ],
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["NP0", "NP1", "C1"]);
+}
+
+#[test]
+fn extra_grand_main_np_prefers_same_color_brave_chain_before_fallback() {
+    let picks = extra_picks(
+        GrandClass::Extra2Wind,
+        vec![
+            command_card(0, Some(10), Some("a"), None),
+            command_card(1, Some(10), Some("a"), None),
+            command_card(2, Some(20), Some("a"), None),
+            command_card(3, Some(30), Some("a"), None),
+        ],
+        vec![np_slot(0, true), np_slot(1, false), np_slot(2, false)],
+        vec![
+            grand_config(10, "arts", "damage"),
+            grand_config_at(1, 20, "arts", "damage"),
+        ],
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["NP0", "C0", "C1"]);
+}
+
+#[test]
+fn extra_earth_without_optional_single_skips_single_related_rules() {
+    let picks = extra_picks(
+        GrandClass::Extra1Earth,
+        vec![
+            command_card(0, Some(30), Some("a"), None),
+            command_card(1, Some(10), Some("b"), None),
+            command_card(2, Some(30), Some("q"), None),
+            command_card(3, Some(30), Some("a"), None),
+        ],
+        vec![np_slot(0, true), np_slot(1, false), np_slot(2, false)],
+        vec![grand_config(10, "buster", "damage")],
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["NP0", "C1", "C0"]);
+}
+
+#[test]
+fn extra_filler_prefers_main_then_deputy_then_other_and_b_a_q() {
+    let picks = extra_picks(
+        GrandClass::Extra2Water,
+        vec![
+            command_card(0, Some(30), Some("a"), None),
+            command_card(1, Some(20), Some("b"), None),
+            command_card(2, Some(10), Some("b"), None),
+            command_card(3, Some(10), Some("q"), None),
+            command_card(4, Some(10), Some("a"), None),
+        ],
+        Vec::new(),
+        vec![
+            grand_config(10, "buster", "damage"),
+            grand_config_at(1, 20, "buster", "damage"),
+        ],
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["C2", "C4", "C3"]);
+}
+
 #[test]
 fn berserker_grand_auto_main_np_color_chain_prioritizes_grand_any_slots() {
     let scene = empty_advanced_scene();

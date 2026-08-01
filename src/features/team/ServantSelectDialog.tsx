@@ -25,6 +25,8 @@ import classAlteregoIcon from "../../../src-tauri/resources/images/class/silver_
 import classForeignerIcon from "../../../src-tauri/resources/images/class/silver_foreigner.png";
 import classPretenderIcon from "../../../src-tauri/resources/images/class/silver_pretender.png";
 import classBeastIcon from "../../../src-tauri/resources/images/class/silver_beast.png";
+import classExtra1Icon from "../../../src-tauri/resources/images/class/silver_extra1.png";
+import classExtra2Icon from "../../../src-tauri/resources/images/class/silver_extra2.png";
 import classAllSelectedIcon from "../../../src-tauri/resources/images/class/gold_all.png";
 import classSaberSelectedIcon from "../../../src-tauri/resources/images/class/gold_saber.png";
 import classArcherSelectedIcon from "../../../src-tauri/resources/images/class/gold_archer.png";
@@ -41,6 +43,8 @@ import classAlteregoSelectedIcon from "../../../src-tauri/resources/images/class
 import classForeignerSelectedIcon from "../../../src-tauri/resources/images/class/gold_forigner.png";
 import classPretenderSelectedIcon from "../../../src-tauri/resources/images/class/gold_prentender.png";
 import classBeastSelectedIcon from "../../../src-tauri/resources/images/class/gold_beast.png";
+import classExtra1SelectedIcon from "../../../src-tauri/resources/images/class/gold_extra1.png";
+import classExtra2SelectedIcon from "../../../src-tauri/resources/images/class/gold_extra2.png";
 import classUnknownIcon from "../../../src-tauri/resources/images/class/silver_unknown.png";
 import classUnknownSelectedIcon from "../../../src-tauri/resources/images/class/gold_unknown.png";
 
@@ -132,6 +136,20 @@ const CLASS_FILTER_OPTIONS: ClassFilterOption[] = [
     servantClasses: ["Berserker"],
   },
   {
+    value: "Extra1",
+    label: "Extra1",
+    icon: classExtra1Icon,
+    selectedIcon: classExtra1SelectedIcon,
+    servantClasses: ["Shielder", "Ruler", "Moon Cancer", "Avenger"],
+  },
+  {
+    value: "Extra2",
+    label: "Extra2",
+    icon: classExtra2Icon,
+    selectedIcon: classExtra2SelectedIcon,
+    servantClasses: ["Alterego", "Pretender", "Foreigner", "Beast", "BeastEresh"],
+  },
+  {
     value: "Shielder",
     label: "盾阶",
     icon: classShielderIcon,
@@ -192,9 +210,15 @@ const CLASS_FILTER_OPTIONS: ClassFilterOption[] = [
 function normalizeClassFilter(className: string | undefined): string {
   if (!className) return "";
   return (
-    CLASS_FILTER_OPTIONS.find((option) =>
-      option.servantClasses.includes(className)
-    )?.value ?? ""
+    CLASS_FILTER_OPTIONS.find((option) => option.value === className)?.value ??
+    CLASS_FILTER_OPTIONS.find(
+      (option) =>
+        option.value !== "Extra1" &&
+        option.value !== "Extra2" &&
+        option.servantClasses.includes(className),
+    )?.value ??
+    CLASS_FILTER_OPTIONS.find((option) => option.servantClasses.includes(className))?.value ??
+    ""
   );
 }
 
@@ -202,11 +226,15 @@ function getServantClassIcon(servant: Servant): {
   icon: string;
   label: string;
 } {
-  const option = CLASS_FILTER_OPTIONS.find(
-    (candidate) =>
-      candidate.value !== "" &&
-      candidate.servantClasses.includes(servant.class)
-  );
+  const option =
+    CLASS_FILTER_OPTIONS.find((candidate) => candidate.value === servant.class) ??
+    CLASS_FILTER_OPTIONS.find(
+      (candidate) =>
+        candidate.value !== "" &&
+        candidate.value !== "Extra1" &&
+        candidate.value !== "Extra2" &&
+        candidate.servantClasses.includes(servant.class),
+    );
   const isGold = servant.rarity === 4 || servant.rarity === 5;
   return {
     icon: option

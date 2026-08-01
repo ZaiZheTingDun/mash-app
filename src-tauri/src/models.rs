@@ -560,10 +560,22 @@ pub enum GrandClass {
     Saber,
     Lancer,
     Berserker,
+    Extra1Fire,
+    Extra1Earth,
+    Extra2Wind,
+    Extra2Water,
 }
 
 impl GrandClass {
-    pub const ALL: [Self; 3] = [Self::Saber, Self::Lancer, Self::Berserker];
+    pub const ALL: [Self; 7] = [
+        Self::Saber,
+        Self::Lancer,
+        Self::Berserker,
+        Self::Extra1Fire,
+        Self::Extra1Earth,
+        Self::Extra2Wind,
+        Self::Extra2Water,
+    ];
 }
 
 impl Default for GrandClass {
@@ -706,6 +718,12 @@ pub struct GrandClassDefinition {
     pub id: GrandClass,
     pub label: String,
     pub servant_class: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selection_group: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selection_group_label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selection_option_label: Option<String>,
     pub roles: Vec<GrandRoleDefinition>,
     pub card_priority_enabled: bool,
     pub auto_order_change_roles: Vec<String>,
