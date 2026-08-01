@@ -203,7 +203,7 @@ pub(crate) const SUPPORT_REFRESH_CONFIRM_BUTTON: Point = Point::new(0.650, 0.779
 pub(crate) const SUPPORT_REFRESH_AVAILABLE_ELEMENT: &str = "refresh_available";
 pub(crate) const SUPPORT_REFRESH_DIALOG_ELEMENT: &str = "dialog_refresh_support";
 pub(crate) const SUPPORT_EXTRA_FILTER_DIALOG_ELEMENT: &str = "dialog_extra_class_filter";
-pub(crate) const SUPPORT_EXTRA_FILTER_LONG_PRESS_MS: u32 = 900;
+pub(crate) const SUPPORT_EXTRA_FILTER_LONG_PRESS_MS: u32 = 2000;
 pub(crate) const SUPPORT_EXTRA_FILTER_CONFIRM_PRESS_MS: u32 = 100;
 pub(crate) const SUPPORT_EXTRA_FILTER_DIALOG_TIMEOUT: Duration = Duration::from_secs(3);
 pub(crate) const SUPPORT_EXTRA_FILTER_DIALOG_POLL: Duration = Duration::from_millis(200);
@@ -267,6 +267,17 @@ impl ExtraClassFilter {
 pub(crate) enum SupportClassFilterAction {
     Tap(Point),
     CnExtra(ExtraClassFilter),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SupportExtraFilterDialogWait {
+    Matched,
+    TimedOut,
+    Aborted,
+}
+
+pub(crate) fn should_retry_support_extra_filter_dialog(wait: SupportExtraFilterDialogWait) -> bool {
+    wait == SupportExtraFilterDialogWait::TimedOut
 }
 
 /// Settle time after tapping a class tab. The list animates a quick fade
@@ -1100,15 +1111,28 @@ impl Runner {
     }
 
     fn configure_cn_extra_class_filter(&mut self, extra: ExtraClassFilter) -> bool {
-        if !self.press_at(
-            "SupportSelect",
-            SUPPORT_TAB_EXTRA,
-            SUPPORT_EXTRA_FILTER_LONG_PRESS_MS,
-        ) {
-            return false;
-        }
-        if !self.wait_for_support_extra_filter_dialog(true) {
-            return false;
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+            if !self.press_at(
+                "SupportSelect",
+                SUPPORT_TAB_EXTRA,
+                SUPPORT_EXTRA_FILTER_LONG_PRESS_MS,
+            ) {
+                return false;
+            }
+            let wait = self.wait_for_support_extra_filter_dialog_once(true);
+            if wait == SupportExtraFilterDialogWait::Matched {
+                break;
+            }
+            if !should_retry_support_extra_filter_dialog(wait) {
+                return false;
+            }
+            self.emit(
+                "SupportSelect",
+                "EXTRA 职阶筛选弹窗未出现，重新长按 EXTRA 页签",
+            );
         }
         thread::sleep(SUPPORT_EXTRA_FILTER_ACTION_SETTLE);
 
@@ -1135,31 +1159,46 @@ impl Runner {
     }
 
     fn wait_for_support_extra_filter_dialog(&mut self, expected_visible: bool) -> bool {
-        let deadline = Instant::now() + SUPPORT_EXTRA_FILTER_DIALOG_TIMEOUT;
-        loop {
-            if self.is_cancelled() {
-                return false;
-            }
-            match self.sidecar().find_element_by_name(
-                None,
-                SUPPORT_SELECT_SCREEN,
-                SUPPORT_EXTRA_FILTER_DIALOG_ELEMENT,
-            ) {
-                Ok(matched) if matched.found == expected_visible => return true,
-                Ok(_) => {}
-                Err(err) => {
-                    self.fail_action("SupportSelect", "识别 EXTRA 职阶筛选弹窗", err);
-                    return false;
-                }
-            }
-            if Instant::now() >= deadline {
+        match self.wait_for_support_extra_filter_dialog_once(expected_visible) {
+            SupportExtraFilterDialogWait::Matched => true,
+            SupportExtraFilterDialogWait::Aborted => false,
+            SupportExtraFilterDialogWait::TimedOut => {
                 let state = if expected_visible { "打开" } else { "关闭" };
                 self.fail_action(
                     "SupportSelect",
                     &format!("等待 EXTRA 职阶筛选弹窗{state}"),
                     "超时".into(),
                 );
-                return false;
+                false
+            }
+        }
+    }
+
+    fn wait_for_support_extra_filter_dialog_once(
+        &mut self,
+        expected_visible: bool,
+    ) -> SupportExtraFilterDialogWait {
+        let deadline = Instant::now() + SUPPORT_EXTRA_FILTER_DIALOG_TIMEOUT;
+        loop {
+            if self.is_cancelled() {
+                return SupportExtraFilterDialogWait::Aborted;
+            }
+            match self.sidecar().find_element_by_name(
+                None,
+                SUPPORT_SELECT_SCREEN,
+                SUPPORT_EXTRA_FILTER_DIALOG_ELEMENT,
+            ) {
+                Ok(matched) if matched.found == expected_visible => {
+                    return SupportExtraFilterDialogWait::Matched;
+                }
+                Ok(_) => {}
+                Err(err) => {
+                    self.fail_action("SupportSelect", "识别 EXTRA 职阶筛选弹窗", err);
+                    return SupportExtraFilterDialogWait::Aborted;
+                }
+            }
+            if Instant::now() >= deadline {
+                return SupportExtraFilterDialogWait::TimedOut;
             }
             thread::sleep(SUPPORT_EXTRA_FILTER_DIALOG_POLL);
         }

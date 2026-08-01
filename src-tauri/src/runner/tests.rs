@@ -3888,10 +3888,19 @@ fn support_class_filter_uses_plain_extra_tab_when_cn_extra_filter_is_disabled() 
 }
 
 #[test]
-fn cn_extra_filter_uses_human_press_and_waits_for_result_overlay() {
-    assert_eq!(SUPPORT_EXTRA_FILTER_LONG_PRESS_MS, 900);
+fn cn_extra_filter_uses_retriable_two_second_press_and_waits_for_result_overlay() {
+    assert_eq!(SUPPORT_EXTRA_FILTER_LONG_PRESS_MS, 2000);
     assert_eq!(SUPPORT_EXTRA_FILTER_CONFIRM_PRESS_MS, 100);
     assert_eq!(SUPPORT_EXTRA_FILTER_RESULT_SETTLE, Duration::from_secs(2));
+    assert!(should_retry_support_extra_filter_dialog(
+        SupportExtraFilterDialogWait::TimedOut
+    ));
+    assert!(!should_retry_support_extra_filter_dialog(
+        SupportExtraFilterDialogWait::Matched
+    ));
+    assert!(!should_retry_support_extra_filter_dialog(
+        SupportExtraFilterDialogWait::Aborted
+    ));
 }
 
 #[test]
