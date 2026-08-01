@@ -62,7 +62,8 @@ const LIST_SCROLLBAR_TOP_MAX_TOP_Y: f64 = 0.28;
 const LIST_SCROLLBAR_LEGACY_TOP_MAX_CENTER_Y: f64 = 0.36;
 const LIST_RESET_MAX_ATTEMPTS: u8 = 3;
 const FILTER_SCROLLBAR_TOP: Point = Point::new(0.888, 0.115);
-const FILTER_SCROLLBAR_TOP_MAX_Y: f64 = 0.16;
+const FILTER_SCROLLBAR_TOP_MAX_Y: f64 = 0.148;
+const FILTER_SCROLLBAR_RESET_MAX_ATTEMPTS: u8 = 2;
 const GRID_READ_MAX_FAILURES: u8 = 3;
 const GRID_DENSITY_BUTTON: Point = Point::new(0.023, 0.938);
 const FILTER_BUTTON: Point = Point::new(0.7635, 0.180);
@@ -554,6 +555,16 @@ fn filter_scrollbar_at_top(y: f64) -> bool {
     y.is_finite() && (0.0..=FILTER_SCROLLBAR_TOP_MAX_Y).contains(&y)
 }
 
+fn filter_scrollbar_reset_needs_drag(y: f64, attempts: u8) -> Result<bool, &'static str> {
+    if filter_scrollbar_at_top(y) {
+        return Ok(false);
+    }
+    if attempts >= FILTER_SCROLLBAR_RESET_MAX_ATTEMPTS {
+        return Err("两次拖动后仍无法确认礼装筛选列表已回到顶部");
+    }
+    Ok(true)
+}
+
 fn choose_incomplete_bomb(cells: &[CraftEssenceGridCell]) -> Option<&CraftEssenceGridCell> {
     cells.iter().find(|cell| is_incomplete_locked_bomb(cell))
 }
@@ -999,6 +1010,7 @@ pub struct CraftEssenceEnhancementRunner {
     filter_reset_done: bool,
     filter_configured: bool,
     filter_scroll_reset_done: bool,
+    filter_scroll_reset_attempts: u8,
     filter_two_star_enabled: Option<bool>,
     filter_two_star_desired: bool,
     order_level_selected: bool,
@@ -1078,6 +1090,7 @@ impl CraftEssenceEnhancementRunner {
             filter_reset_done: false,
             filter_configured: false,
             filter_scroll_reset_done: false,
+            filter_scroll_reset_attempts: 0,
             filter_two_star_enabled: None,
             filter_two_star_desired: false,
             order_level_selected: false,
@@ -3159,16 +3172,32 @@ impl CraftEssenceEnhancementRunner {
                 self.fail("FilterDialog", "未识别到礼装筛选列表滚动条位置".into());
                 return false;
             };
-            self.filter_scroll_reset_done = true;
-            if filter_scrollbar_at_top(from.y) {
+            let needs_drag = match filter_scrollbar_reset_needs_drag(
+                from.y,
+                self.filter_scroll_reset_attempts,
+            ) {
+                Ok(needs_drag) => needs_drag,
+                Err(message) => {
+                    self.fail("FilterDialog", message.into());
+                    return false;
+                }
+            };
+            if !needs_drag {
+                self.filter_scroll_reset_done = true;
                 self.emit("FilterDialog", "筛选列表滚动条已在顶部");
             } else {
-                self.emit("FilterDialog", "先将筛选列表滚动条拖到最顶端");
-                if self.swipe_at("FilterDialog", from, FILTER_SCROLLBAR_TOP, 250) {
-                    thread::sleep(Duration::from_millis(350));
-                    return true;
+                let message = if self.filter_scroll_reset_attempts == 0 {
+                    "先将筛选列表滚动条拖到最顶端"
+                } else {
+                    "拖动后仍未到顶，再拖动一次"
+                };
+                self.emit("FilterDialog", message);
+                self.filter_scroll_reset_attempts += 1;
+                if !self.swipe_at("FilterDialog", from, FILTER_SCROLLBAR_TOP, 250) {
+                    return false;
                 }
-                return false;
+                thread::sleep(Duration::from_millis(350));
+                return true;
             }
         }
 
@@ -4182,11 +4211,20 @@ mod tests {
     }
 
     #[test]
-    fn filter_scrollbar_top_threshold_allows_small_match_drift() {
+    fn filter_scrollbar_top_threshold_is_strict() {
         assert!(filter_scrollbar_at_top(0.145));
         assert!(filter_scrollbar_at_top(FILTER_SCROLLBAR_TOP_MAX_Y));
-        assert!(!filter_scrollbar_at_top(0.161));
+        assert!(!filter_scrollbar_at_top(0.149));
+        assert!(!filter_scrollbar_at_top(0.153));
         assert!(!filter_scrollbar_at_top(f64::NAN));
+    }
+
+    #[test]
+    fn filter_scrollbar_reset_allows_one_retry_after_the_first_drag() {
+        assert_eq!(filter_scrollbar_reset_needs_drag(0.153, 0), Ok(true));
+        assert_eq!(filter_scrollbar_reset_needs_drag(0.153, 1), Ok(true));
+        assert!(filter_scrollbar_reset_needs_drag(0.153, 2).is_err());
+        assert_eq!(filter_scrollbar_reset_needs_drag(0.148, 2), Ok(false));
     }
 
     #[test]
