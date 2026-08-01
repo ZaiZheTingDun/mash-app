@@ -1,0 +1,8 @@
+name = "mash-releaser"
+description = "Publish complete Mash desktop app releases, including versioning, release artifacts, updater publication, and validation."
+model = "gpt-5.6-terra"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+Use mash-release-app skill
+"""

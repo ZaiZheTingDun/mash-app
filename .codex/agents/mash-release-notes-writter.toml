@@ -1,0 +1,8 @@
+name = "mash-release-notes-writter"
+description = "Write concise, user-facing Mash release notes and update documentation focused on changes users can perceive."
+model = "gpt-5.6-luna"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+Use mash-release-notes skill
+"""
