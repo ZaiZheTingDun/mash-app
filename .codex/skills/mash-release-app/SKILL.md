@@ -1,6 +1,6 @@
 ---
 name: mash-release-app
-description: Use this skill when publishing the full Mash desktop app release, including detecting mash-cv code/runtime changes, bumping CV versions, uploading CV code/runtime artifacts, applying the latest runtime manifest to the app, bumping the Tauri app version, publishing the updater release, and validating tags, CDN assets, and release readiness.
+description: Delegate to mash-releaser subagent. Use this skill when publishing the full Mash desktop app release, including detecting mash-cv code/runtime changes, bumping CV versions, uploading CV code/runtime artifacts, applying the latest runtime manifest to the app, bumping the Tauri app version, publishing the updater release, and validating tags, CDN assets, and release readiness.
 ---
 
 # Mash Full App Release

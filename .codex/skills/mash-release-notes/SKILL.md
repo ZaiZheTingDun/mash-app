@@ -1,8 +1,6 @@
 ---
 name: mash-release-notes
-description: Use this skill when writing Mash user-facing update docs, release notes, changelog entries, version announcements, or 更新文档. It focuses on changes users can perceive and filters out implementation details, refactors, internal engineering work, and low-level technical notes.
-metadata:
-  short-description: Write Mash user-facing release notes
+description: Delegate to mash-release-notes-writter subagent. Use this skill when writing Mash user-facing update docs, release notes, changelog entries, version announcements. It focuses on changes users can perceive and filters out implementation details, refactors, internal engineering work, and low-level technical notes.
 ---
 
 # Mash Release Notes
