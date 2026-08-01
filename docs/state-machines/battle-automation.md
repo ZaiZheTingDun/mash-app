@@ -122,7 +122,7 @@ stateDiagram-v2
 
 ## 助战 OCR、CE 与等级筛选
 
-选择助战前，runner 通过 `load_servant_metadata` 加载目标从者资料，再调用 sidecar `find_supports`。项目保存的 `supportServantVariantKey` 会随启动配置传入 runner；若同一 collection id 有多个不同显示名称的变体，只允许所选变体名称，并将其他变体名称作为 OCR 排除候选。排除候选得分更高，或 OCR fragment 只是目标与排除名称共有的片段时，不会选中该行；旧项目缺少 variant key 时仍按 id 搜索全部合法别名。CN server 会用 `src-tauri/src/resources/servants.json` 将 Atlas JP 的从者与 Noble Phantasm 名称转换为 CN 服务器显示名称。`name_cn_server` 非空时优先用它作为 OCR target，否则使用 `name_cn`；`name_jp == name_cn` 仍保留，因为合法名称可相同，也可被 `name_cn_server` 覆盖。
+选择助战前，runner 通过 `load_servant_metadata` 加载目标从者资料，再调用 sidecar `find_supports`。项目保存的 `supportServantVariantKey` 会随启动配置传入 runner；所选 variant 的全部形态 ID 会从 `servants.json` 汇总为合法名称集合，其他 variant 的非重叠名称作为 OCR 排除候选。排除候选得分更高，或 OCR fragment 只是目标与排除名称共有的片段时，不会选中该行；旧项目缺少 variant key 时仍按 id 搜索全部合法别名。宝具名称同样按所选 variant 从 `servants_variants.json` / `servants_variants_cn.json` 限定；variant 宝具数组为空时继承从者基础宝具。若 sibling variant 存在重叠显示名称，则必须同时识别到所选 variant 的宝具，不允许退化为仅名称匹配。名称与有效宝具都相同的 sibling variant 仍无法依靠当前 OCR 字段区分。CN server 会用 `src-tauri/src/resources/servants.json` 将 Atlas JP 的从者与 Noble Phantasm 名称转换为 CN 服务器显示名称。`name_cn_server` 非空时优先用它作为 OCR target，否则使用 `name_cn`；`name_jp == name_cn` 仍保留，因为合法名称可相同，也可被 `name_cn_server` 覆盖。
 
 Sidecar 按布局而非只按文字配对助战行：NP 匹配必须是同一行中、位于从者名 fragment 下方的独立 OCR fragment，避免从者名和 NP 文本相同而误用名称行。
 

@@ -1506,6 +1506,7 @@ pub fn debug_find_supports(
         &meta.names,
         &meta.excluded_names,
         &meta.np_names,
+        false,
         true,
     )?;
     eprintln!(

@@ -2531,44 +2531,146 @@ fn localized_servant_names_dedupe_primary_alias_overlap() {
 
 #[test]
 fn servant_variant_name_candidates_distinguish_olga_variants_by_server() {
-    let (cn_target, cn_names, cn_excluded) =
-        servant_variant_name_candidates(444, "444:1", Server::Cn).unwrap();
-    assert_eq!(cn_target, "Ｕ－奥尔加玛丽");
-    assert_eq!(cn_names, ["Ｕ－奥尔加玛丽"]);
-    assert_eq!(cn_excluded, ["奥尔加玛丽·阿尼姆斯菲亚"]);
+    let cn = servant_variant_name_candidates(444, "444:1", Server::Cn).unwrap();
+    assert_eq!(cn.target_name, "Ｕ－奥尔加玛丽");
+    assert_eq!(cn.target_names, ["Ｕ－奥尔加玛丽"]);
+    assert_eq!(cn.excluded_names, ["奥尔加玛丽·阿尼姆斯菲亚"]);
+    assert_eq!(cn.np_names, ["既已过去的人理之终"]);
+    assert!(!cn.shares_name_with_sibling);
 
-    let (jp_target, jp_names, jp_excluded) =
-        servant_variant_name_candidates(444, "444:1", Server::Jp).unwrap();
-    assert_eq!(jp_target, "Ｕ－オルガマリー");
-    assert_eq!(jp_names, ["Ｕ－オルガマリー"]);
-    assert_eq!(jp_excluded, ["オルガマリー・アニムスフィア"]);
+    let jp = servant_variant_name_candidates(444, "444:1", Server::Jp).unwrap();
+    assert_eq!(jp.target_name, "Ｕ－オルガマリー");
+    assert_eq!(jp.target_names, ["Ｕ－オルガマリー"]);
+    assert_eq!(jp.excluded_names, ["オルガマリー・アニムスフィア"]);
+    assert_eq!(jp.np_names, ["すでに過ぎし人理の終"]);
+    assert!(!jp.shares_name_with_sibling);
 
-    let (cn_alias_target, cn_alias_names, cn_alias_excluded) =
-        servant_variant_name_candidates(444, "444:2", Server::Cn).unwrap();
-    assert_eq!(cn_alias_target, "奥尔加玛丽·阿尼姆斯菲亚");
-    assert_eq!(cn_alias_names, ["奥尔加玛丽·阿尼姆斯菲亚"]);
-    assert_eq!(cn_alias_excluded, ["Ｕ－奥尔加玛丽"]);
+    let cn_alias = servant_variant_name_candidates(444, "444:2", Server::Cn).unwrap();
+    assert_eq!(cn_alias.target_name, "奥尔加玛丽·阿尼姆斯菲亚");
+    assert_eq!(cn_alias.target_names, ["奥尔加玛丽·阿尼姆斯菲亚"]);
+    assert_eq!(cn_alias.excluded_names, ["Ｕ－奥尔加玛丽"]);
+    assert!(cn_alias.np_names.is_empty());
+    assert!(!cn_alias.shares_name_with_sibling);
 }
 
 #[test]
 fn servant_variant_name_candidates_include_all_names_within_one_variant() {
-    let (cn_target, cn_names, cn_excluded) =
-        servant_variant_name_candidates(418, "418:1", Server::Cn).unwrap();
-    assert_eq!(cn_target, "教教我吧！希耶尔老师");
+    let cn = servant_variant_name_candidates(418, "418:1", Server::Cn).unwrap();
+    assert_eq!(cn.target_name, "教教我吧！希耶尔老师");
     assert_eq!(
-        cn_names,
+        cn.target_names,
         ["谜之代行者C.I.E.L", "教教我吧！希耶尔老师", "星之希耶尔"]
     );
-    assert!(cn_excluded.is_empty());
+    assert!(cn.excluded_names.is_empty());
+    assert_eq!(cn.np_names, ["第七圣典·断罪死"]);
+    assert!(!cn.shares_name_with_sibling);
 
-    let (jp_target, jp_names, jp_excluded) =
-        servant_variant_name_candidates(418, "418:1", Server::Jp).unwrap();
-    assert_eq!(jp_target, "教えて！シエル先生");
+    let jp = servant_variant_name_candidates(418, "418:1", Server::Jp).unwrap();
+    assert_eq!(jp.target_name, "教えて！シエル先生");
     assert_eq!(
-        jp_names,
+        jp.target_names,
         ["謎の代行者C.I.E.L", "教えて！シエル先生", "スターシエル"]
     );
-    assert!(jp_excluded.is_empty());
+    assert!(jp.excluded_names.is_empty());
+    assert_eq!(jp.np_names, ["第七聖典・断罪死"]);
+    assert!(!jp.shares_name_with_sibling);
+}
+
+#[test]
+fn servant_variant_candidates_scope_np_names_for_same_name_siblings() {
+    let young = servant_variant_name_candidates(394, "394:1", Server::Cn).unwrap();
+    assert_eq!(young.target_names, ["托勒密"]);
+    assert_eq!(young.np_names, ["月所未知，久远之光"]);
+    assert!(young.shares_name_with_sibling);
+
+    let old = servant_variant_name_candidates(394, "394:2", Server::Cn).unwrap();
+    assert_eq!(old.target_names, ["托勒密"]);
+    assert_eq!(old.np_names, ["王之书库"]);
+    assert!(old.shares_name_with_sibling);
+}
+
+#[test]
+fn applying_variant_candidates_scopes_or_inherits_np_names() {
+    let mut meta = ServantMetadata {
+        id: 394,
+        name: "托勒密".into(),
+        names: vec!["托勒密".into()],
+        excluded_names: Vec::new(),
+        np_names: vec!["月所未知，久远之光".into(), "王之书库".into()],
+        require_np_match: false,
+        class_name: "archer".into(),
+    };
+    let old = servant_variant_name_candidates(394, "394:2", Server::Cn).unwrap();
+    apply_servant_variant_candidates(&mut meta, old);
+    assert_eq!(meta.np_names, ["王之书库"]);
+    assert!(meta.require_np_match);
+
+    let mut olga_meta = ServantMetadata {
+        id: 444,
+        name: "Ｕ－奥尔加玛丽".into(),
+        names: vec!["Ｕ－奥尔加玛丽".into()],
+        excluded_names: Vec::new(),
+        np_names: vec!["既已过去的人理之终".into()],
+        require_np_match: false,
+        class_name: "unbeastolgamarie".into(),
+    };
+    let olga_alias = servant_variant_name_candidates(444, "444:2", Server::Cn).unwrap();
+    apply_servant_variant_candidates(&mut olga_meta, olga_alias);
+    assert_eq!(olga_meta.np_names, ["既已过去的人理之终"]);
+    assert!(!olga_meta.require_np_match);
+}
+
+#[test]
+fn same_name_sibling_variants_have_distinct_np_candidates() {
+    for server in [Server::Cn, Server::Jp] {
+        let servants = servants_data();
+        for (index, left) in servants.iter().enumerate() {
+            for right in servants.iter().skip(index + 1) {
+                if left.id != right.id {
+                    continue;
+                }
+                let left_candidates =
+                    servant_variant_name_candidates(left.id, &left.variant_key, server).unwrap();
+                let right_candidates =
+                    servant_variant_name_candidates(right.id, &right.variant_key, server).unwrap();
+                let shares_name = left_candidates
+                    .target_names
+                    .iter()
+                    .any(|name| right_candidates.target_names.contains(name));
+                if !shares_name {
+                    continue;
+                }
+
+                assert!(left_candidates.shares_name_with_sibling);
+                assert!(right_candidates.shares_name_with_sibling);
+                assert!(
+                    !left_candidates.np_names.is_empty(),
+                    "{} {} {:?} has no variant NP candidates",
+                    left.id,
+                    left.variant_key,
+                    server
+                );
+                assert!(
+                    !right_candidates.np_names.is_empty(),
+                    "{} {} {:?} has no variant NP candidates",
+                    right.id,
+                    right.variant_key,
+                    server
+                );
+                assert!(
+                    left_candidates
+                        .np_names
+                        .iter()
+                        .all(|name| !right_candidates.np_names.contains(name)),
+                    "{} variants {} and {} share both a name and NP candidates for {:?}",
+                    left.id,
+                    left.variant_key,
+                    right.variant_key,
+                    server
+                );
+            }
+        }
+    }
 }
 
 #[test]

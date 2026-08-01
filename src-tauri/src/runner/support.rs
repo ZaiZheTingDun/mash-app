@@ -864,6 +864,7 @@ impl Runner {
             &meta.names,
             &meta.excluded_names,
             &meta.np_names,
+            meta.require_np_match,
             include_support_details,
         ) {
             Ok(r) => r,

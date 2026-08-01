@@ -4083,6 +4083,7 @@ def _find_supports(
     include_support_details: bool = False,
     expected_names: Optional[list[str]] = None,
     excluded_names: Optional[list[str]] = None,
+    require_np_match: bool = False,
 ) -> dict:
     """OCR the support-select list region and return matched support rows.
 
@@ -4127,6 +4128,7 @@ def _find_supports(
         # cross-check so the operator can spot bad data.
         "nameOnlyFallback": False,
         "nameOnlyReason": "",
+        "requireNpMatch": bool(require_np_match),
         # Every "助战编队确认" button currently visible on the page,
         # top-to-bottom. Surfaced so the runner can size its scroll
         # swipe so the lowest visible button ends up near the top of
@@ -4307,6 +4309,10 @@ def _find_supports(
         # No name match at all — there's nothing to fall back to.
         # Return empty supports with full diagnostics so the debug UI
         # can show the closest sub-threshold name fragment.
+        return {"supports": [], "diagnostics": diag}
+
+    if require_np_match and (not expected_np_names or not np_cands):
+        diag["nameOnlyReason"] = "npMatchRequired"
         return {"supports": [], "diagnostics": diag}
 
     if not expected_np_names or not np_cands:
@@ -6139,6 +6145,7 @@ def main() -> None:
                             "fragments": [],
                             "nameOnlyFallback": False,
                             "nameOnlyReason": "",
+                            "requireNpMatch": bool(cmd.get("requireNpMatch", False)),
                             **_support_diagnostics_meta(),
                         },
                         "error": err,
@@ -6158,6 +6165,7 @@ def main() -> None:
                         bool(cmd.get("includeSupportDetails", False)),
                         [str(n) for n in (cmd.get("expectedNames") or []) if n],
                         [str(n) for n in (cmd.get("excludedNames") or []) if n],
+                        bool(cmd.get("requireNpMatch", False)),
                     ),
                 )
         elif action == "ocr_region":

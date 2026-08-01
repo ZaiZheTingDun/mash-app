@@ -27,6 +27,10 @@ pub(crate) struct ServantInfo {
     pub(crate) recognition_names_cn: Vec<String>,
     #[serde(skip_serializing)]
     pub(crate) recognition_names_jp: Vec<String>,
+    #[serde(skip_serializing)]
+    pub(crate) recognition_np_names_cn: Vec<String>,
+    #[serde(skip_serializing)]
+    pub(crate) recognition_np_names_jp: Vec<String>,
     pub(crate) name_cn: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) name_cn_server: Option<String>,
@@ -200,14 +204,24 @@ pub(crate) fn first_np_card(s: &serde_json::Value) -> Option<String> {
 }
 
 pub(crate) fn last_variant_np_name(variant: &serde_json::Value) -> Option<String> {
-    let arr = variant
+    variant_np_names(variant).into_iter().next_back()
+}
+
+pub(crate) fn variant_np_names(variant: &serde_json::Value) -> Vec<String> {
+    let Some(arr) = variant
         .get("noblePhantasms_cn")
-        .or_else(|| variant.get("noblePhantasms"))?
-        .as_array()?;
-    arr.iter()
-        .rev()
-        .find_map(|v| v.as_str().map(str::trim).filter(|s| !s.is_empty()))
-        .map(str::to_string)
+        .or_else(|| variant.get("noblePhantasms"))
+        .and_then(serde_json::Value::as_array)
+    else {
+        return Vec::new();
+    };
+    let mut names = Vec::new();
+    for value in arr {
+        if let Some(name) = value.as_str() {
+            push_unique_nonempty(&mut names, name);
+        }
+    }
+    names
 }
 
 pub(crate) fn variant_face_id(variant: &serde_json::Value) -> Option<u32> {
@@ -345,6 +359,8 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                                     &portrait_ids,
                                     Server::Jp,
                                 );
+                                let recognition_np_names_cn = variant_np_names(np_variant);
+                                let recognition_np_names_jp = variant_np_names(variant);
                                 let name_alias =
                                     variant_name_alias(&over_write_servant_names, face_id);
                                 let variant_name_cn = name_alias
@@ -368,6 +384,8 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                                     portrait_ids,
                                     recognition_names_cn,
                                     recognition_names_jp,
+                                    recognition_np_names_cn,
+                                    recognition_np_names_jp,
                                     name_cn: variant_name_cn,
                                     name_cn_server: variant_name_cn_server,
                                     name_jp: variant_name_jp,
@@ -401,6 +419,8 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                                 &[],
                                 Server::Jp,
                             ),
+                            recognition_np_names_cn: Vec::new(),
+                            recognition_np_names_jp: Vec::new(),
                             name_cn,
                             name_cn_server,
                             name_jp,
@@ -1674,6 +1694,10 @@ pub struct ServantMetadata {
     #[serde(skip_serializing)]
     pub excluded_names: Vec<String>,
     pub np_names: Vec<String>,
+    /// Same-name sibling variants cannot safely use the sidecar's usual
+    /// name-only fallback; their variant-scoped NP must also be observed.
+    #[serde(skip_serializing)]
+    pub require_np_match: bool,
     /// Atlas Academy `className`, lowercased (e.g. `caster`, `alterego`,
     /// `mooncancer`). Drives the support-select class-tab tap so the
     /// runner only OCRs the filtered list instead of "all + mix".
@@ -1859,11 +1883,27 @@ fn localized_variant_names(servant: &ServantInfo, server: Server) -> Vec<String>
     }
 }
 
+fn localized_variant_np_names(servant: &ServantInfo, server: Server) -> Vec<String> {
+    match server {
+        Server::Jp => servant.recognition_np_names_jp.clone(),
+        Server::Cn => servant.recognition_np_names_cn.clone(),
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct ServantVariantCandidates {
+    pub(crate) target_name: String,
+    pub(crate) target_names: Vec<String>,
+    pub(crate) excluded_names: Vec<String>,
+    pub(crate) np_names: Vec<String>,
+    pub(crate) shares_name_with_sibling: bool,
+}
+
 pub(crate) fn servant_variant_name_candidates(
     id: u32,
     variant_key: &str,
     server: Server,
-) -> Result<(String, Vec<String>, Vec<String>), String> {
+) -> Result<ServantVariantCandidates, String> {
     let target = servants_data()
         .iter()
         .find(|servant| servant.id == id && servant.variant_key == variant_key)
@@ -1878,17 +1918,26 @@ pub(crate) fn servant_variant_name_candidates(
     push_unique_nonempty(&mut target_names, &target_name);
 
     let mut excluded_names = Vec::new();
+    let mut shares_name_with_sibling = false;
     for sibling in servants_data().iter().filter(|servant| servant.id == id) {
         if sibling.variant_key == variant_key {
             continue;
         }
         for sibling_name in localized_variant_names(sibling, server) {
-            if !target_names.iter().any(|name| name == &sibling_name) {
+            if target_names.iter().any(|name| name == &sibling_name) {
+                shares_name_with_sibling = true;
+            } else {
                 push_unique_nonempty(&mut excluded_names, sibling_name);
             }
         }
     }
-    Ok((target_name, target_names, excluded_names))
+    Ok(ServantVariantCandidates {
+        target_name,
+        target_names,
+        excluded_names,
+        np_names: localized_variant_np_names(target, server),
+        shares_name_with_sibling,
+    })
 }
 
 pub(crate) fn load_servant_metadata_for_variant(
@@ -1902,12 +1951,22 @@ pub(crate) fn load_servant_metadata_for_variant(
         return Ok(meta);
     };
 
-    let (target_name, target_names, excluded_names) =
-        servant_variant_name_candidates(id, variant_key, server)?;
-    meta.name = target_name.clone();
-    meta.names = target_names;
-    meta.excluded_names = excluded_names;
+    let candidates = servant_variant_name_candidates(id, variant_key, server)?;
+    apply_servant_variant_candidates(&mut meta, candidates);
     Ok(meta)
+}
+
+pub(crate) fn apply_servant_variant_candidates(
+    meta: &mut ServantMetadata,
+    candidates: ServantVariantCandidates,
+) {
+    meta.name = candidates.target_name;
+    meta.names = candidates.target_names;
+    meta.excluded_names = candidates.excluded_names;
+    if !candidates.np_names.is_empty() {
+        meta.np_names = candidates.np_names;
+    }
+    meta.require_np_match = candidates.shares_name_with_sibling && !meta.np_names.is_empty();
 }
 
 pub(crate) fn localize_servant_name_by_id(id: u32, jp: &str) -> String {
@@ -2042,6 +2101,7 @@ pub(crate) fn load_servant_metadata(
         names,
         excluded_names: Vec::new(),
         np_names,
+        require_np_match: false,
         class_name,
     };
     cache.lock().unwrap().insert((id, server), meta.clone());

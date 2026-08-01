@@ -2878,6 +2878,52 @@ def test_find_supports_name_only_fallback_uses_overwrite_name_alias(monkeypatch)
 
 
 @pytest.mark.parametrize(
+    ("observed_np", "should_match"),
+    [
+        ("王之书库", True),
+        ("月所未知久远之光", False),
+        (None, False),
+    ],
+)
+def test_find_supports_requires_variant_np_for_same_name_siblings(
+    monkeypatch, observed_np, should_match
+):
+    import mash_cv.cv as cv
+
+    img = np.zeros((1000, 1000, 3), dtype=np.uint8)
+    box_name = [[100, 100], [260, 100], [260, 130], [100, 130]]
+    box_np = [[120, 185], [340, 185], [340, 215], [120, 215]]
+
+    def fake_ocr(_crop):
+        fragments = [(box_name, "托勒密", 0.98)]
+        if observed_np is not None:
+            fragments.append((box_np, observed_np, 0.97))
+        return (fragments, None)
+
+    monkeypatch.setattr(cv, "_get_ocr", lambda: fake_ocr)
+    monkeypatch.setattr(cv, "_support_find_confirm_button_anchors", lambda _img: [])
+    monkeypatch.setattr(cv, "_support_grand_badge_scores_per_anchor", lambda _img, _anchors: None)
+
+    result = cv._find_supports(
+        img,
+        {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+        "托勒密",
+        ["王之书库"],
+        0.7,
+        0.7,
+        0.2,
+        expected_names=["托勒密"],
+        require_np_match=True,
+    )
+
+    assert bool(result["supports"]) is should_match
+    assert result["diagnostics"]["requireNpMatch"] is True
+    assert result["diagnostics"]["nameOnlyFallback"] is False
+    if not should_match:
+        assert result["diagnostics"]["nameOnlyReason"] == "npMatchRequired"
+
+
+@pytest.mark.parametrize(
     ("target_name", "excluded_name", "observed_name", "should_match"),
     [
         ("Ｕ－奥尔加玛丽", "奥尔加玛丽·阿尼姆斯菲亚", "Ｕ－奥尔加玛丽", True),
