@@ -103,6 +103,7 @@ pub(crate) const SELECT_ADD_INFO_CLOSE: NormRect = NormRect {
     w: 0.077,
     h: 0.106,
 };
+pub(crate) const SKILL_SELECTION_CLOSE_BUTTON_TEMPLATE: &str = "shared/battle/battle_close_button";
 pub(crate) const SELECT_ADD_INFO_OPTIONS_2: [Point; 2] =
     [Point::new(0.498, 0.584), Point::new(0.749, 0.584)];
 pub(crate) const SELECT_ADD_INFO_OPTIONS_3: [Point; 3] = [

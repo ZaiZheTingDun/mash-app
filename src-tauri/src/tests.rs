@@ -1,4 +1,5 @@
 use super::*;
+use crate::runner::{AP_RECOVERY_CONFIRM_TEMPLATE, SKILL_SELECTION_CLOSE_BUTTON_TEMPLATE};
 use std::collections::HashSet;
 use std::io::Cursor;
 use std::str::FromStr;
@@ -64,6 +65,59 @@ fn tauri_bundle_resources_cover_template_subdirectories() {
                 "missing Tauri bundle resource glob for {glob}"
             );
         }
+    }
+}
+
+#[test]
+fn shared_template_references_resolve_to_bundled_files() {
+    fn collect_shared_template_keys(value: &serde_json::Value, keys: &mut HashSet<String>) {
+        match value {
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    collect_shared_template_keys(value, keys);
+                }
+            }
+            serde_json::Value::Object(values) => {
+                if let Some(template) = values.get("template").and_then(|value| value.as_str()) {
+                    if template.starts_with("shared/") {
+                        keys.insert(template.to_string());
+                    }
+                }
+                for value in values.values() {
+                    collect_shared_template_keys(value, keys);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shared_resources = manifest_dir
+        .join("resources")
+        .join("servers")
+        .join("shared");
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(shared_resources.join("cv.json")).unwrap())
+            .unwrap();
+    let mut keys = HashSet::new();
+    collect_shared_template_keys(&config, &mut keys);
+    keys.extend([
+        SKILL_SELECTION_CLOSE_BUTTON_TEMPLATE.to_string(),
+        AP_RECOVERY_CONFIRM_TEMPLATE.to_string(),
+    ]);
+
+    for key in keys {
+        let relative = key
+            .strip_prefix("shared/")
+            .expect("shared template key must use the shared/ prefix");
+        let path = shared_resources
+            .join("templates")
+            .join(format!("{relative}.png"));
+        assert!(
+            path.is_file(),
+            "shared template key {key} does not resolve to {}",
+            path.display()
+        );
     }
 }
 

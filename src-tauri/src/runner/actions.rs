@@ -570,7 +570,7 @@ impl Runner {
             SkillPostTapExpectation::SelectionDialog(kind) => {
                 let region = skill_selection_close_region(kind);
                 self.sidecar()
-                    .find_element(None, "shared/battle_close_button", region, 0.8)
+                    .find_element(None, SKILL_SELECTION_CLOSE_BUTTON_TEMPLATE, region, 0.8)
                     .map(|matched| matched.is_some())
                     .unwrap_or(false)
             }
