@@ -5,7 +5,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from "@radix-ui/react-icons";
-import { invoke } from "../../tauri";
+import { convertFileSrc, invoke } from "../../tauri";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
 import { FaceChip } from "./AdvancedFaceChip";
@@ -44,6 +44,12 @@ import { EnemyTargetButtons, EnemyTargetSelector } from "../battle/EnemyTargetSe
 import { servantSlotIndex, skillSlotIndex } from "../battle/battleSceneModel";
 import { useServantSkillTargeting } from "../battle/useServantSkillTargeting";
 import { useServantSkillSelections } from "../battle/useServantSkillSelections";
+import { BattleStateOverrides } from "../battle/BattleStateOverrides";
+import { buildAdvancedBattleTransitionEvents } from "../battle/battleTransitionPreview";
+import {
+  battleMemberKey,
+  useBattleTransitionMetadata,
+} from "../battle/useBattleTransitionMetadata";
 import type {
   AdvancedBattleScene,
   AdvancedCommandCardCondition,
@@ -61,6 +67,7 @@ import type {
   GrandServantConfig,
 } from "../../types/project";
 import type { Servant } from "../../types/servant";
+import type { ResolvedBattleMetadata } from "../../types/battleTransition";
 import orderChangeIcon from "../../../src-tauri/resources/images/icon_order_change.png";
 
 interface AdvancedCommandEditorProps {
@@ -104,11 +111,13 @@ function AdvancedPreparationActionSummary({
   partyMembers,
   faces,
   skillIcons,
+  transitionMetadata,
 }: {
   action: PreparationAction;
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   skillIcons: Record<string, SkillIcons>;
+  transitionMetadata: Record<string, ResolvedBattleMetadata | null>;
 }) {
   if (action.type === "enemyTarget") {
     return (
@@ -194,7 +203,19 @@ function AdvancedPreparationActionSummary({
     );
     sourceText = servantLabel(source, servant);
     const idx = skillSlotIndex(resolvedAction.skill);
-    const skillEntry = servant && idx >= 0 ? (skillIcons[servant.variantKey]?.[idx] ?? null) : null;
+    const dynamicSkill =
+      idx >= 0
+        ? transitionMetadata[battleMemberKey(member, source)]?.skills[idx] ?? null
+        : null;
+    const skillEntry =
+      idx >= 0 && dynamicSkill
+        ? {
+            src: dynamicSkill.icon ? convertFileSrc(dynamicSkill.icon) : null,
+            name: dynamicSkill.name,
+          }
+        : servant && idx >= 0
+          ? (skillIcons[servant.variantKey]?.[idx] ?? null)
+          : null;
     skillIconSrc = skillEntry?.src ?? null;
     skillLabel = skillEntry?.name || (SKILL_LABELS[resolvedAction.skill ?? ""] ?? "技能");
     skillSlot = idx >= 0 ? idx : 0;
@@ -286,6 +307,7 @@ function AdvancedStrategyEditor({
   skillIcons,
   skillTargetStatus,
   skillSelection,
+  transitionMetadata,
   disableAutoSkillTargetRecognition,
   grandServants,
   grandClassDefinition,
@@ -303,6 +325,7 @@ function AdvancedStrategyEditor({
   skillIcons: Record<string, SkillIcons>;
   skillTargetStatus: ReturnType<typeof useServantSkillTargeting>;
   skillSelection: ReturnType<typeof useServantSkillSelections>;
+  transitionMetadata: Record<string, ResolvedBattleMetadata | null>;
   disableAutoSkillTargetRecognition: boolean;
   grandServants: GrandServantConfig[];
   grandClassDefinition?: GrandClassDefinition;
@@ -373,6 +396,41 @@ function AdvancedStrategyEditor({
     () => deriveMembersAfterPreparationActions(turnStartMembers, startupActions),
     [turnStartMembers, startupActions]
   );
+  const metadataForMember = (member: PartyMember, index: number) =>
+    transitionMetadata[battleMemberKey(member, index)] ?? null;
+  const skillIconsForMember = (member: PartyMember, index: number) => {
+    const servant = member.servant;
+    const resolved = metadataForMember(member, index);
+    if (!servant || !resolved) return skillIcons;
+    const dynamic: SkillIcons = resolved.skills.map((skill, slot) =>
+      skill
+        ? { src: skill.icon ? convertFileSrc(skill.icon) : null, name: skill.name }
+        : skillIcons[servant.variantKey]?.[slot] ?? { src: null, name: "" }
+    ) as SkillIcons;
+    return { ...skillIcons, [servant.variantKey]: dynamic };
+  };
+  const resolvedTargetStatus = (member: PartyMember, index: number, skill: string) => {
+    const slot = skillSlotIndex(skill);
+    const form = slot >= 0 ? metadataForMember(member, index)?.skills[slot] : null;
+    if (!form) return skillTargetStatus(member.servant, skill);
+    return form.targetTypes.some((type) => type === "ptOne" || type === "ptOneOther")
+      ? "needsTarget"
+      : "noTarget";
+  };
+  const resolvedSelection = (member: PartyMember, index: number, skill: string) => {
+    const slot = skillSlotIndex(skill);
+    const selection = slot >= 0 ? metadataForMember(member, index)?.skills[slot]?.selection : null;
+    return selection
+      ? {
+          servantCollectionNo: member.servant?.id ?? 0,
+          skillId: metadataForMember(member, index)?.skills[slot]?.id ?? 0,
+          skillNum: slot + 1,
+          selectionType: selection.type,
+          supplementaryTypes: [],
+          options: selection.options,
+        }
+      : skillSelection(member.servant, skill);
+  };
   const editingCard =
     editingCardSlot == null
       ? null
@@ -561,8 +619,9 @@ function AdvancedStrategyEditor({
       setControlDraft({ step: "target", source, option: skill });
       return;
     }
-    const servant = postControlMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
-    const selection = skillSelection(servant, skill);
+    const memberIndex = servantSlotIndex(source) ?? 0;
+    const member = postControlMembers[memberIndex] ?? { servant: null, isSupport: false };
+    const selection = resolvedSelection(member, memberIndex, skill);
     if (selection) {
       setControlDraft({
         step: "skillSelection",
@@ -575,7 +634,7 @@ function AdvancedStrategyEditor({
     }
     const status = disableAutoSkillTargetRecognition
       ? "unknown"
-      : skillTargetStatus(servant, skill);
+      : resolvedTargetStatus(member, memberIndex, skill);
     const draft = { step: "target", source, option: skill } satisfies Extract<
       PrepDraft,
       { step: "target" }
@@ -592,8 +651,9 @@ function AdvancedStrategyEditor({
       setPrepDraft({ step: "target", source, option: skill });
       return;
     }
-    const servant = currentPartyMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
-    const selection = skillSelection(servant, skill);
+    const memberIndex = servantSlotIndex(source) ?? 0;
+    const member = currentPartyMembers[memberIndex] ?? { servant: null, isSupport: false };
+    const selection = resolvedSelection(member, memberIndex, skill);
     if (selection) {
       setPrepDraft({
         step: "skillSelection",
@@ -606,7 +666,7 @@ function AdvancedStrategyEditor({
     }
     const status = disableAutoSkillTargetRecognition
       ? "unknown"
-      : skillTargetStatus(servant, skill);
+      : resolvedTargetStatus(member, memberIndex, skill);
     const draft = { step: "target", source, option: skill } satisfies Extract<
       PrepDraft,
       { step: "target" }
@@ -633,10 +693,11 @@ function AdvancedStrategyEditor({
         label: option.label,
       },
     } satisfies Extract<PrepDraft, { step: "target" }>;
-    const servant = postControlMembers[servantSlotIndex(draft.source) ?? 0]?.servant ?? null;
+    const memberIndex = servantSlotIndex(draft.source) ?? 0;
+    const member = postControlMembers[memberIndex] ?? { servant: null, isSupport: false };
     const status = disableAutoSkillTargetRecognition
       ? "unknown"
-      : skillTargetStatus(servant, draft.option);
+      : resolvedTargetStatus(member, memberIndex, draft.option);
     if (status === "noTarget") {
       finishControlAction(targetDraft, null);
       return;
@@ -661,10 +722,11 @@ function AdvancedStrategyEditor({
         label: option.label,
       },
     } satisfies Extract<PrepDraft, { step: "target" }>;
-    const servant = currentPartyMembers[servantSlotIndex(draft.source) ?? 0]?.servant ?? null;
+    const memberIndex = servantSlotIndex(draft.source) ?? 0;
+    const member = currentPartyMembers[memberIndex] ?? { servant: null, isSupport: false };
     const status = disableAutoSkillTargetRecognition
       ? "unknown"
-      : skillTargetStatus(servant, draft.option);
+      : resolvedTargetStatus(member, memberIndex, draft.option);
     if (status === "noTarget") {
       finishPrepAction(targetDraft, null);
       return;
@@ -683,6 +745,7 @@ function AdvancedStrategyEditor({
             faces={faces}
             grandServants={grandServants}
             grandClassDefinition={grandClassDefinition}
+            transitionMetadata={transitionMetadata}
             onChange={onGrandServantsChange}
           />
         </div>
@@ -774,6 +837,7 @@ function AdvancedStrategyEditor({
                 partyMembers={controlActionLineups[index] ?? partyMembers}
                 faces={faces}
                 skillIcons={skillIcons}
+                transitionMetadata={transitionMetadata}
               />
             </div>
           ))}
@@ -844,7 +908,17 @@ function AdvancedStrategyEditor({
                             ? (postControlMembers[servantSlotIndex(controlDraft.source) ?? 0]?.servant ?? null)
                             : null
                         }
-                        skillIcons={skillIcons}
+                        skillIcons={
+                          controlDraft.source !== "equipment"
+                            ? skillIconsForMember(
+                                postControlMembers[servantSlotIndex(controlDraft.source) ?? 0] ?? {
+                                  servant: null,
+                                  isSupport: false,
+                                },
+                                servantSlotIndex(controlDraft.source) ?? 0
+                              )
+                            : skillIcons
+                        }
                         onSelect={(skill) => selectControlSkill(controlDraft.source, skill)}
                       />
                     )}
@@ -990,6 +1064,20 @@ function AdvancedStrategyEditor({
               <TrashIcon width={16} height={16} />
             </IconButton>
           </Flex>
+          <BattleStateOverrides
+            members={turnStartMembers}
+            metadata={transitionMetadata}
+            value={activeTurn.battleStateOverrides ?? []}
+            onChange={(battleStateOverrides) =>
+              onChange({
+                ...scene,
+                turns: turns.map((turn) =>
+                  turn.id === activeTurn.id ? { ...turn, battleStateOverrides } : turn
+                ),
+                startupActions: [],
+              })
+            }
+          />
           {startupActions.map((action, index) => (
             <div className="battle-action-row committed advanced-action-row" key={action.id}>
               <button
@@ -1005,6 +1093,7 @@ function AdvancedStrategyEditor({
                 partyMembers={startupActionLineups[index] ?? partyMembers}
                 faces={faces}
                 skillIcons={skillIcons}
+                transitionMetadata={transitionMetadata}
               />
             </div>
           ))}
@@ -1074,7 +1163,17 @@ function AdvancedStrategyEditor({
                             ? (currentPartyMembers[servantSlotIndex(prepDraft.source) ?? 0]?.servant ?? null)
                             : null
                         }
-                        skillIcons={skillIcons}
+                        skillIcons={
+                          prepDraft.source !== "equipment"
+                            ? skillIconsForMember(
+                                currentPartyMembers[servantSlotIndex(prepDraft.source) ?? 0] ?? {
+                                  servant: null,
+                                  isSupport: false,
+                                },
+                                servantSlotIndex(prepDraft.source) ?? 0
+                              )
+                            : skillIcons
+                        }
                         onSelect={(skill) => selectStartupSkill(prepDraft.source, skill)}
                       />
                     )}
@@ -1306,6 +1405,15 @@ export function AdvancedCommandEditor({
   const skillIcons = useServantSkillIcons(initialPartyLineup);
   const skillTargetStatus = useServantSkillTargeting(initialPartyLineup);
   const skillSelection = useServantSkillSelections(initialPartyLineup);
+  const eventsForMember = useCallback(
+    (member: PartyMember, index: number) =>
+      buildAdvancedBattleTransitionEvents(member, index, scene, activeTurnIndex),
+    [activeTurnIndex, scene]
+  );
+  const transitionMetadata = useBattleTransitionMetadata(
+    initialPartyMembers,
+    eventsForMember
+  );
 
   useEffect(() => {
     if (!projectId) return;
@@ -1354,6 +1462,7 @@ export function AdvancedCommandEditor({
           skillIcons={skillIcons}
           skillTargetStatus={skillTargetStatus}
           skillSelection={skillSelection}
+          transitionMetadata={transitionMetadata}
           disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
         grandServants={grandServants}
         grandClassDefinition={grandClassDefinition}

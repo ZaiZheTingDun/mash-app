@@ -90,6 +90,18 @@ stateDiagram-v2
 
 配置 action 保存 selection type、option index、option count 与 display label。无法支持的 option count 会使 action 失败，而非点击含糊坐标。
 
+## 动态技能与宝具状态
+
+`src-tauri/src/battle_transitions.rs` 是编辑器预览和实战运行时共用的纯状态解析器。静态 `servants_variants*.json` 只确定初始形态；战斗中的技能替换、宝具替换、持续回合、层数、回合末隐藏技能和相对冷却调整来自 `servant_battle_transitions*.json`。文件损坏、schema 不支持或当前从者没有动态条目时，解析器返回空结果，调用方继续使用原静态元数据。
+
+- 状态以 `memberId` 为主键；旧项目缺少成员键时回退到初始 slot、从者 ID 和 support 标识，因此 Order Change 只改变位置，不移动或合并状态。
+- 每个普通／高级 Turn 的 `battleStateOverrides` 在执行技能前应用。`set` 可指定剩余回合和层数；外部条件未指定回合数时持续到 `clear`。该入口用于 battle point 等当前无法自动观测的条件，不增加 buff 图标或 battle point OCR。
+- 从者技能只有完成激活确认、可选分支和目标选择后才发送 `skillConfirmed`；`AlreadyUsed` 与失败路径不会更新状态。替换结果立即影响同回合后续技能与宝具。
+- 宝具事件在整组卡片都点击成功后按选择顺序提交。点击链中途失败不会施加状态。
+- Attack 结算返回 Battle 后执行回合末延迟效果并减少剩余回合。宝具当回合计入持续时间，例如 3 回合状态在该次宝具回合结束后剩余 2 回合。
+- 冠位出卡与宝具颜色评分按“用户显式 `npCard` → 当前动态宝具 → 静态宝具 → auto”取值；同名宝具不参与颜色推断。
+- 编辑器只推演已明确配置且能确定释放成员的技能／宝具；自动或无法绑定成员的宝具标记为“运行时决定”，不提前改变之后的预览。
+
 对外可见的 lifecycle 仍由 `RunnerState`（`Idle`、`Starting`、`Running`、`Finished`、`Error`）序列化。运行时变更经 `RunnerLifecycleEvent` 和 `runner_lifecycle_transition` 进入：
 
 - `Starting + WorkerStarted -> Running`

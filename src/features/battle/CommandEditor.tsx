@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Flex, IconButton, Text } from "@radix-ui/themes";
 import { invoke } from "../../tauri";
 import { AdvancedCommandEditor } from "../advanced/AdvancedCommandEditor";
 import { BattleSceneBlock } from "./BattleSceneBlock";
+import { buildNormalBattleTransitionEvents } from "./battleTransitionPreview";
+import { useBattleTransitionMetadata } from "./useBattleTransitionMetadata";
 import {
   deriveTurnPartyMembers,
   partyMembersToServants,
@@ -143,7 +145,10 @@ export function CommandEditor({
   const [loaded, setLoaded] = useState(() => !projectId);
   const [activeIndex, setActiveIndex] = useState(0);
   const [activeTurnIndex, setActiveTurnIndex] = useState(0);
-  const initialPartyMembers = partyMembers ?? toPartyMembers(partyLineup);
+  const initialPartyMembers = useMemo(
+    () => partyMembers ?? toPartyMembers(partyLineup),
+    [partyMembers, partyLineup]
+  );
 
   useEffect(() => {
     if (advancedMode || !projectId) {
@@ -252,6 +257,25 @@ export function CommandEditor({
     });
   }, [activeIndex, activeTurnIndex, saveScenes]);
 
+  const previewScene = scenes[activeIndex] ?? scenes[0] ?? null;
+  const previewTurn = previewScene?.turns[activeTurnIndex] ?? previewScene?.turns[0] ?? null;
+  const previewPartyMembers = useMemo(
+    () =>
+      previewScene
+        ? deriveTurnPartyMembers(initialPartyMembers, scenes, activeIndex, activeTurnIndex)
+        : initialPartyMembers,
+    [activeIndex, activeTurnIndex, initialPartyMembers, previewScene, scenes]
+  );
+  const eventsForMember = useCallback(
+    (member: PartyMember, index: number) =>
+      buildNormalBattleTransitionEvents(member, index, scenes, activeIndex, activeTurnIndex),
+    [activeIndex, activeTurnIndex, scenes]
+  );
+  const transitionMetadata = useBattleTransitionMetadata(
+    previewPartyMembers,
+    eventsForMember
+  );
+
   if (advancedMode) {
     return (
       <AdvancedCommandEditor
@@ -270,14 +294,9 @@ export function CommandEditor({
   }
 
   if (!loaded) return null;
-  const activeScene = scenes[activeIndex] ?? scenes[0] ?? createDefaultScene();
-  const activeTurn = activeScene.turns[activeTurnIndex] ?? activeScene.turns[0] ?? createDefaultTurn();
-  const activePartyMembers = deriveTurnPartyMembers(
-    initialPartyMembers,
-    scenes,
-    activeIndex,
-    activeTurnIndex
-  );
+  const activeScene = previewScene ?? createDefaultScene();
+  const activeTurn = previewTurn ?? createDefaultTurn();
+  const activePartyMembers = previewPartyMembers;
   const activeParty = partyMembersToServants(activePartyMembers);
 
   return (
@@ -374,6 +393,7 @@ export function CommandEditor({
           scene={activeTurn}
           partyServants={activeParty}
           partyMembers={activePartyMembers}
+          transitionMetadata={transitionMetadata}
           disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
           onChange={(updated) => handleTurnChange(activeScene.id, activeTurn.id, updated)}
         />

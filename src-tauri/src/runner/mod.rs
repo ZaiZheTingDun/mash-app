@@ -14,6 +14,7 @@ mod results;
 mod runtime;
 mod state;
 mod support;
+mod transitions;
 
 pub(crate) use actions::*;
 #[cfg(test)]
@@ -27,6 +28,7 @@ pub(crate) use party::*;
 pub(crate) use results::*;
 pub(crate) use state::*;
 pub(crate) use support::*;
+pub(crate) use transitions::*;
 
 use crate::adb::Adb;
 use crate::screen::{

@@ -261,6 +261,9 @@ pub(crate) fn grand_np_color(config: &GrandServantRuntimeConfig) -> Option<&'sta
     if config.np_card != "auto" {
         return suit_code(&config.np_card);
     }
+    if let Some(card) = config.resolved_np_card.as_deref() {
+        return suit_code(card);
+    }
     servant_np_card_code(config.servant_id)
 }
 

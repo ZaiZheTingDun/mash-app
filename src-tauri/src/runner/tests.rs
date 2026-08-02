@@ -324,6 +324,7 @@ fn empty_advanced_scene() -> AdvancedBattleScene {
 fn normal_turn(preparation_actions: Vec<Action>, attack_priority: Vec<AttackCard>) -> BattleTurn {
     BattleTurn {
         id: "turn_1".into(),
+        battle_state_overrides: Vec::new(),
         preparation_actions,
         servant_actions: Vec::new(),
         equipment_actions: Vec::new(),
@@ -361,6 +362,7 @@ fn grand_config_at(
         servant_id,
         is_support: false,
         np_card: np_card.into(),
+        resolved_np_card: None,
         priority: priority.into(),
         role: if servant_id == 20 { "deputy" } else { "main" }.into(),
     }
@@ -2177,12 +2179,14 @@ fn startup_action_member_id_resolves_after_team_reorder() {
     let original_members = [
         Some(PartyMemberRuntime {
             member_id: Some("slot-a".into()),
+            variant_key: None,
             slot_index: 0,
             servant_id: 10,
             is_support: false,
         }),
         Some(PartyMemberRuntime {
             member_id: Some("slot-b".into()),
+            variant_key: None,
             slot_index: 1,
             servant_id: 20,
             is_support: false,
@@ -2195,12 +2199,14 @@ fn startup_action_member_id_resolves_after_team_reorder() {
     let changed_members = [
         Some(PartyMemberRuntime {
             member_id: Some("slot-b".into()),
+            variant_key: None,
             slot_index: 1,
             servant_id: 20,
             is_support: false,
         }),
         Some(PartyMemberRuntime {
             member_id: Some("slot-a".into()),
+            variant_key: None,
             slot_index: 0,
             servant_id: 10,
             is_support: false,
@@ -2261,6 +2267,7 @@ fn runtime_member(
 ) -> PartyMemberRuntime {
     PartyMemberRuntime {
         member_id: Some(member_id.into()),
+        variant_key: None,
         slot_index,
         servant_id,
         is_support,
@@ -2485,6 +2492,7 @@ fn auto_order_change_startup_flow_replays_control_after_swap() {
         control_actions: vec![first_control, second_control],
         turns: vec![crate::AdvancedBattleTurn {
             id: "turn_1".into(),
+            battle_state_overrides: Vec::new(),
             actions: vec![startup],
         }],
         startup_actions: Vec::new(),
@@ -2546,14 +2554,17 @@ fn advanced_startup_flow_interleaves_multi_turn_actions_and_later_controls() {
         turns: vec![
             crate::AdvancedBattleTurn {
                 id: "turn_1".into(),
+                battle_state_overrides: Vec::new(),
                 actions: vec![turn_action("turn_1")],
             },
             crate::AdvancedBattleTurn {
                 id: "turn_2".into(),
+                battle_state_overrides: Vec::new(),
                 actions: vec![turn_action("turn_2")],
             },
             crate::AdvancedBattleTurn {
                 id: "turn_3".into(),
+                battle_state_overrides: Vec::new(),
                 actions: vec![turn_action("turn_3")],
             },
         ],
@@ -2600,10 +2611,12 @@ fn advanced_turn_actions_supports_legacy_and_multi_turn_scenes() {
     scene.turns = vec![
         crate::AdvancedBattleTurn {
             id: "turn_1".into(),
+            battle_state_overrides: Vec::new(),
             actions: Vec::new(),
         },
         crate::AdvancedBattleTurn {
             id: "turn_2".into(),
+            battle_state_overrides: Vec::new(),
             actions: vec![Action::EnemyTarget {
                 id: "second".into(),
                 target: Some("enemy_2".into()),
@@ -3747,6 +3760,7 @@ fn grand_role_for_candidate_prefers_slot_over_duplicate_servant_id() {
             servant_id: 10,
             is_support: false,
             np_card: "buster".into(),
+            resolved_np_card: None,
             priority: "damage".into(),
             role: "main".into(),
         },
@@ -3755,6 +3769,7 @@ fn grand_role_for_candidate_prefers_slot_over_duplicate_servant_id() {
             servant_id: 10,
             is_support: true,
             np_card: "arts".into(),
+            resolved_np_card: None,
             priority: "damage".into(),
             role: "deputy".into(),
         },
@@ -4712,6 +4727,7 @@ fn debug_coordinates_include_all_enemy_targets() {
 fn turn_preparation_actions_preserves_configured_row_order() {
     let turn = BattleTurn {
         id: "turn_1".into(),
+        battle_state_overrides: Vec::new(),
         preparation_actions: vec![
             Action::Equipment {
                 id: "eq_1".into(),

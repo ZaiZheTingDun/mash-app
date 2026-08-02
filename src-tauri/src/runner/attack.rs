@@ -680,6 +680,7 @@ impl Runner {
             self.emit("Battle", &format!("执行 Turn {turn_number} 技能"));
             let turn = BattleTurn {
                 id: format!("{}_turn_{turn_number}", scene.id),
+                battle_state_overrides: Vec::new(),
                 preparation_actions: resolved_actions,
                 servant_actions: Vec::new(),
                 equipment_actions: Vec::new(),
@@ -754,6 +755,7 @@ impl Runner {
         }
         let prep_turn = BattleTurn {
             id: scene.id.clone(),
+            battle_state_overrides: Vec::new(),
             preparation_actions: startup_actions,
             servant_actions: Vec::new(),
             equipment_actions: Vec::new(),
@@ -874,6 +876,15 @@ impl Runner {
         &self,
         scene: &AdvancedBattleScene,
     ) -> [Option<u32>; 3] {
+        let members = self.advanced_current_party_members(scene);
+        let (ids, _) = frontline_party_ids_and_supports(&members);
+        ids
+    }
+
+    pub(crate) fn advanced_current_party_members(
+        &self,
+        scene: &AdvancedBattleScene,
+    ) -> [Option<PartyMemberRuntime>; 3] {
         let scene_index = self.battle.current_scene_index;
         let executed_control_count = *self
             .battle
@@ -886,13 +897,24 @@ impl Runner {
                 .advanced_startup_control_indices
                 .get(&scene_index)
                 .unwrap_or(&executed_control_count);
-            self.advanced_party_ids_after_startup_flow(
+            let actions = advanced_startup_flow_actions(
                 scene,
                 executed_control_count,
                 startup_control_count,
-            )
+                *self
+                    .battle
+                    .advanced_turn_indices
+                    .get(&self.battle.current_scene_index)
+                    .unwrap_or(&0),
+                self.battle
+                    .advanced_auto_order_changes
+                    .get(&self.battle.current_scene_index),
+            );
+            self.advanced_party_members_after_actions(actions.iter())
         } else {
-            self.advanced_party_ids_after_control(scene, executed_control_count)
+            self.advanced_party_members_after_actions(
+                scene.control_actions.iter().take(executed_control_count),
+            )
         }
     }
 
@@ -1271,6 +1293,14 @@ impl Runner {
             thread::sleep(ACTION_DELAY);
         }
 
+        for pick in picks {
+            if let Pick::Np { slot, .. } = pick {
+                if let Some(servant_id) = party_ids.get(*slot as usize).copied().flatten() {
+                    self.apply_submitted_np_transition(*slot as usize, servant_id);
+                }
+            }
+        }
+
         self.battle
             .transition(BattleFlowEvent::AttackCardsSubmitted);
 
@@ -1464,6 +1494,7 @@ impl Runner {
                         }
                         let prep_turn = BattleTurn {
                             id: scene.id.clone(),
+                            battle_state_overrides: Vec::new(),
                             preparation_actions: startup_actions,
                             servant_actions: Vec::new(),
                             equipment_actions: Vec::new(),
@@ -1535,6 +1566,7 @@ impl Runner {
                         }
                         let control_turn = BattleTurn {
                             id: format!("{}_control_{}", scene.id, control_index + 1),
+                            battle_state_overrides: Vec::new(),
                             preparation_actions: vec![control_action],
                             servant_actions: Vec::new(),
                             equipment_actions: Vec::new(),
@@ -1646,6 +1678,7 @@ impl Runner {
                     }
                     let prep_turn = BattleTurn {
                         id: scene.id.clone(),
+                        battle_state_overrides: Vec::new(),
                         preparation_actions: startup_actions,
                         servant_actions: Vec::new(),
                         equipment_actions: Vec::new(),
@@ -1755,6 +1788,7 @@ impl Runner {
                     }
                     let control_turn = BattleTurn {
                         id: format!("{}_auto_control_{}", scene.id, next_control_count),
+                        battle_state_overrides: Vec::new(),
                         preparation_actions: control_actions,
                         servant_actions: Vec::new(),
                         equipment_actions: Vec::new(),
@@ -1876,6 +1910,7 @@ impl Runner {
                 }
                 let prep_turn = BattleTurn {
                     id: rule.id.clone(),
+                    battle_state_overrides: Vec::new(),
                     preparation_actions: prep_actions,
                     servant_actions: Vec::new(),
                     equipment_actions: Vec::new(),

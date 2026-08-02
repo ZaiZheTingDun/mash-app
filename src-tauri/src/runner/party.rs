@@ -15,6 +15,7 @@ pub(crate) fn parse_index(s: &str, prefix: &str) -> Option<usize> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct PartyMemberRuntime {
     pub(crate) member_id: Option<String>,
+    pub(crate) variant_key: Option<String>,
     pub(crate) slot_index: usize,
     pub(crate) servant_id: u32,
     pub(crate) is_support: bool,
@@ -1058,6 +1059,7 @@ pub(crate) fn normal_current_party_ids_from(
     for (slot_index, servant_id) in ids.into_iter().enumerate() {
         members[slot_index] = servant_id.map(|servant_id| PartyMemberRuntime {
             member_id: None,
+            variant_key: None,
             slot_index,
             servant_id,
             is_support: false,
@@ -1162,6 +1164,7 @@ impl Runner {
             if slot < 6 {
                 full[slot] = Some(PartyMemberRuntime {
                     member_id: sel.member_id.clone(),
+                    variant_key: sel.variant_key.clone(),
                     slot_index: slot,
                     servant_id: sel.servant_id,
                     is_support: false,
@@ -1184,6 +1187,7 @@ impl Runner {
             {
                 full[slot] = Some(PartyMemberRuntime {
                     member_id: self.config.support_member_id.clone(),
+                    variant_key: self.config.support_servant_variant_key.clone(),
                     slot_index: slot,
                     servant_id: support_id,
                     is_support: true,
@@ -1193,6 +1197,7 @@ impl Runner {
                     if slot.is_none() {
                         *slot = Some(PartyMemberRuntime {
                             member_id: self.config.support_member_id.clone(),
+                            variant_key: self.config.support_servant_variant_key.clone(),
                             slot_index,
                             servant_id: support_id,
                             is_support: true,
@@ -1252,6 +1257,7 @@ impl Runner {
 
         BattleTurn {
             id: turn.id.clone(),
+            battle_state_overrides: turn.battle_state_overrides.clone(),
             preparation_actions,
             servant_actions: Vec::new(),
             equipment_actions: Vec::new(),
@@ -1287,6 +1293,7 @@ impl Runner {
                     servant_id,
                     is_support: member.is_support,
                     np_card: config.np_card.clone(),
+                    resolved_np_card: self.resolved_np_card_for_member(&member),
                     priority: config.priority.clone(),
                     role: config.role.clone().unwrap_or_default(),
                 })

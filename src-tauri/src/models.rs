@@ -107,6 +107,8 @@ pub struct AttackCard {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BattleTurn {
     pub id: String,
+    #[serde(rename = "battleStateOverrides", default)]
+    pub battle_state_overrides: Vec<crate::battle_transitions::BattleStateOverride>,
     #[serde(rename = "preparationActions", default)]
     pub preparation_actions: Vec<Action>,
     #[serde(rename = "servantActions", default, skip_serializing)]
@@ -170,6 +172,7 @@ impl BattleScene {
             self.turns.push(
                 BattleTurn {
                     id: format!("{}_turn_1", self.id),
+                    battle_state_overrides: Vec::new(),
                     preparation_actions: std::mem::take(&mut self.preparation_actions),
                     servant_actions: std::mem::take(&mut self.servant_actions),
                     equipment_actions: std::mem::take(&mut self.equipment_actions),
@@ -438,6 +441,8 @@ pub struct AdvancedBattleTurn {
     pub id: String,
     #[serde(default)]
     pub actions: Vec<Action>,
+    #[serde(rename = "battleStateOverrides", default)]
+    pub battle_state_overrides: Vec<crate::battle_transitions::BattleStateOverride>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

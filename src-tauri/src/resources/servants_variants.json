@@ -112,26 +112,7 @@
               "name": "奮い断つ決意の盾 A"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              800190,
-              800200
-            ],
-            "noblePhantasms": [
-              "希望証す人理の剣"
-            ],
-            "trigger": {
-              "type": "tdTypeChange",
-              "noblePhantasmIds": [
-                800107,
-                800108
-              ]
-            },
-            "source": "noblePhantasms.script.tdTypeChangeIDs"
-          }
-        ]
+        }
       }
     ]
   },
@@ -579,33 +560,7 @@
               "name": "回路接続 EX"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              1,
-              2,
-              3,
-              4,
-              200130
-            ],
-            "noblePhantasms": [
-              "無限の剣製"
-            ],
-            "trigger": {
-              "type": "servantSkill",
-              "skill": "skill_3",
-              "skillId": 754650,
-              "skillName": "回路接続 EX",
-              "buffTypes": [
-                "tdTypeChange",
-                "tdTypeChangeArts",
-                "tdTypeChangeBuster"
-              ]
-            },
-            "source": "skills.functions.buffs: tdTypeChange*"
-          }
-        ]
+        }
       }
     ]
   },
@@ -728,6 +683,10 @@
             {
               "id": 260550,
               "name": "カリュドーン狩り A"
+            },
+            {
+              "id": 260650,
+              "name": "カリュドーン狩り EX"
             }
           ]
         }
@@ -2718,6 +2677,10 @@
             {
               "id": 109550,
               "name": "神の加護 A"
+            },
+            {
+              "id": 2636551,
+              "name": "巨いなる傲岸への警鐘 A+"
             }
           ],
           "2": [
@@ -4705,6 +4668,10 @@
             {
               "id": 203350,
               "name": "蔵知の司書 C"
+            },
+            {
+              "id": 203450,
+              "name": "蔵知の司書 B"
             }
           ],
           "2": [
@@ -7139,6 +7106,10 @@
             {
               "id": 5450,
               "name": "カリスマ B"
+            },
+            {
+              "id": 2621550,
+              "name": "アマゾネスの女王 A"
             }
           ],
           "2": [
@@ -8816,6 +8787,10 @@
             {
               "id": 494550,
               "name": "叡智の結晶 A"
+            },
+            {
+              "id": 494650,
+              "name": "叡智の結晶 EX"
             }
           ]
         }
@@ -8846,6 +8821,10 @@
             {
               "id": 495550,
               "name": "白鳥礼装 A"
+            },
+            {
+              "id": 2632552,
+              "name": "白鳥の陣 A++"
             }
           ],
           "3": [
@@ -9182,6 +9161,10 @@
             {
               "id": 527451,
               "name": "激情の細波 B+"
+            },
+            {
+              "id": 2639551,
+              "name": "輝く顔 A+"
             }
           ]
         }
@@ -10416,6 +10399,10 @@
             {
               "id": 635451,
               "name": "太陽神の眼（偽） B+"
+            },
+            {
+              "id": 635550,
+              "name": "太陽神の眼（偽） A"
             }
           ],
           "2": [
@@ -10926,34 +10913,7 @@
               "name": "マルチプル・スターリング EX"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              1,
-              2,
-              3,
-              4,
-              1100930
-            ],
-            "noblePhantasms": [
-              "原始宇宙に輝く王冠"
-            ],
-            "trigger": {
-              "type": "servantSkill",
-              "skill": "skill_2",
-              "skillId": 687450,
-              "skillName": "ヴィナス・ドライバー B",
-              "buffTypes": [
-                "tdTypeChange",
-                "tdTypeChangeArts",
-                "tdTypeChangeBuster",
-                "tdTypeChangeQuick"
-              ]
-            },
-            "source": "skills.functions.buffs: tdTypeChange*"
-          }
-        ]
+        }
       }
     ]
   },
@@ -12423,6 +12383,10 @@
             {
               "id": 863650,
               "name": "レディの衣装な愛情 EX"
+            },
+            {
+              "id": 2638650,
+              "name": "衣装部屋より∞愛を込めて EX"
             }
           ],
           "2": [
@@ -15518,30 +15482,7 @@
               "name": "ストライク・ウェーザー B"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              1,
-              2,
-              3,
-              4
-            ],
-            "noblePhantasms": [
-              "災禍祓う日輪の角"
-            ],
-            "trigger": {
-              "type": "servantSkill",
-              "skill": "skill_3",
-              "skillId": 2273450,
-              "skillName": "ストライク・ウェーザー B",
-              "buffTypes": [
-                "tdTypeChangeArts"
-              ]
-            },
-            "source": "skills.functions.buffs: tdTypeChange*"
-          }
-        ]
+        }
       }
     ]
   },
@@ -16456,28 +16397,7 @@
               "name": "ミッシング・スターリング EX"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              1,
-              2,
-              3,
-              4
-            ],
-            "noblePhantasms": [
-              "終局宇宙に閃く獣冠"
-            ],
-            "trigger": {
-              "type": "battlePoint",
-              "battlePointId": 3300200,
-              "phase": 7,
-              "phaseName": "Darling",
-              "value": 60
-            },
-            "source": "noblePhantasms.script.tdChangeByBattlePoint"
-          }
-        ]
+        }
       }
     ]
   },
@@ -16623,32 +16543,7 @@
               "name": "黄金の月の都 EX"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              1,
-              2,
-              3,
-              4
-            ],
-            "noblePhantasms": [
-              "Ｇ.Ｇ.Ｇ."
-            ],
-            "trigger": {
-              "type": "servantSkill",
-              "skill": "skill_3",
-              "skillId": 2403650,
-              "skillName": "黄金の月の都 EX",
-              "buffTypes": [
-                "tdTypeChange",
-                "tdTypeChangeArts",
-                "tdTypeChangeBuster"
-              ]
-            },
-            "source": "skills.functions.buffs: tdTypeChange*"
-          }
-        ]
+        }
       }
     ]
   },
@@ -17048,6 +16943,10 @@
           "3": [
             {
               "id": 2454999,
+              "name": "永久に遠き勝利の剣 D～A+"
+            },
+            {
+              "id": 2455249,
               "name": "永久に遠き勝利の剣 D～A+"
             }
           ]
@@ -17615,32 +17514,7 @@
               "name": "月下逍遙／日輪午睡 A"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              1,
-              2,
-              3,
-              4,
-              2301130
-            ],
-            "noblePhantasms": [
-              "末那識・十六夜残花"
-            ],
-            "trigger": {
-              "type": "servantSkill",
-              "skill": "skill_2",
-              "skillId": 2535550,
-              "skillName": "望月に踊る A",
-              "buffTypes": [
-                "tdTypeChangeBuster",
-                "tdTypeChangeArts"
-              ]
-            },
-            "source": "skills.functions.buffs: tdTypeChange*"
-          }
-        ]
+        }
       }
     ]
   },
@@ -18227,7 +18101,8 @@
           1,
           2,
           3,
-          4
+          4,
+          306430
         ],
         "noblePhantasms": [
           "汝、星を鋤く豊穣"
@@ -18538,6 +18413,42 @@
             {
               "id": 2654550,
               "name": "カルデニアの祝福（裏） A"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": 474,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "晩鐘の天使"
+        ],
+        "skills": {
+          "1": [
+            {
+              "id": 2659550,
+              "name": "天使の肉体 A"
+            }
+          ],
+          "2": [
+            {
+              "id": 2660550,
+              "name": "三十羽の鳥 A"
+            }
+          ],
+          "3": [
+            {
+              "id": 2661650,
+              "name": "ザックームの木 EX"
             }
           ]
         }

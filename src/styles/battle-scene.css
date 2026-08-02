@@ -507,3 +507,44 @@
   color: var(--gray-11);
   min-width: 70px;
 }
+
+.battle-state-overrides {
+  padding-right: 18px;
+}
+
+.battle-state-overrides .battle-action-row {
+  flex-wrap: wrap;
+  border-top: 1px solid var(--gray-5);
+  padding-top: 8px;
+}
+
+.battle-state-override-label {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.battle-state-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--gray-11);
+  font-size: 12px;
+}
+
+.battle-state-number input {
+  width: 58px;
+  border: 1px solid var(--gray-7);
+  border-radius: var(--radius-2);
+  background: var(--color-panel-solid);
+  color: var(--gray-12);
+  padding: 4px 6px;
+}
+
+.advanced-rule-section > .battle-state-overrides {
+  min-height: 0;
+  box-shadow: none;
+  margin: 8px 0;
+  padding: 8px 12px;
+}

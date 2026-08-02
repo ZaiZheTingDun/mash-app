@@ -1,0 +1,1248 @@
+{
+  "schemaVersion": 1,
+  "region": "JP",
+  "servants": [
+    {
+      "id": 1,
+      "variants": [
+        {
+          "variantIds": [
+            800190,
+            800200
+          ],
+          "baseSkillIds": [
+            2476450,
+            970660,
+            133550
+          ],
+          "baseNoblePhantasmId": 800107,
+          "skillForms": [
+            {
+              "id": 2476450,
+              "slot": 1,
+              "name": "誉れ高き雪花の盾 B",
+              "icon": "skill_00400.png",
+              "targetTypes": [
+                "ptAll"
+              ]
+            },
+            {
+              "id": 2550,
+              "slot": 2,
+              "name": "時に煙る白亜の壁 A",
+              "icon": "skill_00419.png",
+              "targetTypes": [
+                "ptOne",
+                "ptOneOther"
+              ]
+            },
+            {
+              "id": 970660,
+              "slot": 2,
+              "name": "時に煙る白亜の壁 A",
+              "icon": "skill_00419.png",
+              "targetTypes": [
+                "ptOne",
+                "ptOneOther"
+              ]
+            },
+            {
+              "id": 2477450,
+              "slot": 2,
+              "name": "時を測る紫弾の薪 B",
+              "icon": "skill_00302.png",
+              "targetTypes": []
+            },
+            {
+              "id": 133550,
+              "slot": 3,
+              "name": "奮い断つ決意の盾 A",
+              "icon": "skill_00700.png",
+              "targetTypes": []
+            }
+          ],
+          "noblePhantasmForms": [
+            {
+              "id": 800107,
+              "name": "希望築く人理の盾",
+              "card": "arts"
+            },
+            {
+              "id": 800108,
+              "name": "希望証す人理の剣",
+              "card": "buster"
+            },
+            {
+              "id": 800197,
+              "name": "希望築く人理の盾",
+              "card": "arts"
+            }
+          ],
+          "conditions": [
+            {
+              "stateKey": "buff:5825",
+              "name": "聖剣装填",
+              "durationTurns": 3,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 800108
+                }
+              ]
+            },
+            {
+              "stateKey": "buff:5826",
+              "name": "skillRankUp",
+              "durationTurns": 3,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceSkill",
+                  "slot": 2,
+                  "skillId": 2477450,
+                  "minStacks": 1
+                }
+              ],
+              "maxStacks": 1
+            }
+          ],
+          "actions": [
+            {
+              "type": "noblePhantasm",
+              "id": 800107,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:5825"
+                },
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:5826",
+                  "stacks": 1
+                },
+                {
+                  "type": "adjustCooldown",
+                  "slot": 2,
+                  "amount": 5
+                }
+              ]
+            }
+          ],
+          "sourceRefs": [
+            "functions.buffs.tdTypeChange*",
+            "functions.shortenSkill",
+            "script.SkillRankUp + buffs.skillRankUp"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "variants": [
+        {
+          "variantIds": [
+            1,
+            2,
+            3,
+            4,
+            200130
+          ],
+          "baseSkillIds": [
+            37650,
+            294451,
+            754650
+          ],
+          "baseNoblePhantasmId": 200101,
+          "skillForms": [
+            {
+              "id": 37450,
+              "slot": 1,
+              "name": "心眼（真） B",
+              "icon": "skill_00402.png",
+              "targetTypes": []
+            },
+            {
+              "id": 37650,
+              "slot": 1,
+              "name": "心眼（真） EX",
+              "icon": "skill_00402.png",
+              "targetTypes": []
+            },
+            {
+              "id": 19350,
+              "slot": 2,
+              "name": "千里眼 C",
+              "icon": "skill_00604.png",
+              "targetTypes": []
+            },
+            {
+              "id": 294451,
+              "slot": 2,
+              "name": "鷹の目 B+",
+              "icon": "skill_00604.png",
+              "targetTypes": []
+            },
+            {
+              "id": 94349,
+              "slot": 3,
+              "name": "魔術 C-",
+              "icon": "skill_00305.png",
+              "targetTypes": []
+            },
+            {
+              "id": 263550,
+              "slot": 3,
+              "name": "投影魔術 A",
+              "icon": "skill_00317.png",
+              "targetTypes": []
+            },
+            {
+              "id": 754650,
+              "slot": 3,
+              "name": "回路接続 EX",
+              "icon": "skill_00317.png",
+              "targetTypes": [
+                "commandTypeSelfTreasureDevice"
+              ],
+              "selection": {
+                "type": "commandTypeSelfTreasureDevice",
+                "options": [
+                  {
+                    "index": 0,
+                    "label": "クイックアップ"
+                  },
+                  {
+                    "index": 1,
+                    "label": "アーツアップ"
+                  },
+                  {
+                    "index": 2,
+                    "label": "バスターアップ"
+                  }
+                ]
+              }
+            }
+          ],
+          "noblePhantasmForms": [
+            {
+              "id": 200101,
+              "name": "無限の剣製",
+              "card": "buster"
+            },
+            {
+              "id": 200102,
+              "name": "無限の剣製",
+              "card": "buster"
+            },
+            {
+              "id": 200197,
+              "name": "無限の剣製",
+              "card": "arts"
+            },
+            {
+              "id": 200198,
+              "name": "無限の剣製",
+              "card": "arts"
+            }
+          ],
+          "conditions": [
+            {
+              "stateKey": "buff:2927",
+              "name": "宝具タイプチェンジ",
+              "durationTurns": 1,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 200101
+                }
+              ]
+            },
+            {
+              "stateKey": "buff:2928",
+              "name": "宝具タイプチェンジ：Arts",
+              "durationTurns": 1,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 200197
+                }
+              ]
+            },
+            {
+              "stateKey": "buff:2929",
+              "name": "宝具タイプチェンジ：Buster",
+              "durationTurns": 1,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 200101
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "type": "skill",
+              "id": 754650,
+              "slot": 3,
+              "selectionIndex": 0,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:2927"
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 754650,
+              "slot": 3,
+              "selectionIndex": 1,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:2928"
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 754650,
+              "slot": 3,
+              "selectionIndex": 2,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:2929"
+                }
+              ]
+            }
+          ],
+          "sourceRefs": [
+            "functions.buffs.tdTypeChange*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 268,
+      "variants": [
+        {
+          "variantIds": [
+            1,
+            2,
+            3,
+            4,
+            1100930
+          ],
+          "baseSkillIds": [
+            686550,
+            687450,
+            688650
+          ],
+          "baseNoblePhantasmId": 1100901,
+          "skillForms": [
+            {
+              "id": 686550,
+              "slot": 1,
+              "name": "デビルズ・シュガー A",
+              "icon": "skill_00300.png",
+              "targetTypes": [
+                "ptOther"
+              ]
+            },
+            {
+              "id": 687450,
+              "slot": 2,
+              "name": "ヴィナス・ドライバー B",
+              "icon": "skill_00302.png",
+              "targetTypes": [
+                "commandTypeSelfTreasureDevice"
+              ],
+              "selection": {
+                "type": "commandTypeSelfTreasureDevice",
+                "options": [
+                  {
+                    "index": 0,
+                    "label": "宝具タイプチェンジ：Quick"
+                  },
+                  {
+                    "index": 1,
+                    "label": "宝具タイプチェンジ：Arts"
+                  },
+                  {
+                    "index": 2,
+                    "label": "宝具タイプチェンジ：Buster"
+                  }
+                ]
+              }
+            },
+            {
+              "id": 688650,
+              "slot": 3,
+              "name": "マルチプル・スターリング EX",
+              "icon": "skill_00601.png",
+              "targetTypes": []
+            }
+          ],
+          "noblePhantasmForms": [
+            {
+              "id": 1100901,
+              "name": "原始宇宙に輝く王冠",
+              "card": "arts"
+            },
+            {
+              "id": 1100997,
+              "name": "原始宇宙に輝く王冠",
+              "card": "buster"
+            },
+            {
+              "id": 1100998,
+              "name": "原始宇宙に輝く王冠",
+              "card": "quick"
+            }
+          ],
+          "conditions": [
+            {
+              "stateKey": "buff:2533",
+              "name": "宝具タイプチェンジ",
+              "durationTurns": 3,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 1100998
+                }
+              ]
+            },
+            {
+              "stateKey": "buff:2534",
+              "name": "宝具タイプチェンジ：Arts",
+              "durationTurns": 3,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 1100998
+                }
+              ]
+            },
+            {
+              "stateKey": "buff:2535",
+              "name": "宝具タイプチェンジ：Buster",
+              "durationTurns": 3,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 1100998
+                }
+              ]
+            },
+            {
+              "stateKey": "buff:2536",
+              "name": "宝具タイプチェンジ：Quick",
+              "durationTurns": 3,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 1100998
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "type": "skill",
+              "id": 687450,
+              "slot": 2,
+              "selectionIndex": 0,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:2533"
+                },
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:2536"
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 687450,
+              "slot": 2,
+              "selectionIndex": 1,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:2534"
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 687450,
+              "slot": 2,
+              "selectionIndex": 2,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:2535"
+                }
+              ]
+            }
+          ],
+          "sourceRefs": [
+            "functions.buffs.tdTypeChange*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 285,
+      "variants": [
+        {
+          "variantIds": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "baseSkillIds": [
+            767650,
+            682450,
+            768550
+          ],
+          "baseNoblePhantasmId": 2300401,
+          "skillForms": [
+            {
+              "id": 767650,
+              "slot": 1,
+              "name": "人魚の肉 EX",
+              "icon": "skill_00333.png",
+              "targetTypes": []
+            },
+            {
+              "id": 682450,
+              "slot": 2,
+              "name": "神通力（墨） B",
+              "icon": "skill_00601.png",
+              "targetTypes": []
+            },
+            {
+              "id": 964647,
+              "slot": 2,
+              "name": "神通力（墨） B+",
+              "icon": "skill_00601.png",
+              "targetTypes": []
+            },
+            {
+              "id": 964648,
+              "slot": 2,
+              "name": "神通力（墨） A",
+              "icon": "skill_00601.png",
+              "targetTypes": []
+            },
+            {
+              "id": 768550,
+              "slot": 3,
+              "name": "蛤御殿 A",
+              "icon": "skill_00402.png",
+              "targetTypes": [
+                "ptAll",
+                "enemyAll"
+              ]
+            },
+            {
+              "id": 964649,
+              "slot": 3,
+              "name": "蛤御殿 A+",
+              "icon": "skill_00402.png",
+              "targetTypes": [
+                "ptAll",
+                "enemyAll"
+              ]
+            },
+            {
+              "id": 964650,
+              "slot": 3,
+              "name": "蛤御殿 A++",
+              "icon": "skill_00402.png",
+              "targetTypes": [
+                "ptAll",
+                "enemyAll"
+              ]
+            }
+          ],
+          "noblePhantasmForms": [
+            {
+              "id": 2300401,
+              "name": "化楽天・蛟蛤曼荼羅",
+              "card": "arts"
+            }
+          ],
+          "conditions": [
+            {
+              "stateKey": "buff:2937",
+              "name": "スキルランクアップ",
+              "durationTurns": 4,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceSkill",
+                  "slot": 2,
+                  "skillId": 964647,
+                  "minStacks": 1
+                },
+                {
+                  "type": "replaceSkill",
+                  "slot": 2,
+                  "skillId": 964648,
+                  "minStacks": 2
+                },
+                {
+                  "type": "replaceSkill",
+                  "slot": 3,
+                  "skillId": 964649,
+                  "minStacks": 1
+                },
+                {
+                  "type": "replaceSkill",
+                  "slot": 3,
+                  "skillId": 964650,
+                  "minStacks": 2
+                }
+              ],
+              "maxStacks": 2
+            },
+            {
+              "stateKey": "buff:2962",
+              "name": "人魚の滋養",
+              "durationTurns": 4,
+              "external": false,
+              "effects": [],
+              "turnEndEffects": [
+                {
+                  "type": "invokeSkill",
+                  "timing": "turnEnd",
+                  "skillId": 964656
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "type": "skill",
+              "id": 767650,
+              "slot": 1,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:2962"
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 964647,
+              "effects": [
+                {
+                  "type": "consumeState",
+                  "stateKey": "buff:2937",
+                  "stacks": 1
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 964648,
+              "effects": [
+                {
+                  "type": "consumeState",
+                  "stateKey": "buff:2937",
+                  "stacks": 2
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 964649,
+              "effects": [
+                {
+                  "type": "consumeState",
+                  "stateKey": "buff:2937",
+                  "stacks": 1
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 964650,
+              "effects": [
+                {
+                  "type": "consumeState",
+                  "stateKey": "buff:2937",
+                  "stacks": 2
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 964656,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:2937",
+                  "stacks": 1
+                }
+              ]
+            }
+          ],
+          "sourceRefs": [
+            "functions.buffs.selfturnendFunction",
+            "replacement skill functions.subState",
+            "script.SkillRankUp + buffs.skillRankUp"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 391,
+      "variants": [
+        {
+          "variantIds": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "baseSkillIds": [
+            2271550,
+            2272550,
+            2273450
+          ],
+          "baseNoblePhantasmId": 204901,
+          "skillForms": [
+            {
+              "id": 2271550,
+              "slot": 1,
+              "name": "守護騎士連盟 A",
+              "icon": "skill_00300.png",
+              "targetTypes": [
+                "ptAll"
+              ]
+            },
+            {
+              "id": 2272550,
+              "slot": 2,
+              "name": "クイーン・キーパー A",
+              "icon": "skill_00601.png",
+              "targetTypes": [
+                "ptOther"
+              ]
+            },
+            {
+              "id": 2273450,
+              "slot": 3,
+              "name": "ストライク・ウェーザー B",
+              "icon": "skill_00302.png",
+              "targetTypes": []
+            }
+          ],
+          "noblePhantasmForms": [
+            {
+              "id": 204901,
+              "name": "災禍祓う日輪の角",
+              "card": "arts"
+            },
+            {
+              "id": 204998,
+              "name": "災禍祓う日輪の角",
+              "card": "arts"
+            }
+          ],
+          "conditions": [
+            {
+              "stateKey": "buff:5460",
+              "name": "宝具チェンジ",
+              "durationTurns": 3,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 204998
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "type": "skill",
+              "id": 2273450,
+              "slot": 3,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:5460"
+                }
+              ]
+            }
+          ],
+          "sourceRefs": [
+            "functions.buffs.tdTypeChange*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 417,
+      "variants": [
+        {
+          "variantIds": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "baseSkillIds": [
+            2374550,
+            2375450,
+            2376650
+          ],
+          "baseNoblePhantasmId": 3300201,
+          "skillForms": [
+            {
+              "id": 2374550,
+              "slot": 1,
+              "name": "ゴッデス・シュガー A",
+              "icon": "skill_00300.png",
+              "targetTypes": [
+                "ptAll"
+              ]
+            },
+            {
+              "id": 2375450,
+              "slot": 2,
+              "name": "ビースト・ドライバー B",
+              "icon": "skill_00603.png",
+              "targetTypes": []
+            },
+            {
+              "id": 2376650,
+              "slot": 3,
+              "name": "ミッシング・スターリング EX",
+              "icon": "skill_00403.png",
+              "targetTypes": []
+            }
+          ],
+          "noblePhantasmForms": [
+            {
+              "id": 3300201,
+              "name": "終局宇宙に閃く獣冠",
+              "card": "arts"
+            },
+            {
+              "id": 3300298,
+              "name": "終局宇宙に閃く獣冠",
+              "card": "arts"
+            }
+          ],
+          "conditions": [
+            {
+              "stateKey": "battlePoint:3300200:7",
+              "name": "Darling",
+              "durationTurns": null,
+              "external": true,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 3300298
+                }
+              ]
+            }
+          ],
+          "actions": [],
+          "sourceRefs": [
+            "noblePhantasms.script.tdChangeByBattlePoint"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 421,
+      "variants": [
+        {
+          "variantIds": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "baseSkillIds": [
+            2401650,
+            2402650,
+            2403650
+          ],
+          "baseNoblePhantasmId": 2300601,
+          "skillForms": [
+            {
+              "id": 2401650,
+              "slot": 1,
+              "name": "都市改造 EX",
+              "icon": "skill_00305.png",
+              "targetTypes": [
+                "ptAll",
+                "ptOther"
+              ]
+            },
+            {
+              "id": 2402650,
+              "slot": 2,
+              "name": "ラグランジュ・ラグジュアリー EX",
+              "icon": "skill_00512.png",
+              "targetTypes": [
+                "enemyAll",
+                "ptAll"
+              ]
+            },
+            {
+              "id": 2403650,
+              "slot": 3,
+              "name": "黄金の月の都 EX",
+              "icon": "skill_00609.png",
+              "targetTypes": [
+                "commandTypeSelfTreasureDevice"
+              ]
+            }
+          ],
+          "noblePhantasmForms": [
+            {
+              "id": 2300601,
+              "name": "Ｃ.Ｃ.Ｃ.",
+              "card": "arts"
+            },
+            {
+              "id": 2300698,
+              "name": "Ｇ.Ｇ.Ｇ.",
+              "card": "arts"
+            }
+          ],
+          "conditions": [
+            {
+              "stateKey": "buff:5649",
+              "name": "宝具タイプチェンジ",
+              "durationTurns": 3,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 2300698
+                }
+              ]
+            },
+            {
+              "stateKey": "buff:5681",
+              "name": "宝具タイプチェンジ：攻撃",
+              "durationTurns": 3,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 2300698
+                }
+              ]
+            },
+            {
+              "stateKey": "buff:5682",
+              "name": "宝具タイプチェンジ：防御",
+              "durationTurns": 3,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 2300698
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "type": "skill",
+              "id": 2403650,
+              "slot": 3,
+              "selectionIndex": 1,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:5681"
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 2403650,
+              "slot": 3,
+              "selectionIndex": 2,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:5682"
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 2403650,
+              "slot": 3,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:5649"
+                }
+              ]
+            }
+          ],
+          "sourceRefs": [
+            "functions.buffs.tdTypeChange*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 448,
+      "variants": [
+        {
+          "variantIds": [
+            1,
+            2,
+            3,
+            4,
+            2301130
+          ],
+          "baseSkillIds": [
+            164800,
+            2535550,
+            2536550
+          ],
+          "baseNoblePhantasmId": 2301101,
+          "skillForms": [
+            {
+              "id": 164800,
+              "slot": 1,
+              "name": "直死の魔眼 A",
+              "icon": "skill_00514.png",
+              "targetTypes": []
+            },
+            {
+              "id": 2535550,
+              "slot": 2,
+              "name": "望月に踊る A",
+              "icon": "skill_00601.png",
+              "targetTypes": []
+            },
+            {
+              "id": 2536550,
+              "slot": 3,
+              "name": "月下逍遙／日輪午睡 A",
+              "icon": "skill_00300.png",
+              "targetTypes": []
+            }
+          ],
+          "noblePhantasmForms": [
+            {
+              "id": 2301101,
+              "name": "末那識・十六夜残花",
+              "card": "arts"
+            },
+            {
+              "id": 2301198,
+              "name": "末那識・十六夜残花",
+              "card": "arts"
+            }
+          ],
+          "conditions": [
+            {
+              "stateKey": "buff:5910",
+              "name": "日輪",
+              "durationTurns": null,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 2301198
+                }
+              ]
+            },
+            {
+              "stateKey": "buff:5911",
+              "name": "月下",
+              "durationTurns": null,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 2301198
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "type": "skill",
+              "id": 2535550,
+              "slot": 2,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:5911"
+                },
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:5910"
+                }
+              ]
+            }
+          ],
+          "sourceRefs": [
+            "functions.buffs.tdTypeChange*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 464,
+      "variants": [
+        {
+          "variantIds": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "baseSkillIds": [
+            2586550,
+            2587450,
+            2589650
+          ],
+          "baseNoblePhantasmId": 1002001,
+          "skillForms": [
+            {
+              "id": 2586550,
+              "slot": 1,
+              "name": "孕りの花 A",
+              "icon": "skill_00404.png",
+              "targetTypes": [
+                "ptOne"
+              ]
+            },
+            {
+              "id": 2587450,
+              "slot": 2,
+              "name": "乙女を攫う西風 B",
+              "icon": "skill_00304.png",
+              "targetTypes": [
+                "ptAll"
+              ]
+            },
+            {
+              "id": 2588650,
+              "slot": 3,
+              "name": "花園作成 EX",
+              "icon": "skill_00313.png",
+              "targetTypes": [
+                "ptAll"
+              ]
+            },
+            {
+              "id": 2589650,
+              "slot": 3,
+              "name": "プロセルピナの開花 EX",
+              "icon": "skill_00313.png",
+              "targetTypes": [
+                "ptAll"
+              ]
+            }
+          ],
+          "noblePhantasmForms": [
+            {
+              "id": 1002001,
+              "name": "全て咲き誇る精彩の花園",
+              "card": "quick"
+            },
+            {
+              "id": 1002101,
+              "name": "冥きに微睡む常世の花園",
+              "card": "quick"
+            }
+          ],
+          "conditions": [
+            {
+              "stateKey": "buff:6020",
+              "name": "tdTypeChangeArts",
+              "durationTurns": 5,
+              "external": false,
+              "effects": [
+                {
+                  "type": "replaceNoblePhantasm",
+                  "noblePhantasmId": 1002101
+                }
+              ]
+            },
+            {
+              "stateKey": "buff:6029",
+              "name": "毎ターン発動",
+              "durationTurns": 3,
+              "external": false,
+              "effects": [],
+              "turnEndEffects": [
+                {
+                  "type": "invokeSkill",
+                  "timing": "turnEnd",
+                  "skillId": 970862
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "type": "skill",
+              "id": 2588650,
+              "slot": 3,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:6029"
+                }
+              ]
+            },
+            {
+              "type": "skill",
+              "id": 2589650,
+              "slot": 3,
+              "effects": [
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:6029"
+                },
+                {
+                  "type": "applyState",
+                  "stateKey": "buff:6020"
+                }
+              ]
+            }
+          ],
+          "sourceRefs": [
+            "functions.buffs.selfturnendFunction",
+            "functions.buffs.tdTypeChange*"
+          ]
+        }
+      ]
+    }
+  ]
+}

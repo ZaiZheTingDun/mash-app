@@ -17,12 +17,15 @@ import type {
   GrandNpCard,
   GrandServantConfig,
 } from "../../types/project";
+import type { ResolvedBattleMetadata } from "../../types/battleTransition";
+import { battleMemberKey } from "../battle/useBattleTransitionMetadata";
 
 interface GrandOutputSettingsProps {
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   grandServants: GrandServantConfig[];
   grandClassDefinition?: GrandClassDefinition;
+  transitionMetadata?: Record<string, ResolvedBattleMetadata | null>;
   onChange?: (grandServants: GrandServantConfig[]) => void;
 }
 
@@ -31,6 +34,7 @@ export function GrandOutputSettings({
   faces,
   grandServants,
   grandClassDefinition,
+  transitionMetadata = {},
   onChange,
 }: GrandOutputSettingsProps) {
   const [settingsIndex, setSettingsIndex] = useState<number | null>(null);
@@ -49,6 +53,14 @@ export function GrandOutputSettings({
     settingsIndex == null ? null : normalized[settingsIndex] ?? null;
   const settingsServant =
     settings == null ? null : partyLineup[settings.slotIndex] ?? null;
+  const resolvedNpCard = (slotIndex: number) => {
+    const member = partyMembers[slotIndex];
+    return (
+      (member
+        ? transitionMetadata[battleMemberKey(member, slotIndex)]?.noblePhantasm?.card
+        : null) ?? partyLineup[slotIndex]?.noblePhantasmCard
+    );
+  };
 
   const persist = (next: GrandServantConfig[]) => {
     onChange?.(normalizeGrandServants(next, grandClassDefinition));
@@ -158,7 +170,7 @@ export function GrandOutputSettings({
                     </span>
                   )}
                   <span className="grand-np-badge">
-                    {npCardLabel(config.npCard, servant?.noblePhantasmCard)}
+                    {npCardLabel(config.npCard, resolvedNpCard(config.slotIndex))}
                   </span>
                   {grandClassDefinition?.cardPriorityEnabled !== false && (
                     <span className="grand-priority-badge">
@@ -223,7 +235,9 @@ export function GrandOutputSettings({
                   <Select.Trigger aria-label="宝具颜色" />
                   <Select.Content>
                     <Select.Item value="auto">
-                      {autoNpOptionLabel(settingsServant)}
+                      {settings && resolvedNpCard(settings.slotIndex)
+                        ? `自动读取（${npCardLabel("auto", resolvedNpCard(settings.slotIndex)).replace("自动", "")}）`
+                        : autoNpOptionLabel(settingsServant)}
                     </Select.Item>
                     <Select.Item value="buster">红卡</Select.Item>
                     <Select.Item value="arts">蓝卡</Select.Item>

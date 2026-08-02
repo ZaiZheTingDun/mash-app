@@ -1,4 +1,5 @@
 mod adb;
+mod battle_transitions;
 mod commands;
 mod craft_essence_enhancement_runner;
 mod enhancement_runner;
@@ -254,6 +255,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::catalog::get_servants,
+            battle_transitions::resolve_battle_metadata,
             commands::catalog::get_craft_essences,
             commands::catalog::get_servant_skill_selection,
             commands::catalog::get_servant_skill_targeting,

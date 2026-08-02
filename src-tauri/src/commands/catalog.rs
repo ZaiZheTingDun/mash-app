@@ -1328,6 +1328,7 @@ pub(crate) fn get_skill_icon_paths(
     app: tauri::AppHandle,
     servant_id: u32,
     variant_key: String,
+    server_state: tauri::State<'_, Mutex<Server>>,
 ) -> [SkillIconEntry; 3] {
     let empty = || {
         [
@@ -1346,6 +1347,31 @@ pub(crate) fn get_skill_icon_paths(
         ]
     };
 
+    let icons_dir = app_assets_dir(&app).join("icons");
+    if let Ok(server) = server_state.lock() {
+        if let Some(resolved) =
+            crate::battle_transitions::resolve_default_metadata(*server, servant_id, &variant_key)
+        {
+            return resolved.skills.map(|skill| {
+                let Some(skill) = skill else {
+                    return SkillIconEntry {
+                        path: None,
+                        name: String::new(),
+                    };
+                };
+                let path = skill
+                    .icon
+                    .map(|filename| icons_dir.join(filename))
+                    .filter(|path| path.is_file())
+                    .map(|path| path.to_string_lossy().into_owned());
+                SkillIconEntry {
+                    path,
+                    name: skill.name,
+                }
+            });
+        }
+    }
+
     let Some(skill_ids) = variant_skill_ids(variants_raw_data(), servant_id, &variant_key) else {
         return empty();
     };
@@ -1353,7 +1379,6 @@ pub(crate) fn get_skill_icon_paths(
         return empty();
     };
 
-    let icons_dir = app_assets_dir(&app).join("icons");
     skill_ids.map(|maybe_id| {
         let path = maybe_id
             .and_then(|id| maps.icon_map.get(&id))
@@ -1373,7 +1398,33 @@ pub(crate) fn get_servant_skill_targeting(
     app: tauri::AppHandle,
     servant_id: u32,
     variant_key: String,
+    server_state: tauri::State<'_, Mutex<Server>>,
 ) -> Result<Vec<SkillTargetingEntry>, String> {
+    if let Ok(server) = server_state.lock() {
+        if let Some(resolved) =
+            crate::battle_transitions::resolve_default_metadata(*server, servant_id, &variant_key)
+        {
+            return Ok(resolved
+                .skills
+                .into_iter()
+                .enumerate()
+                .filter_map(|(index, skill)| {
+                    let skill = skill?;
+                    let target_types: Vec<_> = skill
+                        .target_types
+                        .into_iter()
+                        .filter(|value| matches!(value.as_str(), "ptOne" | "ptOneOther"))
+                        .collect();
+                    (!target_types.is_empty()).then_some(SkillTargetingEntry {
+                        servant_collection_no: servant_id,
+                        skill_id: skill.id,
+                        skill_num: index as u32 + 1,
+                        func_target_types: target_types,
+                    })
+                })
+                .collect());
+        }
+    }
     let skill_ids = variant_skill_ids(variants_raw_data(), servant_id, &variant_key)
         .ok_or_else(|| format!("未找到从者技能配置: {servant_id} ({variant_key})"))?;
     let maps = servant_skill_maps(&app, servant_id)
@@ -1400,7 +1451,38 @@ pub(crate) fn get_servant_skill_selection(
     app: tauri::AppHandle,
     servant_id: u32,
     variant_key: String,
+    server_state: tauri::State<'_, Mutex<Server>>,
 ) -> Result<Vec<SkillSelectionEntry>, String> {
+    if let Ok(server) = server_state.lock() {
+        if let Some(resolved) =
+            crate::battle_transitions::resolve_default_metadata(*server, servant_id, &variant_key)
+        {
+            return Ok(resolved
+                .skills
+                .into_iter()
+                .enumerate()
+                .filter_map(|(index, skill)| {
+                    let skill = skill?;
+                    let selection = skill.selection?;
+                    Some(SkillSelectionEntry {
+                        servant_collection_no: servant_id,
+                        skill_id: skill.id,
+                        skill_num: index as u32 + 1,
+                        selection_type: selection.selection_type,
+                        supplementary_types: Vec::new(),
+                        options: selection
+                            .options
+                            .into_iter()
+                            .map(|option| SkillSelectionOption {
+                                index: option.index,
+                                label: option.label,
+                            })
+                            .collect(),
+                    })
+                })
+                .collect());
+        }
+    }
     let skill_ids = variant_skill_ids(variants_raw_data(), servant_id, &variant_key)
         .ok_or_else(|| format!("未找到从者技能配置: {servant_id} ({variant_key})"))?;
     let maps = servant_skill_maps(&app, servant_id)

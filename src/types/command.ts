@@ -81,12 +81,23 @@ export interface AttackCard {
 
 export interface BattleTurn {
   id: string;
+  battleStateOverrides?: BattleStateOverride[];
   preparationActions: PreparationAction[];
   servantActions: ServantAction[];
   equipmentActions: EquipmentAction[];
   commandSpellActions: CommandSpellAction[];
   enemyTarget?: string | null;
   attackPriority: AttackCard[];
+}
+
+export interface BattleStateOverride {
+  memberId?: string | null;
+  servantId?: number | null;
+  isSupport?: boolean;
+  stateKey: string;
+  mode: "set" | "clear";
+  remainingTurns?: number | null;
+  stacks?: number | null;
 }
 
 export interface BattleScene {
@@ -160,6 +171,7 @@ export interface AdvancedMainOutput {
 export interface AdvancedBattleTurn {
   id: string;
   actions: PreparationAction[];
+  battleStateOverrides?: BattleStateOverride[];
 }
 
 export interface AdvancedBattleScene {

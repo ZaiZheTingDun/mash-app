@@ -223,6 +223,9 @@ impl Runner {
             }
         }
         let scene_m = screen_scene.map(|(m, _)| m);
+        if attack_returned_after_submit {
+            self.end_transition_turn();
+        }
 
         // Decide what to do based on (prior scene, fresh read). See
         // `tick_scene_state` for the full state-transition rules; the

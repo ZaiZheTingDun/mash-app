@@ -35,11 +35,14 @@ pub(crate) enum SelectionDialogKind {
 
 impl Runner {
     pub(crate) fn execute_turn_skills(&mut self, turn: &BattleTurn) -> bool {
+        self.apply_battle_state_overrides(&turn.battle_state_overrides);
         for action in turn_preparation_actions(turn) {
             match action {
                 Action::Servant {
                     servant,
+                    servant_member_id,
                     servant_id,
+                    servant_is_support,
                     skill,
                     skill_selection,
                     target,
@@ -160,6 +163,14 @@ impl Runner {
                     if !self.wait_for_attack_button("Battle", SKILL_WAIT_TIMEOUT) {
                         return self.fail_skill_execution(&action_label, "等待攻击按钮超时");
                     }
+                    self.apply_confirmed_skill_transition(
+                        servant_member_id.as_deref(),
+                        *servant_id,
+                        *servant_is_support,
+                        servant.as_deref(),
+                        skill_index + 1,
+                        skill_selection.as_ref().map(|selection| selection.index),
+                    );
                 }
                 Action::Equipment {
                     skill,

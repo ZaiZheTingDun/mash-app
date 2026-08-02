@@ -112,26 +112,7 @@
               "name": "决意奋起之盾 A"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              800190,
-              800200
-            ],
-            "noblePhantasms": [
-              "印证希望的人理之剑"
-            ],
-            "trigger": {
-              "type": "tdTypeChange",
-              "noblePhantasmIds": [
-                800107,
-                800108
-              ]
-            },
-            "source": "noblePhantasms.script.tdTypeChangeIDs"
-          }
-        ]
+        }
       }
     ]
   },
@@ -579,33 +560,7 @@
               "name": "回路连接 EX"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              1,
-              2,
-              3,
-              4,
-              200130
-            ],
-            "noblePhantasms": [
-              "无限剑制"
-            ],
-            "trigger": {
-              "type": "servantSkill",
-              "skill": "skill_3",
-              "skillId": 754650,
-              "skillName": "回路连接 EX",
-              "buffTypes": [
-                "tdTypeChange",
-                "tdTypeChangeArts",
-                "tdTypeChangeBuster"
-              ]
-            },
-            "source": "skills.functions.buffs: tdTypeChange*"
-          }
-        ]
+        }
       }
     ]
   },
@@ -678,6 +633,10 @@
             {
               "id": 97150,
               "name": "黄金律 E"
+            },
+            {
+              "id": 2521250,
+              "name": "森林贤者 D"
             }
           ],
           "3": [
@@ -1404,6 +1363,10 @@
             {
               "id": 229550,
               "name": "喀耳刻的教诲 A"
+            },
+            {
+              "id": 2519550,
+              "name": "科尔基斯的魔女 A"
             }
           ]
         }
@@ -1518,6 +1481,10 @@
             {
               "id": 70450,
               "name": "自我保存 B"
+            },
+            {
+              "id": 2526551,
+              "name": "五步抑扬格 A+"
             }
           ],
           "3": [
@@ -1628,6 +1595,10 @@
             {
               "id": 82550,
               "name": "鉴识眼 A"
+            },
+            {
+              "id": 2525650,
+              "name": "时钟塔的奇宝 EX"
             }
           ],
           "2": [
@@ -1654,7 +1625,8 @@
           1,
           2,
           3,
-          4
+          4,
+          502130
         ],
         "noblePhantasms": [
           "灼烧殆尽的炎笼"
@@ -1889,6 +1861,10 @@
             {
               "id": 10450,
               "name": "人体研究 B"
+            },
+            {
+              "id": 2524549,
+              "name": "断绝其命脉 A-"
             }
           ]
         }
@@ -1967,6 +1943,10 @@
             {
               "id": 7450,
               "name": "费洛蒙 B"
+            },
+            {
+              "id": 2523550,
+              "name": "耽溺之香甜 A"
             }
           ],
           "3": [
@@ -2272,6 +2252,10 @@
             {
               "id": 27552,
               "name": "天性之魔 A++"
+            },
+            {
+              "id": 2522650,
+              "name": "激昂的雷光 EX"
             }
           ],
           "3": [
@@ -2338,6 +2322,10 @@
             {
               "id": 97450,
               "name": "黄金律 B"
+            },
+            {
+              "id": 2527550,
+              "name": "神之门并未闭合 A"
             }
           ],
           "2": [
@@ -3175,6 +3163,10 @@
             {
               "id": 130550,
               "name": "雾夜的凶杀 A"
+            },
+            {
+              "id": 130650,
+              "name": "雾夜的凶杀 EX"
             }
           ],
           "2": [
@@ -5946,6 +5938,10 @@
             {
               "id": 307551,
               "name": "魔力放出（宝石） A+"
+            },
+            {
+              "id": 2520550,
+              "name": "绝对豪运宝石圈 A"
             }
           ]
         }
@@ -6656,7 +6652,8 @@
           1,
           2,
           3,
-          4
+          4,
+          702530
         ],
         "noblePhantasms": [
           "不灭之诚"
@@ -7544,6 +7541,10 @@
             {
               "id": 409551,
               "name": "女神的恩惠 A+"
+            },
+            {
+              "id": 409650,
+              "name": "女神的恩惠 EX"
             }
           ]
         }
@@ -10832,34 +10833,7 @@
               "name": "多重星环 EX"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              1,
-              2,
-              3,
-              4,
-              1100930
-            ],
-            "noblePhantasms": [
-              "闪耀于原始宇宙的王冠"
-            ],
-            "trigger": {
-              "type": "servantSkill",
-              "skill": "skill_2",
-              "skillId": 687450,
-              "skillName": "金星驱动 B",
-              "buffTypes": [
-                "tdTypeChange",
-                "tdTypeChangeArts",
-                "tdTypeChangeBuster",
-                "tdTypeChangeQuick"
-              ]
-            },
-            "source": "skills.functions.buffs: tdTypeChange*"
-          }
-        ]
+        }
       }
     ]
   },
@@ -11784,7 +11758,8 @@
           2,
           3,
           4,
-          104430
+          104430,
+          104440
         ],
         "noblePhantasms": [
           "无形"
@@ -13492,7 +13467,7 @@
           "1": [
             {
               "id": 2042350,
-              "name": "大总统令 C"
+              "name": "总统令 C"
             }
           ],
           "2": [
@@ -13740,7 +13715,8 @@
           1,
           2,
           3,
-          4
+          4,
+          901330
         ],
         "noblePhantasms": [
           "数理的恶性摘出"
@@ -14655,7 +14631,8 @@
           2,
           3,
           4,
-          604730
+          604730,
+          604740
         ],
         "noblePhantasms": [
           "第一太阳"
@@ -15405,30 +15382,7 @@
               "name": "斯特莱克·韦瑟 B"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              1,
-              2,
-              3,
-              4
-            ],
-            "noblePhantasms": [
-              "驱灾日轮之角"
-            ],
-            "trigger": {
-              "type": "servantSkill",
-              "skill": "skill_3",
-              "skillId": 2273450,
-              "skillName": "斯特莱克·韦瑟 B",
-              "buffTypes": [
-                "tdTypeChangeArts"
-              ]
-            },
-            "source": "skills.functions.buffs: tdTypeChange*"
-          }
-        ]
+        }
       }
     ]
   },
@@ -16343,28 +16297,7 @@
               "name": "失落星环 EX"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              1,
-              2,
-              3,
-              4
-            ],
-            "noblePhantasms": [
-              "闪烁于终局宇宙的兽冠"
-            ],
-            "trigger": {
-              "type": "battlePoint",
-              "battlePointId": 3300200,
-              "phase": 7,
-              "phaseName": "Darling",
-              "value": 60
-            },
-            "source": "noblePhantasms.script.tdChangeByBattlePoint"
-          }
-        ]
+        }
       }
     ]
   },
@@ -16510,32 +16443,7 @@
               "name": "黄金月之都 EX"
             }
           ]
-        },
-        "rules": [
-          {
-            "ids": [
-              1,
-              2,
-              3,
-              4
-            ],
-            "noblePhantasms": [
-              "Ｇ.Ｇ.Ｇ."
-            ],
-            "trigger": {
-              "type": "servantSkill",
-              "skill": "skill_3",
-              "skillId": 2403650,
-              "skillName": "黄金月之都 EX",
-              "buffTypes": [
-                "tdTypeChange",
-                "tdTypeChangeArts",
-                "tdTypeChangeBuster"
-              ]
-            },
-            "source": "skills.functions.buffs: tdTypeChange*"
-          }
-        ]
+        }
       }
     ]
   },

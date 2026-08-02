@@ -53,6 +53,7 @@ pub(crate) struct BattleState {
     pub(crate) advanced_auto_order_changes: HashMap<usize, Action>,
     /// Number of configured Grand Battle skill turns already executed per scene.
     pub(crate) advanced_turn_indices: HashMap<usize, usize>,
+    pub(crate) transition_states: HashMap<String, RuntimeMemberTransition>,
 }
 
 impl BattleState {
@@ -72,6 +73,7 @@ impl BattleState {
             advanced_startup_control_indices: HashMap::new(),
             advanced_auto_order_changes: HashMap::new(),
             advanced_turn_indices: HashMap::new(),
+            transition_states: HashMap::new(),
         }
     }
 

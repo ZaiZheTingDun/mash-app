@@ -14,6 +14,9 @@ import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
 import { EnemyTargetButtons, EnemyTargetSelector } from "./EnemyTargetSelector";
 import { useServantSkillTargeting } from "./useServantSkillTargeting";
 import { useServantSkillSelections } from "./useServantSkillSelections";
+import { convertFileSrc } from "../../tauri";
+import { BattleStateOverrides } from "./BattleStateOverrides";
+import { battleMemberKey } from "./useBattleTransitionMetadata";
 import {
   deriveMembersAfterAttackCards,
   deriveMembersAfterPreparationActions,
@@ -51,11 +54,13 @@ import type {
   ServantAction,
 } from "../../types/command";
 import type { Servant } from "../../types/servant";
+import type { ResolvedBattleMetadata } from "../../types/battleTransition";
 
 interface BattleSceneBlockProps {
   scene: BattleTurn;
   partyServants: (Servant | null)[];
   partyMembers?: PartyMember[];
+  transitionMetadata?: Record<string, ResolvedBattleMetadata | null>;
   disableAutoSkillTargetRecognition?: boolean;
   onChange: (updated: BattleTurn) => void;
 }
@@ -119,11 +124,13 @@ function PreparationActionSummary({
   partyMembers,
   faces,
   skillIcons,
+  transitionMetadata,
 }: {
   action: PreparationAction;
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   skillIcons: Record<string, SkillIcons>;
+  transitionMetadata?: Record<string, ResolvedBattleMetadata | null>;
 }) {
   if (action.type === "enemyTarget") {
     return (
@@ -203,7 +210,23 @@ function PreparationActionSummary({
     );
     sourceText = src == null ? "从者" : servantLabel(src, servant);
     const idx = skillSlotIndex(action.skill);
-    const skillEntry = servant && idx >= 0 ? (skillIcons[servant.variantKey]?.[idx] ?? null) : null;
+    const resolved =
+      src == null
+        ? null
+        : transitionMetadata?.[battleMemberKey(member, src)] ?? null;
+    const skillEntry =
+      idx >= 0
+        ? resolved?.skills[idx]
+          ? {
+              src: resolved.skills[idx]?.icon
+                ? convertFileSrc(resolved.skills[idx]!.icon!)
+                : null,
+              name: resolved.skills[idx]?.name ?? "",
+            }
+          : servant
+            ? (skillIcons[servant.variantKey]?.[idx] ?? null)
+            : null
+        : null;
     skillIconSrc = skillEntry?.src ?? null;
     skillLabel = skillEntry?.name || (SKILL_LABELS[action.skill ?? ""] ?? "技能");
     skillSlot = idx >= 0 ? idx : 0;
@@ -465,12 +488,20 @@ function actionSummary(
     : `令咒 ${COMMAND_SPELL_LABELS[action.spell ?? ""] ?? "行动"} to ${servantLabel(target, partyServants[target] ?? null)}`;
 }
 
-function attackSummary(card: AttackCard, partyServants: (Servant | null)[]): string {
+function attackSummary(
+  card: AttackCard,
+  partyServants: (Servant | null)[],
+  resolvedNpCard?: string | null
+): string {
   const match = card.card?.match(/^servant_([1-3])_(np|buster|arts|quick|all)$/);
   if (!match) return "未设置攻击";
   const index = Number(match[1]) - 1;
   const kind = match[2];
-  return `${servantLabel(index, partyServants[index] ?? null)} ${CARD_LABELS[kind]}`;
+  const color =
+    kind === "np" && resolvedNpCard
+      ? `（${{ buster: "红", arts: "蓝", quick: "绿" }[resolvedNpCard] ?? resolvedNpCard}）`
+      : "";
+  return `${servantLabel(index, partyServants[index] ?? null)} ${CARD_LABELS[kind]}${color}`;
 }
 
 function attackSlotLabel(index: number): string {
@@ -481,6 +512,7 @@ export function BattleSceneBlock({
   scene,
   partyServants,
   partyMembers,
+  transitionMetadata = {},
   disableAutoSkillTargetRecognition = false,
   onChange,
 }: BattleSceneBlockProps) {
@@ -495,6 +527,44 @@ export function BattleSceneBlock({
   const skillIcons = useServantSkillIcons(initialPartyServants);
   const skillTargetStatus = useServantSkillTargeting(initialPartyServants);
   const skillSelection = useServantSkillSelections(initialPartyServants);
+  const metadataForMember = (member: PartyMember, index: number) =>
+    transitionMetadata[battleMemberKey(member, index)] ?? null;
+  const skillIconsForMember = (member: PartyMember, index: number) => {
+    const servant = member.servant;
+    const resolved = metadataForMember(member, index);
+    if (!servant || !resolved) return skillIcons;
+    const dynamic: SkillIcons = resolved.skills.map((skill, slot) =>
+      skill
+        ? {
+            src: skill.icon ? convertFileSrc(skill.icon) : null,
+            name: skill.name,
+          }
+        : skillIcons[servant.variantKey]?.[slot] ?? { src: null, name: "" }
+    ) as SkillIcons;
+    return { ...skillIcons, [servant.variantKey]: dynamic };
+  };
+  const resolvedTargetStatus = (member: PartyMember, index: number, skill: string) => {
+    const slot = skillSlotIndex(skill);
+    const form = slot >= 0 ? metadataForMember(member, index)?.skills[slot] : null;
+    if (!form) return skillTargetStatus(member.servant, skill);
+    return form.targetTypes.some((type) => type === "ptOne" || type === "ptOneOther")
+      ? "needsTarget"
+      : "noTarget";
+  };
+  const resolvedSkillSelection = (member: PartyMember, index: number, skill: string) => {
+    const slot = skillSlotIndex(skill);
+    const selection = slot >= 0 ? metadataForMember(member, index)?.skills[slot]?.selection : null;
+    return selection
+      ? {
+          servantCollectionNo: member.servant?.id ?? 0,
+          skillId: metadataForMember(member, index)?.skills[slot]?.id ?? 0,
+          skillNum: slot + 1,
+          selectionType: selection.type,
+          supplementaryTypes: [],
+          options: selection.options,
+        }
+      : skillSelection(member.servant, skill);
+  };
   const preparationActions = useMemo(
     () =>
       scene.preparationActions ??
@@ -626,8 +696,9 @@ export function BattleSceneBlock({
       setPrepDraft({ step: "target", source, option: skill });
       return;
     }
-    const servant = currentPartyMembers[sourceIndex(source) ?? 0]?.servant ?? null;
-    const selection = skillSelection(servant, skill);
+    const memberIndex = sourceIndex(source) ?? 0;
+    const member = currentPartyMembers[memberIndex] ?? { servant: null, isSupport: false };
+    const selection = resolvedSkillSelection(member, memberIndex, skill);
     if (selection) {
       setPrepDraft({
         step: "skillSelection",
@@ -640,7 +711,7 @@ export function BattleSceneBlock({
     }
     const status = disableAutoSkillTargetRecognition
       ? "unknown"
-      : skillTargetStatus(servant, skill);
+      : resolvedTargetStatus(member, memberIndex, skill);
     const draft = { step: "target", source, option: skill } satisfies Extract<
       PrepDraft,
       { step: "target" }
@@ -667,10 +738,11 @@ export function BattleSceneBlock({
         label: option.label,
       },
     } satisfies Extract<PrepDraft, { step: "target" }>;
-    const servant = currentPartyMembers[sourceIndex(draft.source) ?? 0]?.servant ?? null;
+    const memberIndex = sourceIndex(draft.source) ?? 0;
+    const member = currentPartyMembers[memberIndex] ?? { servant: null, isSupport: false };
     const status = disableAutoSkillTargetRecognition
       ? "unknown"
-      : skillTargetStatus(servant, draft.option);
+      : resolvedTargetStatus(member, memberIndex, draft.option);
     if (status === "noTarget") {
       finishPrepAction(targetDraft, null);
       return;
@@ -795,6 +867,12 @@ export function BattleSceneBlock({
 
   return (
     <div className="battle-scene-editor">
+      <BattleStateOverrides
+        members={initialPartyMembers}
+        metadata={transitionMetadata}
+        value={scene.battleStateOverrides ?? []}
+        onChange={(battleStateOverrides) => onChange({ ...scene, battleStateOverrides })}
+      />
       <section className="battle-phase">
         <div className="battle-phase-label">准备阶段</div>
         <div className="battle-action-list">
@@ -812,6 +890,7 @@ export function BattleSceneBlock({
                 partyMembers={preparationActionLineups[index] ?? initialPartyMembers}
                 faces={faces}
                 skillIcons={skillIcons}
+                transitionMetadata={transitionMetadata}
               />
             </div>
           ))}
@@ -942,7 +1021,17 @@ export function BattleSceneBlock({
                             ? (currentPartyMembers[sourceIndex(prepDraft.source) ?? 0]?.servant ?? null)
                             : null
                         }
-                        skillIcons={skillIcons}
+                        skillIcons={
+                          prepDraft.source !== "equipment"
+                            ? skillIconsForMember(
+                                currentPartyMembers[sourceIndex(prepDraft.source) ?? 0] ?? {
+                                  servant: null,
+                                  isSupport: false,
+                                },
+                                sourceIndex(prepDraft.source) ?? 0
+                              )
+                            : skillIcons
+                        }
                         onSelect={(skill) => selectPrepSkill(prepDraft.source, skill)}
                       />
                     )}
@@ -1069,6 +1158,20 @@ export function BattleSceneBlock({
             const attackPartyMembers =
               attackActionLineups[index] ?? currentPartyMembers;
             const attackPartyServants = partyMembersToServants(attackPartyMembers);
+            const attackMemberIndex = resolveMemberRefIndex(
+              attackPartyMembers,
+              card.card,
+              card.memberId,
+              card.servantId,
+              card.isSupport
+            );
+            const resolvedNpCard =
+              attackMemberIndex == null
+                ? null
+                : metadataForMember(
+                    attackPartyMembers[attackMemberIndex],
+                    attackMemberIndex
+                  )?.noblePhantasm?.card;
             return (
               <div className="battle-action-row committed" key={card.id}>
                 {index >= FIXED_ATTACK_CARD_COUNT ? (
@@ -1102,7 +1205,7 @@ export function BattleSceneBlock({
                       onClick={() => setAttackDraft({ step: "source", targetIndex: index })}
                     >
                       <Text size="2" weight="medium">
-                        {attackSummary(card, attackPartyServants)}
+                        {attackSummary(card, attackPartyServants, resolvedNpCard)}
                       </Text>
                     </button>
                   </>

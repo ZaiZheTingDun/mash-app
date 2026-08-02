@@ -13,6 +13,8 @@ use crate::commands::settings::NoblePhantasmDetectionMode;
 pub struct ServantSlotConfig {
     #[serde(default)]
     pub member_id: Option<String>,
+    #[serde(default)]
+    pub variant_key: Option<String>,
     pub slot_index: u32,
     pub servant_id: u32,
 }
@@ -23,6 +25,7 @@ pub(crate) struct GrandServantRuntimeConfig {
     pub(crate) servant_id: u32,
     pub(crate) is_support: bool,
     pub(crate) np_card: String,
+    pub(crate) resolved_np_card: Option<String>,
     pub(crate) priority: String,
     pub(crate) role: String,
 }

@@ -464,10 +464,15 @@ export function BattlePage({
       selectedProject.slots
         ?.map((slot, slotIndex) =>
           slot.type === "servant" && slot.servantId != null
-            ? { memberId: slot.id, slotIndex, servantId: slot.servantId }
+            ? {
+                memberId: slot.id,
+                variantKey: slot.servantVariantKey ?? null,
+                slotIndex,
+                servantId: slot.servantId,
+              }
             : null
         )
-        .filter((selection): selection is { memberId: string; slotIndex: number; servantId: number } =>
+        .filter((selection): selection is { memberId: string; variantKey: string | null; slotIndex: number; servantId: number } =>
           selection != null
         ) ?? [];
     const maxMissionRuns =
