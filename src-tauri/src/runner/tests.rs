@@ -894,6 +894,19 @@ fn command_card_owner_detection_retries_until_all_five_cards_have_owners() {
         &complete,
         &[10, 20]
     ));
+
+    let stunned_without_owner = vec![
+        command_card_with_state(0, None, false, true, Some("a"), None),
+        command_card(1, Some(10), Some("q"), None),
+        command_card(2, Some(20), Some("b"), None),
+        command_card(3, Some(10), Some("a"), None),
+        command_card(4, Some(20), Some("q"), None),
+    ];
+    assert!(!should_retry_command_card_owner_detection(
+        &stunned_without_owner,
+        &[10, 20]
+    ));
+
     assert!(!should_retry_command_card_owner_detection(&cards, &[]));
     assert!(should_retry_command_card_owner_detection(&[], &[10]));
 }
@@ -1891,7 +1904,7 @@ fn pick_by_priority_distinguishes_owned_and_support_cards_with_same_servant_id()
 }
 
 #[test]
-fn command_card_picks_postpone_stunned_cards_until_needed() {
+fn command_card_priority_uses_stunned_cards_only_when_no_actionable_match_exists() {
     let cards = vec![
         command_card_with_state(0, Some(309), false, true, Some("a"), None),
         command_card_with_state(1, Some(309), false, false, Some("a"), None),
@@ -1942,7 +1955,7 @@ fn command_card_picks_postpone_stunned_cards_until_needed() {
 }
 
 #[test]
-fn command_card_fillers_postpone_stunned_cards_until_needed() {
+fn command_card_fillers_use_stunned_cards_only_after_actionable_cards() {
     let cards = vec![
         command_card_with_state(0, Some(1), false, true, Some("a"), None),
         command_card_with_state(1, Some(1), false, false, Some("a"), None),
@@ -2020,6 +2033,51 @@ fn advanced_auto_picks_exclude_stunned_command_cards() {
     );
 
     assert_eq!(pick_labels(&picks), vec!["C2", "C3", "C1"]);
+}
+
+#[test]
+fn advanced_auto_picks_fill_leftmost_stunned_card_when_actionable_cards_are_short() {
+    let scene = empty_advanced_scene();
+    let cards = vec![
+        command_card_with_state(0, None, false, true, Some("b"), None),
+        command_card_with_state(1, Some(10), false, false, Some("a"), None),
+        command_card_with_state(2, Some(20), false, false, Some("q"), None),
+        command_card_with_state(3, None, false, true, Some("b"), None),
+    ];
+    let picks = choose_advanced_auto_picks(
+        &scene,
+        &cards,
+        &[],
+        &[Some(10), Some(20), None],
+        &[false, false, false],
+        &[],
+        &GrandCardStrategy::default(),
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["C2", "C1", "C0"]);
+}
+
+#[test]
+fn grand_auto_picks_fill_leftmost_stunned_card_when_actionable_cards_are_short() {
+    let scene = empty_advanced_scene();
+    let cards = vec![
+        command_card_with_state(0, None, false, true, Some("b"), None),
+        command_card_with_state(1, Some(10), false, false, Some("a"), None),
+        command_card_with_state(2, Some(20), false, false, Some("q"), None),
+        command_card_with_state(3, None, false, true, Some("b"), None),
+    ];
+    let picks = choose_advanced_auto_picks(
+        &scene,
+        &cards,
+        &[],
+        &[Some(10), Some(20), None],
+        &[false, false, false],
+        &[grand_config(10, "buster", "damage")],
+        &GrandCardStrategy::default(),
+    );
+
+    assert_eq!(picks.len(), 3);
+    assert_eq!(pick_labels(&picks)[2], "C0");
 }
 
 #[test]

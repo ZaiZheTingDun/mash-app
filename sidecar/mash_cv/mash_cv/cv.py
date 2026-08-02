@@ -3514,7 +3514,10 @@ def _find_command_cards(
         else:
             record["isSupport"] = False
 
-        if can_identify:
+        # Unable-to-act markers cover the portrait, and their final positional
+        # fallback only needs the slot coordinates. Do not let an unreliable
+        # face match block the runner's owner-detection retry loop.
+        if can_identify and not record["isStunned"]:
             ident = _identify_servant_in_slot(
                 gray, slot_px, servant_ids, assets_dir, face_threshold
             )

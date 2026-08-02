@@ -2068,6 +2068,38 @@ def test_command_cards_are_not_stunned_when_shared_templates_are_unavailable():
     assert all(card["isStunned"] is False for card in result["cards"])
 
 
+def test_stunned_command_cards_skip_servant_identification(monkeypatch, tmp_path):
+    """Unable-to-act cards do not need an owner and must not trigger retries."""
+    from mash_cv import cv as cv_module
+
+    img = _make_bgr_image(1920, 1080)
+    identified_slots = []
+
+    monkeypatch.setattr(
+        cv_module,
+        "_command_card_is_stunned",
+        lambda _img, region: region["x"] < 0.2,
+    )
+
+    def identify(_gray, slot_px, _servant_ids, _assets_dir, _threshold):
+        identified_slots.append(slot_px)
+        return {"servantId": 1, "ascension": 1, "faceScore": 1.0}
+
+    monkeypatch.setattr(cv_module, "_identify_servant_in_slot", identify)
+
+    result = mash_cv._find_command_cards(
+        img,
+        list(mash_cv.DEFAULT_COMMAND_CARD_SLOTS),
+        [1],
+        str(tmp_path),
+    )
+
+    assert result["cards"][0]["isStunned"] is True
+    assert "servantId" not in result["cards"][0]
+    assert len(identified_slots) == 4
+    assert [card.get("servantId") for card in result["cards"][1:]] == [1, 1, 1, 1]
+
+
 @pytest.mark.parametrize(
     ("fixture_name", "expected_stunned"),
     (

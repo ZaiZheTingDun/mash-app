@@ -1146,6 +1146,29 @@ pub(crate) fn choose_with_grand_rules(
     Vec::new()
 }
 
+fn append_unavailable_card_fallbacks(
+    mut picks: Vec<Pick>,
+    cards: &[CommandCardMatch],
+) -> Vec<Pick> {
+    let mut unavailable: Vec<&CommandCardMatch> =
+        cards.iter().filter(|card| card.is_stunned).collect();
+    unavailable.sort_by_key(|card| card.slot);
+
+    for card in unavailable {
+        if picks.len() >= 3 {
+            break;
+        }
+        picks.push(Pick::Card {
+            slot: card.slot,
+            point: Point::new(card.x, card.y),
+            servant_id: card.servant_id,
+            suit: card.suit.clone(),
+            from_priority: Some("不可用卡补位".into()),
+        });
+    }
+    picks
+}
+
 pub(crate) fn choose_advanced_auto_picks_with_grand_class(
     scene: &AdvancedBattleScene,
     cards: &[CommandCardMatch],
@@ -1236,7 +1259,7 @@ pub(crate) fn choose_advanced_auto_picks_with_grand_class(
                 grand_class,
             );
             if !strategy_picks.is_empty() {
-                return strategy_picks;
+                return append_unavailable_card_fallbacks(strategy_picks, cards);
             }
             if let Some(priority) = grand_strategy(grand_class).incomplete_candidate_priority() {
                 sort_by_candidate_priority(&mut selected, priority, grand_servants);
@@ -1244,10 +1267,13 @@ pub(crate) fn choose_advanced_auto_picks_with_grand_class(
                 sort_grand_picks(&mut selected, None, grand_servants);
             }
         }
-        return selected
-            .into_iter()
-            .map(|candidate| candidate.pick)
-            .collect();
+        return append_unavailable_card_fallbacks(
+            selected
+                .into_iter()
+                .map(|candidate| candidate.pick)
+                .collect(),
+            cards,
+        );
     }
 
     if !grand_servants.is_empty() {

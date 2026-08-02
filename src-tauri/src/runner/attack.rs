@@ -97,7 +97,10 @@ pub(crate) fn should_retry_command_card_owner_detection(
     candidate_ids: &[u32],
 ) -> bool {
     !candidate_ids.is_empty()
-        && (cards.len() < COMMAND_CARD_COUNT || cards.iter().any(|card| card.servant_id.is_none()))
+        && (cards.len() < COMMAND_CARD_COUNT
+            || cards
+                .iter()
+                .any(|card| !card.is_stunned && card.servant_id.is_none()))
 }
 
 pub(crate) fn command_card_candidate_ids(ids: &[Option<u32>]) -> Vec<u32> {
@@ -117,9 +120,9 @@ pub(crate) fn command_cards_visible(cards: &[CommandCardMatch]) -> bool {
             .all(|card| card.suit.is_some() && card.icon_region.is_some())
 }
 
-/// Return only command cards that can currently act. Normal-mode selection
-/// runs its configured priority and ordinary fill pass against this pool
-/// before falling back to stunned cards when fewer than three picks exist.
+/// Return only command cards that can currently act. Unable-to-act cards stay
+/// outside the priority pool and are considered only by the final positional
+/// fallback when fewer than three actionable picks exist.
 pub(crate) fn actionable_command_cards(cards: &[CommandCardMatch]) -> Vec<CommandCardMatch> {
     cards
         .iter()
@@ -385,7 +388,7 @@ pub(crate) fn pick_one_priority(
 
     let mut best: Option<&CommandCardMatch> = None;
     for c in cards {
-        if used_card_slots.contains(&c.slot) {
+        if c.is_stunned || used_card_slots.contains(&c.slot) {
             continue;
         }
         if !party_slot_matches_card(c, wanted_id, wanted_support) {
@@ -398,7 +401,7 @@ pub(crate) fn pick_one_priority(
         } else if c.suit.is_none() {
             continue;
         }
-        if best.map_or(true, |b| (c.is_stunned, c.slot) < (b.is_stunned, b.slot)) {
+        if best.map_or(true, |b| c.slot < b.slot) {
             best = Some(c);
         }
     }
@@ -415,7 +418,8 @@ pub(crate) fn pick_one_priority(
 }
 
 /// Fill still-empty fixed-chain positions with the leftmost remaining command
-/// cards, preserving the user's configured three-card order.
+/// cards, preserving the user's configured three-card order. Actionable cards
+/// are considered before unavailable cards.
 pub(crate) fn fill_empty_pick_slots(
     picks: &mut [Option<Pick>],
     cards: &[CommandCardMatch],
@@ -448,7 +452,8 @@ pub(crate) fn fill_empty_pick_slots(
 }
 
 /// After the priority walk, top picks up to 3 by choosing the leftmost
-/// command cards that have not yet been used.
+/// command cards that have not yet been used. Actionable cards are considered
+/// before unavailable cards.
 pub(crate) fn fill_remaining(
     picks: &mut Vec<Pick>,
     cards: &[CommandCardMatch],
@@ -1174,8 +1179,6 @@ impl Runner {
             fill_remaining(&mut picks, &actionable_cards, &mut used_card_slots);
         }
         if picks.len() < 3 {
-            // Preserve the historical "always submit a chain" fallback only
-            // after every actionable command card has been considered.
             fill_remaining(&mut picks, cards, &mut used_card_slots);
         }
 
