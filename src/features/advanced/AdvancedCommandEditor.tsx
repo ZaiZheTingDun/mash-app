@@ -584,7 +584,13 @@ function AdvancedStrategyEditor({
       finishControlAction(draft, null);
       return;
     }
-    setControlDraft(status === "needsTarget" ? { ...draft, allowNoTarget: false } : draft);
+    setControlDraft(
+      status === "needsTarget"
+        ? { ...draft, allowNoTarget: false }
+        : status === "mixed"
+          ? { ...draft, allowNoTarget: true }
+          : draft
+    );
   };
 
   const selectStartupSkill = (source: PrepSource, skill: string) => {
@@ -615,7 +621,13 @@ function AdvancedStrategyEditor({
       finishPrepAction(draft, null);
       return;
     }
-    setPrepDraft(status === "needsTarget" ? { ...draft, allowNoTarget: false } : draft);
+    setPrepDraft(
+      status === "needsTarget"
+        ? { ...draft, allowNoTarget: false }
+        : status === "mixed"
+          ? { ...draft, allowNoTarget: true }
+          : draft
+    );
   };
 
   const finishControlSkillSelection = (
@@ -642,7 +654,11 @@ function AdvancedStrategyEditor({
       return;
     }
     setControlDraft(
-      status === "needsTarget" ? { ...targetDraft, allowNoTarget: false } : targetDraft
+      status === "needsTarget"
+        ? { ...targetDraft, allowNoTarget: false }
+        : status === "mixed"
+          ? { ...targetDraft, allowNoTarget: true }
+          : targetDraft
     );
   };
 
@@ -669,7 +685,13 @@ function AdvancedStrategyEditor({
       finishPrepAction(targetDraft, null);
       return;
     }
-    setPrepDraft(status === "needsTarget" ? { ...targetDraft, allowNoTarget: false } : targetDraft);
+    setPrepDraft(
+      status === "needsTarget"
+        ? { ...targetDraft, allowNoTarget: false }
+        : status === "mixed"
+          ? { ...targetDraft, allowNoTarget: true }
+          : targetDraft
+    );
   };
 
   return (
@@ -910,6 +932,11 @@ function AdvancedStrategyEditor({
                       </button>
                     </>
                   )}
+                  {controlDraft.allowNoTarget === true && (
+                    <Text size="1" color="gray" className="battle-targeting-mode-hint">
+                      该技能存在可选择目标与无需选择目标两种形态
+                    </Text>
+                  )}
                   </>}
                 </>
               ) : (
@@ -1138,6 +1165,11 @@ function AdvancedStrategyEditor({
                         <img src={orderChangeIcon} alt="" draggable={false} />
                       </button>
                     </>
+                  )}
+                  {prepDraft.allowNoTarget === true && (
+                    <Text size="1" color="gray" className="battle-targeting-mode-hint">
+                      该技能存在可选择目标与无需选择目标两种形态
+                    </Text>
                   )}
                   </>}
                 </>

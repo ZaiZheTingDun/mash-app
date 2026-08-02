@@ -3,16 +3,17 @@ import { invoke } from "../../tauri";
 import { skillSlotIndex } from "./battleSceneModel";
 import type { Servant } from "../../types/servant";
 
-export type SkillTargetStatus = "needsTarget" | "noTarget" | "unknown";
+export type SkillTargetStatus = "needsTarget" | "noTarget" | "mixed" | "unknown";
 
 export interface ServantSkillTargetingEntry {
   servantCollectionNo: number;
   skillId: number;
   skillNum: number;
   funcTargetTypes: ("ptOne" | "ptOneOther")[];
+  targetingMode?: SkillTargetStatus;
 }
 
-type TargetingByVariant = Record<string, Set<number> | null>;
+type TargetingByVariant = Record<string, Map<number, SkillTargetStatus> | null>;
 
 export function useServantSkillTargeting(servants: (Servant | null)[]) {
   const [targeting, setTargeting] = useState<TargetingByVariant>({});
@@ -46,12 +47,20 @@ export function useServantSkillTargeting(servants: (Servant | null)[]) {
           variantKey: request.variantKey,
         })
           .then((entries) => {
-            const skillNums = new Set(
-              entries
-                .map((entry) => entry.skillNum)
-                .filter((skillNum) => skillNum >= 1 && skillNum <= 3)
-            );
-            return [request.variantKey, skillNums] as const;
+            const statuses = new Map<number, SkillTargetStatus>([
+              [1, "noTarget"],
+              [2, "noTarget"],
+              [3, "noTarget"],
+            ]);
+            for (const entry of entries) {
+              if (entry.skillNum < 1 || entry.skillNum > 3) continue;
+              statuses.set(
+                entry.skillNum,
+                entry.targetingMode ??
+                  (entry.funcTargetTypes.length > 0 ? "needsTarget" : "noTarget")
+              );
+            }
+            return [request.variantKey, statuses] as const;
           })
           .catch(() => [request.variantKey, null] as const)
       )
@@ -59,7 +68,7 @@ export function useServantSkillTargeting(servants: (Servant | null)[]) {
       if (cancelled) return;
       setTargeting((prev) => {
         const next = { ...prev };
-        for (const [variantKey, skillNums] of results) next[variantKey] = skillNums;
+        for (const [variantKey, statuses] of results) next[variantKey] = statuses;
         return next;
       });
     });
@@ -73,8 +82,8 @@ export function useServantSkillTargeting(servants: (Servant | null)[]) {
     if (!servant) return "unknown";
     const skillIndex = skillSlotIndex(skill);
     if (skillIndex < 0) return "unknown";
-    const skillNums = targeting[servant.variantKey];
-    if (skillNums === undefined || skillNums === null) return "unknown";
-    return skillNums.has(skillIndex + 1) ? "needsTarget" : "noTarget";
+    const statuses = targeting[servant.variantKey];
+    if (statuses === undefined || statuses === null) return "unknown";
+    return statuses.get(skillIndex + 1) ?? "noTarget";
   };
 }

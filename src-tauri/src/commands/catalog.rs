@@ -950,6 +950,16 @@ pub(crate) struct SkillTargetingEntry {
     pub(crate) skill_id: u32,
     pub(crate) skill_num: u32,
     pub(crate) func_target_types: Vec<String>,
+    pub(crate) targeting_mode: SkillTargetingMode,
+}
+
+#[derive(serde::Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum SkillTargetingMode {
+    NeedsTarget,
+    NoTarget,
+    Mixed,
+    Unknown,
 }
 
 #[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
@@ -1224,8 +1234,7 @@ fn parse_servant_skill_maps(
                 .iter()
                 .filter_map(|skill| {
                     let id = skill.get("id")?.as_u64()? as u32;
-                    let target_types = skill_target_types(skill);
-                    (!target_types.is_empty()).then_some((id, target_types))
+                    Some((id, skill_target_types(skill)))
                 })
                 .collect()
         })
@@ -1287,12 +1296,113 @@ fn variant_skill_ids(
                     .get("skills")
                     .and_then(|s| s.get(slot))
                     .and_then(|arr| arr.as_array())
-                    .and_then(|arr| arr.last())
+                    .and_then(|arr| {
+                        arr.iter().rev().find(|entry| {
+                            entry.get("runtime").and_then(|value| value.as_bool()) != Some(true)
+                        })
+                    })
                     .and_then(|entry| entry.get("id"))
                     .and_then(|id| id.as_u64())
                     .map(|n| n as u32)
             })
         })
+}
+
+fn variant_skill_form_ids(
+    variants_by_id: &HashMap<u32, Vec<serde_json::Value>>,
+    servant_id: u32,
+    variant_key: &str,
+) -> Option<[Vec<u32>; 3]> {
+    let variant_index: usize = variant_key
+        .split(':')
+        .nth(1)
+        .and_then(|s| s.parse::<usize>().ok())
+        .map(|n| n.saturating_sub(1))
+        .unwrap_or(0);
+
+    variants_by_id
+        .get(&servant_id)
+        .and_then(|variants| variants.get(variant_index))
+        .map(|variant| {
+            ["1", "2", "3"].map(|slot| {
+                variant
+                    .get("skills")
+                    .and_then(|skills| skills.get(slot))
+                    .and_then(|entries| entries.as_array())
+                    .map(|entries| {
+                        entries
+                            .iter()
+                            .filter_map(|entry| entry.get("id").and_then(|id| id.as_u64()))
+                            .map(|id| id as u32)
+                            .fold(Vec::new(), |mut ids, id| {
+                                if !ids.contains(&id) {
+                                    ids.push(id);
+                                }
+                                ids
+                            })
+                    })
+                    .unwrap_or_default()
+            })
+        })
+}
+
+fn skill_target_types_from_asset(skills_dir: &Path, skill_id: u32) -> Option<Vec<String>> {
+    let raw = fs::read_to_string(skills_dir.join(skill_id.to_string()).join("skill.json")).ok()?;
+    let skill: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    (skill.get("id").and_then(|id| id.as_u64()) == Some(skill_id as u64))
+        .then(|| skill_target_types(&skill))
+}
+
+fn resolve_skill_targeting_entry(
+    servant_id: u32,
+    skill_num: u32,
+    skill_ids: &[u32],
+    maps: &ServantSkillMaps,
+    skills_dir: &Path,
+) -> Option<SkillTargetingEntry> {
+    let skill_id = *skill_ids.last()?;
+    let mut func_target_types = Vec::new();
+    let mut has_targeted_form = false;
+    let mut has_untargeted_form = false;
+    let mut has_unresolved_form = false;
+
+    for skill_id in skill_ids {
+        let target_types = maps
+            .target_type_map
+            .get(skill_id)
+            .cloned()
+            .or_else(|| skill_target_types_from_asset(skills_dir, *skill_id));
+        let Some(target_types) = target_types else {
+            has_unresolved_form = true;
+            continue;
+        };
+        if target_types.is_empty() {
+            has_untargeted_form = true;
+        } else {
+            has_targeted_form = true;
+            func_target_types.extend(target_types);
+        }
+    }
+    func_target_types.sort();
+    func_target_types.dedup();
+
+    let targeting_mode = if has_unresolved_form {
+        SkillTargetingMode::Unknown
+    } else if has_targeted_form && has_untargeted_form {
+        SkillTargetingMode::Mixed
+    } else if has_targeted_form {
+        SkillTargetingMode::NeedsTarget
+    } else {
+        SkillTargetingMode::NoTarget
+    };
+
+    Some(SkillTargetingEntry {
+        servant_collection_no: servant_id,
+        skill_id,
+        skill_num,
+        func_target_types,
+        targeting_mode,
+    })
 }
 
 fn servant_skill_maps(app: &tauri::AppHandle, servant_id: u32) -> Option<Arc<ServantSkillMaps>> {
@@ -1374,23 +1484,23 @@ pub(crate) fn get_servant_skill_targeting(
     servant_id: u32,
     variant_key: String,
 ) -> Result<Vec<SkillTargetingEntry>, String> {
-    let skill_ids = variant_skill_ids(variants_raw_data(), servant_id, &variant_key)
+    let skill_ids = variant_skill_form_ids(variants_raw_data(), servant_id, &variant_key)
         .ok_or_else(|| format!("未找到从者技能配置: {servant_id} ({variant_key})"))?;
     let maps = servant_skill_maps(&app, servant_id)
         .ok_or_else(|| format!("未找到从者资源: {servant_id}"))?;
+    let skills_dir = resolve_servant_assets_dir(&app)
+        .and_then(|servants_dir| {
+            servants_dir
+                .parent()
+                .map(|assets_dir| assets_dir.join("skills"))
+        })
+        .unwrap_or_else(|| app_assets_dir(&app).join("skills"));
 
     Ok(skill_ids
-        .into_iter()
+        .iter()
         .enumerate()
-        .filter_map(|(index, maybe_id)| {
-            let skill_id = maybe_id?;
-            let func_target_types = maps.target_type_map.get(&skill_id)?.clone();
-            Some(SkillTargetingEntry {
-                servant_collection_no: servant_id,
-                skill_id,
-                skill_num: index as u32 + 1,
-                func_target_types,
-            })
+        .filter_map(|(index, ids)| {
+            resolve_skill_targeting_entry(servant_id, index as u32 + 1, ids, &maps, &skills_dir)
         })
         .collect())
 }
@@ -1484,8 +1594,8 @@ mod tests {
             maps.target_type_map.get(&11),
             Some(&vec!["ptOne".to_string(), "ptOneOther".to_string()])
         );
-        assert!(!maps.target_type_map.contains_key(&22));
-        assert!(!maps.target_type_map.contains_key(&33));
+        assert!(maps.target_type_map.get(&22).is_some_and(Vec::is_empty));
+        assert!(maps.target_type_map.get(&33).is_some_and(Vec::is_empty));
     }
 
     #[test]
@@ -1628,14 +1738,18 @@ mod tests {
     }
 
     #[test]
-    fn variant_skill_ids_uses_last_entry_for_each_slot() {
+    fn variant_skill_ids_uses_last_static_entry_for_each_slot() {
         let variants = HashMap::from([(
             42,
             vec![json!({
                 "skills": {
-                    "1": [{ "id": 1001 }, { "id": 1002 }],
+                    "1": [
+                        { "id": 1001 },
+                        { "id": 1002 },
+                        { "id": 1003, "runtime": true }
+                    ],
                     "2": [{ "id": 2001 }],
-                    "3": []
+                    "3": [{ "id": 3001, "runtime": true }]
                 }
             })],
         )]);
@@ -1651,6 +1765,85 @@ mod tests {
 
         assert!(variant_skill_ids(&variants, 42, "42:2").is_none());
         assert!(variant_skill_ids(&variants, 7, "7:1").is_none());
+    }
+
+    #[test]
+    fn mash_runtime_skill_does_not_replace_the_static_icon_form() {
+        let static_ids = variant_skill_ids(variants_raw_data(), 1, "1:3").unwrap();
+        let form_ids = variant_skill_form_ids(variants_raw_data(), 1, "1:3").unwrap();
+
+        assert_eq!(static_ids[1], Some(970660));
+        assert!(form_ids[1].contains(&2477450));
+    }
+
+    #[test]
+    fn variant_skill_form_ids_returns_every_form_in_each_slot() {
+        let variants = HashMap::from([(
+            42,
+            vec![json!({
+                "skills": {
+                    "1": [{ "id": 1001 }, { "id": 1002 }, { "id": 1001 }],
+                    "2": [{ "id": 2001, "runtime": true }],
+                    "3": []
+                }
+            })],
+        )]);
+
+        let ids = variant_skill_form_ids(&variants, 42, "42:1").unwrap();
+
+        assert_eq!(ids, [vec![1001, 1002], vec![2001], vec![]]);
+    }
+
+    #[test]
+    fn resolve_skill_targeting_entry_reads_runtime_skill_and_marks_mixed() {
+        let maps = parse_servant_skill_maps(
+            &json!({
+                "skills": [{
+                    "id": 2550,
+                    "functions": [{ "funcTargetType": "ptOne" }]
+                }]
+            }),
+            None,
+        );
+        let temp = tempfile::tempdir().unwrap();
+        let runtime_dir = temp.path().join("2477450");
+        fs::create_dir_all(&runtime_dir).unwrap();
+        fs::write(
+            runtime_dir.join("skill.json"),
+            serde_json::to_vec(&json!({
+                "id": 2477450,
+                "functions": [{ "funcTargetType": "self" }]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let entry =
+            resolve_skill_targeting_entry(1, 2, &[2550, 2477450], &maps, temp.path()).unwrap();
+
+        assert_eq!(entry.skill_id, 2477450);
+        assert_eq!(entry.skill_num, 2);
+        assert_eq!(entry.func_target_types, vec!["ptOne"]);
+        assert_eq!(entry.targeting_mode, SkillTargetingMode::Mixed);
+    }
+
+    #[test]
+    fn resolve_skill_targeting_entry_stays_unknown_when_a_form_is_missing() {
+        let maps = parse_servant_skill_maps(
+            &json!({
+                "skills": [{
+                    "id": 2550,
+                    "functions": [{ "funcTargetType": "ptOne" }]
+                }]
+            }),
+            None,
+        );
+        let temp = tempfile::tempdir().unwrap();
+
+        let entry =
+            resolve_skill_targeting_entry(1, 2, &[2550, 2477450], &maps, temp.path()).unwrap();
+
+        assert_eq!(entry.targeting_mode, SkillTargetingMode::Unknown);
     }
 }
 

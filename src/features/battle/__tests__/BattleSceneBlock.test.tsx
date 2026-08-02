@@ -156,6 +156,61 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(next.servantActions).toEqual([]);
   });
 
+  it("offers both a servant target and no target for a mixed-targeting skill", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd, args) => {
+      if (cmd === "get_servant_skill_targeting") {
+        const invokeArgs = args as { servantId?: number } | undefined;
+        if (invokeArgs?.servantId !== 1) return [];
+        return [
+          {
+            servantCollectionNo: 1,
+            skillId: 2477450,
+            skillNum: 2,
+            funcTargetTypes: ["ptOne", "ptOneOther"],
+            targetingMode: "mixed",
+          },
+        ];
+      }
+      if (cmd === "get_skill_icon_paths") {
+        return [
+          { path: null, name: "技能 1" },
+          { path: null, name: "技能 2" },
+          { path: null, name: "技能 3" },
+        ];
+      }
+      if (cmd === "get_servant_skill_selection") return [];
+      return null;
+    });
+    renderWithTheme(
+      <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
+    );
+
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_servant_skill_targeting", {
+        servantId: 1,
+        variantKey: "1",
+      })
+    );
+    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "甲" }));
+    await user.click(screen.getByRole("button", { name: "技能 2" }));
+
+    expect(screen.getByRole("button", { name: "无目标" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "乙" })).toBeInTheDocument();
+    expect(screen.getByText("该技能存在可选择目标与无需选择目标两种形态")).toHaveClass(
+      "battle-targeting-mode-hint"
+    );
+
+    await user.click(screen.getByRole("button", { name: "无目标" }));
+    expect((onChange.mock.calls[0][0] as BattleTurn).preparationActions[0]).toMatchObject({
+      servant: "servant_1",
+      skill: "skill_2",
+      target: null,
+    });
+  });
+
   it("asks for a servant skill selection before saving the action", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

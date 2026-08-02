@@ -97,6 +97,11 @@
   position: relative;
 }
 
+.battle-targeting-mode-hint {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 .battle-add-row,
 .battle-action-summary {
   display: inline-flex;
