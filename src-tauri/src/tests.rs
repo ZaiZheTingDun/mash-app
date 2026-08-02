@@ -1525,7 +1525,7 @@ fn import_asset_bundle_from_zip_path_rejects_zip_without_asset_dirs() {
 
     let err = import_asset_bundle_from_zip_path(&zip_path, &tmp.path().join("installed"))
         .expect_err("import should fail");
-    assert!(err.contains("servants/ces/icons/mystic-codes"));
+    assert!(err.contains("servants/ces/icons/skills/mystic-codes"));
 }
 
 #[test]
@@ -1673,7 +1673,7 @@ fn build_assets_remote_manifest(latest: u32, patches: &str) -> AssetsRemoteManif
 #[test]
 fn assets_app_manifest_parses_target_version_and_latest_url() {
     let manifest = parse_assets_app_manifest(ASSETS_MANIFEST_JSON).unwrap();
-    assert_eq!(manifest.assets_version, 5);
+    assert_eq!(manifest.assets_version, 7);
     assert_eq!(
         manifest.latest_url,
         "https://mash.xiaotongx.com/mash/assets/latest.json"
@@ -2280,7 +2280,7 @@ fn servants_data_includes_latest_cn_catalog_updates() {
     assert_eq!(indra.noble_phantasm_name.as_deref(), Some("神之雷"));
 
     let ascalaphus = servants_data().iter().find(|s| s.id == 471).unwrap();
-    assert_eq!(ascalaphus.name_jp, "アスカラポス");
+    assert_eq!(ascalaphus.name_jp, "アスカラポス＝アケローン");
     assert_eq!(
         ascalaphus.noble_phantasm_name.as_deref(),
         Some("我は告げる、逃れられぬ絶望を")

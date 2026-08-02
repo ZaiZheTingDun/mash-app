@@ -34,7 +34,7 @@
         "cardName": "arts"
       },
       {
-        "id": 800106,
+        "id": 800196,
         "name": "Lord Camelot",
         "nameJP": "いまに在りし夢想の城",
         "nameCN": "依然存在的梦想之城",
@@ -42,7 +42,7 @@
         "cardName": "arts"
       },
       {
-        "id": 800107,
+        "id": 800197,
         "name": "Lord Chaldeas",
         "nameJP": "希望築く人理の盾",
         "nameCN": "构筑希望的人理之盾",
@@ -70,7 +70,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 100101,
+        "id": 100102,
         "name": "Excalibur",
         "nameJP": "約束された勝利の剣",
         "nameCN": "誓约胜利之剑",
@@ -110,7 +110,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 100301,
+        "id": 100302,
         "name": "Caliburn",
         "nameJP": "勝利すべき黄金の剣",
         "nameCN": "必胜黄金之剑",
@@ -130,7 +130,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 100501,
+        "id": 100502,
         "name": "Laus Saint Claudius",
         "nameJP": "童女謳う華の帝政",
         "nameCN": "童女讴歌的荣华帝政",
@@ -150,7 +150,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 100801,
+        "id": 100802,
         "name": "Balmung",
         "nameJP": "幻想大剣・天魔失墜",
         "nameCN": "幻想大剑·天魔失坠",
@@ -170,7 +170,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 101301,
+        "id": 101302,
         "name": "Crocea Mors",
         "nameJP": "黄の死",
         "nameCN": "黄之死",
@@ -190,7 +190,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 101801,
+        "id": 101802,
         "name": "Photon Ray",
         "nameJP": "軍神の剣",
         "nameCN": "军神之剑",
@@ -230,7 +230,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 102601,
+        "id": 102602,
         "name": "Fleur de Lys",
         "nameJP": "百合の花咲く豪華絢爛",
         "nameCN": "百合花开豪华绚烂",
@@ -250,7 +250,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 200101,
+        "id": 200102,
         "name": "Unlimited Blade Works",
         "nameJP": "無限の剣製",
         "nameCN": "无限剑制",
@@ -258,7 +258,7 @@
         "cardName": "buster"
       },
       {
-        "id": 200197,
+        "id": 200198,
         "name": "Unlimited Blade Works",
         "nameJP": "無限の剣製",
         "nameCN": "无限剑制",
@@ -278,7 +278,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 200201,
+        "id": 200202,
         "name": "Enuma Elish",
         "nameJP": "天地乖離す開闢の星",
         "nameCN": "天地乖离开辟之星",
@@ -318,7 +318,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 200501,
+        "id": 200502,
         "name": "Phoebus Catastrophe",
         "nameJP": "訴状の矢文",
         "nameCN": "诉状箭书",
@@ -338,7 +338,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 201201,
+        "id": 201202,
         "name": "Eye of the Euryale",
         "nameJP": "女神の視線",
         "nameCN": "女神的视线",
@@ -358,7 +358,7 @@
     "rarity": 1,
     "noblePhantasms": [
       {
-        "id": 201301,
+        "id": 201302,
         "name": "Stella",
         "nameJP": "流星一条",
         "nameCN": "流星一条",
@@ -378,7 +378,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 300101,
+        "id": 300102,
         "name": "Gae Bolg",
         "nameJP": "刺し穿つ死棘の槍",
         "nameCN": "穿刺死棘之枪",
@@ -398,7 +398,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 300501,
+        "id": 300502,
         "name": "Bathory Erzsebet",
         "nameJP": "鮮血魔嬢",
         "nameCN": "鲜血魔女",
@@ -418,7 +418,7 @@
     "rarity": 2,
     "noblePhantasms": [
       {
-        "id": 300601,
+        "id": 300602,
         "name": "Gohyaku Rakan Fudarakutokai",
         "nameJP": "五百羅漢補陀落渡海",
         "nameCN": "五百罗汉补陀落渡海",
@@ -438,7 +438,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 300701,
+        "id": 300702,
         "name": "Gae Bolg",
         "nameJP": "穿ちの朱槍",
         "nameCN": "贯穿之朱枪",
@@ -498,7 +498,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 400101,
+        "id": 400102,
         "name": "Bellerophon",
         "nameJP": "騎英の手綱",
         "nameCN": "骑英之缰绳",
@@ -538,7 +538,7 @@
     "rarity": 2,
     "noblePhantasms": [
       {
-        "id": 400801,
+        "id": 400802,
         "name": "Queen Anne's Revenge",
         "nameJP": "アン女王の復讐",
         "nameCN": "安妮女王之复仇",
@@ -558,7 +558,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 401101,
+        "id": 401102,
         "name": "Chariot of Boudica",
         "nameJP": "約束されざる守護の車輪",
         "nameCN": "无以誓约守护之车轮",
@@ -578,7 +578,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 401401,
+        "id": 401402,
         "name": "Dan-no-ura Hasso Tobi",
         "nameJP": "壇ノ浦・八艘跳",
         "nameCN": "坛之浦·八艘跳",
@@ -598,7 +598,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 401501,
+        "id": 401502,
         "name": "Bucephalus",
         "nameJP": "始まりの蹂躙制覇",
         "nameCN": "初始的蹂躏制霸",
@@ -618,7 +618,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 401701,
+        "id": 401702,
         "name": "Guillotine Breaker",
         "nameJP": "百合の王冠に栄光あれ",
         "nameCN": "愿百合王冠荣光永在",
@@ -638,7 +638,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 401901,
+        "id": 401902,
         "name": "Tarasque",
         "nameJP": "愛知らぬ哀しき竜よ",
         "nameCN": "不识爱的悲哀之龙啊",
@@ -658,7 +658,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 500101,
+        "id": 500102,
         "name": "Rule Breaker",
         "nameJP": "破戒すべき全ての符",
         "nameCN": "万符必应破戒",
@@ -678,7 +678,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 500201,
+        "id": 500202,
         "name": "Prelati's Spellbook",
         "nameJP": "螺湮城教本",
         "nameCN": "螺湮城教本",
@@ -698,7 +698,7 @@
     "rarity": 2,
     "noblePhantasms": [
       {
-        "id": 500501,
+        "id": 500502,
         "name": "Marchen Meines Lebens",
         "nameJP": "貴方のための物語",
         "nameCN": "为你撰写的故事",
@@ -718,7 +718,7 @@
     "rarity": 2,
     "noblePhantasms": [
       {
-        "id": 500701,
+        "id": 500702,
         "name": "First Folio",
         "nameJP": "開演の刻は来たれり、此処に万雷の喝采を",
         "nameCN": "开演之刻已至，此处应有雷鸣般的喝彩",
@@ -738,7 +738,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 501401,
+        "id": 501402,
         "name": "Ticktock Bomb",
         "nameJP": "微睡む爆弾",
         "nameCN": "浅眠炸弹",
@@ -778,7 +778,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 501901,
+        "id": 501902,
         "name": "无还之阵",
         "nameJP": "石兵八陣",
         "nameCN": "石兵八阵",
@@ -798,7 +798,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 502101,
+        "id": 502102,
         "name": "Wicker Man",
         "nameJP": "灼き尽くす炎の檻",
         "nameCN": "灼烧殆尽的炎笼",
@@ -818,7 +818,7 @@
     "rarity": 1,
     "noblePhantasms": [
       {
-        "id": 600101,
+        "id": 600102,
         "name": "Tsubame Gaeshi",
         "nameJP": "燕返し",
         "nameCN": "燕返",
@@ -838,7 +838,7 @@
     "rarity": 2,
     "noblePhantasms": [
       {
-        "id": 600201,
+        "id": 600202,
         "name": "Zabaniya",
         "nameJP": "妄想心音",
         "nameCN": "妄想心音",
@@ -858,7 +858,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 601001,
+        "id": 601002,
         "name": "Smile of the Stheno",
         "nameJP": "女神の微笑",
         "nameCN": "女神的微笑",
@@ -878,7 +878,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 601101,
+        "id": 601102,
         "name": "只为刺杀而存",
         "nameJP": "不還匕首",
         "nameCN": "不归匕首",
@@ -898,7 +898,7 @@
     "rarity": 2,
     "noblePhantasms": [
       {
-        "id": 601201,
+        "id": 601202,
         "name": "La Mort Espoir",
         "nameJP": "死は明日への希望なり",
         "nameCN": "死亡将为明日的希望",
@@ -918,7 +918,7 @@
     "rarity": 2,
     "noblePhantasms": [
       {
-        "id": 601301,
+        "id": 601302,
         "name": "Christine, Christine",
         "nameJP": "地獄にこそ響け我が愛の唄",
         "nameCN": "吾之情歌只在地狱回响",
@@ -958,7 +958,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 601701,
+        "id": 601702,
         "name": "Phantom Maiden",
         "nameJP": "幻想の鉄処女",
         "nameCN": "幻想铁处女",
@@ -1038,7 +1038,7 @@
     "rarity": 1,
     "noblePhantasms": [
       {
-        "id": 700501,
+        "id": 700502,
         "name": "Crying Warmonger",
         "nameJP": "疵獣の咆吼",
         "nameCN": "伤兽的咆吼",
@@ -1058,7 +1058,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 700601,
+        "id": 700602,
         "name": "Golden Spark",
         "nameJP": "黄金衝撃",
         "nameCN": "黄金冲击",
@@ -1078,7 +1078,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 700701,
+        "id": 700703,
         "name": "Kazikli Bey",
         "nameJP": "血塗れ王鬼",
         "nameCN": "血染的王鬼",
@@ -1098,7 +1098,7 @@
     "rarity": 1,
     "noblePhantasms": [
       {
-        "id": 700901,
+        "id": 700902,
         "name": "Chaos Labyrinthos",
         "nameJP": "万古不易の迷宮",
         "nameCN": "万古不变的迷宫",
@@ -1118,7 +1118,7 @@
     "rarity": 2,
     "noblePhantasms": [
       {
-        "id": 701001,
+        "id": 701002,
         "name": "Flucticulus Diana",
         "nameJP": "我が心を喰らえ、月の光",
         "nameCN": "吞噬吾心吧，月光",
@@ -1138,7 +1138,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 701101,
+        "id": 701102,
         "name": "Athanatoi Ten Thousand",
         "nameJP": "不死の一万騎兵",
         "nameCN": "不死的万名骑兵",
@@ -1198,7 +1198,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 701601,
+        "id": 701602,
         "name": "Sansan Nikko Hiruyasumi Shuchi Nikurin",
         "nameJP": "燦々日光午睡宮酒池肉林",
         "nameCN": "璀灿日光午睡宫酒池肉林",
@@ -1218,7 +1218,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 900101,
+        "id": 900102,
         "name": "Luminosite Eternelle",
         "nameJP": "我が神はここにありて",
         "nameCN": "吾主在此",
@@ -1238,7 +1238,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 200901,
+        "id": 200902,
         "name": "Tri-star Amore Mio",
         "nameJP": "月女神の愛矢恋矢",
         "nameCN": "月女神的爱箭恋矢",
@@ -1286,7 +1286,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 500301,
+        "id": 500302,
         "name": "Suiten Nikko Amaterasu Yano Shizu-Ishi",
         "nameJP": "水天日光天照八野鎮石",
         "nameCN": "水天日光天照八野镇石",
@@ -1306,7 +1306,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 200601,
+        "id": 200602,
         "name": "Hamesh Avanim",
         "nameJP": "五つの石",
         "nameCN": "五块石头",
@@ -1326,7 +1326,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 301601,
+        "id": 301602,
         "name": "Durindana",
         "nameJP": "不毀の極槍",
         "nameCN": "不毁的极枪",
@@ -1346,7 +1346,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 400301,
+        "id": 400302,
         "name": "Golden Wild Hunt",
         "nameJP": "黄金鹿と嵐の夜",
         "nameCN": "黄金鹿与暴风夜",
@@ -1366,7 +1366,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 400901,
+        "id": 400902,
         "name": "Caribbean Free Bird",
         "nameJP": "比翼にして連理",
         "nameCN": "比翼连理",
@@ -1386,7 +1386,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 501701,
+        "id": 501702,
         "name": "Pain Breaker",
         "nameJP": "修補すべき全ての疵",
         "nameCN": "万疵必应修补",
@@ -1454,7 +1454,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 301301,
+        "id": 301302,
         "name": "Gae Bolg Alternative",
         "nameJP": "貫き穿つ死翔の槍",
         "nameCN": "贯穿死翔之枪",
@@ -1474,7 +1474,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 300201,
+        "id": 300202,
         "name": "Gae Dearg＆Gae Buidhe",
         "nameJP": "破魔の紅薔薇、必滅の黄薔薇",
         "nameCN": "破魔的红蔷薇、必灭的黄蔷薇",
@@ -1494,7 +1494,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 101401,
+        "id": 101402,
         "name": "Caladbolg",
         "nameJP": "虹霓剣",
         "nameCN": "虹霓剑",
@@ -1534,7 +1534,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 500401,
+        "id": 500402,
         "name": "Nursery Rhyme",
         "nameJP": "誰かの為の物語",
         "nameCN": "献给某人的故事",
@@ -1554,7 +1554,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 600501,
+        "id": 600502,
         "name": "Maria the Ripper",
         "nameJP": "解体聖母",
         "nameCN": "解体圣母",
@@ -1574,7 +1574,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 100901,
+        "id": 100902,
         "name": "Clarent Blood Arthur",
         "nameJP": "我が麗しき父への叛逆",
         "nameCN": "对吾华丽父王的叛逆",
@@ -1594,7 +1594,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 201101,
+        "id": 201102,
         "name": "System Keraunos",
         "nameJP": "人類神話・雷電降臨",
         "nameCN": "人类神话·雷电降临",
@@ -1614,7 +1614,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 301901,
+        "id": 301902,
         "name": "Rhongomyniad",
         "nameJP": "最果てにて輝ける槍",
         "nameCN": "闪耀于终焉之枪",
@@ -1634,7 +1634,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 501001,
+        "id": 501002,
         "name": "Sword of Paracelsus",
         "nameJP": "元素使いの魔剣",
         "nameCN": "元素使的魔剑",
@@ -1654,7 +1654,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 501101,
+        "id": 501102,
         "name": "Dimension of Steam",
         "nameJP": "絢爛なりし灰燼世界",
         "nameCN": "绚烂的灰烬世界",
@@ -1674,7 +1674,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 600701,
+        "id": 600702,
         "name": "Dangerous Game",
         "nameJP": "密やかなる罪の遊戯",
         "nameCN": "隐秘的罪之游戏",
@@ -1694,7 +1694,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 700401,
+        "id": 700402,
         "name": "Blasted Tree",
         "nameJP": "磔刑の雷樹",
         "nameCN": "磔刑之雷树",
@@ -1734,7 +1734,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 201501,
+        "id": 201502,
         "name": "Pashupata",
         "nameJP": "破壊神の手翳",
         "nameCN": "破坏神之手影",
@@ -1754,7 +1754,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 300401,
+        "id": 300402,
         "name": "Vasavi Shakti",
         "nameJP": "日輪よ、死に随え",
         "nameCN": "日轮啊，顺从死亡",
@@ -1774,7 +1774,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 601801,
+        "id": 601802,
         "name": "Himitsu Calibur",
         "nameJP": "無銘勝利剣",
         "nameCN": "无铭胜利剑",
@@ -1794,7 +1794,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 301101,
+        "id": 301102,
         "name": "Mac an Luin",
         "nameJP": "無敗の紫靫草",
         "nameCN": "无败紫靫草",
@@ -1814,7 +1814,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 301201,
+        "id": 301202,
         "name": "Brynhild Romantia",
         "nameJP": "死がふたりを分断つまで",
         "nameCN": "直至死亡拆散两人",
@@ -1834,7 +1834,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 700801,
+        "id": 700802,
         "name": "Grendel Buster",
         "nameJP": "源流闘争",
         "nameCN": "源流斗争",
@@ -1854,7 +1854,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 100601,
+        "id": 100602,
         "name": "Fax Caelestis",
         "nameJP": "星馳せる終幕の薔薇",
         "nameCN": "星辰驰骋的终幕蔷薇",
@@ -1874,7 +1874,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 102801,
+        "id": 102802,
         "name": "Mukushiki Kara no Kyoukai",
         "nameJP": "無垢識・空の境界",
         "nameCN": "无垢识·空之境界",
@@ -1894,7 +1894,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 602301,
+        "id": 602302,
         "name": "Yuishiki Chokushi no Magan",
         "nameJP": "唯識・直死の魔眼",
         "nameCN": "唯识·直死之魔眼",
@@ -1914,7 +1914,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 900201,
+        "id": 900202,
         "name": "Twin Arm - Big Crunch",
         "nameJP": "双腕・零次集束",
         "nameCN": "双腕·零次集束",
@@ -1934,7 +1934,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 400401,
+        "id": 400402,
         "name": "Hippogriff",
         "nameJP": "この世ならざる幻馬",
         "nameCN": "非世间所存之幻马",
@@ -1954,7 +1954,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 201801,
+        "id": 201802,
         "name": "Gate of Babylon",
         "nameJP": "王の財宝",
         "nameCN": "王之财宝",
@@ -1974,7 +1974,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 1100201,
+        "id": 1100202,
         "name": "Enfer Chateau d'If",
         "nameJP": "虎よ、煌々と燃え盛れ",
         "nameCN": "虎啊，煌煌燎燃",
@@ -1994,7 +1994,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 701401,
+        "id": 701402,
         "name": "Nightingale Pledge",
         "nameJP": "我はすべて毒あるもの、害あるものを絶つ",
         "nameCN": "我将根绝一切毒物，一切害物",
@@ -2014,7 +2014,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 702001,
+        "id": 702002,
         "name": "Curruid Coinchenn",
         "nameJP": "噛み砕く死牙の獣",
         "nameCN": "噬碎死牙之兽",
@@ -2034,7 +2034,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 401301,
+        "id": 401302,
         "name": "Chariot My Love",
         "nameJP": "愛しき私の鉄戦車",
         "nameCN": "我心爱的钢铁战车",
@@ -2054,7 +2054,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 502301,
+        "id": 502302,
         "name": "Sanat Kumara",
         "nameJP": "金星神・火炎天主",
         "nameCN": "金星神·火炎天主",
@@ -2074,7 +2074,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 101901,
+        "id": 101902,
         "name": "Brahmastra",
         "nameJP": "羅刹を穿つ不滅",
         "nameCN": "穿透罗刹之不灭",
@@ -2094,7 +2094,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 301701,
+        "id": 301702,
         "name": "Shinsou Nino Uchi Irazu",
         "nameJP": "神槍无二打",
         "nameCN": "神枪无二打",
@@ -2114,7 +2114,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 502501,
+        "id": 502502,
         "name": "World Faith Domination",
         "nameJP": "Ｗ・Ｆ・Ｄ",
         "nameCN": "W·F·D",
@@ -2134,7 +2134,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 501601,
+        "id": 501602,
         "name": "Tsago Degi Naleya",
         "nameJP": "大地を創りし者",
         "nameCN": "大地的创造者",
@@ -2154,7 +2154,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 201001,
+        "id": 201002,
         "name": "Thunderer",
         "nameJP": "壊音の霹靂",
         "nameCN": "坏音霹雳",
@@ -2174,7 +2174,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 1100301,
+        "id": 1100302,
         "name": "Le Grondement Du Haine",
         "nameJP": "吼え立てよ、我が憤怒",
         "nameCN": "咆哮吧，吾之愤怒",
@@ -2214,7 +2214,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 400201,
+        "id": 400202,
         "name": "Ionioi Hetairoi",
         "nameJP": "王の軍勢",
         "nameCN": "王之军势",
@@ -2234,7 +2234,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 601501,
+        "id": 601502,
         "name": "Khronos Rose",
         "nameJP": "時のある間に薔薇を摘め",
         "nameCN": "花开堪折直须折",
@@ -2254,7 +2254,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 600301,
+        "id": 600302,
         "name": "Zabaniya",
         "nameJP": "妄想幻像",
         "nameCN": "妄想幻像",
@@ -2294,7 +2294,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 602101,
+        "id": 602102,
         "name": "Senshibankou Shinpenkidoku",
         "nameJP": "千紫万紅・神便鬼毒",
         "nameCN": "千紫万红·神便鬼毒",
@@ -2314,7 +2314,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 502201,
+        "id": 502202,
         "name": "Gogyousan Shakanyoraishou",
         "nameJP": "五行山・釈迦如来掌",
         "nameCN": "五行山·觉者掌",
@@ -2334,7 +2334,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 702301,
+        "id": 702302,
         "name": "Gooushourai Tenmoukaikai",
         "nameJP": "牛王招雷・天網恢々",
         "nameCN": "牛王招雷·天网恢恢",
@@ -2394,7 +2394,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 601901,
+        "id": 601902,
         "name": "Immortal Chaos Brigade",
         "nameJP": "不滅の混沌旅団",
         "nameCN": "不灭的混沌旅团",
@@ -2414,7 +2414,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 401201,
+        "id": 401202,
         "name": "Ramesseum Tentyris",
         "nameJP": "光輝の大複合神殿",
         "nameCN": "光辉之大复合神殿",
@@ -2454,7 +2454,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 501201,
+        "id": 501202,
         "name": "Anpu Neb Ta Djeser",
         "nameJP": "冥鏡宝典",
         "nameCN": "冥镜宝典",
@@ -2474,7 +2474,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 102001,
+        "id": 102002,
         "name": "Aroundight Overload",
         "nameJP": "縛鎖全断・過重湖光",
         "nameCN": "缚锁全断·过重湖光",
@@ -2494,7 +2494,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 200801,
+        "id": 200802,
         "name": "Failnaught",
         "nameJP": "痛哭の幻奏",
         "nameCN": "痛哭幻奏",
@@ -2514,7 +2514,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 100701,
+        "id": 100702,
         "name": "Excalibur Galatine",
         "nameJP": "転輪する勝利の剣",
         "nameCN": "轮转胜利之剑",
@@ -2534,7 +2534,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 600901,
+        "id": 600902,
         "name": "Zabaniya",
         "nameJP": "妄想毒身",
         "nameCN": "妄想毒身",
@@ -2554,7 +2554,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 201401,
+        "id": 201402,
         "name": "南无八幡大菩萨·请赐予此箭矢加持",
         "nameJP": "八幡祈願・大妖射貫",
         "nameCN": "八幡祈愿·大妖射贯",
@@ -2574,7 +2574,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 101201,
+        "id": 101202,
         "name": "Switch On Agateram",
         "nameJP": "剣を摂れ、銀色の腕",
         "nameCN": "紧握其剑，银之臂",
@@ -2594,7 +2594,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 500901,
+        "id": 500902,
         "name": "Uomo Universale",
         "nameJP": "万能の人",
         "nameCN": "万能之人",
@@ -2694,18 +2694,10 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 402401,
+        "id": 402402,
         "name": "Prydwen Tube Riding",
         "nameJP": "逆巻く波濤を制する王様気分！",
         "nameCN": "掌控翻涌波涛王者心境！",
-        "card": "1",
-        "cardName": "arts"
-      },
-      {
-        "id": 402402,
-        "name": "プリドゥエン・チューブライディング",
-        "nameJP": "逆巻く波濤を制する王様気分！",
-        "nameCN": "逆巻く波濤を制する王様気分！",
         "card": "1",
         "cardName": "arts"
       }
@@ -2762,7 +2754,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 900401,
+        "id": 900402,
         "name": "Tarasque",
         "nameJP": "荒れ狂う哀しき竜よ",
         "nameCN": "狂暴的悲哀之龙啊",
@@ -2782,7 +2774,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 502801,
+        "id": 502802,
         "name": "Quintett Feuer",
         "nameJP": "多元重奏飽和砲撃",
         "nameCN": "多元重奏饱和炮击",
@@ -2822,7 +2814,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 101001,
+        "id": 101002,
         "name": "Bathory Brave Erzsebet",
         "nameJP": "鮮血竜巻魔嬢",
         "nameCN": "鲜血龙卷魔女",
@@ -2842,7 +2834,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 600801,
+        "id": 600802,
         "name": "Uraeus Astrape",
         "nameJP": "暁の時を終える蛇よ、此処に",
         "nameCN": "终结破晓之蛇啊，降临此处",
@@ -2882,7 +2874,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 302601,
+        "id": 302602,
         "name": "La Grace Fille Noel",
         "nameJP": "優雅に歌え、かの聖誕を",
         "nameCN": "优雅歌唱吧，为那圣诞",
@@ -2902,7 +2894,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 202001,
+        "id": 202002,
         "name": "An Gal Ta Kigal She",
         "nameJP": "山脈震撼す明星の薪",
         "nameCN": "山脉震撼明星之薪",
@@ -2922,7 +2914,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 300801,
+        "id": 300802,
         "name": "Enuma Elish",
         "nameJP": "人よ、神を繋ぎとめよう",
         "nameCN": "世人啊，冀以锁系神明",
@@ -2962,7 +2954,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 501801,
+        "id": 501802,
         "name": "Melammu Dingir",
         "nameJP": "王の号砲",
         "nameCN": "王之号炮",
@@ -2982,7 +2974,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 302701,
+        "id": 302702,
         "name": "Caress of the Medusa",
         "nameJP": "女神の抱擁",
         "nameCN": "女神的拥抱",
@@ -3002,7 +2994,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 1100401,
+        "id": 1100402,
         "name": "Pandemonium Cetus",
         "nameJP": "強制封印・万魔神殿",
         "nameCN": "强制封印·万魔神殿",
@@ -3113,7 +3105,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 101701,
+        "id": 101703,
         "name": "Rikudougorin Kurikaratenshou",
         "nameJP": "六道五輪・倶利伽羅天象",
         "nameCN": "六道五轮·俱利伽罗天象",
@@ -3153,7 +3145,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 702401,
+        "id": 702402,
         "name": "Cross Calibur",
         "nameJP": "黒竜双剋勝利剣",
         "nameCN": "黑龙双克胜利剑",
@@ -3193,7 +3185,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 201601,
+        "id": 201602,
         "name": "Unlimited Lost Works",
         "nameJP": "無限の剣製",
         "nameCN": "无限剑制",
@@ -3213,7 +3205,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 1100501,
+        "id": 1100502,
         "name": "Frieren Scharfrichter",
         "nameJP": "遥かなる者への斬罪",
         "nameCN": "对遥远之辈的斩罪",
@@ -3233,7 +3225,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 602601,
+        "id": 602602,
         "name": "Jumenmaifuku Mueinogotoku",
         "nameJP": "十面埋伏・無影の如く",
         "nameCN": "十面埋伏·无影踪",
@@ -3259,6 +3251,14 @@
         "nameCN": "誓约胜利之剑",
         "card": "2",
         "cardName": "buster"
+      },
+      {
+        "id": 102902,
+        "name": "エクスカリバー",
+        "nameJP": "約束された勝利の剣",
+        "nameCN": "約束された勝利の剣",
+        "card": "2",
+        "cardName": "buster"
       }
     ]
   },
@@ -3273,7 +3273,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 702501,
+        "id": 702502,
         "name": "新选组",
         "nameJP": "不滅の誠",
         "nameCN": "不灭之诚",
@@ -3313,7 +3313,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 1000201,
+        "id": 1000202,
         "name": "Sarasvati Meltout",
         "nameJP": "弁財天五弦琵琶",
         "nameCN": "弁财天五弦琵琶",
@@ -3333,7 +3333,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 1000101,
+        "id": 1000102,
         "name": "Brynhild Romantia",
         "nameJP": "死が二人を別離つとも",
         "nameCN": "纵使死亡分离两人",
@@ -3353,7 +3353,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 103001,
+        "id": 103002,
         "name": "Tenkiame",
         "nameJP": "天鬼雨",
         "nameCN": "天鬼雨",
@@ -3393,7 +3393,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 1000301,
+        "id": 1000302,
         "name": "Amitabha Amidala Heaven's Hole",
         "nameJP": "快楽天・胎蔵曼荼羅",
         "nameCN": "快乐天·胎藏曼荼罗",
@@ -3433,7 +3433,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 503001,
+        "id": 503003,
         "name": "Alf Layla wa Layla",
         "nameJP": "千夜一夜物語",
         "nameCN": "一千零一夜",
@@ -3453,7 +3453,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 602701,
+        "id": 602703,
         "name": "Kokumitsu Rashokukei",
         "nameJP": "告密羅織経",
         "nameCN": "告密罗织经",
@@ -3493,7 +3493,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 402501,
+        "id": 402505,
         "name": "Santa Maria Drop Anchor",
         "nameJP": "新天地探索航",
         "nameCN": "新天地探索航行",
@@ -3533,7 +3533,7 @@
     "rarity": 1,
     "noblePhantasms": [
       {
-        "id": 702801,
+        "id": 702802,
         "name": "Marvelous Exploits",
         "nameJP": "驚くべき偉業",
         "nameCN": "令人惊叹的伟业",
@@ -3553,18 +3553,10 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 503201,
+        "id": 503202,
         "name": "Lauda Lentum Domus Illustrius",
         "nameJP": "誉れ歌う黄金劇場",
         "nameCN": "讴歌荣耀的黄金剧场",
-        "card": "2",
-        "cardName": "buster"
-      },
-      {
-        "id": 503202,
-        "name": "ラウダレントゥム・ドムス・イルステリアス",
-        "nameJP": "誉れ歌う黄金劇場",
-        "nameCN": "誉れ歌う黄金劇場",
         "card": "2",
         "cardName": "buster"
       }
@@ -3601,7 +3593,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 602801,
+        "id": 602802,
         "name": "Sneferu Iteru Nile",
         "nameJP": "穢れを漱げ、青く美しきナイル",
         "nameCN": "洗刷污秽吧，青色美丽的尼罗河",
@@ -3621,7 +3613,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 702901,
+        "id": 702902,
         "name": "Nobunaga THE Rock 'n' Roll",
         "nameJP": "第六天魔王波旬～夏盛～",
         "nameCN": "第六天魔王波旬～盛夏～",
@@ -3661,7 +3653,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 202801,
+        "id": 202802,
         "name": "Sanat Kumara Wheel",
         "nameJP": "金星神・白銀円環",
         "nameCN": "金星神·白银圆环",
@@ -3741,7 +3733,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 202101,
+        "id": 202103,
         "name": "Om Alolik Svaha",
         "nameJP": "真言・聖観世音菩薩",
         "nameCN": "真言·圣观世音菩萨",
@@ -3761,7 +3753,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 602901,
+        "id": 602903,
         "name": "Kuchiyose Ibukidaimyoujinengi",
         "nameJP": "口寄せ・伊吹大明神縁起",
         "nameCN": "通灵·伊吹大明神缘起",
@@ -3801,7 +3793,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 103201,
+        "id": 103202,
         "name": "Kenjutsumusou Kenzenichinyo",
         "nameJP": "剣術無双・剣禅一如",
         "nameCN": "剑术无双·剑禅一如",
@@ -3821,7 +3813,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 603001,
+        "id": 603002,
         "name": "Karakurigenpou Dongyu",
         "nameJP": "絡繰幻法・呑牛",
         "nameCN": "机关幻法·吞牛",
@@ -3841,7 +3833,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 603101,
+        "id": 603102,
         "name": "Hakurojyou no Hyakkihachitendousama",
         "nameJP": "白鷺城の百鬼八天堂様",
         "nameCN": "白鹭城百鬼八天堂大人",
@@ -3901,7 +3893,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 503301,
+        "id": 503302,
         "name": "Metabo Piglets",
         "nameJP": "禁断なる狂宴",
         "nameCN": "禁忌狂宴",
@@ -3921,7 +3913,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 303101,
+        "id": 303102,
         "name": "Chihisourei Kasensou",
         "nameJP": "地飛爽霊 火尖槍",
         "nameCN": "地飞爽灵 火尖枪",
@@ -3981,7 +3973,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 303201,
+        "id": 303202,
         "name": "Kur Kigal Irkalla",
         "nameJP": "霊峰踏抱く冥府の鞴",
         "nameCN": "灵峰踏抱冥府之鞴",
@@ -4021,7 +4013,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 2500201,
+        "id": 2500202,
         "name": "Fugaku Sanjurokkei",
         "nameJP": "冨嶽三十六景",
         "nameCN": "富岳三十六景",
@@ -4041,7 +4033,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 603201,
+        "id": 603202,
         "name": "Hanging Gardens of Babylon",
         "nameJP": "虚栄の空中庭園",
         "nameCN": "虚荣的空中庭园",
@@ -4061,7 +4053,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 202901,
+        "id": 202902,
         "name": "Yuishiki Waikyoku no Magan",
         "nameJP": "唯識・歪曲の魔眼",
         "nameCN": "唯识·歪曲之魔眼",
@@ -4121,7 +4113,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 503601,
+        "id": 503602,
         "name": "Golem Keter Malkuth",
         "nameJP": "王冠：叡智の光",
         "nameCN": "王冠：睿智之光",
@@ -4141,7 +4133,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 1100601,
+        "id": 1100602,
         "name": "Dio Santissimo Misericordia de mi",
         "nameJP": "至高の神よ、我を憐れみたまえ",
         "nameCN": "至高之神啊，请垂怜于我",
@@ -4161,7 +4153,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 402801,
+        "id": 402802,
         "name": "Zveri Krestnyy Khod",
         "nameJP": "我が旅路に従え獣",
         "nameCN": "于吾旅路随行之兽",
@@ -4181,7 +4173,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 402901,
+        "id": 402902,
         "name": "Troias Tragoidia",
         "nameJP": "疾風怒濤の不死戦車",
         "nameCN": "疾风怒涛的不死战车",
@@ -4201,7 +4193,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 203001,
+        "id": 203002,
         "name": "Antares Snipe",
         "nameJP": "天蠍一射",
         "nameCN": "天蝎一射",
@@ -4261,7 +4253,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 603301,
+        "id": 603302,
         "name": "Shimatsuken",
         "nameJP": "始末剣",
         "nameCN": "了结剑",
@@ -4281,7 +4273,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 403001,
+        "id": 403002,
         "name": "Amakakeru Ryu ga Gotoku",
         "nameJP": "天駆ける竜が如く",
         "nameCN": "如翱翔天际之龙",
@@ -4301,7 +4293,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 203101,
+        "id": 203102,
         "name": "Arc de Triomphe de l'Etoile",
         "nameJP": "凱旋を高らかに告げる虹弓",
         "nameCN": "高歌凯旋之虹弓",
@@ -4321,7 +4313,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 103301,
+        "id": 103302,
         "name": "Bolverk Gram",
         "nameJP": "壊劫の天輪",
         "nameCN": "坏劫之天轮",
@@ -4361,7 +4353,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 503901,
+        "id": 503902,
         "name": "Gate of Skye",
         "nameJP": "死溢るる魔境への門",
         "nameCN": "通往死亡满溢的魔境之门",
@@ -4421,7 +4413,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 603401,
+        "id": 603402,
         "name": "Tengu no Hauchiwa Akarashimakaze",
         "nameJP": "天狗ノ羽団扇・暴風",
         "nameCN": "天狗之羽团扇·暴风",
@@ -4501,7 +4493,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 2500301,
+        "id": 2500302,
         "name": "以太宇宙需秩序",
         "nameJP": "蒼輝銀河即ちコスモス",
         "nameCN": "苍辉银河即宇宙",
@@ -4581,7 +4573,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 703201,
+        "id": 703202,
         "name": "拔山盖世",
         "nameJP": "力抜山兮氣蓋世",
         "nameCN": "力拔山兮气盖世",
@@ -4701,7 +4693,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 303601,
+        "id": 303602,
         "name": "Bouclier de Atlante",
         "nameJP": "目映きは閃光の魔盾",
         "nameCN": "炫目的闪光魔盾",
@@ -4761,7 +4753,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 603601,
+        "id": 603602,
         "name": "Nino Uchi Irazu",
         "nameJP": "无二打",
         "nameCN": "无二打",
@@ -4781,7 +4773,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 504101,
+        "id": 504102,
         "name": "向星星许愿",
         "nameJP": "星天を照らせ地の朔月",
         "nameCN": "照耀星天的地之朔月",
@@ -4841,7 +4833,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 603701,
+        "id": 603702,
         "name": "Kama Sammohana",
         "nameJP": "愛もてかれるは恋無きなり",
         "nameCN": "持爱却枯，无恋也",
@@ -4881,7 +4873,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 403201,
+        "id": 403202,
         "name": "不语之阵",
         "nameJP": "混元一陣",
         "nameCN": "混元一阵",
@@ -4901,7 +4893,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 900801,
+        "id": 900802,
         "name": "Custos Morum",
         "nameJP": "裁きの時はいま。汝の名を告げよ",
         "nameCN": "现为裁决之刻。上告汝之名来",
@@ -4921,7 +4913,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 603901,
+        "id": 603902,
         "name": "Rhongomyniad",
         "nameJP": "最果てにて輝ける槍",
         "nameCN": "闪耀于终焉之枪",
@@ -5166,7 +5158,7 @@
     "rarity": 1,
     "noblePhantasms": [
       {
-        "id": 103801,
+        "id": 103802,
         "name": "Astrapste Argo",
         "nameJP": "天上引き裂きし煌々の船",
         "nameCN": "撕裂天际的光辉之船",
@@ -5306,7 +5298,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 703601,
+        "id": 703602,
         "name": "岩流岛",
         "nameJP": "魔剣破り、承る！",
         "nameCN": "破魔剑，谨承！",
@@ -5652,7 +5644,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 403801,
+        "id": 403802,
         "name": "Troia Ippos",
         "nameJP": "終焉の大木馬",
         "nameCN": "终焉的大木马",
@@ -5732,7 +5724,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 2500501,
+        "id": 2500502,
         "name": "Pale Blue Dot",
         "nameJP": "遥か青き星よ",
         "nameCN": "遥远的蓝色星球啊",
@@ -5912,7 +5904,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 104501,
+        "id": 104502,
         "name": "VR Shinkageryuu Ougi Tomoegafuchi Taiyouken",
         "nameJP": "ＶＲ新陰流奥義・巴淵太陽剣",
         "nameCN": "VR新阴流奥义·巴渊太阳剑",
@@ -5932,7 +5924,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 404101,
+        "id": 404102,
         "name": "Sotoorihime Kumo no Okonai",
         "nameJP": "衣通郎姫・蜘蛛行",
         "nameCN": "衣通郎姬·蜘蛛行",
@@ -6152,18 +6144,10 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 104901,
+        "id": 104902,
         "name": "都牟刈村正",
         "nameJP": "無元の剣製",
         "nameCN": "无元剑制",
-        "card": "1",
-        "cardName": "arts"
-      },
-      {
-        "id": 104902,
-        "name": "つむかりむらまさ",
-        "nameJP": "無元の剣製",
-        "nameCN": "無元の剣製",
         "card": "1",
         "cardName": "arts"
       }
@@ -6220,7 +6204,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 901101,
+        "id": 901102,
         "name": "The Greatest Hits“Calling Agape”",
         "nameJP": "遍く無償の無限の愛",
         "nameCN": "无偿无限普遍之爱",
@@ -6349,7 +6333,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 204301,
+        "id": 204302,
         "name": "Fetch Failnaught",
         "nameJP": "痛幻の哭奏",
         "nameCN": "痛幻哭奏",
@@ -6736,7 +6720,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 305001,
+        "id": 305002,
         "name": "龙啊，趁赴绵津见之原",
         "nameJP": "君よ、綿津見の原を征け",
         "nameCN": "君啊，趁赴绵津见之原",
@@ -6796,7 +6780,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 404401,
+        "id": 404402,
         "name": "Zmei Gorynishche",
         "nameJP": "邪竜来りて罪を吐く",
         "nameCN": "邪龙吐罪而临",
@@ -6927,7 +6911,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 1001301,
+        "id": 1001302,
         "name": "America's Sweetheart of Darkness",
         "nameJP": "闇を拓く星条の象り",
         "nameCN": "开拓黑暗的星条之象",
@@ -6987,7 +6971,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 404701,
+        "id": 404702,
         "name": "Theodosius Constantinos",
         "nameJP": "祈誓たるは三重の貴壁",
         "nameCN": "誓之所祈乃三重高墙",
@@ -7067,7 +7051,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 901301,
+        "id": 901302,
         "name": "Mathematical Malignant Annihilate",
         "nameJP": "数理的悪性摘出",
         "nameCN": "数理的恶性摘出",
@@ -7524,7 +7508,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 305301,
+        "id": 305302,
         "name": "Penetrate Blaiddyd",
         "nameJP": "妖精騎士・魔風吶喊",
         "nameCN": "妖精骑士·魔风贯吼",
@@ -8003,7 +7987,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 2501201,
+        "id": 2501202,
         "name": "Queen's Melty Heart",
         "nameJP": "永久機関・妖精帝国",
         "nameCN": "永动机·妖精帝国",
@@ -8053,7 +8037,7 @@
     "rarity": 4,
     "noblePhantasms": [
       {
-        "id": 204901,
+        "id": 204998,
         "name": "Water Save Galatine",
         "nameJP": "災禍祓う日輪の角",
         "nameCN": "驱灾日轮之角",
@@ -8181,7 +8165,7 @@
     "rarity": 3,
     "noblePhantasms": [
       {
-        "id": 205101,
+        "id": 205102,
         "name": "Futatsutamaniteuchitesourou",
         "nameJP": "二つ玉にて撃ちて候",
         "nameCN": "以二弹击之",
@@ -8630,7 +8614,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 3300201,
+        "id": 3300298,
         "name": "Edin Shugrra Collapsar",
         "nameJP": "終局宇宙に閃く獣冠",
         "nameCN": "闪烁于终局宇宙的兽冠",
@@ -9337,7 +9321,7 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 2301101,
+        "id": 2301198,
         "name": "まなしき・いざよいざんか",
         "nameJP": "末那識・十六夜残花",
         "nameCN": "末那識・十六夜残花",
@@ -9551,7 +9535,7 @@
         "cardName": "buster"
       },
       {
-        "id": 306202,
+        "id": 306204,
         "name": "ヴェールマールシュ・エルジェーベト",
         "nameJP": "完全なる血の惑星へ",
         "nameCN": "完全なる血の惑星へ",
@@ -9839,6 +9823,16 @@
         "card": "1",
         "cardName": "arts"
       }
+    ],
+    "overWriteServantNames": [
+      {
+        "ids": [
+          3,
+          4
+        ],
+        "nameJP": "アスカラポス＝アケローン",
+        "nameCN": "アスカラポス＝アケローン"
+      }
     ]
   },
   {
@@ -9878,6 +9872,49 @@
         "nameCN": "最果てにて礎なる夢の塔",
         "card": "2",
         "cardName": "buster"
+      }
+    ]
+  },
+  {
+    "id": 605300,
+    "collectionNo": 474,
+    "nameCN": "ハサン・サッバーハ",
+    "nameJP": "ハサン・サッバーハ",
+    "classId": 6,
+    "className": "assassin",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 605301,
+        "name": "マラク・アル・マウト",
+        "nameJP": "晩鐘の天使",
+        "nameCN": "晩鐘の天使",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "ids": [
+          2
+        ],
+        "nameJP": "アズライール",
+        "nameCN": "アズライール"
+      },
+      {
+        "ids": [
+          3
+        ],
+        "nameJP": "シドラ・アズライール",
+        "nameCN": "シドラ・アズライール"
+      },
+      {
+        "ids": [
+          4
+        ],
+        "nameJP": "蒼きアズライール",
+        "nameCN": "蒼きアズライール"
       }
     ]
   }

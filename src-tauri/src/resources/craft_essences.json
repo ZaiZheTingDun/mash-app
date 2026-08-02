@@ -28407,5 +28407,718 @@
     "flags": [
       "svtEquipCampaign"
     ]
+  },
+  {
+    "id": 9311970,
+    "collectionNo": 2620,
+    "name": "英霊学装：アーサー・ペンドラゴン",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9311980,
+    "collectionNo": 2621,
+    "name": "英霊学装：アスカラポス",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9311990,
+    "collectionNo": 2622,
+    "name": "英霊学装：アスクレピオス",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312000,
+    "collectionNo": 2623,
+    "name": "英霊学装：アムール〔カレン〕",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312450,
+    "collectionNo": 2624,
+    "name": "英霊学装：アルトリア・ペンドラゴン〔オルタ〕",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312010,
+    "collectionNo": 2625,
+    "name": "英霊学装：アレキサンダー",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312460,
+    "collectionNo": 2626,
+    "name": "英霊学装：アンデルセン",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312020,
+    "collectionNo": 2627,
+    "name": "英霊学装：イアソン",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312030,
+    "collectionNo": 2628,
+    "name": "英霊学装：イリヤスフィール",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312040,
+    "collectionNo": 2629,
+    "name": "英霊学装：インドラ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312050,
+    "collectionNo": 2630,
+    "name": "英霊学装：ヴァン・ゴッホ〔マイナー〕",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312470,
+    "collectionNo": 2631,
+    "name": "英霊学装：エドワード・ティーチ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312060,
+    "collectionNo": 2632,
+    "name": "英霊学装：燕青",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312070,
+    "collectionNo": 2633,
+    "name": "英霊学装：刑部姫",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312080,
+    "collectionNo": 2634,
+    "name": "英霊学装：オジマンディアス",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312090,
+    "collectionNo": 2635,
+    "name": "英霊学装：カーマ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312100,
+    "collectionNo": 2636,
+    "name": "英霊学装：葛飾北斎",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312110,
+    "collectionNo": 2637,
+    "name": "英霊学装：巌窟王　モンテ・クリスト",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312120,
+    "collectionNo": 2638,
+    "name": "英霊学装：ギルガメッシュ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312480,
+    "collectionNo": 2639,
+    "name": "英霊学装：クー・フーリン",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312130,
+    "collectionNo": 2640,
+    "name": "英霊学装：クー・フーリン〔オルタ〕",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312140,
+    "collectionNo": 2641,
+    "name": "英霊学装：ジェームズ・モリアーティ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312150,
+    "collectionNo": 2642,
+    "name": "英霊学装：ジャック・ド・モレー",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312160,
+    "collectionNo": 2643,
+    "name": "英霊学装：シャルロット・コルデー",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312490,
+    "collectionNo": 2644,
+    "name": "英霊学装：酒呑童子",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312500,
+    "collectionNo": 2645,
+    "name": "英霊学装：ジュネス・クレーン",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312170,
+    "collectionNo": 2646,
+    "name": "英霊学装：女王メイヴ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312180,
+    "collectionNo": 2647,
+    "name": "英霊学装：諸葛孔明〔エルメロイⅡ世〕",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312190,
+    "collectionNo": 2648,
+    "name": "英霊学装：徐福",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312200,
+    "collectionNo": 2649,
+    "name": "英霊学装：清少納言",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312510,
+    "collectionNo": 2650,
+    "name": "英霊学装：高杉晋作",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312520,
+    "collectionNo": 2651,
+    "name": "英霊学装：ダンテ・アリギエーリ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312210,
+    "collectionNo": 2652,
+    "name": "英霊学装：ツタンカーメン",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312220,
+    "collectionNo": 2653,
+    "name": "英霊学装：テノチティトラン",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312230,
+    "collectionNo": 2654,
+    "name": "英霊学装：デメテル",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312240,
+    "collectionNo": 2655,
+    "name": "英霊学装：テュフォン・エフェメロス＆イプシロン",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312250,
+    "collectionNo": 2656,
+    "name": "英霊学装：藤堂平助",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312530,
+    "collectionNo": 2657,
+    "name": "英霊学装：ドゥルガー",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312260,
+    "collectionNo": 2658,
+    "name": "英霊学装：ネモ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312540,
+    "collectionNo": 2659,
+    "name": "英霊学装：ネモ／ノア",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312270,
+    "collectionNo": 2660,
+    "name": "英霊学装：ネロ・クラウディウス",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312280,
+    "collectionNo": 2661,
+    "name": "英霊学装：バーヴァン・シー",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312290,
+    "collectionNo": 2662,
+    "name": "英霊学装：パーシヴァル",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312300,
+    "collectionNo": 2663,
+    "name": "英霊学装：花咲翁",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312310,
+    "collectionNo": 2664,
+    "name": "英霊学装：原田左之助",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312320,
+    "collectionNo": 2665,
+    "name": "英霊学装：パリス",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312330,
+    "collectionNo": 2666,
+    "name": "英霊学装：フランケンシュタイン",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312340,
+    "collectionNo": 2667,
+    "name": "英霊学装：ブリトマート",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312350,
+    "collectionNo": 2668,
+    "name": "英霊学装：フローラ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312550,
+    "collectionNo": 2669,
+    "name": "英霊学装：マシュ・キリエライト",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312360,
+    "collectionNo": 2670,
+    "name": "英霊学装：マルタ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312370,
+    "collectionNo": 2671,
+    "name": "英霊学装：宮本伊織",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312380,
+    "collectionNo": 2672,
+    "name": "英霊学装：宮本武蔵",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312390,
+    "collectionNo": 2673,
+    "name": "英霊学装：メタトロン・ジャンヌ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312560,
+    "collectionNo": 2674,
+    "name": "英霊学装：メリュジーヌ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312400,
+    "collectionNo": 2675,
+    "name": "英霊学装：モルガン",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312410,
+    "collectionNo": 2676,
+    "name": "英霊学装：蘭陵王",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312420,
+    "collectionNo": 2677,
+    "name": "英霊学装：レオナルド・ダ・ヴィンチ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312430,
+    "collectionNo": 2678,
+    "name": "英霊学装：レディ・アヴァロン",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9312440,
+    "collectionNo": 2679,
+    "name": "英霊学装：ロウヒ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ]
+  },
+  {
+    "id": 9409370,
+    "collectionNo": 2680,
+    "name": "アフター・パーティー",
+    "name_cn": null,
+    "rarity": 5,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409380,
+    "collectionNo": 2681,
+    "name": "フレームド・モーメント",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409390,
+    "collectionNo": 2682,
+    "name": "アズ・ユージュアル",
+    "name_cn": null,
+    "rarity": 3,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409400,
+    "collectionNo": 2683,
+    "name": "人理の徒",
+    "name_cn": null,
+    "rarity": 5,
+    "flag": "normal",
+    "flags": []
+  },
+  {
+    "id": 9311880,
+    "collectionNo": 2684,
+    "name": "鷹の巣の落日",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipFriendShip",
+    "flags": [
+      "svtEquipFriendShip"
+    ]
   }
 ]

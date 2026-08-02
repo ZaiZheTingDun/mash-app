@@ -7,7 +7,7 @@ pub(crate) const ASSETS_MANIFEST_JSON: &str = include_str!("../../resources/asse
 pub(crate) const ASSET_DOWNLOAD_PROGRESS_EVENT: &str = "asset-download-progress";
 // To add a new asset directory: append its name here. install_asset_directories and
 // cleanup_replaced_asset_trees will handle it automatically.
-pub(crate) const ASSET_DIRS: &[&str] = &["servants", "ces", "icons", "mystic-codes"];
+pub(crate) const ASSET_DIRS: &[&str] = &["servants", "ces", "icons", "skills", "mystic-codes"];
 
 #[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -627,12 +627,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn install_asset_directories_accepts_icons_without_servants_or_ces() {
+    fn install_asset_directories_accepts_skills_without_servants_or_ces() {
         let temp = tempfile::tempdir().unwrap();
         let import_root = temp.path().join("import");
         let assets_root = temp.path().join("assets");
-        fs::create_dir_all(import_root.join("icons")).unwrap();
-        fs::write(import_root.join("icons").join("skill.png"), b"icon").unwrap();
+        fs::create_dir_all(import_root.join("skills").join("2477450")).unwrap();
+        fs::write(
+            import_root
+                .join("skills")
+                .join("2477450")
+                .join("skill.json"),
+            b"{}",
+        )
+        .unwrap();
 
         let (has_servants, has_ces, servant_stats, ce_stats) =
             install_asset_directories(&import_root, &assets_root, true).unwrap();
@@ -641,7 +648,11 @@ mod tests {
         assert!(!has_ces);
         assert_eq!(servant_stats, FileCopyStats::default());
         assert_eq!(ce_stats, FileCopyStats::default());
-        assert!(assets_root.join("icons").join("skill.png").is_file());
+        assert!(assets_root
+            .join("skills")
+            .join("2477450")
+            .join("skill.json")
+            .is_file());
     }
 
     #[test]
@@ -653,7 +664,7 @@ mod tests {
 
         let err = install_asset_directories(&import_root, &assets_root, true).unwrap_err();
 
-        assert!(err.contains("servants/ces/icons/mystic-codes"));
+        assert!(err.contains("servants/ces/icons/skills/mystic-codes"));
     }
 
     #[test]
@@ -661,15 +672,18 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let assets_root = temp.path();
         let stale_icons = assets_root.join("icons.replaced-123");
+        let stale_skills = assets_root.join("skills.replaced-234");
         let stale_codes = assets_root.join("mystic-codes.replaced-456");
         let keep = assets_root.join("other.replaced-789");
         fs::create_dir_all(&stale_icons).unwrap();
+        fs::create_dir_all(&stale_skills).unwrap();
         fs::create_dir_all(&stale_codes).unwrap();
         fs::create_dir_all(&keep).unwrap();
 
         cleanup_replaced_asset_trees(assets_root);
 
         assert!(!stale_icons.exists());
+        assert!(!stale_skills.exists());
         assert!(!stale_codes.exists());
         assert!(keep.exists());
     }
