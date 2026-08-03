@@ -773,6 +773,43 @@ pub(crate) fn support_skill_diag_message(row: &SupportRowMatch) -> String {
     format!(" skill [{}]", parts.join(" "))
 }
 
+fn format_support_star_map_score(score: Option<u32>) -> String {
+    score
+        .map(|value| format!("+{value}"))
+        .unwrap_or_else(|| "-".into())
+}
+
+fn format_support_skill_levels(levels: &[Option<u32>]) -> String {
+    if levels.is_empty() {
+        return "-".into();
+    }
+    levels
+        .iter()
+        .map(|level| format_actual_level(*level))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+pub(crate) fn support_found_summary(name: &str, row: &SupportRowMatch) -> String {
+    format!(
+        "找到助战 [{name}] 宝具等级 [{}] 技能 [{}] 星图分值 [{}/{}]",
+        format_actual_level(row.np_level),
+        format_support_skill_levels(&row.skill_levels),
+        format_support_star_map_score(row.star_map_score),
+        format_support_star_map_score(row.grand_star_map_score),
+    )
+}
+
+pub(crate) fn support_found_debug_detail(name: &str, row: &SupportRowMatch) -> String {
+    format!(
+        "找到助战 {} (name {:.2}, np {:.2}){}",
+        name,
+        row.name_score,
+        row.np_score,
+        support_skill_diag_message(row),
+    )
+}
+
 /// Map an Atlas Academy `className` (already lowercased by
 /// `load_servant_metadata`) to the support-select class-filter tab.
 /// Returns `None` for unknown / boss-only class variants so the
@@ -998,15 +1035,10 @@ impl Runner {
         let chosen = chosen_index.and_then(|index| result.supports.get(index));
 
         if let Some(row) = chosen {
-            self.emit(
+            self.emit("SupportSelect", &support_found_summary(&meta.name, row));
+            self.emit_debug(
                 "SupportSelect",
-                &format!(
-                    "找到助战 {} (name {:.2}, np {:.2}){}",
-                    meta.name,
-                    row.name_score,
-                    row.np_score,
-                    support_skill_diag_message(row),
-                ),
+                &support_found_debug_detail(&meta.name, row),
             );
             if !self.tap_at("SupportSelect", support_row_tap_point(row)) {
                 return;

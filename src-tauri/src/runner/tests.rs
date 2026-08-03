@@ -4179,6 +4179,40 @@ fn support_row_tap_point_falls_back_to_ocr_row_tap() {
 }
 
 #[test]
+fn support_found_logs_use_readable_summary_and_keep_recognition_details_for_debug() {
+    let mut row = support_row(Some("owned"), vec![Some(10), Some(10), Some(10)], vec![]);
+    row.name_score = 0.89;
+    row.np_score = 1.0;
+    row.star_map_score = Some(62);
+    row.grand_star_map_score = Some(16);
+    row.skill_level_diagnostics = vec![
+        serde_json::json!({"level": 10, "score": 0.84, "source": "support_template10"}),
+        serde_json::json!({"level": 10, "score": 0.88, "source": "support_template10"}),
+        serde_json::json!({"level": 10, "score": 0.84, "source": "support_template10"}),
+    ];
+
+    assert_eq!(
+        support_found_summary("教えて！シエル先生", &row),
+        "找到助战 [教えて！シエル先生] 宝具等级 [5] 技能 [10,10,10] 星图分值 [+62/+16]"
+    );
+    assert_eq!(
+        support_found_debug_detail("教えて！シエル先生", &row),
+        "找到助战 教えて！シエル先生 (name 0.89, np 1.00) skill [1:10@0.84/support_template10 2:10@0.88/support_template10 3:10@0.84/support_template10]"
+    );
+}
+
+#[test]
+fn support_found_summary_marks_unread_details_with_dashes() {
+    let mut row = support_row(None, vec![], vec![]);
+    row.np_level = None;
+
+    assert_eq!(
+        support_found_summary("哈贝特洛特", &row),
+        "找到助战 [哈贝特洛特] 宝具等级 [-] 技能 [-] 星图分值 [-/-]"
+    );
+}
+
+#[test]
 fn support_score_filter_handles_ordinary_and_grand_thresholds() {
     let mut payload = minimal_run_config_json();
     payload["supportStarMapScoreMin"] = serde_json::json!(40);
