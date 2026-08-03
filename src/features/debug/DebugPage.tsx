@@ -191,6 +191,16 @@ export function DebugPage({
   const [supportServantId, setSupportServantId] = useState<number | null>(
     asNumberOrNull(initialPrefs.supportServantId)
   );
+  const [supportServantVariantKey, setSupportServantVariantKey] = useState<
+    string | null
+  >(() => {
+    const stored = initialPrefs.supportServantVariantKey;
+    if (typeof stored === "string" && stored.trim()) return stored;
+    const servantId = asNumberOrNull(initialPrefs.supportServantId);
+    return (
+      servants.find((servant) => servant.id === servantId)?.variantKey ?? null
+    );
+  });
   const [supportCraftEssenceId, setSupportCraftEssenceId] =
     useState<number | null>(asNumberOrNull(initialPrefs.supportCraftEssenceId));
   const [supportCraftEssenceMlbRequired, setSupportCraftEssenceMlbRequired] =
@@ -323,6 +333,7 @@ export function DebugPage({
       threshold,
       selectedCardServantIds,
       supportServantId,
+      supportServantVariantKey,
       supportCraftEssenceId,
       supportCraftEssenceMlbRequired,
       supportGrandCraftEssenceIds,
@@ -340,6 +351,7 @@ export function DebugPage({
     threshold,
     selectedCardServantIds,
     supportServantId,
+    supportServantVariantKey,
     supportCraftEssenceId,
     supportCraftEssenceMlbRequired,
     supportGrandCraftEssenceIds,
@@ -665,9 +677,16 @@ export function DebugPage({
     return servants.filter((servant) => availableServantIdSet.has(servant.id));
   }, [availableServantIdSet, servants]);
 
-  const selectedSupportServant = supportServantId
-    ? servantById.get(supportServantId) ?? null
-    : null;
+  const selectedSupportServant =
+    supportServantId === null
+      ? null
+      : servants.find(
+          (servant) =>
+            servant.id === supportServantId &&
+            servant.variantKey === supportServantVariantKey
+        ) ??
+        servantById.get(supportServantId) ??
+        null;
   const selectedEnhancementServant = enhancementServantId
     ? servantById.get(enhancementServantId) ?? null
     : null;
@@ -695,6 +714,7 @@ export function DebugPage({
         );
       } else if (servantPickerTarget === "support") {
         setSupportServantId(servant.id);
+        setSupportServantVariantKey(servant.variantKey);
         setSupportMetadata(null);
         setSupportResult(null);
       } else if (servantPickerTarget === "enhancement") {
@@ -996,8 +1016,12 @@ export function DebugPage({
 
   const handleFindSupports = useCallback(async () => {
     if (!capture || supportServantId === null) return;
+    const servantVariantKey =
+      selectedSupportServant?.variantKey ?? supportServantVariantKey;
     setFindingSupports(true);
-    log(`调用 debug_find_supports (servant=${displayServantName(supportServantId)})`);
+    log(
+      `调用 debug_find_supports (servant=${displayServantName(supportServantId)}, variant=${servantVariantKey ?? "未指定"})`
+    );
     try {
       // Fetch metadata first so the log + side panel can show what we
       // actually fed the OCR detector (helpful when a row misses).
@@ -1005,6 +1029,7 @@ export function DebugPage({
       if (!meta || meta.id !== supportServantId) {
         meta = await invoke<ServantMetadataDto>("get_servant_metadata", {
           id: supportServantId,
+          variantKey: servantVariantKey,
         });
         setSupportMetadata(meta);
         log(
@@ -1015,6 +1040,7 @@ export function DebugPage({
         "debug_find_supports",
         {
           servantId: supportServantId,
+          servantVariantKey,
           craftEssenceId: supportCraftEssenceId,
           grandCraftEssenceIds: supportGrandCraftEssenceIds,
           craftEssenceMlbRequired: supportCraftEssenceMlbRequired,
@@ -1155,6 +1181,8 @@ export function DebugPage({
   }, [
     capture,
     supportServantId,
+    supportServantVariantKey,
+    selectedSupportServant,
     supportCraftEssenceId,
     supportGrandCraftEssenceIds,
     supportCraftEssenceMlbRequired,
@@ -1655,7 +1683,8 @@ export function DebugPage({
                 onClick={() => setServantPickerTarget("support")}
               >
                 {selectedSupportServant
-                  ? displayServantName(selectedSupportServant.id)
+                  ? selectedSupportServant.name_cn_server?.trim() ||
+                    selectedSupportServant.name_cn
                   : "选择助战从者"}
               </Button>
               <Button

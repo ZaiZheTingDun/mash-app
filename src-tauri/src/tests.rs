@@ -2337,7 +2337,7 @@ fn servants_data_includes_latest_cn_catalog_updates() {
     assert_eq!(ascalaphus.name_jp, "アスカラポス＝アケローン");
     assert_eq!(
         ascalaphus.noble_phantasm_name.as_deref(),
-        Some("我は告げる、逃れられぬ絶望を")
+        Some("飲み込み来たれ、冥府の河")
     );
 }
 
@@ -2616,7 +2616,7 @@ fn servant_variant_name_candidates_include_all_names_within_one_variant() {
         ["谜之代行者C.I.E.L", "教教我吧！希耶尔老师", "星之希耶尔"]
     );
     assert!(cn.excluded_names.is_empty());
-    assert_eq!(cn.np_names, ["第七圣典·断罪死"]);
+    assert_eq!(cn.np_names, ["第七圣典·断罪死", "原理血戒·断头台"]);
     assert!(!cn.shares_name_with_sibling);
 
     let jp = servant_variant_name_candidates(418, "418:1", Server::Jp).unwrap();
@@ -2626,7 +2626,7 @@ fn servant_variant_name_candidates_include_all_names_within_one_variant() {
         ["謎の代行者C.I.E.L", "教えて！シエル先生", "スターシエル"]
     );
     assert!(jp.excluded_names.is_empty());
-    assert_eq!(jp.np_names, ["第七聖典・断罪死"]);
+    assert_eq!(jp.np_names, ["第七聖典・断罪死", "原理血戒・断頭台"]);
     assert!(!jp.shares_name_with_sibling);
 }
 

@@ -24,7 +24,7 @@ use crate::screen::{
     SupportCeVerificationOptions, SupportDiagnostics, SupportRowMatch,
 };
 use crate::{
-    app_data_dir, load_servant_metadata, resolve_ce_assets_dir, resolve_cv_config_path,
+    app_data_dir, load_servant_metadata_for_variant, resolve_ce_assets_dir, resolve_cv_config_path,
     resolve_cv_config_paths, resolve_scrcpy_jar, resolve_servant_assets_dir, resolve_template_dirs,
     Server, STREAM_BIT_RATE, STREAM_MAX_SIZE,
 };
@@ -1440,6 +1440,7 @@ pub fn debug_find_supports(
     ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
     friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
     servant_id: u32,
+    servant_variant_key: Option<String>,
     craft_essence_id: Option<u32>,
     grand_craft_essence_ids: Option<[Option<u32>; 3]>,
     craft_essence_mlb_required: Option<bool>,
@@ -1464,10 +1465,15 @@ pub fn debug_find_supports(
     }
 
     let server = current_server(&server_state);
-    let meta = load_servant_metadata(&app, servant_id, server)?;
+    let meta = load_servant_metadata_for_variant(
+        &app,
+        servant_id,
+        server,
+        servant_variant_key.as_deref(),
+    )?;
     eprintln!(
-        "[debug_find_supports] servant_id={servant_id} server={server} name={:?} np_names={:?} ce={:?} grand={:?}",
-        meta.name, meta.np_names, craft_essence_id, grand_craft_essence_ids
+        "[debug_find_supports] servant_id={servant_id} variant={:?} server={server} name={:?} np_names={:?} ce={:?} grand={:?}",
+        servant_variant_key, meta.name, meta.np_names, craft_essence_id, grand_craft_essence_ids
     );
 
     ensure_debug_sidecar(&app, &debug_state, server)?;
@@ -1506,7 +1512,7 @@ pub fn debug_find_supports(
         &meta.names,
         &meta.excluded_names,
         &meta.np_names,
-        false,
+        meta.require_np_match,
         true,
     )?;
     eprintln!(

@@ -29,6 +29,7 @@ export interface DebugPagePrefs {
   threshold?: number;
   selectedCardServantIds?: number[];
   supportServantId?: number | null;
+  supportServantVariantKey?: string | null;
   supportCraftEssenceId?: number | null;
   supportCraftEssenceMlbRequired?: boolean;
   supportGrandCraftEssenceIds?: [number | null, number | null, number | null];

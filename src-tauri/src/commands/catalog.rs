@@ -2306,9 +2306,10 @@ pub(crate) fn get_servant_metadata(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<Server>>,
     id: u32,
+    variant_key: Option<String>,
 ) -> Result<ServantMetadata, String> {
     let server = *state.lock().unwrap();
-    load_servant_metadata(&app, id, server)
+    load_servant_metadata_for_variant(&app, id, server, variant_key.as_deref())
 }
 
 #[derive(serde::Serialize, Clone)]

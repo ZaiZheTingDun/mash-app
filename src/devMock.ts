@@ -586,7 +586,11 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "debug_runner_coordinates":
       return { groups: [] } as T;
     case "get_servant_metadata": {
-      const servant = servants.find((item) => item.id === args.servantId);
+      const servant =
+        servants.find(
+          (item) =>
+            item.id === args.servantId && item.variantKey === args.variantKey
+        ) ?? servants.find((item) => item.id === args.servantId);
       return {
         id: servant?.id ?? args.servantId,
         name: servant?.name_cn ?? "模拟从者",

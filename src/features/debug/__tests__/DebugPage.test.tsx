@@ -35,6 +35,16 @@ const SERVANTS: Servant[] = [
     rarity: 5,
     noblePhantasmName: "真圆集",
   },
+  {
+    id: 418,
+    variantKey: "418:1",
+    name_cn: "星之希耶尔",
+    name_jp: "スターシエル",
+    name_en: "Star Ciel",
+    class: "Moon Cancer",
+    rarity: 5,
+    noblePhantasmName: "原理血戒·断头台",
+  },
 ];
 
 const CRAFT_ESSENCES: CraftEssence[] = [
@@ -55,9 +65,9 @@ describe("DebugPage", () => {
   }
 
   function mockDebugPageBootstrap(
-    handler: (cmd: string) => Promise<unknown> | unknown
+    handler: (cmd: string, args?: unknown) => Promise<unknown> | unknown
   ) {
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    vi.mocked(invoke).mockImplementation(async (cmd, args) => {
       switch (cmd) {
         case "debug_get_cv_config":
           return { screens: {} };
@@ -67,7 +77,7 @@ describe("DebugPage", () => {
         case "debug_get_runner_coordinates":
           return { groups: [] };
         default:
-          return handler(cmd);
+          return handler(cmd, args);
       }
     });
   }
@@ -197,6 +207,72 @@ describe("DebugPage", () => {
 
     expect(screen.getByRole("button", { name: "黑之圣杯" })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/礼装 id/)).not.toBeInTheDocument();
+  });
+
+  it("uses the selected servant variant for support metadata and OCR", async () => {
+    const user = userEvent.setup();
+    mockDebugPageBootstrap((cmd) => {
+      if (cmd === "debug_capture") {
+        return {
+          imagePath: "/tmp/debug.png",
+          screen: "SupportSelect",
+          score: 0.95,
+          screenSize: { w: 1920, h: 1080 },
+        };
+      }
+      if (cmd === "get_servant_metadata") {
+        return {
+          id: 418,
+          name: "星之希耶尔",
+          names: [
+            "谜之代行者C.I.E.L",
+            "教教我吧！希耶尔老师",
+            "星之希耶尔",
+          ],
+          npNames: ["第七圣典·断罪死", "原理血戒·断头台"],
+        };
+      }
+      if (cmd === "debug_find_supports") {
+        return {
+          supports: [],
+          diagnostics: {
+            listRegion: { x: 0, y: 0, w: 1, h: 1 },
+            nameCandidates: [],
+            npCandidates: [],
+            fragmentCount: 0,
+          },
+        };
+      }
+      return null;
+    });
+
+    renderDebugPage();
+
+    await user.click(screen.getByRole("button", { name: "选择助战从者" }));
+    await user.type(
+      screen.getByPlaceholderText("搜索从者名称..."),
+      "星之希耶尔"
+    );
+    await user.click(screen.getByRole("option", { name: /星之希耶尔/ }));
+    await user.click(screen.getByRole("button", { name: "截取画面" }));
+    await user.click(screen.getByRole("button", { name: "识别助战" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("get_servant_metadata", {
+        id: 418,
+        variantKey: "418:1",
+      })
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      "debug_find_supports",
+      expect.objectContaining({
+        servantId: 418,
+        servantVariantKey: "418:1",
+      })
+    );
+    expect(
+      await screen.findByText("宝具候选: 第七圣典·断罪死 / 原理血戒·断头台")
+    ).toBeInTheDocument();
   });
 
   it("includes the support marker in command-card debug summaries", async () => {

@@ -3339,6 +3339,14 @@
         "nameCN": "纵使死亡分离两人",
         "card": "2",
         "cardName": "buster"
+      },
+      {
+        "id": 1000102,
+        "name": "Brynhild Romantia",
+        "nameJP": "死がふたりを分断つまで",
+        "nameCN": "直至死亡拆散两人",
+        "card": "2",
+        "cardName": "buster"
       }
     ]
   },
@@ -4839,6 +4847,14 @@
         "nameCN": "持爱却枯，无恋也",
         "card": "3",
         "cardName": "quick"
+      },
+      {
+        "id": 603702,
+        "name": "Samsara Kama",
+        "nameJP": "恋もて焦がすは愛ゆえなり",
+        "nameCN": "以恋焦炙，因爱也",
+        "card": "3",
+        "cardName": "quick"
       }
     ]
   },
@@ -5424,6 +5440,14 @@
         "nameCN": "喷射三段突",
         "card": "3",
         "cardName": "quick"
+      },
+      {
+        "id": 604001,
+        "name": "闪耀于拂晓的无明之光",
+        "nameJP": "蒼穹三段突き",
+        "nameCN": "苍穹三段突",
+        "card": "3",
+        "cardName": "quick"
       }
     ],
     "overWriteServantNames": [
@@ -5788,6 +5812,14 @@
         "name": "Around Caliburn",
         "nameJP": "きみをいだく希望の星",
         "nameCN": "环抱着你的希望之星",
+        "card": "1",
+        "cardName": "arts"
+      },
+      {
+        "id": 504501,
+        "name": "Round of Avalon",
+        "nameJP": "真円集う約束の星",
+        "nameCN": "真圆集结誓约之星",
         "card": "1",
         "cardName": "arts"
       }
@@ -6466,6 +6498,14 @@
         "nameCN": "于彼方点缀的梦之童话",
         "card": "2",
         "cardName": "buster"
+      },
+      {
+        "id": 2800101,
+        "name": "Lie Like Vortigern",
+        "nameJP": "彼方とおちる夢の瞳",
+        "nameCN": "与彼方同坠的梦之瞳眸",
+        "card": "2",
+        "cardName": "buster"
       }
     ]
   },
@@ -6564,6 +6604,14 @@
         "name": "Kama Rupastra",
         "nameJP": "愛もていたるは恋夏なり",
         "nameCN": "持爱而至，恋夏也",
+        "card": "1",
+        "cardName": "arts"
+      },
+      {
+        "id": 1101101,
+        "name": "Mara Sunyata",
+        "nameJP": "恋もて堕とすは愛果てなり",
+        "nameCN": "以恋堕落，爱尽也",
         "card": "1",
         "cardName": "arts"
       }
@@ -6855,6 +6903,14 @@
         "name": "Fragarach",
         "nameJP": "斬り抉る戦神の剣",
         "nameCN": "斩剜战神之剑",
+        "card": "3",
+        "cardName": "quick"
+      },
+      {
+        "id": 1001101,
+        "name": "Fragarach Enbarr",
+        "nameJP": "奔り猛る戦神の剣",
+        "nameCN": "奔勇战神之剑",
         "card": "3",
         "cardName": "quick"
       }
@@ -7846,6 +7902,14 @@
         "nameCN": "愤怒啊，愿望啊，戮尽诸魔的女神啊",
         "card": "1",
         "cardName": "arts"
+      },
+      {
+        "id": 204801,
+        "name": "Samhara Kali",
+        "nameJP": "世界を砕く勝利の舞踏",
+        "nameCN": "粉碎世界的胜利之舞",
+        "card": "1",
+        "cardName": "arts"
       }
     ],
     "overWriteServantNames": [
@@ -7894,6 +7958,14 @@
         "name": "Memory of Londinium",
         "nameJP": "聖剣遙か夢の名残",
         "nameCN": "圣剑遥远梦之遗痕",
+        "card": "2",
+        "cardName": "buster"
+      },
+      {
+        "id": 505301,
+        "name": "Summer Pool Dozmary",
+        "nameJP": "希望孵す夏の水鏡",
+        "nameCN": "孵化希望夏之水镜",
         "card": "2",
         "cardName": "buster"
       }
@@ -8563,6 +8635,14 @@
         "nameCN": "童话怪物，月之油",
         "card": "3",
         "cardName": "quick"
+      },
+      {
+        "id": 505501,
+        "name": "Great Three, Wandersnatch",
+        "nameJP": "童話の怪物、薔薇の猟犬",
+        "nameCN": "童话怪物，蔷薇猎犬",
+        "card": "3",
+        "cardName": "quick"
       }
     ]
   },
@@ -8581,6 +8661,14 @@
         "name": "Unasakahiraku Michihikinotama",
         "nameJP": "海境闢く満干珠",
         "nameCN": "开辟海境的满干珠",
+        "card": "3",
+        "cardName": "quick"
+      },
+      {
+        "id": 1001701,
+        "name": "Starlit Marmalade",
+        "nameJP": "常夜を照らす導きの星",
+        "nameCN": "照耀常夜的引导之星",
         "card": "3",
         "cardName": "quick"
       }
@@ -8655,6 +8743,14 @@
         "name": "Code：Original Sin",
         "nameJP": "第七聖典・断罪死",
         "nameCN": "第七圣典·断罪死",
+        "card": "2",
+        "cardName": "buster"
+      },
+      {
+        "id": 2300901,
+        "name": "Calvaria Galgalim",
+        "nameJP": "原理血戒・断頭台",
+        "nameCN": "原理血戒·断头台",
         "card": "2",
         "cardName": "buster"
       }
@@ -8860,6 +8956,14 @@
         "nameCN": "不断扩张的世界",
         "card": "3",
         "cardName": "quick"
+      },
+      {
+        "id": 1001801,
+        "name": "Atom Micros Murian Foot",
+        "nameJP": "縮みゆく世界",
+        "nameCN": "逐渐缩小的世界",
+        "card": "3",
+        "cardName": "quick"
       }
     ]
   },
@@ -9023,6 +9127,14 @@
         "name": "Visconti Asenza",
         "nameJP": "未蘭蛇竜・紋章咬合",
         "nameCN": "米兰蛇龙·纹章咬合",
+        "card": "3",
+        "cardName": "quick"
+      },
+      {
+        "id": 305701,
+        "name": "Dragon Phantasm",
+        "nameJP": "有鱗幻想",
+        "nameCN": "有鳞幻想",
         "card": "3",
         "cardName": "quick"
       }
@@ -9433,6 +9545,14 @@
         "nameCN": "ノアの方舟",
         "card": "1",
         "cardName": "arts"
+      },
+      {
+        "id": 405701,
+        "name": "グレートラム・ノアズ・アーク",
+        "nameJP": "再創世の試練",
+        "nameCN": "再創世の試練",
+        "card": "1",
+        "cardName": "arts"
       }
     ]
   },
@@ -9692,6 +9812,14 @@
         "nameCN": "汝、星を鋤く豊穣",
         "card": "1",
         "cardName": "arts"
+      },
+      {
+        "id": 306401,
+        "name": "アダマス・クロノス・エリニュス",
+        "nameJP": "汝、星を刈る血刃",
+        "nameCN": "汝、星を刈る血刃",
+        "card": "1",
+        "cardName": "arts"
       }
     ],
     "overWriteServantNames": [
@@ -9822,6 +9950,14 @@
         "nameCN": "我は告げる、逃れられぬ絶望を",
         "card": "1",
         "cardName": "arts"
+      },
+      {
+        "id": 1002201,
+        "name": "ポタモス・トゥ・カトコズム",
+        "nameJP": "飲み込み来たれ、冥府の河",
+        "nameCN": "飲み込み来たれ、冥府の河",
+        "card": "1",
+        "cardName": "arts"
       }
     ],
     "overWriteServantNames": [
@@ -9890,6 +10026,14 @@
         "name": "マラク・アル・マウト",
         "nameJP": "晩鐘の天使",
         "nameCN": "晩鐘の天使",
+        "card": "1",
+        "cardName": "arts"
+      },
+      {
+        "id": 605301,
+        "name": "スィー・ザバーニーヤ",
+        "nameJP": "30と19の死",
+        "nameCN": "30と19の死",
         "card": "1",
         "cardName": "arts"
       }
