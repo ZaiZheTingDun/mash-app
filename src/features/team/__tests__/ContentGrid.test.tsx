@@ -527,8 +527,11 @@ describe("ContentGrid", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "技能/宝具设置" }));
-    expect(await screen.findByRole("dialog")).toHaveTextContent("技能/宝具设置");
+    await user.click(screen.getByRole("button", { name: "助战筛选设置" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("助战筛选设置");
+    expect(screen.getByRole("spinbutton", { name: "星图分值" })).toBeInTheDocument();
+    expect(screen.queryByRole("spinbutton", { name: "冠位星图分值" })).not.toBeInTheDocument();
+    await user.type(screen.getByRole("spinbutton", { name: "星图分值" }), "40");
 
     await user.click(screen.getByRole("button", { name: "宝具等级" }));
     await user.click(await screen.findByRole("radio", { name: "2" }));
@@ -540,9 +543,38 @@ describe("ContentGrid", () => {
 
     expect(onUpdateActiveProject).toHaveBeenCalledWith(
       expect.objectContaining({
+        supportStarMapScoreMin: 40,
+        supportGrandStarMapScoreMin: null,
         supportNoblePhantasmLevelMin: 2,
         supportSkillLevelMins: [10, null, null],
         supportAppendSkillLevelMins: [null, null, null, null, null],
+      })
+    );
+  });
+
+  it("shows and persists both score thresholds for grand support", async () => {
+    const user = userEvent.setup();
+    const onUpdateActiveProject = vi.fn();
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{ ...PROJECT, supportGrandMode: true }}
+        onUpdateActiveProject={onUpdateActiveProject}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "助战筛选设置" }));
+    await user.type(screen.getByRole("spinbutton", { name: "星图分值" }), "62");
+    await user.type(screen.getByRole("spinbutton", { name: "冠位星图分值" }), "16");
+    await user.click(screen.getByRole("button", { name: "确认" }));
+
+    expect(onUpdateActiveProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supportStarMapScoreMin: 62,
+        supportGrandStarMapScoreMin: 16,
       })
     );
   });
@@ -569,11 +601,11 @@ describe("ContentGrid", () => {
     expect(screen.getByLabelText("持有技能 1 至少 10 级")).toBeInTheDocument();
     expect(screen.getByLabelText("追加技能 2 至少 10 级")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "技能/宝具设置" })
+      screen.queryByRole("button", { name: "助战筛选设置" })
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByLabelText("编辑技能宝具设置"));
-    expect(await screen.findByRole("dialog")).toHaveTextContent("技能/宝具设置");
+    await user.click(screen.getByLabelText("编辑助战筛选设置"));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("助战筛选设置");
   });
 
   it("toggles grand support mode from the support slot", async () => {
@@ -780,7 +812,7 @@ describe("ContentGrid", () => {
       />
     );
 
-    await user.click(screen.getByLabelText("编辑技能宝具设置"));
+    await user.click(screen.getByLabelText("编辑助战筛选设置"));
     await user.click(screen.getByRole("button", { name: "持有技能 1" }));
 
     const picker = await screen.findByRole("radiogroup", { name: "技能等级选择" });
@@ -806,7 +838,7 @@ describe("ContentGrid", () => {
       />
     );
 
-    await user.click(screen.getByLabelText("编辑技能宝具设置"));
+    await user.click(screen.getByLabelText("编辑助战筛选设置"));
     await user.click(screen.getByRole("button", { name: "宝具等级" }));
     const npPicker = await screen.findByRole("radiogroup", {
       name: "宝具等级选择",
@@ -835,7 +867,7 @@ describe("ContentGrid", () => {
       />
     );
 
-    await user.click(screen.getByLabelText("编辑技能宝具设置"));
+    await user.click(screen.getByLabelText("编辑助战筛选设置"));
     const npButton = screen.getByRole("button", { name: "宝具等级" });
     await user.click(npButton);
     await user.click(await screen.findByRole("radio", { name: "4" }));

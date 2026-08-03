@@ -489,6 +489,8 @@ fn test_project(id: &str, name: &str, advanced_mode: bool) -> Project {
         grand_servants: Vec::new(),
         grand_card_strategy: GrandCardStrategy::default(),
         support_noble_phantasm_level_min: None,
+        support_star_map_score_min: None,
+        support_grand_star_map_score_min: None,
         support_skill_level_mins: default_support_skill_level_mins(),
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
         recognition_settings: None,
@@ -933,6 +935,8 @@ fn project_legacy_json_without_slots_falls_back_to_defaults() {
         default_grand_chain_priority()
     );
     assert!(project.support_noble_phantasm_level_min.is_none());
+    assert!(project.support_star_map_score_min.is_none());
+    assert!(project.support_grand_star_map_score_min.is_none());
     assert_eq!(project.support_skill_level_mins, [None; 3]);
     assert_eq!(project.support_append_skill_level_mins, [None; 5]);
     assert!(project.recognition_settings.is_none());
@@ -949,6 +953,18 @@ fn new_advanced_project_enables_grand_support_by_default() {
 
     assert!(!regular.support_grand_mode);
     assert!(grand.support_grand_mode);
+}
+
+#[test]
+fn normalize_project_clamps_support_score_thresholds_to_game_maxima() {
+    let mut project = test_project("project-score", "分值", true);
+    project.support_star_map_score_min = Some(99);
+    project.support_grand_star_map_score_min = Some(99);
+
+    let normalized = normalize_project(project);
+
+    assert_eq!(normalized.support_star_map_score_min, Some(62));
+    assert_eq!(normalized.support_grand_star_map_score_min, Some(16));
 }
 
 #[test]
@@ -1265,6 +1281,8 @@ fn normalize_project_migrates_legacy_repeat_flag_to_infinite_mode() {
         grand_servants: Vec::new(),
         grand_card_strategy: GrandCardStrategy::default(),
         support_noble_phantasm_level_min: None,
+        support_star_map_score_min: None,
+        support_grand_star_map_score_min: None,
         support_skill_level_mins: default_support_skill_level_mins(),
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
         recognition_settings: None,

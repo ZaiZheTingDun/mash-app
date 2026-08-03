@@ -314,6 +314,24 @@
   background: var(--green-11);
 }
 
+.debug-overlay-support-score-region {
+  border: 2px solid var(--blue-10);
+  background: rgba(30, 110, 220, 0.12);
+}
+
+.debug-overlay-support-score-region > .debug-overlay-label {
+  background: var(--blue-10);
+}
+
+.debug-overlay-support-score-region.missed {
+  border-color: var(--red-10);
+  background: rgba(220, 40, 40, 0.12);
+}
+
+.debug-overlay-support-score-region.missed > .debug-overlay-label {
+  background: var(--red-10);
+}
+
 .debug-overlay-support-grand-badge.hit {
   border: 2px solid var(--amber-11);
   background: rgba(245, 200, 60, 0.18);

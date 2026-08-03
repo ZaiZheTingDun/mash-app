@@ -35,6 +35,9 @@ export interface DebugPagePrefs {
   supportGrandCraftEssenceIds?: [number | null, number | null, number | null];
   supportGrandCraftEssenceMlbRequired?: [boolean, boolean, boolean];
   supportGrandBondCeMode?: SupportGrandBondCeMode;
+  supportScoreGrandMode?: boolean;
+  supportStarMapScoreMin?: number | null;
+  supportGrandStarMapScoreMin?: number | null;
   enhancementServantId?: number | null;
   enhancementServantThreshold?: string;
   showCoordOverlay?: boolean;

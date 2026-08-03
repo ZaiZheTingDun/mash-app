@@ -553,6 +553,8 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     assert!(cfg.enable_extra_class_filter);
     assert!(cfg.support_slot_index.is_none());
     assert!(cfg.support_noble_phantasm_level_min.is_none());
+    assert!(cfg.support_star_map_score_min.is_none());
+    assert!(cfg.support_grand_star_map_score_min.is_none());
     assert_eq!(cfg.support_skill_level_mins, [None; 3]);
     assert_eq!(cfg.support_append_skill_level_mins, [None; 5]);
     assert_eq!(cfg.repeat_mission, false);
@@ -3954,6 +3956,8 @@ fn run_config_round_trips_support_servant_id_and_repeat_flag() {
     payload["supportServantVariantKey"] = serde_json::json!("284:2");
     payload["enableExtraClassFilter"] = serde_json::json!(false);
     payload["supportNoblePhantasmLevelMin"] = serde_json::json!(2);
+    payload["supportStarMapScoreMin"] = serde_json::json!(40);
+    payload["supportGrandStarMapScoreMin"] = serde_json::json!(16);
     payload["supportSkillLevelMins"] = serde_json::json!([10, null, 9]);
     payload["supportAppendSkillLevelMins"] = serde_json::json!([null, 10, null, null, 6]);
     payload["repeatMission"] = serde_json::json!(true);
@@ -3965,6 +3969,8 @@ fn run_config_round_trips_support_servant_id_and_repeat_flag() {
     assert!(!cfg.enable_extra_class_filter);
     assert_eq!(cfg.grand_class, GrandClass::Saber);
     assert_eq!(cfg.support_noble_phantasm_level_min, Some(2));
+    assert_eq!(cfg.support_star_map_score_min, Some(40));
+    assert_eq!(cfg.support_grand_star_map_score_min, Some(16));
     assert_eq!(cfg.support_skill_level_mins, [Some(10), None, Some(9)]);
     assert_eq!(
         cfg.support_append_skill_level_mins,
@@ -4132,6 +4138,11 @@ fn support_row(
         np_score: 1.0,
         np_region: region,
         score_anchor: None,
+        score_region: None,
+        star_map_score: None,
+        grand_star_map_score: None,
+        score_text: None,
+        score_confidence: None,
         np_matched_name: "为你纺织的时光之轮".into(),
         np_level: Some(5),
         skill_panel: panel.map(str::to_string),
@@ -4165,6 +4176,42 @@ fn support_row_tap_point_falls_back_to_ocr_row_tap() {
     let point = support_row_tap_point(&row);
     assert!((point.x - 0.30).abs() < 1e-9);
     assert!((point.y - 0.55).abs() < 1e-9);
+}
+
+#[test]
+fn support_score_filter_handles_ordinary_and_grand_thresholds() {
+    let mut payload = minimal_run_config_json();
+    payload["supportStarMapScoreMin"] = serde_json::json!(40);
+    let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+    let mut progress = SupportLevelPanelProgress::default();
+    let mut row = support_row(None, vec![], vec![]);
+    row.star_map_score = Some(40);
+    assert_eq!(
+        support_row_matches_level_requirements_with_progress(Server::Cn, &cfg, &row, &mut progress,),
+        SupportLevelFilter::Pass
+    );
+    row.star_map_score = Some(39);
+    assert_eq!(
+        support_row_matches_level_requirements_with_progress(Server::Jp, &cfg, &row, &mut progress,),
+        SupportLevelFilter::Fail("星图分值 ≥ 40（实际 39）".into())
+    );
+
+    let mut payload = minimal_run_config_json();
+    payload["supportGrandMode"] = serde_json::json!(true);
+    payload["supportStarMapScoreMin"] = serde_json::json!(62);
+    payload["supportGrandStarMapScoreMin"] = serde_json::json!(16);
+    let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+    row.star_map_score = Some(62);
+    row.grand_star_map_score = Some(15);
+    assert_eq!(
+        support_row_matches_level_requirements_with_progress(Server::Jp, &cfg, &row, &mut progress,),
+        SupportLevelFilter::Fail("冠位星图分值 ≥ 16（实际 15）".into())
+    );
+    row.grand_star_map_score = Some(16);
+    assert_eq!(
+        support_row_matches_level_requirements_with_progress(Server::Jp, &cfg, &row, &mut progress,),
+        SupportLevelFilter::Pass
+    );
 }
 
 #[test]

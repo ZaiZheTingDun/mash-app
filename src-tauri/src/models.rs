@@ -787,6 +787,12 @@ pub struct Project {
     /// Optional support-search NP minimum level. `None` means "任意".
     #[serde(default)]
     pub support_noble_phantasm_level_min: Option<u32>,
+    /// Optional minimum ordinary star-map score (0-62).
+    #[serde(default)]
+    pub support_star_map_score_min: Option<u32>,
+    /// Optional minimum Grand star-map score (0-16), used in Grand mode.
+    #[serde(default)]
+    pub support_grand_star_map_score_min: Option<u32>,
     /// Optional support-search owned skill minimum levels, one entry per
     /// skill slot. `None` means "任意".
     #[serde(default = "default_support_skill_level_mins")]

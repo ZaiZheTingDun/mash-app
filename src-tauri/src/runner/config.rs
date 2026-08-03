@@ -146,6 +146,12 @@ pub struct RunConfig {
     /// disables the filter.
     #[serde(default)]
     pub support_noble_phantasm_level_min: Option<u32>,
+    /// Minimum ordinary star-map score required for the chosen support row.
+    #[serde(default)]
+    pub support_star_map_score_min: Option<u32>,
+    /// Minimum Grand star-map score required in Grand support mode.
+    #[serde(default)]
+    pub support_grand_star_map_score_min: Option<u32>,
     /// Minimum owned skill levels, one entry per skill slot. `None`
     /// means "任意".
     #[serde(default = "default_support_skill_level_mins")]

@@ -139,6 +139,8 @@ export interface Project {
   grandServants?: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
   supportNoblePhantasmLevelMin?: number | null;
+  supportStarMapScoreMin?: number | null;
+  supportGrandStarMapScoreMin?: number | null;
   supportSkillLevelMins?: SupportSkillLevelMins;
   supportAppendSkillLevelMins?: SupportAppendSkillLevelMins;
   recognitionSettings?: ProjectRecognitionSettings | null;

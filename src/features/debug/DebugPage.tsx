@@ -217,6 +217,15 @@ export function DebugPage({
   );
   const [supportGrandBondCeMode, setSupportGrandBondCeMode] =
     useState<SupportGrandBondCeMode>(initialPrefs.supportGrandBondCeMode ?? "any");
+  const [supportScoreGrandMode, setSupportScoreGrandMode] = useState(
+    initialPrefs.supportScoreGrandMode === true
+  );
+  const [supportStarMapScoreMin, setSupportStarMapScoreMin] =
+    useState<number | null>(asNumberOrNull(initialPrefs.supportStarMapScoreMin));
+  const [supportGrandStarMapScoreMin, setSupportGrandStarMapScoreMin] =
+    useState<number | null>(
+      asNumberOrNull(initialPrefs.supportGrandStarMapScoreMin)
+    );
   const [supportMetadata, setSupportMetadata] =
     useState<ServantMetadataDto | null>(null);
   const [supportResult, setSupportResult] =
@@ -339,6 +348,9 @@ export function DebugPage({
       supportGrandCraftEssenceIds,
       supportGrandCraftEssenceMlbRequired,
       supportGrandBondCeMode,
+      supportScoreGrandMode,
+      supportStarMapScoreMin,
+      supportGrandStarMapScoreMin,
       enhancementServantId,
       enhancementServantThreshold,
       showCoordOverlay,
@@ -357,6 +369,9 @@ export function DebugPage({
     supportGrandCraftEssenceIds,
     supportGrandCraftEssenceMlbRequired,
     supportGrandBondCeMode,
+    supportScoreGrandMode,
+    supportStarMapScoreMin,
+    supportGrandStarMapScoreMin,
     enhancementServantId,
     enhancementServantThreshold,
     showCoordOverlay,
@@ -1046,10 +1061,16 @@ export function DebugPage({
           craftEssenceMlbRequired: supportCraftEssenceMlbRequired,
           grandCraftEssenceMlbRequired: supportGrandCraftEssenceMlbRequired,
           grandBondCeMode: supportGrandBondCeMode,
+          supportGrandMode: supportScoreGrandMode,
+          supportStarMapScoreMin,
+          supportGrandStarMapScoreMin: supportScoreGrandMode
+            ? supportGrandStarMapScoreMin
+            : null,
         }
       );
       setSupportResult(result);
       const diag = result.diagnostics;
+      const scoreFilter = result.scoreFilter;
       const cvInfo =
         diag.cvFingerprint || diag.cvFile
           ? ` · CV ${diag.cvFingerprint || "unknown"} split:${
@@ -1062,6 +1083,18 @@ export function DebugPage({
           ` · 宝具候选 ${diag.npCandidates.length}` +
           cvInfo
       );
+      if (
+        scoreFilter &&
+        (scoreFilter.starMapScoreMin != null ||
+          (scoreFilter.grandMode && scoreFilter.grandStarMapScoreMin != null))
+      ) {
+        log(
+          `分值筛选：星图 ≥ ${scoreFilter.starMapScoreMin ?? "任意"}` +
+            (scoreFilter.grandMode
+              ? ` · 冠位星图 ≥ ${scoreFilter.grandStarMapScoreMin ?? "任意"}`
+              : "")
+        );
+      }
       // Surface the "冠位从者" ribbon probe — info level on a hit
       // so it lines up with the runner's user-facing operation log,
       // muted-gray otherwise. `null`/`undefined` means the active
@@ -1142,6 +1175,15 @@ export function DebugPage({
             : ` | 宝具(未核对)`;
           const npLevelPart =
             s.npLevel != null ? ` | 宝具等级 ${s.npLevel}` : "";
+          const scorePart = s.starMapScore != null
+            ? ` | 星图 ${s.starMapScore}${s.grandStarMapScore != null ? `/${s.grandStarMapScore}` : ""}`
+            : "";
+          const scoreFilterPart =
+            s.scoreFilterPassed == null
+              ? ""
+              : s.scoreFilterPassed
+                ? " | 分值筛选 ✓"
+                : ` | 分值筛选 ✗ ${s.scoreFilterReason ?? "未达标"}`;
           const skillLevels =
             s.skillPanel === "append"
               ? supportLevelList(s.appendSkillLevels)
@@ -1162,6 +1204,8 @@ export function DebugPage({
           log(
             `  行 y=${s.rowRegion.y.toFixed(3)} | 名称='${s.nameText}' (${s.nameScore.toFixed(2)})` +
               npPart +
+              scorePart +
+              scoreFilterPart +
               npLevelPart +
               skillPart +
               skillDiagPart +
@@ -1188,6 +1232,9 @@ export function DebugPage({
     supportCraftEssenceMlbRequired,
     supportGrandCraftEssenceMlbRequired,
     supportGrandBondCeMode,
+    supportScoreGrandMode,
+    supportStarMapScoreMin,
+    supportGrandStarMapScoreMin,
     supportMetadata,
     displayServantName,
     log,
@@ -1687,6 +1734,57 @@ export function DebugPage({
                     selectedSupportServant.name_cn
                   : "选择助战从者"}
               </Button>
+              <Flex gap="1" align="center">
+                <Text size="1" color="gray">星图 ≥</Text>
+                <TextField.Root
+                  type="number"
+                  min={0}
+                  max={62}
+                  value={supportStarMapScoreMin ?? ""}
+                  placeholder="任意"
+                  aria-label="Debug 星图分值"
+                  style={{ width: 76 }}
+                  onChange={(event) => {
+                    const value = event.currentTarget.valueAsNumber;
+                    setSupportStarMapScoreMin(
+                      Number.isFinite(value)
+                        ? Math.min(62, Math.max(0, Math.trunc(value)))
+                        : null
+                    );
+                  }}
+                />
+              </Flex>
+              <label className="debug-coord-toggle">
+                <Checkbox
+                  checked={supportScoreGrandMode}
+                  onCheckedChange={(checked) =>
+                    setSupportScoreGrandMode(checked === true)
+                  }
+                />
+                <Text size="1">冠位分值</Text>
+              </label>
+              {supportScoreGrandMode && (
+                <Flex gap="1" align="center">
+                  <Text size="1" color="gray">冠位星图 ≥</Text>
+                  <TextField.Root
+                    type="number"
+                    min={0}
+                    max={16}
+                    value={supportGrandStarMapScoreMin ?? ""}
+                    placeholder="任意"
+                    aria-label="Debug 冠位星图分值"
+                    style={{ width: 76 }}
+                    onChange={(event) => {
+                      const value = event.currentTarget.valueAsNumber;
+                      setSupportGrandStarMapScoreMin(
+                        Number.isFinite(value)
+                          ? Math.min(16, Math.max(0, Math.trunc(value)))
+                          : null
+                      );
+                    }}
+                  />
+                </Flex>
+              )}
               <Button
                 type="button"
                 size="1"
@@ -2274,6 +2372,17 @@ export function DebugPage({
                   <Text size="1" color="gray">
                     名称候选: {supportMetadata.names.join(" / ")}
                   </Text>
+                  {supportResult.scoreFilter &&
+                    (supportResult.scoreFilter.starMapScoreMin != null ||
+                      (supportResult.scoreFilter.grandMode &&
+                        supportResult.scoreFilter.grandStarMapScoreMin != null)) && (
+                      <Text size="1" color="blue">
+                        分值条件：星图 ≥ {supportResult.scoreFilter.starMapScoreMin ?? "任意"}
+                        {supportResult.scoreFilter.grandMode
+                          ? ` · 冠位星图 ≥ ${supportResult.scoreFilter.grandStarMapScoreMin ?? "任意"}`
+                          : ""}
+                      </Text>
+                    )}
                   <Text size="1" color="gray">
                     宝具候选: {supportMetadata.npNames.join(" / ")}
                   </Text>
@@ -2319,7 +2428,7 @@ export function DebugPage({
               {supportResult?.supports.map((s, i) => (
                 <Box
                   key={`support-side-${i}`}
-                  className="debug-match-entry found"
+                  className={`debug-match-entry ${s.scoreFilterPassed === false ? "missed" : "found"}`}
                 >
                   <Flex justify="between" align="center">
                     <Text size="2" weight="medium">
@@ -2337,6 +2446,32 @@ export function DebugPage({
                     {s.npMatchedName ? ` → ${s.npMatchedName}` : ""}
                     {s.npLevel != null ? ` · 等级 ${s.npLevel}` : ""}
                   </Text>
+                  {s.starMapScore != null && (
+                    <Text
+                      size="1"
+                      color={
+                        s.scoreFilterPassed === false
+                          ? "red"
+                          : s.scoreFilterPassed === true
+                            ? "green"
+                            : "blue"
+                      }
+                    >
+                      星图分值：{s.starMapScore}
+                      {s.grandStarMapScore != null ? ` / ${s.grandStarMapScore}` : ""}
+                      {s.scoreText ? `（OCR: ${s.scoreText}）` : ""}
+                      {s.scoreFilterPassed === true ? " · ✓ 达标" : ""}
+                      {s.scoreFilterPassed === false
+                        ? ` · ✗ ${s.scoreFilterReason ?? "未达标"}`
+                        : ""}
+                    </Text>
+                  )}
+                  {s.starMapScore == null && s.scoreFilterPassed === false && (
+                    <Text size="1" color="red">
+                      分值识别失败 · ✗ {s.scoreFilterReason ?? "未达标"}
+                      {s.scoreText ? `（OCR: ${s.scoreText}）` : ""}
+                    </Text>
+                  )}
                   {s.skillPanel && (
                     <Text size="1" color="blue">
                       {supportPanelLabel(s.skillPanel)}：

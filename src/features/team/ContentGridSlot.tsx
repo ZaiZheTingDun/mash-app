@@ -35,6 +35,8 @@ interface SortableSlotProps {
   bondIconSrc: string | null | undefined;
   bondNpIconSrc: string | null | undefined;
   supportNpLevel: number | null | undefined;
+  supportStarMapScore: number | null | undefined;
+  supportGrandStarMapScore: number | null | undefined;
   supportSkillLevels: SupportSkillLevelMins;
   supportAppendSkillLevels: SupportAppendSkillLevelMins;
   onSelect: () => void;
@@ -72,6 +74,8 @@ export function SortableSlot({
   bondIconSrc,
   bondNpIconSrc,
   supportNpLevel,
+  supportStarMapScore,
+  supportGrandStarMapScore,
   supportSkillLevels,
   supportAppendSkillLevels,
   onSelect,
@@ -104,6 +108,8 @@ export function SortableSlot({
   const isSupport = slot.type === "support";
   const rarityClass = servant ? rarityFrameClass(servant.rarity) : "";
   const hasSupportRequirements =
+    supportStarMapScore != null ||
+    (supportGrandMode && supportGrandStarMapScore != null) ||
     supportNpLevel != null ||
     hasConfiguredLevels(supportSkillLevels) ||
     hasConfiguredLevels(supportAppendSkillLevels);
@@ -190,6 +196,9 @@ export function SortableSlot({
               )}
               {isSupport && hasSupportRequirements && (
                 <SupportRequirementSummary
+                  grandMode={supportGrandMode}
+                  starMapScore={supportStarMapScore}
+                  grandStarMapScore={supportGrandStarMapScore}
                   npLevel={supportNpLevel}
                   skillLevels={supportSkillLevels}
                   appendSkillLevels={supportAppendSkillLevels}
@@ -208,7 +217,7 @@ export function SortableSlot({
                     onSupportSettingsOpen();
                   }}
                 >
-                  技能/宝具设置
+                  助战筛选设置
                 </Button>
               )}
               {isSupport && supportGrandMode ? (

@@ -285,6 +285,13 @@ export interface SupportRowMatchDto {
   npScore: number;
   npRegion: NormRectDto;
   scoreAnchor?: NormRectDto | null;
+  scoreRegion?: NormRectDto | null;
+  starMapScore?: number | null;
+  grandStarMapScore?: number | null;
+  scoreText?: string | null;
+  scoreConfidence?: number | null;
+  scoreFilterPassed?: boolean | null;
+  scoreFilterReason?: string | null;
   npMatchedName: string;
   npLevel?: number | null;
   skillPanel?: "owned" | "append" | null;
@@ -350,4 +357,9 @@ export interface SupportDiagnosticsDto {
 export interface FindSupportsResultDto {
   supports: SupportRowMatchDto[];
   diagnostics: SupportDiagnosticsDto;
+  scoreFilter?: {
+    grandMode: boolean;
+    starMapScoreMin?: number | null;
+    grandStarMapScoreMin?: number | null;
+  };
 }

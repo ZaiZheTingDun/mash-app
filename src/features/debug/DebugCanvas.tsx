@@ -605,6 +605,11 @@ export function DebugCanvas({
                   助战 {i + 1} · 名 {s.nameScore.toFixed(2)} · 宝{" "}
                   {s.npScore.toFixed(2)}
                   {s.npLevel != null ? ` · 宝Lv${s.npLevel}` : ""}
+                  {s.starMapScore != null
+                    ? ` · 星图${s.starMapScore}${s.grandStarMapScore != null ? `/${s.grandStarMapScore}` : ""}`
+                    : ""}
+                  {s.scoreFilterPassed === true ? " · 分值✓" : ""}
+                  {s.scoreFilterPassed === false ? " · 分值✗" : ""}
                   {s.skillPanel
                     ? ` · ${supportPanelShortLabel(s.skillPanel)} ${
                         s.skillPanel === "append"
@@ -642,6 +647,28 @@ export function DebugCanvas({
                   title={`row anchor (${s.scoreAnchor.x.toFixed(3)}, ${s.scoreAnchor.y.toFixed(3)}, ${s.scoreAnchor.w.toFixed(3)}, ${s.scoreAnchor.h.toFixed(3)})`}
                 >
                   <span className="debug-overlay-label">确认 {i + 1}</span>
+                </Box>
+              ) : null
+            )}
+            {supportResult.supports.map((s, i) =>
+              s.scoreRegion ? (
+                <Box
+                  key={`support-score-region-${i}`}
+                  className={`debug-overlay-box debug-overlay-support-score-region${s.scoreFilterPassed === false ? " missed" : ""}`}
+                  style={{
+                    left: `${s.scoreRegion.x * 100}%`,
+                    top: `${s.scoreRegion.y * 100}%`,
+                    width: `${s.scoreRegion.w * 100}%`,
+                    height: `${s.scoreRegion.h * 100}%`,
+                  }}
+                  title={`score OCR ${s.scoreText ?? ""}`}
+                >
+                  <span className="debug-overlay-label">
+                    分值 {s.starMapScore ?? "?"}
+                    {s.grandStarMapScore != null ? `/${s.grandStarMapScore}` : ""}
+                    {s.scoreFilterPassed === true ? " ✓" : ""}
+                    {s.scoreFilterPassed === false ? " ✗" : ""}
+                  </span>
                 </Box>
               ) : null
             )}

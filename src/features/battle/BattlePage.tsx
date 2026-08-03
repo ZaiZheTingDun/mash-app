@@ -499,6 +499,10 @@ export function BattlePage({
       },
       supportNoblePhantasmLevelMin:
         selectedProject.supportNoblePhantasmLevelMin ?? null,
+      supportStarMapScoreMin:
+        selectedProject.supportStarMapScoreMin ?? null,
+      supportGrandStarMapScoreMin:
+        selectedProject.supportGrandStarMapScoreMin ?? null,
       supportSkillLevelMins:
         selectedProject.supportSkillLevelMins ?? [null, null, null],
       supportAppendSkillLevelMins:

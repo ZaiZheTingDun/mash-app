@@ -1384,6 +1384,10 @@ fn format_ce_artwork_checks(checks: &[SupportCeArtworkCheck]) -> String {
 pub struct DebugSupportRow {
     #[serde(flatten)]
     pub row: SupportRowMatch,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score_filter_passed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score_filter_reason: Option<String>,
     /// Present only when the caller passed a `craft_essence_id` *and*
     /// the template was resolvable. Absent rows render exactly like the
     /// pre-CE behaviour so the overlay stays backwards-compatible.
@@ -1395,9 +1399,18 @@ pub struct DebugSupportRow {
 
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct DebugSupportScoreFilter {
+    pub grand_mode: bool,
+    pub star_map_score_min: Option<u32>,
+    pub grand_star_map_score_min: Option<u32>,
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct DebugFindSupportsResult {
     pub supports: Vec<DebugSupportRow>,
     pub diagnostics: SupportDiagnostics,
+    pub score_filter: DebugSupportScoreFilter,
 }
 
 /// Apply the runner's `SUPPORT_CE_OFFSET_IN_ROW` to a row bbox. Kept in
@@ -1446,6 +1459,9 @@ pub fn debug_find_supports(
     craft_essence_mlb_required: Option<bool>,
     grand_craft_essence_mlb_required: Option<[bool; 3]>,
     grand_bond_ce_mode: Option<String>,
+    support_grand_mode: Option<bool>,
+    support_star_map_score_min: Option<u32>,
+    support_grand_star_map_score_min: Option<u32>,
 ) -> Result<DebugFindSupportsResult, String> {
     require_automation_idle(
         &handle_state,
@@ -1458,6 +1474,12 @@ pub fn debug_find_supports(
     let support_ce_full_gate_threshold = recognition_settings.support_ce_full_gate_threshold;
     let support_mlb_icon_threshold = recognition_settings.support_mlb_icon_threshold;
     let support_bond_icon_threshold = recognition_settings.support_bond_icon_threshold;
+    let support_grand_mode = support_grand_mode.unwrap_or(false);
+    let support_star_map_score_min = support_star_map_score_min.map(|score| score.min(62));
+    let support_grand_star_map_score_min =
+        support_grand_star_map_score_min.map(|score| score.min(16));
+    let score_filter_configured = support_star_map_score_min.is_some()
+        || (support_grand_mode && support_grand_star_map_score_min.is_some());
 
     let image_path = debug_image_path(&app);
     if !image_path.exists() {
@@ -1693,12 +1715,34 @@ pub fn debug_find_supports(
             };
             grand_ces.push(info);
         }
-        supports.push(DebugSupportRow { row, ce, grand_ces });
+        let score_filter_reason = score_filter_configured
+            .then(|| {
+                runner::support_score_filter_mismatch(
+                    &row,
+                    support_grand_mode,
+                    support_star_map_score_min,
+                    support_grand_star_map_score_min,
+                )
+            })
+            .flatten();
+        let score_filter_passed = score_filter_configured.then_some(score_filter_reason.is_none());
+        supports.push(DebugSupportRow {
+            row,
+            score_filter_passed,
+            score_filter_reason,
+            ce,
+            grand_ces,
+        });
     }
 
     Ok(DebugFindSupportsResult {
         supports,
         diagnostics: result.diagnostics,
+        score_filter: DebugSupportScoreFilter {
+            grand_mode: support_grand_mode,
+            star_map_score_min: support_star_map_score_min,
+            grand_star_map_score_min: support_grand_star_map_score_min,
+        },
     })
 }
 

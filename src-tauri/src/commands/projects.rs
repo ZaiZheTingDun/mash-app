@@ -32,6 +32,12 @@ pub(crate) fn normalize_project(mut project: Project) -> Project {
     if !matches!(project.repeat_mode, Some(ProjectRepeatMode::Count)) {
         project.repeat_count = None;
     }
+    project.support_star_map_score_min = project
+        .support_star_map_score_min
+        .map(|score| score.min(62));
+    project.support_grand_star_map_score_min = project
+        .support_grand_star_map_score_min
+        .map(|score| score.min(16));
     normalize_grand_card_rule_slots(&mut project);
     normalize_grand_servants(&mut project);
     normalize_project_recognition_settings(&mut project);
@@ -273,6 +279,8 @@ pub(crate) fn new_project(name: String, advanced_mode: bool, grand_class: GrandC
         grand_servants: Vec::new(),
         grand_card_strategy: GrandCardStrategy::default(),
         support_noble_phantasm_level_min: None,
+        support_star_map_score_min: None,
+        support_grand_star_map_score_min: None,
         support_skill_level_mins: default_support_skill_level_mins(),
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
         recognition_settings: None,
@@ -967,6 +975,8 @@ pub(crate) fn clear_project_slot_servant(
         project.support_servant_id = None;
         project.support_servant_variant_key = None;
         project.support_noble_phantasm_level_min = None;
+        project.support_star_map_score_min = None;
+        project.support_grand_star_map_score_min = None;
         project.support_skill_level_mins = default_support_skill_level_mins();
         project.support_append_skill_level_mins = default_support_append_skill_level_mins();
         project.support_grand_mode = false;

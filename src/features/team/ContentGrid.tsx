@@ -319,6 +319,8 @@ export function ContentGrid({
   );
 
   const handleSupportSettingsConfirm = (next: {
+    starMapScore: number | null;
+    grandStarMapScore: number | null;
     npLevel: number | null;
     skillLevels: SupportSkillLevelMins;
     appendSkillLevels: SupportAppendSkillLevelMins;
@@ -326,6 +328,8 @@ export function ContentGrid({
     if (!activeProject) return;
     void onUpdateActiveProject({
       ...activeProject,
+      supportStarMapScoreMin: next.starMapScore,
+      supportGrandStarMapScoreMin: next.grandStarMapScore,
       supportNoblePhantasmLevelMin: next.npLevel,
       supportSkillLevelMins: next.skillLevels,
       supportAppendSkillLevelMins: next.appendSkillLevels,
@@ -375,6 +379,8 @@ export function ContentGrid({
       bondIconSrc={grandBondIconSrc}
       bondNpIconSrc={grandBondNpIconSrc}
       supportNpLevel={activeProject?.supportNoblePhantasmLevelMin ?? null}
+      supportStarMapScore={activeProject?.supportStarMapScoreMin ?? null}
+      supportGrandStarMapScore={activeProject?.supportGrandStarMapScoreMin ?? null}
       supportSkillLevels={supportSkillLevels}
       supportAppendSkillLevels={supportAppendSkillLevels}
       onSelect={() => handleSlotClick(slot)}

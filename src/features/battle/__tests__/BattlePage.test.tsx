@@ -197,11 +197,13 @@ describe("BattlePage", () => {
     });
   });
 
-  it("passes support skill and NP level requirements to automation", async () => {
+  it("passes support score, skill, and NP requirements to automation", async () => {
     const user = userEvent.setup();
     mockProjectCommands();
     renderBattlePage({
       ...PROJECT,
+      supportStarMapScoreMin: 62,
+      supportGrandStarMapScoreMin: 16,
       supportNoblePhantasmLevelMin: 2,
       supportSkillLevelMins: [10, null, 9],
       supportAppendSkillLevelMins: [null, 10, null, null, 6],
@@ -212,6 +214,8 @@ describe("BattlePage", () => {
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("start_automation", {
         config: expect.objectContaining({
+          supportStarMapScoreMin: 62,
+          supportGrandStarMapScoreMin: 16,
           supportNoblePhantasmLevelMin: 2,
           supportSkillLevelMins: [10, null, 9],
           supportAppendSkillLevelMins: [null, 10, null, null, 6],

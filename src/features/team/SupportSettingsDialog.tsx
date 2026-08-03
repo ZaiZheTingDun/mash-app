@@ -5,6 +5,7 @@ import {
   Dialog,
   Flex,
   Text,
+  TextField,
 } from "@radix-ui/themes";
 import {
   ThresholdLevelPicker,
@@ -38,10 +39,29 @@ function supportLevelPickerTitle(kind: SupportLevelKind | undefined) {
 }
 
 interface SupportRequirementSummaryProps {
+  grandMode: boolean;
+  starMapScore: number | null | undefined;
+  grandStarMapScore: number | null | undefined;
   npLevel: number | null | undefined;
   skillLevels: SupportSkillLevelMins;
   appendSkillLevels: SupportAppendSkillLevelMins;
   onOpen: () => void;
+}
+
+function scoreChip(
+  label: string,
+  value: number | null | undefined,
+  className: string,
+) {
+  const isUnset = value == null;
+  return (
+    <span
+      className={`support-requirement-chip score ${className}${isUnset ? " unset" : ""}`}
+      aria-label={isUnset ? `${label}任意` : `${label}至少 ${value}`}
+    >
+      {isUnset ? `${label} -` : `${label} ${value}`}
+    </span>
+  );
 }
 
 /**
@@ -86,6 +106,9 @@ function renderNpChip(npLevel: number | null | undefined) {
  * pinned over the support portrait.
  */
 export function SupportRequirementSummary({
+  grandMode,
+  starMapScore,
+  grandStarMapScore,
   npLevel,
   skillLevels,
   appendSkillLevels,
@@ -94,7 +117,8 @@ export function SupportRequirementSummary({
   const showSkills = hasConfiguredLevels(skillLevels);
   const showAppend = hasConfiguredLevels(appendSkillLevels);
   const showNp = npLevel != null;
-  if (!showSkills && !showAppend && !showNp) return null;
+  const showScores = starMapScore != null || (grandMode && grandStarMapScore != null);
+  if (!showSkills && !showAppend && !showNp && !showScores) return null;
 
   const showRow1 = showSkills || showNp;
 
@@ -102,12 +126,18 @@ export function SupportRequirementSummary({
     <button
       type="button"
       className="support-requirement-summary"
-      aria-label="编辑技能宝具设置"
+      aria-label="编辑助战筛选设置"
       onClick={(event) => {
         event.stopPropagation();
         onOpen();
       }}
     >
+      {showScores && (
+        <>
+          {scoreChip("星图", starMapScore, grandMode ? "primary" : "single")}
+          {grandMode && scoreChip("冠位", grandStarMapScore, "grand")}
+        </>
+      )}
       {showRow1 && (
         <>
           {renderSkillChips(skillLevels, "skill", "持有技能")}
@@ -124,6 +154,8 @@ interface SupportSettingsDialogProps {
   project: Project | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: (next: {
+    starMapScore: number | null;
+    grandStarMapScore: number | null;
     npLevel: number | null;
     skillLevels: SupportSkillLevelMins;
     appendSkillLevels: SupportAppendSkillLevelMins;
@@ -136,6 +168,13 @@ export function SupportSettingsDialog({
   onOpenChange,
   onConfirm,
 }: SupportSettingsDialogProps) {
+  const grandMode = project?.supportGrandMode ?? false;
+  const [starMapScore, setStarMapScore] = useState<number | null>(
+    () => project?.supportStarMapScoreMin ?? null,
+  );
+  const [grandStarMapScore, setGrandStarMapScore] = useState<number | null>(
+    () => project?.supportGrandStarMapScoreMin ?? null,
+  );
   const [npLevel, setNpLevel] = useState<number | null>(
     () => project?.supportNoblePhantasmLevelMin ?? null,
   );
@@ -182,6 +221,8 @@ export function SupportSettingsDialog({
   };
 
   const reset = () => {
+    setStarMapScore(null);
+    setGrandStarMapScore(null);
     setNpLevel(null);
     setSkillLevels([...EMPTY_SUPPORT_SKILL_LEVELS] as SupportSkillLevelMins);
     setAppendSkillLevels(
@@ -193,8 +234,44 @@ export function SupportSettingsDialog({
     <>
       <Dialog.Root open={open} onOpenChange={onOpenChange}>
         <Dialog.Content maxWidth="560px">
-          <Dialog.Title>技能/宝具设置</Dialog.Title>
+          <Dialog.Title>助战筛选设置</Dialog.Title>
           <Flex direction="column" gap="5">
+            <Flex gap="5">
+              <Box>
+                <Text as="div" size="2" weight="medium" mb="2">星图分值</Text>
+                <TextField.Root
+                  type="number"
+                  min={0}
+                  max={62}
+                  value={starMapScore ?? ""}
+                  placeholder="任意"
+                  aria-label="星图分值"
+                  onChange={(event) => {
+                    const value = event.currentTarget.valueAsNumber;
+                    setStarMapScore(Number.isFinite(value) ? Math.min(62, Math.max(0, Math.trunc(value))) : null);
+                  }}
+                />
+                <Text as="div" size="1" color="gray" mt="1">最高 62</Text>
+              </Box>
+              {grandMode && (
+                <Box>
+                  <Text as="div" size="2" weight="medium" mb="2">冠位星图分值</Text>
+                  <TextField.Root
+                    type="number"
+                    min={0}
+                    max={16}
+                    value={grandStarMapScore ?? ""}
+                    placeholder="任意"
+                    aria-label="冠位星图分值"
+                    onChange={(event) => {
+                      const value = event.currentTarget.valueAsNumber;
+                      setGrandStarMapScore(Number.isFinite(value) ? Math.min(16, Math.max(0, Math.trunc(value))) : null);
+                    }}
+                  />
+                  <Text as="div" size="1" color="gray" mt="1">最高 16</Text>
+                </Box>
+              )}
+            </Flex>
             <Flex gap="5">
               <Box>
                 <Text as="div" size="2" weight="medium" mb="2">宝具等级</Text>
@@ -255,7 +332,13 @@ export function SupportSettingsDialog({
                 <Button
                   type="button"
                   onClick={() => {
-                    onConfirm({ npLevel, skillLevels, appendSkillLevels });
+                    onConfirm({
+                      starMapScore,
+                      grandStarMapScore,
+                      npLevel,
+                      skillLevels,
+                      appendSkillLevels,
+                    });
                     onOpenChange(false);
                   }}
                 >

@@ -617,8 +617,10 @@ pub(crate) fn support_level_wait_diagnostic(
         Some(prev) => format!("候选变化 {prev} -> {current_key}"),
     };
     format!(
-        "panel={} np={} owned=[{}] append=[{}] y={:.3} key={}",
+        "panel={} score={}/{} np={} owned=[{}] append=[{}] y={:.3} key={}",
         row.skill_panel.as_deref().unwrap_or("-"),
+        format_actual_level(row.star_map_score),
+        format_actual_level(row.grand_star_map_score),
         format_actual_level(row.np_level),
         format_optional_levels(&row.skill_levels),
         format_optional_levels(&row.append_skill_levels),
@@ -631,20 +633,62 @@ pub(crate) fn support_level_filtering_enabled(server: Server) -> bool {
     matches!(server, Server::Jp | Server::Cn)
 }
 
+pub(crate) fn support_score_filter_mismatch(
+    row: &SupportRowMatch,
+    grand_mode: bool,
+    star_map_score_min: Option<u32>,
+    grand_star_map_score_min: Option<u32>,
+) -> Option<String> {
+    if let Some(min) = star_map_score_min {
+        if !row.star_map_score.is_some_and(|score| score >= min) {
+            return Some(format!(
+                "星图分值 ≥ {}（实际 {}）",
+                min,
+                format_actual_level(row.star_map_score),
+            ));
+        }
+    }
+    if grand_mode {
+        if let Some(min) = grand_star_map_score_min {
+            if !row.grand_star_map_score.is_some_and(|score| score >= min) {
+                return Some(format!(
+                    "冠位星图分值 ≥ {}（实际 {}）",
+                    min,
+                    format_actual_level(row.grand_star_map_score),
+                ));
+            }
+        }
+    }
+    None
+}
+
 pub(crate) fn support_row_matches_level_requirements_with_progress(
     server: Server,
     config: &RunConfig,
     row: &SupportRowMatch,
     progress: &mut SupportLevelPanelProgress,
 ) -> SupportLevelFilter {
+    let needs_score = config.support_star_map_score_min.is_some();
+    let needs_grand_score =
+        config.support_grand_mode && config.support_grand_star_map_score_min.is_some();
     let needs_np = config.support_noble_phantasm_level_min.is_some();
     let needs_owned = config.support_skill_level_mins.iter().any(Option::is_some);
     let needs_append = config
         .support_append_skill_level_mins
         .iter()
         .any(Option::is_some);
-    if !support_level_filtering_enabled(server) || (!needs_np && !needs_owned && !needs_append) {
+    if !support_level_filtering_enabled(server)
+        || (!needs_score && !needs_grand_score && !needs_np && !needs_owned && !needs_append)
+    {
         return SupportLevelFilter::Pass;
+    }
+    if let Some(reason) = support_score_filter_mismatch(
+        row,
+        config.support_grand_mode,
+        config.support_star_map_score_min,
+        config.support_grand_star_map_score_min,
+    ) {
+        return SupportLevelFilter::Fail(reason);
     }
     if let Some(min) = config.support_noble_phantasm_level_min {
         if !row.np_level.is_some_and(|level| level >= min) {
@@ -1404,6 +1448,9 @@ impl Runner {
 
     pub(crate) fn has_support_level_requirements(&self) -> bool {
         self.config.support_noble_phantasm_level_min.is_some()
+            || self.config.support_star_map_score_min.is_some()
+            || (self.config.support_grand_mode
+                && self.config.support_grand_star_map_score_min.is_some())
             || self
                 .config
                 .support_skill_level_mins

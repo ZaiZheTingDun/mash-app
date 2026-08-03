@@ -326,12 +326,9 @@
   color: var(--amber-contrast);
 }
 
-/* The summary itself is the grid container — a 2-row × 5-column layout
- * where row 1 holds [skill1, skill2, skill3, NP (span 2)] and row 2
- * holds [append1..append5]. Source order does the placement: as long
- * as row 1 always renders all 4 of its chips (with `-` placeholders
- * where unset), the NP chip lands on cols 4-5 and append chips fall
- * cleanly onto row 2. */
+/* The summary is a five-column grid. Configured score thresholds take a
+ * full row (or a 3/2 split in Grand mode), followed by the existing
+ * owned-skill/NP row and append-skill row. */
 .support-requirement-summary {
   position: absolute;
   left: 7px;
@@ -372,8 +369,27 @@
 }
 
 .support-requirement-chip.append {
-    border: 1px solid var(--sky-9);
+  border: 1px solid var(--sky-9);
   background: var(--sky-9);
+}
+
+.support-requirement-chip.score {
+  border-color: var(--blue-9);
+  background: var(--blue-9);
+  color: var(--blue-contrast);
+  padding: 0 2px;
+}
+
+.support-requirement-chip.score.single {
+  grid-column: span 5;
+}
+
+.support-requirement-chip.score.primary {
+  grid-column: span 3;
+}
+
+.support-requirement-chip.score.grand {
+  grid-column: span 2;
 }
 
 /* Placeholder slot for skills/NP the user hasn't set a minimum for.

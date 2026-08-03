@@ -3374,6 +3374,83 @@ def test_support_find_score_anchors_locates_one_per_visible_row():
             )
 
 
+def test_support_score_text_parser_handles_ordinary_and_grand_values():
+    import mash_cv.cv as cv
+
+    assert cv._support_parse_score_text("+40") == (40, None)
+    assert cv._support_parse_score_text("+14/+16") == (14, 16)
+    assert cv._support_parse_score_text("１４＋１６") == (14, 16)
+    assert cv._support_parse_score_text("+63/+16") == (None, None)
+    assert cv._support_parse_score_text("+62/+17") == (62, None)
+
+
+@pytest.mark.parametrize(
+    ("fixture", "expected"),
+    [
+        ("support_score_cn_40_62.png", [(40, None), (62, None)]),
+        ("support_score_cn_62_1.png", [(62, None), (1, None)]),
+    ],
+)
+def test_support_scores_read_concrete_cn_values(fixture, expected):
+    import mash_cv.cv as cv
+
+    cv._set_server("CN")
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    try:
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, fixture))
+        assert img is not None, fixture
+        anchors = cv._support_find_confirm_button_anchors(img)
+        scores = [
+            (
+                info["starMapScore"],
+                info["grandStarMapScore"],
+            )
+            for info in (
+                cv._support_read_score_info(img, anchor) for anchor in anchors
+            )
+            if info["starMapScore"] is not None
+        ]
+        assert scores[:2] == expected
+    finally:
+        cv._set_server("JP")
+
+
+@pytest.mark.parametrize(
+    ("fixture", "expected"),
+    [
+        ("support_score_grand_jp_14_16_62_16.png", [(14, 16), (62, 16)]),
+        ("support_score_grand_jp_31_16_0_16.png", [(31, 16), (0, 16)]),
+        ("support_score_grand_jp_9_15_5_8.png", [(9, 15), (5, 8)]),
+    ],
+)
+def test_support_scores_read_both_grand_values_at_native_and_1080p(
+    fixture, expected
+):
+    import mash_cv.cv as cv
+
+    cv._set_server("JP")
+    cv._load_templates(_PROD_TEMPLATES_DIR)
+    img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, fixture))
+    assert img is not None, fixture
+
+    for frame in (
+        img,
+        cv2.resize(img, (1920, 1080), interpolation=cv2.INTER_AREA),
+    ):
+        anchors = cv._support_find_confirm_button_anchors(frame)
+        scores = [
+            (
+                info["starMapScore"],
+                info["grandStarMapScore"],
+            )
+            for info in (
+                cv._support_read_score_info(frame, anchor) for anchor in anchors
+            )
+            if info["starMapScore"] is not None
+        ]
+        assert scores[:2] == expected
+
+
 def test_support_find_confirm_button_anchors_prefers_cn_template():
     import mash_cv.cv as cv
 

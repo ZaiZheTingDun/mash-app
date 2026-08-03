@@ -334,8 +334,25 @@ SUPPORT_SCORE_HSV_LOW = (95, 80, 110)
 SUPPORT_SCORE_HSV_HIGH = (130, 255, 255)
 
 SUPPORT_SCORE_ANCHOR_X = 0.799
-SUPPORT_SCORE_ANCHOR_W = 0.0355
+# Include the complete right-most digit. The previous 0.0355 crop clipped
+# the right edge of Grand score ``6`` on 2560x1440 support rows, which made
+# RapidOCR alternate between ``0`` and ``2`` for otherwise identical text.
+SUPPORT_SCORE_ANCHOR_W = 0.038
 SUPPORT_SCORE_ANCHOR_H = 0.063
+# The numeric score line occupies the lower half of the compact badge.
+# Feeding this tight line directly to RapidOCR's recognizer is materially
+# more stable than asking the detector to rediscover the tiny text box,
+# especially for JP Grand scores such as ``+14/+16``.
+SUPPORT_SCORE_VALUE_Y0 = 0.50
+SUPPORT_SCORE_VALUE_Y1 = 0.94
+# Grand values are re-read as two overlapping segments after the full-line
+# OCR establishes that the badge contains two scores. This keeps the slash
+# out of each numeric token: at small values such as ``+5/+8`` the JP model
+# can otherwise turn the narrow slash into an extra ``1`` (``-51+8``).
+SUPPORT_SCORE_GRAND_LEFT_X1 = 0.50
+SUPPORT_SCORE_GRAND_RIGHT_X0 = 0.35
+SUPPORT_STAR_MAP_SCORE_MAX = 62
+SUPPORT_GRAND_STAR_MAP_SCORE_MAX = 16
 SUPPORT_SCORE_BBOX_MIN_W = 0.025
 SUPPORT_SCORE_BBOX_MAX_W = 0.045
 SUPPORT_SCORE_BBOX_MIN_H = 0.045
@@ -4941,6 +4958,107 @@ def _support_score_anchor_from_row_anchor(anchor: dict) -> dict:
     }
 
 
+def _support_parse_score_text(text: str) -> tuple[Optional[int], Optional[int]]:
+    """Parse one ordinary ``+N`` or Grand ``+N/+N`` support score line."""
+    normalized = str(text).translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+    values = [int(value) for value in re.findall(r"\d{1,3}", normalized)]
+    if not values:
+        return None, None
+    star_map_score = values[0]
+    if not 0 <= star_map_score <= SUPPORT_STAR_MAP_SCORE_MAX:
+        return None, None
+    grand_star_map_score = values[1] if len(values) >= 2 else None
+    if grand_star_map_score is not None and not (
+        0 <= grand_star_map_score <= SUPPORT_GRAND_STAR_MAP_SCORE_MAX
+    ):
+        grand_star_map_score = None
+    return star_map_score, grand_star_map_score
+
+
+def _support_parse_score_segment(text: str, maximum: int) -> Optional[int]:
+    normalized = str(text).translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+    match = re.search(r"\d{1,3}", normalized)
+    if match is None:
+        return None
+    value = int(match.group())
+    return value if 0 <= value <= maximum else None
+
+
+def _support_read_grand_score_segments(
+    ocr, value_crop: np.ndarray
+) -> tuple[Optional[int], Optional[int]]:
+    """Read Grand score values separately so the slash cannot become a digit."""
+    width = value_crop.shape[1]
+    left_x1 = max(1, min(width, int(round(SUPPORT_SCORE_GRAND_LEFT_X1 * width))))
+    right_x0 = max(0, min(width - 1, int(round(SUPPORT_SCORE_GRAND_RIGHT_X0 * width))))
+    try:
+        # Run these independently. RapidOCR normalizes a recognition batch to
+        # its widest aspect ratio; mixing the two segments can make the slash
+        # remnant in the left crop look like an extra ``1`` again.
+        left_results, _left_elapsed = ocr.text_recognizer([value_crop[:, :left_x1]])
+        right_results, _right_elapsed = ocr.text_recognizer([value_crop[:, right_x0:]])
+        if not left_results or not right_results:
+            return None, None
+        left = _support_parse_score_segment(
+            left_results[0][0], SUPPORT_STAR_MAP_SCORE_MAX
+        )
+        right = _support_parse_score_segment(
+            right_results[0][0], SUPPORT_GRAND_STAR_MAP_SCORE_MAX
+        )
+        return left, right
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return None, None
+
+
+def _support_read_score_info(img: np.ndarray, row_anchor: dict) -> dict:
+    """Read the concrete support score(s) projected from a row button anchor."""
+    region = _support_score_anchor_from_row_anchor(row_anchor)
+    crop = _support_crop(img, region)
+    info = {
+        "starMapScore": None,
+        "grandStarMapScore": None,
+        "scoreText": "",
+        "scoreConfidence": 0.0,
+        "scoreRegion": dict(region),
+    }
+    if crop.size == 0:
+        return info
+    h = crop.shape[0]
+    y0 = max(0, min(h, int(SUPPORT_SCORE_VALUE_Y0 * h)))
+    y1 = max(y0 + 1, min(h, int(SUPPORT_SCORE_VALUE_Y1 * h)))
+    value_crop = crop[y0:y1, :]
+    if value_crop.size == 0:
+        return info
+
+    ocr = _get_ocr()
+    if ocr is None:
+        return info
+    try:
+        results, _elapsed = ocr.text_recognizer([value_crop])
+        if results:
+            text, confidence = results[0]
+            info["scoreText"] = str(text)
+            info["scoreConfidence"] = float(confidence)
+    except (AttributeError, IndexError, TypeError, ValueError):
+        # Keep the support row usable if a future OCR backend does not expose
+        # RapidOCR's recognition-only entry point.
+        return info
+
+    star_map_score, grand_star_map_score = _support_parse_score_text(
+        info["scoreText"]
+    )
+    if grand_star_map_score is not None:
+        split_star_map_score, split_grand_star_map_score = (
+            _support_read_grand_score_segments(ocr, value_crop)
+        )
+        if split_star_map_score is not None and split_grand_star_map_score is not None:
+            star_map_score = split_star_map_score
+            grand_star_map_score = split_grand_star_map_score
+    info["starMapScore"] = star_map_score
+    info["grandStarMapScore"] = grand_star_map_score
+    return info
+
+
 def _support_panel_kind_from_anchor(
     img: np.ndarray, anchor: dict
 ) -> Optional[str]:
@@ -5252,6 +5370,9 @@ def _support_extract_skill_details_with_diagnostics(
 def _support_add_details(img: np.ndarray, rows: list[dict], fragments: list[dict]) -> None:
     for row in rows:
         row_region = row.get("rowRegion") or {}
+        score_anchor = row.get("scoreAnchor")
+        if score_anchor:
+            row.update(_support_read_score_info(img, score_anchor))
         row["npLevel"] = _support_extract_np_level(
             fragments, row_region, str(row.get("npText", ""))
         )

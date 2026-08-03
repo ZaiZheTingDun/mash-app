@@ -511,6 +511,19 @@ pub struct SupportRowMatch {
     /// regions whose vertical placement is more stable than OCR text bboxes.
     #[serde(default)]
     pub score_anchor: Option<NormRect>,
+    /// Tight score-badge region projected from `score_anchor`.
+    #[serde(default)]
+    pub score_region: Option<NormRect>,
+    /// The left (ordinary star-map) score shown on every support row.
+    #[serde(default)]
+    pub star_map_score: Option<u32>,
+    /// The right Grand star-map score, present only on Grand support rows.
+    #[serde(default)]
+    pub grand_star_map_score: Option<u32>,
+    #[serde(default)]
+    pub score_text: Option<String>,
+    #[serde(default)]
+    pub score_confidence: Option<f64>,
     /// Which entry of the caller's ``expected_np_names`` list won the fuzzy
     /// match — useful when a servant has multiple candidate NPs.
     pub np_matched_name: String,

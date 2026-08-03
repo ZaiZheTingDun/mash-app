@@ -234,12 +234,33 @@ describe("DebugPage", () => {
       }
       if (cmd === "debug_find_supports") {
         return {
-          supports: [],
+          supports: [
+            {
+              rowRegion: { x: 0.1, y: 0.2, w: 0.7, h: 0.2 },
+              tap: { x: 0.7, y: 0.3 },
+              nameText: "星之希耶尔",
+              nameScore: 0.98,
+              nameRegion: { x: 0.2, y: 0.2, w: 0.2, h: 0.05 },
+              npText: "原理血戒·断头台",
+              npScore: 0.96,
+              npRegion: { x: 0.2, y: 0.27, w: 0.3, h: 0.05 },
+              npMatchedName: "原理血戒·断头台",
+              starMapScore: 62,
+              grandStarMapScore: 16,
+              scoreText: "62/+16",
+              scoreFilterPassed: true,
+            },
+          ],
           diagnostics: {
             listRegion: { x: 0, y: 0, w: 1, h: 1 },
             nameCandidates: [],
             npCandidates: [],
             fragmentCount: 0,
+          },
+          scoreFilter: {
+            grandMode: true,
+            starMapScoreMin: 62,
+            grandStarMapScoreMin: 16,
           },
         };
       }
@@ -255,6 +276,15 @@ describe("DebugPage", () => {
     );
     await user.click(screen.getByRole("option", { name: /星之希耶尔/ }));
     await user.click(screen.getByRole("button", { name: "截取画面" }));
+    await user.type(
+      screen.getByRole("spinbutton", { name: "Debug 星图分值" }),
+      "62"
+    );
+    await user.click(screen.getByRole("checkbox", { name: "冠位分值" }));
+    await user.type(
+      screen.getByRole("spinbutton", { name: "Debug 冠位星图分值" }),
+      "16"
+    );
     await user.click(screen.getByRole("button", { name: "识别助战" }));
 
     await waitFor(() =>
@@ -268,11 +298,17 @@ describe("DebugPage", () => {
       expect.objectContaining({
         servantId: 418,
         servantVariantKey: "418:1",
+        supportGrandMode: true,
+        supportStarMapScoreMin: 62,
+        supportGrandStarMapScoreMin: 16,
       })
     );
     expect(
       await screen.findByText("宝具候选: 第七圣典·断罪死 / 原理血戒·断头台")
     ).toBeInTheDocument();
+    expect(await screen.findByText(/星图分值：62 \/ 16/)).toHaveTextContent(
+      "✓ 达标"
+    );
   });
 
   it("includes the support marker in command-card debug summaries", async () => {
