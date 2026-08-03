@@ -2058,6 +2058,44 @@ fn advanced_auto_picks_fill_leftmost_stunned_card_when_actionable_cards_are_shor
 }
 
 #[test]
+fn unavailable_np_replacements_skip_planned_cards_and_prefer_actionable_cards() {
+    let picks = vec![
+        Pick::Np {
+            slot: 0,
+            point: Point::new(0.1, 0.1),
+            from_priority: "servant_1_np".into(),
+        },
+        Pick::Card {
+            slot: 1,
+            point: Point::new(0.3, 0.7),
+            servant_id: Some(10),
+            suit: Some("a".into()),
+            from_priority: None,
+        },
+        Pick::Card {
+            slot: 3,
+            point: Point::new(0.7, 0.7),
+            servant_id: Some(20),
+            suit: Some("b".into()),
+            from_priority: None,
+        },
+    ];
+    let cards = vec![
+        command_card_with_state(0, Some(30), false, true, Some("q"), None),
+        command_card(1, Some(10), Some("a"), None),
+        command_card(2, Some(20), Some("q"), None),
+        command_card(3, Some(20), Some("b"), None),
+        command_card(4, Some(30), Some("a"), None),
+    ];
+
+    let replacements: Vec<Pick> = replacement_command_card_picks(&picks, &cards)
+        .into_iter()
+        .collect();
+
+    assert_eq!(pick_labels(&replacements), vec!["C2", "C4", "C0"]);
+}
+
+#[test]
 fn grand_auto_picks_fill_leftmost_stunned_card_when_actionable_cards_are_short() {
     let scene = empty_advanced_scene();
     let cards = vec![
@@ -4575,6 +4613,12 @@ fn battle_close_button_element_names_are_stable() {
     );
     assert_eq!(ATTACK_BUTTON_ELEMENT, "attack_button");
     assert_eq!(BATTLE_ACTION_MENU_ELEMENT, "battle_action_menu");
+    assert_eq!(
+        CANNOT_USE_NP_CLOSE_BUTTON_ELEMENT,
+        "cannot_use_np_close_button"
+    );
+    approx(CANNOT_USE_NP_CLOSE_POINT.x, 0.7765);
+    approx(CANNOT_USE_NP_CLOSE_POINT.y, 0.356);
 }
 
 #[test]

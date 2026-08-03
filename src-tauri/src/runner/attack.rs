@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::commands::settings::NoblePhantasmDetectionMode;
+use std::collections::VecDeque;
 
 const COMMAND_CARD_FRONTLINE_OWNER_FAILURE_LIMIT: u32 = 3;
 
@@ -477,6 +478,38 @@ pub(crate) fn fill_remaining(
             from_priority: None,
         });
     }
+}
+
+/// Build positional command-card fallbacks that are not already reserved by
+/// the planned chain. These are consumed when a planned NP opens the game's
+/// "cannot use Noble Phantasm" dialog, so the runner can still submit three
+/// actual selections without tapping the same command card twice.
+pub(crate) fn replacement_command_card_picks(
+    picks: &[Pick],
+    cards: &[CommandCardMatch],
+) -> VecDeque<Pick> {
+    let reserved_slots: HashSet<u32> = picks
+        .iter()
+        .filter_map(|pick| match pick {
+            Pick::Card { slot, .. } => Some(*slot),
+            Pick::Np { .. } => None,
+        })
+        .collect();
+    let mut candidates: Vec<&CommandCardMatch> = cards
+        .iter()
+        .filter(|card| !reserved_slots.contains(&card.slot))
+        .collect();
+    candidates.sort_by_key(|card| (card.is_stunned, card.slot));
+    candidates
+        .into_iter()
+        .map(|card| Pick::Card {
+            slot: card.slot,
+            point: Point::new(card.x, card.y),
+            servant_id: card.servant_id,
+            suit: card.suit.clone(),
+            from_priority: Some("宝具不可用补位".into()),
+        })
+        .collect()
 }
 
 pub(crate) fn advanced_startup_conditions_match(
@@ -1188,17 +1221,39 @@ impl Runner {
             return;
         }
 
-        self.tap_picks("Attack", &picks, party_ids);
+        self.tap_picks("Attack", &picks, cards, party_ids);
     }
 
-    pub(crate) fn tap_picks(&mut self, screen: &str, picks: &[Pick], party_ids: &[Option<u32>; 3]) {
+    pub(crate) fn tap_picks(
+        &mut self,
+        screen: &str,
+        picks: &[Pick],
+        cards: &[CommandCardMatch],
+        party_ids: &[Option<u32>; 3],
+    ) {
         if picks.is_empty() {
             self.emit(screen, "未能选出任何卡，跳过");
             self.battle.scene_config_used = false;
             return;
         }
 
-        for (i, pick) in picks.iter().enumerate() {
+        let mut pending: VecDeque<Pick> = picks.iter().cloned().collect();
+        let mut replacements = replacement_command_card_picks(picks, cards);
+        while pending.len() < 3 {
+            let Some(replacement) = replacements.pop_front() else {
+                self.fail_action(screen, "补足选卡", "没有其他可用指令卡".into());
+                return;
+            };
+            pending.push_back(replacement);
+        }
+
+        let mut selected_count = 0usize;
+        while selected_count < 3 {
+            let Some(pick) = pending.pop_front() else {
+                self.fail_action(screen, "补足选卡", "没有其他可用指令卡".into());
+                return;
+            };
+            let is_np = matches!(&pick, Pick::Np { .. });
             let (msg, point, selected_pick) = match pick {
                 Pick::Card {
                     slot,
@@ -1207,7 +1262,7 @@ impl Runner {
                     suit,
                     from_priority,
                 } => {
-                    let label = match from_priority {
+                    let label = match from_priority.as_deref() {
                         Some(p) => format!("选择 {p} → C{}", slot + 1),
                         None => format!("补位: C{}", slot + 1),
                     };
@@ -1217,16 +1272,16 @@ impl Runner {
                         servant_id.map(|id| format!("/{id}")).unwrap_or_default(),
                     );
                     (
-                        format!("{}/{} {}{}", i + 1, picks.len(), label, detail),
-                        *point,
+                        format!("{}/3 {}{}", selected_count + 1, label, detail),
+                        point,
                         AttackLogSelectedPick {
-                            step: i + 1,
-                            total: picks.len(),
-                            from_priority: from_priority.clone(),
+                            step: selected_count + 1,
+                            total: 3,
+                            from_priority,
                             kind: AttackLogPickKind::Card,
-                            slot: *slot,
-                            suit: suit.clone(),
-                            servant_id: *servant_id,
+                            slot,
+                            suit,
+                            servant_id,
                         },
                     )
                 }
@@ -1236,21 +1291,20 @@ impl Runner {
                     from_priority,
                 } => (
                     format!(
-                        "{}/{} 选择 {} → NP{}",
-                        i + 1,
-                        picks.len(),
+                        "{}/3 选择 {} → NP{}",
+                        selected_count + 1,
                         from_priority,
                         slot + 1,
                     ),
-                    *point,
+                    point,
                     AttackLogSelectedPick {
-                        step: i + 1,
-                        total: picks.len(),
-                        from_priority: Some(from_priority.clone()),
+                        step: selected_count + 1,
+                        total: 3,
+                        from_priority: Some(from_priority),
                         kind: AttackLogPickKind::Np,
-                        slot: *slot,
+                        slot,
                         suit: None,
-                        servant_id: party_ids.get(*slot as usize).copied().flatten(),
+                        servant_id: party_ids.get(slot as usize).copied().flatten(),
                     },
                 ),
             };
@@ -1272,6 +1326,35 @@ impl Runner {
                 return;
             }
             thread::sleep(ACTION_DELAY);
+
+            if is_np {
+                let cannot_use_np = match self.sidecar().find_element_by_name(
+                    None,
+                    ATTACK_SCREEN,
+                    CANNOT_USE_NP_CLOSE_BUTTON_ELEMENT,
+                ) {
+                    Ok(matched) => matched.found,
+                    Err(err) => {
+                        self.fail_action(screen, "检测宝具是否可用", err);
+                        return;
+                    }
+                };
+                if cannot_use_np {
+                    self.emit_warn(screen, "宝具无法使用，关闭提示并改用其他指令卡");
+                    if !self.tap_at(screen, CANNOT_USE_NP_CLOSE_POINT) {
+                        return;
+                    }
+                    thread::sleep(ACTION_DELAY);
+                    let Some(replacement) = replacements.pop_front() else {
+                        self.fail_action(screen, "替换无法使用的宝具", "没有其他可用指令卡".into());
+                        return;
+                    };
+                    pending.push_back(replacement);
+                    continue;
+                }
+            }
+
+            selected_count += 1;
         }
 
         self.battle
@@ -1317,7 +1400,7 @@ impl Runner {
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
                 );
-                self.tap_picks("Attack", &picks, &party_ids);
+                self.tap_picks("Attack", &picks, &cards, &party_ids);
                 return;
             }
             self.emit("Attack", "无高级指令配置，按默认顺序补位");
@@ -1498,7 +1581,7 @@ impl Runner {
                             &self.config.grand_card_strategy,
                             self.config.grand_class,
                         );
-                        self.tap_picks("Attack", &picks, &startup_party_ids);
+                        self.tap_picks("Attack", &picks, &next_cards, &startup_party_ids);
                         return;
                     }
 
@@ -1512,7 +1595,7 @@ impl Runner {
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
                     );
-                    self.tap_picks("Attack", &picks, &startup_party_ids);
+                    self.tap_picks("Attack", &picks, &cards, &startup_party_ids);
                     return;
                 }
 
@@ -1576,7 +1659,7 @@ impl Runner {
                             &self.config.grand_card_strategy,
                             self.config.grand_class,
                         );
-                        self.tap_picks("Attack", &picks, &control_party_ids);
+                        self.tap_picks("Attack", &picks, &next_cards, &control_party_ids);
                         return;
                     }
 
@@ -1591,7 +1674,7 @@ impl Runner {
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
                     );
-                    self.tap_picks("Attack", &picks, &party_ids);
+                    self.tap_picks("Attack", &picks, &cards, &party_ids);
                     return;
                 }
 
@@ -1680,7 +1763,7 @@ impl Runner {
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
                     );
-                    self.tap_picks("Attack", &picks, &startup_party_ids);
+                    self.tap_picks("Attack", &picks, &next_cards, &startup_party_ids);
                     return;
                 }
 
@@ -1694,7 +1777,7 @@ impl Runner {
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
                 );
-                self.tap_picks("Attack", &picks, &startup_party_ids);
+                self.tap_picks("Attack", &picks, &cards, &startup_party_ids);
                 return;
             }
 
@@ -1789,7 +1872,7 @@ impl Runner {
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
                     );
-                    self.tap_picks("Attack", &picks, &control_party_ids);
+                    self.tap_picks("Attack", &picks, &next_cards, &control_party_ids);
                     return;
                 }
 
@@ -1803,7 +1886,7 @@ impl Runner {
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
                 );
-                self.tap_picks("Attack", &picks, &control_party_ids);
+                self.tap_picks("Attack", &picks, &cards, &control_party_ids);
                 return;
             }
             let active_party_ids = self.advanced_party_ids_after_startup_flow(
@@ -1826,7 +1909,7 @@ impl Runner {
                 &self.config.grand_card_strategy,
                 self.config.grand_class,
             );
-            self.tap_picks("Attack", &picks, &active_party_ids);
+            self.tap_picks("Attack", &picks, &cards, &active_party_ids);
             return;
         }
 

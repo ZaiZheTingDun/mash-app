@@ -40,6 +40,17 @@ pub(crate) const ATTACK_SCREEN_SPEED_BUTTON: Point = Point::new(0.882, 0.075);
 pub(crate) const ATTACK_SCREEN: &str = "Attack";
 pub(crate) const ATTACK_SCREEN_SPEED_1_ELEMENT: &str = "battle_speed_1";
 pub(crate) const ATTACK_SCREEN_SPEED_2_ELEMENT: &str = "battle_speed_2";
+pub(crate) const CANNOT_USE_NP_CLOSE_BUTTON_ELEMENT: &str = "cannot_use_np_close_button";
+pub(crate) const CANNOT_USE_NP_CLOSE_REGION: NormRect = NormRect {
+    x: 0.771,
+    y: 0.347,
+    w: 0.011,
+    h: 0.018,
+};
+pub(crate) const CANNOT_USE_NP_CLOSE_POINT: Point = Point::new(
+    CANNOT_USE_NP_CLOSE_REGION.x + CANNOT_USE_NP_CLOSE_REGION.w / 2.0,
+    CANNOT_USE_NP_CLOSE_REGION.y + CANNOT_USE_NP_CLOSE_REGION.h / 2.0,
+);
 
 /// Tap target that, when pressed during a skill / NP animation, makes the
 /// game skip ahead to the next actionable frame. Same physical button

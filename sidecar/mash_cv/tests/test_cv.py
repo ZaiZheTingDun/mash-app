@@ -2169,6 +2169,57 @@ def test_cn_stun_template_marks_the_stunned_card_not_the_sleep_template():
     assert marker_found("shared/battle/command_sleep") is False
 
 
+@pytest.mark.parametrize("server", ("cn", "jp"))
+@pytest.mark.parametrize("width", (1920, 2560))
+def test_cannot_use_np_dialog_matches_shared_close_button(server, width):
+    shared = os.path.join(
+        _REPO_ROOT, "src-tauri", "resources", "servers", "shared"
+    )
+    server_root = os.path.join(
+        _REPO_ROOT, "src-tauri", "resources", "servers", server
+    )
+    assert mash_cv._load_templates(
+        os.path.join(shared, "templates"), key_prefix="shared"
+    )["ok"] is True
+    assert mash_cv._load_config(os.path.join(shared, "cv.json"))["ok"] is True
+    assert mash_cv._load_config(
+        os.path.join(server_root, "cv.json"), merge=True
+    )["ok"] is True
+
+    img = cv2.imread(
+        os.path.join(_TEST_SCREENSHOTS_DIR, "battle_cannot_use_np_cn.png")
+    )
+    assert img is not None
+    if img.shape[1] != width:
+        img = cv2.resize(img, (width, int(img.shape[0] * width / img.shape[1])))
+
+    result = mash_cv._find_element_by_name(
+        img,
+        "Attack",
+        "cannot_use_np_close_button",
+    )
+
+    assert result["found"] is True
+    assert result["score"] >= 0.99
+
+    normal_img = cv2.imread(
+        os.path.join(_TEST_SCREENSHOTS_DIR, "battle_command_cn_no_np.jpg")
+    )
+    assert normal_img is not None
+    if normal_img.shape[1] != width:
+        normal_img = cv2.resize(
+            normal_img,
+            (width, int(normal_img.shape[0] * width / normal_img.shape[1])),
+        )
+    normal_result = mash_cv._find_element_by_name(
+        normal_img,
+        "Attack",
+        "cannot_use_np_close_button",
+    )
+
+    assert normal_result["found"] is False
+
+
 @pytest.mark.skipif(
     not os.path.isdir(_PROD_TEMPLATES_DIR),
     reason="production templates dir not available",

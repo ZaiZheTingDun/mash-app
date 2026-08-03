@@ -176,6 +176,22 @@ fn shared_cv_defines_battle_close_button_elements() {
 }
 
 #[test]
+fn shared_cv_defines_cannot_use_np_close_button() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let config_path = manifest_dir
+        .join("resources")
+        .join("servers")
+        .join("shared")
+        .join("cv.json");
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+    let element =
+        &config["screens"]["Attack"]["variants"]["main"]["elements"]["cannot_use_np_close_button"];
+
+    assert_battle_close_button_element(element, 0.741, 0.312, 0.074, 0.096);
+}
+
+#[test]
 fn shared_cv_uses_the_server_team_confirm_template_path() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let config_path = manifest_dir

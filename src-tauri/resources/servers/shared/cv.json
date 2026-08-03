@@ -236,6 +236,24 @@
         }
       }
     },
+    "Attack": {
+      "variants": {
+        "main": {
+          "elements": {
+            "cannot_use_np_close_button": {
+              "template": "shared/battle/battle_close_button",
+              "region": {
+                "x": 0.741,
+                "y": 0.312,
+                "w": 0.074,
+                "h": 0.096
+              },
+              "threshold": 0.8
+            }
+          }
+        }
+      }
+    },
     "Battle": {
       "detect": {
         "template": "battle/screen_battle",
