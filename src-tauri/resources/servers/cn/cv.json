@@ -346,9 +346,9 @@
         "template": "battle-result/text_battle_result_bond_level_up",
         "region": {
           "x": 0.546,
-          "y": 0.36,
+          "y": 0.32,
           "w": 0.376,
-          "h": 0.16
+          "h": 0.31
         },
         "threshold": 0.85,
         "priority": 10
@@ -358,9 +358,9 @@
           "template": "battle-result/text_battle_result_bond_level_up_anchor",
           "region": {
             "x": 0.528,
-            "y": 0.456,
+            "y": 0.42,
             "w": 0.032,
-            "h": 0.181
+            "h": 0.23
           },
           "threshold": 0.9
         },

@@ -745,6 +745,16 @@ class TestDetectScreen:
                 "歌果",
             ),
             (
+                "cn",
+                (
+                    "test_data",
+                    "screenshots",
+                    "battle_result_bond_level_up_cn_multi_level.png",
+                ),
+                5,
+                "赫费斯提翁",
+            ),
+            (
                 "jp",
                 ("test_data", "screenshots", "battle_result_bond_level_up_jp_level_2_spartacus.png"),
                 2,
@@ -787,9 +797,17 @@ class TestDetectScreen:
         assert result["confidence"]["bondLevelAfter"] >= 0.85
         assert result["servantMatchScore"] >= 0.72
 
-    def test_cn_battle_result_bond_level_up_detects_real_capture(self):
-        """The level-up overlay leaves the battle HUD visible, so the
-        dedicated result screen must beat the base Battle screen."""
+    @pytest.mark.parametrize(
+        "screenshot_name",
+        [
+            "battle_result_bond_level_up_cn.jpg",
+            "battle_result_bond_level_up_cn_multi_level.png",
+        ],
+    )
+    def test_cn_battle_result_bond_level_up_detects_real_capture(
+        self, screenshot_name
+    ):
+        """Both compact and multi-level overlays must beat the battle HUD."""
         repo_root = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "..")
         )
@@ -803,7 +821,7 @@ class TestDetectScreen:
             os.path.dirname(__file__),
             "test_data",
             "screenshots",
-            "battle_result_bond_level_up_cn.jpg",
+            screenshot_name,
         )
         if not (
             os.path.isdir(templates_dir)
