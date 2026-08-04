@@ -67,6 +67,10 @@ interface AutomationEvent {
   action?: ActionLogMeta | null;
 }
 
+interface OperationDebugEvent {
+  message: string;
+}
+
 interface AppProps {
   theme: AppTheme;
   themePreference: AppThemePreference;
@@ -260,11 +264,18 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         appendOperationLog(event.payload.message, event.payload.level ?? "info");
       }
     );
+    const unlistenOperationDebug = listen<OperationDebugEvent>(
+      "operation-debug-log",
+      (event) => {
+        appendOperationLog(event.payload.message, "debug");
+      }
+    );
     return () => {
       unlistenBattle.then((fn) => fn());
       unlistenEnhancement.then((fn) => fn());
       unlistenCraftEssenceEnhancement.then((fn) => fn());
       unlistenFriendPointSummon.then((fn) => fn());
+      unlistenOperationDebug.then((fn) => fn());
     };
   }, [appendOperationLog]);
 

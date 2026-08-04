@@ -4,6 +4,7 @@ mod craft_essence_enhancement_runner;
 mod enhancement_runner;
 mod friend_point_summon_runner;
 mod models;
+mod operation_log;
 mod paths;
 mod runner;
 mod screen;

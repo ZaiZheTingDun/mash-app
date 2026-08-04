@@ -122,6 +122,44 @@ describe("App active project restore", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("routes runtime diagnostics into the hidden debug operation log", async () => {
+    let debugLogHandler: ((message: string) => void) | null = null;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "operation-debug-log") {
+        debugLogHandler = (message) =>
+          handler({
+            event: "operation-debug-log",
+            id: 0,
+            payload: { message },
+          } as Parameters<typeof handler>[0]);
+      }
+      return () => {};
+    });
+    installAppMock("project-1");
+    const user = userEvent.setup();
+
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    act(() => {
+      debugLogHandler?.(
+        "[mash-cv stderr] [scrcpy] first frame decoded (1920x1080)"
+      );
+    });
+
+    await user.click(screen.getByRole("button", { name: /操作日志/ }));
+    expect(
+      screen.queryByText("[mash-cv stderr] [scrcpy] first frame decoded (1920x1080)")
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: /显示调试/ }));
+    expect(
+      screen.getByText("[mash-cv stderr] [scrcpy] first frame decoded (1920x1080)")
+    ).toBeInTheDocument();
+  });
+
   it("opens the independent friend point summon page", async () => {
     installAppMock("project-1");
     const user = userEvent.setup();

@@ -1076,7 +1076,7 @@ impl CraftEssenceEnhancementRunner {
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
         mode: CraftEssenceEnhancementMode,
     ) -> Self {
-        let touch = touch::build(&adb);
+        let touch = touch::build(&adb, &app_handle);
         Self {
             sidecar: Some(sidecar),
             sidecar_cache,

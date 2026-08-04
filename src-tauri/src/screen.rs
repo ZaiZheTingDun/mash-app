@@ -113,6 +113,7 @@ impl SidecarClient {
         // Bridge the async tokio receiver into a sync std::mpsc channel so the
         // blocking runner thread can call recv() without an async runtime.
         let (line_tx, line_rx) = mpsc::channel::<String>();
+        let log_app = app.clone();
 
         tauri::async_runtime::spawn(async move {
             while let Some(event) = rx.recv().await {
@@ -127,10 +128,16 @@ impl SidecarClient {
                     }
                     CommandEvent::Stderr(bytes) => {
                         let msg = String::from_utf8_lossy(&bytes);
-                        eprintln!("[mash-cv stderr] {msg}");
+                        for line in msg.lines().map(str::trim).filter(|line| !line.is_empty()) {
+                            let message = format!("[mash-cv stderr] {line}");
+                            eprintln!("{message}");
+                            crate::operation_log::emit_debug(&log_app, message);
+                        }
                     }
                     CommandEvent::Error(e) => {
-                        eprintln!("[mash-cv error] {e}");
+                        let message = format!("[mash-cv error] {e}");
+                        eprintln!("{message}");
+                        crate::operation_log::emit_debug(&log_app, message);
                     }
                     CommandEvent::Terminated(_) => break,
                     _ => {}

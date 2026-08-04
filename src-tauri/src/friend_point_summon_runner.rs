@@ -197,7 +197,7 @@ impl FriendPointSummonRunner {
         screen_size: (u32, u32),
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     ) -> Self {
-        let touch = touch::build(&adb);
+        let touch = touch::build(&adb, &app_handle);
         Self {
             sidecar: Some(sidecar),
             sidecar_cache,

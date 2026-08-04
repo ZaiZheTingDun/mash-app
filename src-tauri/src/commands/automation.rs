@@ -83,6 +83,32 @@ fn input_size_for_taps(adb_size: Option<(u32, u32)>, stream_size: (u32, u32)) ->
     }
 }
 
+fn stream_mapping_debug_message(
+    scope: &str,
+    input_size: (u32, u32),
+    stream_size: (u32, u32),
+) -> Option<String> {
+    (input_size != stream_size).then(|| {
+        format!(
+            "[{scope}] using adb input size {}x{} with stream frame {}x{}",
+            input_size.0, input_size.1, stream_size.0, stream_size.1
+        )
+    })
+}
+
+fn emit_stream_mapping_debug(
+    app: &tauri::AppHandle,
+    scope: &str,
+    input_size: (u32, u32),
+    stream_size: (u32, u32),
+) {
+    let Some(message) = stream_mapping_debug_message(scope, input_size, stream_size) else {
+        return;
+    };
+    eprintln!("{message}");
+    crate::operation_log::emit_debug(app, message);
+}
+
 fn runner_is_busy(state: &RunnerState) -> bool {
     matches!(state, RunnerState::Starting | RunnerState::Running)
 }
@@ -590,12 +616,7 @@ pub(crate) fn start_automation(
             return;
         }
         let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
-        if input_size != (w, h) {
-            eprintln!(
-                "[runner] using adb input size {}x{} with stream frame {}x{}",
-                input_size.0, input_size.1, w, h
-            );
-        }
+        emit_stream_mapping_debug(&app, "runner", input_size, (w, h));
         let screen_size = Some(input_size);
         let frame_size = Some((w, h));
         let assets_dir = resolve_servant_assets_dir(&app);
@@ -788,12 +809,7 @@ pub(crate) fn start_enhancement_automation(
             return;
         }
         let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
-        if input_size != (w, h) {
-            eprintln!(
-                "[enhancement] using adb input size {}x{} with stream frame {}x{}",
-                input_size.0, input_size.1, w, h
-            );
-        }
+        emit_stream_mapping_debug(&app, "enhancement", input_size, (w, h));
 
         let runner = EnhancementRunner::new(
             adb_dev,
@@ -937,6 +953,7 @@ pub(crate) fn start_craft_essence_enhancement_automation(
             return;
         }
         let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
+        emit_stream_mapping_debug(&app, "ce-enhancement", input_size, (w, h));
         let runner = CraftEssenceEnhancementRunner::new(
             adb_dev,
             sidecar,
@@ -1081,6 +1098,7 @@ pub(crate) fn start_friend_point_summon_automation(
             return;
         }
         let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
+        emit_stream_mapping_debug(&app, "friend-point-summon", input_size, (w, h));
         let runner = FriendPointSummonRunner::new(
             adb_dev,
             sidecar,
@@ -1135,6 +1153,18 @@ mod tests {
         assert_eq!(
             input_size_for_taps(Some((1080, 1920)), (1920, 1080)),
             (1920, 1080)
+        );
+    }
+
+    #[test]
+    fn stream_mapping_debug_message_reports_mismatched_dimensions() {
+        assert_eq!(
+            stream_mapping_debug_message("runner", (2560, 1440), (1920, 1080)),
+            Some("[runner] using adb input size 2560x1440 with stream frame 1920x1080".to_string())
+        );
+        assert_eq!(
+            stream_mapping_debug_message("runner", (1920, 1080), (1920, 1080)),
+            None
         );
     }
 

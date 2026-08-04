@@ -54,6 +54,10 @@ pub trait TouchBackend: Send {
 /// Construct the runner's `TouchBackend`. Currently always returns
 /// the `adb-input` backend — kept as a factory function so future
 /// backends can be slotted in here without changing the call sites.
-pub fn build(adb: &Adb) -> Box<dyn TouchBackend> {
-    Box::new(adb_input::AdbInputBackend::new(adb.clone()))
+pub fn build(adb: &Adb, app: &tauri::AppHandle) -> Box<dyn TouchBackend> {
+    let backend: Box<dyn TouchBackend> = Box::new(adb_input::AdbInputBackend::new(adb.clone()));
+    let message = format!("[touch] backend selected: {}", backend.name());
+    eprintln!("{message}");
+    crate::operation_log::emit_debug(app, message);
+    backend
 }

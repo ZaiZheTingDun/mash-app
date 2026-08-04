@@ -209,7 +209,7 @@ impl Runner {
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         let (frame_w, frame_h) = frame_size.unwrap_or((DEFAULT_FRAME_W, DEFAULT_FRAME_H));
-        let touch = build_touch_backend(&adb);
+        let touch = touch::build(&adb, &app_handle);
         Self {
             touch,
             sidecar: Some(sidecar),
@@ -250,16 +250,6 @@ impl Runner {
             battle_result_continue_handled: false,
         }
     }
-}
-
-/// Build the runner's `TouchBackend`. Today there's only one
-/// implementation, but the indirection through the trait makes adding
-/// a faster transport (minitouch / sendevent / native helper) a
-/// localized change later.
-fn build_touch_backend(adb: &Adb) -> Box<dyn TouchBackend> {
-    let backend = touch::build(adb);
-    eprintln!("[touch] backend selected: {}", backend.name());
-    backend
 }
 
 impl Drop for Runner {
