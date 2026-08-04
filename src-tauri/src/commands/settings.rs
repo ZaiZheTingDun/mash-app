@@ -88,6 +88,8 @@ pub struct DebugSettings {
     pub auto_capture_unknown_screen_timeout: bool,
     #[serde(default)]
     pub auto_capture_skill_use_probe: bool,
+    #[serde(default)]
+    pub simulate_stuck_attack_selection: bool,
 }
 
 impl Default for RecognitionSettings {
@@ -603,6 +605,14 @@ fn debug_settings_with_auto_capture_skill_use_probe(
     settings
 }
 
+fn debug_settings_with_simulate_stuck_attack_selection(
+    mut settings: DebugSettings,
+    value: bool,
+) -> DebugSettings {
+    settings.simulate_stuck_attack_selection = value;
+    settings
+}
+
 #[tauri::command]
 pub(crate) fn set_auto_capture_unknown_screen_timeout(
     app: tauri::AppHandle,
@@ -630,6 +640,45 @@ pub(crate) fn set_auto_capture_skill_use_probe(
     *state.lock().unwrap() = next;
     save_debug_settings(&app, &next)?;
     Ok(next)
+}
+
+#[tauri::command]
+pub(crate) fn set_simulate_stuck_attack_selection(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<DebugSettings>>,
+    value: bool,
+) -> Result<DebugSettings, String> {
+    let next = debug_settings_for_current_build(
+        debug_settings_with_simulate_stuck_attack_selection(*state.lock().unwrap(), value),
+    );
+    save_debug_settings(&app, &next)?;
+    *state.lock().unwrap() = next;
+    Ok(next)
+}
+
+fn take_simulate_stuck_attack_selection(
+    state: &Mutex<DebugSettings>,
+    persist: impl FnOnce(&DebugSettings) -> Result<(), String>,
+) -> Result<bool, String> {
+    let mut guard = state.lock().unwrap();
+    let current = debug_settings_for_current_build(*guard);
+    if !current.simulate_stuck_attack_selection {
+        return Ok(false);
+    }
+
+    let next = debug_settings_with_simulate_stuck_attack_selection(current, false);
+    persist(&next)?;
+    *guard = next;
+    Ok(true)
+}
+
+pub(crate) fn consume_simulate_stuck_attack_selection(
+    app: &tauri::AppHandle,
+) -> Result<bool, String> {
+    let state = app
+        .try_state::<Mutex<DebugSettings>>()
+        .ok_or_else(|| "调试设置尚未初始化".to_string())?;
+    take_simulate_stuck_attack_selection(state.inner(), |next| save_debug_settings(app, next))
 }
 
 #[tauri::command]
@@ -835,6 +884,7 @@ mod tests {
         assert!(!settings.auto_capture_battle_result_loot);
         assert!(!settings.auto_capture_unknown_screen_timeout);
         assert!(!settings.auto_capture_skill_use_probe);
+        assert!(!settings.simulate_stuck_attack_selection);
     }
 
     #[test]
@@ -844,6 +894,7 @@ mod tests {
         assert!(!settings.auto_capture_battle_result_loot);
         assert!(!settings.auto_capture_unknown_screen_timeout);
         assert!(!settings.auto_capture_skill_use_probe);
+        assert!(!settings.simulate_stuck_attack_selection);
     }
 
     #[test]
@@ -852,12 +903,14 @@ mod tests {
             "autoCaptureBattleResultLoot": true,
             "autoCaptureUnknownScreenTimeout": true,
             "autoCaptureSkillUseProbe": true,
+            "simulateStuckAttackSelection": true,
         }))
         .unwrap();
 
         assert!(settings.auto_capture_battle_result_loot);
         assert!(settings.auto_capture_unknown_screen_timeout);
         assert!(settings.auto_capture_skill_use_probe);
+        assert!(settings.simulate_stuck_attack_selection);
         assert_eq!(
             serde_json::to_value(settings).unwrap()["autoCaptureBattleResultLoot"],
             serde_json::json!(true)
@@ -870,6 +923,10 @@ mod tests {
             serde_json::to_value(settings).unwrap()["autoCaptureSkillUseProbe"],
             serde_json::json!(true)
         );
+        assert_eq!(
+            serde_json::to_value(settings).unwrap()["simulateStuckAttackSelection"],
+            serde_json::json!(true)
+        );
     }
 
     #[test]
@@ -878,6 +935,7 @@ mod tests {
             auto_capture_battle_result_loot: true,
             auto_capture_unknown_screen_timeout: true,
             auto_capture_skill_use_probe: true,
+            simulate_stuck_attack_selection: true,
         };
 
         let filtered = debug_settings_for_runtime(settings, false);
@@ -885,6 +943,7 @@ mod tests {
         assert!(!filtered.auto_capture_battle_result_loot);
         assert!(!filtered.auto_capture_unknown_screen_timeout);
         assert!(!filtered.auto_capture_skill_use_probe);
+        assert!(!filtered.simulate_stuck_attack_selection);
     }
 
     #[test]
@@ -893,6 +952,7 @@ mod tests {
             auto_capture_battle_result_loot: true,
             auto_capture_unknown_screen_timeout: true,
             auto_capture_skill_use_probe: true,
+            simulate_stuck_attack_selection: true,
         };
 
         let filtered = debug_settings_for_runtime(settings, true);
@@ -900,6 +960,7 @@ mod tests {
         assert!(filtered.auto_capture_battle_result_loot);
         assert!(filtered.auto_capture_unknown_screen_timeout);
         assert!(filtered.auto_capture_skill_use_probe);
+        assert!(filtered.simulate_stuck_attack_selection);
     }
 
     #[test]
@@ -908,6 +969,7 @@ mod tests {
             auto_capture_battle_result_loot: false,
             auto_capture_unknown_screen_timeout: true,
             auto_capture_skill_use_probe: false,
+            simulate_stuck_attack_selection: true,
         };
 
         let next = debug_settings_with_auto_capture_battle_result_loot(settings, true);
@@ -915,6 +977,7 @@ mod tests {
         assert!(next.auto_capture_battle_result_loot);
         assert!(next.auto_capture_unknown_screen_timeout);
         assert!(!next.auto_capture_skill_use_probe);
+        assert!(next.simulate_stuck_attack_selection);
     }
 
     #[test]
@@ -923,6 +986,7 @@ mod tests {
             auto_capture_battle_result_loot: true,
             auto_capture_unknown_screen_timeout: false,
             auto_capture_skill_use_probe: false,
+            simulate_stuck_attack_selection: true,
         };
 
         let next = debug_settings_with_auto_capture_unknown_screen_timeout(settings, true);
@@ -930,6 +994,7 @@ mod tests {
         assert!(next.auto_capture_battle_result_loot);
         assert!(next.auto_capture_unknown_screen_timeout);
         assert!(!next.auto_capture_skill_use_probe);
+        assert!(next.simulate_stuck_attack_selection);
     }
 
     #[test]
@@ -938,6 +1003,7 @@ mod tests {
             auto_capture_battle_result_loot: true,
             auto_capture_unknown_screen_timeout: true,
             auto_capture_skill_use_probe: false,
+            simulate_stuck_attack_selection: true,
         };
 
         let next = debug_settings_with_auto_capture_skill_use_probe(settings, true);
@@ -945,6 +1011,36 @@ mod tests {
         assert!(next.auto_capture_battle_result_loot);
         assert!(next.auto_capture_unknown_screen_timeout);
         assert!(next.auto_capture_skill_use_probe);
+        assert!(next.simulate_stuck_attack_selection);
+    }
+
+    #[test]
+    fn debug_settings_stuck_attack_test_is_consumed_once_after_persistence() {
+        let state = Mutex::new(DebugSettings {
+            simulate_stuck_attack_selection: true,
+            ..DebugSettings::default()
+        });
+
+        let consumed = take_simulate_stuck_attack_selection(&state, |_| Ok(())).unwrap();
+        let consumed_again = take_simulate_stuck_attack_selection(&state, |_| Ok(())).unwrap();
+
+        assert!(consumed);
+        assert!(!consumed_again);
+        assert!(!state.lock().unwrap().simulate_stuck_attack_selection);
+    }
+
+    #[test]
+    fn debug_settings_stuck_attack_test_stays_enabled_when_persistence_fails() {
+        let state = Mutex::new(DebugSettings {
+            simulate_stuck_attack_selection: true,
+            ..DebugSettings::default()
+        });
+
+        let result =
+            take_simulate_stuck_attack_selection(&state, |_| Err("write failed".to_string()));
+
+        assert_eq!(result.unwrap_err(), "write failed");
+        assert!(state.lock().unwrap().simulate_stuck_attack_selection);
     }
 
     #[test]

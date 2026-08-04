@@ -97,6 +97,7 @@ let enableExtraClassFilter = true;
 let autoCaptureBattleResultLoot = false;
 let autoCaptureUnknownScreenTimeout = false;
 let autoCaptureSkillUseProbe = false;
+let simulateStuckAttackSelection = false;
 let nextProjectNumber = 2;
 let activeProjectId: string | null = "dev-project-1";
 let appTheme: "light" | "dark" | "system" | null = null;
@@ -193,6 +194,7 @@ function debugSettings() {
     autoCaptureBattleResultLoot,
     autoCaptureUnknownScreenTimeout,
     autoCaptureSkillUseProbe,
+    simulateStuckAttackSelection,
   };
 }
 
@@ -453,6 +455,9 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return debugSettings() as T;
     case "set_auto_capture_skill_use_probe":
       autoCaptureSkillUseProbe = Boolean(args.value);
+      return debugSettings() as T;
+    case "set_simulate_stuck_attack_selection":
+      simulateStuckAttackSelection = Boolean(args.value);
       return debugSettings() as T;
     case "pick_asset_bundle":
     case "pick_runtime_bundle":

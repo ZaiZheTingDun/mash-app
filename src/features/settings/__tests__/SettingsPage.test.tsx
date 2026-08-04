@@ -80,6 +80,7 @@ describe("SettingsDialog", () => {
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
           autoCaptureSkillUseProbe: false,
+          simulateStuckAttackSelection: false,
         };
       }
       if (cmd === "set_noble_phantasm_detection_mode") {
@@ -193,6 +194,7 @@ describe("SettingsDialog", () => {
           autoCaptureBattleResultLoot: Boolean(argValue(args)),
           autoCaptureUnknownScreenTimeout: false,
           autoCaptureSkillUseProbe: false,
+          simulateStuckAttackSelection: false,
         };
       }
       if (cmd === "set_auto_capture_unknown_screen_timeout") {
@@ -200,6 +202,7 @@ describe("SettingsDialog", () => {
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: Boolean(argValue(args)),
           autoCaptureSkillUseProbe: false,
+          simulateStuckAttackSelection: false,
         };
       }
       if (cmd === "set_auto_capture_skill_use_probe") {
@@ -207,6 +210,15 @@ describe("SettingsDialog", () => {
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
           autoCaptureSkillUseProbe: Boolean(argValue(args)),
+          simulateStuckAttackSelection: false,
+        };
+      }
+      if (cmd === "set_simulate_stuck_attack_selection") {
+        return {
+          autoCaptureBattleResultLoot: false,
+          autoCaptureUnknownScreenTimeout: false,
+          autoCaptureSkillUseProbe: false,
+          simulateStuckAttackSelection: Boolean(argValue(args)),
         };
       }
       return null;
@@ -281,6 +293,7 @@ describe("SettingsDialog", () => {
     expect(await screen.findByText("自动截图战利品页面")).toBeInTheDocument();
     expect(screen.getByText("无法识别画面超时时截图")).toBeInTheDocument();
     expect(screen.getByText("保存技能确认 probe 截图")).toBeInTheDocument();
+    expect(screen.getByText("测试选卡卡住恢复")).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("get_debug_settings");
 
     await user.click(screen.getByRole("switch", { name: "自动截图战利品页面" }));
@@ -303,6 +316,14 @@ describe("SettingsDialog", () => {
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_auto_capture_skill_use_probe", {
+        value: true,
+      });
+    });
+
+    await user.click(screen.getByRole("switch", { name: "测试选卡卡住恢复" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_simulate_stuck_attack_selection", {
         value: true,
       });
     });

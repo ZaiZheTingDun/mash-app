@@ -7,6 +7,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   autoCaptureBattleResultLoot: false,
   autoCaptureUnknownScreenTimeout: false,
   autoCaptureSkillUseProbe: false,
+  simulateStuckAttackSelection: false,
 };
 
 function normalizeDebugSettings(settings: Partial<DebugSettings>): DebugSettings {
@@ -14,6 +15,7 @@ function normalizeDebugSettings(settings: Partial<DebugSettings>): DebugSettings
     autoCaptureBattleResultLoot: settings.autoCaptureBattleResultLoot === true,
     autoCaptureUnknownScreenTimeout: settings.autoCaptureUnknownScreenTimeout === true,
     autoCaptureSkillUseProbe: settings.autoCaptureSkillUseProbe === true,
+    simulateStuckAttackSelection: settings.simulateStuckAttackSelection === true,
   };
 }
 
@@ -95,6 +97,23 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
     }
   }, []);
 
+  const saveSimulateStuckAttackSelection = useCallback(async (value: boolean) => {
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
+    try {
+      const next = normalizeDebugSettings(
+        await invoke<DebugSettings>("set_simulate_stuck_attack_selection", { value })
+      );
+      setSettings(next);
+      setSavedMessage("已保存");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
   return (
     <Box className="settings-section-panel">
       <Flex direction="column" gap="4" className="recognition-setting-block">
@@ -149,6 +168,24 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
             onCheckedChange={(value) => void saveAutoCaptureSkillUseProbe(value)}
             disabled={loading || saving}
             aria-label="保存技能确认 probe 截图"
+          />
+        </Flex>
+
+        <Flex align="start" justify="between" gap="4" wrap="wrap" className="basic-setting-row">
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              测试选卡卡住恢复
+            </Text>
+            <Text size="1" color="gray">
+              开启后会在下一次自动选卡时故意跳过第 3 张卡的点击，用于验证自动返回并重新选卡；触发后自动关闭。
+            </Text>
+          </Flex>
+
+          <Switch
+            checked={settings.simulateStuckAttackSelection}
+            onCheckedChange={(value) => void saveSimulateStuckAttackSelection(value)}
+            disabled={loading || saving}
+            aria-label="测试选卡卡住恢复"
           />
         </Flex>
 

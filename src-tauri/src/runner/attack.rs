@@ -4,7 +4,9 @@
 //! selection, and non-Grand advanced startup conditions.
 
 use super::*;
-use crate::commands::settings::NoblePhantasmDetectionMode;
+use crate::commands::settings::{
+    consume_simulate_stuck_attack_selection, NoblePhantasmDetectionMode,
+};
 use std::collections::VecDeque;
 
 const COMMAND_CARD_FRONTLINE_OWNER_FAILURE_LIMIT: u32 = 3;
@@ -1331,7 +1333,24 @@ impl Runner {
             } else {
                 self.emit(screen, &msg);
             }
-            if !self.tap_at(screen, point) {
+            let simulate_missed_tap = screen == "Attack"
+                && selected_count == 2
+                && match consume_simulate_stuck_attack_selection(&self.app_handle) {
+                    Ok(enabled) => enabled,
+                    Err(err) => {
+                        self.emit_warn(
+                            screen,
+                            &format!("读取选卡卡住测试开关失败，本次正常选卡: {err}"),
+                        );
+                        false
+                    }
+                };
+            if simulate_missed_tap {
+                self.emit_warn(
+                    screen,
+                    "调试测试：已故意跳过第 3 张卡的点击，等待触发选卡恢复",
+                );
+            } else if !self.tap_at(screen, point) {
                 return;
             }
             thread::sleep(ACTION_DELAY);
