@@ -63,7 +63,7 @@ export interface OperationLogEntry {
 
 export const MAX_OPERATION_LOG_ENTRIES = 500;
 
-const PROGRESS_LOG_RE = /^(.*…)\s+\((\d+)\/(\d+)\)$/;
+const PROGRESS_LOG_RE = /^(.*(?:…|\.{3}))\s+\((\d+)\/(\d+)\)$/;
 
 function operationLogCoalesceKey(message: string): string | null {
   const match = message.match(PROGRESS_LOG_RE);

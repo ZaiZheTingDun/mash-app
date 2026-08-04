@@ -1,5 +1,17 @@
 use super::*;
 
+#[test]
+fn unknown_screen_wait_message_includes_localized_server() {
+    assert_eq!(
+        super::engine::unknown_screen_wait_message(Server::Cn, 1, 75),
+        "等待识别画面[国服]... (1/75)"
+    );
+    assert_eq!(
+        super::engine::unknown_screen_wait_message(Server::Jp, 2, 75),
+        "等待识别画面[日服]... (2/75)"
+    );
+}
+
 /// Helper: assert two `f64` are approximately equal. The CE search
 /// region math is just adds + multiplies on small constants, so the
 /// epsilon is tight.

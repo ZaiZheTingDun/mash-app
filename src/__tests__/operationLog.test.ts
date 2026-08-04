@@ -15,33 +15,33 @@ function log(
 
 describe("appendCoalescedOperationLog", () => {
   it("updates repeated progress logs in place", () => {
-    const logs = [log("23:08:35", "等待识别画面… (1/75)")];
+    const logs = [log("23:08:35", "等待识别画面[国服]... (1/75)")];
 
     const next = appendCoalescedOperationLog(
       logs,
-      log("23:08:36", "等待识别画面… (2/75)"),
+      log("23:08:36", "等待识别画面[国服]... (2/75)"),
     );
 
     expect(next).toEqual([
-      log("23:08:36", "等待识别画面… (2/75)"),
+      log("23:08:36", "等待识别画面[国服]... (2/75)"),
     ]);
   });
 
   it("starts a new progress entry after another visible log", () => {
     const logs = [
-      log("23:08:35", "等待识别画面… (1/75)"),
+      log("23:08:35", "等待识别画面[日服]... (1/75)"),
       log("23:08:35", "队伍就绪"),
     ];
 
     const next = appendCoalescedOperationLog(
       logs,
-      log("23:08:36", "等待识别画面… (2/75)"),
+      log("23:08:36", "等待识别画面[日服]... (2/75)"),
     );
 
     expect(next).toEqual([
-      log("23:08:35", "等待识别画面… (1/75)"),
+      log("23:08:35", "等待识别画面[日服]... (1/75)"),
       log("23:08:35", "队伍就绪"),
-      log("23:08:36", "等待识别画面… (2/75)"),
+      log("23:08:36", "等待识别画面[日服]... (2/75)"),
     ]);
   });
 
@@ -88,17 +88,17 @@ describe("appendCoalescedOperationLog", () => {
 
   it("updates the matching visible progress log across debug entries", () => {
     const logs = [
-      log("23:08:35", "等待识别画面… (1/75)"),
+      log("23:08:35", "等待识别画面[国服]... (1/75)"),
       log("23:08:35", "结算页可能被弹窗遮挡，尝试点击跳过区域", "debug"),
     ];
 
     const next = appendCoalescedOperationLog(
       logs,
-      log("23:08:36", "等待识别画面… (2/75)"),
+      log("23:08:36", "等待识别画面[国服]... (2/75)"),
     );
 
     expect(next).toEqual([
-      log("23:08:36", "等待识别画面… (2/75)"),
+      log("23:08:36", "等待识别画面[国服]... (2/75)"),
       log("23:08:35", "结算页可能被弹窗遮挡，尝试点击跳过区域", "debug"),
     ]);
   });
@@ -123,15 +123,17 @@ describe("appendCoalescedOperationLog", () => {
       ...Array.from({ length: MAX_OPERATION_LOG_ENTRIES - 1 }, (_, index) =>
         log("12:00:00", `日志 ${index}`)
       ),
-      log("12:00:00", "等待识别画面… (1/75)"),
+      log("12:00:00", "等待识别画面[日服]... (1/75)"),
     ];
 
     const next = appendCoalescedOperationLog(
       logs,
-      log("12:00:01", "等待识别画面… (2/75)"),
+      log("12:00:01", "等待识别画面[日服]... (2/75)"),
     );
 
     expect(next).toHaveLength(MAX_OPERATION_LOG_ENTRIES);
-    expect(next[next.length - 1]).toEqual(log("12:00:01", "等待识别画面… (2/75)"));
+    expect(next[next.length - 1]).toEqual(
+      log("12:00:01", "等待识别画面[日服]... (2/75)"),
+    );
   });
 });

@@ -6,6 +6,18 @@
 
 use super::*;
 
+pub(super) fn unknown_screen_wait_message(
+    server: Server,
+    unknown_count: u32,
+    timeout: u32,
+) -> String {
+    let server_label = match server {
+        Server::Cn => "国服",
+        Server::Jp => "日服",
+    };
+    format!("等待识别画面[{server_label}]... ({unknown_count}/{timeout})")
+}
+
 impl Runner {
     // -- main loop -----------------------------------------------------------
 
@@ -142,7 +154,7 @@ impl Runner {
                     }
                     self.emit(
                         "Unknown",
-                        &format!("等待识别画面… ({unknown_count}/{timeout})"),
+                        &unknown_screen_wait_message(self.server, unknown_count, timeout),
                     );
                     if is_battle_result_screen(last_detected_screen) {
                         self.emit_debug("Unknown", "结算页可能被弹窗遮挡，尝试点击跳过区域");
