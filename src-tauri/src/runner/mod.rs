@@ -68,6 +68,16 @@ const ORDER_CHANGE_EXTRA_SETTLE: Duration = Duration::from_secs(1);
 /// Maximum time to suppress duplicate Battle-screen attack taps after tapping
 /// Attack and before the Attack screen classifier catches up.
 const ATTACK_SCREEN_WAIT_TIMEOUT: Duration = Duration::from_secs(3);
+/// If the Attack screen is still visible this long after the runner issued
+/// three card taps, the game did not accept the complete chain. Return to
+/// Battle and retry the cached picks without repeating card recognition.
+const ATTACK_SUBMISSION_STUCK_TIMEOUT: Duration = Duration::from_secs(5);
+/// The retried Attack screen must be observed repeatedly before cached taps
+/// are replayed. This avoids tapping through the card entrance animation on
+/// a device that just demonstrated a lag spike.
+const ATTACK_RETRY_SCREEN_STABLE_POLLS: u32 = 2;
+const ATTACK_RETRY_SCREEN_SETTLE: Duration = Duration::from_secs(1);
+const ATTACK_RETRY_NAVIGATION_TIMEOUT: Duration = Duration::from_secs(5);
 /// Short window after a skill tap where the Battle action menu should
 /// disappear if the game accepted the input. Keep this small so a missed
 /// tap retries promptly instead of stalling the whole turn.
@@ -162,6 +172,10 @@ pub struct Runner {
     servants_placed: Vec<u32>,
     // Battle progress tracking
     battle: BattleState,
+    /// Exact three-card chain last submitted on the Attack screen. Kept until
+    /// the next submission so a stuck partial selection can return to Battle
+    /// and replay the same targets without repeating command-card/NP CV.
+    last_attack_plan: Option<AttackRetryPlan>,
     completed_mission_runs: u32,
     five_star_ce_drop_count: u32,
     battle_result_loot_handled: bool,
@@ -229,6 +243,7 @@ impl Runner {
             support_level_progress: SupportLevelPanelProgress::default(),
             servants_placed: Vec::new(),
             battle: BattleState::new(),
+            last_attack_plan: None,
             completed_mission_runs: 0,
             five_star_ce_drop_count: 0,
             battle_result_loot_handled: false,

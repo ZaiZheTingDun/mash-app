@@ -69,7 +69,19 @@ impl Runner {
                     unknown_count = 0;
                     last_detected_screen = screen;
                     if self.battle.awaiting_attack_resolution() {
-                        self.emit("Attack", "已提交本轮选卡，等待攻击动画");
+                        match attack_submission_wait_gate(
+                            self.battle.attack_submission_started_at(),
+                            Instant::now(),
+                            ATTACK_SUBMISSION_STUCK_TIMEOUT,
+                        ) {
+                            AttackSubmissionWaitGate::TimedOut => {
+                                self.recover_stuck_attack_selection();
+                            }
+                            AttackSubmissionWaitGate::Waiting
+                            | AttackSubmissionWaitGate::NotWaiting => {
+                                self.emit("Attack", "已提交本轮选卡，等待攻击动画");
+                            }
+                        }
                     } else {
                         self.battle
                             .transition(BattleFlowEvent::AttackScreenDetected);

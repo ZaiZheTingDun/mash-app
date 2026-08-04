@@ -33,6 +33,13 @@ pub(crate) enum Pick {
     },
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct AttackRetryPlan {
+    picks: Vec<Pick>,
+    cards: Vec<CommandCardMatch>,
+    party_ids: [Option<u32>; 3],
+}
+
 /// Map ``"quick"|"arts"|"buster"`` to the suit code returned by the sidecar.
 pub(crate) fn suit_code(suit: &str) -> Option<&'static str> {
     match suit {
@@ -1248,12 +1255,14 @@ impl Runner {
         }
 
         let mut selected_count = 0usize;
+        let mut submitted_picks = Vec::with_capacity(3);
         while selected_count < 3 {
             let Some(pick) = pending.pop_front() else {
                 self.fail_action(screen, "补足选卡", "没有其他可用指令卡".into());
                 return;
             };
             let is_np = matches!(&pick, Pick::Np { .. });
+            let submitted_pick = pick.clone();
             let (msg, point, selected_pick) = match pick {
                 Pick::Card {
                     slot,
@@ -1354,14 +1363,115 @@ impl Runner {
                 }
             }
 
+            submitted_picks.push(submitted_pick);
             selected_count += 1;
         }
 
+        self.last_attack_plan = Some(AttackRetryPlan {
+            picks: submitted_picks,
+            cards: cards.to_vec(),
+            party_ids: *party_ids,
+        });
         self.battle
-            .transition(BattleFlowEvent::AttackCardsSubmitted);
+            .transition(BattleFlowEvent::AttackCardsSubmitted { at: Instant::now() });
 
         // Reset for next cycle
         self.battle.scene_config_used = false;
+    }
+
+    /// Recover a chain whose three issued taps left the game on the Attack
+    /// screen. The exact prior picks are replayed after returning to Battle;
+    /// command-card ownership, suit, and NP readiness are intentionally not
+    /// re-read because the hand has not changed.
+    pub(crate) fn recover_stuck_attack_selection(&mut self) {
+        let Some(plan) = self.last_attack_plan.clone() else {
+            self.emit_warn("Attack", "选卡未完成，但没有可复用的选卡记录");
+            return;
+        };
+
+        self.emit_warn(
+            "Attack",
+            "选卡提交后仍停留在指令卡画面，返回并复用本轮选卡重试",
+        );
+        if !self.tap_at("Attack", ATTACK_SCREEN_RETURN) {
+            return;
+        }
+        thread::sleep(ACTION_DELAY);
+        if !self.wait_for_attack_button("Battle", ATTACK_RETRY_NAVIGATION_TIMEOUT) {
+            self.emit_warn("Attack", "选卡重试返回 Battle 超时，稍后继续恢复");
+            return;
+        }
+
+        self.battle.transition(BattleFlowEvent::BattleActionable);
+        if !self.tap_attack_button() {
+            return;
+        }
+        if !self.wait_for_retry_attack_screen_stable(ATTACK_RETRY_NAVIGATION_TIMEOUT) {
+            self.emit_warn("Attack", "选卡重试等待指令卡画面稳定超时");
+            return;
+        }
+        self.battle
+            .transition(BattleFlowEvent::AttackScreenDetected);
+        thread::sleep(ATTACK_RETRY_SCREEN_SETTLE);
+
+        self.emit("Attack", "指令卡画面已稳定，直接复用上次选卡");
+        self.tap_picks("Attack", &plan.picks, &plan.cards, &plan.party_ids);
+        if !self.battle.awaiting_attack_resolution() {
+            return;
+        }
+
+        if self.confirm_retried_attack_submission(ATTACK_SUBMISSION_STUCK_TIMEOUT) {
+            self.emit("Attack", "已确认重试选卡成功");
+        } else {
+            self.emit_warn("Attack", "重试选卡后仍未离开指令卡画面，将再次恢复");
+        }
+    }
+
+    fn wait_for_retry_attack_screen_stable(&mut self, timeout: Duration) -> bool {
+        let started_at = Instant::now();
+        let mut consecutive_attack_polls = 0u32;
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+            match self.sidecar().detect(None) {
+                Ok(Screen::Attack) => {
+                    consecutive_attack_polls += 1;
+                    if consecutive_attack_polls >= ATTACK_RETRY_SCREEN_STABLE_POLLS {
+                        return true;
+                    }
+                }
+                Ok(_) | Err(_) => consecutive_attack_polls = 0,
+            }
+            if started_at.elapsed() >= timeout {
+                return false;
+            }
+            thread::sleep(SKILL_POLL_INTERVAL);
+        }
+    }
+
+    fn confirm_retried_attack_submission(&mut self, timeout: Duration) -> bool {
+        let started_at = Instant::now();
+        let mut consecutive_non_attack_polls = 0u32;
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+            match self.sidecar().detect(None) {
+                Ok(Screen::Attack) => consecutive_non_attack_polls = 0,
+                Ok(_) => {
+                    consecutive_non_attack_polls += 1;
+                    if consecutive_non_attack_polls >= 2 {
+                        return true;
+                    }
+                }
+                Err(_) => consecutive_non_attack_polls = 0,
+            }
+            if started_at.elapsed() >= timeout {
+                return false;
+            }
+            thread::sleep(SKILL_POLL_INTERVAL);
+        }
     }
 
     pub(crate) fn handle_advanced_attack(

@@ -86,9 +86,16 @@ impl BattleState {
     pub(crate) fn awaiting_attack_resolution(&self) -> bool {
         matches!(
             self.flow,
-            BattleFlowState::AwaitingAttackResolution
+            BattleFlowState::AwaitingAttackResolution { .. }
                 | BattleFlowState::AwaitingPostAttackHud { .. }
         )
+    }
+
+    pub(crate) fn attack_submission_started_at(&self) -> Option<Instant> {
+        match self.flow {
+            BattleFlowState::AwaitingAttackResolution { started_at } => Some(started_at),
+            _ => None,
+        }
     }
 
     pub(crate) fn attack_screen_wait_started_at(&self) -> Option<Instant> {
@@ -121,7 +128,7 @@ pub(crate) enum BattleFlowState {
     /// Attack/card screen is visible and card selection can run.
     AttackScreen,
     /// Cards were submitted; wait through the attack animation until Battle returns.
-    AwaitingAttackResolution,
+    AwaitingAttackResolution { started_at: Instant },
     /// Battle returned after an attack, but normal mode is waiting briefly for a
     /// reliable `BATTLE m/n` HUD read before advancing the turn counter.
     AwaitingPostAttackHud { started_at: Instant },
@@ -139,7 +146,7 @@ pub(crate) enum BattleFlowEvent {
     AttackButtonTapped { at: Instant },
     AttackScreenDetected,
     AttackScreenWaitTimedOut,
-    AttackCardsSubmitted,
+    AttackCardsSubmitted { at: Instant },
     PostAttackHudWaitStarted { at: Instant },
     PostAttackHudResolved,
 }
@@ -164,7 +171,7 @@ pub(crate) fn battle_flow_transition(
             BattleFlowState::PreBattle
             | BattleFlowState::AwaitingBattleLoad { .. }
             | BattleFlowState::BattleReady
-            | BattleFlowState::AwaitingAttackResolution,
+            | BattleFlowState::AwaitingAttackResolution { .. },
             BattleFlowEvent::BattleActionable,
         ) => Some(BattleFlowState::BattleReady),
         (BattleFlowState::BattleReady, BattleFlowEvent::AttackButtonTapped { at }) => {
@@ -180,11 +187,11 @@ pub(crate) fn battle_flow_transition(
             BattleFlowState::AwaitingAttackScreen { .. },
             BattleFlowEvent::AttackScreenWaitTimedOut,
         ) => Some(BattleFlowState::BattleReady),
-        (BattleFlowState::AttackScreen, BattleFlowEvent::AttackCardsSubmitted) => {
-            Some(BattleFlowState::AwaitingAttackResolution)
+        (BattleFlowState::AttackScreen, BattleFlowEvent::AttackCardsSubmitted { at }) => {
+            Some(BattleFlowState::AwaitingAttackResolution { started_at: at })
         }
         (
-            BattleFlowState::AwaitingAttackResolution,
+            BattleFlowState::AwaitingAttackResolution { .. },
             BattleFlowEvent::PostAttackHudWaitStarted { at },
         )
         | (
@@ -192,7 +199,7 @@ pub(crate) fn battle_flow_transition(
             BattleFlowEvent::PostAttackHudWaitStarted { at },
         ) => Some(BattleFlowState::AwaitingPostAttackHud { started_at: at }),
         (
-            BattleFlowState::AwaitingAttackResolution
+            BattleFlowState::AwaitingAttackResolution { .. }
             | BattleFlowState::AwaitingPostAttackHud { .. },
             BattleFlowEvent::PostAttackHudResolved,
         ) => Some(BattleFlowState::BattleReady),
@@ -208,6 +215,28 @@ pub(crate) fn battle_flow_transition(
         event,
         next: next.unwrap_or(state),
         accepted: next.is_some(),
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub(crate) enum AttackSubmissionWaitGate {
+    NotWaiting,
+    Waiting,
+    TimedOut,
+}
+
+pub(crate) fn attack_submission_wait_gate(
+    started_at: Option<Instant>,
+    now: Instant,
+    timeout: Duration,
+) -> AttackSubmissionWaitGate {
+    let Some(started_at) = started_at else {
+        return AttackSubmissionWaitGate::NotWaiting;
+    };
+    if now.saturating_duration_since(started_at) >= timeout {
+        AttackSubmissionWaitGate::TimedOut
+    } else {
+        AttackSubmissionWaitGate::Waiting
     }
 }
 

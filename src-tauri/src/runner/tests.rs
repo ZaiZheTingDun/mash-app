@@ -963,10 +963,14 @@ fn battle_flow_runs_full_attack_cycle_through_explicit_states() {
     assert!(attack.accepted);
     assert_eq!(battle.flow, BattleFlowState::AttackScreen);
 
-    let submitted = battle.transition(BattleFlowEvent::AttackCardsSubmitted);
+    let submitted = battle.transition(BattleFlowEvent::AttackCardsSubmitted { at: started_at });
     assert!(submitted.accepted);
-    assert_eq!(battle.flow, BattleFlowState::AwaitingAttackResolution);
+    assert_eq!(
+        battle.flow,
+        BattleFlowState::AwaitingAttackResolution { started_at }
+    );
     assert!(battle.awaiting_attack_resolution());
+    assert_eq!(battle.attack_submission_started_at(), Some(started_at));
 
     let hud_wait_started_at = started_at + Duration::from_secs(1);
     let hud_wait = battle.transition(BattleFlowEvent::PostAttackHudWaitStarted {
@@ -991,7 +995,7 @@ fn battle_flow_runs_full_attack_cycle_through_explicit_states() {
 fn battle_flow_rejects_attack_submission_outside_attack_screen() {
     let mut battle = BattleState::new();
 
-    let rejected = battle.transition(BattleFlowEvent::AttackCardsSubmitted);
+    let rejected = battle.transition(BattleFlowEvent::AttackCardsSubmitted { at: Instant::now() });
 
     assert!(!rejected.accepted);
     assert_eq!(rejected.previous, BattleFlowState::PreBattle);
@@ -4710,6 +4714,12 @@ fn attack_speed_element_names_are_stable() {
 }
 
 #[test]
+fn attack_recovery_uses_the_bottom_right_return_button() {
+    approx(ATTACK_SCREEN_RETURN.x, 0.938);
+    approx(ATTACK_SCREEN_RETURN.y, 0.947);
+}
+
+#[test]
 fn order_change_extra_settle_matches_expected_delay() {
     assert_eq!(ORDER_CHANGE_EXTRA_SETTLE, Duration::from_secs(1));
 }
@@ -5051,6 +5061,32 @@ fn attack_screen_wait_gate_recovers_after_timeout() {
     let gate = attack_screen_wait_gate(Some(started_at), now, ATTACK_SCREEN_WAIT_TIMEOUT);
 
     assert_eq!(gate, AttackScreenWaitGate::TimedOut);
+}
+
+#[test]
+fn attack_submission_wait_gate_ignores_non_submission_states() {
+    let now = Instant::now();
+    let gate = attack_submission_wait_gate(None, now, ATTACK_SUBMISSION_STUCK_TIMEOUT);
+
+    assert_eq!(gate, AttackSubmissionWaitGate::NotWaiting);
+}
+
+#[test]
+fn attack_submission_wait_gate_keeps_waiting_before_stuck_timeout() {
+    let started_at = Instant::now();
+    let now = started_at + ATTACK_SUBMISSION_STUCK_TIMEOUT - Duration::from_millis(1);
+    let gate = attack_submission_wait_gate(Some(started_at), now, ATTACK_SUBMISSION_STUCK_TIMEOUT);
+
+    assert_eq!(gate, AttackSubmissionWaitGate::Waiting);
+}
+
+#[test]
+fn attack_submission_wait_gate_recovers_when_attack_screen_stays_visible() {
+    let started_at = Instant::now();
+    let now = started_at + ATTACK_SUBMISSION_STUCK_TIMEOUT;
+    let gate = attack_submission_wait_gate(Some(started_at), now, ATTACK_SUBMISSION_STUCK_TIMEOUT);
+
+    assert_eq!(gate, AttackSubmissionWaitGate::TimedOut);
 }
 
 #[test]

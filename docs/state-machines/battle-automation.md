@@ -36,6 +36,8 @@ stateDiagram-v2
     BattleAction --> Attack: 已点击攻击
     Attack --> Attack: 检测到速度 1；点击速度按钮并等待速度 2
     Attack --> Attack: 宝具不可用；关闭提示并用其他指令卡补位
+    Attack --> Battle: 提交选卡后仍停留 5 秒；点击返回并复用选卡
+    Battle --> Attack: 重新点击攻击，等待画面稳定后直接重选
     Attack --> Battle: 卡片结算
     Battle --> BattleResultBond: 通关
     BattleResultBond --> BattleResultExp: 继续
@@ -66,6 +68,7 @@ stateDiagram-v2
     BattleReady --> AttackScreen: AttackScreenDetected
     AwaitingAttackScreen --> BattleReady: AttackScreenWaitTimedOut
     AttackScreen --> AwaitingAttackResolution: AttackCardsSubmitted
+    AwaitingAttackResolution --> BattleReady: 提交后 Attack 持续 5 秒；返回并 BattleActionable
     AwaitingAttackResolution --> AwaitingPostAttackHud: PostAttackHudWaitStarted
     AwaitingPostAttackHud --> AwaitingPostAttackHud: PostAttackHudWaitStarted
     AwaitingAttackResolution --> BattleReady: PostAttackHudResolved
@@ -76,6 +79,7 @@ stateDiagram-v2
 - `BattleState` 管理持久上下文：当前 Battle/turn index、上次 HUD 场景读取、已执行的 scene/turn key、指令卡识别 fallback 状态，以及 advanced-mode control/skill-turn index。
 - 连续 `Unknown` 的停止阈值来自「游戏 → 基础设置」中的“识别超时”，所有流程共用同一个检测次数。每次主循环约 0.8 秒，范围为 50–1000 次，默认 100 次；关闭限制时内部阈值写为 9999 次。
 - `awaiting_attack_resolution()` 在 `AwaitingAttackResolution` 或 `AwaitingPostAttackHud` 时为真，避免 classifier 仍显示 Attack 时重复提交卡片。
+- `AwaitingAttackResolution` 保存实际提交时间。若 classifier 连续停留在 `Attack` 达 5 秒，runner 点击右下返回、等待 Battle 的攻击按钮与动作菜单、重新点击攻击；新的 Attack 画面连续稳定两次并额外等待 1 秒后，直接重放缓存的三张卡，不重新识别指令卡归属、卡色或宝具状态。恢复重选是唯一强制确认路径：必须连续两次观察到画面离开 `Attack` 才记录成功；确认失败则保留缓存并再次恢复。
 - 单箭头和双箭头战斗速度模板都会将卡片画面分类为 `Attack`。读取卡片前先 probe mask 后的双箭头模板，再 probe 单箭头；若速度为 level 1，则记录切换、点击速度按钮并等待 level 2。
 - 结算页是 screen-router state 而非 `BattleFlowState`。`BattleResultContinue` 重复关卡时 FGO 回到 `SupportSelect`；runner 将 `BattleState` 重置为 `PreBattle`，下次 `TeamConfirm` 开始点击发出 `QuestStartTapped(TeamConfirm)`。
 
