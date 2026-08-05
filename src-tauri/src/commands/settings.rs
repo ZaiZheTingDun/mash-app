@@ -723,6 +723,7 @@ pub(crate) async fn run_startup_migration(
         *adb_settings_state.lock().unwrap() = load_adb_device_settings(&app);
         *server_state.lock().unwrap() = load_server_setting(&app);
     }
+    crate::battle_statistics::initialize(&app)?;
     Ok(status)
 }
 

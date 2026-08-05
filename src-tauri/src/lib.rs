@@ -1,4 +1,5 @@
 mod adb;
+mod battle_statistics;
 mod commands;
 mod craft_essence_enhancement_runner;
 mod enhancement_runner;
@@ -331,6 +332,7 @@ pub fn run() {
             commands::automation::stop_automation,
             commands::automation::stop_automation_after_current,
             commands::automation::get_automation_status,
+            battle_statistics::get_battle_daily_statistics,
             commands::automation::start_enhancement_automation,
             commands::automation::stop_enhancement_automation,
             commands::automation::get_enhancement_automation_status,

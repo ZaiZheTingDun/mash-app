@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
 import { Cross1Icon } from "@radix-ui/react-icons";
 import goldFruitImage from "../../../src-tauri/resources/images/item_fruit_golden.png";
@@ -9,7 +9,10 @@ import saintQuartzImage from "../../../src-tauri/resources/images/item_saint_qua
 import type { BattleApRecoveryItem } from "../../types/project";
 import {
   battleRunRemainingMs,
+  displayedDailyBattleDurationMs,
   formatBattleRunDuration,
+  type BattleDailyStatistics,
+  type BattleRunApRecoveryUsage,
   type BattleRunStatus,
 } from "../../types/battleRunStatus";
 
@@ -27,6 +30,7 @@ const RECOVERY_ITEMS: {
 
 interface BattleRunStatusPanelProps {
   status: BattleRunStatus | null;
+  dailyStatistics: BattleDailyStatistics | null;
   onClose: () => void;
 }
 
@@ -34,7 +38,34 @@ function isActive(status: BattleRunStatus): boolean {
   return status.phase === "starting" || status.phase === "running";
 }
 
-export function BattleRunStatusPanel({ status, onClose }: BattleRunStatusPanelProps) {
+function consumedRecoveryItems(usage: BattleRunApRecoveryUsage) {
+  return RECOVERY_ITEMS.filter((item) => usage[item.value] > 0);
+}
+
+function RecoveryUsage({ usage }: { usage: BattleRunApRecoveryUsage }) {
+  const items = consumedRecoveryItems(usage);
+  if (items.length === 0) return <span className="operation-log-msg">暂无</span>;
+  return (
+    <span className="operation-log-msg battle-run-status-items">
+      {items.map((item) => (
+        <span key={item.value} className="battle-run-status-item">
+          <img
+            src={item.imageSrc}
+            alt={item.label}
+            className="battle-run-status-item-image"
+          />
+          <span>× {usage[item.value]}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+export function BattleRunStatusPanel({
+  status,
+  dailyStatistics,
+  onClose,
+}: BattleRunStatusPanelProps) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const active = status != null && isActive(status);
 
@@ -43,14 +74,6 @@ export function BattleRunStatusPanel({ status, onClose }: BattleRunStatusPanelPr
     const interval = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, [active, status?.startedAtMs]);
-
-  const consumedItems = useMemo(
-    () =>
-      status == null
-        ? []
-        : RECOVERY_ITEMS.filter((item) => status.apRecoveryUsage[item.value] > 0),
-    [status],
-  );
 
   const displayNowMs = status?.endedAtMs ?? nowMs;
   const elapsedText =
@@ -69,6 +92,17 @@ export function BattleRunStatusPanel({ status, onClose }: BattleRunStatusPanelPr
           : formatBattleRunDuration(Math.ceil(remainingMs / 1000) * 1000, false);
     }
   }
+  const hasDailyRecord =
+    dailyStatistics != null &&
+    (dailyStatistics.completedRuns > 0 ||
+      dailyStatistics.durationMs > 0 ||
+      consumedRecoveryItems(dailyStatistics.apRecoveryUsage).length > 0);
+  const dailyDurationText =
+    dailyStatistics == null
+      ? null
+      : formatBattleRunDuration(
+          displayedDailyBattleDurationMs(dailyStatistics, status, nowMs),
+        );
 
   return (
     <Box className="operation-log-panel battle-run-status-panel">
@@ -84,46 +118,53 @@ export function BattleRunStatusPanel({ status, onClose }: BattleRunStatusPanelPr
         </IconButton>
       </Flex>
       <Box className="operation-log-list">
-        {status == null ? (
+        {status == null && !hasDailyRecord ? (
           <Text size="2" className="operation-log-placeholder">尚无运行记录</Text>
         ) : (
           <>
-            <div className="operation-log-entry">
-              <span className="operation-log-time">运行轮次：</span>
-              <span className="operation-log-msg">
-                {status.completedRuns} 次
-                {status.maxRuns != null ? ` / ${status.maxRuns} 次` : ""}
-              </span>
-            </div>
-            <div className="operation-log-entry">
-              <span className="operation-log-time">运行时间：</span>
-              <span className="operation-log-msg">{elapsedText}</span>
-            </div>
-            {estimateText != null && (
-              <div className="operation-log-entry">
-                <span className="operation-log-time">预计完成时间：</span>
-                <span className="operation-log-msg">{estimateText}</span>
-              </div>
+            {status != null && (
+              <>
+                <div className="operation-log-entry">
+                  <span className="operation-log-time">运行轮次：</span>
+                  <span className="operation-log-msg">
+                    {status.completedRuns} 次
+                    {status.maxRuns != null ? ` / ${status.maxRuns} 次` : ""}
+                  </span>
+                </div>
+                <div className="operation-log-entry">
+                  <span className="operation-log-time">运行时间：</span>
+                  <span className="operation-log-msg">{elapsedText}</span>
+                </div>
+                {estimateText != null && (
+                  <div className="operation-log-entry">
+                    <span className="operation-log-time">预计完成时间：</span>
+                    <span className="operation-log-msg">{estimateText}</span>
+                  </div>
+                )}
+                <div className="operation-log-entry">
+                  <span className="operation-log-time">道具消耗：</span>
+                  <RecoveryUsage usage={status.apRecoveryUsage} />
+                </div>
+              </>
             )}
-            <div className="operation-log-entry">
-              <span className="operation-log-time">道具消耗：</span>
-              {consumedItems.length === 0 ? (
-                <span className="operation-log-msg">暂无</span>
-              ) : (
-                <span className="operation-log-msg battle-run-status-items">
-                  {consumedItems.map((item) => (
-                    <span key={item.value} className="battle-run-status-item">
-                      <img
-                        src={item.imageSrc}
-                        alt={item.label}
-                        className="battle-run-status-item-image"
-                      />
-                      <span>× {status.apRecoveryUsage[item.value]}</span>
-                    </span>
-                  ))}
-                </span>
-              )}
-            </div>
+            {dailyStatistics != null && (
+              <>
+                <div className="operation-log-entry">
+                  <span className="operation-log-time">今日运行：</span>
+                  <span className="operation-log-msg">
+                    {dailyStatistics.completedRuns} 次
+                  </span>
+                </div>
+                <div className="operation-log-entry">
+                  <span className="operation-log-time">今日时间：</span>
+                  <span className="operation-log-msg">{dailyDurationText}</span>
+                </div>
+                <div className="operation-log-entry">
+                  <span className="operation-log-time">今日道具：</span>
+                  <RecoveryUsage usage={dailyStatistics.apRecoveryUsage} />
+                </div>
+              </>
+            )}
           </>
         )}
       </Box>

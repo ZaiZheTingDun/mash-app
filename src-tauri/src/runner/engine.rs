@@ -23,6 +23,9 @@ impl Runner {
 
     pub fn run(mut self) {
         self.transition_lifecycle(RunnerLifecycleEvent::WorkerStarted);
+        if let Some(recorder) = &self.run_recorder {
+            recorder.mark_running();
+        }
         self.emit_run_progress();
         self.emit("", "自动化已启动");
 
@@ -30,6 +33,7 @@ impl Runner {
         let mut last_detected_screen = Screen::Unknown;
 
         loop {
+            self.checkpoint_run_statistics_if_due();
             if self.is_cancelled() {
                 self.transition_lifecycle(RunnerLifecycleEvent::StopRequested);
                 self.emit("", "自动化已停止");

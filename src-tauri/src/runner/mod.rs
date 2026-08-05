@@ -29,6 +29,7 @@ pub(crate) use state::*;
 pub(crate) use support::*;
 
 use crate::adb::Adb;
+use crate::battle_statistics::BattleRunRecorder;
 use crate::screen::{
     BondLevelUpReadResult, CommandCardMatch, NoblePhantasmMatch, NormRect, Point, Screen,
     SidecarClient, SkillUseDialogProbe, SupportCeArtworkCheck, SupportCeIconCheck,
@@ -179,6 +180,8 @@ pub struct Runner {
     completed_mission_runs: u32,
     ap_recovery_usage: BattleRunApRecoveryUsage,
     pending_ap_recovery_item: Option<ApRecoveryItem>,
+    run_recorder: Option<BattleRunRecorder>,
+    last_run_statistics_checkpoint: Instant,
     five_star_ce_drop_count: u32,
     /// The normal bond result may reappear after its level-up overlay closes.
     /// Keep its settlement log to one entry per result sequence.
@@ -211,6 +214,7 @@ impl Runner {
         ce_assets_dir: Option<PathBuf>,
         server: Server,
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
+        run_recorder: Option<BattleRunRecorder>,
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         let (frame_w, frame_h) = frame_size.unwrap_or((DEFAULT_FRAME_W, DEFAULT_FRAME_H));
@@ -252,6 +256,8 @@ impl Runner {
             completed_mission_runs: 0,
             ap_recovery_usage: BattleRunApRecoveryUsage::default(),
             pending_ap_recovery_item: None,
+            run_recorder,
+            last_run_statistics_checkpoint: Instant::now(),
             five_star_ce_drop_count: 0,
             battle_result_bond_handled: false,
             battle_result_loot_handled: false,

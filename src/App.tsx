@@ -39,6 +39,8 @@ import type { AdvancedBattleScene, BattleScene } from "./types/command";
 import type { AutomationStatus } from "./types/automation";
 import {
   EMPTY_AP_RECOVERY_USAGE,
+  localBattleDayBounds,
+  type BattleDailyStatistics,
   type BattleRunProgressEvent,
   type BattleRunStatus,
 } from "./types/battleRunStatus";
@@ -80,6 +82,7 @@ interface AppProps {
   theme: AppTheme;
   themePreference: AppThemePreference;
   onThemeChange: (theme: AppThemePreference) => void;
+  startupReady?: boolean;
 }
 
 function localDateKey(date: Date): string {
@@ -89,7 +92,7 @@ function localDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function App({ theme, themePreference, onThemeChange }: AppProps) {
+function App({ theme, themePreference, onThemeChange, startupReady = true }: AppProps) {
   const [view, setView] = useState<View>("team");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
@@ -106,6 +109,8 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [operationLogs, setOperationLogs] = useState<OperationLogEntry[]>([]);
   const [operationLogOpen, setOperationLogOpen] = useState(false);
   const [battleRunStatus, setBattleRunStatus] = useState<BattleRunStatus | null>(null);
+  const [battleDailyStatistics, setBattleDailyStatistics] =
+    useState<BattleDailyStatistics | null>(null);
   const [battleRunStatusOpen, setBattleRunStatusOpen] = useState(false);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [softwareUpdateOpen, setSoftwareUpdateOpen] = useState(false);
@@ -136,6 +141,20 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     },
     [],
   );
+
+  const refreshBattleDailyStatistics = useCallback(async () => {
+    if (!startupReady) return;
+    const { dayStartMs, dayEndMs } = localBattleDayBounds();
+    try {
+      const statistics = await invoke<BattleDailyStatistics>(
+        "get_battle_daily_statistics",
+        { dayStartMs, dayEndMs },
+      );
+      setBattleDailyStatistics(statistics);
+    } catch (err) {
+      console.error("failed to load daily battle statistics", err);
+    }
+  }, [startupReady]);
 
   const handleAutomationStart = useCallback(() => {
     setOperationLogs([]);
@@ -372,6 +391,23 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
       unlistenOperationDebug.then((fn) => fn());
     };
   }, [appendOperationLog]);
+
+  useEffect(() => {
+    if (!startupReady) return;
+    let cancelled = false;
+    void refreshBattleDailyStatistics();
+    const interval = window.setInterval(() => {
+      if (!cancelled) void refreshBattleDailyStatistics();
+    }, 60_000);
+    const unlistenHistory = listen("battle-run-history-updated", () => {
+      if (!cancelled) void refreshBattleDailyStatistics();
+    });
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      unlistenHistory.then((fn) => fn());
+    };
+  }, [refreshBattleDailyStatistics, startupReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -982,6 +1018,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         operationLogOpen={operationLogOpen}
         onOperationLogOpenChange={handleOperationLogOpenChange}
         battleRunStatus={battleRunStatus}
+        battleDailyStatistics={battleDailyStatistics}
         battleRunStatusOpen={battleRunStatusOpen}
         onBattleRunStatusOpenChange={handleBattleRunStatusOpenChange}
         updateAvailable={availableUpdate != null}

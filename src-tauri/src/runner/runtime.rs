@@ -88,6 +88,9 @@ impl Runner {
     }
 
     pub(crate) fn emit_run_progress(&self) {
+        if let Some(recorder) = &self.run_recorder {
+            recorder.checkpoint(self.completed_mission_runs, &self.ap_recovery_usage);
+        }
         let _ = self.app_handle.emit(
             "battle-run-progress",
             BattleRunProgressEvent {
@@ -101,6 +104,16 @@ impl Runner {
     pub(crate) fn record_ap_recovery_usage(&mut self, item: ApRecoveryItem) {
         self.ap_recovery_usage.increment(item);
         self.emit_run_progress();
+    }
+
+    pub(crate) fn checkpoint_run_statistics_if_due(&mut self) {
+        if self.last_run_statistics_checkpoint.elapsed() < Duration::from_secs(30) {
+            return;
+        }
+        if let Some(recorder) = &self.run_recorder {
+            recorder.checkpoint(self.completed_mission_runs, &self.ap_recovery_usage);
+        }
+        self.last_run_statistics_checkpoint = Instant::now();
     }
 
     pub(crate) fn sidecar(&mut self) -> &mut SidecarClient {

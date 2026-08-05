@@ -22,6 +22,14 @@ export interface BattleRunStatus extends BattleRunProgressEvent {
   lastCompletedAtMs: number | null;
 }
 
+export interface BattleDailyStatistics {
+  dayStartMs: number;
+  calculatedAtMs: number;
+  completedRuns: number;
+  durationMs: number;
+  apRecoveryUsage: BattleRunApRecoveryUsage;
+}
+
 export const EMPTY_AP_RECOVERY_USAGE: BattleRunApRecoveryUsage = {
   gold: 0,
   silver: 0,
@@ -66,4 +74,35 @@ export function battleRunRemainingMs(
     0,
     averageRunMs * (status.maxRuns - status.completedRuns) - elapsedSinceLastCompletion,
   );
+}
+
+export function localBattleDayBounds(nowMs = Date.now()): {
+  dayStartMs: number;
+  dayEndMs: number;
+} {
+  const now = new Date(nowMs);
+  const dayStartMs = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  const dayEndMs = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+  ).getTime();
+  return { dayStartMs, dayEndMs };
+}
+
+export function displayedDailyBattleDurationMs(
+  statistics: BattleDailyStatistics,
+  status: BattleRunStatus | null,
+  nowMs: number,
+): number {
+  const active =
+    status?.phase === "starting" || status?.phase === "running";
+  if (!active || nowMs <= statistics.calculatedAtMs) {
+    return statistics.durationMs;
+  }
+  return statistics.durationMs + nowMs - statistics.calculatedAtMs;
 }

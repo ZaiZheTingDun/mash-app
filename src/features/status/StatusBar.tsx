@@ -26,7 +26,10 @@ import { SERVER_LABELS, type Server } from "../../types/server";
 import type { Servant } from "../../types/servant";
 import type { AppTheme, AppThemePreference } from "../../types/theme";
 import { isAutomationRunning, type AutomationStatus } from "../../types/automation";
-import type { BattleRunStatus } from "../../types/battleRunStatus";
+import type {
+  BattleDailyStatistics,
+  BattleRunStatus,
+} from "../../types/battleRunStatus";
 import { BattleRunStatusPanel } from "./BattleRunStatusPanel";
 
 type LogLevel = "info" | "warn" | "debug" | "localDebug";
@@ -589,6 +592,7 @@ interface StatusBarProps {
   operationLogOpen?: boolean;
   onOperationLogOpenChange?: (open: boolean) => void;
   battleRunStatus?: BattleRunStatus | null;
+  battleDailyStatistics?: BattleDailyStatistics | null;
   battleRunStatusOpen?: boolean;
   onBattleRunStatusOpenChange?: (open: boolean) => void;
   updateAvailable?: boolean;
@@ -610,6 +614,7 @@ export function StatusBar({
   operationLogOpen = false,
   onOperationLogOpenChange,
   battleRunStatus = null,
+  battleDailyStatistics = null,
   battleRunStatusOpen = false,
   onBattleRunStatusOpenChange,
   updateAvailable = false,
@@ -1065,6 +1070,7 @@ export function StatusBar({
       {battleRunStatusOpen && (
         <BattleRunStatusPanel
           status={battleRunStatus}
+          dailyStatistics={battleDailyStatistics}
           onClose={() => onBattleRunStatusOpenChange?.(false)}
         />
       )}

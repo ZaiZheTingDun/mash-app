@@ -169,6 +169,35 @@ describe("StatusBar", () => {
     expect(screen.getByRole("button", { name: "运行状态" })).toHaveClass("status-run-btn");
   });
 
+  it("shows persisted daily battle totals as compact rows", () => {
+    renderWithTheme(
+      <StatusBar
+        battleRunStatusOpen
+        battleDailyStatistics={{
+          dayStartMs: 0,
+          calculatedAtMs: 20_000,
+          completedRuns: 15,
+          durationMs: 6_800_000,
+          apRecoveryUsage: {
+            gold: 1,
+            silver: 0,
+            bronze: 0,
+            copper: 2,
+            rainbow: 0,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("今日运行：")).toBeInTheDocument();
+    expect(screen.getByText("15 次")).toBeInTheDocument();
+    expect(screen.getByText("今日时间：")).toBeInTheDocument();
+    expect(screen.getByText("1 小时 53 分钟 20 秒")).toBeInTheDocument();
+    expect(screen.getByText("今日道具：")).toBeInTheDocument();
+    expect(screen.getByAltText("黄金果实")).toBeInTheDocument();
+    expect(screen.getByAltText("赤铜果实")).toBeInTheDocument();
+  });
+
   it("dispatches set_server with the chosen value and reverts on backend rejection", async () => {
     // First two `set_server` calls succeed; third one rejects to prove
     // the optimistic update is rolled back on failure.

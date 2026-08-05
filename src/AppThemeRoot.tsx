@@ -30,6 +30,7 @@ export function AppThemeRoot({ isDebugCanvas }: AppThemeRootProps) {
   const [themePreference, setThemePreference] =
     React.useState<AppThemePreference>("system");
   const [systemTheme, setSystemTheme] = React.useState<AppTheme>(getSystemTheme);
+  const [startupReady, setStartupReady] = React.useState(isDebugCanvas);
   const theme = themePreference === "system" ? systemTheme : themePreference;
 
   const handleThemePreferenceChange = React.useCallback((nextTheme: AppThemePreference) => {
@@ -74,7 +75,8 @@ export function AppThemeRoot({ isDebugCanvas }: AppThemeRootProps) {
     invoke<StartupMigrationStatus>("run_startup_migration")
       .catch((error: unknown) => {
         console.error("Startup migration failed", error);
-      });
+      })
+      .finally(() => setStartupReady(true));
   }, [isDebugCanvas]);
 
   return (
@@ -92,6 +94,7 @@ export function AppThemeRoot({ isDebugCanvas }: AppThemeRootProps) {
           theme={theme}
           themePreference={themePreference}
           onThemeChange={handleThemePreferenceChange}
+          startupReady={startupReady}
         />
       )}
     </Theme>

@@ -7,6 +7,7 @@
 //! existing command names and event payloads.
 
 use crate::adb;
+use crate::battle_statistics::BattleRunRecorder;
 use crate::commands::catalog::load_enhancement_target;
 use crate::commands::debug;
 use crate::commands::projects::{load_advanced_battle_scenes, load_battle_scenes, read_projects};
@@ -47,6 +48,20 @@ use crate::{resolve_cv_config_paths, resolve_template_dirs};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
+
+struct BattleRunFinishGuard {
+    recorder: Option<BattleRunRecorder>,
+    state: Arc<Mutex<RunnerState>>,
+}
+
+impl Drop for BattleRunFinishGuard {
+    fn drop(&mut self) {
+        let Some(recorder) = &self.recorder else {
+            return;
+        };
+        recorder.finish(&self.state.lock().unwrap());
+    }
+}
 
 pub(crate) fn spawn_configured_sidecar(
     app: &tauri::AppHandle,
@@ -534,6 +549,13 @@ pub(crate) fn start_automation(
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let stop_after_current = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let run_recorder = match BattleRunRecorder::start(&app, config.max_mission_runs) {
+        Ok(recorder) => Some(recorder),
+        Err(err) => {
+            eprintln!("[battle-statistics] {err}");
+            None
+        }
+    };
 
     {
         let mut handle = handle_state.lock().unwrap();
@@ -544,6 +566,10 @@ pub(crate) fn start_automation(
 
     let debug_sidecar = debug_state.0.clone();
     std::thread::spawn(move || {
+        let _run_finish_guard = BattleRunFinishGuard {
+            recorder: run_recorder.clone(),
+            state: state.clone(),
+        };
         emit_automation_status(&app, &state, "", "正在连接 ADB…");
         let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
         if let Err(err) = adb_dev.connect() {
@@ -640,6 +666,7 @@ pub(crate) fn start_automation(
             ce_assets_dir,
             server,
             Some(debug_sidecar),
+            run_recorder,
         );
         runner.run();
     });
