@@ -37,6 +37,37 @@ pub enum ApRecoveryItem {
     Copper,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BattleRunApRecoveryUsage {
+    pub rainbow: u32,
+    pub gold: u32,
+    pub silver: u32,
+    pub bronze: u32,
+    pub copper: u32,
+}
+
+impl BattleRunApRecoveryUsage {
+    pub(crate) fn increment(&mut self, item: ApRecoveryItem) {
+        let count = match item {
+            ApRecoveryItem::Rainbow => &mut self.rainbow,
+            ApRecoveryItem::Gold => &mut self.gold,
+            ApRecoveryItem::Silver => &mut self.silver,
+            ApRecoveryItem::Bronze => &mut self.bronze,
+            ApRecoveryItem::Copper => &mut self.copper,
+        };
+        *count += 1;
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BattleRunProgressEvent {
+    pub completed_runs: u32,
+    pub max_runs: Option<u32>,
+    pub ap_recovery_usage: BattleRunApRecoveryUsage,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunConfig {

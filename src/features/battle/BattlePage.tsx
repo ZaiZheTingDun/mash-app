@@ -110,7 +110,8 @@ interface BattlePageProps {
   onOpenProjectSettings: () => void;
   onUpdateProject: (project: Project) => Promise<void>;
   onBack: () => void;
-  onAutomationStart?: () => void;
+  onAutomationStart?: (maxRuns: number | null) => void;
+  onAutomationStartFailed?: () => void;
   onLogEntry?: (message: string) => void;
 }
 
@@ -384,6 +385,7 @@ export function BattlePage({
   onUpdateProject,
   onBack,
   onAutomationStart,
+  onAutomationStartFailed,
   onLogEntry,
 }: BattlePageProps) {
   const [running, setRunning] = useState(false);
@@ -455,9 +457,11 @@ export function BattlePage({
       draftRef.current?.projectId === selectedProject.id
         ? draftRef.current
         : projectDraftFromProject(selectedProject);
+    const maxMissionRuns =
+      latestDraft.repeatMode === "count" ? latestDraft.repeatCount : null;
     setRunning(true);
     setStopAfterCurrentRequested(false);
-    onAutomationStart?.();
+    onAutomationStart?.(maxMissionRuns);
 
     const supportSlot = selectedProject.slots?.find((slot) => slot.type === "support");
     const servantSelections =
@@ -470,8 +474,6 @@ export function BattlePage({
         .filter((selection): selection is { memberId: string; slotIndex: number; servantId: number } =>
           selection != null
         ) ?? [];
-    const maxMissionRuns =
-      latestDraft.repeatMode === "count" ? latestDraft.repeatCount : null;
     const stopOnFiveStarCeDrop = projectStopsOnFiveStarCeDrop(selectedProject);
     const config = {
       projectId: selectedProject.id,
@@ -520,11 +522,13 @@ export function BattlePage({
 
     invoke("start_automation", { config }).catch((err) => {
       onLogEntry?.(`启动失败: ${String(err)}`);
+      onAutomationStartFailed?.();
       setRunning(false);
       setStopAfterCurrentRequested(false);
     });
   }, [
     onAutomationStart,
+    onAutomationStartFailed,
     onLogEntry,
     selectedProject,
     validateGrandServants,

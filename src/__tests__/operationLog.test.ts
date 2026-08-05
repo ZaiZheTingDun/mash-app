@@ -59,6 +59,35 @@ describe("appendCoalescedOperationLog", () => {
     ]);
   });
 
+  it("drops the same event delivered twice by overlapping listeners", () => {
+    const entry = log("12:00:00", "打开御主技能面板");
+
+    const next = appendCoalescedOperationLog([entry], { ...entry });
+
+    expect(next).toEqual([entry]);
+  });
+
+  it("keeps same-second messages when their structured action differs", () => {
+    const first: OperationLogEntry = {
+      ...log("12:00:00", "御主技能"),
+      action: {
+        kind: "equipmentSkill",
+        skillIndex: 0,
+        targetServantId: null,
+      },
+    };
+    const second: OperationLogEntry = {
+      ...log("12:00:00", "御主技能"),
+      action: {
+        kind: "equipmentSkill",
+        skillIndex: 1,
+        targetServantId: null,
+      },
+    };
+
+    expect(appendCoalescedOperationLog([first], second)).toEqual([first, second]);
+  });
+
   it("updates repeated waiting logs ending with an ellipsis", () => {
     const logs = [log("12:00:00", "等待战斗动作…")];
 

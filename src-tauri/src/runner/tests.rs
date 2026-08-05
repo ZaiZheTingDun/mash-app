@@ -1,6 +1,53 @@
 use super::*;
 
 #[test]
+fn battle_run_progress_serializes_all_recovery_counts() {
+    let mut usage = BattleRunApRecoveryUsage::default();
+    for item in [
+        ApRecoveryItem::Gold,
+        ApRecoveryItem::Silver,
+        ApRecoveryItem::Bronze,
+        ApRecoveryItem::Copper,
+        ApRecoveryItem::Rainbow,
+    ] {
+        usage.increment(item);
+    }
+    let value = serde_json::to_value(BattleRunProgressEvent {
+        completed_runs: 15,
+        max_runs: Some(30),
+        ap_recovery_usage: usage,
+    })
+    .unwrap();
+
+    assert_eq!(value["completedRuns"], 15);
+    assert_eq!(value["maxRuns"], 30);
+    for key in ["gold", "silver", "bronze", "copper", "rainbow"] {
+        assert_eq!(value["apRecoveryUsage"][key], 1);
+    }
+}
+
+#[test]
+fn pending_ap_recovery_waits_for_a_recognized_closed_screen() {
+    let item = ApRecoveryItem::Gold;
+    assert_eq!(
+        resolve_pending_ap_recovery_item(Some(item), Screen::Unknown),
+        (Some(item), None)
+    );
+    assert_eq!(
+        resolve_pending_ap_recovery_item(Some(item), Screen::TeamConfirm),
+        (None, Some(item))
+    );
+}
+
+#[test]
+fn pending_ap_recovery_is_not_counted_when_the_dialog_remains_open() {
+    assert_eq!(
+        resolve_pending_ap_recovery_item(Some(ApRecoveryItem::Silver), Screen::APRecovery),
+        (None, None)
+    );
+}
+
+#[test]
 fn unknown_screen_wait_message_includes_localized_server() {
     assert_eq!(
         super::engine::unknown_screen_wait_message(Server::Cn, 1, 75),

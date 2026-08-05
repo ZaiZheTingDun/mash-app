@@ -10,6 +10,7 @@ import {
   SunIcon,
   Cross1Icon,
   GearIcon,
+  ClockIcon,
 } from "@radix-ui/react-icons";
 import { convertFileSrc, invoke, listen } from "../../tauri";
 import type {
@@ -25,6 +26,8 @@ import { SERVER_LABELS, type Server } from "../../types/server";
 import type { Servant } from "../../types/servant";
 import type { AppTheme, AppThemePreference } from "../../types/theme";
 import { isAutomationRunning, type AutomationStatus } from "../../types/automation";
+import type { BattleRunStatus } from "../../types/battleRunStatus";
+import { BattleRunStatusPanel } from "./BattleRunStatusPanel";
 
 type LogLevel = "info" | "warn" | "debug" | "localDebug";
 
@@ -585,6 +588,9 @@ interface StatusBarProps {
   servants?: Servant[];
   operationLogOpen?: boolean;
   onOperationLogOpenChange?: (open: boolean) => void;
+  battleRunStatus?: BattleRunStatus | null;
+  battleRunStatusOpen?: boolean;
+  onBattleRunStatusOpenChange?: (open: boolean) => void;
   updateAvailable?: boolean;
   updateChecking?: boolean;
   updateInstalling?: boolean;
@@ -603,6 +609,9 @@ export function StatusBar({
   servants = [],
   operationLogOpen = false,
   onOperationLogOpenChange,
+  battleRunStatus = null,
+  battleRunStatusOpen = false,
+  onBattleRunStatusOpenChange,
   updateAvailable = false,
   updateChecking = false,
   updateInstalling = false,
@@ -1053,6 +1062,12 @@ export function StatusBar({
           </Box>
         </Box>
       )}
+      {battleRunStatusOpen && (
+        <BattleRunStatusPanel
+          status={battleRunStatus}
+          onClose={() => onBattleRunStatusOpenChange?.(false)}
+        />
+      )}
       <Flex className="status-bar" align="center" justify="between">
         <Flex align="center">
           {onOpenSettings && (
@@ -1081,6 +1096,21 @@ export function StatusBar({
               <Text size="1">
                 操作日志{userFacingLogCount > 0 ? ` (${userFacingLogCount})` : ""}
               </Text>
+          </Button>
+          <Button
+            type="button"
+            size="1"
+            variant="solid"
+            color="gray"
+            className="status-run-btn"
+            aria-pressed={battleRunStatusOpen}
+            onClick={() => onBattleRunStatusOpenChange?.(!battleRunStatusOpen)}
+          >
+            <ClockIcon width={14} height={14} />
+            <Text size="1">
+              运行状态
+              {battleRunStatus != null ? `（${battleRunStatus.completedRuns} 次）` : ""}
+            </Text>
           </Button>
         </Flex>
 

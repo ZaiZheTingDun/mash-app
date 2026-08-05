@@ -23,6 +23,7 @@ impl Runner {
 
     pub fn run(mut self) {
         self.transition_lifecycle(RunnerLifecycleEvent::WorkerStarted);
+        self.emit_run_progress();
         self.emit("", "自动化已启动");
 
         let mut unknown_count: u32 = 0;
@@ -43,6 +44,8 @@ impl Runner {
                     return;
                 }
             };
+
+            self.resolve_pending_ap_recovery(screen);
 
             if screen != Screen::BattleResultContinue {
                 self.battle_result_continue_handled = false;

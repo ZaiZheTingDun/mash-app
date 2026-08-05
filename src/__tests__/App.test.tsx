@@ -98,6 +98,26 @@ describe("App active project restore", () => {
     expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
   });
 
+  it("switches operation-log and run-status panels exclusively", async () => {
+    installAppMock("project-1");
+    const user = userEvent.setup();
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /操作日志/ }));
+    expect(screen.getByRole("button", { name: "关闭操作日志" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "运行状态" }));
+    expect(screen.queryByRole("button", { name: "关闭操作日志" })).not.toBeInTheDocument();
+    expect(screen.getByText("尚无运行记录")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /操作日志/ }));
+    expect(screen.queryByText("尚无运行记录")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "关闭操作日志" })).toBeInTheDocument();
+  });
+
   it("keeps the shared operation log collapsed when CE automation starts", async () => {
     installAppMock("project-1");
     const user = userEvent.setup();

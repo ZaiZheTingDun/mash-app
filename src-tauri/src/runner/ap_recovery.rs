@@ -47,6 +47,27 @@ pub(crate) enum ApRecoveryCloseObservation {
     Obscured,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ApRecoveryUseOutcome {
+    Confirmed,
+    Pending,
+    Failed,
+}
+
+pub(crate) fn resolve_pending_ap_recovery_item(
+    pending: Option<ApRecoveryItem>,
+    screen: Screen,
+) -> (Option<ApRecoveryItem>, Option<ApRecoveryItem>) {
+    let Some(item) = pending else {
+        return (None, None);
+    };
+    match screen {
+        Screen::Unknown => (Some(item), None),
+        Screen::APRecovery => (None, None),
+        _ => (None, Some(item)),
+    }
+}
+
 pub(crate) fn classify_ap_recovery_close_observation(screen: Screen) -> ApRecoveryCloseObservation {
     match screen {
         Screen::APRecovery => ApRecoveryCloseObservation::StillOpen,
@@ -159,18 +180,22 @@ impl Runner {
         Ok(false)
     }
 
-    fn tap_ap_recovery_item(&mut self, item: ApRecoveryTemplate, point: Point) -> bool {
+    fn tap_ap_recovery_item(
+        &mut self,
+        item: ApRecoveryTemplate,
+        point: Point,
+    ) -> ApRecoveryUseOutcome {
         self.emit("APRecovery", &format!("行动力不足，使用{}", item.label));
         if !self.tap_at("APRecovery", point) {
-            return false;
+            return ApRecoveryUseOutcome::Failed;
         }
         thread::sleep(AP_RECOVERY_TAP_SETTLE);
 
         let Some(confirm_point) = self.wait_for_ap_recovery_confirm(item.item) else {
-            return false;
+            return ApRecoveryUseOutcome::Failed;
         };
         if !self.tap_at("APRecovery", confirm_point) {
-            return false;
+            return ApRecoveryUseOutcome::Failed;
         }
         thread::sleep(AP_RECOVERY_TAP_SETTLE);
         self.wait_for_ap_recovery_to_close()
@@ -203,19 +228,19 @@ impl Runner {
         }
     }
 
-    fn wait_for_ap_recovery_to_close(&mut self) -> bool {
+    fn wait_for_ap_recovery_to_close(&mut self) -> ApRecoveryUseOutcome {
         let start = Instant::now();
         loop {
             if self.is_cancelled() {
-                return false;
+                return ApRecoveryUseOutcome::Failed;
             }
             match self.sidecar().detect(None) {
                 Ok(screen) => match classify_ap_recovery_close_observation(screen) {
                     ApRecoveryCloseObservation::StillOpen => {}
-                    ApRecoveryCloseObservation::Closed => return true,
+                    ApRecoveryCloseObservation::Closed => return ApRecoveryUseOutcome::Confirmed,
                     ApRecoveryCloseObservation::Obscured => {
                         self.emit_debug("APRecovery", "确认后画面暂时无法识别，交回主循环处理");
-                        return true;
+                        return ApRecoveryUseOutcome::Pending;
                     }
                 },
                 Err(err) => {
@@ -224,9 +249,26 @@ impl Runner {
             }
             if start.elapsed() >= AP_RECOVERY_CLOSE_TIMEOUT {
                 self.emit_warn("APRecovery", "等待行动力回复页面关闭超时，返回主循环重试");
-                return false;
+                return ApRecoveryUseOutcome::Failed;
             }
             thread::sleep(AP_RECOVERY_CLOSE_POLL);
+        }
+    }
+
+    pub(crate) fn resolve_pending_ap_recovery(&mut self, screen: Screen) {
+        let (pending, confirmed) =
+            resolve_pending_ap_recovery_item(self.pending_ap_recovery_item, screen);
+        self.pending_ap_recovery_item = pending;
+        if let Some(item) = confirmed {
+            self.record_ap_recovery_usage(item);
+        }
+    }
+
+    fn finish_ap_recovery_attempt(&mut self, item: ApRecoveryItem, outcome: ApRecoveryUseOutcome) {
+        match outcome {
+            ApRecoveryUseOutcome::Confirmed => self.record_ap_recovery_usage(item),
+            ApRecoveryUseOutcome::Pending => self.pending_ap_recovery_item = Some(item),
+            ApRecoveryUseOutcome::Failed => {}
         }
     }
 
@@ -253,7 +295,8 @@ impl Runner {
         for item in self.ap_recovery_candidates(ApRecoveryPage::Top) {
             match self.find_ap_recovery_item(item) {
                 Ok(Some(point)) => {
-                    self.tap_ap_recovery_item(item, point);
+                    let outcome = self.tap_ap_recovery_item(item, point);
+                    self.finish_ap_recovery_attempt(item.item, outcome);
                     return;
                 }
                 Ok(None) => {}
@@ -285,7 +328,8 @@ impl Runner {
         for item in bottom_items {
             match self.find_ap_recovery_item(item) {
                 Ok(Some(point)) => {
-                    self.tap_ap_recovery_item(item, point);
+                    let outcome = self.tap_ap_recovery_item(item, point);
+                    self.finish_ap_recovery_attempt(item.item, outcome);
                     return;
                 }
                 Ok(None) => {}

@@ -177,6 +177,8 @@ pub struct Runner {
     /// and replay the same targets without repeating command-card/NP CV.
     last_attack_plan: Option<AttackRetryPlan>,
     completed_mission_runs: u32,
+    ap_recovery_usage: BattleRunApRecoveryUsage,
+    pending_ap_recovery_item: Option<ApRecoveryItem>,
     five_star_ce_drop_count: u32,
     /// The normal bond result may reappear after its level-up overlay closes.
     /// Keep its settlement log to one entry per result sequence.
@@ -248,6 +250,8 @@ impl Runner {
             battle: BattleState::new(),
             last_attack_plan: None,
             completed_mission_runs: 0,
+            ap_recovery_usage: BattleRunApRecoveryUsage::default(),
+            pending_ap_recovery_item: None,
             five_star_ce_drop_count: 0,
             battle_result_bond_handled: false,
             battle_result_loot_handled: false,

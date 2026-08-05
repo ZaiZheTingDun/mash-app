@@ -66,12 +66,32 @@
   color: var(--gray-9);
 }
 
+.battle-run-status-items {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.battle-run-status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.battle-run-status-item-image {
+  width: 23px;
+  height: 23px;
+  object-fit: contain;
+}
+
 .operation-log-entry {
   display: flex;
   gap: 10px;
 }
 
 .operation-log-time {
+  width: 88px;
   color: var(--gray-9);
   flex-shrink: 0;
 }
@@ -652,6 +672,7 @@
 
 /* TODO: consinder to have a common class */
 .status-log-btn,
+.status-run-btn,
 .status-settings-btn,
 .status-debug-btn,
 .status-update-btn,
@@ -664,6 +685,7 @@
 }
 
 .status-log-btn,
+.status-run-btn,
 .status-settings-btn,
 .status-debug-btn,
 .status-update-btn,
@@ -676,6 +698,8 @@
 .status-settings-btn:hover,
 .status-log-btn:hover,
 .status-log-btn[aria-pressed="true"],
+.status-run-btn:hover,
+.status-run-btn[aria-pressed="true"],
 .status-theme-btn:hover {
   background: var(--fgo-control-hover);
   color: var(--gray-12);
@@ -684,6 +708,7 @@
 .status-debug-btn:focus-visible,
 .status-settings-btn:focus-visible,
 .status-log-btn:focus-visible,
+.status-run-btn:focus-visible,
 .status-update-btn:focus-visible,
 .status-theme-btn:focus-visible {
   outline: 2px solid var(--blue-8);

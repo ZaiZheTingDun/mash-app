@@ -76,6 +76,9 @@ export function appendCoalescedOperationLog(
   logs: OperationLogEntry[],
   entry: OperationLogEntry,
 ): OperationLogEntry[] {
+  const previous = logs[logs.length - 1];
+  if (previous && operationLogEntriesEqual(previous, entry)) return logs;
+
   const coalesceKey = operationLogCoalesceKey(entry.message);
   if (!coalesceKey) return trimOperationLogs([...logs, entry]);
 
@@ -92,6 +95,19 @@ export function appendCoalescedOperationLog(
 
   return trimOperationLogs(
     logs.map((log, index) => (index === matchingIndex ? entry : log))
+  );
+}
+
+function operationLogEntriesEqual(
+  left: OperationLogEntry,
+  right: OperationLogEntry,
+): boolean {
+  return (
+    left.time === right.time &&
+    left.message === right.message &&
+    left.level === right.level &&
+    JSON.stringify(left.attack ?? null) === JSON.stringify(right.attack ?? null) &&
+    JSON.stringify(left.action ?? null) === JSON.stringify(right.action ?? null)
   );
 }
 

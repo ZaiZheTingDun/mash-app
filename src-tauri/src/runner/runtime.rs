@@ -87,6 +87,22 @@ impl Runner {
         );
     }
 
+    pub(crate) fn emit_run_progress(&self) {
+        let _ = self.app_handle.emit(
+            "battle-run-progress",
+            BattleRunProgressEvent {
+                completed_runs: self.completed_mission_runs,
+                max_runs: self.config.max_mission_runs,
+                ap_recovery_usage: self.ap_recovery_usage.clone(),
+            },
+        );
+    }
+
+    pub(crate) fn record_ap_recovery_usage(&mut self, item: ApRecoveryItem) {
+        self.ap_recovery_usage.increment(item);
+        self.emit_run_progress();
+    }
+
     pub(crate) fn sidecar(&mut self) -> &mut SidecarClient {
         self.sidecar.as_mut().expect("runner sidecar missing")
     }

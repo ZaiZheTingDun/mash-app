@@ -515,6 +515,7 @@ impl Runner {
         self.battle_result_continue_handled = true;
 
         self.completed_mission_runs += 1;
+        self.emit_run_progress();
         let reached_run_cap = self
             .config
             .max_mission_runs

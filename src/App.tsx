@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { invoke, listen } from "./tauri";
@@ -37,6 +37,11 @@ import type { SelfCheckStatus } from "./types/selfCheck";
 import type { AppTheme, AppThemePreference } from "./types/theme";
 import type { AdvancedBattleScene, BattleScene } from "./types/command";
 import type { AutomationStatus } from "./types/automation";
+import {
+  EMPTY_AP_RECOVERY_USAGE,
+  type BattleRunProgressEvent,
+  type BattleRunStatus,
+} from "./types/battleRunStatus";
 import {
   appendCoalescedOperationLog,
   type ActionLogMeta,
@@ -100,6 +105,8 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [setupReady, setSetupReady] = useState(false);
   const [operationLogs, setOperationLogs] = useState<OperationLogEntry[]>([]);
   const [operationLogOpen, setOperationLogOpen] = useState(false);
+  const [battleRunStatus, setBattleRunStatus] = useState<BattleRunStatus | null>(null);
+  const [battleRunStatusOpen, setBattleRunStatusOpen] = useState(false);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [softwareUpdateOpen, setSoftwareUpdateOpen] = useState(false);
   const [updateChecking, setUpdateChecking] = useState(false);
@@ -110,6 +117,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   const [selfCheckLoading, setSelfCheckLoading] = useState(false);
   const [selfCheckStatus, setSelfCheckStatus] = useState<SelfCheckStatus | null>(null);
   const [selfCheckError, setSelfCheckError] = useState<string | null>(null);
+  const automationListenerGenerationRef = useRef(0);
 
   const appendOperationLog = useCallback(
     (
@@ -131,11 +139,47 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
 
   const handleAutomationStart = useCallback(() => {
     setOperationLogs([]);
+    setBattleRunStatusOpen(false);
     setOperationLogOpen(true);
+  }, []);
+
+  const handleBattleAutomationStart = useCallback((maxRuns: number | null) => {
+    const startedAtMs = Date.now();
+    setBattleRunStatus({
+      phase: "starting",
+      startedAtMs,
+      endedAtMs: null,
+      lastCompletedAtMs: null,
+      completedRuns: 0,
+      maxRuns,
+      apRecoveryUsage: { ...EMPTY_AP_RECOVERY_USAGE },
+    });
+    setBattleRunStatusOpen(false);
+    setOperationLogs([]);
+    setOperationLogOpen(true);
+  }, []);
+
+  const handleBattleAutomationStartFailed = useCallback(() => {
+    setBattleRunStatus((current) =>
+      current == null || current.endedAtMs != null
+        ? current
+        : { ...current, phase: "error", endedAtMs: Date.now() }
+    );
+  }, []);
+
+  const handleOperationLogOpenChange = useCallback((open: boolean) => {
+    setOperationLogOpen(open);
+    if (open) setBattleRunStatusOpen(false);
+  }, []);
+
+  const handleBattleRunStatusOpenChange = useCallback((open: boolean) => {
+    setBattleRunStatusOpen(open);
+    if (open) setOperationLogOpen(false);
   }, []);
 
   const handleStandaloneAutomationStart = useCallback(() => {
     setOperationLogs([]);
+    setBattleRunStatusOpen(false);
     setOperationLogOpen(false);
   }, []);
 
@@ -143,14 +187,14 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     setUpdateChecking(true);
     setUpdateProgressText(null);
     if (manual) {
-      setOperationLogOpen(true);
+      handleOperationLogOpenChange(true);
     }
     appendOperationLog("正在检查更新…");
     try {
       const update = await check();
       if (update) {
         setAvailableUpdate(update);
-        setOperationLogOpen(true);
+        handleOperationLogOpenChange(true);
         if (manual) {
           setUpdateInstallError(null);
           setSoftwareUpdateOpen(true);
@@ -167,7 +211,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     } finally {
       setUpdateChecking(false);
     }
-  }, [appendOperationLog]);
+  }, [appendOperationLog, handleOperationLogOpenChange]);
 
   const runSelfCheck = useCallback(async () => {
     setSelfCheckOpen(true);
@@ -185,7 +229,7 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
   }, []);
 
   const saveAdbScreenshot = useCallback(async () => {
-    setOperationLogOpen(true);
+    handleOperationLogOpenChange(true);
     appendOperationLog("正在通过 ADB 截取原始截图...");
     try {
       const savedPath = await invoke<string | null>("save_adb_screenshot");
@@ -197,13 +241,13 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     } catch (err) {
       appendOperationLog(`截图失败: ${String(err)}`);
     }
-  }, [appendOperationLog]);
+  }, [appendOperationLog, handleOperationLogOpenChange]);
 
   const handleInstallUpdate = useCallback(async () => {
     if (!availableUpdate || updateInstalling) return;
     setUpdateInstalling(true);
     setUpdateInstallError(null);
-    setOperationLogOpen(true);
+    handleOperationLogOpenChange(true);
     setUpdateProgressText("准备下载");
     appendOperationLog(`开始下载更新 ${availableUpdate.version}…`);
 
@@ -235,43 +279,93 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
     } finally {
       setUpdateInstalling(false);
     }
-  }, [appendOperationLog, availableUpdate, updateInstalling]);
+  }, [appendOperationLog, availableUpdate, handleOperationLogOpenChange, updateInstalling]);
 
   useEffect(() => {
+    const listenerGeneration = ++automationListenerGenerationRef.current;
+    const isCurrentListenerGeneration = () =>
+      automationListenerGenerationRef.current === listenerGeneration;
     const unlistenBattle = listen<AutomationEvent>("automation-status", (event) => {
+      if (!isCurrentListenerGeneration()) return;
       appendOperationLog(
         event.payload.message,
         event.payload.level ?? "info",
         event.payload.attack ?? null,
         event.payload.action ?? null,
       );
+      setBattleRunStatus((current) => {
+        if (current == null) return current;
+        const { status } = event.payload;
+        if (status === "starting" || status === "running") {
+          return { ...current, phase: status, endedAtMs: null };
+        }
+        if (current.endedAtMs != null) return current;
+        return {
+          ...current,
+          phase:
+            status === "finished"
+              ? "finished"
+              : status === "error"
+                ? "error"
+                : "stopped",
+          endedAtMs: Date.now(),
+        };
+      });
     });
+    const unlistenBattleProgress = listen<BattleRunProgressEvent>(
+      "battle-run-progress",
+      (event) => {
+        if (!isCurrentListenerGeneration()) return;
+        const receivedAtMs = Date.now();
+        setBattleRunStatus((current) => {
+          if (current == null) return current;
+          const completedAdvanced = event.payload.completedRuns > current.completedRuns;
+          return {
+            ...current,
+            completedRuns: event.payload.completedRuns,
+            maxRuns: event.payload.maxRuns,
+            apRecoveryUsage: event.payload.apRecoveryUsage,
+            lastCompletedAtMs: completedAdvanced
+              ? receivedAtMs
+              : current.lastCompletedAtMs,
+          };
+        });
+      }
+    );
     const unlistenEnhancement = listen<AutomationEvent>(
       "enhancement-automation-status",
       (event) => {
+        if (!isCurrentListenerGeneration()) return;
         appendOperationLog(event.payload.message, event.payload.level ?? "info");
       }
     );
     const unlistenCraftEssenceEnhancement = listen<AutomationEvent>(
       "craft-essence-enhancement-automation-status",
       (event) => {
+        if (!isCurrentListenerGeneration()) return;
         appendOperationLog(event.payload.message, event.payload.level ?? "info");
       }
     );
     const unlistenFriendPointSummon = listen<AutomationEvent>(
       "friend-point-summon-automation-status",
       (event) => {
+        if (!isCurrentListenerGeneration()) return;
         appendOperationLog(event.payload.message, event.payload.level ?? "info");
       }
     );
     const unlistenOperationDebug = listen<OperationDebugEvent>(
       "operation-debug-log",
       (event) => {
+        if (!isCurrentListenerGeneration()) return;
         appendOperationLog(event.payload.message, "debug");
       }
     );
     return () => {
+      if (automationListenerGenerationRef.current === listenerGeneration) {
+        automationListenerGenerationRef.current += 1;
+      }
       unlistenBattle.then((fn) => fn());
+      unlistenBattleProgress.then((fn) => fn());
       unlistenEnhancement.then((fn) => fn());
       unlistenCraftEssenceEnhancement.then((fn) => fn());
       unlistenFriendPointSummon.then((fn) => fn());
@@ -701,7 +795,8 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
               onOpenProjectSettings={handleOpenProjectSettings}
               onUpdateProject={handleUpdateProject}
               onBack={handleBackToConfig}
-              onAutomationStart={handleAutomationStart}
+              onAutomationStart={handleBattleAutomationStart}
+              onAutomationStartFailed={handleBattleAutomationStartFailed}
               onLogEntry={appendOperationLog}
             />
           ) : view === "enhancement" && featureToggles.servantEnhancement ? (
@@ -885,7 +980,10 @@ function App({ theme, themePreference, onThemeChange }: AppProps) {
         operationLogs={operationLogs}
         servants={servants}
         operationLogOpen={operationLogOpen}
-        onOperationLogOpenChange={setOperationLogOpen}
+        onOperationLogOpenChange={handleOperationLogOpenChange}
+        battleRunStatus={battleRunStatus}
+        battleRunStatusOpen={battleRunStatusOpen}
+        onBattleRunStatusOpenChange={handleBattleRunStatusOpenChange}
         updateAvailable={availableUpdate != null}
         updateChecking={updateChecking}
         updateInstalling={updateInstalling}

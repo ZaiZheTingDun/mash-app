@@ -114,6 +114,61 @@ describe("StatusBar", () => {
     });
   });
 
+  it("shows an empty run-status panel and closes it", async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    renderWithTheme(
+      <StatusBar
+        battleRunStatusOpen
+        onBattleRunStatusOpenChange={onOpenChange}
+      />
+    );
+
+    expect(screen.getByText("尚无运行记录")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "关闭运行状态" }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("renders completed runs, frozen duration, estimate and non-zero recovery items", () => {
+    renderWithTheme(
+      <StatusBar
+        battleRunStatusOpen
+        battleRunStatus={{
+          phase: "finished",
+          startedAtMs: 0,
+          endedAtMs: 6_800_000,
+          lastCompletedAtMs: 6_800_000,
+          completedRuns: 30,
+          maxRuns: 30,
+          apRecoveryUsage: {
+            gold: 1,
+            silver: 2,
+            bronze: 0,
+            copper: 0,
+            rainbow: 0,
+          },
+        }}
+      />
+    );
+
+    expect(screen.getByText("30 次 / 30 次")).toBeInTheDocument();
+    expect(screen.getByText("1 小时 53 分钟 20 秒")).toBeInTheDocument();
+    expect(screen.getByText("已完成")).toBeInTheDocument();
+    expect(screen.getByAltText("黄金果实")).toBeInTheDocument();
+    expect(screen.getByAltText("白银果实")).toBeInTheDocument();
+    expect(screen.queryByAltText("青铜果实")).not.toBeInTheDocument();
+    expect(screen.getByText("× 1")).toBeInTheDocument();
+    expect(screen.getByText("× 2")).toBeInTheDocument();
+    expect(screen.getByText("运行状态（30 次）")).toBeInTheDocument();
+  });
+
+  it("keeps the run-status trigger styling aligned with the operation-log trigger", () => {
+    renderWithTheme(<StatusBar />);
+
+    expect(screen.getByRole("button", { name: "操作日志" })).toHaveClass("status-log-btn");
+    expect(screen.getByRole("button", { name: "运行状态" })).toHaveClass("status-run-btn");
+  });
+
   it("dispatches set_server with the chosen value and reverts on backend rejection", async () => {
     // First two `set_server` calls succeed; third one rejects to prove
     // the optimistic update is rolled back on failure.
