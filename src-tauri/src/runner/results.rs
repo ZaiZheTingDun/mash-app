@@ -217,43 +217,40 @@ pub(crate) fn is_battle_result_screen(screen: Screen) -> bool {
 
 impl Runner {
     pub(crate) fn handle_battle_result_bond(&mut self) {
-        if self.config.stop_on_bond_level_up || self.config.stop_on_bond_max_level {
-            let is_level_up_overlay = match self.sidecar().detect_label_full(None) {
-                Ok((label, _score)) => label == BATTLE_RESULT_BOND_LEVEL_UP_LABEL,
+        let detected_label = match self.sidecar().detect_label_full(None) {
+            Ok((label, _score)) => label,
+            Err(err) => {
+                self.emit_warn(
+                    "BattleResultBond",
+                    &format!("牵绊结算页面识别失败，继续结算流程: {err}"),
+                );
+                Screen::BattleResultBond.to_string()
+            }
+        };
+        let is_level_up_overlay = detected_label == BATTLE_RESULT_BOND_LEVEL_UP_LABEL;
+
+        if is_level_up_overlay {
+            // Always read and log the level. Previously this was only called
+            // for the max-level stop setting, leaving ordinary level-up
+            // overlays unobserved and unlogged.
+            let read = match self.sidecar().read_bond_level_up(None, false) {
+                Ok(result) if result.ok => Some(result),
+                Ok(result) => {
+                    let reason = result.reason.unwrap_or_else(|| "未知原因".into());
+                    self.emit_warn(
+                        "BattleResultBond",
+                        &format!("牵绊等级读取失败，继续结算流程: {reason}"),
+                    );
+                    None
+                }
                 Err(err) => {
                     self.emit_warn(
                         "BattleResultBond",
-                        &format!("牵绊升级页面识别失败，继续结算流程: {err}"),
+                        &format!("牵绊等级读取失败，继续结算流程: {err}"),
                     );
-                    false
+                    None
                 }
             };
-            let read = if is_level_up_overlay
-                && self.config.stop_on_bond_max_level
-                && !self.config.stop_on_bond_level_up
-            {
-                match self.sidecar().read_bond_level_up(None, false) {
-                    Ok(result) if result.ok => Some(result),
-                    Ok(result) => {
-                        let reason = result.reason.unwrap_or_else(|| "未知原因".into());
-                        self.emit_warn(
-                            "BattleResultBond",
-                            &format!("牵绊等级读取失败，继续结算流程: {reason}"),
-                        );
-                        None
-                    }
-                    Err(err) => {
-                        self.emit_warn(
-                            "BattleResultBond",
-                            &format!("牵绊等级读取失败，继续结算流程: {err}"),
-                        );
-                        None
-                    }
-                }
-            } else {
-                None
-            };
-
             match bond_result_stop_action(
                 is_level_up_overlay,
                 read.as_ref(),
@@ -261,7 +258,15 @@ impl Runner {
                 self.config.stop_on_bond_max_level,
             ) {
                 BondResultStopAction::StopOnLevelUp => {
-                    self.emit("BattleResultBond", "检测到牵绊等级提升，自动停止");
+                    let level = read
+                        .as_ref()
+                        .and_then(|result| result.bond_level_after)
+                        .map(|level| format!("至 {level}"))
+                        .unwrap_or_default();
+                    self.emit(
+                        "BattleResultBond",
+                        &format!("检测到牵绊等级提升{level}，自动停止"),
+                    );
                     self.transition_lifecycle(RunnerLifecycleEvent::Finished);
                     return;
                 }
@@ -279,12 +284,25 @@ impl Runner {
                 }
                 BondResultStopAction::Continue => {}
             }
+
+            if let Some(level) = read.and_then(|result| result.bond_level_after) {
+                self.emit(
+                    "BattleResultBond",
+                    &format!("牵绊等级提升至 {level}，前往下一画面"),
+                );
+            } else {
+                self.emit("BattleResultBond", "牵绊等级提升，前往下一画面");
+            }
+        } else {
+            if !self.battle_result_bond_handled {
+                self.battle_result_bond_handled = true;
+                self.emit("BattleResultBond", "羁绊点数结算，前往下一画面");
+            }
         }
 
-        self.emit("BattleResultBond", "羁绊点数结算，前往下一画面");
-        self.tap_until_screen_changes(
+        self.tap_until_screen_label_changes(
             "BattleResultBond",
-            Screen::BattleResultBond,
+            &detected_label,
             BATTLE_RESULT_BOND_NEXT,
             BATTLE_RESULT_TAP_INTERVAL,
             BATTLE_RESULT_TAP_TIMEOUT,

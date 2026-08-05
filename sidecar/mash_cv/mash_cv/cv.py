@@ -1922,8 +1922,6 @@ BOND_LEVEL_DIGIT_SCORE_MARGIN = 0.12
 BOND_LEVEL_DIGIT_MIN_HEIGHT = 0.04
 BOND_LEVEL_SERVANT_MATCH_THRESHOLD = 0.72
 BOND_LEVEL_TEMPLATE_SCALES = (1.0, 1.4, 1.8, 2.0, 2.2, 2.4, 2.5, 2.6, 2.8, 3.0)
-
-
 LEVEL_DIGIT_TEMPLATE_PREFIX = "digit_v2/digit_"
 LEVEL_DIGIT_TEMPLATE_SUFFIX = "_v2"
 LEVEL_DIGIT_BRIGHT_THRESHOLD = 220
@@ -2480,6 +2478,19 @@ def _read_bond_level_up(img: np.ndarray, debug: bool = False) -> dict:
         diag["failReason"] = "bond_level_not_found"
         return {"ok": False, "reason": diag["failReason"], **({"diagnostics": diag} if debug else {})}
 
+    # The level itself is the only datum required to apply the max-level
+    # stopping rule. Name OCR is useful context for logs/debugging but must
+    # not turn a correctly read level into a failed result: coin rows can be
+    # absent while their reveal animation is still running.
+    out = {
+        "ok": True,
+        "bondLevelAfter": int(level["value"]),
+        "confidence": {
+            "anchor": float(anchor["score"]),
+            "bondLevelAfter": float(level["score"]),
+        },
+    }
+
     ocr = _ocr_region(img, read.get("servantOcrRegion", DEFAULT_REGION))
     diag["ocr"] = ocr
     keywords = [str(k) for k in read.get("servantCoinKeywords", []) if k]
@@ -2488,8 +2499,10 @@ def _read_bond_level_up(img: np.ndarray, debug: bool = False) -> dict:
     diag["ocrRows"] = rows
     coin_rows = [row for row in rows if _row_matches_keyword(str(row.get("text", "")), keywords)]
     if not coin_rows:
-        diag["failReason"] = "servant_coin_row_not_found"
-        return {"ok": False, "reason": diag["failReason"], **({"diagnostics": diag} if debug else {})}
+        diag["servantReadReason"] = "servant_coin_row_not_found"
+        if debug:
+            out["diagnostics"] = diag
+        return out
 
     best_candidate: Optional[dict] = None
     for row in coin_rows:
@@ -2505,24 +2518,20 @@ def _read_bond_level_up(img: np.ndarray, debug: bool = False) -> dict:
             best_candidate = candidate
     diag["servantCandidates"] = [best_candidate] if best_candidate else []
     if best_candidate is None or float(best_candidate["match"]["score"]) < BOND_LEVEL_SERVANT_MATCH_THRESHOLD:
-        diag["failReason"] = "servant_match_low_confidence"
-        return {"ok": False, "reason": diag["failReason"], **({"diagnostics": diag} if debug else {})}
+        diag["servantReadReason"] = "servant_match_low_confidence"
+        if debug:
+            out["diagnostics"] = diag
+        return out
 
     match = best_candidate["match"]
-    out = {
-        "ok": True,
-        "bondLevelAfter": int(level["value"]),
+    out.update({
         "servantName": best_candidate["rawName"],
         "servantNameMatched": match["name"],
         "servantId": match["id"],
         "servantCollectionNo": match["collectionNo"],
         "servantMatchScore": float(match["score"]),
-        "confidence": {
-            "anchor": float(anchor["score"]),
-            "bondLevelAfter": float(level["score"]),
-            "servantOcr": float(best_candidate["ocrConfidence"]),
-        },
-    }
+    })
+    out["confidence"]["servantOcr"] = float(best_candidate["ocrConfidence"])
     if debug:
         out["diagnostics"] = diag
     return out

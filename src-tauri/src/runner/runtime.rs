@@ -249,6 +249,48 @@ impl Runner {
         }
     }
 
+    /// Like [`Self::tap_until_screen_changes`], but preserves the sidecar's
+    /// raw screen label. Result overlays such as `BattleResultBondLevelUp`
+    /// intentionally map to the same public `Screen` variant as their base
+    /// result page, so comparing only `Screen` would tap straight through the
+    /// overlay and make the next main-loop pass handle it as the base page.
+    pub(crate) fn tap_until_screen_label_changes(
+        &mut self,
+        screen_label: &str,
+        from_label: &str,
+        point: Point,
+        interval: Duration,
+        timeout: Duration,
+    ) -> bool {
+        let start = std::time::Instant::now();
+        let mut taps: u32 = 0;
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+            if !self.tap_at(screen_label, point) {
+                return false;
+            }
+            taps += 1;
+            thread::sleep(interval);
+            let detected = self
+                .sidecar()
+                .detect_label_full(None)
+                .map(|(label, _)| label)
+                .unwrap_or_else(|_| from_label.to_string());
+            if detected != from_label {
+                return true;
+            }
+            if start.elapsed() >= timeout {
+                self.emit(
+                    screen_label,
+                    &format!("等待画面切换超时 (已点击 {taps} 次)"),
+                );
+                return false;
+            }
+        }
+    }
+
     pub(crate) fn wait_for_element_visible(
         &mut self,
         screen: &str,

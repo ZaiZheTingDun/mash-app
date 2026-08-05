@@ -797,6 +797,47 @@ class TestDetectScreen:
         assert result["confidence"]["bondLevelAfter"] >= 0.85
         assert result["servantMatchScore"] >= 0.72
 
+    def test_bond_level_reader_keeps_level_when_servant_ocr_is_not_ready(self, monkeypatch):
+        """Delayed coin-row reveal must not discard a correctly read level."""
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "templates"
+        )
+        cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "cv.json"
+        )
+        screenshot = os.path.join(
+            os.path.dirname(__file__),
+            "test_data",
+            "screenshots",
+            "battle_result_bond_level_up_cn_level_6.png",
+        )
+        if not (
+            os.path.isdir(templates_dir)
+            and os.path.isfile(cv_json)
+            and os.path.isfile(screenshot)
+        ):
+            pytest.skip("CN production resources or fixture not available")
+
+        mash_cv._load_templates(templates_dir)
+        mash_cv._load_config(cv_json)
+        img = cv2.imread(screenshot)
+        assert img is not None
+        monkeypatch.setattr(
+            mash_cv.cv,
+            "_ocr_region",
+            lambda _img, _region: {"fragments": [], "fullText": ""},
+        )
+
+        result = mash_cv._read_bond_level_up(img, debug=True)
+
+        assert result["ok"] is True, result.get("diagnostics")
+        assert result["bondLevelAfter"] == 6
+        assert result.get("servantNameMatched") is None
+        assert result["diagnostics"]["servantReadReason"] == "servant_coin_row_not_found"
+
     @pytest.mark.parametrize(
         "screenshot_name",
         [

@@ -50,6 +50,9 @@ impl Runner {
             if screen != Screen::BattleResultLoot {
                 self.battle_result_loot_handled = false;
             }
+            if screen != Screen::BattleResultBond {
+                self.battle_result_bond_handled = false;
+            }
 
             match screen {
                 Screen::TeamConfirm => {
