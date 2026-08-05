@@ -401,6 +401,18 @@ describe("SettingsDialog", () => {
     expect(screen.getByRole("switch", { name: "牵绊升级时自动截图" })).toBeChecked();
   });
 
+  it("opens the bond level-up screenshot folder", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="basic" />);
+
+    await user.click(await screen.findByRole("button", { name: "打开截图文件夹" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("open_bond_level_up_screenshot_folder");
+    });
+    expect(await screen.findByText("已打开截图文件夹")).toBeInTheDocument();
+  });
+
   it("enabling bond max auto-stop disables bond level-up auto-stop with a tooltip", async () => {
     const user = userEvent.setup();
     renderWithTheme(<SettingsHarness initialSection="basic" />);

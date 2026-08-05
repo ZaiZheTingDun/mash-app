@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Box, Flex, Select, Switch, Text, TextField, Tooltip } from "@radix-ui/themes";
+import { Box, Button, Flex, Select, Switch, Text, TextField, Tooltip } from "@radix-ui/themes";
 import { invoke } from "../../tauri";
 import type { NoblePhantasmDetectionMode, RecognitionSettings } from "../../types/recognition";
 import {
@@ -201,6 +201,20 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
     [applySettings]
   );
 
+  const openBondLevelUpScreenshotFolder = useCallback(async () => {
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
+    try {
+      await invoke("open_bond_level_up_screenshot_folder");
+      setSavedMessage("已打开截图文件夹");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
   const saveVerifySkillActivation = useCallback(async (value: boolean) => {
     setSaving(true);
     setError(null);
@@ -283,14 +297,24 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
             </Text>
           </Flex>
 
-          <Switch
-            checked={autoCaptureBondLevelUp}
-            onCheckedChange={(value) =>
-              void saveBondStopSetting("set_auto_capture_bond_level_up", value)
-            }
-            disabled={saving}
-            aria-label="牵绊升级时自动截图"
-          />
+          <Flex align="center" gap="2">
+            <Button
+              size="1"
+              variant="soft"
+              onClick={() => void openBondLevelUpScreenshotFolder()}
+              disabled={saving}
+            >
+              打开截图文件夹
+            </Button>
+            <Switch
+              checked={autoCaptureBondLevelUp}
+              onCheckedChange={(value) =>
+                void saveBondStopSetting("set_auto_capture_bond_level_up", value)
+              }
+              disabled={saving}
+              aria-label="牵绊升级时自动截图"
+            />
+          </Flex>
         </Flex>
 
         <Flex

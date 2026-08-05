@@ -209,7 +209,7 @@ pub(crate) fn bond_level_up_screenshot_dir(app: &tauri::AppHandle) -> PathBuf {
 }
 
 pub(crate) fn bond_level_up_screenshot_dir_in_root(root: &Path) -> PathBuf {
-    root.join("debug").join("bond-level-up-screenshots")
+    root.join("screenshots").join("bond-level-up")
 }
 
 pub(crate) fn bond_level_up_screenshot_filename(

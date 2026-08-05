@@ -471,13 +471,13 @@ fn unknown_screen_timeout_screenshot_filename_includes_timestamp_and_run() {
 }
 
 #[test]
-fn bond_level_up_screenshot_path_uses_debug_directory_and_sortable_name() {
+fn bond_level_up_screenshot_path_uses_dedicated_directory_and_sortable_name() {
     let root = PathBuf::from("/tmp/mash-app-test");
     let timestamp = std::time::UNIX_EPOCH + Duration::from_millis(12_345);
 
     assert_eq!(
         bond_level_up_screenshot_dir_in_root(&root),
-        root.join("debug").join("bond-level-up-screenshots")
+        root.join("screenshots").join("bond-level-up")
     );
     assert_eq!(
         bond_level_up_screenshot_filename(timestamp, 2),

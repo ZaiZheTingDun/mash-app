@@ -15,13 +15,14 @@ use crate::friend_point_summon_runner::{
     FriendPointSummonRunnerHandle, FriendPointSummonRunnerState,
 };
 use crate::paths::{migrate_legacy_app_data, StartupMigrationStatus};
-use crate::runner::{RunnerHandle, RunnerState};
+use crate::runner::{bond_level_up_screenshot_dir, RunnerHandle, RunnerState};
 use crate::Server;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Mutex;
 use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
 
 pub(crate) const SUPPORT_CE_THRESHOLD_DEFAULT: f64 = 0.70;
 pub(crate) const SUPPORT_CE_THRESHOLD_MIN: f64 = 0.60;
@@ -544,6 +545,15 @@ pub(crate) fn set_auto_capture_bond_level_up(
     *state.lock().unwrap() = next;
     save_recognition_settings(&app, &next)?;
     Ok(next)
+}
+
+#[tauri::command]
+pub(crate) fn open_bond_level_up_screenshot_folder(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = bond_level_up_screenshot_dir(&app);
+    fs::create_dir_all(&dir).map_err(|err| format!("创建牵绊升级截图目录失败: {err}"))?;
+    app.opener()
+        .open_path(dir.to_string_lossy().into_owned(), None::<String>)
+        .map_err(|err| format!("打开牵绊升级截图目录失败: {err}"))
 }
 
 #[tauri::command]
