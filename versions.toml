@@ -3,4 +3,4 @@ version = "0.8.5"
 
 [mash_cv]
 runtime = "2026.05.08-runtime1"
-code = "0.4.15"
+code = "0.4.16"
