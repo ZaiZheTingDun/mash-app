@@ -95,6 +95,23 @@ pub(crate) fn support_grand_section_exhausted_after_probe(
     }
 }
 
+/// Format the normal-log message emitted when a support scan found no
+/// matching servant and will scroll the list. Make the visible Grand-row
+/// detection explicit so operators can distinguish a Grand scan from an
+/// ordinary support-list scroll at a glance.
+pub(crate) fn support_not_found_scroll_message(
+    name: &str,
+    grand_visible_in_grand_mode: bool,
+    attempt: u32,
+) -> String {
+    let (grand_label, scroll_action) = if grand_visible_in_grand_mode {
+        ("冠位", "继续滚动识别冠位从者")
+    } else {
+        ("非冠位", "继续滚动")
+    };
+    format!("未找到从者 {name} [{grand_label}]，{scroll_action} (第 {attempt} 次)")
+}
+
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
@@ -1119,24 +1136,16 @@ impl Runner {
                 result.diagnostics.is_grand_section_visible,
             );
         if !grand_section_exhausted && !self.support_scroll_bar_at_end() {
-            // Surface the Grand-section signal at info level when it
-            // fired this poll, so the operator sees in the log that we
-            // chose to keep scrolling because a 冠位从者 row was still
-            // visible (vs. just hitting the generic "未找到, 滚动" path
-            // on an ordinary list).
+            // Surface the Grand-section signal in the normal log, so the
+            // operator can see whether this scroll continues a Grand scan
+            // or a normal support-list scan.
             let grand_visible_in_grand_mode = self.config.support_grand_mode
                 && result.diagnostics.is_grand_section_visible == Some(true);
-            let scroll_reason = if grand_visible_in_grand_mode {
-                "识别到冠位从者，继续滚动"
-            } else {
-                "滚动列表"
-            };
             self.emit(
                 "SupportSelect",
-                &format!(
-                    "未找到 {}，{} (第 {} 次)",
-                    meta.name,
-                    scroll_reason,
+                &support_not_found_scroll_message(
+                    &meta.name,
+                    grand_visible_in_grand_mode,
                     self.support_scroll_count + 1,
                 ),
             );

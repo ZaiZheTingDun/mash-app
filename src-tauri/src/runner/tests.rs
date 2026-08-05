@@ -5212,6 +5212,18 @@ fn grand_support_section_ignores_unavailable_probe() {
     assert_eq!(misses, 1);
 }
 
+#[test]
+fn support_not_found_scroll_message_labels_grand_and_normal_scans() {
+    assert_eq!(
+        support_not_found_scroll_message("Ｕ－奥尔加玛丽", true, 1),
+        "未找到从者 Ｕ－奥尔加玛丽 [冠位]，继续滚动识别冠位从者 (第 1 次)"
+    );
+    assert_eq!(
+        support_not_found_scroll_message("Ｕ－奥尔加玛丽", false, 1),
+        "未找到从者 Ｕ－奥尔加玛丽 [非冠位]，继续滚动 (第 1 次)"
+    );
+}
+
 fn anchor_at_y(y: f64) -> NormRect {
     NormRect {
         x: 0.846,
