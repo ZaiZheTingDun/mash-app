@@ -316,6 +316,7 @@ pub fn run() {
             commands::settings::set_support_bond_icon_threshold,
             commands::settings::set_stop_on_bond_level_up,
             commands::settings::set_stop_on_bond_max_level,
+            commands::settings::set_auto_capture_bond_level_up,
             commands::settings::set_verify_skill_activation,
             commands::settings::set_enable_extra_class_filter,
             commands::settings::set_unknown_screen_timeout_count,

@@ -16,6 +16,7 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
   const [mode, setMode] = useState<NoblePhantasmDetectionMode>("card");
   const [stopOnBondLevelUp, setStopOnBondLevelUp] = useState(false);
   const [stopOnBondMaxLevel, setStopOnBondMaxLevel] = useState(false);
+  const [autoCaptureBondLevelUp, setAutoCaptureBondLevelUp] = useState(false);
   const [verifySkillActivation, setVerifySkillActivation] = useState(false);
   const [enableExtraClassFilter, setEnableExtraClassFilter] = useState(true);
   const [timeoutCount, setTimeoutCount] = useState(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT);
@@ -32,6 +33,7 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
     setMode(settings.noblePhantasmDetectionMode);
     setStopOnBondLevelUp(settings.stopOnBondLevelUp);
     setStopOnBondMaxLevel(settings.stopOnBondMaxLevel);
+    setAutoCaptureBondLevelUp(settings.autoCaptureBondLevelUp);
     setVerifySkillActivation(settings.verifySkillActivation);
     setEnableExtraClassFilter(settings.enableExtraClassFilter);
     setTimeoutCount(settings.unknownScreenTimeoutCount);
@@ -263,6 +265,32 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
               <Select.Item value="gauge">底部宝具条识别（实验性）</Select.Item>
             </Select.Content>
           </Select.Root>
+        </Flex>
+
+        <Flex
+          align="start"
+          justify="between"
+          gap="4"
+          wrap="wrap"
+          className="basic-setting-row"
+        >
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              牵绊升级时自动截图
+            </Text>
+            <Text size="1" color="gray">
+              出现牵绊等级提升页面时自动保存当前截图
+            </Text>
+          </Flex>
+
+          <Switch
+            checked={autoCaptureBondLevelUp}
+            onCheckedChange={(value) =>
+              void saveBondStopSetting("set_auto_capture_bond_level_up", value)
+            }
+            disabled={saving}
+            aria-label="牵绊升级时自动截图"
+          />
         </Flex>
 
         <Flex

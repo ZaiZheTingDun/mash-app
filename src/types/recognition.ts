@@ -8,6 +8,7 @@ export interface RecognitionSettings {
   supportBondIconThreshold: number;
   stopOnBondLevelUp: boolean;
   stopOnBondMaxLevel: boolean;
+  autoCaptureBondLevelUp: boolean;
   verifySkillActivation: boolean;
   enableExtraClassFilter: boolean;
   unknownScreenTimeoutCount: number;

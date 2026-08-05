@@ -424,6 +424,21 @@ fn unknown_screen_timeout_screenshot_filename_includes_timestamp_and_run() {
 }
 
 #[test]
+fn bond_level_up_screenshot_path_uses_debug_directory_and_sortable_name() {
+    let root = PathBuf::from("/tmp/mash-app-test");
+    let timestamp = std::time::UNIX_EPOCH + Duration::from_millis(12_345);
+
+    assert_eq!(
+        bond_level_up_screenshot_dir_in_root(&root),
+        root.join("debug").join("bond-level-up-screenshots")
+    );
+    assert_eq!(
+        bond_level_up_screenshot_filename(timestamp, 2),
+        "bond-level-up-0000000012345-run0003.jpg"
+    );
+}
+
+#[test]
 fn ce_search_region_identity_row_returns_offset() {
     // A unit row at the origin → the absolute window equals the
     // raw `SUPPORT_CE_OFFSET_IN_ROW` (it's already in unit-row coords).
@@ -547,6 +562,7 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     );
     assert!(!cfg.stop_on_bond_level_up);
     assert!(!cfg.stop_on_bond_max_level);
+    assert!(!cfg.auto_capture_bond_level_up);
     assert_eq!(cfg.support_craft_essence_mlb_required, true);
     assert_eq!(cfg.support_grand_mode, false);
     assert_eq!(cfg.support_grand_craft_essence_ids, [None; 3]);

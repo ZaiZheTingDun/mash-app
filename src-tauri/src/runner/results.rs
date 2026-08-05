@@ -204,6 +204,28 @@ pub(crate) fn unknown_screen_timeout_screenshot_filename(
     )
 }
 
+pub(crate) fn bond_level_up_screenshot_dir(app: &tauri::AppHandle) -> PathBuf {
+    bond_level_up_screenshot_dir_in_root(&app_data_dir(app))
+}
+
+pub(crate) fn bond_level_up_screenshot_dir_in_root(root: &Path) -> PathBuf {
+    root.join("debug").join("bond-level-up-screenshots")
+}
+
+pub(crate) fn bond_level_up_screenshot_filename(
+    timestamp: std::time::SystemTime,
+    completed_mission_runs: u32,
+) -> String {
+    let millis = timestamp
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!(
+        "bond-level-up-{millis:013}-run{:04}.jpg",
+        completed_mission_runs + 1
+    )
+}
+
 pub(crate) fn is_battle_result_screen(screen: Screen) -> bool {
     matches!(
         screen,
@@ -230,6 +252,19 @@ impl Runner {
         let is_level_up_overlay = detected_label == BATTLE_RESULT_BOND_LEVEL_UP_LABEL;
 
         if is_level_up_overlay {
+            if self.config.auto_capture_bond_level_up {
+                match self.capture_bond_level_up_screenshot() {
+                    Ok(path) => self.emit(
+                        "BattleResultBond",
+                        &format!("牵绊升级截图已保存: {}", path.display()),
+                    ),
+                    Err(err) => self.emit_warn(
+                        "BattleResultBond",
+                        &format!("牵绊升级截图保存失败，继续结算流程: {err}"),
+                    ),
+                }
+            }
+
             // Always read and log the level. Previously this was only called
             // for the max-level stop setting, leaving ordinary level-up
             // overlays unobserved and unlogged.
@@ -412,6 +447,21 @@ impl Runner {
         let dir = battle_result_loot_screenshot_dir(&self.app_handle);
         std::fs::create_dir_all(&dir).map_err(|err| format!("创建战利品截图目录失败: {err}"))?;
         let path = dir.join(battle_result_loot_screenshot_filename(
+            std::time::SystemTime::now(),
+            self.completed_mission_runs,
+        ));
+        let jpeg = self
+            .sidecar()
+            .get_frame_jpeg(LOOT_SCREENSHOT_WAIT_SECONDS)
+            .map_err(|err| format!("获取视频帧失败: {err}"))?;
+        std::fs::write(&path, jpeg).map_err(|err| format!("写入截图失败: {err}"))?;
+        Ok(path)
+    }
+
+    fn capture_bond_level_up_screenshot(&mut self) -> Result<PathBuf, String> {
+        let dir = bond_level_up_screenshot_dir(&self.app_handle);
+        std::fs::create_dir_all(&dir).map_err(|err| format!("创建牵绊升级截图目录失败: {err}"))?;
+        let path = dir.join(bond_level_up_screenshot_filename(
             std::time::SystemTime::now(),
             self.completed_mission_runs,
         ));

@@ -72,6 +72,8 @@ pub struct RecognitionSettings {
     #[serde(default)]
     pub stop_on_bond_max_level: bool,
     #[serde(default)]
+    pub auto_capture_bond_level_up: bool,
+    #[serde(default)]
     pub verify_skill_activation: bool,
     #[serde(default = "default_true")]
     pub enable_extra_class_filter: bool,
@@ -102,6 +104,7 @@ impl Default for RecognitionSettings {
             support_bond_icon_threshold: SUPPORT_ICON_THRESHOLD_DEFAULT,
             stop_on_bond_level_up: false,
             stop_on_bond_max_level: false,
+            auto_capture_bond_level_up: false,
             verify_skill_activation: false,
             enable_extra_class_filter: true,
             unknown_screen_timeout_count: UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
@@ -339,6 +342,7 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
                 stop_on_bond_level_up: settings.stop_on_bond_level_up
                     && !settings.stop_on_bond_max_level,
                 stop_on_bond_max_level: settings.stop_on_bond_max_level,
+                auto_capture_bond_level_up: settings.auto_capture_bond_level_up,
                 verify_skill_activation: settings.verify_skill_activation,
                 enable_extra_class_filter: settings.enable_extra_class_filter,
                 unknown_screen_timeout_count: normalize_unknown_screen_timeout_count(
@@ -524,6 +528,19 @@ pub(crate) fn set_stop_on_bond_max_level(
 ) -> Result<RecognitionSettings, String> {
     let mut next = *state.lock().unwrap();
     apply_stop_on_bond_max_level(&mut next, value);
+    *state.lock().unwrap() = next;
+    save_recognition_settings(&app, &next)?;
+    Ok(next)
+}
+
+#[tauri::command]
+pub(crate) fn set_auto_capture_bond_level_up(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: bool,
+) -> Result<RecognitionSettings, String> {
+    let mut next = *state.lock().unwrap();
+    next.auto_capture_bond_level_up = value;
     *state.lock().unwrap() = next;
     save_recognition_settings(&app, &next)?;
     Ok(next)
@@ -769,6 +786,7 @@ mod tests {
 
         assert!(!settings.stop_on_bond_level_up);
         assert!(!settings.stop_on_bond_max_level);
+        assert!(!settings.auto_capture_bond_level_up);
         assert!(!settings.verify_skill_activation);
         assert!(settings.enable_extra_class_filter);
         assert_eq!(
@@ -790,6 +808,7 @@ mod tests {
 
         assert!(!settings.stop_on_bond_level_up);
         assert!(!settings.stop_on_bond_max_level);
+        assert!(!settings.auto_capture_bond_level_up);
         assert!(!settings.verify_skill_activation);
         assert!(settings.enable_extra_class_filter);
         assert_eq!(

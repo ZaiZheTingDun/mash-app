@@ -1201,6 +1201,7 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
         support_bond_icon_threshold: 0.63,
         stop_on_bond_level_up: true,
         stop_on_bond_max_level: false,
+        auto_capture_bond_level_up: true,
         verify_skill_activation: true,
         enable_extra_class_filter: false,
         unknown_screen_timeout_count: 120,
@@ -1214,6 +1215,7 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
     assert_eq!(effective.support_bond_icon_threshold, 0.63);
     assert!(effective.stop_on_bond_level_up);
     assert!(!effective.stop_on_bond_max_level);
+    assert!(effective.auto_capture_bond_level_up);
     assert!(effective.verify_skill_activation);
     assert!(!effective.enable_extra_class_filter);
     assert_eq!(effective.unknown_screen_timeout_count, 120);
@@ -1233,6 +1235,7 @@ fn effective_recognition_settings_use_project_override() {
         support_bond_icon_threshold: 0.63,
         stop_on_bond_level_up: false,
         stop_on_bond_max_level: true,
+        auto_capture_bond_level_up: true,
         verify_skill_activation: true,
         enable_extra_class_filter: false,
         unknown_screen_timeout_count: 120,
@@ -1255,6 +1258,7 @@ fn effective_recognition_settings_use_project_override() {
     assert_eq!(effective.support_bond_icon_threshold, 0.63);
     assert!(!effective.stop_on_bond_level_up);
     assert!(effective.stop_on_bond_max_level);
+    assert!(effective.auto_capture_bond_level_up);
     assert!(!effective.verify_skill_activation);
     assert!(effective.enable_extra_class_filter);
     assert_eq!(effective.unknown_screen_timeout_count, 120);

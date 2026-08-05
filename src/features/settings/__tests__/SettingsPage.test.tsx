@@ -71,6 +71,7 @@ describe("SettingsDialog", () => {
           supportBondIconThreshold: 0.7,
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: false,
+          autoCaptureBondLevelUp: false,
           verifySkillActivation: false,
           unknownScreenTimeoutCount: 100,
         };
@@ -165,6 +166,11 @@ describe("SettingsDialog", () => {
           stopOnBondLevelUp: false,
           stopOnBondMaxLevel: Boolean(argValue(args)),
           verifySkillActivation: false,
+        };
+      }
+      if (cmd === "set_auto_capture_bond_level_up") {
+        return {
+          autoCaptureBondLevelUp: Boolean(argValue(args)),
         };
       }
       if (cmd === "set_verify_skill_activation") {
@@ -379,6 +385,20 @@ describe("SettingsDialog", () => {
 
     expect(await screen.findByRole("switch", { name: "牵绊升级自动停止" })).not.toBeChecked();
     expect(screen.getByRole("switch", { name: "牵绊满级自动停止" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "牵绊升级时自动截图" })).not.toBeChecked();
+  });
+
+  it("saves automatic bond level-up screenshots", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="basic" />);
+
+    const captureSwitch = await screen.findByRole("switch", { name: "牵绊升级时自动截图" });
+    await user.click(captureSwitch);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_auto_capture_bond_level_up", { value: true });
+    });
+    expect(screen.getByRole("switch", { name: "牵绊升级时自动截图" })).toBeChecked();
   });
 
   it("enabling bond max auto-stop disables bond level-up auto-stop with a tooltip", async () => {

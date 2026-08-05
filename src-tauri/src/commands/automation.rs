@@ -429,6 +429,7 @@ pub(crate) fn effective_recognition_settings(
             .unwrap_or(global.support_bond_icon_threshold),
         stop_on_bond_level_up: global.stop_on_bond_level_up && !global.stop_on_bond_max_level,
         stop_on_bond_max_level: global.stop_on_bond_max_level,
+        auto_capture_bond_level_up: global.auto_capture_bond_level_up,
         verify_skill_activation: project_verify_skill_activation
             .unwrap_or(global.verify_skill_activation),
         enable_extra_class_filter: project_enable_extra_class_filter
@@ -521,6 +522,7 @@ pub(crate) fn start_automation(
     config.noble_phantasm_detection_mode = recognition_settings.noble_phantasm_detection_mode;
     config.stop_on_bond_level_up = recognition_settings.stop_on_bond_level_up;
     config.stop_on_bond_max_level = recognition_settings.stop_on_bond_max_level;
+    config.auto_capture_bond_level_up = recognition_settings.auto_capture_bond_level_up;
     config.verify_skill_activation = recognition_settings.verify_skill_activation;
     config.enable_extra_class_filter = recognition_settings.enable_extra_class_filter;
     config.unknown_screen_timeout_count = recognition_settings.unknown_screen_timeout_count;
