@@ -143,13 +143,6 @@ const CLASS_FILTER_OPTIONS: ClassFilterOption[] = [
     servantClasses: ["Shielder", "Ruler", "Moon Cancer", "Avenger"],
   },
   {
-    value: "Extra2",
-    label: "Extra2",
-    icon: classExtra2Icon,
-    selectedIcon: classExtra2SelectedIcon,
-    servantClasses: ["Alterego", "Pretender", "Foreigner", "Beast", "BeastEresh"],
-  },
-  {
     value: "Shielder",
     label: "盾阶",
     icon: classShielderIcon,
@@ -204,6 +197,13 @@ const CLASS_FILTER_OPTIONS: ClassFilterOption[] = [
     icon: classBeastIcon,
     selectedIcon: classBeastSelectedIcon,
     servantClasses: ["Beast", "BeastEresh"],
+  },
+  {
+    value: "Extra2",
+    label: "Extra2",
+    icon: classExtra2Icon,
+    selectedIcon: classExtra2SelectedIcon,
+    servantClasses: ["Alterego", "Pretender", "Foreigner", "Beast", "BeastEresh"],
   },
 ];
 
