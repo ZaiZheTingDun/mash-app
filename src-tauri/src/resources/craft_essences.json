@@ -26076,7 +26076,7 @@
     "id": 9408720,
     "collectionNo": 2406,
     "name": "ストーミー・ナイト",
-    "name_cn": null,
+    "name_cn": "风暴之夜",
     "rarity": 5,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26087,7 +26087,7 @@
     "id": 9408730,
     "collectionNo": 2407,
     "name": "エンプレス・クエスト",
-    "name_cn": null,
+    "name_cn": "女帝的任务",
     "rarity": 4,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26098,7 +26098,7 @@
     "id": 9408740,
     "collectionNo": 2408,
     "name": "アズ・ア・ダッド",
-    "name_cn": null,
+    "name_cn": "犹如爸爸",
     "rarity": 3,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26109,7 +26109,7 @@
     "id": 9408750,
     "collectionNo": 2409,
     "name": "サマー・インフェルノ",
-    "name_cn": null,
+    "name_cn": "夏日地狱",
     "rarity": 5,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26120,7 +26120,7 @@
     "id": 9408760,
     "collectionNo": 2410,
     "name": "ベジチャウミン",
-    "name_cn": null,
+    "name_cn": "素炒面",
     "rarity": 4,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26131,7 +26131,7 @@
     "id": 9408770,
     "collectionNo": 2411,
     "name": "サン・ボート",
-    "name_cn": null,
+    "name_cn": "太阳小舟",
     "rarity": 3,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26142,7 +26142,7 @@
     "id": 9408780,
     "collectionNo": 2412,
     "name": "眠れる森の戦士",
-    "name_cn": null,
+    "name_cn": "沉睡的森林战士",
     "rarity": 5,
     "flag": "svtEquipEventReward",
     "flags": [
@@ -26153,7 +26153,7 @@
     "id": 9408790,
     "collectionNo": 2413,
     "name": "百の輝き",
-    "name_cn": null,
+    "name_cn": "百种光辉",
     "rarity": 5,
     "flag": "svtEquipEventReward",
     "flags": [
@@ -26164,7 +26164,7 @@
     "id": 9310460,
     "collectionNo": 2414,
     "name": "トライ・ザ・パンチ",
-    "name_cn": null,
+    "name_cn": "Try The Punch",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -26175,7 +26175,7 @@
     "id": 9310470,
     "collectionNo": 2415,
     "name": "素敵な贈り物（サメ）",
-    "name_cn": null,
+    "name_cn": "美妙的赠礼（鲨鱼）",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -26186,7 +26186,7 @@
     "id": 9310480,
     "collectionNo": 2416,
     "name": "あれ？　もしかして",
-    "name_cn": null,
+    "name_cn": "咦？　难道说",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -26197,7 +26197,7 @@
     "id": 9310520,
     "collectionNo": 2417,
     "name": "境界ネコ帽子",
-    "name_cn": null,
+    "name_cn": "境界猫帽子",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -26208,7 +26208,7 @@
     "id": 9310510,
     "collectionNo": 2418,
     "name": "夏の名残に、祈りを編む",
-    "name_cn": null,
+    "name_cn": "于夏日余韵，编织祈祷",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -26219,7 +26219,7 @@
     "id": 9310500,
     "collectionNo": 2419,
     "name": "渚と青春の幻影",
-    "name_cn": null,
+    "name_cn": "海滨与青春的幻影",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -26230,7 +26230,7 @@
     "id": 9310530,
     "collectionNo": 2420,
     "name": "汐彩・リフレイン",
-    "name_cn": null,
+    "name_cn": "汐彩·循环",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -26241,7 +26241,7 @@
     "id": 9310770,
     "collectionNo": 2421,
     "name": "英霊星行：アストライア",
-    "name_cn": null,
+    "name_cn": "英灵星行：阿斯特赖亚",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26252,7 +26252,7 @@
     "id": 9310780,
     "collectionNo": 2422,
     "name": "英霊星行：アルジュナ",
-    "name_cn": null,
+    "name_cn": "英灵星行：阿周那",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26263,7 +26263,7 @@
     "id": 9310790,
     "collectionNo": 2423,
     "name": "英霊星行：茨木童子",
-    "name_cn": null,
+    "name_cn": "英灵星行：茨木童子",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26274,7 +26274,7 @@
     "id": 9310800,
     "collectionNo": 2424,
     "name": "英霊星行：ヴリトラ",
-    "name_cn": null,
+    "name_cn": "英灵星行：弗栗多",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26285,7 +26285,7 @@
     "id": 9310810,
     "collectionNo": 2425,
     "name": "英霊星行：岡田以蔵",
-    "name_cn": null,
+    "name_cn": "英灵星行：冈田以藏",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26296,7 +26296,7 @@
     "id": 9310820,
     "collectionNo": 2426,
     "name": "英霊星行：グレイ",
-    "name_cn": null,
+    "name_cn": "英灵星行：格蕾",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26307,7 +26307,7 @@
     "id": 9310830,
     "collectionNo": 2427,
     "name": "英霊星行：酒呑童子",
-    "name_cn": null,
+    "name_cn": "英灵星行：酒吞童子",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26318,7 +26318,7 @@
     "id": 9310840,
     "collectionNo": 2428,
     "name": "英霊星行：赤兎馬",
-    "name_cn": null,
+    "name_cn": "英灵星行：丹驹",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26329,7 +26329,7 @@
     "id": 9310850,
     "collectionNo": 2429,
     "name": "英霊星行：千利休",
-    "name_cn": null,
+    "name_cn": "英灵星行：千利休",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26340,7 +26340,7 @@
     "id": 9310860,
     "collectionNo": 2430,
     "name": "英霊星行：ナイチンゲール",
-    "name_cn": null,
+    "name_cn": "英灵星行：南丁格尔",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26351,7 +26351,7 @@
     "id": 9310870,
     "collectionNo": 2431,
     "name": "英霊星行：バーヴァン・シー",
-    "name_cn": null,
+    "name_cn": "英灵星行：芭万·希",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26362,7 +26362,7 @@
     "id": 9310880,
     "collectionNo": 2432,
     "name": "英霊星行：パーシヴァル",
-    "name_cn": null,
+    "name_cn": "英灵星行：珀西瓦尔",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26373,7 +26373,7 @@
     "id": 9310890,
     "collectionNo": 2433,
     "name": "英霊星行：ブリトマート",
-    "name_cn": null,
+    "name_cn": "英灵星行：布里托玛特",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26384,7 +26384,7 @@
     "id": 9310900,
     "collectionNo": 2434,
     "name": "英霊星行：モードレッド",
-    "name_cn": null,
+    "name_cn": "英灵星行：莫德雷德",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26395,7 +26395,7 @@
     "id": 9310920,
     "collectionNo": 2435,
     "name": "英霊星行：森長可",
-    "name_cn": null,
+    "name_cn": "英灵星行：森长可",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26406,7 +26406,7 @@
     "id": 9310910,
     "collectionNo": 2436,
     "name": "英霊星行：ロクスタ",
-    "name_cn": null,
+    "name_cn": "英灵星行：洛库斯塔",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -29119,6 +29119,17 @@
     "flag": "svtEquipFriendShip",
     "flags": [
       "svtEquipFriendShip"
+    ]
+  },
+  {
+    "id": 9311890,
+    "collectionNo": 2685,
+    "name": "「FGO 藤丸立香はわからない」Season4",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
     ]
   }
 ]

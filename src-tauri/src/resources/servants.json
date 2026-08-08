@@ -1184,6 +1184,14 @@
         "nameCN": "血染的加冕仪式",
         "card": "2",
         "cardName": "buster"
+      },
+      {
+        "id": 701502,
+        "name": "ブラッドバス・クラウン",
+        "nameJP": "血塗れの戴冠式",
+        "nameCN": "血塗れの戴冠式",
+        "card": "2",
+        "cardName": "buster"
       }
     ]
   },
@@ -9365,7 +9373,7 @@
   {
     "id": 106300,
     "collectionNo": 445,
-    "nameCN": "パッションリップ",
+    "nameCN": "Passionlip",
     "nameJP": "パッションリップ",
     "classId": 1,
     "className": "saber",
@@ -9374,9 +9382,9 @@
     "noblePhantasms": [
       {
         "id": 106301,
-        "name": "パールヴァティー・グランシア",
+        "name": "Parvati Grancia",
         "nameJP": "愛が受難を招くとも",
-        "nameCN": "愛が受難を招くとも",
+        "nameCN": "纵使爱会招致苦难",
         "card": "2",
         "cardName": "buster"
       }
@@ -9385,7 +9393,7 @@
   {
     "id": 405800,
     "collectionNo": 446,
-    "nameCN": "クリームヒルト",
+    "nameCN": "克里姆希尔德",
     "nameJP": "クリームヒルト",
     "classId": 4,
     "className": "rider",
@@ -9394,9 +9402,9 @@
     "noblePhantasms": [
       {
         "id": 405801,
-        "name": "リッター・デア・オツェアネ",
+        "name": "Ritter der Ozeane",
         "nameJP": "我が叫びに応じよ、海騎士たちよ",
-        "nameCN": "我が叫びに応じよ、海騎士たちよ",
+        "nameCN": "回应我的呐喊吧，海骑士们啊",
         "card": "2",
         "cardName": "buster"
       }
@@ -9405,7 +9413,7 @@
   {
     "id": 705200,
     "collectionNo": 447,
-    "nameCN": "呼延灼",
+    "nameCN": "吾绰",
     "nameJP": "呼延灼",
     "classId": 7,
     "className": "berserker",
@@ -9414,9 +9422,9 @@
     "noblePhantasms": [
       {
         "id": 705201,
-        "name": "だいこうりんれんかんばもうしゅうげき",
+        "name": "Daikourinn Rennkannba Moushuugeki",
         "nameJP": "大降臨連環馬猛襲撃",
-        "nameCN": "大降臨連環馬猛襲撃",
+        "nameCN": "大降临连环马猛袭击",
         "card": "3",
         "cardName": "quick"
       }
@@ -9425,7 +9433,7 @@
   {
     "id": 2301100,
     "collectionNo": 448,
-    "nameCN": "玉兎",
+    "nameCN": "玉兔",
     "nameJP": "玉兎",
     "classId": 23,
     "className": "moonCancer",
@@ -9434,9 +9442,9 @@
     "noblePhantasms": [
       {
         "id": 2301198,
-        "name": "まなしき・いざよいざんか",
+        "name": "Manashiki Izayoizannka",
         "nameJP": "末那識・十六夜残花",
-        "nameCN": "末那識・十六夜残花",
+        "nameCN": "末那识·十六夜残花",
         "card": "1",
         "cardName": "arts"
       }
@@ -9447,7 +9455,7 @@
           2
         ],
         "nameJP": "両儀式",
-        "nameCN": "両儀式"
+        "nameCN": "两仪式"
       },
       {
         "ids": [
@@ -9455,14 +9463,14 @@
           4
         ],
         "nameJP": "玉兎輝夜",
-        "nameCN": "玉兎輝夜"
+        "nameCN": "玉兔辉夜"
       }
     ]
   },
   {
     "id": 306000,
     "collectionNo": 449,
-    "nameCN": "美遊・エーデルフェルト",
+    "nameCN": "美游·艾德费尔特",
     "nameJP": "美遊・エーデルフェルト",
     "classId": 3,
     "className": "lancer",
@@ -9471,9 +9479,9 @@
     "noblePhantasms": [
       {
         "id": 306001,
-        "name": "みるくいろの・ゆめをあなたと",
+        "name": "与你共赴乳白色之梦",
         "nameJP": "日輪が穿つ星河の朔月",
-        "nameCN": "日輪が穿つ星河の朔月",
+        "nameCN": "贯穿日轮的星河朔月",
         "card": "1",
         "cardName": "arts"
       }
@@ -9484,14 +9492,14 @@
           3
         ],
         "nameJP": "朔月美遊",
-        "nameCN": "朔月美遊"
+        "nameCN": "朔月美游"
       }
     ]
   },
   {
     "id": 205400,
     "collectionNo": 450,
-    "nameCN": "ラーヴァ／ティアマト",
+    "nameCN": "幼体／提亚马特",
     "nameJP": "ラーヴァ／ティアマト",
     "classId": 2,
     "className": "archer",
@@ -9500,9 +9508,9 @@
     "noblePhantasms": [
       {
         "id": 205401,
-        "name": "ナンム・マリンハート",
+        "name": "Nammu Marine Heart",
         "nameJP": "儚き夏よ、青春のきらめきに還れ",
-        "nameCN": "儚き夏よ、青春のきらめきに還れ",
+        "nameCN": "虚缈的夏日啊，必归闪耀青春",
         "card": "3",
         "cardName": "quick"
       }
@@ -9511,7 +9519,7 @@
   {
     "id": 1001900,
     "collectionNo": 451,
-    "nameCN": "ジュネス・クレーン",
+    "nameCN": "热内斯·克莱恩",
     "nameJP": "ジュネス・クレーン",
     "classId": 10,
     "className": "alterEgo",
@@ -9520,9 +9528,9 @@
     "noblePhantasms": [
       {
         "id": 1001901,
-        "name": "かげろうけん・つるのばかんす きみとみずぎでらんでぶー",
+        "name": "Kageroukenn Tsuru no Vacances Kimitomizugide Rendez-vous",
         "nameJP": "陽炎剣・鶴憩水恋歌",
-        "nameCN": "陽炎剣・鶴憩水恋歌",
+        "nameCN": "阳炎剑·鹤憩水恋歌",
         "card": "1",
         "cardName": "arts"
       }
