@@ -2990,6 +2990,47 @@ def test_find_supports_matches_overwrite_name_alias_with_np_pair(monkeypatch):
     assert result["diagnostics"]["fragments"][0]["matchedName"] == "伟大的石像神"
 
 
+def test_find_supports_uses_anchor_row_recognition_without_full_detector(monkeypatch):
+    import mash_cv.cv as cv
+
+    class FakeOcr:
+        def __call__(self, _crop):
+            raise AssertionError("whole-list text detector should not run")
+
+        def text_recognizer(self, crops):
+            assert len(crops) == 2
+            return [
+                ("阿尔托莉雅·Caster", 0.98),
+                ("为你纺织的时光之轮等级5", 0.97),
+            ], None
+
+    img = np.zeros((1000, 1000, 3), dtype=np.uint8)
+    anchors = [{"x": 0.85, "y": 0.20, "w": 0.07, "h": 0.06}]
+    monkeypatch.setattr(cv, "_get_ocr", lambda: FakeOcr())
+    monkeypatch.setattr(
+        cv, "_support_find_confirm_button_anchors", lambda _img: anchors
+    )
+    monkeypatch.setattr(
+        cv,
+        "_support_grand_badge_scores_per_anchor",
+        lambda _img, _anchors: None,
+    )
+
+    result = cv._find_supports(
+        img,
+        cv.SUPPORT_LIST_REGION,
+        "阿尔托莉雅·Caster",
+        ["为你纺织的时光之轮"],
+        cv.SUPPORT_NAME_THRESHOLD,
+        cv.SUPPORT_NP_THRESHOLD,
+        cv.SUPPORT_ROW_PAIR_DY,
+    )
+
+    assert len(result["supports"]) == 1
+    assert result["supports"][0]["npText"].endswith("等级5")
+    assert result["diagnostics"]["fragmentCount"] == 2
+
+
 def test_find_supports_name_only_fallback_uses_overwrite_name_alias(monkeypatch):
     import mash_cv.cv as cv
 
@@ -3960,7 +4001,22 @@ class TestFindSupports:
         )
 
     def _call(self, name, np_names):
-        from mash_cv.cv import _find_supports
+        from mash_cv.cv import _find_supports, _load_templates
+
+        resources = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "..",
+            "src-tauri",
+            "resources",
+            "servers",
+        )
+        _load_templates(
+            os.path.join(resources, "shared", "templates"),
+            key_prefix="shared",
+        )
+        _load_templates(os.path.join(resources, "jp", "templates"), append=True)
         img, region, nt, npt, dy = self._img()
         return _find_supports(img, region, name, list(np_names), nt, npt, dy)
 

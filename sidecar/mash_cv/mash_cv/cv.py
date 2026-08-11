@@ -305,6 +305,20 @@ SUPPORT_NP_BELOW_NAME_MIN_DY = 0.005
 SUPPORT_NAME_THRESHOLD = 0.65
 SUPPORT_NP_THRESHOLD = 0.65
 
+# Once the row's right-side confirmation button is located, the servant name
+# and Noble Phantasm name occupy stable horizontal strips relative to that
+# anchor. Feeding those strips directly to RapidOCR's recognition model avoids
+# running the much heavier text detector over the full support list. Values are
+# normalized to the full frame; Y offsets are anchor-top -> text-strip-top.
+SUPPORT_ROW_NAME_REGION_X = 0.255
+SUPPORT_ROW_NAME_REGION_W = 0.360
+SUPPORT_ROW_NAME_REGION_DY = 0.085
+SUPPORT_ROW_NAME_REGION_H = 0.055
+SUPPORT_ROW_NP_REGION_X = 0.270
+SUPPORT_ROW_NP_REGION_W = 0.350
+SUPPORT_ROW_NP_REGION_DY = 0.135
+SUPPORT_ROW_NP_REGION_H = 0.060
+
 SUPPORT_SKILL_LEVEL_MIN_SCORE = 0.34
 SUPPORT_SKILL_LEVEL_TEN_MIN_SCORE = 0.56
 SUPPORT_SKILL_LEVEL_DEDICATED_MIN_SCORE = 0.62
@@ -4101,6 +4115,107 @@ def _ocr_region(img: np.ndarray, region: dict, *, scale: float = 1.0) -> dict:
     return {"fragments": fragments, "fullText": "\n".join(texts)}
 
 
+def _support_recognize_anchor_rows(
+    img: np.ndarray,
+    ocr: Any,
+    confirm_anchors: list[dict],
+    *,
+    crop_origin: tuple[int, int],
+) -> list[tuple[list[list[float]], str, float]]:
+    """Recognize support name/NP strips projected from row-button anchors.
+
+    Returned boxes use the same crop-local coordinate system as RapidOCR's
+    whole-list detector, so the existing candidate scoring and row-pairing
+    pipeline can consume either source without branching.
+
+    ``[]`` means the optimized path could not produce text. Callers should
+    fall back to whole-list detection for layouts whose anchors or recognizer
+    contract differ from the bundled CN/JP clients.
+    """
+    recognizer = getattr(ocr, "text_recognizer", None)
+    if not confirm_anchors or not callable(recognizer):
+        return []
+
+    h, w = img.shape[:2]
+    if h <= 0 or w <= 0:
+        return []
+
+    jobs: list[tuple[np.ndarray, tuple[int, int, int, int]]] = []
+    for anchor in confirm_anchors:
+        anchor_y = float(anchor.get("y", 0.0))
+        regions = (
+            {
+                "x": SUPPORT_ROW_NAME_REGION_X,
+                "y": anchor_y + SUPPORT_ROW_NAME_REGION_DY,
+                "w": SUPPORT_ROW_NAME_REGION_W,
+                "h": SUPPORT_ROW_NAME_REGION_H,
+            },
+            {
+                "x": SUPPORT_ROW_NP_REGION_X,
+                "y": anchor_y + SUPPORT_ROW_NP_REGION_DY,
+                "w": SUPPORT_ROW_NP_REGION_W,
+                "h": SUPPORT_ROW_NP_REGION_H,
+            },
+        )
+        for region in regions:
+            x0 = max(0, min(w, int(round(float(region["x"]) * w))))
+            y0 = max(0, min(h, int(round(float(region["y"]) * h))))
+            x1 = max(
+                x0,
+                min(
+                    w,
+                    int(round((float(region["x"]) + float(region["w"])) * w)),
+                ),
+            )
+            y1 = max(
+                y0,
+                min(
+                    h,
+                    int(round((float(region["y"]) + float(region["h"])) * h)),
+                ),
+            )
+            if x1 <= x0 or y1 <= y0:
+                continue
+            text_crop = img[y0:y1, x0:x1]
+            if text_crop.size == 0:
+                continue
+            jobs.append((text_crop, (x0, y0, x1, y1)))
+
+    if not jobs:
+        return []
+
+    try:
+        results, _elapsed = recognizer([job[0] for job in jobs])
+    except Exception:  # noqa: BLE001 - fall back to whole-list OCR below
+        return []
+    if not results:
+        return []
+
+    crop_x, crop_y = crop_origin
+    raw: list[tuple[list[list[float]], str, float]] = []
+    for (_text_crop, (x0, y0, x1, y1)), result in zip(jobs, results):
+        if not result:
+            continue
+        text, confidence = result
+        text_str = str(text).strip()
+        if not text_str:
+            continue
+        box = [
+            [float(x0 - crop_x), float(y0 - crop_y)],
+            [float(x1 - crop_x), float(y0 - crop_y)],
+            [float(x1 - crop_x), float(y1 - crop_y)],
+            [float(x0 - crop_x), float(y1 - crop_y)],
+        ]
+        raw.append(
+            (
+                box,
+                text_str,
+                float(confidence) if confidence is not None else 0.0,
+            )
+        )
+    return raw
+
+
 def _find_supports(
     img: np.ndarray,
     list_region: dict,
@@ -4221,7 +4336,18 @@ def _find_supports(
             "error": "rapidocr_onnxruntime not available",
         }
 
-    raw, _ = ocr(crop)
+    raw = _support_recognize_anchor_rows(
+        img,
+        ocr,
+        confirm_anchors,
+        crop_origin=(rx, ry),
+    )
+    if not raw:
+        # Shape/template anchor detection can be unavailable on old resource
+        # bundles or unusual layouts. Preserve the proven whole-list detector
+        # as a correctness fallback instead of turning those pages into an
+        # unconditional miss.
+        raw, _ = ocr(crop)
     if not raw:
         return {"supports": [], "diagnostics": diag}
 
