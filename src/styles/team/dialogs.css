@@ -187,6 +187,21 @@
   border-radius: var(--radius-1);
 }
 
+.ce-card-thumbnail-trigger {
+  display: block;
+  margin-left: auto;
+}
+
+.rt-HoverCardContent.ce-card-preview {
+  padding: 0;
+}
+
+.ce-card-preview img {
+  display: block;
+  width: 150px;
+  height: 68px;
+}
+
 .servant-face-frame {
   position: relative;
   width: 54px;

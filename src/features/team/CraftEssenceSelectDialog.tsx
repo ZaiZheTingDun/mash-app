@@ -3,6 +3,7 @@ import {
   Checkbox,
   Dialog,
   Flex,
+  HoverCard,
   Select,
   Text,
   TextField,
@@ -317,6 +318,7 @@ export function CraftEssenceSelectDialog({
             >
               {visible.map((ce, i) => {
                 const index = startIndex + i;
+                const cardSrc = ceCardSrcById[ce.id];
                 return (
                   <button
                     key={ce.id}
@@ -342,12 +344,26 @@ export function CraftEssenceSelectDialog({
                         {ce.name}
                       </Text>
                       </Flex>
-                      {ceCardSrcById[ce.id] && (
-                        <img
-                          className="ce-card-thumbnail"
-                          src={ceCardSrcById[ce.id] ?? undefined}
-                          alt=""
-                        />
+                      {cardSrc && (
+                        <HoverCard.Root openDelay={150} closeDelay={100}>
+                          <HoverCard.Trigger>
+                            <span className="ce-card-thumbnail-trigger">
+                              <img
+                                className="ce-card-thumbnail"
+                                src={cardSrc}
+                                alt=""
+                              />
+                            </span>
+                          </HoverCard.Trigger>
+                          <HoverCard.Content
+                            className="ce-card-preview"
+                            side="left"
+                            align="center"
+                            sideOffset={8}
+                          >
+                            <img src={cardSrc} alt={`${ce.name} 卡面预览`} />
+                          </HoverCard.Content>
+                        </HoverCard.Root>
                       )}
                     </div>
                   </button>

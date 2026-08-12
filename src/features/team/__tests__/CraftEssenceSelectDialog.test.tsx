@@ -77,6 +77,30 @@ describe("CraftEssenceSelectDialog", () => {
     });
   });
 
+  it("shows a full-size preview when hovering a CE card thumbnail", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === "get_craft_essence_card_path") {
+        const { craftEssenceId } = (args ?? {}) as { craftEssenceId?: number };
+        return craftEssenceId === 1 ? "/tmp/ces/1/card_ce.png" : null;
+      }
+      return null;
+    });
+    setup();
+
+    const thumbnail = await waitFor(() => {
+      const image = document.querySelector(".ce-card-thumbnail");
+      expect(image).toBeInstanceOf(HTMLImageElement);
+      return image as HTMLImageElement;
+    });
+    await user.hover(thumbnail);
+
+    expect(await screen.findByAltText("Kaleidoscope 卡面预览")).toHaveAttribute(
+      "src",
+      "asset:///tmp/ces/1/card_ce.png"
+    );
+  });
+
   it("filters by the supported category and rarity", async () => {
     const user = userEvent.setup();
     setup({
