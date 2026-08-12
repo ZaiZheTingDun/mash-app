@@ -13,7 +13,7 @@ Lifecycle / streaming:
 → {"cmd":"load_templates","dir":"..."}              ← {"ok":true,"count":3}
 → {"cmd":"load_config","path":"..."}                ← {"ok":true,"screens":4}
 → {"cmd":"set_server","server":"JP"|"CN"}           ← {"ok":true,"server":"CN","ocrReset":true}
-→ {"cmd":"start_stream","adbPath":"...","jarPath":"...","serial":"...","maxSize":0,"bitRate":8000000}
+→ {"cmd":"start_stream","adbPath":"...","jarPath":"...","serial":"...","maxSize":1920,"bitRate":12000000,"maxFps":15}
                                                     ← {"ok":true,"width":1080,"height":1920}
 → {"cmd":"stop_stream"}                             ← {"ok":true,"running":false}
 → {"cmd":"get_frame","quality":85,"waitSeconds":10} ← {"ok":true,"jpegB64":"...","width":w,"height":h}
@@ -6167,6 +6167,7 @@ def _start_stream(cmd: dict) -> dict:
     serial = cmd.get("serial") or None
     max_size = int(cmd.get("maxSize", 0))
     bit_rate = int(cmd.get("bitRate", 8_000_000))
+    max_fps = int(cmd.get("maxFps", 0))
 
     new_stream = ScrcpyStream(
         adb_path=adb_path,
@@ -6174,6 +6175,7 @@ def _start_stream(cmd: dict) -> dict:
         serial=serial,
         max_size=max_size,
         bit_rate=bit_rate,
+        max_fps=max_fps,
     )
     try:
         width, height = new_stream.start()

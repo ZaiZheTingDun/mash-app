@@ -26,7 +26,7 @@ use crate::screen::{
 use crate::{
     app_data_dir, load_servant_metadata_for_variant, resolve_ce_assets_dir, resolve_cv_config_path,
     resolve_cv_config_paths, resolve_scrcpy_jar, resolve_servant_assets_dir, resolve_template_dirs,
-    Server, STREAM_BIT_RATE, STREAM_MAX_SIZE,
+    Server, STREAM_BIT_RATE, STREAM_MAX_FPS, STREAM_MAX_SIZE,
 };
 
 // ---------------------------------------------------------------------------
@@ -163,7 +163,14 @@ fn ensure_debug_stream(
         jar.display()
     );
     let adb_path = adb::resolve_adb_path(app);
-    let (w, h) = client.start_stream(&adb_path, &jar, serial, STREAM_MAX_SIZE, STREAM_BIT_RATE)?;
+    let (w, h) = client.start_stream(
+        &adb_path,
+        &jar,
+        serial,
+        STREAM_MAX_SIZE,
+        STREAM_BIT_RATE,
+        STREAM_MAX_FPS,
+    )?;
     eprintln!("[debug] scrcpy stream started: {w}x{h}");
     if !crate::stream_meets_minimum_resolution(w, h) {
         if let Err(e) = client.stop_stream() {

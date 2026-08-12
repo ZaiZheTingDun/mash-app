@@ -59,12 +59,15 @@ impl FromStr for Server {
 // ---------------------------------------------------------------------------
 // scrcpy stream tunables. Use 1080p as the minimum supported CV input:
 // lower resolutions make support skill icons and two-digit levels too unstable.
-// Bit rate is the H.264 budget.
+// Bit rate is the H.264 budget. The frame-rate cap keeps the emulator's
+// encoder and the host-side decoder from processing frames far faster than
+// the automation polling loop can consume them.
 // ---------------------------------------------------------------------------
 pub const STREAM_MAX_SIZE: u32 = 1920;
 pub(crate) const STREAM_MIN_LONG_SIDE: u32 = 1920;
 pub(crate) const STREAM_MIN_SHORT_SIDE: u32 = 1080;
 pub const STREAM_BIT_RATE: u32 = 12_000_000;
+pub const STREAM_MAX_FPS: u32 = 15;
 
 pub fn stream_meets_minimum_resolution(width: u32, height: u32) -> bool {
     let long = width.max(height);

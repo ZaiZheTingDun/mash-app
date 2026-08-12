@@ -33,7 +33,7 @@ use runner::RunnerHandle;
 pub use models::*;
 pub use server::{
     stream_meets_minimum_resolution, stream_resolution_error, Server, STREAM_BIT_RATE,
-    STREAM_MAX_SIZE,
+    STREAM_MAX_FPS, STREAM_MAX_SIZE,
 };
 
 pub(crate) use commands::assets::*;

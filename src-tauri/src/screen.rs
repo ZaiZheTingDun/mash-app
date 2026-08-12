@@ -1228,6 +1228,7 @@ impl SidecarClient {
         serial: Option<&str>,
         max_size: u32,
         bit_rate: u32,
+        max_fps: u32,
     ) -> Result<(u32, u32), String> {
         let mut req = serde_json::json!({
             "cmd": "start_stream",
@@ -1235,6 +1236,7 @@ impl SidecarClient {
             "jarPath": jar_path.to_string_lossy(),
             "maxSize": max_size,
             "bitRate": bit_rate,
+            "maxFps": max_fps,
         });
         if let Some(s) = serial {
             if let Some(obj) = req.as_object_mut() {

@@ -101,12 +101,14 @@ class ScrcpyStream:
         serial: Optional[str] = None,
         max_size: int = 0,
         bit_rate: int = 8_000_000,
+        max_fps: int = 0,
     ) -> None:
         self.adb_path = adb_path
         self.jar_path = jar_path
         self.serial = serial
         self.max_size = max_size
         self.bit_rate = bit_rate
+        self.max_fps = max_fps
 
         self.scid = random.randint(0, 0x7FFFFFFF)
         self.socket_name = f"scrcpy_{self.scid:08x}"
@@ -262,24 +264,7 @@ class ScrcpyStream:
     def _spawn_server(self) -> None:
         env = _clean_env()
         _ensure_tcp_connected(self.adb_path, self.serial)
-        cmd = _adb_base(self.adb_path, self.serial) + [
-            "shell",
-            "CLASSPATH=/data/local/tmp/scrcpy-server.jar",
-            "app_process",
-            "/",
-            "com.genymobile.scrcpy.Server",
-            SCRCPY_VERSION,
-            f"scid={self.scid:08x}",
-            "log_level=warn",
-            "audio=false",
-            "control=false",
-            "clipboard_autosync=false",
-            "cleanup=true",
-            "tunnel_forward=true",
-            "video_codec=h264",
-            f"video_bit_rate={self.bit_rate}",
-            f"max_size={self.max_size}",
-        ]
+        cmd = self._server_command()
         # ``adb shell`` folds the device-side stderr into stdout, so merge our
         # local handles and read from stdout to capture every server message.
         # ``stdin=DEVNULL`` is critical: otherwise the subprocess inherits the
@@ -307,6 +292,28 @@ class ScrcpyStream:
             daemon=True,
         )
         self._stderr_thread.start()
+
+    def _server_command(self) -> list[str]:
+        """Build the device-side scrcpy command without starting it."""
+        return _adb_base(self.adb_path, self.serial) + [
+            "shell",
+            "CLASSPATH=/data/local/tmp/scrcpy-server.jar",
+            "app_process",
+            "/",
+            "com.genymobile.scrcpy.Server",
+            SCRCPY_VERSION,
+            f"scid={self.scid:08x}",
+            "log_level=warn",
+            "audio=false",
+            "control=false",
+            "clipboard_autosync=false",
+            "cleanup=true",
+            "tunnel_forward=true",
+            "video_codec=h264",
+            f"video_bit_rate={self.bit_rate}",
+            f"max_size={self.max_size}",
+            f"max_fps={self.max_fps}",
+        ]
 
     def _connect_and_handshake_dummy(
         self, attempts: int = 150, delay: float = 0.1

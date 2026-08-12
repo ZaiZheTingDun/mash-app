@@ -42,7 +42,7 @@ use crate::runner::{
 use crate::screen;
 use crate::server::{
     stream_meets_minimum_resolution, stream_resolution_error, Server, STREAM_BIT_RATE,
-    STREAM_MAX_SIZE,
+    STREAM_MAX_FPS, STREAM_MAX_SIZE,
 };
 use crate::{resolve_cv_config_paths, resolve_template_dirs};
 use std::sync::atomic::Ordering;
@@ -620,6 +620,7 @@ pub(crate) fn start_automation(
             serial.as_deref(),
             STREAM_MAX_SIZE,
             STREAM_BIT_RATE,
+            STREAM_MAX_FPS,
         ) {
             Ok(size) => size,
             Err(err) => {
@@ -814,6 +815,7 @@ pub(crate) fn start_enhancement_automation(
             serial.as_deref(),
             STREAM_MAX_SIZE,
             STREAM_BIT_RATE,
+            STREAM_MAX_FPS,
         ) {
             Ok(size) => size,
             Err(err) => {
@@ -969,6 +971,7 @@ pub(crate) fn start_craft_essence_enhancement_automation(
             serial.as_deref(),
             STREAM_MAX_SIZE,
             STREAM_BIT_RATE,
+            STREAM_MAX_FPS,
         ) {
             Ok(size) => size,
             Err(err) => {
@@ -1110,6 +1113,7 @@ pub(crate) fn start_friend_point_summon_automation(
             serial.as_deref(),
             STREAM_MAX_SIZE,
             STREAM_BIT_RATE,
+            STREAM_MAX_FPS,
         ) {
             Ok(size) => size,
             Err(error) => {
