@@ -760,6 +760,7 @@ impl SidecarClient {
         expected_np_names: &[String],
         require_np_match: bool,
         include_support_details: bool,
+        support_full_list_ocr_fallback: bool,
     ) -> Result<FindSupportsResult, String> {
         let mut req = serde_json::json!({
             "cmd": "find_supports",
@@ -769,6 +770,7 @@ impl SidecarClient {
             "expectedNpNames": expected_np_names,
             "requireNpMatch": require_np_match,
             "includeSupportDetails": include_support_details,
+            "supportFullListOcrFallback": support_full_list_ocr_fallback,
         });
         Self::add_image_path(&mut req, image_path);
 

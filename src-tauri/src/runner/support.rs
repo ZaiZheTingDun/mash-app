@@ -1003,6 +1003,7 @@ impl Runner {
         // whose name + NP both fuzzy-match the pinned servant.
         let include_support_details =
             support_level_filtering_enabled(self.server) && self.has_support_level_requirements();
+        let support_full_list_ocr_fallback = self.config.support_full_list_ocr_fallback;
         let result = match self.sidecar().find_supports(
             None,
             &meta.name,
@@ -1011,6 +1012,7 @@ impl Runner {
             &meta.np_names,
             meta.require_np_match,
             include_support_details,
+            support_full_list_ocr_fallback,
         ) {
             Ok(r) => r,
             Err(e) => {

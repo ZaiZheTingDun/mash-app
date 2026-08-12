@@ -88,6 +88,7 @@ export const DEFAULT_RECOGNITION_SETTINGS: RecognitionSettings = {
   autoCaptureBondLevelUp: false,
   verifySkillActivation: false,
   enableExtraClassFilter: true,
+  supportFullListOcrFallback: false,
   unknownScreenTimeoutCount: UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
 };
 
@@ -136,6 +137,7 @@ export function normalizeRecognitionSettings(
     autoCaptureBondLevelUp: settings.autoCaptureBondLevelUp === true,
     verifySkillActivation: settings.verifySkillActivation === true,
     enableExtraClassFilter: settings.enableExtraClassFilter !== false,
+    supportFullListOcrFallback: settings.supportFullListOcrFallback === true,
     unknownScreenTimeoutCount: normalizeTimeoutCount(settings.unknownScreenTimeoutCount),
   };
 }

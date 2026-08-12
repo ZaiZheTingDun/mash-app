@@ -95,6 +95,10 @@ pub struct RunConfig {
     /// existing concrete-class filtering behavior.
     #[serde(default = "default_true")]
     pub enable_extra_class_filter: bool,
+    /// Retry support OCR with the full-list detector when the fast
+    /// anchor-row recognizer cannot resolve the configured target.
+    #[serde(default)]
+    pub support_full_list_ocr_fallback: bool,
     /// Actual 0-based team-builder slot index of the pinned support.
     /// The support can sit in front or back line, and Order Change needs
     /// the full 1-6 position map to stay accurate after a swap.

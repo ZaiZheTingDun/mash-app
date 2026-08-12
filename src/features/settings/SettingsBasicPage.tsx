@@ -19,6 +19,7 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
   const [autoCaptureBondLevelUp, setAutoCaptureBondLevelUp] = useState(false);
   const [verifySkillActivation, setVerifySkillActivation] = useState(false);
   const [enableExtraClassFilter, setEnableExtraClassFilter] = useState(true);
+  const [supportFullListOcrFallback, setSupportFullListOcrFallback] = useState(false);
   const [timeoutCount, setTimeoutCount] = useState(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT);
   const [timeoutDraft, setTimeoutDraft] = useState(
     String(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT)
@@ -36,6 +37,7 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
     setAutoCaptureBondLevelUp(settings.autoCaptureBondLevelUp);
     setVerifySkillActivation(settings.verifySkillActivation);
     setEnableExtraClassFilter(settings.enableExtraClassFilter);
+    setSupportFullListOcrFallback(settings.supportFullListOcrFallback);
     setTimeoutCount(settings.unknownScreenTimeoutCount);
     setTimeoutEnabled(
       settings.unknownScreenTimeoutCount !== UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED
@@ -249,6 +251,23 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
     }
   }, [applySettings]);
 
+  const saveSupportFullListOcrFallback = useCallback(async (value: boolean) => {
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
+    try {
+      const settings = normalizeRecognitionSettings(
+        await invoke<RecognitionSettings>("set_support_full_list_ocr_fallback", { value })
+      );
+      applySettings(settings);
+      setSavedMessage("已保存");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, [applySettings]);
+
   return (
     <Box className="settings-section-panel">
       <Flex direction="column" gap="4" className="recognition-setting-block">
@@ -407,6 +426,30 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
             onCheckedChange={(value) => void saveEnableExtraClassFilter(value)}
             disabled={saving}
             aria-label="全局 Extra 职阶筛选"
+          />
+        </Flex>
+
+        <Flex
+          align="start"
+          justify="between"
+          gap="4"
+          wrap="wrap"
+          className="basic-setting-row"
+        >
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              助战全列表 OCR 回退
+            </Text>
+            <Text size="1" color="gray">
+              锚点 OCR 未找到目标助战时，再使用全列表 OCR；开启后助战识别可能变慢
+            </Text>
+          </Flex>
+
+          <Switch
+            checked={supportFullListOcrFallback}
+            onCheckedChange={(value) => void saveSupportFullListOcrFallback(value)}
+            disabled={saving}
+            aria-label="助战全列表 OCR 回退"
           />
         </Flex>
 

@@ -1286,6 +1286,7 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
         auto_capture_bond_level_up: true,
         verify_skill_activation: true,
         enable_extra_class_filter: false,
+        support_full_list_ocr_fallback: true,
         unknown_screen_timeout_count: 120,
     };
 
@@ -1300,6 +1301,7 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
     assert!(effective.auto_capture_bond_level_up);
     assert!(effective.verify_skill_activation);
     assert!(!effective.enable_extra_class_filter);
+    assert!(effective.support_full_list_ocr_fallback);
     assert_eq!(effective.unknown_screen_timeout_count, 120);
     assert_eq!(
         effective.noble_phantasm_detection_mode,
@@ -1320,6 +1322,7 @@ fn effective_recognition_settings_use_project_override() {
         auto_capture_bond_level_up: true,
         verify_skill_activation: true,
         enable_extra_class_filter: false,
+        support_full_list_ocr_fallback: true,
         unknown_screen_timeout_count: 120,
     };
     let project = ProjectRecognitionSettings {
@@ -1343,6 +1346,7 @@ fn effective_recognition_settings_use_project_override() {
     assert!(effective.auto_capture_bond_level_up);
     assert!(!effective.verify_skill_activation);
     assert!(effective.enable_extra_class_filter);
+    assert!(effective.support_full_list_ocr_fallback);
     assert_eq!(effective.unknown_screen_timeout_count, 120);
     assert_eq!(
         effective.noble_phantasm_detection_mode,

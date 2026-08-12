@@ -449,6 +449,7 @@ pub(crate) fn effective_recognition_settings(
             .unwrap_or(global.verify_skill_activation),
         enable_extra_class_filter: project_enable_extra_class_filter
             .unwrap_or(global.enable_extra_class_filter),
+        support_full_list_ocr_fallback: global.support_full_list_ocr_fallback,
         unknown_screen_timeout_count: global.unknown_screen_timeout_count,
     }
 }
@@ -540,6 +541,7 @@ pub(crate) fn start_automation(
     config.auto_capture_bond_level_up = recognition_settings.auto_capture_bond_level_up;
     config.verify_skill_activation = recognition_settings.verify_skill_activation;
     config.enable_extra_class_filter = recognition_settings.enable_extra_class_filter;
+    config.support_full_list_ocr_fallback = recognition_settings.support_full_list_ocr_fallback;
     config.unknown_screen_timeout_count = recognition_settings.unknown_screen_timeout_count;
     let debug_settings = *debug_settings_state.lock().unwrap();
     config.auto_capture_battle_result_loot = debug_settings.auto_capture_battle_result_loot;

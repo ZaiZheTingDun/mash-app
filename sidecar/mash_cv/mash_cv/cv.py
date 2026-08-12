@@ -4228,6 +4228,8 @@ def _find_supports(
     expected_names: Optional[list[str]] = None,
     excluded_names: Optional[list[str]] = None,
     require_np_match: bool = False,
+    support_full_list_ocr_fallback: bool = False,
+    _force_full_list_ocr: bool = False,
 ) -> dict:
     """OCR the support-select list region and return matched support rows.
 
@@ -4336,20 +4338,53 @@ def _find_supports(
             "error": "rapidocr_onnxruntime not available",
         }
 
-    raw = _support_recognize_anchor_rows(
-        img,
-        ocr,
-        confirm_anchors,
-        crop_origin=(rx, ry),
-    )
-    if not raw:
+    used_anchor_row_ocr = False
+    if _force_full_list_ocr:
         # Shape/template anchor detection can be unavailable on old resource
         # bundles or unusual layouts. Preserve the proven whole-list detector
         # as a correctness fallback instead of turning those pages into an
         # unconditional miss.
         raw, _ = ocr(crop)
+    else:
+        raw = _support_recognize_anchor_rows(
+            img,
+            ocr,
+            confirm_anchors,
+            crop_origin=(rx, ry),
+        )
+        used_anchor_row_ocr = bool(raw)
+        if not raw:
+            # Shape/template anchor detection can be unavailable on old resource
+            # bundles or unusual layouts. Preserve the proven whole-list detector
+            # as a correctness fallback instead of turning those pages into an
+            # unconditional miss.
+            raw, _ = ocr(crop)
     if not raw:
         return {"supports": [], "diagnostics": diag}
+
+    def fallback_to_full_list(result: dict) -> dict:
+        """Optionally retry a fast anchor-row miss with full-list OCR."""
+        if (
+            support_full_list_ocr_fallback
+            and used_anchor_row_ocr
+            and not result["supports"]
+        ):
+            return _find_supports(
+                img,
+                list_region,
+                expected_name,
+                expected_np_names,
+                name_threshold,
+                np_threshold,
+                pair_dy,
+                include_support_details,
+                expected_names,
+                excluded_names,
+                require_np_match,
+                False,
+                True,
+            )
+        return result
 
     diag["fragmentCount"] = int(len(raw))
 
@@ -4464,11 +4499,11 @@ def _find_supports(
         # No name match at all — there's nothing to fall back to.
         # Return empty supports with full diagnostics so the debug UI
         # can show the closest sub-threshold name fragment.
-        return {"supports": [], "diagnostics": diag}
+        return fallback_to_full_list({"supports": [], "diagnostics": diag})
 
     if require_np_match and (not expected_np_names or not np_cands):
         diag["nameOnlyReason"] = "npMatchRequired"
-        return {"supports": [], "diagnostics": diag}
+        return fallback_to_full_list({"supports": [], "diagnostics": diag})
 
     if not expected_np_names or not np_cands:
         diag["nameOnlyFallback"] = True
@@ -4578,7 +4613,7 @@ def _find_supports(
     _support_attach_score_anchors(img, supports, confirm_anchors)
     if include_support_details:
         _support_add_details(img, supports, fragments)
-    return {"supports": supports, "diagnostics": diag}
+    return fallback_to_full_list({"supports": supports, "diagnostics": diag})
 
 
 def _support_parse_np_level_text(text: str) -> Optional[int]:
@@ -6427,6 +6462,7 @@ def main() -> None:
                         [str(n) for n in (cmd.get("expectedNames") or []) if n],
                         [str(n) for n in (cmd.get("excludedNames") or []) if n],
                         bool(cmd.get("requireNpMatch", False)),
+                        bool(cmd.get("supportFullListOcrFallback", False)),
                     ),
                 )
         elif action == "ocr_region":

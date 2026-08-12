@@ -321,6 +321,7 @@ pub fn run() {
             commands::settings::open_bond_level_up_screenshot_folder,
             commands::settings::set_verify_skill_activation,
             commands::settings::set_enable_extra_class_filter,
+            commands::settings::set_support_full_list_ocr_fallback,
             commands::settings::set_unknown_screen_timeout_count,
             commands::settings::set_auto_capture_battle_result_loot,
             commands::settings::set_auto_capture_unknown_screen_timeout,

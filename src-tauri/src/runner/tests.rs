@@ -631,6 +631,7 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     assert!(cfg.support_servant_id.is_none());
     assert!(cfg.support_servant_variant_key.is_none());
     assert!(cfg.enable_extra_class_filter);
+    assert!(!cfg.support_full_list_ocr_fallback);
     assert!(cfg.support_slot_index.is_none());
     assert!(cfg.support_noble_phantasm_level_min.is_none());
     assert!(cfg.support_star_map_score_min.is_none());
@@ -4084,6 +4085,7 @@ fn run_config_round_trips_support_servant_id_and_repeat_flag() {
     payload["supportServantId"] = serde_json::json!(284);
     payload["supportServantVariantKey"] = serde_json::json!("284:2");
     payload["enableExtraClassFilter"] = serde_json::json!(false);
+    payload["supportFullListOcrFallback"] = serde_json::json!(true);
     payload["supportNoblePhantasmLevelMin"] = serde_json::json!(2);
     payload["supportStarMapScoreMin"] = serde_json::json!(40);
     payload["supportGrandStarMapScoreMin"] = serde_json::json!(16);
@@ -4096,6 +4098,7 @@ fn run_config_round_trips_support_servant_id_and_repeat_flag() {
     assert_eq!(cfg.support_servant_id, Some(284));
     assert_eq!(cfg.support_servant_variant_key.as_deref(), Some("284:2"));
     assert!(!cfg.enable_extra_class_filter);
+    assert!(cfg.support_full_list_ocr_fallback);
     assert_eq!(cfg.grand_class, GrandClass::Saber);
     assert_eq!(cfg.support_noble_phantasm_level_min, Some(2));
     assert_eq!(cfg.support_star_map_score_min, Some(40));

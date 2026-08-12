@@ -3031,6 +3031,54 @@ def test_find_supports_uses_anchor_row_recognition_without_full_detector(monkeyp
     assert result["diagnostics"]["fragmentCount"] == 2
 
 
+def test_find_supports_retries_full_list_ocr_when_enabled_after_anchor_miss(monkeypatch):
+    import mash_cv.cv as cv
+
+    class FakeOcr:
+        def __init__(self):
+            self.full_list_calls = 0
+
+        def __call__(self, _crop):
+            self.full_list_calls += 1
+            return (
+                [
+                    ([[100, 20], [240, 20], [240, 50], [100, 50]], "Target", 0.98),
+                    ([[120, 90], [340, 90], [340, 120], [120, 120]], "Target NP", 0.97),
+                ],
+                None,
+            )
+
+        def text_recognizer(self, _crops):
+            return [("unrelated", 0.98), ("still unrelated", 0.97)], None
+
+    ocr = FakeOcr()
+    img = np.zeros((1000, 1000, 3), dtype=np.uint8)
+    anchors = [{"x": 0.85, "y": 0.20, "w": 0.07, "h": 0.06}]
+    monkeypatch.setattr(cv, "_get_ocr", lambda: ocr)
+    monkeypatch.setattr(
+        cv, "_support_find_confirm_button_anchors", lambda _img: anchors
+    )
+    monkeypatch.setattr(
+        cv,
+        "_support_grand_badge_scores_per_anchor",
+        lambda _img, _anchors: None,
+    )
+
+    result = cv._find_supports(
+        img,
+        cv.SUPPORT_LIST_REGION,
+        "Target",
+        ["Target NP"],
+        0.7,
+        0.7,
+        0.2,
+        support_full_list_ocr_fallback=True,
+    )
+
+    assert len(result["supports"]) == 1
+    assert ocr.full_list_calls == 1
+
+
 def test_find_supports_name_only_fallback_uses_overwrite_name_alias(monkeypatch):
     import mash_cv.cv as cv
 

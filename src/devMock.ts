@@ -94,6 +94,7 @@ let stopOnBondLevelUp = false;
 let stopOnBondMaxLevel = false;
 let verifySkillActivation = false;
 let enableExtraClassFilter = true;
+let supportFullListOcrFallback = false;
 let autoCaptureBattleResultLoot = false;
 let autoCaptureUnknownScreenTimeout = false;
 let autoCaptureSkillUseProbe = false;
@@ -188,6 +189,7 @@ function recognitionSettings() {
     stopOnBondMaxLevel,
     verifySkillActivation,
     enableExtraClassFilter,
+    supportFullListOcrFallback,
   };
 }
 
@@ -448,6 +450,9 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return recognitionSettings() as T;
     case "set_enable_extra_class_filter":
       enableExtraClassFilter = Boolean(args.value);
+      return recognitionSettings() as T;
+    case "set_support_full_list_ocr_fallback":
+      supportFullListOcrFallback = Boolean(args.value);
       return recognitionSettings() as T;
     case "set_auto_capture_battle_result_loot":
       autoCaptureBattleResultLoot = Boolean(args.value);

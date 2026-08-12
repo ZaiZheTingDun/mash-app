@@ -78,6 +78,10 @@ pub struct RecognitionSettings {
     pub verify_skill_activation: bool,
     #[serde(default = "default_true")]
     pub enable_extra_class_filter: bool,
+    /// When anchor-row support OCR cannot find the target, retry with the
+    /// slower detector over the full support list.
+    #[serde(default)]
+    pub support_full_list_ocr_fallback: bool,
     #[serde(default = "default_unknown_screen_timeout_count")]
     pub unknown_screen_timeout_count: u32,
 }
@@ -108,6 +112,7 @@ impl Default for RecognitionSettings {
             auto_capture_bond_level_up: false,
             verify_skill_activation: false,
             enable_extra_class_filter: true,
+            support_full_list_ocr_fallback: false,
             unknown_screen_timeout_count: UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
         }
     }
@@ -346,6 +351,7 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
                 auto_capture_bond_level_up: settings.auto_capture_bond_level_up,
                 verify_skill_activation: settings.verify_skill_activation,
                 enable_extra_class_filter: settings.enable_extra_class_filter,
+                support_full_list_ocr_fallback: settings.support_full_list_ocr_fallback,
                 unknown_screen_timeout_count: normalize_unknown_screen_timeout_count(
                     settings.unknown_screen_timeout_count,
                     "识别超时次数",
@@ -583,6 +589,19 @@ pub(crate) fn set_enable_extra_class_filter(
 }
 
 #[tauri::command]
+pub(crate) fn set_support_full_list_ocr_fallback(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: bool,
+) -> Result<RecognitionSettings, String> {
+    let mut next = *state.lock().unwrap();
+    next.support_full_list_ocr_fallback = value;
+    *state.lock().unwrap() = next;
+    save_recognition_settings(&app, &next)?;
+    Ok(next)
+}
+
+#[tauri::command]
 pub(crate) fn set_unknown_screen_timeout_count(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
@@ -800,6 +819,7 @@ mod tests {
         assert!(!settings.auto_capture_bond_level_up);
         assert!(!settings.verify_skill_activation);
         assert!(settings.enable_extra_class_filter);
+        assert!(!settings.support_full_list_ocr_fallback);
         assert_eq!(
             settings.unknown_screen_timeout_count,
             UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
@@ -822,6 +842,7 @@ mod tests {
         assert!(!settings.auto_capture_bond_level_up);
         assert!(!settings.verify_skill_activation);
         assert!(settings.enable_extra_class_filter);
+        assert!(!settings.support_full_list_ocr_fallback);
         assert_eq!(
             settings.unknown_screen_timeout_count,
             UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
@@ -843,6 +864,23 @@ mod tests {
 
         let restored: RecognitionSettings = serde_json::from_value(serialized).unwrap();
         assert!(!restored.enable_extra_class_filter);
+    }
+
+    #[test]
+    fn recognition_settings_round_trips_full_list_support_ocr_fallback() {
+        let settings = RecognitionSettings {
+            support_full_list_ocr_fallback: true,
+            ..RecognitionSettings::default()
+        };
+
+        let serialized = serde_json::to_value(settings).unwrap();
+        assert_eq!(
+            serialized["supportFullListOcrFallback"],
+            serde_json::json!(true)
+        );
+
+        let restored: RecognitionSettings = serde_json::from_value(serialized).unwrap();
+        assert!(restored.support_full_list_ocr_fallback);
     }
 
     #[test]

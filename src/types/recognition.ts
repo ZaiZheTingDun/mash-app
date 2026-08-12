@@ -11,6 +11,7 @@ export interface RecognitionSettings {
   autoCaptureBondLevelUp: boolean;
   verifySkillActivation: boolean;
   enableExtraClassFilter: boolean;
+  supportFullListOcrFallback: boolean;
   unknownScreenTimeoutCount: number;
 }
 

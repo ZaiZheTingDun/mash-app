@@ -1481,6 +1481,7 @@ pub fn debug_find_supports(
     let support_ce_full_gate_threshold = recognition_settings.support_ce_full_gate_threshold;
     let support_mlb_icon_threshold = recognition_settings.support_mlb_icon_threshold;
     let support_bond_icon_threshold = recognition_settings.support_bond_icon_threshold;
+    let support_full_list_ocr_fallback = recognition_settings.support_full_list_ocr_fallback;
     let support_grand_mode = support_grand_mode.unwrap_or(false);
     let support_star_map_score_min = support_star_map_score_min.map(|score| score.min(62));
     let support_grand_star_map_score_min =
@@ -1543,6 +1544,7 @@ pub fn debug_find_supports(
         &meta.np_names,
         meta.require_np_match,
         true,
+        support_full_list_ocr_fallback,
     )?;
     eprintln!(
         "[debug_find_supports] {} match(es), {} name cand(s), {} np cand(s), {} fragment(s)",
