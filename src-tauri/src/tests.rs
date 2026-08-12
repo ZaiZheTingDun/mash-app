@@ -440,6 +440,8 @@ fn default_project_slots_yields_six_slots_with_support_at_index_two() {
         assert_eq!(slot.id, format!("slot-{i}"));
         assert!(slot.servant_id.is_none());
         assert!(slot.craft_essence_id.is_none());
+        assert!(slot.craft_essence_ids.is_empty());
+        assert!(!slot.craft_essence_multi_select);
     }
     // Slot 2 is the support pin; everything else is a party slot.
     assert_eq!(slots[2].kind, "support");
@@ -482,6 +484,7 @@ fn test_project(id: &str, name: &str, advanced_mode: bool) -> Project {
         support_servant_variant_key: None,
         support_grand_mode: false,
         support_grand_craft_essence_ids: default_support_grand_craft_essence_ids(),
+        support_grand_craft_essence_id_lists: default_support_grand_craft_essence_id_lists(),
         support_grand_craft_essence_mlb_required: default_support_grand_craft_essence_mlb_required(
         ),
         support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
@@ -522,6 +525,8 @@ fn clear_project_slot_servant_only_clears_slot_owned_settings() {
     project.slots[0].servant_id = Some(100);
     project.slots[0].servant_variant_key = Some("100:1".into());
     project.slots[0].craft_essence_id = Some(200);
+    project.slots[0].craft_essence_ids = vec![200, 201];
+    project.slots[0].craft_essence_multi_select = true;
     project.grand_servants.push(GrandServantConfig {
         member_id: Some("slot-0".into()),
         slot_index: 0,
@@ -538,6 +543,8 @@ fn clear_project_slot_servant_only_clears_slot_owned_settings() {
     assert!(project.slots[0].servant_id.is_none());
     assert!(project.slots[0].servant_variant_key.is_none());
     assert!(project.slots[0].craft_essence_id.is_none());
+    assert!(project.slots[0].craft_essence_ids.is_empty());
+    assert!(!project.slots[0].craft_essence_multi_select);
     assert_eq!(project.grand_servants.len(), 1);
 }
 
@@ -865,6 +872,8 @@ fn project_slot_legacy_json_without_ce_field_deserializes_with_none() {
     assert_eq!(slot.kind, "servant");
     assert_eq!(slot.servant_id, Some(284));
     assert!(slot.craft_essence_id.is_none());
+    assert!(slot.craft_essence_ids.is_empty());
+    assert!(!slot.craft_essence_multi_select);
     assert_eq!(slot.craft_essence_mlb_required, true);
 }
 
@@ -878,6 +887,8 @@ fn project_slot_round_trips_craft_essence_id() {
     });
     let slot: ProjectSlot = serde_json::from_value(json.clone()).unwrap();
     assert_eq!(slot.craft_essence_id, Some(1485));
+    assert!(slot.craft_essence_ids.is_empty());
+    assert!(!slot.craft_essence_multi_select);
     assert_eq!(slot.craft_essence_mlb_required, true);
 
     // Camel-case rename round-trips on serialize too.
@@ -892,6 +903,71 @@ fn project_slot_round_trips_craft_essence_id() {
 }
 
 #[test]
+fn project_slot_round_trips_multiple_craft_essence_ids() {
+    let json = serde_json::json!({
+        "id": "slot-2",
+        "type": "support",
+        "craftEssenceId": 1485,
+        "craftEssenceIds": [1485, 1001, 1003],
+        "craftEssenceMultiSelect": true,
+    });
+    let slot: ProjectSlot = serde_json::from_value(json).unwrap();
+    assert_eq!(slot.craft_essence_ids, vec![1485, 1001, 1003]);
+    assert!(slot.craft_essence_multi_select);
+
+    let serialized = serde_json::to_value(&slot).unwrap();
+    assert_eq!(
+        serialized["craftEssenceIds"],
+        serde_json::json!([1485, 1001, 1003])
+    );
+    assert_eq!(serialized["craftEssenceMultiSelect"], true);
+}
+
+#[test]
+fn normalize_project_deduplicates_and_caps_support_craft_essences() {
+    let mut project = test_project("project-ce", "多选礼装", false);
+    let support = &mut project.slots[2];
+    support.craft_essence_id = Some(99);
+    support.craft_essence_ids = vec![1, 2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+    support.craft_essence_multi_select = true;
+
+    let normalized = normalize_project(project);
+    let support = &normalized.slots[2];
+    assert_eq!(
+        support.craft_essence_ids,
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    );
+    assert_eq!(support.craft_essence_id, Some(1));
+    assert!(support.craft_essence_multi_select);
+}
+
+#[test]
+fn normalize_project_caps_grand_outer_ce_lists_and_keeps_middle_single() {
+    let mut project = test_project("project-grand-ce", "冠位多选礼装", true);
+    project.support_grand_craft_essence_ids = [Some(99), Some(88), Some(77)];
+    project.support_grand_craft_essence_id_lists = [
+        vec![1, 2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        vec![20, 21],
+        vec![30, 31],
+    ];
+
+    let normalized = normalize_project(project);
+    assert_eq!(
+        normalized.support_grand_craft_essence_id_lists[0],
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    );
+    assert_eq!(normalized.support_grand_craft_essence_id_lists[1], vec![20]);
+    assert_eq!(
+        normalized.support_grand_craft_essence_id_lists[2],
+        vec![30, 31, 77]
+    );
+    assert_eq!(
+        normalized.support_grand_craft_essence_ids,
+        [Some(1), Some(20), Some(30)]
+    );
+}
+
+#[test]
 fn project_slot_servant_id_also_defaults_when_missing() {
     // Sanity-check the sibling `#[serde(default)]` on `servant_id`
     // so a slot row with neither id field still parses (legacy
@@ -903,6 +979,8 @@ fn project_slot_servant_id_also_defaults_when_missing() {
     let slot: ProjectSlot = serde_json::from_value(json).unwrap();
     assert!(slot.servant_id.is_none());
     assert!(slot.craft_essence_id.is_none());
+    assert!(slot.craft_essence_ids.is_empty());
+    assert!(!slot.craft_essence_multi_select);
     assert_eq!(slot.craft_essence_mlb_required, true);
 }
 
@@ -923,6 +1001,10 @@ fn project_legacy_json_without_slots_falls_back_to_defaults() {
     assert!(project.support_servant_id.is_none());
     assert_eq!(project.support_grand_mode, false);
     assert_eq!(project.support_grand_craft_essence_ids, [None; 3]);
+    assert!(project
+        .support_grand_craft_essence_id_lists
+        .iter()
+        .all(Vec::is_empty));
     assert_eq!(project.support_grand_craft_essence_mlb_required, [true; 3]);
     assert_eq!(
         project.support_grand_bond_ce_mode,
@@ -1278,6 +1360,7 @@ fn normalize_project_migrates_legacy_repeat_flag_to_infinite_mode() {
         support_servant_variant_key: None,
         support_grand_mode: false,
         support_grand_craft_essence_ids: default_support_grand_craft_essence_ids(),
+        support_grand_craft_essence_id_lists: default_support_grand_craft_essence_id_lists(),
         support_grand_craft_essence_mlb_required: default_support_grand_craft_essence_mlb_required(
         ),
         support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,

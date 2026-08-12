@@ -84,7 +84,6 @@
 }
 
 .battle-action-row,
-.battle-add-trigger,
 .battle-choice-row {
   min-height: 54px;
   display: flex;
@@ -256,18 +255,6 @@
   pointer-events: none;
 }
 
-.battle-add-trigger {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--gray-12);
-  font: inherit;
-  width: 100%;
-  cursor: pointer;
-  padding: 0;
-  text-align: left;
-}
-
 .battle-attack-slot-label {
   color: var(--gray-10);
   font-size: 12px;
@@ -292,7 +279,6 @@
   color: var(--blue-11);
 }
 
-.battle-plus-box,
 .battle-face-btn,
 .battle-square-btn,
 .battle-option-btn {
@@ -312,11 +298,6 @@
 .battle-choice-row.inline {
   min-height: 0;
   flex: 1 1 auto;
-}
-
-.battle-plus-box {
-  width: 48px;
-  height: 48px;
 }
 
 .battle-face-btn {
@@ -364,8 +345,7 @@
 
 .battle-face-btn:hover,
 .battle-square-btn:hover,
-.battle-option-btn:hover,
-.battle-add-trigger:hover .battle-plus-box {
+.battle-option-btn:hover {
   border-color: var(--blue-8);
   background: var(--blue-2);
   transform: translateY(-1px);

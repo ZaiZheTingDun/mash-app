@@ -13,6 +13,8 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceIds: [],
+      craftEssenceMultiSelect: false,
       craftEssenceMlbRequired: true,
     },
     {
@@ -21,6 +23,8 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceIds: [],
+      craftEssenceMultiSelect: false,
       craftEssenceMlbRequired: true,
     },
     {
@@ -29,6 +33,8 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceIds: [],
+      craftEssenceMultiSelect: false,
       craftEssenceMlbRequired: true,
     },
     {
@@ -37,6 +43,8 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceIds: [],
+      craftEssenceMultiSelect: false,
       craftEssenceMlbRequired: true,
     },
     {
@@ -45,6 +53,8 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceIds: [],
+      craftEssenceMultiSelect: false,
       craftEssenceMlbRequired: true,
     },
     {
@@ -53,6 +63,8 @@ export function createInitialProjectSlots(): ProjectSlot[] {
       servantId: null,
       servantVariantKey: null,
       craftEssenceId: null,
+      craftEssenceIds: [],
+      craftEssenceMultiSelect: false,
       craftEssenceMlbRequired: true,
     },
   ];

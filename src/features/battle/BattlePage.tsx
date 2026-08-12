@@ -486,11 +486,19 @@ export function BattlePage({
         supportSlot != null ? selectedProject.slots?.indexOf(supportSlot) ?? null : null,
       supportMemberId: supportSlot?.id ?? null,
       supportCraftEssenceId: supportSlot?.craftEssenceId ?? null,
+      supportCraftEssenceIds:
+        supportSlot?.craftEssenceIds?.length
+          ? supportSlot.craftEssenceIds.slice(0, 10)
+          : supportSlot?.craftEssenceId != null
+            ? [supportSlot.craftEssenceId]
+            : [],
       supportCraftEssenceMlbRequired:
         supportSlot?.craftEssenceMlbRequired ?? true,
       supportGrandMode: selectedProject.supportGrandMode ?? false,
       supportGrandCraftEssenceIds:
         selectedProject.supportGrandCraftEssenceIds ?? [null, null, null],
+      supportGrandCraftEssenceIdLists:
+        selectedProject.supportGrandCraftEssenceIdLists ?? [[], [], []],
       supportGrandCraftEssenceMlbRequired:
         selectedProject.supportGrandCraftEssenceMlbRequired ?? [true, true, true],
       supportGrandBondCeMode: selectedProject.supportGrandBondCeMode ?? "any",

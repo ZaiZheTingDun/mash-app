@@ -132,7 +132,7 @@ stateDiagram-v2
 
 Sidecar 按布局而非只按文字配对助战行：NP 匹配必须是同一行中、位于从者名 fragment 下方的独立 OCR fragment，避免从者名和 NP 文本相同而误用名称行。
 
-配置助战 CE 时，runner 先将行内 CE art 与 `assets/ces/{id}/card_ce.png` 匹配。slot 启用 MLB 要求（默认启用）时，同一次 `verify_support_ce` 还需在 CE 右下找到 `icon_mlb_mark`。Grand support 则逐个执行三个位置型 CE 检查；未配置 slot 跳过，每个 slot 可独立要求 MLB，第二个 Grand slot 还可要求 `icon_grand_bond_ce` 或 `icon_grand_bond_ce_np`。启用的 CE art 与图标检查必须全部通过。
+配置普通助战 CE 时，项目可保存最多 10 张不重复的候选礼装；runner 依次将行内 CE art 与对应的 `assets/ces/{id}/card_ce.png` 匹配，任意一张匹配即通过。slot 启用 MLB 要求（默认启用）时，匹配到的候选还需在 CE 右下找到 `icon_mlb_mark`。Grand support 仍逐个执行三个独立位置的 CE 检查，其中第 1、3 个位置各可配置最多 10 张候选并按任意一张匹配，第 2 个位置保持单张牵绊礼装；未配置 slot 跳过，每个 slot 可独立要求 MLB，第二个 Grand slot 还可要求 `icon_grand_bond_ce` 或 `icon_grand_bond_ce_np`。启用的 CE art 与图标检查必须全部通过。
 
 CN Grand 助战若未选中匹配行，会先等待当前刷新列表出现至少一个 ribbon；出现后连续两次未命中即刷新而非继续滚动。若从未出现 marker，或 server bundle 不含该 probe，则保留旧的滚至底部行为。
 

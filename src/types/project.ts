@@ -18,6 +18,12 @@ export interface ProjectSlot {
    * CEs are stored for future use.
    */
   craftEssenceId?: number | null;
+  /**
+   * Ordered support CE allow-list. Empty/missing falls back to
+   * `craftEssenceId` for projects saved before multi-select existed.
+   */
+  craftEssenceIds?: number[];
+  craftEssenceMultiSelect?: boolean;
   craftEssenceMlbRequired?: boolean;
 }
 
@@ -42,6 +48,8 @@ export type SupportGrandCraftEssenceIds = [
   number | null,
   number | null,
 ];
+
+export type SupportGrandCraftEssenceIdLists = [number[], number[], number[]];
 
 export type SupportGrandCraftEssenceMlbRequired = [boolean, boolean, boolean];
 export type SupportGrandBondCeMode = "any" | "bond" | "bondNp";
@@ -133,6 +141,7 @@ export interface Project {
   supportServantVariantKey?: string | null;
   supportGrandMode?: boolean;
   supportGrandCraftEssenceIds?: SupportGrandCraftEssenceIds;
+  supportGrandCraftEssenceIdLists?: SupportGrandCraftEssenceIdLists;
   supportGrandCraftEssenceMlbRequired?: SupportGrandCraftEssenceMlbRequired;
   supportGrandBondCeMode?: SupportGrandBondCeMode;
   grandClass?: GrandClass;

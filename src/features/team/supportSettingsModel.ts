@@ -3,6 +3,7 @@ import type {
   GrandClassDefinition,
   Project,
   SupportAppendSkillLevelMins,
+  SupportGrandCraftEssenceIdLists,
   SupportGrandCraftEssenceIds,
   SupportGrandCraftEssenceMlbRequired,
   SupportSkillLevelMins,
@@ -37,6 +38,21 @@ export function normalizeSupportGrandCraftEssenceIds(
   ids: Project["supportGrandCraftEssenceIds"],
 ): SupportGrandCraftEssenceIds {
   return [0, 1, 2].map((index) => ids?.[index] ?? null) as SupportGrandCraftEssenceIds;
+}
+
+export function normalizeSupportGrandCraftEssenceIdLists(
+  lists: Project["supportGrandCraftEssenceIdLists"],
+  legacyIds: Project["supportGrandCraftEssenceIds"],
+): SupportGrandCraftEssenceIdLists {
+  return [0, 1, 2].map((index) => {
+    const raw = lists?.[index]?.length
+      ? lists[index]
+      : legacyIds?.[index] != null
+        ? [legacyIds[index]]
+        : [];
+    const unique = Array.from(new Set(raw)).slice(0, index === 1 ? 1 : 10);
+    return unique;
+  }) as SupportGrandCraftEssenceIdLists;
 }
 
 export function normalizeSupportGrandCraftEssenceMlbRequired(

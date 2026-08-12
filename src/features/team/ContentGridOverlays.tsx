@@ -11,21 +11,27 @@ import type {
 interface CraftEssenceOverlayProps {
   craftEssence: CraftEssence | null;
   cardSrc: string | null | undefined;
+  craftEssences: CraftEssence[];
+  cardSrcs: (string | null | undefined)[];
   mlbRequired: boolean;
   mlbIconSrc: string | null | undefined;
   onSelect: () => void;
+  onAdd?: () => void;
+  onManage?: () => void;
   onClear: () => void;
 }
 
 interface GrandCraftEssenceOverlayProps {
-  craftEssences: (CraftEssence | null)[];
-  cardSrcs: (string | null | undefined)[];
+  craftEssenceGroups: CraftEssence[][];
+  cardSrcGroups: (string | null | undefined)[][];
   mlbRequired: SupportGrandCraftEssenceMlbRequired;
   mlbIconSrc: string | null | undefined;
   grandBondCeMode: SupportGrandBondCeMode;
   bondIconSrc: string | null | undefined;
   bondNpIconSrc: string | null | undefined;
   onSelect: (index: number) => void;
+  onAdd: (index: number) => void;
+  onManage: (index: number) => void;
   onClear: (index: number) => void;
 }
 
@@ -36,33 +42,76 @@ interface GrandCraftEssenceOverlayProps {
 export function CraftEssenceOverlay({
   craftEssence,
   cardSrc,
+  craftEssences,
+  cardSrcs,
   mlbRequired,
   mlbIconSrc,
   onSelect,
+  onAdd,
+  onManage,
   onClear,
 }: CraftEssenceOverlayProps) {
+  const selected = craftEssences.length
+    ? craftEssences
+    : craftEssence
+      ? [craftEssence]
+      : [];
+  const primary = selected[0] ?? null;
+  const isStack = selected.length > 1;
+  const visibleStackSize = Math.min(selected.length, 4);
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onSelect();
+    if (primary && onManage) {
+      onManage();
+    } else {
+      onSelect();
+    }
   };
 
   return (
     <div
-      className={`ce-overlay${craftEssence ? " filled" : " empty"}`}
+      className={`ce-overlay${primary ? " filled" : " empty"}${isStack ? " stacked" : ""}`}
       onClick={handleClick}
       role="button"
-      aria-label={craftEssence ? `礼装：${craftEssence.name}` : "选择礼装"}
+      aria-label={
+        primary
+          ? isStack
+            ? `礼装：${primary.name}等 ${selected.length} 张`
+            : `礼装：${primary.name}`
+          : "选择礼装"
+      }
     >
-      {craftEssence && cardSrc ? (
+      {isStack ? (
+        <div className="ce-overlay-stack" aria-hidden>
+          {selected.slice(0, 4).map((ce, index) => {
+            const src = cardSrcs[index];
+            return (
+              <span
+                className="ce-overlay-stack-card"
+                key={ce.id}
+                style={{
+                  left: `${3 + (visibleStackSize - 1) * 10}px`,
+                  right: "3px",
+                  transform: `translateX(${-index * 10}px)`,
+                  zIndex: 4 - index,
+                }}
+              >
+                {src ? <img src={src} alt="" draggable={false} /> : ce.name}
+              </span>
+            );
+          })}
+          <span className="ce-overlay-count">{selected.length}</span>
+        </div>
+      ) : primary && cardSrc ? (
         <img
           className="ce-overlay-img"
           src={cardSrc}
-          alt={craftEssence.name}
+          alt={primary.name}
           draggable={false}
         />
       ) : (
         <div className="ce-overlay-scrim">
-          {craftEssence ? (
+          {primary ? (
             <Text
               size="1"
               weight="bold"
@@ -70,14 +119,14 @@ export function CraftEssenceOverlay({
               className="ce-overlay-fallback-label"
               truncate
             >
-              {craftEssence.name}
+              {primary.name}
             </Text>
           ) : (
             <PlusIcon width={20} height={20} className="ce-overlay-empty-icon" />
           )}
         </div>
       )}
-      {!craftEssence && (
+      {!primary && (
         <>
           <span className="ce-overlay-corner tl" aria-hidden />
           <span className="ce-overlay-corner tr" aria-hidden />
@@ -85,20 +134,35 @@ export function CraftEssenceOverlay({
           <span className="ce-overlay-corner br" aria-hidden />
         </>
       )}
-      {craftEssence && (
-        <button
-          type="button"
-          className="ce-overlay-clear"
-          aria-label="清除礼装"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClear();
-          }}
-        >
-          <Cross2Icon width={11} height={11} />
-        </button>
+      {primary && (
+        <>
+          {onAdd && selected.length < 10 && (
+            <button
+              type="button"
+              className="ce-overlay-add"
+              aria-label="新增礼装"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAdd();
+              }}
+            >
+              <PlusIcon width={11} height={11} />
+            </button>
+          )}
+          <button
+            type="button"
+            className="ce-overlay-clear"
+            aria-label={isStack ? "清除全部礼装" : "清除礼装"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear();
+            }}
+          >
+            <Cross2Icon width={11} height={11} />
+          </button>
+        </>
       )}
-      {craftEssence && mlbRequired && (
+      {primary && mlbRequired && (
         mlbIconSrc ? (
           <img
             className="ce-condition-icon ce-condition-icon-mlb"
@@ -115,14 +179,16 @@ export function CraftEssenceOverlay({
 }
 
 export function GrandCraftEssenceOverlay({
-  craftEssences,
-  cardSrcs,
+  craftEssenceGroups,
+  cardSrcGroups,
   mlbRequired,
   mlbIconSrc,
   grandBondCeMode,
   bondIconSrc,
   bondNpIconSrc,
   onSelect,
+  onAdd,
+  onManage,
   onClear,
 }: GrandCraftEssenceOverlayProps) {
   const [failedCardSrcs, setFailedCardSrcs] = useState<Record<number, string>>({});
@@ -130,34 +196,61 @@ export function GrandCraftEssenceOverlay({
   const bondLabel = grandBondCeMode === "bond" ? "原始牵绊" : "冠位连接牵绊";
   return (
     <div className="grand-ce-overlay" aria-label="冠位礼装设置">
-      {craftEssences.map((craftEssence, index) => {
-        const cardSrc = cardSrcs[index];
+      {craftEssenceGroups.map((craftEssences, index) => {
+        const craftEssence = craftEssences[0] ?? null;
+        const cardSrc = cardSrcGroups[index]?.[0];
+        const isStack = craftEssences.length > 1;
+        const visibleStackSize = Math.min(craftEssences.length, 4);
         const showCardImage =
           craftEssence != null && cardSrc != null && failedCardSrcs[index] !== cardSrc;
         return (
           <div
             key={index}
-            className={`grand-ce-slot${craftEssence ? " filled" : " empty"}`}
+            className={`grand-ce-slot${craftEssence ? " filled" : " empty"}${isStack ? " stacked" : ""}`}
             role="button"
             tabIndex={0}
             aria-label={
               craftEssence
-                ? `冠位礼装 ${index + 1}：${craftEssence.name}`
+                ? isStack
+                  ? `冠位礼装 ${index + 1}：${craftEssence.name}等 ${craftEssences.length} 张`
+                  : `冠位礼装 ${index + 1}：${craftEssence.name}`
                 : `选择冠位礼装 ${index + 1}`
             }
             onClick={(event) => {
               event.stopPropagation();
-              onSelect(index);
+              if (craftEssence && index !== 1) onManage(index);
+              else onSelect(index);
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 event.stopPropagation();
-                onSelect(index);
+                if (craftEssence && index !== 1) onManage(index);
+                else onSelect(index);
               }
             }}
           >
-            {showCardImage ? (
+            {isStack ? (
+              <div className="grand-ce-slot-stack" aria-hidden>
+                {craftEssences.slice(0, 4).map((ce, stackIndex) => {
+                  const src = cardSrcGroups[index]?.[stackIndex];
+                  return (
+                    <span
+                      key={ce.id}
+                      style={{
+                        left: `${1 + (visibleStackSize - 1) * 5}px`,
+                        right: "1px",
+                        transform: `translateX(${-stackIndex * 5}px)`,
+                        zIndex: 4 - stackIndex,
+                      }}
+                    >
+                      {src ? <img src={src} alt="" /> : ce.name}
+                    </span>
+                  );
+                })}
+                <b>{craftEssences.length}</b>
+              </div>
+            ) : showCardImage ? (
               <img
                 className="grand-ce-slot-img"
                 src={cardSrc}
@@ -176,17 +269,32 @@ export function GrandCraftEssenceOverlay({
               </span>
             )}
             {craftEssence && (
-              <button
-                type="button"
-                className="grand-ce-slot-clear"
-                aria-label={`清除冠位礼装 ${index + 1}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onClear(index);
-                }}
-              >
-                <Cross2Icon width={10} height={10} />
-              </button>
+              <>
+                {index !== 1 && craftEssences.length < 10 && (
+                  <button
+                    type="button"
+                    className="grand-ce-slot-add"
+                    aria-label={`新增冠位礼装 ${index + 1}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onAdd(index);
+                    }}
+                  >
+                    <PlusIcon width={10} height={10} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="grand-ce-slot-clear"
+                  aria-label={`清除冠位礼装 ${index + 1}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onClear(index);
+                  }}
+                >
+                  <Cross2Icon width={10} height={10} />
+                </button>
+              </>
             )}
             {craftEssence && mlbRequired[index] && (
               mlbIconSrc ? (

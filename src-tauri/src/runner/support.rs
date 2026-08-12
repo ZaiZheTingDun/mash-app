@@ -112,6 +112,42 @@ pub(crate) fn support_not_found_scroll_message(
     format!("未找到从者 {name} [{grand_label}]，{scroll_action} (第 {attempt} 次)")
 }
 
+pub(crate) fn ordinary_support_ce_ids(config: &RunConfig) -> Vec<u32> {
+    let mut ids = Vec::new();
+    for id in config
+        .support_craft_essence_ids
+        .iter()
+        .copied()
+        .chain(config.support_craft_essence_id)
+    {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+        if ids.len() == 10 {
+            break;
+        }
+    }
+    ids
+}
+
+pub(crate) fn grand_support_ce_ids(config: &RunConfig, index: usize) -> Vec<u32> {
+    let limit = if index == 1 { 1 } else { 10 };
+    let mut ids = Vec::new();
+    for id in config.support_grand_craft_essence_id_lists[index]
+        .iter()
+        .copied()
+        .chain(config.support_grand_craft_essence_ids[index])
+    {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+        if ids.len() == limit {
+            break;
+        }
+    }
+    ids
+}
+
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
@@ -1289,32 +1325,34 @@ impl Runner {
         }
     }
 
-    /// Resolve the on-disk path for the pinned support CE template, or
-    /// `None` if no CE is pinned, no CE assets directory was located, or
-    /// the template file is missing. Cached on first call so repeated
-    /// `handle_support_select` polls don't restat the filesystem.
-    pub(crate) fn resolve_support_ce_template(&mut self) -> Option<PathBuf> {
-        if let Some(cached) = &self.support_ce_template {
+    /// Resolve all ordinary-support CE templates. The ordered multi-select
+    /// list takes precedence; a legacy single id is used as fallback.
+    /// Cached on first call so repeated polls don't restat the filesystem.
+    pub(crate) fn resolve_support_ce_templates(&mut self) -> Vec<PathBuf> {
+        if let Some(cached) = &self.support_ce_templates {
             return cached.clone();
         }
         let resolved = if self.config.support_grand_mode {
-            None
+            Vec::new()
         } else {
-            self.config
-                .support_craft_essence_id
-                .and_then(|ce_id| self.resolve_ce_template_path(ce_id))
+            ordinary_support_ce_ids(&self.config)
+                .into_iter()
+                .filter_map(|ce_id| self.resolve_ce_template_path(ce_id))
+                .collect()
         };
-        self.support_ce_template = Some(resolved.clone());
+        self.support_ce_templates = Some(resolved.clone());
         resolved
     }
 
-    pub(crate) fn resolve_support_grand_ce_templates(&mut self) -> [Option<PathBuf>; 3] {
+    pub(crate) fn resolve_support_grand_ce_templates(&mut self) -> [Vec<PathBuf>; 3] {
         if let Some(cached) = &self.support_grand_ce_templates {
             return cached.clone();
         }
         let resolved = std::array::from_fn(|index| {
-            self.config.support_grand_craft_essence_ids[index]
-                .and_then(|ce_id| self.resolve_ce_template_path(ce_id))
+            grand_support_ce_ids(&self.config, index)
+                .into_iter()
+                .filter_map(|ce_id| self.resolve_ce_template_path(ce_id))
+                .collect()
         });
         self.support_grand_ce_templates = Some(resolved.clone());
         resolved
@@ -1336,12 +1374,9 @@ impl Runner {
 
     pub(crate) fn support_ce_filter_enabled(&self) -> bool {
         if self.config.support_grand_mode {
-            self.config
-                .support_grand_craft_essence_ids
-                .iter()
-                .any(Option::is_some)
+            (0..3).any(|index| !grand_support_ce_ids(&self.config, index).is_empty())
         } else {
-            self.config.support_craft_essence_id.is_some()
+            !ordinary_support_ce_ids(&self.config).is_empty()
         }
     }
 
@@ -1421,68 +1456,96 @@ impl Runner {
     ) -> Option<SupportCeMismatch> {
         if self.config.support_grand_mode {
             let templates = self.resolve_support_grand_ce_templates();
-            if templates.iter().any(Option::is_some) && row.score_anchor.is_none() {
+            if templates.iter().any(|items| !items.is_empty()) && row.score_anchor.is_none() {
                 return Some(SupportCeMismatch::reason_only("确认按钮未完整显示"));
             }
-            for (index, template) in templates.iter().enumerate() {
-                let Some(template) = template.as_deref() else {
+            for (index, slot_templates) in templates.iter().enumerate() {
+                if slot_templates.is_empty() {
                     continue;
-                };
+                }
                 let Some(region) = Self::support_grand_ce_search_region(row, index) else {
                     return Some(SupportCeMismatch::reason_only(format!(
                         "冠位礼装 {} 区域无效",
                         index + 1
                     )));
                 };
-                if let Some(reason) = self.support_row_region_ce_mismatch(
-                    region,
-                    template,
-                    &format!("冠位礼装 {}", index + 1),
-                    SupportCeVerificationOptions {
-                        mlb_required: self.config.support_grand_craft_essence_mlb_required[index],
-                        grand_bond_ce_mode: if index == 1 {
-                            match self.config.support_grand_bond_ce_mode {
-                                SupportGrandBondCeMode::Any => None,
-                                SupportGrandBondCeMode::Bond => Some("bond".to_string()),
-                                SupportGrandBondCeMode::BondNp => Some("bondNp".to_string()),
-                            }
-                        } else {
-                            None
+                let mut final_mismatch = None;
+                for (candidate_index, template) in slot_templates.iter().enumerate() {
+                    let label = if slot_templates.len() == 1 {
+                        format!("冠位礼装 {}", index + 1)
+                    } else {
+                        format!("冠位礼装 {} 候选 {}", index + 1, candidate_index + 1)
+                    };
+                    match self.support_row_region_ce_mismatch(
+                        region,
+                        template,
+                        &label,
+                        SupportCeVerificationOptions {
+                            mlb_required: self.config.support_grand_craft_essence_mlb_required
+                                [index],
+                            grand_bond_ce_mode: if index == 1 {
+                                match self.config.support_grand_bond_ce_mode {
+                                    SupportGrandBondCeMode::Any => None,
+                                    SupportGrandBondCeMode::Bond => Some("bond".to_string()),
+                                    SupportGrandBondCeMode::BondNp => Some("bondNp".to_string()),
+                                }
+                            } else {
+                                None
+                            },
+                            ..Default::default()
                         },
-                        ..Default::default()
-                    },
-                ) {
+                    ) {
+                        None => {
+                            final_mismatch = None;
+                            break;
+                        }
+                        Some(mismatch) => final_mismatch = Some(mismatch),
+                    }
+                }
+                if let Some(reason) = final_mismatch {
                     return Some(reason);
                 }
             }
             None
         } else {
-            let template = self.resolve_support_ce_template()?;
+            let templates = self.resolve_support_ce_templates();
+            if templates.is_empty() {
+                return None;
+            }
             let region = Self::support_ce_search_region(row);
-            self.support_row_region_ce_mismatch(
-                region,
-                &template,
-                "礼装",
-                SupportCeVerificationOptions {
-                    mlb_required: self.config.support_craft_essence_mlb_required,
-                    grand_bond_ce_mode: None,
-                    ..Default::default()
-                },
-            )
-            .map(|mismatch| {
-                if mismatch.reason.contains("完整匹配不足") {
-                    SupportCeMismatch {
-                        reason: mismatch
-                            .reason
-                            .replace("礼装 完整匹配不足", "礼装完整匹配不足"),
-                        debug_summary: mismatch.debug_summary,
-                    }
+            let mut final_mismatch = None;
+            for (index, template) in templates.iter().enumerate() {
+                let label = if templates.len() == 1 {
+                    "礼装".to_string()
                 } else {
-                    SupportCeMismatch {
-                        reason: "礼装不匹配".to_string(),
-                        debug_summary: mismatch.debug_summary,
-                    }
+                    format!("候选礼装 {}", index + 1)
+                };
+                match self.support_row_region_ce_mismatch(
+                    region,
+                    template,
+                    &label,
+                    SupportCeVerificationOptions {
+                        mlb_required: self.config.support_craft_essence_mlb_required,
+                        grand_bond_ce_mode: None,
+                        ..Default::default()
+                    },
+                ) {
+                    None => return None,
+                    Some(mismatch) => final_mismatch = Some(mismatch),
                 }
+            }
+            final_mismatch.map(|mismatch| SupportCeMismatch {
+                reason: if mismatch.reason.contains("完整匹配不足") {
+                    let suffix = mismatch
+                        .reason
+                        .split_once("完整匹配不足")
+                        .map(|(_, suffix)| suffix)
+                        .unwrap_or_default();
+                    format!("礼装完整匹配不足{suffix}")
+                } else {
+                    "礼装不匹配".to_string()
+                },
+                debug_summary: mismatch.debug_summary,
             })
         }
     }

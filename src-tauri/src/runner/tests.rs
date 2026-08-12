@@ -591,6 +591,7 @@ fn minimal_run_config_json() -> serde_json::Value {
 fn run_config_defaults_support_ce_to_none_when_field_missing() {
     let cfg: RunConfig = serde_json::from_value(minimal_run_config_json()).unwrap();
     assert!(cfg.support_craft_essence_id.is_none());
+    assert!(cfg.support_craft_essence_ids.is_empty());
     assert_eq!(
         cfg.support_ce_threshold,
         crate::commands::settings::SUPPORT_CE_THRESHOLD_DEFAULT
@@ -613,6 +614,10 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     assert_eq!(cfg.support_craft_essence_mlb_required, true);
     assert_eq!(cfg.support_grand_mode, false);
     assert_eq!(cfg.support_grand_craft_essence_ids, [None; 3]);
+    assert!(cfg
+        .support_grand_craft_essence_id_lists
+        .iter()
+        .all(Vec::is_empty));
     assert_eq!(cfg.support_grand_craft_essence_mlb_required, [true; 3]);
     assert_eq!(cfg.support_grand_bond_ce_mode, SupportGrandBondCeMode::Any);
     assert!(cfg.grand_servants.is_empty());
@@ -649,9 +654,12 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
 fn run_config_round_trips_support_craft_essence_id() {
     let mut payload = minimal_run_config_json();
     payload["supportCraftEssenceId"] = serde_json::json!(1485);
+    payload["supportCraftEssenceIds"] = serde_json::json!([1485, 1001]);
     payload["supportSlotIndex"] = serde_json::json!(5);
     payload["supportGrandMode"] = serde_json::json!(true);
     payload["supportGrandCraftEssenceIds"] = serde_json::json!([1001, null, 1003]);
+    payload["supportGrandCraftEssenceIdLists"] =
+        serde_json::json!([[1001, 1002], [], [1003, 1004]]);
     payload["supportCraftEssenceMlbRequired"] = serde_json::json!(false);
     payload["supportCeFullGateThreshold"] = serde_json::json!(0.55);
     payload["supportMlbIconThreshold"] = serde_json::json!(0.76);
@@ -665,6 +673,7 @@ fn run_config_round_trips_support_craft_essence_id() {
     ]);
     let cfg: RunConfig = serde_json::from_value(payload).unwrap();
     assert_eq!(cfg.support_craft_essence_id, Some(1485));
+    assert_eq!(cfg.support_craft_essence_ids, vec![1485, 1001]);
     assert_eq!(cfg.support_craft_essence_mlb_required, false);
     assert_eq!(cfg.support_ce_full_gate_threshold, 0.55);
     assert_eq!(cfg.support_mlb_icon_threshold, 0.76);
@@ -675,6 +684,10 @@ fn run_config_round_trips_support_craft_essence_id() {
     assert_eq!(
         cfg.support_grand_craft_essence_ids,
         [Some(1001), None, Some(1003)]
+    );
+    assert_eq!(
+        cfg.support_grand_craft_essence_id_lists,
+        [vec![1001, 1002], vec![], vec![1003, 1004]]
     );
     assert_eq!(
         cfg.support_grand_craft_essence_mlb_required,
@@ -693,11 +706,19 @@ fn run_config_round_trips_support_craft_essence_id() {
     // camelCase rename rule applied to the whole struct.
     let json = serde_json::to_value(&cfg).unwrap();
     assert_eq!(json["supportCraftEssenceId"], serde_json::json!(1485));
+    assert_eq!(
+        json["supportCraftEssenceIds"],
+        serde_json::json!([1485, 1001])
+    );
     assert_eq!(json["supportSlotIndex"], serde_json::json!(5));
     assert_eq!(json["supportGrandMode"], serde_json::json!(true));
     assert_eq!(
         json["supportGrandCraftEssenceIds"],
         serde_json::json!([1001, null, 1003])
+    );
+    assert_eq!(
+        json["supportGrandCraftEssenceIdLists"],
+        serde_json::json!([[1001, 1002], [], [1003, 1004]])
     );
     assert_eq!(
         json["supportCraftEssenceMlbRequired"],
@@ -715,6 +736,35 @@ fn run_config_round_trips_support_craft_essence_id() {
             { "memberId": null, "slotIndex": 2, "servantId": null, "isSupport": false, "npCard": "auto", "priority": "np" }
         ])
     );
+}
+
+#[test]
+fn ordinary_support_ce_ids_deduplicates_and_caps_the_allow_list() {
+    let mut payload = minimal_run_config_json();
+    payload["supportCraftEssenceId"] = serde_json::json!(99);
+    payload["supportCraftEssenceIds"] = serde_json::json!([1, 2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+
+    assert_eq!(
+        ordinary_support_ce_ids(&cfg),
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    );
+}
+
+#[test]
+fn grand_support_ce_ids_caps_outer_slots_and_keeps_middle_slot_single() {
+    let mut payload = minimal_run_config_json();
+    payload["supportGrandCraftEssenceIds"] = serde_json::json!([99, 88, 77]);
+    payload["supportGrandCraftEssenceIdLists"] =
+        serde_json::json!([[1, 2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11], [20, 21], [30, 31]]);
+    let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+
+    assert_eq!(
+        grand_support_ce_ids(&cfg, 0),
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    );
+    assert_eq!(grand_support_ce_ids(&cfg, 1), vec![20]);
+    assert_eq!(grand_support_ce_ids(&cfg, 2), vec![30, 31, 77]);
 }
 
 #[test]

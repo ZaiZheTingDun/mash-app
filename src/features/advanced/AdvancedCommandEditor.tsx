@@ -8,6 +8,7 @@ import {
 import { invoke } from "../../tauri";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
+import { AddRowTrigger } from "../../components/common/AddRowTrigger";
 import { FaceChip } from "./AdvancedFaceChip";
 import { AdvancedCommandCardButton } from "./AdvancedCommandCardButton";
 import { GrandOutputSettings } from "./AdvancedGrandOutputSettings";
@@ -800,17 +801,12 @@ function AdvancedStrategyEditor({
             </div>
           ))}
           {!controlDraft ? (
-            <button
-              type="button"
-              className="battle-add-trigger"
+            <AddRowTrigger
+              leading={<span className="advanced-delete-spacer" aria-hidden />}
               onClick={() => setControlDraft({ step: "source" })}
             >
-              <span className="advanced-delete-spacer" aria-hidden />
-              <span className="battle-plus-box">
-                <PlusIcon width={16} height={16} />
-              </span>
-              <Text size="2" weight="medium">添加控制行动</Text>
-            </button>
+              添加控制行动
+            </AddRowTrigger>
           ) : (
             <div className="battle-choice-row">
               <span className="advanced-delete-spacer" aria-hidden />
@@ -1036,17 +1032,12 @@ function AdvancedStrategyEditor({
             </div>
           ))}
           {!prepDraft ? (
-            <button
-              type="button"
-              className="battle-add-trigger"
+            <AddRowTrigger
+              leading={<span className="advanced-delete-spacer" aria-hidden />}
               onClick={() => setPrepDraft({ step: "source" })}
             >
-              <span className="advanced-delete-spacer" aria-hidden />
-              <span className="battle-plus-box">
-                <PlusIcon width={16} height={16} />
-              </span>
-              <Text size="2" weight="medium">添加行动</Text>
-            </button>
+              添加行动
+            </AddRowTrigger>
           ) : (
             <div className="battle-choice-row">
               <span className="advanced-delete-spacer" aria-hidden />

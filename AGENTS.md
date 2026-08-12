@@ -103,6 +103,8 @@ Three independent test runners cover the three layers — none of them require a
 
 The only acceptable reasons to skip writing a test are: (a) the change is purely cosmetic (CSS, Chinese copy, comment tweaks), (b) the surface is genuinely untestable without a live ADB device / scrcpy stream / PyInstaller bundle (document this in the PR), or (c) the change is a pure rename whose behaviour is already pinned by an existing test.
 
+For visual adjustments, do not use a physical device for validation unless the user explicitly requests it.
+
 ## Architecture: Backend-Owned State
 
 The Rust backend is the single source of truth for all application state. The frontend is a pure rendering layer.

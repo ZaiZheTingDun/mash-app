@@ -154,6 +154,7 @@ describe("BattlePage", () => {
           repeatMission: false,
           maxMissionRuns: 100,
           apRecoveryItems: ["gold", "copper", "rainbow"],
+          supportCraftEssenceIds: [1485],
         }),
       });
     });
@@ -252,6 +253,7 @@ describe("BattlePage", () => {
       ...PROJECT,
       supportGrandMode: true,
       supportGrandCraftEssenceIds: [1001, null, 1003],
+      supportGrandCraftEssenceIdLists: [[1001, 1002], [], [1003]],
     });
 
     await user.click(await screen.findByRole("button", { name: "开始" }));
@@ -261,6 +263,7 @@ describe("BattlePage", () => {
         config: expect.objectContaining({
           supportGrandMode: true,
           supportGrandCraftEssenceIds: [1001, null, 1003],
+          supportGrandCraftEssenceIdLists: [[1001, 1002], [], [1003]],
         }),
       });
     });

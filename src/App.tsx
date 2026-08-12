@@ -550,21 +550,35 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
   // the grid still renders (selections are no-ops in that case).
   const slots = useMemo<SlotItem[]>(() => {
     const raw = activeProject?.slots ?? createInitialProjectSlots();
-    return raw.map((s) => ({
-      id: s.id,
-      type: s.type,
-      servant:
-        s.servantId != null
-          ? (servants.find((sv) => sv.variantKey === s.servantVariantKey) ??
-            servants.find((sv) => sv.id === s.servantId) ??
-            null)
-          : null,
-      craftEssence:
-        s.craftEssenceId != null
-          ? (craftEssences.find((c) => c.id === s.craftEssenceId) ?? null)
-          : null,
-      craftEssenceMlbRequired: s.craftEssenceMlbRequired ?? true,
-    }));
+    return raw.map((s) => {
+      const craftEssenceIds = Array.from(
+        new Set(
+          (s.craftEssenceIds?.length
+            ? s.craftEssenceIds
+            : s.craftEssenceId != null
+              ? [s.craftEssenceId]
+              : []
+          ).slice(0, 10)
+        )
+      );
+      const slotCraftEssences = craftEssenceIds
+        .map((id) => craftEssences.find((ce) => ce.id === id) ?? null)
+        .filter((ce): ce is CraftEssence => ce != null);
+      return {
+        id: s.id,
+        type: s.type,
+        servant:
+          s.servantId != null
+            ? (servants.find((sv) => sv.variantKey === s.servantVariantKey) ??
+              servants.find((sv) => sv.id === s.servantId) ??
+              null)
+            : null,
+        craftEssence: slotCraftEssences[0] ?? null,
+        craftEssences: slotCraftEssences,
+        craftEssenceMultiSelect: s.craftEssenceMultiSelect ?? false,
+        craftEssenceMlbRequired: s.craftEssenceMlbRequired ?? true,
+      };
+    });
   }, [activeProject, servants, craftEssences]);
 
   // Persist any slot mutation (drag-reorder or selection from the dialog)
@@ -573,14 +587,29 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
   const handleSlotsChange = useCallback(
     (next: SlotItem[]) => {
       if (!activeProject) return;
-      const projectSlots = next.map((s) => ({
-        id: s.id,
-        type: s.type,
-        servantId: s.servant?.id ?? null,
-        servantVariantKey: s.servant?.variantKey ?? null,
-        craftEssenceId: s.craftEssence?.id ?? null,
-        craftEssenceMlbRequired: s.craftEssenceMlbRequired ?? true,
-      }));
+      const projectSlots = next.map((s) => {
+        const craftEssenceIds = Array.from(
+          new Set(
+            (s.craftEssences?.length
+              ? s.craftEssences.map((ce) => ce.id)
+              : s.craftEssence
+                ? [s.craftEssence.id]
+                : []
+            ).slice(0, 10)
+          )
+        );
+        return {
+          id: s.id,
+          type: s.type,
+          servantId: s.servant?.id ?? null,
+          servantVariantKey: s.servant?.variantKey ?? null,
+          craftEssenceId: craftEssenceIds[0] ?? null,
+          craftEssenceIds,
+          craftEssenceMultiSelect:
+            s.type === "support" && (s.craftEssenceMultiSelect ?? false),
+          craftEssenceMlbRequired: s.craftEssenceMlbRequired ?? true,
+        };
+      });
       const grandCardStrategy = activeProject.grandCardStrategy
         ? relocateGrandCardStrategySlots(
             activeProject.grandCardStrategy,

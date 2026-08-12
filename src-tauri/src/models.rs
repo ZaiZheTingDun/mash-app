@@ -495,6 +495,13 @@ pub struct ProjectSlot {
     /// the support-select screen, party slots store it for future use.
     #[serde(default)]
     pub craft_essence_id: Option<u32>,
+    /// Ordered allow-list used by ordinary support selection. Legacy
+    /// projects only carry `craft_essence_id`; normalization migrates that
+    /// value into this list. The UI and runner cap it at ten unique ids.
+    #[serde(default)]
+    pub craft_essence_ids: Vec<u32>,
+    #[serde(default)]
+    pub craft_essence_multi_select: bool,
     #[serde(default = "default_true")]
     pub craft_essence_mlb_required: bool,
 }
@@ -512,6 +519,8 @@ pub(crate) fn default_project_slots() -> Vec<ProjectSlot> {
         servant_id: None,
         servant_variant_key: None,
         craft_essence_id: None,
+        craft_essence_ids: Vec::new(),
+        craft_essence_multi_select: false,
         craft_essence_mlb_required: true,
     };
     vec![
@@ -534,6 +543,10 @@ pub(crate) fn default_support_append_skill_level_mins() -> [Option<u32>; 5] {
 
 pub(crate) fn default_support_grand_craft_essence_ids() -> [Option<u32>; 3] {
     [None; 3]
+}
+
+pub(crate) fn default_support_grand_craft_essence_id_lists() -> [Vec<u32>; 3] {
+    std::array::from_fn(|_| Vec::new())
 }
 
 pub(crate) fn default_support_grand_craft_essence_mlb_required() -> [bool; 3] {
@@ -774,6 +787,8 @@ pub struct Project {
     pub support_grand_mode: bool,
     #[serde(default = "default_support_grand_craft_essence_ids")]
     pub support_grand_craft_essence_ids: [Option<u32>; 3],
+    #[serde(default = "default_support_grand_craft_essence_id_lists")]
+    pub support_grand_craft_essence_id_lists: [Vec<u32>; 3],
     #[serde(default = "default_support_grand_craft_essence_mlb_required")]
     pub support_grand_craft_essence_mlb_required: [bool; 3],
     #[serde(default)]

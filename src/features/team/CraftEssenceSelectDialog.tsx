@@ -25,6 +25,7 @@ interface CraftEssenceSelectDialogProps {
   onMlbRequiredChange?: (required: boolean) => void;
   grandBondCeMode?: SupportGrandBondCeMode;
   onGrandBondCeModeChange?: (mode: SupportGrandBondCeMode) => void;
+  disabledIds?: number[];
 }
 
 const ROW_HEIGHT = 40;
@@ -50,12 +51,39 @@ function craftEssenceSearchText(ce: CraftEssence) {
     .toLowerCase();
 }
 
+function CraftEssenceCardThumbnail({
+  craftEssence,
+  src,
+}: {
+  craftEssence: CraftEssence;
+  src: string;
+}) {
+  return (
+    <HoverCard.Root openDelay={150} closeDelay={100}>
+      <HoverCard.Trigger>
+        <span className="ce-card-thumbnail-trigger">
+          <img className="ce-card-thumbnail" src={src} alt="" />
+        </span>
+      </HoverCard.Trigger>
+      <HoverCard.Content
+        className="ce-card-preview"
+        side="left"
+        align="center"
+        sideOffset={8}
+      >
+        <img src={src} alt={`${craftEssence.name} 卡面预览`} />
+      </HoverCard.Content>
+    </HoverCard.Root>
+  );
+}
+
 /**
  * Picker for craft essences. Modeled after `ServantSelectDialog` but
  * simpler: Rust normalizes the bundled `craft_essences.json` to
  * collectionNo-as-id + Chinese name (+ optional wiki link), so we don't
- * need a `disabledIds` prop — duplicate CEs across slots are valid (e.g.
- * a party can run several copies of the same MLB CE).
+ * `disabledIds` only prevents selecting the same CE twice inside one
+ * managed support slot; duplicate CEs across different team slots remain
+ * valid.
  *
  * The CE catalog has ~2600 entries, so we render the list with a tiny
  * fixed-row-height windowed renderer instead of mounting every option.
@@ -71,6 +99,7 @@ export function CraftEssenceSelectDialog({
   onMlbRequiredChange,
   grandBondCeMode,
   onGrandBondCeModeChange,
+  disabledIds = [],
 }: CraftEssenceSelectDialogProps) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] =
@@ -92,13 +121,16 @@ export function CraftEssenceSelectDialog({
       craftEssenceSearchText(ce).includes(q)
     );
   }, [craftEssences, search, categoryFilter, rarityFilter]);
+  const disabledIdSet = useMemo(() => new Set(disabledIds), [disabledIds]);
 
   // Clamp at read-time rather than via a setState-in-effect (which the
   // lint rule rejects). The stored `activeIndex` may briefly exceed the
   // current `filtered.length` when the search shrinks the list; we just
   // never render past the end.
   const safeActiveIndex =
-    filtered.length === 0 ? 0 : Math.min(activeIndex, filtered.length - 1);
+    filtered.length === 0
+      ? 0
+      : Math.min(activeIndex, filtered.length - 1);
 
   const startIndex = Math.max(
     0,
@@ -120,6 +152,7 @@ export function CraftEssenceSelectDialog({
 
   const handleSelect = useCallback(
     (ce: CraftEssence) => {
+      if (disabledIdSet.has(ce.id)) return;
       onSelect(ce);
       onOpenChange(false);
       setSearch("");
@@ -128,7 +161,12 @@ export function CraftEssenceSelectDialog({
       setActiveIndex(0);
       resetScroll();
     },
-    [onSelect, onOpenChange, resetScroll]
+    [
+      disabledIdSet,
+      onSelect,
+      onOpenChange,
+      resetScroll,
+    ]
   );
 
   const handleOpenChange = useCallback(
@@ -164,7 +202,10 @@ export function CraftEssenceSelectDialog({
       switch (e.key) {
         case "ArrowDown": {
           e.preventDefault();
-          const next = Math.min(safeActiveIndex + 1, filtered.length - 1);
+          const next = Math.min(
+            safeActiveIndex + 1,
+            filtered.length - 1
+          );
           setActiveIndex(next);
           ensureVisible(next);
           break;
@@ -269,7 +310,9 @@ export function CraftEssenceSelectDialog({
             <label className="ce-select-option">
               <Checkbox
                 checked={mlbRequired ?? true}
-                onCheckedChange={(checked) => onMlbRequiredChange(checked === true)}
+                onCheckedChange={(checked) =>
+                  onMlbRequiredChange(checked === true)
+                }
               />
               <Text size="2">满破礼装</Text>
             </label>
@@ -324,6 +367,8 @@ export function CraftEssenceSelectDialog({
                     key={ce.id}
                     role="option"
                     aria-selected={index === safeActiveIndex}
+                    aria-disabled={disabledIdSet.has(ce.id)}
+                    disabled={disabledIdSet.has(ce.id)}
                     className={`servant-option ${index === safeActiveIndex ? "focused" : ""}`}
                     style={{
                       position: "absolute",
@@ -337,33 +382,19 @@ export function CraftEssenceSelectDialog({
                   >
                     <div className="ce-option-content">
                       <Flex align="center" gap="3" className="ce-option-text">
-                      <Text size="1" color="gray" style={{ minWidth: "3em" }}>
-                        #{ce.id}
-                      </Text>
-                      <Text size="2" weight="medium">
-                        {ce.name}
-                      </Text>
+                        <Text
+                          size="1"
+                          color="gray"
+                          style={{ minWidth: "3em" }}
+                        >
+                          #{ce.id}
+                        </Text>
+                        <Text size="2" weight="medium">
+                          {ce.name}
+                        </Text>
                       </Flex>
                       {cardSrc && (
-                        <HoverCard.Root openDelay={150} closeDelay={100}>
-                          <HoverCard.Trigger>
-                            <span className="ce-card-thumbnail-trigger">
-                              <img
-                                className="ce-card-thumbnail"
-                                src={cardSrc}
-                                alt=""
-                              />
-                            </span>
-                          </HoverCard.Trigger>
-                          <HoverCard.Content
-                            className="ce-card-preview"
-                            side="left"
-                            align="center"
-                            sideOffset={8}
-                          >
-                            <img src={cardSrc} alt={`${ce.name} 卡面预览`} />
-                          </HoverCard.Content>
-                        </HoverCard.Root>
+                        <CraftEssenceCardThumbnail craftEssence={ce} src={cardSrc} />
                       )}
                     </div>
                   </button>

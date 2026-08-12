@@ -10,5 +10,7 @@ export interface SlotItem {
    * only consumed by the runner for the support slot today.
    */
   craftEssence: CraftEssence | null;
+  craftEssences?: CraftEssence[];
+  craftEssenceMultiSelect?: boolean;
   craftEssenceMlbRequired?: boolean;
 }

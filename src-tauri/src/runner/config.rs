@@ -103,14 +103,16 @@ pub struct RunConfig {
     /// Stable team-builder slot id of the pinned support member.
     #[serde(default)]
     pub support_member_id: Option<String>,
-    /// Craft-essence id pinned via the team-builder support CE slot.
-    /// When `Some`, `handle_support_select` runs `verify_support_ce`
-    /// against each OCR-detected row and picks the first row whose CE
-    /// matches the template at `assets/ces/{id}/card_ce.png`. `None`
-    /// (or a missing template) preserves legacy behaviour: pick the
-    /// first OCR match.
+    /// Legacy single craft-essence id pinned via the team-builder support
+    /// CE slot. New projects also populate `support_craft_essence_ids`;
+    /// this field remains as a fallback for older start payloads.
     #[serde(default)]
     pub support_craft_essence_id: Option<u32>,
+    /// Ordered ordinary-support CE allow-list. A candidate row passes when
+    /// its card matches any configured entry. Empty keeps the legacy single
+    /// `support_craft_essence_id` behavior.
+    #[serde(default)]
+    pub support_craft_essence_ids: Vec<u32>,
     /// Runtime CE artwork threshold injected from persisted recognition
     /// settings when automation starts.
     #[serde(default = "default_support_ce_threshold")]
@@ -166,6 +168,8 @@ pub struct RunConfig {
     pub support_grand_mode: bool,
     #[serde(default = "default_support_grand_craft_essence_ids")]
     pub support_grand_craft_essence_ids: [Option<u32>; 3],
+    #[serde(default = "default_support_grand_craft_essence_id_lists")]
+    pub support_grand_craft_essence_id_lists: [Vec<u32>; 3],
     #[serde(default = "default_support_grand_craft_essence_mlb_required")]
     pub support_grand_craft_essence_mlb_required: [bool; 3],
     #[serde(default)]
@@ -248,6 +252,10 @@ fn default_support_append_skill_level_mins() -> [Option<u32>; 5] {
 
 fn default_support_grand_craft_essence_ids() -> [Option<u32>; 3] {
     [None; 3]
+}
+
+fn default_support_grand_craft_essence_id_lists() -> [Vec<u32>; 3] {
+    std::array::from_fn(|_| Vec::new())
 }
 
 fn default_support_grand_craft_essence_mlb_required() -> [bool; 3] {

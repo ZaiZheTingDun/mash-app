@@ -26,9 +26,11 @@ interface SortableSlotProps {
   slot: SlotItem;
   portraitSrc: string | null | undefined;
   ceCardSrc: string | null | undefined;
+  craftEssences: CraftEssence[];
+  ceCardSrcs: (string | null | undefined)[];
   supportGrandMode: boolean;
-  supportGrandCraftEssences: (CraftEssence | null)[];
-  supportGrandCeCardSrcs: (string | null | undefined)[];
+  supportGrandCraftEssenceGroups: CraftEssence[][];
+  supportGrandCeCardSrcGroups: (string | null | undefined)[][];
   supportGrandCeMlbRequired: SupportGrandCraftEssenceMlbRequired;
   supportGrandBondCeMode: SupportGrandBondCeMode;
   mlbIconSrc: string | null | undefined;
@@ -41,9 +43,13 @@ interface SortableSlotProps {
   supportAppendSkillLevels: SupportAppendSkillLevelMins;
   onSelect: () => void;
   onCeSelect: () => void;
+  onCeAdd: () => void;
+  onCeManage: () => void;
   onCeClear: () => void;
   onGrandModeToggle: () => void;
   onGrandCeSelect: (index: number) => void;
+  onGrandCeAdd: (index: number) => void;
+  onGrandCeManage: (index: number) => void;
   onGrandCeClear: (index: number) => void;
   onSupportSettingsOpen: () => void;
   onDeleteRequest?: () => void;
@@ -65,9 +71,11 @@ export function SortableSlot({
   slot,
   portraitSrc,
   ceCardSrc,
+  craftEssences,
+  ceCardSrcs,
   supportGrandMode,
-  supportGrandCraftEssences,
-  supportGrandCeCardSrcs,
+  supportGrandCraftEssenceGroups,
+  supportGrandCeCardSrcGroups,
   supportGrandCeMlbRequired,
   supportGrandBondCeMode,
   mlbIconSrc,
@@ -80,9 +88,13 @@ export function SortableSlot({
   supportAppendSkillLevels,
   onSelect,
   onCeSelect,
+  onCeAdd,
+  onCeManage,
   onCeClear,
   onGrandModeToggle,
   onGrandCeSelect,
+  onGrandCeAdd,
+  onGrandCeManage,
   onGrandCeClear,
   onSupportSettingsOpen,
   onDeleteRequest,
@@ -222,23 +234,29 @@ export function SortableSlot({
               )}
               {isSupport && supportGrandMode ? (
                 <GrandCraftEssenceOverlay
-                  craftEssences={supportGrandCraftEssences}
-                  cardSrcs={supportGrandCeCardSrcs}
+                  craftEssenceGroups={supportGrandCraftEssenceGroups}
+                  cardSrcGroups={supportGrandCeCardSrcGroups}
                   mlbRequired={supportGrandCeMlbRequired}
                   mlbIconSrc={mlbIconSrc}
                   grandBondCeMode={supportGrandBondCeMode}
                   bondIconSrc={bondIconSrc}
                   bondNpIconSrc={bondNpIconSrc}
                   onSelect={onGrandCeSelect}
+                  onAdd={onGrandCeAdd}
+                  onManage={onGrandCeManage}
                   onClear={onGrandCeClear}
                 />
               ) : (
                 <CraftEssenceOverlay
                   craftEssence={slot.craftEssence}
                   cardSrc={ceCardSrc}
+                  craftEssences={craftEssences}
+                  cardSrcs={ceCardSrcs}
                   mlbRequired={isSupport ? slot.craftEssenceMlbRequired ?? true : false}
                   mlbIconSrc={mlbIconSrc}
                   onSelect={onCeSelect}
+                  onAdd={isSupport ? onCeAdd : undefined}
+                  onManage={isSupport ? onCeManage : undefined}
                   onClear={onCeClear}
                 />
               )}

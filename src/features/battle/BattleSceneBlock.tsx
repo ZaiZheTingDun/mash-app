@@ -1,16 +1,14 @@
 import { useMemo, useState } from "react";
 import type React from "react";
 import { Avatar, Button, Text } from "@radix-ui/themes";
-import {
-  Cross2Icon,
-  PlusIcon,
-} from "@radix-ui/react-icons";
+import { Cross2Icon } from "@radix-ui/react-icons";
 import orderChangeIcon from "../../../src-tauri/resources/images/icon_order_change.png";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
 import { useServantFaceImages } from "../team/useServantFaceImages";
 import { useServantSkillIcons, type SkillIcons } from "../team/useServantSkillIcons";
 import { SkillOptionButtons } from "../../components/common/SkillOptionButtons";
+import { AddRowTrigger } from "../../components/common/AddRowTrigger";
 import { EnemyTargetButtons, EnemyTargetSelector } from "./EnemyTargetSelector";
 import { useServantSkillTargeting } from "./useServantSkillTargeting";
 import { useServantSkillSelections } from "./useServantSkillSelections";
@@ -833,18 +831,11 @@ export function BattleSceneBlock({
               onClick={() => setPrepDraft(null)}
             />
             {!prepDraft ? (
-              <button
-                type="button"
-                className="battle-add-trigger"
+              <AddRowTrigger
                 onClick={() => setPrepDraft({ step: "source" })}
               >
-                <span className="battle-plus-box">
-                  <PlusIcon width={16} height={16} />
-                </span>
-                <Text size="2" weight="medium">
-                  添加一项新的行动
-                </Text>
-              </button>
+                添加一项新的行动
+              </AddRowTrigger>
             ) : prepDraft.step === "source" ? (
               <div className="battle-choice-row">
                 {currentPartyMembers.slice(0, 3).map((member, index) => {
@@ -1133,31 +1124,17 @@ export function BattleSceneBlock({
               onClick={() => setAttackDraft(null)}
             />
             {attackDraft?.targetIndex !== null ? (
-              <button
-                type="button"
-                className="battle-add-trigger"
+              <AddRowTrigger
                 onClick={() => setAttackDraft({ step: "source", targetIndex: null })}
               >
-                <span className="battle-plus-box">
-                  <PlusIcon width={16} height={16} />
-                </span>
-                <Text size="2" weight="medium">
-                  添加一项新的行动
-                </Text>
-              </button>
+                添加一项新的行动
+              </AddRowTrigger>
             ) : !attackDraft ? (
-              <button
-                type="button"
-                className="battle-add-trigger"
+              <AddRowTrigger
                 onClick={() => setAttackDraft({ step: "source", targetIndex: null })}
               >
-                <span className="battle-plus-box">
-                  <PlusIcon width={16} height={16} />
-                </span>
-                <Text size="2" weight="medium">
-                  添加一项新的行动
-                </Text>
-              </button>
+                添加一项新的行动
+              </AddRowTrigger>
             ) : (
               renderAttackDraft(attackDraft, currentAttackPartyMembers)
             )}

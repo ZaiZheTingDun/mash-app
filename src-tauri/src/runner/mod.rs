@@ -152,13 +152,11 @@ pub struct Runner {
     /// we don't do disk I/O at 500ms cadence (and cleared between runs
     /// because each run owns its own `Runner`).
     support_meta: Option<ServantMetadata>,
-    /// Cached resolved path to the pinned support CE template, computed
-    /// once on the first poll where `support_craft_essence_id` is set.
-    /// Outer `Option` is "have we tried to resolve yet"; inner `Option`
-    /// is "did it succeed" (`None` = template missing / no CE pinned →
-    /// skip verification).
-    support_ce_template: Option<Option<PathBuf>>,
-    support_grand_ce_templates: Option<[Option<PathBuf>; 3]>,
+    /// Cached ordinary-support CE template paths. The filesystem lookup is
+    /// performed once on the first poll where at least one CE id is set.
+    /// Outer `Option` records whether resolution has already been attempted.
+    support_ce_templates: Option<Vec<PathBuf>>,
+    support_grand_ce_templates: Option<[Vec<PathBuf>; 3]>,
     /// Whether the current refreshed support list has ever shown the Grand
     /// avatar-frame probe. A missing probe before this flips true is not
     /// enough to conclude the Grand section is exhausted, because first-page
@@ -245,7 +243,7 @@ impl Runner {
             support_class_tab_done: false,
             support_extra_class_filter_configured: false,
             support_meta: None,
-            support_ce_template: None,
+            support_ce_templates: None,
             support_grand_ce_templates: None,
             support_grand_section_seen: false,
             support_grand_section_misses: 0,

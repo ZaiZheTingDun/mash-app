@@ -22,6 +22,48 @@ pub(crate) fn read_projects_from_path(path: &Path) -> Vec<Project> {
 }
 
 pub(crate) fn normalize_project(mut project: Project) -> Project {
+    for slot in &mut project.slots {
+        let mut ids = Vec::new();
+        for id in slot
+            .craft_essence_ids
+            .iter()
+            .copied()
+            .chain(slot.craft_essence_id)
+        {
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+            if ids.len() == 10 {
+                break;
+            }
+        }
+        if slot.kind != "support" || !slot.craft_essence_multi_select {
+            ids.truncate(1);
+            slot.craft_essence_multi_select = false;
+        }
+        slot.craft_essence_id = ids.first().copied();
+        slot.craft_essence_ids = ids;
+    }
+    for index in 0..3 {
+        let mut ids = Vec::new();
+        for id in project.support_grand_craft_essence_id_lists[index]
+            .iter()
+            .copied()
+            .chain(project.support_grand_craft_essence_ids[index])
+        {
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+            if ids.len() == if index == 1 { 1 } else { 10 } {
+                break;
+            }
+        }
+        if index == 1 {
+            ids.truncate(1);
+        }
+        project.support_grand_craft_essence_ids[index] = ids.first().copied();
+        project.support_grand_craft_essence_id_lists[index] = ids;
+    }
     let repeat_mode = match project.repeat_mode {
         Some(mode) => mode,
         None if project.repeat_mission => ProjectRepeatMode::Infinite,
@@ -272,6 +314,7 @@ pub(crate) fn new_project(name: String, advanced_mode: bool, grand_class: GrandC
         support_servant_variant_key: None,
         support_grand_mode: advanced_mode,
         support_grand_craft_essence_ids: default_support_grand_craft_essence_ids(),
+        support_grand_craft_essence_id_lists: default_support_grand_craft_essence_id_lists(),
         support_grand_craft_essence_mlb_required: default_support_grand_craft_essence_mlb_required(
         ),
         support_grand_bond_ce_mode: SupportGrandBondCeMode::Any,
@@ -969,6 +1012,8 @@ pub(crate) fn clear_project_slot_servant(
     slot.servant_id = None;
     slot.servant_variant_key = None;
     slot.craft_essence_id = None;
+    slot.craft_essence_ids.clear();
+    slot.craft_essence_multi_select = false;
     slot.craft_essence_mlb_required = true;
 
     if is_support {
@@ -981,6 +1026,8 @@ pub(crate) fn clear_project_slot_servant(
         project.support_append_skill_level_mins = default_support_append_skill_level_mins();
         project.support_grand_mode = false;
         project.support_grand_craft_essence_ids = default_support_grand_craft_essence_ids();
+        project.support_grand_craft_essence_id_lists =
+            default_support_grand_craft_essence_id_lists();
         project.support_grand_craft_essence_mlb_required =
             default_support_grand_craft_essence_mlb_required();
         project.support_grand_bond_ce_mode = SupportGrandBondCeMode::Any;

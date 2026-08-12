@@ -104,6 +104,51 @@
   pointer-events: none;
 }
 
+.ce-overlay-stack {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ce-overlay-stack-card {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  border-radius: 2px;
+  background: var(--gray-4);
+  color: var(--gray-12);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.ce-overlay-stack-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ce-overlay-count {
+  position: absolute;
+  left: 5px;
+  bottom: 4px;
+  z-index: 6;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.78);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
 .ce-overlay-scrim {
   position: absolute;
   inset: 0;
@@ -170,10 +215,10 @@
   border-top: none;
 }
 
-.ce-overlay-clear {
+.ce-overlay-clear,
+.ce-overlay-add {
   position: absolute;
   top: 4px;
-  right: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -187,15 +232,26 @@
   cursor: pointer;
   opacity: 0;
   transition: background 0.15s, opacity 0.15s;
-  z-index: 3;
+  z-index: 10;
+}
+
+.ce-overlay-clear {
+  right: 4px;
+}
+
+.ce-overlay-add {
+  right: 24px;
 }
 
 .ce-overlay:hover .ce-overlay-clear,
-.ce-overlay-clear:focus-visible {
+.ce-overlay-clear:focus-visible,
+.ce-overlay:hover .ce-overlay-add,
+.ce-overlay-add:focus-visible {
   opacity: 1;
 }
 
-.ce-overlay-clear:hover {
+.ce-overlay-clear:hover,
+.ce-overlay-add:hover {
   background: rgba(0, 0, 0, 0.8);
 }
 
@@ -311,10 +367,10 @@
   white-space: nowrap;
 }
 
-.grand-ce-slot-clear {
+.grand-ce-slot-clear,
+.grand-ce-slot-add {
   position: absolute;
   top: 2px;
-  right: 2px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -327,11 +383,62 @@
   color: white;
   cursor: pointer;
   opacity: 0;
+  z-index: 10;
+}
+
+.grand-ce-slot-clear {
+  right: 2px;
+}
+
+.grand-ce-slot-add {
+  right: 20px;
 }
 
 .grand-ce-slot:hover .grand-ce-slot-clear,
-.grand-ce-slot-clear:focus-visible {
+.grand-ce-slot-clear:focus-visible,
+.grand-ce-slot:hover .grand-ce-slot-add,
+.grand-ce-slot-add:focus-visible {
   opacity: 1;
+}
+
+.grand-ce-slot-stack {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.grand-ce-slot-stack > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 2px;
+  background: var(--gray-5);
+  color: var(--gray-12);
+  font-size: 8px;
+}
+
+.grand-ce-slot-stack img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.grand-ce-slot-stack > b {
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
+  z-index: 6;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.78);
+  color: white;
+  font-size: 8px;
+  line-height: 14px;
+  text-align: center;
 }
 
 .ce-select-option {

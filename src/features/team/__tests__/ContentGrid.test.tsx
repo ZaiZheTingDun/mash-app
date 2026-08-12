@@ -109,6 +109,8 @@ describe("createInitialProjectSlots", () => {
       expect(s.servantId).toBeNull();
       expect(s.servantVariantKey).toBeNull();
       expect(s.craftEssenceId).toBeNull();
+      expect(s.craftEssenceIds).toEqual([]);
+      expect(s.craftEssenceMultiSelect).toBe(false);
     }
   });
 });
@@ -251,6 +253,158 @@ describe("ContentGrid", () => {
     for (let i = 1; i < next.length; i++) {
       expect(next[i].craftEssence).toBeNull();
     }
+  });
+
+  it("adds another support CE from the external plus button without a multi-select toggle", async () => {
+    const user = userEvent.setup();
+    const onSlotsChange = vi.fn();
+    const slots = buildSlots();
+    slots[2] = { ...slots[2], craftEssence: CES[0], craftEssences: [CES[0]] };
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={slots}
+        onSlotsChange={onSlotsChange}
+        activeProject={PROJECT}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByLabelText("新增礼装"));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByText("多选礼装")).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("option", { name: "#1 Kaleidoscope" })
+    ).toBeDisabled();
+    await user.click(within(dialog).getByText("Black Grail"));
+
+    const lastCall = onSlotsChange.mock.calls[onSlotsChange.mock.calls.length - 1];
+    const next = lastCall[0] as SlotItem[];
+    expect(next[2]).toMatchObject({
+      craftEssence: CES[0],
+      craftEssences: CES,
+      craftEssenceMultiSelect: true,
+    });
+  });
+
+  it("opens the management page from a configured CE and supports delete and replace", async () => {
+    const user = userEvent.setup();
+    const onSlotsChange = vi.fn();
+    const thirdCe: CraftEssence = {
+      id: 3,
+      rarity: 4,
+      category: "normal",
+      name: "Imaginary Element",
+    };
+    const slots = buildSlots();
+    slots[2] = {
+      ...slots[2],
+      craftEssence: CES[0],
+      craftEssences: CES,
+      craftEssenceMultiSelect: true,
+    };
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={[...CES, thirdCe]}
+        slots={slots}
+        onSlotsChange={onSlotsChange}
+        activeProject={PROJECT}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByLabelText("礼装：Kaleidoscope等 2 张"));
+    const manageDialog = await screen.findByRole("dialog", { name: "管理礼装" });
+    expect(within(manageDialog).getByText("2/10")).toBeInTheDocument();
+    expect(
+      within(manageDialog).getByRole("button", { name: "删除礼装 Kaleidoscope" })
+    ).toBeInTheDocument();
+    expect(
+      within(manageDialog).getByRole("button", { name: "添加礼装" })
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(manageDialog).getByRole("button", { name: "更改礼装 Black Grail" })
+    );
+    const picker = await screen.findByRole("dialog", { name: "选择礼装" });
+    await user.click(within(picker).getByText("Imaginary Element"));
+    const replaceCall = onSlotsChange.mock.calls[onSlotsChange.mock.calls.length - 1];
+    const replaced = replaceCall[0] as SlotItem[];
+    expect(replaced[2].craftEssences).toEqual([CES[0], thirdCe]);
+  });
+
+  it("hides the management add row after reaching the CE selection limit", async () => {
+    const user = userEvent.setup();
+    const selectedCraftEssences = Array.from({ length: 10 }, (_, index) => ({
+      id: index + 1,
+      rarity: 5,
+      category: "normal" as const,
+      name: `CE ${index + 1}`,
+    }));
+    const slots = buildSlots();
+    slots[2] = {
+      ...slots[2],
+      craftEssence: selectedCraftEssences[0],
+      craftEssences: selectedCraftEssences,
+      craftEssenceMultiSelect: true,
+    };
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={selectedCraftEssences}
+        slots={slots}
+        onSlotsChange={vi.fn()}
+        activeProject={PROJECT}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByLabelText("礼装：CE 1等 10 张"));
+    const manageDialog = await screen.findByRole("dialog", { name: "管理礼装" });
+
+    expect(within(manageDialog).getByText("10/10")).toBeInTheDocument();
+    expect(
+      within(manageDialog).queryByRole("button", { name: "添加礼装" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders selected support CEs as a stack and confirms before clearing all", async () => {
+    const user = userEvent.setup();
+    const onSlotsChange = vi.fn();
+    const slots = buildSlots();
+    slots[2] = {
+      ...slots[2],
+      craftEssence: CES[0],
+      craftEssences: CES,
+      craftEssenceMultiSelect: true,
+    };
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={slots}
+        onSlotsChange={onSlotsChange}
+        activeProject={PROJECT}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText("礼装：Kaleidoscope等 2 张")).toBeInTheDocument();
+    expect(screen.getByText("2", { selector: ".ce-overlay-count" })).toBeInTheDocument();
+    await user.click(screen.getByLabelText("清除全部礼装"));
+
+    expect(onSlotsChange).not.toHaveBeenCalled();
+    expect(screen.getByText("确认清空礼装")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "删除全部" }));
+
+    const next = onSlotsChange.mock.calls[0][0] as SlotItem[];
+    expect(next[2]).toMatchObject({
+      craftEssence: null,
+      craftEssences: [],
+      craftEssenceMultiSelect: false,
+    });
   });
 
   // --- Portrait rendering -------------------------------------------
@@ -669,6 +823,40 @@ describe("ContentGrid", () => {
         supportGrandCraftEssenceIds: [null, null, 2],
       })
     );
+  });
+
+  it("supports managed multi-select for grand CE slots 1 and 3 but keeps slot 2 single-select", async () => {
+    const user = userEvent.setup();
+    const onUpdateActiveProject = vi.fn();
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{
+          ...PROJECT,
+          supportGrandMode: true,
+          supportGrandCraftEssenceIds: [1, 2, 2],
+          supportGrandCraftEssenceIdLists: [[1, 2], [2], [2]],
+        }}
+        onUpdateActiveProject={onUpdateActiveProject}
+      />
+    );
+
+    expect(
+      screen.getByLabelText("冠位礼装 1：Kaleidoscope等 2 张")
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("新增冠位礼装 1")).toBeInTheDocument();
+    expect(screen.queryByLabelText("新增冠位礼装 2")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("新增冠位礼装 3")).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText("冠位礼装 1：Kaleidoscope等 2 张"));
+    expect(await screen.findByRole("dialog", { name: "管理礼装" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "完成" }));
+
+    await user.click(screen.getByLabelText("冠位礼装 2：Black Grail"));
+    expect(await screen.findByRole("dialog", { name: "选择礼装" })).toBeInTheDocument();
   });
 
   it("stacks grand support craft essences and falls back when card art fails", async () => {

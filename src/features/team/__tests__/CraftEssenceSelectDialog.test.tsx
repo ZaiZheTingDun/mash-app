@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { CraftEssenceSelectDialog } from "../CraftEssenceSelectDialog";
 import type { CraftEssence } from "../../../types/craftEssence";
+import type { ComponentProps } from "react";
 
 const FIXTURE: CraftEssence[] = [
   { id: 1, rarity: 5, category: "normal", name: "Kaleidoscope" },
@@ -13,12 +14,9 @@ const FIXTURE: CraftEssence[] = [
   { id: 4, rarity: 3, category: "bond", name: "Heaven's Feel" },
 ];
 
-function setup(overrides?: {
-  open?: boolean;
-  craftEssences?: CraftEssence[];
-  onSelect?: (ce: CraftEssence) => void;
-  onOpenChange?: (open: boolean) => void;
-}) {
+function setup(
+  overrides?: Partial<ComponentProps<typeof CraftEssenceSelectDialog>>
+) {
   const onSelect = overrides?.onSelect ?? vi.fn();
   const onOpenChange = overrides?.onOpenChange ?? vi.fn();
   const utils = renderWithTheme(
@@ -27,6 +25,9 @@ function setup(overrides?: {
       onOpenChange={onOpenChange}
       onSelect={onSelect}
       craftEssences={overrides?.craftEssences ?? FIXTURE}
+      mlbRequired={overrides?.mlbRequired}
+      onMlbRequiredChange={overrides?.onMlbRequiredChange}
+      disabledIds={overrides?.disabledIds}
     />
   );
   return { ...utils, onSelect, onOpenChange };
@@ -193,6 +194,15 @@ describe("CraftEssenceSelectDialog", () => {
       expect.objectContaining({ id: 2, name: "Black Grail" })
     );
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("disables already selected CEs to prevent duplicates", async () => {
+    const user = userEvent.setup();
+    const { onSelect } = setup({ disabledIds: [1] });
+    const option = screen.getByRole("option", { name: "#1 Kaleidoscope" });
+    expect(option).toBeDisabled();
+    await user.click(option);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it("selects via keyboard: ArrowDown + Enter picks the second row", async () => {
