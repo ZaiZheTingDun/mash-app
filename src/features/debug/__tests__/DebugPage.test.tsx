@@ -48,8 +48,8 @@ const SERVANTS: Servant[] = [
 ];
 
 const CRAFT_ESSENCES: CraftEssence[] = [
-  { id: 1, name: "万华镜" },
-  { id: 2, name: "黑之圣杯" },
+  { id: 1, rarity: 5, category: "normal", name: "万华镜" },
+  { id: 2, rarity: 5, category: "normal", name: "黑之圣杯" },
 ];
 
 describe("DebugPage", () => {

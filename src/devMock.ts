@@ -77,10 +77,10 @@ const servants: Servant[] = [
 ];
 
 const craftEssences: CraftEssence[] = [
-  { id: 1001, name: "万华镜" },
-  { id: 1002, name: "黑之圣杯" },
-  { id: 1003, name: "迦勒底午餐时光" },
-  { id: 1004, name: "虚数魔术" },
+  { id: 1001, rarity: 5, category: "normal", name: "万华镜" },
+  { id: 1002, rarity: 5, category: "normal", name: "黑之圣杯" },
+  { id: 1003, rarity: 5, category: "manaExchange", name: "迦勒底午餐时光" },
+  { id: 1004, rarity: 4, category: "normal", name: "虚数魔术" },
 ];
 
 let selectedAdbSerial: string | null = null;

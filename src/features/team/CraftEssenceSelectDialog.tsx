@@ -8,8 +8,12 @@ import {
   TextField,
 } from "@radix-ui/themes";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
-import type { CraftEssence } from "../../types/craftEssence";
+import type {
+  CraftEssence,
+  CraftEssenceCategory,
+} from "../../types/craftEssence";
 import type { SupportGrandBondCeMode } from "../../types/project";
+import { useCeCards } from "./contentGridAssets";
 
 interface CraftEssenceSelectDialogProps {
   open: boolean;
@@ -25,7 +29,19 @@ interface CraftEssenceSelectDialogProps {
 const ROW_HEIGHT = 40;
 const OVERSCAN = 4;
 const VIEWPORT_H = 420;
-const NARROW_HINT_THRESHOLD = 200;
+const RARITY_FILTER_OPTIONS = [null, 5, 4, 3, 2, 1] as const;
+
+const CATEGORY_FILTER_OPTIONS: {
+  value: CraftEssenceCategory | null;
+  label: string;
+}[] = [
+  { value: null, label: "全部类型" },
+  { value: "normal", label: "常规" },
+  { value: "bond", label: "牵绊礼装" },
+  { value: "manaExchange", label: "魔力棱镜/进阶关卡礼装" },
+  { value: "event", label: "活动礼装" },
+  { value: "eventReward", label: "活动报酬礼装" },
+];
 
 function craftEssenceSearchText(ce: CraftEssence) {
   return [ce.name, ...(ce.nameAliases ?? []), ce.nameLink ?? ""]
@@ -36,10 +52,9 @@ function craftEssenceSearchText(ce: CraftEssence) {
 /**
  * Picker for craft essences. Modeled after `ServantSelectDialog` but
  * simpler: Rust normalizes the bundled `craft_essences.json` to
- * collectionNo-as-id + Chinese name (+ optional wiki link), so the row
- * is text-only and we don't need a `disabledIds` prop — duplicate CEs
- * across slots are valid (e.g. a party can run several copies of the
- * same MLB CE).
+ * collectionNo-as-id + Chinese name (+ optional wiki link), so we don't
+ * need a `disabledIds` prop — duplicate CEs across slots are valid (e.g.
+ * a party can run several copies of the same MLB CE).
  *
  * The CE catalog has ~2600 entries, so we render the list with a tiny
  * fixed-row-height windowed renderer instead of mounting every option.
@@ -57,15 +72,25 @@ export function CraftEssenceSelectDialog({
   onGrandBondCeModeChange,
 }: CraftEssenceSelectDialogProps) {
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] =
+    useState<CraftEssenceCategory | null>(null);
+  const [rarityFilter, setRarityFilter] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return craftEssences;
+    const categoryAndRarityFiltered = craftEssences.filter((ce) => {
+      if (categoryFilter !== null && ce.category !== categoryFilter) return false;
+      if (rarityFilter !== null && ce.rarity !== rarityFilter) return false;
+      return true;
+    });
+    if (!search.trim()) return categoryAndRarityFiltered;
     const q = search.toLowerCase().trim();
-    return craftEssences.filter((ce) => craftEssenceSearchText(ce).includes(q));
-  }, [craftEssences, search]);
+    return categoryAndRarityFiltered.filter((ce) =>
+      craftEssenceSearchText(ce).includes(q)
+    );
+  }, [craftEssences, search, categoryFilter, rarityFilter]);
 
   // Clamp at read-time rather than via a setState-in-effect (which the
   // lint rule rejects). The stored `activeIndex` may briefly exceed the
@@ -83,6 +108,7 @@ export function CraftEssenceSelectDialog({
     Math.ceil((scrollTop + VIEWPORT_H) / ROW_HEIGHT) + OVERSCAN
   );
   const visible = filtered.slice(startIndex, endIndex);
+  const ceCardSrcById = useCeCards(visible.map((ce) => ce.id));
 
   const resetScroll = useCallback(() => {
     setScrollTop(0);
@@ -96,6 +122,8 @@ export function CraftEssenceSelectDialog({
       onSelect(ce);
       onOpenChange(false);
       setSearch("");
+      setCategoryFilter(null);
+      setRarityFilter(null);
       setActiveIndex(0);
       resetScroll();
     },
@@ -107,6 +135,8 @@ export function CraftEssenceSelectDialog({
       onOpenChange(nextOpen);
       if (!nextOpen) {
         setSearch("");
+        setCategoryFilter(null);
+        setRarityFilter(null);
         setActiveIndex(0);
         resetScroll();
       }
@@ -157,8 +187,6 @@ export function CraftEssenceSelectDialog({
     [filtered, safeActiveIndex, handleSelect, ensureVisible]
   );
 
-  const showNarrowHint = filtered.length > NARROW_HINT_THRESHOLD;
-
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Content maxWidth="560px" className="servant-dialog">
@@ -181,11 +209,59 @@ export function CraftEssenceSelectDialog({
           </TextField.Slot>
         </TextField.Root>
 
-        {showNarrowHint && (
-          <Text size="1" color="gray" mt="2">
-            共 {filtered.length} 项，输入名称以精确查找
-          </Text>
-        )}
+        <Flex gap="2" className="ce-filter-row">
+          <div
+            className="ce-category-filter-grid"
+            role="group"
+            aria-label="礼装类型筛选"
+          >
+            {CATEGORY_FILTER_OPTIONS.map((option) => {
+              const selected = categoryFilter === option.value;
+              return (
+                <button
+                  key={option.value ?? "all"}
+                  type="button"
+                  className={`ce-filter-button${selected ? " selected" : ""}`}
+                  aria-label={option.label}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setCategoryFilter(option.value);
+                    setActiveIndex(0);
+                    resetScroll();
+                  }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <div
+            className="ce-rarity-filter-grid"
+            role="group"
+            aria-label="礼装星级筛选"
+          >
+            {RARITY_FILTER_OPTIONS.map((rarity) => {
+              const selected = rarityFilter === rarity;
+              const label = rarity === null ? "全部星级" : `★${rarity}`;
+              return (
+                <button
+                  key={rarity ?? "all"}
+                  type="button"
+                  className={`ce-filter-button${selected ? " selected" : ""}`}
+                  aria-label={label}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setRarityFilter(rarity);
+                    setActiveIndex(0);
+                    resetScroll();
+                  }}
+                >
+                  {rarity === null ? "全部" : `★${rarity}`}
+                </button>
+              );
+            })}
+          </div>
+        </Flex>
 
         {onMlbRequiredChange && (
           <Flex gap="3" align="center" wrap="wrap" mt="3">
@@ -257,14 +333,23 @@ export function CraftEssenceSelectDialog({
                     onClick={() => handleSelect(ce)}
                     onMouseEnter={() => setActiveIndex(index)}
                   >
-                    <Flex align="center" gap="3">
+                    <div className="ce-option-content">
+                      <Flex align="center" gap="3" className="ce-option-text">
                       <Text size="1" color="gray" style={{ minWidth: "3em" }}>
                         #{ce.id}
                       </Text>
                       <Text size="2" weight="medium">
                         {ce.name}
                       </Text>
-                    </Flex>
+                      </Flex>
+                      {ceCardSrcById[ce.id] && (
+                        <img
+                          className="ce-card-thumbnail"
+                          src={ceCardSrcById[ce.id] ?? undefined}
+                          alt=""
+                        />
+                      )}
+                    </div>
                   </button>
                 );
               })}

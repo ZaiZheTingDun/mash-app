@@ -1,15 +1,16 @@
 import { describe, it, expect, vi } from "vitest";
-import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { CraftEssenceSelectDialog } from "../CraftEssenceSelectDialog";
 import type { CraftEssence } from "../../../types/craftEssence";
 
 const FIXTURE: CraftEssence[] = [
-  { id: 1, name: "Kaleidoscope" },
-  { id: 2, name: "Black Grail" },
-  { id: 3, name: "The Imaginary Element" },
-  { id: 4, name: "Heaven's Feel" },
+  { id: 1, rarity: 5, category: "normal", name: "Kaleidoscope" },
+  { id: 2, rarity: 5, category: "normal", name: "Black Grail" },
+  { id: 3, rarity: 4, category: "event", name: "The Imaginary Element" },
+  { id: 4, rarity: 3, category: "bond", name: "Heaven's Feel" },
 ];
 
 function setup(overrides?: {
@@ -60,12 +61,81 @@ describe("CraftEssenceSelectDialog", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows the resolved CE card art at the right of its row", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === "get_craft_essence_card_path") {
+        const { craftEssenceId } = (args ?? {}) as { craftEssenceId?: number };
+        return craftEssenceId === 1 ? "/tmp/ces/1/card_ce.png" : null;
+      }
+      return null;
+    });
+    setup();
+
+    await waitFor(() => {
+      const thumbnail = document.querySelector(".ce-card-thumbnail");
+      expect(thumbnail).toHaveAttribute("src", "asset:///tmp/ces/1/card_ce.png");
+    });
+  });
+
+  it("filters by the supported category and rarity", async () => {
+    const user = userEvent.setup();
+    setup({
+      craftEssences: [
+        ...FIXTURE,
+        {
+          id: 5,
+          rarity: 4,
+          category: "manaExchange",
+          name: "Mana Prism CE",
+        },
+        {
+          id: 6,
+          rarity: 4,
+          category: "eventReward",
+          name: "Event Reward CE",
+        },
+        { id: 7, rarity: 4, category: "other", name: "Chocolate CE" },
+      ],
+    });
+
+    const categoryGroup = screen.getByRole("group", { name: "礼装类型筛选" });
+    const rarityGroup = screen.getByRole("group", { name: "礼装星级筛选" });
+    expect(within(categoryGroup).getAllByRole("button")).toHaveLength(6);
+    expect(within(rarityGroup).getAllByRole("button")).toHaveLength(6);
+    expect(
+      within(categoryGroup).queryByRole("button", { name: "巧克力礼装" })
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(categoryGroup).getByRole("button", {
+        name: "魔力棱镜/进阶关卡礼装",
+      })
+    );
+    await user.click(within(rarityGroup).getByRole("button", { name: "★4" }));
+
+    expect(screen.getByText("Mana Prism CE")).toBeInTheDocument();
+    expect(screen.queryByText("Event Reward CE")).not.toBeInTheDocument();
+    expect(screen.queryByText("Chocolate CE")).not.toBeInTheDocument();
+  });
+
   it("matches translation aliases while displaying the fixed CE name", async () => {
     const user = userEvent.setup();
     setup({
       craftEssences: [
-        { id: 2234, name: "心愿之味", nameAliases: ["心意的滋味"] },
-        { id: 2237, name: "去往大海", nameAliases: ["向着大海"] },
+        {
+          id: 2234,
+          rarity: 5,
+          category: "normal",
+          name: "心愿之味",
+          nameAliases: ["心意的滋味"],
+        },
+        {
+          id: 2237,
+          rarity: 5,
+          category: "normal",
+          name: "去往大海",
+          nameAliases: ["向着大海"],
+        },
       ],
     });
 
@@ -144,6 +214,8 @@ describe("CraftEssenceSelectDialog", () => {
   it("virtualizes large lists: only mounts a window of rows, not all 500", () => {
     const big: CraftEssence[] = Array.from({ length: 500 }, (_, i) => ({
       id: i + 1,
+      rarity: 5,
+      category: "normal",
       name: `CE ${i + 1}`,
     }));
     setup({ craftEssences: big });
@@ -154,12 +226,6 @@ describe("CraftEssenceSelectDialog", () => {
     expect(options.length).toBeGreaterThan(0);
     expect(options.length).toBeLessThan(100);
 
-    // The narrow-list hint kicks in once the filtered count crosses
-    // NARROW_HINT_THRESHOLD (200) — confirm the hint copy is present so
-    // future tweaks to that threshold are noticed.
-    expect(
-      screen.getByText(/共 500 项/)
-    ).toBeInTheDocument();
   });
 
   it("clears the search when the dialog is closed via onOpenChange", async () => {

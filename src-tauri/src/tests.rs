@@ -2488,6 +2488,23 @@ fn craft_essences_data_uses_collection_no_and_cn_names() {
 }
 
 #[test]
+fn craft_essences_data_exposes_rarity_and_picker_categories() {
+    let ces = craft_essences_data();
+    let ce = |id| ces.iter().find(|ce| ce.id == id).unwrap();
+
+    assert_eq!(ce(1).rarity, 1);
+    assert_eq!(ce(1).category, CraftEssenceCategory::Normal);
+    assert_eq!(ce(191).category, CraftEssenceCategory::Bond);
+    assert_eq!(ce(80).category, CraftEssenceCategory::ManaExchange);
+    // This entry has `flag: unknown`, so it verifies we classify from Atlas'
+    // original `flags` rather than the flattened primary flag.
+    assert_eq!(ce(1527).category, CraftEssenceCategory::ManaExchange);
+    assert_eq!(ce(43).category, CraftEssenceCategory::Event);
+    assert_eq!(ce(41).category, CraftEssenceCategory::EventReward);
+    assert_eq!(ce(113).category, CraftEssenceCategory::Other);
+}
+
+#[test]
 fn craft_essences_data_is_memoized_via_oncelock() {
     // OnceLock-backed `&'static [CraftEssenceInfo]` should hand back
     // the exact same slice on repeated calls (same pointer + len).

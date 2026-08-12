@@ -80,8 +80,8 @@ const SERVANTS: Servant[] = [MASH, ALTRIA_CASTER];
 const GRAND_SERVANTS: Servant[] = [ALTRIA_CASTER, ALTRIA_SABER, HERACLES];
 
 const CES: CraftEssence[] = [
-  { id: 1, name: "Kaleidoscope" },
-  { id: 2, name: "Black Grail" },
+  { id: 1, rarity: 5, category: "normal", name: "Kaleidoscope" },
+  { id: 2, rarity: 5, category: "normal", name: "Black Grail" },
 ];
 
 const PROJECT: Project = {
