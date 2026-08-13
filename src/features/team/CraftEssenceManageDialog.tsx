@@ -37,7 +37,7 @@ export function CraftEssenceManageDialog({
           </Text>
         </Flex>
         <Dialog.Description size="2" color="gray" mt="2">
-          点击礼装可更改，或使用左侧按钮删除。
+          点击可更改礼装，所有礼装共享满破开关
         </Dialog.Description>
 
         <div className="ce-manage-list" aria-label="已选择的礼装">

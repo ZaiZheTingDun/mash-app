@@ -438,10 +438,10 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
         >
           <Flex direction="column" gap="1" className="basic-setting-copy">
             <Text size="2" weight="bold">
-              助战全列表 OCR 回退
+              使用全列表 OCR
             </Text>
             <Text size="1" color="gray">
-              锚点 OCR 未找到目标助战时，再使用全列表 OCR；开启后助战识别可能变慢
+              默认使用锚点进行识别，开启后会在识别失败时回退到全列表 OCR 识别，可能会降低识别速度
             </Text>
           </Flex>
 
@@ -449,7 +449,7 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
             checked={supportFullListOcrFallback}
             onCheckedChange={(value) => void saveSupportFullListOcrFallback(value)}
             disabled={saving}
-            aria-label="助战全列表 OCR 回退"
+            aria-label="使用全列表 OCR"
           />
         </Flex>
 

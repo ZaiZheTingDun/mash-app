@@ -38,7 +38,7 @@ describe("SettingsBasicPage", () => {
     renderWithTheme(<SettingsBasicPage active />);
 
     const fallback = await screen.findByRole("switch", {
-      name: "助战全列表 OCR 回退",
+      name: "使用全列表 OCR",
     });
     expect(fallback).not.toBeChecked();
 
