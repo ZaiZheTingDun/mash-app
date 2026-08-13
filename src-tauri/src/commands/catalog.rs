@@ -1813,11 +1813,14 @@ mod tests {
     }
 
     #[test]
-    fn mash_runtime_skill_does_not_replace_the_static_icon_form() {
+    fn mash_runtime_skill_does_not_replace_the_latest_static_icon_form() {
         let static_ids = variant_skill_ids(variants_raw_data(), 1, "1:3").unwrap();
         let form_ids = variant_skill_form_ids(variants_raw_data(), 1, "1:3").unwrap();
 
-        assert_eq!(static_ids[1], Some(970660));
+        // Asset v9 adds a later non-runtime skill form (2550) after 970660.
+        // Keep choosing that latest static form while retaining the runtime
+        // form for targeting metadata.
+        assert_eq!(static_ids[1], Some(2550));
         assert!(form_ids[1].contains(&2477450));
     }
 
