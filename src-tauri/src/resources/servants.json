@@ -10069,5 +10069,65 @@
         "nameCN": "蒼きアズライール"
       }
     ]
+  },
+  {
+    "id": 705300,
+    "collectionNo": 475,
+    "nameCN": "紅閻魔",
+    "nameJP": "紅閻魔",
+    "classId": 7,
+    "className": "berserker",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 705301,
+        "name": "じゅうおうまんぷく・つづらのえんかい",
+        "nameJP": "十王満腹・葛籠の宴海",
+        "nameCN": "十王満腹・葛籠の宴海",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 2301200,
+    "collectionNo": 476,
+    "nameCN": "キングプロテア",
+    "nameJP": "キングプロテア",
+    "classId": 23,
+    "className": "moonCancer",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 2301201,
+        "name": "ダイボッチ・キングダイブ",
+        "nameJP": "巨影、南海の空より墜ちる",
+        "nameCN": "巨影、南海の空より墜ちる",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ]
+  },
+  {
+    "id": 506000,
+    "collectionNo": 477,
+    "nameCN": "ビショーネ",
+    "nameJP": "ビショーネ",
+    "classId": 5,
+    "className": "caster",
+    "type": "normal",
+    "rarity": 4,
+    "noblePhantasms": [
+      {
+        "id": 506001,
+        "name": "ドラコニック・スパルトイ",
+        "nameJP": "竜牙幻想・播かれたる者",
+        "nameCN": "竜牙幻想・播かれたる者",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
   }
 ]

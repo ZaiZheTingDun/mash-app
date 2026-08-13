@@ -29131,5 +29131,126 @@
     "flags": [
       "svtEquipCampaign"
     ]
+  },
+  {
+    "id": 9409410,
+    "collectionNo": 2686,
+    "name": "豊穣の海",
+    "name_cn": null,
+    "rarity": 5,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409420,
+    "collectionNo": 2687,
+    "name": "サマー・アーマー",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409430,
+    "collectionNo": 2688,
+    "name": "幽世の使者",
+    "name_cn": null,
+    "rarity": 3,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409440,
+    "collectionNo": 2689,
+    "name": "マブイ・ロード",
+    "name_cn": null,
+    "rarity": 5,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409450,
+    "collectionNo": 2690,
+    "name": "シープ・イズ・ザ・ゴート",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409460,
+    "collectionNo": 2691,
+    "name": "わくわくざぶーん～沖縄支店～",
+    "name_cn": null,
+    "rarity": 3,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409470,
+    "collectionNo": 2692,
+    "name": "ル・グテ",
+    "name_cn": null,
+    "rarity": 5,
+    "flag": "svtEquipEventReward",
+    "flags": [
+      "svtEquipEventReward"
+    ]
+  },
+  {
+    "id": 9409480,
+    "collectionNo": 2693,
+    "name": "渓谷の神秘",
+    "name_cn": null,
+    "rarity": 5,
+    "flag": "svtEquipEventReward",
+    "flags": [
+      "svtEquipEventReward"
+    ]
+  },
+  {
+    "id": 9311960,
+    "collectionNo": 2694,
+    "name": "くらくら堪能セット",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipFriendShip",
+    "flags": [
+      "svtEquipFriendShip"
+    ]
+  },
+  {
+    "id": 9311930,
+    "collectionNo": 2695,
+    "name": "レディ・ロングアームの探偵事務所",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipFriendShip",
+    "flags": [
+      "svtEquipFriendShip"
+    ]
+  },
+  {
+    "id": 9311910,
+    "collectionNo": 2696,
+    "name": "ドラゴンロッド　サマーヴァイパーＥＸ",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipFriendShip",
+    "flags": [
+      "svtEquipFriendShip"
+    ]
   }
 ]
