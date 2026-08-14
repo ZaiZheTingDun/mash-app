@@ -4151,10 +4151,17 @@ fn run_config_round_trips_lancer_roles() {
 #[test]
 fn support_class_filter_keeps_single_tap_for_jp_extra_and_cn_standard_classes() {
     let jp_extra = support_class_filter_action(Server::Jp, "ruler", true, false).unwrap();
+    let jp_draco = support_class_filter_action(Server::Jp, "beast", true, false).unwrap();
+    let jp_ereshkigal = support_class_filter_action(Server::Jp, "beasteresh", true, false).unwrap();
+    let jp_u_olga_marie =
+        support_class_filter_action(Server::Jp, "unbeastolgamarie", true, false).unwrap();
     let cn_standard = support_class_filter_action(Server::Cn, "caster", true, false).unwrap();
 
     for (action, expected) in [
         (jp_extra, SUPPORT_TAB_EXTRA),
+        (jp_draco, SUPPORT_TAB_EXTRA),
+        (jp_ereshkigal, SUPPORT_TAB_EXTRA),
+        (jp_u_olga_marie, SUPPORT_TAB_EXTRA),
         (cn_standard, SUPPORT_TAB_CASTER),
     ] {
         let SupportClassFilterAction::Tap(point) = action else {
@@ -4201,8 +4208,8 @@ fn support_class_filter_reuses_saved_cn_extra_choice_after_first_configuration()
 }
 
 #[test]
-fn support_class_filter_rejects_non_support_beast_variants() {
-    assert!(support_class_filter_action(Server::Jp, "beasteresh", true, false).is_none());
+fn support_class_filter_rejects_enemy_only_beast_variants() {
+    assert!(support_class_filter_action(Server::Jp, "beastii", true, false).is_none());
     assert!(support_class_filter_action(Server::Cn, "beastii", true, false).is_none());
 }
 

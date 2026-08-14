@@ -878,10 +878,10 @@ pub(crate) fn class_tab_for(class_name: &str) -> Option<Point> {
         "berserker" => Some(SUPPORT_TAB_BERSERKER),
         // "Extra" tab covers every non-knight / non-cavalry class:
         // shielder, ruler, avenger, alterego, mooncancer, foreigner,
-        // pretender. Atlas mixes camelCase and lowercase forms so
+        // pretender, plus the three playable Beast classes. Atlas mixes camelCase and lowercase forms so
         // `load_servant_metadata` lowercases before we land here.
-        "shielder" | "ruler" | "avenger" | "alterego" | "mooncancer" | "foreigner"
-        | "pretender" => Some(SUPPORT_TAB_EXTRA),
+        "shielder" | "ruler" | "avenger" | "mooncancer" | "alterego" | "foreigner"
+        | "pretender" | "beast" | "beasteresh" | "unbeastolgamarie" => Some(SUPPORT_TAB_EXTRA),
         _ => None,
     }
 }
