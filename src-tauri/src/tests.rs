@@ -3123,6 +3123,9 @@ fn battle_scene_round_trips_preparation_actions_under_camel_case_key() {
             command_spell_actions: vec![],
             enemy_target: None,
             attack_priority: vec![],
+            attack_mode: AttackMode::Normal,
+            critical_strategy: CriticalAttackStrategy::default(),
+            advanced_card_strategy: AdvancedCardStrategy::default(),
         }],
         preparation_actions: vec![],
         servant_actions: vec![],
@@ -3153,6 +3156,47 @@ fn battle_scene_round_trips_preparation_actions_under_camel_case_key() {
         }
         _ => panic!("expected Action::CommandSpell"),
     }
+}
+
+#[test]
+fn legacy_battle_turn_defaults_to_normal_attack_mode_and_preserves_all_strategies() {
+    let legacy: BattleTurn = serde_json::from_value(serde_json::json!({
+        "id": "turn_legacy",
+        "preparationActions": [],
+        "attackPriority": []
+    }))
+    .unwrap();
+    assert_eq!(legacy.attack_mode, AttackMode::Normal);
+    assert_eq!(
+        legacy.critical_strategy.chain_priority,
+        default_critical_chain_priority()
+    );
+    assert!(legacy.advanced_card_strategy.custom_rules.is_empty());
+
+    let mut configured = legacy;
+    configured.attack_mode = AttackMode::Critical;
+    configured.critical_strategy.member_priority = vec![AttackMemberPriorityItem {
+        member_id: Some("slot-support".into()),
+        slot_index: 2,
+        servant_id: Some(10),
+        is_support: true,
+    }];
+    configured.advanced_card_strategy.custom_rules = vec![GrandCardRuleConfig {
+        id: "rule_1".into(),
+        name: "保留规则".into(),
+        slots: vec![],
+    }];
+
+    let value = serde_json::to_value(configured).unwrap();
+    assert_eq!(value["attackMode"], "critical");
+    assert_eq!(
+        value["criticalStrategy"]["memberPriority"][0]["memberId"],
+        "slot-support"
+    );
+    assert_eq!(
+        value["advancedCardStrategy"]["customRules"][0]["name"],
+        "保留规则"
+    );
 }
 
 #[test]

@@ -1205,18 +1205,6 @@ impl Runner {
         full
     }
 
-    pub(crate) fn normal_current_party_ids(&self) -> [Option<u32>; 3] {
-        let members = self.normal_current_party_members();
-        let (ids, _) = frontline_party_ids_and_supports(&members);
-        ids
-    }
-
-    pub(crate) fn normal_current_party_supports(&self) -> [bool; 3] {
-        let members = self.normal_current_party_members();
-        let (_, supports) = frontline_party_ids_and_supports(&members);
-        supports
-    }
-
     pub(crate) fn normal_current_party_members(&self) -> [Option<PartyMemberRuntime>; 3] {
         let full = normal_current_party_members_from(
             self.build_full_party_members(),
@@ -1258,6 +1246,9 @@ impl Runner {
             command_spell_actions: Vec::new(),
             enemy_target: turn.enemy_target.clone(),
             attack_priority: turn.attack_priority.clone(),
+            attack_mode: turn.attack_mode,
+            critical_strategy: turn.critical_strategy.clone(),
+            advanced_card_strategy: turn.advanced_card_strategy.clone(),
         }
     }
 

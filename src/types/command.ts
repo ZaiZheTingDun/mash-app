@@ -1,3 +1,5 @@
+import type { GrandCardRuleConfig } from "./project";
+
 export type SkillSelectionType =
   | "SelectAddInfo"
   | "selectTreasureDeviceInfo"
@@ -79,6 +81,25 @@ export interface AttackCard {
   isSupport?: boolean;
 }
 
+export type AttackMode = "normal" | "critical" | "advanced";
+export type CriticalChainType = "mighty" | "buster" | "arts" | "quick";
+
+export interface AttackMemberPriorityItem {
+  memberId?: string | null;
+  slotIndex: number;
+  servantId?: number | null;
+  isSupport?: boolean;
+}
+
+export interface CriticalAttackStrategy {
+  memberPriority: AttackMemberPriorityItem[];
+  chainPriority: CriticalChainType[];
+}
+
+export interface AdvancedCardStrategy {
+  customRules: GrandCardRuleConfig[];
+}
+
 export interface BattleTurn {
   id: string;
   preparationActions: PreparationAction[];
@@ -87,6 +108,9 @@ export interface BattleTurn {
   commandSpellActions: CommandSpellAction[];
   enemyTarget?: string | null;
   attackPriority: AttackCard[];
+  attackMode?: AttackMode;
+  criticalStrategy?: CriticalAttackStrategy;
+  advancedCardStrategy?: AdvancedCardStrategy;
 }
 
 export interface BattleScene {

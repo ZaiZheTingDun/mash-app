@@ -5,6 +5,7 @@ interface FeatureToggleEnv {
   VITE_FEATURE_FRIEND_POINT_SUMMON?: string;
   VITE_FEATURE_CV_DEBUG?: string;
   VITE_FEATURE_GRAND_CARD_PRIORITY?: string;
+  VITE_FEATURE_TURN_ATTACK_MODES?: string;
 }
 
 export interface FeatureToggles {
@@ -13,6 +14,7 @@ export interface FeatureToggles {
   friendPointSummon: boolean;
   cvDebug: boolean;
   grandCardPriority: boolean;
+  turnAttackModes: boolean;
   settingsDebug: boolean;
 }
 
@@ -38,6 +40,7 @@ export function createFeatureToggles(env: FeatureToggleEnv): FeatureToggles {
     ),
     cvDebug: envFlag(env.VITE_FEATURE_CV_DEBUG, env.DEV),
     grandCardPriority: envFlag(env.VITE_FEATURE_GRAND_CARD_PRIORITY, env.DEV),
+    turnAttackModes: envFlag(env.VITE_FEATURE_TURN_ATTACK_MODES, env.DEV),
     settingsDebug: env.DEV,
   };
 }

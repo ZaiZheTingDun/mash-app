@@ -673,11 +673,265 @@ pub(crate) fn attack_card_requires_command_card_recognition(card: &AttackCard) -
 pub(crate) fn normal_scenes_need_command_card_recognition(scenes: &[BattleScene]) -> bool {
     scenes.iter().any(|scene| {
         scene.turns.iter().any(|turn| {
-            turn.attack_priority
-                .iter()
-                .any(attack_card_requires_command_card_recognition)
+            turn.attack_mode != AttackMode::Normal
+                || turn
+                    .attack_priority
+                    .iter()
+                    .any(attack_card_requires_command_card_recognition)
         })
     })
+}
+
+pub(crate) fn normal_turn_for_current_scene(
+    scenes: &[BattleScene],
+    current_scene_index: usize,
+    current_turn_index: usize,
+) -> Option<&BattleTurn> {
+    let turns = &scenes.get(current_scene_index)?.turns;
+    let last_index = turns.len().checked_sub(1)?;
+    turns.get(current_turn_index.min(last_index))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CriticalPickSummary {
+    pub(crate) chain: Option<CriticalChainType>,
+    pub(crate) relaxed_alternation: bool,
+    pub(crate) relaxed_reason: Option<&'static str>,
+    pub(crate) owner_labels: Vec<String>,
+}
+
+fn critical_chain_rank(
+    cards: [&CommandCardMatch; 3],
+    priority: &[CriticalChainType],
+) -> (usize, Option<CriticalChainType>) {
+    let counts = cards
+        .iter()
+        .fold((0usize, 0usize, 0usize), |mut counts, card| {
+            match card.suit.as_deref() {
+                Some("b") => counts.0 += 1,
+                Some("a") => counts.1 += 1,
+                Some("q") => counts.2 += 1,
+                _ => {}
+            }
+            counts
+        });
+    let chain = match counts {
+        (1, 1, 1) => Some(CriticalChainType::Mighty),
+        (3, 0, 0) => Some(CriticalChainType::Buster),
+        (0, 3, 0) => Some(CriticalChainType::Arts),
+        (0, 0, 3) => Some(CriticalChainType::Quick),
+        _ => None,
+    };
+    let rank = chain
+        .and_then(|chain| priority.iter().position(|candidate| *candidate == chain))
+        .unwrap_or(priority.len());
+    (rank, chain)
+}
+
+fn member_priority_rank(
+    card: &CommandCardMatch,
+    member: Option<&PartyMemberRuntime>,
+    priority: &[AttackMemberPriorityItem],
+) -> usize {
+    priority
+        .iter()
+        .position(|configured| {
+            member.is_some_and(|member| {
+                configured
+                    .member_id
+                    .as_deref()
+                    .zip(member.member_id.as_deref())
+                    .is_some_and(|(left, right)| left == right)
+                    || (configured.slot_index as usize == member.slot_index
+                        && configured.servant_id == Some(member.servant_id)
+                        && configured.is_support == member.is_support)
+            }) || (configured.servant_id == card.servant_id
+                && configured.is_support == card.is_support)
+        })
+        .unwrap_or_else(|| {
+            priority.len()
+                + member
+                    .map(|member| member.slot_index)
+                    .unwrap_or(usize::MAX / 2)
+        })
+}
+
+fn command_card_member<'a>(
+    card: &CommandCardMatch,
+    members: &'a [Option<PartyMemberRuntime>; 3],
+) -> Option<&'a PartyMemberRuntime> {
+    let servant_id = card.servant_id?;
+    members
+        .iter()
+        .flatten()
+        .find(|member| member.servant_id == servant_id && member.is_support == card.is_support)
+}
+
+fn command_card_owner_key(
+    card: &CommandCardMatch,
+    members: &[Option<PartyMemberRuntime>; 3],
+) -> Option<String> {
+    let member = command_card_member(card, members)?;
+    Some(
+        member
+            .member_id
+            .clone()
+            .unwrap_or_else(|| format!("{}:{}", member.is_support, member.servant_id)),
+    )
+}
+
+fn normalized_critical_chain_priority(configured: &[CriticalChainType]) -> Vec<CriticalChainType> {
+    let defaults = [
+        CriticalChainType::Mighty,
+        CriticalChainType::Buster,
+        CriticalChainType::Arts,
+        CriticalChainType::Quick,
+    ];
+    let mut priority = Vec::with_capacity(defaults.len());
+    for chain in configured {
+        if defaults.contains(chain) && !priority.contains(chain) {
+            priority.push(*chain);
+        }
+    }
+    for chain in defaults {
+        if !priority.contains(&chain) {
+            priority.push(chain);
+        }
+    }
+    priority
+}
+
+pub(crate) fn choose_critical_picks(
+    cards: &[CommandCardMatch],
+    members: &[Option<PartyMemberRuntime>; 3],
+    strategy: &CriticalAttackStrategy,
+) -> (Vec<Pick>, CriticalPickSummary) {
+    let mut actionable: Vec<&CommandCardMatch> =
+        cards.iter().filter(|card| !card.is_stunned).collect();
+    actionable.sort_by_key(|card| card.slot);
+    let chain_priority = normalized_critical_chain_priority(&strategy.chain_priority);
+
+    if actionable.len() < 3 {
+        let picks = actionable
+            .into_iter()
+            .map(|card| Pick::Card {
+                slot: card.slot,
+                point: Point::new(card.x, card.y),
+                servant_id: card.servant_id,
+                suit: card.suit.clone(),
+                from_priority: Some("暴击模式补位".into()),
+            })
+            .collect();
+        return (
+            picks,
+            CriticalPickSummary {
+                chain: None,
+                relaxed_alternation: true,
+                relaxed_reason: Some("可行动卡不足"),
+                owner_labels: Vec::new(),
+            },
+        );
+    }
+
+    #[derive(Clone)]
+    struct Candidate<'a> {
+        cards: [&'a CommandCardMatch; 3],
+        owners: [Option<String>; 3],
+        chain: Option<CriticalChainType>,
+        score: (usize, [usize; 3], std::cmp::Reverse<u32>, [u32; 3]),
+    }
+
+    let mut candidates = Vec::new();
+    for first in 0..actionable.len() {
+        for second in 0..actionable.len() {
+            if second == first {
+                continue;
+            }
+            for third in 0..actionable.len() {
+                if third == first || third == second {
+                    continue;
+                }
+                let ordered = [actionable[first], actionable[second], actionable[third]];
+                let owners = ordered.map(|card| command_card_owner_key(card, members));
+                let (chain_rank, chain) = critical_chain_rank(ordered, &chain_priority);
+                let member_ranks = ordered.map(|card| {
+                    member_priority_rank(
+                        card,
+                        command_card_member(card, members),
+                        &strategy.member_priority,
+                    )
+                });
+                let crit_total = ordered
+                    .iter()
+                    .map(|card| card.crit_chance.unwrap_or(0))
+                    .sum::<u32>();
+                let slots = ordered.map(|card| card.slot);
+                candidates.push(Candidate {
+                    cards: ordered,
+                    owners,
+                    chain,
+                    score: (
+                        chain_rank,
+                        member_ranks,
+                        std::cmp::Reverse(crit_total),
+                        slots,
+                    ),
+                });
+            }
+        }
+    }
+
+    let alternating = |candidate: &Candidate<'_>| {
+        candidate.owners.iter().all(Option::is_some)
+            && candidate.owners[0] != candidate.owners[1]
+            && candidate.owners[1] != candidate.owners[2]
+    };
+    let has_alternating = candidates.iter().any(alternating);
+    let relaxed_reason = if has_alternating {
+        None
+    } else if actionable
+        .iter()
+        .any(|card| command_card_owner_key(card, members).is_none())
+    {
+        Some("成员识别失败")
+    } else {
+        Some("手牌只有一个成员")
+    };
+    let best = candidates
+        .into_iter()
+        .filter(|candidate| !has_alternating || alternating(candidate))
+        .min_by_key(|candidate| candidate.score.clone())
+        .expect("three actionable cards always produce a permutation");
+    let owner_labels = best
+        .cards
+        .iter()
+        .map(|card| {
+            let support = if card.is_support { "助战" } else { "自有" };
+            card.servant_id
+                .map(|id| format!("{support}#{id}"))
+                .unwrap_or_else(|| "未识别成员".into())
+        })
+        .collect();
+    let picks = best
+        .cards
+        .into_iter()
+        .map(|card| Pick::Card {
+            slot: card.slot,
+            point: Point::new(card.x, card.y),
+            servant_id: card.servant_id,
+            suit: card.suit.clone(),
+            from_priority: Some("暴击模式".into()),
+        })
+        .collect();
+    (
+        picks,
+        CriticalPickSummary {
+            chain: best.chain,
+            relaxed_alternation: !has_alternating,
+            relaxed_reason,
+            owner_labels,
+        },
+    )
 }
 
 /// Center of a normalized rectangle (used to derive a tap point from a
@@ -733,6 +987,9 @@ impl Runner {
                 command_spell_actions: Vec::new(),
                 enemy_target: None,
                 attack_priority: Vec::new(),
+                attack_mode: AttackMode::Normal,
+                critical_strategy: CriticalAttackStrategy::default(),
+                advanced_card_strategy: AdvancedCardStrategy::default(),
             };
             if !self.execute_turn_skills(&turn) {
                 return false;
@@ -807,6 +1064,9 @@ impl Runner {
             command_spell_actions: Vec::new(),
             enemy_target: None,
             attack_priority: Vec::new(),
+            attack_mode: AttackMode::Normal,
+            critical_strategy: CriticalAttackStrategy::default(),
+            advanced_card_strategy: AdvancedCardStrategy::default(),
         };
         if !self.execute_turn_skills(&prep_turn) {
             return false;
@@ -859,20 +1119,101 @@ impl Runner {
                     ));
                     supports
                 });
-            let Some((cards, nps)) = self.read_attack_state(&party_ids, true) else {
+            let Some((cards, nps)) = self.read_attack_state(&party_ids, true, false) else {
                 return;
             };
             self.handle_advanced_attack(cards, nps, party_ids, party_supports);
             return;
         }
 
-        let party_ids = self.normal_current_party_ids();
-        let party_supports = self.normal_current_party_supports();
+        let party_members = self.normal_current_party_members();
+        let party_ids = std::array::from_fn(|index| {
+            party_members[index]
+                .as_ref()
+                .map(|member| member.servant_id)
+        });
+        let party_supports = std::array::from_fn(|index| {
+            party_members[index]
+                .as_ref()
+                .map(|member| member.is_support)
+                .unwrap_or(false)
+        });
+        let current_turn = normal_turn_for_current_scene(
+            &self.scenes,
+            self.battle.current_scene_index,
+            self.battle.current_turn_index,
+        )
+        .cloned();
         let recognize_command_cards = normal_scenes_need_command_card_recognition(&self.scenes);
-        let Some((cards, nps)) = self.read_attack_state(&party_ids, recognize_command_cards) else {
+        let tolerate_missing_owners = current_turn
+            .as_ref()
+            .is_some_and(|turn| turn.attack_mode == AttackMode::Critical);
+        let Some((cards, nps)) =
+            self.read_attack_state(&party_ids, recognize_command_cards, tolerate_missing_owners)
+        else {
             return;
         };
-        self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, &party_supports, None);
+        match current_turn
+            .as_ref()
+            .map(|turn| turn.attack_mode)
+            .unwrap_or_default()
+        {
+            AttackMode::Normal => {
+                self.emit("Attack", "普通模式：按配置的攻击优先级选卡");
+                self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, &party_supports, None);
+            }
+            AttackMode::Critical => {
+                let strategy = current_turn
+                    .as_ref()
+                    .map(|turn| &turn.critical_strategy)
+                    .cloned()
+                    .unwrap_or_default();
+                let (picks, summary) = choose_critical_picks(&cards, &party_members, &strategy);
+                let chain = match summary.chain {
+                    Some(CriticalChainType::Mighty) => "精湛连携",
+                    Some(CriticalChainType::Buster) => "力击连携",
+                    Some(CriticalChainType::Arts) => "技击连携",
+                    Some(CriticalChainType::Quick) => "迅击连携",
+                    None => "无连携",
+                };
+                self.emit(
+                    "Attack",
+                    &format!(
+                        "暴击模式：{chain}，成员顺序 {}",
+                        if summary.owner_labels.is_empty() {
+                            "待补位".into()
+                        } else {
+                            summary.owner_labels.join(" → ")
+                        }
+                    ),
+                );
+                if summary.relaxed_alternation {
+                    self.emit_warn(
+                        "Attack",
+                        &format!(
+                            "暴击模式因{}，放宽相邻成员限制并补足选卡",
+                            summary.relaxed_reason.unwrap_or("无法确认可交错的三张卡")
+                        ),
+                    );
+                }
+                self.tap_picks("Attack", &picks, &cards, &party_ids);
+            }
+            AttackMode::Advanced => {
+                let strategy = current_turn
+                    .as_ref()
+                    .map(|turn| &turn.advanced_card_strategy)
+                    .cloned()
+                    .unwrap_or_default();
+                let (picks, matched_rule) =
+                    choose_ordinary_advanced_picks(&cards, &nps, &party_members, &strategy);
+                if let Some(rule) = matched_rule {
+                    self.emit("Attack", &format!("高级模式：命中 {rule}"));
+                } else {
+                    self.emit("Attack", "高级模式：无规则命中，按可行动卡从左至右补位");
+                }
+                self.tap_picks("Attack", &picks, &cards, &party_ids);
+            }
+        }
     }
 
     fn ensure_battle_speed_level_two(&mut self) -> bool {
@@ -947,6 +1288,7 @@ impl Runner {
         &mut self,
         party_ids: &[Option<u32>; 3],
         recognize_command_cards: bool,
+        tolerate_missing_owners: bool,
     ) -> Option<(Vec<CommandCardMatch>, Vec<NoblePhantasmMatch>)> {
         // Start with the expected front line for speed. If owner recognition
         // repeatedly fails, a servant probably died and a back-line member
@@ -976,6 +1318,8 @@ impl Runner {
 
             let assets_dir = self.assets_dir.clone();
             loop {
+                let used_full_party_candidates =
+                    self.battle.command_card_owner_fallback_to_full_party;
                 let cards = match self.sidecar().find_command_cards(
                     None,
                     None,
@@ -1000,6 +1344,13 @@ impl Runner {
                     if !self.battle.command_card_owner_fallback_to_full_party {
                         self.battle.command_card_owner_failure_count = 0;
                     }
+                    break cards;
+                }
+                if tolerate_missing_owners && used_full_party_candidates {
+                    self.emit_warn(
+                        "Attack",
+                        "警告：全队候选仍有指令卡成员未识别，暴击模式将放宽成员交错限制",
+                    );
                     break cards;
                 }
                 if !self.battle.command_card_owner_fallback_to_full_party {
@@ -1572,7 +1923,8 @@ impl Runner {
             let (cards, nps, party_ids, party_supports) = if current_party_ids != party_ids
                 || current_party_supports != party_supports
             {
-                let Some((cards, nps)) = self.read_attack_state(&current_party_ids, true) else {
+                let Some((cards, nps)) = self.read_attack_state(&current_party_ids, true, false)
+                else {
                     return;
                 };
                 (cards, nps, current_party_ids, current_party_supports)
@@ -1685,6 +2037,9 @@ impl Runner {
                             command_spell_actions: Vec::new(),
                             enemy_target: None,
                             attack_priority: Vec::new(),
+                            attack_mode: AttackMode::Normal,
+                            critical_strategy: CriticalAttackStrategy::default(),
+                            advanced_card_strategy: AdvancedCardStrategy::default(),
                         };
                         if !self.execute_turn_skills(&prep_turn) {
                             return;
@@ -1696,7 +2051,7 @@ impl Runner {
                         }
                         thread::sleep(ACTION_DELAY);
                         let Some((next_cards, next_nps)) =
-                            self.read_attack_state(&startup_party_ids, true)
+                            self.read_attack_state(&startup_party_ids, true, false)
                         else {
                             return;
                         };
@@ -1756,6 +2111,9 @@ impl Runner {
                             command_spell_actions: Vec::new(),
                             enemy_target: None,
                             attack_priority: Vec::new(),
+                            attack_mode: AttackMode::Normal,
+                            critical_strategy: CriticalAttackStrategy::default(),
+                            advanced_card_strategy: AdvancedCardStrategy::default(),
                         };
                         if !self.execute_turn_skills(&control_turn) {
                             return;
@@ -1774,7 +2132,7 @@ impl Runner {
                         let control_party_supports =
                             self.advanced_party_supports_after_control(&scene, control_index + 1);
                         let Some((next_cards, _next_nps)) =
-                            self.read_attack_state(&control_party_ids, true)
+                            self.read_attack_state(&control_party_ids, true, false)
                         else {
                             return;
                         };
@@ -1867,6 +2225,9 @@ impl Runner {
                         command_spell_actions: Vec::new(),
                         enemy_target: None,
                         attack_priority: Vec::new(),
+                        attack_mode: AttackMode::Normal,
+                        critical_strategy: CriticalAttackStrategy::default(),
+                        advanced_card_strategy: AdvancedCardStrategy::default(),
                     };
                     if !self.execute_turn_skills(&prep_turn) {
                         return;
@@ -1878,7 +2239,7 @@ impl Runner {
                     }
                     thread::sleep(ACTION_DELAY);
                     let Some((next_cards, next_nps)) =
-                        self.read_attack_state(&startup_party_ids, true)
+                        self.read_attack_state(&startup_party_ids, true, false)
                     else {
                         return;
                     };
@@ -1976,6 +2337,9 @@ impl Runner {
                         command_spell_actions: Vec::new(),
                         enemy_target: None,
                         attack_priority: Vec::new(),
+                        attack_mode: AttackMode::Normal,
+                        critical_strategy: CriticalAttackStrategy::default(),
+                        advanced_card_strategy: AdvancedCardStrategy::default(),
                     };
                     if !self.execute_turn_skills(&control_turn) {
                         return;
@@ -1987,7 +2351,7 @@ impl Runner {
                     }
                     thread::sleep(ACTION_DELAY);
                     let Some((next_cards, next_nps)) =
-                        self.read_attack_state(&control_party_ids, true)
+                        self.read_attack_state(&control_party_ids, true, false)
                     else {
                         return;
                     };
@@ -2097,6 +2461,9 @@ impl Runner {
                     command_spell_actions: Vec::new(),
                     enemy_target: None,
                     attack_priority: Vec::new(),
+                    attack_mode: AttackMode::Normal,
+                    critical_strategy: CriticalAttackStrategy::default(),
+                    advanced_card_strategy: AdvancedCardStrategy::default(),
                 };
                 if !self.execute_turn_skills(&prep_turn) {
                     return;
@@ -2107,7 +2474,8 @@ impl Runner {
                     return;
                 }
                 thread::sleep(ACTION_DELAY);
-                let Some((next_cards, next_nps)) = self.read_attack_state(&party_ids, true) else {
+                let Some((next_cards, next_nps)) = self.read_attack_state(&party_ids, true, false)
+                else {
                     return;
                 };
                 cards = next_cards;

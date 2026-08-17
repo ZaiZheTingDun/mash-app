@@ -389,6 +389,9 @@ fn normal_turn(preparation_actions: Vec<Action>, attack_priority: Vec<AttackCard
         command_spell_actions: Vec::new(),
         enemy_target: None,
         attack_priority,
+        attack_mode: AttackMode::Normal,
+        critical_strategy: CriticalAttackStrategy::default(),
+        advanced_card_strategy: AdvancedCardStrategy::default(),
     }
 }
 
@@ -433,6 +436,33 @@ fn pick_labels(picks: &[Pick]) -> Vec<String> {
             Pick::Np { slot, .. } => format!("NP{slot}"),
         })
         .collect()
+}
+
+fn picked_servant_ids(picks: &[Pick], cards: &[CommandCardMatch]) -> Vec<Option<u32>> {
+    picks
+        .iter()
+        .map(|pick| match pick {
+            Pick::Card { slot, .. } => cards
+                .iter()
+                .find(|card| card.slot == *slot)
+                .and_then(|card| card.servant_id),
+            Pick::Np { .. } => None,
+        })
+        .collect()
+}
+
+fn frontline_member(
+    member_id: &str,
+    slot_index: usize,
+    servant_id: u32,
+    is_support: bool,
+) -> Option<PartyMemberRuntime> {
+    Some(PartyMemberRuntime {
+        member_id: Some(member_id.into()),
+        slot_index,
+        servant_id,
+        is_support,
+    })
 }
 
 #[test]
@@ -1226,6 +1256,311 @@ fn command_card_visibility_waits_for_all_five_suits_without_requiring_owner() {
         &visible_without_owners,
         &[10, 20]
     ));
+}
+
+#[test]
+fn critical_mode_alternates_four_cards_from_one_member_with_the_other_member() {
+    let cards = vec![
+        command_card(0, Some(10), Some("b"), Some(90)),
+        command_card(1, Some(10), Some("a"), Some(80)),
+        command_card(2, Some(10), Some("q"), Some(70)),
+        command_card(3, Some(10), Some("b"), Some(60)),
+        command_card(4, Some(20), Some("a"), Some(50)),
+    ];
+    let members = [
+        frontline_member("owned-10", 0, 10, false),
+        frontline_member("owned-20", 1, 20, false),
+        None,
+    ];
+    let strategy = CriticalAttackStrategy {
+        member_priority: vec![
+            AttackMemberPriorityItem {
+                member_id: Some("owned-10".into()),
+                slot_index: 0,
+                servant_id: Some(10),
+                is_support: false,
+            },
+            AttackMemberPriorityItem {
+                member_id: Some("owned-20".into()),
+                slot_index: 1,
+                servant_id: Some(20),
+                is_support: false,
+            },
+        ],
+        chain_priority: vec![
+            CriticalChainType::Mighty,
+            CriticalChainType::Buster,
+            CriticalChainType::Arts,
+            CriticalChainType::Quick,
+        ],
+    };
+
+    let (picks, summary) = choose_critical_picks(&cards, &members, &strategy);
+
+    assert_eq!(
+        picked_servant_ids(&picks, &cards),
+        vec![Some(10), Some(20), Some(10)]
+    );
+    assert!(!summary.relaxed_alternation);
+}
+
+#[test]
+fn critical_mode_chain_order_outranks_crit_total() {
+    let cards = vec![
+        command_card(0, Some(10), Some("b"), Some(10)),
+        command_card(1, Some(20), Some("b"), Some(10)),
+        command_card(2, Some(30), Some("b"), Some(10)),
+        command_card(3, Some(20), Some("a"), Some(100)),
+        command_card(4, Some(30), Some("q"), Some(100)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        frontline_member("three", 2, 30, false),
+    ];
+    let strategy = CriticalAttackStrategy {
+        member_priority: Vec::new(),
+        chain_priority: vec![
+            CriticalChainType::Buster,
+            CriticalChainType::Mighty,
+            CriticalChainType::Arts,
+            CriticalChainType::Quick,
+        ],
+    };
+
+    let (picks, summary) = choose_critical_picks(&cards, &members, &strategy);
+
+    assert_eq!(pick_labels(&picks), vec!["C0", "C1", "C2"]);
+    assert_eq!(summary.chain, Some(CriticalChainType::Buster));
+}
+
+#[test]
+fn critical_mode_recognizes_all_four_chain_types_and_falls_back_to_non_chain() {
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        None,
+    ];
+    let cases = [
+        (["b", "a", "q"], Some(CriticalChainType::Mighty)),
+        (["b", "b", "b"], Some(CriticalChainType::Buster)),
+        (["a", "a", "a"], Some(CriticalChainType::Arts)),
+        (["q", "q", "q"], Some(CriticalChainType::Quick)),
+        (["b", "b", "a"], None),
+    ];
+
+    for (suits, expected) in cases {
+        let cards = vec![
+            command_card(0, Some(10), Some(suits[0]), Some(30)),
+            command_card(1, Some(20), Some(suits[1]), Some(20)),
+            command_card(2, Some(10), Some(suits[2]), Some(10)),
+        ];
+        let (_, summary) =
+            choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
+        assert_eq!(summary.chain, expected);
+    }
+}
+
+#[test]
+fn critical_mode_distinguishes_owned_and_support_copies() {
+    let cards = vec![
+        command_card_with_support(0, Some(10), true, Some("b"), Some(50)),
+        command_card_with_support(1, Some(10), false, Some("a"), Some(50)),
+        command_card_with_support(2, Some(10), true, Some("q"), Some(50)),
+        command_card_with_support(3, Some(10), false, Some("b"), Some(50)),
+        command_card_with_support(4, Some(10), false, Some("q"), Some(50)),
+    ];
+    let members = [
+        frontline_member("support", 0, 10, true),
+        frontline_member("owned", 1, 10, false),
+        None,
+    ];
+    let strategy = CriticalAttackStrategy {
+        member_priority: vec![
+            AttackMemberPriorityItem {
+                member_id: Some("support".into()),
+                slot_index: 0,
+                servant_id: Some(10),
+                is_support: true,
+            },
+            AttackMemberPriorityItem {
+                member_id: Some("owned".into()),
+                slot_index: 1,
+                servant_id: Some(10),
+                is_support: false,
+            },
+        ],
+        chain_priority: vec![CriticalChainType::Mighty],
+    };
+
+    let (picks, summary) = choose_critical_picks(&cards, &members, &strategy);
+
+    assert_eq!(pick_labels(&picks), vec!["C0", "C1", "C2"]);
+    assert!(!summary.relaxed_alternation);
+}
+
+#[test]
+fn critical_mode_excludes_stunned_cards_and_never_selects_np_candidates() {
+    let cards = vec![
+        command_card_with_state(0, Some(10), false, true, Some("b"), Some(100)),
+        command_card(1, Some(10), Some("b"), Some(20)),
+        command_card(2, Some(20), Some("a"), Some(30)),
+        command_card(3, Some(10), Some("q"), Some(40)),
+        command_card(4, Some(20), Some("b"), Some(50)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        None,
+    ];
+
+    let (picks, _) = choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
+
+    assert_eq!(picks.len(), 3);
+    assert!(!pick_labels(&picks).contains(&"C0".to_string()));
+    assert!(picks.iter().all(|pick| matches!(pick, Pick::Card { .. })));
+}
+
+#[test]
+fn critical_mode_reports_actionable_shortage_before_positional_fill() {
+    let cards = vec![
+        command_card_with_state(0, Some(10), false, true, Some("b"), Some(100)),
+        command_card(1, Some(10), Some("a"), Some(20)),
+        command_card_with_state(2, Some(20), false, true, Some("q"), Some(100)),
+        command_card_with_state(3, Some(10), false, true, Some("b"), Some(100)),
+        command_card(4, Some(20), Some("q"), Some(30)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        None,
+    ];
+
+    let (picks, summary) =
+        choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
+
+    assert_eq!(pick_labels(&picks), vec!["C1", "C4"]);
+    assert_eq!(summary.relaxed_reason, Some("可行动卡不足"));
+}
+
+#[test]
+fn critical_mode_uses_total_crit_to_break_equal_member_and_chain_scores() {
+    let cards = vec![
+        command_card(0, Some(10), Some("b"), Some(10)),
+        command_card(1, Some(10), Some("b"), Some(90)),
+        command_card(2, Some(20), Some("a"), Some(20)),
+        command_card(3, Some(30), Some("q"), Some(30)),
+        command_card(4, Some(20), Some("b"), Some(100)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        frontline_member("three", 2, 30, false),
+    ];
+
+    let (picks, summary) =
+        choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
+
+    assert_eq!(pick_labels(&picks), vec!["C1", "C2", "C3"]);
+    assert_eq!(summary.chain, Some(CriticalChainType::Mighty));
+}
+
+#[test]
+fn critical_mode_relaxes_alternation_when_card_owner_recognition_failed() {
+    let cards = vec![
+        command_card(0, None, Some("b"), Some(90)),
+        command_card(1, Some(10), Some("a"), Some(80)),
+        command_card(2, Some(10), Some("q"), Some(70)),
+        command_card(3, Some(10), Some("b"), Some(60)),
+        command_card(4, Some(10), Some("a"), Some(50)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        None,
+    ];
+
+    let (picks, summary) =
+        choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
+
+    assert_eq!(picks.len(), 3);
+    assert!(summary.relaxed_alternation);
+    assert_eq!(summary.relaxed_reason.as_deref(), Some("成员识别失败"));
+}
+
+#[test]
+fn ordinary_advanced_mode_uses_the_first_matching_rule_in_configured_order() {
+    let cards = vec![
+        command_card(0, Some(10), Some("b"), Some(20)),
+        command_card(1, Some(20), Some("a"), Some(30)),
+        command_card(2, Some(10), Some("q"), Some(40)),
+        command_card(3, Some(20), Some("b"), Some(50)),
+        command_card(4, Some(10), Some("a"), Some(60)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        None,
+    ];
+    let slot =
+        |member_id: &str, slot_index: u32, servant_id: u32, color: &str| GrandCardRuleSlotConfig {
+            member_id: Some(member_id.into()),
+            slot_index: Some(slot_index),
+            servant_id: Some(servant_id),
+            is_support: false,
+            grand_servant: false,
+            kind: "command".into(),
+            color: color.into(),
+        };
+    let strategy = AdvancedCardStrategy {
+        custom_rules: vec![
+            GrandCardRuleConfig {
+                id: "miss".into(),
+                name: "不会命中".into(),
+                slots: vec![
+                    slot("one", 0, 10, "buster"),
+                    slot("one", 0, 10, "buster"),
+                    slot("one", 0, 10, "buster"),
+                ],
+            },
+            GrandCardRuleConfig {
+                id: "match".into(),
+                name: "交错规则".into(),
+                slots: vec![
+                    slot("two", 1, 20, "arts"),
+                    slot("one", 0, 10, "quick"),
+                    slot("two", 1, 20, "buster"),
+                ],
+            },
+        ],
+    };
+
+    let (picks, matched) = choose_ordinary_advanced_picks(&cards, &[], &members, &strategy);
+
+    assert_eq!(pick_labels(&picks), vec!["C1", "C2", "C3"]);
+    assert_eq!(matched.as_deref(), Some("交错规则"));
+}
+
+#[test]
+fn ordinary_advanced_mode_falls_back_to_actionable_command_cards_from_left_to_right() {
+    let cards = vec![
+        command_card_with_state(0, Some(10), false, true, Some("b"), Some(100)),
+        command_card(1, Some(20), Some("a"), Some(30)),
+        command_card(2, Some(10), Some("q"), Some(40)),
+        command_card(3, Some(20), Some("b"), Some(50)),
+        command_card(4, Some(10), Some("a"), Some(60)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        None,
+    ];
+
+    let (picks, matched) =
+        choose_ordinary_advanced_picks(&cards, &[], &members, &AdvancedCardStrategy::default());
+
+    assert_eq!(pick_labels(&picks), vec!["C1", "C2", "C3"]);
+    assert_eq!(matched, None);
 }
 
 #[test]
@@ -5077,6 +5412,9 @@ fn turn_preparation_actions_preserves_configured_row_order() {
         command_spell_actions: vec![],
         enemy_target: None,
         attack_priority: vec![],
+        attack_mode: AttackMode::Normal,
+        critical_strategy: CriticalAttackStrategy::default(),
+        advanced_card_strategy: AdvancedCardStrategy::default(),
     };
 
     let kinds: Vec<&str> = turn_preparation_actions(&turn)

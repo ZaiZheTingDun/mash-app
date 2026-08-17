@@ -489,6 +489,80 @@ function relocateAttackCardMembers(
   };
 }
 
+function relocateTurnMemberRef<T extends {
+  memberId?: string | null;
+  slotIndex?: number | null;
+  servantId?: number | null;
+  isSupport?: boolean;
+}>(
+  ref: T,
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[]
+): T {
+  const previous = ref.slotIndex == null ? null : previousMembers[ref.slotIndex] ?? null;
+  const memberId = ref.memberId ?? previous?.memberId ?? null;
+  const servantId = ref.servantId ?? previous?.servant?.id ?? null;
+  const isSupport = ref.isSupport ?? previous?.isSupport ?? false;
+  const nextIndex = resolveMemberRefIndex(
+    nextMembers,
+    ref.slotIndex == null ? null : `servant_${ref.slotIndex + 1}`,
+    memberId,
+    servantId,
+    isSupport
+  );
+  const next = nextIndex == null ? null : nextMembers[nextIndex] ?? null;
+  return {
+    ...ref,
+    memberId: next?.memberId ?? memberId,
+    slotIndex: nextIndex ?? ref.slotIndex,
+    servantId: next?.servant?.id ?? servantId,
+    isSupport: next?.isSupport ?? isSupport,
+  };
+}
+
+function relocateCriticalMemberPriority(
+  priority: NonNullable<BattleTurn["criticalStrategy"]>["memberPriority"],
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[]
+): NonNullable<BattleTurn["criticalStrategy"]>["memberPriority"] {
+  const relocated = priority.flatMap((item) => {
+    const previous = previousMembers[item.slotIndex] ?? null;
+    const memberId = item.memberId ?? previous?.memberId ?? null;
+    const servantId = item.servantId ?? previous?.servant?.id ?? null;
+    const isSupport = item.isSupport ?? previous?.isSupport ?? false;
+    const nextIndex = memberId
+      ? nextMembers.findIndex((member) => member.memberId === memberId)
+      : nextMembers.findIndex(
+          (member) => member.servant?.id === servantId && member.isSupport === isSupport
+        );
+    if (nextIndex < 0 || !nextMembers[nextIndex]?.servant) return [];
+    const next = nextMembers[nextIndex];
+    return [{
+      memberId: next.memberId ?? memberId,
+      slotIndex: nextIndex,
+      servantId: next.servant?.id ?? servantId,
+      isSupport: next.isSupport,
+    }];
+  });
+  for (const [slotIndex, member] of nextMembers.entries()) {
+    if (!member.servant) continue;
+    const alreadyIncluded = relocated.some((item) =>
+      member.memberId
+        ? item.memberId === member.memberId
+        : item.servantId === member.servant?.id && item.isSupport === member.isSupport
+    );
+    if (!alreadyIncluded) {
+      relocated.push({
+        memberId: member.memberId ?? null,
+        slotIndex,
+        servantId: member.servant.id,
+        isSupport: member.isSupport,
+      });
+    }
+  }
+  return relocated;
+}
+
 function relocateBattleTurnMembers(
   turn: BattleTurn,
   previousMembers: PartyMember[],
@@ -511,6 +585,28 @@ function relocateBattleTurnMembers(
     attackPriority: turn.attackPriority.map((card) =>
       relocateAttackCardMembers(card, previousMembers, nextMembers)
     ),
+    criticalStrategy: turn.criticalStrategy
+      ? {
+          ...turn.criticalStrategy,
+          memberPriority: relocateCriticalMemberPriority(
+            turn.criticalStrategy.memberPriority,
+            previousMembers,
+            nextMembers
+          ),
+        }
+      : turn.criticalStrategy,
+    advancedCardStrategy: turn.advancedCardStrategy
+      ? {
+          customRules: turn.advancedCardStrategy.customRules.map((rule) => ({
+            ...rule,
+            slots: rule.slots.map((slot) =>
+              slot.grandServant
+                ? slot
+                : relocateTurnMemberRef(slot, previousMembers, nextMembers)
+            ),
+          })),
+        }
+      : turn.advancedCardStrategy,
   };
 }
 

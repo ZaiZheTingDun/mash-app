@@ -631,6 +631,53 @@ describe("deriveScenePartyServants", () => {
     ]);
   });
 
+  it("relocates per-turn critical priorities and advanced rules by member identity", () => {
+    const previousMembers = [
+      { memberId: "slot-a", servant: ARASH, isSupport: false },
+      { memberId: "slot-b", servant: MERLIN, isSupport: false },
+      { memberId: "slot-c", servant: MASH, isSupport: true },
+    ];
+    const nextMembers = [
+      { memberId: "slot-b", servant: MERLIN, isSupport: false },
+      { memberId: "slot-c", servant: MASH, isSupport: true },
+      { memberId: "slot-a", servant: ARASH, isSupport: false },
+    ];
+    const scene = makeScene({
+      attackMode: "critical",
+      criticalStrategy: {
+        memberPriority: [
+          { memberId: "slot-a", slotIndex: 0, servantId: ARASH.id, isSupport: false },
+          { memberId: "slot-c", slotIndex: 2, servantId: MASH.id, isSupport: true },
+        ],
+        chainPriority: ["mighty", "buster", "arts", "quick"],
+      },
+      advancedCardStrategy: {
+        customRules: [{
+          id: "rule-1",
+          name: "成员规则",
+          slots: [
+            { memberId: "slot-a", slotIndex: 0, servantId: ARASH.id, isSupport: false, kind: "command", color: "buster" },
+            { memberId: "slot-c", slotIndex: 2, servantId: MASH.id, isSupport: true, kind: "command", color: "arts" },
+            { memberId: null, slotIndex: null, servantId: null, isSupport: false, kind: "any", color: "any" },
+          ],
+        }],
+      },
+    });
+
+    const relocated = relocateBattleSceneMembers(scene, previousMembers, nextMembers);
+
+    expect(relocated.turns[0].criticalStrategy?.memberPriority).toMatchObject([
+      { memberId: "slot-a", slotIndex: 2, servantId: ARASH.id, isSupport: false },
+      { memberId: "slot-c", slotIndex: 1, servantId: MASH.id, isSupport: true },
+      { memberId: "slot-b", slotIndex: 0, servantId: MERLIN.id, isSupport: false },
+    ]);
+    expect(relocated.turns[0].advancedCardStrategy?.customRules[0].slots).toMatchObject([
+      { memberId: "slot-a", slotIndex: 2, servantId: ARASH.id, isSupport: false },
+      { memberId: "slot-c", slotIndex: 1, servantId: MASH.id, isSupport: true },
+      { memberId: null, slotIndex: null, servantId: null },
+    ]);
+  });
+
   it("relocates advanced output, conditions, and rule attacks to the same member after team reorder", () => {
     const previousMembers = [
       { memberId: "slot-a", servant: ARASH, isSupport: false },

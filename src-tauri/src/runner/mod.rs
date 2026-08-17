@@ -40,8 +40,9 @@ use crate::touch::{self, TouchBackend};
 use crate::GrandCardRuleSlotConfig;
 use crate::{
     default_grand_chain_priority, load_servant_metadata_for_variant, servant_np_card, Action,
-    AdvancedBattleScene, AdvancedCommandCardCondition, AdvancedOutputType, AdvancedRule,
-    AttackCard, BattleScene, BattleTurn, GrandCardRuleConfig, GrandCardStrategy,
+    AdvancedBattleScene, AdvancedCardStrategy, AdvancedCommandCardCondition, AdvancedOutputType,
+    AdvancedRule, AttackCard, AttackMemberPriorityItem, AttackMode, BattleScene, BattleTurn,
+    CriticalAttackStrategy, CriticalChainType, GrandCardRuleConfig, GrandCardStrategy,
     GrandChainPriorityItem, GrandClass, GrandClassDefinition, GrandRoleDefinition,
     GrandServantConfig, LancerGrandRole, ServantMetadata, Server,
 };

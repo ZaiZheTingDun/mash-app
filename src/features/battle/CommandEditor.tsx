@@ -30,6 +30,7 @@ interface CommandEditorProps {
   grandClassDefinition?: GrandClassDefinition;
   grandCardStrategy?: GrandCardStrategy;
   grandCardPriorityEnabled?: boolean;
+  turnAttackModesEnabled?: boolean;
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
   onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
 }
@@ -62,6 +63,12 @@ function createDefaultTurn(): BattleTurn {
     commandSpellActions: [],
     enemyTarget: null,
     attackPriority: createDefaultAttackPriority(),
+    attackMode: "normal",
+    criticalStrategy: {
+      memberPriority: [],
+      chainPriority: ["mighty", "buster", "arts", "quick"],
+    },
+    advancedCardStrategy: { customRules: [] },
   };
 }
 
@@ -94,6 +101,14 @@ function normalizeTurn(turn: BattleTurn): BattleTurn {
     commandSpellActions: [],
     enemyTarget: turn.enemyTarget ?? null,
     attackPriority,
+    attackMode: turn.attackMode ?? "normal",
+    criticalStrategy: {
+      memberPriority: turn.criticalStrategy?.memberPriority ?? [],
+      chainPriority: turn.criticalStrategy?.chainPriority ?? ["mighty", "buster", "arts", "quick"],
+    },
+    advancedCardStrategy: {
+      customRules: turn.advancedCardStrategy?.customRules ?? [],
+    },
   };
 }
 
@@ -134,6 +149,7 @@ export function CommandEditor({
   grandClassDefinition,
   grandCardStrategy,
   grandCardPriorityEnabled = false,
+  turnAttackModesEnabled = false,
   onGrandServantsChange,
   onGrandCardStrategyChange,
 }: CommandEditorProps) {
@@ -375,6 +391,7 @@ export function CommandEditor({
           partyServants={activeParty}
           partyMembers={activePartyMembers}
           disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
+          turnAttackModesEnabled={turnAttackModesEnabled}
           onChange={(updated) => handleTurnChange(activeScene.id, activeTurn.id, updated)}
         />
       </div>

@@ -101,6 +101,70 @@ pub struct AttackCard {
     pub is_support: bool,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AttackMode {
+    #[default]
+    Normal,
+    Critical,
+    Advanced,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CriticalChainType {
+    Mighty,
+    Buster,
+    Arts,
+    Quick,
+}
+
+pub(crate) fn default_critical_chain_priority() -> Vec<CriticalChainType> {
+    vec![
+        CriticalChainType::Mighty,
+        CriticalChainType::Buster,
+        CriticalChainType::Arts,
+        CriticalChainType::Quick,
+    ]
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AttackMemberPriorityItem {
+    #[serde(default)]
+    pub member_id: Option<String>,
+    pub slot_index: u32,
+    #[serde(default)]
+    pub servant_id: Option<u32>,
+    #[serde(default)]
+    pub is_support: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CriticalAttackStrategy {
+    #[serde(default)]
+    pub member_priority: Vec<AttackMemberPriorityItem>,
+    #[serde(default = "default_critical_chain_priority")]
+    pub chain_priority: Vec<CriticalChainType>,
+}
+
+impl Default for CriticalAttackStrategy {
+    fn default() -> Self {
+        Self {
+            member_priority: Vec::new(),
+            chain_priority: default_critical_chain_priority(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedCardStrategy {
+    #[serde(default)]
+    pub custom_rules: Vec<GrandCardRuleConfig>,
+}
+
 /// One configured turn inside a battle scene. The runner selects a
 /// `BattleScene` from the `BATTLE m/n` HUD and then uses an internal
 /// per-scene turn counter to choose which `BattleTurn` runs.
@@ -122,6 +186,12 @@ pub struct BattleTurn {
     pub enemy_target: Option<String>,
     #[serde(rename = "attackPriority", default)]
     pub attack_priority: Vec<AttackCard>,
+    #[serde(rename = "attackMode", default)]
+    pub attack_mode: AttackMode,
+    #[serde(rename = "criticalStrategy", default)]
+    pub critical_strategy: CriticalAttackStrategy,
+    #[serde(rename = "advancedCardStrategy", default)]
+    pub advanced_card_strategy: AdvancedCardStrategy,
 }
 
 impl BattleTurn {
@@ -176,6 +246,9 @@ impl BattleScene {
                     command_spell_actions: std::mem::take(&mut self.command_spell_actions),
                     enemy_target: self.enemy_target.take(),
                     attack_priority: std::mem::take(&mut self.attack_priority),
+                    attack_mode: AttackMode::Normal,
+                    critical_strategy: CriticalAttackStrategy::default(),
+                    advanced_card_strategy: AdvancedCardStrategy::default(),
                 }
                 .normalize_preparation_actions(),
             );

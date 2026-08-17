@@ -465,6 +465,99 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(screen.getByText("指令卡三")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "未设置攻击" })).toHaveLength(3);
     expect(screen.queryAllByRole("button", { name: "清除指令卡" })).toHaveLength(0);
+    expect(screen.queryByRole("combobox", { name: "攻击模式" })).not.toBeInTheDocument();
+  });
+
+  it("preserves hidden strategies when switching attack modes", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const scene = makeScene({
+      attackMode: "critical",
+      criticalStrategy: {
+        memberPriority: [{ memberId: "slot-1", slotIndex: 0, servantId: 1, isSupport: false }],
+        chainPriority: ["quick", "mighty", "buster", "arts"],
+      },
+      advancedCardStrategy: { customRules: [] },
+    });
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={scene}
+        partyServants={PARTY}
+        turnAttackModesEnabled
+        onChange={onChange}
+      />
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "攻击模式" }));
+    await user.click(await screen.findByRole("option", { name: "普通模式" }));
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      attackMode: "normal",
+      criticalStrategy: scene.criticalStrategy,
+      advancedCardStrategy: scene.advancedCardStrategy,
+    }));
+  });
+
+  it("shows configured owned and support members plus all critical chain priorities", () => {
+    const duplicate = makeServant(10, "同名从者");
+    const members: PartyMember[] = [
+      { memberId: "owned", servant: duplicate, isSupport: false },
+      { memberId: "support", servant: duplicate, isSupport: true },
+      { memberId: "empty", servant: null, isSupport: false },
+    ];
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({ attackMode: "critical" })}
+        partyServants={members.map((member) => member.servant)}
+        partyMembers={members}
+        turnAttackModesEnabled
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getAllByRole("button", { name: /同名从者，拖动调整优先级/ })).toHaveLength(2);
+    expect(screen.getByLabelText("助战")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /从者 3，拖动调整优先级/ })).not.toBeInTheDocument();
+    for (const label of ["精湛连携", "力击连携", "技击连携", "迅击连携"]) {
+      expect(screen.getByRole("button", { name: `${label}，拖动调整优先级` })).toBeInTheDocument();
+    }
+  });
+
+  it("embeds the advanced card-rule editor without the Grand servant option", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <BattleSceneBlock
+        scene={makeScene({
+          attackMode: "advanced",
+          advancedCardStrategy: {
+            customRules: [{
+              id: "rule-1",
+              name: "普通高级规则",
+              slots: [0, 1, 2].map(() => ({
+                memberId: null,
+                slotIndex: null,
+                servantId: null,
+                isSupport: false,
+                grandServant: false,
+                kind: "any" as const,
+                color: "any" as const,
+              })),
+            }],
+          },
+        })}
+        partyServants={PARTY}
+        turnAttackModesEnabled
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "指令卡策略" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "添加规则" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /第 1 张，任意从者/ }));
+
+    expect(await screen.findByText("设置策略")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "任意从者" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "冠位从者" })).not.toBeInTheDocument();
   });
 
   it("updates a fixed attack chain row from servant and card choice", async () => {

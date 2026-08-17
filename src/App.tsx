@@ -942,6 +942,7 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
                     )}
                     grandCardStrategy={activeProject?.grandCardStrategy}
                     grandCardPriorityEnabled
+                    turnAttackModesEnabled={featureToggles.turnAttackModes}
                     onGrandServantsChange={(grandServants) => {
                       if (!activeProject) return;
                       void handleUpdateProject({ ...activeProject, grandServants });

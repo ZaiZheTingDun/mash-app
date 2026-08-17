@@ -9,6 +9,7 @@ describe("feature toggles", () => {
       friendPointSummon: true,
       cvDebug: true,
       grandCardPriority: true,
+      turnAttackModes: true,
       settingsDebug: true,
     });
   });
@@ -20,6 +21,7 @@ describe("feature toggles", () => {
       friendPointSummon: false,
       cvDebug: false,
       grandCardPriority: false,
+      turnAttackModes: false,
       settingsDebug: false,
     });
   });
@@ -33,6 +35,7 @@ describe("feature toggles", () => {
         VITE_FEATURE_FRIEND_POINT_SUMMON: "enabled",
         VITE_FEATURE_CV_DEBUG: "1",
         VITE_FEATURE_GRAND_CARD_PRIORITY: "on",
+        VITE_FEATURE_TURN_ATTACK_MODES: "true",
       })
     ).toEqual({
       servantEnhancement: true,
@@ -40,6 +43,7 @@ describe("feature toggles", () => {
       friendPointSummon: true,
       cvDebug: true,
       grandCardPriority: true,
+      turnAttackModes: true,
       settingsDebug: false,
     });
   });

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type React from "react";
-import { Avatar, Button, Text } from "@radix-ui/themes";
+import { Avatar, Button, Select, Text } from "@radix-ui/themes";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import orderChangeIcon from "../../../src-tauri/resources/images/icon_order_change.png";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
@@ -12,6 +12,8 @@ import { AddRowTrigger } from "../../components/common/AddRowTrigger";
 import { EnemyTargetButtons, EnemyTargetSelector } from "./EnemyTargetSelector";
 import { useServantSkillTargeting } from "./useServantSkillTargeting";
 import { useServantSkillSelections } from "./useServantSkillSelections";
+import { CriticalStrategyEditor } from "./CriticalStrategyEditor";
+import { GrandCardStrategyPanel } from "../advanced/AdvancedGrandStrategyPanel";
 import {
   deriveMembersAfterAttackCards,
   deriveMembersAfterPreparationActions,
@@ -55,6 +57,7 @@ interface BattleSceneBlockProps {
   partyServants: (Servant | null)[];
   partyMembers?: PartyMember[];
   disableAutoSkillTargetRecognition?: boolean;
+  turnAttackModesEnabled?: boolean;
   onChange: (updated: BattleTurn) => void;
 }
 
@@ -480,6 +483,7 @@ export function BattleSceneBlock({
   partyServants,
   partyMembers,
   disableAutoSkillTargetRecognition = false,
+  turnAttackModesEnabled = false,
   onChange,
 }: BattleSceneBlockProps) {
   const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
@@ -493,6 +497,7 @@ export function BattleSceneBlock({
   const skillIcons = useServantSkillIcons(initialPartyServants);
   const skillTargetStatus = useServantSkillTargeting(initialPartyServants);
   const skillSelection = useServantSkillSelections(initialPartyServants);
+  const attackMode = turnAttackModesEnabled ? (scene.attackMode ?? "normal") : "normal";
   const preparationActions = useMemo(
     () =>
       scene.preparationActions ??
@@ -545,6 +550,11 @@ export function BattleSceneBlock({
 
   const updateAttackPriority = (next: AttackCard[]) => {
     onChange(emptyLegacyFields({ ...scene, attackPriority: next }));
+  };
+
+  const updateAttackMode = (attackMode: "normal" | "critical" | "advanced") => {
+    setAttackDraft(null);
+    onChange(emptyLegacyFields({ ...scene, attackMode }));
   };
 
   const updateEnemyTarget = (enemyTarget: EnemyTarget | null) => {
@@ -1069,8 +1079,23 @@ export function BattleSceneBlock({
         onChange={updateEnemyTarget}
       />
 
-      <section className="battle-phase">
-        <div className="battle-phase-label">攻击阶段</div>
+      <section className={`battle-phase${turnAttackModesEnabled ? " battle-attack-phase" : ""}`}>
+        {turnAttackModesEnabled ? (
+          <div className="battle-attack-heading">
+            <Select.Root value={attackMode} onValueChange={updateAttackMode}>
+              <Select.Trigger aria-label="攻击模式" className="battle-attack-mode-select" />
+              <Select.Content>
+                <Select.Item value="normal">普通模式</Select.Item>
+                <Select.Item value="critical">暴击模式</Select.Item>
+                <Select.Item value="advanced">高级模式</Select.Item>
+              </Select.Content>
+            </Select.Root>
+            <div className="battle-phase-label">攻击阶段</div>
+          </div>
+        ) : (
+          <div className="battle-phase-label">攻击阶段</div>
+        )}
+        {attackMode === "normal" ? (
         <div className="battle-action-list">
           {attackPriority.map((card, index) => {
             const rowDraft = attackDraft?.targetIndex === index ? attackDraft : null;
@@ -1140,6 +1165,32 @@ export function BattleSceneBlock({
             )}
           </div>
         </div>
+        ) : attackMode === "critical" ? (
+          <CriticalStrategyEditor
+            strategy={scene.criticalStrategy}
+            partyMembers={currentPartyMembers}
+            faces={faces}
+            onChange={(criticalStrategy) =>
+              onChange(emptyLegacyFields({ ...scene, criticalStrategy }))
+            }
+          />
+        ) : (
+          <GrandCardStrategyPanel
+            strategy={{ customRules: scene.advancedCardStrategy?.customRules ?? [] }}
+            partyMembers={currentPartyMembers}
+            faces={faces}
+            allowGrandServant={false}
+            embedded
+            onChange={(advancedCardStrategy) =>
+              onChange(emptyLegacyFields({
+                ...scene,
+                advancedCardStrategy: {
+                  customRules: advancedCardStrategy.customRules ?? [],
+                },
+              }))
+            }
+          />
+        )}
       </section>
     </div>
   );

@@ -1146,6 +1146,127 @@ pub(crate) fn choose_with_grand_rules(
     Vec::new()
 }
 
+fn ordinary_advanced_rules(
+    strategy: &AdvancedCardStrategy,
+    members: &[Option<PartyMemberRuntime>; 3],
+) -> Vec<(String, GrandCardRule)> {
+    strategy
+        .custom_rules
+        .iter()
+        .cloned()
+        .enumerate()
+        .filter_map(|(index, mut rule)| {
+            let name = if rule.name.trim().is_empty() {
+                format!("规则 {}", index + 1)
+            } else {
+                rule.name.trim().to_string()
+            };
+            for slot in &mut rule.slots {
+                slot.grand_servant = false;
+                let has_specific_owner = slot.member_id.is_some()
+                    || slot.servant_id.is_some()
+                    || slot.slot_index.is_some();
+                if !has_specific_owner {
+                    continue;
+                }
+                let current_index = members.iter().position(|candidate| {
+                    candidate.as_ref().is_some_and(|member| {
+                        slot.member_id
+                            .as_deref()
+                            .zip(member.member_id.as_deref())
+                            .is_some_and(|(left, right)| left == right)
+                            || (slot.member_id.is_none()
+                                && slot
+                                    .slot_index
+                                    .is_some_and(|index| index as usize == member.slot_index)
+                                && slot.servant_id == Some(member.servant_id)
+                                && slot.is_support == member.is_support)
+                    })
+                });
+                slot.slot_index = Some(current_index.map(|index| index as u32).unwrap_or(6));
+            }
+            custom_rule_config_to_rule(&rule).map(|rule| (name, rule))
+        })
+        .collect()
+}
+
+pub(crate) fn choose_ordinary_advanced_picks(
+    cards: &[CommandCardMatch],
+    nps: &[NoblePhantasmMatch],
+    members: &[Option<PartyMemberRuntime>; 3],
+    strategy: &AdvancedCardStrategy,
+) -> (Vec<Pick>, Option<String>) {
+    let party_ids: [Option<u32>; 3] =
+        std::array::from_fn(|index| members[index].as_ref().map(|member| member.servant_id));
+    let mut candidates = Vec::new();
+    for np in nps.iter().filter(|np| np.ready) {
+        let servant_index = Some(np.slot as usize).filter(|index| *index < 3);
+        let servant_id = servant_index.and_then(|index| party_ids[index]);
+        candidates.push(AdvancedPickCandidate {
+            pick: Pick::Np {
+                slot: np.slot,
+                point: rect_center(&np.card_region),
+                from_priority: "高级模式".into(),
+            },
+            servant_index,
+            servant_id,
+            color: servant_id
+                .and_then(servant_np_card_code)
+                .map(str::to_string),
+            original_order: np.slot,
+            is_np: true,
+        });
+    }
+    for card in cards.iter().filter(|card| !card.is_stunned) {
+        let servant_index = card.servant_id.and_then(|servant_id| {
+            members.iter().position(|candidate| {
+                candidate.as_ref().is_some_and(|member| {
+                    member.servant_id == servant_id && member.is_support == card.is_support
+                })
+            })
+        });
+        candidates.push(AdvancedPickCandidate {
+            pick: Pick::Card {
+                slot: card.slot,
+                point: Point::new(card.x, card.y),
+                servant_id: card.servant_id,
+                suit: card.suit.clone(),
+                from_priority: Some("高级模式".into()),
+            },
+            servant_index,
+            servant_id: card.servant_id,
+            color: card.suit.clone(),
+            original_order: 10 + card.slot,
+            is_np: false,
+        });
+    }
+
+    for (name, rule) in ordinary_advanced_rules(strategy, members) {
+        let picks = choose_with_grand_rules(&candidates, &[], vec![rule]);
+        if !picks.is_empty() {
+            return (picks, Some(name));
+        }
+    }
+
+    let mut fallback: Vec<&CommandCardMatch> =
+        cards.iter().filter(|card| !card.is_stunned).collect();
+    fallback.sort_by_key(|card| card.slot);
+    (
+        fallback
+            .into_iter()
+            .take(3)
+            .map(|card| Pick::Card {
+                slot: card.slot,
+                point: Point::new(card.x, card.y),
+                servant_id: card.servant_id,
+                suit: card.suit.clone(),
+                from_priority: Some("高级模式默认补位".into()),
+            })
+            .collect(),
+        None,
+    )
+}
+
 fn append_unavailable_card_fallbacks(
     mut picks: Vec<Pick>,
     cards: &[CommandCardMatch],
