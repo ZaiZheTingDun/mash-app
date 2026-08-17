@@ -4835,6 +4835,14 @@
         "nameCN": "巨影，现于生命之海",
         "card": "2",
         "cardName": "buster"
+      },
+      {
+        "id": 1000901,
+        "name": "ソチナトル・ガリヴァーワーズ",
+        "nameJP": "巨影、冥海の淵より来たる",
+        "nameCN": "巨影、冥海の淵より来たる",
+        "card": "2",
+        "cardName": "buster"
       }
     ]
   },
@@ -10127,6 +10135,94 @@
         "nameCN": "竜牙幻想・播かれたる者",
         "card": "1",
         "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 405900,
+    "collectionNo": 478,
+    "nameCN": "リリス",
+    "nameJP": "リリス",
+    "classId": 4,
+    "className": "rider",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 405901,
+        "name": "セアラ・ナアラト・フルバーン",
+        "nameJP": "風乗り少女の縦横無尽",
+        "nameCN": "風乗り少女の縦横無尽",
+        "card": "3",
+        "cardName": "quick"
+      },
+      {
+        "id": 405901,
+        "name": "ラシール・セアラ・レドディ",
+        "nameJP": "嵐のような恋を唄えよ",
+        "nameCN": "嵐のような恋を唄えよ",
+        "card": "3",
+        "cardName": "quick"
+      }
+    ]
+  },
+  {
+    "id": 1102300,
+    "collectionNo": 479,
+    "nameCN": "キングプロテア・オルタ",
+    "nameJP": "キングプロテア・オルタ",
+    "classId": 11,
+    "className": "avenger",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 1102301,
+        "name": "ラクシャーサ・キングピット",
+        "nameJP": "巨影、矮小たる夜を駆ける",
+        "nameCN": "巨影、矮小たる夜を駆ける",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ]
+  },
+  {
+    "id": 205600,
+    "collectionNo": 480,
+    "nameCN": "小野小町",
+    "nameJP": "小野小町",
+    "classId": 2,
+    "className": "archer",
+    "type": "normal",
+    "rarity": 4,
+    "noblePhantasms": [
+      {
+        "id": 205601,
+        "name": "あくごうしょかん・えんまほうおう",
+        "nameJP": "悪業所感・琰魔法王",
+        "nameCN": "悪業所感・琰魔法王",
+        "card": "3",
+        "cardName": "quick"
+      }
+    ]
+  },
+  {
+    "id": 2801300,
+    "collectionNo": 481,
+    "nameCN": "ハベトロット",
+    "nameJP": "ハベトロット",
+    "classId": 28,
+    "className": "pretender",
+    "type": "normal",
+    "rarity": 4,
+    "noblePhantasms": [
+      {
+        "id": 2801301,
+        "name": "ちびらーさぬ・ハベトロット",
+        "nameJP": "うみを湧かす獅子の勇姿",
+        "nameCN": "うみを湧かす獅子の勇姿",
+        "card": "2",
+        "cardName": "buster"
       }
     ]
   }

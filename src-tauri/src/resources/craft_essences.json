@@ -29252,5 +29252,49 @@
     "flags": [
       "svtEquipFriendShip"
     ]
+  },
+  {
+    "id": 9311900,
+    "collectionNo": 2697,
+    "name": "リリン＆リリスｓグッズセット",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipFriendShip",
+    "flags": [
+      "svtEquipFriendShip"
+    ]
+  },
+  {
+    "id": 9311940,
+    "collectionNo": 2698,
+    "name": "ミス・トールフットの美術館",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipFriendShip",
+    "flags": [
+      "svtEquipFriendShip"
+    ]
+  },
+  {
+    "id": 9311950,
+    "collectionNo": 2699,
+    "name": "地獄コンパクト",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipFriendShip",
+    "flags": [
+      "svtEquipFriendShip"
+    ]
+  },
+  {
+    "id": 9311920,
+    "collectionNo": 2700,
+    "name": "南海の花の衣装",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipFriendShip",
+    "flags": [
+      "svtEquipFriendShip"
+    ]
   }
 ]
