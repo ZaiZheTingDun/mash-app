@@ -105,8 +105,10 @@ pub(crate) fn advanced_rule_matches(
 pub(crate) fn should_retry_command_card_owner_detection(
     cards: &[CommandCardMatch],
     candidate_ids: &[u32],
+    configured_frontline_count: usize,
 ) -> bool {
-    !candidate_ids.is_empty()
+    configured_frontline_count >= 3
+        && !candidate_ids.is_empty()
         && (cards.len() < COMMAND_CARD_COUNT
             || cards
                 .iter()
@@ -1294,6 +1296,7 @@ impl Runner {
         // repeatedly fails, a servant probably died and a back-line member
         // moved forward, so broaden the template candidates to the full team.
         let full_candidate_ids = command_card_candidate_ids(&self.build_full_party_ids());
+        let configured_frontline_count = party_ids.iter().flatten().count();
         let mut candidate_ids = if self.battle.command_card_owner_fallback_to_full_party {
             full_candidate_ids.clone()
         } else {
@@ -1340,7 +1343,21 @@ impl Runner {
                     thread::sleep(ACTION_DELAY);
                     continue;
                 }
-                if !should_retry_command_card_owner_detection(&cards, &candidate_ids) {
+                if !should_retry_command_card_owner_detection(
+                    &cards,
+                    &candidate_ids,
+                    configured_frontline_count,
+                ) {
+                    if configured_frontline_count < 3
+                        && cards
+                            .iter()
+                            .any(|card| !card.is_stunned && card.servant_id.is_none())
+                    {
+                        self.emit_warn(
+                            "Attack",
+                            "当前从者配置不满三位，跳过强制识别所有指令卡归属。",
+                        );
+                    }
                     if !self.battle.command_card_owner_fallback_to_full_party {
                         self.battle.command_card_owner_failure_count = 0;
                     }

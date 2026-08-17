@@ -1027,7 +1027,11 @@ fn command_card_owner_detection_retries_until_all_five_cards_have_owners() {
         command_card(0, None, Some("a"), None),
         command_card(1, None, Some("q"), None),
     ];
-    assert!(should_retry_command_card_owner_detection(&cards, &[10, 20]));
+    assert!(should_retry_command_card_owner_detection(
+        &cards,
+        &[10, 20],
+        3
+    ));
 
     let partial_owner = vec![
         command_card(0, None, Some("a"), None),
@@ -1038,7 +1042,8 @@ fn command_card_owner_detection_retries_until_all_five_cards_have_owners() {
     ];
     assert!(should_retry_command_card_owner_detection(
         &partial_owner,
-        &[10, 20]
+        &[10, 20],
+        3
     ));
 
     let complete = vec![
@@ -1050,7 +1055,8 @@ fn command_card_owner_detection_retries_until_all_five_cards_have_owners() {
     ];
     assert!(!should_retry_command_card_owner_detection(
         &complete,
-        &[10, 20]
+        &[10, 20],
+        3
     ));
 
     let stunned_without_owner = vec![
@@ -1062,11 +1068,29 @@ fn command_card_owner_detection_retries_until_all_five_cards_have_owners() {
     ];
     assert!(!should_retry_command_card_owner_detection(
         &stunned_without_owner,
-        &[10, 20]
+        &[10, 20],
+        3
     ));
 
-    assert!(!should_retry_command_card_owner_detection(&cards, &[]));
-    assert!(should_retry_command_card_owner_detection(&[], &[10]));
+    assert!(!should_retry_command_card_owner_detection(&cards, &[], 3));
+    assert!(should_retry_command_card_owner_detection(&[], &[10], 3));
+}
+
+#[test]
+fn command_card_owner_detection_allows_unknown_owners_with_fewer_than_three_configured_servants() {
+    let partial_owner = vec![
+        command_card(0, None, Some("a"), None),
+        command_card(1, Some(10), Some("q"), None),
+        command_card(2, Some(20), Some("b"), None),
+        command_card(3, Some(10), Some("a"), None),
+        command_card(4, Some(20), Some("q"), None),
+    ];
+
+    assert!(!should_retry_command_card_owner_detection(
+        &partial_owner,
+        &[10, 20],
+        2
+    ));
 }
 
 #[test]
@@ -1254,7 +1278,8 @@ fn command_card_visibility_waits_for_all_five_suits_without_requiring_owner() {
     assert!(command_cards_visible(&visible_without_owners));
     assert!(should_retry_command_card_owner_detection(
         &visible_without_owners,
-        &[10, 20]
+        &[10, 20],
+        3
     ));
 }
 
