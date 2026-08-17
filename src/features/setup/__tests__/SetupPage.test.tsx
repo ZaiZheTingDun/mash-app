@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
@@ -179,13 +179,26 @@ describe("SetupPage", () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it("disables the management done button while a resource download is running", async () => {
+  it("disables management exit while assets need an update", async () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === "get_runtime_status") return Promise.resolve(runtimeStatus(true));
       if (cmd === "get_asset_bundle_status") return Promise.resolve(staleAssetStatus());
-      if (cmd === "download_asset_bundles") {
-        return new Promise(() => {});
-      }
+      return Promise.resolve(null);
+    });
+
+    renderWithTheme(<SetupPage mode="manage" onBack={vi.fn()} />);
+
+    const done = await screen.findByRole("button", { name: "完成" });
+    expect(done).toBeDisabled();
+    expect(screen.getByRole("button", { name: "取消" })).toBeDisabled();
+  });
+
+  it("disables management exit while a resource download is running", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "get_runtime_status") return Promise.resolve(runtimeStatus(true));
+      if (cmd === "get_asset_bundle_status") return Promise.resolve(assetStatus(true));
+      if (cmd === "download_asset_bundles") return new Promise(() => {});
       return Promise.resolve(null);
     });
     const user = userEvent.setup();
@@ -194,8 +207,12 @@ describe("SetupPage", () => {
 
     const done = await screen.findByRole("button", { name: "完成" });
     expect(done).toBeEnabled();
-    await user.click(await screen.findByRole("button", { name: "在线更新" }));
+    const assetSection = screen.getByText("素材包").closest(".setup-requirement");
+    expect(assetSection).not.toBeNull();
+    await user.click(within(assetSection as HTMLElement).getByRole("button", { name: "重新下载" }));
 
     expect(done).toBeDisabled();
+    expect(screen.getByRole("button", { name: "取消" })).toBeDisabled();
+    confirmSpy.mockRestore();
   });
 });

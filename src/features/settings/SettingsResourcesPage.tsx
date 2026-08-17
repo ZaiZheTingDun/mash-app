@@ -1,5 +1,15 @@
 import { ResourceManagementPanel } from "../setup/SetupPage";
 
-export function SettingsResourcesPage() {
-  return <ResourceManagementPanel mode="manage" embedded />;
+interface SettingsResourcesPageProps {
+  onExitBlockedChange?: (blocked: boolean) => void;
+}
+
+export function SettingsResourcesPage({ onExitBlockedChange }: SettingsResourcesPageProps) {
+  return (
+    <ResourceManagementPanel
+      mode="manage"
+      embedded
+      onExitBlockedChange={onExitBlockedChange}
+    />
+  );
 }

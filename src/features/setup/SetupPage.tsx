@@ -16,6 +16,7 @@ interface ResourceManagementPanelProps {
   mode?: "setup" | "manage";
   onBack?: () => void;
   onReady?: () => void;
+  onExitBlockedChange?: (blocked: boolean) => void;
   embedded?: boolean;
 }
 
@@ -23,6 +24,7 @@ export function ResourceManagementPanel({
   mode = "setup",
   onBack,
   onReady,
+  onExitBlockedChange,
   embedded = false,
 }: ResourceManagementPanelProps) {
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null);
@@ -70,6 +72,11 @@ export function ResourceManagementPanel({
   const runtimeReady = runtimeStatus?.installed ?? false;
   const assetsReady = assetStatus?.installed ?? false;
   const resourceBusy = runtimeBusy || assetsBusy;
+  const exitBlocked = checking || resourceBusy || assetStatus?.updateAvailable === true;
+
+  useEffect(() => {
+    onExitBlockedChange?.(exitBlocked);
+  }, [exitBlocked, onExitBlockedChange]);
 
   return (
     <Flex direction="column" gap="4" className={embedded ? "resource-panel-embedded" : undefined}>
@@ -82,10 +89,16 @@ export function ResourceManagementPanel({
           </Box>
           {mode === "manage" && onBack && (
             <Flex align="center" gap="2">
-              <Button type="button" variant="soft" color="gray" onClick={handleCancel}>
+              <Button
+                type="button"
+                variant="soft"
+                color="gray"
+                onClick={handleCancel}
+                disabled={exitBlocked}
+              >
                 取消
               </Button>
-              <Button type="button" onClick={handleDone} disabled={resourceBusy}>
+              <Button type="button" onClick={handleDone} disabled={exitBlocked}>
                 完成
               </Button>
             </Flex>

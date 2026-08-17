@@ -264,6 +264,7 @@ pub fn run() {
             commands::assets::pick_asset_bundle,
             commands::assets::import_asset_bundle,
             commands::assets::download_asset_bundles,
+            commands::assets::cancel_asset_operation,
             commands::assets::cancel_resource_downloads,
             commands::runtime::get_runtime_status,
             commands::runtime::pick_runtime_bundle,

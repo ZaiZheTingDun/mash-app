@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { SettingsDialog, type SettingsSection } from "../SettingsPage";
+import type { AssetBundleImportResult, AssetBundleStatus } from "../../../types/assets";
 import type { SelfCheckStatus } from "../../../types/selfCheck";
 import type { Project } from "../../../types/project";
 
@@ -50,6 +51,29 @@ function argValue(args: unknown) {
   return typeof args === "object" && args != null && "value" in args
     ? (args as { value?: unknown }).value
     : undefined;
+}
+
+function resourceAssetStatus(version: number): AssetBundleStatus {
+  const updateAvailable = version < 2;
+  return {
+    installed: !updateAvailable,
+    importedServants: true,
+    importedCraftEssences: true,
+    servantFiles: 12,
+    craftEssenceFiles: 8,
+    installDir: "/tmp/mash-assets",
+    currentVersion: version,
+    appAssetsVersion: 2,
+    remoteLatestVersion: null,
+    remoteLatestBaseVersion: null,
+    targetVersion: updateAvailable ? 2 : null,
+    updateAvailable,
+    updateDownloadSize: 0,
+    updatePlan: updateAvailable ? "pending" : "none",
+    latestUrl: "https://mash.xiaotongx.com/mash/assets/latest.json",
+    remoteManifestUrl: null,
+    updateCheckError: null,
+  };
 }
 
 describe("SettingsDialog", () => {
@@ -254,6 +278,74 @@ describe("SettingsDialog", () => {
 
     expect(await screen.findByText("CV 运行时")).toBeInTheDocument();
     expect(screen.getByText("素材包")).toBeInTheDocument();
+  });
+
+  it("blocks leaving resource management until an imported old bundle is updated", async () => {
+    const onOpenChange = vi.fn();
+    const onSectionChange = vi.fn();
+    let installedVersion = 2;
+    let finishImport!: () => void;
+    const importPromise = new Promise<AssetBundleImportResult>((resolve) => {
+      finishImport = () => {
+        installedVersion = 1;
+        resolve({
+          importedServants: true,
+          importedCraftEssences: true,
+          servantFiles: 12,
+          craftEssenceFiles: 8,
+          installDir: "/tmp/mash-assets",
+        });
+      };
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") return { installed: true };
+      if (cmd === "get_asset_bundle_status") return resourceAssetStatus(installedVersion);
+      if (cmd === "pick_asset_bundle") return "/tmp/mash-assets-v1.zip";
+      if (cmd === "import_asset_bundle") return importPromise;
+      if (cmd === "download_asset_bundles") {
+        installedVersion = 2;
+        return {
+          installed: true,
+          installedVersion: 2,
+          plan: "patch",
+          servantFiles: 12,
+          craftEssenceFiles: 8,
+          installDir: "/tmp/mash-assets",
+        };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+
+    renderWithTheme(
+      <SettingsDialog
+        open
+        section="resources"
+        onOpenChange={onOpenChange}
+        onSectionChange={onSectionChange}
+      />
+    );
+
+    const close = await screen.findByRole("button", { name: "关闭设置" });
+    await waitFor(() => expect(close).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "从本地导入" }));
+
+    expect(await screen.findByRole("button", { name: "导入中…" })).toBeInTheDocument();
+    expect(close).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    finishImport();
+    expect(await screen.findByText("需要更新素材包 v1 → v2")).toBeInTheDocument();
+    expect(close).toBeDisabled();
+    expect(screen.getByRole("button", { name: "基础设置" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "在线更新" }));
+    await waitFor(() => expect(close).toBeEnabled());
+    await user.click(close);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onSectionChange).not.toHaveBeenCalled();
   });
 
   it("groups settings navigation and switches to data management", async () => {

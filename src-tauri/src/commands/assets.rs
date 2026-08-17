@@ -260,7 +260,7 @@ pub(crate) fn write_asset_version(assets_root: &Path, version: u32) -> Result<()
 pub(crate) fn read_import_asset_version(
     extracted_root: &Path,
     import_root: &Path,
-) -> Result<Option<u32>, String> {
+) -> Result<u32, String> {
     let mut candidates = vec![import_root.join("assets-version.json")];
     let root_record = extracted_root.join("assets-version.json");
     if root_record != candidates[0] {
@@ -275,10 +275,10 @@ pub(crate) fn read_import_asset_version(
             fs::read_to_string(&path).map_err(|e| format!("读取素材包版本记录失败: {e}"))?;
         let record: AssetVersionRecord =
             serde_json::from_str(&contents).map_err(|e| format!("解析素材包版本记录失败: {e}"))?;
-        return Ok(Some(record.version));
+        return Ok(record.version);
     }
 
-    Ok(None)
+    Err("文件不是素材包文件".to_string())
 }
 
 pub(crate) fn local_asset_version(
@@ -420,11 +420,26 @@ pub(crate) fn asset_patch_chain(
     Some(patches)
 }
 
-pub(crate) fn extract_zip_archive(zip_path: &Path, destination: &Path) -> Result<(), String> {
+pub(crate) fn ensure_asset_import_not_cancelled(cancel: &AtomicBool) -> Result<(), String> {
+    if cancel.load(Ordering::Relaxed) {
+        Err("导入已取消".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+pub(crate) fn extract_zip_archive_inner(
+    zip_path: &Path,
+    destination: &Path,
+    cancel: Option<&AtomicBool>,
+) -> Result<(), String> {
     let file = fs::File::open(zip_path).map_err(|e| format!("无法打开压缩包: {e}"))?;
     let mut archive = ZipArchive::new(file).map_err(|e| format!("无法读取 zip 压缩包: {e}"))?;
 
     for index in 0..archive.len() {
+        if let Some(cancel) = cancel {
+            ensure_asset_import_not_cancelled(cancel)?;
+        }
         let mut entry = archive
             .by_index(index)
             .map_err(|e| format!("读取 zip 条目失败: {e}"))?;
@@ -440,11 +455,28 @@ pub(crate) fn extract_zip_archive(zip_path: &Path, destination: &Path) -> Result
             fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {e}"))?;
         }
         let mut out = fs::File::create(&output).map_err(|e| format!("写入解压文件失败: {e}"))?;
-        io::copy(&mut entry, &mut out).map_err(|e| format!("解压文件失败: {e}"))?;
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            if let Some(cancel) = cancel {
+                ensure_asset_import_not_cancelled(cancel)?;
+            }
+            let read = entry
+                .read(&mut buffer)
+                .map_err(|e| format!("解压文件失败: {e}"))?;
+            if read == 0 {
+                break;
+            }
+            out.write_all(&buffer[..read])
+                .map_err(|e| format!("解压文件失败: {e}"))?;
+        }
         out.flush().map_err(|e| format!("写入解压文件失败: {e}"))?;
     }
 
     Ok(())
+}
+
+pub(crate) fn extract_zip_archive(zip_path: &Path, destination: &Path) -> Result<(), String> {
+    extract_zip_archive_inner(zip_path, destination, None)
 }
 
 pub(crate) fn locate_import_root(extracted_root: &Path) -> PathBuf {
@@ -589,11 +621,22 @@ pub(crate) fn install_asset_directories(
     Ok((has_servants, has_ces, servant_stats, ce_stats))
 }
 
+#[cfg(test)]
 pub(crate) fn import_asset_bundle_from_zip_path(
     zip_path: &Path,
     assets_root: &Path,
 ) -> Result<AssetBundleImportResult, String> {
+    let cancel = AtomicBool::new(false);
+    import_asset_bundle_from_zip_path_with_cancel(zip_path, assets_root, &cancel)
+}
+
+pub(crate) fn import_asset_bundle_from_zip_path_with_cancel(
+    zip_path: &Path,
+    assets_root: &Path,
+    cancel: &AtomicBool,
+) -> Result<AssetBundleImportResult, String> {
     cleanup_replaced_asset_trees(assets_root);
+    ensure_asset_import_not_cancelled(cancel)?;
     let temp = tempfile::Builder::new()
         .prefix("asset-import-")
         .tempdir_in(
@@ -604,10 +647,11 @@ pub(crate) fn import_asset_bundle_from_zip_path(
         .map_err(|e| format!("创建临时目录失败: {e}"))?;
     let extracted_root = temp.path().join("unzipped");
     fs::create_dir_all(&extracted_root).map_err(|e| format!("创建临时目录失败: {e}"))?;
-    extract_zip_archive(zip_path, &extracted_root)?;
+    extract_zip_archive_inner(zip_path, &extracted_root, Some(cancel))?;
 
     let import_root = locate_import_root(&extracted_root);
-    let imported_version = read_import_asset_version(&extracted_root, &import_root)?.unwrap_or(1);
+    let imported_version = read_import_asset_version(&extracted_root, &import_root)?;
+    ensure_asset_import_not_cancelled(cancel)?;
     let (has_servants, has_ces, servant_stats, ce_stats) =
         install_asset_directories(&import_root, assets_root, true)?;
     write_asset_version(assets_root, imported_version)?;
@@ -873,12 +917,20 @@ pub(crate) async fn pick_asset_bundle(app: tauri::AppHandle) -> Result<Option<St
 pub(crate) async fn import_asset_bundle(
     app: tauri::AppHandle,
     zip_path: String,
+    cancel_state: tauri::State<'_, Arc<ResourceDownloadCancelState>>,
 ) -> Result<AssetBundleImportResult, String> {
     let zip_path = PathBuf::from(zip_path);
     if !zip_path.is_file() {
         return Err("选择的压缩包不存在".to_string());
     }
-    let result = import_asset_bundle_from_zip_path(&zip_path, &app_assets_dir(&app))?;
+    let assets_root = app_assets_dir(&app);
+    let cancel_state = cancel_state.inner().clone();
+    cancel_state.assets.store(false, Ordering::Relaxed);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        import_asset_bundle_from_zip_path_with_cancel(&zip_path, &assets_root, &cancel_state.assets)
+    })
+    .await
+    .map_err(|e| format!("素材包导入任务失败: {e}"))??;
     refresh_asset_protocol_scope(&app)?;
     Ok(result)
 }
@@ -1252,6 +1304,14 @@ pub(crate) fn cancel_resource_downloads(
     cancel_state: tauri::State<'_, Arc<ResourceDownloadCancelState>>,
 ) -> Result<(), String> {
     cancel_state.runtime.store(true, Ordering::Relaxed);
+    cancel_state.assets.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn cancel_asset_operation(
+    cancel_state: tauri::State<'_, Arc<ResourceDownloadCancelState>>,
+) -> Result<(), String> {
     cancel_state.assets.store(true, Ordering::Relaxed);
     Ok(())
 }

@@ -100,6 +100,61 @@ describe("AssetBundleButton", () => {
     expect(onImported).toHaveBeenCalledTimes(1);
   });
 
+  it("cancels an online asset update", async () => {
+    let rejectDownload!: (reason: unknown) => void;
+    const downloadPromise = new Promise<never>((_resolve, reject) => {
+      rejectDownload = reject;
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_asset_bundle_status") return assetStatus();
+      if (cmd === "download_asset_bundles") return downloadPromise;
+      if (cmd === "cancel_asset_operation") {
+        rejectDownload("下载已取消");
+        return null;
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+
+    renderWithTheme(<AssetBundleButton />);
+
+    await user.click(await screen.findByRole("button", { name: "在线更新" }));
+    expect(await screen.findByRole("button", { name: "取消在线更新" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "取消在线更新" }));
+
+    expect(invoke).toHaveBeenCalledWith("cancel_asset_operation");
+    expect(await screen.findByText("在线更新已取消。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "在线更新" })).toBeEnabled();
+  });
+
+  it("cancels a local asset import", async () => {
+    let rejectImport!: (reason: unknown) => void;
+    const importPromise = new Promise<never>((_resolve, reject) => {
+      rejectImport = reject;
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_asset_bundle_status") return assetStatus();
+      if (cmd === "pick_asset_bundle") return "/tmp/mash-assets-v2.zip";
+      if (cmd === "import_asset_bundle") return importPromise;
+      if (cmd === "cancel_asset_operation") {
+        rejectImport("导入已取消");
+        return null;
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+
+    renderWithTheme(<AssetBundleButton />);
+
+    await user.click(await screen.findByRole("button", { name: "从本地导入" }));
+    expect(await screen.findByRole("button", { name: "取消导入" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "取消导入" }));
+
+    expect(invoke).toHaveBeenCalledWith("cancel_asset_operation");
+    expect(await screen.findByText("导入已取消。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "从本地导入" })).toBeEnabled();
+  });
+
   it("force-downloads the base bundle when reinstalling current assets", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const onImported = vi.fn();

@@ -547,6 +547,8 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         craftEssenceFiles: 0,
         installDir: "/dev/mash-assets",
       } as T;
+    case "cancel_asset_operation":
+      return null as T;
     case "import_runtime_bundle":
       return {
         installedKind: "runtime",

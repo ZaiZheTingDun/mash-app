@@ -145,6 +145,8 @@ vi.mock("@tauri-apps/api/core", () => ({
           craftEssenceFiles: 0,
           installDir: "/tmp/mash-assets",
         };
+      case "cancel_asset_operation":
+        return null;
       case "get_asset_bundle_status":
         return {
           installed: false,

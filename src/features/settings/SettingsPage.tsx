@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Box, Button, Dialog, Flex, IconButton, Text } from "@radix-ui/themes";
 import {
   ArchiveIcon,
@@ -33,12 +33,19 @@ interface SettingsDialogProps {
   onProjectsImported?: (projects: Project[]) => void;
 }
 
+type SettingsRenderProps = Pick<
+  SettingsDialogProps,
+  "onProjectsImported"
+> & {
+  onResourcesExitBlockedChange: (blocked: boolean) => void;
+};
+
 const navItems: Array<{
   group: "game" | "application";
   section: SettingsSection;
   label: string;
   icon: JSX.Element;
-  render: (active: boolean, props: Pick<SettingsDialogProps, "onProjectsImported">) => JSX.Element;
+  render: (active: boolean, props: SettingsRenderProps) => JSX.Element;
 }> = [
   {
     group: "game",
@@ -75,7 +82,9 @@ const navItems: Array<{
     section: "resources",
     label: "资源管理",
     icon: <ArchiveIcon width={15} height={15} />,
-    render: () => <SettingsResourcesPage />,
+    render: (_active, props) => (
+      <SettingsResourcesPage onExitBlockedChange={props.onResourcesExitBlockedChange} />
+    ),
   },
   {
     group: "application",
@@ -97,6 +106,7 @@ export function SettingsDialog({
   onSectionChange,
   onProjectsImported,
 }: SettingsDialogProps) {
+  const [resourcesExitBlocked, setResourcesExitBlocked] = useState(false);
   const items = visibleNavItems();
   const activeItem = items.find((item) => item.section === section) ?? items[0];
   const activeSection = activeItem.section;
@@ -106,13 +116,16 @@ export function SettingsDialog({
   ] as const;
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (!nextOpen && section === "resources" && resourcesExitBlocked) {
+      return;
+    }
     if (!nextOpen && section === "resources") {
       void invoke("cancel_resource_downloads").catch((err) => {
         console.error("cancel_resource_downloads failed", err);
       });
     }
     onOpenChange(nextOpen);
-  }, [onOpenChange, section]);
+  }, [onOpenChange, resourcesExitBlocked, section]);
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
@@ -139,6 +152,11 @@ export function SettingsDialog({
                           color="gray"
                           data-active={activeSection === item.section ? "true" : undefined}
                           aria-current={activeSection === item.section ? "page" : undefined}
+                          disabled={
+                            activeSection === "resources" &&
+                            resourcesExitBlocked &&
+                            item.section !== "resources"
+                          }
                           onClick={() => onSectionChange(item.section)}
                           className="settings-nav-button"
                         >
@@ -162,7 +180,13 @@ export function SettingsDialog({
                 </Text>
               </Flex>
               <Dialog.Close>
-                <IconButton type="button" variant="ghost" color="gray" aria-label="关闭设置">
+                <IconButton
+                  type="button"
+                  variant="ghost"
+                  color="gray"
+                  aria-label="关闭设置"
+                  disabled={activeSection === "resources" && resourcesExitBlocked}
+                >
                   <Cross1Icon width={15} height={15} />
                 </IconButton>
               </Dialog.Close>
@@ -172,6 +196,7 @@ export function SettingsDialog({
               <Box className="settings-content-body">
                 {activeItem.render(open && activeItem.section === activeSection, {
                   onProjectsImported,
+                  onResourcesExitBlockedChange: setResourcesExitBlocked,
                 })}
               </Box>
             </Box>

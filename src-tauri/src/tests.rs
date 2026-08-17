@@ -1557,6 +1557,7 @@ fn import_asset_bundle_from_zip_path_accepts_assets_wrapper() {
     fs::write(
         &zip_path,
         build_zip(&[
+            ("assets/assets-version.json", br#"{"version":2}"#),
             ("assets/servants/1/narrow_servant_4.png", b"portrait"),
             ("assets/ces/2/card_ce.png", b"ce"),
         ]),
@@ -1627,7 +1628,7 @@ fn import_asset_bundle_from_zip_path_writes_root_version_record() {
 }
 
 #[test]
-fn import_asset_bundle_from_zip_path_defaults_missing_version_to_v1() {
+fn import_asset_bundle_from_zip_path_rejects_missing_version_record() {
     let tmp = tempfile::tempdir().unwrap();
     let install_root = tmp.path().join("installed");
     let zip_path = tmp.path().join("bundle.zip");
@@ -1640,9 +1641,37 @@ fn import_asset_bundle_from_zip_path_defaults_missing_version_to_v1() {
     )
     .unwrap();
 
-    import_asset_bundle_from_zip_path(&zip_path, &install_root).unwrap();
+    let err = import_asset_bundle_from_zip_path(&zip_path, &install_root).unwrap_err();
 
-    assert_eq!(read_asset_version(&install_root).unwrap().version, 1);
+    assert_eq!(err, "文件不是素材包文件");
+    assert!(!asset_version_path(&install_root).exists());
+    assert!(!install_root.join("servants").exists());
+    assert!(!install_root.join("ces").exists());
+}
+
+#[test]
+fn import_asset_bundle_from_zip_path_honors_cancellation() {
+    let tmp = tempfile::tempdir().unwrap();
+    let install_root = tmp.path().join("installed");
+    let zip_path = tmp.path().join("bundle.zip");
+    fs::write(
+        &zip_path,
+        build_zip(&[
+            ("assets-version.json", br#"{"version":2}"#),
+            ("servants/1/narrow_servant_4.png", b"portrait"),
+            ("ces/2/card_ce.png", b"ce"),
+        ]),
+    )
+    .unwrap();
+    let cancel = std::sync::atomic::AtomicBool::new(true);
+
+    let err = import_asset_bundle_from_zip_path_with_cancel(&zip_path, &install_root, &cancel)
+        .unwrap_err();
+
+    assert_eq!(err, "导入已取消");
+    assert!(!asset_version_path(&install_root).exists());
+    assert!(!install_root.join("servants").exists());
+    assert!(!install_root.join("ces").exists());
 }
 
 #[test]
@@ -1677,7 +1706,14 @@ fn import_asset_bundle_from_zip_path_replaces_existing_tree() {
     fs::write(existing.join("old.png"), b"old").unwrap();
 
     let zip_path = tmp.path().join("bundle.zip");
-    fs::write(&zip_path, build_zip(&[("servants/1/new.png", b"new")])).unwrap();
+    fs::write(
+        &zip_path,
+        build_zip(&[
+            ("assets-version.json", br#"{"version":2}"#),
+            ("servants/1/new.png", b"new"),
+        ]),
+    )
+    .unwrap();
 
     let result =
         import_asset_bundle_from_zip_path(&zip_path, &install_root).expect("import should work");
@@ -1700,7 +1736,14 @@ fn import_asset_bundle_from_zip_path_replaces_existing_tree() {
 fn import_asset_bundle_from_zip_path_rejects_zip_without_asset_dirs() {
     let tmp = tempfile::tempdir().unwrap();
     let zip_path = tmp.path().join("bundle.zip");
-    fs::write(&zip_path, build_zip(&[("docs/readme.txt", b"no assets")])).unwrap();
+    fs::write(
+        &zip_path,
+        build_zip(&[
+            ("assets-version.json", br#"{"version":2}"#),
+            ("docs/readme.txt", b"no assets"),
+        ]),
+    )
+    .unwrap();
 
     let err = import_asset_bundle_from_zip_path(&zip_path, &tmp.path().join("installed"))
         .expect_err("import should fail");

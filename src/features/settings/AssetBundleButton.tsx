@@ -99,6 +99,10 @@ function progressPercent(progress: AssetDownloadProgress | null): number | null 
   return Math.min(100, (progress.downloadedBytes / progress.totalBytes) * 100);
 }
 
+function isCancelledError(error: unknown): boolean {
+  return String(error).includes("已取消");
+}
+
 export function AssetBundleButton({
   status: controlledStatus,
   onImported,
@@ -106,6 +110,7 @@ export function AssetBundleButton({
 }: AssetBundleButtonProps) {
   const [localBundleStatus, setLocalBundleStatus] = useState<AssetBundleStatus | null>(null);
   const [busyAction, setBusyAction] = useState<"download" | "import" | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<AssetDownloadProgress | null>(null);
   const bundleStatus = controlledStatus !== undefined ? controlledStatus : localBundleStatus;
@@ -158,6 +163,7 @@ export function AssetBundleButton({
     }
 
     setBusyAction("download");
+    setCancelling(false);
     setStatus(null);
     setDownloadProgress(null);
     try {
@@ -178,9 +184,10 @@ export function AssetBundleButton({
       await refreshStatus();
       onImported?.();
     } catch (err) {
-      setStatus(`下载失败：${String(err)}`);
+      setStatus(isCancelledError(err) ? "在线更新已取消。" : `下载失败：${String(err)}`);
     } finally {
       setBusyAction(null);
+      setCancelling(false);
     }
   }, [bundleStatus, onImported, refreshStatus]);
 
@@ -194,16 +201,28 @@ export function AssetBundleButton({
       }
 
       setBusyAction("import");
+      setCancelling(false);
       await invoke<AssetBundleImportResult>("import_asset_bundle", { zipPath });
       setStatus("导入完成：素材包已安装。");
       await refreshStatus();
       onImported?.();
     } catch (err) {
-      setStatus(`导入失败：${String(err)}`);
+      setStatus(isCancelledError(err) ? "导入已取消。" : `导入失败：${String(err)}`);
     } finally {
       setBusyAction(null);
+      setCancelling(false);
     }
   }, [onImported, refreshStatus]);
+
+  const handleCancel = useCallback(async () => {
+    setCancelling(true);
+    try {
+      await invoke("cancel_asset_operation");
+    } catch (err) {
+      setStatus(`取消失败：${String(err)}`);
+      setCancelling(false);
+    }
+  }, []);
 
   const canDownload = Boolean(bundleStatus?.updateAvailable || !bundleStatus?.installed);
   const progressValue = progressPercent(downloadProgress);
@@ -235,6 +254,21 @@ export function AssetBundleButton({
             {busyAction === "import" ? "导入中…" : "从本地导入"}
           </Text>
         </Button>
+        {busy && (
+          <Button
+            type="button"
+            variant="soft"
+            color="gray"
+            aria-label={busyAction === "download" ? "取消在线更新" : "取消导入"}
+            disabled={cancelling}
+            onClick={handleCancel}
+          >
+            {cancelling ? <Spinner size="1" /> : null}
+            <Text size="2" weight="medium">
+              {cancelling ? "正在取消…" : "取消"}
+            </Text>
+          </Button>
+        )}
       </div>
       <Text size="1" color={bundleStatus?.updateAvailable || !bundleStatus?.installed ? "amber" : "gray"}>
         {statusText(bundleStatus)}
