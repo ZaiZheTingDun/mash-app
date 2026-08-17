@@ -5,7 +5,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type Event } from "@tauri-apps/api/event";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { AssetBundleButton } from "../AssetBundleButton";
-import type { AssetBundleStatus, AssetDownloadProgress } from "../../../types/assets";
+import type {
+  AssetBundleImportResult,
+  AssetBundleStatus,
+  AssetDownloadProgress,
+} from "../../../types/assets";
 
 function assetStatus(overrides: Partial<AssetBundleStatus> = {}): AssetBundleStatus {
   return {
@@ -31,16 +35,41 @@ function assetStatus(overrides: Partial<AssetBundleStatus> = {}): AssetBundleSta
 }
 
 describe("AssetBundleButton", () => {
-  it("does not show manual import controls", async () => {
+  it("imports a local asset bundle", async () => {
+    const onImported = vi.fn();
+    let finishImport!: () => void;
+    const importPromise = new Promise<AssetBundleImportResult>((resolve) => {
+      finishImport = () => resolve({
+        importedServants: true,
+        importedCraftEssences: true,
+        servantFiles: 12,
+        craftEssenceFiles: 8,
+        installDir: "/tmp/mash-assets",
+      });
+    });
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_asset_bundle_status") return assetStatus();
+      if (cmd === "pick_asset_bundle") return "/tmp/mash-assets-v2.zip";
+      if (cmd === "import_asset_bundle") return importPromise;
       return null;
     });
+    const user = userEvent.setup();
 
-    renderWithTheme(<AssetBundleButton onImported={vi.fn()} />);
+    renderWithTheme(<AssetBundleButton onImported={onImported} />);
 
     expect(await screen.findByRole("button", { name: "在线更新" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "手动导入" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "从本地导入" }));
+
+    expect(invoke).toHaveBeenCalledWith("pick_asset_bundle");
+    expect(invoke).toHaveBeenCalledWith("import_asset_bundle", {
+      zipPath: "/tmp/mash-assets-v2.zip",
+    });
+    expect(await screen.findByRole("button", { name: "导入中…" })).toBeInTheDocument();
+    expect(screen.queryByText("下载中…")).not.toBeInTheDocument();
+
+    finishImport();
+    expect(await screen.findByText("导入完成：素材包已安装。")).toBeInTheDocument();
+    expect(onImported).toHaveBeenCalledTimes(1);
   });
 
   it("shows local manifest target version and downloads remote asset bundles", async () => {

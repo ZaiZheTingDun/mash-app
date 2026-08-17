@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, Spinner, Text } from "@radix-ui/themes";
 import { invoke, listen } from "../../tauri";
 import type {
+  AssetBundleImportResult,
   AssetBundleStatus,
   AssetDownloadInstallResult,
   AssetDownloadProgress,
@@ -104,11 +105,12 @@ export function AssetBundleButton({
   onBusyChange,
 }: AssetBundleButtonProps) {
   const [localBundleStatus, setLocalBundleStatus] = useState<AssetBundleStatus | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"download" | "import" | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<AssetDownloadProgress | null>(null);
   const bundleStatus = controlledStatus !== undefined ? controlledStatus : localBundleStatus;
   const usesControlledStatus = controlledStatus !== undefined;
+  const busy = busyAction !== null;
 
   const refreshStatus = useCallback(async () => {
     if (usesControlledStatus) return;
@@ -155,7 +157,7 @@ export function AssetBundleButton({
       }
     }
 
-    setBusy(true);
+    setBusyAction("download");
     setStatus(null);
     setDownloadProgress(null);
     try {
@@ -178,9 +180,30 @@ export function AssetBundleButton({
     } catch (err) {
       setStatus(`下载失败：${String(err)}`);
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }, [bundleStatus, onImported, refreshStatus]);
+
+  const handleImport = useCallback(async () => {
+    setStatus(null);
+    setDownloadProgress(null);
+    try {
+      const zipPath = await invoke<string | null>("pick_asset_bundle");
+      if (!zipPath) {
+        return;
+      }
+
+      setBusyAction("import");
+      await invoke<AssetBundleImportResult>("import_asset_bundle", { zipPath });
+      setStatus("导入完成：素材包已安装。");
+      await refreshStatus();
+      onImported?.();
+    } catch (err) {
+      setStatus(`导入失败：${String(err)}`);
+    } finally {
+      setBusyAction(null);
+    }
+  }, [onImported, refreshStatus]);
 
   const canDownload = Boolean(bundleStatus?.updateAvailable || !bundleStatus?.installed);
   const progressValue = progressPercent(downloadProgress);
@@ -195,9 +218,21 @@ export function AssetBundleButton({
           disabled={busy || !bundleStatus}
           onClick={handleDownload}
         >
-          {busy ? <Spinner size="1" /> : null}
+          {busyAction === "download" ? <Spinner size="1" /> : null}
           <Text size="2" weight="medium">
-            {busy ? "下载中…" : canDownload ? "在线更新" : "重新下载"}
+            {busyAction === "download" ? "下载中…" : canDownload ? "在线更新" : "重新下载"}
+          </Text>
+        </Button>
+        <Button
+          type="button"
+          variant="soft"
+          color="gray"
+          disabled={busy}
+          onClick={handleImport}
+        >
+          {busyAction === "import" ? <Spinner size="1" /> : null}
+          <Text size="2" weight="medium">
+            {busyAction === "import" ? "导入中…" : "从本地导入"}
           </Text>
         </Button>
       </div>
