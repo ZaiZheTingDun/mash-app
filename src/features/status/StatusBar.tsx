@@ -31,6 +31,7 @@ import type {
   BattleRunStatus,
 } from "../../types/battleRunStatus";
 import { BattleRunStatusPanel } from "./BattleRunStatusPanel";
+import { SupportAuthorDialog } from "./SupportAuthorDialog";
 
 type LogLevel = "info" | "warn" | "debug" | "localDebug";
 
@@ -1140,6 +1141,7 @@ export function StatusBar({
               </Text>
             </Button>
           )}
+          <SupportAuthorDialog />
           {onOpenDebug && (
             <Button
               type="button"

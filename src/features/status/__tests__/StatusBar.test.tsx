@@ -395,6 +395,27 @@ describe("StatusBar", () => {
     expect(onThemeChange).toHaveBeenLastCalledWith("light");
   });
 
+  it("opens the author support dialog with WeChat and Alipay images", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<StatusBar onOpenDebug={() => {}} />);
+
+    const supportButton = screen.getByRole("button", { name: "支持作者" });
+    const debugButton = screen.getByRole("button", { name: "CV 调试" });
+    expect(
+      supportButton.compareDocumentPosition(debugButton) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
+    await user.click(supportButton);
+
+    expect(screen.getByRole("dialog", { name: "支持作者" })).toBeInTheDocument();
+    expect(screen.getByText(/Mash 仍在持续开发中/)).toBeInTheDocument();
+    expect(screen.getByAltText("微信支持作者二维码")).toBeInTheDocument();
+    expect(screen.getByAltText("支付宝支持作者二维码")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "关闭支持作者" }));
+    expect(screen.queryByRole("dialog", { name: "支持作者" })).not.toBeInTheDocument();
+  });
+
   it("opens and renders the shared operation log panel from the status bar", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";
