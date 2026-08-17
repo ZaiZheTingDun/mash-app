@@ -86,6 +86,7 @@ describe("SettingsDialog", () => {
       if (cmd === "get_self_check_status") return selfCheckStatus;
       if (cmd === "get_runtime_status") return { installed: true };
       if (cmd === "get_asset_bundle_status") return { installed: true };
+      if (cmd === "get_battle_start_panel") return "operationLog";
       if (cmd === "get_recognition_settings") {
         return {
           noblePhantasmDetectionMode: "card",

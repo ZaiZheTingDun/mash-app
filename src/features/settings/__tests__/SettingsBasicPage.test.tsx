@@ -51,4 +51,40 @@ describe("SettingsBasicPage", () => {
     });
     expect(fallback).toBeChecked();
   });
+
+  it("persists the panel opened after battle automation starts", async () => {
+    const user = userEvent.setup();
+    const onBattleStartPanelChange = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "get_recognition_settings") return SETTINGS;
+      if (command === "get_battle_start_panel") return "operationLog";
+      if (command === "set_battle_start_panel") {
+        expect(args).toEqual({ value: "runStatus" });
+        return "runStatus";
+      }
+      return null;
+    });
+
+    renderWithTheme(
+      <SettingsBasicPage
+        active
+        onBattleStartPanelChange={onBattleStartPanelChange}
+      />
+    );
+
+    const panelSelect = await screen.findByRole("combobox", {
+      name: "开始后展开",
+    });
+    expect(panelSelect).toHaveTextContent("操作日志");
+
+    await user.click(panelSelect);
+    await user.click(await screen.findByText("运行状态"));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_battle_start_panel", {
+        value: "runStatus",
+      });
+    });
+    expect(onBattleStartPanelChange).toHaveBeenCalledWith("runStatus");
+  });
 });

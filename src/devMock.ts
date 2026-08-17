@@ -102,6 +102,7 @@ let simulateStuckAttackSelection = false;
 let nextProjectNumber = 2;
 let activeProjectId: string | null = "dev-project-1";
 let appTheme: "light" | "dark" | "system" | null = null;
+let battleStartPanel: "operationLog" | "runStatus" | "none" = "operationLog";
 
 let projects: Project[] = [
   {
@@ -235,6 +236,17 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         appTheme = args.theme;
       }
       return null as T;
+    case "get_battle_start_panel":
+      return battleStartPanel as T;
+    case "set_battle_start_panel":
+      if (
+        args.value === "operationLog" ||
+        args.value === "runStatus" ||
+        args.value === "none"
+      ) {
+        battleStartPanel = args.value;
+      }
+      return battleStartPanel as T;
     case "create_project": {
       const project = createProject(
         String(args.name ?? `模拟队伍 ${nextProjectNumber}`),

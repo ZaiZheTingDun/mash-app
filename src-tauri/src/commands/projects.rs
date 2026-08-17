@@ -278,6 +278,23 @@ pub(crate) fn set_app_theme(app: tauri::AppHandle, theme: String) -> Result<(), 
 }
 
 #[tauri::command]
+pub(crate) fn get_battle_start_panel(app: tauri::AppHandle) -> crate::paths::BattleStartPanel {
+    read_app_ui_settings_from_path(&app_ui_settings_path(&app)).battle_start_panel
+}
+
+#[tauri::command]
+pub(crate) fn set_battle_start_panel(
+    app: tauri::AppHandle,
+    value: crate::paths::BattleStartPanel,
+) -> Result<crate::paths::BattleStartPanel, String> {
+    let path = app_ui_settings_path(&app);
+    let mut settings = read_app_ui_settings_from_path(&path);
+    settings.battle_start_panel = value;
+    write_app_ui_settings_to_path(&path, &settings)?;
+    Ok(value)
+}
+
+#[tauri::command]
 pub(crate) fn list_projects(app: tauri::AppHandle) -> Vec<Project> {
     read_projects(&app)
 }

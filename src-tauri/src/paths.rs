@@ -165,11 +165,22 @@ pub(crate) struct AppUiSettings {
     pub(crate) active_project_id: Option<String>,
     #[serde(default)]
     pub(crate) theme: Option<String>,
+    #[serde(default)]
+    pub(crate) battle_start_panel: BattleStartPanel,
     /// Global portrait selections keyed by `variantKey`. When present, the
     /// chosen portrait id overrides the default "highest ascension" pick for
     /// every team that includes that variant.
     #[serde(default)]
     pub(crate) servant_portrait_selections: std::collections::HashMap<String, u32>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum BattleStartPanel {
+    #[default]
+    OperationLog,
+    RunStatus,
+    None,
 }
 
 pub(crate) fn project_battle_scenes_path(app: &tauri::AppHandle, project_id: &str) -> PathBuf {

@@ -9,6 +9,7 @@ import {
 } from "@radix-ui/react-icons";
 import { invoke } from "../../tauri";
 import { featureToggles } from "../../featureToggles";
+import type { BattleStartPanel } from "../../types/appUiSettings";
 import type { Project } from "../../types/project";
 import { SettingsDataManagementPage } from "./SettingsDataManagementPage";
 import { SettingsBasicPage } from "./SettingsBasicPage";
@@ -31,11 +32,12 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   onSectionChange: (section: SettingsSection) => void;
   onProjectsImported?: (projects: Project[]) => void;
+  onBattleStartPanelChange?: (value: BattleStartPanel) => void;
 }
 
 type SettingsRenderProps = Pick<
   SettingsDialogProps,
-  "onProjectsImported"
+  "onProjectsImported" | "onBattleStartPanelChange"
 > & {
   onResourcesExitBlockedChange: (blocked: boolean) => void;
 };
@@ -52,7 +54,12 @@ const navItems: Array<{
     section: "basic",
     label: "基础设置",
     icon: <GearIcon width={15} height={15} />,
-    render: (active) => <SettingsBasicPage active={active} />,
+    render: (active, props) => (
+      <SettingsBasicPage
+        active={active}
+        onBattleStartPanelChange={props.onBattleStartPanelChange}
+      />
+    ),
   },
   {
     group: "game",
@@ -105,6 +112,7 @@ export function SettingsDialog({
   onOpenChange,
   onSectionChange,
   onProjectsImported,
+  onBattleStartPanelChange,
 }: SettingsDialogProps) {
   const [resourcesExitBlocked, setResourcesExitBlocked] = useState(false);
   const items = visibleNavItems();
@@ -196,6 +204,7 @@ export function SettingsDialog({
               <Box className="settings-content-body">
                 {activeItem.render(open && activeItem.section === activeSection, {
                   onProjectsImported,
+                  onBattleStartPanelChange,
                   onResourcesExitBlockedChange: setResourcesExitBlocked,
                 })}
               </Box>

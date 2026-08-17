@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Button, Flex, Select, Switch, Text, TextField, Tooltip } from "@radix-ui/themes";
 import { invoke } from "../../tauri";
+import {
+  DEFAULT_BATTLE_START_PANEL,
+  normalizeBattleStartPanel,
+  type BattleStartPanel,
+} from "../../types/appUiSettings";
 import type { NoblePhantasmDetectionMode, RecognitionSettings } from "../../types/recognition";
 import {
   normalizeRecognitionSettings,
@@ -12,7 +17,16 @@ import {
 
 const TIMEOUT_COMMAND = "set_unknown_screen_timeout_count";
 
-export function SettingsBasicPage({ active }: { active: boolean }) {
+export function SettingsBasicPage({
+  active,
+  onBattleStartPanelChange,
+}: {
+  active: boolean;
+  onBattleStartPanelChange?: (value: BattleStartPanel) => void;
+}) {
+  const [battleStartPanel, setBattleStartPanel] = useState<BattleStartPanel>(
+    DEFAULT_BATTLE_START_PANEL
+  );
   const [mode, setMode] = useState<NoblePhantasmDetectionMode>("card");
   const [stopOnBondLevelUp, setStopOnBondLevelUp] = useState(false);
   const [stopOnBondMaxLevel, setStopOnBondMaxLevel] = useState(false);
@@ -151,14 +165,38 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
     setError(null);
     setSavedMessage(null);
     try {
-      const settings = normalizeRecognitionSettings(
-        await invoke<RecognitionSettings>("get_recognition_settings")
-      );
+      const [rawSettings, rawBattleStartPanel] = await Promise.all([
+        invoke<RecognitionSettings>("get_recognition_settings"),
+        invoke<BattleStartPanel>("get_battle_start_panel"),
+      ]);
+      const settings = normalizeRecognitionSettings(rawSettings);
       applySettings(settings);
+      setBattleStartPanel(normalizeBattleStartPanel(rawBattleStartPanel));
     } catch (err) {
       setError(String(err));
     }
   }, [applySettings]);
+
+  const saveBattleStartPanel = useCallback(
+    async (value: BattleStartPanel) => {
+      setSaving(true);
+      setError(null);
+      setSavedMessage(null);
+      try {
+        const saved = normalizeBattleStartPanel(
+          await invoke<BattleStartPanel>("set_battle_start_panel", { value })
+        );
+        setBattleStartPanel(saved);
+        onBattleStartPanelChange?.(saved);
+        setSavedMessage("已保存");
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [onBattleStartPanelChange]
+  );
 
   useEffect(() => {
     if (active) {
@@ -271,6 +309,36 @@ export function SettingsBasicPage({ active }: { active: boolean }) {
   return (
     <Box className="settings-section-panel">
       <Flex direction="column" gap="4" className="recognition-setting-block">
+        <Flex
+          align="start"
+          justify="between"
+          gap="4"
+          wrap="wrap"
+          className="basic-setting-row"
+        >
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              开始后展开
+            </Text>
+            <Text size="1" color="gray">
+              点击战斗页面的开始后，自动展开所选底栏面板
+            </Text>
+          </Flex>
+
+          <Select.Root
+            value={battleStartPanel}
+            onValueChange={(value) => void saveBattleStartPanel(value as BattleStartPanel)}
+            disabled={saving}
+          >
+            <Select.Trigger aria-label="开始后展开" className="recognition-mode-select" />
+            <Select.Content>
+              <Select.Item value="operationLog">操作日志</Select.Item>
+              <Select.Item value="runStatus">运行状态</Select.Item>
+              <Select.Item value="none">不弹出</Select.Item>
+            </Select.Content>
+          </Select.Root>
+        </Flex>
+
         <Flex
           align="start"
           justify="between"

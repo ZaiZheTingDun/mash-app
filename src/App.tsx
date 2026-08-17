@@ -35,6 +35,11 @@ import type { AssetBundleStatus } from "./types/assets";
 import type { RuntimeStatus } from "./types/runtime";
 import type { SelfCheckStatus } from "./types/selfCheck";
 import type { AppTheme, AppThemePreference } from "./types/theme";
+import {
+  DEFAULT_BATTLE_START_PANEL,
+  normalizeBattleStartPanel,
+  type BattleStartPanel,
+} from "./types/appUiSettings";
 import type { AdvancedBattleScene, BattleScene } from "./types/command";
 import type { AutomationStatus } from "./types/automation";
 import {
@@ -112,6 +117,9 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
   const [battleDailyStatistics, setBattleDailyStatistics] =
     useState<BattleDailyStatistics | null>(null);
   const [battleRunStatusOpen, setBattleRunStatusOpen] = useState(false);
+  const [battleStartPanel, setBattleStartPanel] = useState<BattleStartPanel>(
+    DEFAULT_BATTLE_START_PANEL
+  );
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [softwareUpdateOpen, setSoftwareUpdateOpen] = useState(false);
   const [updateChecking, setUpdateChecking] = useState(false);
@@ -162,21 +170,24 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
     setOperationLogOpen(true);
   }, []);
 
-  const handleBattleAutomationStart = useCallback((maxRuns: number | null) => {
-    const startedAtMs = Date.now();
-    setBattleRunStatus({
-      phase: "starting",
-      startedAtMs,
-      endedAtMs: null,
-      lastCompletedAtMs: null,
-      completedRuns: 0,
-      maxRuns,
-      apRecoveryUsage: { ...EMPTY_AP_RECOVERY_USAGE },
-    });
-    setBattleRunStatusOpen(false);
-    setOperationLogs([]);
-    setOperationLogOpen(true);
-  }, []);
+  const handleBattleAutomationStart = useCallback(
+    (maxRuns: number | null) => {
+      const startedAtMs = Date.now();
+      setBattleRunStatus({
+        phase: "starting",
+        startedAtMs,
+        endedAtMs: null,
+        lastCompletedAtMs: null,
+        completedRuns: 0,
+        maxRuns,
+        apRecoveryUsage: { ...EMPTY_AP_RECOVERY_USAGE },
+      });
+      setOperationLogs([]);
+      setOperationLogOpen(battleStartPanel === "operationLog");
+      setBattleRunStatusOpen(battleStartPanel === "runStatus");
+    },
+    [battleStartPanel]
+  );
 
   const handleBattleAutomationStartFailed = useCallback(() => {
     setBattleRunStatus((current) =>
@@ -531,6 +542,12 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
     void refreshProjects().catch(console.error);
   }, [refreshProjects]);
 
+  useEffect(() => {
+    void invoke<BattleStartPanel>("get_battle_start_panel")
+      .then((value) => setBattleStartPanel(normalizeBattleStartPanel(value)))
+      .catch(console.error);
+  }, []);
+
   const activeProject = useMemo(
     () => projects.find((p) => p.id === activeProjectId) ?? null,
     [projects, activeProjectId]
@@ -830,6 +847,7 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
           onOpenChange={setSettingsOpen}
           onSectionChange={setSettingsSection}
           onProjectsImported={handleProjectsImported}
+          onBattleStartPanelChange={setBattleStartPanel}
         />
         <SelfCheckDialog
           open={selfCheckOpen}
@@ -1064,6 +1082,7 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
         onOpenChange={setSettingsOpen}
         onSectionChange={setSettingsSection}
         onProjectsImported={handleProjectsImported}
+        onBattleStartPanelChange={setBattleStartPanel}
       />
       <ProjectSettingsDialog
         open={projectSettingsOpen}

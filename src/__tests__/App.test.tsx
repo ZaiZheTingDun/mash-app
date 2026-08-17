@@ -37,7 +37,10 @@ const selfCheckStatus: SelfCheckStatus = {
 
 function installAppMock(
   savedActiveProjectId: string | null,
-  options: { selfCheckError?: string } = {},
+  options: {
+    selfCheckError?: string;
+    battleStartPanel?: "operationLog" | "runStatus" | "none";
+  } = {},
 ) {
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
     switch (cmd) {
@@ -58,6 +61,8 @@ function installAppMock(
         return [];
       case "get_active_project_id":
         return savedActiveProjectId;
+      case "get_battle_start_panel":
+        return options.battleStartPanel ?? "operationLog";
       case "check_adb":
         return { connected: false, deviceName: null };
       case "get_server":
@@ -116,6 +121,44 @@ describe("App active project restore", () => {
     await user.click(screen.getByRole("button", { name: /操作日志/ }));
     expect(screen.queryByText("尚无运行记录")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "关闭操作日志" })).toBeInTheDocument();
+  });
+
+  it("opens the configured run-status panel when battle automation starts", async () => {
+    installAppMock("project-1", { battleStartPanel: "runStatus" });
+    const user = userEvent.setup();
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "指令设置" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    expect(screen.getByRole("button", { name: "关闭运行状态" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "关闭操作日志" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps both bottom panels collapsed when battle automation starts with no popup", async () => {
+    installAppMock("project-1", { battleStartPanel: "none" });
+    const user = userEvent.setup();
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "指令设置" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    expect(
+      screen.queryByRole("button", { name: "关闭运行状态" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "关闭操作日志" })
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the shared operation log collapsed when CE automation starts", async () => {

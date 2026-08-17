@@ -292,6 +292,8 @@ pub fn run() {
             commands::projects::set_active_project_id,
             commands::projects::get_app_theme,
             commands::projects::set_app_theme,
+            commands::projects::get_battle_start_panel,
+            commands::projects::set_battle_start_panel,
             commands::projects::create_project,
             commands::projects::duplicate_project,
             commands::projects::update_project,

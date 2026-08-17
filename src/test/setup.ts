@@ -112,6 +112,10 @@ vi.mock("@tauri-apps/api/core", () => ({
         return null;
       case "set_app_theme":
         return null;
+      case "get_battle_start_panel":
+        return "operationLog";
+      case "set_battle_start_panel":
+        return args?.value ?? "operationLog";
       case "pick_asset_bundle":
       case "pick_runtime_bundle":
       case "pick_config_import_file":

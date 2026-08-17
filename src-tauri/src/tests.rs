@@ -459,6 +459,7 @@ fn app_ui_settings_persist_active_project_id() {
 
     let initial = read_app_ui_settings_from_path(&path);
     assert!(initial.active_project_id.is_none());
+    assert_eq!(initial.battle_start_panel, BattleStartPanel::OperationLog);
 
     write_app_ui_settings_to_path(
         &path,
@@ -473,6 +474,22 @@ fn app_ui_settings_persist_active_project_id() {
     let saved = read_app_ui_settings_from_path(&path);
     assert_eq!(saved.active_project_id.as_deref(), Some("project-2"));
     assert_eq!(saved.theme.as_deref(), Some("system"));
+    assert_eq!(saved.battle_start_panel, BattleStartPanel::OperationLog);
+}
+
+#[test]
+fn app_ui_settings_round_trip_battle_start_panel() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("app_ui_settings.json");
+    let settings = AppUiSettings {
+        battle_start_panel: BattleStartPanel::RunStatus,
+        ..Default::default()
+    };
+
+    write_app_ui_settings_to_path(&path, &settings).unwrap();
+
+    let saved = read_app_ui_settings_from_path(&path);
+    assert_eq!(saved.battle_start_panel, BattleStartPanel::RunStatus);
 }
 
 fn test_project(id: &str, name: &str, advanced_mode: bool) -> Project {
