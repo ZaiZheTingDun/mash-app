@@ -2227,7 +2227,7 @@ dependencies = [
 
 [[package]]
 name = "mash"
-version = "0.8.9"
+version = "0.8.10"
 dependencies = [
  "base64 0.22.1",
  "reqwest",
