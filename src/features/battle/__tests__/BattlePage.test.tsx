@@ -132,6 +132,18 @@ function renderBattlePage(initialProject: Project, servants: Servant[] = [SABER,
 }
 
 describe("BattlePage", () => {
+  it("explains AP recovery limits from the heading help icon", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage(PROJECT);
+
+    await user.hover(await screen.findByRole("button", { name: "行动力恢复说明" }));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "某种道具达到上限后会继续尝试其他已选道具"
+    );
+  });
+
   it("starts automation with ordered apples and repeat count", async () => {
     const user = userEvent.setup();
     const project = {
@@ -140,6 +152,7 @@ describe("BattlePage", () => {
       repeatMode: "count",
       repeatCount: 100,
       apRecoveryItems: ["rainbow", "copper", "gold"],
+      apRecoveryLimits: { rainbow: 3, copper: null, gold: 2 },
     } satisfies Project;
     mockProjectCommands();
     renderBattlePage(project);
@@ -154,6 +167,11 @@ describe("BattlePage", () => {
           repeatMission: false,
           maxMissionRuns: 100,
           apRecoveryItems: ["gold", "copper", "rainbow"],
+          apRecoveryLimits: expect.objectContaining({
+            gold: 2,
+            copper: null,
+            rainbow: 3,
+          }),
           supportCraftEssenceIds: [1485],
         }),
       });
@@ -526,6 +544,52 @@ describe("BattlePage", () => {
         }),
       });
     });
+  });
+
+  it("shows and persists a per-apple limit with unlimited as the default", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage({
+      ...PROJECT,
+      apRecoveryItems: ["gold"],
+    });
+
+    const unlimited = await screen.findByRole("button", {
+      name: "黄金果实当前无限使用，点击设置数量",
+    });
+    expect(unlimited).toHaveClass("is-active");
+    expect(
+      screen.queryByRole("spinbutton", { name: "黄金果实使用数量" })
+    ).not.toBeInTheDocument();
+
+    await user.click(unlimited);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("update_project", {
+        project: expect.objectContaining({
+          apRecoveryLimits: expect.objectContaining({ gold: 1 }),
+        }),
+      });
+    });
+    const quantity = await screen.findByRole("spinbutton", {
+      name: "黄金果实使用数量",
+    });
+    expect(
+      screen.getByRole("button", { name: "黄金果实当前限量使用，点击改为无限" })
+    ).not.toHaveClass("is-active");
+    expect(quantity).toBeEnabled();
+    expect(quantity).toHaveValue(1);
+
+    await user.click(screen.getByRole("button", { name: "增加黄金果实使用数量" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("update_project", {
+        project: expect.objectContaining({
+          apRecoveryLimits: expect.objectContaining({ gold: 2 }),
+        }),
+      });
+    });
+    expect(quantity).toHaveValue(2);
   });
 
   it("starts with pending local draft before project save resolves", async () => {

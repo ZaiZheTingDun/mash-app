@@ -37,6 +37,30 @@ pub enum ApRecoveryItem {
     Copper,
 }
 
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ApRecoveryLimits {
+    pub rainbow: Option<u32>,
+    pub gold: Option<u32>,
+    pub silver: Option<u32>,
+    pub bronze: Option<u32>,
+    pub copper: Option<u32>,
+}
+
+impl ApRecoveryLimits {
+    pub(crate) fn get(self, item: ApRecoveryItem) -> Option<u32> {
+        match item {
+            ApRecoveryItem::Rainbow => self.rainbow,
+            ApRecoveryItem::Gold => self.gold,
+            ApRecoveryItem::Silver => self.silver,
+            ApRecoveryItem::Bronze => self.bronze,
+            ApRecoveryItem::Copper => self.copper,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BattleRunApRecoveryUsage {
@@ -48,6 +72,16 @@ pub struct BattleRunApRecoveryUsage {
 }
 
 impl BattleRunApRecoveryUsage {
+    pub(crate) fn get(&self, item: ApRecoveryItem) -> u32 {
+        match item {
+            ApRecoveryItem::Rainbow => self.rainbow,
+            ApRecoveryItem::Gold => self.gold,
+            ApRecoveryItem::Silver => self.silver,
+            ApRecoveryItem::Bronze => self.bronze,
+            ApRecoveryItem::Copper => self.copper,
+        }
+    }
+
     pub(crate) fn increment(&mut self, item: ApRecoveryItem) {
         let count = match item {
             ApRecoveryItem::Rainbow => &mut self.rainbow,
@@ -220,6 +254,9 @@ pub struct RunConfig {
     /// insufficient-AP dialog. Empty means stop on that dialog.
     #[serde(default)]
     pub ap_recovery_items: Vec<ApRecoveryItem>,
+    /// Maximum uses per recovery item for this run. `None` means unlimited.
+    #[serde(default)]
+    pub ap_recovery_limits: ApRecoveryLimits,
 }
 
 fn default_support_skill_level_mins() -> [Option<u32>; 3] {

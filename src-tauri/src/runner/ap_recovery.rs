@@ -139,9 +139,29 @@ pub(crate) fn ap_recovery_candidates_for_page(
     .collect()
 }
 
+pub(crate) fn available_ap_recovery_items(
+    configured: &[ApRecoveryItem],
+    limits: ApRecoveryLimits,
+    usage: &BattleRunApRecoveryUsage,
+) -> Vec<ApRecoveryItem> {
+    configured
+        .iter()
+        .copied()
+        .filter(|item| limits.get(*item).is_none_or(|limit| usage.get(*item) < limit))
+        .collect()
+}
+
 impl Runner {
+    pub(crate) fn available_ap_recovery_items(&self) -> Vec<ApRecoveryItem> {
+        available_ap_recovery_items(
+            &self.config.ap_recovery_items,
+            self.config.ap_recovery_limits,
+            &self.ap_recovery_usage,
+        )
+    }
+
     pub(crate) fn ap_recovery_candidates(&self, page: ApRecoveryPage) -> Vec<ApRecoveryTemplate> {
-        ap_recovery_candidates_for_page(&self.config.ap_recovery_items, page)
+        ap_recovery_candidates_for_page(&self.available_ap_recovery_items(), page)
     }
 
     pub(crate) fn find_ap_recovery_item(
@@ -275,6 +295,12 @@ impl Runner {
     pub(crate) fn handle_ap_recovery(&mut self) {
         if self.config.ap_recovery_items.is_empty() {
             self.emit("APRecovery", "行动力不足且未配置自动吃苹果，停止");
+            self.transition_lifecycle(RunnerLifecycleEvent::Finished);
+            return;
+        }
+
+        if self.available_ap_recovery_items().is_empty() {
+            self.emit("APRecovery", "所有已配置苹果均已达到使用上限，停止");
             self.transition_lifecycle(RunnerLifecycleEvent::Finished);
             return;
         }

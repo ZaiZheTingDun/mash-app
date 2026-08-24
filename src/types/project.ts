@@ -127,6 +127,8 @@ export type BattleApRecoveryItem =
   | "copper"
   | "rainbow";
 
+export type BattleApRecoveryLimits = Record<BattleApRecoveryItem, number | null>;
+
 export interface Project {
   id: string;
   name: string;
@@ -171,4 +173,6 @@ export interface Project {
   repeatMode?: BattleRepeatMode | null;
   repeatCount?: number | null;
   apRecoveryItems?: BattleApRecoveryItem[];
+  /** Per-item cap for one automation run. `null`/missing means unlimited. */
+  apRecoveryLimits?: Partial<Record<BattleApRecoveryItem, number | null>>;
 }

@@ -350,6 +350,7 @@ pub(crate) fn new_project(name: String, advanced_mode: bool, grand_class: GrandC
         repeat_mode: Some(ProjectRepeatMode::Single),
         repeat_count: None,
         ap_recovery_items: Vec::new(),
+        ap_recovery_limits: Default::default(),
     }
 }
 

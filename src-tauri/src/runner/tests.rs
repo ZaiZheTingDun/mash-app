@@ -671,6 +671,7 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     assert_eq!(cfg.repeat_mission, false);
     assert_eq!(cfg.max_mission_runs, None);
     assert!(cfg.ap_recovery_items.is_empty());
+    assert_eq!(cfg.ap_recovery_limits, ApRecoveryLimits::default());
     assert!(!cfg.verify_skill_activation);
     assert_eq!(
         cfg.unknown_screen_timeout_count,
@@ -4454,6 +4455,10 @@ fn run_config_round_trips_support_servant_id_and_repeat_flag() {
     payload["repeatMission"] = serde_json::json!(true);
     payload["maxMissionRuns"] = serde_json::json!(3);
     payload["apRecoveryItems"] = serde_json::json!(["gold", "bronze"]);
+    payload["apRecoveryLimits"] = serde_json::json!({
+        "gold": 2,
+        "bronze": null
+    });
     let cfg: RunConfig = serde_json::from_value(payload).unwrap();
     assert_eq!(cfg.support_servant_id, Some(284));
     assert_eq!(cfg.support_servant_variant_key.as_deref(), Some("284:2"));
@@ -4474,6 +4479,8 @@ fn run_config_round_trips_support_servant_id_and_repeat_flag() {
         cfg.ap_recovery_items,
         vec![ApRecoveryItem::Gold, ApRecoveryItem::Bronze]
     );
+    assert_eq!(cfg.ap_recovery_limits.gold, Some(2));
+    assert_eq!(cfg.ap_recovery_limits.bronze, None);
 }
 
 #[test]
@@ -4983,6 +4990,49 @@ fn ap_recovery_candidates_for_page_preserves_priority_within_page() {
         bottom.iter().map(|item| item.item).collect::<Vec<_>>(),
         vec![ApRecoveryItem::Bronze, ApRecoveryItem::Copper]
     );
+}
+
+#[test]
+fn ap_recovery_limits_skip_exhausted_items_and_keep_unlimited_items() {
+    let configured = [
+        ApRecoveryItem::Gold,
+        ApRecoveryItem::Silver,
+        ApRecoveryItem::Bronze,
+    ];
+    let limits = ApRecoveryLimits {
+        gold: Some(2),
+        silver: Some(1),
+        bronze: None,
+        ..Default::default()
+    };
+    let usage = BattleRunApRecoveryUsage {
+        gold: 2,
+        silver: 0,
+        bronze: 20,
+        ..Default::default()
+    };
+
+    assert_eq!(
+        available_ap_recovery_items(&configured, limits, &usage),
+        vec![ApRecoveryItem::Silver, ApRecoveryItem::Bronze]
+    );
+}
+
+#[test]
+fn ap_recovery_limits_report_no_candidate_after_every_cap_is_reached() {
+    let configured = [ApRecoveryItem::Gold, ApRecoveryItem::Silver];
+    let limits = ApRecoveryLimits {
+        gold: Some(1),
+        silver: Some(3),
+        ..Default::default()
+    };
+    let usage = BattleRunApRecoveryUsage {
+        gold: 1,
+        silver: 3,
+        ..Default::default()
+    };
+
+    assert!(available_ap_recovery_items(&configured, limits, &usage).is_empty());
 }
 
 #[test]

@@ -457,6 +457,113 @@
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
 }
 
+.battle-recovery-option {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.battle-recovery-option .battle-recovery-card {
+  width: 100%;
+}
+
+.battle-recovery-option.is-selected {
+  height: 166px;
+  display: flex;
+  flex-direction: column;
+  border-color: var(--blue-9);
+  background: linear-gradient(180deg, var(--gray-1), var(--gray-2));
+  box-shadow: 0 0 0 1px var(--blue-8), 0 14px 30px rgba(28, 100, 242, 0.13);
+}
+
+.battle-recovery-option.is-selected .battle-recovery-card {
+  min-height: 0;
+  height: 92px;
+  flex: 0 0 92px;
+  padding: 8px 14px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.battle-recovery-option.is-selected .battle-recovery-card:hover {
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.battle-recovery-limit {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px 8px;
+}
+
+.battle-recovery-infinity {
+  min-width: 44px;
+  padding: 0 8px;
+  border: 0;
+  color: var(--gray-8);
+  background: transparent;
+  font-family: inherit;
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.58;
+  transition: color 0.15s, font-size 0.15s, opacity 0.15s, text-shadow 0.15s;
+}
+
+.battle-recovery-infinity.is-active {
+  color: var(--blue-9);
+  font-size: 38px;
+  opacity: 1;
+  text-shadow: 0 0 16px var(--blue-a8);
+}
+
+.battle-recovery-infinity:disabled {
+  cursor: not-allowed;
+}
+
+.battle-recovery-counter {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--gray-5);
+  border-radius: 8px;
+  background: var(--gray-1);
+}
+
+.battle-recovery-counter > button {
+  flex: 0 0 auto;
+}
+
+.battle-recovery-counter-value {
+  min-width: 0;
+  flex: 1;
+  text-align: center;
+  color: var(--gray-12);
+  background: transparent;
+  appearance: textfield;
+}
+
+.battle-recovery-counter-value::-webkit-outer-spin-button,
+.battle-recovery-counter-value::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.battle-recovery-counter-value:disabled {
+  color: var(--gray-8);
+}
+
 .option-card-radio-item {
   flex: 1;
   display: grid;
@@ -481,8 +588,7 @@
   transform: none;
 }
 
-.option-card-radio-item.is-selected,
-.battle-recovery-card.is-selected {
+.option-card-radio-item.is-selected {
   border-color: var(--blue-9);
   box-shadow: 0 0 0 1px var(--blue-8), 0 14px 30px rgba(28, 100, 242, 0.13);
 }

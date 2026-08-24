@@ -1,5 +1,8 @@
 use super::*;
-use crate::runner::{AP_RECOVERY_CONFIRM_TEMPLATE, SKILL_SELECTION_CLOSE_BUTTON_TEMPLATE};
+use crate::runner::{
+    ApRecoveryItem, ApRecoveryLimits, AP_RECOVERY_CONFIRM_TEMPLATE,
+    SKILL_SELECTION_CLOSE_BUTTON_TEMPLATE,
+};
 use std::collections::HashSet;
 use std::io::Cursor;
 use std::str::FromStr;
@@ -520,6 +523,7 @@ fn test_project(id: &str, name: &str, advanced_mode: bool) -> Project {
         repeat_mode: Some(ProjectRepeatMode::Single),
         repeat_count: None,
         ap_recovery_items: Vec::new(),
+        ap_recovery_limits: Default::default(),
     }
 }
 
@@ -1043,6 +1047,26 @@ fn project_legacy_json_without_slots_falls_back_to_defaults() {
     assert!(project.repeat_mode.is_none());
     assert!(project.repeat_count.is_none());
     assert!(project.ap_recovery_items.is_empty());
+    assert_eq!(project.ap_recovery_limits, ApRecoveryLimits::default());
+}
+
+#[test]
+fn project_ap_recovery_limits_round_trip_with_unlimited_items() {
+    let mut project = test_project("project-ap-limits", "苹果上限", false);
+    project.ap_recovery_items = vec![ApRecoveryItem::Gold, ApRecoveryItem::Silver];
+    project.ap_recovery_limits = ApRecoveryLimits {
+        gold: Some(5),
+        silver: None,
+        ..Default::default()
+    };
+
+    let json = serde_json::to_value(&project).unwrap();
+    assert_eq!(json["apRecoveryLimits"]["gold"], serde_json::json!(5));
+    assert_eq!(json["apRecoveryLimits"]["silver"], serde_json::Value::Null);
+
+    let restored: Project = serde_json::from_value(json).unwrap();
+    assert_eq!(restored.ap_recovery_limits.gold, Some(5));
+    assert_eq!(restored.ap_recovery_limits.silver, None);
 }
 
 #[test]
@@ -1400,6 +1424,7 @@ fn normalize_project_migrates_legacy_repeat_flag_to_infinite_mode() {
         repeat_mode: None,
         repeat_count: Some(9),
         ap_recovery_items: Vec::new(),
+        ap_recovery_limits: Default::default(),
     });
 
     assert_eq!(project.repeat_mission, true);

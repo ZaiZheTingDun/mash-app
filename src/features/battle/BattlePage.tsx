@@ -22,6 +22,7 @@ import {
 import { ProjectBar } from "../projects/ProjectBar";
 import { OptionCardRadioGroup } from "../../components/common/OptionCardRadioGroup";
 import { SectionHeading } from "../../components/common/SectionHeading";
+import { HelpTooltip } from "../../components/common/HelpTooltip";
 import goldFruitImage from "../../../src-tauri/resources/images/item_fruit_golden.png";
 import silverFruitImage from "../../../src-tauri/resources/images/item_fruit_silver.png";
 import bronzeFruitImage from "../../../src-tauri/resources/images/item_fruit_bronzed_cobalt.png";
@@ -29,6 +30,7 @@ import copperFruitImage from "../../../src-tauri/resources/images/item_fruit_bro
 import saintQuartzImage from "../../../src-tauri/resources/images/item_saint_quartz.png";
 import type {
   BattleApRecoveryItem,
+  BattleApRecoveryLimits,
   BattleRepeatMode,
   GrandClass,
   GrandClassDefinition,
@@ -87,6 +89,16 @@ const AP_RECOVERY_OPTIONS: {
     },
   ];
 const EMPTY_AP_RECOVERY_ITEMS: BattleApRecoveryItem[] = [];
+const UNLIMITED_AP_RECOVERY_LIMITS: BattleApRecoveryLimits = {
+  rainbow: null,
+  gold: null,
+  silver: null,
+  bronze: null,
+  copper: null,
+};
+const MAX_AP_RECOVERY_LIMIT = 4_294_967_295;
+const AP_RECOVERY_HELP_TEXT =
+  "选中恢复道具后默认为无限使用；点击无限图标可设置本次运行的使用数量。某种道具达到上限后会继续尝试其他已选道具，全部达到上限后停止。";
 const DEFAULT_GRAND_CHAIN_PRIORITY: GrandChainPriorityItem[] = [
   "mainBraveChain",
   "mainReadyNp",
@@ -120,6 +132,7 @@ interface BattleProjectDraft {
   repeatMode: BattleRepeatMode;
   repeatCount: number | null;
   apRecoveryItems: BattleApRecoveryItem[];
+  apRecoveryLimits: BattleApRecoveryLimits;
 }
 
 function projectRepeatMode(project: Project | null | undefined): BattleRepeatMode {
@@ -144,12 +157,28 @@ function orderedApRecoveryItems(project: Project | null | undefined): BattleApRe
   );
 }
 
+function projectApRecoveryLimits(project: Project | null | undefined): BattleApRecoveryLimits {
+  const configured = project?.apRecoveryLimits;
+  return AP_RECOVERY_OPTIONS.reduce<BattleApRecoveryLimits>(
+    (limits, option) => {
+      const value = configured?.[option.value];
+      limits[option.value] =
+        typeof value === "number" && Number.isInteger(value) && value > 0
+          ? Math.min(value, MAX_AP_RECOVERY_LIMIT)
+          : null;
+      return limits;
+    },
+    { ...UNLIMITED_AP_RECOVERY_LIMITS }
+  );
+}
+
 function projectDraftFromProject(project: Project): BattleProjectDraft {
   return {
     projectId: project.id,
     repeatMode: projectRepeatMode(project),
     repeatCount: projectRepeatCount(project),
     apRecoveryItems: orderedApRecoveryItems(project),
+    apRecoveryLimits: projectApRecoveryLimits(project),
   };
 }
 
@@ -420,6 +449,8 @@ export function BattlePage({
   const repeatMode = activeDraft?.repeatMode ?? "single";
   const repeatCount = activeDraft?.repeatCount ?? null;
   const apRecoveryItems = activeDraft?.apRecoveryItems ?? EMPTY_AP_RECOVERY_ITEMS;
+  const apRecoveryLimits =
+    activeDraft?.apRecoveryLimits ?? UNLIMITED_AP_RECOVERY_LIMITS;
 
   const saveProject = useCallback(
     (nextProject: Project) => {
@@ -522,6 +553,7 @@ export function BattlePage({
       repeatMission: latestDraft.repeatMode === "infinite",
       maxMissionRuns,
       apRecoveryItems: latestDraft.apRecoveryItems,
+      apRecoveryLimits: latestDraft.apRecoveryLimits,
       stopOnFiveStarCeDrop,
       fiveStarCeDropTargetCount: stopOnFiveStarCeDrop
         ? projectFiveStarCeDropTargetCount(selectedProject)
@@ -641,9 +673,29 @@ export function BattlePage({
         apRecoveryItems: AP_RECOVERY_OPTIONS.map((option) => option.value).filter((value) =>
           items.includes(value)
         ),
+        apRecoveryLimits,
       }));
     },
-    [updateSelectedProject]
+    [apRecoveryLimits, updateSelectedProject]
+  );
+
+  const setApRecoveryLimit = useCallback(
+    (item: BattleApRecoveryItem, limit: number | null) => {
+      if (!selectedProject || running) return;
+      const normalized =
+        limit == null
+          ? null
+          : Math.min(MAX_AP_RECOVERY_LIMIT, Math.max(1, Math.floor(limit)));
+      updateSelectedProject((project) => ({
+        ...project,
+        apRecoveryItems,
+        apRecoveryLimits: {
+          ...apRecoveryLimits,
+          [item]: normalized,
+        },
+      }));
+    },
+    [apRecoveryItems, apRecoveryLimits, running, selectedProject, updateSelectedProject]
   );
 
   const displayedRepeatCount = repeatCount ?? 1;
@@ -736,7 +788,16 @@ export function BattlePage({
         </Box>
 
         <Box className="battle-panel">
-          <SectionHeading>行动力恢复</SectionHeading>
+          <SectionHeading
+            accessory={
+              <HelpTooltip
+                ariaLabel="行动力恢复说明"
+                content={AP_RECOVERY_HELP_TEXT}
+              />
+            }
+          >
+            行动力恢复
+          </SectionHeading>
           <CheckboxCards.Root
             value={apRecoveryItems}
             className="battle-recovery-cards"
@@ -745,18 +806,92 @@ export function BattlePage({
           >
             {AP_RECOVERY_OPTIONS.map((option) => {
               const checked = apRecoveryItems.includes(option.value);
+              const limit = apRecoveryLimits[option.value];
               return (
-                <CheckboxCards.Item
+                <div
+                  className={`battle-recovery-option ${checked ? "is-selected" : ""} ${
+                    checked && limit != null ? "is-limited" : ""
+                  }`}
                   key={option.value}
-                  value={option.value}
-                  className={`battle-recovery-card ${checked ? "is-selected" : ""}`}
                 >
-                  <img src={option.imageSrc} alt="" className="battle-recovery-image" />
-                  <Text size="3" weight="bold">{option.label}</Text>
-                  <Text size="2" weight="bold" className="battle-recovery-amount">
-                    {option.recoveryLabel}
-                  </Text>
-                </CheckboxCards.Item>
+                  <CheckboxCards.Item
+                    value={option.value}
+                    className="battle-recovery-card"
+                    aria-label={`${option.label} ${option.recoveryLabel}`}
+                  >
+                    <img src={option.imageSrc} alt="" className="battle-recovery-image" />
+                    {!checked && (
+                      <>
+                        <Text size="3" weight="bold">{option.label}</Text>
+                        <Text size="2" weight="bold" className="battle-recovery-amount">
+                          {option.recoveryLabel}
+                        </Text>
+                      </>
+                    )}
+                  </CheckboxCards.Item>
+                  {checked && (
+                    <div className="battle-recovery-limit" aria-label={`${option.label}使用限制`}>
+                      <button
+                        type="button"
+                        className={`battle-recovery-infinity ${
+                          limit == null ? "is-active" : ""
+                        }`}
+                        disabled={running || !selectedProject}
+                        aria-label={
+                          limit == null
+                            ? `${option.label}当前无限使用，点击设置数量`
+                            : `${option.label}当前限量使用，点击改为无限`
+                        }
+                        onClick={() => setApRecoveryLimit(option.value, limit == null ? 1 : null)}
+                      >
+                        ∞
+                      </button>
+                      {limit != null && (
+                        <div className="battle-recovery-counter">
+                          <Button
+                            color="indigo"
+                            disabled={running || !selectedProject || limit <= 1}
+                            aria-label={`减少${option.label}使用数量`}
+                            onClick={() => setApRecoveryLimit(option.value, limit - 1)}
+                          >
+                            <MinusIcon width={15} height={15} />
+                          </Button>
+                          <TextField.Root
+                            className="battle-recovery-counter-value"
+                            type="number"
+                            min="1"
+                            max={String(MAX_AP_RECOVERY_LIMIT)}
+                            step="1"
+                            variant="soft"
+                            radius="none"
+                            inputMode="numeric"
+                            aria-label={`${option.label}使用数量`}
+                            value={limit}
+                            disabled={running || !selectedProject}
+                            onChange={(event) => {
+                              const parsed = Number(event.target.value);
+                              if (Number.isInteger(parsed) && parsed > 0) {
+                                setApRecoveryLimit(option.value, parsed);
+                              }
+                            }}
+                          />
+                          <Button
+                            color="indigo"
+                            disabled={
+                              running ||
+                              !selectedProject ||
+                              limit >= MAX_AP_RECOVERY_LIMIT
+                            }
+                            aria-label={`增加${option.label}使用数量`}
+                            onClick={() => setApRecoveryLimit(option.value, limit + 1)}
+                          >
+                            <PlusIcon width={15} height={15} />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </CheckboxCards.Root>

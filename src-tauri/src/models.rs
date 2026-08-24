@@ -1,7 +1,7 @@
 //! IPC wire models shared by Tauri commands, persisted project JSON, and runners.
 //! Keep serde field names camelCase-compatible with the TypeScript interfaces.
 
-use crate::runner::ApRecoveryItem;
+use crate::runner::{ApRecoveryItem, ApRecoveryLimits};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -916,4 +916,7 @@ pub struct Project {
     /// Persisted AP recovery items in UI priority order.
     #[serde(default)]
     pub ap_recovery_items: Vec<ApRecoveryItem>,
+    /// Persisted per-run use caps. Missing/null item limits mean unlimited.
+    #[serde(default)]
+    pub ap_recovery_limits: ApRecoveryLimits,
 }
