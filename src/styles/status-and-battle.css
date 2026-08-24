@@ -677,7 +677,8 @@
 .status-support-btn,
 .status-debug-btn,
 .status-update-btn,
-.status-theme-btn {
+.status-theme-btn,
+.status-server-btn {
   background: none;
   color: var(--gray-11);
   cursor: pointer;
@@ -691,7 +692,8 @@
 .status-support-btn,
 .status-debug-btn,
 .status-update-btn,
-.status-theme-btn {
+.status-theme-btn,
+.status-server-btn {
   opacity: 1;
 }
 
@@ -703,7 +705,8 @@
 .status-log-btn[aria-pressed="true"],
 .status-run-btn:hover,
 .status-run-btn[aria-pressed="true"],
-.status-theme-btn:hover {
+.status-theme-btn:hover,
+.status-server-btn:hover:not(:disabled) {
   background: var(--fgo-control-hover);
   color: var(--gray-12);
 }
@@ -714,7 +717,8 @@
 .status-log-btn:focus-visible,
 .status-run-btn:focus-visible,
 .status-update-btn:focus-visible,
-.status-theme-btn:focus-visible {
+.status-theme-btn:focus-visible,
+.status-server-btn:focus-visible {
   outline: 2px solid var(--blue-8);
   outline-offset: 1px;
 }
@@ -724,7 +728,8 @@
   background: color-mix(in srgb, var(--blue-9) 16%, transparent);
 }
 
-.status-update-btn:disabled {
+.status-update-btn:disabled,
+.status-server-btn:disabled {
   cursor: default;
   opacity: 0.72;
 }

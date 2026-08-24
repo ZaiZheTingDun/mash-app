@@ -5,7 +5,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type Event } from "@tauri-apps/api/event";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { StatusBar } from "../StatusBar";
-import { SERVER_LABELS } from "../../../types/server";
 import type { Servant } from "../../../types/servant";
 import type { AutomationStatus } from "../../../types/automation";
 
@@ -93,7 +92,7 @@ describe("StatusBar", () => {
     vi.mocked(listen).mockImplementation(async () => () => {});
   });
 
-  it("hydrates the server selector from get_server on mount", async () => {
+  it("hydrates the server button from get_server on mount", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "CN";
       if (cmd === "get_use_bluestack") return false;
@@ -101,17 +100,28 @@ describe("StatusBar", () => {
         return { connected: false, deviceName: null };
       return null;
     });
-    const user = userEvent.setup();
     renderWithTheme(<StatusBar />);
 
-    // Open the popover so the Select trigger renders into the DOM.
-    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
+    expect(await screen.findByRole("button", { name: "国服" })).toBeInTheDocument();
+  });
 
-    const trigger = await screen.findByRole("combobox", { name: "服务器" });
-    // Radix `<Select.Trigger>` renders the current value text inline.
-    await waitFor(() => {
-      expect(trigger).toHaveTextContent(SERVER_LABELS.CN);
+  it("shows the server as a separate button to the left of the connection status", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "CN";
+      if (cmd === "get_use_bluestack") return false;
+      if (cmd === "check_adb")
+        return { connected: true, deviceName: "127.0.0.1:5555" };
+      return null;
     });
+
+    const { container } = renderWithTheme(<StatusBar />);
+
+    const connectionButton = await screen.findByRole("button", { name: "游戏已连接" });
+    const serverButton = await screen.findByRole("button", { name: "国服" });
+    expect(
+      serverButton.compareDocumentPosition(connectionButton) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(container.querySelector(".status-server-btn svg")).toBeNull();
   });
 
   it("shows an empty run-status panel and closes it", async () => {
@@ -223,36 +233,32 @@ describe("StatusBar", () => {
 
     const user = userEvent.setup();
     renderWithTheme(<StatusBar />);
-    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
-
-    const trigger = await screen.findByRole("combobox", { name: "服务器" });
-    await user.click(trigger);
-    await user.click(await screen.findByRole("option", { name: SERVER_LABELS.CN }));
+    const serverButton = await screen.findByRole("button", { name: "日服" });
+    await user.click(serverButton);
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_server", { value: "CN" });
     });
     await waitFor(() => {
-      expect(trigger).toHaveTextContent(SERVER_LABELS.CN);
+      expect(screen.getByRole("button", { name: "国服" })).toBeInTheDocument();
     });
 
-    // Second selection is rejected by the backend — UI must revert.
-    await user.click(trigger);
-    await user.click(await screen.findByRole("option", { name: SERVER_LABELS.JP }));
+    // The second toggle is rejected by the backend — UI must revert.
+    await user.click(screen.getByRole("button", { name: "国服" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_server", { value: "JP" });
     });
-    // After the rejection settles, the trigger snaps back to the
+    // After the rejection settles, the button snaps back to the
     // previous value (CN) so the UI stays consistent with backend state.
     await waitFor(() => {
-      expect(trigger).toHaveTextContent(SERVER_LABELS.CN);
+      expect(screen.getByRole("button", { name: "国服" })).toBeInTheDocument();
     });
     expect(errSpy).toHaveBeenCalled();
     errSpy.mockRestore();
   });
 
-  it("disables the server selector while the runner is Running", async () => {
+  it("disables the server button while the runner is Running", async () => {
     const automation = captureAutomationListener();
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";
@@ -262,11 +268,9 @@ describe("StatusBar", () => {
       return null;
     });
 
-    const user = userEvent.setup();
     renderWithTheme(<StatusBar />);
-    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
 
-    const trigger = await screen.findByRole("combobox", { name: "服务器" });
+    const trigger = await screen.findByRole("button", { name: "日服" });
     expect(trigger).not.toBeDisabled();
 
     // Simulate the runner transitioning into running — the lock kicks
@@ -283,7 +287,7 @@ describe("StatusBar", () => {
     });
   });
 
-  it("also disables the server selector while enhancement automation is running", async () => {
+  it("also disables the server button while enhancement automation is running", async () => {
     const enhancement = captureAutomationListener("enhancement-automation-status");
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "JP";
@@ -292,11 +296,9 @@ describe("StatusBar", () => {
       return null;
     });
 
-    const user = userEvent.setup();
     renderWithTheme(<StatusBar />);
-    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
 
-    const trigger = await screen.findByRole("combobox", { name: "服务器" });
+    const trigger = await screen.findByRole("button", { name: "日服" });
     expect(trigger).not.toBeDisabled();
 
     enhancement.trigger("running");
@@ -310,7 +312,7 @@ describe("StatusBar", () => {
     });
   });
 
-  it("locks the server selector for CE enhancement and friend point summon", async () => {
+  it("locks the server button for CE enhancement and friend point summon", async () => {
     const listeners = new Map<string, AutomationListener>();
     vi.mocked(listen).mockImplementation(async (event, callback) => {
       if (
@@ -328,10 +330,8 @@ describe("StatusBar", () => {
       return null;
     });
 
-    const user = userEvent.setup();
     renderWithTheme(<StatusBar />);
-    await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
-    const trigger = await screen.findByRole("combobox", { name: "服务器" });
+    const trigger = await screen.findByRole("button", { name: "国服" });
 
     for (const event of [
       "craft-essence-enhancement-automation-status",

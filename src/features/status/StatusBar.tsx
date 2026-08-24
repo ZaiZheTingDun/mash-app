@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Avatar, Box, Flex, Text, Popover, Button, Spinner, Checkbox, Select, IconButton, Dialog, TextField } from "@radix-ui/themes";
+import { Avatar, Box, Flex, Text, Popover, Button, Spinner, Checkbox, IconButton, Dialog, TextField } from "@radix-ui/themes";
 import {
   HamburgerMenuIcon,
   Link2Icon,
@@ -1187,6 +1187,17 @@ export function StatusBar({
               </Text>
             </Button>
           )}
+          <Button
+            type="button"
+            size="1"
+            variant="solid"
+            color="gray"
+            className="status-server-btn"
+            disabled={runnerRunning}
+            onClick={() => handleServerChange(server === "JP" ? "CN" : "JP")}
+          >
+            <Text size="1">{SERVER_LABELS[server]}</Text>
+          </Button>
           <Popover.Root>
             <Popover.Trigger>
               <Button type="button" size="1" variant="solid" color="gray" className="status-trigger">
@@ -1200,22 +1211,6 @@ export function StatusBar({
             </Popover.Trigger>
             <Popover.Content side="top" align="end" size="1" className="status-popover">
               <Flex direction="column" gap="3">
-                <Flex align="center" justify="between" gap="2">
-                  <Text size="2">服务器</Text>
-                  <Select.Root
-                    size="1"
-                    value={server}
-                    onValueChange={handleServerChange}
-                    disabled={runnerRunning}
-                  >
-                    <Select.Trigger aria-label="服务器" />
-                    <Select.Content>
-                      <Select.Item value="JP">{SERVER_LABELS.JP}</Select.Item>
-                      <Select.Item value="CN">{SERVER_LABELS.CN}</Select.Item>
-                    </Select.Content>
-                  </Select.Root>
-                </Flex>
-
                 <Button
                   size="1"
                   variant="soft"
