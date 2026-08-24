@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Flex, IconButton, Text } from "@radix-ui/themes";
 import { invoke } from "../../tauri";
 import { AdvancedCommandEditor } from "../advanced/AdvancedCommandEditor";
+import { TurnHelpTooltip } from "../../components/common/TurnHelpTooltip";
 import { BattleSceneBlock } from "./BattleSceneBlock";
 import {
   deriveTurnPartyMembers,
@@ -313,7 +314,7 @@ export function CommandEditor({
           <ChevronLeftIcon width={18} height={18} />
         </IconButton>
         <Text size="4" weight="bold">
-          Battle {activeIndex + 1} / {scenes.length}
+          第 {activeIndex + 1}/{scenes.length} 面
         </Text>
         <IconButton
           type="button"
@@ -351,7 +352,8 @@ export function CommandEditor({
       </Flex>
       <Flex align="center" justify="between" gap="3" className="battle-turn-nav">
         <Flex align="center" gap="2" wrap="wrap">
-          <Text size="2" weight="bold">Turn:</Text>
+          <Text size="2" weight="bold">当前面轮次</Text>
+          <TurnHelpTooltip />
           {activeScene.turns.map((turn, index) => (
             <button
               type="button"

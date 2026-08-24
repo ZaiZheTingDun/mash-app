@@ -84,14 +84,14 @@ describe("CommandEditor pagination", () => {
       />
     );
 
-    expect(await screen.findByText("Battle 1 / 2")).toBeInTheDocument();
+    expect(await screen.findByText("第 1/2 面")).toBeInTheDocument();
     expect(screen.getByText("御主礼装 释放 技能 1")).toBeInTheDocument();
     expect(screen.queryByText("御主礼装 释放 技能 3")).not.toBeInTheDocument();
     expect(container.querySelector(".command-scroll-region")).not.toBeNull();
 
     await user.click(screen.getByRole("button", { name: "下一场战斗" }));
 
-    expect(screen.getByText("Battle 2 / 2")).toBeInTheDocument();
+    expect(screen.getByText("第 2/2 面")).toBeInTheDocument();
     expect(screen.getByText("御主礼装 释放 技能 3")).toBeInTheDocument();
     expect(screen.queryByText("御主礼装 释放 技能 1")).not.toBeInTheDocument();
   });
@@ -120,6 +120,7 @@ describe("CommandEditor pagination", () => {
     );
 
     expect(await screen.findByRole("button", { name: "Turn 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Turn 帮助" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "删除当前 Turn" })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "添加 Turn" }));

@@ -978,7 +978,7 @@ function AdvancedStrategyEditor({
         <div className="battle-phase-label">使用技能</div>
         <div className="advanced-rule-section">
           <Flex align="center" gap="2" className="advanced-turn-controls">
-            <Text size="2" weight="bold">Turn:</Text>
+            <Text size="2" weight="bold">轮次</Text>
             {turns.map((turn, index) => (
               <button
                 type="button"
