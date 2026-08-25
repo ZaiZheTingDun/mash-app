@@ -1,7 +1,7 @@
 import { createInitialProjectSlots } from "./features/team/projectSlots";
 import type { AdvancedBattleScene, BattleScene } from "./types/command";
 import type { CraftEssence } from "./types/craftEssence";
-import type { Project } from "./types/project";
+import type { Project, ProjectCatalog } from "./types/project";
 import type { Servant } from "./types/servant";
 import type { Server } from "./types/server";
 
@@ -100,6 +100,7 @@ let autoCaptureUnknownScreenTimeout = false;
 let autoCaptureSkillUseProbe = false;
 let simulateStuckAttackSelection = false;
 let nextProjectNumber = 2;
+let nextProjectGroupNumber = 1;
 let activeProjectId: string | null = "dev-project-1";
 let appTheme: "light" | "dark" | "system" | null = null;
 let battleStartPanel: "operationLog" | "runStatus" | "none" = "operationLog";
@@ -129,6 +130,12 @@ let projects: Project[] = [
     }),
   },
 ];
+
+const projectCatalog: ProjectCatalog = {
+  schemaVersion: 1,
+  groups: [],
+  ungroupedProjectIds: projects.map((project) => project.id),
+};
 
 const battleScenesByProject = new Map<string, BattleScene[]>([
   [
@@ -179,6 +186,41 @@ function createProject(name: string, advancedMode = false): Project {
   };
 }
 
+function removeProjectFromCatalog(projectId: string) {
+  projectCatalog.ungroupedProjectIds = projectCatalog.ungroupedProjectIds.filter(
+    (existingId) => existingId !== projectId,
+  );
+  projectCatalog.groups = projectCatalog.groups.map((group) => ({
+    ...group,
+    projectIds: group.projectIds.filter((existingId) => existingId !== projectId),
+  }));
+}
+
+function insertProjectIntoCatalog(projectId: string, groupId: string | null) {
+  removeProjectFromCatalog(projectId);
+  if (groupId == null) {
+    projectCatalog.ungroupedProjectIds.push(projectId);
+    return;
+  }
+  const group = projectCatalog.groups.find((item) => item.id === groupId);
+  if (!group) throw new Error(`project group not found: ${groupId}`);
+  group.projectIds.push(projectId);
+}
+
+function reorderCatalogIds(currentIds: string[], orderedIds: string[], label: string) {
+  const current = new Set(currentIds);
+  const ordered = new Set(orderedIds);
+  if (
+    currentIds.length !== orderedIds.length ||
+    ordered.size !== orderedIds.length ||
+    current.size !== ordered.size ||
+    [...current].some((id) => !ordered.has(id))
+  ) {
+    throw new Error(`${label}排序内容与当前目录不一致`);
+  }
+  return [...orderedIds];
+}
+
 function recognitionSettings() {
   return {
     noblePhantasmDetectionMode,
@@ -213,6 +255,79 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return clone(craftEssences) as T;
     case "list_projects":
       return clone(projects) as T;
+    case "get_project_catalog":
+      return clone(projectCatalog) as T;
+    case "create_project_group": {
+      const name = String(args.name ?? "").trim();
+      if (!name) throw new Error("分组名称不能为空");
+      if (projectCatalog.groups.some((group) => group.name === name)) {
+        throw new Error(`分组「${name}」已存在`);
+      }
+      projectCatalog.groups.push({
+        id: `dev-group-${nextProjectGroupNumber++}`,
+        name,
+        projectIds: [],
+      });
+      return clone(projectCatalog) as T;
+    }
+    case "rename_project_group": {
+      const groupId = String(args.groupId ?? "");
+      const name = String(args.name ?? "").trim();
+      if (!name) throw new Error("分组名称不能为空");
+      const group = projectCatalog.groups.find((item) => item.id === groupId);
+      if (!group) throw new Error(`project group not found: ${groupId}`);
+      if (projectCatalog.groups.some((item) => item.id !== groupId && item.name === name)) {
+        throw new Error(`分组「${name}」已存在`);
+      }
+      group.name = name;
+      return clone(projectCatalog) as T;
+    }
+    case "delete_project_group": {
+      const groupId = String(args.groupId ?? "");
+      const index = projectCatalog.groups.findIndex((group) => group.id === groupId);
+      if (index < 0) throw new Error(`project group not found: ${groupId}`);
+      const [group] = projectCatalog.groups.splice(index, 1);
+      projectCatalog.ungroupedProjectIds.push(...group.projectIds);
+      return clone(projectCatalog) as T;
+    }
+    case "move_project_to_group": {
+      const projectId = String(args.projectId ?? "");
+      const groupId = typeof args.groupId === "string" ? args.groupId : null;
+      if (!projects.some((project) => project.id === projectId)) {
+        throw new Error(`project not found: ${projectId}`);
+      }
+      insertProjectIntoCatalog(projectId, groupId);
+      return clone(projectCatalog) as T;
+    }
+    case "reorder_project_groups": {
+      const groupIds = args.groupIds as string[];
+      const ordered = reorderCatalogIds(
+        projectCatalog.groups.map((group) => group.id),
+        groupIds,
+        "分组",
+      );
+      const positions = new Map(ordered.map((id, index) => [id, index]));
+      projectCatalog.groups.sort(
+        (left, right) => (positions.get(left.id) ?? 0) - (positions.get(right.id) ?? 0),
+      );
+      return clone(projectCatalog) as T;
+    }
+    case "reorder_projects_in_group": {
+      const groupId = typeof args.groupId === "string" ? args.groupId : null;
+      const projectIds = args.projectIds as string[];
+      if (groupId == null) {
+        projectCatalog.ungroupedProjectIds = reorderCatalogIds(
+          projectCatalog.ungroupedProjectIds,
+          projectIds,
+          "队伍",
+        );
+      } else {
+        const group = projectCatalog.groups.find((item) => item.id === groupId);
+        if (!group) throw new Error(`project group not found: ${groupId}`);
+        group.projectIds = reorderCatalogIds(group.projectIds, projectIds, "队伍");
+      }
+      return clone(projectCatalog) as T;
+    }
     case "get_grand_class_definitions":
       return [
         { id: "saber", label: "剑阶冠位", servantClass: "Saber", roles: [{ role: "main", label: "主", required: true }, { role: "deputy", label: "副", required: false }], cardPriorityEnabled: true, autoOrderChangeRoles: ["main"], validationMessage: "戴冠战需要选择 1 到 2 名冠位从者" },
@@ -248,11 +363,16 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       }
       return battleStartPanel as T;
     case "create_project": {
+      const groupId = typeof args.groupId === "string" ? args.groupId : null;
+      if (groupId != null && !projectCatalog.groups.some((group) => group.id === groupId)) {
+        throw new Error(`project group not found: ${groupId}`);
+      }
       const project = createProject(
         String(args.name ?? `模拟队伍 ${nextProjectNumber}`),
         args.advancedMode === true
       );
       projects = [...projects, project];
+      insertProjectIntoCatalog(project.id, groupId);
       activeProjectId = project.id;
       return clone(project) as T;
     }
@@ -267,6 +387,9 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         name: String(args.name ?? `${source.name} 副本`),
       };
       projects = [...projects, project];
+      const sourceGroupId =
+        projectCatalog.groups.find((group) => group.projectIds.includes(source.id))?.id ?? null;
+      insertProjectIntoCatalog(project.id, sourceGroupId);
       activeProjectId = project.id;
       battleScenesByProject.set(
         project.id,
@@ -285,6 +408,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     }
     case "delete_project":
       projects = projects.filter((project) => project.id !== args.id);
+      removeProjectFromCatalog(String(args.id));
       if (activeProjectId === args.id) {
         activeProjectId = projects[0]?.id ?? null;
       }

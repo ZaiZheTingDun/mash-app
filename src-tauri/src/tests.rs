@@ -1465,7 +1465,8 @@ fn missing_project_catalog_places_existing_projects_in_ungrouped() {
         new_project("Beta".to_string(), false, GrandClass::Saber),
     ];
 
-    let catalog = read_project_catalog_from_path(&tmp.path().join("missing.json"), &projects);
+    let catalog =
+        read_project_catalog_from_path(&tmp.path().join("missing.json"), &projects).unwrap();
 
     assert!(catalog.groups.is_empty());
     assert_eq!(
@@ -1475,6 +1476,40 @@ fn missing_project_catalog_places_existing_projects_in_ungrouped() {
             .map(|project| project.id.clone())
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn malformed_project_catalog_is_reported_without_overwriting_the_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("project_catalog.json");
+    fs::write(&path, "{not valid json").unwrap();
+
+    let error = read_project_catalog_from_path(&path, &[]).unwrap_err();
+
+    assert!(error.contains("项目目录文件格式错误"));
+    assert_eq!(fs::read_to_string(path).unwrap(), "{not valid json");
+}
+
+#[test]
+fn project_catalog_write_atomically_replaces_existing_contents() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("project_catalog.json");
+    fs::write(&path, "old contents").unwrap();
+    let catalog = ProjectCatalog {
+        schema_version: 1,
+        groups: vec![ProjectGroup {
+            id: "weekly".to_string(),
+            name: "周回".to_string(),
+            project_ids: vec!["alpha".to_string()],
+        }],
+        ungrouped_project_ids: vec!["beta".to_string()],
+    };
+
+    write_project_catalog_to_path(&path, &catalog).unwrap();
+
+    let saved: ProjectCatalog = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(saved, catalog);
+    assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), 1);
 }
 
 #[test]

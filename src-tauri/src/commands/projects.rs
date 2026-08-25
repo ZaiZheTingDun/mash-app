@@ -58,26 +58,50 @@ pub(crate) fn normalize_project_catalog(
     catalog
 }
 
-pub(crate) fn read_project_catalog_from_path(path: &Path, projects: &[Project]) -> ProjectCatalog {
-    let catalog = fs::read_to_string(path)
-        .ok()
-        .and_then(|contents| serde_json::from_str::<ProjectCatalog>(&contents).ok())
-        .unwrap_or_default();
-    normalize_project_catalog(catalog, projects)
+pub(crate) fn read_project_catalog_from_path(
+    path: &Path,
+    projects: &[Project],
+) -> Result<ProjectCatalog, String> {
+    let catalog = match fs::read_to_string(path) {
+        Ok(contents) => serde_json::from_str::<ProjectCatalog>(&contents)
+            .map_err(|error| format!("项目目录文件格式错误（{}）：{error}", path.display()))?,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => ProjectCatalog::default(),
+        Err(error) => return Err(format!("读取项目目录失败（{}）：{error}", path.display())),
+    };
+    Ok(normalize_project_catalog(catalog, projects))
 }
 
 pub(crate) fn write_project_catalog_to_path(
     path: &Path,
     catalog: &ProjectCatalog,
 ) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    if parent != Path::new(".") {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
     let json = serde_json::to_string_pretty(catalog).map_err(|error| error.to_string())?;
-    fs::write(path, json).map_err(|error| error.to_string())
+    let mut temporary =
+        tempfile::NamedTempFile::new_in(parent).map_err(|error| error.to_string())?;
+    temporary
+        .write_all(json.as_bytes())
+        .map_err(|error| error.to_string())?;
+    temporary
+        .as_file()
+        .sync_all()
+        .map_err(|error| error.to_string())?;
+    temporary
+        .persist(path)
+        .map_err(|error| error.error.to_string())?;
+    Ok(())
 }
 
-fn read_project_catalog(app: &tauri::AppHandle, projects: &[Project]) -> ProjectCatalog {
+fn read_project_catalog(
+    app: &tauri::AppHandle,
+    projects: &[Project],
+) -> Result<ProjectCatalog, String> {
     read_project_catalog_from_path(&project_catalog_path(app), projects)
 }
 
@@ -430,7 +454,7 @@ pub(crate) fn list_projects(app: tauri::AppHandle) -> Vec<Project> {
 }
 
 #[tauri::command]
-pub(crate) fn get_project_catalog(app: tauri::AppHandle) -> ProjectCatalog {
+pub(crate) fn get_project_catalog(app: tauri::AppHandle) -> Result<ProjectCatalog, String> {
     let projects = read_projects(&app);
     read_project_catalog(&app, &projects)
 }
@@ -441,7 +465,7 @@ pub(crate) fn create_project_group(
     name: String,
 ) -> Result<ProjectCatalog, String> {
     let projects = read_projects(&app);
-    let mut catalog = read_project_catalog(&app, &projects);
+    let mut catalog = read_project_catalog(&app, &projects)?;
     let name = validate_project_group_name(&catalog, &name, None)?;
     catalog.groups.push(ProjectGroup {
         id: uuid::Uuid::new_v4().to_string(),
@@ -459,7 +483,7 @@ pub(crate) fn rename_project_group(
     name: String,
 ) -> Result<ProjectCatalog, String> {
     let projects = read_projects(&app);
-    let mut catalog = read_project_catalog(&app, &projects);
+    let mut catalog = read_project_catalog(&app, &projects)?;
     let name = validate_project_group_name(&catalog, &name, Some(&group_id))?;
     let group = catalog
         .groups
@@ -477,7 +501,7 @@ pub(crate) fn delete_project_group(
     group_id: String,
 ) -> Result<ProjectCatalog, String> {
     let projects = read_projects(&app);
-    let mut catalog = read_project_catalog(&app, &projects);
+    let mut catalog = read_project_catalog(&app, &projects)?;
     let index = catalog
         .groups
         .iter()
@@ -499,7 +523,7 @@ pub(crate) fn move_project_to_group(
     if !projects.iter().any(|project| project.id == project_id) {
         return Err(format!("project not found: {project_id}"));
     }
-    let mut catalog = read_project_catalog(&app, &projects);
+    let mut catalog = read_project_catalog(&app, &projects)?;
     insert_project_into_catalog(&mut catalog, project_id, group_id.as_deref())?;
     write_project_catalog(&app, &catalog)?;
     Ok(catalog)
@@ -511,7 +535,7 @@ pub(crate) fn reorder_project_groups(
     group_ids: Vec<String>,
 ) -> Result<ProjectCatalog, String> {
     let projects = read_projects(&app);
-    let mut catalog = read_project_catalog(&app, &projects);
+    let mut catalog = read_project_catalog(&app, &projects)?;
     let mut current_group_ids: Vec<String> = catalog
         .groups
         .iter()
@@ -537,7 +561,7 @@ pub(crate) fn reorder_projects_in_group(
     project_ids: Vec<String>,
 ) -> Result<ProjectCatalog, String> {
     let projects = read_projects(&app);
-    let mut catalog = read_project_catalog(&app, &projects);
+    let mut catalog = read_project_catalog(&app, &projects)?;
     let current_ids = if let Some(group_id) = group_id.as_deref() {
         &mut catalog
             .groups
@@ -572,7 +596,7 @@ pub(crate) fn create_project(
         grand_class.unwrap_or_default(),
     );
     let mut projects = read_projects(&app);
-    let mut catalog = read_project_catalog(&app, &projects);
+    let mut catalog = read_project_catalog(&app, &projects)?;
     if let Some(group_id) = group_id.as_deref() {
         if !catalog.groups.iter().any(|group| group.id == group_id) {
             return Err(format!("project group not found: {group_id}"));
@@ -642,7 +666,7 @@ pub(crate) fn duplicate_project(
     name: String,
 ) -> Result<Project, String> {
     let mut projects = read_projects(&app);
-    let mut catalog = read_project_catalog(&app, &projects);
+    let mut catalog = read_project_catalog(&app, &projects)?;
     let source = projects
         .iter()
         .find(|p| p.id == source_id)
@@ -690,7 +714,7 @@ pub(crate) fn update_project(app: tauri::AppHandle, project: Project) -> Result<
 #[tauri::command]
 pub(crate) fn delete_project(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let mut projects = read_projects(&app);
-    let mut catalog = read_project_catalog(&app, &projects);
+    let mut catalog = read_project_catalog(&app, &projects)?;
     projects.retain(|p| p.id != id);
     write_projects(&app, &projects)?;
     remove_project_from_catalog(&mut catalog, &id);
