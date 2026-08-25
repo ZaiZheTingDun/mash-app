@@ -150,6 +150,10 @@ pub(crate) fn projects_file_path(app: &tauri::AppHandle) -> PathBuf {
     app_data_dir(app).join("projects.json")
 }
 
+pub(crate) fn project_catalog_path(app: &tauri::AppHandle) -> PathBuf {
+    app_data_dir(app).join("project_catalog.json")
+}
+
 pub(crate) fn app_ui_settings_path(app: &tauri::AppHandle) -> PathBuf {
     app_data_dir(app).join("app_ui_settings.json")
 }

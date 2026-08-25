@@ -1457,6 +1457,111 @@ fn copy_project_dir_recursively_copies_saved_project_files() {
     );
 }
 
+#[test]
+fn missing_project_catalog_places_existing_projects_in_ungrouped() {
+    let tmp = tempfile::tempdir().unwrap();
+    let projects = vec![
+        new_project("Alpha".to_string(), false, GrandClass::Saber),
+        new_project("Beta".to_string(), false, GrandClass::Saber),
+    ];
+
+    let catalog = read_project_catalog_from_path(&tmp.path().join("missing.json"), &projects);
+
+    assert!(catalog.groups.is_empty());
+    assert_eq!(
+        catalog.ungrouped_project_ids,
+        projects
+            .iter()
+            .map(|project| project.id.clone())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn project_catalog_normalization_repairs_duplicates_and_orphans() {
+    let projects = vec![
+        new_project("Alpha".to_string(), false, GrandClass::Saber),
+        new_project("Beta".to_string(), false, GrandClass::Saber),
+        new_project("Gamma".to_string(), false, GrandClass::Saber),
+    ];
+    let catalog = ProjectCatalog {
+        schema_version: 99,
+        groups: vec![
+            ProjectGroup {
+                id: "weekly".to_string(),
+                name: "  周回  ".to_string(),
+                project_ids: vec![
+                    projects[0].id.clone(),
+                    projects[0].id.clone(),
+                    "missing".to_string(),
+                ],
+            },
+            ProjectGroup {
+                id: "weekly".to_string(),
+                name: "重复 ID".to_string(),
+                project_ids: vec![projects[1].id.clone()],
+            },
+        ],
+        ungrouped_project_ids: vec![projects[0].id.clone(), projects[1].id.clone()],
+    };
+
+    let normalized = normalize_project_catalog(catalog, &projects);
+
+    assert_eq!(normalized.schema_version, 1);
+    assert_eq!(normalized.groups.len(), 1);
+    assert_eq!(normalized.groups[0].name, "周回");
+    assert_eq!(
+        normalized.groups[0].project_ids,
+        vec![projects[0].id.clone()]
+    );
+    assert_eq!(
+        normalized.ungrouped_project_ids,
+        vec![projects[1].id.clone(), projects[2].id.clone()]
+    );
+}
+
+#[test]
+fn moving_and_deleting_project_groups_preserves_projects() {
+    let mut catalog = ProjectCatalog {
+        schema_version: 1,
+        groups: vec![ProjectGroup {
+            id: "weekly".to_string(),
+            name: "周回".to_string(),
+            project_ids: vec!["alpha".to_string()],
+        }],
+        ungrouped_project_ids: vec!["beta".to_string()],
+    };
+
+    insert_project_into_catalog(&mut catalog, "beta".to_string(), Some("weekly")).unwrap();
+    assert!(catalog.ungrouped_project_ids.is_empty());
+    assert_eq!(catalog.groups[0].project_ids, vec!["alpha", "beta"]);
+
+    let removed = catalog.groups.remove(0);
+    catalog.ungrouped_project_ids.extend(removed.project_ids);
+    assert_eq!(catalog.ungrouped_project_ids, vec!["alpha", "beta"]);
+}
+
+#[test]
+fn catalog_reorder_requires_each_current_id_exactly_once() {
+    let mut ids = vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()];
+
+    reorder_catalog_ids(
+        &mut ids,
+        vec!["gamma".to_string(), "alpha".to_string(), "beta".to_string()],
+        "队伍",
+    )
+    .unwrap();
+    assert_eq!(ids, vec!["gamma", "alpha", "beta"]);
+
+    assert!(reorder_catalog_ids(
+        &mut ids,
+        vec!["gamma".to_string(), "gamma".to_string(), "beta".to_string()],
+        "队伍",
+    )
+    .is_err());
+    assert_eq!(ids, vec!["gamma", "alpha", "beta"]);
+}
+
 // --- pick_portrait_in ----------------------------------------------
 
 #[test]

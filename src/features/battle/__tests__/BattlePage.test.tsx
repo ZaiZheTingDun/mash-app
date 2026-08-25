@@ -93,6 +93,12 @@ function renderBattlePage(initialProject: Project, servants: Servant[] = [SABER,
     onRenameProject: vi.fn(),
     onDuplicateProject: vi.fn(),
     onDeleteProject: vi.fn(),
+    onCreateProjectGroup: vi.fn(async () => {}),
+    onRenameProjectGroup: vi.fn(async () => {}),
+    onDeleteProjectGroup: vi.fn(async () => {}),
+    onMoveProjectToGroup: vi.fn(async () => {}),
+    onReorderProjectGroups: vi.fn(async () => {}),
+    onReorderProjectsInGroup: vi.fn(async () => {}),
     onOpenProjectSettings: vi.fn(),
     onBack: vi.fn(),
     onAutomationStart: vi.fn(),
@@ -110,6 +116,11 @@ function renderBattlePage(initialProject: Project, servants: Servant[] = [SABER,
     return (
       <BattlePage
         projects={projects}
+        projectCatalog={{
+          schemaVersion: 1,
+          groups: [],
+          ungroupedProjectIds: projects.map((project) => project.id),
+        }}
         grandClassDefinitions={GRAND_CLASS_DEFINITIONS}
         servants={servants}
         activeProjectId={activeProjectId}
@@ -118,6 +129,12 @@ function renderBattlePage(initialProject: Project, servants: Servant[] = [SABER,
         onRenameProject={callbacks.onRenameProject}
         onDuplicateProject={callbacks.onDuplicateProject}
         onDeleteProject={callbacks.onDeleteProject}
+        onCreateProjectGroup={callbacks.onCreateProjectGroup}
+        onRenameProjectGroup={callbacks.onRenameProjectGroup}
+        onDeleteProjectGroup={callbacks.onDeleteProjectGroup}
+        onMoveProjectToGroup={callbacks.onMoveProjectToGroup}
+        onReorderProjectGroups={callbacks.onReorderProjectGroups}
+        onReorderProjectsInGroup={callbacks.onReorderProjectsInGroup}
         onOpenProjectSettings={callbacks.onOpenProjectSettings}
         onUpdateProject={handleUpdateProject}
         onBack={callbacks.onBack}

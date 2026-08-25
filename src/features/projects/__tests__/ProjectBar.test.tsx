@@ -4,6 +4,12 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { ProjectBar } from "../ProjectBar";
+import {
+  projectCatalogDropAction,
+  projectDragId,
+  projectGroupDragId,
+  reorderProjectCatalogIds,
+} from "../projectCatalogOrder";
 import type { Project } from "../../../types/project";
 import type { GrandClassDefinition } from "../../../types/project";
 import { createInitialProjectSlots } from "../../team/projectSlots";
@@ -32,6 +38,11 @@ describe("ProjectBar", () => {
   function renderProjectBar(overrides?: Partial<ComponentProps<typeof ProjectBar>>) {
     const props: ComponentProps<typeof ProjectBar> = {
       projects: [makeProject("p1", "项目甲")],
+      projectCatalog: {
+        schemaVersion: 1,
+        groups: [],
+        ungroupedProjectIds: ["p1"],
+      },
       grandClassDefinitions: definitions,
       activeProjectId: "p1",
       onProjectSelect: vi.fn(),
@@ -39,6 +50,12 @@ describe("ProjectBar", () => {
       onRenameProject: vi.fn(),
       onDuplicateProject: vi.fn(),
       onDeleteProject: vi.fn(),
+      onCreateProjectGroup: vi.fn(async () => {}),
+      onRenameProjectGroup: vi.fn(async () => {}),
+      onDeleteProjectGroup: vi.fn(async () => {}),
+      onMoveProjectToGroup: vi.fn(async () => {}),
+      onReorderProjectGroups: vi.fn(async () => {}),
+      onReorderProjectsInGroup: vi.fn(async () => {}),
       onOpenProjectSettings: vi.fn(),
       ...overrides,
     };
@@ -64,16 +81,17 @@ describe("ProjectBar", () => {
     expect(screen.getByRole("button", { name: /选择队伍/ })).toBeInTheDocument();
   });
 
-  it("lists only projects when the selector menu opens", async () => {
+  it("lists projects inside the ungrouped section when the selector opens", async () => {
     const user = userEvent.setup();
     const projects = [makeProject("p1", "项目甲"), makeProject("p2", "项目乙")];
     renderProjectBar({ projects, activeProjectId: "p1" });
 
     await user.click(screen.getByRole("button", { name: /项目甲/ }));
 
-    expect(await screen.findByRole("menuitem", { name: /项目甲/ })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /项目乙/ })).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: /新建队伍/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /未分组 2/ })).toBeInTheDocument();
+    expect(screen.getByText("项目甲")).toBeInTheDocument();
+    expect(screen.getByText("项目乙")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /新建队伍/ })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: /删除当前队伍/ })).not.toBeInTheDocument();
   });
 
@@ -84,9 +102,142 @@ describe("ProjectBar", () => {
     renderProjectBar({ projects, activeProjectId: "p1", onProjectSelect });
 
     await user.click(screen.getByRole("button", { name: /项目甲/ }));
-    await user.click(await screen.findByRole("menuitem", { name: /项目乙/ }));
+    await user.click(await screen.findByText("项目乙"));
 
     expect(onProjectSelect).toHaveBeenCalledWith("p2");
+  });
+
+  it("expands the active project group and searches across collapsed groups", async () => {
+    const user = userEvent.setup();
+    const projects = [makeProject("p1", "周回队伍"), makeProject("p2", "高难队伍")];
+    renderProjectBar({
+      projects,
+      activeProjectId: "p1",
+      projectCatalog: {
+        schemaVersion: 1,
+        groups: [{ id: "weekly", name: "90++ 周回", projectIds: ["p1"] }],
+        ungroupedProjectIds: ["p2"],
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: /周回队伍/ }));
+    expect(await screen.findByText("90++ 周回")).toBeInTheDocument();
+    expect(screen.getByText("周回队伍")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /90\+\+ 周回 1/ }));
+    expect(screen.queryByText("周回队伍")).not.toBeInTheDocument();
+
+    await user.type(screen.getByRole("textbox", { name: "搜索队伍" }), "周回");
+    expect(screen.getByText("周回队伍")).toBeInTheDocument();
+    expect(screen.getByText("位于：90++ 周回")).toBeInTheDocument();
+  });
+
+  it("creates a project group from the management dialog", async () => {
+    const user = userEvent.setup();
+    const onCreateProjectGroup = vi.fn(async () => {});
+    renderProjectBar({ onCreateProjectGroup });
+
+    await user.click(screen.getByRole("button", { name: /项目甲/ }));
+    await user.click(await screen.findByRole("button", { name: /管理所有队伍/ }));
+    await user.click(await screen.findByRole("button", { name: "新建分组" }));
+    await user.type(screen.getByRole("textbox", { name: "分组名称" }), "活动周回");
+    await user.click(screen.getByRole("button", { name: "新建" }));
+
+    expect(onCreateProjectGroup).toHaveBeenCalledWith("活动周回");
+  });
+
+  it("removes the project group dropdown from the management dialog", async () => {
+    const user = userEvent.setup();
+    renderProjectBar({
+      projectCatalog: {
+        schemaVersion: 1,
+        groups: [{ id: "weekly", name: "周回", projectIds: ["p1"] }],
+        ungroupedProjectIds: [],
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: /项目甲/ }));
+    await user.click(await screen.findByRole("button", { name: /管理所有队伍/ }));
+    expect(screen.queryByRole("combobox", { name: "项目甲所属分组" })).not.toBeInTheDocument();
+  });
+
+  it("makes each project group row draggable", async () => {
+    const user = userEvent.setup();
+    renderProjectBar({
+      projectCatalog: {
+        schemaVersion: 1,
+        groups: [
+          { id: "weekly", name: "周回", projectIds: ["p1"] },
+          { id: "challenge", name: "高难", projectIds: [] },
+        ],
+        ungroupedProjectIds: [],
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: /项目甲/ }));
+    await user.click(await screen.findByRole("button", { name: /管理所有队伍/ }));
+    expect(await screen.findByRole("button", { name: /^周回/ })).toHaveAttribute("tabindex", "0");
+    expect(screen.getByRole("button", { name: /^高难/ })).toHaveAttribute("tabindex", "0");
+  });
+
+  it("makes each project row draggable", async () => {
+    const user = userEvent.setup();
+    const projects = [makeProject("p1", "队伍甲"), makeProject("p2", "队伍乙")];
+    renderProjectBar({
+      projects,
+      projectCatalog: {
+        schemaVersion: 1,
+        groups: [{ id: "weekly", name: "周回", projectIds: ["p1", "p2"] }],
+        ungroupedProjectIds: [],
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: /队伍甲/ }));
+    await user.click(await screen.findByRole("button", { name: /管理所有队伍/ }));
+    expect(await screen.findByRole("button", { name: /队伍甲 普通/ })).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    expect(screen.getByRole("button", { name: /队伍乙 普通/ })).toHaveAttribute("tabindex", "0");
+  });
+
+  it("computes persisted catalog order from drag ids", () => {
+    expect(reorderProjectCatalogIds(["a", "b", "c"], "a", "c")).toEqual(["b", "c", "a"]);
+    const current = ["a", "b"];
+    expect(reorderProjectCatalogIds(current, "missing", "b")).toBe(current);
+  });
+
+  it("treats dropping a project on a group as a cross-group move", () => {
+    expect(
+      projectCatalogDropAction(
+        projectDragId("p1"),
+        projectGroupDragId("challenge"),
+        "weekly",
+        ["weekly", "challenge"],
+        ["p1", "p2"],
+      ),
+    ).toEqual({ type: "moveProject", projectId: "p1", groupId: "challenge" });
+    expect(
+      projectCatalogDropAction(
+        projectDragId("p1"),
+        projectGroupDragId(null),
+        "weekly",
+        ["weekly"],
+        ["p1", "p2"],
+      ),
+    ).toEqual({ type: "moveProject", projectId: "p1", groupId: null });
+  });
+
+  it("keeps project-on-project drops as in-group reordering", () => {
+    expect(
+      projectCatalogDropAction(
+        projectDragId("p1"),
+        projectDragId("p2"),
+        "weekly",
+        ["weekly"],
+        ["p1", "p2"],
+      ),
+    ).toEqual({ type: "reorderProjects", groupId: "weekly", projectIds: ["p2", "p1"] });
   });
 
   it("opens a name dialog before creating a project", async () => {
@@ -101,7 +252,7 @@ describe("ProjectBar", () => {
     await user.type(input, "周回队伍");
     await user.click(screen.getByRole("button", { name: "新建" }));
 
-    expect(onCreateProject).toHaveBeenCalledWith("周回队伍", false, "saber");
+    expect(onCreateProject).toHaveBeenCalledWith("周回队伍", false, "saber", null);
   });
 
   it("creates an advanced project when grand mode is selected", async () => {
@@ -115,7 +266,7 @@ describe("ProjectBar", () => {
     await user.click(await screen.findByRole("option", { name: "戴冠战模式" }));
     await user.click(screen.getByRole("button", { name: "新建" }));
 
-    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "saber");
+    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "saber", null);
   });
 
   it("creates a berserker grand project from the create dialog", async () => {
@@ -131,7 +282,7 @@ describe("ProjectBar", () => {
     await user.click(await screen.findByRole("option", { name: "狂阶冠位" }));
     await user.click(screen.getByRole("button", { name: "新建" }));
 
-    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "berserker");
+    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "berserker", null);
   });
 
   it("creates a lancer grand project from the create dialog", async () => {
@@ -147,7 +298,7 @@ describe("ProjectBar", () => {
     await user.click(await screen.findByRole("option", { name: "枪阶冠位" }));
     await user.click(screen.getByRole("button", { name: "新建" }));
 
-    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "lancer");
+    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "lancer", null);
   });
 
   it("selects Extra group first and then its stage attribute", async () => {
@@ -167,7 +318,7 @@ describe("ProjectBar", () => {
     await user.click(await screen.findByRole("option", { name: "地" }));
     await user.click(screen.getByRole("button", { name: "新建" }));
 
-    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "extra1Earth");
+    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "extra1Earth", null);
   });
 
   it("resets the stage attribute when switching from Extra1 to Extra2", async () => {

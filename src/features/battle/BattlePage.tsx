@@ -36,6 +36,7 @@ import type {
   GrandClassDefinition,
   GrandChainPriorityItem,
   Project,
+  ProjectCatalog,
 } from "../../types/project";
 import type { Servant } from "../../types/servant";
 import {
@@ -111,14 +112,26 @@ const DEFAULT_FIVE_STAR_CE_DROP_TARGET_COUNT = 1;
 
 interface BattlePageProps {
   projects: Project[];
+  projectCatalog: ProjectCatalog;
   grandClassDefinitions: GrandClassDefinition[];
   servants: Servant[];
   activeProjectId: string | null;
   onProjectSelect: (id: string) => void;
-  onCreateProject: (name: string, advancedMode?: boolean, grandClass?: GrandClass) => void;
+  onCreateProject: (
+    name: string,
+    advancedMode?: boolean,
+    grandClass?: GrandClass,
+    groupId?: string | null,
+  ) => void;
   onRenameProject: (id: string, name: string) => void;
   onDuplicateProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
+  onCreateProjectGroup: (name: string) => Promise<void>;
+  onRenameProjectGroup: (groupId: string, name: string) => Promise<void>;
+  onDeleteProjectGroup: (groupId: string) => Promise<void>;
+  onMoveProjectToGroup: (projectId: string, groupId: string | null) => Promise<void>;
+  onReorderProjectGroups: (groupIds: string[]) => Promise<void>;
+  onReorderProjectsInGroup: (groupId: string | null, projectIds: string[]) => Promise<void>;
   onOpenProjectSettings: () => void;
   onUpdateProject: (project: Project) => Promise<void>;
   onBack: () => void;
@@ -403,6 +416,7 @@ function BattleAdvancedSettingsDialog({
 
 export function BattlePage({
   projects,
+  projectCatalog,
   grandClassDefinitions,
   activeProjectId,
   onProjectSelect,
@@ -410,6 +424,12 @@ export function BattlePage({
   onRenameProject,
   onDuplicateProject,
   onDeleteProject,
+  onCreateProjectGroup,
+  onRenameProjectGroup,
+  onDeleteProjectGroup,
+  onMoveProjectToGroup,
+  onReorderProjectGroups,
+  onReorderProjectsInGroup,
   onOpenProjectSettings,
   onUpdateProject,
   onBack,
@@ -705,6 +725,7 @@ export function BattlePage({
       <Box className="battle-topbar">
         <ProjectBar
           projects={projects}
+          projectCatalog={projectCatalog}
           grandClassDefinitions={grandClassDefinitions}
           activeProjectId={activeProjectId}
           disabled={running}
@@ -713,6 +734,12 @@ export function BattlePage({
           onRenameProject={onRenameProject}
           onDuplicateProject={onDuplicateProject}
           onDeleteProject={onDeleteProject}
+          onCreateProjectGroup={onCreateProjectGroup}
+          onRenameProjectGroup={onRenameProjectGroup}
+          onDeleteProjectGroup={onDeleteProjectGroup}
+          onMoveProjectToGroup={onMoveProjectToGroup}
+          onReorderProjectGroups={onReorderProjectGroups}
+          onReorderProjectsInGroup={onReorderProjectsInGroup}
           onOpenProjectSettings={onOpenProjectSettings}
         />
       </Box>

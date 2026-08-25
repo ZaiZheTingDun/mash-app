@@ -920,3 +920,39 @@ pub struct Project {
     #[serde(default)]
     pub ap_recovery_limits: ApRecoveryLimits,
 }
+
+/// User-defined, one-level grouping for projects. Project execution data stays
+/// in `projects.json`; this catalog only owns organization and display order.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectGroup {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub project_ids: Vec<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectCatalog {
+    #[serde(default = "default_project_catalog_schema_version")]
+    pub schema_version: u32,
+    #[serde(default)]
+    pub groups: Vec<ProjectGroup>,
+    #[serde(default)]
+    pub ungrouped_project_ids: Vec<String>,
+}
+
+fn default_project_catalog_schema_version() -> u32 {
+    1
+}
+
+impl Default for ProjectCatalog {
+    fn default() -> Self {
+        Self {
+            schema_version: default_project_catalog_schema_version(),
+            groups: Vec::new(),
+            ungrouped_project_ids: Vec::new(),
+        }
+    }
+}

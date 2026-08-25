@@ -56,6 +56,238 @@
   width: var(--radix-dropdown-menu-trigger-width);
 }
 
+.project-selector-popover {
+  padding: 10px;
+}
+
+.project-selector-list {
+  max-height: min(430px, calc(100vh - 220px));
+  margin: 8px -4px 0;
+  overflow-y: auto;
+}
+
+.project-selector-section + .project-selector-section {
+  margin-top: 2px;
+}
+
+.project-selector-section-trigger,
+.project-selector-project,
+.project-manager-group {
+  width: 100%;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-manager-sortable-group[data-dragging="true"],
+.project-manager-project[data-dragging="true"] {
+  z-index: 1;
+  opacity: 0.65;
+  background: var(--gray-a3);
+}
+
+.project-selector-section-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 5px 8px;
+  border-radius: var(--radius-2);
+  background: transparent;
+}
+
+.project-selector-section-trigger:hover {
+  background: var(--gray-a3);
+}
+
+.project-selector-count {
+  margin-left: auto;
+  min-width: 18px;
+  text-align: right;
+}
+
+.project-selector-section-projects {
+  margin-left: 12px;
+  padding-left: 7px;
+  border-left: 1px solid var(--gray-a5);
+}
+
+.project-selector-project {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border-radius: var(--radius-2);
+  background: transparent;
+}
+
+.project-selector-project:hover,
+.project-selector-project[data-active="true"] {
+  background: var(--accent-a3);
+}
+
+.project-selector-project[data-active="true"] {
+  color: var(--accent-11);
+}
+
+.project-selector-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+}
+
+.project-selector-project-name,
+.project-selector-project-copy {
+  min-width: 0;
+}
+
+.project-selector-project-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-selector-project-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.project-selector-mode {
+  padding-left: 8px;
+  white-space: nowrap;
+}
+
+.project-selector-empty-group {
+  display: block;
+  padding: 7px 8px 8px 26px;
+}
+
+.project-selector-footer {
+  margin: 8px -4px -3px;
+  padding: 8px 4px 0;
+  border-top: 1px solid var(--gray-a5);
+}
+
+.project-manager-dialog {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.project-manager-body {
+  min-height: 374px;
+  max-height: min(560px, calc(100vh - 240px));
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid var(--gray-a6);
+  border-radius: var(--radius-3);
+}
+
+.project-manager-sidebar {
+  width: 190px;
+  flex-shrink: 0;
+  padding: 10px;
+  overflow-y: auto;
+  background: var(--gray-a2);
+  border-right: 1px solid var(--gray-a6);
+}
+
+.project-manager-heading {
+  min-height: 38px;
+  padding: 3px 5px 8px;
+}
+
+.project-manager-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: var(--radius-2);
+  background: transparent;
+}
+
+.project-manager-group:hover,
+.project-manager-group:focus-visible,
+.project-manager-group[data-active="true"] {
+  background: var(--accent-a3);
+}
+
+.project-manager-group[data-active="true"] {
+  color: var(--accent-11);
+}
+
+.project-manager-group[data-drop-target="true"] {
+  background: var(--accent-a4);
+  box-shadow: inset 0 0 0 1px var(--accent-a7);
+}
+
+.project-manager-sortable-group,
+.project-manager-project {
+  cursor: grab;
+  touch-action: none;
+}
+
+.project-manager-sortable-group:active,
+.project-manager-project:active {
+  cursor: grabbing;
+}
+
+.project-manager-content {
+  min-width: 0;
+  flex: 1;
+  padding: 10px 12px;
+}
+
+.project-manager-projects {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.project-manager-project {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  padding: 7px 6px;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-top: 1px solid var(--gray-a4);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+}
+
+.project-manager-project:hover,
+.project-manager-project:focus-visible {
+  background: var(--gray-a3);
+}
+
+.project-manager-sortable-group:focus-visible,
+.project-manager-project:focus-visible {
+  outline: 2px solid var(--accent-a8);
+  outline-offset: -2px;
+}
+
+.project-manager-project-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+@media (max-width: 640px) {
+  .project-manager-sidebar {
+    width: 145px;
+  }
+}
+
 .project-bar-check-spacer {
   display: inline-block;
   width: 14px;

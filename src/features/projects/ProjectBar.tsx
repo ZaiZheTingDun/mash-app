@@ -13,27 +13,43 @@ import {
   TextField,
 } from "@radix-ui/themes";
 import {
-  ChevronDownIcon,
   CopyIcon,
   DotsHorizontalIcon,
   Pencil1Icon,
   PlusIcon,
   GearIcon,
   TrashIcon,
-  CheckIcon,
 } from "@radix-ui/react-icons";
-import type { GrandClass, GrandClassDefinition, Project } from "../../types/project";
+import type {
+  GrandClass,
+  GrandClassDefinition,
+  Project,
+  ProjectCatalog,
+} from "../../types/project";
+import { ProjectSelector } from "./ProjectSelector";
 
 interface ProjectBarProps {
   projects: Project[];
+  projectCatalog: ProjectCatalog;
   grandClassDefinitions?: GrandClassDefinition[];
   activeProjectId: string | null;
   disabled?: boolean;
   onProjectSelect: (id: string) => void;
-  onCreateProject: (name: string, advancedMode?: boolean, grandClass?: GrandClass) => void;
+  onCreateProject: (
+    name: string,
+    advancedMode?: boolean,
+    grandClass?: GrandClass,
+    groupId?: string | null,
+  ) => void;
   onRenameProject: (id: string, name: string) => void;
   onDuplicateProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
+  onCreateProjectGroup: (name: string) => Promise<void>;
+  onRenameProjectGroup: (groupId: string, name: string) => Promise<void>;
+  onDeleteProjectGroup: (groupId: string) => Promise<void>;
+  onMoveProjectToGroup: (projectId: string, groupId: string | null) => Promise<void>;
+  onReorderProjectGroups: (groupIds: string[]) => Promise<void>;
+  onReorderProjectsInGroup: (groupId: string | null, projectIds: string[]) => Promise<void>;
   onOpenProjectSettings: () => void;
 }
 
@@ -50,6 +66,7 @@ type NameDialogMode = "create" | "rename" | "duplicate";
  */
 export function ProjectBar({
   projects,
+  projectCatalog,
   grandClassDefinitions = [],
   activeProjectId,
   disabled = false,
@@ -58,18 +75,27 @@ export function ProjectBar({
   onRenameProject,
   onDuplicateProject,
   onDeleteProject,
+  onCreateProjectGroup,
+  onRenameProjectGroup,
+  onDeleteProjectGroup,
+  onMoveProjectToGroup,
+  onReorderProjectGroups,
+  onReorderProjectsInGroup,
   onOpenProjectSettings,
 }: ProjectBarProps) {
   const [nameDialogMode, setNameDialogMode] = useState<NameDialogMode | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftAdvancedMode, setDraftAdvancedMode] = useState(false);
   const [draftGrandClass, setDraftGrandClass] = useState<GrandClass>("saber");
+  const [draftGroupId, setDraftGroupId] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const activeProject =
     projects.find((p) => p.id === activeProjectId) ?? null;
+  const activeProjectGroupId =
+    projectCatalog.groups.find((group) => group.projectIds.includes(activeProjectId ?? ""))?.id ??
+    null;
 
-  const triggerLabel = activeProject?.name ?? "选择队伍";
   const trimmedDraftName = draftName.trim();
   const draftGrandDefinition = grandClassDefinitions.find(
     (definition) => definition.id === draftGrandClass,
@@ -97,7 +123,7 @@ export function ProjectBar({
     : [];
 
   const openNameDialog = useCallback(
-    (mode: NameDialogMode) => {
+    (mode: NameDialogMode, groupId?: string | null) => {
       setNameDialogMode(mode);
       if (mode === "rename") {
         setDraftName(activeProject?.name ?? "");
@@ -108,8 +134,15 @@ export function ProjectBar({
       }
       setDraftAdvancedMode(false);
       setDraftGrandClass(grandClassDefinitions[0]?.id ?? "saber");
+      setDraftGroupId(
+        mode === "create"
+          ? groupId === undefined
+            ? activeProjectGroupId
+            : groupId
+          : null,
+      );
     },
-    [activeProject, grandClassDefinitions, projects.length]
+    [activeProject, activeProjectGroupId, grandClassDefinitions, projects.length]
   );
 
   const handleNameSubmit = useCallback(
@@ -117,7 +150,7 @@ export function ProjectBar({
       event.preventDefault();
       if (!nameDialogMode || !trimmedDraftName) return;
       if (nameDialogMode === "create") {
-        onCreateProject(trimmedDraftName, draftAdvancedMode, draftGrandClass);
+        onCreateProject(trimmedDraftName, draftAdvancedMode, draftGrandClass, draftGroupId);
       } else if (nameDialogMode === "rename" && activeProject) {
         onRenameProject(activeProject.id, trimmedDraftName);
       } else if (nameDialogMode === "duplicate" && activeProject) {
@@ -129,6 +162,7 @@ export function ProjectBar({
       activeProject,
       draftAdvancedMode,
       draftGrandClass,
+      draftGroupId,
       nameDialogMode,
       onCreateProject,
       onDuplicateProject,
@@ -160,50 +194,20 @@ export function ProjectBar({
   return (
     <Box className="project-bar">
       <Flex align="center" justify="center" gap="2" className="project-bar-controls">
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <Button
-              type="button"
-              size="3"
-              variant="surface"
-              color="gray"
-              className="project-bar-pill"
-              disabled={disabled}
-            >
-              <Text size="3" weight="bold" className="project-bar-title">
-                {`～ ${triggerLabel} ～`}
-              </Text>
-              <ChevronDownIcon width={15} height={15} className="project-bar-menu-icon" />
-            </Button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content className="project-select-menu">
-            {projects.length === 0 ? (
-              <DropdownMenu.Item disabled>
-                <Text size="2" color="gray">暂无队伍</Text>
-              </DropdownMenu.Item>
-            ) : (
-              projects.map((p) => {
-                const isActive = p.id === activeProjectId;
-                return (
-                  <DropdownMenu.Item
-                    key={p.id}
-                    disabled={disabled}
-                    onSelect={() => onProjectSelect(p.id)}
-                  >
-                    <Flex align="center" gap="2" justify="between" width="100%">
-                      <Text size="2">{p.name}</Text>
-                      {isActive ? (
-                        <CheckIcon width={14} height={14} />
-                      ) : (
-                        <span className="project-bar-check-spacer" />
-                      )}
-                    </Flex>
-                  </DropdownMenu.Item>
-                );
-              })
-            )}
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
+        <ProjectSelector
+          projects={projects}
+          projectCatalog={projectCatalog}
+          activeProjectId={activeProjectId}
+          disabled={disabled}
+          onProjectSelect={onProjectSelect}
+          onRequestCreate={(groupId) => openNameDialog("create", groupId)}
+          onCreateProjectGroup={onCreateProjectGroup}
+          onRenameProjectGroup={onRenameProjectGroup}
+          onDeleteProjectGroup={onDeleteProjectGroup}
+          onMoveProjectToGroup={onMoveProjectToGroup}
+          onReorderProjectGroups={onReorderProjectGroups}
+          onReorderProjectsInGroup={onReorderProjectsInGroup}
+        />
 
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
@@ -292,6 +296,27 @@ export function ProjectBar({
               </label>
               {nameDialogMode === "create" && (
                 <>
+                  <Box>
+                    <Text as="div" size="2" mb="2" weight="medium">
+                      所属分组
+                    </Text>
+                    <Select.Root
+                      value={draftGroupId ?? "__ungrouped__"}
+                      onValueChange={(value) =>
+                        setDraftGroupId(value === "__ungrouped__" ? null : value)
+                      }
+                    >
+                      <Select.Trigger aria-label="所属分组" />
+                      <Select.Content>
+                        <Select.Item value="__ungrouped__">未分组</Select.Item>
+                        {projectCatalog.groups.map((group) => (
+                          <Select.Item key={group.id} value={group.id}>
+                            {group.name}
+                          </Select.Item>
+                        ))}
+                      </Select.Content>
+                    </Select.Root>
+                  </Box>
                   <Box>
                     <Text as="div" size="2" mb="2" weight="medium">
                       队伍模式

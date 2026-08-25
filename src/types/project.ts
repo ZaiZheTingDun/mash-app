@@ -176,3 +176,15 @@ export interface Project {
   /** Per-item cap for one automation run. `null`/missing means unlimited. */
   apRecoveryLimits?: Partial<Record<BattleApRecoveryItem, number | null>>;
 }
+
+export interface ProjectGroup {
+  id: string;
+  name: string;
+  projectIds: string[];
+}
+
+export interface ProjectCatalog {
+  schemaVersion: number;
+  groups: ProjectGroup[];
+  ungroupedProjectIds: string[];
+}

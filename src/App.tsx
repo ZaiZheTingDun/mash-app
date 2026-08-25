@@ -30,7 +30,12 @@ import { featureToggles } from "./featureToggles";
 import type { SlotItem } from "./features/team/ContentGrid";
 import type { Servant } from "./types/servant";
 import type { CraftEssence } from "./types/craftEssence";
-import type { GrandClass, GrandClassDefinition, Project } from "./types/project";
+import type {
+  GrandClass,
+  GrandClassDefinition,
+  Project,
+  ProjectCatalog,
+} from "./types/project";
 import type { AssetBundleStatus } from "./types/assets";
 import type { RuntimeStatus } from "./types/runtime";
 import type { SelfCheckStatus } from "./types/selfCheck";
@@ -104,6 +109,11 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("basic");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectCatalog, setProjectCatalog] = useState<ProjectCatalog>({
+    schemaVersion: 1,
+    groups: [],
+    ungroupedProjectIds: [],
+  });
   const [grandClassDefinitions, setGrandClassDefinitions] = useState<GrandClassDefinition[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
   const [craftEssences, setCraftEssences] = useState<CraftEssence[]>([]);
@@ -513,12 +523,20 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
   );
 
   const refreshProjects = useCallback(async () => {
-    const [list, savedActiveProjectId, definitions] = await Promise.all([
+    const [list, catalog, savedActiveProjectId, definitions] = await Promise.all([
       invoke<Project[]>("list_projects"),
+      invoke<ProjectCatalog>("get_project_catalog"),
       invoke<string | null>("get_active_project_id"),
       invoke<GrandClassDefinition[]>("get_grand_class_definitions"),
     ]);
     setProjects(list);
+    setProjectCatalog(
+      catalog ?? {
+        schemaVersion: 1,
+        groups: [],
+        ungroupedProjectIds: list.map((project) => project.id),
+      },
+    );
     setGrandClassDefinitions(definitions ?? []);
     if (list.length > 0) {
       const savedProject = list.find((project) => project.id === savedActiveProjectId);
@@ -712,15 +730,26 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
   // sidebar now reduced to action buttons, the picker moves to the
   // `<ProjectBar/>` ribbon above the team grid and the mutations live
   // here so both `App` and `ProjectBar` mutate the same lifted state.
-  const handleCreateProject = useCallback((name: string, advancedMode = false, grandClass: GrandClass = "saber") => {
-    invoke<Project>("create_project", { name, advancedMode, grandClass })
+  const refreshProjectCatalog = useCallback(async () => {
+    const catalog = await invoke<ProjectCatalog>("get_project_catalog");
+    setProjectCatalog(catalog);
+  }, []);
+
+  const handleCreateProject = useCallback((
+    name: string,
+    advancedMode = false,
+    grandClass: GrandClass = "saber",
+    groupId: string | null = null,
+  ) => {
+    invoke<Project>("create_project", { name, advancedMode, grandClass, groupId })
       .then((p) => {
         setProjects((prev) => [...prev, p]);
         setActiveProjectId(p.id);
         persistActiveProjectId(p.id);
+        void refreshProjectCatalog();
       })
       .catch(console.error);
-  }, [persistActiveProjectId]);
+  }, [persistActiveProjectId, refreshProjectCatalog]);
 
   const handleRenameProject = useCallback(
     (id: string, name: string) => {
@@ -737,9 +766,10 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
         setProjects((prev) => [...prev, p]);
         setActiveProjectId(p.id);
         persistActiveProjectId(p.id);
+        void refreshProjectCatalog();
       })
       .catch(console.error);
-  }, [persistActiveProjectId]);
+  }, [persistActiveProjectId, refreshProjectCatalog]);
 
   const handleDeleteProject = useCallback(
     (id: string) => {
@@ -754,10 +784,53 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
             }
             return next;
           });
+          void refreshProjectCatalog();
         })
         .catch(console.error);
     },
-    [activeProjectId, persistActiveProjectId]
+    [activeProjectId, persistActiveProjectId, refreshProjectCatalog]
+  );
+
+  const handleCreateProjectGroup = useCallback(async (name: string) => {
+    const catalog = await invoke<ProjectCatalog>("create_project_group", { name });
+    setProjectCatalog(catalog);
+  }, []);
+
+  const handleRenameProjectGroup = useCallback(async (groupId: string, name: string) => {
+    const catalog = await invoke<ProjectCatalog>("rename_project_group", { groupId, name });
+    setProjectCatalog(catalog);
+  }, []);
+
+  const handleDeleteProjectGroup = useCallback(async (groupId: string) => {
+    const catalog = await invoke<ProjectCatalog>("delete_project_group", { groupId });
+    setProjectCatalog(catalog);
+  }, []);
+
+  const handleMoveProjectToGroup = useCallback(
+    async (projectId: string, groupId: string | null) => {
+      const catalog = await invoke<ProjectCatalog>("move_project_to_group", {
+        projectId,
+        groupId,
+      });
+      setProjectCatalog(catalog);
+    },
+    [],
+  );
+
+  const handleReorderProjectGroups = useCallback(async (groupIds: string[]) => {
+    const catalog = await invoke<ProjectCatalog>("reorder_project_groups", { groupIds });
+    setProjectCatalog(catalog);
+  }, []);
+
+  const handleReorderProjectsInGroup = useCallback(
+    async (groupId: string | null, projectIds: string[]) => {
+      const catalog = await invoke<ProjectCatalog>("reorder_projects_in_group", {
+        groupId,
+        projectIds,
+      });
+      setProjectCatalog(catalog);
+    },
+    [],
   );
 
   const handleStartRun = useCallback(() => {
@@ -867,6 +940,7 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
           {view === "battle" ? (
             <BattlePage
               projects={projects}
+              projectCatalog={projectCatalog}
               grandClassDefinitions={grandClassDefinitions}
               servants={servants}
               activeProjectId={activeProjectId}
@@ -875,6 +949,12 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
               onRenameProject={handleRenameProject}
               onDuplicateProject={handleDuplicateProject}
               onDeleteProject={handleDeleteProject}
+              onCreateProjectGroup={handleCreateProjectGroup}
+              onRenameProjectGroup={handleRenameProjectGroup}
+              onDeleteProjectGroup={handleDeleteProjectGroup}
+              onMoveProjectToGroup={handleMoveProjectToGroup}
+              onReorderProjectGroups={handleReorderProjectGroups}
+              onReorderProjectsInGroup={handleReorderProjectsInGroup}
               onOpenProjectSettings={handleOpenProjectSettings}
               onUpdateProject={handleUpdateProject}
               onBack={handleBackToConfig}
@@ -914,6 +994,7 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
             <Box className="main-content-inner">
               <ProjectBar
                 projects={projects}
+                projectCatalog={projectCatalog}
                 grandClassDefinitions={grandClassDefinitions}
                 activeProjectId={activeProjectId}
                 onProjectSelect={handleProjectSelect}
@@ -921,6 +1002,12 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
                 onRenameProject={handleRenameProject}
                 onDuplicateProject={handleDuplicateProject}
                 onDeleteProject={handleDeleteProject}
+                onCreateProjectGroup={handleCreateProjectGroup}
+                onRenameProjectGroup={handleRenameProjectGroup}
+                onDeleteProjectGroup={handleDeleteProjectGroup}
+                onMoveProjectToGroup={handleMoveProjectToGroup}
+                onReorderProjectGroups={handleReorderProjectGroups}
+                onReorderProjectsInGroup={handleReorderProjectsInGroup}
                 onOpenProjectSettings={handleOpenProjectSettings}
               />
               {loading ? (
