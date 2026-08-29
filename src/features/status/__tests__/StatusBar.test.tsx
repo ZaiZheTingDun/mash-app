@@ -925,9 +925,7 @@ describe("StatusBar", () => {
     expect(screen.getByText("用户可见消息")).toBeInTheDocument();
     expect(screen.queryByText("调试诊断输出")).not.toBeInTheDocument();
 
-    // Trigger label counts info entries only — the debug entry must
-    // not inflate the user-visible badge.
-    expect(screen.getByText("操作日志 (1)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "操作日志" })).toBeInTheDocument();
 
     // Flip the toggle: the debug entry should now appear.
     await user.click(screen.getByRole("checkbox", { name: /显示调试/ }));
@@ -954,7 +952,7 @@ describe("StatusBar", () => {
 
     expect(screen.getByText("用户可见消息")).toBeInTheDocument();
     expect(screen.queryByText("本地滚动诊断")).not.toBeInTheDocument();
-    expect(screen.getByText("操作日志 (1)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "操作日志" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("checkbox", { name: /显示调试/ }));
     expect(screen.getByText("本地滚动诊断")).toBeInTheDocument();

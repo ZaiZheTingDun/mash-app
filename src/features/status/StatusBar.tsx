@@ -690,13 +690,6 @@ export function StatusBar({
     },
     [operationLogs, showDebugLogs],
   );
-  // Show the count of user-facing entries even when debug is on; keep
-  // diagnostics excluded, but include warnings because they are actionable.
-  const userFacingLogCount = useMemo(
-    () => operationLogs.filter((entry) => entry.level !== "debug" && entry.level !== "localDebug").length,
-    [operationLogs],
-  );
-
   useEffect(() => {
     invoke<Server>("get_server").then(setServer).catch(() => {});
   }, []);
@@ -1099,10 +1092,8 @@ export function StatusBar({
             aria-pressed={operationLogOpen}
             onClick={() => onOperationLogOpenChange?.(!operationLogOpen)}
           >
-              <HamburgerMenuIcon width={14} height={14} />
-              <Text size="1">
-                操作日志{userFacingLogCount > 0 ? ` (${userFacingLogCount})` : ""}
-              </Text>
+            <HamburgerMenuIcon width={14} height={14} />
+            <Text size="1">操作日志</Text>
           </Button>
           <Button
             type="button"
