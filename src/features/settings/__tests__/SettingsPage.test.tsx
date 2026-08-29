@@ -111,7 +111,8 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_noble_phantasm_detection_mode") {
         return {
-          noblePhantasmDetectionMode: "gauge",
+          noblePhantasmDetectionMode:
+            argValue(args) === "gaugeBeforeAttack" ? "gaugeBeforeAttack" : "gauge",
           supportCeThreshold: 0.7,
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,
@@ -471,6 +472,25 @@ describe("SettingsDialog", () => {
         value: "gauge",
       });
     });
+  });
+
+  it("offers gauge detection before attack with a dialogue warning", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsHarness initialSection="basic" />);
+
+    const modeSelect = await screen.findByRole("combobox", { name: "宝具识别方式" });
+    await user.click(modeSelect);
+    await user.click(await screen.findByText("攻击前底部宝具条识别（实验性）"));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_noble_phantasm_detection_mode", {
+        value: "gaugeBeforeAttack",
+      });
+    });
+    expect(await screen.findByText("攻击前识别可能被从者台词遮挡，请关闭台词")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("img", { name: "关闭战斗中宝具语音字幕的设置示例" })
+    ).toBeInTheDocument();
   });
 
   it("loads bond auto-stop switches disabled by default", async () => {

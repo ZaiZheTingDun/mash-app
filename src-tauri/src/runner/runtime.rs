@@ -172,6 +172,9 @@ impl Runner {
     }
 
     pub(crate) fn tap_attack_button(&mut self) -> bool {
+        if !self.prepare_noble_phantasm_gauge_before_attack() {
+            return false;
+        }
         if !self.tap_at("Battle", ATTACK_BUTTON) {
             return false;
         }

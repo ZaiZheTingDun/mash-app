@@ -89,7 +89,7 @@ let supportCeThreshold = 0.7;
 let supportCeFullGateThreshold = 0.6;
 let supportMlbIconThreshold = 0.7;
 let supportBondIconThreshold = 0.7;
-let noblePhantasmDetectionMode: "card" | "gauge" = "card";
+let noblePhantasmDetectionMode: "card" | "gauge" | "gaugeBeforeAttack" = "card";
 let stopOnBondLevelUp = false;
 let stopOnBondMaxLevel = false;
 let verifySkillActivation = false;
@@ -544,7 +544,11 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "get_debug_settings":
       return debugSettings() as T;
     case "set_noble_phantasm_detection_mode":
-      if (args.value === "card" || args.value === "gauge") {
+      if (
+        args.value === "card" ||
+        args.value === "gauge" ||
+        args.value === "gaugeBeforeAttack"
+      ) {
         noblePhantasmDetectionMode = args.value;
       }
       return recognitionSettings() as T;

@@ -272,7 +272,10 @@ vi.mock("@tauri-apps/api/core", () => ({
         };
       case "set_noble_phantasm_detection_mode":
         return {
-          noblePhantasmDetectionMode: args?.value === "gauge" ? "gauge" : "card",
+          noblePhantasmDetectionMode:
+            args?.value === "gaugeBeforeAttack" || args?.value === "gauge"
+              ? args.value
+              : "card",
           supportCeThreshold: 0.7,
           supportCeFullGateThreshold: 0.6,
           supportMlbIconThreshold: 0.7,

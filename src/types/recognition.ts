@@ -1,4 +1,4 @@
-export type NoblePhantasmDetectionMode = "card" | "gauge";
+export type NoblePhantasmDetectionMode = "card" | "gauge" | "gaugeBeforeAttack";
 
 export interface RecognitionSettings {
   noblePhantasmDetectionMode: NoblePhantasmDetectionMode;

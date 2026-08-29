@@ -47,6 +47,12 @@ pub(crate) struct BattleState {
     /// against the full party for the rest of the current battle because a
     /// back-line servant has likely rotated into the front line.
     pub(crate) command_card_owner_fallback_to_full_party: bool,
+    /// Bottom NP-gauge readiness sampled on the Battle screen immediately
+    /// before tapping Attack when the pre-attack gauge mode is enabled.
+    pub(crate) pre_attack_nps: Option<Vec<NoblePhantasmMatch>>,
+    /// The pre-attack gauge mode can obscure readiness behind servant dialogue;
+    /// keep its user warning to one log entry per quest.
+    pub(crate) pre_attack_np_warning_emitted: bool,
     pub(crate) advanced_startup_done: HashSet<usize>,
     pub(crate) advanced_control_indices: HashMap<usize, usize>,
     pub(crate) advanced_startup_control_indices: HashMap<usize, usize>,
@@ -67,6 +73,8 @@ impl BattleState {
             scene_config_used: false,
             command_card_owner_failure_count: 0,
             command_card_owner_fallback_to_full_party: false,
+            pre_attack_nps: None,
+            pre_attack_np_warning_emitted: false,
             advanced_startup_done: HashSet::new(),
             advanced_control_indices: HashMap::new(),
             advanced_startup_control_indices: HashMap::new(),

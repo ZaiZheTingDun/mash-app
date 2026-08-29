@@ -115,7 +115,11 @@ export function normalizeRecognitionSettings(
   };
   return {
     noblePhantasmDetectionMode:
-      settings.noblePhantasmDetectionMode === "gauge" ? "gauge" : "card",
+      settings.noblePhantasmDetectionMode === "gaugeBeforeAttack"
+        ? "gaugeBeforeAttack"
+        : settings.noblePhantasmDetectionMode === "gauge"
+          ? "gauge"
+          : "card",
     supportCeThreshold: clampThreshold(
       settings.supportCeThreshold ?? SUPPORT_THRESHOLD_DEFAULT,
       THRESHOLD_CONFIGS[0]

@@ -260,6 +260,26 @@ fn gauge_np_detection_mode_preserves_current_glow_signal() {
 }
 
 #[test]
+fn pre_attack_gauge_mode_is_distinct_from_post_attack_gauge_mode() {
+    assert!(!reads_np_gauge_before_attack(
+        crate::commands::settings::NoblePhantasmDetectionMode::Card
+    ));
+    assert!(!reads_np_gauge_before_attack(
+        crate::commands::settings::NoblePhantasmDetectionMode::Gauge
+    ));
+    assert!(reads_np_gauge_before_attack(
+        crate::commands::settings::NoblePhantasmDetectionMode::GaugeBeforeAttack
+    ));
+    assert_eq!(
+        serde_json::to_value(
+            crate::commands::settings::NoblePhantasmDetectionMode::GaugeBeforeAttack,
+        )
+        .unwrap(),
+        serde_json::json!("gaugeBeforeAttack")
+    );
+}
+
+#[test]
 fn attack_log_command_cards_keep_slot_suit_and_servant_id() {
     let mut cards = vec![
         command_card(0, Some(309), Some("q"), None),

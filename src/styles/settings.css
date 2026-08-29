@@ -141,6 +141,19 @@
   flex: 0 0 220px;
 }
 
+.pre-attack-np-dialog {
+  width: min(860px, calc(100vw - 48px));
+}
+
+.pre-attack-np-dialog-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 20px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-3);
+}
+
 .recognition-threshold-row {
   width: 100%;
 }

@@ -43,6 +43,7 @@ pub(crate) const UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED: u32 = 9_999;
 pub enum NoblePhantasmDetectionMode {
     Card,
     Gauge,
+    GaugeBeforeAttack,
 }
 
 impl Default for NoblePhantasmDetectionMode {

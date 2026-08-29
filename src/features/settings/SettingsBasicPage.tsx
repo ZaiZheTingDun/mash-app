@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Box, Button, Flex, Select, Switch, Text, TextField, Tooltip } from "@radix-ui/themes";
+import {
+  Box,
+  Button,
+  Dialog,
+  Flex,
+  Select,
+  Switch,
+  Text,
+  TextField,
+  Tooltip,
+} from "@radix-ui/themes";
+import preAttackNpGaugeDialogImage from "../../../src-tauri/resources/images/battle/pre_attack_np_gauge_dialog.png";
 import { invoke } from "../../tauri";
 import {
   DEFAULT_BATTLE_START_PANEL,
@@ -28,6 +39,7 @@ export function SettingsBasicPage({
     DEFAULT_BATTLE_START_PANEL
   );
   const [mode, setMode] = useState<NoblePhantasmDetectionMode>("card");
+  const [preAttackModeDialogOpen, setPreAttackModeDialogOpen] = useState(false);
   const [stopOnBondLevelUp, setStopOnBondLevelUp] = useState(false);
   const [stopOnBondMaxLevel, setStopOnBondMaxLevel] = useState(false);
   const [autoCaptureBondLevelUp, setAutoCaptureBondLevelUp] = useState(false);
@@ -213,6 +225,9 @@ export function SettingsBasicPage({
         await invoke<RecognitionSettings>("set_noble_phantasm_detection_mode", { value })
       );
       applySettings(settings);
+      if (settings.noblePhantasmDetectionMode === "gaugeBeforeAttack") {
+        setPreAttackModeDialogOpen(true);
+      }
       setSavedMessage("已保存");
     } catch (err) {
       setError(String(err));
@@ -353,6 +368,11 @@ export function SettingsBasicPage({
             <Text size="1" color="gray">
               出现宝具识别问题可尝试切换，仍在实验中可能导致选卡速度变慢
             </Text>
+            {mode === "gaugeBeforeAttack" && (
+              <Text size="1" color="orange">
+                攻击前识别可能被从者台词遮挡，请关闭台词
+              </Text>
+            )}
           </Flex>
 
           <Select.Root
@@ -364,6 +384,9 @@ export function SettingsBasicPage({
             <Select.Content>
               <Select.Item value="card">宝具指令卡识别</Select.Item>
               <Select.Item value="gauge">底部宝具条识别（实验性）</Select.Item>
+              <Select.Item value="gaugeBeforeAttack">
+                攻击前底部宝具条识别（实验性）
+              </Select.Item>
             </Select.Content>
           </Select.Root>
         </Flex>
@@ -603,6 +626,25 @@ export function SettingsBasicPage({
             </Text>
           )}
         </Flex>
+
+        <Dialog.Root open={preAttackModeDialogOpen} onOpenChange={setPreAttackModeDialogOpen}>
+          <Dialog.Content maxWidth="860px" className="pre-attack-np-dialog">
+            <Dialog.Title size="4">请关闭战斗中宝具语音字幕</Dialog.Title>
+            <Dialog.Description size="2" color="gray">
+              攻击前读取宝具条时，从者语音字幕可能遮挡识别区域。请按照下图关闭相关设置。
+            </Dialog.Description>
+            <img
+              src={preAttackNpGaugeDialogImage}
+              alt="关闭战斗中宝具语音字幕的设置示例"
+              className="pre-attack-np-dialog-image"
+            />
+            <Flex justify="end" mt="4">
+              <Dialog.Close>
+                <Button type="button">知道了</Button>
+              </Dialog.Close>
+            </Flex>
+          </Dialog.Content>
+        </Dialog.Root>
       </Flex>
     </Box>
   );

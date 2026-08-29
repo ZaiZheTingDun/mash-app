@@ -165,7 +165,12 @@ pub(crate) fn apply_np_detection_mode(
             }
         }
         NoblePhantasmDetectionMode::Gauge => {}
+        NoblePhantasmDetectionMode::GaugeBeforeAttack => {}
     }
+}
+
+pub(crate) fn reads_np_gauge_before_attack(mode: NoblePhantasmDetectionMode) -> bool {
+    matches!(mode, NoblePhantasmDetectionMode::GaugeBeforeAttack)
 }
 
 /// Merge a new NP sample into the running best-per-slot accumulator,
@@ -1443,41 +1448,22 @@ impl Runner {
                 thread::sleep(ACTION_DELAY);
             },
             NoblePhantasmDetectionMode::Gauge => loop {
-                let started = Instant::now();
-                let sample_window = Duration::from_secs(1);
-                let sample_interval = Duration::from_millis(200);
-                let mut best_nps: Option<Vec<NoblePhantasmMatch>> = None;
-
-                loop {
-                    let sample = match self.sidecar().find_noble_phantasms(None, None) {
-                        Ok(n) => n,
-                        Err(err) => {
-                            self.fail_action("Attack", "读取宝具数字", err);
-                            return None;
-                        }
-                    };
-
-                    merge_best_np_slots(&mut best_nps, sample);
-
-                    if self.is_cancelled() {
-                        return None;
-                    }
-                    if started.elapsed() >= sample_window {
-                        break;
-                    }
-                    thread::sleep(sample_interval);
-                }
-
-                let nps = best_nps.unwrap_or_default();
-                if np_gauge_read_complete(&nps) {
-                    break nps;
-                }
-                if self.is_cancelled() {
+                let Some(nps) = self.read_noble_phantasm_gauges("Attack") else {
                     return None;
-                }
-                self.emit("Attack", "宝具数字未识别完整，等待遮挡消失后重试");
-                thread::sleep(ACTION_DELAY);
+                };
+                break nps;
             },
+            NoblePhantasmDetectionMode::GaugeBeforeAttack => {
+                let Some(nps) = self.battle.pre_attack_nps.clone() else {
+                    self.fail_action(
+                        "Attack",
+                        "读取攻击前宝具条",
+                        "未找到攻击前缓存的宝具条识别结果".into(),
+                    );
+                    return None;
+                };
+                nps
+            }
         };
 
         if recognize_command_cards {
@@ -1539,7 +1525,78 @@ impl Runner {
             );
         }
 
+        if reads_np_gauge_before_attack(np_detection_mode) {
+            self.battle.pre_attack_nps = None;
+        }
+
         Some((cards, nps))
+    }
+
+    /// Read the bottom NP gauges while the Battle screen is still visible.
+    /// A one-second best-sample window avoids treating a transient dialogue
+    /// overlay as the final readiness state.
+    pub(crate) fn read_noble_phantasm_gauges(
+        &mut self,
+        screen: &str,
+    ) -> Option<Vec<NoblePhantasmMatch>> {
+        loop {
+            let started = Instant::now();
+            let sample_window = Duration::from_secs(1);
+            let sample_interval = Duration::from_millis(200);
+            let mut best_nps: Option<Vec<NoblePhantasmMatch>> = None;
+
+            loop {
+                let sample = match self.sidecar().find_noble_phantasms(None, None) {
+                    Ok(n) => n,
+                    Err(err) => {
+                        self.fail_action(screen, "读取宝具数字", err);
+                        return None;
+                    }
+                };
+
+                merge_best_np_slots(&mut best_nps, sample);
+
+                if self.is_cancelled() {
+                    return None;
+                }
+                if started.elapsed() >= sample_window {
+                    break;
+                }
+                thread::sleep(sample_interval);
+            }
+
+            let nps = best_nps.unwrap_or_default();
+            if np_gauge_read_complete(&nps) {
+                return Some(nps);
+            }
+            if self.is_cancelled() {
+                return None;
+            }
+            self.emit(screen, "宝具数字未识别完整，等待遮挡消失后重试");
+            thread::sleep(ACTION_DELAY);
+        }
+    }
+
+    /// Capture NP readiness before the attack button changes the screen to
+    /// the command-card view. The result is consumed by `read_attack_state`.
+    pub(crate) fn prepare_noble_phantasm_gauge_before_attack(&mut self) -> bool {
+        if !reads_np_gauge_before_attack(self.config.noble_phantasm_detection_mode) {
+            return true;
+        }
+
+        self.battle.pre_attack_nps = None;
+        if !self.battle.pre_attack_np_warning_emitted {
+            self.emit_warn(
+                "Battle",
+                "当前使用攻击前宝具条识别，从者台词可能遮挡识别结果，请关闭台词",
+            );
+            self.battle.pre_attack_np_warning_emitted = true;
+        }
+        let Some(nps) = self.read_noble_phantasm_gauges("Battle") else {
+            return false;
+        };
+        self.battle.pre_attack_nps = Some(nps);
+        true
     }
 
     pub(crate) fn pick_and_tap_attack_cards(
