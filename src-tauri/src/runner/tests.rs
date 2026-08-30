@@ -683,6 +683,7 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     assert!(cfg.enable_extra_class_filter);
     assert!(!cfg.support_full_list_ocr_fallback);
     assert!(cfg.support_slot_index.is_none());
+    assert!(cfg.support_servant_level_min.is_none());
     assert!(cfg.support_noble_phantasm_level_min.is_none());
     assert!(cfg.support_star_map_score_min.is_none());
     assert!(cfg.support_grand_star_map_score_min.is_none());
@@ -4642,6 +4643,33 @@ fn support_level_filtering_is_enabled_for_jp_and_cn() {
     assert!(support_level_filtering_enabled(Server::Cn));
 }
 
+#[test]
+fn support_servant_level_filter_accepts_levels_at_or_above_the_minimum() {
+    let mut payload = minimal_run_config_json();
+    payload["supportServantLevelMin"] = serde_json::json!(120);
+    let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+    let mut progress = SupportLevelPanelProgress::default();
+
+    let mut row = support_row(None, vec![], vec![]);
+    row.servant_level = Some(119);
+    assert_eq!(
+        support_row_matches_level_requirements_with_progress(Server::Jp, &cfg, &row, &mut progress,),
+        SupportLevelFilter::Fail("从者等级 ≥ 120（实际 119）".into())
+    );
+
+    row.servant_level = Some(120);
+    assert_eq!(
+        support_row_matches_level_requirements_with_progress(Server::Cn, &cfg, &row, &mut progress,),
+        SupportLevelFilter::Pass
+    );
+
+    row.servant_level = None;
+    assert_eq!(
+        support_row_matches_level_requirements_with_progress(Server::Cn, &cfg, &row, &mut progress,),
+        SupportLevelFilter::Fail("从者等级 ≥ 120（实际 -）".into())
+    );
+}
+
 fn support_row(
     panel: Option<&str>,
     skills: Vec<Option<u32>>,
@@ -4671,6 +4699,7 @@ fn support_row(
         score_confidence: None,
         np_matched_name: "为你纺织的时光之轮".into(),
         np_level: Some(5),
+        servant_level: None,
         skill_panel: panel.map(str::to_string),
         skill_levels: skills,
         append_skill_levels: append,

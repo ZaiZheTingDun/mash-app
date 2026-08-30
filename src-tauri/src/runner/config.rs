@@ -218,6 +218,9 @@ pub struct RunConfig {
     pub grand_class: GrandClass,
     #[serde(default)]
     pub grand_card_strategy: GrandCardStrategy,
+    /// Minimum servant level required for the chosen support row.
+    #[serde(default)]
+    pub support_servant_level_min: Option<u32>,
     /// Minimum NP level required for the chosen support row. `None`
     /// disables the filter.
     #[serde(default)]

@@ -605,6 +605,7 @@ export function DebugCanvas({
                   助战 {i + 1} · 名 {s.nameScore.toFixed(2)} · 宝{" "}
                   {s.npScore.toFixed(2)}
                   {s.npLevel != null ? ` · 宝Lv${s.npLevel}` : ""}
+                  {s.servantLevel != null ? ` · 从者Lv${s.servantLevel}` : ""}
                   {s.starMapScore != null
                     ? ` · 星图${s.starMapScore}${s.grandStarMapScore != null ? `/${s.grandStarMapScore}` : ""}`
                     : ""}

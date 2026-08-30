@@ -294,6 +294,7 @@ export interface SupportRowMatchDto {
   scoreFilterReason?: string | null;
   npMatchedName: string;
   npLevel?: number | null;
+  servantLevel?: number | null;
   skillPanel?: "owned" | "append" | null;
   skillLevels?: (number | null)[];
   appendSkillLevels?: (number | null)[];

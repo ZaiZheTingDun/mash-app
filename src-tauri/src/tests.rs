@@ -511,6 +511,7 @@ fn test_project(id: &str, name: &str, advanced_mode: bool) -> Project {
         grand_class: GrandClass::Saber,
         grand_servants: Vec::new(),
         grand_card_strategy: GrandCardStrategy::default(),
+        support_servant_level_min: None,
         support_noble_phantasm_level_min: None,
         support_star_map_score_min: None,
         support_grand_star_map_score_min: None,
@@ -1037,6 +1038,7 @@ fn project_legacy_json_without_slots_falls_back_to_defaults() {
         project.grand_card_strategy.chain_priority,
         default_grand_chain_priority()
     );
+    assert!(project.support_servant_level_min.is_none());
     assert!(project.support_noble_phantasm_level_min.is_none());
     assert!(project.support_star_map_score_min.is_none());
     assert!(project.support_grand_star_map_score_min.is_none());
@@ -1088,6 +1090,23 @@ fn normalize_project_clamps_support_score_thresholds_to_game_maxima() {
 
     assert_eq!(normalized.support_star_map_score_min, Some(62));
     assert_eq!(normalized.support_grand_star_map_score_min, Some(16));
+}
+
+#[test]
+fn normalize_project_clamps_support_servant_level_to_one_through_120() {
+    let mut project = test_project("project-servant-level", "从者等级", false);
+    project.support_servant_level_min = Some(121);
+    assert_eq!(
+        normalize_project(project).support_servant_level_min,
+        Some(120)
+    );
+
+    let mut project = test_project("project-servant-level-low", "从者等级下限", false);
+    project.support_servant_level_min = Some(0);
+    assert_eq!(
+        normalize_project(project).support_servant_level_min,
+        Some(1)
+    );
 }
 
 #[test]
@@ -1412,6 +1431,7 @@ fn normalize_project_migrates_legacy_repeat_flag_to_infinite_mode() {
         grand_class: GrandClass::Saber,
         grand_servants: Vec::new(),
         grand_card_strategy: GrandCardStrategy::default(),
+        support_servant_level_min: None,
         support_noble_phantasm_level_min: None,
         support_star_map_score_min: None,
         support_grand_star_map_score_min: None,

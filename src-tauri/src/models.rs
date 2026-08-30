@@ -872,6 +872,9 @@ pub struct Project {
     pub grand_servants: Vec<GrandServantConfig>,
     #[serde(default)]
     pub grand_card_strategy: GrandCardStrategy,
+    /// Optional minimum servant level required for the chosen support row.
+    #[serde(default)]
+    pub support_servant_level_min: Option<u32>,
     /// Optional support-search NP minimum level. `None` means "任意".
     #[serde(default)]
     pub support_noble_phantasm_level_min: Option<u32>,

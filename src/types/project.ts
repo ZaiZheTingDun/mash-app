@@ -149,6 +149,7 @@ export interface Project {
   grandClass?: GrandClass;
   grandServants?: GrandServantConfig[];
   grandCardStrategy?: GrandCardStrategy;
+  supportServantLevelMin?: number | null;
   supportNoblePhantasmLevelMin?: number | null;
   supportStarMapScoreMin?: number | null;
   supportGrandStarMapScoreMin?: number | null;

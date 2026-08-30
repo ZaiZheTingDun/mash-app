@@ -318,6 +318,14 @@ SUPPORT_ROW_NP_REGION_X = 0.270
 SUPPORT_ROW_NP_REGION_W = 0.350
 SUPPORT_ROW_NP_REGION_DY = 0.135
 SUPPORT_ROW_NP_REGION_H = 0.060
+# The servant's current level is rendered above the portrait, to the left of
+# the name/NP strips. The y-position is derived from the matched name row so
+# it remains valid after scrolling.
+SUPPORT_ROW_LEVEL_REGION_X = 0.030
+SUPPORT_ROW_LEVEL_REGION_Y_OFFSET = -0.140
+SUPPORT_ROW_LEVEL_REGION_W = 0.140
+SUPPORT_ROW_LEVEL_REGION_H = 0.125
+SUPPORT_SERVANT_LEVEL_MAX = 120
 
 SUPPORT_SKILL_LEVEL_MIN_SCORE = 0.34
 SUPPORT_SKILL_LEVEL_TEN_MIN_SCORE = 0.56
@@ -4145,6 +4153,12 @@ def _support_recognize_anchor_rows(
         anchor_y = float(anchor.get("y", 0.0))
         regions = (
             {
+                "x": SUPPORT_ROW_LEVEL_REGION_X,
+                "y": anchor_y + SUPPORT_ROW_LEVEL_REGION_Y_OFFSET,
+                "w": SUPPORT_ROW_LEVEL_REGION_W,
+                "h": SUPPORT_ROW_LEVEL_REGION_H,
+            },
+            {
                 "x": SUPPORT_ROW_NAME_REGION_X,
                 "y": anchor_y + SUPPORT_ROW_NAME_REGION_DY,
                 "w": SUPPORT_ROW_NAME_REGION_W,
@@ -4632,6 +4646,59 @@ def _support_parse_np_level_text(text: str) -> Optional[int]:
     if m:
         return int(m.group(1))
     return None
+
+
+def _support_parse_servant_level_text(text: str) -> Optional[int]:
+    """Read the current level from ``Lv.120/120`` or ``等级120/120`` text.
+
+    The crop is dedicated to the portrait's level label, so accepting the
+    slash-less ``120`` fallback helps with OCR that drops ``Lv`` while the
+    range guard prevents unrelated large numbers from becoming levels.
+    """
+    normalized = unicodedata.normalize("NFKC", str(text))
+    match = re.search(
+        r"(?:等级|L(?:V)?)\s*\.?\s*(\d{1,3})(?:\s*/\s*\d{1,3})?",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        match = re.search(r"\b(\d{1,3})\s*/\s*\d{1,3}\b", normalized)
+    if not match:
+        return None
+    level = int(match.group(1))
+    return level if 1 <= level <= SUPPORT_SERVANT_LEVEL_MAX else None
+
+
+def _support_extract_servant_level(img: np.ndarray, row_region: dict) -> Optional[int]:
+    """OCR the level label above the portrait for one matched support row."""
+    ocr = _get_ocr()
+    if ocr is None:
+        return None
+    h, w = img.shape[:2]
+    row_y = float(row_region.get("y", 0.0))
+    x0 = max(0, int(round(SUPPORT_ROW_LEVEL_REGION_X * w)))
+    y0 = max(0, int(round((row_y + SUPPORT_ROW_LEVEL_REGION_Y_OFFSET) * h)))
+    x1 = min(w, int(round((SUPPORT_ROW_LEVEL_REGION_X + SUPPORT_ROW_LEVEL_REGION_W) * w)))
+    y1 = min(h, int(round((row_y + SUPPORT_ROW_LEVEL_REGION_Y_OFFSET + SUPPORT_ROW_LEVEL_REGION_H) * h)))
+    if x1 <= x0 or y1 <= y0:
+        return None
+    crop = img[y0:y1, x0:x1]
+    if crop.size == 0:
+        return None
+    try:
+        results, _elapsed = ocr(crop)
+    except Exception:  # noqa: BLE001 - level OCR is an optional filter detail
+        return None
+    candidates = []
+    for result in results or []:
+        if len(result) < 3:
+            continue
+        level = _support_parse_servant_level_text(str(result[1]))
+        if level is not None:
+            candidates.append((float(result[2] or 0.0), level))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[0])[1]
 
 
 def _support_extract_np_level(fragments: list[dict], row_region: dict, np_text: str = "") -> Optional[int]:
@@ -5546,6 +5613,7 @@ def _support_add_details(img: np.ndarray, rows: list[dict], fragments: list[dict
         row["npLevel"] = _support_extract_np_level(
             fragments, row_region, str(row.get("npText", ""))
         )
+        row["servantLevel"] = _support_extract_servant_level(img, row_region)
         panel, skill_levels, append_levels, skill_diagnostics = (
             _support_extract_skill_details_with_diagnostics(img, row_region)
         )

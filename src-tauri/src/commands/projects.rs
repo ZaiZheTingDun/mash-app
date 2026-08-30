@@ -234,6 +234,9 @@ pub(crate) fn normalize_project(mut project: Project) -> Project {
     project.support_grand_star_map_score_min = project
         .support_grand_star_map_score_min
         .map(|score| score.min(16));
+    project.support_servant_level_min = project
+        .support_servant_level_min
+        .map(|level| level.clamp(1, 120));
     normalize_grand_card_rule_slots(&mut project);
     normalize_grand_servants(&mut project);
     normalize_project_recognition_settings(&mut project);
@@ -625,6 +628,7 @@ pub(crate) fn new_project(name: String, advanced_mode: bool, grand_class: GrandC
         grand_class,
         grand_servants: Vec::new(),
         grand_card_strategy: GrandCardStrategy::default(),
+        support_servant_level_min: None,
         support_noble_phantasm_level_min: None,
         support_star_map_score_min: None,
         support_grand_star_map_score_min: None,
@@ -1336,6 +1340,7 @@ pub(crate) fn clear_project_slot_servant(
     if is_support {
         project.support_servant_id = None;
         project.support_servant_variant_key = None;
+        project.support_servant_level_min = None;
         project.support_noble_phantasm_level_min = None;
         project.support_star_map_score_min = None;
         project.support_grand_star_map_score_min = None;

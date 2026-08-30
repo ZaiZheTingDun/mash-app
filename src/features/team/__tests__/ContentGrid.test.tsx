@@ -683,6 +683,8 @@ describe("ContentGrid", () => {
 
     await user.click(screen.getByRole("button", { name: "助战筛选设置" }));
     expect(await screen.findByRole("dialog")).toHaveTextContent("助战筛选设置");
+    await user.click(screen.getByRole("button", { name: "从者等级 120" }));
+    expect(screen.getByRole("spinbutton", { name: "从者等级" })).toHaveValue(120);
     expect(screen.getByRole("spinbutton", { name: "星图分值" })).toBeInTheDocument();
     expect(screen.queryByRole("spinbutton", { name: "冠位星图分值" })).not.toBeInTheDocument();
     await user.type(screen.getByRole("spinbutton", { name: "星图分值" }), "40");
@@ -697,6 +699,7 @@ describe("ContentGrid", () => {
 
     expect(onUpdateActiveProject).toHaveBeenCalledWith(
       expect.objectContaining({
+        supportServantLevelMin: 120,
         supportStarMapScoreMin: 40,
         supportGrandStarMapScoreMin: null,
         supportNoblePhantasmLevelMin: 2,
@@ -760,6 +763,32 @@ describe("ContentGrid", () => {
 
     await user.click(screen.getByLabelText("编辑助战筛选设置"));
     expect(await screen.findByRole("dialog")).toHaveTextContent("助战筛选设置");
+  });
+
+  it("keeps servant level and score requirements on one summary row", () => {
+    renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={buildSlots()}
+        onSlotsChange={vi.fn()}
+        activeProject={{
+          ...PROJECT,
+          supportGrandMode: true,
+          supportServantLevelMin: 100,
+          supportStarMapScoreMin: 62,
+          supportGrandStarMapScoreMin: 16,
+        }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+
+    const scoreRow = document.querySelector(".support-requirement-score-row");
+    expect(scoreRow).not.toBeNull();
+    expect(scoreRow).toHaveTextContent("Lv.100");
+    expect(scoreRow).toHaveTextContent("星图 62");
+    expect(scoreRow).toHaveTextContent("冠位 16");
+    expect(scoreRow?.querySelectorAll(".support-requirement-chip")).toHaveLength(3);
   });
 
   it("toggles grand support mode from the support slot", async () => {

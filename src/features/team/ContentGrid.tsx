@@ -395,6 +395,7 @@ export function ContentGrid({
   );
 
   const handleSupportSettingsConfirm = (next: {
+    servantLevel: number | null;
     starMapScore: number | null;
     grandStarMapScore: number | null;
     npLevel: number | null;
@@ -404,6 +405,7 @@ export function ContentGrid({
     if (!activeProject) return;
     void onUpdateActiveProject({
       ...activeProject,
+      supportServantLevelMin: next.servantLevel,
       supportStarMapScoreMin: next.starMapScore,
       supportGrandStarMapScoreMin: next.grandStarMapScore,
       supportNoblePhantasmLevelMin: next.npLevel,
@@ -467,6 +469,7 @@ export function ContentGrid({
       mlbIconSrc={mlbIconSrc}
       bondIconSrc={grandBondIconSrc}
       bondNpIconSrc={grandBondNpIconSrc}
+      supportServantLevel={activeProject?.supportServantLevelMin ?? null}
       supportNpLevel={activeProject?.supportNoblePhantasmLevelMin ?? null}
       supportStarMapScore={activeProject?.supportStarMapScoreMin ?? null}
       supportGrandStarMapScore={activeProject?.supportGrandStarMapScoreMin ?? null}

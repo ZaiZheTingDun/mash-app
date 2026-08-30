@@ -2911,6 +2911,38 @@ def test_support_np_level_parser_rejects_non_level_digits():
     assert _support_parse_np_level_text("サーヴァント Lv.120") is None
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Lv.100/100", 100),
+        ("Ｌｖ．９２／９２", 92),
+        ("L. 90/90", 90),
+        ("等级120/120", 120),
+        ("120/120", 120),
+        ("Lv.121/121", None),
+    ],
+)
+def test_support_servant_level_parser_reads_current_level_and_caps_at_120(text, expected):
+    from mash_cv.cv import _support_parse_servant_level_text
+
+    assert _support_parse_servant_level_text(text) == expected
+
+
+def test_support_detail_extracts_servant_level_above_portrait():
+    from mash_cv.cv import _support_extract_servant_level
+
+    image = cv2.imread("tests/test_data/screenshots/support_select.png")
+    assert image is not None
+    assert _support_extract_servant_level(
+        image,
+        {"x": 0.177, "y": 0.3909722222, "w": 0.466, "h": 0.0833333333},
+    ) == 100
+    assert _support_extract_servant_level(
+        image,
+        {"x": 0.177, "y": 0.66875, "w": 0.466, "h": 0.0833333333},
+    ) == 92
+
+
 def test_support_skill_details_distinguish_owned_and_append_panels(monkeypatch):
     import mash_cv.cv as cv
 
@@ -2998,8 +3030,9 @@ def test_find_supports_uses_anchor_row_recognition_without_full_detector(monkeyp
             raise AssertionError("whole-list text detector should not run")
 
         def text_recognizer(self, crops):
-            assert len(crops) == 2
+            assert len(crops) == 3
             return [
+                ("Lv.100/100", 0.99),
                 ("阿尔托莉雅·Caster", 0.98),
                 ("为你纺织的时光之轮等级5", 0.97),
             ], None
@@ -3028,7 +3061,7 @@ def test_find_supports_uses_anchor_row_recognition_without_full_detector(monkeyp
 
     assert len(result["supports"]) == 1
     assert result["supports"][0]["npText"].endswith("等级5")
-    assert result["diagnostics"]["fragmentCount"] == 2
+    assert result["diagnostics"]["fragmentCount"] == 3
 
 
 def test_find_supports_retries_full_list_ocr_when_enabled_after_anchor_miss(monkeypatch):

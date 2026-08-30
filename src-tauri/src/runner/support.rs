@@ -724,6 +724,7 @@ pub(crate) fn support_row_matches_level_requirements_with_progress(
     let needs_score = config.support_star_map_score_min.is_some();
     let needs_grand_score =
         config.support_grand_mode && config.support_grand_star_map_score_min.is_some();
+    let needs_servant_level = config.support_servant_level_min.is_some();
     let needs_np = config.support_noble_phantasm_level_min.is_some();
     let needs_owned = config.support_skill_level_mins.iter().any(Option::is_some);
     let needs_append = config
@@ -731,7 +732,12 @@ pub(crate) fn support_row_matches_level_requirements_with_progress(
         .iter()
         .any(Option::is_some);
     if !support_level_filtering_enabled(server)
-        || (!needs_score && !needs_grand_score && !needs_np && !needs_owned && !needs_append)
+        || (!needs_score
+            && !needs_grand_score
+            && !needs_servant_level
+            && !needs_np
+            && !needs_owned
+            && !needs_append)
     {
         return SupportLevelFilter::Pass;
     }
@@ -742,6 +748,15 @@ pub(crate) fn support_row_matches_level_requirements_with_progress(
         config.support_grand_star_map_score_min,
     ) {
         return SupportLevelFilter::Fail(reason);
+    }
+    if let Some(min) = config.support_servant_level_min {
+        if !row.servant_level.is_some_and(|level| level >= min) {
+            return SupportLevelFilter::Fail(format!(
+                "从者等级 ≥ {}（实际 {}）",
+                min,
+                format_actual_level(row.servant_level),
+            ));
+        }
     }
     if let Some(min) = config.support_noble_phantasm_level_min {
         if !row.np_level.is_some_and(|level| level >= min) {
@@ -1553,7 +1568,8 @@ impl Runner {
     }
 
     pub(crate) fn has_support_level_requirements(&self) -> bool {
-        self.config.support_noble_phantasm_level_min.is_some()
+        self.config.support_servant_level_min.is_some()
+            || self.config.support_noble_phantasm_level_min.is_some()
             || self.config.support_star_map_score_min.is_some()
             || (self.config.support_grand_mode
                 && self.config.support_grand_star_map_score_min.is_some())

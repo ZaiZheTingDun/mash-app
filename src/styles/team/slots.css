@@ -326,9 +326,9 @@
   color: var(--amber-contrast);
 }
 
-/* The summary is a five-column grid. Configured score thresholds take a
- * full row (or a 3/2 split in Grand mode), followed by the existing
- * owned-skill/NP row and append-skill row. */
+/* The summary is a five-column grid. Score thresholds and servant level
+ * share one compact row, followed by the existing owned-skill/NP row and
+ * append-skill row. */
 .support-requirement-summary {
   position: absolute;
   left: 7px;
@@ -345,6 +345,22 @@
   backdrop-filter: blur(8px);
   color: white;
   cursor: pointer;
+}
+
+.support-requirement-score-row {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: flex;
+  gap: 2px;
+}
+
+.support-requirement-score-row .support-requirement-chip {
+  flex: 1 1 0;
+}
+
+.support-requirement-score-row .support-requirement-chip.servant-level {
+  flex: 0 0 auto;
+  padding: 0 3px;
 }
 
 .servant-portrait.grand-support .support-requirement-summary {

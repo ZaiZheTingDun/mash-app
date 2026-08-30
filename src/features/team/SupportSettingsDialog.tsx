@@ -40,6 +40,7 @@ function supportLevelPickerTitle(kind: SupportLevelKind | undefined) {
 
 interface SupportRequirementSummaryProps {
   grandMode: boolean;
+  servantLevel: number | null | undefined;
   starMapScore: number | null | undefined;
   grandStarMapScore: number | null | undefined;
   npLevel: number | null | undefined;
@@ -60,6 +61,17 @@ function scoreChip(
       aria-label={isUnset ? `${label}任意` : `${label}至少 ${value}`}
     >
       {isUnset ? `${label} -` : `${label} ${value}`}
+    </span>
+  );
+}
+
+function servantLevelChip(value: number) {
+  return (
+    <span
+      className="support-requirement-chip score servant-level"
+      aria-label={`从者至少 ${value} 级`}
+    >
+      Lv.{value}
     </span>
   );
 }
@@ -107,6 +119,7 @@ function renderNpChip(npLevel: number | null | undefined) {
  */
 export function SupportRequirementSummary({
   grandMode,
+  servantLevel,
   starMapScore,
   grandStarMapScore,
   npLevel,
@@ -116,9 +129,10 @@ export function SupportRequirementSummary({
 }: SupportRequirementSummaryProps) {
   const showSkills = hasConfiguredLevels(skillLevels);
   const showAppend = hasConfiguredLevels(appendSkillLevels);
+  const showServantLevel = servantLevel != null;
   const showNp = npLevel != null;
   const showScores = starMapScore != null || (grandMode && grandStarMapScore != null);
-  if (!showSkills && !showAppend && !showNp && !showScores) return null;
+  if (!showSkills && !showAppend && !showNp && !showScores && !showServantLevel) return null;
 
   const showRow1 = showSkills || showNp;
 
@@ -132,11 +146,16 @@ export function SupportRequirementSummary({
         onOpen();
       }}
     >
-      {showScores && (
-        <>
-          {scoreChip("星图", starMapScore, grandMode ? "primary" : "single")}
-          {grandMode && scoreChip("冠位", grandStarMapScore, "grand")}
-        </>
+      {(showScores || showServantLevel) && (
+        <span className="support-requirement-score-row">
+          {showServantLevel && servantLevelChip(servantLevel)}
+          {showScores && (
+            <>
+              {scoreChip("星图", starMapScore, grandMode ? "primary" : "single")}
+              {grandMode && scoreChip("冠位", grandStarMapScore, "grand")}
+            </>
+          )}
+        </span>
       )}
       {showRow1 && (
         <>
@@ -154,6 +173,7 @@ interface SupportSettingsDialogProps {
   project: Project | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: (next: {
+    servantLevel: number | null;
     starMapScore: number | null;
     grandStarMapScore: number | null;
     npLevel: number | null;
@@ -169,6 +189,9 @@ export function SupportSettingsDialog({
   onConfirm,
 }: SupportSettingsDialogProps) {
   const grandMode = project?.supportGrandMode ?? false;
+  const [servantLevel, setServantLevel] = useState<number | null>(
+    () => project?.supportServantLevelMin ?? null,
+  );
   const [starMapScore, setStarMapScore] = useState<number | null>(
     () => project?.supportStarMapScoreMin ?? null,
   );
@@ -221,6 +244,7 @@ export function SupportSettingsDialog({
   };
 
   const reset = () => {
+    setServantLevel(null);
     setStarMapScore(null);
     setGrandStarMapScore(null);
     setNpLevel(null);
@@ -271,6 +295,49 @@ export function SupportSettingsDialog({
                   <Text as="div" size="1" color="gray" mt="1">最高 16</Text>
                 </Box>
               )}
+              <Box>
+                <Text as="div" size="2" weight="medium" mb="2">从者等级</Text>
+                <Flex align="center" gap="1">
+                  <TextField.Root
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={servantLevel ?? ""}
+                    placeholder="任意"
+                    aria-label="从者等级"
+                    style={{ width: "72px" }}
+                    onChange={(event) => {
+                      const value = event.currentTarget.valueAsNumber;
+                      setServantLevel(
+                        Number.isFinite(value)
+                          ? Math.min(120, Math.max(1, Math.trunc(value)))
+                          : null,
+                      );
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="1"
+                    variant="soft"
+                    color="gray"
+                    aria-label="从者等级 100"
+                    onClick={() => setServantLevel(100)}
+                  >
+                    100
+                  </Button>
+                  <Button
+                    type="button"
+                    size="1"
+                    variant="soft"
+                    color="gray"
+                    aria-label="从者等级 120"
+                    onClick={() => setServantLevel(120)}
+                  >
+                    120
+                  </Button>
+                </Flex>
+                <Text as="div" size="1" color="gray" mt="1">最低等级，最高 120</Text>
+              </Box>
             </Flex>
             <Flex gap="5">
               <Box>
@@ -333,6 +400,7 @@ export function SupportSettingsDialog({
                   type="button"
                   onClick={() => {
                     onConfirm({
+                      servantLevel,
                       starMapScore,
                       grandStarMapScore,
                       npLevel,

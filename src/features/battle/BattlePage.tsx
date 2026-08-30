@@ -558,6 +558,8 @@ export function BattlePage({
       grandCardStrategy: selectedProject.grandCardStrategy ?? {
         chainPriority: DEFAULT_GRAND_CHAIN_PRIORITY,
       },
+      supportServantLevelMin:
+        selectedProject.supportServantLevelMin ?? null,
       supportNoblePhantasmLevelMin:
         selectedProject.supportNoblePhantasmLevelMin ?? null,
       supportStarMapScoreMin:

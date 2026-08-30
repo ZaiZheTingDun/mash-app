@@ -36,6 +36,7 @@ interface SortableSlotProps {
   mlbIconSrc: string | null | undefined;
   bondIconSrc: string | null | undefined;
   bondNpIconSrc: string | null | undefined;
+  supportServantLevel: number | null | undefined;
   supportNpLevel: number | null | undefined;
   supportStarMapScore: number | null | undefined;
   supportGrandStarMapScore: number | null | undefined;
@@ -81,6 +82,7 @@ export function SortableSlot({
   mlbIconSrc,
   bondIconSrc,
   bondNpIconSrc,
+  supportServantLevel,
   supportNpLevel,
   supportStarMapScore,
   supportGrandStarMapScore,
@@ -120,6 +122,7 @@ export function SortableSlot({
   const isSupport = slot.type === "support";
   const rarityClass = servant ? rarityFrameClass(servant.rarity) : "";
   const hasSupportRequirements =
+    supportServantLevel != null ||
     supportStarMapScore != null ||
     (supportGrandMode && supportGrandStarMapScore != null) ||
     supportNpLevel != null ||
@@ -209,6 +212,7 @@ export function SortableSlot({
               {isSupport && hasSupportRequirements && (
                 <SupportRequirementSummary
                   grandMode={supportGrandMode}
+                  servantLevel={supportServantLevel}
                   starMapScore={supportStarMapScore}
                   grandStarMapScore={supportGrandStarMapScore}
                   npLevel={supportNpLevel}

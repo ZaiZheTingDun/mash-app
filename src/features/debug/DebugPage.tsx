@@ -1175,6 +1175,8 @@ export function DebugPage({
             : ` | 宝具(未核对)`;
           const npLevelPart =
             s.npLevel != null ? ` | 宝具等级 ${s.npLevel}` : "";
+          const servantLevelPart =
+            s.servantLevel != null ? ` | 从者等级 ${s.servantLevel}` : "";
           const scorePart = s.starMapScore != null
             ? ` | 星图 ${s.starMapScore}${s.grandStarMapScore != null ? `/${s.grandStarMapScore}` : ""}`
             : "";
@@ -1207,6 +1209,7 @@ export function DebugPage({
               scorePart +
               scoreFilterPart +
               npLevelPart +
+              servantLevelPart +
               skillPart +
               skillDiagPart +
               scoreAnchorPart +
@@ -2445,6 +2448,9 @@ export function DebugPage({
                     宝: {s.npText} ({s.npScore.toFixed(2)})
                     {s.npMatchedName ? ` → ${s.npMatchedName}` : ""}
                     {s.npLevel != null ? ` · 等级 ${s.npLevel}` : ""}
+                  </Text>
+                  <Text size="1" color={s.servantLevel != null ? "green" : "amber"}>
+                    从者等级：{s.servantLevel ?? "未识别"}
                   </Text>
                   {s.starMapScore != null && (
                     <Text

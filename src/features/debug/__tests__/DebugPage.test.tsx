@@ -245,6 +245,7 @@ describe("DebugPage", () => {
               npScore: 0.96,
               npRegion: { x: 0.2, y: 0.27, w: 0.3, h: 0.05 },
               npMatchedName: "原理血戒·断头台",
+              servantLevel: 120,
               starMapScore: 62,
               grandStarMapScore: 16,
               scoreText: "62/+16",
@@ -309,6 +310,7 @@ describe("DebugPage", () => {
     expect(await screen.findByText(/星图分值：62 \/ 16/)).toHaveTextContent(
       "✓ 达标"
     );
+    expect(await screen.findByText("从者等级：120")).toBeInTheDocument();
   });
 
   it("includes the support marker in command-card debug summaries", async () => {

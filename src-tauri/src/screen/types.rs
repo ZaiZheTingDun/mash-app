@@ -531,6 +531,10 @@ pub struct SupportRowMatch {
     /// caller enables CN support-detail extraction.
     #[serde(default)]
     pub np_level: Option<u32>,
+    /// Current servant level shown above the servant portrait. Present only
+    /// when the caller enables support-detail extraction.
+    #[serde(default)]
+    pub servant_level: Option<u32>,
     /// Current right-side skill panel kind: "owned" or "append".
     #[serde(default)]
     pub skill_panel: Option<String>,
