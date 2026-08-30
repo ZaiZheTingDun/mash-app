@@ -460,12 +460,19 @@ describe("SettingsDialog", () => {
     renderWithTheme(<SettingsHarness initialSection="basic" />);
 
     const modeSelect = await screen.findByRole("combobox", { name: "宝具识别方式" });
-    expect(modeSelect).toHaveTextContent("宝具指令卡识别");
+    expect(modeSelect).toHaveTextContent("指令卡识别");
     expect(screen.getByText("出现宝具识别问题可尝试切换，仍在实验中可能导致选卡速度变慢"))
       .toBeInTheDocument();
 
     await user.click(modeSelect);
-    await user.click(await screen.findByText("底部宝具条识别（实验性）"));
+    const options = await screen.findAllByRole("option");
+    expect(options.map((option) => option.textContent?.trim())).toEqual([
+      "指令卡识别",
+      "宝具条识别（选卡前）",
+      "宝具条识别（选卡时）",
+    ]);
+
+    await user.click(screen.getByText("宝具条识别（选卡时）"));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_noble_phantasm_detection_mode", {
@@ -480,7 +487,7 @@ describe("SettingsDialog", () => {
 
     const modeSelect = await screen.findByRole("combobox", { name: "宝具识别方式" });
     await user.click(modeSelect);
-    await user.click(await screen.findByText("攻击前底部宝具条识别（实验性）"));
+    await user.click(await screen.findByText("宝具条识别（选卡前）"));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_noble_phantasm_detection_mode", {

@@ -147,9 +147,11 @@
 
 .pre-attack-np-dialog-image {
   display: block;
-  width: 100%;
+  width: min(100%, 680px);
   height: auto;
-  margin-top: 20px;
+  max-height: calc(100vh - 280px);
+  margin: 16px auto 0;
+  object-fit: contain;
   border: 1px solid var(--gray-6);
   border-radius: var(--radius-3);
 }

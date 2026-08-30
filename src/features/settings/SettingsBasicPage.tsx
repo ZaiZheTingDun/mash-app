@@ -382,11 +382,11 @@ export function SettingsBasicPage({
           >
             <Select.Trigger aria-label="宝具识别方式" className="recognition-mode-select" />
             <Select.Content>
-              <Select.Item value="card">宝具指令卡识别</Select.Item>
-              <Select.Item value="gauge">底部宝具条识别（实验性）</Select.Item>
+              <Select.Item value="card">指令卡识别</Select.Item>
               <Select.Item value="gaugeBeforeAttack">
-                攻击前底部宝具条识别（实验性）
+                宝具条识别（选卡前）
               </Select.Item>
+              <Select.Item value="gauge">宝具条识别（选卡时）</Select.Item>
             </Select.Content>
           </Select.Root>
         </Flex>
