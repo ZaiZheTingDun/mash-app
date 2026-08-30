@@ -12,6 +12,8 @@ use std::collections::VecDeque;
 const COMMAND_CARD_FRONTLINE_OWNER_FAILURE_LIMIT: u32 = 3;
 const NP_GAUGE_GLOW_READY_THRESHOLD: f64 = 0.5;
 const NP_GAUGE_MIN_VALID_SAMPLES: usize = 3;
+const NP_GAUGE_SAMPLE_WINDOW: Duration = Duration::from_secs(1);
+const NP_GAUGE_SAMPLE_INTERVAL: Duration = Duration::from_millis(200);
 
 // ---------------------------------------------------------------------------
 // Attack pick logic
@@ -225,6 +227,10 @@ pub(crate) fn aggregate_np_gauge_samples(
             Some(representative)
         })
         .collect()
+}
+
+pub(crate) fn np_gauge_sample_window_complete(elapsed: Duration, sample_count: usize) -> bool {
+    elapsed >= NP_GAUGE_SAMPLE_WINDOW && sample_count >= NP_GAUGE_MIN_VALID_SAMPLES
 }
 
 pub(crate) fn np_condition_matches(
@@ -1599,8 +1605,6 @@ impl Runner {
     ) -> Option<Vec<NoblePhantasmMatch>> {
         loop {
             let started = Instant::now();
-            let sample_window = Duration::from_secs(1);
-            let sample_interval = Duration::from_millis(200);
             let mut samples: Vec<Vec<NoblePhantasmMatch>> = Vec::new();
 
             loop {
@@ -1617,10 +1621,10 @@ impl Runner {
                 if self.is_cancelled() {
                     return None;
                 }
-                if started.elapsed() >= sample_window {
+                if np_gauge_sample_window_complete(started.elapsed(), samples.len()) {
                     break;
                 }
-                thread::sleep(sample_interval);
+                thread::sleep(NP_GAUGE_SAMPLE_INTERVAL);
             }
 
             let nps = aggregate_np_gauge_samples(&samples);

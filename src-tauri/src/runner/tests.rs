@@ -318,6 +318,16 @@ fn np_gauge_samples_keep_stable_readiness_despite_one_dark_frame() {
 }
 
 #[test]
+fn np_gauge_sample_window_waits_for_three_samples_on_slow_cv() {
+    assert!(!np_gauge_sample_window_complete(Duration::from_secs(2), 2));
+    assert!(!np_gauge_sample_window_complete(
+        Duration::from_millis(999),
+        3
+    ));
+    assert!(np_gauge_sample_window_complete(Duration::from_secs(2), 3));
+}
+
+#[test]
 fn retry_picks_replace_np_that_is_no_longer_ready() {
     let picks = vec![
         Pick::Np {
