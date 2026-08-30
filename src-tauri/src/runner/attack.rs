@@ -10,6 +10,8 @@ use crate::commands::settings::{
 use std::collections::VecDeque;
 
 const COMMAND_CARD_FRONTLINE_OWNER_FAILURE_LIMIT: u32 = 3;
+const NP_GAUGE_GLOW_READY_THRESHOLD: f64 = 0.5;
+const NP_GAUGE_MIN_VALID_SAMPLES: usize = 3;
 
 // ---------------------------------------------------------------------------
 // Attack pick logic
@@ -173,27 +175,56 @@ pub(crate) fn reads_np_gauge_before_attack(mode: NoblePhantasmDetectionMode) -> 
     matches!(mode, NoblePhantasmDetectionMode::GaugeBeforeAttack)
 }
 
-/// Merge a new NP sample into the running best-per-slot accumulator,
-/// keeping the highest `np_glow_score` seen for each slot index.
-pub(crate) fn merge_best_np_slots(
-    acc: &mut Option<Vec<NoblePhantasmMatch>>,
-    sample: Vec<NoblePhantasmMatch>,
-) {
-    if let Some(best) = acc.as_mut() {
+/// Aggregate one-second NP-gauge samples by slot.
+///
+/// The median rejects a single bright frame caused by a dialogue or visual
+/// effect. The representative record is updated with the median score so its
+/// readiness fields remain consistent with the value the runner uses.
+pub(crate) fn aggregate_np_gauge_samples(
+    samples: &[Vec<NoblePhantasmMatch>],
+) -> Vec<NoblePhantasmMatch> {
+    let mut slot_ids = Vec::new();
+    for sample in samples {
         for slot in sample {
-            if let Some(existing) = best.iter_mut().find(|s| s.slot == slot.slot) {
-                let old_score = existing.np_glow_score.unwrap_or(f64::NEG_INFINITY);
-                let new_score = slot.np_glow_score.unwrap_or(f64::NEG_INFINITY);
-                if new_score > old_score {
-                    *existing = slot;
-                }
-            } else {
-                best.push(slot);
+            if !slot_ids.contains(&slot.slot) {
+                slot_ids.push(slot.slot);
             }
         }
-    } else {
-        *acc = Some(sample);
     }
+    slot_ids.sort_unstable();
+
+    slot_ids
+        .into_iter()
+        .filter_map(|slot_id| {
+            let mut readings: Vec<(f64, NoblePhantasmMatch)> = samples
+                .iter()
+                .filter_map(|sample| {
+                    sample
+                        .iter()
+                        .find(|slot| slot.slot == slot_id)
+                        .and_then(|slot| slot.np_glow_score.map(|score| (score, slot.clone())))
+                })
+                .collect();
+            if readings.len() < NP_GAUGE_MIN_VALID_SAMPLES {
+                return None;
+            }
+
+            readings.sort_by(|left, right| left.0.total_cmp(&right.0));
+            let median = if readings.len() % 2 == 1 {
+                readings[readings.len() / 2].0
+            } else {
+                let upper = readings.len() / 2;
+                (readings[upper - 1].0 + readings[upper].0) / 2.0
+            };
+            let mut representative = readings[readings.len() / 2].1.clone();
+            let ready = median >= NP_GAUGE_GLOW_READY_THRESHOLD;
+            representative.ready = ready;
+            representative.ready_source = Some("glow".into());
+            representative.np_glow_score = Some(median);
+            representative.np_glow_ready = Some(ready);
+            Some(representative)
+        })
+        .collect()
 }
 
 pub(crate) fn np_condition_matches(
@@ -526,6 +557,33 @@ pub(crate) fn replacement_command_card_picks(
             from_priority: Some("宝具不可用补位".into()),
         })
         .collect()
+}
+
+/// Refresh a cached retry plan against the current NP readiness state. A
+/// retry can happen after the original NP read became stale, so unavailable
+/// NP picks are replaced in-place with unused command cards.
+pub(crate) fn refresh_retry_picks_for_np_state(
+    picks: &[Pick],
+    cards: &[CommandCardMatch],
+    nps: &[NoblePhantasmMatch],
+) -> Vec<Pick> {
+    let mut replacements = replacement_command_card_picks(picks, cards);
+    let mut refreshed = Vec::with_capacity(picks.len());
+
+    for pick in picks {
+        match pick {
+            Pick::Np { slot, .. }
+                if !nps.iter().any(|np| np.slot == *slot && np.ready) =>
+            {
+                if let Some(replacement) = replacements.pop_front() {
+                    refreshed.push(replacement);
+                }
+            }
+            _ => refreshed.push(pick.clone()),
+        }
+    }
+
+    refreshed
 }
 
 pub(crate) fn advanced_startup_conditions_match(
@@ -1533,8 +1591,8 @@ impl Runner {
     }
 
     /// Read the bottom NP gauges while the Battle screen is still visible.
-    /// A one-second best-sample window avoids treating a transient dialogue
-    /// overlay as the final readiness state.
+    /// A one-second median-sample window avoids treating a transient dialogue
+    /// overlay or visual effect as the final readiness state.
     pub(crate) fn read_noble_phantasm_gauges(
         &mut self,
         screen: &str,
@@ -1543,7 +1601,7 @@ impl Runner {
             let started = Instant::now();
             let sample_window = Duration::from_secs(1);
             let sample_interval = Duration::from_millis(200);
-            let mut best_nps: Option<Vec<NoblePhantasmMatch>> = None;
+            let mut samples: Vec<Vec<NoblePhantasmMatch>> = Vec::new();
 
             loop {
                 let sample = match self.sidecar().find_noble_phantasms(None, None) {
@@ -1554,7 +1612,7 @@ impl Runner {
                     }
                 };
 
-                merge_best_np_slots(&mut best_nps, sample);
+                samples.push(sample);
 
                 if self.is_cancelled() {
                     return None;
@@ -1565,7 +1623,7 @@ impl Runner {
                 thread::sleep(sample_interval);
             }
 
-            let nps = best_nps.unwrap_or_default();
+            let nps = aggregate_np_gauge_samples(&samples);
             if np_gauge_read_complete(&nps) {
                 return Some(nps);
             }
@@ -1823,10 +1881,44 @@ impl Runner {
         self.battle.scene_config_used = false;
     }
 
+    fn read_noble_phantasms_for_retry(&mut self) -> Option<Vec<NoblePhantasmMatch>> {
+        match self.config.noble_phantasm_detection_mode {
+            NoblePhantasmDetectionMode::Card => loop {
+                let mut nps = match self.sidecar().find_noble_phantasms(None, None) {
+                    Ok(n) => n,
+                    Err(err) => {
+                        self.fail_action("Attack", "重试时识别宝具卡", err);
+                        return None;
+                    }
+                };
+                apply_np_detection_mode(&mut nps, NoblePhantasmDetectionMode::Card);
+                if np_card_read_complete(&nps) {
+                    return Some(nps);
+                }
+                if self.is_cancelled() {
+                    return None;
+                }
+                self.emit("Attack", "重试时宝具卡尚未识别完整，等待卡面稳定后重试");
+                thread::sleep(ACTION_DELAY);
+            },
+            NoblePhantasmDetectionMode::Gauge => self.read_noble_phantasm_gauges("Attack"),
+            NoblePhantasmDetectionMode::GaugeBeforeAttack => {
+                let nps = self.battle.pre_attack_nps.clone();
+                if nps.is_none() {
+                    self.fail_action(
+                        "Attack",
+                        "重试时读取攻击前宝具条",
+                        "未找到重新识别的宝具条结果".into(),
+                    );
+                }
+                nps
+            }
+        }
+    }
+
     /// Recover a chain whose three issued taps left the game on the Attack
-    /// screen. The exact prior picks are replayed after returning to Battle;
-    /// command-card ownership, suit, and NP readiness are intentionally not
-    /// re-read because the hand has not changed.
+    /// screen. The command-card hand is reused after returning to Battle, but
+    /// NP readiness is re-read because the original result may be stale.
     pub(crate) fn recover_stuck_attack_selection(&mut self) {
         let Some(plan) = self.last_attack_plan.clone() else {
             self.emit_warn("Attack", "选卡未完成，但没有可复用的选卡记录");
@@ -1858,8 +1950,16 @@ impl Runner {
             .transition(BattleFlowEvent::AttackScreenDetected);
         thread::sleep(ATTACK_RETRY_SCREEN_SETTLE);
 
-        self.emit("Attack", "指令卡画面已稳定，直接复用上次选卡");
-        self.tap_picks("Attack", &plan.picks, &plan.cards, &plan.party_ids);
+        let Some(nps) = self.read_noble_phantasms_for_retry() else {
+            return;
+        };
+        let retry_picks = refresh_retry_picks_for_np_state(&plan.picks, &plan.cards, &nps);
+        if retry_picks.len() < 3 {
+            self.fail_action("Attack", "重试选卡", "宝具不可用且没有足够的指令卡补位".into());
+            return;
+        }
+        self.emit("Attack", "指令卡画面已稳定，已重新识别宝具状态并重试选卡");
+        self.tap_picks("Attack", &retry_picks, &plan.cards, &plan.party_ids);
         if !self.battle.awaiting_attack_resolution() {
             return;
         }

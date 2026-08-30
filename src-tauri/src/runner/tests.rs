@@ -281,6 +281,78 @@ fn pre_attack_gauge_mode_is_distinct_from_post_attack_gauge_mode() {
 }
 
 #[test]
+fn np_gauge_samples_use_median_instead_of_a_bright_outlier() {
+    let samples = [0.30, 0.31, 0.29, 0.95, 0.32]
+        .into_iter()
+        .map(|score| {
+            let mut slot = np_slot_with_detectors(2, false, Some(false), Some(false));
+            slot.np_glow_score = Some(score);
+            vec![slot]
+        })
+        .collect::<Vec<_>>();
+
+    let aggregated = aggregate_np_gauge_samples(&samples);
+
+    assert_eq!(aggregated.len(), 1);
+    assert_eq!(aggregated[0].np_glow_score, Some(0.31));
+    assert!(!aggregated[0].ready);
+    assert_eq!(aggregated[0].np_glow_ready, Some(false));
+}
+
+#[test]
+fn np_gauge_samples_keep_stable_readiness_despite_one_dark_frame() {
+    let samples = [0.80, 0.82, 0.79, 0.20, 0.81]
+        .into_iter()
+        .map(|score| {
+            let mut slot = np_slot_with_detectors(2, false, Some(false), Some(false));
+            slot.np_glow_score = Some(score);
+            vec![slot]
+        })
+        .collect::<Vec<_>>();
+
+    let aggregated = aggregate_np_gauge_samples(&samples);
+
+    assert_eq!(aggregated[0].np_glow_score, Some(0.8));
+    assert!(aggregated[0].ready);
+    assert_eq!(aggregated[0].ready_source.as_deref(), Some("glow"));
+}
+
+#[test]
+fn retry_picks_replace_np_that_is_no_longer_ready() {
+    let picks = vec![
+        Pick::Np {
+            slot: 2,
+            point: Point::new(0.0, 0.0),
+            from_priority: "servant_3_np".into(),
+        },
+        Pick::Card {
+            slot: 0,
+            point: Point::new(0.0, 0.0),
+            servant_id: Some(10),
+            suit: Some("a".into()),
+            from_priority: None,
+        },
+        Pick::Card {
+            slot: 1,
+            point: Point::new(0.0, 0.0),
+            servant_id: Some(20),
+            suit: Some("b".into()),
+            from_priority: None,
+        },
+    ];
+    let cards = (0..5)
+        .map(|slot| command_card(slot, Some(10 + slot), Some("a"), None))
+        .collect::<Vec<_>>();
+    let nps = vec![np_slot(2, false)];
+
+    let refreshed = refresh_retry_picks_for_np_state(&picks, &cards, &nps);
+
+    assert_eq!(refreshed.len(), 3);
+    assert!(matches!(refreshed[0], Pick::Card { slot: 2, .. }));
+    assert_eq!(pick_labels(&refreshed), vec!["C2", "C0", "C1"]);
+}
+
+#[test]
 fn attack_log_command_cards_keep_slot_suit_and_servant_id() {
     let mut cards = vec![
         command_card(0, Some(309), Some("q"), None),

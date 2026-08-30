@@ -16,7 +16,7 @@ use crate::enhancement_runner::{
 use crate::friend_point_summon_runner::{
     FriendPointSummonRunnerHandle, FriendPointSummonRunnerState,
 };
-use crate::runner::{self, merge_best_np_slots, RunnerHandle, RunnerState};
+use crate::runner::{self, aggregate_np_gauge_samples, RunnerHandle, RunnerState};
 use crate::screen::{
     BondLevelUpReadResult, CommandCardMatch, ElementMatch, FindEnhancementServantGridResult,
     FindSupportsResult, NoblePhantasmMatch, NormRect, Point, ServantGridAnchor, ServantGridCell,
@@ -535,7 +535,7 @@ pub fn debug_read_noble_phantasm_gauges_live(
     let started = Instant::now();
     let sample_interval = Duration::from_millis(200);
     let sample_window = Duration::from_secs(1);
-    let mut best_slots: Option<Vec<NoblePhantasmMatch>> = None;
+    let mut samples: Vec<Vec<NoblePhantasmMatch>> = Vec::new();
 
     loop {
         let sample = {
@@ -546,7 +546,7 @@ pub fn debug_read_noble_phantasm_gauges_live(
             client.find_noble_phantasms(None, None)?
         };
 
-        merge_best_np_slots(&mut best_slots, sample);
+        samples.push(sample);
 
         if started.elapsed() >= sample_window {
             break;
@@ -554,8 +554,7 @@ pub fn debug_read_noble_phantasm_gauges_live(
         thread::sleep(sample_interval);
     }
 
-    let mut slots = best_slots.unwrap_or_default();
-    slots.sort_by_key(|slot| slot.slot);
+    let slots = aggregate_np_gauge_samples(&samples);
     Ok(slots)
 }
 
