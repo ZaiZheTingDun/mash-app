@@ -1031,6 +1031,7 @@ impl Runner {
         ) {
             Ok(r) => r,
             Err(e) => {
+                self.release_support_ocr();
                 self.fail_action("SupportSelect", "OCR 助战识别", e);
                 return;
             }
@@ -1105,6 +1106,7 @@ impl Runner {
         let chosen = chosen_index.and_then(|index| result.supports.get(index));
 
         if let Some(row) = chosen {
+            self.release_support_ocr();
             self.emit("SupportSelect", &support_found_summary(&meta.name, row));
             self.emit_debug(
                 "SupportSelect",
@@ -1240,11 +1242,18 @@ impl Runner {
                 return;
             }
         } else {
+            self.release_support_ocr();
             self.fail_action(
                 "SupportSelect",
                 "查找助战",
                 format!("刷新 {} 次仍未找到 {}", SUPPORT_MAX_REFRESHES, meta.name),
             );
+        }
+    }
+
+    pub(crate) fn release_support_ocr(&mut self) {
+        if let Err(error) = self.sidecar().release_ocr() {
+            eprintln!("[mash-cv] release support-search OCR worker failed: {error}");
         }
     }
 

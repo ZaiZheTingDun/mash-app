@@ -1271,6 +1271,31 @@ impl SidecarClient {
         Ok(())
     }
 
+    /// Release the disposable RapidOCR/ONNX worker without stopping the
+    /// lightweight mash-cv process. Safe to call before OCR was initialized.
+    pub fn release_ocr(&mut self) -> Result<(), String> {
+        let req = serde_json::json!({ "cmd": "release_ocr" });
+        let resp = self.send_recv(&req)?;
+        if !resp["ok"].as_bool().unwrap_or(false) {
+            let err = resp["error"].as_str().unwrap_or("unknown error");
+            return Err(format!("release_ocr failed: {err}"));
+        }
+        Ok(())
+    }
+
+    /// Stop device streaming and release the memory-heavy OCR worker before
+    /// this client is placed back into the shared sidecar cache.
+    pub fn prepare_for_cache(&mut self) -> Result<(), String> {
+        let stream_error = self.stop_stream().err();
+        let ocr_error = self.release_ocr().err();
+        match (stream_error, ocr_error) {
+            (None, None) => Ok(()),
+            (Some(stream), None) => Err(stream),
+            (None, Some(ocr)) => Err(ocr),
+            (Some(stream), Some(ocr)) => Err(format!("{stream}; {ocr}")),
+        }
+    }
+
     /// Return the (width, height) of the live stream, if one was started.
     pub fn stream_size(&self) -> Option<(u32, u32)> {
         self.stream_size

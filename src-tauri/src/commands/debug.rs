@@ -1536,7 +1536,7 @@ pub fn debug_find_supports(
     let client = guard
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-    let result: FindSupportsResult = client.find_supports(
+    let find_result: Result<FindSupportsResult, String> = client.find_supports(
         Some(&image_path),
         &meta.name,
         &meta.names,
@@ -1545,7 +1545,10 @@ pub fn debug_find_supports(
         meta.require_np_match,
         true,
         support_full_list_ocr_fallback,
-    )?;
+    );
+    let release_result = client.release_ocr();
+    let result = find_result?;
+    release_result?;
     eprintln!(
         "[debug_find_supports] {} match(es), {} name cand(s), {} np cand(s), {} fragment(s)",
         result.supports.len(),

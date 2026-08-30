@@ -21,6 +21,8 @@ def _clear_state():
     mash_cv._face_cache.clear()
     mash_cv._icon_color_sig.clear()
     from mash_cv import cv as _cv_module
+    _cv_module._release_ocr()
+    _cv_module._current_server = "JP"
     _cv_module._ce_template_cache.clear()
     _cv_module._servant_catalog_cache = None
     _cv_module.static_template_keys.clear()
@@ -36,6 +38,8 @@ def _clear_state():
     _cv_module.static_template_keys.clear()
     _cv_module.template_dirs.clear()
     _cv_module.templates_dir = None
+    _cv_module._release_ocr()
+    _cv_module._current_server = "JP"
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -5258,6 +5262,23 @@ class TestSetServer:
         assert resp["server"] == "JP"
         assert _cv_module._current_server == "JP"
 
+    def test_set_server_closes_worker_before_reset(self):
+        from mash_cv import cv as _cv_module
+
+        class Worker:
+            reason = None
+
+            def close(self, reason):
+                self.reason = reason
+
+        worker = Worker()
+        _cv_module._ocr_engine = worker
+
+        _cv_module._set_server("CN")
+
+        assert worker.reason == "server-changed"
+        assert _cv_module._ocr_engine is None
+
 
 # ── Integration: subprocess REPL ────────────────────────────────────────
 
@@ -5330,6 +5351,17 @@ class TestREPL:
         assert "ocrReset" in responses[0]
         assert responses[1]["server"] == "JP"
         assert responses[2] == {"ok": True}
+
+    def test_release_ocr_is_idempotent(self):
+        responses = self._run([
+            {"cmd": "release_ocr"},
+            {"cmd": "release_ocr"},
+            {"cmd": "quit"},
+        ])
+        assert responses == [
+            {"ok": True, "released": False},
+            {"ok": True, "released": False},
+        ]
 
     def test_detect_missing_image(self):
         responses = self._run([

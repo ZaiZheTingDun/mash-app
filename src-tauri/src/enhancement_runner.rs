@@ -1244,8 +1244,8 @@ impl Drop for EnhancementRunner {
         let Some(mut sidecar) = self.sidecar.take() else {
             return;
         };
-        if let Err(err) = sidecar.stop_stream() {
-            eprintln!("[mash-cv] stop_stream before caching enhancement sidecar failed: {err}");
+        if let Err(err) = sidecar.prepare_for_cache() {
+            eprintln!("[mash-cv] prepare enhancement sidecar for cache failed: {err}");
         }
         if let Some(cache) = &self.sidecar_cache {
             let mut guard = cache.lock().unwrap();

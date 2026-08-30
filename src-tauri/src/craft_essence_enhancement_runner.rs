@@ -3665,8 +3665,8 @@ impl Drop for CraftEssenceEnhancementRunner {
         let Some(mut sidecar) = self.sidecar.take() else {
             return;
         };
-        if let Err(err) = sidecar.stop_stream() {
-            eprintln!("[mash-cv] stop CE enhancement stream failed: {err}");
+        if let Err(err) = sidecar.prepare_for_cache() {
+            eprintln!("[mash-cv] prepare CE enhancement sidecar for cache failed: {err}");
         }
         if let Some(cache) = &self.sidecar_cache {
             let mut guard = cache.lock().unwrap();

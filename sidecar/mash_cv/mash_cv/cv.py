@@ -16,6 +16,7 @@ Lifecycle / streaming:
 → {"cmd":"start_stream","adbPath":"...","jarPath":"...","serial":"...","maxSize":1920,"bitRate":12000000,"maxFps":15}
                                                     ← {"ok":true,"width":1080,"height":1920}
 → {"cmd":"stop_stream"}                             ← {"ok":true,"running":false}
+→ {"cmd":"release_ocr"}                             ← {"ok":true,"released":true}
 → {"cmd":"get_frame","quality":85,"waitSeconds":10} ← {"ok":true,"jpegB64":"...","width":w,"height":h}
 → {"cmd":"quit"}                                    (process exits)
 
@@ -3817,9 +3818,8 @@ def _find_noble_phantasms(
 # Support-select OCR detector
 # ---------------------------------------------------------------------------
 
-# Lazy singleton: RapidOCR cold-start (ONNX runtime + model warmup) costs
-# ~1s, which we don't want on `ping` or on every CV command that doesn't
-# touch OCR. Constructed on first ``find_supports`` call and reused after.
+# Lazy proxy to a disposable OCR worker. RapidOCR/ONNX is never imported in
+# this long-running process; recycling the worker releases its native arenas.
 _ocr_engine: Any = None
 
 # Active game server. Drives which OCR model `_get_ocr()` pins.
@@ -3845,6 +3845,9 @@ def _set_server(server: str) -> dict:
     changed = resolved != _current_server
     _current_server = resolved
     if changed:
+        close = getattr(_ocr_engine, "close", None)
+        if callable(close):
+            close("server-changed")
         _ocr_engine = None
     print(
         f"[mash-cv] set_server -> {resolved} (requested={requested!r}, "
@@ -3854,100 +3857,26 @@ def _set_server(server: str) -> dict:
     return {"ok": True, "server": resolved, "ocrReset": changed}
 
 
-def _ocr_models_dir() -> Optional[str]:
-    """Resolve the directory holding the bundled Japanese OCR rec model.
-
-    ``MASH_CV_MODELS_DIR`` is set by the Tauri app when the lightweight
-    ``mash_cv`` code package runs on top of a separately installed runtime
-    base.
-
-    The model files live under ``mash_cv/models/`` in the source tree and
-    must be shipped via PyInstaller's ``--add-data mash_cv/models:mash_cv/models``
-    so the same relative path resolves inside the bundled ``_internal/``.
-
-    Tries (in order):
-      1. ``<this_dir>/models`` — works in dev (poetry run) and in
-         PyInstaller --onedir bundles where ``__file__`` resolves to
-         ``_internal/mash_cv/cv.pyc``.
-      2. ``<sys._MEIPASS>/mash_cv/models`` — fallback for --onefile or
-         odd PyInstaller layouts where step 1 misses.
-    """
-    candidates: list[str] = []
-    env_models = os.environ.get("MASH_CV_MODELS_DIR")
-    if env_models:
-        candidates.append(env_models)
-    candidates.append(os.path.join(os.path.dirname(__file__), "models"))
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass:
-        candidates.append(os.path.join(meipass, "mash_cv", "models"))
-    for path in candidates:
-        if os.path.isdir(path):
-            return path
-    return None
+def _release_ocr(reason: str = "released") -> dict:
+    """Stop the disposable OCR worker while keeping stream/template state."""
+    global _ocr_engine
+    worker = _ocr_engine
+    _ocr_engine = None
+    close = getattr(worker, "close", None)
+    if callable(close):
+        close(reason)
+        return {"ok": True, "released": True}
+    return {"ok": True, "released": False}
 
 
 def _get_ocr() -> Optional[Any]:
-    """Lazily build the RapidOCR engine pinned to the active server's rec model.
-
-    Returns ``None`` if rapidocr-onnxruntime isn't importable so callers
-    can degrade gracefully (the dep is optional in the unit-test sandbox).
-    Logs to stderr exactly which rec model + dict path won so deployment
-    bugs (e.g. bundle missing the active model) are obvious from the
-    logs. The cached engine is invalidated by `_set_server` so a
-    mid-session server flip rebuilds against the new model on next use.
-    """
+    """Return a lazy RapidOCR-compatible proxy backed by a child process."""
     global _ocr_engine
     if _ocr_engine is not None:
         return _ocr_engine
-    try:
-        from rapidocr_onnxruntime import RapidOCR
-    except Exception as exc:  # noqa: BLE001
-        print(f"[mash-cv] rapidocr import failed: {exc}", file=sys.stderr)
-        return None
+    from mash_cv.ocr_client import OcrWorkerClient
 
-    models_dir = _ocr_models_dir()
-
-    # Per-server (rec_model_filename, rec_keys_filename) pinning. JP
-    # ships with the project (japanese rec + dict). CN expects the
-    # standard PaddleOCR Chinese rec model + ppocr_keys_v1.txt — drop
-    # those two files into `mash_cv/models/` and rebuild the sidecar to
-    # light up CN OCR. Until then `_get_ocr()` falls back to the
-    # framework default with a loud warning.
-    server = _current_server
-    if server == "CN":
-        rec_filename = "chinese_PP-OCRv4_rec_infer.onnx"
-        keys_filename = "ppocr_keys_v1.txt"
-    else:
-        rec_filename = "japan_PP-OCRv4_rec_infer.onnx"
-        keys_filename = "japan_dict.txt"
-
-    rec_model = (
-        os.path.join(models_dir, rec_filename) if models_dir else None
-    )
-    rec_keys = (
-        os.path.join(models_dir, keys_filename) if models_dir else None
-    )
-    if rec_model and rec_keys and os.path.isfile(rec_model) and os.path.isfile(rec_keys):
-        print(
-            f"[mash-cv] OCR using {server} rec model: {rec_model}",
-            file=sys.stderr,
-        )
-        _ocr_engine = RapidOCR(rec_model_path=rec_model, rec_keys_path=rec_keys)
-    else:
-        # JP missing -> almost always a build bug (PyInstaller bundle
-        # didn't pick up `mash_cv/models/`). CN missing -> expected
-        # state until someone drops the chinese rec model into the
-        # bundle; surface it loudly so it's obvious why every
-        # find_supports call returns nothing on a fresh CN install.
-        print(
-            f"[mash-cv] WARNING: {server} rec model not found "
-            f"(searched: dir={models_dir!r} rec={rec_model!r} keys={rec_keys!r}); "
-            "falling back to default rapidocr model (server-specific OCR will fail). "
-            "Drop the matching .onnx / dict files into mash_cv/models/ and "
-            "rebuild the sidecar.",
-            file=sys.stderr,
-        )
-        _ocr_engine = RapidOCR()
+    _ocr_engine = OcrWorkerClient(_current_server)
     return _ocr_engine
 
 
@@ -4289,6 +4218,11 @@ def _support_recognize_anchor_rows(
     return raw
 
 
+def _support_full_list_ocr(ocr: Any, crop: np.ndarray):
+    """Run the heavy detector inside the current support-search worker."""
+    return ocr(crop)
+
+
 def _find_supports(
     img: np.ndarray,
     list_region: dict,
@@ -4417,7 +4351,7 @@ def _find_supports(
         # bundles or unusual layouts. Preserve the proven whole-list detector
         # as a correctness fallback instead of turning those pages into an
         # unconditional miss.
-        raw, _ = ocr(crop)
+        raw, _ = _support_full_list_ocr(ocr, crop)
     else:
         raw = _support_recognize_anchor_rows(
             img,
@@ -4431,7 +4365,7 @@ def _find_supports(
             # bundles or unusual layouts. Preserve the proven whole-list detector
             # as a correctness fallback instead of turning those pages into an
             # unconditional miss.
-            raw, _ = ocr(crop)
+            raw, _ = _support_full_list_ocr(ocr, crop)
     if not raw:
         return {"supports": [], "diagnostics": diag}
 
@@ -6401,7 +6335,7 @@ def _get_frame(cmd: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
+def _main_repl() -> None:
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -6442,6 +6376,8 @@ def main() -> None:
             _reply(req_id, _start_stream(cmd))
         elif action == "stop_stream":
             _reply(req_id, _stop_stream())
+        elif action == "release_ocr":
+            _reply(req_id, _release_ocr())
         elif action == "get_frame":
             _reply(req_id, _get_frame(cmd))
         elif action == "detect":
@@ -6707,3 +6643,21 @@ def main() -> None:
             _reply(req_id, _read_craft_essence_main_target(img))
         else:
             _reply(req_id, {"error": f"unknown command: {action}"})
+
+
+def main() -> None:
+    if os.environ.get("MASH_CV_PROCESS_MODE") == "ocr-worker":
+        from mash_cv.ocr_worker import main as ocr_worker_main
+
+        ocr_worker_main()
+        return
+
+    try:
+        _main_repl()
+    finally:
+        _release_ocr()
+        if stream is not None:
+            try:
+                stream.stop()
+            except Exception:  # noqa: BLE001 - process is already exiting
+                pass

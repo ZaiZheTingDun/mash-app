@@ -698,8 +698,8 @@ impl Drop for FriendPointSummonRunner {
         let Some(mut sidecar) = self.sidecar.take() else {
             return;
         };
-        if let Err(error) = sidecar.stop_stream() {
-            eprintln!("[mash-cv] stop friend point summon stream failed: {error}");
+        if let Err(error) = sidecar.prepare_for_cache() {
+            eprintln!("[mash-cv] prepare friend point summon sidecar for cache failed: {error}");
         }
         if let Some(cache) = &self.sidecar_cache {
             let mut guard = cache.lock().unwrap();

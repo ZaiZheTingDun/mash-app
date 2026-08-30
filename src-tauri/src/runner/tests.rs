@@ -1,3 +1,4 @@
+use super::engine::support_search_screen_exited;
 use super::*;
 
 #[test]
@@ -498,6 +499,26 @@ fn battle_result_popup_skip_only_applies_to_result_screens() {
     assert!(!is_battle_result_screen(Screen::SupportSelect));
     assert!(!is_battle_result_screen(Screen::APRecovery));
     assert!(!is_battle_result_screen(Screen::Unknown));
+}
+
+#[test]
+fn support_search_worker_releases_only_after_a_confirmed_screen_exit() {
+    assert!(support_search_screen_exited(
+        Screen::SupportSelect,
+        Screen::TeamConfirm
+    ));
+    assert!(!support_search_screen_exited(
+        Screen::SupportSelect,
+        Screen::SupportSelect
+    ));
+    assert!(!support_search_screen_exited(
+        Screen::SupportSelect,
+        Screen::Unknown
+    ));
+    assert!(!support_search_screen_exited(
+        Screen::Battle,
+        Screen::TeamConfirm
+    ));
 }
 
 #[test]

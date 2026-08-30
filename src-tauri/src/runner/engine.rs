@@ -18,6 +18,12 @@ pub(super) fn unknown_screen_wait_message(
     format!("等待识别画面[{server_label}]... ({unknown_count}/{timeout})")
 }
 
+pub(super) fn support_search_screen_exited(previous: Screen, current: Screen) -> bool {
+    previous == Screen::SupportSelect
+        && current != Screen::SupportSelect
+        && current != Screen::Unknown
+}
+
 impl Runner {
     // -- main loop -----------------------------------------------------------
 
@@ -48,6 +54,10 @@ impl Runner {
                     return;
                 }
             };
+
+            if support_search_screen_exited(last_detected_screen, screen) {
+                self.release_support_ocr();
+            }
 
             self.resolve_pending_ap_recovery(screen);
 
