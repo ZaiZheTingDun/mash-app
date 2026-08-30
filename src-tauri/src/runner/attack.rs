@@ -578,9 +578,7 @@ pub(crate) fn refresh_retry_picks_for_np_state(
 
     for pick in picks {
         match pick {
-            Pick::Np { slot, .. }
-                if !nps.iter().any(|np| np.slot == *slot && np.ready) =>
-            {
+            Pick::Np { slot, .. } if !nps.iter().any(|np| np.slot == *slot && np.ready) => {
                 if let Some(replacement) = replacements.pop_front() {
                     refreshed.push(replacement);
                 }
@@ -1959,7 +1957,11 @@ impl Runner {
         };
         let retry_picks = refresh_retry_picks_for_np_state(&plan.picks, &plan.cards, &nps);
         if retry_picks.len() < 3 {
-            self.fail_action("Attack", "重试选卡", "宝具不可用且没有足够的指令卡补位".into());
+            self.fail_action(
+                "Attack",
+                "重试选卡",
+                "宝具不可用且没有足够的指令卡补位".into(),
+            );
             return;
         }
         self.emit("Attack", "指令卡画面已稳定，已重新识别宝具状态并重试选卡");

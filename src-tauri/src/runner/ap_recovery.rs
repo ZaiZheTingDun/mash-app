@@ -147,7 +147,11 @@ pub(crate) fn available_ap_recovery_items(
     configured
         .iter()
         .copied()
-        .filter(|item| limits.get(*item).is_none_or(|limit| usage.get(*item) < limit))
+        .filter(|item| {
+            limits
+                .get(*item)
+                .is_none_or(|limit| usage.get(*item) < limit)
+        })
         .collect()
 }
 

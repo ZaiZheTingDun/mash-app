@@ -37,9 +37,7 @@ pub enum ApRecoveryItem {
     Copper,
 }
 
-#[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ApRecoveryLimits {
     pub rainbow: Option<u32>,
