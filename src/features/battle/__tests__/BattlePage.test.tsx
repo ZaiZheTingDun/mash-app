@@ -8,6 +8,7 @@ import { renderWithTheme } from "../../../test/renderWithTheme";
 import { BattlePage } from "../BattlePage";
 import type { Project } from "../../../types/project";
 import type { GrandClassDefinition } from "../../../types/project";
+import type { BattleRunStatus } from "../../../types/battleRunStatus";
 
 const GRAND_CLASS_DEFINITIONS: GrandClassDefinition[] = [
   {
@@ -87,7 +88,11 @@ function mockProjectCommands() {
   });
 }
 
-function renderBattlePage(initialProject: Project, servants: Servant[] = [SABER, BERSERKER, CASTER]) {
+function renderBattlePage(
+  initialProject: Project,
+  servants: Servant[] = [SABER, BERSERKER, CASTER],
+  battleRunStatus: BattleRunStatus | null = null,
+) {
   const callbacks = {
     onCreateProject: vi.fn(),
     onRenameProject: vi.fn(),
@@ -140,6 +145,7 @@ function renderBattlePage(initialProject: Project, servants: Servant[] = [SABER,
         onBack={callbacks.onBack}
         onAutomationStart={callbacks.onAutomationStart}
         onLogEntry={callbacks.onLogEntry}
+        battleRunStatus={battleRunStatus}
       />
     );
   }
@@ -451,6 +457,36 @@ describe("BattlePage", () => {
         }),
       });
     });
+  });
+
+  it("shows run progress in the count control and footer while running", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage(
+      {
+        ...PROJECT,
+        repeatMission: true,
+        repeatMode: "count",
+        repeatCount: 10,
+      },
+      [SABER, BERSERKER, CASTER],
+      {
+        phase: "running",
+        startedAtMs: 0,
+        endedAtMs: null,
+        lastCompletedAtMs: 1_000,
+        completedRuns: 1,
+        maxRuns: 10,
+        apRecoveryUsage: { gold: 0, silver: 0, bronze: 0, copper: 0, rainbow: 0 },
+      },
+    );
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    expect(screen.queryByRole("spinbutton", { name: "重复次数" })).not.toBeInTheDocument();
+    expect(screen.getByText("1/10")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "开始" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
   });
 
   it("opens advanced loot settings and persists five-star CE drop options", async () => {

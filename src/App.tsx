@@ -961,6 +961,7 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
               onAutomationStart={handleBattleAutomationStart}
               onAutomationStartFailed={handleBattleAutomationStartFailed}
               onLogEntry={appendOperationLog}
+              battleRunStatus={battleRunStatus}
             />
           ) : view === "enhancement" && featureToggles.servantEnhancement ? (
             <EnhancementPage

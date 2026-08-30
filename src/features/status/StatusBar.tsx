@@ -1107,7 +1107,11 @@ export function StatusBar({
             <ClockIcon width={14} height={14} />
             <Text size="1">
               运行状态
-              {battleRunStatus != null ? `（${battleRunStatus.completedRuns} 次）` : ""}
+              {battleRunStatus != null
+                ? `（${battleRunStatus.completedRuns}${
+                    battleRunStatus.maxRuns != null ? `/${battleRunStatus.maxRuns}` : ""
+                  } 次）`
+                : ""}
             </Text>
           </Button>
         </Flex>

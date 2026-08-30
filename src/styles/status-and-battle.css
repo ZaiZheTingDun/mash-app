@@ -645,6 +645,14 @@
   color: var(--gray-8);
 }
 
+.battle-counter-progress {
+  min-width: 42px;
+  padding: 6px 4px;
+  color: var(--gray-11);
+  text-align: center;
+  white-space: nowrap;
+}
+
 .battle-recovery-cards {
   display: grid;
   grid-template-columns: repeat(5, minmax(128px, 1fr));

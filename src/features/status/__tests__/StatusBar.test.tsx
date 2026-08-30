@@ -169,7 +169,7 @@ describe("StatusBar", () => {
     expect(screen.queryByAltText("青铜果实")).not.toBeInTheDocument();
     expect(screen.getByText("× 1")).toBeInTheDocument();
     expect(screen.getByText("× 2")).toBeInTheDocument();
-    expect(screen.getByText("运行状态（30 次）")).toBeInTheDocument();
+    expect(screen.getByText("运行状态（30/30 次）")).toBeInTheDocument();
   });
 
   it("keeps the run-status trigger styling aligned with the operation-log trigger", () => {

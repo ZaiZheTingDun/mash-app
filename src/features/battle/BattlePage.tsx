@@ -44,6 +44,7 @@ import {
   validateGrandServants as grandServantsAreValid,
 } from "../advanced/grandClassModel";
 import { isAutomationTerminal, type AutomationStatus } from "../../types/automation";
+import type { BattleRunStatus } from "../../types/battleRunStatus";
 
 interface AutomationEvent {
   state: string;
@@ -138,6 +139,7 @@ interface BattlePageProps {
   onAutomationStart?: (maxRuns: number | null) => void;
   onAutomationStartFailed?: () => void;
   onLogEntry?: (message: string) => void;
+  battleRunStatus?: BattleRunStatus | null;
 }
 
 interface BattleProjectDraft {
@@ -436,6 +438,7 @@ export function BattlePage({
   onAutomationStart,
   onAutomationStartFailed,
   onLogEntry,
+  battleRunStatus = null,
 }: BattlePageProps) {
   const [running, setRunning] = useState(false);
   const [rainbowConfirmOpen, setRainbowConfirmOpen] = useState(false);
@@ -721,6 +724,10 @@ export function BattlePage({
   );
 
   const displayedRepeatCount = repeatCount ?? 1;
+  const runProgressText =
+    running && repeatMode === "count"
+      ? `${battleRunStatus?.completedRuns ?? 0}/${battleRunStatus?.maxRuns ?? displayedRepeatCount}`
+      : null;
 
   return (
     <Flex direction="column" className="battle-page">
@@ -784,20 +791,29 @@ export function BattlePage({
                     >
                       <MinusIcon width={15} height={15} />
                     </Button>
-                    <TextField.Root
-                      className="battle-counter-value"
-                      type="number"
-                      min="1"
-                      step="1"
-                      variant="soft"
-                      radius="none"
-                      inputMode="numeric"
-                      aria-label="重复次数"
-                      value={displayedRepeatCount}
-                      disabled={running || !selectedProject}
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={(event) => handleRepeatCountInput(event.target.value)}
-                    />
+                    {runProgressText != null ? (
+                      <Text
+                        className="battle-counter-progress"
+                        aria-label={`运行进度 ${runProgressText}`}
+                      >
+                        {runProgressText}
+                      </Text>
+                    ) : (
+                      <TextField.Root
+                        className="battle-counter-value"
+                        type="number"
+                        min="1"
+                        step="1"
+                        variant="soft"
+                        radius="none"
+                        inputMode="numeric"
+                        aria-label="重复次数"
+                        value={displayedRepeatCount}
+                        disabled={running || !selectedProject}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => handleRepeatCountInput(event.target.value)}
+                      />
+                    )}
                     <Button
                       disabled={running || !selectedProject}
                       color="indigo"
