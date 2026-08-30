@@ -3031,6 +3031,8 @@ def test_find_supports_uses_anchor_row_recognition_without_full_detector(monkeyp
 
         def text_recognizer(self, crops):
             assert len(crops) == 3
+            assert crops[1].shape == (55, 343, 3)
+            assert crops[2].shape == (60, 348, 3)
             return [
                 ("Lv.100/100", 0.99),
                 ("阿尔托莉雅·Caster", 0.98),
@@ -3039,7 +3041,8 @@ def test_find_supports_uses_anchor_row_recognition_without_full_detector(monkeyp
 
     img = np.zeros((1000, 1000, 3), dtype=np.uint8)
     anchors = [{"x": 0.85, "y": 0.20, "w": 0.07, "h": 0.06}]
-    monkeypatch.setattr(cv, "_get_ocr", lambda: FakeOcr())
+    ocr = FakeOcr()
+    monkeypatch.setattr(cv, "_get_ocr", lambda: ocr)
     monkeypatch.setattr(
         cv, "_support_find_confirm_button_anchors", lambda _img: anchors
     )
@@ -3062,6 +3065,42 @@ def test_find_supports_uses_anchor_row_recognition_without_full_detector(monkeyp
     assert len(result["supports"]) == 1
     assert result["supports"][0]["npText"].endswith("等级5")
     assert result["diagnostics"]["fragmentCount"] == 3
+
+
+def test_support_text_regions_move_right_without_shortening_the_right_edge():
+    import mash_cv.cv as cv
+
+    assert cv.SUPPORT_ROW_NAME_REGION_X == pytest.approx(0.272)
+    assert cv.SUPPORT_ROW_NAME_REGION_X + cv.SUPPORT_ROW_NAME_REGION_W == pytest.approx(
+        0.615
+    )
+    assert cv.SUPPORT_ROW_NP_REGION_X == pytest.approx(0.272)
+    assert cv.SUPPORT_ROW_NP_REGION_X + cv.SUPPORT_ROW_NP_REGION_W == pytest.approx(
+        0.620
+    )
+
+
+def test_support_text_right_trim_removes_blank_tail_but_keeps_final_glyph_padding():
+    import mash_cv.cv as cv
+
+    crop = np.full((60, 500, 3), 150, dtype=np.uint8)
+    crop[10:50, 20:221] = 20
+
+    trimmed = cv._support_trim_text_right(crop)
+
+    assert 221 + 32 <= trimmed.shape[1] < crop.shape[1]
+    assert np.array_equal(trimmed[:, :221], crop[:, :221])
+
+
+def test_support_text_right_trim_keeps_uncertain_or_full_width_content():
+    import mash_cv.cv as cv
+
+    blank = np.full((60, 500, 3), 150, dtype=np.uint8)
+    long_text = blank.copy()
+    long_text[10:50, 20:495] = 20
+
+    assert cv._support_trim_text_right(blank).shape == blank.shape
+    assert cv._support_trim_text_right(long_text).shape == long_text.shape
 
 
 def test_find_supports_retries_full_list_ocr_when_enabled_after_anchor_miss(monkeypatch):

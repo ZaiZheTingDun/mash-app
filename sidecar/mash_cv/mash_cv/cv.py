@@ -310,12 +310,17 @@ SUPPORT_NP_THRESHOLD = 0.65
 # anchor. Feeding those strips directly to RapidOCR's recognition model avoids
 # running the much heavier text detector over the full support list. Values are
 # normalized to the full frame; Y offsets are anchor-top -> text-strip-top.
-SUPPORT_ROW_NAME_REGION_X = 0.255
-SUPPORT_ROW_NAME_REGION_W = 0.360
+# CN and JP align the actual servant value at the same column, but the
+# longer JP ``サーヴァント`` label reaches farther right. Start after that
+# label while leaving enough leading context for narrow Latin initials, and
+# preserve the previous 0.615 right edge for unusually long servant names.
+SUPPORT_ROW_NAME_REGION_X = 0.272
+SUPPORT_ROW_NAME_REGION_W = 0.343
 SUPPORT_ROW_NAME_REGION_DY = 0.085
 SUPPORT_ROW_NAME_REGION_H = 0.055
-SUPPORT_ROW_NP_REGION_X = 0.270
-SUPPORT_ROW_NP_REGION_W = 0.350
+# Skip the NP icon while preserving the previous 0.620 right edge.
+SUPPORT_ROW_NP_REGION_X = 0.272
+SUPPORT_ROW_NP_REGION_W = 0.348
 SUPPORT_ROW_NP_REGION_DY = 0.135
 SUPPORT_ROW_NP_REGION_H = 0.060
 # The servant's current level is rendered above the portrait, to the left of
@@ -4123,6 +4128,48 @@ def _ocr_region(img: np.ndarray, region: dict, *, scale: float = 1.0) -> dict:
     return {"fragments": fragments, "fullText": "\n".join(texts)}
 
 
+def _support_trim_text_right(crop: np.ndarray) -> np.ndarray:
+    """Trim unused panel background after a support-row text value.
+
+    The recognition-only model stretches every input to its fixed tensor
+    width. A full-width support panel therefore turns a large blank blue tail
+    into repeated dashes or kana. Dark glyph outlines give us a stable right
+    edge on both CN and JP, while a generous height-relative pad preserves the
+    final glyph and keeps long names at the original maximum boundary.
+
+    If there is not enough ink evidence (for example during a transition),
+    keep the original crop so the caller can still fall back normally.
+    """
+    if crop.size == 0 or crop.ndim < 2:
+        return crop
+
+    height, width = crop.shape[:2]
+    if height <= 0 or width <= 0:
+        return crop
+
+    if crop.ndim == 2:
+        gray = crop
+    else:
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+
+    min_dark_pixels = max(3, int(round(height * 0.045)))
+    ink_columns = (gray < 90).sum(axis=0) >= min_dark_pixels
+    dense_ink = np.convolve(
+        ink_columns.astype(np.uint8),
+        np.ones(5, dtype=np.uint8),
+        mode="same",
+    ) >= 2
+    active_columns = np.flatnonzero(dense_ink)
+    if active_columns.size < 8:
+        return crop
+
+    right_padding = max(32, int(round(height * 0.75)))
+    trimmed_width = min(width, int(active_columns[-1]) + 1 + right_padding)
+    if trimmed_width >= width:
+        return crop
+    return crop[:, :trimmed_width]
+
+
 def _support_recognize_anchor_rows(
     img: np.ndarray,
     ocr: Any,
@@ -4152,26 +4199,35 @@ def _support_recognize_anchor_rows(
     for anchor in confirm_anchors:
         anchor_y = float(anchor.get("y", 0.0))
         regions = (
-            {
-                "x": SUPPORT_ROW_LEVEL_REGION_X,
-                "y": anchor_y + SUPPORT_ROW_LEVEL_REGION_Y_OFFSET,
-                "w": SUPPORT_ROW_LEVEL_REGION_W,
-                "h": SUPPORT_ROW_LEVEL_REGION_H,
-            },
-            {
-                "x": SUPPORT_ROW_NAME_REGION_X,
-                "y": anchor_y + SUPPORT_ROW_NAME_REGION_DY,
-                "w": SUPPORT_ROW_NAME_REGION_W,
-                "h": SUPPORT_ROW_NAME_REGION_H,
-            },
-            {
-                "x": SUPPORT_ROW_NP_REGION_X,
-                "y": anchor_y + SUPPORT_ROW_NP_REGION_DY,
-                "w": SUPPORT_ROW_NP_REGION_W,
-                "h": SUPPORT_ROW_NP_REGION_H,
-            },
+            (
+                {
+                    "x": SUPPORT_ROW_LEVEL_REGION_X,
+                    "y": anchor_y + SUPPORT_ROW_LEVEL_REGION_Y_OFFSET,
+                    "w": SUPPORT_ROW_LEVEL_REGION_W,
+                    "h": SUPPORT_ROW_LEVEL_REGION_H,
+                },
+                False,
+            ),
+            (
+                {
+                    "x": SUPPORT_ROW_NAME_REGION_X,
+                    "y": anchor_y + SUPPORT_ROW_NAME_REGION_DY,
+                    "w": SUPPORT_ROW_NAME_REGION_W,
+                    "h": SUPPORT_ROW_NAME_REGION_H,
+                },
+                True,
+            ),
+            (
+                {
+                    "x": SUPPORT_ROW_NP_REGION_X,
+                    "y": anchor_y + SUPPORT_ROW_NP_REGION_DY,
+                    "w": SUPPORT_ROW_NP_REGION_W,
+                    "h": SUPPORT_ROW_NP_REGION_H,
+                },
+                True,
+            ),
         )
-        for region in regions:
+        for region, trim_text_right in regions:
             x0 = max(0, min(w, int(round(float(region["x"]) * w))))
             y0 = max(0, min(h, int(round(float(region["y"]) * h))))
             x1 = max(
@@ -4193,6 +4249,9 @@ def _support_recognize_anchor_rows(
             text_crop = img[y0:y1, x0:x1]
             if text_crop.size == 0:
                 continue
+            if trim_text_right:
+                text_crop = _support_trim_text_right(text_crop)
+                x1 = x0 + text_crop.shape[1]
             jobs.append((text_crop, (x0, y0, x1, y1)))
 
     if not jobs:
