@@ -2923,6 +2923,10 @@ def test_support_np_level_parser_rejects_non_level_digits():
         ("L. 90/90", 90),
         ("等级120/120", 120),
         ("120/120", 120),
+        ("120", 120),
+        (" 92 ", 92),
+        ("121", None),
+        ("友情点25", None),
         ("Lv.121/121", None),
     ],
 )

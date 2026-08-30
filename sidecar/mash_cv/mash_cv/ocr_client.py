@@ -19,7 +19,10 @@ from mash_cv.ocr_protocol import read_message, write_message
 OCR_WORKER_MAX_REQUESTS = 200
 OCR_WORKER_MAX_DETECT_REQUESTS = 25
 OCR_WORKER_MAX_LIFETIME_SECONDS = 30 * 60
-OCR_WORKER_REQUEST_TIMEOUT_SECONDS = 30.0
+# Two attempts, including process startup and forced cleanup, must fit inside
+# the Rust client's 60-second recoverable OCR command timeout.
+OCR_WORKER_PING_TIMEOUT_SECONDS = 5.0
+OCR_WORKER_REQUEST_TIMEOUT_SECONDS = 15.0
 
 
 @dataclass
@@ -151,7 +154,11 @@ class OcrWorkerClient:
         self._generation += 1
         worker = _WorkerProcess(self._generation)
         try:
-            response = worker.request({"id": 0, "action": "ping"}, [], 10.0)
+            response = worker.request(
+                {"id": 0, "action": "ping"},
+                [],
+                OCR_WORKER_PING_TIMEOUT_SECONDS,
+            )
             if not response.get("ok"):
                 raise RuntimeError(str(response.get("error", "OCR worker ping failed")))
         except Exception:

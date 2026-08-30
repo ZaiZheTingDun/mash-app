@@ -5,6 +5,8 @@ use std::time::{Duration, Instant};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
+const RECOVERABLE_OCR_COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
+
 mod types;
 pub use types::*;
 
@@ -774,10 +776,9 @@ impl SidecarClient {
         });
         Self::add_image_path(&mut req, image_path);
 
-        // OCR cold-start (loading the ONNX model on first call) can run
-        // 5-10s on a fresh sidecar; bump the per-call timeout accordingly.
-        // Subsequent calls return in <1s.
-        let resp = self.send_recv_with_timeout(&req, Duration::from_secs(30))?;
+        // The worker may be recycled and retried once. Keep this outer timeout
+        // longer than both 15-second worker attempts plus startup/cleanup.
+        let resp = self.send_recv_with_timeout(&req, RECOVERABLE_OCR_COMMAND_TIMEOUT)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
             return Err(err.to_string());
         }
@@ -802,7 +803,7 @@ impl SidecarClient {
             },
         });
         Self::add_image_path(&mut req, image_path);
-        let resp = self.send_recv_with_timeout(&req, Duration::from_secs(30))?;
+        let resp = self.send_recv_with_timeout(&req, RECOVERABLE_OCR_COMMAND_TIMEOUT)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
             return Err(err.to_string());
         }

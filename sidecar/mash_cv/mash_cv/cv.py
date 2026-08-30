@@ -4657,6 +4657,8 @@ def _support_parse_servant_level_text(text: str) -> Optional[int]:
     if not match:
         match = re.search(r"\b(\d{1,3})\s*/\s*\d{1,3}\b", normalized)
     if not match:
+        match = re.fullmatch(r"\s*(\d{1,3})\s*", normalized)
+    if not match:
         return None
     level = int(match.group(1))
     return level if 1 <= level <= SUPPORT_SERVANT_LEVEL_MAX else None

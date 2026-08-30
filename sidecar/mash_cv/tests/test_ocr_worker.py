@@ -157,6 +157,7 @@ def test_client_reuses_worker_until_explicit_release(monkeypatch) -> None:
 
 def test_client_retries_once_with_a_fresh_worker(monkeypatch) -> None:
     workers = []
+    request_timeouts = []
 
     class Worker:
         def __init__(self, generation: int) -> None:
@@ -165,10 +166,11 @@ def test_client_retries_once_with_a_fresh_worker(monkeypatch) -> None:
             self.closed = False
             workers.append(self)
 
-        def request(self, header, _payload_parts, _timeout):
+        def request(self, header, _payload_parts, timeout):
             action = header["action"]
             if action in ("ping", "quit"):
                 return {"id": header["id"], "ok": True}
+            request_timeouts.append(timeout)
             if self.generation == 1:
                 raise RuntimeError("simulated worker crash")
             return {"id": header["id"], "ok": True, "result": [], "elapsed": 0.0}
@@ -183,6 +185,7 @@ def test_client_retries_once_with_a_fresh_worker(monkeypatch) -> None:
 
     assert result == []
     assert len(workers) == 2
+    assert request_timeouts == [ocr_client_module.OCR_WORKER_REQUEST_TIMEOUT_SECONDS] * 2
     assert workers[0].closed is True
     client.close()
 
