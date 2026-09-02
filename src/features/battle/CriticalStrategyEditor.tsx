@@ -75,7 +75,7 @@ function normalizedMembers(
   partyMembers: PartyMember[],
   configured: AttackMemberPriorityItem[] | undefined
 ): ConfiguredMember[] {
-  const available = partyMembers.flatMap((member, index) => {
+  const available = partyMembers.slice(0, 3).flatMap((member, index) => {
     if (!member.servant) return [];
     return [{
       key: `member:${member.memberId ?? index}`,

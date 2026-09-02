@@ -198,6 +198,9 @@ pub struct RunConfig {
     /// Save the exact frame used by the skill-use dialog probe.
     #[serde(default)]
     pub auto_capture_skill_use_probe: bool,
+    /// Save the current Attack frame when critical chance OCR is incomplete.
+    #[serde(default)]
+    pub auto_capture_unrecognized_critical_chance: bool,
     #[serde(default = "default_true")]
     pub support_craft_essence_mlb_required: bool,
     #[serde(default)]

@@ -8,8 +8,10 @@ use crate::commands::settings::{
     consume_simulate_stuck_attack_selection, NoblePhantasmDetectionMode,
 };
 use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
 
 const COMMAND_CARD_FRONTLINE_OWNER_FAILURE_LIMIT: u32 = 3;
+const CRITICAL_CHANCE_RECOGNITION_SETTLE_DELAY: Duration = Duration::from_secs(1);
 const NP_GAUGE_GLOW_READY_THRESHOLD: f64 = 0.5;
 const NP_GAUGE_MIN_VALID_SAMPLES: usize = 3;
 const NP_GAUGE_SAMPLE_WINDOW: Duration = Duration::from_secs(1);
@@ -175,6 +177,58 @@ pub(crate) fn apply_np_detection_mode(
 
 pub(crate) fn reads_np_gauge_before_attack(mode: NoblePhantasmDetectionMode) -> bool {
     matches!(mode, NoblePhantasmDetectionMode::GaugeBeforeAttack)
+}
+
+pub(crate) fn format_command_card_crit_chances(cards: &[CommandCardMatch]) -> String {
+    let mut cards = cards.iter().collect::<Vec<_>>();
+    cards.sort_by_key(|card| card.slot);
+    cards
+        .into_iter()
+        .map(|card| {
+            format!(
+                "C{}={}",
+                card.slot + 1,
+                card.crit_chance
+                    .map(|chance| format!("{chance}%"))
+                    .unwrap_or_else(|| "未识别".into())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+pub(crate) fn should_capture_unrecognized_critical_chance(
+    enabled: bool,
+    critical_mode: bool,
+    cards: &[CommandCardMatch],
+) -> bool {
+    enabled && critical_mode && cards.iter().any(|card| card.crit_chance.is_none())
+}
+
+pub(crate) fn command_card_recognition_settle_delay(critical_mode: bool) -> Duration {
+    if critical_mode {
+        CRITICAL_CHANCE_RECOGNITION_SETTLE_DELAY
+    } else {
+        Duration::ZERO
+    }
+}
+
+pub(crate) fn unrecognized_critical_chance_screenshot_dir_in_root(root: &Path) -> PathBuf {
+    root.join("debug").join("unrecognized-critical-chances")
+}
+
+pub(crate) fn unrecognized_critical_chance_screenshot_filename(
+    timestamp: std::time::SystemTime,
+    completed_mission_runs: u32,
+) -> String {
+    let millis = timestamp
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!(
+        "critical-chance-{millis:013}-run{:04}.jpg",
+        completed_mission_runs + 1,
+    )
 }
 
 /// Aggregate one-second NP-gauge samples by slot.
@@ -405,6 +459,59 @@ pub(crate) fn priority_card_is_np(card_str: &str) -> bool {
     parse_priority_card(card_str)
         .map(|(_, kind)| kind == "np")
         .unwrap_or(false)
+}
+
+pub(crate) fn battle_turn_requires_np_recognition(turn: &BattleTurn) -> bool {
+    match turn.attack_mode {
+        AttackMode::Normal => turn
+            .attack_priority
+            .iter()
+            .filter_map(|entry| entry.card.as_deref())
+            .any(priority_card_is_np),
+        AttackMode::Critical => false,
+        AttackMode::Advanced => turn
+            .advanced_card_strategy
+            .custom_rules
+            .iter()
+            .flat_map(|rule| &rule.slots)
+            .any(|slot| slot.kind == "np"),
+    }
+}
+
+fn advanced_rule_requires_np_recognition(rule: &AdvancedRule) -> bool {
+    !rule.np_condition_groups.is_empty()
+        || rule.actions.iter().any(|action| {
+            action
+                .as_attack_card()
+                .and_then(|entry| entry.card)
+                .as_deref()
+                .is_some_and(priority_card_is_np)
+        })
+}
+
+pub(crate) fn advanced_scene_requires_np_recognition(
+    scene: &AdvancedBattleScene,
+    grand_servants_configured: bool,
+    grand_card_strategy: &GrandCardStrategy,
+) -> bool {
+    if !scene.rules.is_empty() && !uses_advanced_strategy_flow(scene) {
+        return scene
+            .rules
+            .iter()
+            .any(advanced_rule_requires_np_recognition);
+    }
+
+    let main_output_is_np = scene
+        .main_output
+        .as_ref()
+        .and_then(|output| output.output_type.as_ref())
+        .is_some_and(|output_type| matches!(output_type, AdvancedOutputType::Np));
+    let custom_rule_uses_np = grand_card_strategy
+        .custom_rules
+        .iter()
+        .flat_map(|rule| &rule.slots)
+        .any(|slot| slot.kind == "np");
+    main_output_is_np || grand_servants_configured || custom_rule_uses_np
 }
 
 pub(crate) fn pick_one_priority(
@@ -764,15 +871,20 @@ pub(crate) fn normal_turn_for_current_scene(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CriticalPickSummary {
     pub(crate) chain: Option<CriticalChainType>,
+    pub(crate) bonus: Option<CriticalBonusType>,
     pub(crate) relaxed_alternation: bool,
     pub(crate) relaxed_reason: Option<&'static str>,
     pub(crate) owner_labels: Vec<String>,
 }
 
-fn critical_chain_rank(
-    cards: [&CommandCardMatch; 3],
-    priority: &[CriticalChainType],
-) -> (usize, Option<CriticalChainType>) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CriticalBonusType {
+    MightyChain,
+    QuickChain,
+    QuickFirst,
+}
+
+fn critical_chain(cards: [&CommandCardMatch; 3]) -> Option<CriticalChainType> {
     let counts = cards
         .iter()
         .fold((0usize, 0usize, 0usize), |mut counts, card| {
@@ -784,17 +896,46 @@ fn critical_chain_rank(
             }
             counts
         });
-    let chain = match counts {
+    match counts {
         (1, 1, 1) => Some(CriticalChainType::Mighty),
         (3, 0, 0) => Some(CriticalChainType::Buster),
         (0, 3, 0) => Some(CriticalChainType::Arts),
         (0, 0, 3) => Some(CriticalChainType::Quick),
         _ => None,
-    };
-    let rank = chain
-        .and_then(|chain| priority.iter().position(|candidate| *candidate == chain))
-        .unwrap_or(priority.len());
-    (rank, chain)
+    }
+}
+
+fn critical_bonus(
+    cards: [&CommandCardMatch; 3],
+    chain: Option<CriticalChainType>,
+) -> Option<CriticalBonusType> {
+    match chain {
+        Some(CriticalChainType::Mighty) => Some(CriticalBonusType::MightyChain),
+        Some(CriticalChainType::Quick) => Some(CriticalBonusType::QuickChain),
+        _ if cards[0].suit.as_deref() == Some("q") => Some(CriticalBonusType::QuickFirst),
+        _ => None,
+    }
+}
+
+fn normalized_critical_chain_priority(configured: &[CriticalChainType]) -> Vec<CriticalChainType> {
+    let defaults = [
+        CriticalChainType::Mighty,
+        CriticalChainType::Buster,
+        CriticalChainType::Arts,
+        CriticalChainType::Quick,
+    ];
+    let mut priority = Vec::with_capacity(defaults.len());
+    for chain in configured {
+        if defaults.contains(chain) && !priority.contains(chain) {
+            priority.push(*chain);
+        }
+    }
+    for chain in defaults {
+        if !priority.contains(&chain) {
+            priority.push(chain);
+        }
+    }
+    priority
 }
 
 fn member_priority_rank(
@@ -849,27 +990,6 @@ fn command_card_owner_key(
     )
 }
 
-fn normalized_critical_chain_priority(configured: &[CriticalChainType]) -> Vec<CriticalChainType> {
-    let defaults = [
-        CriticalChainType::Mighty,
-        CriticalChainType::Buster,
-        CriticalChainType::Arts,
-        CriticalChainType::Quick,
-    ];
-    let mut priority = Vec::with_capacity(defaults.len());
-    for chain in configured {
-        if defaults.contains(chain) && !priority.contains(chain) {
-            priority.push(*chain);
-        }
-    }
-    for chain in defaults {
-        if !priority.contains(&chain) {
-            priority.push(chain);
-        }
-    }
-    priority
-}
-
 pub(crate) fn choose_critical_picks(
     cards: &[CommandCardMatch],
     members: &[Option<PartyMemberRuntime>; 3],
@@ -878,7 +998,6 @@ pub(crate) fn choose_critical_picks(
     let mut actionable: Vec<&CommandCardMatch> =
         cards.iter().filter(|card| !card.is_stunned).collect();
     actionable.sort_by_key(|card| card.slot);
-    let chain_priority = normalized_critical_chain_priority(&strategy.chain_priority);
 
     if actionable.len() < 3 {
         let picks = actionable
@@ -895,6 +1014,7 @@ pub(crate) fn choose_critical_picks(
             picks,
             CriticalPickSummary {
                 chain: None,
+                bonus: None,
                 relaxed_alternation: true,
                 relaxed_reason: Some("可行动卡不足"),
                 owner_labels: Vec::new(),
@@ -907,9 +1027,16 @@ pub(crate) fn choose_critical_picks(
         cards: [&'a CommandCardMatch; 3],
         owners: [Option<String>; 3],
         chain: Option<CriticalChainType>,
-        score: (usize, [usize; 3], std::cmp::Reverse<u32>, [u32; 3]),
+        bonus: Option<CriticalBonusType>,
+        has_three_full_crit: bool,
+        effective_crit_priority: [std::cmp::Reverse<u32>; 3],
+        member_ranks: [usize; 3],
+        slots: [u32; 3],
     }
 
+    // Compare every ordered three-card choice from the full five-card hand so
+    // that Mighty/Quick bonuses can change which cards have the best effective
+    // critical rates instead of ranking only a preselected three-card subset.
     let mut candidates = Vec::new();
     for first in 0..actionable.len() {
         for second in 0..actionable.len() {
@@ -922,7 +1049,19 @@ pub(crate) fn choose_critical_picks(
                 }
                 let ordered = [actionable[first], actionable[second], actionable[third]];
                 let owners = ordered.map(|card| command_card_owner_key(card, members));
-                let (chain_rank, chain) = critical_chain_rank(ordered, &chain_priority);
+                let chain = critical_chain(ordered);
+                let bonus = critical_bonus(ordered, chain);
+                let bonus_value = if bonus.is_some() { 20 } else { 0 };
+                let effective_crit = ordered.map(|card| {
+                    card.crit_chance
+                        .unwrap_or(0)
+                        .saturating_add(bonus_value)
+                        .min(100)
+                });
+                let has_three_full_crit = effective_crit.iter().all(|chance| *chance == 100);
+                let mut effective_crit_priority = effective_crit;
+                effective_crit_priority.sort_unstable_by(|left, right| right.cmp(left));
+                let effective_crit_priority = effective_crit_priority.map(std::cmp::Reverse);
                 let member_ranks = ordered.map(|card| {
                     member_priority_rank(
                         card,
@@ -930,21 +1069,16 @@ pub(crate) fn choose_critical_picks(
                         &strategy.member_priority,
                     )
                 });
-                let crit_total = ordered
-                    .iter()
-                    .map(|card| card.crit_chance.unwrap_or(0))
-                    .sum::<u32>();
                 let slots = ordered.map(|card| card.slot);
                 candidates.push(Candidate {
                     cards: ordered,
                     owners,
                     chain,
-                    score: (
-                        chain_rank,
-                        member_ranks,
-                        std::cmp::Reverse(crit_total),
-                        slots,
-                    ),
+                    bonus,
+                    has_three_full_crit,
+                    effective_crit_priority,
+                    member_ranks,
+                    slots,
                 });
             }
         }
@@ -966,10 +1100,58 @@ pub(crate) fn choose_critical_picks(
     } else {
         Some("手牌只有一个成员")
     };
-    let best = candidates
+    let candidates = candidates
         .into_iter()
         .filter(|candidate| !has_alternating || alternating(candidate))
-        .min_by_key(|candidate| candidate.score.clone())
+        .collect::<Vec<_>>();
+    let has_three_full_crit = candidates
+        .iter()
+        .any(|candidate| candidate.has_three_full_crit);
+    let has_prioritized_chain = !has_three_full_crit
+        && candidates.iter().any(|candidate| {
+            matches!(
+                candidate.chain,
+                Some(CriticalChainType::Quick | CriticalChainType::Mighty)
+            )
+        });
+    let has_quick_first = !has_three_full_crit
+        && !has_prioritized_chain
+        && candidates
+            .iter()
+            .any(|candidate| candidate.bonus == Some(CriticalBonusType::QuickFirst));
+    let chain_priority = normalized_critical_chain_priority(&strategy.chain_priority);
+    let best = candidates
+        .into_iter()
+        .filter(|candidate| {
+            if has_three_full_crit {
+                candidate.has_three_full_crit
+            } else if has_prioritized_chain {
+                matches!(
+                    candidate.chain,
+                    Some(CriticalChainType::Quick | CriticalChainType::Mighty)
+                )
+            } else if has_quick_first {
+                candidate.bonus == Some(CriticalBonusType::QuickFirst)
+            } else {
+                true
+            }
+        })
+        .min_by_key(|candidate| {
+            let chain_rank = if has_three_full_crit || has_prioritized_chain {
+                candidate
+                    .chain
+                    .and_then(|chain| chain_priority.iter().position(|item| *item == chain))
+                    .unwrap_or(chain_priority.len())
+            } else {
+                0
+            };
+            (
+                chain_rank,
+                candidate.effective_crit_priority,
+                candidate.member_ranks,
+                candidate.slots,
+            )
+        })
         .expect("three actionable cards always produce a permutation");
     let owner_labels = best
         .cards
@@ -996,6 +1178,7 @@ pub(crate) fn choose_critical_picks(
         picks,
         CriticalPickSummary {
             chain: best.chain,
+            bonus: best.bonus,
             relaxed_alternation: !has_alternating,
             relaxed_reason,
             owner_labels,
@@ -1010,6 +1193,57 @@ pub(crate) fn rect_center(r: &NormRect) -> Point {
 }
 
 impl Runner {
+    fn current_attack_is_critical(&self) -> bool {
+        !self.advanced_mode
+            && normal_turn_for_current_scene(
+                &self.scenes,
+                self.battle.current_scene_index,
+                self.battle.current_turn_index,
+            )
+            .is_some_and(|turn| turn.attack_mode == AttackMode::Critical)
+    }
+
+    fn capture_unrecognized_critical_chance_screenshot(&mut self) -> Result<PathBuf, String> {
+        let dir = unrecognized_critical_chance_screenshot_dir_in_root(&crate::app_data_dir(
+            &self.app_handle,
+        ));
+        std::fs::create_dir_all(&dir)
+            .map_err(|err| format!("创建暴击率识别截图目录失败: {err}"))?;
+        let path = dir.join(unrecognized_critical_chance_screenshot_filename(
+            std::time::SystemTime::now(),
+            self.completed_mission_runs,
+        ));
+        let jpeg = self
+            .sidecar()
+            .get_frame_jpeg(0.0)
+            .map_err(|err| format!("获取暴击率识别视频帧失败: {err}"))?;
+        std::fs::write(&path, jpeg).map_err(|err| format!("写入暴击率识别截图失败: {err}"))?;
+        Ok(path)
+    }
+
+    fn current_attack_requires_np_recognition(&self) -> bool {
+        if self.advanced_mode {
+            return self
+                .advanced_scenes
+                .get(self.battle.current_scene_index)
+                .map(|scene| {
+                    advanced_scene_requires_np_recognition(
+                        scene,
+                        !self.config.grand_servants.is_empty(),
+                        &self.config.grand_card_strategy,
+                    )
+                })
+                .unwrap_or(!self.config.grand_servants.is_empty());
+        }
+
+        normal_turn_for_current_scene(
+            &self.scenes,
+            self.battle.current_scene_index,
+            self.battle.current_turn_index,
+        )
+        .is_some_and(battle_turn_requires_np_recognition)
+    }
+
     pub(crate) fn execute_next_grand_turn_skills(&mut self, scene: &AdvancedBattleScene) -> bool {
         let scene_index = self.battle.current_scene_index;
         if !self.battle.advanced_startup_done.contains(&scene_index) {
@@ -1232,23 +1466,30 @@ impl Runner {
                 self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, &party_supports, None);
             }
             AttackMode::Critical => {
+                self.emit(
+                    "Attack",
+                    &format!("指令卡暴击率：{}", format_command_card_crit_chances(&cards)),
+                );
                 let strategy = current_turn
                     .as_ref()
                     .map(|turn| &turn.critical_strategy)
                     .cloned()
                     .unwrap_or_default();
                 let (picks, summary) = choose_critical_picks(&cards, &party_members, &strategy);
-                let chain = match summary.chain {
-                    Some(CriticalChainType::Mighty) => "精湛连携",
-                    Some(CriticalChainType::Buster) => "力击连携",
-                    Some(CriticalChainType::Arts) => "技击连携",
-                    Some(CriticalChainType::Quick) => "迅击连携",
-                    None => "无连携",
+                let selection = match summary.bonus {
+                    Some(CriticalBonusType::MightyChain) => "精湛连携 +20% 暴击率",
+                    Some(CriticalBonusType::QuickChain) => "迅击连携 +20% 暴击率",
+                    Some(CriticalBonusType::QuickFirst) => "首张迅击 +20% 暴击率",
+                    None => match summary.chain {
+                        Some(CriticalChainType::Buster) => "力击连携",
+                        Some(CriticalChainType::Arts) => "技击连携",
+                        _ => "无额外暴击率加成",
+                    },
                 };
                 self.emit(
                     "Attack",
                     &format!(
-                        "暴击模式：{chain}，成员顺序 {}",
+                        "暴击模式：{selection}，成员顺序 {}",
                         if summary.owner_labels.is_empty() {
                             "待补位".into()
                         } else {
@@ -1359,6 +1600,13 @@ impl Runner {
         recognize_command_cards: bool,
         tolerate_missing_owners: bool,
     ) -> Option<(Vec<CommandCardMatch>, Vec<NoblePhantasmMatch>)> {
+        let recognition_settle_delay =
+            command_card_recognition_settle_delay(self.current_attack_is_critical());
+        if !recognition_settle_delay.is_zero() {
+            self.emit("Attack", "暴击模式：等待 1 秒后识别暴击率");
+            thread::sleep(recognition_settle_delay);
+        }
+
         // Start with the expected front line for speed. If owner recognition
         // repeatedly fails, a servant probably died and a back-line member
         // moved forward, so broaden the template candidates to the full team.
@@ -1488,43 +1736,65 @@ impl Runner {
             self.emit("Attack", "未配置普通指令卡，跳过指令卡归属识别");
             cards
         };
+        if should_capture_unrecognized_critical_chance(
+            self.config.auto_capture_unrecognized_critical_chance,
+            self.current_attack_is_critical(),
+            &cards,
+        ) {
+            match self.capture_unrecognized_critical_chance_screenshot() {
+                Ok(path) => self.emit(
+                    "Attack",
+                    &format!("无法识别暴击率截图已保存: {}", path.display()),
+                ),
+                Err(err) => self.emit_warn(
+                    "Attack",
+                    &format!("无法识别暴击率截图保存失败，继续选卡: {err}"),
+                ),
+            }
+        }
         let np_detection_mode = self.config.noble_phantasm_detection_mode;
-        let nps = match np_detection_mode {
-            NoblePhantasmDetectionMode::Card => loop {
-                let mut nps = match self.sidecar().find_noble_phantasms(None, None) {
-                    Ok(n) => n,
-                    Err(err) => {
-                        self.fail_action("Attack", "识别宝具卡", err);
+        let recognize_noble_phantasms = self.current_attack_requires_np_recognition();
+        let nps = if !recognize_noble_phantasms {
+            self.battle.pre_attack_nps = None;
+            Vec::new()
+        } else {
+            match np_detection_mode {
+                NoblePhantasmDetectionMode::Card => loop {
+                    let mut nps = match self.sidecar().find_noble_phantasms(None, None) {
+                        Ok(n) => n,
+                        Err(err) => {
+                            self.fail_action("Attack", "识别宝具卡", err);
+                            return None;
+                        }
+                    };
+                    apply_np_detection_mode(&mut nps, np_detection_mode);
+
+                    if np_card_read_complete(&nps) {
+                        break nps;
+                    }
+                    if self.is_cancelled() {
                         return None;
                     }
-                };
-                apply_np_detection_mode(&mut nps, np_detection_mode);
-
-                if np_card_read_complete(&nps) {
+                    self.emit("Attack", "宝具卡尚未识别完整，等待卡面稳定后重试");
+                    thread::sleep(ACTION_DELAY);
+                },
+                NoblePhantasmDetectionMode::Gauge => loop {
+                    let Some(nps) = self.read_noble_phantasm_gauges("Attack") else {
+                        return None;
+                    };
                     break nps;
+                },
+                NoblePhantasmDetectionMode::GaugeBeforeAttack => {
+                    let Some(nps) = self.battle.pre_attack_nps.clone() else {
+                        self.fail_action(
+                            "Attack",
+                            "读取攻击前宝具条",
+                            "未找到攻击前缓存的宝具条识别结果".into(),
+                        );
+                        return None;
+                    };
+                    nps
                 }
-                if self.is_cancelled() {
-                    return None;
-                }
-                self.emit("Attack", "宝具卡尚未识别完整，等待卡面稳定后重试");
-                thread::sleep(ACTION_DELAY);
-            },
-            NoblePhantasmDetectionMode::Gauge => loop {
-                let Some(nps) = self.read_noble_phantasm_gauges("Attack") else {
-                    return None;
-                };
-                break nps;
-            },
-            NoblePhantasmDetectionMode::GaugeBeforeAttack => {
-                let Some(nps) = self.battle.pre_attack_nps.clone() else {
-                    self.fail_action(
-                        "Attack",
-                        "读取攻击前宝具条",
-                        "未找到攻击前缓存的宝具条识别结果".into(),
-                    );
-                    return None;
-                };
-                nps
             }
         };
 
@@ -1557,34 +1827,36 @@ impl Runner {
                 },
             );
         }
-        let ready: Vec<String> = nps
-            .iter()
-            .filter(|n| n.ready)
-            .map(|n| format!("NP{}", n.slot + 1))
-            .collect();
-        let ready_np_slots: Vec<u32> = nps.iter().filter(|n| n.ready).map(|n| n.slot).collect();
-        if ready.is_empty() {
-            self.emit_attack(
-                "宝具就绪: 无",
-                AttackLogMeta {
-                    front_servant_ids: *party_ids,
-                    candidate_servant_ids: None,
-                    command_cards: None,
-                    ready_np_slots: Some(ready_np_slots),
-                    selected_pick: None,
-                },
-            );
-        } else {
-            self.emit_attack(
-                &format!("宝具就绪: {}", ready.join(" ")),
-                AttackLogMeta {
-                    front_servant_ids: *party_ids,
-                    candidate_servant_ids: None,
-                    command_cards: None,
-                    ready_np_slots: Some(ready_np_slots),
-                    selected_pick: None,
-                },
-            );
+        if recognize_noble_phantasms {
+            let ready: Vec<String> = nps
+                .iter()
+                .filter(|n| n.ready)
+                .map(|n| format!("NP{}", n.slot + 1))
+                .collect();
+            let ready_np_slots: Vec<u32> = nps.iter().filter(|n| n.ready).map(|n| n.slot).collect();
+            if ready.is_empty() {
+                self.emit_attack(
+                    "宝具就绪: 无",
+                    AttackLogMeta {
+                        front_servant_ids: *party_ids,
+                        candidate_servant_ids: None,
+                        command_cards: None,
+                        ready_np_slots: Some(ready_np_slots),
+                        selected_pick: None,
+                    },
+                );
+            } else {
+                self.emit_attack(
+                    &format!("宝具就绪: {}", ready.join(" ")),
+                    AttackLogMeta {
+                        front_servant_ids: *party_ids,
+                        candidate_servant_ids: None,
+                        command_cards: None,
+                        ready_np_slots: Some(ready_np_slots),
+                        selected_pick: None,
+                    },
+                );
+            }
         }
 
         if reads_np_gauge_before_attack(np_detection_mode) {
@@ -1640,6 +1912,10 @@ impl Runner {
     /// Capture NP readiness before the attack button changes the screen to
     /// the command-card view. The result is consumed by `read_attack_state`.
     pub(crate) fn prepare_noble_phantasm_gauge_before_attack(&mut self) -> bool {
+        if !self.current_attack_requires_np_recognition() {
+            self.battle.pre_attack_nps = None;
+            return true;
+        }
         if !reads_np_gauge_before_attack(self.config.noble_phantasm_detection_mode) {
             return true;
         }

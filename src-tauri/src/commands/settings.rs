@@ -97,6 +97,8 @@ pub struct DebugSettings {
     #[serde(default)]
     pub auto_capture_skill_use_probe: bool,
     #[serde(default)]
+    pub auto_capture_unrecognized_critical_chance: bool,
+    #[serde(default)]
     pub simulate_stuck_attack_selection: bool,
 }
 
@@ -652,6 +654,14 @@ fn debug_settings_with_auto_capture_skill_use_probe(
     settings
 }
 
+fn debug_settings_with_auto_capture_unrecognized_critical_chance(
+    mut settings: DebugSettings,
+    value: bool,
+) -> DebugSettings {
+    settings.auto_capture_unrecognized_critical_chance = value;
+    settings
+}
+
 fn debug_settings_with_simulate_stuck_attack_selection(
     mut settings: DebugSettings,
     value: bool,
@@ -684,6 +694,23 @@ pub(crate) fn set_auto_capture_skill_use_probe(
         *state.lock().unwrap(),
         value,
     ));
+    *state.lock().unwrap() = next;
+    save_debug_settings(&app, &next)?;
+    Ok(next)
+}
+
+#[tauri::command]
+pub(crate) fn set_auto_capture_unrecognized_critical_chance(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<DebugSettings>>,
+    value: bool,
+) -> Result<DebugSettings, String> {
+    let next = debug_settings_for_current_build(
+        debug_settings_with_auto_capture_unrecognized_critical_chance(
+            *state.lock().unwrap(),
+            value,
+        ),
+    );
     *state.lock().unwrap() = next;
     save_debug_settings(&app, &next)?;
     Ok(next)
@@ -953,6 +980,7 @@ mod tests {
         assert!(!settings.auto_capture_battle_result_loot);
         assert!(!settings.auto_capture_unknown_screen_timeout);
         assert!(!settings.auto_capture_skill_use_probe);
+        assert!(!settings.auto_capture_unrecognized_critical_chance);
         assert!(!settings.simulate_stuck_attack_selection);
     }
 
@@ -963,6 +991,7 @@ mod tests {
         assert!(!settings.auto_capture_battle_result_loot);
         assert!(!settings.auto_capture_unknown_screen_timeout);
         assert!(!settings.auto_capture_skill_use_probe);
+        assert!(!settings.auto_capture_unrecognized_critical_chance);
         assert!(!settings.simulate_stuck_attack_selection);
     }
 
@@ -972,6 +1001,7 @@ mod tests {
             "autoCaptureBattleResultLoot": true,
             "autoCaptureUnknownScreenTimeout": true,
             "autoCaptureSkillUseProbe": true,
+            "autoCaptureUnrecognizedCriticalChance": true,
             "simulateStuckAttackSelection": true,
         }))
         .unwrap();
@@ -979,6 +1009,7 @@ mod tests {
         assert!(settings.auto_capture_battle_result_loot);
         assert!(settings.auto_capture_unknown_screen_timeout);
         assert!(settings.auto_capture_skill_use_probe);
+        assert!(settings.auto_capture_unrecognized_critical_chance);
         assert!(settings.simulate_stuck_attack_selection);
         assert_eq!(
             serde_json::to_value(settings).unwrap()["autoCaptureBattleResultLoot"],
@@ -993,6 +1024,10 @@ mod tests {
             serde_json::json!(true)
         );
         assert_eq!(
+            serde_json::to_value(settings).unwrap()["autoCaptureUnrecognizedCriticalChance"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
             serde_json::to_value(settings).unwrap()["simulateStuckAttackSelection"],
             serde_json::json!(true)
         );
@@ -1004,6 +1039,7 @@ mod tests {
             auto_capture_battle_result_loot: true,
             auto_capture_unknown_screen_timeout: true,
             auto_capture_skill_use_probe: true,
+            auto_capture_unrecognized_critical_chance: true,
             simulate_stuck_attack_selection: true,
         };
 
@@ -1012,6 +1048,7 @@ mod tests {
         assert!(!filtered.auto_capture_battle_result_loot);
         assert!(!filtered.auto_capture_unknown_screen_timeout);
         assert!(!filtered.auto_capture_skill_use_probe);
+        assert!(!filtered.auto_capture_unrecognized_critical_chance);
         assert!(!filtered.simulate_stuck_attack_selection);
     }
 
@@ -1021,6 +1058,7 @@ mod tests {
             auto_capture_battle_result_loot: true,
             auto_capture_unknown_screen_timeout: true,
             auto_capture_skill_use_probe: true,
+            auto_capture_unrecognized_critical_chance: true,
             simulate_stuck_attack_selection: true,
         };
 
@@ -1029,6 +1067,7 @@ mod tests {
         assert!(filtered.auto_capture_battle_result_loot);
         assert!(filtered.auto_capture_unknown_screen_timeout);
         assert!(filtered.auto_capture_skill_use_probe);
+        assert!(filtered.auto_capture_unrecognized_critical_chance);
         assert!(filtered.simulate_stuck_attack_selection);
     }
 
@@ -1038,6 +1077,7 @@ mod tests {
             auto_capture_battle_result_loot: false,
             auto_capture_unknown_screen_timeout: true,
             auto_capture_skill_use_probe: false,
+            auto_capture_unrecognized_critical_chance: true,
             simulate_stuck_attack_selection: true,
         };
 
@@ -1046,6 +1086,7 @@ mod tests {
         assert!(next.auto_capture_battle_result_loot);
         assert!(next.auto_capture_unknown_screen_timeout);
         assert!(!next.auto_capture_skill_use_probe);
+        assert!(next.auto_capture_unrecognized_critical_chance);
         assert!(next.simulate_stuck_attack_selection);
     }
 
@@ -1055,6 +1096,7 @@ mod tests {
             auto_capture_battle_result_loot: true,
             auto_capture_unknown_screen_timeout: false,
             auto_capture_skill_use_probe: false,
+            auto_capture_unrecognized_critical_chance: true,
             simulate_stuck_attack_selection: true,
         };
 
@@ -1063,6 +1105,7 @@ mod tests {
         assert!(next.auto_capture_battle_result_loot);
         assert!(next.auto_capture_unknown_screen_timeout);
         assert!(!next.auto_capture_skill_use_probe);
+        assert!(next.auto_capture_unrecognized_critical_chance);
         assert!(next.simulate_stuck_attack_selection);
     }
 
@@ -1072,6 +1115,7 @@ mod tests {
             auto_capture_battle_result_loot: true,
             auto_capture_unknown_screen_timeout: true,
             auto_capture_skill_use_probe: false,
+            auto_capture_unrecognized_critical_chance: true,
             simulate_stuck_attack_selection: true,
         };
 
@@ -1080,6 +1124,26 @@ mod tests {
         assert!(next.auto_capture_battle_result_loot);
         assert!(next.auto_capture_unknown_screen_timeout);
         assert!(next.auto_capture_skill_use_probe);
+        assert!(next.auto_capture_unrecognized_critical_chance);
+        assert!(next.simulate_stuck_attack_selection);
+    }
+
+    #[test]
+    fn debug_settings_critical_capture_update_preserves_other_debug_settings() {
+        let settings = DebugSettings {
+            auto_capture_battle_result_loot: true,
+            auto_capture_unknown_screen_timeout: true,
+            auto_capture_skill_use_probe: true,
+            auto_capture_unrecognized_critical_chance: false,
+            simulate_stuck_attack_selection: true,
+        };
+
+        let next = debug_settings_with_auto_capture_unrecognized_critical_chance(settings, true);
+
+        assert!(next.auto_capture_battle_result_loot);
+        assert!(next.auto_capture_unknown_screen_timeout);
+        assert!(next.auto_capture_skill_use_probe);
+        assert!(next.auto_capture_unrecognized_critical_chance);
         assert!(next.simulate_stuck_attack_selection);
     }
 

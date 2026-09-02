@@ -60,11 +60,7 @@ describe("CriticalStrategyEditor", () => {
   it("reorders chain priority with the horizontal keyboard drag interaction", async () => {
     const onChange = vi.fn();
     renderWithTheme(
-      <CriticalStrategyEditor
-        partyMembers={members}
-        faces={{}}
-        onChange={onChange}
-      />
+      <CriticalStrategyEditor partyMembers={members} faces={{}} onChange={onChange} />
     );
 
     const chainButtons = ["精湛连携", "力击连携", "技击连携", "迅击连携"].map((label) =>
@@ -82,5 +78,22 @@ describe("CriticalStrategyEditor", () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
       chainPriority: ["buster", "mighty", "arts", "quick"],
     }));
+  });
+
+  it("shows only the first three frontline members", () => {
+    renderWithTheme(
+      <CriticalStrategyEditor
+        partyMembers={[
+          ...members,
+          { memberId: "three", servant: servant(3, "从者三"), isSupport: false },
+          { memberId: "four", servant: servant(4, "后排从者"), isSupport: false },
+        ]}
+        faces={{}}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /从者三，拖动调整优先级/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /后排从者，拖动调整优先级/ })).not.toBeInTheDocument();
   });
 });

@@ -281,6 +281,170 @@ fn pre_attack_gauge_mode_is_distinct_from_post_attack_gauge_mode() {
 }
 
 #[test]
+fn critical_chance_log_lists_all_cards_in_slot_order() {
+    let cards = vec![
+        command_card(4, Some(30), Some("b"), Some(100)),
+        command_card(0, Some(10), Some("q"), Some(70)),
+        command_card(2, Some(20), Some("a"), None),
+        command_card(1, Some(10), Some("b"), Some(80)),
+        command_card(3, Some(30), Some("q"), Some(90)),
+    ];
+
+    assert_eq!(
+        format_command_card_crit_chances(&cards),
+        "C1=70% C2=80% C3=未识别 C4=90% C5=100%"
+    );
+}
+
+#[test]
+fn critical_chance_capture_requires_enabled_critical_mode_and_a_missing_value() {
+    let complete = vec![command_card(0, Some(10), Some("q"), Some(70))];
+    let incomplete = vec![command_card(0, Some(10), Some("q"), None)];
+
+    assert!(!should_capture_unrecognized_critical_chance(
+        false,
+        true,
+        &incomplete
+    ));
+    assert!(!should_capture_unrecognized_critical_chance(
+        true,
+        false,
+        &incomplete
+    ));
+    assert!(!should_capture_unrecognized_critical_chance(
+        true, true, &complete
+    ));
+    assert!(should_capture_unrecognized_critical_chance(
+        true,
+        true,
+        &incomplete
+    ));
+}
+
+#[test]
+fn critical_mode_waits_one_second_before_command_card_recognition() {
+    assert_eq!(
+        command_card_recognition_settle_delay(true),
+        Duration::from_secs(1)
+    );
+    assert_eq!(command_card_recognition_settle_delay(false), Duration::ZERO);
+}
+
+#[test]
+fn critical_chance_capture_path_uses_its_own_debug_directory() {
+    let root = PathBuf::from("/tmp/mash-app-data");
+    let timestamp = std::time::UNIX_EPOCH + std::time::Duration::from_millis(1_781_234_567_890);
+
+    assert_eq!(
+        unrecognized_critical_chance_screenshot_dir_in_root(&root),
+        root.join("debug").join("unrecognized-critical-chances")
+    );
+    assert_eq!(
+        unrecognized_critical_chance_screenshot_filename(timestamp, 2),
+        "critical-chance-1781234567890-run0003.jpg"
+    );
+}
+
+#[test]
+fn normal_critical_and_ordinary_advanced_modes_only_read_configured_nps() {
+    let mut turn = normal_turn(Vec::new(), Vec::new());
+    assert!(!battle_turn_requires_np_recognition(&turn));
+
+    turn.attack_priority.push(AttackCard {
+        id: "np".into(),
+        card: Some("servant_1_np".into()),
+        member_id: None,
+        servant_id: None,
+        is_support: false,
+    });
+    assert!(battle_turn_requires_np_recognition(&turn));
+
+    turn.attack_mode = AttackMode::Critical;
+    assert!(!battle_turn_requires_np_recognition(&turn));
+
+    turn.attack_mode = AttackMode::Advanced;
+    turn.advanced_card_strategy.custom_rules = vec![GrandCardRuleConfig {
+        id: "command-only".into(),
+        name: "只出指令卡".into(),
+        slots: vec![crate::GrandCardRuleSlotConfig {
+            member_id: None,
+            slot_index: None,
+            servant_id: None,
+            is_support: false,
+            grand_servant: false,
+            kind: "command".into(),
+            color: "any".into(),
+        }],
+    }];
+    assert!(!battle_turn_requires_np_recognition(&turn));
+    turn.advanced_card_strategy.custom_rules[0].slots[0].kind = "np".into();
+    assert!(battle_turn_requires_np_recognition(&turn));
+}
+
+#[test]
+fn project_advanced_mode_only_reads_nps_when_its_active_strategy_uses_them() {
+    let mut scene = empty_advanced_scene();
+    assert!(!advanced_scene_requires_np_recognition(
+        &scene,
+        false,
+        &GrandCardStrategy::default()
+    ));
+
+    scene.main_output = Some(crate::AdvancedMainOutput {
+        member_id: None,
+        servant: Some("servant_1".into()),
+        servant_id: Some(10),
+        is_support: false,
+        output_type: Some(AdvancedOutputType::Critical),
+        np_card: Some("buster".into()),
+    });
+    assert!(!advanced_scene_requires_np_recognition(
+        &scene,
+        false,
+        &GrandCardStrategy::default()
+    ));
+
+    scene.main_output.as_mut().unwrap().output_type = Some(AdvancedOutputType::Np);
+    assert!(advanced_scene_requires_np_recognition(
+        &scene,
+        false,
+        &GrandCardStrategy::default()
+    ));
+    assert!(advanced_scene_requires_np_recognition(
+        &empty_advanced_scene(),
+        true,
+        &GrandCardStrategy::default()
+    ));
+
+    let mut legacy_scene = empty_advanced_scene();
+    legacy_scene.rules = vec![AdvancedRule {
+        id: "legacy".into(),
+        np_condition_groups: Vec::new(),
+        command_condition_groups: Vec::new(),
+        actions: vec![crate::AdvancedAction::Attack {
+            id: "command".into(),
+            card: Some("servant_1_buster".into()),
+            member_id: None,
+            servant_id: None,
+            is_support: false,
+        }],
+    }];
+    assert!(!advanced_scene_requires_np_recognition(
+        &legacy_scene,
+        false,
+        &GrandCardStrategy::default()
+    ));
+    if let crate::AdvancedAction::Attack { card, .. } = &mut legacy_scene.rules[0].actions[0] {
+        *card = Some("servant_1_np".into());
+    }
+    assert!(advanced_scene_requires_np_recognition(
+        &legacy_scene,
+        false,
+        &GrandCardStrategy::default()
+    ));
+}
+
+#[test]
 fn np_gauge_samples_use_median_instead_of_a_bright_outlier() {
     let samples = [0.30, 0.31, 0.29, 0.95, 0.32]
         .into_iter()
@@ -804,6 +968,7 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     assert!(!cfg.auto_capture_battle_result_loot);
     assert!(!cfg.auto_capture_unknown_screen_timeout);
     assert!(!cfg.auto_capture_skill_use_probe);
+    assert!(!cfg.auto_capture_unrecognized_critical_chance);
 }
 
 #[test]
@@ -1437,12 +1602,7 @@ fn critical_mode_alternates_four_cards_from_one_member_with_the_other_member() {
                 is_support: false,
             },
         ],
-        chain_priority: vec![
-            CriticalChainType::Mighty,
-            CriticalChainType::Buster,
-            CriticalChainType::Arts,
-            CriticalChainType::Quick,
-        ],
+        ..CriticalAttackStrategy::default()
     };
 
     let (picks, summary) = choose_critical_picks(&cards, &members, &strategy);
@@ -1455,11 +1615,191 @@ fn critical_mode_alternates_four_cards_from_one_member_with_the_other_member() {
 }
 
 #[test]
-fn critical_mode_chain_order_outranks_crit_total() {
+fn critical_mode_prioritizes_three_full_crit_cards_before_member_priority() {
     let cards = vec![
-        command_card(0, Some(10), Some("b"), Some(10)),
-        command_card(1, Some(20), Some("b"), Some(10)),
-        command_card(2, Some(30), Some("b"), Some(10)),
+        command_card(0, Some(10), Some("b"), Some(30)),
+        command_card(1, Some(10), Some("a"), Some(30)),
+        command_card(2, Some(20), Some("a"), Some(100)),
+        command_card(3, Some(20), Some("q"), Some(100)),
+        command_card(4, Some(30), Some("b"), Some(100)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        frontline_member("three", 2, 30, false),
+    ];
+    let strategy = CriticalAttackStrategy {
+        member_priority: vec![
+            AttackMemberPriorityItem {
+                member_id: Some("one".into()),
+                slot_index: 0,
+                servant_id: Some(10),
+                is_support: false,
+            },
+            AttackMemberPriorityItem {
+                member_id: Some("two".into()),
+                slot_index: 1,
+                servant_id: Some(20),
+                is_support: false,
+            },
+            AttackMemberPriorityItem {
+                member_id: Some("three".into()),
+                slot_index: 2,
+                servant_id: Some(30),
+                is_support: false,
+            },
+        ],
+        ..CriticalAttackStrategy::default()
+    };
+
+    let (picks, summary) = choose_critical_picks(&cards, &members, &strategy);
+
+    assert_eq!(pick_labels(&picks), vec!["C2", "C4", "C3"]);
+    assert_eq!(summary.bonus, Some(CriticalBonusType::MightyChain));
+}
+
+#[test]
+fn critical_mode_applies_twenty_percent_for_mighty_chain_in_any_order() {
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        frontline_member("three", 2, 30, false),
+    ];
+    for suits in [["b", "a", "q"], ["a", "q", "b"], ["q", "b", "a"]] {
+        let cards = vec![
+            command_card(0, Some(10), Some(suits[0]), Some(80)),
+            command_card(1, Some(20), Some(suits[1]), Some(80)),
+            command_card(2, Some(30), Some(suits[2]), Some(80)),
+        ];
+        let (picks, summary) =
+            choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
+        assert_eq!(picks.len(), 3);
+        assert_eq!(summary.bonus, Some(CriticalBonusType::MightyChain));
+    }
+}
+
+#[test]
+fn critical_mode_applies_twenty_percent_when_quick_is_first_including_quick_chain() {
+    let cards = vec![
+        command_card(0, Some(10), Some("q"), Some(80)),
+        command_card(1, Some(20), Some("q"), Some(80)),
+        command_card(2, Some(30), Some("q"), Some(80)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        frontline_member("three", 2, 30, false),
+    ];
+
+    let (picks, summary) =
+        choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
+
+    assert_eq!(pick_labels(&picks), vec!["C0", "C1", "C2"]);
+    assert_eq!(summary.bonus, Some(CriticalBonusType::QuickChain));
+}
+
+#[test]
+fn critical_mode_prefers_mighty_chain_over_quick_chain_when_crit_rates_match() {
+    let cards = vec![
+        command_card(0, Some(30), Some("b"), Some(50)),
+        command_card(1, Some(20), Some("a"), Some(50)),
+        command_card(2, Some(10), Some("q"), Some(50)),
+        command_card(3, Some(20), Some("q"), Some(50)),
+        command_card(4, Some(10), Some("q"), Some(50)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        frontline_member("three", 2, 30, false),
+    ];
+
+    let (picks, summary) =
+        choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
+
+    assert_eq!(pick_labels(&picks), vec!["C2", "C1", "C0"]);
+    assert_eq!(summary.bonus, Some(CriticalBonusType::MightyChain));
+}
+
+#[test]
+fn critical_mode_uses_prioritized_bonus_chain_before_higher_crit_cards() {
+    let cards = vec![
+        command_card(0, Some(30), Some("b"), Some(10)),
+        command_card(1, Some(20), Some("a"), Some(10)),
+        command_card(2, Some(10), Some("q"), Some(60)),
+        command_card(3, Some(20), Some("q"), Some(60)),
+        command_card(4, Some(10), Some("q"), Some(60)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        frontline_member("three", 2, 30, false),
+    ];
+
+    let (picks, summary) =
+        choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
+
+    assert_eq!(pick_labels(&picks), vec!["C2", "C1", "C0"]);
+    assert_eq!(summary.bonus, Some(CriticalBonusType::MightyChain));
+}
+
+#[test]
+fn critical_mode_prefers_quick_chain_over_quick_first_when_crit_rates_match() {
+    let cards = vec![
+        command_card(0, Some(10), Some("q"), Some(50)),
+        command_card(1, Some(20), Some("q"), Some(50)),
+        command_card(2, Some(30), Some("q"), Some(50)),
+        command_card(3, Some(20), Some("b"), Some(50)),
+        command_card(4, Some(10), Some("b"), Some(50)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        frontline_member("three", 2, 30, false),
+    ];
+
+    let (picks, summary) =
+        choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
+
+    assert_eq!(pick_labels(&picks), vec!["C0", "C1", "C2"]);
+    assert_eq!(summary.bonus, Some(CriticalBonusType::QuickChain));
+}
+
+#[test]
+fn critical_mode_uses_configured_quick_before_mighty_fallback_priority() {
+    let cards = vec![
+        command_card(0, Some(30), Some("b"), Some(50)),
+        command_card(1, Some(20), Some("a"), Some(50)),
+        command_card(2, Some(10), Some("q"), Some(50)),
+        command_card(3, Some(20), Some("q"), Some(50)),
+        command_card(4, Some(10), Some("q"), Some(50)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        frontline_member("three", 2, 30, false),
+    ];
+    let strategy = CriticalAttackStrategy {
+        chain_priority: vec![
+            CriticalChainType::Quick,
+            CriticalChainType::Mighty,
+            CriticalChainType::Buster,
+            CriticalChainType::Arts,
+        ],
+        ..CriticalAttackStrategy::default()
+    };
+
+    let (picks, summary) = choose_critical_picks(&cards, &members, &strategy);
+
+    assert_eq!(pick_labels(&picks), vec!["C2", "C3", "C4"]);
+    assert_eq!(summary.bonus, Some(CriticalBonusType::QuickChain));
+}
+
+#[test]
+fn critical_mode_uses_configured_chain_priority_after_three_full_crit_cards() {
+    let cards = vec![
+        command_card(0, Some(10), Some("b"), Some(100)),
+        command_card(1, Some(20), Some("b"), Some(100)),
+        command_card(2, Some(10), Some("b"), Some(100)),
         command_card(3, Some(20), Some("a"), Some(100)),
         command_card(4, Some(30), Some("q"), Some(100)),
     ];
@@ -1469,46 +1809,20 @@ fn critical_mode_chain_order_outranks_crit_total() {
         frontline_member("three", 2, 30, false),
     ];
     let strategy = CriticalAttackStrategy {
-        member_priority: Vec::new(),
         chain_priority: vec![
             CriticalChainType::Buster,
             CriticalChainType::Mighty,
             CriticalChainType::Arts,
             CriticalChainType::Quick,
         ],
+        ..CriticalAttackStrategy::default()
     };
 
     let (picks, summary) = choose_critical_picks(&cards, &members, &strategy);
 
     assert_eq!(pick_labels(&picks), vec!["C0", "C1", "C2"]);
     assert_eq!(summary.chain, Some(CriticalChainType::Buster));
-}
-
-#[test]
-fn critical_mode_recognizes_all_four_chain_types_and_falls_back_to_non_chain() {
-    let members = [
-        frontline_member("one", 0, 10, false),
-        frontline_member("two", 1, 20, false),
-        None,
-    ];
-    let cases = [
-        (["b", "a", "q"], Some(CriticalChainType::Mighty)),
-        (["b", "b", "b"], Some(CriticalChainType::Buster)),
-        (["a", "a", "a"], Some(CriticalChainType::Arts)),
-        (["q", "q", "q"], Some(CriticalChainType::Quick)),
-        (["b", "b", "a"], None),
-    ];
-
-    for (suits, expected) in cases {
-        let cards = vec![
-            command_card(0, Some(10), Some(suits[0]), Some(30)),
-            command_card(1, Some(20), Some(suits[1]), Some(20)),
-            command_card(2, Some(10), Some(suits[2]), Some(10)),
-        ];
-        let (_, summary) =
-            choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
-        assert_eq!(summary.chain, expected);
-    }
+    assert_eq!(summary.bonus, None);
 }
 
 #[test]
@@ -1540,7 +1854,7 @@ fn critical_mode_distinguishes_owned_and_support_copies() {
                 is_support: false,
             },
         ],
-        chain_priority: vec![CriticalChainType::Mighty],
+        ..CriticalAttackStrategy::default()
     };
 
     let (picks, summary) = choose_critical_picks(&cards, &members, &strategy);
@@ -1594,12 +1908,12 @@ fn critical_mode_reports_actionable_shortage_before_positional_fill() {
 }
 
 #[test]
-fn critical_mode_uses_total_crit_to_break_equal_member_and_chain_scores() {
+fn critical_mode_uses_highest_crit_cards_when_no_bonus_route_exists() {
     let cards = vec![
         command_card(0, Some(10), Some("b"), Some(10)),
         command_card(1, Some(10), Some("b"), Some(90)),
         command_card(2, Some(20), Some("a"), Some(20)),
-        command_card(3, Some(30), Some("q"), Some(30)),
+        command_card(3, Some(30), Some("a"), Some(30)),
         command_card(4, Some(20), Some("b"), Some(100)),
     ];
     let members = [
@@ -1611,8 +1925,30 @@ fn critical_mode_uses_total_crit_to_break_equal_member_and_chain_scores() {
     let (picks, summary) =
         choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
 
-    assert_eq!(pick_labels(&picks), vec!["C1", "C2", "C3"]);
-    assert_eq!(summary.chain, Some(CriticalChainType::Mighty));
+    assert_eq!(pick_labels(&picks), vec!["C1", "C4", "C3"]);
+    assert_eq!(summary.bonus, None);
+}
+
+#[test]
+fn critical_mode_uses_quick_first_when_no_quick_or_mighty_chain_exists() {
+    let cards = vec![
+        command_card(0, Some(10), Some("q"), Some(10)),
+        command_card(1, Some(20), Some("b"), Some(100)),
+        command_card(2, Some(10), Some("b"), Some(90)),
+        command_card(3, Some(30), Some("b"), Some(80)),
+        command_card(4, Some(20), Some("b"), Some(70)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        frontline_member("three", 2, 30, false),
+    ];
+
+    let (picks, summary) =
+        choose_critical_picks(&cards, &members, &CriticalAttackStrategy::default());
+
+    assert_eq!(pick_labels(&picks), vec!["C0", "C1", "C2"]);
+    assert_eq!(summary.bonus, Some(CriticalBonusType::QuickFirst));
 }
 
 #[test]

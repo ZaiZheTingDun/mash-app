@@ -7,6 +7,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   autoCaptureBattleResultLoot: false,
   autoCaptureUnknownScreenTimeout: false,
   autoCaptureSkillUseProbe: false,
+  autoCaptureUnrecognizedCriticalChance: false,
   simulateStuckAttackSelection: false,
 };
 
@@ -15,6 +16,8 @@ function normalizeDebugSettings(settings: Partial<DebugSettings>): DebugSettings
     autoCaptureBattleResultLoot: settings.autoCaptureBattleResultLoot === true,
     autoCaptureUnknownScreenTimeout: settings.autoCaptureUnknownScreenTimeout === true,
     autoCaptureSkillUseProbe: settings.autoCaptureSkillUseProbe === true,
+    autoCaptureUnrecognizedCriticalChance:
+      settings.autoCaptureUnrecognizedCriticalChance === true,
     simulateStuckAttackSelection: settings.simulateStuckAttackSelection === true,
   };
 }
@@ -97,6 +100,23 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
     }
   }, []);
 
+  const saveAutoCaptureUnrecognizedCriticalChance = useCallback(async (value: boolean) => {
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
+    try {
+      const next = normalizeDebugSettings(
+        await invoke<DebugSettings>("set_auto_capture_unrecognized_critical_chance", { value })
+      );
+      setSettings(next);
+      setSavedMessage("已保存");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
   const saveSimulateStuckAttackSelection = useCallback(async (value: boolean) => {
     setSaving(true);
     setError(null);
@@ -168,6 +188,24 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
             onCheckedChange={(value) => void saveAutoCaptureSkillUseProbe(value)}
             disabled={loading || saving}
             aria-label="保存技能确认 probe 截图"
+          />
+        </Flex>
+
+        <Flex align="start" justify="between" gap="4" wrap="wrap" className="basic-setting-row">
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              暴击率无法识别时截图
+            </Text>
+            <Text size="1" color="gray">
+              开启后暴击模式中任意指令卡的暴击率无法识别时，会保存当前指令卡画面用于排查。
+            </Text>
+          </Flex>
+
+          <Switch
+            checked={settings.autoCaptureUnrecognizedCriticalChance}
+            onCheckedChange={(value) => void saveAutoCaptureUnrecognizedCriticalChance(value)}
+            disabled={loading || saving}
+            aria-label="暴击率无法识别时截图"
           />
         </Flex>
 

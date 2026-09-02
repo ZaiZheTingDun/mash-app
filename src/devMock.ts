@@ -98,6 +98,7 @@ let supportFullListOcrFallback = false;
 let autoCaptureBattleResultLoot = false;
 let autoCaptureUnknownScreenTimeout = false;
 let autoCaptureSkillUseProbe = false;
+let autoCaptureUnrecognizedCriticalChance = false;
 let simulateStuckAttackSelection = false;
 let nextProjectNumber = 2;
 let nextProjectGroupNumber = 1;
@@ -241,6 +242,7 @@ function debugSettings() {
     autoCaptureBattleResultLoot,
     autoCaptureUnknownScreenTimeout,
     autoCaptureSkillUseProbe,
+    autoCaptureUnrecognizedCriticalChance,
     simulateStuckAttackSelection,
   };
 }
@@ -602,6 +604,9 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return debugSettings() as T;
     case "set_auto_capture_skill_use_probe":
       autoCaptureSkillUseProbe = Boolean(args.value);
+      return debugSettings() as T;
+    case "set_auto_capture_unrecognized_critical_chance":
+      autoCaptureUnrecognizedCriticalChance = Boolean(args.value);
       return debugSettings() as T;
     case "set_simulate_stuck_attack_selection":
       simulateStuckAttackSelection = Boolean(args.value);

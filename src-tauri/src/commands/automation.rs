@@ -547,6 +547,8 @@ pub(crate) fn start_automation(
     config.auto_capture_battle_result_loot = debug_settings.auto_capture_battle_result_loot;
     config.auto_capture_unknown_screen_timeout = debug_settings.auto_capture_unknown_screen_timeout;
     config.auto_capture_skill_use_probe = debug_settings.auto_capture_skill_use_probe;
+    config.auto_capture_unrecognized_critical_chance =
+        debug_settings.auto_capture_unrecognized_critical_chance;
 
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));

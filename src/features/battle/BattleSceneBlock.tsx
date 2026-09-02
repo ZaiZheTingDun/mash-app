@@ -1083,7 +1083,11 @@ export function BattleSceneBlock({
         {turnAttackModesEnabled ? (
           <div className="battle-attack-heading">
             <Select.Root value={attackMode} onValueChange={updateAttackMode}>
-              <Select.Trigger aria-label="攻击模式" className="battle-attack-mode-select" />
+              <Select.Trigger
+                aria-label="攻击模式"
+                className="battle-attack-mode-select"
+                variant="ghost"
+              />
               <Select.Content>
                 <Select.Item value="normal">普通模式</Select.Item>
                 <Select.Item value="critical">暴击模式</Select.Item>

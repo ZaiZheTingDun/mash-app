@@ -498,12 +498,13 @@ describe("BattleSceneBlock staged action editor", () => {
     }));
   });
 
-  it("shows configured owned and support members plus all critical chain priorities", () => {
+  it("shows configured owned and support frontline members plus chain priorities", () => {
     const duplicate = makeServant(10, "同名从者");
     const members: PartyMember[] = [
       { memberId: "owned", servant: duplicate, isSupport: false },
       { memberId: "support", servant: duplicate, isSupport: true },
       { memberId: "empty", servant: null, isSupport: false },
+      { memberId: "backline", servant: makeServant(11, "后排从者"), isSupport: false },
     ];
     renderWithTheme(
       <BattleSceneBlock
@@ -518,6 +519,8 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(screen.getAllByRole("button", { name: /同名从者，拖动调整优先级/ })).toHaveLength(2);
     expect(screen.getByLabelText("助战")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /从者 3，拖动调整优先级/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /后排从者，拖动调整优先级/ })).not.toBeInTheDocument();
+    expect(screen.getByText("连携优先级")).toBeInTheDocument();
     for (const label of ["精湛连携", "力击连携", "技击连携", "迅击连携"]) {
       expect(screen.getByRole("button", { name: `${label}，拖动调整优先级` })).toBeInTheDocument();
     }

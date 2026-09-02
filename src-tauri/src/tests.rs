@@ -3408,13 +3408,23 @@ fn legacy_battle_turn_defaults_to_normal_attack_mode_and_preserves_all_strategie
     let legacy: BattleTurn = serde_json::from_value(serde_json::json!({
         "id": "turn_legacy",
         "preparationActions": [],
-        "attackPriority": []
+        "attackPriority": [],
+        "criticalStrategy": {
+            "memberPriority": [],
+            "chainPriority": ["quick", "mighty", "buster", "arts"]
+        }
     }))
     .unwrap();
     assert_eq!(legacy.attack_mode, AttackMode::Normal);
+    assert!(legacy.critical_strategy.member_priority.is_empty());
     assert_eq!(
         legacy.critical_strategy.chain_priority,
-        default_critical_chain_priority()
+        vec![
+            CriticalChainType::Quick,
+            CriticalChainType::Mighty,
+            CriticalChainType::Buster,
+            CriticalChainType::Arts,
+        ]
     );
     assert!(legacy.advanced_card_strategy.custom_rules.is_empty());
 
@@ -3438,6 +3448,7 @@ fn legacy_battle_turn_defaults_to_normal_attack_mode_and_preserves_all_strategie
         value["criticalStrategy"]["memberPriority"][0]["memberId"],
         "slot-support"
     );
+    assert_eq!(value["criticalStrategy"]["chainPriority"][0], "quick");
     assert_eq!(
         value["advancedCardStrategy"]["customRules"][0]["name"],
         "保留规则"
