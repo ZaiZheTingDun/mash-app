@@ -549,6 +549,9 @@ pub(crate) fn start_automation(
     config.auto_capture_skill_use_probe = debug_settings.auto_capture_skill_use_probe;
     config.auto_capture_unrecognized_critical_chance =
         debug_settings.auto_capture_unrecognized_critical_chance;
+    config.prefer_higher_critical_chance = project
+        .as_ref()
+        .is_some_and(|project| project.prefer_higher_critical_chance);
 
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));

@@ -1190,11 +1190,22 @@ fn ordinary_advanced_rules(
         .collect()
 }
 
+#[cfg(test)]
 pub(crate) fn choose_ordinary_advanced_picks(
     cards: &[CommandCardMatch],
     nps: &[NoblePhantasmMatch],
     members: &[Option<PartyMemberRuntime>; 3],
     strategy: &AdvancedCardStrategy,
+) -> (Vec<Pick>, Option<String>) {
+    choose_ordinary_advanced_picks_with_crit(cards, nps, members, strategy, false)
+}
+
+pub(crate) fn choose_ordinary_advanced_picks_with_crit(
+    cards: &[CommandCardMatch],
+    nps: &[NoblePhantasmMatch],
+    members: &[Option<PartyMemberRuntime>; 3],
+    strategy: &AdvancedCardStrategy,
+    prefer_higher_critical_chance: bool,
 ) -> (Vec<Pick>, Option<String>) {
     let party_ids: [Option<u32>; 3] =
         std::array::from_fn(|index| members[index].as_ref().map(|member| member.servant_id));
@@ -1236,10 +1247,12 @@ pub(crate) fn choose_ordinary_advanced_picks(
             servant_index,
             servant_id: card.servant_id,
             color: card.suit.clone(),
-            original_order: 10 + card.slot,
+            original_order: 10
+                + command_card_preference_order(card, cards, prefer_higher_critical_chance),
             is_np: false,
         });
     }
+    candidates.sort_by_key(|candidate| candidate.original_order);
 
     for (name, rule) in ordinary_advanced_rules(strategy, members) {
         let picks = choose_with_grand_rules(&candidates, &[], vec![rule]);
@@ -1250,7 +1263,9 @@ pub(crate) fn choose_ordinary_advanced_picks(
 
     let mut fallback: Vec<&CommandCardMatch> =
         cards.iter().filter(|card| !card.is_stunned).collect();
-    fallback.sort_by_key(|card| card.slot);
+    fallback.sort_by_key(|card| {
+        command_card_preference_order(card, cards, prefer_higher_critical_chance)
+    });
     (
         fallback
             .into_iter()
@@ -1290,6 +1305,7 @@ fn append_unavailable_card_fallbacks(
     picks
 }
 
+#[cfg(test)]
 pub(crate) fn choose_advanced_auto_picks_with_grand_class(
     scene: &AdvancedBattleScene,
     cards: &[CommandCardMatch],
@@ -1299,6 +1315,30 @@ pub(crate) fn choose_advanced_auto_picks_with_grand_class(
     grand_servants: &[GrandServantRuntimeConfig],
     grand_card_strategy: &GrandCardStrategy,
     grand_class: GrandClass,
+) -> Vec<Pick> {
+    choose_advanced_auto_picks_with_crit(
+        scene,
+        cards,
+        nps,
+        party_ids,
+        party_supports,
+        grand_servants,
+        grand_card_strategy,
+        grand_class,
+        false,
+    )
+}
+
+pub(crate) fn choose_advanced_auto_picks_with_crit(
+    scene: &AdvancedBattleScene,
+    cards: &[CommandCardMatch],
+    nps: &[NoblePhantasmMatch],
+    party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
+    grand_servants: &[GrandServantRuntimeConfig],
+    grand_card_strategy: &GrandCardStrategy,
+    grand_class: GrandClass,
+    prefer_higher_critical_chance: bool,
 ) -> Vec<Pick> {
     let main_index = main_output_index(scene);
     let main_np_color = main_np_color(scene, party_ids);
@@ -1363,10 +1403,12 @@ pub(crate) fn choose_advanced_auto_picks_with_grand_class(
             servant_index,
             servant_id: card.servant_id,
             color: card.suit.clone(),
-            original_order: 10 + card.slot,
+            original_order: 10
+                + command_card_preference_order(card, cards, prefer_higher_critical_chance),
             is_np: false,
         });
     }
+    candidates.sort_by_key(|candidate| candidate.original_order);
 
     if candidates.len() <= 3 {
         let mut selected = candidates;

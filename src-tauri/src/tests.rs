@@ -519,6 +519,7 @@ fn test_project(id: &str, name: &str, advanced_mode: bool) -> Project {
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
         recognition_settings: None,
         disable_auto_skill_target_recognition: false,
+        prefer_higher_critical_chance: false,
         slots: default_project_slots(),
         repeat_mission: false,
         repeat_mode: Some(ProjectRepeatMode::Single),
@@ -1045,6 +1046,7 @@ fn project_legacy_json_without_slots_falls_back_to_defaults() {
     assert_eq!(project.support_skill_level_mins, [None; 3]);
     assert_eq!(project.support_append_skill_level_mins, [None; 5]);
     assert!(project.recognition_settings.is_none());
+    assert!(!project.prefer_higher_critical_chance);
     assert_eq!(project.repeat_mission, false);
     assert!(project.repeat_mode.is_none());
     assert!(project.repeat_count.is_none());
@@ -1069,6 +1071,18 @@ fn project_ap_recovery_limits_round_trip_with_unlimited_items() {
     let restored: Project = serde_json::from_value(json).unwrap();
     assert_eq!(restored.ap_recovery_limits.gold, Some(5));
     assert_eq!(restored.ap_recovery_limits.silver, None);
+}
+
+#[test]
+fn project_higher_critical_chance_preference_round_trips_as_camel_case() {
+    let mut project = test_project("project-crit-preference", "暴击率优先", false);
+    project.prefer_higher_critical_chance = true;
+
+    let serialized = serde_json::to_value(&project).unwrap();
+    assert_eq!(serialized["preferHigherCriticalChance"], true);
+
+    let deserialized: Project = serde_json::from_value(serialized).unwrap();
+    assert!(deserialized.prefer_higher_critical_chance);
 }
 
 #[test]
@@ -1439,6 +1453,7 @@ fn normalize_project_migrates_legacy_repeat_flag_to_infinite_mode() {
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
         recognition_settings: None,
         disable_auto_skill_target_recognition: false,
+        prefer_higher_critical_chance: false,
         slots: default_project_slots(),
         repeat_mission: true,
         repeat_mode: None,

@@ -266,6 +266,25 @@ describe("BattlePage", () => {
     });
   });
 
+  it("passes the command-card critical chance preference to automation", async () => {
+    const user = userEvent.setup();
+    mockProjectCommands();
+    renderBattlePage({
+      ...PROJECT,
+      preferHigherCriticalChance: true,
+    });
+
+    await user.click(await screen.findByRole("button", { name: "开始" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("start_automation", {
+        config: expect.objectContaining({
+          preferHigherCriticalChance: true,
+        }),
+      });
+    });
+  });
+
   it("passes the selected support servant variant to automation", async () => {
     const user = userEvent.setup();
     mockProjectCommands();

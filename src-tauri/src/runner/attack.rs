@@ -197,6 +197,13 @@ pub(crate) fn format_command_card_crit_chances(cards: &[CommandCardMatch]) -> St
         .join(" ")
 }
 
+pub(crate) fn should_log_command_card_crit_chances(
+    prefer_higher_critical_chance: bool,
+    critical_mode: bool,
+) -> bool {
+    prefer_higher_critical_chance || critical_mode
+}
+
 pub(crate) fn should_capture_unrecognized_critical_chance(
     enabled: bool,
     critical_mode: bool,
@@ -383,6 +390,7 @@ pub(crate) fn command_condition_matches_card(
 /// repeated while they can still match, before moving to the next priority.
 /// Cards / NPs already picked are tracked in `used_card_slots` /
 /// `used_np_slots` and will not be re-selected.
+#[cfg(test)]
 pub(crate) fn pick_by_priority(
     priority: &[AttackCard],
     cards: &[CommandCardMatch],
@@ -391,6 +399,28 @@ pub(crate) fn pick_by_priority(
     party_supports: &[bool; 3],
     used_card_slots: &mut HashSet<u32>,
     used_np_slots: &mut HashSet<u32>,
+) -> Vec<Pick> {
+    pick_by_priority_with_crit(
+        priority,
+        cards,
+        nps,
+        party_ids,
+        party_supports,
+        used_card_slots,
+        used_np_slots,
+        false,
+    )
+}
+
+pub(crate) fn pick_by_priority_with_crit(
+    priority: &[AttackCard],
+    cards: &[CommandCardMatch],
+    nps: &[NoblePhantasmMatch],
+    party_ids: &[Option<u32>; 3],
+    party_supports: &[bool; 3],
+    used_card_slots: &mut HashSet<u32>,
+    used_np_slots: &mut HashSet<u32>,
+    prefer_higher_critical_chance: bool,
 ) -> Vec<Pick> {
     let mut picks: Vec<Option<Pick>> = (0..3).map(|_| None).collect();
     let mut inherited_fixed_card: Option<String> = None;
@@ -406,6 +436,7 @@ pub(crate) fn pick_by_priority(
                 party_supports,
                 used_card_slots,
                 used_np_slots,
+                prefer_higher_critical_chance,
             ) {
                 picks[idx] = Some(pick);
             }
@@ -430,6 +461,7 @@ pub(crate) fn pick_by_priority(
                 party_supports,
                 used_card_slots,
                 used_np_slots,
+                prefer_higher_critical_chance,
             ) else {
                 break;
             };
@@ -441,7 +473,12 @@ pub(crate) fn pick_by_priority(
     }
 
     let fixed_len = priority.len().min(3);
-    fill_empty_pick_slots(&mut picks[..fixed_len], cards, used_card_slots);
+    fill_empty_pick_slots(
+        &mut picks[..fixed_len],
+        cards,
+        used_card_slots,
+        prefer_higher_critical_chance,
+    );
     picks.into_iter().flatten().collect()
 }
 
@@ -522,6 +559,7 @@ pub(crate) fn pick_one_priority(
     party_supports: &[bool; 3],
     used_card_slots: &mut HashSet<u32>,
     used_np_slots: &mut HashSet<u32>,
+    prefer_higher_critical_chance: bool,
 ) -> Option<Pick> {
     let (field_pos, kind) = parse_priority_card(card_str)?;
 
@@ -562,7 +600,10 @@ pub(crate) fn pick_one_priority(
         } else if c.suit.is_none() {
             continue;
         }
-        if best.map_or(true, |b| c.slot < b.slot) {
+        if best.is_none_or(|b| {
+            command_card_preference_order(c, cards, prefer_higher_critical_chance)
+                < command_card_preference_order(b, cards, prefer_higher_critical_chance)
+        }) {
             best = Some(c);
         }
     }
@@ -578,6 +619,58 @@ pub(crate) fn pick_one_priority(
     })
 }
 
+/// Return the card's virtual left-to-right order. When the preference is
+/// enabled, cards from the same member with the same color exchange only
+/// their order ranks according to critical chance. This keeps every other
+/// configured owner/color priority intact.
+pub(crate) fn command_card_preference_order(
+    card: &CommandCardMatch,
+    cards: &[CommandCardMatch],
+    prefer_higher_critical_chance: bool,
+) -> u32 {
+    let (Some(servant_id), Some(suit)) = (card.servant_id, card.suit.as_deref()) else {
+        return card.slot;
+    };
+    if !prefer_higher_critical_chance {
+        return card.slot;
+    }
+
+    let mut equivalent = cards
+        .iter()
+        .filter(|candidate| {
+            candidate.servant_id == Some(servant_id)
+                && candidate.is_support == card.is_support
+                && candidate.suit.as_deref() == Some(suit)
+        })
+        .collect::<Vec<_>>();
+    if equivalent.len() < 2 {
+        return card.slot;
+    }
+    if equivalent
+        .iter()
+        .any(|candidate| candidate.crit_chance.is_none())
+    {
+        return card.slot;
+    }
+
+    let mut available_orders = equivalent
+        .iter()
+        .map(|candidate| candidate.slot)
+        .collect::<Vec<_>>();
+    available_orders.sort_unstable();
+    equivalent.sort_by_key(|candidate| {
+        (
+            std::cmp::Reverse(candidate.crit_chance.expect("checked above")),
+            candidate.slot,
+        )
+    });
+    equivalent
+        .iter()
+        .position(|candidate| candidate.slot == card.slot)
+        .and_then(|rank| available_orders.get(rank).copied())
+        .unwrap_or(card.slot)
+}
+
 /// Fill still-empty fixed-chain positions with the leftmost remaining command
 /// cards, preserving the user's configured three-card order. Actionable cards
 /// are considered before unavailable cards.
@@ -585,9 +678,15 @@ pub(crate) fn fill_empty_pick_slots(
     picks: &mut [Option<Pick>],
     cards: &[CommandCardMatch],
     used_card_slots: &mut HashSet<u32>,
+    prefer_higher_critical_chance: bool,
 ) {
     let mut sorted: Vec<&CommandCardMatch> = cards.iter().collect();
-    sorted.sort_by_key(|c| (c.is_stunned, c.slot));
+    sorted.sort_by_key(|card| {
+        (
+            card.is_stunned,
+            command_card_preference_order(card, cards, prefer_higher_critical_chance),
+        )
+    });
 
     let mut next_card_idx = 0;
     for pick in picks.iter_mut().filter(|pick| pick.is_none()) {
@@ -619,9 +718,15 @@ pub(crate) fn fill_remaining(
     picks: &mut Vec<Pick>,
     cards: &[CommandCardMatch],
     used_card_slots: &mut HashSet<u32>,
+    prefer_higher_critical_chance: bool,
 ) {
     let mut sorted: Vec<&CommandCardMatch> = cards.iter().collect();
-    sorted.sort_by_key(|c| (c.is_stunned, c.slot));
+    sorted.sort_by_key(|card| {
+        (
+            card.is_stunned,
+            command_card_preference_order(card, cards, prefer_higher_critical_chance),
+        )
+    });
     for c in sorted {
         if picks.len() >= 3 {
             break;
@@ -644,9 +749,18 @@ pub(crate) fn fill_remaining(
 /// the planned chain. These are consumed when a planned NP opens the game's
 /// "cannot use Noble Phantasm" dialog, so the runner can still submit three
 /// actual selections without tapping the same command card twice.
+#[cfg(test)]
 pub(crate) fn replacement_command_card_picks(
     picks: &[Pick],
     cards: &[CommandCardMatch],
+) -> VecDeque<Pick> {
+    replacement_command_card_picks_with_crit(picks, cards, false)
+}
+
+pub(crate) fn replacement_command_card_picks_with_crit(
+    picks: &[Pick],
+    cards: &[CommandCardMatch],
+    prefer_higher_critical_chance: bool,
 ) -> VecDeque<Pick> {
     let reserved_slots: HashSet<u32> = picks
         .iter()
@@ -659,7 +773,12 @@ pub(crate) fn replacement_command_card_picks(
         .iter()
         .filter(|card| !reserved_slots.contains(&card.slot))
         .collect();
-    candidates.sort_by_key(|card| (card.is_stunned, card.slot));
+    candidates.sort_by_key(|card| {
+        (
+            card.is_stunned,
+            command_card_preference_order(card, cards, prefer_higher_critical_chance),
+        )
+    });
     candidates
         .into_iter()
         .map(|card| Pick::Card {
@@ -679,8 +798,10 @@ pub(crate) fn refresh_retry_picks_for_np_state(
     picks: &[Pick],
     cards: &[CommandCardMatch],
     nps: &[NoblePhantasmMatch],
+    prefer_higher_critical_chance: bool,
 ) -> Vec<Pick> {
-    let mut replacements = replacement_command_card_picks(picks, cards);
+    let mut replacements =
+        replacement_command_card_picks_with_crit(picks, cards, prefer_higher_critical_chance);
     let mut refreshed = Vec::with_capacity(picks.len());
 
     for pick in picks {
@@ -1447,10 +1568,12 @@ impl Runner {
             self.battle.current_turn_index,
         )
         .cloned();
-        let recognize_command_cards = normal_scenes_need_command_card_recognition(&self.scenes);
+        let recognize_command_cards = normal_scenes_need_command_card_recognition(&self.scenes)
+            || self.config.prefer_higher_critical_chance;
         let tolerate_missing_owners = current_turn
             .as_ref()
-            .is_some_and(|turn| turn.attack_mode == AttackMode::Critical);
+            .is_some_and(|turn| turn.attack_mode == AttackMode::Critical)
+            || self.config.prefer_higher_critical_chance;
         let Some((cards, nps)) =
             self.read_attack_state(&party_ids, recognize_command_cards, tolerate_missing_owners)
         else {
@@ -1466,10 +1589,6 @@ impl Runner {
                 self.pick_and_tap_attack_cards(&cards, &nps, &party_ids, &party_supports, None);
             }
             AttackMode::Critical => {
-                self.emit(
-                    "Attack",
-                    &format!("指令卡暴击率：{}", format_command_card_crit_chances(&cards)),
-                );
                 let strategy = current_turn
                     .as_ref()
                     .map(|turn| &turn.critical_strategy)
@@ -1514,8 +1633,13 @@ impl Runner {
                     .map(|turn| &turn.advanced_card_strategy)
                     .cloned()
                     .unwrap_or_default();
-                let (picks, matched_rule) =
-                    choose_ordinary_advanced_picks(&cards, &nps, &party_members, &strategy);
+                let (picks, matched_rule) = choose_ordinary_advanced_picks_with_crit(
+                    &cards,
+                    &nps,
+                    &party_members,
+                    &strategy,
+                    self.config.prefer_higher_critical_chance,
+                );
                 if let Some(rule) = matched_rule {
                     self.emit("Attack", &format!("高级模式：命中 {rule}"));
                 } else {
@@ -1600,10 +1724,16 @@ impl Runner {
         recognize_command_cards: bool,
         tolerate_missing_owners: bool,
     ) -> Option<(Vec<CommandCardMatch>, Vec<NoblePhantasmMatch>)> {
+        let tolerate_missing_owners =
+            tolerate_missing_owners || self.config.prefer_higher_critical_chance;
+        let recognize_critical_chance = should_log_command_card_crit_chances(
+            self.config.prefer_higher_critical_chance,
+            self.current_attack_is_critical(),
+        );
         let recognition_settle_delay =
-            command_card_recognition_settle_delay(self.current_attack_is_critical());
+            command_card_recognition_settle_delay(recognize_critical_chance);
         if !recognition_settle_delay.is_zero() {
-            self.emit("Attack", "暴击模式：等待 1 秒后识别暴击率");
+            self.emit("Attack", "等待 1 秒后识别指令卡暴击率");
             thread::sleep(recognition_settle_delay);
         }
 
@@ -1681,7 +1811,7 @@ impl Runner {
                 if tolerate_missing_owners && used_full_party_candidates {
                     self.emit_warn(
                         "Attack",
-                        "警告：全队候选仍有指令卡成员未识别，暴击模式将放宽成员交错限制",
+                        "警告：全队候选仍有指令卡成员未识别，将按未识别成员的原卡位处理",
                     );
                     break cards;
                 }
@@ -1736,9 +1866,15 @@ impl Runner {
             self.emit("Attack", "未配置普通指令卡，跳过指令卡归属识别");
             cards
         };
+        if recognize_critical_chance {
+            self.emit(
+                "Attack",
+                &format!("指令卡暴击率：{}", format_command_card_crit_chances(&cards)),
+            );
+        }
         if should_capture_unrecognized_critical_chance(
             self.config.auto_capture_unrecognized_critical_chance,
-            self.current_attack_is_critical(),
+            recognize_critical_chance,
             &cards,
         ) {
             match self.capture_unrecognized_critical_chance_screenshot() {
@@ -1949,7 +2085,7 @@ impl Runner {
         let actionable_cards = actionable_command_cards(cards);
 
         if let Some(priority) = attack_priority_override {
-            picks = pick_by_priority(
+            picks = pick_by_priority_with_crit(
                 priority,
                 &actionable_cards,
                 nps,
@@ -1957,6 +2093,7 @@ impl Runner {
                 party_supports,
                 &mut used_card_slots,
                 &mut used_np_slots,
+                self.config.prefer_higher_critical_chance,
             );
         } else if let Some(priority) = attack_priority_for_current_scene(
             self.advanced_mode,
@@ -1965,7 +2102,7 @@ impl Runner {
             self.battle.current_scene_index,
             self.battle.current_turn_index,
         ) {
-            picks = pick_by_priority(
+            picks = pick_by_priority_with_crit(
                 priority,
                 &actionable_cards,
                 nps,
@@ -1973,16 +2110,27 @@ impl Runner {
                 party_supports,
                 &mut used_card_slots,
                 &mut used_np_slots,
+                self.config.prefer_higher_critical_chance,
             );
         } else {
             self.emit("Attack", "场景未变更，按默认顺序补位");
         }
 
         if picks.len() < 3 {
-            fill_remaining(&mut picks, &actionable_cards, &mut used_card_slots);
+            fill_remaining(
+                &mut picks,
+                &actionable_cards,
+                &mut used_card_slots,
+                self.config.prefer_higher_critical_chance,
+            );
         }
         if picks.len() < 3 {
-            fill_remaining(&mut picks, cards, &mut used_card_slots);
+            fill_remaining(
+                &mut picks,
+                cards,
+                &mut used_card_slots,
+                self.config.prefer_higher_critical_chance,
+            );
         }
 
         if picks.is_empty() {
@@ -2008,7 +2156,11 @@ impl Runner {
         }
 
         let mut pending: VecDeque<Pick> = picks.iter().cloned().collect();
-        let mut replacements = replacement_command_card_picks(picks, cards);
+        let mut replacements = replacement_command_card_picks_with_crit(
+            picks,
+            cards,
+            self.config.prefer_higher_critical_chance,
+        );
         while pending.len() < 3 {
             let Some(replacement) = replacements.pop_front() else {
                 self.fail_action(screen, "补足选卡", "没有其他可用指令卡".into());
@@ -2231,7 +2383,12 @@ impl Runner {
         let Some(nps) = self.read_noble_phantasms_for_retry() else {
             return;
         };
-        let retry_picks = refresh_retry_picks_for_np_state(&plan.picks, &plan.cards, &nps);
+        let retry_picks = refresh_retry_picks_for_np_state(
+            &plan.picks,
+            &plan.cards,
+            &nps,
+            self.config.prefer_higher_critical_chance,
+        );
         if retry_picks.len() < 3 {
             self.fail_action(
                 "Attack",
@@ -2326,7 +2483,7 @@ impl Runner {
                     startup_actions: Vec::new(),
                     rules: Vec::new(),
                 };
-                let picks = choose_advanced_auto_picks_with_grand_class(
+                let picks = choose_advanced_auto_picks_with_crit(
                     &scene,
                     &cards,
                     &nps,
@@ -2335,6 +2492,7 @@ impl Runner {
                     &grand_servants,
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
+                    self.config.prefer_higher_critical_chance,
                 );
                 self.tap_picks("Attack", &picks, &cards, &party_ids);
                 return;
@@ -2511,7 +2669,7 @@ impl Runner {
                         else {
                             return;
                         };
-                        let picks = choose_advanced_auto_picks_with_grand_class(
+                        let picks = choose_advanced_auto_picks_with_crit(
                             &scene,
                             &next_cards,
                             &next_nps,
@@ -2520,12 +2678,13 @@ impl Runner {
                             &grand_servants,
                             &self.config.grand_card_strategy,
                             self.config.grand_class,
+                            self.config.prefer_higher_critical_chance,
                         );
                         self.tap_picks("Attack", &picks, &next_cards, &startup_party_ids);
                         return;
                     }
 
-                    let picks = choose_advanced_auto_picks_with_grand_class(
+                    let picks = choose_advanced_auto_picks_with_crit(
                         &scene,
                         &cards,
                         &nps,
@@ -2534,6 +2693,7 @@ impl Runner {
                         &grand_servants,
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
+                        self.config.prefer_higher_critical_chance,
                     );
                     self.tap_picks("Attack", &picks, &cards, &startup_party_ids);
                     return;
@@ -2592,7 +2752,7 @@ impl Runner {
                         else {
                             return;
                         };
-                        let picks = choose_advanced_auto_picks_with_grand_class(
+                        let picks = choose_advanced_auto_picks_with_crit(
                             &scene,
                             &next_cards,
                             &[],
@@ -2601,13 +2761,14 @@ impl Runner {
                             &grand_servants,
                             &self.config.grand_card_strategy,
                             self.config.grand_class,
+                            self.config.prefer_higher_critical_chance,
                         );
                         self.tap_picks("Attack", &picks, &next_cards, &control_party_ids);
                         return;
                     }
 
                     self.emit("Attack", "启动条件未满足，按自动优先级攻击且不释放宝具");
-                    let picks = choose_advanced_auto_picks_with_grand_class(
+                    let picks = choose_advanced_auto_picks_with_crit(
                         &scene,
                         &cards,
                         &[],
@@ -2616,6 +2777,7 @@ impl Runner {
                         &grand_servants,
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
+                        self.config.prefer_higher_critical_chance,
                     );
                     self.tap_picks("Attack", &picks, &cards, &party_ids);
                     return;
@@ -2699,7 +2861,7 @@ impl Runner {
                     else {
                         return;
                     };
-                    let picks = choose_advanced_auto_picks_with_grand_class(
+                    let picks = choose_advanced_auto_picks_with_crit(
                         &scene,
                         &next_cards,
                         &next_nps,
@@ -2708,12 +2870,13 @@ impl Runner {
                         &grand_servants,
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
+                        self.config.prefer_higher_critical_chance,
                     );
                     self.tap_picks("Attack", &picks, &next_cards, &startup_party_ids);
                     return;
                 }
 
-                let picks = choose_advanced_auto_picks_with_grand_class(
+                let picks = choose_advanced_auto_picks_with_crit(
                     &scene,
                     &cards,
                     &nps,
@@ -2722,6 +2885,7 @@ impl Runner {
                     &grand_servants,
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
+                    self.config.prefer_higher_critical_chance,
                 );
                 self.tap_picks("Attack", &picks, &cards, &startup_party_ids);
                 return;
@@ -2811,7 +2975,7 @@ impl Runner {
                     else {
                         return;
                     };
-                    let picks = choose_advanced_auto_picks_with_grand_class(
+                    let picks = choose_advanced_auto_picks_with_crit(
                         &scene,
                         &next_cards,
                         &next_nps,
@@ -2820,12 +2984,13 @@ impl Runner {
                         &grand_servants,
                         &self.config.grand_card_strategy,
                         self.config.grand_class,
+                        self.config.prefer_higher_critical_chance,
                     );
                     self.tap_picks("Attack", &picks, &next_cards, &control_party_ids);
                     return;
                 }
 
-                let picks = choose_advanced_auto_picks_with_grand_class(
+                let picks = choose_advanced_auto_picks_with_crit(
                     &scene,
                     &cards,
                     &nps,
@@ -2834,6 +2999,7 @@ impl Runner {
                     &grand_servants,
                     &self.config.grand_card_strategy,
                     self.config.grand_class,
+                    self.config.prefer_higher_critical_chance,
                 );
                 self.tap_picks("Attack", &picks, &cards, &control_party_ids);
                 return;
@@ -2848,7 +3014,7 @@ impl Runner {
                 executed_control_count,
                 startup_control_count,
             );
-            let picks = choose_advanced_auto_picks_with_grand_class(
+            let picks = choose_advanced_auto_picks_with_crit(
                 &scene,
                 &cards,
                 &nps,
@@ -2857,6 +3023,7 @@ impl Runner {
                 &grand_servants,
                 &self.config.grand_card_strategy,
                 self.config.grand_class,
+                self.config.prefer_higher_critical_chance,
             );
             self.tap_picks("Attack", &picks, &cards, &active_party_ids);
             return;

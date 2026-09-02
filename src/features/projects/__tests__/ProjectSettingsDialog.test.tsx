@@ -188,6 +188,34 @@ describe("ProjectSettingsDialog", () => {
     });
   });
 
+  it("persists the higher critical chance command-card preference", async () => {
+    const user = userEvent.setup();
+    const onUpdateProject = vi.fn().mockResolvedValue(undefined);
+    const project = makeProject();
+    renderWithTheme(
+      <ProjectSettingsDialog
+        open
+        project={project}
+        onOpenChange={vi.fn()}
+        onUpdateProject={onUpdateProject}
+      />
+    );
+
+    const preference = await screen.findByRole("switch", {
+      name: "优先选择暴击率更高的指令卡",
+    });
+    expect(preference).not.toBeChecked();
+
+    await user.click(preference);
+
+    await waitFor(() => {
+      expect(onUpdateProject).toHaveBeenCalledWith({
+        ...project,
+        preferHigherCriticalChance: true,
+      });
+    });
+  });
+
   it("enables Extra class filtering by default and persists the switch", async () => {
     const user = userEvent.setup();
     const onUpdateProject = vi.fn().mockResolvedValue(undefined);

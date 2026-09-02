@@ -294,6 +294,9 @@ fn critical_chance_log_lists_all_cards_in_slot_order() {
         format_command_card_crit_chances(&cards),
         "C1=70% C2=80% C3=未识别 C4=90% C5=100%"
     );
+    assert!(should_log_command_card_crit_chances(true, false));
+    assert!(should_log_command_card_crit_chances(false, true));
+    assert!(!should_log_command_card_crit_chances(false, false));
 }
 
 #[test]
@@ -519,7 +522,7 @@ fn retry_picks_replace_np_that_is_no_longer_ready() {
         .collect::<Vec<_>>();
     let nps = vec![np_slot(2, false)];
 
-    let refreshed = refresh_retry_picks_for_np_state(&picks, &cards, &nps);
+    let refreshed = refresh_retry_picks_for_np_state(&picks, &cards, &nps, false);
 
     assert_eq!(refreshed.len(), 3);
     assert!(matches!(refreshed[0], Pick::Card { slot: 2, .. }));
@@ -969,6 +972,7 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
     assert!(!cfg.auto_capture_unknown_screen_timeout);
     assert!(!cfg.auto_capture_skill_use_probe);
     assert!(!cfg.auto_capture_unrecognized_critical_chance);
+    assert!(!cfg.prefer_higher_critical_chance);
 }
 
 #[test]
@@ -2028,6 +2032,48 @@ fn ordinary_advanced_mode_uses_the_first_matching_rule_in_configured_order() {
 }
 
 #[test]
+fn ordinary_advanced_rule_prefers_higher_crit_between_equivalent_cards() {
+    let cards = vec![
+        command_card(0, Some(10), Some("b"), Some(20)),
+        command_card(1, Some(20), Some("a"), Some(40)),
+        command_card(2, Some(30), Some("q"), Some(100)),
+        command_card(3, Some(10), Some("b"), Some(80)),
+    ];
+    let members = [
+        frontline_member("one", 0, 10, false),
+        frontline_member("two", 1, 20, false),
+        frontline_member("three", 2, 30, false),
+    ];
+    let slot =
+        |member_id: &str, slot_index: u32, servant_id: u32, color: &str| GrandCardRuleSlotConfig {
+            member_id: Some(member_id.into()),
+            slot_index: Some(slot_index),
+            servant_id: Some(servant_id),
+            is_support: false,
+            grand_servant: false,
+            kind: "command".into(),
+            color: color.into(),
+        };
+    let strategy = AdvancedCardStrategy {
+        custom_rules: vec![GrandCardRuleConfig {
+            id: "same-card".into(),
+            name: "同色卡".into(),
+            slots: vec![
+                slot("one", 0, 10, "buster"),
+                slot("two", 1, 20, "arts"),
+                slot("one", 0, 10, "buster"),
+            ],
+        }],
+    };
+
+    let (picks, matched) =
+        choose_ordinary_advanced_picks_with_crit(&cards, &[], &members, &strategy, true);
+
+    assert_eq!(pick_labels(&picks), vec!["C3", "C1", "C0"]);
+    assert_eq!(matched.as_deref(), Some("同色卡"));
+}
+
+#[test]
 fn ordinary_advanced_mode_falls_back_to_actionable_command_cards_from_left_to_right() {
     let cards = vec![
         command_card_with_state(0, Some(10), false, true, Some("b"), Some(100)),
@@ -2162,6 +2208,68 @@ fn normal_priority_preserves_chain_order_between_duplicate_card_colors_and_np() 
     );
 
     assert_eq!(pick_labels(&picks), vec!["C0", "NP0", "C1"]);
+}
+
+#[test]
+fn normal_priority_prefers_higher_crit_between_same_member_and_color() {
+    let priority = vec![AttackCard {
+        id: "chain_1".into(),
+        card: Some("servant_1_buster".into()),
+        member_id: None,
+        servant_id: None,
+        is_support: false,
+    }];
+    let cards = vec![
+        command_card(0, Some(10), Some("b"), Some(20)),
+        command_card(1, Some(20), Some("a"), Some(100)),
+        command_card(3, Some(10), Some("b"), Some(80)),
+    ];
+    let mut used_cards = HashSet::new();
+    let mut used_nps = HashSet::new();
+
+    let picks = pick_by_priority_with_crit(
+        &priority,
+        &cards,
+        &[],
+        &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
+        &mut used_cards,
+        &mut used_nps,
+        true,
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["C3"]);
+}
+
+#[test]
+fn normal_fallback_prefers_higher_crit_between_same_member_and_color() {
+    let cards = vec![
+        command_card(0, Some(10), Some("b"), Some(20)),
+        command_card(1, Some(20), Some("a"), Some(40)),
+        command_card(2, Some(30), Some("q"), Some(60)),
+        command_card(3, Some(10), Some("b"), Some(80)),
+    ];
+    let mut picks = Vec::new();
+    let mut used_cards = HashSet::new();
+
+    fill_remaining(&mut picks, &cards, &mut used_cards, true);
+
+    assert_eq!(pick_labels(&picks), vec!["C3", "C1", "C2"]);
+}
+
+#[test]
+fn normal_preference_keeps_slot_order_when_equivalent_crit_is_unrecognized() {
+    let cards = vec![
+        command_card(0, Some(10), Some("b"), None),
+        command_card(1, Some(20), Some("a"), Some(40)),
+        command_card(3, Some(10), Some("b"), Some(80)),
+    ];
+    let mut picks = Vec::new();
+    let mut used_cards = HashSet::new();
+
+    fill_remaining(&mut picks, &cards, &mut used_cards, true);
+
+    assert_eq!(pick_labels(&picks), vec!["C0", "C1", "C3"]);
 }
 
 #[test]
@@ -2917,14 +3025,14 @@ fn command_card_fillers_use_stunned_cards_only_after_actionable_cards() {
     let mut used_cards = HashSet::new();
     let mut fixed = [None, None, None];
 
-    fill_empty_pick_slots(&mut fixed, &cards, &mut used_cards);
+    fill_empty_pick_slots(&mut fixed, &cards, &mut used_cards, false);
     assert!(matches!(fixed[0], Some(Pick::Card { slot: 1, .. })));
     assert!(matches!(fixed[1], Some(Pick::Card { slot: 2, .. })));
     assert!(matches!(fixed[2], Some(Pick::Card { slot: 0, .. })));
 
     let mut remaining = Vec::new();
     let mut used_cards = HashSet::new();
-    fill_remaining(&mut remaining, &cards, &mut used_cards);
+    fill_remaining(&mut remaining, &cards, &mut used_cards, false);
     assert!(matches!(remaining[0], Pick::Card { slot: 1, .. }));
     assert!(matches!(remaining[1], Pick::Card { slot: 2, .. }));
     assert!(matches!(remaining[2], Pick::Card { slot: 0, .. }));
@@ -2961,7 +3069,7 @@ fn normal_mode_uses_other_actionable_cards_before_a_stunned_priority_target() {
         &mut used_cards,
         &mut used_nps,
     );
-    fill_remaining(&mut picks, &actionable, &mut used_cards);
+    fill_remaining(&mut picks, &actionable, &mut used_cards, false);
 
     assert_eq!(pick_labels(&picks), vec!["C0", "C3", "C4"]);
 }
@@ -2986,6 +3094,33 @@ fn advanced_auto_picks_exclude_stunned_command_cards() {
     );
 
     assert_eq!(pick_labels(&picks), vec!["C2", "C3", "C1"]);
+}
+
+#[test]
+fn advanced_auto_picks_prefer_higher_crit_between_equivalent_cards() {
+    let scene = empty_advanced_scene();
+    let cards = vec![
+        command_card(0, Some(10), Some("b"), Some(20)),
+        command_card(1, Some(20), Some("a"), Some(40)),
+        command_card(2, Some(30), Some("q"), Some(60)),
+        command_card(3, Some(10), Some("b"), Some(80)),
+        command_card(4, Some(40), Some("q"), Some(100)),
+    ];
+
+    let picks = choose_advanced_auto_picks_with_crit(
+        &scene,
+        &cards,
+        &[],
+        &[Some(10), Some(20), Some(30)],
+        &[false, false, false],
+        &[],
+        &GrandCardStrategy::default(),
+        GrandClass::Saber,
+        true,
+    );
+
+    assert!(pick_labels(&picks).contains(&"C3".to_string()));
+    assert!(!pick_labels(&picks).contains(&"C0".to_string()));
 }
 
 #[test]

@@ -157,6 +157,8 @@ export interface Project {
   supportAppendSkillLevelMins?: SupportAppendSkillLevelMins;
   recognitionSettings?: ProjectRecognitionSettings | null;
   disableAutoSkillTargetRecognition?: boolean;
+  /** Prefer the higher critical chance when two command cards have the same owner and color. */
+  preferHigherCriticalChance?: boolean;
   /**
    * Team-builder grid layout (5 servant slots + 1 support slot, in
    * arrangement order). Persisted on the backend so selections and

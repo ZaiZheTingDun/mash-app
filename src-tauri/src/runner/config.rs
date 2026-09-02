@@ -201,6 +201,10 @@ pub struct RunConfig {
     /// Save the current Attack frame when critical chance OCR is incomplete.
     #[serde(default)]
     pub auto_capture_unrecognized_critical_chance: bool,
+    /// Prefer higher critical chance only between otherwise-equivalent
+    /// command cards (same member and color).
+    #[serde(default)]
+    pub prefer_higher_critical_chance: bool,
     #[serde(default = "default_true")]
     pub support_craft_essence_mlb_required: bool,
     #[serde(default)]

@@ -165,6 +165,17 @@ export function ProjectSettingsDialog({
     [onUpdateProject, project]
   );
 
+  const savePreferHigherCriticalChance = useCallback(
+    async (enabled: boolean) => {
+      if (!project) return;
+      await onUpdateProject({
+        ...project,
+        preferHigherCriticalChance: enabled,
+      });
+    },
+    [onUpdateProject, project]
+  );
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content className="settings-dialog">
@@ -281,6 +292,23 @@ export function ProjectSettingsDialog({
                           checked={extraClassFilterEnabled}
                           onCheckedChange={(enabled) => void saveExtraClassFilter(enabled)}
                           aria-label="Extra 职阶筛选"
+                        />
+                      </Flex>
+                      <Flex align="center" justify="between" gap="4" wrap="wrap">
+                        <Flex direction="column" gap="1">
+                          <Text size="2" weight="bold">
+                            优先选择暴击率更高的指令卡
+                          </Text>
+                          <Text size="1" color="gray">
+                            普通模式和高级模式中，同一成员有相同色卡时，优先选择暴击率更高的一张。
+                          </Text>
+                        </Flex>
+                        <Switch
+                          checked={project?.preferHigherCriticalChance ?? false}
+                          onCheckedChange={(enabled) =>
+                            void savePreferHigherCriticalChance(enabled)
+                          }
+                          aria-label="优先选择暴击率更高的指令卡"
                         />
                       </Flex>
                       <Flex align="center" justify="between" gap="4" wrap="wrap">

@@ -573,6 +573,8 @@ export function BattlePage({
         selectedProject.supportSkillLevelMins ?? [null, null, null],
       supportAppendSkillLevelMins:
         selectedProject.supportAppendSkillLevelMins ?? [null, null, null, null, null],
+      preferHigherCriticalChance:
+        selectedProject.preferHigherCriticalChance ?? false,
       servantSelections,
       maxSupportScrolls: 3,
       repeatMission: latestDraft.repeatMode === "infinite",

@@ -898,6 +898,10 @@ pub struct Project {
     pub recognition_settings: Option<ProjectRecognitionSettings>,
     #[serde(default)]
     pub disable_auto_skill_target_recognition: bool,
+    /// When two command cards belong to the same member and have the same
+    /// color, prefer the one with the higher recognized critical chance.
+    #[serde(default)]
+    pub prefer_higher_critical_chance: bool,
     /// Team-builder grid layout (chosen servants + slot order). Persisted
     /// so the user's selections survive app restarts and project switches.
     /// Defaulted via `default_project_slots` for legacy rows.
