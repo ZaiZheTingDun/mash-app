@@ -88,10 +88,15 @@ export function ProjectBar({
   const [draftAdvancedMode, setDraftAdvancedMode] = useState(false);
   const [draftGrandClass, setDraftGrandClass] = useState<GrandClass>("saber");
   const [draftGroupId, setDraftGroupId] = useState<string | null>(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
+  const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
 
   const activeProject =
     projects.find((p) => p.id === activeProjectId) ?? null;
+  const dialogProject =
+    projects.find((project) => project.id === dialogProjectId) ?? activeProject;
+  const deleteProject =
+    projects.find((project) => project.id === deleteProjectId) ?? null;
   const activeProjectGroupId =
     projectCatalog.groups.find((group) => group.projectIds.includes(activeProjectId ?? ""))?.id ??
     null;
@@ -123,12 +128,16 @@ export function ProjectBar({
     : [];
 
   const openNameDialog = useCallback(
-    (mode: NameDialogMode, groupId?: string | null) => {
+    (mode: NameDialogMode, groupId?: string | null, projectId?: string) => {
+      const project = projectId
+        ? projects.find((item) => item.id === projectId) ?? null
+        : activeProject;
       setNameDialogMode(mode);
+      setDialogProjectId(project?.id ?? null);
       if (mode === "rename") {
-        setDraftName(activeProject?.name ?? "");
+        setDraftName(project?.name ?? "");
       } else if (mode === "duplicate") {
-        setDraftName(activeProject ? `${activeProject.name} 副本` : "");
+        setDraftName(project ? `${project.name} 副本` : "");
       } else {
         setDraftName(`队伍 ${projects.length + 1}`);
       }
@@ -142,7 +151,7 @@ export function ProjectBar({
           : null,
       );
     },
-    [activeProject, activeProjectGroupId, grandClassDefinitions, projects.length]
+    [activeProject, activeProjectGroupId, grandClassDefinitions, projects]
   );
 
   const handleNameSubmit = useCallback(
@@ -151,15 +160,16 @@ export function ProjectBar({
       if (!nameDialogMode || !trimmedDraftName) return;
       if (nameDialogMode === "create") {
         onCreateProject(trimmedDraftName, draftAdvancedMode, draftGrandClass, draftGroupId);
-      } else if (nameDialogMode === "rename" && activeProject) {
-        onRenameProject(activeProject.id, trimmedDraftName);
-      } else if (nameDialogMode === "duplicate" && activeProject) {
-        onDuplicateProject(activeProject.id, trimmedDraftName);
+      } else if (nameDialogMode === "rename" && dialogProject) {
+        onRenameProject(dialogProject.id, trimmedDraftName);
+      } else if (nameDialogMode === "duplicate" && dialogProject) {
+        onDuplicateProject(dialogProject.id, trimmedDraftName);
       }
       setNameDialogMode(null);
+      setDialogProjectId(null);
     },
     [
-      activeProject,
+      dialogProject,
       draftAdvancedMode,
       draftGrandClass,
       draftGroupId,
@@ -172,11 +182,11 @@ export function ProjectBar({
   );
 
   const handleDeleteConfirm = useCallback(() => {
-    if (activeProject) {
-      onDeleteProject(activeProject.id);
+    if (deleteProject) {
+      onDeleteProject(deleteProject.id);
     }
-    setDeleteConfirmOpen(false);
-  }, [activeProject, onDeleteProject]);
+    setDeleteProjectId(null);
+  }, [deleteProject, onDeleteProject]);
 
   const nameDialogTitle =
     nameDialogMode === "rename"
@@ -201,6 +211,8 @@ export function ProjectBar({
           disabled={disabled}
           onProjectSelect={onProjectSelect}
           onRequestCreate={(groupId) => openNameDialog("create", groupId)}
+          onRequestRename={(projectId) => openNameDialog("rename", undefined, projectId)}
+          onRequestDelete={setDeleteProjectId}
           onCreateProjectGroup={onCreateProjectGroup}
           onRenameProjectGroup={onRenameProjectGroup}
           onDeleteProjectGroup={onDeleteProjectGroup}
@@ -255,7 +267,7 @@ export function ProjectBar({
             <DropdownMenu.Item
               color="red"
               disabled={disabled || !activeProject}
-              onSelect={() => setDeleteConfirmOpen(true)}
+              onSelect={() => setDeleteProjectId(activeProject?.id ?? null)}
             >
               <Flex align="center" gap="2">
                 <TrashIcon width={12} height={12} />
@@ -276,7 +288,10 @@ export function ProjectBar({
       <Dialog.Root
         open={nameDialogMode !== null}
         onOpenChange={(open) => {
-          if (!open) setNameDialogMode(null);
+          if (!open) {
+            setNameDialogMode(null);
+            setDialogProjectId(null);
+          }
         }}
       >
         <Dialog.Content maxWidth="420px">
@@ -395,11 +410,16 @@ export function ProjectBar({
         </Dialog.Content>
       </Dialog.Root>
 
-      <AlertDialog.Root open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+      <AlertDialog.Root
+        open={deleteProjectId !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteProjectId(null);
+        }}
+      >
         <AlertDialog.Content maxWidth="420px">
           <AlertDialog.Title>删除队伍</AlertDialog.Title>
           <AlertDialog.Description size="2">
-            确定删除队伍「{activeProject?.name ?? ""}」吗？此操作无法撤销。
+            确定删除队伍「{deleteProject?.name ?? ""}」吗？此操作无法撤销。
           </AlertDialog.Description>
           <Flex gap="2" justify="end" mt="4">
             <AlertDialog.Cancel>

@@ -23,6 +23,7 @@ import {
   AlertDialog,
   Box,
   Button,
+  ContextMenu,
   Dialog,
   Flex,
   IconButton,
@@ -67,6 +68,8 @@ interface ProjectSelectorProps {
   disabled?: boolean;
   onProjectSelect: (id: string) => void;
   onRequestCreate: (groupId: string | null) => void;
+  onRequestRename: (projectId: string) => void;
+  onRequestDelete: (projectId: string) => void;
   onCreateProjectGroup: (name: string) => Promise<void>;
   onRenameProjectGroup: (groupId: string, name: string) => Promise<void>;
   onDeleteProjectGroup: (groupId: string) => Promise<void>;
@@ -181,8 +184,12 @@ function ProjectGroupDropTarget({
 
 function SortableProject({
   project,
+  onRequestRename,
+  onRequestDelete,
 }: {
   project: Project;
+  onRequestRename: () => void;
+  onRequestDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: projectDragId(project.id),
@@ -192,20 +199,39 @@ function SortableProject({
     transition,
   } as CSSProperties;
   return (
-    <button
-      ref={setNodeRef}
-      type="button"
-      style={style}
-      className="project-manager-project"
-      data-dragging={isDragging}
-      {...attributes}
-      {...listeners}
-    >
-      <Box className="project-manager-project-copy">
-        <Text as="div" size="2" weight="medium">{project.name}</Text>
-        <Text as="div" size="1" color="gray">{projectModeLabel(project)}</Text>
-      </Box>
-    </button>
+    <ContextMenu.Root>
+      <ContextMenu.Trigger>
+        <button
+          ref={setNodeRef}
+          type="button"
+          style={style}
+          className="project-manager-project"
+          data-dragging={isDragging}
+          {...attributes}
+          {...listeners}
+        >
+          <Box className="project-manager-project-copy">
+            <Text as="div" size="2" weight="medium">{project.name}</Text>
+            <Text as="div" size="1" color="gray">{projectModeLabel(project)}</Text>
+          </Box>
+        </button>
+      </ContextMenu.Trigger>
+      <ContextMenu.Content>
+        <ContextMenu.Item onSelect={onRequestRename}>
+          <Flex align="center" gap="2">
+            <Pencil1Icon width={12} height={12} />
+            <Text size="2">重命名队伍</Text>
+          </Flex>
+        </ContextMenu.Item>
+        <ContextMenu.Separator />
+        <ContextMenu.Item color="red" onSelect={onRequestDelete}>
+          <Flex align="center" gap="2">
+            <TrashIcon width={12} height={12} />
+            <Text size="2">删除队伍</Text>
+          </Flex>
+        </ContextMenu.Item>
+      </ContextMenu.Content>
+    </ContextMenu.Root>
   );
 }
 
@@ -216,6 +242,8 @@ export function ProjectSelector({
   disabled = false,
   onProjectSelect,
   onRequestCreate,
+  onRequestRename,
+  onRequestDelete,
   onCreateProjectGroup,
   onRenameProjectGroup,
   onDeleteProjectGroup,
@@ -493,7 +521,7 @@ export function ProjectSelector({
         <Dialog.Content maxWidth="760px" className="project-manager-dialog">
           <Dialog.Title size="4">管理所有队伍</Dialog.Title>
           <Dialog.Description size="2" color="gray">
-            拖动调整顺序，也可以把队伍直接拖到左侧分组。
+            拖动调整顺序，也可以把队伍直接拖到左侧分组；右键队伍可重命名或删除。
           </Dialog.Description>
           <DndContext
             sensors={sensors}
@@ -586,6 +614,8 @@ export function ProjectSelector({
                         <SortableProject
                           key={project.id}
                           project={project}
+                          onRequestRename={() => onRequestRename(project.id)}
+                          onRequestDelete={() => onRequestDelete(project.id)}
                         />
                       ))}
                     </SortableContext>

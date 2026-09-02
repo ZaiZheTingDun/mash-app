@@ -5,6 +5,9 @@
 
 use super::*;
 
+const SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE: &str =
+    "技能点击未观察到状态变化（请检查该技能目标选择是否正确，无目标请选择无目标）";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SkillUseDialogState {
     Confirm,
@@ -86,8 +89,10 @@ impl Runner {
                             if attempt == 0 && self.config.verify_skill_activation {
                                 continue;
                             }
-                            return self
-                                .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
+                            return self.fail_skill_execution(
+                                &action_label,
+                                SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE,
+                            );
                         };
                         if matches!(outcome, SkillPostTapOutcome::AlreadyUsed) {
                             skipped = true;
@@ -137,15 +142,19 @@ impl Runner {
                             if attempt == 0 {
                                 continue;
                             }
-                            return self
-                                .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
+                            return self.fail_skill_execution(
+                                &action_label,
+                                SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE,
+                            );
                         }
                         triggered = true;
                         break;
                     }
                     if !triggered {
-                        return self
-                            .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
+                        return self.fail_skill_execution(
+                            &action_label,
+                            SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE,
+                        );
                     }
                     if skipped {
                         continue;
@@ -205,8 +214,10 @@ impl Runner {
                             &action_label,
                             SkillPostTapExpectation::OrderChange,
                         ) else {
-                            return self
-                                .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
+                            return self.fail_skill_execution(
+                                &action_label,
+                                SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE,
+                            );
                         };
                         if matches!(outcome, SkillPostTapOutcome::AlreadyUsed) {
                             continue;
@@ -242,7 +253,7 @@ impl Runner {
                                 }
                                 return self.fail_skill_execution(
                                     &action_label,
-                                    "技能点击未观察到状态变化",
+                                    SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE,
                                 );
                             };
                             if matches!(outcome, SkillPostTapOutcome::AlreadyUsed) {
@@ -293,15 +304,17 @@ impl Runner {
                                 }
                                 return self.fail_skill_execution(
                                     &action_label,
-                                    "技能点击未观察到状态变化",
+                                    SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE,
                                 );
                             }
                             triggered = true;
                             break;
                         }
                         if !triggered {
-                            return self
-                                .fail_skill_execution(&action_label, "技能点击未观察到状态变化");
+                            return self.fail_skill_execution(
+                                &action_label,
+                                SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE,
+                            );
                         }
                         if skipped {
                             continue;
@@ -424,7 +437,7 @@ impl Runner {
             BATTLE_ACTION_MENU_ELEMENT,
             SKILL_ACTIVATION_START_TIMEOUT,
             "等待战斗菜单隐藏…",
-            "技能点击未观察到状态变化",
+            SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE,
         )
     }
 

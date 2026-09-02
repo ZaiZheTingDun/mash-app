@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ComponentProps } from "react";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { ProjectBar } from "../ProjectBar";
@@ -199,6 +199,45 @@ describe("ProjectBar", () => {
       "0",
     );
     expect(screen.getByRole("button", { name: /队伍乙 普通/ })).toHaveAttribute("tabindex", "0");
+  });
+
+  it("renames a non-active project from its management row context menu", async () => {
+    const user = userEvent.setup();
+    const onRenameProject = vi.fn();
+    const projects = [makeProject("p1", "队伍甲"), makeProject("p2", "队伍乙")];
+    renderProjectBar({ projects, activeProjectId: "p1", onRenameProject });
+
+    await user.click(screen.getByRole("button", { name: /队伍甲/ }));
+    await user.click(await screen.findByRole("button", { name: /管理所有队伍/ }));
+    fireEvent.contextMenu(await screen.findByRole("button", { name: /队伍乙 普通/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "重命名队伍" }));
+
+    const input = await screen.findByRole("textbox", { name: "队伍名称" });
+    expect(input).toHaveValue("队伍乙");
+    await user.clear(input);
+    await user.type(input, "高难队伍");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(onRenameProject).toHaveBeenCalledWith("p2", "高难队伍");
+  });
+
+  it("deletes a non-active project from its management row context menu after confirmation", async () => {
+    const user = userEvent.setup();
+    const onDeleteProject = vi.fn();
+    const projects = [makeProject("p1", "队伍甲"), makeProject("p2", "队伍乙")];
+    renderProjectBar({ projects, activeProjectId: "p1", onDeleteProject });
+
+    await user.click(screen.getByRole("button", { name: /队伍甲/ }));
+    await user.click(await screen.findByRole("button", { name: /管理所有队伍/ }));
+    fireEvent.contextMenu(await screen.findByRole("button", { name: /队伍乙 普通/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "删除队伍" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("确定删除队伍「队伍乙」吗？此操作无法撤销。");
+    expect(onDeleteProject).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole("button", { name: "删除" }));
+
+    expect(onDeleteProject).toHaveBeenCalledWith("p2");
   });
 
   it("computes persisted catalog order from drag ids", () => {
