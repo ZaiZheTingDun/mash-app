@@ -40,7 +40,7 @@ export function createFeatureToggles(env: FeatureToggleEnv): FeatureToggles {
     ),
     cvDebug: envFlag(env.VITE_FEATURE_CV_DEBUG, env.DEV),
     grandCardPriority: envFlag(env.VITE_FEATURE_GRAND_CARD_PRIORITY, env.DEV),
-    turnAttackModes: envFlag(env.VITE_FEATURE_TURN_ATTACK_MODES, env.DEV),
+    turnAttackModes: envFlag(env.VITE_FEATURE_TURN_ATTACK_MODES, true),
     settingsDebug: env.DEV,
   };
 }

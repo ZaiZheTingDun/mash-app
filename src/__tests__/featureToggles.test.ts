@@ -21,7 +21,7 @@ describe("feature toggles", () => {
       friendPointSummon: false,
       cvDebug: false,
       grandCardPriority: false,
-      turnAttackModes: false,
+      turnAttackModes: true,
       settingsDebug: false,
     });
   });
@@ -58,6 +58,17 @@ describe("feature toggles", () => {
     ).toMatchObject({
       servantEnhancement: false,
       craftEssenceEnhancement: true,
+    });
+  });
+
+  it("allows released attack modes to be disabled explicitly", () => {
+    expect(
+      createFeatureToggles({
+        DEV: false,
+        VITE_FEATURE_TURN_ATTACK_MODES: "false",
+      })
+    ).toMatchObject({
+      turnAttackModes: false,
     });
   });
 });
