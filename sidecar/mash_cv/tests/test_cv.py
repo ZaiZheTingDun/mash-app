@@ -3612,6 +3612,19 @@ def test_support_score_text_parser_handles_ordinary_and_grand_values():
     assert cv._support_parse_score_text("+62/+17") == (62, None)
 
 
+def test_support_score_right_segment_takes_last_number():
+    import mash_cv.cv as cv
+
+    # The overlapping right crop can retain the tail of the ordinary score;
+    # for ``3/+16`` the Grand value is the final number, not the first one.
+    assert (
+        cv._support_parse_score_segment(
+            "3/+16", cv.SUPPORT_GRAND_STAR_MAP_SCORE_MAX, take_last=True
+        )
+        == 16
+    )
+
+
 @pytest.mark.parametrize(
     ("fixture", "expected"),
     [

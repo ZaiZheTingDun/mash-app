@@ -5215,12 +5215,14 @@ def _support_parse_score_text(text: str) -> tuple[Optional[int], Optional[int]]:
     return star_map_score, grand_star_map_score
 
 
-def _support_parse_score_segment(text: str, maximum: int) -> Optional[int]:
+def _support_parse_score_segment(
+    text: str, maximum: int, *, take_last: bool = False
+) -> Optional[int]:
     normalized = str(text).translate(str.maketrans("０１２３４５６７８９", "0123456789"))
-    match = re.search(r"\d{1,3}", normalized)
-    if match is None:
+    values = re.findall(r"\d{1,3}", normalized)
+    if not values:
         return None
-    value = int(match.group())
+    value = int(values[-1] if take_last else values[0])
     return value if 0 <= value <= maximum else None
 
 
@@ -5243,7 +5245,7 @@ def _support_read_grand_score_segments(
             left_results[0][0], SUPPORT_STAR_MAP_SCORE_MAX
         )
         right = _support_parse_score_segment(
-            right_results[0][0], SUPPORT_GRAND_STAR_MAP_SCORE_MAX
+            right_results[0][0], SUPPORT_GRAND_STAR_MAP_SCORE_MAX, take_last=True
         )
         return left, right
     except (AttributeError, IndexError, TypeError, ValueError):
