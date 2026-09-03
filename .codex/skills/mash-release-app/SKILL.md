@@ -82,11 +82,33 @@ cat versions.toml
 node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync("src-tauri/resources/runtime-manifest.json","utf8")); console.log(m)'
 ```
 
-Choose versions before running scripts:
+Choose versions before running scripts and apply Semantic Versioning (SemVer)
+consistently:
+
+- Every newly selected app, CV code, and CV runtime version must be a stable
+  `MAJOR.MINOR.PATCH` value (`x.y.z`). Do not introduce date-based versions,
+  arbitrary suffixes, or a new pre-release/build identifier for a stable
+  channel release.
+- Select the increment from the user-visible compatibility impact: increment
+  `PATCH` for backward-compatible fixes or release-only corrections, `MINOR`
+  for backward-compatible user-facing functionality, and `MAJOR` for breaking
+  persisted-data, IPC, configuration, or runtime compatibility changes. Reset
+  lower-order components after a higher-order increment.
+- Compare against the latest matching release tag and existing manifest before
+  choosing a version. The selected version must be strictly greater than the
+  current one, must not reuse an existing tag, and must be used consistently in
+  `versions.toml`, manifests, package metadata, and Git tags.
+- Validate each selected value before running a release script (for example,
+  with `node` and a strict `^\\d+\\.\\d+\\.\\d+$` check). If a script still
+  expects a historical date-style version, update the script/data contract or
+  migrate the value to SemVer before publishing; do not create another
+  date-style release.
 
 - App version: semver `x.y.z`, matching `src-tauri/tauri.conf.json`, Cargo package, and tag `vX.Y.Z`.
 - CV code version: semver `x.y.z`, tag `cv-code/x.y.z`.
-- CV runtime version: prefer semver `x.y.z` unless the repository scripts have been updated to accept the current `versions.toml` date-style runtime string. `release-cv-runtime.sh` currently requires `x.y.z`.
+- CV runtime version: semver `x.y.z`, tag `cv-runtime/<platform>/x.y.z`. Existing
+  date-style runtime values are legacy inputs only and must not be used for a
+  new stable release.
 
 ## Validation Before Publishing
 
