@@ -1006,6 +1006,23 @@ pub(crate) fn resolve_ce_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
     None
 }
 
+pub(crate) fn resolve_mystic_code_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let imported = app_assets_dir(app).join("mystic-codes");
+    if imported.is_dir() {
+        return Some(imported);
+    }
+    if let Ok(base) = app.path().resource_dir() {
+        let bundled = base.join("assets").join("mystic-codes");
+        if bundled.is_dir() {
+            return Some(bundled);
+        }
+    }
+    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join("mystic-codes");
+    dev.is_dir().then_some(dev)
+}
+
 /// Resolve the installed mash-cv runtime executable path. The sidecar is no
 /// longer bundled inside the app; users install the PyInstaller --onedir zip
 /// under `app_data_dir()/runtime/mash-cv/<version>/mash-cv/`.

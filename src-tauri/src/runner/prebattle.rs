@@ -5,6 +5,21 @@
 
 use super::*;
 
+/// Normalized location of the Master outfit icon on the TeamConfirm page.
+/// The game keeps this control anchored to the lower-left corner across
+/// landscape resolutions; the generous padding covers small layout shifts.
+const MYSTIC_CODE_ITEM_REGION: NormRect = NormRect {
+    x: 0.0,
+    y: 0.84,
+    w: 0.11,
+    h: 0.16,
+};
+const MYSTIC_CODE_ITEM_THRESHOLD: f64 = 0.62;
+const MYSTIC_CODE_ITEM_SCALES: &[f64] = &[
+    0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20, 1.25,
+    1.30, 1.35, 1.40,
+];
+
 impl Runner {
     pub(crate) fn handle_team_confirm(&mut self) {
         if self.config.party_order.is_some() && !self.team_changed {
@@ -29,6 +44,11 @@ impl Runner {
             return;
         }
 
+        if !self.verify_selected_mystic_code() {
+            thread::sleep(Duration::from_millis(500));
+            return;
+        }
+
         self.emit("TeamConfirm", "队伍就绪，点击开始任务");
         if !self.tap_at("TeamConfirm", Point::new(0.90, 0.93)) {
             return;
@@ -37,6 +57,62 @@ impl Runner {
             BattleLoadSource::TeamConfirm,
         ));
         thread::sleep(ACTION_DELAY);
+    }
+
+    fn verify_selected_mystic_code(&mut self) -> bool {
+        if self.config.mystic_code_id.is_none() {
+            return true;
+        }
+
+        let Some(template_path) = self.mystic_code_item_template.clone() else {
+            self.warn_mystic_code_check_blocked(
+                "已配置御主礼装，但找不到对应的礼装图，暂不点击开始任务。请先更新资源。",
+            );
+            return false;
+        };
+
+        let result = self.sidecar().find_region_multiscale(
+            None,
+            &template_path,
+            MYSTIC_CODE_ITEM_REGION,
+            MYSTIC_CODE_ITEM_THRESHOLD,
+            MYSTIC_CODE_ITEM_SCALES,
+        );
+        match result {
+            Ok(match_result) if match_result.found => {
+                self.mystic_code_warning_emitted = false;
+                true
+            }
+            Ok(match_result) => {
+                self.emit_debug(
+                    "TeamConfirm",
+                    &format!(
+                        "御主礼装图标匹配未通过，多尺度最佳得分 {:.3}（阈值 {:.2}）",
+                        match_result.score, MYSTIC_CODE_ITEM_THRESHOLD
+                    ),
+                );
+                self.warn_mystic_code_check_blocked(
+                    "队伍确认页左下角的御主礼装与当前队伍配置不一致，请在游戏中换成已选择的礼装。",
+                );
+                false
+            }
+            Err(err) => {
+                self.warn_mystic_code_check_blocked(&format!(
+                    "无法确认队伍确认页左下角的御主礼装，暂不点击开始任务。{err}"
+                ));
+                false
+            }
+        }
+    }
+
+    fn warn_mystic_code_check_blocked(&mut self, message: &str) {
+        if !self.mystic_code_warning_emitted {
+            self.emit_warn("TeamConfirm", message);
+            self.mystic_code_warning_emitted = true;
+        }
+        // A mismatched outfit is a configuration error. Stop the runner so
+        // it cannot keep polling or retry the start tap after the warning.
+        self.cancel.store(true, Ordering::Relaxed);
     }
 
     pub(crate) fn handle_team_change(&mut self) {

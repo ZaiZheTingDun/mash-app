@@ -1,0 +1,57 @@
+.mystic-code-trigger {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  padding: 0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.mystic-code-trigger-image,
+.mystic-code-trigger .rt-Avatar {
+  width: 38px;
+  height: 38px;
+}
+
+.mystic-code-trigger .rt-Avatar img,
+.mystic-code-option .rt-Avatar img {
+  object-fit: contain;
+}
+
+.mystic-code-dialog {
+  max-width: min(720px, calc(100vw - 32px));
+}
+
+.mystic-code-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 12px;
+  max-height: min(58vh, 560px);
+  overflow-y: auto;
+  padding: 4px;
+  margin-top: 18px;
+}
+
+.mystic-code-option {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 108px;
+  padding: 8px 5px;
+  color: var(--gray-12);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.mystic-code-option:hover,
+.mystic-code-option.selected {
+  background: var(--accent-a3);
+  border-color: var(--accent-8);
+}
+
+.mystic-code-option-name {
+  line-height: 1.25;
+}

@@ -934,6 +934,60 @@ impl SidecarClient {
         }
     }
 
+    /// Search for an arbitrary template across a list of scales and return
+    /// the best match. The sidecar keeps the highest score even when it is
+    /// below `threshold`, which lets callers include useful diagnostics.
+    pub fn find_region_multiscale(
+        &mut self,
+        image_path: Option<&Path>,
+        template_path: &Path,
+        region: NormRect,
+        threshold: f64,
+        scales: &[f64],
+    ) -> Result<ElementMatch, String> {
+        let mut req = serde_json::json!({
+            "cmd": "find_region",
+            "templatePath": template_path.to_string_lossy(),
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "w": region.w,
+                "h": region.h,
+            },
+            "threshold": threshold,
+            "scales": scales,
+            "alphaMask": true,
+            "alphaBackground": 224,
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            return Err(format!(
+                "find_region_multiscale({}): {err}",
+                template_path.display()
+            ));
+        }
+        let found = resp["found"].as_bool().unwrap_or(false);
+        let score = resp["score"].as_f64().unwrap_or(0.0);
+        let x = resp["x"].as_f64().unwrap_or(0.0);
+        let y = resp["y"].as_f64().unwrap_or(0.0);
+        let region = resp.get("region").and_then(|r| {
+            Some(NormRect {
+                x: r.get("x")?.as_f64()?,
+                y: r.get("y")?.as_f64()?,
+                w: r.get("w")?.as_f64()?,
+                h: r.get("h")?.as_f64()?,
+            })
+        });
+        Ok(ElementMatch {
+            found,
+            x,
+            y,
+            score,
+            region,
+        })
+    }
+
     /// Search for an arbitrary template file after cropping the template.
     #[allow(dead_code)]
     pub fn find_region_with_template_crop(

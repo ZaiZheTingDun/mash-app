@@ -157,6 +157,8 @@ export interface Project {
   supportAppendSkillLevelMins?: SupportAppendSkillLevelMins;
   recognitionSettings?: ProjectRecognitionSettings | null;
   disableAutoSkillTargetRecognition?: boolean;
+  /** Selected Mystic Code for the team. */
+  mysticCodeId?: number | null;
   /** Prefer the higher critical chance when two command cards have the same owner and color. */
   preferHigherCriticalChance?: boolean;
   /**

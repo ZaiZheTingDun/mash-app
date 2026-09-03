@@ -16,6 +16,7 @@ import {
   DEFAULT_BATTLE_START_PANEL,
   normalizeBattleStartPanel,
   type BattleStartPanel,
+  type MysticCodeGender,
 } from "../../types/appUiSettings";
 import type { NoblePhantasmDetectionMode, RecognitionSettings } from "../../types/recognition";
 import {
@@ -31,9 +32,13 @@ const TIMEOUT_COMMAND = "set_unknown_screen_timeout_count";
 export function SettingsBasicPage({
   active,
   onBattleStartPanelChange,
+  mysticCodeGender = "female",
+  onMysticCodeGenderChange,
 }: {
   active: boolean;
   onBattleStartPanelChange?: (value: BattleStartPanel) => void;
+  mysticCodeGender?: MysticCodeGender;
+  onMysticCodeGenderChange?: (value: MysticCodeGender) => void;
 }) {
   const [battleStartPanel, setBattleStartPanel] = useState<BattleStartPanel>(
     DEFAULT_BATTLE_START_PANEL
@@ -55,6 +60,7 @@ export function SettingsBasicPage({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [savingGender, setSavingGender] = useState(false);
 
   const applySettings = useCallback((settings: RecognitionSettings) => {
     setMode(settings.noblePhantasmDetectionMode);
@@ -177,17 +183,33 @@ export function SettingsBasicPage({
     setError(null);
     setSavedMessage(null);
     try {
-      const [rawSettings, rawBattleStartPanel] = await Promise.all([
+      const [rawSettings, rawBattleStartPanel, rawGender] = await Promise.all([
         invoke<RecognitionSettings>("get_recognition_settings"),
         invoke<BattleStartPanel>("get_battle_start_panel"),
+        invoke<MysticCodeGender>("get_mystic_code_gender"),
       ]);
       const settings = normalizeRecognitionSettings(rawSettings);
       applySettings(settings);
       setBattleStartPanel(normalizeBattleStartPanel(rawBattleStartPanel));
+      onMysticCodeGenderChange?.(rawGender === "male" ? "male" : "female");
     } catch (err) {
       setError(String(err));
     }
-  }, [applySettings]);
+  }, [applySettings, onMysticCodeGenderChange]);
+
+  const saveMysticCodeGender = useCallback(async (value: MysticCodeGender) => {
+    setSavingGender(true);
+    setError(null);
+    try {
+      const saved = await invoke<MysticCodeGender>("set_mystic_code_gender", { value });
+      onMysticCodeGenderChange?.(saved === "male" ? "male" : "female");
+      setSavedMessage("已保存");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSavingGender(false);
+    }
+  }, [onMysticCodeGenderChange]);
 
   const saveBattleStartPanel = useCallback(
     async (value: BattleStartPanel) => {
@@ -324,6 +346,34 @@ export function SettingsBasicPage({
   return (
     <Box className="settings-section-panel">
       <Flex direction="column" gap="4" className="recognition-setting-block">
+        <Flex
+          align="start"
+          justify="between"
+          gap="4"
+          wrap="wrap"
+          className="basic-setting-row"
+        >
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              御主礼装显示性别
+            </Text>
+            <Text size="1" color="gray">
+              选择队伍配置中御主礼装图标使用的服装款式
+            </Text>
+          </Flex>
+          <Select.Root
+            value={mysticCodeGender ?? "female"}
+            onValueChange={(value) => void saveMysticCodeGender(value as MysticCodeGender)}
+            disabled={saving || savingGender}
+          >
+            <Select.Trigger aria-label="御主礼装显示性别" className="recognition-mode-select" />
+            <Select.Content>
+              <Select.Item value="female">女</Select.Item>
+              <Select.Item value="male">男</Select.Item>
+            </Select.Content>
+          </Select.Root>
+        </Flex>
+
         <Flex
           align="start"
           justify="between"

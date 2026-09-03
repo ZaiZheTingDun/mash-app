@@ -176,6 +176,16 @@ pub(crate) struct AppUiSettings {
     /// every team that includes that variant.
     #[serde(default)]
     pub(crate) servant_portrait_selections: std::collections::HashMap<String, u32>,
+    #[serde(default)]
+    pub(crate) mystic_code_gender: MysticCodeGender,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum MysticCodeGender {
+    #[default]
+    Female,
+    Male,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]

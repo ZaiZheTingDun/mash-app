@@ -2228,10 +2228,13 @@ def _match_template_region_multiscale(
     threshold: float,
     *,
     scales: tuple[float, ...] = BOND_LEVEL_TEMPLATE_SCALES,
+    mask: Optional[np.ndarray] = None,
 ) -> dict:
     """Best normalized template match in ``region`` across explicit scales."""
     if len(tmpl.shape) == 3:
         tmpl = cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
+    if mask is not None and mask.shape[:2] != tmpl.shape[:2]:
+        mask = None
 
     h, w = img.shape[:2]
     rx = max(0, int(round(float(region.get("x", 0.0)) * w)))
@@ -2257,7 +2260,12 @@ def _match_template_region_multiscale(
             continue
         interpolation = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
         scaled = cv2.resize(tmpl, (tw, th), interpolation=interpolation)
-        result = cv2.matchTemplate(gray_roi, scaled, cv2.TM_CCOEFF_NORMED)
+        scaled_mask = None
+        method = cv2.TM_CCOEFF_NORMED
+        if mask is not None:
+            scaled_mask = cv2.resize(mask, (tw, th), interpolation=cv2.INTER_AREA)
+            method = cv2.TM_CCORR_NORMED
+        result = cv2.matchTemplate(gray_roi, scaled, method, mask=scaled_mask)
         _, max_val, _, max_loc = cv2.minMaxLoc(result)
         score = float(max_val)
         if score <= float(best["score"]):
@@ -6590,22 +6598,72 @@ def _main_repl() -> None:
             if img is None:
                 _reply(req_id, {"found": False, "error": err})
                 continue
-            tmpl = cv2.imread(cmd["templatePath"], cv2.IMREAD_GRAYSCALE)
-            if tmpl is None:
+            use_alpha_mask = cmd.get("alphaMask") is True
+            raw_tmpl = cv2.imread(
+                cmd["templatePath"],
+                cv2.IMREAD_UNCHANGED if use_alpha_mask else cv2.IMREAD_GRAYSCALE,
+            )
+            if raw_tmpl is None:
                 _reply(req_id, {"found": False, "error": "failed to read template"})
                 continue
+            alpha_mask = None
+            if use_alpha_mask and len(raw_tmpl.shape) == 3 and raw_tmpl.shape[2] == 4:
+                alpha_mask = raw_tmpl[:, :, 3]
+                alpha_background = cmd.get("alphaBackground")
+                if isinstance(alpha_background, (int, float)):
+                    alpha = alpha_mask.astype(np.float32)[:, :, None] / 255.0
+                    background = float(np.clip(alpha_background, 0, 255))
+                    tmpl = cv2.cvtColor(
+                        (
+                            raw_tmpl[:, :, :3].astype(np.float32) * alpha
+                            + background * (1.0 - alpha)
+                        ).astype(np.uint8),
+                        cv2.COLOR_BGR2GRAY,
+                    )
+                    alpha_mask = None
+                else:
+                    tmpl = cv2.cvtColor(raw_tmpl, cv2.COLOR_BGRA2GRAY)
+            elif len(raw_tmpl.shape) == 3:
+                tmpl = cv2.cvtColor(raw_tmpl, cv2.COLOR_BGR2GRAY)
+            else:
+                tmpl = raw_tmpl
             tmpl = _resize_template(tmpl, cmd.get("templateSize"))
+            if alpha_mask is not None and cmd.get("templateSize"):
+                alpha_mask = _resize_template(alpha_mask, cmd.get("templateSize"))
             tmpl = _crop_template(tmpl, cmd.get("templateCrop"))
+            if alpha_mask is not None:
+                alpha_mask = _crop_template(alpha_mask, cmd.get("templateCrop"))
             if tmpl.size == 0:
                 _reply(req_id, {"found": False, "error": "empty template crop"})
                 continue
+            raw_scales = cmd.get("scales")
+            scales = (
+                tuple(
+                    float(scale)
+                    for scale in raw_scales
+                    if isinstance(scale, (int, float)) and float(scale) > 0
+                )
+                if isinstance(raw_scales, list)
+                else ()
+            )
+            if not scales:
+                scales = (1.0,)
+            matcher = (
+                _match_template_region_multiscale
+                if isinstance(raw_scales, list)
+                else _match_template_region
+            )
+            kwargs = {"scales": scales} if matcher is _match_template_region_multiscale else {}
+            if matcher is _match_template_region_multiscale and alpha_mask is not None:
+                kwargs["mask"] = alpha_mask
             _reply(
                 req_id,
-                _match_template_region(
+                matcher(
                     img,
                     tmpl,
                     cmd.get("region", DEFAULT_REGION),
                     cmd.get("threshold", 0.8),
+                    **kwargs,
                 ),
             )
         elif action in (

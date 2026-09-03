@@ -104,6 +104,10 @@ pub struct BattleRunProgressEvent {
 #[serde(rename_all = "camelCase")]
 pub struct RunConfig {
     pub project_id: String,
+    /// Mystic Code selected for this team. When present, TeamConfirm checks
+    /// the outfit icon in the lower-left corner before starting the quest.
+    #[serde(default)]
+    pub mystic_code_id: Option<u32>,
     /// Desired party slot order, e.g. [2,0,1,3,4,5]. None = don't reorder.
     pub party_order: Option<Vec<u32>>,
     /// Class filter to tap in the support list (e.g. "Caster").

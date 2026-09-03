@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
+import { AlertDialog, Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { invoke, listen } from "./tauri";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { ContentGrid } from "./features/team/ContentGrid";
+import { MysticCodeSelector } from "./features/team/MysticCodeSelector";
 import {
   derivePartyMembers,
   derivePartyLineup,
@@ -30,6 +31,7 @@ import { featureToggles } from "./featureToggles";
 import type { SlotItem } from "./features/team/ContentGrid";
 import type { Servant } from "./types/servant";
 import type { CraftEssence } from "./types/craftEssence";
+import type { MysticCode } from "./types/mysticCode";
 import type {
   GrandClass,
   GrandClassDefinition,
@@ -44,6 +46,7 @@ import {
   DEFAULT_BATTLE_START_PANEL,
   normalizeBattleStartPanel,
   type BattleStartPanel,
+  type MysticCodeGender,
 } from "./types/appUiSettings";
 import type { AdvancedBattleScene, BattleScene } from "./types/command";
 import type { AutomationStatus } from "./types/automation";
@@ -92,6 +95,8 @@ interface AppProps {
   theme: AppTheme;
   themePreference: AppThemePreference;
   onThemeChange: (theme: AppThemePreference) => void;
+  mysticCodeGender?: MysticCodeGender;
+  onMysticCodeGenderChange?: (gender: MysticCodeGender) => void;
   startupReady?: boolean;
 }
 
@@ -102,7 +107,14 @@ function localDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function App({ theme, themePreference, onThemeChange, startupReady = true }: AppProps) {
+function App({
+  theme,
+  themePreference,
+  onThemeChange,
+  mysticCodeGender = "female",
+  onMysticCodeGenderChange = () => {},
+  startupReady = true,
+}: AppProps) {
   const [view, setView] = useState<View>("team");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
@@ -117,12 +129,14 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
   const [grandClassDefinitions, setGrandClassDefinitions] = useState<GrandClassDefinition[]>([]);
   const [servants, setServants] = useState<Servant[]>([]);
   const [craftEssences, setCraftEssences] = useState<CraftEssence[]>([]);
+  const [mysticCodes, setMysticCodes] = useState<MysticCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [setupChecking, setSetupChecking] = useState(true);
   const [setupReady, setSetupReady] = useState(false);
   const [operationLogs, setOperationLogs] = useState<OperationLogEntry[]>([]);
   const [operationLogOpen, setOperationLogOpen] = useState(false);
+  const [mysticCodeWarning, setMysticCodeWarning] = useState<string | null>(null);
   const [battleRunStatus, setBattleRunStatus] = useState<BattleRunStatus | null>(null);
   const [battleDailyStatistics, setBattleDailyStatistics] =
     useState<BattleDailyStatistics | null>(null);
@@ -333,6 +347,13 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
         event.payload.attack ?? null,
         event.payload.action ?? null,
       );
+      if (
+        event.payload.level === "warn" &&
+        event.payload.currentScreen === "TeamConfirm" &&
+        event.payload.message.includes("御主礼装")
+      ) {
+        setMysticCodeWarning(event.payload.message);
+      }
       setBattleRunStatus((current) => {
         if (current == null) return current;
         const { status } = event.payload;
@@ -492,6 +513,15 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    void invoke<MysticCode[]>("get_mystic_codes")
+      .then((value) => setMysticCodes(value ?? []))
+      .catch((err) => {
+        console.warn("御主礼装资源不可用", err);
+        setMysticCodes([]);
+      });
   }, []);
 
   // Load both static catalogs in parallel. The CE catalog is small (just
@@ -921,6 +951,8 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
           onSectionChange={setSettingsSection}
           onProjectsImported={handleProjectsImported}
           onBattleStartPanelChange={setBattleStartPanel}
+          mysticCodeGender={mysticCodeGender}
+          onMysticCodeGenderChange={onMysticCodeGenderChange}
         />
         <SelfCheckDialog
           open={selfCheckOpen}
@@ -1041,6 +1073,7 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
                     disableAutoSkillTargetRecognition={
                       activeProject?.disableAutoSkillTargetRecognition === true
                     }
+                    mysticCode={mysticCodes.find((code) => code.id === activeProject?.mysticCodeId) ?? null}
                     grandServants={activeProject?.grandServants ?? []}
                     grandClass={activeProject?.grandClass ?? "saber"}
                     grandClassDefinition={grandClassDefinitions.find(
@@ -1092,6 +1125,25 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
                   </Box>
                   <Flex justify="between" align="center" className="page-footer" gap="3">
                     <Flex align="center" gap="3">
+                      <MysticCodeSelector
+                        codes={mysticCodes}
+                        selectedId={activeProject?.mysticCodeId ?? null}
+                        gender={mysticCodeGender}
+                        onSelect={(id) => {
+                          if (!activeProject) return;
+                          if (
+                            id != null &&
+                            activeProject.mysticCodeId != null &&
+                            id !== activeProject.mysticCodeId &&
+                            !window.confirm(
+                              "更换御主礼装后，已配置的御主礼装行动仍会保留，但技能名称和图标会按新礼装显示。是否继续？",
+                            )
+                          ) {
+                            return;
+                          }
+                          void handleUpdateProject({ ...activeProject, mysticCodeId: id });
+                        }}
+                      />
                       {featureToggles.friendPointSummon && (
                         <Button
                           type="button"
@@ -1164,13 +1216,37 @@ function App({ theme, themePreference, onThemeChange, startupReady = true }: App
         onInstallUpdate={handleInstallUpdate}
         onLogEntry={appendOperationLog}
       />
+      <AlertDialog.Root
+        open={mysticCodeWarning != null}
+        onOpenChange={(open) => {
+          if (!open) setMysticCodeWarning(null);
+        }}
+      >
+        <AlertDialog.Content maxWidth="460px">
+          <AlertDialog.Title>御主礼装检查</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            {mysticCodeWarning}
+            <br />
+            自动化已自动停止；请换好礼装后重新开始任务。
+          </AlertDialog.Description>
+          <Flex justify="end" gap="3" mt="4">
+            <AlertDialog.Action>
+              <Button type="button" onClick={() => setMysticCodeWarning(null)}>
+                知道了
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
       <SettingsDialog
         open={settingsOpen}
         section={settingsSection}
         onOpenChange={setSettingsOpen}
         onSectionChange={setSettingsSection}
         onProjectsImported={handleProjectsImported}
-        onBattleStartPanelChange={setBattleStartPanel}
+          onBattleStartPanelChange={setBattleStartPanel}
+          mysticCodeGender={mysticCodeGender}
+          onMysticCodeGenderChange={onMysticCodeGenderChange}
       />
       <ProjectSettingsDialog
         open={projectSettingsOpen}

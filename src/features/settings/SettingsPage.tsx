@@ -9,7 +9,7 @@ import {
 } from "@radix-ui/react-icons";
 import { invoke } from "../../tauri";
 import { featureToggles } from "../../featureToggles";
-import type { BattleStartPanel } from "../../types/appUiSettings";
+import type { BattleStartPanel, MysticCodeGender } from "../../types/appUiSettings";
 import type { Project } from "../../types/project";
 import { SettingsDataManagementPage } from "./SettingsDataManagementPage";
 import { SettingsBasicPage } from "./SettingsBasicPage";
@@ -33,11 +33,13 @@ interface SettingsDialogProps {
   onSectionChange: (section: SettingsSection) => void;
   onProjectsImported?: (projects: Project[]) => void;
   onBattleStartPanelChange?: (value: BattleStartPanel) => void;
+  mysticCodeGender?: MysticCodeGender;
+  onMysticCodeGenderChange?: (value: MysticCodeGender) => void;
 }
 
 type SettingsRenderProps = Pick<
   SettingsDialogProps,
-  "onProjectsImported" | "onBattleStartPanelChange"
+  "onProjectsImported" | "onBattleStartPanelChange" | "mysticCodeGender" | "onMysticCodeGenderChange"
 > & {
   onResourcesExitBlockedChange: (blocked: boolean) => void;
 };
@@ -58,6 +60,8 @@ const navItems: Array<{
       <SettingsBasicPage
         active={active}
         onBattleStartPanelChange={props.onBattleStartPanelChange}
+        mysticCodeGender={props.mysticCodeGender}
+        onMysticCodeGenderChange={props.onMysticCodeGenderChange}
       />
     ),
   },
@@ -113,6 +117,8 @@ export function SettingsDialog({
   onSectionChange,
   onProjectsImported,
   onBattleStartPanelChange,
+  mysticCodeGender,
+  onMysticCodeGenderChange,
 }: SettingsDialogProps) {
   const [resourcesExitBlocked, setResourcesExitBlocked] = useState(false);
   const items = visibleNavItems();
@@ -205,6 +211,8 @@ export function SettingsDialog({
                 {activeItem.render(open && activeItem.section === activeSection, {
                   onProjectsImported,
                   onBattleStartPanelChange,
+                  mysticCodeGender,
+                  onMysticCodeGenderChange,
                   onResourcesExitBlockedChange: setResourcesExitBlocked,
                 })}
               </Box>

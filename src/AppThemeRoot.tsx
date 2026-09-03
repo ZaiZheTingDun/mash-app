@@ -4,6 +4,11 @@ import App from "./App";
 import { DebugCanvasWindow } from "./features/debug/DebugCanvasWindow";
 import { invoke } from "./tauri";
 import type { AppTheme, AppThemePreference } from "./types/theme";
+import {
+  DEFAULT_MYSTIC_CODE_GENDER,
+  normalizeMysticCodeGender,
+  type MysticCodeGender,
+} from "./types/appUiSettings";
 
 interface AppThemeRootProps {
   isDebugCanvas: boolean;
@@ -31,12 +36,22 @@ export function AppThemeRoot({ isDebugCanvas }: AppThemeRootProps) {
     React.useState<AppThemePreference>("system");
   const [systemTheme, setSystemTheme] = React.useState<AppTheme>(getSystemTheme);
   const [startupReady, setStartupReady] = React.useState(isDebugCanvas);
+  const [mysticCodeGender, setMysticCodeGender] = React.useState<MysticCodeGender>(
+    DEFAULT_MYSTIC_CODE_GENDER,
+  );
   const theme = themePreference === "system" ? systemTheme : themePreference;
 
   const handleThemePreferenceChange = React.useCallback((nextTheme: AppThemePreference) => {
     setThemePreference(nextTheme);
     invoke("set_app_theme", { theme: nextTheme }).catch((error: unknown) => {
       console.error("Failed to persist app theme", error);
+    });
+  }, []);
+
+  const handleMysticCodeGenderChange = React.useCallback((value: MysticCodeGender) => {
+    setMysticCodeGender(value);
+    invoke("set_mystic_code_gender", { value }).catch((error: unknown) => {
+      console.error("Failed to persist Mystic Code gender", error);
     });
   }, []);
 
@@ -54,6 +69,14 @@ export function AppThemeRoot({ isDebugCanvas }: AppThemeRootProps) {
     return () => {
       media.removeEventListener?.("change", handleSystemThemeChange);
     };
+  }, []);
+
+  React.useEffect(() => {
+    invoke<MysticCodeGender>("get_mystic_code_gender")
+      .then((value) => setMysticCodeGender(normalizeMysticCodeGender(value)))
+      .catch((error: unknown) => {
+        console.error("Failed to load Mystic Code gender", error);
+      });
   }, []);
 
   React.useEffect(() => {
@@ -94,6 +117,8 @@ export function AppThemeRoot({ isDebugCanvas }: AppThemeRootProps) {
           theme={theme}
           themePreference={themePreference}
           onThemeChange={handleThemePreferenceChange}
+          mysticCodeGender={mysticCodeGender}
+          onMysticCodeGenderChange={handleMysticCodeGenderChange}
           startupReady={startupReady}
         />
       )}

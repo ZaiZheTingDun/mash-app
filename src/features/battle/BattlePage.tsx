@@ -531,6 +531,7 @@ export function BattlePage({
     const stopOnFiveStarCeDrop = projectStopsOnFiveStarCeDrop(selectedProject);
     const config = {
       projectId: selectedProject.id,
+      mysticCodeId: selectedProject.mysticCodeId ?? null,
       partyOrder: null,
       supportClassFilter: null,
       supportServantName: null,

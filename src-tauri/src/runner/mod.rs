@@ -127,6 +127,10 @@ pub struct Runner {
     /// disk; CE verification is silently skipped in that case so the
     /// existing flow (pick first OCR match) still works.
     ce_assets_dir: Option<PathBuf>,
+    /// Selected Mystic Code outfit icon used to verify the TeamConfirm page
+    /// before the quest-start tap. This is resolved with the persisted global
+    /// gender setting when the runner starts.
+    mystic_code_item_template: Option<PathBuf>,
     /// Game server this run targets (JP/CN). Forwarded to
     /// `load_servant_metadata` so the cached `support_meta.name` /
     /// `np_names` come out in the right language for the OCR model the
@@ -148,6 +152,9 @@ pub struct Runner {
     /// The game persists that choice, so later refreshes / repeated quests
     /// only need to tap the ordinary EXTRA tab again.
     support_extra_class_filter_configured: bool,
+    /// Avoid repeating the same warning while the runner is unwinding after
+    /// a blocked TeamConfirm check.
+    mystic_code_warning_emitted: bool,
     /// Cached `(name, np_names, class_name)` for the pinned support
     /// servant. Loaded lazily on the first `handle_support_select` poll so
     /// we don't do disk I/O at 500ms cadence (and cleared between runs
@@ -211,6 +218,7 @@ impl Runner {
         frame_size: Option<(u32, u32)>,
         assets_dir: Option<PathBuf>,
         ce_assets_dir: Option<PathBuf>,
+        mystic_code_item_template: Option<PathBuf>,
         server: Server,
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
         run_recorder: Option<BattleRunRecorder>,
@@ -236,6 +244,7 @@ impl Runner {
             frame_h,
             assets_dir,
             ce_assets_dir,
+            mystic_code_item_template,
             server,
             team_changed: false,
             support_selected: false,
@@ -261,6 +270,7 @@ impl Runner {
             battle_result_bond_handled: false,
             battle_result_loot_handled: false,
             battle_result_continue_handled: false,
+            mystic_code_warning_emitted: false,
         }
     }
 }

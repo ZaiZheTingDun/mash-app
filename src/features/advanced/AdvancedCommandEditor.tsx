@@ -5,7 +5,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from "@radix-ui/react-icons";
-import { invoke } from "../../tauri";
+import { convertFileSrc, invoke } from "../../tauri";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
 import { AddRowTrigger } from "../../components/common/AddRowTrigger";
@@ -62,6 +62,7 @@ import type {
   GrandServantConfig,
 } from "../../types/project";
 import type { Servant } from "../../types/servant";
+import { mysticCodeSkill, type MysticCode } from "../../types/mysticCode";
 import orderChangeIcon from "../../../src-tauri/resources/images/icon_order_change.png";
 
 interface AdvancedCommandEditorProps {
@@ -69,6 +70,7 @@ interface AdvancedCommandEditorProps {
   partyLineup: (Servant | null)[];
   partyMembers?: PartyMember[];
   disableAutoSkillTargetRecognition?: boolean;
+  mysticCode?: MysticCode | null;
   grandServants?: GrandServantConfig[];
   grandClass?: GrandClass;
   grandClassDefinition?: GrandClassDefinition;
@@ -105,11 +107,13 @@ function AdvancedPreparationActionSummary({
   partyMembers,
   faces,
   skillIcons,
+  mysticCode,
 }: {
   action: PreparationAction;
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   skillIcons: Record<string, SkillIcons>;
+  mysticCode?: MysticCode | null;
 }) {
   if (action.type === "enemyTarget") {
     return (
@@ -208,13 +212,19 @@ function AdvancedPreparationActionSummary({
     sourceFace = (
       <BattleActorIcon kind={kind} label={battleActorLabel({ kind })} size="inline" />
     );
-    sourceText = action.type === "equipment" ? "御主礼装" : "令咒";
+    sourceText = action.type === "equipment" ? (mysticCode?.name ?? "御主礼装") : "令咒";
     actionText =
       resolvedAction.type === "equipment"
-        ? `释放 ${SKILL_LABELS[resolvedAction.skill ?? ""] ?? "技能"}`
+        ? `释放 ${mysticCodeSkill(mysticCode, resolvedAction.skill ?? "")?.name ?? SKILL_LABELS[resolvedAction.skill ?? ""] ?? "技能"}`
         : resolvedAction.type === "commandSpell"
           ? COMMAND_SPELL_LABELS[resolvedAction.spell ?? ""] ?? "行动"
           : "选择敌方目标";
+    if (resolvedAction.type === "equipment") {
+      const entry = mysticCodeSkill(mysticCode, resolvedAction.skill ?? "");
+      skillIconSrc = entry?.iconPath ? convertFileSrc(entry.iconPath) : null;
+      skillLabel = entry?.name ?? SKILL_LABELS[resolvedAction.skill ?? ""] ?? "技能";
+      skillSlot = Math.max(0, skillSlotIndex(resolvedAction.skill));
+    }
   }
 
   return (
@@ -224,7 +234,7 @@ function AdvancedPreparationActionSummary({
         {sourceText}{" "}
         {resolvedAction.type === "servant"
           ? <>释放{" "}<span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span></>
-          : actionText}
+          : resolvedAction.type === "equipment" ? <>{actionText} <span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span></> : actionText}
         {resolvedAction.type === "servant" && resolvedAction.skillSelection
           ? `并选择 ${resolvedAction.skillSelection.label ?? `选项 ${resolvedAction.skillSelection.index + 1}`}`
           : ""}
@@ -285,6 +295,7 @@ function AdvancedStrategyEditor({
   partyMembers,
   faces,
   skillIcons,
+  mysticCode,
   skillTargetStatus,
   skillSelection,
   disableAutoSkillTargetRecognition,
@@ -302,6 +313,7 @@ function AdvancedStrategyEditor({
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   skillIcons: Record<string, SkillIcons>;
+  mysticCode: MysticCode | null;
   skillTargetStatus: ReturnType<typeof useServantSkillTargeting>;
   skillSelection: ReturnType<typeof useServantSkillSelections>;
   disableAutoSkillTargetRecognition: boolean;
@@ -319,6 +331,13 @@ function AdvancedStrategyEditor({
   const [controlDraft, setControlDraft] = useState<PrepDraft | null>(null);
   const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
   const partyLineup = useMemo(() => partyMembersToServants(partyMembers), [partyMembers]);
+  const mysticSkillEntries: SkillIcons = [1, 2, 3].map((slot) => {
+    const skill = mysticCode?.skills.find((entry) => entry.slot === slot);
+    return {
+      src: skill?.iconPath ? convertFileSrc(skill.iconPath) : null,
+      name: skill?.name ?? "",
+    };
+  }) as SkillIcons;
   const grandAutoOrderChange = scene.grandAutoOrderChange ?? null;
   const mainGrandSlot = mainGrandBackSlot(grandServants, grandClassDefinition);
   const mainGrandServant = mainGrandSlot == null ? null : partyLineup[mainGrandSlot] ?? null;
@@ -559,7 +578,16 @@ function AdvancedStrategyEditor({
 
   const selectControlSkill = (source: PrepSource, skill: string) => {
     if (source === "equipment") {
-      setControlDraft({ step: "target", source, option: skill });
+      const meta = mysticCodeSkill(mysticCode, skill);
+      const draft = { step: "target", source, option: skill } satisfies Extract<PrepDraft, { step: "target" }>;
+      const status = disableAutoSkillTargetRecognition ? "unknown" : meta?.targetingMode ?? "unknown";
+      if (status === "noTarget") {
+        finishControlAction(draft, null);
+      } else if (status === "orderChange") {
+        setControlDraft({ step: "orderChange", source, option: skill, front: null });
+      } else {
+        setControlDraft(status === "needsTarget" ? { ...draft, allowNoTarget: false } : draft);
+      }
       return;
     }
     const servant = postControlMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
@@ -596,7 +624,16 @@ function AdvancedStrategyEditor({
 
   const selectStartupSkill = (source: PrepSource, skill: string) => {
     if (source === "equipment") {
-      setPrepDraft({ step: "target", source, option: skill });
+      const meta = mysticCodeSkill(mysticCode, skill);
+      const draft = { step: "target", source, option: skill } satisfies Extract<PrepDraft, { step: "target" }>;
+      const status = disableAutoSkillTargetRecognition ? "unknown" : meta?.targetingMode ?? "unknown";
+      if (status === "noTarget") {
+        finishPrepAction(draft, null);
+      } else if (status === "orderChange") {
+        setPrepDraft({ step: "orderChange", source, option: skill, front: null });
+      } else {
+        setPrepDraft(status === "needsTarget" ? { ...draft, allowNoTarget: false } : draft);
+      }
       return;
     }
     const servant = currentPartyMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
@@ -797,6 +834,7 @@ function AdvancedStrategyEditor({
                 partyMembers={controlActionLineups[index] ?? partyMembers}
                 faces={faces}
                 skillIcons={skillIcons}
+                mysticCode={mysticCode}
               />
             </div>
           ))}
@@ -863,6 +901,7 @@ function AdvancedStrategyEditor({
                             : null
                         }
                         skillIcons={skillIcons}
+                        entries={controlDraft.source === "equipment" ? mysticSkillEntries : undefined}
                         onSelect={(skill) => selectControlSkill(controlDraft.source, skill)}
                       />
                     )}
@@ -908,7 +947,10 @@ function AdvancedStrategyEditor({
                         />
                       );
                     })}
-                  {controlDraft.source === "equipment" && (
+                  {controlDraft.source === "equipment" &&
+                    (disableAutoSkillTargetRecognition ||
+                      mysticCodeSkill(mysticCode, controlDraft.option)?.targetingMode == null ||
+                      mysticCodeSkill(mysticCode, controlDraft.option)?.targetingMode === "unknown") && (
                     <>
                       <span className="battle-choice-separator" aria-hidden />
                       <button
@@ -1028,6 +1070,7 @@ function AdvancedStrategyEditor({
                 partyMembers={startupActionLineups[index] ?? partyMembers}
                 faces={faces}
                 skillIcons={skillIcons}
+                mysticCode={mysticCode}
               />
             </div>
           ))}
@@ -1093,6 +1136,7 @@ function AdvancedStrategyEditor({
                             : null
                         }
                         skillIcons={skillIcons}
+                        entries={prepDraft.source === "equipment" ? mysticSkillEntries : undefined}
                         onSelect={(skill) => selectStartupSkill(prepDraft.source, skill)}
                       />
                     )}
@@ -1137,7 +1181,10 @@ function AdvancedStrategyEditor({
                       />
                     );
                   })}
-                  {prepDraft.source === "equipment" && (
+                  {prepDraft.source === "equipment" &&
+                    (disableAutoSkillTargetRecognition ||
+                      mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode == null ||
+                      mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode === "unknown") && (
                     <>
                       <span className="battle-choice-separator" aria-hidden />
                       <button
@@ -1302,6 +1349,7 @@ export function AdvancedCommandEditor({
   partyLineup,
   partyMembers,
   disableAutoSkillTargetRecognition = false,
+  mysticCode = null,
   grandServants = [],
   grandClassDefinition,
   grandCardStrategy,
@@ -1375,6 +1423,7 @@ export function AdvancedCommandEditor({
           partyMembers={initialPartyMembers}
           faces={faces}
           skillIcons={skillIcons}
+          mysticCode={mysticCode}
           skillTargetStatus={skillTargetStatus}
           skillSelection={skillSelection}
           disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}

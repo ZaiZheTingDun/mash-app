@@ -3,6 +3,7 @@ import type React from "react";
 import { Avatar, Button, Select, Text } from "@radix-ui/themes";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import orderChangeIcon from "../../../src-tauri/resources/images/icon_order_change.png";
+import { convertFileSrc } from "../../tauri";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
 import { useServantFaceImages } from "../team/useServantFaceImages";
@@ -51,12 +52,14 @@ import type {
   ServantAction,
 } from "../../types/command";
 import type { Servant } from "../../types/servant";
+import { mysticCodeSkill, type MysticCode } from "../../types/mysticCode";
 
 interface BattleSceneBlockProps {
   scene: BattleTurn;
   partyServants: (Servant | null)[];
   partyMembers?: PartyMember[];
   disableAutoSkillTargetRecognition?: boolean;
+  mysticCode?: MysticCode | null;
   turnAttackModesEnabled?: boolean;
   onChange: (updated: BattleTurn) => void;
 }
@@ -120,11 +123,13 @@ function PreparationActionSummary({
   partyMembers,
   faces,
   skillIcons,
+  mysticCode,
 }: {
   action: PreparationAction;
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   skillIcons: Record<string, SkillIcons>;
+  mysticCode?: MysticCode | null;
 }) {
   if (action.type === "enemyTarget") {
     return (
@@ -217,11 +222,17 @@ function PreparationActionSummary({
     sourceFace = (
       <BattleActorIcon kind={kind} label={battleActorLabel({ kind })} size="inline" />
     );
-    sourceText = action.type === "equipment" ? "御主礼装" : "令咒";
+    sourceText = action.type === "equipment" ? (mysticCode?.name ?? "御主礼装") : "令咒";
     actionText =
       action.type === "equipment"
-        ? `释放 ${SKILL_LABELS[action.skill ?? ""] ?? "技能"}`
+        ? `释放 ${mysticCodeSkill(mysticCode, action.skill ?? "")?.name ?? SKILL_LABELS[action.skill ?? ""] ?? "技能"}`
         : COMMAND_SPELL_LABELS[action.spell ?? ""] ?? "行动";
+    if (action.type === "equipment") {
+      const entry = mysticCodeSkill(mysticCode, action.skill ?? "");
+      skillIconSrc = entry?.iconPath ? convertFileSrc(entry.iconPath) : null;
+      skillLabel = entry?.name ?? SKILL_LABELS[action.skill ?? ""] ?? "技能";
+      skillSlot = Math.max(0, skillSlotIndex(action.skill));
+    }
   }
 
   return (
@@ -234,7 +245,7 @@ function PreparationActionSummary({
         {sourceText}{" "}
         {action.type === "servant"
           ? <>释放{" "}<span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span></>
-          : actionText}
+          : action.type === "equipment" ? <>{actionText} <span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span></> : actionText}
         {action.type === "servant" && action.skillSelection
           ? `并选择 ${action.skillSelection.label ?? `选项 ${action.skillSelection.index + 1}`}`
           : ""}
@@ -483,6 +494,7 @@ export function BattleSceneBlock({
   partyServants,
   partyMembers,
   disableAutoSkillTargetRecognition = false,
+  mysticCode = null,
   turnAttackModesEnabled = false,
   onChange,
 }: BattleSceneBlockProps) {
@@ -497,6 +509,13 @@ export function BattleSceneBlock({
   const skillIcons = useServantSkillIcons(initialPartyServants);
   const skillTargetStatus = useServantSkillTargeting(initialPartyServants);
   const skillSelection = useServantSkillSelections(initialPartyServants);
+  const mysticSkillEntries: SkillIcons = [1, 2, 3].map((slot) => {
+    const skill = mysticCode?.skills.find((entry) => entry.slot === slot);
+    return {
+      src: skill?.iconPath ? convertFileSrc(skill.iconPath) : null,
+      name: skill?.name ?? "",
+    };
+  }) as SkillIcons;
   const attackMode = turnAttackModesEnabled ? (scene.attackMode ?? "normal") : "normal";
   const preparationActions = useMemo(
     () =>
@@ -631,7 +650,16 @@ export function BattleSceneBlock({
 
   const selectPrepSkill = (source: PrepSource, skill: string) => {
     if (source === "equipment") {
-      setPrepDraft({ step: "target", source, option: skill });
+      const meta = mysticCodeSkill(mysticCode, skill);
+      const draft = { step: "target", source, option: skill } satisfies Extract<PrepDraft, { step: "target" }>;
+      const status = disableAutoSkillTargetRecognition ? "unknown" : meta?.targetingMode ?? "unknown";
+      if (status === "noTarget") {
+        finishPrepAction(draft, null);
+      } else if (status === "orderChange") {
+        setPrepDraft({ step: "orderChange", source, option: skill, front: null });
+      } else {
+        setPrepDraft(status === "needsTarget" ? { ...draft, allowNoTarget: false } : draft);
+      }
       return;
     }
     const servant = currentPartyMembers[sourceIndex(source) ?? 0]?.servant ?? null;
@@ -832,6 +860,7 @@ export function BattleSceneBlock({
                 partyMembers={preparationActionLineups[index] ?? initialPartyMembers}
                 faces={faces}
                 skillIcons={skillIcons}
+                mysticCode={mysticCode}
               />
             </div>
           ))}
@@ -955,8 +984,9 @@ export function BattleSceneBlock({
                             ? (currentPartyMembers[sourceIndex(prepDraft.source) ?? 0]?.servant ?? null)
                             : null
                         }
-                        skillIcons={skillIcons}
-                        onSelect={(skill) => selectPrepSkill(prepDraft.source, skill)}
+                skillIcons={skillIcons}
+                entries={prepDraft.source === "equipment" ? mysticSkillEntries : undefined}
+                onSelect={(skill) => selectPrepSkill(prepDraft.source, skill)}
                       />
                     )}
                 </div>
@@ -1008,7 +1038,10 @@ export function BattleSceneBlock({
                     />
                   );
                 })}
-                {prepDraft.source === "equipment" && (
+                {prepDraft.source === "equipment" &&
+                  (disableAutoSkillTargetRecognition ||
+                    mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode == null ||
+                    mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode === "unknown") && (
                   <>
                     <span className="battle-choice-separator" aria-hidden />
                     <button

@@ -898,6 +898,8 @@ pub struct Project {
     pub recognition_settings: Option<ProjectRecognitionSettings>,
     #[serde(default)]
     pub disable_auto_skill_target_recognition: bool,
+    #[serde(default)]
+    pub mystic_code_id: Option<u32>,
     /// When two command cards belong to the same member and have the same
     /// color, prefer the one with the higher recognized critical chance.
     #[serde(default)]

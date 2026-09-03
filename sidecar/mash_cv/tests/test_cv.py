@@ -5479,6 +5479,48 @@ class TestREPL:
         assert 0.19 <= responses[0]["region"]["x"] <= 0.21
         assert 0.39 <= responses[0]["region"]["y"] <= 0.41
 
+    def test_find_region_tries_explicit_scales(self, tmp_path):
+        patch = _gradient_patch(20)
+        template = np.zeros((24, 24, 4), dtype=np.uint8)
+        template[2:22, 2:22, :3] = cv2.merge([patch] * 3)
+        template[2:22, 2:22, 3] = 255
+        scaled_template = cv2.resize(template, (36, 36), interpolation=cv2.INTER_CUBIC)
+        alpha = scaled_template[:, :, 3:4].astype(np.float32) / 255.0
+        scaled_gray = cv2.cvtColor(
+            (
+                scaled_template[:, :, :3].astype(np.float32) * alpha
+                + 224 * (1.0 - alpha)
+            ).astype(np.uint8),
+            cv2.COLOR_BGR2GRAY,
+        )
+        img = _make_bgr_image(200, 200, bgr=(180, 180, 180))
+        img[80:116, 40:76] = cv2.merge([scaled_gray] * 3)
+
+        img_path = str(tmp_path / "scaled-scene.png")
+        tmpl_path = str(tmp_path / "scaled-tmpl.png")
+        _save_image(img, img_path)
+        cv2.imwrite(tmpl_path, template)
+
+        responses = self._run([
+            {
+                "cmd": "find_region",
+                "imagePath": img_path,
+                "templatePath": tmpl_path,
+                "region": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+                "threshold": 0.8,
+                "scales": [0.5, 1.0, 1.5],
+                "alphaMask": True,
+                "alphaBackground": 224,
+            },
+            {"cmd": "quit"},
+        ])
+
+        assert len(responses) == 1
+        assert responses[0]["found"] is True
+        assert responses[0]["scale"] == 1.5
+        assert 0.19 <= responses[0]["region"]["x"] <= 0.21
+        assert 0.39 <= responses[0]["region"]["y"] <= 0.41
+
     def test_verify_support_ce_command(self, tmp_path):
         # Build a synthetic 2560x1440 screenshot with the CE icon stamped
         # into a known region, and the matching template on disk.

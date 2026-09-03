@@ -19,6 +19,7 @@ import {
 import type { BattleScene, BattleTurn, AttackCard } from "../../types/command";
 import type { GrandCardStrategy, GrandClass, GrandClassDefinition, GrandServantConfig } from "../../types/project";
 import type { Servant } from "../../types/servant";
+import type { MysticCode } from "../../types/mysticCode";
 
 interface CommandEditorProps {
   projectId: string | null;
@@ -26,6 +27,7 @@ interface CommandEditorProps {
   partyMembers?: PartyMember[];
   advancedMode?: boolean;
   disableAutoSkillTargetRecognition?: boolean;
+  mysticCode?: MysticCode | null;
   grandServants?: GrandServantConfig[];
   grandClass?: GrandClass;
   grandClassDefinition?: GrandClassDefinition;
@@ -146,6 +148,7 @@ export function CommandEditor({
   partyMembers,
   advancedMode = false,
   disableAutoSkillTargetRecognition = false,
+  mysticCode = null,
   grandServants = [],
   grandClassDefinition,
   grandCardStrategy,
@@ -276,6 +279,7 @@ export function CommandEditor({
         partyLineup={partyLineup}
         partyMembers={initialPartyMembers}
         disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
+        mysticCode={mysticCode}
         grandServants={grandServants}
         grandClassDefinition={grandClassDefinition}
         grandCardStrategy={grandCardStrategy}
@@ -393,6 +397,7 @@ export function CommandEditor({
           partyServants={activeParty}
           partyMembers={activePartyMembers}
           disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
+          mysticCode={mysticCode}
           turnAttackModesEnabled={turnAttackModesEnabled}
           onChange={(updated) => handleTurnChange(activeScene.id, activeTurn.id, updated)}
         />

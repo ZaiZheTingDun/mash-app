@@ -85,6 +85,7 @@ const craftEssences: CraftEssence[] = [
 
 let selectedAdbSerial: string | null = null;
 let server: Server = "JP";
+let mysticCodeGender: "female" | "male" = "female";
 let supportCeThreshold = 0.7;
 let supportCeFullGateThreshold = 0.6;
 let supportMlbIconThreshold = 0.7;
@@ -255,6 +256,8 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return clone(servants) as T;
     case "get_craft_essences":
       return clone(craftEssences) as T;
+    case "get_mystic_codes":
+      return [] as T;
     case "list_projects":
       return clone(projects) as T;
     case "get_project_catalog":
@@ -353,6 +356,11 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         appTheme = args.theme;
       }
       return null as T;
+    case "get_mystic_code_gender":
+      return mysticCodeGender as T;
+    case "set_mystic_code_gender":
+      if (args.value === "female" || args.value === "male") mysticCodeGender = args.value;
+      return mysticCodeGender as T;
     case "get_battle_start_panel":
       return battleStartPanel as T;
     case "set_battle_start_panel":

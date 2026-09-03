@@ -10,9 +10,12 @@ use crate::adb;
 use crate::battle_statistics::BattleRunRecorder;
 use crate::commands::catalog::load_enhancement_target;
 use crate::commands::debug;
-use crate::commands::projects::{load_advanced_battle_scenes, load_battle_scenes, read_projects};
+use crate::commands::projects::{
+    load_advanced_battle_scenes, load_battle_scenes, read_app_ui_settings_from_path, read_projects,
+};
 use crate::commands::runtime::{
-    resolve_ce_assets_dir, resolve_scrcpy_jar, resolve_servant_assets_dir,
+    resolve_ce_assets_dir, resolve_mystic_code_assets_dir, resolve_scrcpy_jar,
+    resolve_servant_assets_dir,
 };
 use crate::commands::settings::{AdbDeviceSettings, DebugSettings, RecognitionSettings};
 use crate::craft_essence_enhancement_runner::{
@@ -35,6 +38,7 @@ use crate::friend_point_summon_runner::{
     EVENT_NAME as FRIEND_POINT_SUMMON_EVENT_NAME,
 };
 use crate::models::ProjectRecognitionSettings;
+use crate::paths::app_ui_settings_path;
 use crate::runner::{
     grand_strategy, runner_lifecycle_transition, AutomationEvent, LogLevel, RunConfig, Runner,
     RunnerHandle, RunnerLifecycleEvent, RunnerState,
@@ -122,6 +126,23 @@ fn emit_stream_mapping_debug(
     };
     eprintln!("{message}");
     crate::operation_log::emit_debug(app, message);
+}
+
+fn resolve_mystic_code_item_template(
+    app: &tauri::AppHandle,
+    config: &RunConfig,
+) -> Option<std::path::PathBuf> {
+    let id = config.mystic_code_id?;
+    let assets_dir = resolve_mystic_code_assets_dir(app)?;
+    let gender = read_app_ui_settings_from_path(&app_ui_settings_path(app)).mystic_code_gender;
+    let gender_name = match gender {
+        crate::paths::MysticCodeGender::Female => "female",
+        crate::paths::MysticCodeGender::Male => "male",
+    };
+    let path = assets_dir
+        .join(id.to_string())
+        .join(format!("item-{gender_name}.png"));
+    path.is_file().then_some(path)
 }
 
 fn runner_is_busy(state: &RunnerState) -> bool {
@@ -657,6 +678,7 @@ pub(crate) fn start_automation(
         let frame_size = Some((w, h));
         let assets_dir = resolve_servant_assets_dir(&app);
         let ce_assets_dir = resolve_ce_assets_dir(&app);
+        let mystic_code_item_template = resolve_mystic_code_item_template(&app, &config);
         let runner = Runner::new(
             adb_dev,
             sidecar,
@@ -672,6 +694,7 @@ pub(crate) fn start_automation(
             frame_size,
             assets_dir,
             ce_assets_dir,
+            mystic_code_item_template,
             server,
             Some(debug_sidecar),
             run_recorder,

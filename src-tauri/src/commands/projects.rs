@@ -452,6 +452,23 @@ pub(crate) fn set_battle_start_panel(
 }
 
 #[tauri::command]
+pub(crate) fn get_mystic_code_gender(app: tauri::AppHandle) -> crate::paths::MysticCodeGender {
+    read_app_ui_settings_from_path(&app_ui_settings_path(&app)).mystic_code_gender
+}
+
+#[tauri::command]
+pub(crate) fn set_mystic_code_gender(
+    app: tauri::AppHandle,
+    value: crate::paths::MysticCodeGender,
+) -> Result<crate::paths::MysticCodeGender, String> {
+    let path = app_ui_settings_path(&app);
+    let mut settings = read_app_ui_settings_from_path(&path);
+    settings.mystic_code_gender = value;
+    write_app_ui_settings_to_path(&path, &settings)?;
+    Ok(value)
+}
+
+#[tauri::command]
 pub(crate) fn list_projects(app: tauri::AppHandle) -> Vec<Project> {
     read_projects(&app)
 }
@@ -636,6 +653,7 @@ pub(crate) fn new_project(name: String, advanced_mode: bool, grand_class: GrandC
         support_append_skill_level_mins: default_support_append_skill_level_mins(),
         recognition_settings: None,
         disable_auto_skill_target_recognition: false,
+        mystic_code_id: None,
         prefer_higher_critical_chance: false,
         slots: default_project_slots(),
         repeat_mission: false,

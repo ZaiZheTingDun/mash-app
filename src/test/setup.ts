@@ -98,6 +98,7 @@ vi.mock("@tauri-apps/api/core", () => ({
         return { migrated: false, from: null, to: "/tmp/mash-app-data" };
       case "get_servants":
       case "get_craft_essences":
+      case "get_mystic_codes":
       case "list_projects":
       case "load_battle_scenes":
       case "get_servant_skill_selection":
@@ -114,6 +115,10 @@ vi.mock("@tauri-apps/api/core", () => ({
         return null;
       case "set_app_theme":
         return null;
+      case "get_mystic_code_gender":
+        return "female";
+      case "set_mystic_code_gender":
+        return args?.value ?? "female";
       case "get_battle_start_panel":
         return "operationLog";
       case "set_battle_start_panel":
