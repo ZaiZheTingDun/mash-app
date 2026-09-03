@@ -1,12 +1,12 @@
 {
   "mashCvRuntimeVersion": "2026.05.08-runtime1",
-  "mashCvCodeVersion": "0.4.18",
+  "mashCvCodeVersion": "0.4.19",
   "platforms": {
     "darwin-aarch64": {
       "runtimeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/runtime/darwin-aarch64/mash-cv-runtime-darwin-aarch64-v2026.05.08-runtime1.zip",
       "runtimeSha256": "3a80a0d595cfa54e7d907ccfce335dc99ba29428e2970057476b0b973ff3bf88",
-      "codeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/code/mash-cv-code-v0.4.18.zip",
-      "codeSha256": "c1b5a0d96aed00ec79e2e032c5d009979e578e87ed6da6545e420d1d52240e2e"
+      "codeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/code/mash-cv-code-v0.4.19.zip",
+      "codeSha256": "39b178cc9cbb23b8fa821d9524f3d03ed7fcc286ffd37e9d42569da0467758d2"
     },
     "darwin-x86_64": {
       "runtimeUrl": "https://cdn.example.com/mash-cv-runtime-darwin-x86_64-v2026.05.08-runtime1.zip",
