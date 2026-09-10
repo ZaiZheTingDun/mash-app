@@ -2269,8 +2269,17 @@ pub(crate) fn localized_servant_names_by_id(
 }
 
 fn servant_names_overlap(left: &str, right: &str) -> bool {
-    let left = normalize_jp_key(left);
-    let right = normalize_jp_key(right);
+    fn normalize_support_name_key(value: &str) -> String {
+        const DROPPED_SEPARATORS: &str = "・·.,。、;:!?-_/|()（）[]【】「」『』〔〕";
+        normalize_jp_key(value)
+            .chars()
+            .filter(|ch| !DROPPED_SEPARATORS.contains(*ch))
+            .flat_map(char::to_lowercase)
+            .collect()
+    }
+
+    let left = normalize_support_name_key(left);
+    let right = normalize_support_name_key(right);
     !left.is_empty()
         && !right.is_empty()
         && (left == right || left.contains(&right) || right.contains(&left))

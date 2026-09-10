@@ -3063,6 +3063,20 @@ fn ambiguous_servant_names_include_overlapping_names_from_other_ids() {
     };
 
     assert!(servant_name_overlaps_other_id(&nemo_noah, Server::Cn));
+
+    let santa_lily = ServantMetadata {
+        id: 141,
+        name: "贞德·Alter·Santa·Lily".into(),
+        names: vec!["贞德·Alter·Santa·Lily".into()],
+        excluded_names: Vec::new(),
+        np_names: vec!["优雅地歌唱吧，为此世界带来圣诞快乐".into()],
+        require_np_match: false,
+        class_name: "lancer".into(),
+    };
+
+    // The sidecar removes brackets and middle dots before fuzzy matching,
+    // turning “贞德〔Alter〕” into a prefix of Santa Lily's display name.
+    assert!(servant_name_overlaps_other_id(&santa_lily, Server::Cn));
 }
 
 #[test]
