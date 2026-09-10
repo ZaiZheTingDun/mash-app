@@ -3035,6 +3035,37 @@ fn servant_variant_name_candidates_include_all_names_within_one_variant() {
 }
 
 #[test]
+fn ambiguous_servant_names_include_overlapping_names_from_other_ids() {
+    let mut nemo = ServantMetadata {
+        id: 296,
+        name: "尼莫".into(),
+        names: vec!["尼莫".into()],
+        excluded_names: Vec::new(),
+        np_names: vec!["吾将远征，鹦鹉螺的大冲角".into()],
+        require_np_match: false,
+        class_name: "rider".into(),
+    };
+
+    assert!(servant_name_overlaps_other_id(&nemo, Server::Cn));
+    let nemo_candidates = servant_variant_name_candidates(296, "296:1", Server::Cn).unwrap();
+    assert!(nemo_candidates.shares_name_with_sibling);
+    apply_servant_variant_candidates(&mut nemo, nemo_candidates, Server::Cn);
+    assert!(nemo.require_np_match);
+
+    let nemo_noah = ServantMetadata {
+        id: 452,
+        name: "尼莫／诺亚".into(),
+        names: vec!["尼莫／诺亚".into()],
+        excluded_names: Vec::new(),
+        np_names: vec!["诺亚方舟".into()],
+        require_np_match: false,
+        class_name: "rider".into(),
+    };
+
+    assert!(servant_name_overlaps_other_id(&nemo_noah, Server::Cn));
+}
+
+#[test]
 fn servant_variant_candidates_scope_np_names_for_same_name_siblings() {
     let young = servant_variant_name_candidates(394, "394:1", Server::Cn).unwrap();
     assert_eq!(young.target_names, ["托勒密"]);
@@ -3059,7 +3090,7 @@ fn applying_variant_candidates_scopes_or_inherits_np_names() {
         class_name: "archer".into(),
     };
     let old = servant_variant_name_candidates(394, "394:2", Server::Cn).unwrap();
-    apply_servant_variant_candidates(&mut meta, old);
+    apply_servant_variant_candidates(&mut meta, old, Server::Cn);
     assert_eq!(meta.np_names, ["王之书库"]);
     assert!(meta.require_np_match);
 
@@ -3073,7 +3104,7 @@ fn applying_variant_candidates_scopes_or_inherits_np_names() {
         class_name: "unbeastolgamarie".into(),
     };
     let olga_alias = servant_variant_name_candidates(444, "444:2", Server::Cn).unwrap();
-    apply_servant_variant_candidates(&mut olga_meta, olga_alias);
+    apply_servant_variant_candidates(&mut olga_meta, olga_alias, Server::Cn);
     assert_eq!(olga_meta.np_names, ["既已过去的人理之终"]);
     assert!(!olga_meta.require_np_match);
 }

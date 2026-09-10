@@ -2863,6 +2863,15 @@ class TestFindNoblePhantasms:
 
 # ── _find_supports ──────────────────────────────────────────────────────
 
+def test_support_name_normalization_removes_ui_label_and_brackets():
+    from mash_cv.cv import _best_fuzzy_name, _normalize_support_name_text
+
+    assert _normalize_support_name_text("从者尼草【圣诞】") == "尼草圣诞"
+    score, matched_name = _best_fuzzy_name("从者尼草【圣诞】", ["尼莫〔圣诞〕"])
+    assert score >= 0.7
+    assert matched_name == "尼莫〔圣诞〕"
+
+
 def test_support_np_pairing_requires_distinct_lower_fragment():
     from mash_cv.cv import _support_np_can_pair_with_name
 

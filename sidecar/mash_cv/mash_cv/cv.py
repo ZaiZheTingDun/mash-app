@@ -3898,7 +3898,7 @@ def _normalize_jp_text(s: str) -> str:
     cosmetic separators that shift between captures.
     """
     s = unicodedata.normalize("NFKC", s)
-    drop = " \t\u3000・·.,。、;:!?-_／/|·"
+    drop = " \t\u3000・·.,。、;:!?-_／/|·()（）[]【】「」『』〔〕"
     return "".join(ch for ch in s if ch not in drop).lower()
 
 
@@ -3940,12 +3940,22 @@ def _expected_names_or_single(expected_name: str, expected_names: Optional[list[
 def _best_fuzzy_name(text: str, expected_names: list[str]) -> tuple[float, str]:
     best_score = 0.0
     best_name = ""
+    candidate = _normalize_support_name_text(text)
     for name in expected_names:
-        score = _fuzzy_score(text, name)
+        score = _fuzzy_score(candidate, name)
         if score > best_score:
             best_score = float(score)
             best_name = name
     return best_score, best_name
+
+
+def _normalize_support_name_text(text: str) -> str:
+    """Remove stable UI labels before matching a servant display name."""
+    normalized = _normalize_jp_text(text)
+    for prefix in ("从者", "サーヴァント"):
+        if normalized.startswith(prefix):
+            return normalized[len(prefix) :]
+    return normalized
 
 
 def _name_matches_excluded_variant(
@@ -3971,11 +3981,11 @@ def _name_matches_excluded_variant(
     if excluded_score > positive_score + 1e-6:
         return True, excluded_score, excluded_name
 
-    normalized_text = _normalize_jp_text(text)
-    normalized_match = _normalize_jp_text(matched_name)
+    normalized_text = _normalize_support_name_text(text)
+    normalized_match = _normalize_support_name_text(matched_name)
     if normalized_text and normalized_text in normalized_match:
         for name in excluded_names:
-            normalized_excluded = _normalize_jp_text(name)
+            normalized_excluded = _normalize_support_name_text(name)
             if (
                 normalized_excluded != normalized_match
                 and normalized_text in normalized_excluded

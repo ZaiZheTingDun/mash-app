@@ -2098,8 +2098,8 @@ pub struct ServantMetadata {
     #[serde(skip_serializing)]
     pub excluded_names: Vec<String>,
     pub np_names: Vec<String>,
-    /// Same-name sibling variants cannot safely use the sidecar's usual
-    /// name-only fallback; their variant-scoped NP must also be observed.
+    /// Overlapping names cannot safely use the sidecar's usual name-only
+    /// fallback; their variant-scoped NP must also be observed.
     #[serde(skip_serializing)]
     pub require_np_match: bool,
     /// Atlas Academy `className`, lowercased (e.g. `caster`, `alterego`,
@@ -2268,6 +2268,36 @@ pub(crate) fn localized_servant_names_by_id(
     names
 }
 
+fn servant_names_overlap(left: &str, right: &str) -> bool {
+    let left = normalize_jp_key(left);
+    let right = normalize_jp_key(right);
+    !left.is_empty()
+        && !right.is_empty()
+        && (left == right || left.contains(&right) || right.contains(&left))
+}
+
+/// Detect names from different servant IDs that would otherwise be accepted
+/// by the support OCR's substring-tolerant fuzzy matcher. This is intentionally
+/// limited to equal/containing names so ordinary fuzzy OCR correction keeps
+/// working for unrelated servants.
+pub(crate) fn servant_name_overlaps_other_id(meta: &ServantMetadata, server: Server) -> bool {
+    let target_names = meta.names.clone();
+    for sibling in servants_data()
+        .iter()
+        .filter(|servant| servant.id != meta.id)
+    {
+        for sibling_name in localized_variant_names(sibling, server) {
+            if target_names
+                .iter()
+                .any(|target_name| servant_names_overlap(target_name, &sibling_name))
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn localized_variant_name(servant: &ServantInfo, server: Server) -> String {
     match server {
         Server::Jp => servant.name_jp.trim().to_string(),
@@ -2335,6 +2365,15 @@ pub(crate) fn servant_variant_name_candidates(
             }
         }
     }
+    if target_names.iter().any(|target_name| {
+        servants_data()
+            .iter()
+            .filter(|servant| servant.id != id)
+            .flat_map(|servant| localized_variant_names(servant, server))
+            .any(|sibling_name| servant_names_overlap(target_name, &sibling_name))
+    }) {
+        shares_name_with_sibling = true;
+    }
     Ok(ServantVariantCandidates {
         target_name,
         target_names,
@@ -2356,13 +2395,14 @@ pub(crate) fn load_servant_metadata_for_variant(
     };
 
     let candidates = servant_variant_name_candidates(id, variant_key, server)?;
-    apply_servant_variant_candidates(&mut meta, candidates);
+    apply_servant_variant_candidates(&mut meta, candidates, server);
     Ok(meta)
 }
 
 pub(crate) fn apply_servant_variant_candidates(
     meta: &mut ServantMetadata,
     candidates: ServantVariantCandidates,
+    server: Server,
 ) {
     meta.name = candidates.target_name;
     meta.names = candidates.target_names;
@@ -2370,7 +2410,9 @@ pub(crate) fn apply_servant_variant_candidates(
     if !candidates.np_names.is_empty() {
         meta.np_names = candidates.np_names;
     }
-    meta.require_np_match = candidates.shares_name_with_sibling && !meta.np_names.is_empty();
+    let ambiguous = servant_name_overlaps_other_id(meta, server);
+    meta.require_np_match =
+        (candidates.shares_name_with_sibling || ambiguous) && !meta.np_names.is_empty();
 }
 
 pub(crate) fn localize_servant_name_by_id(id: u32, jp: &str) -> String {
@@ -2499,7 +2541,7 @@ pub(crate) fn load_servant_metadata(
     };
 
     let names = localized_servant_names_by_id(id, server, &name);
-    let meta = ServantMetadata {
+    let mut meta = ServantMetadata {
         id,
         name,
         names,
@@ -2508,6 +2550,8 @@ pub(crate) fn load_servant_metadata(
         require_np_match: false,
         class_name,
     };
+    let ambiguous = servant_name_overlaps_other_id(&meta, server);
+    meta.require_np_match = ambiguous && !meta.np_names.is_empty();
     cache.lock().unwrap().insert((id, server), meta.clone());
     Ok(meta)
 }
