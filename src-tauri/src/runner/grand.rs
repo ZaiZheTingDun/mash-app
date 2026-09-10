@@ -194,6 +194,7 @@ pub(crate) struct AdvancedPickCandidate {
     pub(crate) pick: Pick,
     pub(crate) servant_index: Option<usize>,
     pub(crate) servant_id: Option<u32>,
+    pub(crate) is_support: bool,
     pub(crate) color: Option<String>,
     pub(crate) original_order: u32,
     pub(crate) is_np: bool,
@@ -233,6 +234,18 @@ pub(crate) fn grand_role_for_candidate(
     candidate: &AdvancedPickCandidate,
     grand_servants: &[GrandServantRuntimeConfig],
 ) -> GrandRole {
+    if let Some((index, _)) = candidate.servant_id.and_then(|servant_id| {
+        grand_servants.iter().enumerate().find(|(_, config)| {
+            config.servant_id == servant_id && config.is_support == candidate.is_support
+        })
+    }) {
+        return match index {
+            0 => GrandRole::Main,
+            1 => GrandRole::Deputy,
+            _ => GrandRole::Other,
+        };
+    }
+
     if let Some(index) = candidate.servant_index {
         if grand_servants
             .first()
@@ -416,6 +429,7 @@ pub(crate) enum RuleOwner {
     AnyGrand,
     ExactSlot(usize),
     ExactServant(u32),
+    ExactServantWithSupport(u32, bool),
     Any,
 }
 
@@ -600,6 +614,14 @@ pub(crate) fn custom_rule_config_to_rule(config: &GrandCardRuleConfig) -> Option
             };
             let owner = if slot_config.grand_servant {
                 RuleOwner::AnyGrand
+            } else if slot_config.member_id.is_some() && slot_config.servant_id.is_some() {
+                // Configurations with member metadata must follow the
+                // servant through an in-battle Order Change. Keep the
+                // legacy slot fallback below for older saved strategies.
+                RuleOwner::ExactServantWithSupport(
+                    slot_config.servant_id.unwrap(),
+                    slot_config.is_support,
+                )
             } else if let Some(slot_index) = slot_config.slot_index {
                 RuleOwner::ExactSlot(slot_index as usize)
             } else if let Some(servant_id) = slot_config.servant_id {
@@ -655,6 +677,9 @@ pub(crate) fn owner_matches(
         ),
         RuleOwner::ExactSlot(slot_index) => candidate.servant_index == Some(slot_index),
         RuleOwner::ExactServant(servant_id) => candidate.servant_id == Some(servant_id),
+        RuleOwner::ExactServantWithSupport(servant_id, is_support) => {
+            candidate.servant_id == Some(servant_id) && candidate.is_support == is_support
+        }
     }
 }
 
@@ -1225,6 +1250,9 @@ pub(crate) fn choose_ordinary_advanced_picks_with_crit(
             },
             servant_index,
             servant_id,
+            is_support: servant_index
+                .and_then(|index| members[index].as_ref())
+                .is_some_and(|member| member.is_support),
             color: servant_id
                 .and_then(servant_np_card_code)
                 .map(str::to_string),
@@ -1250,6 +1278,7 @@ pub(crate) fn choose_ordinary_advanced_picks_with_crit(
             },
             servant_index,
             servant_id: card.servant_id,
+            is_support: card.is_support,
             color: card.suit.clone(),
             original_order: 10
                 + command_card_preference_order(card, cards, prefer_higher_critical_chance),
@@ -1377,6 +1406,9 @@ pub(crate) fn choose_advanced_auto_picks_with_crit(
             },
             servant_index,
             servant_id,
+            is_support: servant_index
+                .and_then(|index| party_supports.get(index).copied())
+                .unwrap_or(false),
             color,
             original_order: np.slot,
             is_np: true,
@@ -1406,6 +1438,7 @@ pub(crate) fn choose_advanced_auto_picks_with_crit(
             },
             servant_index,
             servant_id: card.servant_id,
+            is_support: card.is_support,
             color: card.suit.clone(),
             original_order: 10
                 + command_card_preference_order(card, cards, prefer_higher_critical_chance),

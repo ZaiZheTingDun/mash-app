@@ -1271,7 +1271,23 @@ impl Runner {
                 if !seen.insert(slot) {
                     return None;
                 }
-                let member = full.get(slot).cloned().flatten()?;
+                let member = config
+                    .member_id
+                    .as_deref()
+                    .and_then(|member_id| {
+                        full.iter()
+                            .flatten()
+                            .find(|member| member.member_id.as_deref() == Some(member_id))
+                    })
+                    .or_else(|| {
+                        config.servant_id.and_then(|servant_id| {
+                            full.iter().flatten().find(|member| {
+                                member.servant_id == servant_id
+                                    && member.is_support == config.is_support
+                            })
+                        })
+                    })
+                    .or_else(|| full.get(slot).and_then(|member| member.as_ref()))?;
                 let servant_id = member.servant_id;
                 Some(GrandServantRuntimeConfig {
                     slot_index: slot,

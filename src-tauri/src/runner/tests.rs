@@ -4869,6 +4869,7 @@ fn custom_grand_rule_matches_duplicate_servant_by_slot_index() {
             },
             servant_index: Some(0),
             servant_id: Some(10),
+            is_support: false,
             color: None,
             original_order: 0,
             is_np: true,
@@ -4881,6 +4882,7 @@ fn custom_grand_rule_matches_duplicate_servant_by_slot_index() {
             },
             servant_index: Some(1),
             servant_id: Some(10),
+            is_support: true,
             color: None,
             original_order: 1,
             is_np: true,
@@ -4895,6 +4897,7 @@ fn custom_grand_rule_matches_duplicate_servant_by_slot_index() {
             },
             servant_index: Some(2),
             servant_id: Some(30),
+            is_support: false,
             color: Some("b".into()),
             original_order: 10,
             is_np: false,
@@ -4924,7 +4927,7 @@ fn custom_grand_rule_matches_duplicate_servant_by_slot_index() {
 }
 
 #[test]
-fn grand_role_for_candidate_prefers_slot_over_duplicate_servant_id() {
+fn grand_role_for_candidate_distinguishes_duplicate_servant_id_by_support() {
     let grands = vec![
         GrandServantRuntimeConfig {
             slot_index: 0,
@@ -4951,6 +4954,7 @@ fn grand_role_for_candidate_prefers_slot_over_duplicate_servant_id() {
         },
         servant_index: Some(1),
         servant_id: Some(10),
+        is_support: true,
         color: None,
         original_order: 1,
         is_np: true,
@@ -4960,6 +4964,123 @@ fn grand_role_for_candidate_prefers_slot_over_duplicate_servant_id() {
         grand_role_for_candidate(&candidate, &grands),
         GrandRole::Deputy
     );
+}
+
+#[test]
+fn grand_role_for_candidate_follows_servant_after_order_change() {
+    let grands = vec![
+        grand_config_at(1, 20, "buster", "damage"),
+        grand_config_at(3, 40, "arts", "damage"),
+    ];
+    // Servant 40 was originally in slot 4, then moved into the old slot 2
+    // position. Slot-based matching would incorrectly call it the main.
+    let candidate = AdvancedPickCandidate {
+        pick: Pick::Np {
+            slot: 1,
+            point: Point::new(0.0, 0.0),
+            from_priority: "test".into(),
+        },
+        servant_index: Some(1),
+        servant_id: Some(40),
+        is_support: false,
+        color: None,
+        original_order: 1,
+        is_np: true,
+    };
+
+    assert_eq!(
+        grand_role_for_candidate(&candidate, &grands),
+        GrandRole::Deputy
+    );
+}
+
+#[test]
+fn custom_grand_rule_with_member_metadata_follows_servant_after_order_change() {
+    let rule = custom_rule_config_to_rule(&GrandCardRuleConfig {
+        id: "custom_1".into(),
+        name: "换位后仍选择从者 4 宝具".into(),
+        slots: vec![
+            GrandCardRuleSlotConfig {
+                member_id: Some("slot-4".into()),
+                slot_index: Some(3),
+                servant_id: Some(40),
+                is_support: false,
+                grand_servant: false,
+                kind: "np".into(),
+                color: "any".into(),
+            },
+            custom_rule_slot(None, "any", "any"),
+            custom_rule_slot(None, "any", "any"),
+        ],
+    })
+    .expect("custom rule should convert");
+    let candidate = AdvancedPickCandidate {
+        pick: Pick::Np {
+            slot: 1,
+            point: Point::new(0.0, 0.0),
+            from_priority: "test".into(),
+        },
+        servant_index: Some(1),
+        servant_id: Some(40),
+        is_support: false,
+        color: None,
+        original_order: 1,
+        is_np: true,
+    };
+
+    assert!(owner_matches(&candidate, rule.slots[0].owner, &[],));
+}
+
+#[test]
+fn custom_grand_np_rule_selects_all_configured_nps_after_order_change() {
+    let strategy = custom_strategy(GrandCardRuleConfig {
+        id: "custom_1".into(),
+        name: "换位后的三张宝具".into(),
+        slots: vec![
+            GrandCardRuleSlotConfig {
+                member_id: Some("slot-1".into()),
+                slot_index: Some(0),
+                servant_id: Some(10),
+                is_support: false,
+                grand_servant: false,
+                kind: "np".into(),
+                color: "any".into(),
+            },
+            GrandCardRuleSlotConfig {
+                member_id: Some("slot-4".into()),
+                slot_index: Some(3),
+                servant_id: Some(40),
+                is_support: false,
+                grand_servant: false,
+                kind: "np".into(),
+                color: "any".into(),
+            },
+            GrandCardRuleSlotConfig {
+                member_id: Some("slot-3".into()),
+                slot_index: Some(2),
+                servant_id: Some(30),
+                is_support: false,
+                grand_servant: false,
+                kind: "np".into(),
+                color: "any".into(),
+            },
+        ],
+    });
+    let picks = choose_advanced_auto_picks(
+        &empty_advanced_scene(),
+        &[
+            command_card(0, Some(10), Some("b"), None),
+            command_card(1, Some(40), Some("a"), None),
+            command_card(2, Some(30), Some("q"), None),
+        ],
+        &[np_slot(0, true), np_slot(1, true), np_slot(2, true)],
+        &[Some(10), Some(40), Some(30)],
+        &[false, false, false],
+        &[grand_config(10, "buster", "damage")],
+        &strategy,
+    );
+
+    assert_eq!(pick_labels(&picks), vec!["NP0", "NP1", "NP2"]);
 }
 
 #[test]
