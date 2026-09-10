@@ -140,6 +140,7 @@ fn np_slot(slot: u32, ready: bool) -> NoblePhantasmMatch {
         card_ready: None,
         ready_source: None,
         gauge_digit_count: None,
+        gauge_hundreds_visible: None,
         gauge_region: None,
         np_glow_region: None,
         np_glow_score: None,
@@ -159,6 +160,13 @@ fn np_slot_with_detectors(
         np_glow_score: glow_ready.map(|ready| if ready { 0.6 } else { 0.4 }),
         np_glow_ready: glow_ready,
         ..np_slot(slot, ready)
+    }
+}
+
+fn np_slot_with_gauge_digits(slot: u32, hundreds_visible: Option<bool>) -> NoblePhantasmMatch {
+    NoblePhantasmMatch {
+        gauge_hundreds_visible: hundreds_visible,
+        ..np_slot(slot, false)
     }
 }
 
@@ -492,6 +500,35 @@ fn np_gauge_sample_window_waits_for_three_samples_on_slow_cv() {
         3
     ));
     assert!(np_gauge_sample_window_complete(Duration::from_secs(2), 3));
+}
+
+#[test]
+fn np_gauge_digit_samples_use_majority_of_hundreds_slot() {
+    let samples = [Some(true), Some(true), Some(false), Some(true), None]
+        .into_iter()
+        .map(|hundreds_visible| vec![np_slot_with_gauge_digits(1, hundreds_visible)])
+        .collect::<Vec<_>>();
+
+    let aggregated = aggregate_np_gauge_digit_samples(&samples);
+
+    assert_eq!(aggregated.len(), 1);
+    assert!(aggregated[0].ready);
+    assert_eq!(aggregated[0].ready_source.as_deref(), Some("gaugeDigits"));
+    assert_eq!(aggregated[0].gauge_hundreds_visible, Some(true));
+}
+
+#[test]
+fn np_gauge_digit_read_requires_three_slots_with_valid_hundreds_results() {
+    let complete = vec![
+        np_slot_with_gauge_digits(0, Some(true)),
+        np_slot_with_gauge_digits(1, Some(false)),
+        np_slot_with_gauge_digits(2, Some(true)),
+    ];
+    assert!(np_gauge_digit_read_complete(&complete));
+
+    let mut obscured = complete.clone();
+    obscured[1].gauge_hundreds_visible = None;
+    assert!(!np_gauge_digit_read_complete(&obscured));
 }
 
 #[test]

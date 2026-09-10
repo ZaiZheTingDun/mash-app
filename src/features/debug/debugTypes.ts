@@ -127,6 +127,7 @@ export interface NoblePhantasmMatchDto {
   cardReady?: boolean | null;
   readySource?: "glow" | "gauge" | "unknown" | string;
   gaugeDigitCount?: number | null;
+  gaugeHundredsVisible?: boolean | null;
   gaugeRegion?: NormRectDto | null;
   npGlowRegion?: NormRectDto | null;
   npGlowScore?: number | null;

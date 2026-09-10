@@ -157,6 +157,10 @@ pub(crate) fn np_gauge_read_complete(nps: &[NoblePhantasmMatch]) -> bool {
     nps.len() == 3 && nps.iter().all(|np| np.np_glow_score.is_some())
 }
 
+pub(crate) fn np_gauge_digit_read_complete(nps: &[NoblePhantasmMatch]) -> bool {
+    nps.len() == 3 && nps.iter().all(|np| np.gauge_hundreds_visible.is_some())
+}
+
 pub(crate) fn apply_np_detection_mode(
     nps: &mut [NoblePhantasmMatch],
     mode: NoblePhantasmDetectionMode,
@@ -285,6 +289,53 @@ pub(crate) fn aggregate_np_gauge_samples(
             representative.ready_source = Some("glow".into());
             representative.np_glow_score = Some(median);
             representative.np_glow_ready = Some(ready);
+            Some(representative)
+        })
+        .collect()
+}
+
+/// Aggregate one-second NP-gauge digit samples by majority vote of the
+/// fixed hundreds slot. A visible hundreds digit means the gauge is at least
+/// 100%, which is the only distinction the runner needs for NP readiness.
+pub(crate) fn aggregate_np_gauge_digit_samples(
+    samples: &[Vec<NoblePhantasmMatch>],
+) -> Vec<NoblePhantasmMatch> {
+    let mut slot_ids = Vec::new();
+    for sample in samples {
+        for slot in sample {
+            if !slot_ids.contains(&slot.slot) {
+                slot_ids.push(slot.slot);
+            }
+        }
+    }
+    slot_ids.sort_unstable();
+
+    slot_ids
+        .into_iter()
+        .filter_map(|slot_id| {
+            let readings: Vec<(bool, NoblePhantasmMatch)> = samples
+                .iter()
+                .filter_map(|sample| {
+                    sample
+                        .iter()
+                        .find(|slot| slot.slot == slot_id)
+                        .and_then(|slot| {
+                            slot.gauge_hundreds_visible
+                                .map(|visible| (visible, slot.clone()))
+                        })
+                })
+                .collect();
+            if readings.len() < NP_GAUGE_MIN_VALID_SAMPLES {
+                return None;
+            }
+
+            let visible_count = readings.iter().filter(|(visible, _)| *visible).count();
+            let ready = visible_count * 2 > readings.len();
+            let mut representative = readings[readings.len() / 2].1.clone();
+            representative.ready = ready;
+            representative.ready_source = Some("gaugeDigits".into());
+            representative.gauge_hundreds_visible = Some(ready);
+            representative.gauge_digit_count = Some(if ready { 3 } else { 2 });
             Some(representative)
         })
         .collect()
@@ -1915,7 +1966,7 @@ impl Runner {
                     thread::sleep(ACTION_DELAY);
                 },
                 NoblePhantasmDetectionMode::Gauge => loop {
-                    let Some(nps) = self.read_noble_phantasm_gauges("Attack") else {
+                    let Some(nps) = self.read_noble_phantasm_gauges("Attack", false) else {
                         return None;
                     };
                     break nps;
@@ -2008,6 +2059,7 @@ impl Runner {
     pub(crate) fn read_noble_phantasm_gauges(
         &mut self,
         screen: &str,
+        use_digit_readiness: bool,
     ) -> Option<Vec<NoblePhantasmMatch>> {
         loop {
             let started = Instant::now();
@@ -2033,8 +2085,17 @@ impl Runner {
                 thread::sleep(NP_GAUGE_SAMPLE_INTERVAL);
             }
 
-            let nps = aggregate_np_gauge_samples(&samples);
-            if np_gauge_read_complete(&nps) {
+            let nps = if use_digit_readiness {
+                aggregate_np_gauge_digit_samples(&samples)
+            } else {
+                aggregate_np_gauge_samples(&samples)
+            };
+            let read_complete = if use_digit_readiness {
+                np_gauge_digit_read_complete(&nps)
+            } else {
+                np_gauge_read_complete(&nps)
+            };
+            if read_complete {
                 return Some(nps);
             }
             if self.is_cancelled() {
@@ -2064,7 +2125,7 @@ impl Runner {
             );
             self.battle.pre_attack_np_warning_emitted = true;
         }
-        let Some(nps) = self.read_noble_phantasm_gauges("Battle") else {
+        let Some(nps) = self.read_noble_phantasm_gauges("Battle", true) else {
             return false;
         };
         self.battle.pre_attack_nps = Some(nps);
@@ -2331,7 +2392,7 @@ impl Runner {
                 self.emit("Attack", "重试时宝具卡尚未识别完整，等待卡面稳定后重试");
                 thread::sleep(ACTION_DELAY);
             },
-            NoblePhantasmDetectionMode::Gauge => self.read_noble_phantasm_gauges("Attack"),
+            NoblePhantasmDetectionMode::Gauge => self.read_noble_phantasm_gauges("Attack", false),
             NoblePhantasmDetectionMode::GaugeBeforeAttack => {
                 let nps = self.battle.pre_attack_nps.clone();
                 if nps.is_none() {

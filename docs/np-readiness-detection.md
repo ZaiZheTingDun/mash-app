@@ -9,7 +9,7 @@
 
 ## 信号
 
-就绪状态由每个底部 NP 槽位右端附近的亮色端帽判断。检测器先从三个底部 NP 槽位百分比区域开始，每个前排从者各一个：
+“宝具条识别（选卡时）”的就绪状态由每个底部 NP 槽位右端附近的亮色端帽判断。检测器先从三个底部 NP 槽位百分比区域开始，每个前排从者各一个：
 
 ```python
 DEFAULT_NP_GAUGE_DIGIT_REGIONS = (
@@ -29,7 +29,7 @@ NP_GAUGE_GLOW_H = 0.011111111111111112
 NP_GAUGE_GLOW_READY_THRESHOLD = 0.5
 ```
 
-`npGlowScore` 是端帽 ROI 灰度均值归一化至 `0.0..1.0` 的结果。最终规则为：
+`npGlowScore` 是端帽 ROI 灰度均值归一化至 `0.0..1.0` 的结果。选卡时模式的最终规则为：
 
 - `npGlowScore >= 0.5`：已就绪
 - `npGlowScore < 0.5`：未就绪
@@ -55,7 +55,9 @@ Sidecar 会检测每个固定数字槽是否含有可信的白色数字主体。
 
 检测通过以下条件滤除底部 gauge 线、HP 条、百分号残片及字幕文字：组件必须较高、起始于数字槽的上半部分，且跨越足够的数字高度。
 
-数字结果仅通过 `gaugeDigitCount` 暴露，不影响 `ready`。
+数字结果通过 `gaugeDigitCount` 和 `gaugeHundredsVisible` 暴露。
+
+“宝具条识别（选卡前）”使用 `gaugeHundredsVisible` 作为就绪条件：固定百位槽出现有效数字即表示宝具条至少为 100%。该模式仍采样约一秒，并以有效样本的多数结果决定每个槽位，避免单帧字幕或特效造成误判。它不要求完整 OCR 出具体百分比，也不要求十位和个位都可见。
 
 上方 NP 卡片槽位矩形仍保留在响应中，既作为点击区域，也作为旧版调试测量（`edgeFrac`、`stdBgr`、`edgeThreshold`、`cardReady`）：
 
@@ -95,6 +97,7 @@ Runner 将缺少端帽分数视为不完整读取，返回：
             "readySource": "glow",
             "npGlowScore": 0.61,
             "npGlowReady": True,
+            "gaugeHundredsVisible": True,
             "npGlowRegion": {"x": ..., "y": ..., "w": ..., "h": ...},
             "gaugeDigitCount": 3,
             "gaugeRegion": {"x": 0.182, "y": 0.913, "w": 0.0297, "h": 0.0278},

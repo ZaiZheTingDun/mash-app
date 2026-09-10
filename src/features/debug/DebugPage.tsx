@@ -794,6 +794,10 @@ export function DebugPage({
               `NP${s.slot + 1}:卡:${npCardStatus(s)} 条:${npGaugeStatus(s)}(${
                 s.npGlowScore != null ? ` 端帽:${s.npGlowScore.toFixed(3)}` : ""
               }${s.gaugeDigitCount != null ? ` digit:${s.gaugeDigitCount}位` : ""}${
+                s.gaugeHundredsVisible != null
+                  ? ` 百位:${s.gaugeHundredsVisible ? "有" : "无"}`
+                  : ""
+              }${
                 s.cardReady != null ? ` edge:${(s.edgeFrac * 100).toFixed(2)}%` : ""
               })`
           )
@@ -2145,6 +2149,9 @@ export function DebugPage({
                         }`
                       : " · 宝具条端帽未识别"}
                     {s.gaugeDigitCount != null ? ` · digit ${s.gaugeDigitCount}位` : ""}
+                    {s.gaugeHundredsVisible != null
+                      ? ` · 百位${s.gaugeHundredsVisible ? "有" : "无"}`
+                      : ""}
                   </Text>
                 </Box>
               ))}

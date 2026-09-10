@@ -2850,6 +2850,10 @@ class TestFindNoblePhantasms:
         assert len(slots) == 3
 
         assert [s.get("gaugeDigitCount") for s in slots] == expected_counts
+        assert [s.get("gaugeHundredsVisible") for s in slots] == [
+            count == 3 if count is not None else False
+            for count in expected_counts
+        ]
         for slot in slots:
             assert slot["readySource"] == "glow"
             assert slot["npGlowScore"] is not None

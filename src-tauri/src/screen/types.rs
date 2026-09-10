@@ -465,15 +465,20 @@ pub struct NoblePhantasmMatch {
     /// gauge glow cap.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub card_ready: Option<bool>,
-    /// Which detector produced the final ``ready`` flag: currently
-    /// ``"glow"`` for the bottom gauge cap, or ``"unknown"`` when it could
-    /// not be read.
+    /// Which detector produced the final ``ready`` flag: ``"glow"`` for the
+    /// bottom gauge cap, ``"gaugeDigits"`` for the pre-attack hundreds-slot
+    /// detector, or ``"unknown"`` when it could not be read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ready_source: Option<String>,
-    /// Number of visible digits in the bottom NP gauge ROI. Debug-only;
-    /// current readiness does not use this as a fallback.
+    /// Number of visible digits in the bottom NP gauge ROI. Debug-only for
+    /// glow-based modes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gauge_digit_count: Option<u32>,
+    /// Whether the fixed hundreds digit slot contains a valid digit. The
+    /// pre-attack gauge mode uses this as its readiness signal because a
+    /// visible hundreds digit means the gauge is at least 100%.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gauge_hundreds_visible: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gauge_region: Option<NormRect>,
     /// Probe for the bright NP-charge slot near the right end of the

@@ -3785,9 +3785,17 @@ def _find_noble_phantasms(
     for slot, (measurement, card_ready) in enumerate(zip(measurements, card_ready_flags)):
         sx, sy, sw, sh, edge_frac, std_bgr, _bright_frac = measurement
         gauge_digit_count: Optional[int] = None
+        gauge_hundreds_visible: Optional[bool] = None
         gauge_region = None
         if slot < len(gauge_regions):
             gauge_region = gauge_regions[slot]
+            digit_regions = [
+                _child_norm_rect(gauge_region, digit_region)
+                for digit_region in DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS
+            ]
+            gauge_hundreds_visible = _np_gauge_hundreds_slot_visible(
+                img, digit_regions[0]
+            )
             gauge_digit_count = _read_np_gauge_digit_count(img, gauge_region)
         glow_region = _np_gauge_glow_region(gauge_region) if gauge_region else None
         glow_score = (
@@ -3815,6 +3823,7 @@ def _find_noble_phantasms(
             "cardReady": bool(card_ready),
             "readySource": "glow" if glow_ready is not None else "unknown",
             "gaugeDigitCount": gauge_digit_count,
+            "gaugeHundredsVisible": gauge_hundreds_visible,
             "gaugeRegion": gauge_region,
             "npGlowRegion": glow_region,
             "npGlowScore": glow_score,
