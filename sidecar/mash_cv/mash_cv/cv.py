@@ -319,9 +319,11 @@ SUPPORT_ROW_NAME_REGION_X = 0.272
 SUPPORT_ROW_NAME_REGION_W = 0.343
 SUPPORT_ROW_NAME_REGION_DY = 0.085
 SUPPORT_ROW_NAME_REGION_H = 0.055
-# Skip the NP icon while preserving the previous 0.620 right edge.
+# Skip the NP icon while extending through the trailing NP-level digit. Long
+# localized NP names can place ``Lv.5`` / ``等级5`` just past the old 0.620
+# edge, while 0.640 still stops before the right-side skill panel.
 SUPPORT_ROW_NP_REGION_X = 0.272
-SUPPORT_ROW_NP_REGION_W = 0.348
+SUPPORT_ROW_NP_REGION_W = 0.368
 SUPPORT_ROW_NP_REGION_DY = 0.135
 SUPPORT_ROW_NP_REGION_H = 0.060
 # The servant's current level is rendered above the portrait, to the left of

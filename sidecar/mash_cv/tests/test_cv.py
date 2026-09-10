@@ -3040,7 +3040,7 @@ def test_find_supports_uses_anchor_row_recognition_without_full_detector(monkeyp
         def text_recognizer(self, crops):
             assert len(crops) == 3
             assert crops[1].shape == (55, 343, 3)
-            assert crops[2].shape == (60, 348, 3)
+            assert crops[2].shape == (60, 368, 3)
             return [
                 ("Lv.100/100", 0.99),
                 ("阿尔托莉雅·Caster", 0.98),
@@ -3075,7 +3075,7 @@ def test_find_supports_uses_anchor_row_recognition_without_full_detector(monkeyp
     assert result["diagnostics"]["fragmentCount"] == 3
 
 
-def test_support_text_regions_move_right_without_shortening_the_right_edge():
+def test_support_text_regions_keep_name_edge_and_include_np_level_tail():
     import mash_cv.cv as cv
 
     assert cv.SUPPORT_ROW_NAME_REGION_X == pytest.approx(0.272)
@@ -3084,7 +3084,7 @@ def test_support_text_regions_move_right_without_shortening_the_right_edge():
     )
     assert cv.SUPPORT_ROW_NP_REGION_X == pytest.approx(0.272)
     assert cv.SUPPORT_ROW_NP_REGION_X + cv.SUPPORT_ROW_NP_REGION_W == pytest.approx(
-        0.620
+        0.640
     )
 
 
