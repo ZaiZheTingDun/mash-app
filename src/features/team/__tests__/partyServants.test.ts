@@ -9,6 +9,7 @@ import {
   deriveScenePartyMembers,
   deriveScenePartyLineups,
   deriveScenePartyServants,
+  relocatePreparationActionMembers,
   relocateAdvancedBattleSceneMembers,
   relocateBattleSceneMembers,
 } from "../partyServants";
@@ -592,6 +593,42 @@ describe("deriveScenePartyServants", () => {
       servantMemberId: "slot-a",
       servantId: ARASH.id,
       servantIsSupport: false,
+    });
+  });
+
+  it("refreshes action servant ids when a configured slot replaces its servant", () => {
+    const previousMembers = [
+      { memberId: "slot-1", servant: ARASH, isSupport: false },
+      { memberId: "slot-2", servant: MERLIN, isSupport: false },
+      { memberId: "slot-3", servant: ULTIMATE_ELISABETH, isSupport: false },
+    ];
+    const nextMembers = [
+      { memberId: "slot-1", servant: ARASH, isSupport: false },
+      { memberId: "slot-2", servant: MERLIN, isSupport: false },
+      { memberId: "slot-3", servant: CHLOE, isSupport: false },
+    ];
+    const action = {
+      type: "servant" as const,
+      id: "sa_replace",
+      servant: "servant_2",
+      servantMemberId: "slot-2",
+      servantId: MERLIN.id,
+      servantIsSupport: false,
+      skill: "skill_1",
+      target: "servant_3",
+      targetMemberId: "slot-3",
+      targetServantId: ULTIMATE_ELISABETH.id,
+      targetIsSupport: false,
+    };
+
+    const relocated = relocatePreparationActionMembers(action, previousMembers, nextMembers);
+
+    expect(relocated).toMatchObject({
+      servant: "servant_2",
+      servantId: MERLIN.id,
+      target: "servant_3",
+      targetMemberId: "slot-3",
+      targetServantId: CHLOE.id,
     });
   });
 

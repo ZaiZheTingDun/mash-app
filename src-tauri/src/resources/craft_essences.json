@@ -26417,7 +26417,7 @@
     "id": 9408800,
     "collectionNo": 2437,
     "name": "異星の神",
-    "name_cn": null,
+    "name_cn": "异星之神",
     "rarity": 5,
     "flag": "svtEquipManaExchange",
     "flags": [
@@ -26428,7 +26428,7 @@
     "id": 9408810,
     "collectionNo": 2438,
     "name": "ビヨンド・ザ・フラッド",
-    "name_cn": null,
+    "name_cn": "越过大洪水",
     "rarity": 5,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26439,7 +26439,7 @@
     "id": 9408820,
     "collectionNo": 2439,
     "name": "魔女の憩い場",
-    "name_cn": null,
+    "name_cn": "魔女憩息之地",
     "rarity": 4,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26450,7 +26450,7 @@
     "id": 9408830,
     "collectionNo": 2440,
     "name": "クイーンズ・ボヤージュ",
-    "name_cn": null,
+    "name_cn": "女王的航海",
     "rarity": 3,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26461,7 +26461,7 @@
     "id": 9310930,
     "collectionNo": 2441,
     "name": "地に満ちよ",
-    "name_cn": null,
+    "name_cn": "遍满大地吧",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -26472,7 +26472,7 @@
     "id": 9408840,
     "collectionNo": 2442,
     "name": "騎兵の頂に立つもの",
-    "name_cn": null,
+    "name_cn": "立于骑兵之巅者",
     "rarity": 5,
     "flag": "svtEquipManaExchange",
     "flags": [
@@ -29295,6 +29295,17 @@
     "flag": "svtEquipFriendShip",
     "flags": [
       "svtEquipFriendShip"
+    ]
+  },
+  {
+    "id": 9409490,
+    "collectionNo": 2701,
+    "name": "ガン・ディーラー",
+    "name_cn": null,
+    "rarity": 5,
+    "flag": "svtEquipManaExchange",
+    "flags": [
+      "svtEquipManaExchange"
     ]
   }
 ]

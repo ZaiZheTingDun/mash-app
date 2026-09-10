@@ -9547,7 +9547,7 @@
   {
     "id": 405700,
     "collectionNo": 452,
-    "nameCN": "ネモ／ノア",
+    "nameCN": "尼莫／诺亚",
     "nameJP": "ネモ／ノア",
     "classId": 4,
     "className": "rider",
@@ -9556,17 +9556,17 @@
     "noblePhantasms": [
       {
         "id": 405701,
-        "name": "ノアズ・アーク",
+        "name": "Noah's Ark",
         "nameJP": "ノアの方舟",
-        "nameCN": "ノアの方舟",
+        "nameCN": "诺亚方舟",
         "card": "1",
         "cardName": "arts"
       },
       {
         "id": 405701,
-        "name": "グレートラム・ノアズ・アーク",
+        "name": "Great Ram Noah's Ark",
         "nameJP": "再創世の試練",
-        "nameCN": "再創世の試練",
+        "nameCN": "再创世的试炼",
         "card": "1",
         "cardName": "arts"
       }

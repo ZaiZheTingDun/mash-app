@@ -238,28 +238,40 @@ export function resolvePreparationAction(action: PreparationAction, members: Par
   };
 }
 
-function withTargetRef<T extends { target: string | null }>(
-  action: T,
-  members: PartyMember[]
-): T & {
-  targetMemberId?: string | null;
-  targetServantId?: number | null;
-  targetIsSupport?: boolean;
+function relocateMemberRef(
+  previousMembers: PartyMember[],
+  nextMembers: PartyMember[],
+  fallbackValue: string | null | undefined,
+  memberId: string | null | undefined,
+  servantId: number | null | undefined,
+  isSupport: boolean | null | undefined
+): {
+  value: string | null;
+  memberId: string | null;
+  servantId: number | null;
+  isSupport: boolean;
 } {
-  const existing = action as T & {
-    targetMemberId?: string | null;
-    targetServantId?: number | null;
-    targetIsSupport?: boolean;
-  };
-  if (existing.targetMemberId != null || existing.targetServantId != null) {
-    return existing;
-  }
-  const ref = memberRefAt(members, action.target);
+  const fallbackRef = memberRefAt(previousMembers, fallbackValue);
+  const resolvedMemberId = memberId ?? fallbackRef.memberId;
+  const resolvedServantId = servantId ?? fallbackRef.servantId;
+  const resolvedIsSupport = isSupport ?? fallbackRef.isSupport;
+  const index = resolveMemberRefIndex(
+    nextMembers,
+    fallbackValue,
+    resolvedMemberId,
+    resolvedServantId,
+    resolvedIsSupport
+  );
+  const nextMember = index == null ? null : nextMembers[index] ?? null;
+
   return {
-    ...existing,
-    targetMemberId: ref.memberId,
-    targetServantId: ref.servantId,
-    targetIsSupport: ref.isSupport,
+    value: index == null ? fallbackValue ?? null : `servant_${index + 1}`,
+    // A stable slot/member can keep its memberId while its servant changes.
+    // Refresh all identity fields from the next lineup so logs and later
+    // runtime resolution do not retain the replaced servant's id.
+    memberId: nextMember?.memberId ?? resolvedMemberId,
+    servantId: nextMember?.servant?.id ?? resolvedServantId,
+    isSupport: nextMember?.isSupport ?? resolvedIsSupport,
   };
 }
 
@@ -269,74 +281,102 @@ export function relocatePreparationActionMembers(
   nextMembers: PartyMember[]
 ): PreparationAction {
   if (action.type === "servant") {
-    const sourceRef =
-      action.servantMemberId != null || action.servantId != null
-        ? {
-            servantMemberId: action.servantMemberId ?? null,
-            servantId: action.servantId ?? null,
-            servantIsSupport: action.servantIsSupport === true,
-          }
-        : (() => {
-            const ref = memberRefAt(previousMembers, action.servant);
-            return {
-              servantMemberId: ref.memberId,
-              servantId: ref.servantId,
-              servantIsSupport: ref.isSupport,
-            };
-          })();
-    return resolvePreparationAction(
-      {
-        ...withTargetRef(action, previousMembers),
-        ...sourceRef,
-      },
-      nextMembers
+    const sourceRef = relocateMemberRef(
+      previousMembers,
+      nextMembers,
+      action.servant,
+      action.servantMemberId,
+      action.servantId,
+      action.servantIsSupport
     );
+    const targetRef = relocateMemberRef(
+      previousMembers,
+      nextMembers,
+      action.target,
+      action.targetMemberId,
+      action.targetServantId,
+      action.targetIsSupport
+    );
+    return {
+      ...action,
+      servant: sourceRef.value,
+      servantMemberId: sourceRef.memberId,
+      servantId: sourceRef.servantId,
+      servantIsSupport: sourceRef.isSupport,
+      target: targetRef.value,
+      targetMemberId: targetRef.memberId,
+      targetServantId: targetRef.servantId,
+      targetIsSupport: targetRef.isSupport,
+    };
   }
 
   if (action.type === "equipment") {
-    const orderChange = action.orderChange
-      ? {
-          ...action.orderChange,
-          ...(() => {
-            if (
-              action.orderChange?.frontMemberId != null ||
-              action.orderChange?.frontServantId != null
-            ) {
-              return {};
-            }
-            const ref = memberRefAt(previousMembers, action.orderChange?.front);
-            return {
-              frontMemberId: ref.memberId,
-              frontServantId: ref.servantId,
-              frontIsSupport: ref.isSupport,
-            };
-          })(),
-          ...(() => {
-            if (
-              action.orderChange?.backMemberId != null ||
-              action.orderChange?.backServantId != null
-            ) {
-              return {};
-            }
-            const ref = memberRefAt(previousMembers, action.orderChange?.back);
-            return {
-              backMemberId: ref.memberId,
-              backServantId: ref.servantId,
-              backIsSupport: ref.isSupport,
-            };
-          })(),
-        }
-      : action.orderChange;
-    return resolvePreparationAction(
-      {
-        ...withTargetRef(action, previousMembers),
-        orderChange,
-      },
-      nextMembers
+    const targetRef = relocateMemberRef(
+      previousMembers,
+      nextMembers,
+      action.target,
+      action.targetMemberId,
+      action.targetServantId,
+      action.targetIsSupport
     );
+    const orderChange = action.orderChange
+      ? (() => {
+          const frontRef = relocateMemberRef(
+            previousMembers,
+            nextMembers,
+            action.orderChange?.front,
+            action.orderChange?.frontMemberId,
+            action.orderChange?.frontServantId,
+            action.orderChange?.frontIsSupport
+          );
+          const backRef = relocateMemberRef(
+            previousMembers,
+            nextMembers,
+            action.orderChange?.back,
+            action.orderChange?.backMemberId,
+            action.orderChange?.backServantId,
+            action.orderChange?.backIsSupport
+          );
+          return {
+            ...action.orderChange,
+            front: frontRef.value,
+            frontMemberId: frontRef.memberId,
+            frontServantId: frontRef.servantId,
+            frontIsSupport: frontRef.isSupport,
+            back: backRef.value,
+            backMemberId: backRef.memberId,
+            backServantId: backRef.servantId,
+            backIsSupport: backRef.isSupport,
+          };
+        })()
+      : action.orderChange;
+    return {
+      ...action,
+      target: targetRef.value,
+      targetMemberId: targetRef.memberId,
+      targetServantId: targetRef.servantId,
+      targetIsSupport: targetRef.isSupport,
+      orderChange,
+    };
   }
 
-  return resolvePreparationAction(withTargetRef(action, previousMembers), nextMembers);
+  if (action.type === "enemyTarget") return action;
+
+  const targetRef = relocateMemberRef(
+    previousMembers,
+    nextMembers,
+    action.target,
+    action.targetMemberId,
+    action.targetServantId,
+    action.targetIsSupport
+  );
+  return {
+    ...action,
+    target: targetRef.value,
+    targetMemberId: targetRef.memberId,
+    targetServantId: targetRef.servantId,
+    targetIsSupport: targetRef.isSupport,
+  };
 }
 
 export function relocateAdvancedBattleSceneMembers(
