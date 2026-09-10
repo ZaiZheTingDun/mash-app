@@ -29,6 +29,7 @@ describe("ProjectBar", () => {
   const definitions: GrandClassDefinition[] = [
     { id: "saber", label: "剑阶冠位", servantClass: "Saber", roles: [], cardPriorityEnabled: true, autoOrderChangeRoles: [], validationMessage: "" },
     { id: "lancer", label: "枪阶冠位", servantClass: "Lancer", roles: [], cardPriorityEnabled: false, autoOrderChangeRoles: [], validationMessage: "" },
+    { id: "rider", label: "骑阶冠位", servantClass: "Rider", roles: [], cardPriorityEnabled: false, autoOrderChangeRoles: [], validationMessage: "" },
     { id: "berserker", label: "狂阶冠位", servantClass: "Berserker", roles: [], cardPriorityEnabled: true, autoOrderChangeRoles: [], validationMessage: "" },
     { id: "extra1Fire", label: "Extra1 · 火", servantClass: "Extra1", selectionGroup: "extra1", selectionGroupLabel: "额外职阶 Ⅰ 冠位", selectionOptionLabel: "火", roles: [], cardPriorityEnabled: false, autoOrderChangeRoles: [], validationMessage: "" },
     { id: "extra1Earth", label: "Extra1 · 地", servantClass: "Extra1", selectionGroup: "extra1", selectionGroupLabel: "额外职阶 Ⅰ 冠位", selectionOptionLabel: "地", roles: [], cardPriorityEnabled: false, autoOrderChangeRoles: [], validationMessage: "" },
@@ -338,6 +339,22 @@ describe("ProjectBar", () => {
     await user.click(screen.getByRole("button", { name: "新建" }));
 
     expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "lancer", null);
+  });
+
+  it("creates a rider grand project from the create dialog", async () => {
+    const user = userEvent.setup();
+    const onCreateProject = vi.fn();
+    renderProjectBar({ onCreateProject });
+
+    await user.click(screen.getByRole("button", { name: /队伍操作/ }));
+    await user.click(await screen.findByRole("menuitem", { name: /新建队伍/ }));
+    await user.click(await screen.findByRole("combobox", { name: "队伍模式" }));
+    await user.click(await screen.findByRole("option", { name: "戴冠战模式" }));
+    await user.click(screen.getByRole("combobox", { name: "冠位职阶" }));
+    await user.click(await screen.findByRole("option", { name: "骑阶冠位" }));
+    await user.click(screen.getByRole("button", { name: "新建" }));
+
+    expect(onCreateProject).toHaveBeenCalledWith("队伍 2", true, "rider", null);
   });
 
   it("selects Extra group first and then its stage attribute", async () => {

@@ -645,6 +645,7 @@ impl Default for SupportGrandBondCeMode {
 pub enum GrandClass {
     Saber,
     Lancer,
+    Rider,
     Berserker,
     Extra1Fire,
     Extra1Earth,
@@ -653,9 +654,10 @@ pub enum GrandClass {
 }
 
 impl GrandClass {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Saber,
         Self::Lancer,
+        Self::Rider,
         Self::Berserker,
         Self::Extra1Fire,
         Self::Extra1Earth,

@@ -116,7 +116,7 @@ impl GrandClassStrategy for ExtraStrategy {
     }
 
     fn built_in_rules(&self, _strategy: &GrandCardStrategy) -> Vec<GrandCardRule> {
-        built_in_rules()
+        default_built_in_rules()
     }
 
     fn incomplete_candidate_priority(&self) -> Option<RuleCandidatePriority> {
@@ -176,7 +176,7 @@ fn single_np_rule(owner: RuleOwner, role: GrandRole) -> GrandCardRule {
     }
 }
 
-fn built_in_rules() -> Vec<GrandCardRule> {
+pub(super) fn default_built_in_rules() -> Vec<GrandCardRule> {
     vec![
         dual_np_rule(true),
         dual_np_rule(false),

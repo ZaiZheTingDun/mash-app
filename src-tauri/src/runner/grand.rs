@@ -8,15 +8,18 @@ use super::*;
 mod berserker;
 mod extra;
 mod lancer;
+mod rider;
 mod saber;
 
 use berserker::BerserkerStrategy;
 use extra::ExtraStrategy;
 use lancer::LancerStrategy;
+use rider::RiderStrategy;
 use saber::SaberStrategy;
 
 static SABER_STRATEGY: SaberStrategy = SaberStrategy;
 static LANCER_STRATEGY: LancerStrategy = LancerStrategy;
+static RIDER_STRATEGY: RiderStrategy = RiderStrategy;
 static BERSERKER_STRATEGY: BerserkerStrategy = BerserkerStrategy;
 static EXTRA1_FIRE_STRATEGY: ExtraStrategy = ExtraStrategy::fire();
 static EXTRA1_EARTH_STRATEGY: ExtraStrategy = ExtraStrategy::earth();
@@ -127,10 +130,11 @@ pub(crate) trait GrandClassStrategy: Sync {
     }
 }
 
-pub(crate) fn grand_class_strategies() -> [&'static dyn GrandClassStrategy; 7] {
+pub(crate) fn grand_class_strategies() -> [&'static dyn GrandClassStrategy; 8] {
     [
         &SABER_STRATEGY,
         &LANCER_STRATEGY,
+        &RIDER_STRATEGY,
         &BERSERKER_STRATEGY,
         &EXTRA1_FIRE_STRATEGY,
         &EXTRA1_EARTH_STRATEGY,
@@ -1531,12 +1535,31 @@ mod registry_tests {
         assert!(grand_strategy(GrandClass::Lancer)
             .validate_servants(&[servant(0, "single")])
             .is_err());
+        assert!(grand_strategy(GrandClass::Rider)
+            .validate_servants(&[servant(0, "main")])
+            .is_ok());
         assert!(grand_strategy(GrandClass::Extra1Earth)
             .validate_servants(&[servant(0, "aoe")])
             .is_ok());
         assert!(grand_strategy(GrandClass::Extra1Earth)
             .validate_servants(&[servant(0, "single")])
             .is_err());
+    }
+
+    #[test]
+    fn rider_definition_uses_extra_like_default_rules() {
+        let rider = grand_class_definitions()
+            .into_iter()
+            .find(|definition| definition.id == GrandClass::Rider)
+            .expect("Rider definition");
+        assert_eq!(rider.label, "骑阶冠位");
+        assert_eq!(rider.servant_class, "Rider");
+        assert!(rider.selection_group.is_none());
+        assert!(!rider.card_priority_enabled);
+        assert_eq!(rider.roles[0].role, "main");
+        assert!(rider.roles[0].required);
+        assert_eq!(rider.roles[1].role, "deputy");
+        assert!(!rider.roles[1].required);
     }
 
     #[test]

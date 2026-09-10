@@ -5091,6 +5091,18 @@ fn run_config_round_trips_grand_class() {
 }
 
 #[test]
+fn run_config_round_trips_rider_grand_class() {
+    let mut payload = minimal_run_config_json();
+    payload["grandClass"] = serde_json::json!("rider");
+
+    let cfg: RunConfig = serde_json::from_value(payload).unwrap();
+
+    assert_eq!(cfg.grand_class, GrandClass::Rider);
+    let serialized = serde_json::to_value(&cfg).unwrap();
+    assert_eq!(serialized["grandClass"], serde_json::json!("rider"));
+}
+
+#[test]
 fn run_config_round_trips_lancer_roles() {
     let mut payload = minimal_run_config_json();
     payload["grandClass"] = serde_json::json!("lancer");
