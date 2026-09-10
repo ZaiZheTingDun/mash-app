@@ -4967,6 +4967,36 @@ fn grand_role_for_candidate_distinguishes_duplicate_servant_id_by_support() {
 }
 
 #[test]
+fn grand_role_for_candidate_rejects_unconfigured_support_duplicate() {
+    let grands = vec![GrandServantRuntimeConfig {
+        slot_index: 0,
+        servant_id: 10,
+        is_support: false,
+        np_card: "buster".into(),
+        priority: "damage".into(),
+        role: "main".into(),
+    }];
+    let candidate = AdvancedPickCandidate {
+        pick: Pick::Np {
+            slot: 1,
+            point: Point::new(0.0, 0.0),
+            from_priority: "test".into(),
+        },
+        servant_index: Some(1),
+        servant_id: Some(10),
+        is_support: true,
+        color: None,
+        original_order: 1,
+        is_np: true,
+    };
+
+    assert_eq!(
+        grand_role_for_candidate(&candidate, &grands),
+        GrandRole::Other
+    );
+}
+
+#[test]
 fn grand_role_for_candidate_follows_servant_after_order_change() {
     let grands = vec![
         grand_config_at(1, 20, "buster", "damage"),

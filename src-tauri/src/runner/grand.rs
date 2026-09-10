@@ -207,29 +207,6 @@ pub(crate) enum GrandRole {
     Other,
 }
 
-pub(crate) fn grand_role_for_servant(
-    servant_id: Option<u32>,
-    grand_servants: &[GrandServantRuntimeConfig],
-) -> GrandRole {
-    match servant_id {
-        Some(id)
-            if grand_servants
-                .first()
-                .is_some_and(|config| config.servant_id == id) =>
-        {
-            GrandRole::Main
-        }
-        Some(id)
-            if grand_servants
-                .get(1)
-                .is_some_and(|config| config.servant_id == id) =>
-        {
-            GrandRole::Deputy
-        }
-        _ => GrandRole::Other,
-    }
-}
-
 pub(crate) fn grand_role_for_candidate(
     candidate: &AdvancedPickCandidate,
     grand_servants: &[GrandServantRuntimeConfig],
@@ -246,6 +223,13 @@ pub(crate) fn grand_role_for_candidate(
         };
     }
 
+    // A recognized servant id plus support flag is authoritative. Falling
+    // back to the id alone would make an owned and support copy of the same
+    // servant share one Grand role.
+    if candidate.servant_id.is_some() {
+        return GrandRole::Other;
+    }
+
     if let Some(index) = candidate.servant_index {
         if grand_servants
             .first()
@@ -260,7 +244,7 @@ pub(crate) fn grand_role_for_candidate(
             return GrandRole::Deputy;
         }
     }
-    grand_role_for_servant(candidate.servant_id, grand_servants)
+    GrandRole::Other
 }
 
 pub(crate) fn grand_config_for_role(
