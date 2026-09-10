@@ -67,6 +67,10 @@ const SKILL_WAIT_TIMEOUT: Duration = Duration::from_secs(15);
 /// HUD becomes visible again. Without this, the next skill tap can land
 /// while the swap animation is still unwinding.
 const ORDER_CHANGE_EXTRA_SETTLE: Duration = Duration::from_secs(1);
+/// Retry a failed Order Change once while the Mystic Code panel remains open.
+/// The retry is intentionally bounded so a broken touch stream cannot loop
+/// forever inside one battle action.
+const ORDER_CHANGE_RETRY_COUNT: u32 = 1;
 /// Maximum time to suppress duplicate Battle-screen attack taps after tapping
 /// Attack and before the Attack screen classifier catches up.
 const ATTACK_SCREEN_WAIT_TIMEOUT: Duration = Duration::from_secs(3);

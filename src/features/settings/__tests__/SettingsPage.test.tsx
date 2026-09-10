@@ -108,6 +108,7 @@ describe("SettingsDialog", () => {
           autoCaptureSkillUseProbe: false,
           autoCaptureUnrecognizedCriticalChance: false,
           simulateStuckAttackSelection: false,
+          simulateOrderChangeFailure: false,
         };
       }
       if (cmd === "set_noble_phantasm_detection_mode") {
@@ -267,6 +268,16 @@ describe("SettingsDialog", () => {
           simulateStuckAttackSelection: Boolean(argValue(args)),
         };
       }
+      if (cmd === "set_simulate_order_change_failure") {
+        return {
+          autoCaptureBattleResultLoot: false,
+          autoCaptureUnknownScreenTimeout: false,
+          autoCaptureSkillUseProbe: false,
+          autoCaptureUnrecognizedCriticalChance: false,
+          simulateStuckAttackSelection: false,
+          simulateOrderChangeFailure: Boolean(argValue(args)),
+        };
+      }
       return null;
     });
   });
@@ -409,6 +420,7 @@ describe("SettingsDialog", () => {
     expect(screen.getByText("保存技能确认 probe 截图")).toBeInTheDocument();
     expect(screen.getByText("暴击率无法识别时截图")).toBeInTheDocument();
     expect(screen.getByText("测试选卡卡住恢复")).toBeInTheDocument();
+    expect(screen.getByText("测试换人失败恢复")).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("get_debug_settings");
 
     await user.click(screen.getByRole("switch", { name: "自动截图战利品页面" }));
@@ -447,6 +459,14 @@ describe("SettingsDialog", () => {
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("set_simulate_stuck_attack_selection", {
+        value: true,
+      });
+    });
+
+    await user.click(screen.getByRole("switch", { name: "测试换人失败恢复" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_simulate_order_change_failure", {
         value: true,
       });
     });

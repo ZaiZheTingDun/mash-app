@@ -100,6 +100,10 @@ pub struct DebugSettings {
     pub auto_capture_unrecognized_critical_chance: bool,
     #[serde(default)]
     pub simulate_stuck_attack_selection: bool,
+    /// Force the first Order Change confirmation of a run to fail so the
+    /// close-dialog and direct Mystic Code skill retry path can be exercised.
+    #[serde(default)]
+    pub simulate_order_change_failure: bool,
 }
 
 impl Default for RecognitionSettings {
@@ -670,6 +674,14 @@ fn debug_settings_with_simulate_stuck_attack_selection(
     settings
 }
 
+fn debug_settings_with_simulate_order_change_failure(
+    mut settings: DebugSettings,
+    value: bool,
+) -> DebugSettings {
+    settings.simulate_order_change_failure = value;
+    settings
+}
+
 #[tauri::command]
 pub(crate) fn set_auto_capture_unknown_screen_timeout(
     app: tauri::AppHandle,
@@ -730,6 +742,21 @@ pub(crate) fn set_simulate_stuck_attack_selection(
     Ok(next)
 }
 
+#[tauri::command]
+pub(crate) fn set_simulate_order_change_failure(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<DebugSettings>>,
+    value: bool,
+) -> Result<DebugSettings, String> {
+    let next = debug_settings_for_current_build(debug_settings_with_simulate_order_change_failure(
+        *state.lock().unwrap(),
+        value,
+    ));
+    save_debug_settings(&app, &next)?;
+    *state.lock().unwrap() = next;
+    Ok(next)
+}
+
 fn take_simulate_stuck_attack_selection(
     state: &Mutex<DebugSettings>,
     persist: impl FnOnce(&DebugSettings) -> Result<(), String>,
@@ -753,6 +780,31 @@ pub(crate) fn consume_simulate_stuck_attack_selection(
         .try_state::<Mutex<DebugSettings>>()
         .ok_or_else(|| "调试设置尚未初始化".to_string())?;
     take_simulate_stuck_attack_selection(state.inner(), |next| save_debug_settings(app, next))
+}
+
+fn take_simulate_order_change_failure(
+    state: &Mutex<DebugSettings>,
+    persist: impl FnOnce(&DebugSettings) -> Result<(), String>,
+) -> Result<bool, String> {
+    let mut guard = state.lock().unwrap();
+    let current = debug_settings_for_current_build(*guard);
+    if !current.simulate_order_change_failure {
+        return Ok(false);
+    }
+
+    let next = debug_settings_with_simulate_order_change_failure(current, false);
+    persist(&next)?;
+    *guard = next;
+    Ok(true)
+}
+
+pub(crate) fn consume_simulate_order_change_failure(
+    app: &tauri::AppHandle,
+) -> Result<bool, String> {
+    let state = app
+        .try_state::<Mutex<DebugSettings>>()
+        .ok_or_else(|| "调试设置尚未初始化".to_string())?;
+    take_simulate_order_change_failure(state.inner(), |next| save_debug_settings(app, next))
 }
 
 #[tauri::command]
@@ -982,6 +1034,7 @@ mod tests {
         assert!(!settings.auto_capture_skill_use_probe);
         assert!(!settings.auto_capture_unrecognized_critical_chance);
         assert!(!settings.simulate_stuck_attack_selection);
+        assert!(!settings.simulate_order_change_failure);
     }
 
     #[test]
@@ -993,6 +1046,7 @@ mod tests {
         assert!(!settings.auto_capture_skill_use_probe);
         assert!(!settings.auto_capture_unrecognized_critical_chance);
         assert!(!settings.simulate_stuck_attack_selection);
+        assert!(!settings.simulate_order_change_failure);
     }
 
     #[test]
@@ -1003,6 +1057,7 @@ mod tests {
             "autoCaptureSkillUseProbe": true,
             "autoCaptureUnrecognizedCriticalChance": true,
             "simulateStuckAttackSelection": true,
+            "simulateOrderChangeFailure": true,
         }))
         .unwrap();
 
@@ -1011,6 +1066,7 @@ mod tests {
         assert!(settings.auto_capture_skill_use_probe);
         assert!(settings.auto_capture_unrecognized_critical_chance);
         assert!(settings.simulate_stuck_attack_selection);
+        assert!(settings.simulate_order_change_failure);
         assert_eq!(
             serde_json::to_value(settings).unwrap()["autoCaptureBattleResultLoot"],
             serde_json::json!(true)
@@ -1031,6 +1087,10 @@ mod tests {
             serde_json::to_value(settings).unwrap()["simulateStuckAttackSelection"],
             serde_json::json!(true)
         );
+        assert_eq!(
+            serde_json::to_value(settings).unwrap()["simulateOrderChangeFailure"],
+            serde_json::json!(true)
+        );
     }
 
     #[test]
@@ -1041,6 +1101,7 @@ mod tests {
             auto_capture_skill_use_probe: true,
             auto_capture_unrecognized_critical_chance: true,
             simulate_stuck_attack_selection: true,
+            simulate_order_change_failure: true,
         };
 
         let filtered = debug_settings_for_runtime(settings, false);
@@ -1050,6 +1111,7 @@ mod tests {
         assert!(!filtered.auto_capture_skill_use_probe);
         assert!(!filtered.auto_capture_unrecognized_critical_chance);
         assert!(!filtered.simulate_stuck_attack_selection);
+        assert!(!filtered.simulate_order_change_failure);
     }
 
     #[test]
@@ -1060,6 +1122,7 @@ mod tests {
             auto_capture_skill_use_probe: true,
             auto_capture_unrecognized_critical_chance: true,
             simulate_stuck_attack_selection: true,
+            simulate_order_change_failure: true,
         };
 
         let filtered = debug_settings_for_runtime(settings, true);
@@ -1069,6 +1132,7 @@ mod tests {
         assert!(filtered.auto_capture_skill_use_probe);
         assert!(filtered.auto_capture_unrecognized_critical_chance);
         assert!(filtered.simulate_stuck_attack_selection);
+        assert!(filtered.simulate_order_change_failure);
     }
 
     #[test]
@@ -1079,6 +1143,7 @@ mod tests {
             auto_capture_skill_use_probe: false,
             auto_capture_unrecognized_critical_chance: true,
             simulate_stuck_attack_selection: true,
+            simulate_order_change_failure: true,
         };
 
         let next = debug_settings_with_auto_capture_battle_result_loot(settings, true);
@@ -1088,6 +1153,7 @@ mod tests {
         assert!(!next.auto_capture_skill_use_probe);
         assert!(next.auto_capture_unrecognized_critical_chance);
         assert!(next.simulate_stuck_attack_selection);
+        assert!(next.simulate_order_change_failure);
     }
 
     #[test]
@@ -1098,6 +1164,7 @@ mod tests {
             auto_capture_skill_use_probe: false,
             auto_capture_unrecognized_critical_chance: true,
             simulate_stuck_attack_selection: true,
+            simulate_order_change_failure: true,
         };
 
         let next = debug_settings_with_auto_capture_unknown_screen_timeout(settings, true);
@@ -1107,6 +1174,7 @@ mod tests {
         assert!(!next.auto_capture_skill_use_probe);
         assert!(next.auto_capture_unrecognized_critical_chance);
         assert!(next.simulate_stuck_attack_selection);
+        assert!(next.simulate_order_change_failure);
     }
 
     #[test]
@@ -1117,6 +1185,7 @@ mod tests {
             auto_capture_skill_use_probe: false,
             auto_capture_unrecognized_critical_chance: true,
             simulate_stuck_attack_selection: true,
+            simulate_order_change_failure: true,
         };
 
         let next = debug_settings_with_auto_capture_skill_use_probe(settings, true);
@@ -1126,6 +1195,7 @@ mod tests {
         assert!(next.auto_capture_skill_use_probe);
         assert!(next.auto_capture_unrecognized_critical_chance);
         assert!(next.simulate_stuck_attack_selection);
+        assert!(next.simulate_order_change_failure);
     }
 
     #[test]
@@ -1136,6 +1206,7 @@ mod tests {
             auto_capture_skill_use_probe: true,
             auto_capture_unrecognized_critical_chance: false,
             simulate_stuck_attack_selection: true,
+            simulate_order_change_failure: true,
         };
 
         let next = debug_settings_with_auto_capture_unrecognized_critical_chance(settings, true);
@@ -1145,6 +1216,7 @@ mod tests {
         assert!(next.auto_capture_skill_use_probe);
         assert!(next.auto_capture_unrecognized_critical_chance);
         assert!(next.simulate_stuck_attack_selection);
+        assert!(next.simulate_order_change_failure);
     }
 
     #[test]
@@ -1174,6 +1246,35 @@ mod tests {
 
         assert_eq!(result.unwrap_err(), "write failed");
         assert!(state.lock().unwrap().simulate_stuck_attack_selection);
+    }
+
+    #[test]
+    fn debug_settings_order_change_test_is_consumed_once_after_persistence() {
+        let state = Mutex::new(DebugSettings {
+            simulate_order_change_failure: true,
+            ..DebugSettings::default()
+        });
+
+        let consumed = take_simulate_order_change_failure(&state, |_| Ok(())).unwrap();
+        let consumed_again = take_simulate_order_change_failure(&state, |_| Ok(())).unwrap();
+
+        assert!(consumed);
+        assert!(!consumed_again);
+        assert!(!state.lock().unwrap().simulate_order_change_failure);
+    }
+
+    #[test]
+    fn debug_settings_order_change_test_stays_enabled_when_persistence_fails() {
+        let state = Mutex::new(DebugSettings {
+            simulate_order_change_failure: true,
+            ..DebugSettings::default()
+        });
+
+        let result =
+            take_simulate_order_change_failure(&state, |_| Err("write failed".to_string()));
+
+        assert_eq!(result.unwrap_err(), "write failed");
+        assert!(state.lock().unwrap().simulate_order_change_failure);
     }
 
     #[test]

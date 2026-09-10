@@ -5893,6 +5893,13 @@ fn order_change_extra_settle_matches_expected_delay() {
 }
 
 #[test]
+fn order_change_retry_keeps_the_close_button_inside_the_dialog() {
+    assert_eq!(ORDER_CHANGE_RETRY_COUNT, 1);
+    approx(ORDER_CHANGE_CLOSE.x, 0.955);
+    approx(ORDER_CHANGE_CLOSE.y, 0.188);
+}
+
+#[test]
 fn command_spell_index_returns_none_for_unknown_or_missing() {
     // Unknown / missing spell names cause the runner's loop to
     // `continue` instead of tapping a phantom row; mirrors how

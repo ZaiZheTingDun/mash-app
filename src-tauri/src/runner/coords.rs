@@ -198,6 +198,11 @@ pub(crate) const ORDER_CHANGE_SLOTS: [Point; 6] = [
 
 pub(crate) const ORDER_CHANGE_CONFIRM: Point = Point::new(0.500, 0.872);
 
+/// Close button on the in-battle Order Change dialog. This is the center of
+/// the CV search region in `servers/shared/cv.json` and is used to recover
+/// from a failed swap without closing the Mystic Code skill panel underneath.
+pub(crate) const ORDER_CHANGE_CLOSE: Point = Point::new(0.955, 0.188);
+
 /// Settle time between taps in the Command Spell dialog stack. Each tap
 /// pops or pushes a full-screen modal (open dialog → confirmation →
 /// target picker), so we wait noticeably longer than `ACTION_DELAY`

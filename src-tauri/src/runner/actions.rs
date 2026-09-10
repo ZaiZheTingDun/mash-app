@@ -4,6 +4,7 @@
 //! change execution, and target-position resolution for battle actions.
 
 use super::*;
+use crate::commands::settings::consume_simulate_order_change_failure;
 
 const SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE: &str =
     "技能点击未观察到状态变化（请检查该技能目标选择是否正确，无目标请选择无目标）";
@@ -205,24 +206,55 @@ impl Runner {
                         },
                     );
                     if let Some(change) = order_change {
-                        self.emit_skill_tap_debug("点击御主技能", pos);
-                        if !self.tap_at("Battle", pos) {
-                            return self.fail_skill_execution(&action_label, "点击御主技能失败");
-                        }
-                        thread::sleep(SKILL_TAP_DELAY);
-                        let Some(outcome) = self.handle_skill_post_tap(
-                            &action_label,
-                            SkillPostTapExpectation::OrderChange,
-                        ) else {
-                            return self.fail_skill_execution(
+                        let mut order_change_completed = false;
+                        let mut order_change_already_used = false;
+                        for attempt in 0..=ORDER_CHANGE_RETRY_COUNT {
+                            if attempt > 0 {
+                                self.emit_warn("Battle", "Order Change 执行失败，关闭换人框后重试");
+                            }
+
+                            // The Mystic Code panel stays open while the
+                            // Order Change dialog is closed for recovery, so
+                            // retries tap the skill directly instead of
+                            // opening the panel a second time.
+                            self.emit_skill_tap_debug("点击御主技能", pos);
+                            if !self.tap_at("Battle", pos) {
+                                return self
+                                    .fail_skill_execution(&action_label, "点击御主技能失败");
+                            }
+                            thread::sleep(SKILL_TAP_DELAY);
+                            let Some(outcome) = self.handle_skill_post_tap(
                                 &action_label,
-                                SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE,
-                            );
-                        };
-                        if matches!(outcome, SkillPostTapOutcome::AlreadyUsed) {
+                                SkillPostTapExpectation::OrderChange,
+                            ) else {
+                                let closed = self.close_order_change_dialog_until_hidden();
+                                if attempt < ORDER_CHANGE_RETRY_COUNT && closed {
+                                    continue;
+                                }
+                                return self.fail_skill_execution(
+                                    &action_label,
+                                    SKILL_ACTIVATION_NOT_OBSERVED_MESSAGE,
+                                );
+                            };
+                            if matches!(outcome, SkillPostTapOutcome::AlreadyUsed) {
+                                order_change_already_used = true;
+                                break;
+                            }
+
+                            if self.execute_order_change(change) {
+                                order_change_completed = true;
+                                break;
+                            }
+                            let closed = self.close_order_change_dialog_until_hidden();
+                            if attempt < ORDER_CHANGE_RETRY_COUNT && closed {
+                                continue;
+                            }
+                            break;
+                        }
+                        if order_change_already_used {
                             continue;
                         }
-                        if !self.execute_order_change(change) {
+                        if !order_change_completed {
                             return self
                                 .fail_skill_execution(&action_label, "Order Change 执行失败");
                         }
@@ -638,6 +670,20 @@ impl Runner {
         }
         thread::sleep(ACTION_DELAY);
 
+        match consume_simulate_order_change_failure(&self.app_handle) {
+            Ok(true) => {
+                self.emit_warn("Battle", "调试测试：已故意跳过第一次换人确认，触发换人重试");
+                return false;
+            }
+            Ok(false) => {}
+            Err(err) => {
+                self.emit_warn(
+                    "Battle",
+                    &format!("读取换人失败测试开关失败，本次正常确认: {err}"),
+                );
+            }
+        }
+
         self.emit("Battle", "Order Change 点击进行更替");
         if !self.tap_at("Battle", ORDER_CHANGE_CONFIRM) {
             return false;
@@ -653,6 +699,49 @@ impl Runner {
             return false;
         }
         true
+    }
+
+    /// Close a failed Order Change dialog while preserving the Mystic Code
+    /// panel underneath it. A single close tap can be lost while the dialog
+    /// is settling, so keep tapping the close button until CV observes the
+    /// dialog as hidden or the normal skill timeout expires.
+    fn close_order_change_dialog_until_hidden(&mut self) -> bool {
+        let start = Instant::now();
+        loop {
+            if self.is_cancelled() {
+                return false;
+            }
+
+            let visible = match self.sidecar().find_element_by_name(
+                None,
+                BATTLE_SCREEN,
+                ORDER_CHANGE_CLOSE_BUTTON_ELEMENT,
+            ) {
+                Ok(matched) => Some(matched.found),
+                Err(err) => {
+                    eprintln!(
+                        "[runner] find_element_by_name({BATTLE_SCREEN}.{ORDER_CHANGE_CLOSE_BUTTON_ELEMENT}) failed: {err}"
+                    );
+                    None
+                }
+            };
+            match visible {
+                Some(false) => return true,
+                Some(true) => {
+                    self.emit_skill_tap_debug("点击换人框关闭按钮", ORDER_CHANGE_CLOSE);
+                    if !self.tap_at("Battle", ORDER_CHANGE_CLOSE) {
+                        return false;
+                    }
+                }
+                None => {}
+            }
+
+            if start.elapsed() >= SKILL_WAIT_TIMEOUT {
+                self.emit_warn("Battle", "等待换人框关闭超时");
+                return false;
+            }
+            thread::sleep(SKILL_POLL_INTERVAL);
+        }
     }
 
     /// Tap the in-game "skip animation" button so the cut-in / buff

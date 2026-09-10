@@ -4,4 +4,5 @@ export interface DebugSettings {
   autoCaptureSkillUseProbe: boolean;
   autoCaptureUnrecognizedCriticalChance: boolean;
   simulateStuckAttackSelection: boolean;
+  simulateOrderChangeFailure: boolean;
 }
