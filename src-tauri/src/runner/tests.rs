@@ -5025,6 +5025,27 @@ fn grand_role_for_candidate_follows_servant_after_order_change() {
 }
 
 #[test]
+fn grand_config_for_candidate_prefers_identity_after_order_change() {
+    let grands = vec![
+        grand_config_at(0, 10, "buster", "damage"),
+        grand_config_at(3, 40, "arts", "damage"),
+    ];
+
+    let config =
+        grand_config_for_candidate(Some(0), Some(40), false, &grands).expect("moved deputy config");
+
+    assert_eq!(config.servant_id, 40);
+    assert_eq!(grand_np_color(config), Some("a"));
+}
+
+#[test]
+fn grand_config_for_candidate_does_not_inherit_occupied_original_slot() {
+    let grands = vec![grand_config_at(0, 10, "buster", "damage")];
+
+    assert!(grand_config_for_candidate(Some(0), Some(30), false, &grands).is_none());
+}
+
+#[test]
 fn custom_grand_rule_with_member_metadata_follows_servant_after_order_change() {
     let rule = custom_rule_config_to_rule(&GrandCardRuleConfig {
         id: "custom_1".into(),

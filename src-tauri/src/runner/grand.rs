@@ -265,6 +265,24 @@ pub(crate) fn grand_np_color(config: &GrandServantRuntimeConfig) -> Option<&'sta
     servant_np_card_code(config.servant_id)
 }
 
+pub(crate) fn grand_config_for_candidate(
+    servant_index: Option<usize>,
+    servant_id: Option<u32>,
+    is_support: bool,
+    grand_servants: &[GrandServantRuntimeConfig],
+) -> Option<&GrandServantRuntimeConfig> {
+    if let Some(servant_id) = servant_id {
+        return grand_servants
+            .iter()
+            .find(|config| config.servant_id == servant_id && config.is_support == is_support);
+    }
+    servant_index.and_then(|index| {
+        grand_servants
+            .iter()
+            .find(|config| config.slot_index == index)
+    })
+}
+
 pub(crate) fn main_output_index(scene: &AdvancedBattleScene) -> Option<usize> {
     scene
         .main_output
@@ -1364,18 +1382,16 @@ pub(crate) fn choose_advanced_auto_picks_with_crit(
     for np in nps.iter().filter(|np| np.ready) {
         let servant_index = Some(np.slot as usize).filter(|index| *index < 3);
         let servant_id = servant_index.and_then(|index| party_ids.get(index).copied().flatten());
-        let color = if let Some(config) = servant_index
-            .and_then(|index| {
-                grand_servants
-                    .iter()
-                    .find(|config| config.slot_index == index)
-            })
-            .or_else(|| {
-                servant_id
-                    .and_then(|id| grand_servants.iter().find(|config| config.servant_id == id))
-            }) {
+        let color = if let Some(config) = grand_config_for_candidate(
+            servant_index,
+            servant_id,
+            servant_index
+                .and_then(|index| party_supports.get(index).copied())
+                .unwrap_or(false),
+            grand_servants,
+        ) {
             grand_np_color(config).map(str::to_string)
-        } else if servant_index == main_index {
+        } else if grand_servants.is_empty() && servant_index == main_index {
             main_np_color.map(str::to_string)
         } else {
             servant_id
