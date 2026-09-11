@@ -9,7 +9,6 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   autoCaptureSkillUseProbe: false,
   autoCaptureUnrecognizedCriticalChance: false,
   simulateStuckAttackSelection: false,
-  simulateOrderChangeFailure: false,
 };
 
 function normalizeDebugSettings(settings: Partial<DebugSettings>): DebugSettings {
@@ -20,7 +19,6 @@ function normalizeDebugSettings(settings: Partial<DebugSettings>): DebugSettings
     autoCaptureUnrecognizedCriticalChance:
       settings.autoCaptureUnrecognizedCriticalChance === true,
     simulateStuckAttackSelection: settings.simulateStuckAttackSelection === true,
-    simulateOrderChangeFailure: settings.simulateOrderChangeFailure === true,
   };
 }
 
@@ -136,23 +134,6 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
     }
   }, []);
 
-  const saveSimulateOrderChangeFailure = useCallback(async (value: boolean) => {
-    setSaving(true);
-    setError(null);
-    setSavedMessage(null);
-    try {
-      const next = normalizeDebugSettings(
-        await invoke<DebugSettings>("set_simulate_order_change_failure", { value })
-      );
-      setSettings(next);
-      setSavedMessage("已保存");
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setSaving(false);
-    }
-  }, []);
-
   return (
     <Box className="settings-section-panel">
       <Flex direction="column" gap="4" className="recognition-setting-block">
@@ -243,24 +224,6 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
             onCheckedChange={(value) => void saveSimulateStuckAttackSelection(value)}
             disabled={loading || saving}
             aria-label="测试选卡卡住恢复"
-          />
-        </Flex>
-
-        <Flex align="start" justify="between" gap="4" wrap="wrap" className="basic-setting-row">
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">
-              测试换人失败恢复
-            </Text>
-            <Text size="1" color="gray">
-              开启后下一次换人会故意跳过第一次确认，验证关闭换人框并直接重试御主礼装技能；触发后自动关闭。
-            </Text>
-          </Flex>
-
-          <Switch
-            checked={settings.simulateOrderChangeFailure}
-            onCheckedChange={(value) => void saveSimulateOrderChangeFailure(value)}
-            disabled={loading || saving}
-            aria-label="测试换人失败恢复"
           />
         </Flex>
 

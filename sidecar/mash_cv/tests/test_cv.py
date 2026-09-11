@@ -1482,6 +1482,75 @@ class TestReadRegionLuma:
         assert used_result["meanLuma"] < 210.0
 
 
+@pytest.mark.parametrize("width", (1280, 1920, 2560))
+def test_order_change_selection_probe_uses_glow_points_without_templates(width):
+    fixture = (
+        Path(__file__).resolve().parent
+        / "test_data"
+        / "screenshots"
+        / "order_change_confirm_jp.png"
+    )
+    img = cv2.imread(str(fixture))
+    assert img is not None
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, round(img.shape[0] * width / img.shape[1])))
+
+    slot_xs = (0.107, 0.264, 0.420, 0.576, 0.732, 0.888)
+    expected = (False, True, False, True, False, False)
+    for slot_x, selected in zip(slot_xs, expected):
+        result = mash_cv._probe_order_change_selection(img, slot_x)
+        assert result["ok"] is True
+        assert result["selected"] is selected, (slot_x, result)
+        assert len(result["sampleLumas"]) == 1
+        assert result["brightCount"] == (1 if selected else 0)
+
+
+@pytest.mark.parametrize("width", (1280, 1920, 2560))
+def test_order_change_selection_probe_supports_cn_marker_layout(width):
+    fixture = (
+        Path(__file__).resolve().parent
+        / "test_data"
+        / "screenshots"
+        / "order_change_confirm_cn.png"
+    )
+    img = cv2.imread(str(fixture))
+    assert img is not None
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, round(img.shape[0] * width / img.shape[1])))
+
+    slot_xs = (0.107, 0.264, 0.420, 0.576, 0.732, 0.888)
+    expected = (False, True, False, True, False, False)
+    for slot_x, selected in zip(slot_xs, expected):
+        result = mash_cv._probe_order_change_selection(img, slot_x, server="CN")
+        assert result["ok"] is True
+        assert result["selected"] is selected, (slot_x, result)
+        assert len(result["sampleLumas"]) == 1
+        assert result["brightCount"] == (1 if selected else 0)
+
+
+@pytest.mark.parametrize("width", (1280, 1920, 2560))
+def test_order_change_selection_probe_matches_current_jp_capture(width):
+    fixture = (
+        Path(__file__).resolve().parent
+        / "test_data"
+        / "screenshots"
+        / "order_change_confirm_jp_current.png"
+    )
+    img = cv2.imread(str(fixture))
+    assert img is not None
+    if width != img.shape[1]:
+        img = cv2.resize(img, (width, round(img.shape[0] * width / img.shape[1])))
+
+    slot_xs = (0.107, 0.264, 0.420, 0.576, 0.732, 0.888)
+    expected = (True, False, False, True, False, False)
+    for slot_x, selected in zip(slot_xs, expected):
+        result = mash_cv._probe_order_change_selection(img, slot_x, server="JP")
+        assert result["ok"] is True
+        assert result["selected"] is selected, (slot_x, result)
+        assert len(result["sampleLumas"]) == 1
+        assert result["brightCount"] == (1 if selected else 0)
+
+
 class TestProbeSkillUseDialog:
     def test_missing_template_key_returns_error(self):
         img = _make_bgr_image(100, 100)

@@ -101,7 +101,6 @@ let autoCaptureUnknownScreenTimeout = false;
 let autoCaptureSkillUseProbe = false;
 let autoCaptureUnrecognizedCriticalChance = false;
 let simulateStuckAttackSelection = false;
-let simulateOrderChangeFailure = false;
 let nextProjectNumber = 2;
 let nextProjectGroupNumber = 1;
 let activeProjectId: string | null = "dev-project-1";
@@ -246,7 +245,6 @@ function debugSettings() {
     autoCaptureSkillUseProbe,
     autoCaptureUnrecognizedCriticalChance,
     simulateStuckAttackSelection,
-    simulateOrderChangeFailure,
   };
 }
 
@@ -621,9 +619,6 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
       return debugSettings() as T;
     case "set_simulate_stuck_attack_selection":
       simulateStuckAttackSelection = Boolean(args.value);
-      return debugSettings() as T;
-    case "set_simulate_order_change_failure":
-      simulateOrderChangeFailure = Boolean(args.value);
       return debugSettings() as T;
     case "pick_asset_bundle":
     case "pick_runtime_bundle":

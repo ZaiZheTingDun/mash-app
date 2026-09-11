@@ -29,6 +29,9 @@ stream frame is used):
                                                     ← {"found":true,"x":0.45,"y":0.32,"score":0.87,"region":{...}}
 → {"cmd":"find_element_by_name","screen":"Battle","element":"attackButton"}
                                                     ← {"found":true,"x":0.82,"y":0.88,"score":0.89,"region":{...}}
+→ {"cmd":"probe_order_change_selection","slotX":0.264,"slotY":0.25556,"server":"JP"}
+                                                    ← {"ok":true,"selected":true,"brightCount":1,
+                                                       "sampleLumas":[...]}
 → {"cmd":"read_battle_scene","region":{...},"debug":false}
                                                     ← {"scene":1,"total":3}  (both null if anchor misses;
                                                        when "debug":true the response also carries a
@@ -113,6 +116,13 @@ _servant_catalog_cache: Optional[list[dict]] = None
 stream: Optional["ScrcpyStream"] = None
 
 DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
+
+# The in-battle Order Change screen draws a bright SELECT marker at these
+# server-independent detection centers in the 2560x1440 reference frame.
+ORDER_CHANGE_SELECTION_POINT_Y = 368 / 1440
+ORDER_CHANGE_SELECTION_SAMPLE_W = 10 / 2560
+ORDER_CHANGE_SELECTION_SAMPLE_H = 10 / 1440
+ORDER_CHANGE_SELECTION_GLOW_LUMA = 90.0
 STATIC_TEMPLATE_REFERENCE_WIDTH = 2560
 BATTLE_SPEED_TEMPLATE_REFERENCE_WIDTH = 1920
 BATTLE_SPEED_TEMPLATE_KEYS = {
@@ -600,6 +610,44 @@ def _read_region_luma(img: np.ndarray, region: dict) -> dict:
             "w": rw / w,
             "h": rh / h,
         },
+    }
+
+
+def _probe_order_change_selection(
+    img: np.ndarray,
+    slot_x: float,
+    slot_y: float = ORDER_CHANGE_SELECTION_POINT_Y,
+    server: str | None = None,
+) -> dict:
+    """Check the exact server-independent SELECT marker center."""
+    sample = _read_region_luma(
+        img,
+        {
+            "x": float(slot_x) - ORDER_CHANGE_SELECTION_SAMPLE_W / 2,
+            "y": float(slot_y) - ORDER_CHANGE_SELECTION_SAMPLE_H / 2,
+            "w": ORDER_CHANGE_SELECTION_SAMPLE_W,
+            "h": ORDER_CHANGE_SELECTION_SAMPLE_H,
+        },
+    )
+    if not sample.get("ok"):
+        return {
+            "ok": False,
+            "selected": False,
+            "brightCount": 0,
+            "sampleLumas": [],
+            "error": sample.get("error", "empty_region"),
+        }
+    samples = [float(sample["meanLuma"])]
+
+    bright_count = sum(
+        luma >= ORDER_CHANGE_SELECTION_GLOW_LUMA for luma in samples
+    )
+    selected = bright_count >= 1
+    return {
+        "ok": True,
+        "selected": selected,
+        "brightCount": bright_count,
+        "sampleLumas": samples,
     }
 
 
@@ -6463,6 +6511,29 @@ def _main_repl() -> None:
                 )
             else:
                 _reply(req_id, _read_region_luma(img, cmd.get("region", DEFAULT_REGION)))
+        elif action == "probe_order_change_selection":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(
+                    req_id,
+                    {
+                        "ok": False,
+                        "selected": False,
+                        "brightCount": 0,
+                        "sampleLumas": [],
+                        "error": err,
+                    },
+                )
+            else:
+                _reply(
+                    req_id,
+                    _probe_order_change_selection(
+                        img,
+                        float(cmd["slotX"]),
+                        float(cmd.get("slotY", ORDER_CHANGE_SELECTION_POINT_Y)),
+                        cmd.get("server"),
+                    ),
+                )
         elif action == "probe_skill_use_dialog":
             img, err = _load_frame(cmd)
             if img is None:

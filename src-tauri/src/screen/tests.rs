@@ -53,6 +53,21 @@ fn add_image_path_preserves_probe_skill_use_dialog_request_shape() {
 }
 
 #[test]
+fn order_change_selection_probe_deserializes_camel_case_fields() {
+    let probe: OrderChangeSelectionProbe = serde_json::from_value(serde_json::json!({
+        "ok": true,
+        "selected": true,
+        "brightCount": 1,
+        "sampleLumas": [250.6],
+    }))
+    .unwrap();
+
+    assert_eq!(probe.bright_count, 1);
+    assert_eq!(probe.sample_lumas.len(), 1);
+    assert!(probe.selected);
+}
+
+#[test]
 fn add_image_path_does_nothing_when_request_is_not_an_object() {
     // The early-return on `as_object_mut` keeps the helper safe to
     // call against arbitrary `serde_json::Value` payloads.

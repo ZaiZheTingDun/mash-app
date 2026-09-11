@@ -6114,10 +6114,12 @@ fn order_change_extra_settle_matches_expected_delay() {
 }
 
 #[test]
-fn order_change_retry_keeps_the_close_button_inside_the_dialog() {
-    assert_eq!(ORDER_CHANGE_RETRY_COUNT, 1);
-    approx(ORDER_CHANGE_CLOSE.x, 0.955);
-    approx(ORDER_CHANGE_CLOSE.y, 0.188);
+fn order_change_selection_confirmation_is_bounded() {
+    assert_eq!(
+        ORDER_CHANGE_SELECTION_CONFIRM_DELAY,
+        Duration::from_millis(500)
+    );
+    assert_eq!(ORDER_CHANGE_SELECTION_TIMEOUT, Duration::from_secs(3));
 }
 
 #[test]
@@ -6236,12 +6238,18 @@ fn order_change_slot_position_requires_one_front_and_one_back_range() {
         (front.x, front.y),
         (ORDER_CHANGE_SLOTS[0].x, ORDER_CHANGE_SLOTS[0].y)
     );
+    let front_probe = order_change_selection_position(Some("servant_1"), 0..3).unwrap();
+    approx(front_probe.x, 274.0 / 2560.0);
+    approx(front_probe.y, 368.0 / 1440.0);
 
     let back = order_change_slot_position(Some("servant_4"), 3..6).unwrap();
     assert_eq!(
         (back.x, back.y),
         (ORDER_CHANGE_SLOTS[3].x, ORDER_CHANGE_SLOTS[3].y)
     );
+    let back_probe = order_change_selection_position(Some("servant_4"), 3..6).unwrap();
+    approx(back_probe.x, 1474.0 / 2560.0);
+    approx(back_probe.y, 368.0 / 1440.0);
 
     assert!(order_change_slot_position(Some("servant_4"), 0..3).is_none());
     assert!(order_change_slot_position(Some("servant_2"), 3..6).is_none());

@@ -185,8 +185,8 @@ pub(crate) const COMMAND_SPELL_OPTIONS: [Point; 2] =
 /// always confirms.
 pub(crate) const COMMAND_SPELL_CONFIRM: Point = Point::new(0.660, 0.600);
 
-/// In-battle Order Change servant slots, left to right on the change screen.
-/// Front-line slots are indices 0-2, back-line slots are 3-5.
+/// In-battle Order Change servant card tap positions, left to right on the
+/// change screen. Front-line slots are indices 0-2, back-line slots are 3-5.
 pub(crate) const ORDER_CHANGE_SLOTS: [Point; 6] = [
     Point::new(0.107, 0.486),
     Point::new(0.264, 0.486),
@@ -196,12 +196,19 @@ pub(crate) const ORDER_CHANGE_SLOTS: [Point; 6] = [
     Point::new(0.888, 0.486),
 ];
 
-pub(crate) const ORDER_CHANGE_CONFIRM: Point = Point::new(0.500, 0.872);
+/// In-battle Order Change SELECT-marker detection centers from the user's
+/// 2560x1440 reference capture. These are detection coordinates, not tap
+/// positions.
+pub(crate) const ORDER_CHANGE_SELECTION_POINTS: [Point; 6] = [
+    Point::new(274.0 / 2560.0, 368.0 / 1440.0),
+    Point::new(674.0 / 2560.0, 368.0 / 1440.0),
+    Point::new(1074.0 / 2560.0, 368.0 / 1440.0),
+    Point::new(1474.0 / 2560.0, 368.0 / 1440.0),
+    Point::new(1874.0 / 2560.0, 368.0 / 1440.0),
+    Point::new(2274.0 / 2560.0, 368.0 / 1440.0),
+];
 
-/// Close button on the in-battle Order Change dialog. This is the center of
-/// the CV search region in `servers/shared/cv.json` and is used to recover
-/// from a failed swap without closing the Mystic Code skill panel underneath.
-pub(crate) const ORDER_CHANGE_CLOSE: Point = Point::new(0.955, 0.188);
+pub(crate) const ORDER_CHANGE_CONFIRM: Point = Point::new(0.500, 0.872);
 
 /// Settle time between taps in the Command Spell dialog stack. Each tap
 /// pops or pushes a full-screen modal (open dialog → confirmation →

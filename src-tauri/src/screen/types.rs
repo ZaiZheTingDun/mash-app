@@ -145,6 +145,14 @@ pub struct RegionColorStats {
     pub mean_value: f64,
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrderChangeSelectionProbe {
+    pub selected: bool,
+    pub bright_count: u8,
+    pub sample_lumas: Vec<f64>,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillUseDialogProbe {

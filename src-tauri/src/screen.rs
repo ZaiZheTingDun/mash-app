@@ -556,6 +556,34 @@ impl SidecarClient {
             .ok_or_else(|| "read_region_luma response missing meanLuma".to_string())
     }
 
+    /// Check the bright selection marker above one in-battle Order Change slot.
+    /// The sidecar samples all marker points from one frame without template
+    /// matching, so a successful probe means it is safe to leave the slot alone.
+    pub fn probe_order_change_selection(
+        &mut self,
+        image_path: Option<&Path>,
+        slot_x: f64,
+        slot_y: f64,
+        server: crate::Server,
+    ) -> Result<OrderChangeSelectionProbe, String> {
+        let mut req = serde_json::json!({
+            "cmd": "probe_order_change_selection",
+            "slotX": slot_x,
+            "slotY": slot_y,
+            "server": server.to_string(),
+        });
+        Self::add_image_path(&mut req, image_path);
+        let resp = self.send_recv(&req)?;
+        if let Some(err) = resp.get("error").and_then(|value| value.as_str()) {
+            return Err(err.to_string());
+        }
+        if !resp["ok"].as_bool().unwrap_or(false) {
+            return Err("probe_order_change_selection failed".into());
+        }
+        serde_json::from_value(resp)
+            .map_err(|err| format!("invalid order-change selection probe: {err}"))
+    }
+
     /// Return mean grayscale luma and HSV saturation/value for a normalized region.
     #[allow(dead_code)] // Retained as a generic sidecar primitive for other automation flows.
     pub fn read_region_color(
