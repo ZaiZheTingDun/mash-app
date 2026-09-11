@@ -681,10 +681,12 @@ impl Runner {
             thread::sleep(ORDER_CHANGE_SELECTION_CONFIRM_DELAY);
 
             let server = self.server;
-            match self
-                .sidecar()
-                .probe_order_change_selection(None, probe_pos.x, probe_pos.y, server)
-            {
+            match self.sidecar().probe_order_change_selection(
+                None,
+                probe_pos.x,
+                probe_pos.y,
+                server,
+            ) {
                 Ok(probe) => {
                     self.emit_local_debug(
                         "Battle",
