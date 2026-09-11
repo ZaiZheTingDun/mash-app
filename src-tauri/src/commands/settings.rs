@@ -85,6 +85,8 @@ pub struct RecognitionSettings {
     pub support_full_list_ocr_fallback: bool,
     #[serde(default = "default_unknown_screen_timeout_count")]
     pub unknown_screen_timeout_count: u32,
+    #[serde(default)]
+    pub auto_friend_request: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
@@ -117,6 +119,7 @@ impl Default for RecognitionSettings {
             enable_extra_class_filter: true,
             support_full_list_ocr_fallback: false,
             unknown_screen_timeout_count: UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
+            auto_friend_request: false,
         }
     }
 }
@@ -360,6 +363,7 @@ pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSe
                     "识别超时次数",
                 )
                 .ok()?,
+                auto_friend_request: settings.auto_friend_request,
             })
         })
         .unwrap_or_default()
@@ -599,6 +603,19 @@ pub(crate) fn set_support_full_list_ocr_fallback(
 ) -> Result<RecognitionSettings, String> {
     let mut next = *state.lock().unwrap();
     next.support_full_list_ocr_fallback = value;
+    *state.lock().unwrap() = next;
+    save_recognition_settings(&app, &next)?;
+    Ok(next)
+}
+
+#[tauri::command]
+pub(crate) fn set_auto_friend_request(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<RecognitionSettings>>,
+    value: bool,
+) -> Result<RecognitionSettings, String> {
+    let mut next = *state.lock().unwrap();
+    next.auto_friend_request = value;
     *state.lock().unwrap() = next;
     save_recognition_settings(&app, &next)?;
     Ok(next)

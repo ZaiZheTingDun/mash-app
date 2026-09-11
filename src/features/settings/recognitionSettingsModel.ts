@@ -78,6 +78,7 @@ export const THRESHOLD_CONFIGS: ThresholdConfig[] = [
 ];
 
 export const DEFAULT_RECOGNITION_SETTINGS: RecognitionSettings = {
+  autoFriendRequest: false,
   noblePhantasmDetectionMode: "card",
   supportCeThreshold: SUPPORT_THRESHOLD_DEFAULT,
   supportCeFullGateThreshold: SUPPORT_FULL_GATE_THRESHOLD_DEFAULT,
@@ -114,6 +115,7 @@ export function normalizeRecognitionSettings(
     );
   };
   return {
+    autoFriendRequest: settings.autoFriendRequest === true,
     noblePhantasmDetectionMode:
       settings.noblePhantasmDetectionMode === "gaugeBeforeAttack"
         ? "gaugeBeforeAttack"

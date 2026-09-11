@@ -6,6 +6,7 @@ interface FeatureToggleEnv {
   VITE_FEATURE_CV_DEBUG?: string;
   VITE_FEATURE_GRAND_CARD_PRIORITY?: string;
   VITE_FEATURE_TURN_ATTACK_MODES?: string;
+  VITE_FEATURE_AUTO_FRIEND_REQUEST?: string;
 }
 
 export interface FeatureToggles {
@@ -16,6 +17,7 @@ export interface FeatureToggles {
   grandCardPriority: boolean;
   turnAttackModes: boolean;
   settingsDebug: boolean;
+  autoFriendRequest: boolean;
 }
 
 function envFlag(value: string | undefined, fallback: boolean): boolean {
@@ -42,6 +44,7 @@ export function createFeatureToggles(env: FeatureToggleEnv): FeatureToggles {
     grandCardPriority: envFlag(env.VITE_FEATURE_GRAND_CARD_PRIORITY, env.DEV),
     turnAttackModes: envFlag(env.VITE_FEATURE_TURN_ATTACK_MODES, true),
     settingsDebug: env.DEV,
+    autoFriendRequest: envFlag(env.VITE_FEATURE_AUTO_FRIEND_REQUEST, false),
   };
 }
 

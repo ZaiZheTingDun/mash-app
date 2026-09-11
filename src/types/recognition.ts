@@ -1,6 +1,7 @@
 export type NoblePhantasmDetectionMode = "card" | "gauge" | "gaugeBeforeAttack";
 
 export interface RecognitionSettings {
+  autoFriendRequest: boolean;
   noblePhantasmDetectionMode: NoblePhantasmDetectionMode;
   supportCeThreshold: number;
   supportCeFullGateThreshold: number;

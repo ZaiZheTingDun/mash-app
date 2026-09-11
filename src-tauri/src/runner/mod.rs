@@ -199,6 +199,7 @@ pub struct Runner {
     /// Keep its settlement log to one entry per result sequence.
     battle_result_bond_handled: bool,
     battle_result_loot_handled: bool,
+    battle_result_friend_request_handled: bool,
     battle_result_continue_handled: bool,
     /// Pluggable touch-injection backend (see `touch::TouchBackend`).
     /// Currently always `adb-input`; the trait indirection is kept so
@@ -275,6 +276,7 @@ impl Runner {
             five_star_ce_drop_count: 0,
             battle_result_bond_handled: false,
             battle_result_loot_handled: false,
+            battle_result_friend_request_handled: false,
             battle_result_continue_handled: false,
             mystic_code_warning_emitted: false,
         }

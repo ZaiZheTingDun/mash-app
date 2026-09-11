@@ -19,6 +19,7 @@ import {
   type MysticCodeGender,
 } from "../../types/appUiSettings";
 import type { NoblePhantasmDetectionMode, RecognitionSettings } from "../../types/recognition";
+import { featureToggles } from "../../featureToggles";
 import {
   normalizeRecognitionSettings,
   UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
@@ -48,6 +49,7 @@ export function SettingsBasicPage({
   const [stopOnBondLevelUp, setStopOnBondLevelUp] = useState(false);
   const [stopOnBondMaxLevel, setStopOnBondMaxLevel] = useState(false);
   const [autoCaptureBondLevelUp, setAutoCaptureBondLevelUp] = useState(false);
+  const [autoFriendRequest, setAutoFriendRequest] = useState(false);
   const [verifySkillActivation, setVerifySkillActivation] = useState(false);
   const [enableExtraClassFilter, setEnableExtraClassFilter] = useState(true);
   const [supportFullListOcrFallback, setSupportFullListOcrFallback] = useState(false);
@@ -67,6 +69,7 @@ export function SettingsBasicPage({
     setStopOnBondLevelUp(settings.stopOnBondLevelUp);
     setStopOnBondMaxLevel(settings.stopOnBondMaxLevel);
     setAutoCaptureBondLevelUp(settings.autoCaptureBondLevelUp);
+    setAutoFriendRequest(settings.autoFriendRequest);
     setVerifySkillActivation(settings.verifySkillActivation);
     setEnableExtraClassFilter(settings.enableExtraClassFilter);
     setSupportFullListOcrFallback(settings.supportFullListOcrFallback);
@@ -343,10 +346,25 @@ export function SettingsBasicPage({
     }
   }, [applySettings]);
 
+  const saveAutoFriendRequest = useCallback(async (value: boolean) => {
+    setSaving(true);
+    setError(null);
+    try {
+      applySettings(normalizeRecognitionSettings(
+        await invoke<RecognitionSettings>("set_auto_friend_request", { value })
+      ));
+      setSavedMessage("已保存");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, [applySettings]);
+
   return (
     <Box className="settings-section-panel">
       <Flex direction="column" gap="4" className="recognition-setting-block">
-        <Flex
+        {featureToggles.autoFriendRequest && <Flex
           align="start"
           justify="between"
           gap="4"
@@ -372,7 +390,7 @@ export function SettingsBasicPage({
               <Select.Item value="male">男</Select.Item>
             </Select.Content>
           </Select.Root>
-        </Flex>
+        </Flex>}
 
         <Flex
           align="start"
@@ -657,6 +675,27 @@ export function SettingsBasicPage({
               aria-label="识别超时限制"
             />
           </Flex>
+        </Flex>
+
+        <Flex
+          align="start"
+          justify="between"
+          gap="4"
+          wrap="wrap"
+          className="basic-setting-row"
+        >
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">自动申请好友</Text>
+            <Text size="1" color="gray">
+              结算页的申请好友按钮处于激活状态时自动申请好友
+            </Text>
+          </Flex>
+          <Switch
+            checked={autoFriendRequest}
+            onCheckedChange={(value) => void saveAutoFriendRequest(value)}
+            disabled={saving}
+            aria-label="自动申请好友"
+          />
         </Flex>
 
         <Flex align="center" gap="2">

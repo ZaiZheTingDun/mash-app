@@ -1363,6 +1363,7 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
         enable_extra_class_filter: false,
         support_full_list_ocr_fallback: true,
         unknown_screen_timeout_count: 120,
+        auto_friend_request: false,
     };
 
     let effective = commands::automation::effective_recognition_settings(global, None);
@@ -1399,6 +1400,7 @@ fn effective_recognition_settings_use_project_override() {
         enable_extra_class_filter: false,
         support_full_list_ocr_fallback: true,
         unknown_screen_timeout_count: 120,
+        auto_friend_request: false,
     };
     let project = ProjectRecognitionSettings {
         support_ce_threshold: Some(0.66),

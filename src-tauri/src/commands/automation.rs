@@ -472,6 +472,7 @@ pub(crate) fn effective_recognition_settings(
             .unwrap_or(global.enable_extra_class_filter),
         support_full_list_ocr_fallback: global.support_full_list_ocr_fallback,
         unknown_screen_timeout_count: global.unknown_screen_timeout_count,
+        auto_friend_request: global.auto_friend_request,
     }
 }
 
@@ -566,6 +567,7 @@ pub(crate) fn start_automation(
     config.unknown_screen_timeout_count = recognition_settings.unknown_screen_timeout_count;
     let debug_settings = *debug_settings_state.lock().unwrap();
     config.auto_capture_battle_result_loot = debug_settings.auto_capture_battle_result_loot;
+    config.auto_friend_request = recognition_settings.auto_friend_request;
     config.auto_capture_unknown_screen_timeout = debug_settings.auto_capture_unknown_screen_timeout;
     config.auto_capture_skill_use_probe = debug_settings.auto_capture_skill_use_probe;
     config.auto_capture_unrecognized_critical_chance =

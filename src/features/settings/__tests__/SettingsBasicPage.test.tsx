@@ -9,6 +9,7 @@ import type { RecognitionSettings } from "../../../types/recognition";
 vi.mock("../../../tauri", () => ({ invoke: vi.fn() }));
 
 const SETTINGS: RecognitionSettings = {
+  autoFriendRequest: false,
   noblePhantasmDetectionMode: "card",
   supportCeThreshold: 0.7,
   supportCeFullGateThreshold: 0.6,

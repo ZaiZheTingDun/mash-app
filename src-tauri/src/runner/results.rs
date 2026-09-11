@@ -22,6 +22,15 @@ pub(crate) const BATTLE_RESULT_LOOT_NEXT: Point = Point::new(0.874, 0.890);
 /// "Skip / Close" on the optional friend-request prompt that appears
 /// after using a non-friend support.
 pub(crate) const BATTLE_RESULT_FRIEND_SKIP: Point = Point::new(0.254, 0.854);
+pub(crate) const BATTLE_RESULT_FRIEND_REQUEST: Point = Point::new(0.746, 0.854);
+const BATTLE_RESULT_FRIEND_REQUEST_TEMPLATE: &str =
+    "battle-result/text_battle_result_friend_request";
+const BATTLE_RESULT_FRIEND_REQUEST_REGION: NormRect = NormRect {
+    x: 0.62,
+    y: 0.806,
+    w: 0.157,
+    h: 0.095,
+};
 /// "Continue / Repeat" button on the final continue page — taps this when
 /// `RunConfig::repeat_mission` is true.
 pub(crate) const BATTLE_RESULT_CONTINUE_REPEAT: Point = Point::new(0.657, 0.809);
@@ -490,8 +499,30 @@ impl Runner {
     }
 
     pub(crate) fn handle_battle_result_friend_request(&mut self) {
-        self.emit("BattleResultFriendRequest", "跳过好友申请");
-        if self.tap_at("BattleResultFriendRequest", BATTLE_RESULT_FRIEND_SKIP) {
+        if self.battle_result_friend_request_handled {
+            thread::sleep(BATTLE_RESULT_TAP_INTERVAL);
+            return;
+        }
+        self.battle_result_friend_request_handled = true;
+        let should_request = self.config.auto_friend_request
+            && self
+                .sidecar()
+                .find_element(
+                    None,
+                    BATTLE_RESULT_FRIEND_REQUEST_TEMPLATE,
+                    BATTLE_RESULT_FRIEND_REQUEST_REGION,
+                    0.85,
+                )
+                .ok()
+                .flatten()
+                .is_some();
+        let (message, point) = if should_request {
+            ("自动申请好友", BATTLE_RESULT_FRIEND_REQUEST)
+        } else {
+            ("跳过好友申请", BATTLE_RESULT_FRIEND_SKIP)
+        };
+        self.emit("BattleResultFriendRequest", message);
+        if self.tap_at("BattleResultFriendRequest", point) {
             thread::sleep(ACTION_DELAY);
         }
     }
