@@ -6416,6 +6416,80 @@ def _get_frame(cmd: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _handle_find_region_command(cmd: dict) -> dict:
+    """Handle the configurable debug/template matcher outside the REPL loop."""
+    img, err = _load_frame(cmd)
+    if img is None:
+        return {"found": False, "error": err}
+
+    use_alpha_mask = cmd.get("alphaMask") is True
+    raw_tmpl = cv2.imread(
+        cmd["templatePath"],
+        cv2.IMREAD_UNCHANGED if use_alpha_mask else cv2.IMREAD_GRAYSCALE,
+    )
+    if raw_tmpl is None:
+        return {"found": False, "error": "failed to read template"}
+
+    alpha_mask = None
+    if use_alpha_mask and len(raw_tmpl.shape) == 3 and raw_tmpl.shape[2] == 4:
+        alpha_mask = raw_tmpl[:, :, 3]
+        alpha_background = cmd.get("alphaBackground")
+        if isinstance(alpha_background, (int, float)):
+            alpha = alpha_mask.astype(np.float32)[:, :, None] / 255.0
+            background = float(np.clip(alpha_background, 0, 255))
+            tmpl = cv2.cvtColor(
+                (
+                    raw_tmpl[:, :, :3].astype(np.float32) * alpha
+                    + background * (1.0 - alpha)
+                ).astype(np.uint8),
+                cv2.COLOR_BGR2GRAY,
+            )
+            alpha_mask = None
+        else:
+            tmpl = cv2.cvtColor(raw_tmpl, cv2.COLOR_BGRA2GRAY)
+    elif len(raw_tmpl.shape) == 3:
+        tmpl = cv2.cvtColor(raw_tmpl, cv2.COLOR_BGR2GRAY)
+    else:
+        tmpl = raw_tmpl
+
+    tmpl = _resize_template(tmpl, cmd.get("templateSize"))
+    if alpha_mask is not None and cmd.get("templateSize"):
+        alpha_mask = _resize_template(alpha_mask, cmd.get("templateSize"))
+    tmpl = _crop_template(tmpl, cmd.get("templateCrop"))
+    if alpha_mask is not None:
+        alpha_mask = _crop_template(alpha_mask, cmd.get("templateCrop"))
+    if tmpl.size == 0:
+        return {"found": False, "error": "empty template crop"}
+
+    raw_scales = cmd.get("scales")
+    scales = (
+        tuple(
+            float(scale)
+            for scale in raw_scales
+            if isinstance(scale, (int, float)) and float(scale) > 0
+        )
+        if isinstance(raw_scales, list)
+        else ()
+    )
+    if not scales:
+        scales = (1.0,)
+    matcher = (
+        _match_template_region_multiscale
+        if isinstance(raw_scales, list)
+        else _match_template_region
+    )
+    kwargs = {"scales": scales} if matcher is _match_template_region_multiscale else {}
+    if matcher is _match_template_region_multiscale and alpha_mask is not None:
+        kwargs["mask"] = alpha_mask
+    return matcher(
+        img,
+        tmpl,
+        cmd.get("region", DEFAULT_REGION),
+        cmd.get("threshold", 0.8),
+        **kwargs,
+    )
+
+
 def _main_repl() -> None:
     for line in sys.stdin:
         line = line.strip()
@@ -6688,78 +6762,7 @@ def _main_repl() -> None:
                 ),
             )
         elif action == "find_region":
-            img, err = _load_frame(cmd)
-            if img is None:
-                _reply(req_id, {"found": False, "error": err})
-                continue
-            use_alpha_mask = cmd.get("alphaMask") is True
-            raw_tmpl = cv2.imread(
-                cmd["templatePath"],
-                cv2.IMREAD_UNCHANGED if use_alpha_mask else cv2.IMREAD_GRAYSCALE,
-            )
-            if raw_tmpl is None:
-                _reply(req_id, {"found": False, "error": "failed to read template"})
-                continue
-            alpha_mask = None
-            if use_alpha_mask and len(raw_tmpl.shape) == 3 and raw_tmpl.shape[2] == 4:
-                alpha_mask = raw_tmpl[:, :, 3]
-                alpha_background = cmd.get("alphaBackground")
-                if isinstance(alpha_background, (int, float)):
-                    alpha = alpha_mask.astype(np.float32)[:, :, None] / 255.0
-                    background = float(np.clip(alpha_background, 0, 255))
-                    tmpl = cv2.cvtColor(
-                        (
-                            raw_tmpl[:, :, :3].astype(np.float32) * alpha
-                            + background * (1.0 - alpha)
-                        ).astype(np.uint8),
-                        cv2.COLOR_BGR2GRAY,
-                    )
-                    alpha_mask = None
-                else:
-                    tmpl = cv2.cvtColor(raw_tmpl, cv2.COLOR_BGRA2GRAY)
-            elif len(raw_tmpl.shape) == 3:
-                tmpl = cv2.cvtColor(raw_tmpl, cv2.COLOR_BGR2GRAY)
-            else:
-                tmpl = raw_tmpl
-            tmpl = _resize_template(tmpl, cmd.get("templateSize"))
-            if alpha_mask is not None and cmd.get("templateSize"):
-                alpha_mask = _resize_template(alpha_mask, cmd.get("templateSize"))
-            tmpl = _crop_template(tmpl, cmd.get("templateCrop"))
-            if alpha_mask is not None:
-                alpha_mask = _crop_template(alpha_mask, cmd.get("templateCrop"))
-            if tmpl.size == 0:
-                _reply(req_id, {"found": False, "error": "empty template crop"})
-                continue
-            raw_scales = cmd.get("scales")
-            scales = (
-                tuple(
-                    float(scale)
-                    for scale in raw_scales
-                    if isinstance(scale, (int, float)) and float(scale) > 0
-                )
-                if isinstance(raw_scales, list)
-                else ()
-            )
-            if not scales:
-                scales = (1.0,)
-            matcher = (
-                _match_template_region_multiscale
-                if isinstance(raw_scales, list)
-                else _match_template_region
-            )
-            kwargs = {"scales": scales} if matcher is _match_template_region_multiscale else {}
-            if matcher is _match_template_region_multiscale and alpha_mask is not None:
-                kwargs["mask"] = alpha_mask
-            _reply(
-                req_id,
-                matcher(
-                    img,
-                    tmpl,
-                    cmd.get("region", DEFAULT_REGION),
-                    cmd.get("threshold", 0.8),
-                    **kwargs,
-                ),
-            )
+            _reply(req_id, _handle_find_region_command(cmd))
         elif action in (
             "find_item_grid",
             "find_enhancement_servant_grid",

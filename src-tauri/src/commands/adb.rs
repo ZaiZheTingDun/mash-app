@@ -4,10 +4,10 @@
 //! and raw screenshot export. It stays separate from the lower-level adb module,
 //! which contains the reusable device connection and input primitives.
 
+use crate::adb;
 use crate::commands::debug::DebugSidecar;
 use crate::commands::settings::{save_adb_device_settings, AdbDeviceSettings};
 use crate::paths::app_data_dir;
-use crate::{adb, AdbResetResult, AdbResetStatusEvent, AdbResetStep, AdbStatus};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -16,6 +16,39 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AdbStatus {
+    pub(crate) connected: bool,
+    pub(crate) device_name: Option<String>,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AdbResetStep {
+    pub(crate) command: String,
+    pub(crate) success: bool,
+    pub(crate) status: Option<i32>,
+    pub(crate) stdout: String,
+    pub(crate) stderr: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AdbResetResult {
+    pub(crate) ok: bool,
+    pub(crate) steps: Vec<AdbResetStep>,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AdbResetStatusEvent {
+    pub(crate) message: String,
+    pub(crate) step: Option<AdbResetStep>,
+    pub(crate) done: bool,
+    pub(crate) ok: Option<bool>,
+}
 
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]

@@ -6,16 +6,11 @@
 //! server resources.
 
 use crate::adb::BLUESTACKS_SERIAL;
+use crate::automation_coordinator::AutomationCoordinator;
 use crate::commands::debug;
-use crate::craft_essence_enhancement_runner::{
-    CraftEssenceEnhancementRunnerHandle, CraftEssenceEnhancementRunnerState,
-};
-use crate::enhancement_runner::{EnhancementRunnerHandle, EnhancementRunnerState};
-use crate::friend_point_summon_runner::{
-    FriendPointSummonRunnerHandle, FriendPointSummonRunnerState,
-};
 use crate::paths::{migrate_legacy_app_data, StartupMigrationStatus};
-use crate::runner::{bond_level_up_screenshot_dir, RunnerHandle, RunnerState};
+use crate::runner::bond_level_up_screenshot_dir;
+use crate::storage::{read_json_or_default, write_json_atomic};
 use crate::Server;
 use std::fs;
 use std::path::PathBuf;
@@ -169,6 +164,46 @@ fn update_unknown_screen_timeout_count(
     Ok(next)
 }
 
+/// Serialize a read-modify-write sequence under one lock and publish the new
+/// in-memory value only after durable persistence succeeds.
+fn update_persisted_state<T: Copy>(
+    state: &Mutex<T>,
+    update: impl FnOnce(&mut T),
+    persist: impl FnOnce(&T) -> Result<(), String>,
+) -> Result<T, String> {
+    let mut guard = state.lock().unwrap();
+    let mut next = *guard;
+    update(&mut next);
+    persist(&next)?;
+    *guard = next;
+    Ok(next)
+}
+
+fn update_recognition_settings(
+    app: &tauri::AppHandle,
+    state: &Mutex<RecognitionSettings>,
+    update: impl FnOnce(&mut RecognitionSettings),
+) -> Result<RecognitionSettings, String> {
+    update_persisted_state(state, update, |settings| {
+        save_recognition_settings(app, settings)
+    })
+}
+
+fn update_debug_settings(
+    app: &tauri::AppHandle,
+    state: &Mutex<DebugSettings>,
+    update: impl FnOnce(&mut DebugSettings),
+) -> Result<DebugSettings, String> {
+    update_persisted_state(
+        state,
+        |settings| {
+            update(settings);
+            *settings = debug_settings_for_current_build(*settings);
+        },
+        |settings| save_debug_settings(app, settings),
+    )
+}
+
 fn normalize_threshold(value: f64, label: &str, min: f64, max: f64) -> Result<f64, String> {
     if !value.is_finite() {
         return Err(format!("{label}必须是有效数字"));
@@ -257,13 +292,12 @@ fn adb_settings_path(app: &tauri::AppHandle) -> PathBuf {
     dir.join("adb_settings.json")
 }
 
-pub(crate) fn load_adb_device_settings(app: &tauri::AppHandle) -> AdbDeviceSettings {
+pub(crate) fn load_adb_device_settings(
+    app: &tauri::AppHandle,
+) -> Result<AdbDeviceSettings, String> {
     let path = adb_settings_path(app);
-    fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .map(|v| adb_device_settings_from_value(&v))
-        .unwrap_or_default()
+    let value: serde_json::Value = read_json_or_default(&path, "ADB 设置")?;
+    Ok(adb_device_settings_from_value(&value))
 }
 
 pub(crate) fn save_adb_device_settings(
@@ -271,11 +305,7 @@ pub(crate) fn save_adb_device_settings(
     settings: &AdbDeviceSettings,
 ) -> Result<(), String> {
     let path = adb_settings_path(app);
-    fs::write(
-        &path,
-        serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())
+    write_json_atomic(&path, settings, "ADB 设置")
 }
 
 fn server_settings_path(app: &tauri::AppHandle) -> PathBuf {
@@ -313,69 +343,56 @@ fn debug_settings_path(app: &tauri::AppHandle) -> PathBuf {
     dir.join("debug_settings.json")
 }
 
-pub(crate) fn load_server_setting(app: &tauri::AppHandle) -> Server {
+pub(crate) fn load_server_setting(app: &tauri::AppHandle) -> Result<Server, String> {
     let path = server_settings_path(app);
-    fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .and_then(|v| {
-            v.get("server")
-                .and_then(|s| s.as_str())
-                .map(|s| s.to_string())
-        })
-        .and_then(|s| Server::from_str(&s).ok())
-        .unwrap_or_default()
+    let value: serde_json::Value = read_json_or_default(&path, "服务器设置")?;
+    if value.is_null() {
+        return Ok(Server::default());
+    }
+    let server = value
+        .get("server")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| format!("服务器设置缺少 server 字段（{}）", path.display()))?;
+    Server::from_str(server)
 }
 
-pub(crate) fn load_recognition_settings(app: &tauri::AppHandle) -> RecognitionSettings {
+pub(crate) fn load_recognition_settings(
+    app: &tauri::AppHandle,
+) -> Result<RecognitionSettings, String> {
     let path = recognition_settings_path(app);
-    fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<RecognitionSettings>(&s).ok())
-        .and_then(|settings| {
-            Some(RecognitionSettings {
-                noble_phantasm_detection_mode: settings.noble_phantasm_detection_mode,
-                support_ce_threshold: normalize_support_ce_threshold(settings.support_ce_threshold)
-                    .ok()?,
-                support_ce_full_gate_threshold: normalize_support_ce_full_gate_threshold(
-                    settings.support_ce_full_gate_threshold,
-                )
-                .ok()?,
-                support_mlb_icon_threshold: normalize_support_icon_threshold(
-                    settings.support_mlb_icon_threshold,
-                    "满破图标阈值",
-                )
-                .ok()?,
-                support_bond_icon_threshold: normalize_support_icon_threshold(
-                    settings.support_bond_icon_threshold,
-                    "牵绊图标阈值",
-                )
-                .ok()?,
-                stop_on_bond_level_up: settings.stop_on_bond_level_up
-                    && !settings.stop_on_bond_max_level,
-                stop_on_bond_max_level: settings.stop_on_bond_max_level,
-                auto_capture_bond_level_up: settings.auto_capture_bond_level_up,
-                verify_skill_activation: settings.verify_skill_activation,
-                enable_extra_class_filter: settings.enable_extra_class_filter,
-                support_full_list_ocr_fallback: settings.support_full_list_ocr_fallback,
-                unknown_screen_timeout_count: normalize_unknown_screen_timeout_count(
-                    settings.unknown_screen_timeout_count,
-                    "识别超时次数",
-                )
-                .ok()?,
-                auto_friend_request: settings.auto_friend_request,
-            })
-        })
-        .unwrap_or_default()
+    let settings: RecognitionSettings = read_json_or_default(&path, "识别设置")?;
+    Ok(RecognitionSettings {
+        noble_phantasm_detection_mode: settings.noble_phantasm_detection_mode,
+        support_ce_threshold: normalize_support_ce_threshold(settings.support_ce_threshold)?,
+        support_ce_full_gate_threshold: normalize_support_ce_full_gate_threshold(
+            settings.support_ce_full_gate_threshold,
+        )?,
+        support_mlb_icon_threshold: normalize_support_icon_threshold(
+            settings.support_mlb_icon_threshold,
+            "满破图标阈值",
+        )?,
+        support_bond_icon_threshold: normalize_support_icon_threshold(
+            settings.support_bond_icon_threshold,
+            "牵绊图标阈值",
+        )?,
+        stop_on_bond_level_up: settings.stop_on_bond_level_up && !settings.stop_on_bond_max_level,
+        stop_on_bond_max_level: settings.stop_on_bond_max_level,
+        auto_capture_bond_level_up: settings.auto_capture_bond_level_up,
+        verify_skill_activation: settings.verify_skill_activation,
+        enable_extra_class_filter: settings.enable_extra_class_filter,
+        support_full_list_ocr_fallback: settings.support_full_list_ocr_fallback,
+        unknown_screen_timeout_count: normalize_unknown_screen_timeout_count(
+            settings.unknown_screen_timeout_count,
+            "识别超时次数",
+        )?,
+        auto_friend_request: settings.auto_friend_request,
+    })
 }
 
-pub(crate) fn load_debug_settings(app: &tauri::AppHandle) -> DebugSettings {
+pub(crate) fn load_debug_settings(app: &tauri::AppHandle) -> Result<DebugSettings, String> {
     let path = debug_settings_path(app);
-    let settings = fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<DebugSettings>(&s).ok())
-        .unwrap_or_default();
-    debug_settings_for_current_build(settings)
+    let settings = read_json_or_default(&path, "调试设置")?;
+    Ok(debug_settings_for_current_build(settings))
 }
 
 fn save_recognition_settings(
@@ -383,20 +400,12 @@ fn save_recognition_settings(
     settings: &RecognitionSettings,
 ) -> Result<(), String> {
     let path = recognition_settings_path(app);
-    fs::write(
-        &path,
-        serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())
+    write_json_atomic(&path, settings, "识别设置")
 }
 
 fn save_debug_settings(app: &tauri::AppHandle, settings: &DebugSettings) -> Result<(), String> {
     let path = debug_settings_path(app);
-    fs::write(
-        &path,
-        serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())
+    write_json_atomic(&path, settings, "调试设置")
 }
 
 fn debug_settings_for_current_build(settings: DebugSettings) -> DebugSettings {
@@ -414,11 +423,12 @@ fn debug_settings_for_runtime(
     }
 }
 
-fn load_last_update_check_date(app: &tauri::AppHandle) -> Option<String> {
+fn load_last_update_check_date(app: &tauri::AppHandle) -> Result<Option<String>, String> {
     let path = update_check_settings_path(app);
-    fs::read_to_string(path)
-        .ok()
-        .and_then(|text| serde_json::from_str::<String>(&text).ok())
+    if !path.exists() {
+        return Ok(None);
+    }
+    read_json_or_default(&path, "更新检查设置").map(Some)
 }
 
 #[tauri::command]
@@ -458,11 +468,9 @@ pub(crate) fn set_noble_phantasm_detection_mode(
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
     value: NoblePhantasmDetectionMode,
 ) -> Result<RecognitionSettings, String> {
-    let mut next = *state.lock().unwrap();
-    next.noble_phantasm_detection_mode = value;
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        settings.noble_phantasm_detection_mode = value;
+    })
 }
 
 #[tauri::command]
@@ -472,11 +480,9 @@ pub(crate) fn set_support_ce_threshold(
     value: f64,
 ) -> Result<RecognitionSettings, String> {
     let value = normalize_support_ce_threshold(value)?;
-    let mut next = *state.lock().unwrap();
-    next.support_ce_threshold = value;
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        settings.support_ce_threshold = value;
+    })
 }
 
 #[tauri::command]
@@ -486,11 +492,9 @@ pub(crate) fn set_support_ce_full_gate_threshold(
     value: f64,
 ) -> Result<RecognitionSettings, String> {
     let value = normalize_support_ce_full_gate_threshold(value)?;
-    let mut next = *state.lock().unwrap();
-    next.support_ce_full_gate_threshold = value;
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        settings.support_ce_full_gate_threshold = value;
+    })
 }
 
 #[tauri::command]
@@ -500,11 +504,9 @@ pub(crate) fn set_support_mlb_icon_threshold(
     value: f64,
 ) -> Result<RecognitionSettings, String> {
     let value = normalize_support_icon_threshold(value, "满破图标阈值")?;
-    let mut next = *state.lock().unwrap();
-    next.support_mlb_icon_threshold = value;
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        settings.support_mlb_icon_threshold = value;
+    })
 }
 
 #[tauri::command]
@@ -514,11 +516,9 @@ pub(crate) fn set_support_bond_icon_threshold(
     value: f64,
 ) -> Result<RecognitionSettings, String> {
     let value = normalize_support_icon_threshold(value, "牵绊图标阈值")?;
-    let mut next = *state.lock().unwrap();
-    next.support_bond_icon_threshold = value;
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        settings.support_bond_icon_threshold = value;
+    })
 }
 
 #[tauri::command]
@@ -527,11 +527,9 @@ pub(crate) fn set_stop_on_bond_level_up(
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
     value: bool,
 ) -> Result<RecognitionSettings, String> {
-    let mut next = *state.lock().unwrap();
-    apply_stop_on_bond_level_up(&mut next, value);
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        apply_stop_on_bond_level_up(settings, value);
+    })
 }
 
 #[tauri::command]
@@ -540,11 +538,9 @@ pub(crate) fn set_stop_on_bond_max_level(
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
     value: bool,
 ) -> Result<RecognitionSettings, String> {
-    let mut next = *state.lock().unwrap();
-    apply_stop_on_bond_max_level(&mut next, value);
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        apply_stop_on_bond_max_level(settings, value);
+    })
 }
 
 #[tauri::command]
@@ -553,11 +549,9 @@ pub(crate) fn set_auto_capture_bond_level_up(
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
     value: bool,
 ) -> Result<RecognitionSettings, String> {
-    let mut next = *state.lock().unwrap();
-    next.auto_capture_bond_level_up = value;
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        settings.auto_capture_bond_level_up = value;
+    })
 }
 
 #[tauri::command]
@@ -575,11 +569,9 @@ pub(crate) fn set_verify_skill_activation(
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
     value: bool,
 ) -> Result<RecognitionSettings, String> {
-    let mut next = *state.lock().unwrap();
-    next.verify_skill_activation = value;
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        settings.verify_skill_activation = value;
+    })
 }
 
 #[tauri::command]
@@ -588,11 +580,9 @@ pub(crate) fn set_enable_extra_class_filter(
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
     value: bool,
 ) -> Result<RecognitionSettings, String> {
-    let mut next = *state.lock().unwrap();
-    next.enable_extra_class_filter = value;
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        settings.enable_extra_class_filter = value;
+    })
 }
 
 #[tauri::command]
@@ -601,11 +591,9 @@ pub(crate) fn set_support_full_list_ocr_fallback(
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
     value: bool,
 ) -> Result<RecognitionSettings, String> {
-    let mut next = *state.lock().unwrap();
-    next.support_full_list_ocr_fallback = value;
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        settings.support_full_list_ocr_fallback = value;
+    })
 }
 
 #[tauri::command]
@@ -614,11 +602,9 @@ pub(crate) fn set_auto_friend_request(
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
     value: bool,
 ) -> Result<RecognitionSettings, String> {
-    let mut next = *state.lock().unwrap();
-    next.auto_friend_request = value;
-    *state.lock().unwrap() = next;
-    save_recognition_settings(&app, &next)?;
-    Ok(next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        settings.auto_friend_request = value;
+    })
 }
 
 #[tauri::command]
@@ -639,12 +625,9 @@ pub(crate) fn set_auto_capture_battle_result_loot(
     state: tauri::State<'_, Mutex<DebugSettings>>,
     value: bool,
 ) -> Result<DebugSettings, String> {
-    let next = debug_settings_for_current_build(
-        debug_settings_with_auto_capture_battle_result_loot(*state.lock().unwrap(), value),
-    );
-    *state.lock().unwrap() = next;
-    save_debug_settings(&app, &next)?;
-    Ok(next)
+    update_debug_settings(&app, state.inner(), |settings| {
+        *settings = debug_settings_with_auto_capture_battle_result_loot(*settings, value);
+    })
 }
 
 fn debug_settings_with_auto_capture_battle_result_loot(
@@ -693,12 +676,9 @@ pub(crate) fn set_auto_capture_unknown_screen_timeout(
     state: tauri::State<'_, Mutex<DebugSettings>>,
     value: bool,
 ) -> Result<DebugSettings, String> {
-    let next = debug_settings_for_current_build(
-        debug_settings_with_auto_capture_unknown_screen_timeout(*state.lock().unwrap(), value),
-    );
-    *state.lock().unwrap() = next;
-    save_debug_settings(&app, &next)?;
-    Ok(next)
+    update_debug_settings(&app, state.inner(), |settings| {
+        *settings = debug_settings_with_auto_capture_unknown_screen_timeout(*settings, value);
+    })
 }
 
 #[tauri::command]
@@ -707,13 +687,9 @@ pub(crate) fn set_auto_capture_skill_use_probe(
     state: tauri::State<'_, Mutex<DebugSettings>>,
     value: bool,
 ) -> Result<DebugSettings, String> {
-    let next = debug_settings_for_current_build(debug_settings_with_auto_capture_skill_use_probe(
-        *state.lock().unwrap(),
-        value,
-    ));
-    *state.lock().unwrap() = next;
-    save_debug_settings(&app, &next)?;
-    Ok(next)
+    update_debug_settings(&app, state.inner(), |settings| {
+        *settings = debug_settings_with_auto_capture_skill_use_probe(*settings, value);
+    })
 }
 
 #[tauri::command]
@@ -722,15 +698,9 @@ pub(crate) fn set_auto_capture_unrecognized_critical_chance(
     state: tauri::State<'_, Mutex<DebugSettings>>,
     value: bool,
 ) -> Result<DebugSettings, String> {
-    let next = debug_settings_for_current_build(
-        debug_settings_with_auto_capture_unrecognized_critical_chance(
-            *state.lock().unwrap(),
-            value,
-        ),
-    );
-    *state.lock().unwrap() = next;
-    save_debug_settings(&app, &next)?;
-    Ok(next)
+    update_debug_settings(&app, state.inner(), |settings| {
+        *settings = debug_settings_with_auto_capture_unrecognized_critical_chance(*settings, value);
+    })
 }
 
 #[tauri::command]
@@ -739,12 +709,9 @@ pub(crate) fn set_simulate_stuck_attack_selection(
     state: tauri::State<'_, Mutex<DebugSettings>>,
     value: bool,
 ) -> Result<DebugSettings, String> {
-    let next = debug_settings_for_current_build(
-        debug_settings_with_simulate_stuck_attack_selection(*state.lock().unwrap(), value),
-    );
-    save_debug_settings(&app, &next)?;
-    *state.lock().unwrap() = next;
-    Ok(next)
+    update_debug_settings(&app, state.inner(), |settings| {
+        *settings = debug_settings_with_simulate_stuck_attack_selection(*settings, value);
+    })
 }
 
 fn take_simulate_stuck_attack_selection(
@@ -784,8 +751,8 @@ pub(crate) async fn run_startup_migration(
             .await
             .map_err(|e| format!("startup migration task failed: {e}"))??;
     if status.migrated {
-        *adb_settings_state.lock().unwrap() = load_adb_device_settings(&app);
-        *server_state.lock().unwrap() = load_server_setting(&app);
+        *adb_settings_state.lock().unwrap() = load_adb_device_settings(&app)?;
+        *server_state.lock().unwrap() = load_server_setting(&app)?;
     }
     crate::battle_statistics::initialize(&app)?;
     Ok(status)
@@ -988,6 +955,20 @@ mod tests {
 
         assert_eq!(result.unknown_screen_timeout_count, 200);
         assert_eq!(state.lock().unwrap().unknown_screen_timeout_count, 200);
+    }
+
+    #[test]
+    fn generic_setting_update_keeps_memory_unchanged_when_persistence_fails() {
+        let state = Mutex::new(RecognitionSettings::default());
+
+        let result = update_persisted_state(
+            &state,
+            |settings| settings.verify_skill_activation = true,
+            |_| Err("write failed".to_string()),
+        );
+
+        assert_eq!(result.unwrap_err(), "write failed");
+        assert!(!state.lock().unwrap().verify_skill_activation);
     }
 
     #[test]
@@ -1267,63 +1248,21 @@ mod tests {
 pub(crate) fn set_server(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<Server>>,
-    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
-    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
-    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
-    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
+    coordinator: tauri::State<'_, AutomationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
     value: Server,
 ) -> Result<(), String> {
     // Refuse to flip mid-run: the runner cached templates / OCR model /
     // localized servant metadata for the *previous* server when it spawned;
     // changing the global setting now would silently desync those caches.
-    {
-        let handle = handle_state.lock().unwrap();
-        let running = matches!(*handle.state.lock().unwrap(), RunnerState::Running);
-        if running {
-            return Err("自动化正在运行中，请先停止后再切换服务器".into());
-        }
-    }
-    {
-        let handle = enhancement_handle_state.lock().unwrap();
-        let running = matches!(
-            *handle.state.lock().unwrap(),
-            EnhancementRunnerState::Running
-        );
-        if running {
-            return Err("强化自动化正在运行中，请先停止后再切换服务器".into());
-        }
-    }
-    {
-        let handle = ce_enhancement_handle_state.lock().unwrap();
-        let running = matches!(
-            *handle.state.lock().unwrap(),
-            CraftEssenceEnhancementRunnerState::Starting
-                | CraftEssenceEnhancementRunnerState::Running
-        );
-        if running {
-            return Err("概念礼装强化自动化正在运行中，请先停止后再切换服务器".into());
-        }
-    }
-    {
-        let handle = friend_point_summon_handle_state.lock().unwrap();
-        let running = matches!(
-            *handle.state.lock().unwrap(),
-            FriendPointSummonRunnerState::Starting | FriendPointSummonRunnerState::Running
-        );
-        if running {
-            return Err("友情点抽取自动化正在运行中，请先停止后再切换服务器".into());
-        }
-    }
+    coordinator
+        .require_idle()
+        .map_err(|_| "自动化正在运行中，请先停止后再切换服务器".to_string())?;
 
-    *state.lock().unwrap() = value;
     let path = server_settings_path(&app);
     let json = serde_json::json!({ "server": value.to_string() });
-    fs::write(
-        &path,
-        serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
+    write_json_atomic(&path, &json, "服务器设置")?;
+    *state.lock().unwrap() = value;
 
     // Tear down any idle sidecar so the next debug or automation call
     // respawns it with the new server's templates / OCR model.
@@ -1340,15 +1279,11 @@ pub(crate) fn should_check_updates_today(
     app: tauri::AppHandle,
     today: String,
 ) -> Result<bool, String> {
-    Ok(load_last_update_check_date(&app).as_deref() != Some(today.as_str()))
+    Ok(load_last_update_check_date(&app)?.as_deref() != Some(today.as_str()))
 }
 
 #[tauri::command]
 pub(crate) fn mark_update_checked_today(app: tauri::AppHandle, date: String) -> Result<(), String> {
     let path = update_check_settings_path(&app);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let body = serde_json::to_string(&date).map_err(|e| e.to_string())?;
-    fs::write(path, body).map_err(|e| e.to_string())
+    write_json_atomic(&path, &date, "更新检查设置")
 }

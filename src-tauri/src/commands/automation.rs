@@ -7,12 +7,11 @@
 //! existing command names and event payloads.
 
 use crate::adb;
+use crate::automation_coordinator::{AutomationCoordinator, AutomationKind};
 use crate::battle_statistics::BattleRunRecorder;
 use crate::commands::catalog::load_enhancement_target;
 use crate::commands::debug;
-use crate::commands::projects::{
-    load_advanced_battle_scenes, load_battle_scenes, read_app_ui_settings_from_path, read_projects,
-};
+use crate::commands::projects::{load_advanced_battle_scenes, load_battle_scenes, read_projects};
 use crate::commands::runtime::{
     resolve_ce_assets_dir, resolve_mystic_code_assets_dir, resolve_scrcpy_jar,
     resolve_servant_assets_dir,
@@ -38,7 +37,7 @@ use crate::friend_point_summon_runner::{
     EVENT_NAME as FRIEND_POINT_SUMMON_EVENT_NAME,
 };
 use crate::models::ProjectRecognitionSettings;
-use crate::paths::app_ui_settings_path;
+use crate::paths::{AppUiSettings, MysticCodeGender};
 use crate::runner::{
     grand_strategy, runner_lifecycle_transition, AutomationEvent, LogLevel, RunConfig, Runner,
     RunnerHandle, RunnerLifecycleEvent, RunnerState,
@@ -51,7 +50,7 @@ use crate::server::{
 use crate::{resolve_cv_config_paths, resolve_template_dirs};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 struct BattleRunFinishGuard {
     recorder: Option<BattleRunRecorder>,
@@ -131,10 +130,10 @@ fn emit_stream_mapping_debug(
 fn resolve_mystic_code_item_template(
     app: &tauri::AppHandle,
     config: &RunConfig,
+    gender: MysticCodeGender,
 ) -> Option<std::path::PathBuf> {
     let id = config.mystic_code_id?;
     let assets_dir = resolve_mystic_code_assets_dir(app)?;
-    let gender = read_app_ui_settings_from_path(&app_ui_settings_path(app)).mystic_code_gender;
     let gender_name = match gender {
         crate::paths::MysticCodeGender::Female => "female",
         crate::paths::MysticCodeGender::Male => "male",
@@ -143,31 +142,6 @@ fn resolve_mystic_code_item_template(
         .join(id.to_string())
         .join(format!("item-{gender_name}.png"));
     path.is_file().then_some(path)
-}
-
-fn runner_is_busy(state: &RunnerState) -> bool {
-    matches!(state, RunnerState::Starting | RunnerState::Running)
-}
-
-fn enhancement_runner_is_busy(state: &EnhancementRunnerState) -> bool {
-    matches!(
-        state,
-        EnhancementRunnerState::Starting | EnhancementRunnerState::Running
-    )
-}
-
-fn ce_enhancement_runner_is_busy(state: &CraftEssenceEnhancementRunnerState) -> bool {
-    matches!(
-        state,
-        CraftEssenceEnhancementRunnerState::Starting | CraftEssenceEnhancementRunnerState::Running
-    )
-}
-
-fn friend_point_summon_runner_is_busy(state: &FriendPointSummonRunnerState) -> bool {
-    matches!(
-        state,
-        FriendPointSummonRunnerState::Starting | FriendPointSummonRunnerState::Running
-    )
 }
 
 const ADB_RESET_USER_MESSAGE: &str =
@@ -480,45 +454,13 @@ pub(crate) fn effective_recognition_settings(
 pub(crate) fn start_automation(
     app: tauri::AppHandle,
     mut config: RunConfig,
-    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
-    server_state: tauri::State<'_, Mutex<Server>>,
-    recognition_settings_state: tauri::State<'_, Mutex<RecognitionSettings>>,
-    debug_settings_state: tauri::State<'_, Mutex<DebugSettings>>,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
-    enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
-    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
-    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
+    coordinator: tauri::State<'_, AutomationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
-    let is_running = {
-        let state = handle_state.lock().unwrap().state.clone();
-        let running = runner_is_busy(&state.lock().unwrap());
-        running
-    };
-    if is_running {
-        return Err("自动化正在运行中".into());
-    }
-    {
-        let handle = enhancement_handle_state.lock().unwrap();
-        let running = enhancement_runner_is_busy(&handle.state.lock().unwrap());
-        if running {
-            return Err("强化自动化正在运行中".into());
-        }
-    }
-    {
-        let handle = ce_enhancement_handle_state.lock().unwrap();
-        if ce_enhancement_runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("概念礼装强化自动化正在运行中".into());
-        }
-    }
-    {
-        let handle = friend_point_summon_handle_state.lock().unwrap();
-        if friend_point_summon_runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("友情点抽取自动化正在运行中".into());
-        }
-    }
+    let automation_lease = coordinator.reserve(AutomationKind::Battle)?;
 
-    let project = read_projects(&app)
+    let project = read_projects(&app)?
         .into_iter()
         .find(|project| project.id == config.project_id);
     let advanced_mode = project
@@ -533,22 +475,23 @@ pub(crate) fn start_automation(
     let scenes = if advanced_mode {
         Vec::new()
     } else {
-        load_battle_scenes(app.clone(), config.project_id.clone())
+        load_battle_scenes(app.clone(), config.project_id.clone())?
     };
     let advanced_scenes = if advanced_mode {
-        load_advanced_battle_scenes(app.clone(), config.project_id.clone())
+        load_advanced_battle_scenes(app.clone(), config.project_id.clone())?
     } else {
         Vec::new()
     };
 
-    let selected_adb_serial = adb_settings_state
+    let selected_adb_serial = app
+        .state::<Mutex<AdbDeviceSettings>>()
         .lock()
         .unwrap()
         .selected_adb_serial
         .clone();
-    let server = *server_state.lock().unwrap();
+    let server = *app.state::<Mutex<Server>>().lock().unwrap();
     let recognition_settings = effective_recognition_settings(
-        *recognition_settings_state.lock().unwrap(),
+        *app.state::<Mutex<RecognitionSettings>>().lock().unwrap(),
         project
             .as_ref()
             .and_then(|project| project.recognition_settings),
@@ -565,7 +508,7 @@ pub(crate) fn start_automation(
     config.enable_extra_class_filter = recognition_settings.enable_extra_class_filter;
     config.support_full_list_ocr_fallback = recognition_settings.support_full_list_ocr_fallback;
     config.unknown_screen_timeout_count = recognition_settings.unknown_screen_timeout_count;
-    let debug_settings = *debug_settings_state.lock().unwrap();
+    let debug_settings = *app.state::<Mutex<DebugSettings>>().lock().unwrap();
     config.auto_capture_battle_result_loot = debug_settings.auto_capture_battle_result_loot;
     config.auto_friend_request = recognition_settings.auto_friend_request;
     config.auto_capture_unknown_screen_timeout = debug_settings.auto_capture_unknown_screen_timeout;
@@ -575,6 +518,13 @@ pub(crate) fn start_automation(
     config.prefer_higher_critical_chance = project
         .as_ref()
         .is_some_and(|project| project.prefer_higher_critical_chance);
+    let mystic_code_gender = app
+        .state::<Mutex<AppUiSettings>>()
+        .lock()
+        .unwrap()
+        .mystic_code_gender;
+    let mystic_code_item_template =
+        resolve_mystic_code_item_template(&app, &config, mystic_code_gender);
 
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -596,6 +546,7 @@ pub(crate) fn start_automation(
 
     let debug_sidecar = debug_state.0.clone();
     std::thread::spawn(move || {
+        let _automation_lease = automation_lease;
         let _run_finish_guard = BattleRunFinishGuard {
             recorder: run_recorder.clone(),
             state: state.clone(),
@@ -680,7 +631,6 @@ pub(crate) fn start_automation(
         let frame_size = Some((w, h));
         let assets_dir = resolve_servant_assets_dir(&app);
         let ce_assets_dir = resolve_ce_assets_dir(&app);
-        let mystic_code_item_template = resolve_mystic_code_item_template(&app, &config);
         let runner = Runner::new(
             adb_dev,
             sidecar,
@@ -738,47 +688,19 @@ pub(crate) fn get_automation_status(
 pub(crate) fn start_enhancement_automation(
     app: tauri::AppHandle,
     config: EnhancementConfig,
-    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
-    server_state: tauri::State<'_, Mutex<Server>>,
-    battle_handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
-    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
-    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
+    coordinator: tauri::State<'_, AutomationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
-    {
-        let handle = handle_state.lock().unwrap();
-        let running = enhancement_runner_is_busy(&handle.state.lock().unwrap());
-        if running {
-            return Err("强化自动化正在运行中".into());
-        }
-    }
-    {
-        let handle = battle_handle_state.lock().unwrap();
-        let running = runner_is_busy(&handle.state.lock().unwrap());
-        if running {
-            return Err("战斗自动化正在运行中，请先停止".into());
-        }
-    }
-    {
-        let handle = ce_enhancement_handle_state.lock().unwrap();
-        if ce_enhancement_runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("概念礼装强化自动化正在运行中，请先停止".into());
-        }
-    }
-    {
-        let handle = friend_point_summon_handle_state.lock().unwrap();
-        if friend_point_summon_runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("友情点抽取自动化正在运行中，请先停止".into());
-        }
-    }
+    let automation_lease = coordinator.reserve(AutomationKind::ServantEnhancement)?;
 
-    let selected_adb_serial = adb_settings_state
+    let selected_adb_serial = app
+        .state::<Mutex<AdbDeviceSettings>>()
         .lock()
         .unwrap()
         .selected_adb_serial
         .clone();
-    let server = *server_state.lock().unwrap();
+    let server = *app.state::<Mutex<Server>>().lock().unwrap();
     if !enhancement_server_supported(server) {
         return Err("当前仅支持日服强化自动化".into());
     }
@@ -798,6 +720,7 @@ pub(crate) fn start_enhancement_automation(
 
     let debug_sidecar = debug_state.0.clone();
     std::thread::spawn(move || {
+        let _automation_lease = automation_lease;
         emit_enhancement_status(&app, &state, "", "正在连接 ADB…");
         let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
         if let Err(err) = adb_dev.connect() {
@@ -910,45 +833,19 @@ pub(crate) fn get_enhancement_automation_status(
 #[tauri::command]
 pub(crate) fn start_craft_essence_enhancement_automation(
     app: tauri::AppHandle,
-    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
-    server_state: tauri::State<'_, Mutex<Server>>,
-    battle_handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
-    servant_enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
     handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
-    friend_point_summon_handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
+    coordinator: tauri::State<'_, AutomationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
     mode: Option<CraftEssenceEnhancementMode>,
 ) -> Result<(), String> {
-    {
-        let handle = handle_state.lock().unwrap();
-        if ce_enhancement_runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("概念礼装强化自动化正在运行中".into());
-        }
-    }
-    {
-        let handle = battle_handle_state.lock().unwrap();
-        if runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("战斗自动化正在运行中，请先停止".into());
-        }
-    }
-    {
-        let handle = servant_enhancement_handle_state.lock().unwrap();
-        if enhancement_runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("从者强化自动化正在运行中，请先停止".into());
-        }
-    }
-    {
-        let handle = friend_point_summon_handle_state.lock().unwrap();
-        if friend_point_summon_runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("友情点抽取自动化正在运行中，请先停止".into());
-        }
-    }
+    let automation_lease = coordinator.reserve(AutomationKind::CraftEssenceEnhancement)?;
 
-    let server = *server_state.lock().unwrap();
+    let server = *app.state::<Mutex<Server>>().lock().unwrap();
     if !ce_server_supported(server) {
         return Err("当前仅支持国服概念礼装强化自动化".into());
     }
-    let selected_adb_serial = adb_settings_state
+    let selected_adb_serial = app
+        .state::<Mutex<AdbDeviceSettings>>()
         .lock()
         .unwrap()
         .selected_adb_serial
@@ -964,6 +861,7 @@ pub(crate) fn start_craft_essence_enhancement_automation(
     let debug_sidecar = debug_state.0.clone();
     let mode = mode.unwrap_or_default();
     std::thread::spawn(move || {
+        let _automation_lease = automation_lease;
         emit_ce_enhancement_status(&app, &state, "", "正在连接 ADB…");
         let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
         if let Err(err) = adb_dev.connect() {
@@ -1054,44 +952,18 @@ pub(crate) fn get_craft_essence_enhancement_automation_status(
 #[tauri::command]
 pub(crate) fn start_friend_point_summon_automation(
     app: tauri::AppHandle,
-    adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
-    server_state: tauri::State<'_, Mutex<Server>>,
-    battle_handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
-    servant_enhancement_handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
-    ce_enhancement_handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
     handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
+    coordinator: tauri::State<'_, AutomationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
-    {
-        let handle = handle_state.lock().unwrap();
-        if friend_point_summon_runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("友情点抽取自动化正在运行中".into());
-        }
-    }
-    {
-        let handle = battle_handle_state.lock().unwrap();
-        if runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("战斗自动化正在运行中，请先停止".into());
-        }
-    }
-    {
-        let handle = servant_enhancement_handle_state.lock().unwrap();
-        if enhancement_runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("从者强化自动化正在运行中，请先停止".into());
-        }
-    }
-    {
-        let handle = ce_enhancement_handle_state.lock().unwrap();
-        if ce_enhancement_runner_is_busy(&handle.state.lock().unwrap()) {
-            return Err("概念礼装强化自动化正在运行中，请先停止".into());
-        }
-    }
+    let automation_lease = coordinator.reserve(AutomationKind::FriendPointSummon)?;
 
-    let server = *server_state.lock().unwrap();
+    let server = *app.state::<Mutex<Server>>().lock().unwrap();
     if !friend_point_summon_server_supported(server) {
         return Err("当前仅支持国服友情点抽取自动化".into());
     }
-    let selected_adb_serial = adb_settings_state
+    let selected_adb_serial = app
+        .state::<Mutex<AdbDeviceSettings>>()
         .lock()
         .unwrap()
         .selected_adb_serial
@@ -1106,6 +978,7 @@ pub(crate) fn start_friend_point_summon_automation(
 
     let debug_sidecar = debug_state.0.clone();
     std::thread::spawn(move || {
+        let _automation_lease = automation_lease;
         emit_friend_point_summon_status(&app, &state, "", "正在连接 ADB…");
         let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
         if let Err(error) = adb_dev.connect() {

@@ -7,7 +7,9 @@ use tauri_plugin_shell::ShellExt;
 
 const RECOVERABLE_OCR_COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
 
+mod protocol;
 mod types;
+use protocol::{request, SidecarCommand};
 pub use types::*;
 
 pub const SIDECAR_STARTUP_REDOWNLOAD_MESSAGE: &str =
@@ -159,7 +161,7 @@ impl SidecarClient {
         // 20-40s on macOS the first time it's extracted. A dedicated `ping`
         // response tells us Python's REPL is running and keeps subsequent
         // request/response pairs in lockstep.
-        let ping = serde_json::json!({ "cmd": "ping" });
+        let ping = request(SidecarCommand::Ping, serde_json::json!({}))?;
         match client.send_recv_with_timeout(&ping, Duration::from_secs(90)) {
             Ok(resp) => eprintln!("[mash-cv] ping -> {resp}"),
             Err(e) => {
@@ -171,12 +173,14 @@ impl SidecarClient {
 
         for (idx, dir) in template_dirs.iter().enumerate() {
             if dir.dir.exists() {
-                let req = serde_json::json!({
-                    "cmd": "load_templates",
-                    "dir": dir.dir.to_string_lossy(),
-                    "append": idx > 0,
-                    "keyPrefix": dir.key_prefix.as_deref().unwrap_or(""),
-                });
+                let req = request(
+                    SidecarCommand::LoadTemplates,
+                    serde_json::json!({
+                        "dir": dir.dir.to_string_lossy(),
+                        "append": idx > 0,
+                        "keyPrefix": dir.key_prefix.as_deref().unwrap_or(""),
+                    }),
+                )?;
                 match client.send_recv(&req) {
                     Ok(resp) => eprintln!("[mash-cv] load_templates -> {resp}"),
                     Err(e) => eprintln!("[mash-cv] load_templates failed: {e}"),
@@ -188,11 +192,13 @@ impl SidecarClient {
 
         for (idx, path) in config_paths.iter().enumerate() {
             if path.exists() {
-                let req = serde_json::json!({
-                    "cmd": "load_config",
-                    "path": path.to_string_lossy(),
-                    "merge": idx > 0,
-                });
+                let req = request(
+                    SidecarCommand::LoadConfig,
+                    serde_json::json!({
+                        "path": path.to_string_lossy(),
+                        "merge": idx > 0,
+                    }),
+                )?;
                 match client.send_recv(&req) {
                     Ok(resp) => eprintln!("[mash-cv] load_config -> {resp}"),
                     Err(e) => eprintln!("[mash-cv] load_config failed: {e}"),
@@ -207,10 +213,12 @@ impl SidecarClient {
         // right model on the first `find_supports` call. Failures are
         // logged but non-fatal: an older sidecar binary that doesn't
         // know `set_server` simply stays on its compile-time default.
-        let req = serde_json::json!({
-            "cmd": "set_server",
-            "server": server.to_string(),
-        });
+        let req = request(
+            SidecarCommand::SetServer,
+            serde_json::json!({
+                "server": server.to_string(),
+            }),
+        )?;
         match client.send_recv(&req) {
             Ok(resp) => eprintln!("[mash-cv] set_server -> {resp}"),
             Err(e) => eprintln!("[mash-cv] set_server failed (sidecar may be stale): {e}"),
@@ -319,7 +327,7 @@ impl SidecarClient {
         &mut self,
         image_path: Option<&Path>,
     ) -> Result<(String, f64), String> {
-        let mut req = serde_json::json!({ "cmd": "detect" });
+        let mut req = request(SidecarCommand::Detect, serde_json::json!({}))?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         let screen_str = resp["screen"].as_str().unwrap_or("Unknown");
@@ -373,17 +381,19 @@ impl SidecarClient {
         threshold: f64,
         template_reference_width: Option<f64>,
     ) -> Result<Option<Point>, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_element",
-            "templateKey": template_key,
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "threshold": threshold,
-        });
+        let mut req = request(
+            SidecarCommand::FindElement,
+            serde_json::json!({
+                "templateKey": template_key,
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+                "threshold": threshold,
+            }),
+        )?;
         if let Some(reference_width) = template_reference_width {
             req["templateReferenceWidth"] = serde_json::json!(reference_width);
         }
@@ -415,18 +425,20 @@ impl SidecarClient {
         region: NormRect,
         threshold: f64,
     ) -> Result<Option<Point>, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_element",
-            "templateKey": template_key,
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "threshold": threshold,
-            "requireApRecoveryEnabled": true,
-        });
+        let mut req = request(
+            SidecarCommand::FindElement,
+            serde_json::json!({
+                "templateKey": template_key,
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+                "threshold": threshold,
+                "requireApRecoveryEnabled": true,
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -450,17 +462,19 @@ impl SidecarClient {
         region: NormRect,
         threshold: f64,
     ) -> Result<ElementMatch, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_element",
-            "templateKey": template_key,
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "threshold": threshold,
-        });
+        let mut req = request(
+            SidecarCommand::FindElement,
+            serde_json::json!({
+                "templateKey": template_key,
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+                "threshold": threshold,
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -495,11 +509,13 @@ impl SidecarClient {
         screen: &str,
         element: &str,
     ) -> Result<ElementMatch, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_element_by_name",
-            "screen": screen,
-            "element": element,
-        });
+        let mut req = request(
+            SidecarCommand::FindElementByName,
+            serde_json::json!({
+                "screen": screen,
+                "element": element,
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -534,15 +550,17 @@ impl SidecarClient {
         image_path: Option<&Path>,
         region: NormRect,
     ) -> Result<f64, String> {
-        let mut req = serde_json::json!({
-            "cmd": "read_region_luma",
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-        });
+        let mut req = request(
+            SidecarCommand::ReadRegionLuma,
+            serde_json::json!({
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|value| value.as_str()) {
@@ -566,12 +584,14 @@ impl SidecarClient {
         slot_y: f64,
         server: crate::Server,
     ) -> Result<OrderChangeSelectionProbe, String> {
-        let mut req = serde_json::json!({
-            "cmd": "probe_order_change_selection",
-            "slotX": slot_x,
-            "slotY": slot_y,
-            "server": server.to_string(),
-        });
+        let mut req = request(
+            SidecarCommand::ProbeOrderChangeSelection,
+            serde_json::json!({
+                "slotX": slot_x,
+                "slotY": slot_y,
+                "server": server.to_string(),
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|value| value.as_str()) {
@@ -591,15 +611,17 @@ impl SidecarClient {
         image_path: Option<&Path>,
         region: NormRect,
     ) -> Result<RegionColorStats, String> {
-        let mut req = serde_json::json!({
-            "cmd": "read_region_luma",
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-        });
+        let mut req = request(
+            SidecarCommand::ReadRegionLuma,
+            serde_json::json!({
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|value| value.as_str()) {
@@ -633,23 +655,25 @@ impl SidecarClient {
         dialog_threshold: f64,
         confirm_region: NormRect,
     ) -> Result<SkillUseDialogProbe, String> {
-        let mut req = serde_json::json!({
-            "cmd": "probe_skill_use_dialog",
-            "templateKey": template_key,
-            "dialogRegion": {
-                "x": dialog_region.x,
-                "y": dialog_region.y,
-                "w": dialog_region.w,
-                "h": dialog_region.h,
-            },
-            "dialogThreshold": dialog_threshold,
-            "confirmRegion": {
-                "x": confirm_region.x,
-                "y": confirm_region.y,
-                "w": confirm_region.w,
-                "h": confirm_region.h,
-            },
-        });
+        let mut req = request(
+            SidecarCommand::ProbeSkillUseDialog,
+            serde_json::json!({
+                "templateKey": template_key,
+                "dialogRegion": {
+                    "x": dialog_region.x,
+                    "y": dialog_region.y,
+                    "w": dialog_region.w,
+                    "h": dialog_region.h,
+                },
+                "dialogThreshold": dialog_threshold,
+                "confirmRegion": {
+                    "x": confirm_region.x,
+                    "y": confirm_region.y,
+                    "w": confirm_region.w,
+                    "h": confirm_region.h,
+                },
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         let found = resp["found"].as_bool().unwrap_or(false);
@@ -690,10 +714,12 @@ impl SidecarClient {
         servant_ids: &[u32],
         assets_dir: Option<&Path>,
     ) -> Result<Vec<CommandCardMatch>, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_command_cards",
-            "servantIds": servant_ids,
-        });
+        let mut req = request(
+            SidecarCommand::FindCommandCards,
+            serde_json::json!({
+                "servantIds": servant_ids,
+            }),
+        )?;
         if let Some(regions) = card_regions {
             if let Some(obj) = req.as_object_mut() {
                 obj.insert(
@@ -741,9 +767,7 @@ impl SidecarClient {
         image_path: Option<&Path>,
         np_regions: Option<&[NormRect]>,
     ) -> Result<Vec<NoblePhantasmMatch>, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_noble_phantasms",
-        });
+        let mut req = request(SidecarCommand::FindNoblePhantasms, serde_json::json!({}))?;
         if let Some(regions) = np_regions {
             if let Some(obj) = req.as_object_mut() {
                 obj.insert(
@@ -792,16 +816,18 @@ impl SidecarClient {
         include_support_details: bool,
         support_full_list_ocr_fallback: bool,
     ) -> Result<FindSupportsResult, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_supports",
-            "expectedName": expected_name,
-            "expectedNames": expected_names,
-            "excludedNames": excluded_names,
-            "expectedNpNames": expected_np_names,
-            "requireNpMatch": require_np_match,
-            "includeSupportDetails": include_support_details,
-            "supportFullListOcrFallback": support_full_list_ocr_fallback,
-        });
+        let mut req = request(
+            SidecarCommand::FindSupports,
+            serde_json::json!({
+                "expectedName": expected_name,
+                "expectedNames": expected_names,
+                "excludedNames": excluded_names,
+                "expectedNpNames": expected_np_names,
+                "requireNpMatch": require_np_match,
+                "includeSupportDetails": include_support_details,
+                "supportFullListOcrFallback": support_full_list_ocr_fallback,
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
 
         // The worker may be recycled and retried once. Keep this outer timeout
@@ -821,15 +847,17 @@ impl SidecarClient {
         image_path: Option<&Path>,
         region: NormRect,
     ) -> Result<OcrRegionResult, String> {
-        let mut req = serde_json::json!({
-            "cmd": "ocr_region",
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-        });
+        let mut req = request(
+            SidecarCommand::OcrRegion,
+            serde_json::json!({
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv_with_timeout(&req, RECOVERABLE_OCR_COMMAND_TIMEOUT)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -846,15 +874,17 @@ impl SidecarClient {
         image_path: Option<&Path>,
         region: NormRect,
     ) -> Result<LevelDigitsResult, String> {
-        let mut req = serde_json::json!({
-            "cmd": "read_level_digits",
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-        });
+        let mut req = request(
+            SidecarCommand::ReadLevelDigits,
+            serde_json::json!({
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -871,10 +901,12 @@ impl SidecarClient {
         image_path: Option<&Path>,
         debug: bool,
     ) -> Result<BondLevelUpReadResult, String> {
-        let mut req = serde_json::json!({
-            "cmd": "read_bond_level_up",
-            "debug": debug,
-        });
+        let mut req = request(
+            SidecarCommand::ReadBondLevelUp,
+            serde_json::json!({
+                "debug": debug,
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv_with_timeout(&req, Duration::from_secs(30))?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -903,22 +935,24 @@ impl SidecarClient {
         threshold: f64,
         options: SupportCeVerificationOptions,
     ) -> Result<SupportCeVerificationResult, String> {
-        let mut req = serde_json::json!({
-            "cmd": "verify_support_ce",
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "templatePath": template_path.to_string_lossy(),
-            "threshold": threshold,
-            "mlbRequired": options.mlb_required,
-            "grandBondCeMode": options.grand_bond_ce_mode,
-            "fullGateThreshold": options.full_gate_threshold,
-            "mlbIconThreshold": options.mlb_icon_threshold,
-            "bondIconThreshold": options.bond_icon_threshold,
-        });
+        let mut req = request(
+            SidecarCommand::VerifySupportCe,
+            serde_json::json!({
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+                "templatePath": template_path.to_string_lossy(),
+                "threshold": threshold,
+                "mlbRequired": options.mlb_required,
+                "grandBondCeMode": options.grand_bond_ce_mode,
+                "fullGateThreshold": options.full_gate_threshold,
+                "mlbIconThreshold": options.mlb_icon_threshold,
+                "bondIconThreshold": options.bond_icon_threshold,
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -937,17 +971,19 @@ impl SidecarClient {
         region: NormRect,
         threshold: f64,
     ) -> Result<Option<Point>, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_region",
-            "templatePath": template_path.to_string_lossy(),
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "threshold": threshold,
-        });
+        let mut req = request(
+            SidecarCommand::FindRegion,
+            serde_json::json!({
+                "templatePath": template_path.to_string_lossy(),
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+                "threshold": threshold,
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -973,20 +1009,22 @@ impl SidecarClient {
         threshold: f64,
         scales: &[f64],
     ) -> Result<ElementMatch, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_region",
-            "templatePath": template_path.to_string_lossy(),
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "threshold": threshold,
-            "scales": scales,
-            "alphaMask": true,
-            "alphaBackground": 224,
-        });
+        let mut req = request(
+            SidecarCommand::FindRegion,
+            serde_json::json!({
+                "templatePath": template_path.to_string_lossy(),
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+                "threshold": threshold,
+                "scales": scales,
+                "alphaMask": true,
+                "alphaBackground": 224,
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -1027,23 +1065,25 @@ impl SidecarClient {
         template_size: Option<(u32, u32)>,
         threshold: f64,
     ) -> Result<Option<Point>, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_region",
-            "templatePath": template_path.to_string_lossy(),
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "templateCrop": {
-                "x": template_crop.x,
-                "y": template_crop.y,
-                "w": template_crop.w,
-                "h": template_crop.h,
-            },
-            "threshold": threshold,
-        });
+        let mut req = request(
+            SidecarCommand::FindRegion,
+            serde_json::json!({
+                "templatePath": template_path.to_string_lossy(),
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+                "templateCrop": {
+                    "x": template_crop.x,
+                    "y": template_crop.y,
+                    "w": template_crop.w,
+                    "h": template_crop.h,
+                },
+                "threshold": threshold,
+            }),
+        )?;
         if let Some((w, h)) = template_size {
             if let Some(obj) = req.as_object_mut() {
                 obj.insert("templateSize".into(), serde_json::json!({ "w": w, "h": h }));
@@ -1075,23 +1115,25 @@ impl SidecarClient {
         template_size: Option<(u32, u32)>,
         threshold: f64,
     ) -> Result<ElementMatch, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_region",
-            "templatePath": template_path.to_string_lossy(),
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "templateCrop": {
-                "x": template_crop.x,
-                "y": template_crop.y,
-                "w": template_crop.w,
-                "h": template_crop.h,
-            },
-            "threshold": threshold,
-        });
+        let mut req = request(
+            SidecarCommand::FindRegion,
+            serde_json::json!({
+                "templatePath": template_path.to_string_lossy(),
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+                "templateCrop": {
+                    "x": template_crop.x,
+                    "y": template_crop.y,
+                    "w": template_crop.w,
+                    "h": template_crop.h,
+                },
+                "threshold": threshold,
+            }),
+        )?;
         if let Some((w, h)) = template_size {
             if let Some(obj) = req.as_object_mut() {
                 obj.insert("templateSize".into(), serde_json::json!({ "w": w, "h": h }));
@@ -1133,29 +1175,31 @@ impl SidecarClient {
         threshold: f64,
         retry_seconds: f64,
     ) -> Result<FindEnhancementServantGridResult, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_enhancement_servant_grid",
-            "anchorTemplateKey": "text_servant_avatar_bottom_line",
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "templateCrop": {
-                "x": template_crop.x,
-                "y": template_crop.y,
-                "w": template_crop.w,
-                "h": template_crop.h,
-            },
-            "faceThreshold": threshold,
-            "retrySeconds": retry_seconds,
-            "retryIntervalSeconds": 0.15,
-            "faceTemplatePaths": face_template_paths
-                .iter()
-                .map(|p| p.to_string_lossy().into_owned())
-                .collect::<Vec<_>>(),
-        });
+        let mut req = request(
+            SidecarCommand::FindEnhancementServantGrid,
+            serde_json::json!({
+                "anchorTemplateKey": "text_servant_avatar_bottom_line",
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+                "templateCrop": {
+                    "x": template_crop.x,
+                    "y": template_crop.y,
+                    "w": template_crop.w,
+                    "h": template_crop.h,
+                },
+                "faceThreshold": threshold,
+                "retrySeconds": retry_seconds,
+                "retryIntervalSeconds": 0.15,
+                "faceTemplatePaths": face_template_paths
+                    .iter()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .collect::<Vec<_>>(),
+            }),
+        )?;
         if let Some((w, h)) = template_size {
             if let Some(obj) = req.as_object_mut() {
                 obj.insert("templateSize".into(), serde_json::json!({ "w": w, "h": h }));
@@ -1179,19 +1223,21 @@ impl SidecarClient {
         region: NormRect,
         retry_seconds: f64,
     ) -> Result<FindItemGridResult, String> {
-        let mut req = serde_json::json!({
-            "cmd": "find_item_grid",
-            "anchorTemplateKey": anchor_template_key,
-            "anchorTemplateReferenceWidth": anchor_template_reference_width,
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "retrySeconds": retry_seconds,
-            "retryIntervalSeconds": 0.15,
-        });
+        let mut req = request(
+            SidecarCommand::FindItemGrid,
+            serde_json::json!({
+                "anchorTemplateKey": anchor_template_key,
+                "anchorTemplateReferenceWidth": anchor_template_reference_width,
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+                "retrySeconds": retry_seconds,
+                "retryIntervalSeconds": 0.15,
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -1209,19 +1255,21 @@ impl SidecarClient {
         region: NormRect,
         retry_seconds: f64,
     ) -> Result<ReadCraftEssenceGridResult, String> {
-        let mut req = serde_json::json!({
-            "cmd": "read_craft_essence_grid",
-            "anchorTemplateKey": anchor_template_key,
-            "anchorTemplateReferenceWidth": anchor_template_reference_width,
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-            "retrySeconds": retry_seconds,
-            "retryIntervalSeconds": 0.15,
-        });
+        let mut req = request(
+            SidecarCommand::ReadCraftEssenceGrid,
+            serde_json::json!({
+                "anchorTemplateKey": anchor_template_key,
+                "anchorTemplateReferenceWidth": anchor_template_reference_width,
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+                "retrySeconds": retry_seconds,
+                "retryIntervalSeconds": 0.15,
+            }),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -1235,9 +1283,10 @@ impl SidecarClient {
         &mut self,
         image_path: Option<&Path>,
     ) -> Result<ReadCraftEssenceMainTargetResult, String> {
-        let mut req = serde_json::json!({
-            "cmd": "read_craft_essence_main_target",
-        });
+        let mut req = request(
+            SidecarCommand::ReadCraftEssenceMainTarget,
+            serde_json::json!({}),
+        )?;
         Self::add_image_path(&mut req, image_path);
         let resp = self.send_recv(&req)?;
         if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -1257,15 +1306,17 @@ impl SidecarClient {
         region: NormRect,
         debug: bool,
     ) -> Result<serde_json::Value, String> {
-        let mut req = serde_json::json!({
-            "cmd": "read_battle_scene",
-            "region": {
-                "x": region.x,
-                "y": region.y,
-                "w": region.w,
-                "h": region.h,
-            },
-        });
+        let mut req = request(
+            SidecarCommand::ReadBattleScene,
+            serde_json::json!({
+                "region": {
+                    "x": region.x,
+                    "y": region.y,
+                    "w": region.w,
+                    "h": region.h,
+                },
+            }),
+        )?;
         if debug {
             req["debug"] = serde_json::Value::Bool(true);
         }
@@ -1315,14 +1366,16 @@ impl SidecarClient {
         bit_rate: u32,
         max_fps: u32,
     ) -> Result<(u32, u32), String> {
-        let mut req = serde_json::json!({
-            "cmd": "start_stream",
-            "adbPath": adb_path.to_string_lossy(),
-            "jarPath": jar_path.to_string_lossy(),
-            "maxSize": max_size,
-            "bitRate": bit_rate,
-            "maxFps": max_fps,
-        });
+        let mut req = request(
+            SidecarCommand::StartStream,
+            serde_json::json!({
+                "adbPath": adb_path.to_string_lossy(),
+                "jarPath": jar_path.to_string_lossy(),
+                "maxSize": max_size,
+                "bitRate": bit_rate,
+                "maxFps": max_fps,
+            }),
+        )?;
         if let Some(s) = serial {
             if let Some(obj) = req.as_object_mut() {
                 obj.insert("serial".into(), serde_json::Value::String(s.to_string()));
@@ -1344,7 +1397,7 @@ impl SidecarClient {
 
     /// Stop the scrcpy server / decoder thread. Safe to call if not started.
     pub fn stop_stream(&mut self) -> Result<(), String> {
-        let req = serde_json::json!({ "cmd": "stop_stream" });
+        let req = request(SidecarCommand::StopStream, serde_json::json!({}))?;
         let resp = self.send_recv(&req)?;
         if !resp["ok"].as_bool().unwrap_or(false) {
             let err = resp["error"].as_str().unwrap_or("unknown error");
@@ -1357,7 +1410,7 @@ impl SidecarClient {
     /// Release the disposable RapidOCR/ONNX worker without stopping the
     /// lightweight mash-cv process. Safe to call before OCR was initialized.
     pub fn release_ocr(&mut self) -> Result<(), String> {
-        let req = serde_json::json!({ "cmd": "release_ocr" });
+        let req = request(SidecarCommand::ReleaseOcr, serde_json::json!({}))?;
         let resp = self.send_recv(&req)?;
         if !resp["ok"].as_bool().unwrap_or(false) {
             let err = resp["error"].as_str().unwrap_or("unknown error");
@@ -1399,10 +1452,12 @@ impl SidecarClient {
         &mut self,
         wait_seconds: f64,
     ) -> Result<(String, u32, u32), String> {
-        let req = serde_json::json!({
-            "cmd": "get_frame",
-            "waitSeconds": wait_seconds,
-        });
+        let req = request(
+            SidecarCommand::GetFrame,
+            serde_json::json!({
+                "waitSeconds": wait_seconds,
+            }),
+        )?;
         let resp = self.send_recv(&req)?;
         if !resp["ok"].as_bool().unwrap_or(false) {
             let err = resp["error"].as_str().unwrap_or("unknown error");
@@ -1429,7 +1484,8 @@ impl SidecarClient {
             }
         }
         if let Some(mut child) = self.child.take() {
-            let req = serde_json::json!({"cmd": "quit"});
+            let req = request(SidecarCommand::Quit, serde_json::json!({}))
+                .expect("empty sidecar quit request must serialize");
             let mut line = req.to_string();
             line.push('\n');
             let _ = child.write(line.as_bytes());

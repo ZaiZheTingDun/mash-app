@@ -1965,12 +1965,12 @@ impl Runner {
                     self.emit("Attack", "宝具卡尚未识别完整，等待卡面稳定后重试");
                     thread::sleep(ACTION_DELAY);
                 },
-                NoblePhantasmDetectionMode::Gauge => loop {
+                NoblePhantasmDetectionMode::Gauge => {
                     let Some(nps) = self.read_noble_phantasm_gauges("Attack", false) else {
                         return None;
                     };
-                    break nps;
-                },
+                    nps
+                }
                 NoblePhantasmDetectionMode::GaugeBeforeAttack => {
                     let Some(nps) = self.battle.pre_attack_nps.clone() else {
                         self.fail_action(

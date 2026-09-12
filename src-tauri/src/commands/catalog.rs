@@ -1,7 +1,7 @@
 //! Servant, craft essence, and template catalog access.
 //! Localization rules live here so runners receive server-specific metadata.
 
-use super::projects::{read_app_ui_settings_from_path, write_app_ui_settings_to_path};
+use super::projects::update_app_ui_settings;
 use super::*;
 
 #[derive(serde::Serialize, Clone)]
@@ -796,6 +796,7 @@ fn servant_by_variant_key(variant_key: &str) -> Result<&'static ServantInfo, Str
 #[tauri::command]
 pub(crate) fn get_servant_portrait_path(
     app: tauri::AppHandle,
+    settings_state: tauri::State<'_, Mutex<AppUiSettings>>,
     servant_id: u32,
     face_id: Option<u32>,
     variant_key: Option<String>,
@@ -811,10 +812,10 @@ pub(crate) fn get_servant_portrait_path(
     let allowed_ids = variant
         .map(|servant| servant.portrait_ids.as_slice())
         .unwrap_or_default();
-    let global_id = variant_key.as_deref().and_then(|vk| {
-        let settings = read_app_ui_settings_from_path(&app_ui_settings_path(&app));
-        settings.servant_portrait_selections.get(vk).copied()
-    });
+    let settings = settings_state.lock().unwrap();
+    let global_id = variant_key
+        .as_deref()
+        .and_then(|vk| settings.servant_portrait_selections.get(vk).copied());
     let picked = if allowed_ids.is_empty() {
         pick_portrait_with_preferences_in(&servant_dir, global_id, face_id)
     } else {
@@ -843,6 +844,7 @@ pub(crate) struct ServantPortraitOptions {
 #[tauri::command]
 pub(crate) fn list_servant_portraits(
     app: tauri::AppHandle,
+    settings_state: tauri::State<'_, Mutex<AppUiSettings>>,
     servant_id: u32,
     variant_key: String,
 ) -> Result<ServantPortraitOptions, String> {
@@ -862,7 +864,7 @@ pub(crate) fn list_servant_portraits(
                 path: path.to_string_lossy().into_owned(),
             })
             .collect();
-    let settings = read_app_ui_settings_from_path(&app_ui_settings_path(&app));
+    let settings = settings_state.lock().unwrap();
     let selected_id = settings
         .servant_portrait_selections
         .get(&variant_key)
@@ -882,6 +884,7 @@ pub(crate) fn list_servant_portraits(
 #[tauri::command]
 pub(crate) fn save_servant_portrait_selection(
     app: tauri::AppHandle,
+    settings_state: tauri::State<'_, Mutex<AppUiSettings>>,
     variant_key: String,
     portrait_id: u32,
 ) -> Result<(), String> {
@@ -897,17 +900,18 @@ pub(crate) fn save_servant_portrait_selection(
     if pick_portrait_by_id_in(&root.join(servant.id.to_string()), portrait_id).is_none() {
         return Err(format!("从者 {} 缺少立绘 {portrait_id}", servant.name_cn));
     }
-    let path = app_ui_settings_path(&app);
-    let mut settings = read_app_ui_settings_from_path(&path);
-    settings
-        .servant_portrait_selections
-        .insert(variant_key, portrait_id);
-    write_app_ui_settings_to_path(&path, &settings)
+    update_app_ui_settings(&app, settings_state.inner(), |settings| {
+        settings
+            .servant_portrait_selections
+            .insert(variant_key, portrait_id);
+    })?;
+    Ok(())
 }
 
 #[tauri::command]
 pub(crate) fn get_servant_face_path(
     app: tauri::AppHandle,
+    settings_state: tauri::State<'_, Mutex<AppUiSettings>>,
     servant_id: u32,
     face_id: Option<u32>,
     variant_key: Option<String>,
@@ -923,10 +927,10 @@ pub(crate) fn get_servant_face_path(
     let allowed_ids = variant
         .map(|servant| servant.portrait_ids.as_slice())
         .unwrap_or_default();
-    let global_id = variant_key.as_deref().and_then(|vk| {
-        let settings = read_app_ui_settings_from_path(&app_ui_settings_path(&app));
-        settings.servant_portrait_selections.get(vk).copied()
-    });
+    let settings = settings_state.lock().unwrap();
+    let global_id = variant_key
+        .as_deref()
+        .and_then(|vk| settings.servant_portrait_selections.get(vk).copied());
     let picked =
         pick_face_for_ids_with_preferences_in(&servant_dir, global_id, face_id, allowed_ids);
     Ok(picked.map(|p| p.to_string_lossy().into_owned()))
@@ -2574,37 +2578,4 @@ pub(crate) fn get_servant_metadata(
 ) -> Result<ServantMetadata, String> {
     let server = *state.lock().unwrap();
     load_servant_metadata_for_variant(&app, id, server, variant_key.as_deref())
-}
-
-#[derive(serde::Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct AdbStatus {
-    pub(crate) connected: bool,
-    pub(crate) device_name: Option<String>,
-}
-
-#[derive(serde::Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct AdbResetStep {
-    pub(crate) command: String,
-    pub(crate) success: bool,
-    pub(crate) status: Option<i32>,
-    pub(crate) stdout: String,
-    pub(crate) stderr: String,
-}
-
-#[derive(serde::Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct AdbResetResult {
-    pub(crate) ok: bool,
-    pub(crate) steps: Vec<AdbResetStep>,
-}
-
-#[derive(serde::Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct AdbResetStatusEvent {
-    pub(crate) message: String,
-    pub(crate) step: Option<AdbResetStep>,
-    pub(crate) done: bool,
-    pub(crate) ok: Option<bool>,
 }

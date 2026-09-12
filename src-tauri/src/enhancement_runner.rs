@@ -1,6 +1,7 @@
 use crate::adb::Adb;
 use crate::runner::LogLevel;
 use crate::screen::{ElementMatch, NormRect, OcrFragment, OcrRegionResult, Point, SidecarClient};
+use crate::touch::{self, TouchBackend};
 use crate::Server;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -415,7 +416,7 @@ struct NamedOcr {
 }
 
 pub struct EnhancementRunner {
-    adb: Adb,
+    touch: Box<dyn TouchBackend>,
     sidecar: Option<SidecarClient>,
     sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     app_handle: tauri::AppHandle,
@@ -440,8 +441,9 @@ impl EnhancementRunner {
         target: EnhancementTarget,
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     ) -> Self {
+        let touch = touch::build(&adb, &app_handle, screen_size);
         Self {
-            adb,
+            touch,
             sidecar: Some(sidecar),
             sidecar_cache,
             app_handle,
@@ -619,9 +621,9 @@ impl EnhancementRunner {
         self.emit(screen, &message);
     }
 
-    fn tap_at(&self, screen: &str, point: Point) -> bool {
+    fn tap_at(&mut self, screen: &str, point: Point) -> bool {
         let (px, py) = point.to_physical(self.screen_w, self.screen_h);
-        match self.adb.tap(px, py) {
+        match self.touch.tap(px, py) {
             Ok(()) => true,
             Err(err) => {
                 self.fail(screen, format!("点击失败: {err}"));
@@ -630,10 +632,10 @@ impl EnhancementRunner {
         }
     }
 
-    fn swipe_at(&self, screen: &str, from: Point, to: Point, duration_ms: u32) -> bool {
+    fn swipe_at(&mut self, screen: &str, from: Point, to: Point, duration_ms: u32) -> bool {
         let from_px = from.to_physical(self.screen_w, self.screen_h);
         let to_px = to.to_physical(self.screen_w, self.screen_h);
-        match self.adb.swipe(from_px, to_px, duration_ms) {
+        match self.touch.swipe(from_px, to_px, duration_ms) {
             Ok(()) => true,
             Err(err) => {
                 self.fail(screen, format!("滑动失败: {err}"));
@@ -818,7 +820,7 @@ impl EnhancementRunner {
         }
     }
 
-    fn handle_enhance_menu(&self) {
+    fn handle_enhance_menu(&mut self) {
         self.emit("EnhanceMenu", "进入从者强化");
         if self.tap_at("EnhanceMenu", ENHANCE_SERVANT_ENTRY_BUTTON) {
             thread::sleep(Duration::from_millis(900));
@@ -1133,7 +1135,7 @@ impl EnhancementRunner {
         }
     }
 
-    fn handle_profile_update_dialog(&self, ocr: &OcrRegionResult) {
+    fn handle_profile_update_dialog(&mut self, ocr: &OcrRegionResult) {
         self.emit("ProfileDialog", "关闭资料更新弹窗");
         if let Some(center) = find_best_fragment_center(&ocr.fragments, "閉じる") {
             if self.tap_at("ProfileDialog", center) {
@@ -1145,7 +1147,7 @@ impl EnhancementRunner {
     }
 
     fn tap_fragment_if_present(
-        &self,
+        &mut self,
         screen: &str,
         fragments: &[OcrFragment],
         needle: &str,

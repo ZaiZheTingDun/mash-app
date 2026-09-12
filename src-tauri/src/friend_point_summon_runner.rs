@@ -6,7 +6,7 @@ use crate::Server;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use tauri::Emitter;
 
 pub(crate) const EVENT_NAME: &str = "friend-point-summon-automation-status";
@@ -25,7 +25,6 @@ const REQUIRED_STABLE_MATCHES: u8 = 2;
 const CONFIRMATION_MAX_CHECKS: u8 = 25;
 const MAX_ACTION_TAPS: u8 = 3;
 const RESULT_SETTLE_CHECKS: u8 = 20;
-const TAP_JITTER_PX: i32 = 6;
 
 const SUMMON_100_BUTTON: Point = Point::new(0.6845, 0.7205);
 const CONFIRM_BUTTON: Point = Point::new(0.661, 0.786);
@@ -197,7 +196,7 @@ impl FriendPointSummonRunner {
         screen_size: (u32, u32),
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     ) -> Self {
-        let touch = touch::build(&adb, &app_handle);
+        let touch = touch::build(&adb, &app_handle, screen_size);
         Self {
             sidecar: Some(sidecar),
             sidecar_cache,
@@ -649,10 +648,7 @@ impl FriendPointSummonRunner {
 
     fn tap_at(&mut self, screen: &str, point: Point) -> bool {
         let (px, py) = point.to_physical(self.screen_w, self.screen_h);
-        let (jx, jy) = jitter_offset();
-        let x = (px as i32 + jx).clamp(0, self.screen_w.saturating_sub(1) as i32) as u32;
-        let y = (py as i32 + jy).clamp(0, self.screen_h.saturating_sub(1) as i32) as u32;
-        match self.touch.tap(x, y) {
+        match self.touch.tap(px, py) {
             Ok(()) => true,
             Err(error) => {
                 self.fail(screen, format!("点击失败: {error}"));
@@ -718,18 +714,6 @@ fn current_screen_name(screen: ObservedScreen) -> &'static str {
         ObservedScreen::SummonShell => "GrandSummon",
         ObservedScreen::Unknown => "Unknown",
     }
-}
-
-fn jitter_offset() -> (i32, i32) {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.subsec_nanos())
-        .unwrap_or(0);
-    let span = (TAP_JITTER_PX * 2 + 1) as u32;
-    (
-        (nanos % span) as i32 - TAP_JITTER_PX,
-        ((nanos / span) % span) as i32 - TAP_JITTER_PX,
-    )
 }
 
 pub(crate) fn server_supported(server: Server) -> bool {

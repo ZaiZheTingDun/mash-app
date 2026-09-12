@@ -15,7 +15,6 @@ use tauri::Emitter;
 
 pub(crate) const EVENT_NAME: &str = "craft-essence-enhancement-automation-status";
 const SCREEN_NAME: &str = "CraftEssenceEnhancement";
-const TAP_JITTER_PX: i32 = 6;
 const BINARY_CONTROL_MIN_SCORE: f64 = 0.9;
 const BINARY_CONTROL_SCORE_MARGIN: f64 = 0.04;
 const FILTER_TOGGLE_OFF_MAX_LUMA: f64 = 145.0;
@@ -1076,7 +1075,7 @@ impl CraftEssenceEnhancementRunner {
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
         mode: CraftEssenceEnhancementMode,
     ) -> Self {
-        let touch = touch::build(&adb, &app_handle);
+        let touch = touch::build(&adb, &app_handle, screen_size);
         Self {
             sidecar: Some(sidecar),
             sidecar_cache,
@@ -3567,10 +3566,7 @@ impl CraftEssenceEnhancementRunner {
 
     fn tap_at(&mut self, screen: &str, point: Point) -> bool {
         let (px, py) = point.to_physical(self.screen_w, self.screen_h);
-        let (jx, jy) = jitter_offset();
-        let x = (px as i32 + jx).clamp(0, self.screen_w.saturating_sub(1) as i32) as u32;
-        let y = (py as i32 + jy).clamp(0, self.screen_h.saturating_sub(1) as i32) as u32;
-        match self.touch.tap(x, y) {
+        match self.touch.tap(px, py) {
             Ok(()) => true,
             Err(err) => {
                 self.fail(screen, format!("点击失败: {err}"));
@@ -3582,19 +3578,10 @@ impl CraftEssenceEnhancementRunner {
     fn swipe_at(&mut self, screen: &str, from: Point, to: Point, duration_ms: u32) -> bool {
         let (from_x, from_y) = from.to_physical(self.screen_w, self.screen_h);
         let (to_x, to_y) = to.to_physical(self.screen_w, self.screen_h);
-        let (jx, jy) = jitter_offset();
-        let clamp_x = |value: u32| {
-            (value as i32 + jx).clamp(0, self.screen_w.saturating_sub(1) as i32) as u32
-        };
-        let clamp_y = |value: u32| {
-            (value as i32 + jy).clamp(0, self.screen_h.saturating_sub(1) as i32) as u32
-        };
-        match self.touch.swipe_with_settle(
-            (clamp_x(from_x), clamp_y(from_y)),
-            (clamp_x(to_x), clamp_y(to_y)),
-            duration_ms,
-            180,
-        ) {
+        match self
+            .touch
+            .swipe_with_settle((from_x, from_y), (to_x, to_y), duration_ms, 180)
+        {
             Ok(()) => true,
             Err(err) => {
                 self.fail(screen, format!("滑动失败: {err}"));
@@ -3675,18 +3662,6 @@ impl Drop for CraftEssenceEnhancementRunner {
             }
         }
     }
-}
-
-fn jitter_offset() -> (i32, i32) {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.subsec_nanos())
-        .unwrap_or(0);
-    let span = (TAP_JITTER_PX * 2 + 1) as u32;
-    (
-        (nanos % span) as i32 - TAP_JITTER_PX,
-        ((nanos / span) % span) as i32 - TAP_JITTER_PX,
-    )
 }
 
 pub(crate) fn server_supported(server: Server) -> bool {

@@ -460,7 +460,7 @@ fn app_ui_settings_persist_active_project_id() {
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("app_ui_settings.json");
 
-    let initial = read_app_ui_settings_from_path(&path);
+    let initial = read_app_ui_settings_from_path(&path).unwrap();
     assert!(initial.active_project_id.is_none());
     assert_eq!(initial.battle_start_panel, BattleStartPanel::OperationLog);
 
@@ -474,7 +474,7 @@ fn app_ui_settings_persist_active_project_id() {
     )
     .unwrap();
 
-    let saved = read_app_ui_settings_from_path(&path);
+    let saved = read_app_ui_settings_from_path(&path).unwrap();
     assert_eq!(saved.active_project_id.as_deref(), Some("project-2"));
     assert_eq!(saved.theme.as_deref(), Some("system"));
     assert_eq!(saved.battle_start_panel, BattleStartPanel::OperationLog);
@@ -491,8 +491,20 @@ fn app_ui_settings_round_trip_battle_start_panel() {
 
     write_app_ui_settings_to_path(&path, &settings).unwrap();
 
-    let saved = read_app_ui_settings_from_path(&path);
+    let saved = read_app_ui_settings_from_path(&path).unwrap();
     assert_eq!(saved.battle_start_panel, BattleStartPanel::RunStatus);
+}
+
+#[test]
+fn malformed_projects_file_is_reported_without_overwriting_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    fs::write(&path, "{broken").unwrap();
+
+    let error = read_projects_from_path(&path).unwrap_err();
+
+    assert!(error.contains("项目配置格式错误"));
+    assert_eq!(fs::read_to_string(path).unwrap(), "{broken");
 }
 
 fn test_project(id: &str, name: &str, advanced_mode: bool) -> Project {
@@ -809,11 +821,18 @@ fn config_import_appends_copies_with_new_ids_and_unique_names() {
     let imported = &result.imported_projects[0];
     assert_ne!(imported.id, "source");
     assert_eq!(imported.name, "第一套（导入 2）");
-    let projects = read_projects_from_path(&root.join("projects.json"));
+    let projects = read_projects_from_path(&root.join("projects.json")).unwrap();
     assert_eq!(projects.len(), 3);
-    assert_eq!(load_battle_scenes_from_root(root, &imported.id).len(), 1);
     assert_eq!(
-        load_advanced_battle_scenes_from_root(root, &imported.id).len(),
+        load_battle_scenes_from_root(root, &imported.id)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        load_advanced_battle_scenes_from_root(root, &imported.id)
+            .unwrap()
+            .len(),
         1
     );
 }
@@ -847,13 +866,19 @@ fn config_import_only_imports_selected_keys() {
 
     assert_eq!(result.imported_projects.len(), 1);
     assert_eq!(result.imported_projects[0].name, "第二套（导入）");
-    let projects = read_projects_from_path(&root.join("projects.json"));
+    let projects = read_projects_from_path(&root.join("projects.json")).unwrap();
     assert_eq!(projects.len(), 1);
     assert_eq!(
-        load_advanced_battle_scenes_from_root(root, &result.imported_projects[0].id).len(),
+        load_advanced_battle_scenes_from_root(root, &result.imported_projects[0].id)
+            .unwrap()
+            .len(),
         1
     );
-    assert!(load_battle_scenes_from_root(root, &result.imported_projects[0].id).is_empty());
+    assert!(
+        load_battle_scenes_from_root(root, &result.imported_projects[0].id)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]

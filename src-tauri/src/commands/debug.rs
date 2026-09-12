@@ -224,12 +224,15 @@ fn require_automation_idle(
 ) -> Result<(), String> {
     let handle = handle_state.lock().unwrap();
     let state = handle.state.lock().unwrap().clone();
-    if matches!(state, RunnerState::Running) {
+    if matches!(state, RunnerState::Starting | RunnerState::Running) {
         return Err("自动化正在运行中，请先停止后再使用调试功能".into());
     }
     let handle = enhancement_handle_state.lock().unwrap();
     let state = handle.state.lock().unwrap().clone();
-    if matches!(state, EnhancementRunnerState::Running) {
+    if matches!(
+        state,
+        EnhancementRunnerState::Starting | EnhancementRunnerState::Running
+    ) {
         return Err("强化自动化正在运行中，请先停止后再使用调试功能".into());
     }
     let handle = ce_enhancement_handle_state.lock().unwrap();

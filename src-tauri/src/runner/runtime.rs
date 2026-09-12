@@ -138,12 +138,7 @@ impl Runner {
 
     pub(crate) fn tap_at(&mut self, screen: &str, point: Point) -> bool {
         let (px, py) = point.to_physical(self.screen_w, self.screen_h);
-        let (jx, jy) = jitter_offset();
-        // Saturate at the screen edges so a near-edge button still
-        // registers even if the jitter would push it off-screen.
-        let tap_x = (px as i32 + jx).clamp(0, self.screen_w.saturating_sub(1) as i32) as u32;
-        let tap_y = (py as i32 + jy).clamp(0, self.screen_h.saturating_sub(1) as i32) as u32;
-        match self.touch.tap(tap_x, tap_y) {
+        match self.touch.tap(px, py) {
             Ok(()) => true,
             Err(err) => {
                 self.fail_action(screen, "点击", err);
@@ -158,10 +153,7 @@ impl Runner {
     /// Android's instantaneous `input tap`.
     pub(crate) fn press_at(&mut self, screen: &str, point: Point, duration_ms: u32) -> bool {
         let (px, py) = point.to_physical(self.screen_w, self.screen_h);
-        let (jx, jy) = jitter_offset();
-        let press_x = (px as i32 + jx).clamp(0, self.screen_w.saturating_sub(1) as i32) as u32;
-        let press_y = (py as i32 + jy).clamp(0, self.screen_h.saturating_sub(1) as i32) as u32;
-        let press = (press_x, press_y);
+        let press = (px, py);
         match self.touch.swipe_with_settle(press, press, 0, duration_ms) {
             Ok(()) => true,
             Err(err) => {

@@ -96,12 +96,6 @@ const SKILL_ACTIVATION_START_TIMEOUT: Duration = Duration::from_secs(2);
 /// so automation does not stall forever.
 const POST_ATTACK_HUD_READ_TIMEOUT: Duration = Duration::from_secs(3);
 const COMMAND_CARD_COUNT: usize = 5;
-/// Maximum per-axis jitter (in physical pixels) added to every tap so
-/// repeated runs don't land on identical coordinates. Small enough to
-/// stay well inside button hit-boxes; large enough that the noise is
-/// distinguishable from a deterministic script.
-const TAP_JITTER_PX: i32 = 6;
-
 const DEFAULT_W: u32 = 1080;
 const DEFAULT_H: u32 = 1920;
 const DEFAULT_FRAME_W: u32 = 1920;
@@ -232,7 +226,7 @@ impl Runner {
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         let (frame_w, frame_h) = frame_size.unwrap_or((DEFAULT_FRAME_W, DEFAULT_FRAME_H));
-        let touch = touch::build(&adb, &app_handle);
+        let touch = touch::build(&adb, &app_handle, (screen_w, screen_h));
         Self {
             touch,
             sidecar: Some(sidecar),
@@ -304,23 +298,6 @@ impl Drop for Runner {
             }
         }
     }
-}
-
-/// Cheap (dx, dy) pixel jitter in the range
-/// `[-TAP_JITTER_PX, TAP_JITTER_PX]` derived from the current wall-clock
-/// nanos. Avoids pulling in a `rand` dependency for what is essentially
-/// "make our taps look slightly less robotic" -- the distribution does
-/// not need to be cryptographically uniform.
-fn jitter_offset() -> (i32, i32) {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.subsec_nanos())
-        .unwrap_or(0);
-    // Two independent low-bit slices of the same nanos value.
-    let span = (TAP_JITTER_PX * 2 + 1) as u32;
-    let dx = (nanos % span) as i32 - TAP_JITTER_PX;
-    let dy = ((nanos / span) % span) as i32 - TAP_JITTER_PX;
-    (dx, dy)
 }
 
 #[cfg(test)]

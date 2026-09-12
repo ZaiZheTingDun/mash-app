@@ -1,4 +1,5 @@
 mod adb;
+mod automation_coordinator;
 mod battle_statistics;
 mod commands;
 mod craft_essence_enhancement_runner;
@@ -10,6 +11,7 @@ mod paths;
 mod runner;
 mod screen;
 mod server;
+mod storage;
 mod touch;
 
 #[cfg(test)]
@@ -25,6 +27,7 @@ use std::sync::{Arc, Mutex};
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
 
+use automation_coordinator::AutomationCoordinator;
 use craft_essence_enhancement_runner::CraftEssenceEnhancementRunnerHandle;
 use enhancement_runner::EnhancementRunnerHandle;
 use friend_point_summon_runner::FriendPointSummonRunnerHandle;
@@ -235,21 +238,30 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let adb_device_settings = load_adb_device_settings(&app.handle());
-            let server = load_server_setting(&app.handle());
-            let recognition_settings = load_recognition_settings(&app.handle());
-            let debug_settings = commands::settings::load_debug_settings(&app.handle());
+            let adb_device_settings =
+                load_adb_device_settings(app.handle()).map_err(std::io::Error::other)?;
+            let server = load_server_setting(app.handle()).map_err(std::io::Error::other)?;
+            let recognition_settings =
+                load_recognition_settings(app.handle()).map_err(std::io::Error::other)?;
+            let debug_settings = commands::settings::load_debug_settings(app.handle())
+                .map_err(std::io::Error::other)?;
+            let app_ui_settings = commands::projects::read_app_ui_settings_from_path(
+                &app_ui_settings_path(app.handle()),
+            )
+            .map_err(std::io::Error::other)?;
             #[cfg(desktop)]
             configure_app_menu(app)?;
-            refresh_asset_protocol_scope(&app.handle())?;
+            refresh_asset_protocol_scope(app.handle())?;
             app.manage(Mutex::new(adb_device_settings));
             app.manage(Mutex::new(server));
             app.manage(Mutex::new(recognition_settings));
             app.manage(Mutex::new(debug_settings));
+            app.manage(Mutex::new(app_ui_settings));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
             app.manage(Mutex::new(EnhancementRunnerHandle::new_idle()));
             app.manage(Mutex::new(CraftEssenceEnhancementRunnerHandle::new_idle()));
             app.manage(Mutex::new(FriendPointSummonRunnerHandle::new_idle()));
+            app.manage(AutomationCoordinator::default());
             app.manage(Arc::new(ResourceDownloadCancelState::default()));
             app.manage(commands::debug::DebugSidecar::new());
             Ok(())
