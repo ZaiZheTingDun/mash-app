@@ -3,8 +3,10 @@
 本文说明 `find_noble_phantasms` 如何判断前排各从者的 Noble Phantasm 是否就绪。
 
 - **Sidecar 入口**：`sidecar/mash_cv/mash_cv/cv.py` 中的 `_find_noble_phantasms`
-- **Rust 客户端**：`src-tauri/src/screen.rs` 中的 `SidecarClient::find_noble_phantasms`
-- **Runner 使用处**：`src-tauri/src/runner/attack.rs` 中的 `Runner::read_attack_state`
+- **Rust 客户端**：`src-tauri/src/screen/operations/battle.rs` 中的 `SidecarClient::find_noble_phantasms`（由 `screen.rs` facade 组织）
+- **Runner 使用处**：`src-tauri/src/runner/attack/runtime.rs` 中的 `Runner::read_attack_state`；选卡前采样流程位于 `attack/selection_runtime.rs`
+- **聚合与模式判断**：`src-tauri/src/runner/attack/noble_phantasm.rs`
+- **调试命令**：`src-tauri/src/commands/debug/noble_phantasm.rs`
 - **调试界面**：`src/features/debug/DebugPage.tsx` 中的 `readNpGauges` / `动态检测端帽`
 
 ## 信号
@@ -81,9 +83,9 @@ Runner 将缺少端帽分数视为不完整读取，返回：
 }
 ```
 
-`Runner::read_attack_state` 会将任意 `None` 的 `npGlowScore` 视为不完整读取，等待 `ACTION_DELAY` 后再次调用 `find_noble_phantasms`。它只会在全部五个指令卡槽均出现 suit/icon 信号后启动 gauge 循环，从而让指令卡按钮切换动画离开底部 gauge 后再读取 NP；取消操作仍会退出该循环。
+`Runner::read_attack_state` 会将任意 `None` 的 `npGlowScore` 视为不完整读取，等待 `ACTION_DELAY` 后再次调用 `find_noble_phantasms`。它只会在全部五个指令卡槽均出现 suit/icon 信号后启动 gauge 循环，从而让指令卡按钮切换动画离开底部 gauge 后再读取 NP；取消操作仍会退出该循环。设备采样循环位于 `attack/selection_runtime.rs`，完整性和聚合规则位于 `attack/noble_phantasm.rs`。
 
-仅供调试的实时命令 `debug_read_noble_phantasm_gauges_live` 会采样一秒，并返回每个槽位所见的最高 `npGlowScore`，以捕获呼吸灯的峰值，无需写入截图文件。
+仅供调试的实时命令 `debug_read_noble_phantasm_gauges_live` 会采样一秒，并按槽位取有效 `npGlowScore` 的中位数，无需写入截图文件。
 
 ## 响应结构
 

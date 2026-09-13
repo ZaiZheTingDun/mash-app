@@ -1,6 +1,6 @@
 # 强化自动化画面关系
 
-本图描述 `src-tauri/src/enhancement_runner.rs` 实现的强化画面及 variant 关系。画面路由采用 template-first 方式，使用 `src-tauri/resources/servers/<server>/cv.json` 中各 screen 的 `detect` 和 `variants` 配置。
+本图描述 `src-tauri/src/enhancement_runner.rs` facade 与 `src-tauri/src/enhancement_runner/` 子模块实现的强化画面及 variant 关系；Tauri lifecycle command 位于 `src-tauri/src/commands/automation/enhancement.rs`。画面路由采用 template-first 方式，使用 `src-tauri/resources/servers/<server>/cv.json` 中各 screen 的 `detect` 和 `variants` 配置。
 
 ```mermaid
 stateDiagram-v2

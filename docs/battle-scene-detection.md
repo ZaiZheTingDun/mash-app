@@ -3,9 +3,10 @@
 本文说明 `read_battle_scene` 如何识别攻击画面右上 HUD、金色 **BATTLE** 标签旁的 `m / n` 指示器，以及 runner 如何在每次场景切换时选择对应的已配置技能块。
 
 - **Sidecar 入口**：`sidecar/mash_cv/mash_cv/cv.py` 中的 `_read_battle_scene`
-- **Rust 客户端**：`src-tauri/src/screen.rs` 中的 `SidecarClient::read_battle_scene`
-- **Runner 使用处**：`src-tauri/src/runner/engine.rs` 中 `tick_scene_state` 调用附近的 `Runner::handle_battle`
-- **调试界面**：`debug_read_battle_scene` Tauri command 与 `DebugPage.tsx`
+- **Rust 客户端**：`src-tauri/src/screen/operations/battle.rs` 中的 `SidecarClient::read_battle_scene`（由 `screen.rs` facade 组织）
+- **Runner 使用处**：`src-tauri/src/runner/engine.rs` 中的 `Runner::handle_battle`，状态转换 helper 位于 `runner/state.rs::tick_scene_state`
+- **调试命令**：`src-tauri/src/commands/debug/battle.rs` 中的 `debug_read_battle_scene`
+- **调试界面**：`src/features/debug/DebugPage.tsx`
 
 ## 解决的问题
 

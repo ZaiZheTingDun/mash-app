@@ -29,27 +29,39 @@ Backend 代码位于 `src-tauri/src/`。
 - `lib.rs` 负责 Tauri builder：plugin registration、managed state、menu 与 command registration。
 - `commands/` 存放 Tauri command 及相关 helper：
   - `adb.rs`：ADB status/reset/screenshot。
-  - `assets.rs`：asset bundle status/import/download/self-check。
-  - `automation.rs`：战斗/强化自动化 start/stop/status 与 sidecar startup。
-  - `catalog.rs`：从者/CE catalog、asset lookup 与 metadata localization。
-  - `debug.rs`：debug page command 与共享 debug sidecar state。
-  - `projects.rs`：项目 CRUD 与配置 import/export。
-  - `runtime.rs`：CV runtime status/import/download 与 runtime resource resolution。
-  - `settings.rs`：app settings、startup migration、server selection 与 update-check settings。
-- `runner/` 按 domain 拆分战斗自动化 state machine：config、coordinates、state、support、AP recovery、party mutation、attack selection、runtime helper、prebattle routing、result handling 与测试。`runner/grand.rs` 是共享 Grand rule engine/strategy registry；`runner/grand/` 每个 Grand class 一个 strategy module。
+  - `assets.rs` + `assets/download.rs`：asset bundle status/import/self-check 与下载。
+  - `automation.rs` + `automation/`：共享 start/stop/status，以及 battle、servant enhancement、CE enhancement、friend-point summon 的 lifecycle command。
+  - `catalog.rs` + `catalog/`：从者目录与图片选择入口；`craft_essences.rs`、`metadata.rs`、`skills.rs` 分别负责 CE catalog、metadata localization 和技能资料。
+  - `debug.rs` + `debug/`：通用模板命令入口；`session.rs` 管理共享 sidecar，`capture.rs` 管理截图/视频流，`battle.rs`、`noble_phantasm.rs`、`support.rs`、`enhancement.rs` 按诊断领域分组。
+  - `projects.rs` + `projects/config_transfer.rs`：项目 CRUD、配置 import/export。
+  - `runtime.rs` + `runtime/resolution.rs`：CV runtime status/import/download 与 runtime resource resolution。
+  - `settings.rs` + `settings/tests.rs`：app settings、startup migration、server selection、update-check settings 与对应测试。
+- `runner/` 按 domain 拆分战斗自动化 state machine：
+  - `engine.rs`、`state.rs`：tick routing 与权威流程状态。
+  - `prebattle.rs`、`results.rs`、`ap_recovery.rs`：战前、结算和 AP 恢复流程。
+  - `support.rs` + `support/runtime.rs`：助战筛选规则与设备运行时。
+  - `actions.rs` + `actions/helpers.rs`：技能/换人执行与纯坐标、分类 helper。
+  - `attack.rs` + `attack/`：选卡入口；`critical.rs`、`noble_phantasm.rs`、`conditions.rs` 负责纯决策，`runtime.rs`、`selection_runtime.rs`、`advanced_runtime.rs` 负责设备交互流程。
+  - `party.rs` + `party/`：阵容 identity 入口；`lineup.rs`、`resolution.rs`、`replay.rs`、`runtime.rs` 分别负责阵容变更、动作槽位解析、历史重放和运行时身份构建。
+  - `grand.rs` + `grand/`：共享 Grand rule engine/strategy registry，以及按 class 划分的 strategy module。
+  - `config.rs`、`coords.rs`、`runtime.rs`：runner 配置、归一化坐标和共享运行时 helper。
+  - `tests.rs`：跨 runner 子模块的行为测试。
 - `touch/` 存放底层 touch input construction。
-- `screen.rs` 负责 Python sidecar client/IPC；`screen/types.rs` 定义通过 `crate::screen` re-export 的 screen/CV DTO。
-- `enhancement_runner.rs` 负责强化自动化。
+- `screen.rs` 是 Python sidecar IPC facade；`screen/client.rs` 管理进程与请求生命周期，`screen/protocol.rs` 定义 JSON-line protocol，`screen/types.rs` 定义通过 `crate::screen` re-export 的 DTO，`screen/operations/` 按 battle、support、enhancement、template matching 拆分调用封装，`screen/tests.rs` 覆盖协议与 DTO。
+- `enhancement_runner.rs` + `enhancement_runner/` 负责从者强化自动化及其 runtime helper。
+- `craft_essence_enhancement_runner.rs` + `craft_essence_enhancement_runner/` 负责 CE 强化策略、材料选择、runtime 与测试。
+- `friend_point_summon_runner.rs` 负责友情点召唤自动化。
 - `models.rs` 存放 command 与 frontend IPC 共用的 serde DTO。
 - `paths.rs` 存放 app-data/resource path resolution 与 migration helper。
 - `server.rs` 存放 server enum 与 stream-resolution validation。
-- `tests.rs` 存放跨 module backend 测试；domain-specific 测试应尽量与 module 放在一起。
-- `resources/` 存放 backend 使用的 embedded catalog JSON。
+- 根 `tests.rs` 存放跨 module backend 测试；domain-specific 测试放在最近的 sibling `tests.rs` 或 local `#[cfg(test)]` module。
+- `src-tauri/src/resources/` 存放通过 `include_str!` 编入 backend 的 catalog JSON；`src-tauri/resources/` 存放随应用分发的 runtime manifest、server CV 配置、模板、图片与 scrcpy server。两者不要混用。
 
 ## 新文件规则
 
 - Feature 自有 React UI 放在 `src/features/<feature>/`，不要放到根 `src/components/`。
 - 只有至少两个 feature 使用或抽象明显可复用时，才放入 `src/components/common/`。
 - 测试放在最近的 sibling `__tests__/`。
-- 新 Tauri command 放在 `src-tauri/src/commands/`，纯 domain 内部逻辑除外。
+- 新 Tauri command 放在 `src-tauri/src/commands/`；当某个 domain 已有同名子目录时，按现有职责放入该子模块，并由同名 `.rs` facade re-export/register。
 - 自动化 state-machine 逻辑保留在 `runner/` 或 `enhancement_runner.rs`；状态或页面路由变化时同步更新 `docs/state-machines/`。
+- 大文件拆分优先保留 facade：`foo.rs` 放共享类型、入口与 re-export，`foo/` 按业务职责拆分纯逻辑、runtime/device I/O 和测试。不要只按行数机械切文件。

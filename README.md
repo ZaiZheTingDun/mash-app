@@ -17,19 +17,39 @@ An automation tool for FGO (Fate/Grand Order). Connects to an Android device or 
 
 ```
 src/                         # React frontend
-  components/                # UI components (party editor, command planner, debug page, etc.)
-  types/                     # TypeScript type definitions
+  App.tsx                    # Top-level routing and cross-feature orchestration
+  components/common/        # Shared UI primitives used by multiple features
+  features/                  # Feature-owned pages, components, helpers, and tests
+  styles/                    # Global and feature-oriented CSS
+  test/                      # Shared Vitest/RTL setup and render helpers
+  types/                     # Shared TypeScript interfaces for backend DTOs
 src-tauri/                   # Tauri / Rust backend
   src/
     main.rs                  # Thin entry, calls mash_lib::run()
     lib.rs                   # Tauri command registration & plugin wiring
+    commands/                # Tauri commands grouped by domain
+      automation/            # Battle, enhancement, CE, and friend-point lifecycle commands
+      catalog/               # CE catalog, servant metadata, and skill helpers
+      debug/                 # Capture/session and battle, NP, support, enhancement diagnostics
+      assets/                # Managed asset download/install helpers
+      projects/              # Project persistence and configuration transfer
+      runtime/               # External mash-cv runtime resolution
     adb.rs                   # ADB device connection, tap, swipe
-    screen.rs                # Python sidecar IPC (stream, detect, find_element, read_battle_scene)
-    runner/                  # Battle automation state machine and domain handlers
-    debug.rs                 # Debug-page commands (screenshot capture, coord dump)
+    screen.rs, screen/       # Sidecar client, protocol, DTOs, and operation groups
+      operations/            # Battle, support, enhancement, and template-matching IPC
+    runner/                  # Battle state machine and domain handlers
+      actions/               # Skill execution helpers
+      attack/                # Card selection, NP recognition, conditions, and runtime flows
+      grand/                 # Grand-class strategy implementations and shared rules
+      party/                 # Lineup mutation, action resolution, replay, and runtime identity
+      support/               # Support selection policy and runtime flow
+    enhancement_runner/      # Servant-enhancement runtime helpers
+    craft_essence_enhancement_runner/ # CE enhancement policy/material/runtime helpers
+    touch/                   # Low-level, jittered device input abstraction
+    resources/               # Embedded catalog JSON consumed with include_str!
   resources/
     runtime-manifest.json    # Required mash-cv base/code versions + artifact metadata
-    servers/                 # Per-server CV configs and PNG templates
+    servers/                 # JP/CN/shared CV configs and PNG templates
     scrcpy/scrcpy-server.jar # Pushed to device for realtime H.264 streaming
 sidecar/                     # Python image recognition process (Poetry-managed)
   mash_cv/
@@ -41,6 +61,8 @@ sidecar/                     # Python image recognition process (Poetry-managed)
     build_sidecar.sh         # PyInstaller --onedir build script
     pyproject.toml           # Poetry dependencies
 ```
+
+See [docs/module-structure.md](docs/module-structure.md) for module ownership and placement rules.
 
 ## Prerequisites
 

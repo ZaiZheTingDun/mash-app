@@ -1,6 +1,6 @@
 # 友情点抽取自动化
 
-友情点抽取由独立的 `friend_point_summon_runner` 驱动，当前仅支持国服。它与战斗、从者强化和概念礼装强化 runner 互斥，只共享 ADB、视频流、触控和 CV sidecar 基础设施。
+友情点抽取由独立的 `src-tauri/src/friend_point_summon_runner.rs` 驱动，Tauri lifecycle command 位于 `src-tauri/src/commands/automation/friend_point.rs`，当前仅支持国服。它与战斗、从者强化和概念礼装强化 runner 互斥，只共享 ADB、视频流、触控和 CV sidecar 基础设施。
 
 ## 页面和安全约束
 

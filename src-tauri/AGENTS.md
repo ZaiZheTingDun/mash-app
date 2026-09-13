@@ -50,4 +50,4 @@
 
 ## Testing
 
-Plain `cargo test` against `#[cfg(test)] mod tests { ... }` blocks at the bottom of each `src-tauri/src/*.rs` module. No extra dev-deps needed.
+Run `cargo test --manifest-path src-tauri/Cargo.toml` from the repository root. Larger domains keep tests in sibling modules such as `runner/tests.rs`, `screen/tests.rs`, and `commands/settings/tests.rs`; smaller modules may still use a local `#[cfg(test)] mod tests` block. No extra dev-deps are needed.

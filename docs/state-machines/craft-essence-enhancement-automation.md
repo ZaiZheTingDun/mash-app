@@ -1,6 +1,6 @@
 # 概念礼装丸子自动化
 
-本流程由独立的 `craft_essence_enhancement_runner` 驱动，当前仅支持国服。它不依赖从者强化 runner；两者只共享 ADB、视频流、识图和运行互斥基础设施。
+本流程由 `src-tauri/src/craft_essence_enhancement_runner.rs` facade 与 `src-tauri/src/craft_essence_enhancement_runner/` 子模块驱动，Tauri lifecycle command 位于 `src-tauri/src/commands/automation/craft_essence.rs`，当前仅支持国服。它不依赖从者强化 runner；两者只共享 ADB、视频流、识图和运行互斥基础设施。
 
 页面提供两个独立策略：
 

@@ -16,17 +16,31 @@ src/                              # React frontend
   test/                           # Shared frontend test helpers (setup.ts, renderWithTheme.tsx)
   types/                          # Shared TypeScript interfaces
 src-tauri/                        # Tauri / Rust backend
-  src/                            # Each module ends with a `#[cfg(test)] mod tests` block
+  src/
     main.rs                       # Thin entry: calls mash_lib::run()
     lib.rs                        # Tauri builder, managed state, plugin/menu setup, command registration
-    commands/                     # Tauri command modules grouped by domain
+    commands/                     # Domain commands; larger domains use sibling subdirectories
+      automation/                 # Battle/enhancement/CE/friend-point lifecycle commands
+      catalog/                    # CE catalog, servant metadata, and skill helpers
+      debug/                      # Session/capture plus battle/NP/support/enhancement diagnostics
+      assets/, projects/, runtime/ # Download, persistence, and runtime-resolution helpers
     adb.rs                        # ADB device connection, tap, swipe
-    screen.rs, screen/            # Python sidecar IPC and screen/CV DTOs
-    runner/                       # Battle automation runner modules
+    screen.rs, screen/            # Sidecar client, protocol, CV DTOs, and operation groups
+      operations/                 # Battle/support/enhancement/template-matching IPC
+    runner/                       # Battle automation runner modules and shared tests
+      actions/                    # Skill/action helper functions
+      attack/                     # Selection, critical, NP, condition, and runtime modules
+      grand/                      # Grand-class strategies and rule engine
+      party/                      # Lineup, resolution, replay, and identity runtime
+      support/                    # Support-selection runtime
+    enhancement_runner/           # Servant-enhancement runtime helpers
+    craft_essence_enhancement_runner/ # CE enhancement policy/material/runtime helpers
     touch/                        # Low-level touch event helpers
+    resources/                    # Embedded catalog JSON used by Rust
   resources/                      # Bundled runtime assets (see resources/README.md)
-    cv.json                       # Screen / element template config
-    templates/                    # PNG templates (buttons, anchors, digit_0..9, …)
+    runtime-manifest.json         # Required external mash-cv artifact versions
+    servers/{jp,cn,shared}/       # Per-server/shared CV config and PNG templates
+    images/                       # Bundled UI/game-derived image assets
     scrcpy/                       # Pinned scrcpy-server.jar for realtime streaming
   capabilities/                   # Tauri permission capabilities
   tauri.conf.json                 # Tauri app configuration
@@ -85,7 +99,7 @@ bash build_sidecar.sh       # Build runtime base zip + lightweight code zip arti
 Three independent test runners cover the three layers — none of them require an ADB device, scrcpy stream, or PyInstaller-bundled sidecar:
 
 - **Frontend** — Vitest + `@testing-library/react` + jsdom. See `src/AGENTS.md` for setup and conventions.
-- **Rust** — `cargo test` against `#[cfg(test)] mod tests` blocks. See `src-tauri/AGENTS.md` for conventions.
+- **Rust** — `cargo test` against sibling `tests.rs` modules and local `#[cfg(test)]` blocks. See `src-tauri/AGENTS.md` for conventions.
 - **Python sidecar** — pytest under `sidecar/mash_cv/tests/`. See `sidecar/mash_cv/AGENTS.md` for conventions.
 
 `pnpm build` runs `eslint . && tsc && vitest run && vite build` in order, so a broken test fails the production build (and therefore `pnpm tauri build`). Always run the layer-appropriate test command after edits. The Vite dev server runs on port **1420** with `strictPort: true`.
