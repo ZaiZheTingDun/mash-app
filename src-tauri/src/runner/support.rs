@@ -94,6 +94,8 @@ pub(crate) fn support_row_tap_point(row: &SupportRowMatch) -> Point {
 mod class_filter;
 pub(crate) use class_filter::*;
 
+mod class_filter_runtime;
+
 mod craft_essence;
 pub(crate) use craft_essence::*;
 
