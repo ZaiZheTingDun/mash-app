@@ -101,6 +101,8 @@ pub(crate) use craft_essence::*;
 
 mod craft_essence_runtime;
 
+mod navigation_runtime;
+
 mod requirements;
 pub(crate) use requirements::*;
 
