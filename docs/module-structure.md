@@ -29,7 +29,7 @@ Backend 代码位于 `src-tauri/src/`。
 - `lib.rs` 负责 Tauri builder：plugin registration、managed state、menu 与 command registration。
 - `commands/` 存放 Tauri command 及相关 helper：
   - `adb.rs`：ADB status/reset/screenshot。
-  - `assets.rs` + `assets/download.rs`：asset bundle status/import/self-check 与下载。
+  - `assets.rs` + `assets/`：asset bundle manifest、安装计划和导入入口；`status.rs` 负责安装状态与 self-check，`download.rs` 负责下载、校验和安装。
   - `automation.rs` + `automation/`：共享 start/stop/status，以及 battle、servant enhancement、CE enhancement、friend-point summon 的 lifecycle command。
   - `catalog.rs` + `catalog/`：从者目录与图片选择入口；`craft_essences.rs`、`metadata.rs`、`skills.rs` 分别负责 CE catalog、metadata localization 和技能资料。
   - `debug.rs` + `debug/`：通用模板命令入口；`session.rs` 管理共享 sidecar，`capture.rs` 管理截图/视频流，`battle.rs`、`noble_phantasm.rs`、`support.rs`、`enhancement.rs` 按诊断领域分组。
