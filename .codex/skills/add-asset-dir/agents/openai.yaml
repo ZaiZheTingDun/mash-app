@@ -1,0 +1,6 @@
+interface:
+  display_name: "Add Mash Asset Directory"
+  short_description: "Register a managed Mash asset directory"
+  default_prompt: "Use $add-asset-dir to register a new managed Mash asset directory."
+policy:
+  allow_implicit_invocation: true
