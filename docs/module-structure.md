@@ -51,7 +51,7 @@ Backend 代码位于 `src-tauri/src/`。
 - `enhancement_runner.rs` + `enhancement_runner/` 负责从者强化自动化及其 runtime helper。
 - `craft_essence_enhancement_runner.rs` + `craft_essence_enhancement_runner/` 负责 CE 强化策略、材料选择、runtime 与测试。
 - `friend_point_summon_runner.rs` 负责友情点召唤自动化。
-- `models.rs` + `models/project.rs`：共享 serde DTO facade；`project.rs` 负责项目、队伍槽位、助战/Grand 配置、识别覆盖项和项目目录模型。
+- `models.rs` + `models/`：共享 serde DTO facade；`advanced.rs` 负责高级战斗条件、动作、规则和场景，`project.rs` 负责项目、队伍槽位、助战/Grand 配置、识别覆盖项和项目目录模型。
 - `paths.rs` 存放 app-data/resource path resolution 与 migration helper。
 - `server.rs` 存放 server enum 与 stream-resolution validation。
 - 根 `tests.rs` 存放跨 module backend 测试；domain-specific 测试放在最近的 sibling `tests.rs` 或 local `#[cfg(test)]` module。
