@@ -99,6 +99,8 @@ mod class_filter_runtime;
 mod craft_essence;
 pub(crate) use craft_essence::*;
 
+mod craft_essence_runtime;
+
 mod requirements;
 pub(crate) use requirements::*;
 

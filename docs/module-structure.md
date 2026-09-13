@@ -39,7 +39,7 @@ Backend 代码位于 `src-tauri/src/`。
 - `runner/` 按 domain 拆分战斗自动化 state machine：
   - `engine.rs`、`state.rs`：tick routing 与权威流程状态。
   - `prebattle.rs`、`results.rs`、`ap_recovery.rs`：战前、结算和 AP 恢复流程。
-  - `support.rs` + `support/`：助战筛选 facade；`class_filter.rs` 负责职阶策略，`class_filter_runtime.rs` 负责国服 EXTRA 弹窗交互，`craft_essence.rs` 负责礼装配置、区域计算和校验诊断，`requirements.rs` 负责等级、技能、星图门槛和诊断文本，`scrolling.rs` 负责列表滚动决策、时序和诊断，`runtime.rs` 负责主选择编排和其余设备交互。
+  - `support.rs` + `support/`：助战筛选 facade；`class_filter.rs` 负责职阶策略，`class_filter_runtime.rs` 负责国服 EXTRA 弹窗交互，`craft_essence.rs` 负责礼装配置、区域计算和诊断，`craft_essence_runtime.rs` 负责礼装模板解析和设备校验，`requirements.rs` 负责等级、技能、星图门槛和诊断文本，`scrolling.rs` 负责列表滚动决策、时序和诊断，`runtime.rs` 负责主选择编排和其余设备交互。
   - `actions.rs` + `actions/helpers.rs`：技能/换人执行与纯坐标、分类 helper。
   - `attack.rs` + `attack/`：选卡入口；`critical.rs`、`noble_phantasm.rs`、`conditions.rs` 负责纯决策，`runtime.rs`、`selection_runtime.rs`、`advanced_runtime.rs` 负责设备交互流程。
   - `party.rs` + `party/`：阵容 identity 入口；`lineup.rs`、`resolution.rs`、`replay.rs`、`runtime.rs` 分别负责阵容变更、动作槽位解析、历史重放和运行时身份构建。
