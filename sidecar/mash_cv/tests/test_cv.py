@@ -128,21 +128,14 @@ def test_friend_point_summon_elements_use_padded_roi_across_resolutions(
 
 
 def test_five_star_ce_drop_template_hits_expected_loot_cells():
+    test_data_dir = Path(__file__).with_name("test_data")
     cases = [
-        (Path("/Users/xiaotong/Downloads/test.png"), [(0, 1), (0, 2)]),
         (
-            Path(
-                "/Users/xiaotong/Library/Application Support/com.xiaotongx.mash/debug/"
-                "loot-screenshots/loot-1783259793253-run0012.jpg"
-            ),
+            test_data_dir / "screenshots" / "five_star_ce_drop_one_cell.jpg",
             [(0, 1)],
         ),
     ]
-    existing_cases = [(path, expected) for path, expected in cases if path.is_file()]
-    if not existing_cases:
-        pytest.skip("external loot screenshot fixtures are not available")
-    repo_root = Path(__file__).resolve().parents[3]
-    template_path = repo_root / "src-tauri" / "resources" / "images" / "stars_5.png"
+    template_path = test_data_dir / "templates" / "stars_5.png"
     tmpl = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
     assert tmpl is not None
 
@@ -156,7 +149,7 @@ def test_five_star_ce_drop_template_hits_expected_loot_cells():
     for gap in x_gaps:
         cols.append(cols[-1] + cell_w + gap)
 
-    for screenshot_path, expected_hits in existing_cases:
+    for screenshot_path, expected_hits in cases:
         img = cv2.imread(str(screenshot_path), cv2.IMREAD_COLOR)
         assert img is not None
 
@@ -1874,11 +1867,6 @@ _PROD_SERVANTS_DIR = os.path.normpath(
         "src-tauri", "assets", "servants",
     )
 )
-_ROOT_SCREENSHOTS_DIR = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "screenshots")
-)
-
-
 class TestReadBattleScene:
     def _load_real_templates(self):
         result = mash_cv._load_templates(_TEST_TEMPLATES_DIR)
@@ -2050,13 +2038,6 @@ class TestReadBattleScene:
 LEVEL_DIGIT_REGION = {"x": 0.345, "y": 0.626, "w": 0.12, "h": 0.075}
 
 
-@pytest.mark.skipif(
-    not os.path.isdir(_PROD_TEMPLATES_DIR)
-    or not os.path.isfile(
-        os.path.join(_ROOT_SCREENSHOTS_DIR, "servant_enhancement_selected.png")
-    ),
-    reason="production templates or servant_enhancement_selected.png fixture not available",
-)
 class TestReadLevelDigits:
     def test_servant_enhancement_selected_reads_ninety_of_ninety(self):
         result = mash_cv._load_templates(_PROD_TEMPLATES_DIR)
@@ -2065,9 +2046,9 @@ class TestReadLevelDigits:
             assert mash_cv._get_template(f"digit_v2/digit_{digit}_v2") is not None
 
         img = cv2.imread(
-            os.path.join(_ROOT_SCREENSHOTS_DIR, "servant_enhancement_selected.png")
+            os.path.join(_TEST_SCREENSHOTS_DIR, "servant_enhancement_level_90.png")
         )
-        assert img is not None, "servant_enhancement_selected.png fixture missing"
+        assert img is not None, "servant_enhancement_level_90.png fixture missing"
 
         result = mash_cv._read_level_digits(img, LEVEL_DIGIT_REGION, debug=True)
         assert result["found"] is True, result
@@ -2093,19 +2074,17 @@ class TestFindEnhancementServantGrid:
         assert result["ok"] is True
         assert "text_servant_avatar_bottom_line" in mash_cv.templates
 
-    @pytest.mark.skipif(
-        not os.path.isfile(os.path.join(_ROOT_SCREENSHOTS_DIR, "..", "servant_select_all.png")),
-        reason="servant_select_all.png fixture not available",
-    )
-    def test_servant_select_all_infers_reference_col_two(self):
+    def test_servant_select_partial_grid_infers_reference_col_two(self):
         self._load()
-        img = cv2.imread(os.path.join(_ROOT_SCREENSHOTS_DIR, "..", "servant_select_all.png"))
+        img = cv2.imread(
+            os.path.join(_TEST_SCREENSHOTS_DIR, "servant_select_partial_grid.png")
+        )
         assert img is not None
 
         result = mash_cv._find_enhancement_servant_grid(img, {"faceTemplatePaths": []})
 
         assert result["diagnostics"]["failReason"] == "no_face_templates"
-        assert len(result["anchors"]) >= 7
+        assert len(result["anchors"]) >= 2
         assert result["referenceAnchor"]["col"] == 2
         assert len(result["gridCells"]) >= 21
         assert [c["col"] for c in result["gridCells"][:7]] == list(range(7))
@@ -3362,21 +3341,14 @@ def test_find_supports_distinguishes_sibling_servant_variants(
     assert result["diagnostics"]["fragments"][0]["excludedVariant"] is (not should_match)
 
 
-@pytest.mark.skipif(
-    not os.path.isfile(
-        os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "skill.png"))
-    ),
-    reason="root skill.png fixture not available",
-)
-def test_support_skill_details_from_habetrot_screenshots(monkeypatch):
+def test_support_skill_details_from_habetrot_screenshot(monkeypatch):
     import mash_cv.cv as cv
 
-    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     cv._set_server("CN")
-    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
 
-    def read(shot: str):
-        img = cv2.imread(os.path.join(root, shot))
+    try:
+        img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "error_2_no_skill.png"))
         assert img is not None
         result = cv._find_supports(
             img,
@@ -3389,16 +3361,11 @@ def test_support_skill_details_from_habetrot_screenshots(monkeypatch):
             True,
         )
         assert len(result["supports"]) == 1
-        return result["supports"][0]
-
-    try:
-        owned = read("skill.png")
+        owned = result["supports"][0]
         assert owned["npLevel"] == 5
         assert owned["skillPanel"] == "owned"
         assert owned["skillLevels"] == [1, 10, 1]
 
-        img = cv2.imread(os.path.join(root, "skill.png"))
-        assert img is not None
         scaled = cv2.resize(img, (1920, 1080), interpolation=cv2.INTER_AREA)
         result = cv._find_supports(
             scaled,
@@ -3420,11 +3387,6 @@ def test_support_skill_details_from_habetrot_screenshots(monkeypatch):
         assert panel == "owned"
         assert skill_levels == [1, 10, 1]
         assert append_levels == []
-
-        append = read("append_skill.png")
-        assert append["npLevel"] == 5
-        assert append["skillPanel"] == "append"
-        assert append["appendSkillLevels"] == [None, 4, None, None, None]
     finally:
         cv._set_server("JP")
 
@@ -4063,49 +4025,40 @@ def test_find_supports_surfaces_grand_section_diagnostics(monkeypatch):
     assert any(hits), scores
 
 
-@pytest.mark.skipif(
-    not os.path.isfile(
-        os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug1.png"))
-    ),
-    reason="root debug1.png fixture not available",
-)
-def test_support_skill_details_split_merged_owned_skill_contours(monkeypatch):
+def test_support_skill_details_reads_merged_ten_contours_without_ocr(monkeypatch):
     import mash_cv.cv as cv
 
-    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     cv._set_server("CN")
-    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
 
     try:
-        for screenshot in ["debug1.png", "debug2.png"]:
-            path = os.path.join(root, screenshot)
-            if not os.path.isfile(path):
-                continue
-            img = cv2.imread(path)
-            assert img is not None
-            result = cv._find_supports(
-                img,
-                cv.SUPPORT_LIST_REGION,
-                "奥斯曼狄斯",
-                ["光辉之大复合神殿"],
-                cv.SUPPORT_NAME_THRESHOLD,
-                cv.SUPPORT_NP_THRESHOLD,
-                cv.SUPPORT_ROW_PAIR_DY,
-                True,
-            )
-            assert len(result["supports"]) == 1
-            row = result["supports"][0]
-            assert row["skillPanel"] == "owned"
-            assert row["skillLevels"] == [10, 10, 10]
-            assert row["appendSkillLevels"] == []
+        img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "error_10_10_1.png"))
+        assert img is not None
+        result = cv._find_supports(
+            img,
+            cv.SUPPORT_LIST_REGION,
+            "伊什塔尔",
+            ["山脉震撼明星之薪"],
+            cv.SUPPORT_NAME_THRESHOLD,
+            cv.SUPPORT_NP_THRESHOLD,
+            cv.SUPPORT_ROW_PAIR_DY,
+            True,
+        )
+        assert len(result["supports"]) == 1
+        row = result["supports"][0]
+        assert row["skillPanel"] == "owned"
+        assert row["skillLevels"] == [10, 10, 10]
+        assert row["appendSkillLevels"] == []
 
-            get_ocr = cv._get_ocr
-            monkeypatch.setattr(cv, "_get_ocr", lambda: None)
-            panel, skill_levels, append_levels = cv._support_extract_skill_details(img, row["rowRegion"])
-            monkeypatch.setattr(cv, "_get_ocr", get_ocr)
-            assert panel == "owned"
-            assert skill_levels == [10, 10, 10]
-            assert append_levels == []
+        get_ocr = cv._get_ocr
+        monkeypatch.setattr(cv, "_get_ocr", lambda: None)
+        panel, skill_levels, append_levels = cv._support_extract_skill_details(
+            img, row["rowRegion"]
+        )
+        monkeypatch.setattr(cv, "_get_ocr", get_ocr)
+        assert panel == "owned"
+        assert skill_levels == [10, 10, 10]
+        assert append_levels == []
 
     finally:
         cv._set_server("JP")

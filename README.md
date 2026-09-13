@@ -131,3 +131,9 @@ The Tauri bundle intentionally excludes `mash-cv`; app updates remain small. Bum
 5. During battle, the sidecar also OCRs the turn number (anchor-bounded digit template matching) so the runner can schedule skills turn-by-turn
 6. Based on the detected screen, the runner issues tap/swipe commands over ADB
 7. The frontend displays real-time automation status and allows stopping at any time
+
+## License
+
+Mash's original source code and documentation are licensed under the [MIT License](LICENSE).
+Bundled third-party software, OCR models, dependencies, and game-derived assets remain subject
+to their own terms. See [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) for details.
