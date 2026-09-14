@@ -18,6 +18,9 @@ pub(crate) use craft_essences::*;
 mod skills;
 pub(crate) use skills::*;
 
+mod mystic_codes;
+pub(crate) use mystic_codes::*;
+
 mod metadata;
 pub(crate) use metadata::*;
 
