@@ -166,7 +166,7 @@ pub(crate) fn display_class_name(raw: &str) -> String {
         "uOlgaMarieGrandCollection" => "U-Olga Marie Grand".into(),
         "uOlgaMarieStellarCollection" => "U-Olga Marie Stellar".into(),
         "beastEresh" | "unBeastOlgaMarie" => "Beast".into(),
-        other if other.is_empty() => String::new(),
+        "" => String::new(),
         other => {
             let mut chars = other.chars();
             match chars.next() {
@@ -234,10 +234,10 @@ pub(crate) fn variant_face_id(variant: &serde_json::Value) -> Option<u32> {
 
 /// Keep the displayed name aligned with the same ascension/costume ID chosen
 /// as this variant's representative portrait.
-pub(crate) fn variant_name_alias<'a>(
-    aliases: &'a [ServantNameAlias],
+pub(crate) fn variant_name_alias(
+    aliases: &[ServantNameAlias],
     face_id: Option<u32>,
-) -> Option<&'a ServantNameAlias> {
+) -> Option<&ServantNameAlias> {
     let face_id = face_id?;
     aliases.iter().find(|alias| alias.ids.contains(&face_id))
 }
