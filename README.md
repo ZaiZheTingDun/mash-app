@@ -33,7 +33,7 @@ src-tauri/                   # Tauri / Rust backend
       debug/                 # Capture/session and battle, NP, support, enhancement diagnostics
       assets/                # Managed asset download/install helpers
       projects/              # Project persistence and configuration transfer
-      runtime/               # External mash-cv runtime resolution
+      runtime/               # External mash-cv archive and resource helpers
     adb.rs                   # ADB device connection, tap, swipe
     screen.rs, screen/       # Sidecar client, protocol, DTOs, and operation groups
       operations/            # Battle, support, enhancement, and template-matching IPC
