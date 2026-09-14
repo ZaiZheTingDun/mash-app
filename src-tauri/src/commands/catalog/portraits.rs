@@ -173,6 +173,25 @@ fn servant_by_variant_key(variant_key: &str) -> Result<&'static ServantInfo, Str
         .ok_or_else(|| format!("未找到立绘集合 {variant_key}"))
 }
 
+fn allowed_portrait_ids(
+    servant_id: u32,
+    variant_key: Option<&str>,
+) -> Result<&'static [u32], String> {
+    variant_key
+        .map(|key| servant_for_variant(servant_id, key))
+        .transpose()
+        .map(|servant| {
+            servant
+                .map(|servant| servant.portrait_ids.as_slice())
+                .unwrap_or_default()
+        })
+}
+
+fn saved_portrait_id(settings: &Mutex<AppUiSettings>, variant_key: Option<&str>) -> Option<u32> {
+    let settings = settings.lock().unwrap();
+    variant_key.and_then(|key| settings.servant_portrait_selections.get(key).copied())
+}
+
 /// Resolve the full-art portrait file for a single servant, returning
 /// the absolute path so the frontend can hand it to `convertFileSrc()`.
 ///
@@ -193,17 +212,8 @@ pub(crate) fn get_servant_portrait_path(
         return Ok(None);
     };
     let servant_dir = root.join(servant_id.to_string());
-    let variant = variant_key
-        .as_deref()
-        .map(|key| servant_for_variant(servant_id, key))
-        .transpose()?;
-    let allowed_ids = variant
-        .map(|servant| servant.portrait_ids.as_slice())
-        .unwrap_or_default();
-    let settings = settings_state.lock().unwrap();
-    let global_id = variant_key
-        .as_deref()
-        .and_then(|key| settings.servant_portrait_selections.get(key).copied());
+    let allowed_ids = allowed_portrait_ids(servant_id, variant_key.as_deref())?;
+    let global_id = saved_portrait_id(settings_state.inner(), variant_key.as_deref());
     let picked = if allowed_ids.is_empty() {
         pick_portrait_with_preferences_in(&servant_dir, global_id, face_id)
     } else {
@@ -252,15 +262,10 @@ pub(crate) fn list_servant_portraits(
                 path: path.to_string_lossy().into_owned(),
             })
             .collect();
-    let settings = settings_state.lock().unwrap();
-    let selected_id = settings
-        .servant_portrait_selections
-        .get(&variant_key)
-        .copied()
-        .filter(|id| {
-            portrait_id_is_allowed(&servant.portrait_ids, *id)
-                && options.iter().any(|option| option.id == *id)
-        });
+    let selected_id = saved_portrait_id(settings_state.inner(), Some(&variant_key)).filter(|id| {
+        portrait_id_is_allowed(&servant.portrait_ids, *id)
+            && options.iter().any(|option| option.id == *id)
+    });
     Ok(ServantPortraitOptions {
         options,
         selected_id,
@@ -308,17 +313,8 @@ pub(crate) fn get_servant_face_path(
         return Ok(None);
     };
     let servant_dir = root.join(servant_id.to_string());
-    let variant = variant_key
-        .as_deref()
-        .map(|key| servant_for_variant(servant_id, key))
-        .transpose()?;
-    let allowed_ids = variant
-        .map(|servant| servant.portrait_ids.as_slice())
-        .unwrap_or_default();
-    let settings = settings_state.lock().unwrap();
-    let global_id = variant_key
-        .as_deref()
-        .and_then(|key| settings.servant_portrait_selections.get(key).copied());
+    let allowed_ids = allowed_portrait_ids(servant_id, variant_key.as_deref())?;
+    let global_id = saved_portrait_id(settings_state.inner(), variant_key.as_deref());
     let picked =
         pick_face_for_ids_with_preferences_in(&servant_dir, global_id, face_id, allowed_ids);
     Ok(picked.map(|path| path.to_string_lossy().into_owned()))
