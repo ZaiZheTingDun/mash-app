@@ -4,7 +4,7 @@ use super::{
     ensure_download_not_cancelled, import_runtime_bundle_from_zip_path, runtime_manifest,
     runtime_platform_key, runtime_root_dir, runtime_status_from_manifest,
     ResourceDownloadCancelState, RuntimeDownloadInstallResult, RuntimeDownloadProgress,
-    RUNTIME_DOWNLOAD_PROGRESS_EVENT,
+    RuntimeInstallResult, RuntimeManifest, RUNTIME_DOWNLOAD_PROGRESS_EVENT,
 };
 use std::fs;
 use std::io::{Read, Write};
@@ -127,6 +127,35 @@ pub(crate) fn download_runtime_artifact(
     Ok(())
 }
 
+struct RuntimeDownloadContext<'a> {
+    app: &'a tauri::AppHandle,
+    cancel: &'a AtomicBool,
+    manifest: &'a RuntimeManifest,
+    runtime_root: &'a Path,
+    platform: &'a str,
+}
+
+impl RuntimeDownloadContext<'_> {
+    fn download_and_install(
+        &self,
+        kind: &str,
+        url: &str,
+        zip_path: &Path,
+    ) -> Result<RuntimeInstallResult, String> {
+        download_runtime_artifact(self.app, kind, url, zip_path, self.cancel)?;
+        ensure_download_not_cancelled(self.cancel)?;
+        emit_runtime_download_progress(self.app, kind, "installing", 0, None, None, None);
+        let installed = import_runtime_bundle_from_zip_path(
+            zip_path,
+            self.manifest,
+            self.runtime_root,
+            self.platform,
+        )?;
+        emit_runtime_download_progress(self.app, kind, "installed", 0, None, None, None);
+        Ok(installed)
+    }
+}
+
 pub(crate) fn download_and_install_runtime_bundles_inner(
     app: tauri::AppHandle,
     cancel: Arc<ResourceDownloadCancelState>,
@@ -142,6 +171,13 @@ pub(crate) fn download_and_install_runtime_bundles_inner(
         .ok_or_else(|| format!("当前平台不支持独立 CV runtime: {platform}"))?;
     let downloads_dir = runtime_downloads_dir(&runtime_root);
     let mut installed = Vec::new();
+    let download = RuntimeDownloadContext {
+        app: &app,
+        cancel: &cancel.runtime,
+        manifest: &manifest,
+        runtime_root: &runtime_root,
+        platform: &platform,
+    };
 
     if force || !status.runtime_installed {
         let filename = format!(
@@ -149,37 +185,17 @@ pub(crate) fn download_and_install_runtime_bundles_inner(
             manifest.mash_cv_runtime_version
         );
         let zip_path = downloads_dir.join(filename);
-        download_runtime_artifact(
-            &app,
+        installed.push(download.download_and_install(
             "runtime",
             &artifact.runtime_url,
             &zip_path,
-            &cancel.runtime,
-        )?;
-        ensure_download_not_cancelled(&cancel.runtime)?;
-        emit_runtime_download_progress(&app, "runtime", "installing", 0, None, None, None);
-        installed.push(import_runtime_bundle_from_zip_path(
-            &zip_path,
-            &manifest,
-            &runtime_root,
-            &platform,
         )?);
-        emit_runtime_download_progress(&app, "runtime", "installed", 0, None, None, None);
     }
 
     if force || !status.code_installed {
         let filename = format!("mash-cv-code-v{}.zip", manifest.mash_cv_code_version);
         let zip_path = downloads_dir.join(filename);
-        download_runtime_artifact(&app, "code", &artifact.code_url, &zip_path, &cancel.runtime)?;
-        ensure_download_not_cancelled(&cancel.runtime)?;
-        emit_runtime_download_progress(&app, "code", "installing", 0, None, None, None);
-        installed.push(import_runtime_bundle_from_zip_path(
-            &zip_path,
-            &manifest,
-            &runtime_root,
-            &platform,
-        )?);
-        emit_runtime_download_progress(&app, "code", "installed", 0, None, None, None);
+        installed.push(download.download_and_install("code", &artifact.code_url, &zip_path)?);
     }
 
     Ok(RuntimeDownloadInstallResult { installed })
