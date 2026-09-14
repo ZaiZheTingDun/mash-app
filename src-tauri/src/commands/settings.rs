@@ -8,7 +8,7 @@
 use crate::adb::BLUESTACKS_SERIAL;
 use crate::automation_coordinator::AutomationCoordinator;
 use crate::commands::debug;
-use crate::paths::{migrate_legacy_app_data, StartupMigrationStatus};
+use crate::paths::{app_data_dir, migrate_legacy_app_data, StartupMigrationStatus};
 use crate::runner::bond_level_up_screenshot_dir;
 use crate::storage::{read_json_or_default, write_json_atomic};
 use crate::Server;
@@ -271,12 +271,7 @@ fn adb_device_settings_from_value(v: &serde_json::Value) -> AdbDeviceSettings {
 }
 
 fn adb_settings_path(app: &tauri::AppHandle) -> PathBuf {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .expect("failed to resolve app data dir");
-    fs::create_dir_all(&dir).ok();
-    dir.join("adb_settings.json")
+    app_data_dir(app).join("adb_settings.json")
 }
 
 pub(crate) fn load_adb_device_settings(
@@ -296,12 +291,7 @@ pub(crate) fn save_adb_device_settings(
 }
 
 fn server_settings_path(app: &tauri::AppHandle) -> PathBuf {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .expect("failed to resolve app data dir");
-    fs::create_dir_all(&dir).ok();
-    dir.join("server_settings.json")
+    app_data_dir(app).join("server_settings.json")
 }
 
 fn update_check_settings_path(app: &tauri::AppHandle) -> PathBuf {
@@ -313,21 +303,11 @@ fn update_check_settings_path(app: &tauri::AppHandle) -> PathBuf {
 }
 
 fn recognition_settings_path(app: &tauri::AppHandle) -> PathBuf {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .expect("failed to resolve app data dir");
-    fs::create_dir_all(&dir).ok();
-    dir.join("recognition_settings.json")
+    app_data_dir(app).join("recognition_settings.json")
 }
 
 fn debug_settings_path(app: &tauri::AppHandle) -> PathBuf {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .expect("failed to resolve app data dir");
-    fs::create_dir_all(&dir).ok();
-    dir.join("debug_settings.json")
+    app_data_dir(app).join("debug_settings.json")
 }
 
 pub(crate) fn load_server_setting(app: &tauri::AppHandle) -> Result<Server, String> {
