@@ -1,4 +1,7 @@
-use super::*;
+use crate::commands::runtime::resolve_ce_assets_dir;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 /// One craft-essence entry exposed to the frontend. Mirrors the shape of
 /// `resources/craft_essences.json` (using Atlas `collectionNo` as the
@@ -127,4 +130,23 @@ pub(crate) fn craft_essences_data() -> &'static [CraftEssenceInfo] {
 #[tauri::command]
 pub(crate) fn get_craft_essences() -> &'static [CraftEssenceInfo] {
     craft_essences_data()
+}
+
+/// Return `<ce_root>/<id>/card_ce.png` when that card asset exists.
+pub(crate) fn pick_ce_card_in(ce_root: &Path, ce_id: u32) -> Option<PathBuf> {
+    let candidate = ce_root.join(ce_id.to_string()).join("card_ce.png");
+    candidate.is_file().then_some(candidate)
+}
+
+/// Resolve the card art for a single craft essence, returning an absolute path
+/// for the frontend or `None` when the asset tree or card file is unavailable.
+#[tauri::command]
+pub(crate) fn get_craft_essence_card_path(
+    app: tauri::AppHandle,
+    craft_essence_id: u32,
+) -> Result<Option<String>, String> {
+    let Some(root) = resolve_ce_assets_dir(&app) else {
+        return Ok(None);
+    };
+    Ok(pick_ce_card_in(&root, craft_essence_id).map(|path| path.to_string_lossy().into_owned()))
 }

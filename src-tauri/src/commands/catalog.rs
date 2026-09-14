@@ -477,39 +477,6 @@ pub(crate) fn get_servants() -> &'static [ServantInfo] {
     selectable_servants_data()
 }
 
-/// Pure helper so [`get_craft_essence_card_path`] stays a thin wrapper
-/// and the file-walk logic is unit-testable without spinning up a
-/// `tauri::AppHandle`. Returns `Some(path)` when
-/// `<ce_root>/<id>/card_ce.png` exists, `None` otherwise.
-pub(crate) fn pick_ce_card_in(ce_root: &std::path::Path, ce_id: u32) -> Option<PathBuf> {
-    let candidate = ce_root.join(ce_id.to_string()).join("card_ce.png");
-    if candidate.is_file() {
-        Some(candidate)
-    } else {
-        None
-    }
-}
-
-/// Resolve the card art for a single craft essence, returning the
-/// absolute path so the frontend can hand it to `convertFileSrc()`.
-///
-/// Mirrors [`get_servant_portrait_path`] but for the CE asset tree
-/// (`assets/ces/{id}/card_ce.png`). The single-file layout means there
-/// is no glob/pick-highest step — the file either exists or it
-/// doesn't. Returning `Ok(None)` (rather than an `Err`) on a missing
-/// file keeps the empty-state placeholder a normal render path instead
-/// of an error toast.
-#[tauri::command]
-pub(crate) fn get_craft_essence_card_path(
-    app: tauri::AppHandle,
-    craft_essence_id: u32,
-) -> Result<Option<String>, String> {
-    let Some(root) = resolve_ce_assets_dir(&app) else {
-        return Ok(None);
-    };
-    Ok(pick_ce_card_in(&root, craft_essence_id).map(|p| p.to_string_lossy().into_owned()))
-}
-
 mod craft_essences;
 pub(crate) use craft_essences::*;
 mod skills;
