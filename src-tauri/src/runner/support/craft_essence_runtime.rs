@@ -1,6 +1,7 @@
 //! Device-facing craft-essence template resolution and row verification.
 
 use super::*;
+use crate::commands::catalog::ce_card_path;
 
 impl Runner {
     /// Resolve all ordinary-support CE templates. The ordered multi-select
@@ -38,7 +39,7 @@ impl Runner {
 
     pub(crate) fn resolve_ce_template_path(&self, ce_id: u32) -> Option<PathBuf> {
         let dir = self.ce_assets_dir.as_ref()?;
-        let path = dir.join(ce_id.to_string()).join("card_ce.png");
+        let path = ce_card_path(dir, ce_id);
         if path.is_file() {
             Some(path)
         } else {

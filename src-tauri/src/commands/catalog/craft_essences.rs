@@ -132,9 +132,13 @@ pub(crate) fn get_craft_essences() -> &'static [CraftEssenceInfo] {
     craft_essences_data()
 }
 
+pub(crate) fn ce_card_path(ce_root: &Path, ce_id: u32) -> PathBuf {
+    ce_root.join(ce_id.to_string()).join("card_ce.png")
+}
+
 /// Return `<ce_root>/<id>/card_ce.png` when that card asset exists.
 pub(crate) fn pick_ce_card_in(ce_root: &Path, ce_id: u32) -> Option<PathBuf> {
-    let candidate = ce_root.join(ce_id.to_string()).join("card_ce.png");
+    let candidate = ce_card_path(ce_root, ce_id);
     candidate.is_file().then_some(candidate)
 }
 

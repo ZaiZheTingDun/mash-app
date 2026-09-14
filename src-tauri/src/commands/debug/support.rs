@@ -1,6 +1,7 @@
 //! Support-list OCR and craft-essence verification debug command.
 
 use super::*;
+use crate::commands::catalog::ce_card_path;
 
 /// Per-row CE verification info computed by `debug_find_supports` when a
 /// `craft_essence_id` is supplied. Surfaces both the search region (so
@@ -176,7 +177,7 @@ pub fn debug_find_supports(
     // OCR pass still runs and the response carries no per-row CE info.
     let ce_template: Option<PathBuf> = craft_essence_id.and_then(|id| {
         let dir = resolve_ce_assets_dir(&app)?;
-        let path = dir.join(id.to_string()).join("card_ce.png");
+        let path = ce_card_path(&dir, id);
         if path.is_file() {
             Some(path)
         } else {
@@ -190,9 +191,7 @@ pub fn debug_find_supports(
     let grand_ce_template_paths: [Option<PathBuf>; 3] = std::array::from_fn(|index| {
         grand_craft_essence_ids
             .and_then(|ids| ids[index])
-            .and_then(|id| {
-                resolve_ce_assets_dir(&app).map(|dir| dir.join(id.to_string()).join("card_ce.png"))
-            })
+            .and_then(|id| resolve_ce_assets_dir(&app).map(|dir| ce_card_path(&dir, id)))
     });
 
     let mut guard = debug_state.0.lock().unwrap();
