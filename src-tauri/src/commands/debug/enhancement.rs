@@ -1,4 +1,5 @@
 use super::*;
+use crate::commands::catalog::pick_faces_desc_in;
 
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -25,32 +26,6 @@ pub struct DebugEnhancementServantMatchResult {
 pub struct DebugTemplateSize {
     pub w: u32,
     pub h: u32,
-}
-
-fn face_template_stage(path: &std::path::Path) -> u32 {
-    path.file_stem()
-        .and_then(|n| n.to_str())
-        .and_then(|n| n.strip_prefix("face_servant_"))
-        .and_then(|n| n.parse::<u32>().ok())
-        .unwrap_or(0)
-}
-
-fn list_face_templates_desc(servant_dir: &std::path::Path) -> Vec<PathBuf> {
-    let Ok(entries) = fs::read_dir(servant_dir) else {
-        return Vec::new();
-    };
-    let mut paths: Vec<PathBuf> = entries
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|n| n.to_str())
-                .map(|name| name.starts_with("face_servant_") && name.ends_with(".png"))
-                .unwrap_or(false)
-        })
-        .collect();
-    paths.sort_by(|a, b| face_template_stage(b).cmp(&face_template_stage(a)));
-    paths
 }
 
 /// Run the enhancement servant-select face matcher against the most recent
@@ -84,7 +59,7 @@ pub fn debug_find_enhancement_servant(
     let assets_dir = resolve_servant_assets_dir(&app)
         .ok_or_else(|| "未找到从者资源目录，无法进行头像匹配".to_string())?;
     let servant_dir = assets_dir.join(servant_id.to_string());
-    let templates = list_face_templates_desc(&servant_dir);
+    let templates = pick_faces_desc_in(&servant_dir);
     if templates.is_empty() {
         return Err(format!(
             "从者 #{servant_id} 缺少 face_servant_*.png: {}",
