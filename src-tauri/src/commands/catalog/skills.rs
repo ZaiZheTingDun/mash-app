@@ -365,37 +365,42 @@ fn parse_servant_skill_maps(
     }
 }
 
+fn servant_variant<'a>(
+    variants_by_id: &'a HashMap<u32, Vec<serde_json::Value>>,
+    servant_id: u32,
+    variant_key: &str,
+) -> Option<&'a serde_json::Value> {
+    let variant_index = variant_key
+        .split(':')
+        .nth(1)
+        .and_then(|value| value.parse::<usize>().ok())
+        .map(|value| value.saturating_sub(1))
+        .unwrap_or(0);
+
+    variants_by_id.get(&servant_id)?.get(variant_index)
+}
+
 fn variant_skill_ids(
     variants_by_id: &HashMap<u32, Vec<serde_json::Value>>,
     servant_id: u32,
     variant_key: &str,
 ) -> Option<[Option<u32>; 3]> {
-    let variant_index: usize = variant_key
-        .split(':')
-        .nth(1)
-        .and_then(|s| s.parse::<usize>().ok())
-        .map(|n| n.saturating_sub(1))
-        .unwrap_or(0);
-
-    variants_by_id
-        .get(&servant_id)
-        .and_then(|v| v.get(variant_index))
-        .map(|variant| {
-            ["1", "2", "3"].map(|slot| {
-                variant
-                    .get("skills")
-                    .and_then(|s| s.get(slot))
-                    .and_then(|arr| arr.as_array())
-                    .and_then(|arr| {
-                        arr.iter().rev().find(|entry| {
-                            entry.get("runtime").and_then(|value| value.as_bool()) != Some(true)
-                        })
+    servant_variant(variants_by_id, servant_id, variant_key).map(|variant| {
+        ["1", "2", "3"].map(|slot| {
+            variant
+                .get("skills")
+                .and_then(|skills| skills.get(slot))
+                .and_then(|entries| entries.as_array())
+                .and_then(|entries| {
+                    entries.iter().rev().find(|entry| {
+                        entry.get("runtime").and_then(|value| value.as_bool()) != Some(true)
                     })
-                    .and_then(|entry| entry.get("id"))
-                    .and_then(|id| id.as_u64())
-                    .map(|n| n as u32)
-            })
+                })
+                .and_then(|entry| entry.get("id"))
+                .and_then(|id| id.as_u64())
+                .map(|id| id as u32)
         })
+    })
 }
 
 fn variant_skill_form_ids(
@@ -403,37 +408,27 @@ fn variant_skill_form_ids(
     servant_id: u32,
     variant_key: &str,
 ) -> Option<[Vec<u32>; 3]> {
-    let variant_index: usize = variant_key
-        .split(':')
-        .nth(1)
-        .and_then(|s| s.parse::<usize>().ok())
-        .map(|n| n.saturating_sub(1))
-        .unwrap_or(0);
-
-    variants_by_id
-        .get(&servant_id)
-        .and_then(|variants| variants.get(variant_index))
-        .map(|variant| {
-            ["1", "2", "3"].map(|slot| {
-                variant
-                    .get("skills")
-                    .and_then(|skills| skills.get(slot))
-                    .and_then(|entries| entries.as_array())
-                    .map(|entries| {
-                        entries
-                            .iter()
-                            .filter_map(|entry| entry.get("id").and_then(|id| id.as_u64()))
-                            .map(|id| id as u32)
-                            .fold(Vec::new(), |mut ids, id| {
-                                if !ids.contains(&id) {
-                                    ids.push(id);
-                                }
-                                ids
-                            })
-                    })
-                    .unwrap_or_default()
-            })
+    servant_variant(variants_by_id, servant_id, variant_key).map(|variant| {
+        ["1", "2", "3"].map(|slot| {
+            variant
+                .get("skills")
+                .and_then(|skills| skills.get(slot))
+                .and_then(|entries| entries.as_array())
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .filter_map(|entry| entry.get("id").and_then(|id| id.as_u64()))
+                        .map(|id| id as u32)
+                        .fold(Vec::new(), |mut ids, id| {
+                            if !ids.contains(&id) {
+                                ids.push(id);
+                            }
+                            ids
+                        })
+                })
+                .unwrap_or_default()
         })
+    })
 }
 
 fn skill_target_types_from_asset(skills_dir: &Path, skill_id: u32) -> Option<Vec<String>> {
