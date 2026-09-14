@@ -84,21 +84,6 @@ pub struct RecognitionSettings {
     pub auto_friend_request: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DebugSettings {
-    #[serde(default)]
-    pub auto_capture_battle_result_loot: bool,
-    #[serde(default)]
-    pub auto_capture_unknown_screen_timeout: bool,
-    #[serde(default)]
-    pub auto_capture_skill_use_probe: bool,
-    #[serde(default)]
-    pub auto_capture_unrecognized_critical_chance: bool,
-    #[serde(default)]
-    pub simulate_stuck_attack_selection: bool,
-}
-
 impl Default for RecognitionSettings {
     fn default() -> Self {
         Self {
@@ -174,21 +159,6 @@ fn update_recognition_settings(
     update_persisted_state(state, update, |settings| {
         save_recognition_settings(app, settings)
     })
-}
-
-fn update_debug_settings(
-    app: &tauri::AppHandle,
-    state: &Mutex<DebugSettings>,
-    update: impl FnOnce(&mut DebugSettings),
-) -> Result<DebugSettings, String> {
-    update_persisted_state(
-        state,
-        |settings| {
-            update(settings);
-            *settings = debug_settings_for_current_build(*settings);
-        },
-        |settings| save_debug_settings(app, settings),
-    )
 }
 
 fn normalize_threshold(value: f64, label: &str, min: f64, max: f64) -> Result<f64, String> {
@@ -306,10 +276,6 @@ fn recognition_settings_path(app: &tauri::AppHandle) -> PathBuf {
     app_data_dir(app).join("recognition_settings.json")
 }
 
-fn debug_settings_path(app: &tauri::AppHandle) -> PathBuf {
-    app_data_dir(app).join("debug_settings.json")
-}
-
 pub(crate) fn load_server_setting(app: &tauri::AppHandle) -> Result<Server, String> {
     let path = server_settings_path(app);
     let value: serde_json::Value = read_json_or_default(&path, "服务器设置")?;
@@ -356,38 +322,12 @@ pub(crate) fn load_recognition_settings(
     })
 }
 
-pub(crate) fn load_debug_settings(app: &tauri::AppHandle) -> Result<DebugSettings, String> {
-    let path = debug_settings_path(app);
-    let settings = read_json_or_default(&path, "调试设置")?;
-    Ok(debug_settings_for_current_build(settings))
-}
-
 fn save_recognition_settings(
     app: &tauri::AppHandle,
     settings: &RecognitionSettings,
 ) -> Result<(), String> {
     let path = recognition_settings_path(app);
     write_json_atomic(&path, settings, "识别设置")
-}
-
-fn save_debug_settings(app: &tauri::AppHandle, settings: &DebugSettings) -> Result<(), String> {
-    let path = debug_settings_path(app);
-    write_json_atomic(&path, settings, "调试设置")
-}
-
-fn debug_settings_for_current_build(settings: DebugSettings) -> DebugSettings {
-    debug_settings_for_runtime(settings, cfg!(debug_assertions))
-}
-
-fn debug_settings_for_runtime(
-    settings: DebugSettings,
-    allow_debug_settings: bool,
-) -> DebugSettings {
-    if allow_debug_settings {
-        settings
-    } else {
-        DebugSettings::default()
-    }
 }
 
 fn load_last_update_check_date(app: &tauri::AppHandle) -> Result<Option<String>, String> {
@@ -422,11 +362,6 @@ pub(crate) fn get_recognition_settings(
     state: tauri::State<'_, Mutex<RecognitionSettings>>,
 ) -> RecognitionSettings {
     *state.lock().unwrap()
-}
-
-#[tauri::command]
-pub(crate) fn get_debug_settings(state: tauri::State<'_, Mutex<DebugSettings>>) -> DebugSettings {
-    debug_settings_for_current_build(*state.lock().unwrap())
 }
 
 #[tauri::command]
@@ -587,126 +522,6 @@ pub(crate) fn set_unknown_screen_timeout_count(
 }
 
 #[tauri::command]
-pub(crate) fn set_auto_capture_battle_result_loot(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, Mutex<DebugSettings>>,
-    value: bool,
-) -> Result<DebugSettings, String> {
-    update_debug_settings(&app, state.inner(), |settings| {
-        *settings = debug_settings_with_auto_capture_battle_result_loot(*settings, value);
-    })
-}
-
-fn debug_settings_with_auto_capture_battle_result_loot(
-    mut settings: DebugSettings,
-    value: bool,
-) -> DebugSettings {
-    settings.auto_capture_battle_result_loot = value;
-    settings
-}
-
-fn debug_settings_with_auto_capture_unknown_screen_timeout(
-    mut settings: DebugSettings,
-    value: bool,
-) -> DebugSettings {
-    settings.auto_capture_unknown_screen_timeout = value;
-    settings
-}
-
-fn debug_settings_with_auto_capture_skill_use_probe(
-    mut settings: DebugSettings,
-    value: bool,
-) -> DebugSettings {
-    settings.auto_capture_skill_use_probe = value;
-    settings
-}
-
-fn debug_settings_with_auto_capture_unrecognized_critical_chance(
-    mut settings: DebugSettings,
-    value: bool,
-) -> DebugSettings {
-    settings.auto_capture_unrecognized_critical_chance = value;
-    settings
-}
-
-fn debug_settings_with_simulate_stuck_attack_selection(
-    mut settings: DebugSettings,
-    value: bool,
-) -> DebugSettings {
-    settings.simulate_stuck_attack_selection = value;
-    settings
-}
-
-#[tauri::command]
-pub(crate) fn set_auto_capture_unknown_screen_timeout(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, Mutex<DebugSettings>>,
-    value: bool,
-) -> Result<DebugSettings, String> {
-    update_debug_settings(&app, state.inner(), |settings| {
-        *settings = debug_settings_with_auto_capture_unknown_screen_timeout(*settings, value);
-    })
-}
-
-#[tauri::command]
-pub(crate) fn set_auto_capture_skill_use_probe(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, Mutex<DebugSettings>>,
-    value: bool,
-) -> Result<DebugSettings, String> {
-    update_debug_settings(&app, state.inner(), |settings| {
-        *settings = debug_settings_with_auto_capture_skill_use_probe(*settings, value);
-    })
-}
-
-#[tauri::command]
-pub(crate) fn set_auto_capture_unrecognized_critical_chance(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, Mutex<DebugSettings>>,
-    value: bool,
-) -> Result<DebugSettings, String> {
-    update_debug_settings(&app, state.inner(), |settings| {
-        *settings = debug_settings_with_auto_capture_unrecognized_critical_chance(*settings, value);
-    })
-}
-
-#[tauri::command]
-pub(crate) fn set_simulate_stuck_attack_selection(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, Mutex<DebugSettings>>,
-    value: bool,
-) -> Result<DebugSettings, String> {
-    update_debug_settings(&app, state.inner(), |settings| {
-        *settings = debug_settings_with_simulate_stuck_attack_selection(*settings, value);
-    })
-}
-
-fn take_simulate_stuck_attack_selection(
-    state: &Mutex<DebugSettings>,
-    persist: impl FnOnce(&DebugSettings) -> Result<(), String>,
-) -> Result<bool, String> {
-    let mut guard = state.lock().unwrap();
-    let current = debug_settings_for_current_build(*guard);
-    if !current.simulate_stuck_attack_selection {
-        return Ok(false);
-    }
-
-    let next = debug_settings_with_simulate_stuck_attack_selection(current, false);
-    persist(&next)?;
-    *guard = next;
-    Ok(true)
-}
-
-pub(crate) fn consume_simulate_stuck_attack_selection(
-    app: &tauri::AppHandle,
-) -> Result<bool, String> {
-    let state = app
-        .try_state::<Mutex<DebugSettings>>()
-        .ok_or_else(|| "调试设置尚未初始化".to_string())?;
-    take_simulate_stuck_attack_selection(state.inner(), |next| save_debug_settings(app, next))
-}
-
-#[tauri::command]
 pub(crate) async fn run_startup_migration(
     app: tauri::AppHandle,
     adb_settings_state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
@@ -724,6 +539,9 @@ pub(crate) async fn run_startup_migration(
     crate::battle_statistics::initialize(&app)?;
     Ok(status)
 }
+
+mod debug_settings;
+pub(crate) use debug_settings::*;
 
 #[cfg(test)]
 mod tests;

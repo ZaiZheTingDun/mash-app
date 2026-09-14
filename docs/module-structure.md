@@ -35,7 +35,7 @@ Backend 代码位于 `src-tauri/src/`。
   - `debug.rs` + `debug/`：通用模板命令入口；`session.rs` 管理共享 sidecar，`capture.rs` 管理截图/视频流，`battle.rs`、`noble_phantasm.rs`、`support.rs`、`enhancement.rs` 按诊断领域分组。
   - `projects.rs` + `projects/`：项目 CRUD 与场景文件命令；`normalization.rs` 负责项目兼容迁移和约束归一化，`catalog.rs` 负责目录分组与排序，`ui_settings.rs` 负责应用 UI 偏好持久化，`config_transfer.rs` 负责配置 import/export。
   - `runtime.rs` + `runtime/`：CV runtime facade；`archive.rs` 集中处理 ZIP 校验、安全解压和可执行权限，`download.rs` 负责远端下载与进度事件，`install.rs` 负责校验后的替换安装和版本记录，`resolution.rs` 负责 runtime resource resolution。
-  - `settings.rs` + `settings/tests.rs`：app settings、startup migration、server selection、update-check settings 与对应测试。
+  - `settings.rs` + `settings/`：app settings facade、startup migration、server selection 与 update-check settings；`debug_settings.rs` 封装调试开关的持久化、构建模式过滤和一次性消费逻辑，测试跟随各自模块放置。
 - `runner/` 按 domain 拆分战斗自动化 state machine：
   - `engine.rs`、`state.rs`：tick routing 与权威流程状态。
   - `prebattle.rs`、`results.rs`、`ap_recovery.rs`：战前、结算和 AP 恢复流程。
