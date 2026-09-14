@@ -151,19 +151,6 @@ fn normalize_unknown_screen_timeout_count(value: u32, label: &str) -> Result<u32
     Ok(value)
 }
 
-fn update_unknown_screen_timeout_count(
-    state: &Mutex<RecognitionSettings>,
-    value: u32,
-    persist: impl FnOnce(&RecognitionSettings) -> Result<(), String>,
-) -> Result<RecognitionSettings, String> {
-    let mut guard = state.lock().unwrap();
-    let mut next = *guard;
-    next.unknown_screen_timeout_count = value;
-    persist(&next)?;
-    *guard = next;
-    Ok(next)
-}
-
 /// Serialize a read-modify-write sequence under one lock and publish the new
 /// in-memory value only after durable persistence succeeds.
 fn update_persisted_state<T: Copy>(
@@ -614,8 +601,8 @@ pub(crate) fn set_unknown_screen_timeout_count(
     value: u32,
 ) -> Result<RecognitionSettings, String> {
     let value = normalize_unknown_screen_timeout_count(value, "识别超时次数")?;
-    update_unknown_screen_timeout_count(state.inner(), value, |next| {
-        save_recognition_settings(&app, next)
+    update_recognition_settings(&app, state.inner(), |settings| {
+        settings.unknown_screen_timeout_count = value;
     })
 }
 

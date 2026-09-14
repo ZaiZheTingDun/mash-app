@@ -166,11 +166,14 @@ fn unknown_screen_timeout_count_rejects_values_outside_range() {
 }
 
 #[test]
-fn failed_timeout_persistence_keeps_shared_state_unchanged() {
+fn generic_timeout_update_keeps_state_unchanged_when_persistence_fails() {
     let state = Mutex::new(RecognitionSettings::default());
 
-    let result =
-        update_unknown_screen_timeout_count(&state, 200, |_| Err("write failed".to_string()));
+    let result = update_persisted_state(
+        &state,
+        |settings| settings.unknown_screen_timeout_count = 200,
+        |_| Err("write failed".to_string()),
+    );
 
     assert_eq!(result.unwrap_err(), "write failed");
     assert_eq!(
@@ -180,10 +183,15 @@ fn failed_timeout_persistence_keeps_shared_state_unchanged() {
 }
 
 #[test]
-fn successful_timeout_persistence_updates_shared_state() {
+fn generic_setting_update_publishes_persisted_state() {
     let state = Mutex::new(RecognitionSettings::default());
 
-    let result = update_unknown_screen_timeout_count(&state, 200, |_| Ok(())).unwrap();
+    let result = update_persisted_state(
+        &state,
+        |settings| settings.unknown_screen_timeout_count = 200,
+        |_| Ok(()),
+    )
+    .unwrap();
 
     assert_eq!(result.unknown_screen_timeout_count, 200);
     assert_eq!(state.lock().unwrap().unknown_screen_timeout_count, 200);
