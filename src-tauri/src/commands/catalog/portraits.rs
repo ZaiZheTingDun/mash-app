@@ -1,6 +1,6 @@
 //! Servant portrait and face asset selection.
 
-use super::{servants_data, ServantInfo};
+use super::servants::{servants_data, ServantInfo};
 use crate::commands::projects::update_app_ui_settings;
 use crate::commands::runtime::resolve_servant_assets_dir;
 use crate::paths::AppUiSettings;

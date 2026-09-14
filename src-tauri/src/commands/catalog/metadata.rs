@@ -3,7 +3,14 @@
 //! This module owns JP/CN name indexes, variant-aware recognition names,
 //! Noble Phantasm localization, and the cached metadata command.
 
-use super::*;
+use super::servants::{
+    preferred_cn_name, push_unique_nonempty, servants_data, string_field, ServantInfo,
+};
+use crate::commands::runtime::resolve_servant_assets_dir;
+use crate::server::Server;
+use std::collections::HashMap;
+use std::fs;
+use std::sync::{Mutex, OnceLock};
 
 /// Subset of `assets/servants/{id}/servant.json` needed by the OCR-based
 /// support detector: the servant's primary name and every Noble Phantasm

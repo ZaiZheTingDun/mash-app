@@ -3,7 +3,13 @@
 //! This module owns skill-form resolution, targeting metadata, selection
 //! options, and the associated asset lookups.
 
-use super::*;
+use super::servants::{string_field, u32_field};
+use crate::commands::runtime::{resolve_mystic_code_assets_dir, resolve_servant_assets_dir};
+use crate::paths::app_assets_dir;
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+use std::sync::{Arc, Mutex, OnceLock};
 
 fn variants_raw_data() -> &'static HashMap<u32, Vec<serde_json::Value>> {
     static VARIANTS: OnceLock<HashMap<u32, Vec<serde_json::Value>>> = OnceLock::new();

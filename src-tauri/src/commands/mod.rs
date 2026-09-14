@@ -1,5 +1,4 @@
 use self::runtime::*;
-use crate::enhancement_runner::EnhancementTarget;
 use crate::models::*;
 use crate::paths::*;
 use crate::screen;
@@ -10,7 +9,7 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;

@@ -29,7 +29,7 @@ src-tauri/                   # Tauri / Rust backend
     lib.rs                   # Tauri command registration & plugin wiring
     commands/                # Tauri commands grouped by domain
       automation/            # Battle, enhancement, CE, and friend-point lifecycle commands
-      catalog/               # CE catalog, servant metadata, and skill helpers
+      catalog/               # Servant/CE catalogs, portraits, metadata, and skill helpers
       debug/                 # Capture/session and battle, NP, support, enhancement diagnostics
       assets/                # Managed asset download/install helpers
       projects/              # Project persistence and configuration transfer

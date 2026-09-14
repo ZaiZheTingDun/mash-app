@@ -31,7 +31,7 @@ Backend 代码位于 `src-tauri/src/`。
   - `adb.rs`：ADB status/reset/screenshot。
   - `assets.rs` + `assets/`：asset bundle manifest 与安装计划；`import.rs` 负责本地 ZIP 导入和共享目录安装，`status.rs` 负责安装状态与 self-check，`download.rs` 负责远端下载与校验。
   - `automation.rs` + `automation/`：共享 start/stop/status，以及 battle、servant enhancement、CE enhancement、friend-point summon 的 lifecycle command。
-  - `catalog.rs` + `catalog/`：从者目录入口；`portraits.rs` 负责从者立绘/头像资源选择与偏好持久化，`craft_essences.rs` 负责 CE catalog 与卡面资源，`metadata.rs`、`skills.rs` 分别负责 metadata localization 和技能资料。
+  - `catalog.rs` + `catalog/`：catalog facade；`servants.rs` 负责从者目录解析与 variant 展开，`portraits.rs` 负责从者立绘/头像资源选择与偏好持久化，`craft_essences.rs` 负责 CE catalog 与卡面资源，`metadata.rs`、`skills.rs` 分别负责 metadata localization 和技能资料。
   - `debug.rs` + `debug/`：通用模板命令入口；`session.rs` 管理共享 sidecar，`capture.rs` 管理截图/视频流，`battle.rs`、`noble_phantasm.rs`、`support.rs`、`enhancement.rs` 按诊断领域分组。
   - `projects.rs` + `projects/`：项目 CRUD 与场景文件命令；`normalization.rs` 负责项目兼容迁移和约束归一化，`catalog.rs` 负责目录分组与排序，`ui_settings.rs` 负责应用 UI 偏好持久化，`config_transfer.rs` 负责配置 import/export。
   - `runtime.rs` + `runtime/resolution.rs`：CV runtime status/import/download 与 runtime resource resolution。
