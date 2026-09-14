@@ -476,8 +476,6 @@ fn classify_enhancement_route(snapshot: &ProbeSnapshot) -> Option<EnhancementRou
             EnhancementVariant::MaterialSelect
         } else if snapshot.found("text_enhancement_servant_select") {
             EnhancementVariant::ServantSelect
-        } else if snapshot.found("text_enhancement_result") {
-            EnhancementVariant::Main
         } else {
             EnhancementVariant::Main
         };
@@ -496,8 +494,6 @@ fn classify_enhancement_route(snapshot: &ProbeSnapshot) -> Option<EnhancementRou
     if snapshot.found("screen_enhancement_ascension") {
         let variant = if snapshot.found("text_enhancement_ascension_servant_select") {
             EnhancementVariant::ServantSelect
-        } else if snapshot.found("text_ascension_main_variant") {
-            EnhancementVariant::Main
         } else {
             EnhancementVariant::Main
         };
