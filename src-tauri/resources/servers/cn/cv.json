@@ -600,10 +600,10 @@
             "dialog_grand_summon_friends_point_confirmation": {
               "template": "summon_friends_point/dialog_grand_summon_friends_point_confirmation",
               "region": {
-                "x": 0.418,
-                "y": 0.237,
-                "w": 0.136,
-                "h": 0.087
+                "x": 0.35,
+                "y": 0.55,
+                "w": 0.3,
+                "h": 0.18
               },
               "threshold": 0.85,
               "templateReferenceWidth": 1920

@@ -1,8 +1,11 @@
 use crate::adb::Adb;
 use crate::runner::LogLevel;
-use crate::screen::{ElementMatch, Point, SidecarClient};
+use crate::screen::{ElementMatch, NormRect, Point, SidecarClient};
 use crate::touch::{self, TouchBackend};
 use crate::Server;
+use base64::Engine;
+use std::io::Write;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -29,6 +32,87 @@ const RESULT_SETTLE_CHECKS: u8 = 20;
 const SUMMON_100_BUTTON: Point = Point::new(0.6845, 0.7205);
 const CONFIRM_BUTTON: Point = Point::new(0.661, 0.786);
 const SKIP_ANIMATION_BUTTON: Point = Point::new(0.685, 0.095);
+
+// Task-local identity only: never authorizes the confirmation button.
+// Title + central banner distinguish pools; neither includes currency or dates.
+const HOME_REGIONS: [NormRect; 2] = [
+    NormRect {
+        x: 0.39,
+        y: 0.505,
+        w: 0.23,
+        h: 0.09,
+    },
+    NormRect {
+        x: 0.40,
+        y: 0.20,
+        w: 0.25,
+        h: 0.23,
+    },
+];
+const HOME_THRESHOLD: f64 = 0.90;
+
+pub(crate) struct HomeReference {
+    frame: tempfile::NamedTempFile,
+    size: (u32, u32),
+}
+
+impl HomeReference {
+    fn validate_size(&self, size: (u32, u32)) -> Result<(), String> {
+        if self.size != size || size.0 == 0 || size.1 == 0 {
+            return Err("视频分辨率发生变化，请重新进入目标友情池并启动任务".into());
+        }
+        Ok(())
+    }
+
+    fn matches(&self, sidecar: &mut SidecarClient, frame: &Path) -> Result<bool, String> {
+        for crop in HOME_REGIONS {
+            let region = NormRect {
+                x: crop.x - 0.005,
+                y: crop.y - 0.005,
+                w: crop.w + 0.01,
+                h: crop.h + 0.01,
+            };
+            if !sidecar
+                .find_region_with_template_crop_full(
+                    Some(frame),
+                    self.frame.path(),
+                    region,
+                    crop,
+                    None,
+                    HOME_THRESHOLD,
+                )?
+                .found
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
+
+fn capture_frame(sidecar: &mut SidecarClient) -> Result<HomeReference, String> {
+    let (encoded, width, height) = sidecar.get_frame_jpeg_base64(2.0)?;
+    if width == 0 || height == 0 {
+        return Err("视频帧尺寸无效".into());
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|error| format!("视频帧解码失败: {error}"))?;
+    let mut frame = tempfile::Builder::new()
+        .prefix("mash-friend-home-")
+        .suffix(".jpg")
+        .tempfile()
+        .map_err(|error| error.to_string())?;
+    frame.write_all(&bytes).map_err(|error| error.to_string())?;
+    Ok(HomeReference {
+        frame,
+        size: (width, height),
+    })
+}
+
+fn can_record_home(snapshot: ProbeSnapshot) -> bool {
+    snapshot.summon_shell && !snapshot.confirmation && !snapshot.result_continue_100
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
@@ -93,13 +177,22 @@ pub struct FriendPointSummonAutomationEvent {
 }
 
 pub struct FriendPointSummonRunnerHandle {
+    home_reference: Arc<Mutex<Option<HomeReference>>>,
     pub state: Arc<Mutex<FriendPointSummonRunnerState>>,
     pub cancel: Arc<AtomicBool>,
 }
 
 impl FriendPointSummonRunnerHandle {
+    /// Start a fresh generation only for an accepted manual start. Keeping
+    /// the slot on the handle retains the frame after the worker exits.
+    pub(crate) fn begin_manual_start(&mut self) -> Arc<Mutex<Option<HomeReference>>> {
+        self.home_reference = Arc::new(Mutex::new(None));
+        self.home_reference.clone()
+    }
+
     pub fn new_idle() -> Self {
         Self {
+            home_reference: Arc::new(Mutex::new(None)),
             state: Arc::new(Mutex::new(FriendPointSummonRunnerState::Idle)),
             cancel: Arc::new(AtomicBool::new(false)),
         }
@@ -183,11 +276,12 @@ pub struct FriendPointSummonRunner {
     screen_w: u32,
     screen_h: u32,
     completed_batches: u32,
+    home_reference: Arc<Mutex<Option<HomeReference>>>,
 }
 
 impl FriendPointSummonRunner {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(crate) fn new(
         adb: Adb,
         sidecar: SidecarClient,
         app_handle: tauri::AppHandle,
@@ -195,6 +289,7 @@ impl FriendPointSummonRunner {
         cancel: Arc<AtomicBool>,
         screen_size: (u32, u32),
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
+        home_reference: Arc<Mutex<Option<HomeReference>>>,
     ) -> Self {
         let touch = touch::build(&adb, &app_handle, screen_size);
         Self {
@@ -207,6 +302,7 @@ impl FriendPointSummonRunner {
             screen_w: screen_size.0,
             screen_h: screen_size.1,
             completed_batches: 0,
+            home_reference,
         }
     }
 
@@ -279,7 +375,7 @@ impl FriendPointSummonRunner {
     }
 
     fn handle_verify_start(&mut self, checks: u8, stable_matches: u8) -> Option<WorkflowState> {
-        let observation = match self.observe() {
+        let observation = match self.observe_start(true) {
             Ok(observation) => observation,
             Err(error) => {
                 self.fail("", format!("友情点页面识别失败: {error}"));
@@ -294,7 +390,10 @@ impl FriendPointSummonRunner {
         };
 
         if next_stable >= REQUIRED_STABLE_MATCHES {
-            self.emit("FriendPointSummonMain", "已确认当前为友情点抽取页面");
+            self.emit(
+                "FriendPointSummonMain",
+                "已记录本次目标主页，接下来通过确认框验证友情点召唤",
+            );
             if !self.tap_at("FriendPointSummonMain", SUMMON_100_BUTTON) {
                 return None;
             }
@@ -312,14 +411,14 @@ impl FriendPointSummonRunner {
         if next_checks >= START_MAX_CHECKS {
             self.fail(
                 current_screen_name(observation),
-                "启动失败：当前必须停留在国服友情点抽取主页".into(),
+                "启动失败：无法稳定记录目标主页，请停留在国服友情点抽取主页后重试".into(),
             );
             return None;
         }
 
         self.emit(
             current_screen_name(observation),
-            &format!("正在确认友情点抽取主页… ({next_checks}/{START_MAX_CHECKS})"),
+            &format!("正在记录目标主页特征… ({next_checks}/{START_MAX_CHECKS})"),
         );
         Some(WorkflowState::VerifyStart {
             checks: next_checks,
@@ -337,7 +436,11 @@ impl FriendPointSummonRunner {
         shell_matches: u8,
         last_tap: Instant,
     ) -> Option<WorkflowState> {
-        let observation = match self.observe() {
+        let observed = match origin {
+            ConfirmationOrigin::Initial => self.observe_start(false),
+            ConfirmationOrigin::Repeat => self.observe(),
+        };
+        let observation = match observed {
             Ok(observation) => observation,
             Err(error) => {
                 self.fail("", format!("友情点确认框识别失败: {error}"));
@@ -605,9 +708,40 @@ impl FriendPointSummonRunner {
         }))
     }
 
+    fn observe_start(&mut self, allow_capture: bool) -> Result<ObservedScreen, String> {
+        // Every probe sees the same frame, including the resolution check.
+        let current = capture_frame(self.sidecar())?;
+        if let Some(reference) = self.home_reference.lock().unwrap().as_ref() {
+            reference.validate_size(current.size)?;
+        }
+        let frame = Some(current.frame.path());
+        let mut snapshot = ProbeSnapshot {
+            confirmation: self.probe_at(frame, CONFIRMATION_ELEMENT)?.found,
+            result_continue_100: self.probe_at(frame, CONTINUE_100_ELEMENT)?.found,
+            summon_shell: self.probe_at(frame, SUMMON_SHELL_ELEMENT)?.found,
+            main: false,
+        };
+        if can_record_home(snapshot) {
+            let mut home_reference = self.home_reference.lock().unwrap();
+            if let Some(reference) = home_reference.as_ref() {
+                snapshot.main =
+                    reference.matches(self.sidecar.as_mut().unwrap(), current.frame.path())?;
+            } else if allow_capture {
+                // Do not match the captured frame against itself or replace the
+                // reference with an unexpected page later in the task.
+                *home_reference = Some(current);
+            }
+        }
+        Ok(classify_snapshot(snapshot))
+    }
+
     fn probe(&mut self, element: &str) -> Result<ElementMatch, String> {
+        self.probe_at(None, element)
+    }
+
+    fn probe_at(&mut self, frame: Option<&Path>, element: &str) -> Result<ElementMatch, String> {
         self.sidecar()
-            .find_element_by_name(None, SCREEN_NAME, element)
+            .find_element_by_name(frame, SCREEN_NAME, element)
             .map_err(|error| format!("{SCREEN_NAME}.{element}: {error}"))
     }
 
@@ -723,6 +857,74 @@ pub(crate) fn server_supported(server: Server) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn home_capture_does_not_require_a_static_home_match() {
+        assert!(can_record_home(ProbeSnapshot {
+            summon_shell: true,
+            ..Default::default()
+        }));
+        assert!(!can_record_home(ProbeSnapshot::default()));
+        for snapshot in [
+            ProbeSnapshot {
+                summon_shell: true,
+                confirmation: true,
+                ..Default::default()
+            },
+            ProbeSnapshot {
+                summon_shell: true,
+                result_continue_100: true,
+                ..Default::default()
+            },
+        ] {
+            assert!(!can_record_home(snapshot));
+        }
+    }
+
+    #[test]
+    fn home_reference_survives_worker_exit_until_next_manual_start() {
+        let mut handle = FriendPointSummonRunnerHandle::new_idle();
+        let worker_reference = handle.begin_manual_start();
+        let reference = HomeReference {
+            frame: tempfile::NamedTempFile::new().unwrap(),
+            size: (1920, 1080),
+        };
+        let path = reference.frame.path().to_owned();
+        *worker_reference.lock().unwrap() = Some(reference);
+        // Confirmation and worker termination do not own the retained frame.
+        drop(worker_reference);
+        assert!(path.exists());
+        assert!(handle.home_reference.lock().unwrap().is_some());
+        let next_worker_reference = handle.begin_manual_start();
+        assert!(!path.exists());
+        assert!(next_worker_reference.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn previous_worker_cannot_replace_new_manual_start_reference() {
+        let mut handle = FriendPointSummonRunnerHandle::new_idle();
+        let previous = handle.begin_manual_start();
+        let current = handle.begin_manual_start();
+        *previous.lock().unwrap() = Some(HomeReference {
+            frame: tempfile::NamedTempFile::new().unwrap(),
+            size: (1920, 1080),
+        });
+        assert!(current.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn home_reference_rejects_resolution_changes_and_is_deleted_on_drop() {
+        let reference = HomeReference {
+            frame: tempfile::NamedTempFile::new().unwrap(),
+            size: (1920, 1080),
+        };
+        assert!(reference.validate_size((1920, 1080)).is_ok());
+        assert!(reference.validate_size((1280, 720)).is_err());
+        assert!(reference.validate_size((1080, 1920)).is_err());
+        let path = reference.frame.path().to_owned();
+        drop(reference);
+        assert!(!path.exists());
+    }
 
     #[test]
     fn lifecycle_moves_through_running_and_finished() {

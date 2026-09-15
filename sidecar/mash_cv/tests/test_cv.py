@@ -60,6 +60,48 @@ def _gradient_patch(size: int = 20) -> np.ndarray:
     return np.tile(np.arange(size, dtype=np.uint8) * 12, (size, 1))
 
 
+@pytest.mark.parametrize("scale", [1.0, 2 / 3])
+@pytest.mark.parametrize("change", ["balance_and_date", "other_banner", "other_title", "covered"])
+def test_task_home_reference_matches_identity_not_dynamic_fields(tmp_path, scale, change):
+    from mash_cv.cv import _handle_find_region_command
+
+    source = (
+        Path(__file__).with_name("test_data")
+        / "screenshots/friend_point_summon/home_limited.png"
+    )
+    frame = cv2.imread(str(source))
+    frame = cv2.resize(frame, (round(1920 * scale), round(1080 * scale)))
+    height, width = frame.shape[:2]
+    reference = tmp_path / "reference.jpg"
+    cv2.imwrite(str(reference), frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    current = frame.copy()
+    regions = [(0.39, 0.505, 0.23, 0.09), (0.40, 0.20, 0.25, 0.23)]
+    changes = {
+        "balance_and_date": [(0.59, 0.03, 0.17, 0.06), (0.38, 0.615, 0.25, 0.04)],
+        "other_banner": [regions[1]],
+        "other_title": [regions[0]],
+        "covered": [(0.2, 0.15, 0.6, 0.7)],
+    }
+    for x, y, w, h in changes[change]:
+        current[
+            int(y * height):int((y + h) * height),
+            int(x * width):int((x + w) * width),
+        ] = 50
+    image = tmp_path / "current.jpg"
+    cv2.imwrite(str(image), current, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    matches = []
+    for x, y, w, h in regions:
+        result = _handle_find_region_command({
+            "imagePath": str(image), "templatePath": str(reference),
+            "templateCrop": dict(x=x, y=y, w=w, h=h),
+            "region": dict(x=x - 0.005, y=y - 0.005, w=w + 0.01, h=h + 0.01),
+            "threshold": 0.90,
+        })
+        assert "error" not in result
+        matches.append(result["found"])
+    assert all(matches) == (change == "balance_and_date")
+
+
 @pytest.mark.parametrize(
     ("element", "raw_roi", "padded_roi"),
     [
@@ -75,8 +117,8 @@ def _gradient_patch(size: int = 20) -> np.ndarray:
         ),
         (
             "dialog_grand_summon_friends_point_confirmation",
-            (0.438, 0.257, 0.096, 0.047),
-            (0.418, 0.237, 0.136, 0.087),
+            (0.4, 0.6, 0.198, 0.077),
+            (0.35, 0.55, 0.3, 0.18),
         ),
         (
             "button_grand_summon_friends_point_continue_100",
@@ -125,6 +167,47 @@ def test_friend_point_summon_elements_use_padded_roi_across_resolutions(
             element,
         )
         assert result["found"], (element, candidate.shape, result)
+
+
+@pytest.mark.parametrize("variant", ["limited", "regular"])
+@pytest.mark.parametrize("scale", [1.0, 0.75])
+@pytest.mark.parametrize("remove_text", [False, True])
+def test_friend_point_confirmation_uses_auto_burn_button(variant, scale, remove_text):
+    """Real review crops: pool/amount text must not be needed to identify the dialog."""
+    from mash_cv import cv as cv_module
+
+    resources = Path(__file__).resolve().parents[3] / "src-tauri/resources/servers/cn"
+    mash_cv._load_templates(str(resources / "templates"))
+    mash_cv._load_config(str(resources / "cv.json"))
+    spec = cv_module._find_named_target(
+        cv_module.config["screens"]["FriendPointSummon"],
+        "dialog_grand_summon_friends_point_confirmation",
+    )
+    path = Path(__file__).with_name("test_data") / "screenshots/friend_point_summon"
+    frame = cv2.imread(str(path / f"confirmation_{variant}_crop.png"))
+    assert frame is not None
+    if remove_text:
+        # Remove all changing text above the button, including the FP amount.
+        frame[100:550, 300:1150] = 0
+
+    # These review attachments are crops, not full device frames. Calibrate their
+    # pixel scale against the previous 1920-reference title (0.92), and search
+    # the full crop. The test above separately covers the production ROI.
+    spec["region"] = {"x": 0, "y": 0, "w": 1, "h": 1}
+    spec["templateReferenceWidth"] = frame.shape[1] / 0.92
+    candidate = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    result = mash_cv._find_element_by_name(
+        candidate, "FriendPointSummon", "dialog_grand_summon_friends_point_confirmation"
+    )
+    assert result["found"], (variant, scale, remove_text, result)
+
+    # Other confirmation buttons and the unchanged dialog text are insufficient.
+    frame[550:655, 550:930] = 0
+    candidate = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    result = mash_cv._find_element_by_name(
+        candidate, "FriendPointSummon", "dialog_grand_summon_friends_point_confirmation"
+    )
+    assert not result["found"], (variant, scale, result)
 
 
 def test_five_star_ce_drop_template_hits_expected_loot_cells():

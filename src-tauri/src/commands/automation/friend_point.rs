@@ -80,11 +80,12 @@ pub(crate) fn start_friend_point_summon_automation(
         .clone();
     let state = Arc::new(Mutex::new(FriendPointSummonRunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    {
+    let home_reference = {
         let mut handle = handle_state.lock().unwrap();
         handle.state = state.clone();
         handle.cancel = cancel.clone();
-    }
+        handle.begin_manual_start()
+    };
 
     let debug_sidecar = debug_state.0.clone();
     std::thread::spawn(move || {
@@ -155,6 +156,7 @@ pub(crate) fn start_friend_point_summon_automation(
             cancel,
             input_size,
             Some(debug_sidecar),
+            home_reference,
         );
         runner.run();
     });
