@@ -362,7 +362,7 @@
             "w": 0.032,
             "h": 0.23
           },
-          "threshold": 0.9
+          "threshold": 0.82
         },
         "servantOcrRegion": {
           "x": 0.497,

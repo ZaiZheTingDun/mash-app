@@ -150,7 +150,7 @@ JP 与 CN 项目配置任意 `supportStarMapScoreMin`、`supportGrandStarMapScor
 
 - `BattleSceneTick` 是内部状态，不是 `Screen` enum variant；它通过 `tick_scene_state` 映射最近的 `BATTLE m/n` 读取，并控制技能执行。
 - `BattleAction` 是文档中的可执行战斗状态节点，条件为检测到 `attack_button`。
-- `BattleResultBond` 覆盖普通羁绊结算；`BattleResultBondLevelUp` 覆盖羁绊等级提升 overlay。全局羁绊自动停止命中 overlay（任意升级，或最大等级模式下等级读数 `10+`）时直接结束，否则点击同一 next 目标。`BattleResultExp` 同理覆盖普通 EXP 结算，`BattleResultExpLevelUp` 覆盖装备／技能提升 overlay。
+- `BattleResultBond` 覆盖普通羁绊结算；`BattleResultBondLevelUp` 覆盖羁绊等级提升 overlay。全局羁绊自动停止命中 overlay（任意升级，或最大等级模式下等级读数 `10+`）时直接结束，否则点击同一 next 目标。CN 等级读取在升级页身份已确认后，以 `0.82` 匹配小号“牵绊等级”锚点，容纳 1080p 视频帧的轻微模糊；升级后数字仍使用独立的 `0.85` 门槛，普通羁绊结算页不得通过锚点检查。`BattleResultExp` 同理覆盖普通 EXP 结算，`BattleResultExpLevelUp` 覆盖装备／技能提升 overlay。
 - 定向从者／装备技能以共享 battle close-button probe 作为同步门：点击技能后等待 `skill_target_close_button`，点击已配置己方目标，等待 close button 消失，再点击动画跳过点。picker 未出现或不关闭时停止当前 action chain，不以固定延迟猜测。Command Spell 在确认对话框后通过 `command_spell_close_button` 使用同一门；此前的按钮、spell row 和确认 dialog 仍使用固定 modal-settle 延迟。
 - 战斗内 Order Change 存储在装备 action 的 `orderChange.front` + `orderChange.back`。Runner 点击御主技能，等待 `order_change_close_button`，选择每个前排（`servant_1..3`）和后排（`servant_4..6`）slot 后，按当前服务器使用同一帧中的三个发光点确认上方 SELECT 标记；当前 JP/CN 画面的采样几何相同，但请求仍携带 server 以便后续布局变化。每次点击只确认一次；只有确认失败才再次点击，确认成功后不会再次触碰该槽位。两个槽位都确认后点击换人确认，并等待 close button 消失及攻击按钮。这不是战前 `TeamChange`，不经过 `Screen::TeamChange` route。
 - preparation action 为逐槽位确认后的 fail-fast：从者技能、御主技能、Command Spell 或 Order Change 无法完成同步点击／等待链时，runner 会输出包含行动者和技能的 Error 日志并停止，不会将回合标记为已执行。action 后攻击按钮等待使用共享技能超时窗口，当前为 15 秒。

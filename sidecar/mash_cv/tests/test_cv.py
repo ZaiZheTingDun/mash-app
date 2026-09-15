@@ -613,14 +613,14 @@ class TestDetectScreen:
         assert level_up_detect["priority"] > 0
 
     @pytest.mark.parametrize(
-        ("server", "expected_keyword", "expected_name_field"),
+        ("server", "expected_keyword", "expected_name_field", "expected_anchor_threshold"),
         [
-            ("cn", "从者币", "nameCN"),
-            ("jp", "サーヴァントコイン", "nameJP"),
+            ("cn", "从者币", "nameCN", 0.82),
+            ("jp", "サーヴァントコイン", "nameJP", 0.9),
         ],
     )
     def test_battle_result_bond_level_up_read_config_is_bundled(
-        self, server, expected_keyword, expected_name_field
+        self, server, expected_keyword, expected_name_field, expected_anchor_threshold
     ):
         repo_root = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "..")
@@ -643,7 +643,7 @@ class TestDetectScreen:
             cfg = json.load(f)
         read = cfg["screens"]["BattleResultBondLevelUp"]["read"]
         assert read["anchor"]["template"] == "battle-result/text_battle_result_bond_level_up_anchor"
-        assert read["anchor"]["threshold"] >= 0.9
+        assert read["anchor"]["threshold"] == expected_anchor_threshold
         assert read["servantOcrRegion"] == {
             "x": 0.497,
             "y": 0.526,
@@ -726,6 +726,59 @@ class TestDetectScreen:
         assert result["confidence"]["anchor"] >= 0.9
         assert result["confidence"]["bondLevelAfter"] >= 0.85
         assert result["servantMatchScore"] >= 0.72
+
+    def test_cn_bond_level_reader_tolerates_soft_1080p_anchor(self, monkeypatch):
+        """Small CN anchor text varies enough at 1080p to fall below 0.9.
+
+        Keep accepting a softened level-up overlay while proving that an
+        ordinary bond result still cannot clear the relaxed anchor threshold.
+        """
+        repo_root = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        templates_dir = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "templates"
+        )
+        cv_json = os.path.join(
+            repo_root, "src-tauri", "resources", "servers", "cn", "cv.json"
+        )
+        screenshots_dir = os.path.join(os.path.dirname(__file__), "test_data", "screenshots")
+        level_up_path = os.path.join(screenshots_dir, "battle_result_bond_level_up_cn.jpg")
+        normal_bond_path = os.path.join(screenshots_dir, "battle_result_bond.png")
+        if not all(
+            os.path.exists(path)
+            for path in (templates_dir, cv_json, level_up_path, normal_bond_path)
+        ):
+            pytest.skip("CN production resources or bond-result fixtures not available")
+
+        mash_cv._load_templates(templates_dir)
+        mash_cv._load_config(cv_json)
+        from mash_cv import cv as _cv_module
+
+        monkeypatch.setattr(
+            _cv_module,
+            "_ocr_region",
+            lambda _img, _region: {"fragments": [], "fullText": ""},
+        )
+        level_up = cv2.imread(level_up_path)
+        assert level_up is not None
+        softened = cv2.GaussianBlur(level_up, (7, 7), 0)
+
+        result = mash_cv._read_bond_level_up(softened, debug=True)
+
+        anchor_threshold = _cv_module.config["screens"]["BattleResultBondLevelUp"]["read"][
+            "anchor"
+        ]["threshold"]
+        assert result["ok"] is True, result.get("diagnostics")
+        assert result["bondLevelAfter"] == 6
+        assert anchor_threshold <= result["confidence"]["anchor"] < 0.9
+        assert result["confidence"]["bondLevelAfter"] >= 0.85
+
+        normal_bond = cv2.imread(normal_bond_path)
+        assert normal_bond is not None
+        normal_result = mash_cv._read_bond_level_up(normal_bond, debug=True)
+        assert normal_result["ok"] is False
+        assert normal_result["reason"] == "anchor_not_found"
 
     def test_bond_level_reader_keeps_level_when_servant_ocr_is_not_ready(self, monkeypatch):
         """Delayed coin-row reveal must not discard a correctly read level."""
