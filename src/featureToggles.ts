@@ -3,6 +3,7 @@ interface FeatureToggleEnv {
   VITE_FEATURE_SERVANT_ENHANCEMENT?: string;
   VITE_FEATURE_CRAFT_ESSENCE_ENHANCEMENT?: string;
   VITE_FEATURE_FRIEND_POINT_SUMMON?: string;
+  VITE_FEATURE_RANK_UP_QUEST?: string;
   VITE_FEATURE_CV_DEBUG?: string;
   VITE_FEATURE_GRAND_CARD_PRIORITY?: string;
   VITE_FEATURE_TURN_ATTACK_MODES?: string;
@@ -13,6 +14,7 @@ export interface FeatureToggles {
   servantEnhancement: boolean;
   craftEssenceEnhancement: boolean;
   friendPointSummon: boolean;
+  rankUpQuest: boolean;
   cvDebug: boolean;
   grandCardPriority: boolean;
   turnAttackModes: boolean;
@@ -40,6 +42,7 @@ export function createFeatureToggles(env: FeatureToggleEnv): FeatureToggles {
       env.VITE_FEATURE_FRIEND_POINT_SUMMON,
       env.DEV
     ),
+    rankUpQuest: envFlag(env.VITE_FEATURE_RANK_UP_QUEST, env.DEV),
     cvDebug: envFlag(env.VITE_FEATURE_CV_DEBUG, env.DEV),
     grandCardPriority: envFlag(env.VITE_FEATURE_GRAND_CARD_PRIORITY, env.DEV),
     turnAttackModes: envFlag(env.VITE_FEATURE_TURN_ATTACK_MODES, true),

@@ -145,6 +145,49 @@ pub struct RegionColorStats {
     pub mean_value: f64,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RankUpQuestAnchor {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RankUpQuestRow {
+    pub candidate_id: String,
+    pub region: NormRect,
+    #[serde(default)]
+    pub rank_up_anchor: Option<RankUpQuestAnchor>,
+    pub cost_anchor: RankUpQuestAnchor,
+    pub signature_regions: Vec<NormRect>,
+    pub actionable: bool,
+    pub anchor_score: f64,
+    pub mean_luma: f64,
+    pub mean_saturation: f64,
+    pub mean_value: f64,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RankUpQuestDiagnostics {
+    pub rank_up_anchor_count: u32,
+    pub cost_anchor_count: u32,
+    pub paired_row_count: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindRankUpQuestRowsResult {
+    #[serde(default)]
+    pub rows: Vec<RankUpQuestRow>,
+    #[serde(default)]
+    pub diagnostics: RankUpQuestDiagnostics,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OrderChangeSelectionProbe {
@@ -744,6 +787,7 @@ pub struct FindSupportsResult {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum Screen {
+    RankUpQuest,
     TeamConfirm,
     TeamChange,
     SupportSelect,
@@ -769,6 +813,7 @@ pub enum Screen {
 impl std::fmt::Display for Screen {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::RankUpQuest => write!(f, "RankUpQuest"),
             Self::TeamConfirm => write!(f, "TeamConfirm"),
             Self::TeamChange => write!(f, "TeamChange"),
             Self::SupportSelect => write!(f, "SupportSelect"),
@@ -791,6 +836,7 @@ impl FromStr for Screen {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let screen = match s {
+            "RankUpQuest" => Self::RankUpQuest,
             "TeamConfirm" => Self::TeamConfirm,
             "TeamChange" => Self::TeamChange,
             "SupportSelect" => Self::SupportSelect,

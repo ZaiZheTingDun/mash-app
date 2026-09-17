@@ -34,7 +34,6 @@ import type {
   BattleRepeatMode,
   GrandClass,
   GrandClassDefinition,
-  GrandChainPriorityItem,
   Project,
   ProjectCatalog,
 } from "../../types/project";
@@ -45,6 +44,7 @@ import {
 } from "../advanced/grandClassModel";
 import { isAutomationTerminal, type AutomationStatus } from "../../types/automation";
 import type { BattleRunStatus } from "../../types/battleRunStatus";
+import { buildProjectRunConfig } from "./projectRunConfig";
 
 interface AutomationEvent {
   state: string;
@@ -101,14 +101,6 @@ const UNLIMITED_AP_RECOVERY_LIMITS: BattleApRecoveryLimits = {
 const MAX_AP_RECOVERY_LIMIT = 4_294_967_295;
 const AP_RECOVERY_HELP_TEXT =
   "选中恢复道具后默认为无限使用；点击无限图标可设置本次运行的使用数量。某种道具达到上限后会继续尝试其他已选道具，全部达到上限后停止。";
-const DEFAULT_GRAND_CHAIN_PRIORITY: GrandChainPriorityItem[] = [
-  "mainBraveChain",
-  "mainReadyNp",
-  "deputyBraveChain",
-  "mainColorChain",
-  "deputyColorChain",
-  "fallback",
-];
 const DEFAULT_FIVE_STAR_CE_DROP_TARGET_COUNT = 1;
 
 interface BattlePageProps {
@@ -517,76 +509,12 @@ export function BattlePage({
     setStopAfterCurrentRequested(false);
     onAutomationStart?.(maxMissionRuns);
 
-    const supportSlot = selectedProject.slots?.find((slot) => slot.type === "support");
-    const servantSelections =
-      selectedProject.slots
-        ?.map((slot, slotIndex) =>
-          slot.type === "servant" && slot.servantId != null
-            ? { memberId: slot.id, slotIndex, servantId: slot.servantId }
-            : null
-        )
-        .filter((selection): selection is { memberId: string; slotIndex: number; servantId: number } =>
-          selection != null
-        ) ?? [];
-    const stopOnFiveStarCeDrop = projectStopsOnFiveStarCeDrop(selectedProject);
-    const config = {
-      projectId: selectedProject.id,
-      mysticCodeId: selectedProject.mysticCodeId ?? null,
-      partyOrder: null,
-      supportClassFilter: null,
-      supportServantName: null,
-      supportServantId: selectedProject.supportServantId ?? null,
-      supportServantVariantKey: selectedProject.supportServantVariantKey ?? null,
-      supportSlotIndex:
-        supportSlot != null ? selectedProject.slots?.indexOf(supportSlot) ?? null : null,
-      supportMemberId: supportSlot?.id ?? null,
-      supportCraftEssenceId: supportSlot?.craftEssenceId ?? null,
-      supportCraftEssenceIds:
-        supportSlot?.craftEssenceIds?.length
-          ? supportSlot.craftEssenceIds.slice(0, 10)
-          : supportSlot?.craftEssenceId != null
-            ? [supportSlot.craftEssenceId]
-            : [],
-      supportCraftEssenceMlbRequired:
-        supportSlot?.craftEssenceMlbRequired ?? true,
-      supportGrandMode: selectedProject.supportGrandMode ?? false,
-      supportGrandCraftEssenceIds:
-        selectedProject.supportGrandCraftEssenceIds ?? [null, null, null],
-      supportGrandCraftEssenceIdLists:
-        selectedProject.supportGrandCraftEssenceIdLists ?? [[], [], []],
-      supportGrandCraftEssenceMlbRequired:
-        selectedProject.supportGrandCraftEssenceMlbRequired ?? [true, true, true],
-      supportGrandBondCeMode: selectedProject.supportGrandBondCeMode ?? "any",
-      grandServants: selectedProject.grandServants ?? [],
-      grandClass: selectedProject.grandClass ?? "saber",
-      grandCardStrategy: selectedProject.grandCardStrategy ?? {
-        chainPriority: DEFAULT_GRAND_CHAIN_PRIORITY,
-      },
-      supportServantLevelMin:
-        selectedProject.supportServantLevelMin ?? null,
-      supportNoblePhantasmLevelMin:
-        selectedProject.supportNoblePhantasmLevelMin ?? null,
-      supportStarMapScoreMin:
-        selectedProject.supportStarMapScoreMin ?? null,
-      supportGrandStarMapScoreMin:
-        selectedProject.supportGrandStarMapScoreMin ?? null,
-      supportSkillLevelMins:
-        selectedProject.supportSkillLevelMins ?? [null, null, null],
-      supportAppendSkillLevelMins:
-        selectedProject.supportAppendSkillLevelMins ?? [null, null, null, null, null],
-      preferHigherCriticalChance:
-        selectedProject.preferHigherCriticalChance ?? false,
-      servantSelections,
-      maxSupportScrolls: 3,
+    const config = buildProjectRunConfig(selectedProject, {
       repeatMission: latestDraft.repeatMode === "infinite",
       maxMissionRuns,
       apRecoveryItems: latestDraft.apRecoveryItems,
       apRecoveryLimits: latestDraft.apRecoveryLimits,
-      stopOnFiveStarCeDrop,
-      fiveStarCeDropTargetCount: stopOnFiveStarCeDrop
-        ? projectFiveStarCeDropTargetCount(selectedProject)
-        : DEFAULT_FIVE_STAR_CE_DROP_TARGET_COUNT,
-    };
+    });
 
     invoke("start_automation", { config }).catch((err) => {
       onLogEntry?.(`启动失败: ${String(err)}`);

@@ -1,6 +1,44 @@
 {
   "$comment": "Screen + variant + element template mapping. All coordinates are normalized (0.0..1.0). 'template' refers to a PNG filename (without extension) in resources/templates/. Detection is template matching: for each screen, find its 'detect' template within its region at >= threshold; the highest-scoring screen wins. Every screen has at least variants.main. Variants describe alternate views of the same screen; elements are used for interactions and status probes.",
   "screens": {
+    "RankUpQuest": {
+      "detect": {
+        "template": "rank-up-quest/text_rank_up_quest_page",
+        "region": {
+          "x": 0.81,
+          "y": 0.0,
+          "w": 0.19,
+          "h": 0.09
+        },
+        "threshold": 0.8
+      },
+      "variants": {
+        "main": {
+          "elements": {
+            "scroll_start": {
+              "template": "shared/ui_scroll_bar_start",
+              "region": {
+                "x": 0.945,
+                "y": 0.12,
+                "w": 0.055,
+                "h": 0.12
+              },
+              "threshold": 0.8
+            },
+            "scroll_end": {
+              "template": "shared/ui_scroll_bar_end",
+              "region": {
+                "x": 0.945,
+                "y": 0.82,
+                "w": 0.055,
+                "h": 0.18
+              },
+              "threshold": 0.8
+            }
+          }
+        }
+      }
+    },
     "Battle": {
       "variants": {
         "main": {

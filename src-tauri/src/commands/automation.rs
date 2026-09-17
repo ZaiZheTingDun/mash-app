@@ -12,6 +12,7 @@ use crate::battle_statistics::BattleRunRecorder;
 use crate::commands::catalog::load_enhancement_target;
 use crate::commands::debug;
 use crate::commands::projects::{load_advanced_battle_scenes, load_battle_scenes, read_projects};
+use crate::commands::rank_up_quest::{apply_rank_up_quest_workflow, RankUpQuestCaptureState};
 use crate::commands::runtime::{
     resolve_ce_assets_dir, resolve_mystic_code_assets_dir, resolve_scrcpy_jar,
     resolve_servant_assets_dir,
@@ -39,8 +40,8 @@ use crate::friend_point_summon_runner::{
 use crate::models::ProjectRecognitionSettings;
 use crate::paths::{AppUiSettings, MysticCodeGender};
 use crate::runner::{
-    grand_strategy, runner_lifecycle_transition, AutomationEvent, LogLevel, RunConfig, Runner,
-    RunnerHandle, RunnerLifecycleEvent, RunnerState,
+    grand_strategy, runner_lifecycle_transition, AutomationEvent, LogLevel,
+    RankUpQuestStartRequest, RunConfig, Runner, RunnerHandle, RunnerLifecycleEvent, RunnerState,
 };
 use crate::screen;
 use crate::server::{
@@ -266,14 +267,42 @@ pub(crate) fn effective_recognition_settings(
 #[tauri::command]
 pub(crate) fn start_automation(
     app: tauri::AppHandle,
-    mut config: RunConfig,
+    config: RunConfig,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
     coordinator: tauri::State<'_, AutomationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
+    start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
+}
+
+#[tauri::command]
+pub(crate) fn start_rank_up_quest_automation(
+    app: tauri::AppHandle,
+    mut config: RunConfig,
+    workflow: RankUpQuestStartRequest,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+    coordinator: tauri::State<'_, AutomationCoordinator>,
+    debug_state: tauri::State<'_, debug::DebugSidecar>,
+    capture_state: tauri::State<'_, RankUpQuestCaptureState>,
+) -> Result<(), String> {
+    let server = *app.state::<Mutex<Server>>().lock().unwrap();
+    if server != Server::Cn {
+        return Err("强化任务自动化首版仅支持国服".into());
+    }
+    apply_rank_up_quest_workflow(&mut config, workflow, &capture_state)?;
+    start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
+}
+
+fn start_automation_with_config(
+    app: &tauri::AppHandle,
+    mut config: RunConfig,
+    handle_state: &Mutex<RunnerHandle>,
+    coordinator: &AutomationCoordinator,
+    debug_state: &debug::DebugSidecar,
+) -> Result<(), String> {
     let automation_lease = coordinator.reserve(AutomationKind::Battle)?;
 
-    let project = read_projects(&app)?
+    let project = read_projects(app)?
         .into_iter()
         .find(|project| project.id == config.project_id);
     let advanced_mode = project
@@ -339,6 +368,7 @@ pub(crate) fn start_automation(
     let mystic_code_item_template =
         resolve_mystic_code_item_template(&app, &config, mystic_code_gender);
 
+    let app = app.clone();
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let stop_after_current = Arc::new(std::sync::atomic::AtomicBool::new(false));

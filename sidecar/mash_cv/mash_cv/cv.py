@@ -117,6 +117,22 @@ stream: Optional["ScrcpyStream"] = None
 
 DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 
+RANK_UP_QUEST_ROW_TEMPLATE = "rank-up-quest/text_rank_up_quest_anchor"
+RANK_UP_QUEST_COST_TEMPLATE = "rank-up-quest/text_cost"
+RANK_UP_QUEST_LIST_REGION = {"x": 0.55, "y": 0.12, "w": 0.22, "h": 0.84}
+RANK_UP_QUEST_ANCHOR_THRESHOLD = 0.68
+RANK_UP_QUEST_PAIR_DY_MIN = 0.045
+RANK_UP_QUEST_PAIR_DY_MAX = 0.095
+RANK_UP_QUEST_PAIR_DX_MAX = 0.03
+RANK_UP_QUEST_COST_ROW_X_OFFSET = -0.119
+RANK_UP_QUEST_COST_ROW_Y_OFFSET = -0.084
+RANK_UP_QUEST_ROW_W = 0.472
+RANK_UP_QUEST_ROW_H = 0.196
+RANK_UP_QUEST_VISIBLE_TOP = 0.135
+RANK_UP_QUEST_VISIBLE_BOTTOM = 0.965
+RANK_UP_QUEST_ACTIONABLE_LUMA = 92.0
+RANK_UP_QUEST_ACTIONABLE_VALUE = 105.0
+
 # The in-battle Order Change screen draws a bright SELECT marker at these
 # server-independent detection centers in the 2560x1440 reference frame.
 ORDER_CHANGE_SELECTION_POINT_Y = 368 / 1440
@@ -1763,6 +1779,172 @@ def _find_element(
         if not enabled["enabled"]:
             result["found"] = False
     return result
+
+
+def _find_all_template_matches(
+    img: np.ndarray,
+    template_key: str,
+    region: dict,
+    threshold: float,
+) -> list[dict]:
+    """Return vertically distinct matches for one static UI label."""
+    tmpl = _get_template(template_key)
+    if tmpl is None:
+        return []
+    tmpl = _scale_static_template_for_image(tmpl, img, template_key)
+    h, w = img.shape[:2]
+    rx = max(0, int(round(float(region["x"]) * w)))
+    ry = max(0, int(round(float(region["y"]) * h)))
+    rw = max(1, min(int(round(float(region["w"]) * w)), w - rx))
+    rh = max(1, min(int(round(float(region["h"]) * h)), h - ry))
+    crop = img[ry : ry + rh, rx : rx + rw]
+    if crop.size == 0:
+        return []
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
+    th, tw = tmpl.shape[:2]
+    if tw > gray.shape[1] or th > gray.shape[0]:
+        return []
+
+    result = cv2.matchTemplate(gray, tmpl, cv2.TM_CCOEFF_NORMED)
+    matches: list[dict] = []
+    while True:
+        _, max_val, _, max_loc = cv2.minMaxLoc(result)
+        score = float(max_val)
+        if score < threshold:
+            break
+        x, y = max_loc
+        matches.append(
+            {
+                "x": (rx + x) / w,
+                "y": (ry + y) / h,
+                "w": tw / w,
+                "h": th / h,
+                "score": score,
+            }
+        )
+        x0 = max(0, x - tw // 2)
+        y0 = max(0, y - th)
+        x1 = min(result.shape[1], x + tw // 2)
+        y1 = min(result.shape[0], y + th)
+        result[y0:y1, x0:x1] = -1.0
+    return sorted(matches, key=lambda match: (match["y"], match["x"]))
+
+
+def _rank_up_quest_row_color_stats(img: np.ndarray, row: dict) -> tuple[float, float, float]:
+    """Sample a text-free part of the gold header to classify bright/dark rows."""
+    h, w = img.shape[:2]
+    sample = {
+        "x": row["x"] + 0.255,
+        "y": row["y"] + 0.022,
+        "w": 0.115,
+        "h": 0.050,
+    }
+    x0 = max(0, min(w - 1, int(round(sample["x"] * w))))
+    y0 = max(0, min(h - 1, int(round(sample["y"] * h))))
+    x1 = max(x0 + 1, min(w, int(round((sample["x"] + sample["w"]) * w))))
+    y1 = max(y0 + 1, min(h, int(round((sample["y"] + sample["h"]) * h))))
+    crop = img[y0:y1, x0:x1]
+    if crop.size == 0:
+        return 0.0, 0.0, 0.0
+    bgr = crop if crop.ndim == 3 else cv2.cvtColor(crop, cv2.COLOR_GRAY2BGR)
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    return float(gray.mean()), float(hsv[:, :, 1].mean()), float(hsv[:, :, 2].mean())
+
+
+def _find_rank_up_quest_rows(img: np.ndarray) -> dict:
+    rank_anchors = _find_all_template_matches(
+        img,
+        RANK_UP_QUEST_ROW_TEMPLATE,
+        RANK_UP_QUEST_LIST_REGION,
+        RANK_UP_QUEST_ANCHOR_THRESHOLD,
+    )
+    cost_anchors = _find_all_template_matches(
+        img,
+        RANK_UP_QUEST_COST_TEMPLATE,
+        RANK_UP_QUEST_LIST_REGION,
+        RANK_UP_QUEST_ANCHOR_THRESHOLD,
+    )
+    rows: list[dict] = []
+    used_ranks: set[int] = set()
+    for cost in cost_anchors:
+        cost_cx = cost["x"] + cost["w"] / 2.0
+        best: Optional[tuple[int, dict, float]] = None
+        for index, rank in enumerate(rank_anchors):
+            if index in used_ranks:
+                continue
+            rank_cx = rank["x"] + rank["w"] / 2.0
+            dy = cost["y"] - rank["y"]
+            dx = abs(cost_cx - rank_cx)
+            if not (RANK_UP_QUEST_PAIR_DY_MIN <= dy <= RANK_UP_QUEST_PAIR_DY_MAX):
+                continue
+            if dx > RANK_UP_QUEST_PAIR_DX_MAX:
+                continue
+            distance = abs(dy - 0.068) + dx
+            if best is None or distance < best[2]:
+                best = (index, rank, distance)
+        rank = best[1] if best is not None else None
+        if best is not None:
+            used_ranks.add(best[0])
+        row = {
+            "x": cost["x"] + RANK_UP_QUEST_COST_ROW_X_OFFSET,
+            "y": cost["y"] + RANK_UP_QUEST_COST_ROW_Y_OFFSET,
+            "w": RANK_UP_QUEST_ROW_W,
+            "h": RANK_UP_QUEST_ROW_H,
+        }
+        if row["y"] < RANK_UP_QUEST_VISIBLE_TOP:
+            continue
+        if row["y"] + row["h"] > RANK_UP_QUEST_VISIBLE_BOTTOM:
+            continue
+        mean_luma, mean_saturation, mean_value = _rank_up_quest_row_color_stats(img, row)
+        actionable = (
+            rank is not None
+            and mean_luma >= RANK_UP_QUEST_ACTIONABLE_LUMA
+            and mean_value >= RANK_UP_QUEST_ACTIONABLE_VALUE
+        )
+        rows.append(
+            {
+                "candidateId": f"row-{len(rows)}",
+                "region": row,
+                "rankUpAnchor": rank,
+                "costAnchor": cost,
+                "signatureRegions": [
+                    {
+                        "x": row["x"] + 0.014,
+                        "y": row["y"] + 0.045,
+                        "w": 0.090,
+                        "h": 0.110,
+                    },
+                    {
+                        "x": row["x"] + 0.120,
+                        "y": row["y"] + 0.015,
+                        "w": 0.250,
+                        "h": 0.060,
+                    },
+                    {
+                        "x": row["x"] + 0.435,
+                        "y": row["y"] + 0.055,
+                        "w": 0.032,
+                        "h": 0.085,
+                    },
+                ],
+                "actionable": actionable,
+                "anchorScore": min(float(rank["score"]), float(cost["score"]))
+                if rank is not None
+                else float(cost["score"]),
+                "meanLuma": mean_luma,
+                "meanSaturation": mean_saturation,
+                "meanValue": mean_value,
+            }
+        )
+    return {
+        "rows": sorted(rows, key=lambda row: row["region"]["y"]),
+        "diagnostics": {
+            "rankUpAnchorCount": len(rank_anchors),
+            "costAnchorCount": len(cost_anchors),
+            "pairedRowCount": len(rows),
+        },
+    }
 
 
 def _named_targets(screen: dict) -> list[tuple[str, dict]]:
@@ -6570,6 +6752,23 @@ def _main_repl() -> None:
                         cmd["element"],
                     ),
                 )
+        elif action == "find_rank_up_quest_rows":
+            img, err = _load_frame(cmd)
+            if img is None:
+                _reply(
+                    req_id,
+                    {
+                        "rows": [],
+                        "diagnostics": {
+                            "rankUpAnchorCount": 0,
+                            "costAnchorCount": 0,
+                            "pairedRowCount": 0,
+                        },
+                        "error": err,
+                    },
+                )
+            else:
+                _reply(req_id, _find_rank_up_quest_rows(img))
         elif action == "read_region_luma":
             img, err = _load_frame(cmd)
             if img is None:

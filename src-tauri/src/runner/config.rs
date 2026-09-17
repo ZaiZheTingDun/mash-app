@@ -17,6 +17,51 @@ pub struct ServantSlotConfig {
     pub servant_id: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RankUpQuestMode {
+    Single,
+    All,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RankUpQuestStartRequest {
+    pub mode: RankUpQuestMode,
+    #[serde(default)]
+    pub capture_id: Option<String>,
+    #[serde(default)]
+    pub candidate_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RankUpQuestTarget {
+    pub reference_path: PathBuf,
+    pub signature_regions: Vec<NormRect>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RankUpQuestWorkflowConfig {
+    pub mode: RankUpQuestMode,
+    pub target: Option<RankUpQuestTarget>,
+}
+
+impl RankUpQuestWorkflowConfig {
+    pub fn all() -> Self {
+        Self {
+            mode: RankUpQuestMode::All,
+            target: None,
+        }
+    }
+
+    pub fn single(target: RankUpQuestTarget) -> Self {
+        Self {
+            mode: RankUpQuestMode::Single,
+            target: Some(target),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct GrandServantRuntimeConfig {
     pub(crate) slot_index: usize,
@@ -104,6 +149,8 @@ pub struct BattleRunProgressEvent {
 #[serde(rename_all = "camelCase")]
 pub struct RunConfig {
     pub project_id: String,
+    #[serde(skip)]
+    pub rank_up_quest: Option<RankUpQuestWorkflowConfig>,
     /// Mystic Code selected for this team. When present, TeamConfirm checks
     /// the outfit icon in the lower-left corner before starting the quest.
     #[serde(default)]

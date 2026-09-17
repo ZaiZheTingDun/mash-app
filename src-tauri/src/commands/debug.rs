@@ -29,12 +29,12 @@ mod session;
 pub use capture::*;
 
 use session::{
-    current_server, debug_image_path, debug_stream_status, ensure_debug_sidecar,
-    ensure_debug_stream, ensure_debug_stream_for_current_device, require_automation_idle,
-    DebugScreenSize,
+    current_server, debug_image_path, debug_stream_status, ensure_debug_stream,
+    ensure_debug_stream_for_current_device, require_automation_idle, DebugScreenSize,
 };
 pub(crate) use session::{
-    DebugCaptureResult, DebugSidecar, DebugStreamFrameResult, DebugStreamStatus,
+    ensure_debug_sidecar, DebugCaptureResult, DebugSidecar, DebugStreamFrameResult,
+    DebugStreamStatus,
 };
 
 fn cv_element_spec(

@@ -736,6 +736,7 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
         ],
       } as T;
     case "start_automation":
+    case "start_rank_up_quest_automation":
     case "stop_automation":
     case "stop_automation_after_current":
     case "start_enhancement_automation":
@@ -745,6 +746,12 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "debug_shutdown":
     case "debug_reload_sidecar":
       return null as T;
+    case "capture_rank_up_quest_page":
+      return {
+        captureId: "dev-rank-up-capture",
+        imagePath: "/dev/rank-up-quest.png",
+        rows: [],
+      } as T;
     case "debug_get_cv_config":
       return { screens: {} } as T;
     case "debug_list_templates":

@@ -17,6 +17,7 @@ import { BattlePage } from "./features/battle/BattlePage";
 import { EnhancementPage } from "./features/enhancement/EnhancementPage";
 import { CraftEssenceEnhancementPage } from "./features/craft-essence-enhancement/CraftEssenceEnhancementPage";
 import { FriendPointSummonPage } from "./features/friend-point-summon/FriendPointSummonPage";
+import { RankUpQuestPage } from "./features/rank-up-quest/RankUpQuestPage";
 import { DebugPage } from "./features/debug/DebugPage";
 import { StatusBar } from "./features/status/StatusBar";
 import { ProjectBar } from "./features/projects/ProjectBar";
@@ -75,6 +76,7 @@ type View =
   | "enhancement"
   | "craftEssenceEnhancement"
   | "friendPointSummon"
+  | "rankUpQuest"
   | "debug";
 
 interface AutomationEvent {
@@ -899,6 +901,11 @@ function App({
     setView("friendPointSummon");
   }, []);
 
+  const handleOpenRankUpQuest = useCallback(() => {
+    if (!featureToggles.rankUpQuest) return;
+    setView("rankUpQuest");
+  }, []);
+
   const handleOpenSettings = useCallback(() => {
     setSettingsSection("basic");
     setSettingsOpen(true);
@@ -994,6 +1001,16 @@ function App({
               onAutomationStartFailed={handleBattleAutomationStartFailed}
               onLogEntry={appendOperationLog}
               battleRunStatus={battleRunStatus}
+            />
+          ) : view === "rankUpQuest" && featureToggles.rankUpQuest ? (
+            <RankUpQuestPage
+              projects={projects}
+              activeProjectId={activeProjectId}
+              onProjectSelect={handleProjectSelect}
+              onBack={handleBackToConfig}
+              onAutomationStart={() => handleBattleAutomationStart(null)}
+              onAutomationStartFailed={handleBattleAutomationStartFailed}
+              onLogEntry={appendOperationLog}
             />
           ) : view === "enhancement" && featureToggles.servantEnhancement ? (
             <EnhancementPage
@@ -1165,6 +1182,18 @@ function App({
                         >
                           <Text size="2" weight="medium">
                             强化概念礼装
+                          </Text>
+                        </Button>
+                      )}
+                      {featureToggles.rankUpQuest && (
+                        <Button
+                          type="button"
+                          variant="soft"
+                          color="gray"
+                          onClick={handleOpenRankUpQuest}
+                        >
+                          <Text size="2" weight="medium">
+                            强化任务
                           </Text>
                         </Button>
                       )}

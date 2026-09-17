@@ -20,5 +20,6 @@ pub(crate) mod automation;
 pub(crate) mod catalog;
 pub(crate) mod debug;
 pub(crate) mod projects;
+pub(crate) mod rank_up_quest;
 pub(crate) mod runtime;
 pub(crate) mod settings;

@@ -545,8 +545,20 @@ impl Runner {
         }
         self.battle_result_continue_handled = true;
 
+        if self.rank_up_quest_active() {
+            self.complete_rank_up_quest_run();
+            self.emit("BattleResultContinue", "结束当前强化关卡，返回任务列表");
+            if !self.tap_at("BattleResultContinue", BATTLE_RESULT_CONTINUE_STOP) {
+                return;
+            }
+            self.mark_rank_up_quest_return_pending();
+            thread::sleep(ACTION_DELAY);
+            return;
+        }
+
         self.completed_mission_runs += 1;
         self.emit_run_progress();
+
         let reached_run_cap = self
             .config
             .max_mission_runs

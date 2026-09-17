@@ -10,6 +10,7 @@ mod engine;
 mod grand;
 mod party;
 mod prebattle;
+mod rank_up_quest;
 mod results;
 mod runtime;
 mod state;
@@ -24,6 +25,7 @@ pub use config::*;
 pub(crate) use coords::*;
 pub(crate) use grand::*;
 pub(crate) use party::*;
+pub(crate) use rank_up_quest::*;
 pub(crate) use results::*;
 pub(crate) use state::*;
 pub(crate) use support::*;
@@ -105,6 +107,7 @@ pub struct Runner {
     sidecar: Option<SidecarClient>,
     sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     config: RunConfig,
+    rank_up_quest: Option<RankUpQuestRuntime>,
     scenes: Vec<BattleScene>,
     advanced_mode: bool,
     advanced_scenes: Vec<AdvancedBattleScene>,
@@ -227,11 +230,13 @@ impl Runner {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         let (frame_w, frame_h) = frame_size.unwrap_or((DEFAULT_FRAME_W, DEFAULT_FRAME_H));
         let touch = touch::build(&adb, &app_handle, (screen_w, screen_h));
+        let rank_up_quest = config.rank_up_quest.clone().map(RankUpQuestRuntime::new);
         Self {
             touch,
             sidecar: Some(sidecar),
             sidecar_cache,
             config,
+            rank_up_quest,
             scenes,
             advanced_mode,
             advanced_scenes,

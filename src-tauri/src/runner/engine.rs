@@ -61,6 +61,10 @@ impl Runner {
 
             self.resolve_pending_ap_recovery(screen);
 
+            if !self.observe_rank_up_quest_screen(screen) {
+                return;
+            }
+
             if screen != Screen::BattleResultContinue {
                 self.battle_result_continue_handled = false;
             }
@@ -75,6 +79,11 @@ impl Runner {
             }
 
             match screen {
+                Screen::RankUpQuest => {
+                    unknown_count = 0;
+                    last_detected_screen = screen;
+                    self.handle_rank_up_quest();
+                }
                 Screen::TeamConfirm => {
                     unknown_count = 0;
                     last_detected_screen = screen;
@@ -157,8 +166,13 @@ impl Runner {
                     unknown_count += 1;
                     let timeout = self.config.unknown_screen_timeout_count;
                     if unknown_count >= timeout {
+                        let message = if self.rank_up_quest_transition_message().is_some() {
+                            "等待强化任务页面切换超时"
+                        } else {
+                            "无法识别当前画面"
+                        };
                         self.transition_lifecycle(RunnerLifecycleEvent::Failed {
-                            message: "无法识别当前画面".into(),
+                            message: message.into(),
                         });
                         if self.config.auto_capture_unknown_screen_timeout {
                             match self.capture_unknown_screen_timeout_screenshot() {
@@ -172,8 +186,32 @@ impl Runner {
                                 ),
                             }
                         }
-                        self.emit("Unknown", "无法识别当前画面，已超时停止");
+                        self.emit(
+                            if self.rank_up_quest_transition_message().is_some() {
+                                "RankUpQuest"
+                            } else {
+                                "Unknown"
+                            },
+                            &format!("{message}，已停止"),
+                        );
                         return;
+                    }
+                    if let Some(message) = self.rank_up_quest_transition_message() {
+                        self.emit(
+                            "RankUpQuest",
+                            &format!("{message} ({unknown_count}/{timeout})"),
+                        );
+                        if is_battle_result_screen(last_detected_screen) {
+                            self.emit_debug(
+                                "RankUpQuest",
+                                "返回任务列表时可能被结算弹窗遮挡，尝试点击跳过区域",
+                            );
+                            if self.tap_at("RankUpQuest", BATTLE_RESULT_POPUP_SKIP) {
+                                thread::sleep(ACTION_DELAY);
+                            }
+                        }
+                        thread::sleep(POLL_INTERVAL);
+                        continue;
                     }
                     self.emit(
                         "Unknown",

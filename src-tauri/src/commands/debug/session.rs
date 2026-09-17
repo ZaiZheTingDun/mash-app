@@ -76,7 +76,7 @@ pub(super) fn current_server(server_state: &Mutex<Server>) -> Server {
     *server_state.lock().unwrap()
 }
 
-pub(super) fn ensure_debug_sidecar(
+pub(crate) fn ensure_debug_sidecar(
     app: &tauri::AppHandle,
     debug_state: &DebugSidecar,
     server: Server,

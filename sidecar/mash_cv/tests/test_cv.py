@@ -60,6 +60,197 @@ def _gradient_patch(size: int = 20) -> np.ndarray:
     return np.tile(np.arange(size, dtype=np.uint8) * 12, (size, 1))
 
 
+def _load_rank_up_quest_assets():
+    test_data_dir = Path(__file__).with_name("test_data")
+    template_dir = test_data_dir / "templates" / "rank-up-quest"
+    for key, filename in (
+        ("rank-up-quest/text_rank_up_quest_page", "text_rank_up_quest_page.png"),
+        ("rank-up-quest/text_rank_up_quest_anchor", "text_rank_up_quest_anchor.png"),
+        ("rank-up-quest/text_cost", "text_cost.png"),
+    ):
+        template = cv2.imread(str(template_dir / filename), cv2.IMREAD_GRAYSCALE)
+        assert template is not None
+        mash_cv.templates[key] = template
+        from mash_cv import cv as cv_module
+        cv_module.static_template_keys.add(key)
+
+
+def _rank_up_quest_fixture(filename: str) -> np.ndarray:
+    path = (
+        Path(__file__).with_name("test_data")
+        / "screenshots"
+        / "rank-up-quest"
+        / filename
+    )
+    image = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    assert image is not None
+    return image
+
+
+@pytest.mark.parametrize("size", ((2560, 1440), (1920, 1080)))
+def test_detect_rank_up_quest_page_at_supported_sizes(size):
+    _load_rank_up_quest_assets()
+    mash_cv._set_config(
+        {
+            "screens": {
+                "RankUpQuest": {
+                    "detect": {
+                        "template": "rank-up-quest/text_rank_up_quest_page",
+                        "region": {"x": 0.81, "y": 0.0, "w": 0.19, "h": 0.09},
+                        "threshold": 0.8,
+                    }
+                }
+            }
+        }
+    )
+    image = _rank_up_quest_fixture("bright-cn.png")
+    if (image.shape[1], image.shape[0]) != size:
+        image = cv2.resize(image, size, interpolation=cv2.INTER_AREA)
+
+    result = mash_cv._detect_screen(image)
+
+    assert result["screen"] == "RankUpQuest"
+    assert result["score"] >= 0.8
+
+
+@pytest.mark.parametrize("size", ((2560, 1440), (1920, 1080)))
+def test_find_rank_up_quest_rows_detects_bright_rows_at_supported_sizes(size):
+    from mash_cv import cv as cv_module
+
+    _load_rank_up_quest_assets()
+    image = _rank_up_quest_fixture("bright-cn.png")
+    if (image.shape[1], image.shape[0]) != size:
+        image = cv2.resize(image, size, interpolation=cv2.INTER_AREA)
+
+    result = cv_module._find_rank_up_quest_rows(image)
+
+    assert len(result["rows"]) == 3
+    assert all(row["rankUpAnchor"] is not None for row in result["rows"])
+    assert all(row["actionable"] for row in result["rows"])
+    assert [row["region"]["y"] for row in result["rows"]] == sorted(
+        row["region"]["y"] for row in result["rows"]
+    )
+
+
+@pytest.mark.parametrize("size", ((2560, 1440), (1920, 1080)))
+def test_find_rank_up_quest_rows_keeps_dark_rows_but_disables_them(size):
+    from mash_cv import cv as cv_module
+
+    _load_rank_up_quest_assets()
+    image = _rank_up_quest_fixture("dark-cn.png")
+    if (image.shape[1], image.shape[0]) != size:
+        image = cv2.resize(image, size, interpolation=cv2.INTER_AREA)
+
+    result = cv_module._find_rank_up_quest_rows(image)
+
+    assert len(result["rows"]) == 3
+    assert all(not row["actionable"] for row in result["rows"])
+    assert all(row["meanLuma"] < 92 for row in result["rows"])
+
+
+def test_find_rank_up_quest_rows_does_not_pair_anchors_from_other_rows(monkeypatch):
+    from mash_cv import cv as cv_module
+
+    image = _make_bgr_image(2560, 1440, bgr=(160, 160, 160))
+    rank_anchors = [
+        {"x": 0.62, "y": 0.20, "w": 0.06, "h": 0.04, "score": 0.9},
+    ]
+    cost_anchors = [
+        {"x": 0.62, "y": 0.40, "w": 0.04, "h": 0.03, "score": 0.9},
+    ]
+
+    def fake_matches(_image, key, _region, _threshold):
+        if key == cv_module.RANK_UP_QUEST_ROW_TEMPLATE:
+            return rank_anchors
+        return cost_anchors
+
+    monkeypatch.setattr(cv_module, "_find_all_template_matches", fake_matches)
+    result = cv_module._find_rank_up_quest_rows(image)
+
+    assert len(result["rows"]) == 1
+    assert result["rows"][0]["rankUpAnchor"] is None
+    assert result["rows"][0]["actionable"] is False
+
+
+def test_find_rank_up_quest_rows_drops_top_and_bottom_clipped_rows(monkeypatch):
+    from mash_cv import cv as cv_module
+
+    image = _make_bgr_image(2560, 1440, bgr=(160, 160, 160))
+    cost_anchors = [
+        {"x": 0.62, "y": 0.15, "w": 0.04, "h": 0.03, "score": 0.9},
+        {"x": 0.62, "y": 0.40, "w": 0.04, "h": 0.03, "score": 0.9},
+        {"x": 0.62, "y": 0.90, "w": 0.04, "h": 0.03, "score": 0.9},
+    ]
+
+    def fake_matches(_image, key, _region, _threshold):
+        return [] if key == cv_module.RANK_UP_QUEST_ROW_TEMPLATE else cost_anchors
+
+    monkeypatch.setattr(cv_module, "_find_all_template_matches", fake_matches)
+    result = cv_module._find_rank_up_quest_rows(image)
+
+    assert len(result["rows"]) == 1
+    assert result["rows"][0]["region"]["y"] == pytest.approx(0.316)
+
+
+@pytest.mark.parametrize("size", ((2560, 1440), (1920, 1080)))
+def test_rank_up_quest_signature_tracks_selected_row_after_list_shift(size, tmp_path):
+    from mash_cv import cv as cv_module
+
+    _load_rank_up_quest_assets()
+    test_data_dir = Path(__file__).with_name("test_data")
+    reference_path = (
+        test_data_dir / "screenshots" / "rank-up-quest" / "bright-cn.png"
+    )
+    shifted_path = (
+        test_data_dir
+        / "screenshots"
+        / "rank-up-quest"
+        / "shifted-after-run-cn.png"
+    )
+    reference = _rank_up_quest_fixture("bright-cn.png")
+    shifted = _rank_up_quest_fixture("shifted-after-run-cn.png")
+    if (shifted.shape[1], shifted.shape[0]) != size:
+        shifted = cv2.resize(shifted, size, interpolation=cv2.INTER_AREA)
+        current_path = tmp_path / "shifted.png"
+        cv2.imwrite(str(current_path), shifted)
+    else:
+        current_path = shifted_path
+
+    reference_rows = cv_module._find_rank_up_quest_rows(reference)["rows"]
+    current_rows = cv_module._find_rank_up_quest_rows(shifted)["rows"]
+    assert len(reference_rows) == 3
+    assert len(current_rows) == 3
+
+    # The task selected in the second row moves to the third visible row after
+    # one quest. Match its portrait, name, and class icon instead of reusing Y.
+    selected = reference_rows[1]
+    weights = (0.45, 0.40, 0.15)
+    scores = []
+    for row in current_rows:
+        score = 0.0
+        for region, template_crop, weight in zip(
+            row["signatureRegions"], selected["signatureRegions"], weights
+        ):
+            match = cv_module._handle_find_region_command(
+                {
+                    "imagePath": str(current_path),
+                    "templatePath": str(reference_path),
+                    "region": region,
+                    "templateCrop": template_crop,
+                    # Resize the full reference frame before cropping the
+                    # selected row's signature block.
+                    "templateSize": {"w": size[0], "h": size[1]},
+                    "threshold": 0.0,
+                }
+            )
+            score += float(match["score"]) * weight
+        scores.append(score)
+
+    assert int(np.argmax(scores)) == 2
+    assert scores[2] >= 0.70
+    assert max(scores[:2]) < 0.70
+
+
 def test_five_star_ce_drop_template_hits_expected_loot_cells():
     test_data_dir = Path(__file__).with_name("test_data")
     cases = [

@@ -1,0 +1,76 @@
+.rank-up-quest-page .option-card-radio-group {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rank-up-quest-team-select {
+  min-width: min(420px, 100%);
+}
+
+.rank-up-quest-help {
+  display: block;
+  margin-top: 8px;
+}
+
+.rank-up-quest-notice {
+  padding: 12px 14px;
+  border: 1px solid var(--red-6);
+  border-radius: var(--radius-3);
+  background: var(--red-2);
+}
+
+.rank-up-quest-capture {
+  position: relative;
+  width: 100%;
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-3);
+  background: var(--gray-3);
+  line-height: 0;
+}
+
+.rank-up-quest-capture > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.rank-up-quest-row {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid var(--amber-9);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--amber-9) 12%, transparent);
+  color: white;
+  cursor: pointer;
+  line-height: normal;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 45%);
+}
+
+.rank-up-quest-row > span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 68%);
+  font-size: 12px;
+}
+
+.rank-up-quest-row.is-actionable:hover,
+.rank-up-quest-row.is-selected {
+  border-color: var(--cyan-9);
+  background: color-mix(in srgb, var(--cyan-9) 24%, transparent);
+}
+
+.rank-up-quest-row.is-selected {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan-9) 55%, transparent);
+}
+
+.rank-up-quest-row.is-disabled {
+  border-color: var(--gray-9);
+  background: rgb(0 0 0 / 42%);
+  cursor: not-allowed;
+  opacity: 0.78;
+}

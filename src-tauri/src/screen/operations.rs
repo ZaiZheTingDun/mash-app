@@ -457,5 +457,6 @@ impl SidecarClient {
 
 mod battle;
 mod enhancement;
+mod rank_up_quest;
 mod support;
 mod template_matching;

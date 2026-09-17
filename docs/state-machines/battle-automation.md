@@ -88,6 +88,32 @@ stateDiagram-v2
 
 状态机约定由 `src-tauri/src/runner/tests.rs` 的 `battle_flow_*` 测试覆盖。
 
+## 国服强化任务工作流
+
+强化任务复用同一个 battle runner、助战选择、队伍确认、战斗、结算、行动力恢复和设备互斥机制，但在外层增加 `RankUpQuestRuntime`。首个已知画面必须是 `RankUpQuest`；否则 runner 在发出任何点击前失败。日服在启动命令阶段直接返回不支持。
+
+```mermaid
+stateDiagram-v2
+    [*] --> RankUpQuest: 启动并确认页面
+    RankUpQuest --> SupportSelect: 连续两帧确认亮色任务后点击
+    SupportSelect --> TeamConfirm: 选择助战
+    TeamConfirm --> Battle: 开始任务
+    TeamConfirm --> APRecovery: AP 不足
+    APRecovery --> TeamConfirm: 已恢复
+    Battle --> BattleResults: 通关
+    BattleResults --> BattleResultContinue: 逐页关闭
+    BattleResultContinue --> RankUpQuest: 点击结束并返回列表
+    RankUpQuest --> [*]: 指定任务变暗或消失
+    RankUpQuest --> [*]: 完整扫描无亮色任务
+```
+
+- Sidecar 以每行“消耗”为基础 anchor，并仅在同一 Y 排配对“强化关卡”anchor；行框必须完整落在列表可见区内。暗色锁定行仍会返回给前端绘框，但缺少“强化关卡”anchor或亮度不足时 `actionable=false`，不能选择和点击。
+- 指定模式的截图只用于让用户选择。后端保存 `captureId + candidateId` 对应的截图路径和视觉签名区域；每次点击前都从当前视频帧重新检测双 anchor，并用头像、名称和职阶区域与截图签名匹配。参考截图先缩放到当前完整视频帧尺寸，再裁出三个签名区域，不能先缩成签名块后再裁剪。返回列表时游戏可能自动改变任务行的 Y 位置，因此运行时按签名重新定位，不复用初始行号或 Y 坐标。目标需连续两次保持可点击，初始截图不会直接授权点击。
+- `AwaitingDeparture` 是一次性点击 guard。点击任务行后，只要画面尚未离开列表，runner 只等待，不会重复点击；观察到其他已知画面后才进入战斗流程。
+- 指定模式在结算返回列表后重新定位同一签名；连续两次变暗或消失才认为全部关卡完成。尚未完成过任何关卡时目标消失会报错，避免把滚动位置变化误判为完成。部分强化任务会跳过可识别的最终关闭页而直接返回列表；状态机在已经进入过助战选择后观察到 `RankUpQuest` 时，同样记录本轮完成、重置战斗状态并恢复列表扫描，不会停留在 `InQuest`。
+- 全部模式先滚动到顶部，再按当前画面从上到下选择首个亮色完整行；当前画面没有目标时向下滚动。到达底部后，若本轮曾启动过任务，则重新从顶部验证；只有一次从顶部到底部都没有启动任何亮色任务才结束。
+- 强化任务强制忽略项目的普通重复次数，但保留项目的助战筛选、战斗指令、行动力恢复道具与单类上限。最终结算固定点击“结束/关闭”返回任务列表，不点击普通重复按钮。
+
 ## 技能子选择对话框与生命周期
 
 部分从者技能在点击后会立即打开第二层战斗选择对话框；runner 在普通己方目标选择器之前将其作为 `BattleAction` 一部分处理：

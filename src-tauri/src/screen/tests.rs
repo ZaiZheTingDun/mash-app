@@ -98,6 +98,15 @@ fn ap_recovery_screen_round_trips_display_name() {
 }
 
 #[test]
+fn rank_up_quest_screen_round_trips_display_name() {
+    assert_eq!(Screen::RankUpQuest.to_string(), "RankUpQuest");
+    assert_eq!(
+        "RankUpQuest".parse::<Screen>().unwrap(),
+        Screen::RankUpQuest
+    );
+}
+
+#[test]
 fn bond_level_up_screen_routes_to_bond_handler() {
     assert_eq!(
         "BattleResultBondLevelUp".parse::<Screen>().unwrap(),

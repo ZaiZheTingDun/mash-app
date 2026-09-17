@@ -14,6 +14,7 @@ pub(super) enum SidecarCommand {
     FindEnhancementServantGrid,
     FindItemGrid,
     FindNoblePhantasms,
+    FindRankUpQuestRows,
     FindRegion,
     FindSupports,
     GetFrame,
