@@ -364,7 +364,7 @@ export function SettingsBasicPage({
   return (
     <Box className="settings-section-panel">
       <Flex direction="column" gap="4" className="recognition-setting-block">
-        {featureToggles.autoFriendRequest && <Flex
+        <Flex
           align="start"
           justify="between"
           gap="4"
@@ -390,7 +390,7 @@ export function SettingsBasicPage({
               <Select.Item value="male">男</Select.Item>
             </Select.Content>
           </Select.Root>
-        </Flex>}
+        </Flex>
 
         <Flex
           align="start"
@@ -677,26 +677,28 @@ export function SettingsBasicPage({
           </Flex>
         </Flex>
 
-        <Flex
-          align="start"
-          justify="between"
-          gap="4"
-          wrap="wrap"
-          className="basic-setting-row"
-        >
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">自动申请好友</Text>
-            <Text size="1" color="gray">
-              结算页的申请好友按钮处于激活状态时自动申请好友
-            </Text>
+        {featureToggles.autoFriendRequest && (
+          <Flex
+            align="start"
+            justify="between"
+            gap="4"
+            wrap="wrap"
+            className="basic-setting-row"
+          >
+            <Flex direction="column" gap="1" className="basic-setting-copy">
+              <Text size="2" weight="bold">自动申请好友</Text>
+              <Text size="1" color="gray">
+                结算页的申请好友按钮处于激活状态时自动申请好友
+              </Text>
+            </Flex>
+            <Switch
+              checked={autoFriendRequest}
+              onCheckedChange={(value) => void saveAutoFriendRequest(value)}
+              disabled={saving}
+              aria-label="自动申请好友"
+            />
           </Flex>
-          <Switch
-            checked={autoFriendRequest}
-            onCheckedChange={(value) => void saveAutoFriendRequest(value)}
-            disabled={saving}
-            aria-label="自动申请好友"
-          />
-        </Flex>
+        )}
 
         <Flex align="center" gap="2">
           {saving && (

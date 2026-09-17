@@ -25,6 +25,24 @@ const SETTINGS: RecognitionSettings = {
 };
 
 describe("SettingsBasicPage", () => {
+  it("keeps the Mystic Code gender visible when automatic friend requests are gated off", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "get_recognition_settings") return SETTINGS;
+      if (command === "get_mystic_code_gender") return "female";
+      if (command === "get_battle_start_panel") return "operationLog";
+      return null;
+    });
+
+    renderWithTheme(<SettingsBasicPage active />);
+
+    expect(await screen.findByRole("combobox", {
+      name: "御主礼装显示性别",
+    })).toBeInTheDocument();
+    expect(screen.queryByRole("switch", {
+      name: "自动申请好友",
+    })).not.toBeInTheDocument();
+  });
+
   it("persists the full-list support OCR fallback toggle", async () => {
     const user = userEvent.setup();
     vi.mocked(invoke).mockImplementation(async (command, args) => {
