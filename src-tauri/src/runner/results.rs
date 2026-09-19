@@ -365,64 +365,78 @@ impl Runner {
     }
 
     pub(crate) fn handle_battle_result_loot(&mut self) {
-        if self.battle_result_loot_handled {
-            self.emit("BattleResultLoot", "等待掉落结算页切换…");
-            thread::sleep(ACTION_DELAY);
-            return;
-        }
-        self.battle_result_loot_handled = true;
+        if !self.battle_result_loot_handled {
+            self.battle_result_loot_handled = true;
 
-        if self.config.auto_capture_battle_result_loot {
-            match self.capture_battle_result_loot_screenshot() {
-                Ok(path) => self.emit(
-                    "BattleResultLoot",
-                    &format!("战利品截图已保存: {}", path.display()),
-                ),
-                Err(err) => self.emit_warn(
-                    "BattleResultLoot",
-                    &format!("战利品截图保存失败，继续结算流程: {err}"),
-                ),
-            }
-        }
-
-        if self.config.stop_on_five_star_ce_drop {
-            let target = five_star_ce_drop_target_count(self.config.five_star_ce_drop_target_count);
-            match self.count_visible_five_star_ce_drops() {
-                Ok(new_drops) => {
-                    let (next_total, action) = five_star_ce_drop_stop_action(
-                        self.five_star_ce_drop_count,
-                        new_drops,
-                        target,
-                    );
-                    self.five_star_ce_drop_count = next_total;
-                    self.emit(
+            if self.config.auto_capture_battle_result_loot {
+                match self.capture_battle_result_loot_screenshot() {
+                    Ok(path) => self.emit(
                         "BattleResultLoot",
-                        &format!(
-                            "本场检测到五星礼装掉落 {new_drops} 个，累计 {next_total}/{target}"
-                        ),
-                    );
-                    if action == FiveStarCeDropStopAction::Stop {
+                        &format!("战利品截图已保存: {}", path.display()),
+                    ),
+                    Err(err) => self.emit_warn(
+                        "BattleResultLoot",
+                        &format!("战利品截图保存失败，继续结算流程: {err}"),
+                    ),
+                }
+            }
+
+            if self.config.stop_on_five_star_ce_drop {
+                let target =
+                    five_star_ce_drop_target_count(self.config.five_star_ce_drop_target_count);
+                match self.count_visible_five_star_ce_drops() {
+                    Ok(new_drops) => {
+                        let (next_total, action) = five_star_ce_drop_stop_action(
+                            self.five_star_ce_drop_count,
+                            new_drops,
+                            target,
+                        );
+                        self.five_star_ce_drop_count = next_total;
                         self.emit(
                             "BattleResultLoot",
-                            &format!("五星礼装掉落累计达到 {target} 个，自动停止"),
+                            &format!(
+                                "本场检测到五星礼装掉落 {new_drops} 个，累计 {next_total}/{target}"
+                            ),
                         );
-                        self.transition_lifecycle(RunnerLifecycleEvent::Finished);
-                        return;
+                        if action == FiveStarCeDropStopAction::Stop {
+                            self.emit(
+                                "BattleResultLoot",
+                                &format!("五星礼装掉落累计达到 {target} 个，自动停止"),
+                            );
+                            self.transition_lifecycle(RunnerLifecycleEvent::Finished);
+                            return;
+                        }
+                    }
+                    Err(err) => {
+                        self.emit_warn(
+                            "BattleResultLoot",
+                            &format!("五星礼装掉落检测失败，继续结算流程: {err}"),
+                        );
                     }
                 }
-                Err(err) => {
-                    self.emit_warn(
-                        "BattleResultLoot",
-                        &format!("五星礼装掉落检测失败，继续结算流程: {err}"),
-                    );
-                }
             }
+
+            self.emit("BattleResultLoot", "掉落结算，前往下一画面");
+        } else {
+            self.emit("BattleResultLoot", "掉落结算页仍未切换，重试点击");
         }
 
-        self.emit("BattleResultLoot", "掉落结算，前往下一画面");
-        if self.tap_at("BattleResultLoot", BATTLE_RESULT_LOOT_NEXT) {
-            thread::sleep(ACTION_DELAY);
-        }
+        // BattleResultLootEvent is intentionally mapped to the same public
+        // Screen as BattleResultLoot. Keep the raw label here so an event
+        // rewards page counts as a real transition, while a missed tap on
+        // the current page gets retried instead of leaving the runner idle.
+        let detected_label = self
+            .sidecar()
+            .detect_label_full(None)
+            .map(|(label, _score)| label)
+            .unwrap_or_else(|_| Screen::BattleResultLoot.to_string());
+        self.tap_until_screen_label_changes(
+            "BattleResultLoot",
+            &detected_label,
+            BATTLE_RESULT_LOOT_NEXT,
+            BATTLE_RESULT_TAP_INTERVAL,
+            BATTLE_RESULT_TAP_TIMEOUT,
+        );
     }
 
     fn count_visible_five_star_ce_drops(&mut self) -> Result<u32, String> {
