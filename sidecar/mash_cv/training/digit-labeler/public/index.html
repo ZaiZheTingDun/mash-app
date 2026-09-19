@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mash 数字标注</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header>
+      <div class="header-row">
+        <h1>Mash 数字标注</h1>
+        <div id="progress" class="progress">正在读取…</div>
+      </div>
+      <div class="filters">
+        <select id="statusFilter" aria-label="标注状态">
+          <option value="unlabeled">仅未标注</option>
+          <option value="all">全部</option>
+          <option value="labeled">仅已标注</option>
+        </select>
+        <select id="serverFilter" aria-label="服务器"><option value="all">全部服务器</option></select>
+        <select id="sourceFilter" aria-label="数字来源"><option value="all">全部来源</option></select>
+        <span id="message"></span>
+      </div>
+    </header>
+    <main>
+      <section class="panel">
+        <div class="panel-title">原始截图与当前裁剪位置</div>
+        <div class="context-wrap">
+          <img id="contextImage" alt="原始战斗截图">
+          <div id="sourceBox"></div>
+        </div>
+      </section>
+      <section class="panel crop-panel">
+        <div class="panel-title">待标注字符</div>
+        <div class="crop-stage"><img id="cropImage" alt="单字裁剪"></div>
+        <div class="meta">
+          <strong id="position">—</strong>
+          <span id="sourceMeta">—</span>
+          <span id="labelMeta">—</span>
+        </div>
+        <div class="controls">
+          <div id="labelButtons" class="labels"></div>
+          <div class="actions">
+            <button id="previousButton">← 上一个</button>
+            <button id="undoButton">撤销 U</button>
+            <button id="skipButton">跳过 S</button>
+            <button id="nextButton">下一个 →</button>
+          </div>
+          <div class="hint">快捷键：0–9 标数字，X 标记无效，S 跳过，U 撤销，←/→ 浏览，Backspace 清除标签。</div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

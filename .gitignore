@@ -28,6 +28,12 @@ sidecar/*/build/
 sidecar/*/dist/
 src-tauri/binaries/
 
+# Local digit-classifier training data and runs
+sidecar/mash_cv/training/digit_classifier/.venv/
+sidecar/mash_cv/training/digit_classifier/.pytest_cache/
+sidecar/mash_cv/training/digit_classifier/data/
+sidecar/mash_cv/training/digit_classifier/runs/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

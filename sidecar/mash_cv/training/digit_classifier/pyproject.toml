@@ -1,0 +1,32 @@
+[project]
+name = "mash-digit-classifier-training"
+version = "0.1.0"
+description = "Offline training tools for Mash's shared game-UI digit classifier"
+authors = []
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+  "numpy",
+  "opencv-python-headless",
+  "torch",
+  "onnx",
+]
+
+[project.scripts]
+digit-crop = "digit_training.crop:main"
+digit-label = "digit_training.label:main"
+digit-manifest = "digit_training.manifest:main"
+digit-train = "digit_training.train:main"
+
+[tool.poetry]
+packages = [{ include = "digit_training" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
