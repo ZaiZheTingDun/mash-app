@@ -111,6 +111,12 @@ bash build_sidecar.sh
 Release entry points:
 
 ```bash
+# Full release orchestration (read-only plan by default)
+mise exec -- scripts/release.sh 0.2.2
+
+# Execute the planned release; add --dmg and --push when wanted
+mise exec -- scripts/release.sh 0.2.2 --publish
+
 # App updater release: bump versions, commit, and tag vX.Y.Z
 scripts/bump-app-version.sh 0.2.2
 

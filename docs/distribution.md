@@ -54,6 +54,31 @@ code = "0.2.2"
 - CV code：`cv-code/0.2.2`
 - CV runtime：`cv-runtime/darwin-aarch64/0.2.2`
 
+## 完整发布编排
+
+`scripts/release.sh` 串联测试、更新日志、CV artifact、runtime manifest、App
+版本、updater、DMG 与 Git refs。默认仅输出只读计划；添加 `--publish` 后才会
+提交、打 tag 或上传，添加 `--push` 后才会推送 Git refs。
+
+```bash
+# 检查发布计划
+mise exec -- scripts/release.sh 0.2.2
+
+# 只发布 App updater
+mise exec -- scripts/release.sh 0.2.2 --publish
+
+# 同时发布 CV code、DMG，并在全部验证通过后推送 Git refs
+mise exec -- scripts/release.sh 0.2.2 \
+  --cv-code 0.2.2 \
+  --dmg \
+  --push \
+  --publish
+```
+
+发布前工作区必须干净，`CHANGELOG.md` 中必须有 `## 未发布` 或目标版本标题。
+脚本会检查自上次发布以来的 CV code/runtime 相关改动；检测到改动却未提供
+对应版本号时会停止实际发布。CV runtime 只在显式传入 `--cv-runtime` 时发布。
+
 ## App 发布
 
 应用通过 Tauri updater 分发；客户端仅读取 channel manifest：
