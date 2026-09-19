@@ -356,8 +356,27 @@ RELEASE_PREFIX="${R2_PREFIX:-mash}"
 RELEASE_PREFIX="${RELEASE_PREFIX#/}"
 RELEASE_PREFIX="${RELEASE_PREFIX%/}"
 
-note "Checking release endpoint"
-run_command curl --fail --location --silent --show-error --head "${RELEASE_BASE_URL%/}/"
+RELEASE_PROBE_URL="${RELEASE_BASE_URL%/}/$RELEASE_PREFIX/releases/${RELEASE_CHANNEL:-stable}/latest.json"
+note "Checking updater channel endpoint"
+print_command curl --location --silent --show-error --head "$RELEASE_PROBE_URL"
+RELEASE_PROBE_STATUS="$(
+  curl --location --silent --show-error \
+    --head \
+    --output /dev/null \
+    --write-out '%{http_code}' \
+    "$RELEASE_PROBE_URL"
+)"
+case "$RELEASE_PROBE_STATUS" in
+  2??|3??)
+    echo "  reachable: HTTP $RELEASE_PROBE_STATUS"
+    ;;
+  404)
+    echo "  channel is not published yet (HTTP 404); connectivity is available"
+    ;;
+  *)
+    fail "updater channel probe returned HTTP $RELEASE_PROBE_STATUS: $RELEASE_PROBE_URL"
+    ;;
+esac
 
 if [[ "$SKIP_TESTS" != true ]]; then
   note "Running release validation"

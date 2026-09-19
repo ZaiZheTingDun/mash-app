@@ -35,8 +35,13 @@ mise exec -- test -n "${R2_BUCKET:-}"
 mise exec -- test -n "${RELEASE_BASE_URL:-}"
 mise exec -- test -n "${TAURI_SIGNING_PRIVATE_KEY:-}"
 mise exec -- test -n "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
-mise exec -- curl --fail --location --silent --show-error --head "${RELEASE_BASE_URL%/}/"
+mise exec -- /bin/zsh -lc 'prefix="${R2_PREFIX:-mash}"; prefix="${prefix#/}"; prefix="${prefix%/}"; curl --fail --location --silent --show-error --head "${RELEASE_BASE_URL%/}/${prefix}/releases/${RELEASE_CHANNEL:-stable}/latest.json"'
 ```
+
+The CDN root may legitimately return HTTP 404 because no object is published at
+that key. Probe the current updater channel instead. A 404 at a brand-new channel
+still proves connectivity; the artifact release scripts perform the authoritative
+post-upload public URL checks.
 
 Do not use `aws sts get-caller-identity` as a release preflight for this repo.
 The configured R2-backed AWS profile can reject STS even when artifact uploads are
