@@ -10225,5 +10225,25 @@
         "cardName": "buster"
       }
     ]
+  },
+  {
+    "id": 705400,
+    "collectionNo": 482,
+    "nameCN": "ダイダロス",
+    "nameJP": "ダイダロス",
+    "classId": 7,
+    "className": "berserker",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 705401,
+        "name": "イカロス・アセンズ・アゲイン",
+        "nameJP": "再び飛べ、不壊の翼",
+        "nameCN": "再び飛べ、不壊の翼",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ]
   }
 ]

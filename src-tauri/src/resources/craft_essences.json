@@ -26483,7 +26483,7 @@
     "id": 9310980,
     "collectionNo": 2443,
     "name": "英霊星行：蘆屋道満",
-    "name_cn": null,
+    "name_cn": "英灵星行：芦屋道满",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26494,7 +26494,7 @@
     "id": 9310990,
     "collectionNo": 2444,
     "name": "英霊星行：アルテラ",
-    "name_cn": null,
+    "name_cn": "英灵星行：阿蒂拉",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26505,7 +26505,7 @@
     "id": 9311000,
     "collectionNo": 2445,
     "name": "英霊星行：アルトリア・ペンドラゴン",
-    "name_cn": null,
+    "name_cn": "英灵星行：阿尔托莉雅·潘德拉贡",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26516,7 +26516,7 @@
     "id": 9311010,
     "collectionNo": 2446,
     "name": "英霊星行：宇津見エリセ",
-    "name_cn": null,
+    "name_cn": "英灵星行：宇津见绘里濑",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26527,7 +26527,7 @@
     "id": 9311020,
     "collectionNo": 2447,
     "name": "英霊星行：ククルカン",
-    "name_cn": null,
+    "name_cn": "英灵星行：库库尔坎",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26538,7 +26538,7 @@
     "id": 9311040,
     "collectionNo": 2448,
     "name": "英霊星行：ケツァル・コアトル",
-    "name_cn": null,
+    "name_cn": "英灵星行：魁札尔·科亚特尔",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26549,7 +26549,7 @@
     "id": 9311030,
     "collectionNo": 2449,
     "name": "英霊星行：コロンブス",
-    "name_cn": null,
+    "name_cn": "英灵星行：哥伦布",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26560,7 +26560,7 @@
     "id": 9311050,
     "collectionNo": 2450,
     "name": "英霊星行：テュフォン・エフェメロス",
-    "name_cn": null,
+    "name_cn": "英灵星行：堤丰·厄斐墨洛斯",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26571,7 +26571,7 @@
     "id": 9311060,
     "collectionNo": 2451,
     "name": "英霊星行：謎のヒロインX",
-    "name_cn": null,
+    "name_cn": "英灵星行：谜之女主角X",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26582,7 +26582,7 @@
     "id": 9311070,
     "collectionNo": 2452,
     "name": "英霊星行：フランケンシュタイン",
-    "name_cn": null,
+    "name_cn": "英灵星行：弗兰肯斯坦",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26593,7 +26593,7 @@
     "id": 9311080,
     "collectionNo": 2453,
     "name": "英霊星行：ポール・バニヤン",
-    "name_cn": null,
+    "name_cn": "英灵星行：保罗·班扬",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26604,7 +26604,7 @@
     "id": 9311090,
     "collectionNo": 2454,
     "name": "英霊星行：メリュジーヌ",
-    "name_cn": null,
+    "name_cn": "英灵星行：梅柳齐娜",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26615,7 +26615,7 @@
     "id": 9311100,
     "collectionNo": 2455,
     "name": "英霊星行：ヤマトタケル",
-    "name_cn": null,
+    "name_cn": "英灵星行：大和武尊",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26626,7 +26626,7 @@
     "id": 9311110,
     "collectionNo": 2456,
     "name": "英霊星行：ラーマ",
-    "name_cn": null,
+    "name_cn": "英灵星行：罗摩",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26637,7 +26637,7 @@
     "id": 9311120,
     "collectionNo": 2457,
     "name": "英霊星行：ランスロット",
-    "name_cn": null,
+    "name_cn": "英灵星行：兰斯洛特",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -26648,7 +26648,7 @@
     "id": 9311130,
     "collectionNo": 2458,
     "name": "英霊星行：レオナルド・ダ・ヴィンチ",
-    "name_cn": null,
+    "name_cn": "英灵星行：莱昂纳多·达·芬奇",
     "rarity": 4,
     "flag": "svtEquipCampaign",
     "flags": [
@@ -29306,6 +29306,61 @@
     "flag": "svtEquipManaExchange",
     "flags": [
       "svtEquipManaExchange"
+    ]
+  },
+  {
+    "id": 9409500,
+    "collectionNo": 2702,
+    "name": "ヴァリアント・ウルフ",
+    "name_cn": null,
+    "rarity": 5,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409510,
+    "collectionNo": 2703,
+    "name": "フォーチュン・テラー",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409520,
+    "collectionNo": 2704,
+    "name": "トーメンテッド・ガーディアン",
+    "name_cn": null,
+    "rarity": 3,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ]
+  },
+  {
+    "id": 9409530,
+    "collectionNo": 2705,
+    "name": "ピース・オブ・メモリー",
+    "name_cn": null,
+    "rarity": 5,
+    "flag": "svtEquipEventReward",
+    "flags": [
+      "svtEquipEventReward"
+    ]
+  },
+  {
+    "id": 9312570,
+    "collectionNo": 2706,
+    "name": "ミッシングウィング",
+    "name_cn": null,
+    "rarity": 4,
+    "flag": "svtEquipFriendShip",
+    "flags": [
+      "svtEquipFriendShip"
     ]
   }
 ]
