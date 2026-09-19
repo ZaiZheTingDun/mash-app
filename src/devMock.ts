@@ -96,6 +96,7 @@ let stopOnBondMaxLevel = false;
 let verifySkillActivation = false;
 let enableExtraClassFilter = true;
 let supportFullListOcrFallback = false;
+let autoCaptureBattleBeforeAttack = false;
 let autoCaptureBattleResultLoot = false;
 let autoCaptureUnknownScreenTimeout = false;
 let autoCaptureSkillUseProbe = false;
@@ -240,6 +241,7 @@ function recognitionSettings() {
 
 function debugSettings() {
   return {
+    autoCaptureBattleBeforeAttack,
     autoCaptureBattleResultLoot,
     autoCaptureUnknownScreenTimeout,
     autoCaptureSkillUseProbe,
@@ -605,6 +607,9 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "set_support_full_list_ocr_fallback":
       supportFullListOcrFallback = Boolean(args.value);
       return recognitionSettings() as T;
+    case "set_auto_capture_battle_before_attack":
+      autoCaptureBattleBeforeAttack = Boolean(args.value);
+      return debugSettings() as T;
     case "set_auto_capture_battle_result_loot":
       autoCaptureBattleResultLoot = Boolean(args.value);
       return debugSettings() as T;

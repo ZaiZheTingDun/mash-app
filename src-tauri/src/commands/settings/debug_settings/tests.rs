@@ -4,6 +4,7 @@ use super::*;
 fn debug_settings_default_disables_debug_captures() {
     let settings = DebugSettings::default();
 
+    assert!(!settings.auto_capture_battle_before_attack);
     assert!(!settings.auto_capture_battle_result_loot);
     assert!(!settings.auto_capture_unknown_screen_timeout);
     assert!(!settings.auto_capture_skill_use_probe);
@@ -15,6 +16,7 @@ fn debug_settings_default_disables_debug_captures() {
 fn debug_settings_deserializes_legacy_json_with_debug_capture_defaults() {
     let settings: DebugSettings = serde_json::from_value(serde_json::json!({})).unwrap();
 
+    assert!(!settings.auto_capture_battle_before_attack);
     assert!(!settings.auto_capture_battle_result_loot);
     assert!(!settings.auto_capture_unknown_screen_timeout);
     assert!(!settings.auto_capture_skill_use_probe);
@@ -25,6 +27,7 @@ fn debug_settings_deserializes_legacy_json_with_debug_capture_defaults() {
 #[test]
 fn debug_settings_round_trips_debug_capture_settings() {
     let settings: DebugSettings = serde_json::from_value(serde_json::json!({
+        "autoCaptureBattleBeforeAttack": true,
         "autoCaptureBattleResultLoot": true,
         "autoCaptureUnknownScreenTimeout": true,
         "autoCaptureSkillUseProbe": true,
@@ -33,11 +36,16 @@ fn debug_settings_round_trips_debug_capture_settings() {
     }))
     .unwrap();
 
+    assert!(settings.auto_capture_battle_before_attack);
     assert!(settings.auto_capture_battle_result_loot);
     assert!(settings.auto_capture_unknown_screen_timeout);
     assert!(settings.auto_capture_skill_use_probe);
     assert!(settings.auto_capture_unrecognized_critical_chance);
     assert!(settings.simulate_stuck_attack_selection);
+    assert_eq!(
+        serde_json::to_value(settings).unwrap()["autoCaptureBattleBeforeAttack"],
+        serde_json::json!(true)
+    );
     assert_eq!(
         serde_json::to_value(settings).unwrap()["autoCaptureBattleResultLoot"],
         serde_json::json!(true)
@@ -63,6 +71,7 @@ fn debug_settings_round_trips_debug_capture_settings() {
 #[test]
 fn debug_settings_runtime_filter_forces_debug_captures_off_when_disallowed() {
     let settings = DebugSettings {
+        auto_capture_battle_before_attack: true,
         auto_capture_battle_result_loot: true,
         auto_capture_unknown_screen_timeout: true,
         auto_capture_skill_use_probe: true,
@@ -72,6 +81,7 @@ fn debug_settings_runtime_filter_forces_debug_captures_off_when_disallowed() {
 
     let filtered = debug_settings_for_runtime(settings, false);
 
+    assert!(!filtered.auto_capture_battle_before_attack);
     assert!(!filtered.auto_capture_battle_result_loot);
     assert!(!filtered.auto_capture_unknown_screen_timeout);
     assert!(!filtered.auto_capture_skill_use_probe);
@@ -82,6 +92,7 @@ fn debug_settings_runtime_filter_forces_debug_captures_off_when_disallowed() {
 #[test]
 fn debug_settings_runtime_filter_preserves_debug_captures_when_allowed() {
     let settings = DebugSettings {
+        auto_capture_battle_before_attack: true,
         auto_capture_battle_result_loot: true,
         auto_capture_unknown_screen_timeout: true,
         auto_capture_skill_use_probe: true,
@@ -91,6 +102,7 @@ fn debug_settings_runtime_filter_preserves_debug_captures_when_allowed() {
 
     let filtered = debug_settings_for_runtime(settings, true);
 
+    assert!(filtered.auto_capture_battle_before_attack);
     assert!(filtered.auto_capture_battle_result_loot);
     assert!(filtered.auto_capture_unknown_screen_timeout);
     assert!(filtered.auto_capture_skill_use_probe);
@@ -101,6 +113,7 @@ fn debug_settings_runtime_filter_preserves_debug_captures_when_allowed() {
 #[test]
 fn debug_settings_auto_loot_update_preserves_unknown_timeout_capture() {
     let settings = DebugSettings {
+        auto_capture_battle_before_attack: true,
         auto_capture_battle_result_loot: false,
         auto_capture_unknown_screen_timeout: true,
         auto_capture_skill_use_probe: false,
@@ -110,6 +123,7 @@ fn debug_settings_auto_loot_update_preserves_unknown_timeout_capture() {
 
     let next = debug_settings_with_auto_capture_battle_result_loot(settings, true);
 
+    assert!(next.auto_capture_battle_before_attack);
     assert!(next.auto_capture_battle_result_loot);
     assert!(next.auto_capture_unknown_screen_timeout);
     assert!(!next.auto_capture_skill_use_probe);
@@ -120,6 +134,7 @@ fn debug_settings_auto_loot_update_preserves_unknown_timeout_capture() {
 #[test]
 fn debug_settings_unknown_timeout_update_preserves_auto_loot_capture() {
     let settings = DebugSettings {
+        auto_capture_battle_before_attack: true,
         auto_capture_battle_result_loot: true,
         auto_capture_unknown_screen_timeout: false,
         auto_capture_skill_use_probe: false,
@@ -129,6 +144,7 @@ fn debug_settings_unknown_timeout_update_preserves_auto_loot_capture() {
 
     let next = debug_settings_with_auto_capture_unknown_screen_timeout(settings, true);
 
+    assert!(next.auto_capture_battle_before_attack);
     assert!(next.auto_capture_battle_result_loot);
     assert!(next.auto_capture_unknown_screen_timeout);
     assert!(!next.auto_capture_skill_use_probe);
@@ -139,6 +155,7 @@ fn debug_settings_unknown_timeout_update_preserves_auto_loot_capture() {
 #[test]
 fn debug_settings_skill_use_probe_update_preserves_other_captures() {
     let settings = DebugSettings {
+        auto_capture_battle_before_attack: true,
         auto_capture_battle_result_loot: true,
         auto_capture_unknown_screen_timeout: true,
         auto_capture_skill_use_probe: false,
@@ -148,6 +165,7 @@ fn debug_settings_skill_use_probe_update_preserves_other_captures() {
 
     let next = debug_settings_with_auto_capture_skill_use_probe(settings, true);
 
+    assert!(next.auto_capture_battle_before_attack);
     assert!(next.auto_capture_battle_result_loot);
     assert!(next.auto_capture_unknown_screen_timeout);
     assert!(next.auto_capture_skill_use_probe);
@@ -158,6 +176,7 @@ fn debug_settings_skill_use_probe_update_preserves_other_captures() {
 #[test]
 fn debug_settings_critical_capture_update_preserves_other_debug_settings() {
     let settings = DebugSettings {
+        auto_capture_battle_before_attack: true,
         auto_capture_battle_result_loot: true,
         auto_capture_unknown_screen_timeout: true,
         auto_capture_skill_use_probe: true,
@@ -167,6 +186,28 @@ fn debug_settings_critical_capture_update_preserves_other_debug_settings() {
 
     let next = debug_settings_with_auto_capture_unrecognized_critical_chance(settings, true);
 
+    assert!(next.auto_capture_battle_before_attack);
+    assert!(next.auto_capture_battle_result_loot);
+    assert!(next.auto_capture_unknown_screen_timeout);
+    assert!(next.auto_capture_skill_use_probe);
+    assert!(next.auto_capture_unrecognized_critical_chance);
+    assert!(next.simulate_stuck_attack_selection);
+}
+
+#[test]
+fn debug_settings_pre_attack_capture_update_preserves_other_debug_settings() {
+    let settings = DebugSettings {
+        auto_capture_battle_before_attack: false,
+        auto_capture_battle_result_loot: true,
+        auto_capture_unknown_screen_timeout: true,
+        auto_capture_skill_use_probe: true,
+        auto_capture_unrecognized_critical_chance: true,
+        simulate_stuck_attack_selection: true,
+    };
+
+    let next = debug_settings_with_auto_capture_battle_before_attack(settings, true);
+
+    assert!(next.auto_capture_battle_before_attack);
     assert!(next.auto_capture_battle_result_loot);
     assert!(next.auto_capture_unknown_screen_timeout);
     assert!(next.auto_capture_skill_use_probe);

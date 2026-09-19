@@ -229,6 +229,16 @@ class ScrcpyStream:
         ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
         return buf.tobytes() if ok else None
 
+    def get_latest_png(self, wait: float = 0.0) -> Optional[bytes]:
+        if wait > 0:
+            frame = self.wait_for_frame(timeout=wait)
+        else:
+            frame = self.get_latest_bgr()
+        if frame is None:
+            return None
+        ok, buf = cv2.imencode(".png", frame)
+        return buf.tobytes() if ok else None
+
     def is_decoder_alive(self) -> bool:
         """Return True iff the H.264 decode thread is still running.
 

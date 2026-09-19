@@ -384,6 +384,28 @@ impl SidecarClient {
             .map_err(|e| format!("invalid base64 in jpegB64: {e}"))
     }
 
+    /// Return the latest decoded frame as a lossless PNG byte buffer.
+    pub fn get_frame_png(&mut self, wait_seconds: f64) -> Result<Vec<u8>, String> {
+        let req = request(
+            SidecarCommand::GetFrame,
+            serde_json::json!({
+                "format": "png",
+                "waitSeconds": wait_seconds,
+            }),
+        )?;
+        let resp = self.send_recv(&req)?;
+        if !resp["ok"].as_bool().unwrap_or(false) {
+            let err = resp["error"].as_str().unwrap_or("unknown error");
+            return Err(format!("get_frame failed: {err}"));
+        }
+        let b64 = resp["pngB64"]
+            .as_str()
+            .ok_or_else(|| "get_frame missing pngB64".to_string())?;
+        base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| format!("invalid base64 in pngB64: {e}"))
+    }
+
     /// Return the latest decoded frame as base64 JPEG plus frame dimensions.
     pub fn get_frame_jpeg_base64(
         &mut self,

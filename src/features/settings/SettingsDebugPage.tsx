@@ -4,6 +4,7 @@ import { invoke } from "../../tauri";
 import type { DebugSettings } from "../../types/debug";
 
 const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
+  autoCaptureBattleBeforeAttack: false,
   autoCaptureBattleResultLoot: false,
   autoCaptureUnknownScreenTimeout: false,
   autoCaptureSkillUseProbe: false,
@@ -13,6 +14,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
 
 function normalizeDebugSettings(settings: Partial<DebugSettings>): DebugSettings {
   return {
+    autoCaptureBattleBeforeAttack: settings.autoCaptureBattleBeforeAttack === true,
     autoCaptureBattleResultLoot: settings.autoCaptureBattleResultLoot === true,
     autoCaptureUnknownScreenTimeout: settings.autoCaptureUnknownScreenTimeout === true,
     autoCaptureSkillUseProbe: settings.autoCaptureSkillUseProbe === true,
@@ -56,6 +58,23 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
     try {
       const next = normalizeDebugSettings(
         await invoke<DebugSettings>("set_auto_capture_battle_result_loot", { value })
+      );
+      setSettings(next);
+      setSavedMessage("已保存");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const saveAutoCaptureBattleBeforeAttack = useCallback(async (value: boolean) => {
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
+    try {
+      const next = normalizeDebugSettings(
+        await invoke<DebugSettings>("set_auto_capture_battle_before_attack", { value })
       );
       setSettings(next);
       setSavedMessage("已保存");
@@ -137,6 +156,24 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
   return (
     <Box className="settings-section-panel">
       <Flex direction="column" gap="4" className="recognition-setting-block">
+        <Flex align="start" justify="between" gap="4" wrap="wrap" className="basic-setting-row">
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              点击攻击前自动截图
+            </Text>
+            <Text size="1" color="gray">
+              开启后每次在战斗页面点击攻击按钮前都会保存一张无损 PNG，用于数字识别数据收集。
+            </Text>
+          </Flex>
+
+          <Switch
+            checked={settings.autoCaptureBattleBeforeAttack}
+            onCheckedChange={(value) => void saveAutoCaptureBattleBeforeAttack(value)}
+            disabled={loading || saving}
+            aria-label="点击攻击前自动截图"
+          />
+        </Flex>
+
         <Flex align="start" justify="between" gap="4" wrap="wrap" className="basic-setting-row">
           <Flex direction="column" gap="1" className="basic-setting-copy">
             <Text size="2" weight="bold">

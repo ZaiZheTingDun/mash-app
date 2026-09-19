@@ -6575,10 +6575,18 @@ def _stop_stream() -> dict:
 def _get_frame(cmd: dict) -> dict:
     if stream is None:
         return {"ok": False, "error": "stream not started"}
-    quality = int(cmd.get("quality", 85))
     wait = float(cmd.get("waitSeconds", 10.0))
-    jpeg = stream.get_latest_jpeg(quality=quality, wait=wait)
-    if jpeg is None:
+    image_format = str(cmd.get("format", "jpeg")).lower()
+    if image_format == "png":
+        encoded = stream.get_latest_png(wait=wait)
+        encoded_field = "pngB64"
+    elif image_format in ("jpeg", "jpg"):
+        quality = int(cmd.get("quality", 85))
+        encoded = stream.get_latest_jpeg(quality=quality, wait=wait)
+        encoded_field = "jpegB64"
+    else:
+        return {"ok": False, "error": f"unsupported frame format: {image_format}"}
+    if encoded is None:
         if not stream.is_decoder_alive():
             return {
                 "ok": False,
@@ -6587,7 +6595,7 @@ def _get_frame(cmd: dict) -> dict:
         return {"ok": False, "error": "no frame available yet"}
     return {
         "ok": True,
-        "jpegB64": base64.b64encode(jpeg).decode("ascii"),
+        encoded_field: base64.b64encode(encoded).decode("ascii"),
         "width": stream.width,
         "height": stream.height,
     }

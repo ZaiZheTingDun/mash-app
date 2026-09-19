@@ -357,6 +357,25 @@ fn critical_chance_capture_path_uses_its_own_debug_directory() {
 }
 
 #[test]
+fn battle_before_attack_capture_path_records_context_as_png() {
+    let root = PathBuf::from("/tmp/mash-app-data");
+    let timestamp = std::time::UNIX_EPOCH + std::time::Duration::from_millis(1_781_234_567_890);
+
+    assert_eq!(
+        battle_before_attack_screenshot_dir_in_root(&root, Server::Cn),
+        root.join("debug").join("battle-before-attack").join("cn")
+    );
+    assert_eq!(
+        battle_before_attack_screenshot_dir_in_root(&root, Server::Jp),
+        root.join("debug").join("battle-before-attack").join("jp")
+    );
+    assert_eq!(
+        battle_before_attack_screenshot_filename(timestamp, Server::Cn, 2, 1, 3),
+        "battle-before-attack-cn-1781234567890-run0003-scene02-turn04.png"
+    );
+}
+
+#[test]
 fn normal_critical_and_ordinary_advanced_modes_only_read_configured_nps() {
     let mut turn = normal_turn(Vec::new(), Vec::new());
     assert!(!battle_turn_requires_np_recognition(&turn));
@@ -1005,6 +1024,7 @@ fn run_config_defaults_support_ce_to_none_when_field_missing() {
         cfg.unknown_screen_timeout_count,
         crate::commands::settings::UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT
     );
+    assert!(!cfg.auto_capture_battle_before_attack);
     assert!(!cfg.auto_capture_battle_result_loot);
     assert!(!cfg.auto_capture_unknown_screen_timeout);
     assert!(!cfg.auto_capture_skill_use_probe);

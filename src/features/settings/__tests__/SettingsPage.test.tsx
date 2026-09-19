@@ -103,6 +103,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "get_debug_settings") {
         return {
+          autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
           autoCaptureSkillUseProbe: false,
@@ -224,6 +225,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_auto_capture_battle_result_loot") {
         return {
+          autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: Boolean(argValue(args)),
           autoCaptureUnknownScreenTimeout: false,
           autoCaptureSkillUseProbe: false,
@@ -233,6 +235,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_auto_capture_unknown_screen_timeout") {
         return {
+          autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: Boolean(argValue(args)),
           autoCaptureSkillUseProbe: false,
@@ -242,6 +245,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_auto_capture_skill_use_probe") {
         return {
+          autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
           autoCaptureSkillUseProbe: Boolean(argValue(args)),
@@ -251,6 +255,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_auto_capture_unrecognized_critical_chance") {
         return {
+          autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
           autoCaptureSkillUseProbe: false,
@@ -260,11 +265,22 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_simulate_stuck_attack_selection") {
         return {
+          autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
           autoCaptureSkillUseProbe: false,
           autoCaptureUnrecognizedCriticalChance: false,
           simulateStuckAttackSelection: Boolean(argValue(args)),
+        };
+      }
+      if (cmd === "set_auto_capture_battle_before_attack") {
+        return {
+          autoCaptureBattleBeforeAttack: Boolean(argValue(args)),
+          autoCaptureBattleResultLoot: false,
+          autoCaptureUnknownScreenTimeout: false,
+          autoCaptureSkillUseProbe: false,
+          autoCaptureUnrecognizedCriticalChance: false,
+          simulateStuckAttackSelection: false,
         };
       }
       return null;
@@ -395,6 +411,7 @@ describe("SettingsDialog", () => {
     );
 
     expect(screen.queryByRole("button", { name: "调试" })).not.toBeInTheDocument();
+    expect(screen.queryByText("点击攻击前自动截图")).not.toBeInTheDocument();
     expect(screen.queryByText("自动截图战利品页面")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "基础设置" })).toBeInTheDocument();
     expect(await screen.findByText("宝具识别方式")).toBeInTheDocument();
@@ -405,11 +422,20 @@ describe("SettingsDialog", () => {
     renderWithTheme(<SettingsHarness initialSection="debug" />);
 
     expect(await screen.findByText("自动截图战利品页面")).toBeInTheDocument();
+    expect(screen.getByText("点击攻击前自动截图")).toBeInTheDocument();
     expect(screen.getByText("无法识别画面超时时截图")).toBeInTheDocument();
     expect(screen.getByText("保存技能确认 probe 截图")).toBeInTheDocument();
     expect(screen.getByText("暴击率无法识别时截图")).toBeInTheDocument();
     expect(screen.getByText("测试选卡卡住恢复")).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("get_debug_settings");
+
+    await user.click(screen.getByRole("switch", { name: "点击攻击前自动截图" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_auto_capture_battle_before_attack", {
+        value: true,
+      });
+    });
 
     await user.click(screen.getByRole("switch", { name: "自动截图战利品页面" }));
 

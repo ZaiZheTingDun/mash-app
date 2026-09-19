@@ -351,6 +351,7 @@ fn start_automation_with_config(
     config.support_full_list_ocr_fallback = recognition_settings.support_full_list_ocr_fallback;
     config.unknown_screen_timeout_count = recognition_settings.unknown_screen_timeout_count;
     let debug_settings = *app.state::<Mutex<DebugSettings>>().lock().unwrap();
+    config.auto_capture_battle_before_attack = debug_settings.auto_capture_battle_before_attack;
     config.auto_capture_battle_result_loot = debug_settings.auto_capture_battle_result_loot;
     config.auto_friend_request = recognition_settings.auto_friend_request;
     config.auto_capture_unknown_screen_timeout = debug_settings.auto_capture_unknown_screen_timeout;

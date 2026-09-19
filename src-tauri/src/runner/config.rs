@@ -243,6 +243,9 @@ pub struct RunConfig {
     /// Save each newly handled loot result page to the app debug directory.
     #[serde(default)]
     pub auto_capture_battle_result_loot: bool,
+    /// Save a lossless Battle frame immediately before tapping Attack.
+    #[serde(default)]
+    pub auto_capture_battle_before_attack: bool,
     #[serde(default)]
     pub auto_friend_request: bool,
     /// Save one current stream frame when Unknown screen detection times out.

@@ -33,7 +33,7 @@ stateDiagram-v2
     Battle --> BattleAction: 攻击可用
     BattleAction --> Battle: 完成场景技能、可选子选择与可选敌方目标
     BattleAction --> BattleAction: 完成 Order Change overlay
-    BattleAction --> Attack: 已点击攻击
+    BattleAction --> Attack: 可选保存当前 PNG；已点击攻击
     Attack --> Attack: 检测到速度 1；点击速度按钮并等待速度 2
     Attack --> Attack: 宝具不可用；关闭提示并用其他指令卡补位
     Attack --> Battle: 提交选卡后仍停留 5 秒；点击返回并复用选卡
@@ -81,6 +81,7 @@ stateDiagram-v2
 - `awaiting_attack_resolution()` 在 `AwaitingAttackResolution` 或 `AwaitingPostAttackHud` 时为真，避免 classifier 仍显示 Attack 时重复提交卡片。
 - `AwaitingAttackResolution` 保存实际提交时间。若 classifier 连续停留在 `Attack` 达 5 秒，runner 点击右下返回、等待 Battle 的攻击按钮与动作菜单、重新点击攻击；新的 Attack 画面连续稳定两次并额外等待 1 秒后，复用缓存的指令卡识别结果，但按当前识别模式重新读取宝具状态；原计划中已不可用的宝具会替换为未使用的指令卡。恢复重选是唯一强制确认路径：必须连续两次观察到画面离开 `Attack` 才记录成功；确认失败则保留缓存并再次恢复。
 - 本地开发环境可在「设置 → 调试」开启“测试选卡卡住恢复”。下一次自动选卡会只记录而不实际点击第 3 张卡，从而稳定进入上述 5 秒恢复路径；开关在注入该次漏点时持久化为关闭，恢复重选不会再次漏点。
+- 本地开发环境可在「设置 → 调试」开启“点击攻击前自动截图”。统一的 `tap_attack_button()` 入口会先完成可选的攻击前宝具条采样，再将最新 stream frame 以无损 PNG 保存到 `app_data_dir()/debug/battle-before-attack/{cn|jp}/`，最后才点击攻击；文件名包含服务器、任务轮次、Battle index 和 turn index。只对之后生成的截图按服务器分目录，不迁移已有图片。截图失败只记录 warning，不中断攻击，因此普通、Advanced、Grand 与卡住恢复重试使用同一时机。
 - 本地开发环境可在「设置 → 调试」开启“暴击率无法识别时截图”。暴击模式完成五张指令卡识别后，只要任一张卡的暴击率缺失，就立即将当前 Attack 画面保存到 `app_data_dir()/debug/unrecognized-critical-chances/`；截图失败仅记录 warning，不中断选卡。
 - 单箭头和双箭头战斗速度模板都会将卡片画面分类为 `Attack`。读取卡片前先 probe mask 后的双箭头模板，再 probe 单箭头；若速度为 level 1，则记录切换、点击速度按钮并等待 level 2。
 - 宝具识别方式有三种：宝具指令卡识别、进入 `Attack` 后读取底部宝具条、点击 `Attack` 前在 `Battle` 画面读取底部宝具条。最后一种会在统一的攻击按钮入口采样并缓存结果，进入 `Attack` 后复用缓存，因此普通、Advanced、Grand 及准备行动后的攻击路径都保持同一时机；若当前出卡配置没有宝具，三种方式都会直接跳过宝具读取，其中攻击前宝具条模式不会采样或生成缓存；1 秒采样窗口按槽位取端帽亮度中位数，过滤单帧特效造成的瞬时高分；从者台词可能遮挡攻击前的宝具条，设置页会提醒用户关闭台词。

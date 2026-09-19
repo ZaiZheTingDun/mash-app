@@ -11,6 +11,8 @@ use tauri::Manager;
 #[serde(rename_all = "camelCase")]
 pub struct DebugSettings {
     #[serde(default)]
+    pub auto_capture_battle_before_attack: bool,
+    #[serde(default)]
     pub auto_capture_battle_result_loot: bool,
     #[serde(default)]
     pub auto_capture_unknown_screen_timeout: bool,
@@ -91,6 +93,14 @@ fn debug_settings_with_auto_capture_battle_result_loot(
     settings
 }
 
+fn debug_settings_with_auto_capture_battle_before_attack(
+    mut settings: DebugSettings,
+    value: bool,
+) -> DebugSettings {
+    settings.auto_capture_battle_before_attack = value;
+    settings
+}
+
 fn debug_settings_with_auto_capture_unknown_screen_timeout(
     mut settings: DebugSettings,
     value: bool,
@@ -121,6 +131,17 @@ fn debug_settings_with_simulate_stuck_attack_selection(
 ) -> DebugSettings {
     settings.simulate_stuck_attack_selection = value;
     settings
+}
+
+#[tauri::command]
+pub(crate) fn set_auto_capture_battle_before_attack(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<DebugSettings>>,
+    value: bool,
+) -> Result<DebugSettings, String> {
+    update_debug_settings(&app, state.inner(), |settings| {
+        *settings = debug_settings_with_auto_capture_battle_before_attack(*settings, value);
+    })
 }
 
 #[tauri::command]
