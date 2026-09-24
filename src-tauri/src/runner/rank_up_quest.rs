@@ -151,6 +151,11 @@ impl Runner {
         self.support_scroll_count = 0;
         self.support_refresh_count = 0;
         self.support_class_tab_done = false;
+        // Every rank-up quest returns to the list and opens a fresh support
+        // selection page. Reapply CN's second-level EXTRA filter there too;
+        // its modal choice may persist in-game, but the new page still needs
+        // the configured filter to be explicitly selected for this run.
+        self.support_extra_class_filter_configured = false;
         self.support_grand_section_seen = false;
         self.support_grand_section_misses = 0;
         self.support_level_progress = SupportLevelPanelProgress::default();
