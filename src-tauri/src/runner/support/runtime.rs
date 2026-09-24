@@ -369,26 +369,67 @@ impl Runner {
             }
         };
 
+        let mut mismatch_reasons = Vec::new();
+        let mut mismatch_debug_summaries = Vec::new();
         for (index, row) in result.supports.iter().enumerate() {
-            if self.support_row_ce_mismatch(row).is_none() {
-                self.release_support_ocr();
-                let label = if row.name_text.is_empty() {
-                    format!("第 {} 行", index + 1)
-                } else {
-                    row.name_text.clone()
-                };
-                self.emit("SupportSelect", &format!("找到礼装匹配的助战: {label}"));
-                self.emit_debug("SupportSelect", &format!("礼装匹配助战 {label}"));
-                if !self.tap_at("SupportSelect", support_row_tap_point(row)) {
-                    return;
+            if let Some(mismatch) = self.support_row_ce_mismatch(row) {
+                if !mismatch_reasons.contains(&mismatch.reason) {
+                    mismatch_reasons.push(mismatch.reason);
                 }
-                self.support_selected = true;
-                self.support_scroll_count = 0;
-                self.support_refresh_count = 0;
-                self.support_grand_section_seen = false;
-                self.support_grand_section_misses = 0;
-                thread::sleep(ACTION_DELAY);
+                if let Some(summary) = mismatch.debug_summary {
+                    if !mismatch_debug_summaries.contains(&summary) {
+                        mismatch_debug_summaries.push(summary);
+                    }
+                }
+                continue;
+            }
+
+            self.release_support_ocr();
+            let label = if row.name_text.is_empty() {
+                format!("第 {} 行", index + 1)
+            } else {
+                row.name_text.clone()
+            };
+            let mlb_required = if self.config.support_grand_mode {
+                (0..3).any(|slot| {
+                    !grand_support_ce_ids(&self.config, slot).is_empty()
+                        && self.config.support_grand_craft_essence_mlb_required[slot]
+                })
+            } else {
+                self.config.support_craft_essence_mlb_required
+            };
+            let mlb_summary = if mlb_required {
+                "满破检查通过"
+            } else {
+                "未启用满破要求"
+            };
+            self.emit(
+                "SupportSelect",
+                &format!("找到符合礼装条件的助战: {label}（{mlb_summary}）"),
+            );
+            self.emit_debug("SupportSelect", &format!("礼装匹配助战 {label}"));
+            if !self.tap_at("SupportSelect", support_row_tap_point(row)) {
                 return;
+            }
+            self.support_selected = true;
+            self.support_scroll_count = 0;
+            self.support_refresh_count = 0;
+            self.support_grand_section_seen = false;
+            self.support_grand_section_misses = 0;
+            thread::sleep(ACTION_DELAY);
+            return;
+        }
+
+        if !mismatch_reasons.is_empty() {
+            self.emit(
+                "SupportSelect",
+                &format!(
+                    "当前助战礼装不满足要求（{}），继续查找…",
+                    mismatch_reasons.join("；")
+                ),
+            );
+            for summary in mismatch_debug_summaries {
+                self.emit_debug("SupportSelect", &summary);
             }
         }
 
