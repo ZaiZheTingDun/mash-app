@@ -4931,6 +4931,7 @@ def _find_supports(
     require_np_match: bool = False,
     support_full_list_ocr_fallback: bool = False,
     _force_full_list_ocr: bool = False,
+    match_any_servant: bool = False,
 ) -> dict:
     """OCR the support-select list region and return matched support rows.
 
@@ -5084,6 +5085,7 @@ def _find_supports(
                 require_np_match,
                 False,
                 True,
+                match_any_servant,
             )
         return result
 
@@ -5176,6 +5178,89 @@ def _find_supports(
         for c in np_cands
     ]
     diag["fragments"] = fragments
+
+    if match_any_servant:
+        # With no pinned servant, the confirm buttons provide stable row
+        # anchors. Associate the recognized name/NP strips with each anchor
+        # without applying a servant-name or NP-name filter; the runner can
+        # then use the equipped CE as the sole selection requirement.
+        rows: list[dict] = []
+        for anchor in confirm_anchors:
+            anchor_y = float(anchor.get("y", 0.0))
+            name_center = anchor_y + SUPPORT_ROW_NAME_REGION_DY + SUPPORT_ROW_NAME_REGION_H / 2.0
+            np_center = anchor_y + SUPPORT_ROW_NP_REGION_DY + SUPPORT_ROW_NP_REGION_H / 2.0
+            name_fragment = min(
+                fragments,
+                key=lambda item: abs(
+                    float(item["region"]["y"]) + float(item["region"]["h"]) / 2.0 - name_center
+                ),
+                default=None,
+            )
+            if name_fragment is not None and abs(
+                float(name_fragment["region"]["y"])
+                + float(name_fragment["region"]["h"]) / 2.0
+                - name_center
+            ) > 0.045:
+                name_fragment = None
+            np_fragment = min(
+                fragments,
+                key=lambda item: abs(
+                    float(item["region"]["y"]) + float(item["region"]["h"]) / 2.0 - np_center
+                ),
+                default=None,
+            )
+            if np_fragment is not None and abs(
+                float(np_fragment["region"]["y"])
+                + float(np_fragment["region"]["h"]) / 2.0
+                - np_center
+            ) > 0.045:
+                np_fragment = None
+            name_region = (
+                name_fragment["region"]
+                if name_fragment is not None
+                else {
+                    "x": SUPPORT_ROW_NAME_REGION_X,
+                    "y": anchor_y + SUPPORT_ROW_NAME_REGION_DY,
+                    "w": SUPPORT_ROW_NAME_REGION_W,
+                    "h": SUPPORT_ROW_NAME_REGION_H,
+                }
+            )
+            np_region = (
+                np_fragment["region"]
+                if np_fragment is not None
+                else {
+                    "x": SUPPORT_ROW_NP_REGION_X,
+                    "y": anchor_y + SUPPORT_ROW_NP_REGION_DY,
+                    "w": SUPPORT_ROW_NP_REGION_W,
+                    "h": SUPPORT_ROW_NP_REGION_H,
+                }
+            )
+            y0 = min(float(name_region["y"]), float(np_region["y"]))
+            y1 = max(
+                float(name_region["y"]) + float(name_region["h"]),
+                float(np_region["y"]) + float(np_region["h"]),
+            )
+            row_x = float(list_region["x"])
+            row_w = float(list_region["w"])
+            rows.append(
+                {
+                    "rowRegion": {"x": row_x, "y": y0, "w": row_w, "h": y1 - y0},
+                    "tap": {"x": row_x + row_w / 2.0, "y": (y0 + y1) / 2.0},
+                    "nameText": str(name_fragment["text"]) if name_fragment is not None else "",
+                    "nameScore": 1.0 if name_fragment is not None else 0.0,
+                    "nameMatchedName": str(name_fragment["text"]) if name_fragment is not None else None,
+                    "nameRegion": name_region,
+                    "npText": str(np_fragment["text"]) if np_fragment is not None else "",
+                    "npScore": 1.0 if np_fragment is not None else 0.0,
+                    "npRegion": np_region,
+                    "npMatchedName": str(np_fragment["text"]) if np_fragment is not None else "",
+                }
+            )
+        rows.sort(key=lambda row: row["rowRegion"]["y"])
+        _support_attach_score_anchors(img, rows, confirm_anchors)
+        if include_support_details:
+            _support_add_details(img, rows, fragments)
+        return fallback_to_full_list({"supports": rows, "diagnostics": diag})
 
     # Name-only fallback. We synthesize one row per above-threshold name
     # candidate (expanded horizontally to the full list region) instead
@@ -7356,6 +7441,8 @@ def _main_repl() -> None:
                         [str(n) for n in (cmd.get("excludedNames") or []) if n],
                         bool(cmd.get("requireNpMatch", False)),
                         bool(cmd.get("supportFullListOcrFallback", False)),
+                        False,
+                        bool(cmd.get("matchAnyServant", False)),
                     ),
                 )
         elif action == "ocr_region":

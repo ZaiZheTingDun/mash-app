@@ -165,6 +165,8 @@ Sidecar 按布局而非只按文字配对助战行：NP 匹配必须是同一行
 
 配置普通助战 CE 时，项目可保存最多 10 张不重复的候选礼装；runner 依次将行内 CE art 与对应的 `assets/ces/{id}/card_ce.png` 匹配，任意一张匹配即通过。slot 启用 MLB 要求（默认启用）时，匹配到的候选还需在 CE 右下找到 `icon_mlb_mark`。Grand support 仍逐个执行三个独立位置的 CE 检查，其中第 1、3 个位置各可配置最多 10 张候选并按任意一张匹配，第 2 个位置保持单张牵绊礼装；未配置 slot 跳过，每个 slot 可独立要求 MLB，第二个 Grand slot 还可要求 `icon_grand_bond_ce` 或 `icon_grand_bond_ce_np`。启用的 CE art 与图标检查必须全部通过。
 
+若项目未指定助战从者但配置了普通或冠位 CE，runner 会按确认按钮 anchor OCR 当前可见的所有助战行，并只用配置的 CE 条件筛选；匹配后选择该行，未匹配则继续滚动或刷新列表。未配置 CE 时仍沿用直接选择列表首位助战的兼容流程。
+
 CN Grand 助战若未选中匹配行，会先等待当前刷新列表出现至少一个 ribbon；出现后连续两次未命中即刷新而非继续滚动。若从未出现 marker，或 server bundle 不含该 probe，则保留旧的滚至底部行为。
 
 JP 与 CN 项目配置任意 `supportStarMapScoreMin`、`supportGrandStarMapScoreMin`、`supportNoblePhantasmLevelMin`、`supportSkillLevelMins` 或 `supportAppendSkillLevelMins` 时，runner 都会请求助战详情，并在点击前调用 `support_row_matches_level_requirements_with_progress`：`Pass` 表示名称、NP、分值和全部等级达标；`Fail` 表示至少一项不足；`WaitingForPanel` 表示当前面板达标但尚未观察到另一面板。普通助战的分值徽章读取一个星图分值（最高 62）；冠位助战读取左侧星图分值与右侧冠位星图分值（最高 62/16），并分别与项目最小值比较。非冠位模式忽略已保存的冠位星图分值条件。宝具等级解析同时接受 CN 的“等级5”和 JP OCR 常见的 `Lv.5`、全角 `ＬＶ.5`、漏读窄字符后的 `Ｌ5`。自有和 append 技能图标共享行；游戏的显示切换是固定自有／固定 append／间隔切换三态，runner 无法知道用户锁定状态。因此遇到 `WaitingForPanel` 会点击 `SUPPORT_SKILL_PANEL_TOGGLE_BUTTON` 并重做 OCR；每个候选最多 `SUPPORT_SKILL_PANEL_MAX_TOGGLE_TAPS` 次，避免无法验证的行困住循环，候选变化时计数自然重置。

@@ -9,7 +9,8 @@ impl SidecarClient {
     /// part of the same row. ``excluded_names`` identifies sibling servant
     /// variants that must not win the name match. Defaults (list region,
     /// thresholds, pair_dy) are owned by the sidecar; this binding stays
-    /// minimal so retuning happens on the Python side.
+    /// minimal so retuning happens on the Python side. ``match_any_servant``
+    /// returns all anchor-backed rows for CE-only selection.
     pub fn find_supports(
         &mut self,
         image_path: Option<&Path>,
@@ -20,6 +21,7 @@ impl SidecarClient {
         require_np_match: bool,
         include_support_details: bool,
         support_full_list_ocr_fallback: bool,
+        match_any_servant: bool,
     ) -> Result<FindSupportsResult, String> {
         let mut req = request(
             SidecarCommand::FindSupports,
@@ -31,6 +33,7 @@ impl SidecarClient {
                 "requireNpMatch": require_np_match,
                 "includeSupportDetails": include_support_details,
                 "supportFullListOcrFallback": support_full_list_ocr_fallback,
+                "matchAnyServant": match_any_servant,
             }),
         )?;
         Self::add_image_path(&mut req, image_path);
