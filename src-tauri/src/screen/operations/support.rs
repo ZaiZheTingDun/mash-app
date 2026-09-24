@@ -52,8 +52,8 @@ impl SidecarClient {
     ///
     /// The runner calls this once per OCR-matched support row when a CE
     /// is pinned on the team-builder support slot. ``region`` is the
-    /// search window in absolute normalized coordinates (computed by
-    /// applying ``SUPPORT_CE_OFFSET_IN_ROW`` to the row's bbox).
+    /// search window in absolute normalized coordinates (computed from
+    /// the row's right-side confirm-button anchor).
     /// ``template_path`` points at ``assets/ces/{id}/card_ce.png``.
     ///
     /// Returns ``(score, passed)``; both are ``(0.0, false)`` if the

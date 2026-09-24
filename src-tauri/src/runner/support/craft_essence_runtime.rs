@@ -59,13 +59,11 @@ impl Runner {
         }
     }
 
-    /// Compute the absolute search window for a row's CE icon by
-    /// applying `SUPPORT_CE_OFFSET_IN_ROW` (a row-local rect) to the
-    /// row's full bbox. Thin method wrapper around the pure free helper
-    /// [`ce_search_region`] (kept free so unit tests can exercise the
-    /// math without constructing a full `SupportRowMatch`).
-    pub(crate) fn support_ce_search_region(row: &SupportRowMatch) -> NormRect {
-        ce_search_region(row.row_region)
+    /// Compute the narrow CE search window from the row's right-side
+    /// confirm-button anchor. Rows without a detected anchor cannot be
+    /// safely checked and return `None`.
+    pub(crate) fn support_ce_search_region(row: &SupportRowMatch) -> Option<NormRect> {
+        row.score_anchor.map(ce_search_region)
     }
 
     pub(crate) fn support_grand_ce_search_region(
@@ -191,7 +189,11 @@ impl Runner {
             if templates.is_empty() {
                 return None;
             }
-            let region = Self::support_ce_search_region(row);
+            let Some(region) = Self::support_ce_search_region(row) else {
+                return Some(SupportCeMismatch::reason_only(
+                    "助战编队确认锚点未识别，无法定位礼装",
+                ));
+            };
             let mut final_mismatch = None;
             for (index, template) in templates.iter().enumerate() {
                 let label = if templates.len() == 1 {

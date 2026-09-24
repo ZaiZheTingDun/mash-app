@@ -84,18 +84,9 @@ pub struct DebugFindSupportsResult {
     pub score_filter: DebugSupportScoreFilter,
 }
 
-/// Apply the runner's `SUPPORT_CE_OFFSET_IN_ROW` to a row bbox. Kept in
-/// sync manually with `Runner::support_ce_search_region` (the runner's
-/// version is private to that module).
-fn ce_search_region(row: &SupportRowMatch) -> NormRect {
-    let r = row.row_region;
-    let off = runner::SUPPORT_CE_OFFSET_IN_ROW;
-    NormRect {
-        x: r.x + off.x * r.w,
-        y: r.y + off.y * r.h,
-        w: off.w * r.w,
-        h: off.h * r.h,
-    }
+/// Use the same confirm-button-anchored CE strip as the runner.
+fn ce_search_region(row: &SupportRowMatch) -> Option<NormRect> {
+    row.score_anchor.map(runner::ce_search_region)
 }
 
 fn grand_ce_search_region(row: &SupportRowMatch, slot: usize) -> Option<NormRect> {
@@ -110,9 +101,9 @@ fn grand_ce_search_region(row: &SupportRowMatch, slot: usize) -> Option<NormRect
 /// debug overlay can render misses too.
 ///
 /// When `craft_essence_id` is supplied, also runs the runner's CE
-/// verification per row and returns the search region + score so the
-/// user can iterate on `SUPPORT_CE_OFFSET_IN_ROW` and
-/// `SUPPORT_CE_THRESHOLD` without restarting a real run.
+/// verification per row and returns the anchored search region + score
+/// so the user can inspect the detected CE strip without restarting a
+/// real run.
 #[tauri::command]
 pub fn debug_find_supports(
     app: tauri::AppHandle,
@@ -233,9 +224,8 @@ pub fn debug_find_supports(
                 row.row_region.y
             );
         }
-        let ce = match ce_template.as_deref() {
-            Some(template) => {
-                let region = ce_search_region(&row);
+        let ce = match (ce_template.as_deref(), ce_search_region(&row)) {
+            (Some(template), Some(region)) => {
                 let info = match client.verify_support_ce(
                     Some(&image_path),
                     region,
@@ -303,7 +293,7 @@ pub fn debug_find_supports(
                 };
                 Some(info)
             }
-            None => None,
+            _ => None,
         };
         let mut grand_ces = Vec::new();
         for (index, template_path) in grand_ce_template_paths.iter().enumerate() {

@@ -38,25 +38,15 @@ pub(crate) fn grand_support_ce_ids(config: &RunConfig, index: usize) -> Vec<u32>
     ids
 }
 
-/// Search window for the support row's craft-essence icon, expressed as
-/// fractions of the row bbox. The OCR-derived `row_region` only covers
-/// the name + NP text strip (anchored to `SUPPORT_LIST_REGION.x`/`.w`);
-/// the CE icon overlay actually sits on the **face card to the left of
-/// the row**, so `x` is negative on purpose to push the search window
-/// outside the row's left edge. `h > 1.0` lets the window span the
-/// face vertically (the face is taller than the text strip).
-///
-/// Reference screenshot: `tests/test_data/screenshots/support_select.png`
-/// (1024×576). row_region for row 1: `x≈0.177, w≈0.466, y≈0.30, h≈0.13`.
-/// With the values below the search window resolves to roughly
-/// `x≈0.05, w≈0.10, y≈0.39, h≈0.13` — bottom of the face card. Retune
-/// via the debug page (`助战识别` panel) against real captures.
-pub(crate) const SUPPORT_CE_OFFSET_IN_ROW: NormRect = NormRect {
-    x: -0.33,
-    y: -1.60,
-    w: 0.35,
-    h: 3.45,
-};
+/// Ordinary support CE thumbnails occupy a narrow strip at the lower-left
+/// of the row. The confirm button anchor gives a stable vertical reference
+/// even when OCR row bounds vary; x is fixed because CE thumbnails stay in
+/// the left column. The window includes a small margin around the rendered
+/// CE image while excluding the servant portrait.
+pub(crate) const SUPPORT_CE_X: f64 = 0.030;
+pub(crate) const SUPPORT_CE_W: f64 = 0.145;
+pub(crate) const SUPPORT_CE_H: f64 = 0.080;
+pub(crate) const SUPPORT_CE_CENTER_FROM_BUTTON_TOP_Y: f64 = 0.200;
 /// Grand support rows show three CE strips in a fixed left-side column.
 /// Their vertical position tracks the right-side "助战编队确认" panel in
 /// Grand support rows. The panel's top edge is cleaner than the score
@@ -212,17 +202,15 @@ pub(crate) fn mismatch_from_ce_result(
     }
 }
 
-/// Pure helper: apply [`SUPPORT_CE_OFFSET_IN_ROW`] (a row-local rect) to
-/// `row` (an absolute row bbox) and return the absolute search window for
-/// the row's CE icon. Extracted from `Runner::support_ce_search_region`
-/// so unit tests can exercise the math directly without needing to build
-/// a full `SupportRowMatch`.
-pub(crate) fn ce_search_region(row: NormRect) -> NormRect {
+/// Project the ordinary CE strip from the row's right-side confirm-button
+/// anchor. Extracted as a pure helper so its normalized geometry can be
+/// tested independently from OCR and device state.
+pub(crate) fn ce_search_region(confirm_button: NormRect) -> NormRect {
     NormRect {
-        x: row.x + SUPPORT_CE_OFFSET_IN_ROW.x * row.w,
-        y: row.y + SUPPORT_CE_OFFSET_IN_ROW.y * row.h,
-        w: SUPPORT_CE_OFFSET_IN_ROW.w * row.w,
-        h: SUPPORT_CE_OFFSET_IN_ROW.h * row.h,
+        x: SUPPORT_CE_X,
+        y: confirm_button.y + SUPPORT_CE_CENTER_FROM_BUTTON_TOP_Y - SUPPORT_CE_H / 2.0,
+        w: SUPPORT_CE_W,
+        h: SUPPORT_CE_H,
     }
 }
 

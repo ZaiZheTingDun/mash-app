@@ -582,9 +582,9 @@ pub struct SupportRowMatch {
     pub np_text: String,
     pub np_score: f64,
     pub np_region: NormRect,
-    /// Optional right-side support-row anchor bbox. In Grand support mode
-    /// this is the "助战编队确认" panel; runners use it for row-relative
-    /// regions whose vertical placement is more stable than OCR text bboxes.
+    /// Optional right-side "助战编队确认" button bbox. Runners use it
+    /// to project row-relative regions whose vertical placement is more
+    /// stable than OCR text bboxes.
     #[serde(default)]
     pub score_anchor: Option<NormRect>,
     /// Tight score-badge region projected from `score_anchor`.

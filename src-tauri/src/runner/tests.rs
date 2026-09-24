@@ -926,58 +926,36 @@ fn bond_level_up_screenshot_path_uses_dedicated_directory_and_sortable_name() {
 }
 
 #[test]
-fn ce_search_region_identity_row_returns_offset() {
-    // A unit row at the origin → the absolute window equals the
-    // raw `SUPPORT_CE_OFFSET_IN_ROW` (it's already in unit-row coords).
-    let row = NormRect {
-        x: 0.0,
-        y: 0.0,
-        w: 1.0,
-        h: 1.0,
+fn ce_search_region_uses_fixed_ce_column_and_anchor_y() {
+    let anchor = NormRect {
+        x: 0.84,
+        y: 0.29,
+        w: 0.07,
+        h: 0.06,
     };
-    let out = ce_search_region(row);
-    approx(out.x, SUPPORT_CE_OFFSET_IN_ROW.x);
-    approx(out.y, SUPPORT_CE_OFFSET_IN_ROW.y);
-    approx(out.w, SUPPORT_CE_OFFSET_IN_ROW.w);
-    approx(out.h, SUPPORT_CE_OFFSET_IN_ROW.h);
+    let out = ce_search_region(anchor);
+    approx(out.x, SUPPORT_CE_X);
+    approx(
+        out.y,
+        0.29 + SUPPORT_CE_CENTER_FROM_BUTTON_TOP_Y - SUPPORT_CE_H / 2.0,
+    );
+    approx(out.w, SUPPORT_CE_W);
+    approx(out.h, SUPPORT_CE_H);
 }
 
 #[test]
-fn ce_search_region_scales_and_translates_offset_row() {
-    // Row at (0.10, 0.20) sized (0.50, 0.10): the CE icon search
-    // window is the row-local offset, scaled by row size, then
-    // translated by row origin.
-    let row = NormRect {
-        x: 0.10,
-        y: 0.20,
-        w: 0.50,
-        h: 0.10,
+fn ce_search_region_tracks_anchor_when_list_scrolls() {
+    let anchor = NormRect {
+        x: 0.84,
+        y: 0.61,
+        w: 0.07,
+        h: 0.06,
     };
-    let out = ce_search_region(row);
-    approx(out.x, 0.10 + SUPPORT_CE_OFFSET_IN_ROW.x * 0.50);
-    approx(out.y, 0.20 + SUPPORT_CE_OFFSET_IN_ROW.y * 0.10);
-    approx(out.w, SUPPORT_CE_OFFSET_IN_ROW.w * 0.50);
-    approx(out.h, SUPPORT_CE_OFFSET_IN_ROW.h * 0.10);
-}
-
-#[test]
-fn ce_search_region_handles_negative_offset() {
-    // SUPPORT_CE_OFFSET_IN_ROW.x is negative on purpose (the CE icon
-    // sits to the *left* of the OCR-anchored row strip). For a row
-    // that starts at x=0.20 with w=0.40, the search window should
-    // start to the *left* of the row origin.
-    let row = NormRect {
-        x: 0.20,
-        y: 0.30,
-        w: 0.40,
-        h: 0.10,
-    };
-    let out = ce_search_region(row);
-    assert!(
-        out.x < row.x,
-        "search window should be left of row origin: got x={} vs row x={}",
-        out.x,
-        row.x,
+    let out = ce_search_region(anchor);
+    approx(out.x, SUPPORT_CE_X);
+    approx(
+        out.y,
+        0.61 + SUPPORT_CE_CENTER_FROM_BUTTON_TOP_Y - SUPPORT_CE_H / 2.0,
     );
 }
 
