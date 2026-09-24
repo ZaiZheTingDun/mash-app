@@ -19,7 +19,19 @@ export interface MysticCode {
   name: string;
   itemMalePath: string | null;
   itemFemalePath: string | null;
+  masterFigureMalePath: string | null;
+  masterFigureFemalePath: string | null;
+  masterFaceMalePath: string | null;
+  masterFaceFemalePath: string | null;
   skills: MysticCodeSkill[];
+}
+
+export function masterFigurePath(code: MysticCode, gender: MysticCodeGender): string | null {
+  return gender === "male" ? code.masterFigureMalePath : code.masterFigureFemalePath;
+}
+
+export function masterFacePath(code: MysticCode, gender: MysticCodeGender): string | null {
+  return gender === "male" ? code.masterFaceMalePath : code.masterFaceFemalePath;
 }
 
 export function mysticCodeSkill(code: MysticCode | null | undefined, skill: string) {

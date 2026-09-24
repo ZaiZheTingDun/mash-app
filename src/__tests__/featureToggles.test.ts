@@ -20,8 +20,8 @@ describe("feature toggles", () => {
     expect(createFeatureToggles({ DEV: false })).toEqual({
       servantEnhancement: false,
       craftEssenceEnhancement: true,
-      friendPointSummon: false,
-      rankUpQuest: false,
+      friendPointSummon: true,
+      rankUpQuest: true,
       cvDebug: false,
       grandCardPriority: false,
       turnAttackModes: true,
@@ -67,6 +67,14 @@ describe("feature toggles", () => {
       servantEnhancement: false,
       craftEssenceEnhancement: true,
     });
+  });
+
+  it("allows explicit production opt-outs for summon and rank-up quests", () => {
+    expect(createFeatureToggles({
+      DEV: false,
+      VITE_FEATURE_FRIEND_POINT_SUMMON: "false",
+      VITE_FEATURE_RANK_UP_QUEST: "false",
+    })).toMatchObject({ friendPointSummon: false, rankUpQuest: false });
   });
 
   it("allows released attack modes to be disabled explicitly", () => {

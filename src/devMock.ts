@@ -86,6 +86,7 @@ const craftEssences: CraftEssence[] = [
 let selectedAdbSerial: string | null = null;
 let server: Server = "JP";
 let mysticCodeGender: "female" | "male" = "female";
+let homeMasterFigureId = 470;
 let supportCeThreshold = 0.7;
 let supportCeFullGateThreshold = 0.6;
 let supportMlbIconThreshold = 0.7;
@@ -263,7 +264,17 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "get_craft_essences":
       return clone(craftEssences) as T;
     case "get_mystic_codes":
-      return [] as T;
+      return [{
+        id: 470,
+        name: "御主立绘 470",
+        itemMalePath: null,
+        itemFemalePath: null,
+        masterFigureMalePath: null,
+        masterFigureFemalePath: null,
+        masterFaceMalePath: null,
+        masterFaceFemalePath: null,
+        skills: [],
+      }] as T;
     case "list_projects":
       return clone(projects) as T;
     case "get_project_catalog":
@@ -368,6 +379,11 @@ export async function invokeDevMock<T>(cmd: string, args: InvokeArgs = {}): Prom
     case "set_mystic_code_gender":
       if (args.value === "female" || args.value === "male") mysticCodeGender = args.value;
       return mysticCodeGender as T;
+    case "get_home_master_figure_id":
+      return homeMasterFigureId as T;
+    case "set_home_master_figure_id":
+      if (args.id === 470) homeMasterFigureId = 470;
+      return homeMasterFigureId as T;
     case "get_battle_start_panel":
       return battleStartPanel as T;
     case "set_battle_start_panel":

@@ -496,6 +496,23 @@ fn app_ui_settings_round_trip_battle_start_panel() {
 }
 
 #[test]
+fn app_ui_settings_round_trip_home_master_figure_id() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("app_ui_settings.json");
+    let initial = read_app_ui_settings_from_path(&path).unwrap();
+    assert_eq!(initial.home_master_figure_id, None);
+
+    let settings = AppUiSettings {
+        home_master_figure_id: Some(470),
+        ..Default::default()
+    };
+    write_app_ui_settings_to_path(&path, &settings).unwrap();
+
+    let saved = read_app_ui_settings_from_path(&path).unwrap();
+    assert_eq!(saved.home_master_figure_id, Some(470));
+}
+
+#[test]
 fn malformed_projects_file_is_reported_without_overwriting_it() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("projects.json");

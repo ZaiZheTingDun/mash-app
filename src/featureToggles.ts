@@ -40,9 +40,9 @@ export function createFeatureToggles(env: FeatureToggleEnv): FeatureToggles {
     ),
     friendPointSummon: envFlag(
       env.VITE_FEATURE_FRIEND_POINT_SUMMON,
-      env.DEV
+      true
     ),
-    rankUpQuest: envFlag(env.VITE_FEATURE_RANK_UP_QUEST, env.DEV),
+    rankUpQuest: envFlag(env.VITE_FEATURE_RANK_UP_QUEST, true),
     cvDebug: envFlag(env.VITE_FEATURE_CV_DEBUG, env.DEV),
     grandCardPriority: envFlag(env.VITE_FEATURE_GRAND_CARD_PRIORITY, env.DEV),
     turnAttackModes: envFlag(env.VITE_FEATURE_TURN_ATTACK_MODES, true),

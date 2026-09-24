@@ -31,6 +31,10 @@ pub(crate) struct MysticCodeInfo {
     pub(crate) name: String,
     pub(crate) item_male_path: Option<String>,
     pub(crate) item_female_path: Option<String>,
+    pub(crate) master_figure_male_path: Option<String>,
+    pub(crate) master_figure_female_path: Option<String>,
+    pub(crate) master_face_male_path: Option<String>,
+    pub(crate) master_face_female_path: Option<String>,
     pub(crate) skills: Vec<MysticCodeSkillInfo>,
 }
 
@@ -60,6 +64,11 @@ fn mystic_code_skill_mode(skill: &serde_json::Value) -> MysticCodeSkillMode {
 
 fn mystic_code_item_path(code_dir: &Path, gender: &str) -> Option<String> {
     let path = code_dir.join(format!("item-{gender}.png"));
+    path.is_file().then(|| path.to_string_lossy().into_owned())
+}
+
+fn master_image_path(code_dir: &Path, kind: &str, gender: &str) -> Option<String> {
+    let path = code_dir.join(format!("master-{kind}-{gender}.png"));
     path.is_file().then(|| path.to_string_lossy().into_owned())
 }
 
@@ -133,6 +142,10 @@ fn load_mystic_codes_from_dir(root: &Path) -> Vec<MysticCodeInfo> {
                 name,
                 item_male_path: mystic_code_item_path(&code_dir, "male"),
                 item_female_path: mystic_code_item_path(&code_dir, "female"),
+                master_figure_male_path: master_image_path(&code_dir, "figure", "male"),
+                master_figure_female_path: master_image_path(&code_dir, "figure", "female"),
+                master_face_male_path: master_image_path(&code_dir, "face", "male"),
+                master_face_female_path: master_image_path(&code_dir, "face", "female"),
                 skills,
             })
         })
