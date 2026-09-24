@@ -1,0 +1,26 @@
+[dataset]
+sources = [
+  "enemy_hp",
+  "ally_hp",
+  "np_gauge",
+  "battle_progress",
+  "enemy_count",
+  "turn_count",
+]
+screenshot_type = "battle"
+input_width = 192
+input_height = 32
+split_seed = 20260917
+
+[model]
+channels = [32, 64, 96, 128]
+dropout = 0.10
+
+[training]
+batch_size = 32
+epochs = 80
+learning_rate = 0.001
+weight_decay = 0.0001
+
+[inference]
+minimum_sequence_confidence = 0.65

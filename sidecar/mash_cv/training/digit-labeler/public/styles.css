@@ -5,7 +5,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; background: #101114; color: #f2f3f5; }
-button, select { font: inherit; }
+button, select, input { font: inherit; }
 header {
   position: sticky;
   top: 0;
@@ -19,8 +19,10 @@ header {
 .header-row { justify-content: space-between; }
 h1 { margin: 0; font-size: 18px; }
 .progress { color: #aeb3c0; font-variant-numeric: tabular-nums; }
+.mode-tabs { display: flex; gap: 8px; margin-top: 12px; }
+.mode-tab.active { background: #215d3c; border-color: #52e38c; }
 .filters { margin-top: 12px; }
-select, button {
+select, button, input {
   color: #f4f5f7;
   background: #242730;
   border: 1px solid #3b3f4b;
@@ -59,8 +61,21 @@ main {
 #cropImage { max-width: 100%; width: 360px; max-height: 440px; object-fit: contain; image-rendering: pixelated; }
 .meta { padding: 12px 14px; display: grid; gap: 5px; font-size: 13px; color: #b7bbc5; border-top: 1px solid #30333b; }
 .meta strong { color: #fff; }
+.suggestion-panel { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; padding: 12px; border: 1px solid #5577a8; border-radius: 9px; background: #202a39; }
+.suggestion-panel[hidden] { display: none; }
+.suggestion-panel > div { display: grid; gap: 3px; }
+.suggestion-caption { color: #9eabc0; font-size: 12px; }
+#suggestionValue { color: #8fc1ff; font-size: 24px; }
+#suggestionConfidence { color: #b7bbc5; font-size: 12px; }
+.confirm-suggestion-button { background: #214f39; border-color: #4b9b70; white-space: nowrap; }
+.confirm-suggestion-button:disabled { opacity: .45; }
 .controls { padding: 14px; border-top: 1px solid #30333b; display: grid; gap: 12px; }
 .labels { display: grid; grid-template-columns: repeat(6, minmax(42px, 1fr)); }
+.labels[hidden], .sequence-form[hidden] { display: none; }
+.sequence-form { display: grid; gap: 8px; }
+.sequence-entry { display: flex; gap: 8px; flex-wrap: wrap; }
+.sequence-entry input { flex: 1; min-width: 180px; font-size: 22px; font-variant-numeric: tabular-nums; }
+#invalidSequenceButton { color: #ffaaa8; }
 .label-button { font-size: 18px; font-weight: 700; min-height: 46px; }
 .label-button.active { background: #215d3c; border-color: #52e38c; }
 .invalid { color: #ffaaa8; }

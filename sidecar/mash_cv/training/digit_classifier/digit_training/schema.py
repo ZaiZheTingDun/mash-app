@@ -76,6 +76,7 @@ class DigitSample:
     style: str
     server: str
     parent_id: str
+    screenshot_type: str = "battle"
     label: str | None = None
     resolution: tuple[int, int] | None = None
     source_bbox_px: tuple[int, int, int, int] | None = None
@@ -113,6 +114,9 @@ class DigitSample:
             style=_required_string(raw.get("style"), "style"),
             server=server,
             parent_id=_required_string(raw.get("parentId"), "parentId"),
+            screenshot_type=_required_string(
+                raw.get("screenshotType", "battle"), "screenshotType"
+            ),
             label=label,
             resolution=_optional_resolution(raw.get("resolution")),
             source_bbox_px=_optional_bbox(raw.get("sourceBboxPx")),
@@ -130,6 +134,7 @@ class DigitSample:
             "style": self.style,
             "server": self.server,
             "parentId": self.parent_id,
+            "screenshotType": self.screenshot_type,
             "resolution": list(self.resolution) if self.resolution else None,
             "sourceBboxPx": list(self.source_bbox_px)
             if self.source_bbox_px
@@ -244,6 +249,9 @@ def manifest_summary(samples: Sequence[DigitSample]) -> dict[str, Any]:
         "sources": dict(sorted(Counter(sample.source for sample in samples).items())),
         "styles": dict(sorted(Counter(sample.style for sample in samples).items())),
         "servers": dict(sorted(Counter(sample.server for sample in samples).items())),
+        "screenshotTypes": dict(
+            sorted(Counter(sample.screenshot_type for sample in samples).items())
+        ),
         "splits": dict(sorted(splits.items())),
         "parents": len({sample.parent_id for sample in samples}),
     }

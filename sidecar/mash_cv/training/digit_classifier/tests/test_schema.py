@@ -39,6 +39,15 @@ def test_manifest_round_trip(tmp_path: Path):
     assert load_manifest(path) == expected
 
 
+def test_manifest_defaults_legacy_samples_to_battle_screenshot_type():
+    raw = _sample(1).to_dict()
+    raw.pop("screenshotType")
+
+    sample = DigitSample.from_dict(raw)
+
+    assert sample.screenshot_type == "battle"
+
+
 @pytest.mark.parametrize(
     "field,value,message",
     [
@@ -97,4 +106,5 @@ def test_manifest_summary_counts_dataset_dimensions():
     assert summary["labeled"] == 2
     assert summary["unlabeled"] == 1
     assert summary["parents"] == 2
+    assert summary["screenshotTypes"] == {"battle": 3}
     assert summary["labels"] == {"1": 1, "invalid": 1, "unlabeled": 1}

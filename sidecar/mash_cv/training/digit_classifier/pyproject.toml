@@ -17,6 +17,9 @@ digit-crop = "digit_training.crop:main"
 digit-label = "digit_training.label:main"
 digit-manifest = "digit_training.manifest:main"
 digit-train = "digit_training.train:main"
+sequence-ctc-train = "digit_training.train_ctc:main"
+sequence-ctc-predict = "digit_training.predict_ctc:main"
+digit-suggest = "digit_training.suggest:main"
 
 [tool.poetry]
 packages = [{ include = "digit_training" }]

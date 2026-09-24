@@ -12,12 +12,17 @@
         <h1>Mash 数字标注</h1>
         <div id="progress" class="progress">正在读取…</div>
       </div>
+      <nav class="mode-tabs" aria-label="标注类型">
+        <button id="digitMode" class="mode-tab active" type="button">单个数字区域</button>
+        <button id="sequenceMode" class="mode-tab" type="button">完整数字区域（CTC）</button>
+      </nav>
       <div class="filters">
         <select id="statusFilter" aria-label="标注状态">
           <option value="unlabeled">仅未标注</option>
           <option value="all">全部</option>
           <option value="labeled">仅已标注</option>
         </select>
+        <select id="screenshotTypeFilter" aria-label="截图类型"><option value="all">全部截图类型</option></select>
         <select id="serverFilter" aria-label="服务器"><option value="all">全部服务器</option></select>
         <select id="sourceFilter" aria-label="数字来源"><option value="all">全部来源</option></select>
         <span id="message"></span>
@@ -27,27 +32,45 @@
       <section class="panel">
         <div class="panel-title">原始截图与当前裁剪位置</div>
         <div class="context-wrap">
-          <img id="contextImage" alt="原始战斗截图">
+          <img id="contextImage" alt="原始截图">
           <div id="sourceBox"></div>
         </div>
       </section>
       <section class="panel crop-panel">
-        <div class="panel-title">待标注字符</div>
-        <div class="crop-stage"><img id="cropImage" alt="单字裁剪"></div>
+        <div id="cropTitle" class="panel-title">待标注字符</div>
+        <div class="crop-stage"><img id="cropImage" alt="数字裁剪"></div>
         <div class="meta">
           <strong id="position">—</strong>
           <span id="sourceMeta">—</span>
           <span id="labelMeta">—</span>
+          <div id="suggestionPanel" class="suggestion-panel" hidden>
+            <div>
+              <span id="suggestionCaption" class="suggestion-caption">模型识别候选</span>
+              <strong id="suggestionValue">—</strong>
+              <span id="suggestionConfidence"></span>
+            </div>
+            <button id="confirmSuggestionButton" class="confirm-suggestion-button">
+              确认候选 Enter
+            </button>
+          </div>
         </div>
         <div class="controls">
           <div id="labelButtons" class="labels"></div>
+          <form id="sequenceForm" class="sequence-form" hidden>
+            <label for="sequenceInput">这张完整区域显示的数字</label>
+            <div class="sequence-entry">
+              <input id="sequenceInput" type="text" inputmode="numeric" autocomplete="off" maxlength="12" pattern="[0-9]{1,12}" placeholder="输入完整数字，例如 120">
+              <button id="saveSequenceButton" type="submit">保存整串数字</button>
+              <button id="invalidSequenceButton" type="button">无效 / 无数字</button>
+            </div>
+          </form>
           <div class="actions">
             <button id="previousButton">← 上一个</button>
             <button id="undoButton">撤销 U</button>
             <button id="skipButton">跳过 S</button>
             <button id="nextButton">下一个 →</button>
           </div>
-          <div class="hint">快捷键：0–9 标数字，X 标记无效，S 跳过，U 撤销，←/→ 浏览，Backspace 清除标签。</div>
+          <div id="shortcutHint" class="hint">快捷键：Enter 确认模型候选，0–9 直接重标，X 标记无效，S 跳过，U 撤销，←/→ 浏览，Backspace 清除标签。</div>
         </div>
       </section>
     </main>

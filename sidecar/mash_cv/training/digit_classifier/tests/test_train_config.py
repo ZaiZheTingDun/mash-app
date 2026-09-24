@@ -4,6 +4,7 @@ import pytest
 
 from digit_training.schema import DigitSample
 from digit_training.train import load_config, validate_training_samples
+from digit_training.train_ctc import load_config as load_ctc_config
 
 
 def test_default_training_config_has_expected_class_order():
@@ -25,3 +26,19 @@ def test_training_validation_requires_labels_and_splits():
 
     with pytest.raises(ValueError, match="missing labels"):
         validate_training_samples([sample], ("0", "invalid"))
+
+
+def test_sequence_ctc_config_uses_one_model_for_all_battle_digit_sources():
+    config = load_ctc_config(
+        Path(__file__).parents[1] / "configs" / "sequence_ctc.toml"
+    )
+
+    assert config.sources == (
+        "enemy_hp",
+        "ally_hp",
+        "np_gauge",
+        "battle_progress",
+        "enemy_count",
+        "turn_count",
+    )
+    assert (config.input_width, config.input_height) == (192, 32)
