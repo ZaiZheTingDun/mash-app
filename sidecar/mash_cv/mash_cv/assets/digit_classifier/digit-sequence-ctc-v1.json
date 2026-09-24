@@ -1,0 +1,2157 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "digit-sequence-ctc-v1",
+  "createdAt": "2026-09-22T21:28:18.790461+00:00",
+  "labels": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+  ],
+  "blankIndex": 10,
+  "input": {
+    "width": 192,
+    "height": 32,
+    "channels": 1
+  },
+  "preprocessing": {
+    "color": "grayscale",
+    "brightThreshold": 140,
+    "resize": "preserve aspect ratio and center"
+  },
+  "decision": {
+    "minimumSequenceConfidence": 0.65
+  },
+  "sources": [
+    "enemy_hp",
+    "ally_hp",
+    "np_gauge",
+    "battle_progress",
+    "enemy_count",
+    "turn_count"
+  ],
+  "screenshotType": "battle",
+  "manifestSha256": "e4cb55feeff46309caaa9f0e01d605b938a31eb0a7e3d3d1cd1355a711623900",
+  "sequenceManifestSha256": "d7448606e81ee7dd54144d094b62e13001ffdd93fe41c2e8d4e09b86fb0bb0f9",
+  "sampleCounts": {
+    "train": {
+      "total": 950,
+      "bySource": {
+        "ally_hp": 258,
+        "battle_progress": 86,
+        "enemy_count": 86,
+        "enemy_hp": 176,
+        "np_gauge": 258,
+        "turn_count": 86
+      },
+      "byLength": {
+        "1": 186,
+        "2": 206,
+        "3": 125,
+        "4": 16,
+        "5": 376,
+        "6": 36,
+        "7": 5
+      }
+    },
+    "validation": {
+      "total": 124,
+      "bySource": {
+        "ally_hp": 33,
+        "battle_progress": 11,
+        "enemy_count": 11,
+        "enemy_hp": 25,
+        "np_gauge": 33,
+        "turn_count": 11
+      },
+      "byLength": {
+        "1": 23,
+        "2": 29,
+        "3": 14,
+        "4": 1,
+        "5": 53,
+        "6": 4
+      }
+    },
+    "test": {
+      "total": 117,
+      "bySource": {
+        "ally_hp": 33,
+        "battle_progress": 11,
+        "enemy_count": 11,
+        "enemy_hp": 18,
+        "np_gauge": 33,
+        "turn_count": 11
+      },
+      "byLength": {
+        "1": 25,
+        "2": 25,
+        "3": 16,
+        "4": 2,
+        "5": 45,
+        "6": 3,
+        "7": 1
+      }
+    }
+  },
+  "validation": {
+    "samples": 124,
+    "exactSequenceAccuracy": 1.0,
+    "coverage": 0.9758064516129032,
+    "acceptedSequenceAccuracy": 1.0,
+    "byServerAccuracy": {
+      "cn": 1.0,
+      "jp": 1.0
+    },
+    "bySourceAccuracy": {
+      "ally_hp": 1.0,
+      "battle_progress": 1.0,
+      "enemy_count": 1.0,
+      "enemy_hp": 1.0,
+      "np_gauge": 1.0,
+      "turn_count": 1.0
+    },
+    "predictions": [
+      {
+        "id": "battle-enemy_hp-sequence-79de1729a64d4b18",
+        "expected": "251352",
+        "predicted": "251352",
+        "confidence": 0.9426392018795013,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-4e8b2d10a2ad2a66",
+        "expected": "16254",
+        "predicted": "16254",
+        "confidence": 0.8678412914276123,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-aa31dae0f97885a6",
+        "expected": "7454",
+        "predicted": "7454",
+        "confidence": 0.9032361060380936,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-926561b70ca38263",
+        "expected": "20547",
+        "predicted": "20547",
+        "confidence": 0.8582067728042603,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-3f2102d32781427f",
+        "expected": "29",
+        "predicted": "29",
+        "confidence": 0.8214760422706604,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-26a7ec28c1ed3ea7",
+        "expected": "0",
+        "predicted": "0",
+        "confidence": 0.9906356930732727,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-d22b18cd8641436d",
+        "expected": "23",
+        "predicted": "23",
+        "confidence": 0.5864970088005066,
+        "accepted": false
+      },
+      {
+        "id": "battle-battle_progress-sequence-44337d6bf417f3f7",
+        "expected": "11",
+        "predicted": "11",
+        "confidence": 0.9804238379001617,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-1619fe3e924c3774",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9903993010520935,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-2e78bc62b61f8c05",
+        "expected": "2",
+        "predicted": "2",
+        "confidence": 0.7888339757919312,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-14b4219e5c67e37d",
+        "expected": "26251",
+        "predicted": "26251",
+        "confidence": 0.8252303242683411,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-daf51759ad29a095",
+        "expected": "19956",
+        "predicted": "19956",
+        "confidence": 0.951021921634674,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-b108cc2625b162b7",
+        "expected": "25338",
+        "predicted": "25338",
+        "confidence": 0.8919793963432312,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-07cb06e950ee974b",
+        "expected": "15563",
+        "predicted": "15563",
+        "confidence": 0.8934474110603332,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-86fed43701cf0418",
+        "expected": "19926",
+        "predicted": "19926",
+        "confidence": 0.9395994186401367,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-25256a8e57906e68",
+        "expected": "21096",
+        "predicted": "21096",
+        "confidence": 0.9064483284950257,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-04d5dc45250c38fc",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.9158267776171366,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-9889689f46262b8a",
+        "expected": "70",
+        "predicted": "70",
+        "confidence": 0.7446674406528473,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-f6d3c21b2e1f2499",
+        "expected": "120",
+        "predicted": "120",
+        "confidence": 0.9074438611666361,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-f83b90aaad841385",
+        "expected": "23",
+        "predicted": "23",
+        "confidence": 0.9857161641120911,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-2b3fee6d099dcfcd",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.875170111656189,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-1f9c3ec4081665a6",
+        "expected": "2",
+        "predicted": "2",
+        "confidence": 0.7347227334976196,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-3c084dffbe68c399",
+        "expected": "138439",
+        "predicted": "138439",
+        "confidence": 0.9416263898213705,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-ac38d88785616780",
+        "expected": "14563",
+        "predicted": "14563",
+        "confidence": 0.9472303628921509,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-a0813b9d07e31eae",
+        "expected": "18926",
+        "predicted": "18926",
+        "confidence": 0.8944393634796143,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-e77b291030767598",
+        "expected": "19403",
+        "predicted": "19403",
+        "confidence": 0.9106629967689515,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-cf6d732fd3f5e64b",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.8503649632136027,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-4a80700c377739d4",
+        "expected": "90",
+        "predicted": "90",
+        "confidence": 0.9696020185947418,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-dcdf7a8ca3b36f5e",
+        "expected": "300",
+        "predicted": "300",
+        "confidence": 0.8302403092384338,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-888e6ed4caf605e3",
+        "expected": "33",
+        "predicted": "33",
+        "confidence": 0.9810045063495636,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-71884c4db7be9114",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.989051103591919,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-da6c94af0323c157",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.9914088845252991,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-dc641e2535c65d4a",
+        "expected": "42536",
+        "predicted": "42536",
+        "confidence": 0.950012469291687,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-aa2f0fcd874db8fb",
+        "expected": "146675",
+        "predicted": "146675",
+        "confidence": 0.9455097019672394,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-9627eb4429592ef2",
+        "expected": "35766",
+        "predicted": "35766",
+        "confidence": 0.9376821517944336,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-35710a0512196abe",
+        "expected": "12806",
+        "predicted": "12806",
+        "confidence": 0.8684449911117553,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-487a3ca7b44c5096",
+        "expected": "20993",
+        "predicted": "20993",
+        "confidence": 0.8712280750274658,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-892058b1001fb446",
+        "expected": "16926",
+        "predicted": "16926",
+        "confidence": 0.8824844598770142,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-7dd3cfd6c8f19355",
+        "expected": "97",
+        "predicted": "97",
+        "confidence": 0.7121641635894775,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-b98c883281adcf0e",
+        "expected": "64",
+        "predicted": "64",
+        "confidence": 0.8570882081985474,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-6a3c15af0da025f5",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.8692006866137186,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-79892097956a9a76",
+        "expected": "33",
+        "predicted": "33",
+        "confidence": 0.9159156084060669,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-6db0c3ef6896c868",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.9905133247375488,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-35ac5f2e38f36e96",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.997191846370697,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-d6db33d3c36eccab",
+        "expected": "30792",
+        "predicted": "30792",
+        "confidence": 0.9376140594482422,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-fea352403a8c25c8",
+        "expected": "22503",
+        "predicted": "22503",
+        "confidence": 0.9466992139816284,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-9109cbaba7c4f4ab",
+        "expected": "21867",
+        "predicted": "21867",
+        "confidence": 0.9272050499916077,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-55a2dbe9f0f99c23",
+        "expected": "14806",
+        "predicted": "14806",
+        "confidence": 0.8519662737846374,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-35dae400886f0f37",
+        "expected": "22993",
+        "predicted": "22993",
+        "confidence": 0.7986738801002502,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-5f7de84bbbe11853",
+        "expected": "18926",
+        "predicted": "18926",
+        "confidence": 0.8736310005187988,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-c5a1b2154ce85fef",
+        "expected": "57",
+        "predicted": "57",
+        "confidence": 0.9049039483070374,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-0511b812804d3cd3",
+        "expected": "147",
+        "predicted": "147",
+        "confidence": 0.9535479346911112,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-e3c4257dda349647",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.8571683367093405,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-21486216d5810da3",
+        "expected": "13",
+        "predicted": "13",
+        "confidence": 0.9902171492576599,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-e647df4400f3f44a",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.9905133247375488,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-8e76f1753e00f823",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9737981557846069,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-ee7a23c8edfb4358",
+        "expected": "27224",
+        "predicted": "27224",
+        "confidence": 0.9172498226165772,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-d38c07a4ae37a63c",
+        "expected": "20003",
+        "predicted": "20003",
+        "confidence": 0.9553263425827027,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-6bbccf5965016f1e",
+        "expected": "19436",
+        "predicted": "19436",
+        "confidence": 0.915121054649353,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-2211b0f1184f6036",
+        "expected": "14975",
+        "predicted": "14975",
+        "confidence": 0.8520357966423034,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-b048cca3b6511f0b",
+        "expected": "23050",
+        "predicted": "23050",
+        "confidence": 0.8708164095878601,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-639497387522b240",
+        "expected": "18926",
+        "predicted": "18926",
+        "confidence": 0.8249828934669494,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-849fcb60094272df",
+        "expected": "27",
+        "predicted": "27",
+        "confidence": 0.7702036499977112,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-b3f3b68ad06851f5",
+        "expected": "97",
+        "predicted": "97",
+        "confidence": 0.7217759191989899,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-04dc43350831d20b",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.8591325680414835,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-578382045f280bd0",
+        "expected": "13",
+        "predicted": "13",
+        "confidence": 0.9880918562412262,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-1ef0d041f4eab4d3",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.9958581328392029,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-6f97cca23e74b505",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9852350950241089,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-21d23a24f1107e0b",
+        "expected": "28434",
+        "predicted": "28434",
+        "confidence": 0.9304420709609985,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-c7f0f453f3bdf5de",
+        "expected": "68707",
+        "predicted": "68707",
+        "confidence": 0.9040854096412658,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-027d9f1bea6e649c",
+        "expected": "33568",
+        "predicted": "33568",
+        "confidence": 0.8665622472763062,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-5314219a7ccba15f",
+        "expected": "13975",
+        "predicted": "13975",
+        "confidence": 0.8709778785705566,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-302d8fbc276bfb02",
+        "expected": "22050",
+        "predicted": "22050",
+        "confidence": 0.8690821409225464,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-4d0bec0f958002fc",
+        "expected": "17926",
+        "predicted": "17926",
+        "confidence": 0.871513020992279,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-ea938c590e1ba5c7",
+        "expected": "47",
+        "predicted": "47",
+        "confidence": 0.8455712497234344,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-7c2ce0d96b35d24d",
+        "expected": "117",
+        "predicted": "117",
+        "confidence": 0.8926693201065063,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-64a77149e31d9e11",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.8696633378664652,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-97902354d1de8852",
+        "expected": "23",
+        "predicted": "23",
+        "confidence": 0.9854229986667633,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-2e22d1bd504ee0fb",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.9960662722587585,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-a8717e8d9c714d89",
+        "expected": "2",
+        "predicted": "2",
+        "confidence": 0.9946761131286621,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-0218429cbdf2079f",
+        "expected": "29322",
+        "predicted": "29322",
+        "confidence": 0.881987452507019,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-689476168d0fcf5c",
+        "expected": "21451",
+        "predicted": "21451",
+        "confidence": 0.9700137972831726,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-80329453e579e471",
+        "expected": "20752",
+        "predicted": "20752",
+        "confidence": 0.883717393875122,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-ec25419c55d06454",
+        "expected": "14806",
+        "predicted": "14806",
+        "confidence": 0.8917586922645568,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-1710339d52098a12",
+        "expected": "22993",
+        "predicted": "22993",
+        "confidence": 0.8980239868164063,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-7e1a72601040027b",
+        "expected": "18926",
+        "predicted": "18926",
+        "confidence": 0.7923625349998474,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-1dcc3fe34023125e",
+        "expected": "57",
+        "predicted": "57",
+        "confidence": 0.777386873960495,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-6475f5c736e28aeb",
+        "expected": "147",
+        "predicted": "147",
+        "confidence": 0.9443312684694926,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-a89dacd7c75772d4",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.8985773921012878,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-3691cf7e1b26ec92",
+        "expected": "13",
+        "predicted": "13",
+        "confidence": 0.9892595410346985,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-7671dbdaf6e589f7",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.9951960444450378,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-a4c68d09d5097d8f",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9825891256332397,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-251221538eacc815",
+        "expected": "38298",
+        "predicted": "38298",
+        "confidence": 0.9013609409332275,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-5740be2c4b1fb6b2",
+        "expected": "131580",
+        "predicted": "131580",
+        "confidence": 0.9353555142879486,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-0cba6abf7ebdcad4",
+        "expected": "32325",
+        "predicted": "32325",
+        "confidence": 0.9248297452926636,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-52d12bb7450a3b43",
+        "expected": "12406",
+        "predicted": "12406",
+        "confidence": 0.8161127209663391,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-b585d97a280ef6b2",
+        "expected": "21050",
+        "predicted": "21050",
+        "confidence": 0.7660088777542114,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-90289cfc093ff824",
+        "expected": "16926",
+        "predicted": "16926",
+        "confidence": 0.8737310647964478,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-c5d356f3e1a89d68",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.9620817104975382,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-6038ac73177b4951",
+        "expected": "104",
+        "predicted": "104",
+        "confidence": 0.9592068592707316,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-98b3679afa047b7b",
+        "expected": "70",
+        "predicted": "70",
+        "confidence": 0.8118101358413696,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-9bd4e6f4144f61e8",
+        "expected": "33",
+        "predicted": "33",
+        "confidence": 0.9159156084060669,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-0df7c543e0f76ce1",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.9909017086029053,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-c5306f51ae1c4d49",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.997191846370697,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-b5127cdec50844af",
+        "expected": "00838",
+        "predicted": "00838",
+        "confidence": 0.9438900470733642,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-aceadae7d29afee1",
+        "expected": "20581",
+        "predicted": "20581",
+        "confidence": 0.9153325438499451,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-3b48c64e882dc438",
+        "expected": "18926",
+        "predicted": "18926",
+        "confidence": 0.9071677923202515,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-43bfd446b4c7b33f",
+        "expected": "21120",
+        "predicted": "21120",
+        "confidence": 0.7821775436401367,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-41149e9e40a26789",
+        "expected": "78",
+        "predicted": "78",
+        "confidence": 0.9287611544132233,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-1786fe2e45080beb",
+        "expected": "50",
+        "predicted": "50",
+        "confidence": 0.9762510061264038,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-94c7a9e180aacfe3",
+        "expected": "80",
+        "predicted": "80",
+        "confidence": 0.8898082077503204,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-43b63c5d6962f890",
+        "expected": "11",
+        "predicted": "11",
+        "confidence": 0.9674708545207977,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-fe1e87024c68d5cb",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.5067242383956909,
+        "accepted": false
+      },
+      {
+        "id": "battle-turn_count-sequence-6874f651b5b693c8",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9737981557846069,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-eec4ab835e5770e5",
+        "expected": "02645",
+        "predicted": "02645",
+        "confidence": 0.8936993718147278,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-41ee3be6eb289471",
+        "expected": "20581",
+        "predicted": "20581",
+        "confidence": 0.8958860158920288,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-789fdfb7af82dbd9",
+        "expected": "18926",
+        "predicted": "18926",
+        "confidence": 0.8999199509620667,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-b4db96fd67f7d2c0",
+        "expected": "22024",
+        "predicted": "22024",
+        "confidence": 0.901343834400177,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-830e40e06486b9c8",
+        "expected": "78",
+        "predicted": "78",
+        "confidence": 0.9290448725223541,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-691894390b811fe8",
+        "expected": "50",
+        "predicted": "50",
+        "confidence": 0.9762510061264038,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-3f1ecfa31052c370",
+        "expected": "30",
+        "predicted": "30",
+        "confidence": 0.6997442543506622,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-49421dd1014f7571",
+        "expected": "11",
+        "predicted": "11",
+        "confidence": 0.9674708545207977,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-a007f5295070014c",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.5067242383956909,
+        "accepted": false
+      },
+      {
+        "id": "battle-turn_count-sequence-4935b7a75714ca5e",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9737981557846069,
+        "accepted": true
+      }
+    ]
+  },
+  "test": {
+    "samples": 117,
+    "exactSequenceAccuracy": 1.0,
+    "coverage": 0.9743589743589743,
+    "acceptedSequenceAccuracy": 1.0,
+    "byServerAccuracy": {
+      "cn": 1.0,
+      "jp": 1.0
+    },
+    "bySourceAccuracy": {
+      "ally_hp": 1.0,
+      "battle_progress": 1.0,
+      "enemy_count": 1.0,
+      "enemy_hp": 1.0,
+      "np_gauge": 1.0,
+      "turn_count": 1.0
+    },
+    "predictions": [
+      {
+        "id": "battle-enemy_hp-sequence-edaa69ff3749a05a",
+        "expected": "29781",
+        "predicted": "29781",
+        "confidence": 0.897013533115387,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-6b7874627d14451b",
+        "expected": "11960",
+        "predicted": "11960",
+        "confidence": 0.9494906067848206,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-671c4a58079c51e8",
+        "expected": "15084",
+        "predicted": "15084",
+        "confidence": 0.9563705086708069,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-11e468b4f18ec113",
+        "expected": "22292",
+        "predicted": "22292",
+        "confidence": 0.8882575273513794,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-65be3fbb319e0e36",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.9794754981994629,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-e4d62eecbf5161a6",
+        "expected": "105",
+        "predicted": "105",
+        "confidence": 0.9246827165285746,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-4f8c92c8570883c3",
+        "expected": "20",
+        "predicted": "20",
+        "confidence": 0.8787976503372192,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-0b42c8145b04ab9f",
+        "expected": "33",
+        "predicted": "33",
+        "confidence": 0.9866710305213928,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-54e114c947a9634f",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9834121465682983,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-eae3b4b13cb02cdb",
+        "expected": "6",
+        "predicted": "6",
+        "confidence": 0.9148347973823547,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-3fa97c3174e1f561",
+        "expected": "29781",
+        "predicted": "29781",
+        "confidence": 0.897013533115387,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-5c4b6eb4f53b878a",
+        "expected": "11960",
+        "predicted": "11960",
+        "confidence": 0.9523624420166016,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-8257acd5e93986aa",
+        "expected": "15084",
+        "predicted": "15084",
+        "confidence": 0.9588882327079773,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-77d3a12bac62d5bf",
+        "expected": "22292",
+        "predicted": "22292",
+        "confidence": 0.9274884343147278,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-1a16b19d3697939f",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.9790204167366028,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-1cab0ef900aa47f8",
+        "expected": "155",
+        "predicted": "155",
+        "confidence": 0.9618263641993204,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-567220189713a93f",
+        "expected": "50",
+        "predicted": "50",
+        "confidence": 0.8463427424430847,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-7dd8266e5d144b89",
+        "expected": "33",
+        "predicted": "33",
+        "confidence": 0.9866710305213928,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-77c863ef1409926d",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9834121465682983,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-652ab96b01ed774c",
+        "expected": "6",
+        "predicted": "6",
+        "confidence": 0.9148347973823547,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-f7ff3f9f32996ff2",
+        "expected": "11728",
+        "predicted": "11728",
+        "confidence": 0.844450056552887,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-89207f6e6a568ed5",
+        "expected": "14031",
+        "predicted": "14031",
+        "confidence": 0.9758287906646729,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-cc2c09ac25d515e6",
+        "expected": "11728",
+        "predicted": "11728",
+        "confidence": 0.9212690949440002,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-794e30e0575036ba",
+        "expected": "15563",
+        "predicted": "15563",
+        "confidence": 0.8957344651222229,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-73260d2cf4ba08da",
+        "expected": "19926",
+        "predicted": "19926",
+        "confidence": 0.943112826347351,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-30395b18e1fab96e",
+        "expected": "24493",
+        "predicted": "24493",
+        "confidence": 0.924985933303833,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-3c7162e6d98000ab",
+        "expected": "50",
+        "predicted": "50",
+        "confidence": 0.9822787940502167,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-d95cdfa62cae41b0",
+        "expected": "130",
+        "predicted": "130",
+        "confidence": 0.791666567325592,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-446d5bbf6c97857d",
+        "expected": "50",
+        "predicted": "50",
+        "confidence": 0.8790279030799866,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-33b4f9fa2b8f87d5",
+        "expected": "13",
+        "predicted": "13",
+        "confidence": 0.9812847971916199,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-529d3fa7ec5d2d36",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.8828509449958801,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-eae227995772e201",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9928170442581177,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-e318dd2775036cd9",
+        "expected": "137324",
+        "predicted": "137324",
+        "confidence": 0.8914472758769989,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-8a3b4641540b69d7",
+        "expected": "13443",
+        "predicted": "13443",
+        "confidence": 0.9154402136802673,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-8fc06f2349da6aea",
+        "expected": "19926",
+        "predicted": "19926",
+        "confidence": 0.863394272327423,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-4bae79f9fae7e6d3",
+        "expected": "23422",
+        "predicted": "23422",
+        "confidence": 0.891653323173523,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-0bc6b024322d5802",
+        "expected": "73",
+        "predicted": "73",
+        "confidence": 0.8353863656520844,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-bef7ab49c4ecfd91",
+        "expected": "20",
+        "predicted": "20",
+        "confidence": 0.8726443350315094,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-ba9be3b75c57559b",
+        "expected": "122",
+        "predicted": "122",
+        "confidence": 0.8131615122159322,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-cc727c4010dde479",
+        "expected": "11",
+        "predicted": "11",
+        "confidence": 0.979295551776886,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-5cbc90399e0f1030",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9893039464950562,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-5877de5d9993a1e0",
+        "expected": "2",
+        "predicted": "2",
+        "confidence": 0.7905820608139038,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-590b2c8b58a62775",
+        "expected": "3600806",
+        "predicted": "3600806",
+        "confidence": 0.9380714637892587,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-702db9a18e955219",
+        "expected": "16254",
+        "predicted": "16254",
+        "confidence": 0.8181485652923584,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-1213b3d2b76ca10c",
+        "expected": "7454",
+        "predicted": "7454",
+        "confidence": 0.9067567735910416,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-4e58d116b8b421d0",
+        "expected": "21047",
+        "predicted": "21047",
+        "confidence": 0.9004015803337098,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-c9298dbe0aacc79b",
+        "expected": "22",
+        "predicted": "22",
+        "confidence": 0.9353642761707306,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-6326c6007559ea95",
+        "expected": "0",
+        "predicted": "0",
+        "confidence": 0.9790149331092834,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-2282cfd5889c88d5",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.8380211790402731,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-91a8abed9e6d1ed6",
+        "expected": "11",
+        "predicted": "11",
+        "confidence": 0.9819934964179993,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-d0696a6bc66a69a5",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9850778579711914,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-d41fe1ead0b91095",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9960726499557495,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-a34b85f9e15f9329",
+        "expected": "237071",
+        "predicted": "237071",
+        "confidence": 0.8732477029164633,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-460a6f8a81299752",
+        "expected": "9323",
+        "predicted": "9323",
+        "confidence": 0.9105716496706009,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-50e9ea42576cfe0f",
+        "expected": "17525",
+        "predicted": "17525",
+        "confidence": 0.8983514785766602,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-7690831c564378d2",
+        "expected": "18353",
+        "predicted": "18353",
+        "confidence": 0.9052484631538391,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-6d0c3f5a962a65f6",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.9143054286638895,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-e88b56ef23a8a4a1",
+        "expected": "82",
+        "predicted": "82",
+        "confidence": 0.7689185440540314,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-2ab7935a98f83e30",
+        "expected": "247",
+        "predicted": "247",
+        "confidence": 0.9203622937202454,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-168e2bd634c3311c",
+        "expected": "22",
+        "predicted": "22",
+        "confidence": 0.9870287775993347,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-2e447116b552dc0e",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9889059066772461,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-0faf588f24e1c20b",
+        "expected": "5",
+        "predicted": "5",
+        "confidence": 0.7327646613121033,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-6ba87f6e8480a87c",
+        "expected": "35078",
+        "predicted": "35078",
+        "confidence": 0.9110029458999633,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-3898134243afd78e",
+        "expected": "24326",
+        "predicted": "24326",
+        "confidence": 0.8966244101524353,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-160ac023d01f52d1",
+        "expected": "23724",
+        "predicted": "23724",
+        "confidence": 0.9233757019042969,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-c6e8079a74b7d3f4",
+        "expected": "15563",
+        "predicted": "15563",
+        "confidence": 0.8993042826652526,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-3d5e5d025818e87e",
+        "expected": "19926",
+        "predicted": "19926",
+        "confidence": 0.9395075798034668,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-672191b7af4823ba",
+        "expected": "21596",
+        "predicted": "21596",
+        "confidence": 0.8883824825286866,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-8db2b66c38014946",
+        "expected": "50",
+        "predicted": "50",
+        "confidence": 0.9832638800144196,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-15fddaff271fb6cf",
+        "expected": "130",
+        "predicted": "130",
+        "confidence": 0.745677133401235,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-dffc6472258def5b",
+        "expected": "50",
+        "predicted": "50",
+        "confidence": 0.9010257422924042,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-73bb2d30f5e65d03",
+        "expected": "13",
+        "predicted": "13",
+        "confidence": 0.9854152798652649,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-664c9345f3b4aef7",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.8776819705963135,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-50e6b71fd5c701c5",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9950195550918579,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-cac42249b49c930d",
+        "expected": "30792",
+        "predicted": "30792",
+        "confidence": 0.9376140594482422,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-601a14a5c18377d7",
+        "expected": "22503",
+        "predicted": "22503",
+        "confidence": 0.9466992139816284,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-ac2f9e0c1c04f323",
+        "expected": "21867",
+        "predicted": "21867",
+        "confidence": 0.9272050499916077,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-2e0000de8d45740c",
+        "expected": "13806",
+        "predicted": "13806",
+        "confidence": 0.8796350359916687,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-0aa7b5fcf7c3f0e8",
+        "expected": "21993",
+        "predicted": "21993",
+        "confidence": 0.8697173714637756,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-5c30668dee6d136e",
+        "expected": "17926",
+        "predicted": "17926",
+        "confidence": 0.8972638726234436,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-f037a0a742c82a1c",
+        "expected": "57",
+        "predicted": "57",
+        "confidence": 0.9049039483070374,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-5bd5b3a0ac493aeb",
+        "expected": "300",
+        "predicted": "300",
+        "confidence": 0.8484586874643961,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-06e10a8da29c8cc5",
+        "expected": "100",
+        "predicted": "100",
+        "confidence": 0.8759904106458029,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-b811695bce78077e",
+        "expected": "13",
+        "predicted": "13",
+        "confidence": 0.9902171492576599,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-b28553dbb7a1388d",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.9905133247375488,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-a84b5b5c45cde176",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9737981557846069,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-71c7475db4601655",
+        "expected": "86465",
+        "predicted": "86465",
+        "confidence": 0.9151009440422058,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-0ff9ce569285cac9",
+        "expected": "105630",
+        "predicted": "105630",
+        "confidence": 0.8513491551081339,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-b3087c3e7417b088",
+        "expected": "14806",
+        "predicted": "14806",
+        "confidence": 0.8510162115097046,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-b1432a8f5e217f49",
+        "expected": "13022",
+        "predicted": "13022",
+        "confidence": 0.8704920053482056,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-0d35b9132cfb9473",
+        "expected": "18926",
+        "predicted": "18926",
+        "confidence": 0.8778190374374389,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-fd1ec9a822db3c0b",
+        "expected": "30",
+        "predicted": "30",
+        "confidence": 0.9826555550098419,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-a9ff6c18da488b1e",
+        "expected": "45",
+        "predicted": "45",
+        "confidence": 0.976781040430069,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-77c91c160cd5f102",
+        "expected": "75",
+        "predicted": "75",
+        "confidence": 0.8477152585983276,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-1c98c3bbd24a1482",
+        "expected": "11",
+        "predicted": "11",
+        "confidence": 0.9674708545207977,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-4ec66a9a62d7c705",
+        "expected": "2",
+        "predicted": "2",
+        "confidence": 0.9899734258651733,
+        "accepted": true
+      },
+      {
+        "id": "battle-turn_count-sequence-25f59b8898dc0236",
+        "expected": "3",
+        "predicted": "3",
+        "confidence": 0.9808517694473267,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-68ada39a1bdb3ba3",
+        "expected": "00838",
+        "predicted": "00838",
+        "confidence": 0.9433083653450012,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-3287659e5e3ded76",
+        "expected": "19581",
+        "predicted": "19581",
+        "confidence": 0.8984407901763916,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-b87360c1cf817f54",
+        "expected": "12081",
+        "predicted": "12081",
+        "confidence": 0.8904369592666626,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-49efa89e8b73ba04",
+        "expected": "20120",
+        "predicted": "20120",
+        "confidence": 0.9186750411987304,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-205c3bc59c6b4307",
+        "expected": "108",
+        "predicted": "108",
+        "confidence": 0.9228169520696005,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-8fc7aee4426191b5",
+        "expected": "0",
+        "predicted": "0",
+        "confidence": 0.9936700463294983,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-d0669fe7ef3f832d",
+        "expected": "176",
+        "predicted": "176",
+        "confidence": 0.6824141144752502,
+        "accepted": true
+      },
+      {
+        "id": "battle-battle_progress-sequence-86c8f84da5f68416",
+        "expected": "11",
+        "predicted": "11",
+        "confidence": 0.9674708545207977,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-d613fea9e0bc9c81",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.5067242383956909,
+        "accepted": false
+      },
+      {
+        "id": "battle-turn_count-sequence-8dd78690ee915319",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9737981557846069,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_hp-sequence-302485b4e2af0ba9",
+        "expected": "02645",
+        "predicted": "02645",
+        "confidence": 0.8892638087272644,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-6ce3fa3489b540ad",
+        "expected": "19581",
+        "predicted": "19581",
+        "confidence": 0.8852454423904419,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-81d29ae79e449d14",
+        "expected": "12081",
+        "predicted": "12081",
+        "confidence": 0.8904538869857788,
+        "accepted": true
+      },
+      {
+        "id": "battle-ally_hp-sequence-28b1d05450518fec",
+        "expected": "21024",
+        "predicted": "21024",
+        "confidence": 0.9101190090179443,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-ead8475f487e028e",
+        "expected": "108",
+        "predicted": "108",
+        "confidence": 0.92416379849116,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-1bd09da2b2f08f07",
+        "expected": "0",
+        "predicted": "0",
+        "confidence": 0.9936700463294983,
+        "accepted": true
+      },
+      {
+        "id": "battle-np_gauge-sequence-ec83d043450a656a",
+        "expected": "126",
+        "predicted": "126",
+        "confidence": 0.6120365063349406,
+        "accepted": false
+      },
+      {
+        "id": "battle-battle_progress-sequence-33e864982fc54e7e",
+        "expected": "11",
+        "predicted": "11",
+        "confidence": 0.9674708545207977,
+        "accepted": true
+      },
+      {
+        "id": "battle-enemy_count-sequence-5d6921d12ac9204b",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.5067242383956909,
+        "accepted": false
+      },
+      {
+        "id": "battle-turn_count-sequence-2e5d14d3fc38d2ff",
+        "expected": "1",
+        "predicted": "1",
+        "confidence": 0.9737981557846069,
+        "accepted": true
+      }
+    ]
+  },
+  "onnxVerification": {
+    "batchSize": 2,
+    "maxAbsDifference": 4.991888999938965e-06,
+    "decodedMismatches": 0
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "validationExactSequenceAccuracy": 0.06451612903225806
+    },
+    {
+      "epoch": 2,
+      "validationExactSequenceAccuracy": 0.0
+    },
+    {
+      "epoch": 3,
+      "validationExactSequenceAccuracy": 0.0
+    },
+    {
+      "epoch": 4,
+      "validationExactSequenceAccuracy": 0.0
+    },
+    {
+      "epoch": 5,
+      "validationExactSequenceAccuracy": 0.25
+    },
+    {
+      "epoch": 6,
+      "validationExactSequenceAccuracy": 0.3709677419354839
+    },
+    {
+      "epoch": 7,
+      "validationExactSequenceAccuracy": 0.3790322580645161
+    },
+    {
+      "epoch": 8,
+      "validationExactSequenceAccuracy": 0.4435483870967742
+    },
+    {
+      "epoch": 9,
+      "validationExactSequenceAccuracy": 0.5645161290322581
+    },
+    {
+      "epoch": 10,
+      "validationExactSequenceAccuracy": 0.7661290322580645
+    },
+    {
+      "epoch": 11,
+      "validationExactSequenceAccuracy": 0.9919354838709677
+    },
+    {
+      "epoch": 12,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 13,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 14,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 15,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 16,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 17,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 18,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 19,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 20,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 21,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 22,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 23,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 24,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 25,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 26,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 27,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 28,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 29,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 30,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 31,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 32,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 33,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 34,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 35,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 36,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 37,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 38,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 39,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 40,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 41,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 42,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 43,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 44,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 45,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 46,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 47,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 48,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 49,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 50,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 51,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 52,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 53,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 54,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 55,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 56,
+      "validationExactSequenceAccuracy": 0.9758064516129032
+    },
+    {
+      "epoch": 57,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 58,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 59,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 60,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 61,
+      "validationExactSequenceAccuracy": 0.9919354838709677
+    },
+    {
+      "epoch": 62,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 63,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 64,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 65,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 66,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 67,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 68,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 69,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 70,
+      "validationExactSequenceAccuracy": 0.9919354838709677
+    },
+    {
+      "epoch": 71,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 72,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 73,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 74,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 75,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 76,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 77,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 78,
+      "validationExactSequenceAccuracy": 1.0
+    },
+    {
+      "epoch": 79,
+      "validationExactSequenceAccuracy": 0.9919354838709677
+    },
+    {
+      "epoch": 80,
+      "validationExactSequenceAccuracy": 1.0
+    }
+  ]
+}

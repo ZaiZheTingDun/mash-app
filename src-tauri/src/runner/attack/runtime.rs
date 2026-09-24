@@ -6,28 +6,6 @@
 use super::*;
 
 impl Runner {
-    pub(crate) fn capture_battle_before_attack_screenshot(&mut self) -> Result<PathBuf, String> {
-        let dir = battle_before_attack_screenshot_dir_in_root(
-            &crate::app_data_dir(&self.app_handle),
-            self.server,
-        );
-        std::fs::create_dir_all(&dir)
-            .map_err(|err| format!("创建点击攻击前截图目录失败: {err}"))?;
-        let path = dir.join(battle_before_attack_screenshot_filename(
-            std::time::SystemTime::now(),
-            self.server,
-            self.completed_mission_runs,
-            self.battle.current_scene_index,
-            self.battle.current_turn_index,
-        ));
-        let png = self
-            .sidecar()
-            .get_frame_png(0.0)
-            .map_err(|err| format!("获取点击攻击前视频帧失败: {err}"))?;
-        std::fs::write(&path, png).map_err(|err| format!("写入点击攻击前截图失败: {err}"))?;
-        Ok(path)
-    }
-
     fn current_attack_is_critical(&self) -> bool {
         !self.advanced_mode
             && normal_turn_for_current_scene(
@@ -617,6 +595,7 @@ impl Runner {
                             return None;
                         }
                     };
+                    self.emit_np_recognition_diagnostics("Attack", &nps);
                     apply_np_detection_mode(&mut nps, np_detection_mode);
 
                     if np_card_read_complete(&nps) {

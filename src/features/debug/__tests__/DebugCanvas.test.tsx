@@ -17,6 +17,7 @@ function makeState(overrides: Partial<DebugCanvasState> = {}): DebugCanvasState 
     enhancementServantResult: null,
     supportResult: null,
     coordinates: null,
+    showDigitRecognitionRegions: false,
     showCoordOverlay: false,
     visibleCoordGroups: [],
     ...overrides,
@@ -126,7 +127,7 @@ describe("DebugCanvas", () => {
     expect(container.querySelectorAll(".debug-coord-dot").length).toBe(0);
   });
 
-  it("renders NP gauge digit slot overlays inside the gauge region", () => {
+  it("renders NP gauge and glow overlays from recognition results", () => {
     const { container } = renderWithTheme(
       <DebugCanvas
         {...makeState({
@@ -157,13 +158,75 @@ describe("DebugCanvas", () => {
     );
 
     expect(container.querySelectorAll(".debug-overlay-np-gauge").length).toBe(1);
-    expect(container.querySelectorAll(".debug-overlay-np-digit-slot").length).toBe(3);
     expect(container.querySelectorAll(".debug-overlay-np-glow-slot.ready").length).toBe(1);
     expect(
       container.textContent?.includes(
         "NP1 · 卡 ready · 条 ready · 端帽 0.800 · gauge 3位"
       )
     ).toBe(true);
+  });
+
+  it("toggles configured battle digit and NP sequence regions", () => {
+    const { container, rerender } = renderWithTheme(
+      <DebugCanvas
+        {...makeState({
+          imageSrc: "tauri://localhost/fake.png?t=digits",
+          showDigitRecognitionRegions: false,
+        })}
+      />
+    );
+
+    expect(container.querySelectorAll(".debug-overlay-digit-source")).toHaveLength(0);
+
+    rerender(
+      <DebugCanvas
+        {...makeState({
+          imageSrc: "tauri://localhost/fake.png?t=digits",
+          showDigitRecognitionRegions: true,
+          npGaugeSlots: [
+            {
+              slot: 0,
+              cardRegion: { x: 0.241, y: 0.097, w: 0.187, h: 0.396 },
+              ready: false,
+              edgeFrac: 0,
+              stdBgr: 0,
+              gaugeDigitModelLabels: ["1", "0", "0"],
+              turnCountModelLabel: "4",
+            },
+            {
+              slot: 1,
+              cardRegion: { x: 0.41, y: 0.097, w: 0.187, h: 0.396 },
+              ready: false,
+              edgeFrac: 0,
+              stdBgr: 0,
+              gaugeDigitModelLabels: ["未识别", "6", "0"],
+              turnCountModelLabel: "4",
+            },
+            {
+              slot: 2,
+              cardRegion: { x: 0.603, y: 0.097, w: 0.187, h: 0.396 },
+              ready: false,
+              edgeFrac: 0,
+              stdBgr: 0,
+              gaugeDigitModelLabels: ["1", "9", "0"],
+              turnCountModelLabel: "4",
+            },
+          ],
+        })}
+      />
+    );
+
+    expect(container.querySelectorAll(".debug-overlay-turn-count")).toHaveLength(1);
+    expect(container.querySelectorAll(".debug-overlay-np-digit-source")).toHaveLength(9);
+    expect(container.querySelectorAll(".debug-overlay-other-digit-source")).toHaveLength(8);
+    expect(container.querySelectorAll(".debug-overlay-sequence-source")).toHaveLength(3);
+    expect(container.textContent).toContain("回合数 4");
+    expect(container.textContent).toContain("CTC 己方生命值1");
+    expect(container.textContent).toContain("CTC 战斗场次");
+    expect(container.textContent).toContain("CTC NP2");
+    expect(container.textContent).toContain("NP1 百位 1");
+    expect(container.textContent).toContain("NP2 十位 6");
+    expect(container.textContent).toContain("NP3 个位 0");
   });
 
   it("renders command-card support badge overlays and labels", () => {

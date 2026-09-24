@@ -16,7 +16,11 @@ impl Runner {
             let mut samples: Vec<Vec<NoblePhantasmMatch>> = Vec::new();
 
             loop {
-                let sample = match self.sidecar().find_noble_phantasms(None, None) {
+                let sample = match if use_digit_readiness {
+                    self.sidecar().find_battle_noble_phantasms(None, None)
+                } else {
+                    self.sidecar().find_noble_phantasms(None, None)
+                } {
                     Ok(n) => n,
                     Err(err) => {
                         self.fail_action(screen, "读取宝具数字", err);
@@ -40,6 +44,7 @@ impl Runner {
             } else {
                 aggregate_np_gauge_samples(&samples)
             };
+            self.emit_np_recognition_diagnostics(screen, &nps);
             let read_complete = if use_digit_readiness {
                 np_gauge_digit_read_complete(&nps)
             } else {
@@ -257,24 +262,7 @@ impl Runner {
             } else {
                 self.emit(screen, &msg);
             }
-            let simulate_missed_tap = screen == "Attack"
-                && selected_count == 2
-                && match consume_simulate_stuck_attack_selection(&self.app_handle) {
-                    Ok(enabled) => enabled,
-                    Err(err) => {
-                        self.emit_warn(
-                            screen,
-                            &format!("读取选卡卡住测试开关失败，本次正常选卡: {err}"),
-                        );
-                        false
-                    }
-                };
-            if simulate_missed_tap {
-                self.emit_warn(
-                    screen,
-                    "调试测试：已故意跳过第 3 张卡的点击，等待触发选卡恢复",
-                );
-            } else if !self.tap_at(screen, point) {
+            if !self.tap_pick_with_stuck_selection_test(screen, point, selected_count) {
                 return;
             }
             thread::sleep(ACTION_DELAY);
@@ -332,6 +320,7 @@ impl Runner {
                         return None;
                     }
                 };
+                self.emit_np_recognition_diagnostics("Attack", &nps);
                 apply_np_detection_mode(&mut nps, NoblePhantasmDetectionMode::Card);
                 if np_card_read_complete(&nps) {
                     return Some(nps);

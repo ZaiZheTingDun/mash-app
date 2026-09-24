@@ -103,6 +103,8 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "get_debug_settings") {
         return {
+          imageRecognitionDebugMode: "disabled",
+          sequenceRecognitionDebugMode: "disabled",
           autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
@@ -225,6 +227,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_auto_capture_battle_result_loot") {
         return {
+          imageRecognitionDebugMode: "disabled",
           autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: Boolean(argValue(args)),
           autoCaptureUnknownScreenTimeout: false,
@@ -235,6 +238,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_auto_capture_unknown_screen_timeout") {
         return {
+          imageRecognitionDebugMode: "disabled",
           autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: Boolean(argValue(args)),
@@ -245,6 +249,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_auto_capture_skill_use_probe") {
         return {
+          imageRecognitionDebugMode: "disabled",
           autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
@@ -255,6 +260,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_auto_capture_unrecognized_critical_chance") {
         return {
+          imageRecognitionDebugMode: "disabled",
           autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
@@ -265,6 +271,7 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_simulate_stuck_attack_selection") {
         return {
+          imageRecognitionDebugMode: "disabled",
           autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
@@ -275,7 +282,32 @@ describe("SettingsDialog", () => {
       }
       if (cmd === "set_auto_capture_battle_before_attack") {
         return {
+          imageRecognitionDebugMode: "disabled",
           autoCaptureBattleBeforeAttack: Boolean(argValue(args)),
+          autoCaptureBattleResultLoot: false,
+          autoCaptureUnknownScreenTimeout: false,
+          autoCaptureSkillUseProbe: false,
+          autoCaptureUnrecognizedCriticalChance: false,
+          simulateStuckAttackSelection: false,
+        };
+      }
+      if (cmd === "set_image_recognition_debug_mode") {
+        return {
+          imageRecognitionDebugMode: argValue(args),
+          sequenceRecognitionDebugMode: "disabled",
+          autoCaptureBattleBeforeAttack: false,
+          autoCaptureBattleResultLoot: false,
+          autoCaptureUnknownScreenTimeout: false,
+          autoCaptureSkillUseProbe: false,
+          autoCaptureUnrecognizedCriticalChance: false,
+          simulateStuckAttackSelection: false,
+        };
+      }
+      if (cmd === "set_sequence_recognition_debug_mode") {
+        return {
+          imageRecognitionDebugMode: "disabled",
+          sequenceRecognitionDebugMode: argValue(args),
+          autoCaptureBattleBeforeAttack: false,
           autoCaptureBattleResultLoot: false,
           autoCaptureUnknownScreenTimeout: false,
           autoCaptureSkillUseProbe: false,
@@ -422,12 +454,32 @@ describe("SettingsDialog", () => {
     renderWithTheme(<SettingsHarness initialSection="debug" />);
 
     expect(await screen.findByText("自动截图战利品页面")).toBeInTheDocument();
+    expect(screen.getByText("图像识别调试")).toBeInTheDocument();
+    expect(screen.getByText("完整数字识别调试")).toBeInTheDocument();
     expect(screen.getByText("点击攻击前自动截图")).toBeInTheDocument();
     expect(screen.getByText("无法识别画面超时时截图")).toBeInTheDocument();
     expect(screen.getByText("保存技能确认 probe 截图")).toBeInTheDocument();
     expect(screen.getByText("暴击率无法识别时截图")).toBeInTheDocument();
     expect(screen.getByText("测试选卡卡住恢复")).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("get_debug_settings");
+
+    await user.click(screen.getByRole("combobox", { name: "图像识别调试" }));
+    await user.click(await screen.findByRole("option", { name: "影子模式" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_image_recognition_debug_mode", {
+        value: "shadow",
+      });
+    });
+
+    await user.click(screen.getByRole("combobox", { name: "完整数字识别调试" }));
+    await user.click(await screen.findByRole("option", { name: "影子模式" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_sequence_recognition_debug_mode", {
+        value: "shadow",
+      });
+    });
 
     await user.click(screen.getByRole("switch", { name: "点击攻击前自动截图" }));
 

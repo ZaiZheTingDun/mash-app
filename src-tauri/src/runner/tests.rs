@@ -141,6 +141,14 @@ fn np_slot(slot: u32, ready: bool) -> NoblePhantasmMatch {
         ready_source: None,
         gauge_digit_count: None,
         gauge_hundreds_visible: None,
+        gauge_digit_model_labels: None,
+        turn_count_model_label: None,
+        gauge_sequence_value: None,
+        gauge_sequence_confidence: None,
+        gauge_sequence_accepted: None,
+        turn_sequence_value: None,
+        turn_sequence_confidence: None,
+        turn_sequence_accepted: None,
         gauge_region: None,
         np_glow_region: None,
         np_glow_score: None,
@@ -168,6 +176,62 @@ fn np_slot_with_gauge_digits(slot: u32, hundreds_visible: Option<bool>) -> Noble
         gauge_hundreds_visible: hundreds_visible,
         ..np_slot(slot, false)
     }
+}
+
+#[test]
+fn shadow_battle_model_digit_log_orders_turn_and_all_gauge_positions() {
+    let mut third = np_slot(2, false);
+    third.gauge_digit_model_labels = Some(vec!["未识别".into(), "9".into(), "0".into()]);
+    third.turn_count_model_label = Some("4".into());
+    let mut first = np_slot(0, false);
+    first.gauge_digit_model_labels = Some(vec!["1".into(), "0".into(), "0".into()]);
+    first.turn_count_model_label = Some("4".into());
+    let mut second = np_slot(1, false);
+    second.gauge_digit_model_labels = Some(vec!["未识别".into(), "6".into(), "0".into()]);
+    second.turn_count_model_label = Some("4".into());
+
+    assert_eq!(
+        diagnostics::format_shadow_battle_model_digits(&[third, first, second]).as_deref(),
+        Some(
+            "影子模式数字验证：回合=4；宝具1[百=1 十=0 个=0]；宝具2[百=未识别 十=6 个=0]；宝具3[百=未识别 十=9 个=0]"
+        )
+    );
+}
+
+#[test]
+fn np_recognition_diagnostics_joins_digit_and_sequence_results() {
+    let mut nps = [np_slot(0, false), np_slot(1, false), np_slot(2, false)];
+    assert_eq!(diagnostics::format_shadow_battle_model_digits(&nps), None);
+
+    nps[0].turn_count_model_label = Some("2".into());
+    nps[0].turn_sequence_value = Some("2".into());
+    for (np, (value, confidence, accepted)) in nps.iter_mut().zip([
+        ("30", 0.945, true),
+        ("143", 0.886, true),
+        ("0", 0.580, false),
+    ]) {
+        np.gauge_digit_model_labels = Some(vec!["未识别".into(), "3".into(), "0".into()]);
+        np.gauge_sequence_value = Some(value.into());
+        np.gauge_sequence_confidence = Some(confidence);
+        np.gauge_sequence_accepted = Some(accepted);
+    }
+
+    assert_eq!(
+        diagnostics::format_shadow_battle_model_digits(&nps).as_deref(),
+        Some(
+            "影子模式数字验证：回合=2；宝具1[百=未识别 十=3 个=0]；宝具2[百=未识别 十=3 个=0]；宝具3[百=未识别 十=3 个=0]；CNN-CTC 数字验证：回合=2；宝具1=30(0.945)；宝具2=143(0.886)；宝具3=0(0.580 拒绝)"
+        )
+    );
+}
+
+#[test]
+fn stuck_selection_test_only_consumes_at_third_attack_pick() {
+    use fault_injection::should_consume_stuck_selection_test as should_consume;
+
+    assert!(!should_consume("Attack", 0));
+    assert!(!should_consume("Attack", 1));
+    assert!(should_consume("Attack", 2));
+    assert!(!should_consume("Battle", 2));
 }
 
 fn bond_level_read(level: Option<u32>) -> BondLevelUpReadResult {
@@ -362,15 +426,15 @@ fn battle_before_attack_capture_path_records_context_as_png() {
     let timestamp = std::time::UNIX_EPOCH + std::time::Duration::from_millis(1_781_234_567_890);
 
     assert_eq!(
-        battle_before_attack_screenshot_dir_in_root(&root, Server::Cn),
+        diagnostics::battle_before_attack_screenshot_dir_in_root(&root, Server::Cn),
         root.join("debug").join("battle-before-attack").join("cn")
     );
     assert_eq!(
-        battle_before_attack_screenshot_dir_in_root(&root, Server::Jp),
+        diagnostics::battle_before_attack_screenshot_dir_in_root(&root, Server::Jp),
         root.join("debug").join("battle-before-attack").join("jp")
     );
     assert_eq!(
-        battle_before_attack_screenshot_filename(timestamp, Server::Cn, 2, 1, 3),
+        diagnostics::battle_before_attack_screenshot_filename(timestamp, Server::Cn, 2, 1, 3),
         "battle-before-attack-cn-1781234567890-run0003-scene02-turn04.png"
     );
 }

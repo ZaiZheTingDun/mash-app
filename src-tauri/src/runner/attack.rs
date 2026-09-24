@@ -4,9 +4,7 @@
 //! selection, and non-Grand advanced startup conditions.
 
 use super::*;
-use crate::commands::settings::{
-    consume_simulate_stuck_attack_selection, NoblePhantasmDetectionMode,
-};
+use crate::commands::settings::NoblePhantasmDetectionMode;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
@@ -205,32 +203,6 @@ pub(crate) fn unrecognized_critical_chance_screenshot_filename(
     format!(
         "critical-chance-{millis:013}-run{:04}.jpg",
         completed_mission_runs + 1,
-    )
-}
-
-pub(crate) fn battle_before_attack_screenshot_dir_in_root(root: &Path, server: Server) -> PathBuf {
-    root.join("debug")
-        .join("battle-before-attack")
-        .join(server.dir_token())
-}
-
-pub(crate) fn battle_before_attack_screenshot_filename(
-    timestamp: std::time::SystemTime,
-    server: Server,
-    completed_mission_runs: u32,
-    scene_index: usize,
-    turn_index: usize,
-) -> String {
-    let millis = timestamp
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis())
-        .unwrap_or(0);
-    format!(
-        "battle-before-attack-{}-{millis:013}-run{:04}-scene{:02}-turn{:02}.png",
-        server.dir_token(),
-        completed_mission_runs + 1,
-        scene_index + 1,
-        turn_index + 1,
     )
 }
 

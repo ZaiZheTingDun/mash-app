@@ -30,7 +30,7 @@ pub fn debug_read_noble_phantasm_gauges_live(
             let client = guard
                 .as_mut()
                 .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-            client.find_noble_phantasms(None, None)?
+            client.find_noble_phantasms_with_digit_debug(None, None, true)?
         };
 
         samples.push(sample);
@@ -72,7 +72,7 @@ fn read_noble_phantasm_gauges(
     let client = guard
         .as_mut()
         .ok_or_else(|| "debug sidecar not initialized".to_string())?;
-    client.find_noble_phantasms(Some(&image_path), None)
+    client.find_noble_phantasms_with_digit_debug(Some(&image_path), None, true)
 }
 
 /// Debug the bottom NP-gauge percentage detector against the most recent

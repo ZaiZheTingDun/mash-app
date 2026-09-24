@@ -82,6 +82,79 @@ describe("DebugPage", () => {
     });
   }
 
+  it("offers a toggle for digit recognition source regions", () => {
+    renderDebugPage();
+
+    expect(
+      screen.getByRole("checkbox", { name: "标记数字取值位置" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "识别" })).toBeDisabled();
+  });
+
+  it("recognizes configured digit regions only after the manual button is clicked", async () => {
+    const user = userEvent.setup();
+    mockDebugPageBootstrap((cmd) => {
+      if (cmd === "debug_capture") {
+        return {
+          imagePath: "/tmp/debug.png",
+          screen: "Battle",
+          score: 0.95,
+          screenSize: { w: 1920, h: 1080 },
+        };
+      }
+      if (cmd === "debug_read_noble_phantasm_gauges") {
+        return [
+          {
+            slot: 0,
+            cardRegion: { x: 0.241, y: 0.097, w: 0.187, h: 0.396 },
+            ready: false,
+            edgeFrac: 0,
+            stdBgr: 0,
+            gaugeDigitModelLabels: ["1", "0", "0"],
+            turnCountModelLabel: "4",
+          },
+          {
+            slot: 1,
+            cardRegion: { x: 0.41, y: 0.097, w: 0.187, h: 0.396 },
+            ready: false,
+            edgeFrac: 0,
+            stdBgr: 0,
+            gaugeDigitModelLabels: ["未识别", "6", "0"],
+            turnCountModelLabel: "4",
+          },
+          {
+            slot: 2,
+            cardRegion: { x: 0.603, y: 0.097, w: 0.187, h: 0.396 },
+            ready: false,
+            edgeFrac: 0,
+            stdBgr: 0,
+            gaugeDigitModelLabels: ["1", "9", "0"],
+            turnCountModelLabel: "4",
+          },
+        ];
+      }
+      return null;
+    });
+
+    renderDebugPage();
+    await user.click(screen.getByRole("button", { name: "截取画面" }));
+
+    expect(
+      vi.mocked(invoke).mock.calls.some(
+        ([cmd]) => cmd === "debug_read_noble_phantasm_gauges"
+      )
+    ).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "识别" }));
+
+    expect(
+      await screen.findByText(
+        /数字识别：回合=4；NP1\[百=1 十=0 个=0\]；NP2\[百=未识别 十=6 个=0\]；NP3\[百=1 十=9 个=0\]/
+      )
+    ).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("debug_read_noble_phantasm_gauges");
+  });
+
   it("renders live scrcpy frames as data URLs for dynamic preview", async () => {
     const user = userEvent.setup();
     mockDebugPageBootstrap((cmd) => {
@@ -166,6 +239,8 @@ describe("DebugPage", () => {
             npGlowRegion: { x: 0.482, y: 0.94, w: 0.00625, h: 0.01111 },
             npGlowScore: 0.62,
             npGlowReady: true,
+            gaugeDigitModelLabels: ["1", "0", "0"],
+            turnCountModelLabel: "4",
           },
         ];
       }
@@ -183,6 +258,8 @@ describe("DebugPage", () => {
     );
     expect(await screen.findByText(/宝具卡 not ready/)).toBeInTheDocument();
     expect(screen.getByText(/宝具条端帽 0\.620/)).toBeInTheDocument();
+    expect(screen.getByText(/模型当前回合：4/)).toBeInTheDocument();
+    expect(screen.getByText(/模型 百\/十\/个 1 \/ 0 \/ 0/)).toBeInTheDocument();
   });
 
   it("selects command-card candidates by searchable Chinese servant name", async () => {

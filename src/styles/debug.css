@@ -233,12 +233,34 @@
   border-width: 1px;
 }
 
-.debug-overlay-np-digit-slot {
-  position: absolute;
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28);
-  box-sizing: border-box;
+.debug-overlay-digit-source {
+  border: 1px solid var(--purple-9);
+  background: rgba(145, 80, 220, 0.16);
+  z-index: 8;
+}
+
+.debug-overlay-digit-source > .debug-overlay-label {
+  top: 100%;
+  left: 50%;
+  transform: translate(-50%, 2px);
+  padding: 2px 4px;
+  font-size: 9px;
+  background: var(--purple-9);
+}
+
+.debug-overlay-sequence-source {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+.debug-overlay-turn-count {
+  border-color: var(--amber-9);
+  background: rgba(255, 190, 0, 0.12);
+}
+
+.debug-overlay-turn-count > .debug-overlay-label {
+  top: -18px;
+  background: var(--amber-9);
 }
 
 .debug-overlay-np-glow-slot {

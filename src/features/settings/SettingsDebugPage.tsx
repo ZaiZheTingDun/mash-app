@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Box, Flex, Switch, Text } from "@radix-ui/themes";
+import { Box, Flex, Select, Switch, Text } from "@radix-ui/themes";
 import { invoke } from "../../tauri";
-import type { DebugSettings } from "../../types/debug";
+import type { DebugSettings, ImageRecognitionDebugMode } from "../../types/debug";
 
 const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
+  imageRecognitionDebugMode: "disabled",
+  sequenceRecognitionDebugMode: "disabled",
   autoCaptureBattleBeforeAttack: false,
   autoCaptureBattleResultLoot: false,
   autoCaptureUnknownScreenTimeout: false,
@@ -13,7 +15,19 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
 };
 
 function normalizeDebugSettings(settings: Partial<DebugSettings>): DebugSettings {
+  const imageRecognitionDebugMode =
+    settings.imageRecognitionDebugMode === "enabled" ||
+    settings.imageRecognitionDebugMode === "shadow"
+      ? settings.imageRecognitionDebugMode
+      : "disabled";
+  const sequenceRecognitionDebugMode =
+    settings.sequenceRecognitionDebugMode === "enabled" ||
+    settings.sequenceRecognitionDebugMode === "shadow"
+      ? settings.sequenceRecognitionDebugMode
+      : "disabled";
   return {
+    imageRecognitionDebugMode,
+    sequenceRecognitionDebugMode,
     autoCaptureBattleBeforeAttack: settings.autoCaptureBattleBeforeAttack === true,
     autoCaptureBattleResultLoot: settings.autoCaptureBattleResultLoot === true,
     autoCaptureUnknownScreenTimeout: settings.autoCaptureUnknownScreenTimeout === true,
@@ -44,6 +58,46 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
       setLoading(false);
     }
   }, []);
+
+  const saveImageRecognitionDebugMode = useCallback(
+    async (value: ImageRecognitionDebugMode) => {
+      setSaving(true);
+      setError(null);
+      setSavedMessage(null);
+      try {
+        const next = normalizeDebugSettings(
+          await invoke<DebugSettings>("set_image_recognition_debug_mode", { value })
+        );
+        setSettings(next);
+        setSavedMessage("已保存");
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setSaving(false);
+      }
+    },
+    []
+  );
+
+  const saveSequenceRecognitionDebugMode = useCallback(
+    async (value: ImageRecognitionDebugMode) => {
+      setSaving(true);
+      setError(null);
+      setSavedMessage(null);
+      try {
+        const next = normalizeDebugSettings(
+          await invoke<DebugSettings>("set_sequence_recognition_debug_mode", { value })
+        );
+        setSettings(next);
+        setSavedMessage("已保存");
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setSaving(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (active) {
@@ -156,6 +210,55 @@ export function SettingsDebugPage({ active }: { active: boolean }) {
   return (
     <Box className="settings-section-panel">
       <Flex direction="column" gap="4" className="recognition-setting-block">
+        <Flex align="start" justify="between" gap="4" wrap="wrap" className="basic-setting-row">
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">
+              图像识别调试
+            </Text>
+            <Text size="1" color="gray">
+              打开后使用数字模型；影子模式会同时运行新旧识别，结果不一致时停止自动化；关闭时继续使用现有识别。
+            </Text>
+          </Flex>
+
+          <Select.Root
+            value={settings.imageRecognitionDebugMode}
+            onValueChange={(value) =>
+              void saveImageRecognitionDebugMode(value as ImageRecognitionDebugMode)
+            }
+            disabled={loading || saving}
+          >
+            <Select.Trigger aria-label="图像识别调试" className="recognition-mode-select" />
+            <Select.Content>
+              <Select.Item value="enabled">打开</Select.Item>
+              <Select.Item value="shadow">影子模式</Select.Item>
+              <Select.Item value="disabled">关闭</Select.Item>
+            </Select.Content>
+          </Select.Root>
+        </Flex>
+
+        <Flex align="start" justify="between" gap="4" wrap="wrap" className="basic-setting-row">
+          <Flex direction="column" gap="1" className="basic-setting-copy">
+            <Text size="2" weight="bold">完整数字识别调试</Text>
+            <Text size="1" color="gray">
+              打开后用 CNN-CTC 读取战斗场次和点击攻击前的宝具条；影子模式记录新旧结果，不一致时停止自动化。
+            </Text>
+          </Flex>
+          <Select.Root
+            value={settings.sequenceRecognitionDebugMode}
+            onValueChange={(value) =>
+              void saveSequenceRecognitionDebugMode(value as ImageRecognitionDebugMode)
+            }
+            disabled={loading || saving}
+          >
+            <Select.Trigger aria-label="完整数字识别调试" className="recognition-mode-select" />
+            <Select.Content>
+              <Select.Item value="enabled">打开</Select.Item>
+              <Select.Item value="shadow">影子模式</Select.Item>
+              <Select.Item value="disabled">关闭</Select.Item>
+            </Select.Content>
+          </Select.Root>
+        </Flex>
+
         <Flex align="start" justify="between" gap="4" wrap="wrap" className="basic-setting-row">
           <Flex direction="column" gap="1" className="basic-setting-copy">
             <Text size="2" weight="bold">

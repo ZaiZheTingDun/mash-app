@@ -332,6 +332,34 @@ impl SidecarClient {
         Ok((w, h))
     }
 
+    /// Select which battle-HUD digit reader the sidecar should use.
+    pub fn set_digit_recognition_mode(&mut self, mode: &str) -> Result<(), String> {
+        let req = request(
+            SidecarCommand::SetDigitRecognitionMode,
+            serde_json::json!({ "mode": mode }),
+        )?;
+        let resp = self.send_recv(&req)?;
+        if !resp["ok"].as_bool().unwrap_or(false) {
+            let err = resp["error"].as_str().unwrap_or("unknown error");
+            return Err(format!("set_digit_recognition_mode failed: {err}"));
+        }
+        Ok(())
+    }
+
+    /// Select the complete-number CNN-CTC reader for battle HUD values.
+    pub fn set_sequence_recognition_mode(&mut self, mode: &str) -> Result<(), String> {
+        let req = request(
+            SidecarCommand::SetSequenceRecognitionMode,
+            serde_json::json!({ "mode": mode }),
+        )?;
+        let resp = self.send_recv(&req)?;
+        if !resp["ok"].as_bool().unwrap_or(false) {
+            let err = resp["error"].as_str().unwrap_or("unknown error");
+            return Err(format!("set_sequence_recognition_mode failed: {err}"));
+        }
+        Ok(())
+    }
+
     /// Stop the scrcpy server / decoder thread. Safe to call if not started.
     pub fn stop_stream(&mut self) -> Result<(), String> {
         let req = request(SidecarCommand::StopStream, serde_json::json!({}))?;

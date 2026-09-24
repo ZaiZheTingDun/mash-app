@@ -167,18 +167,7 @@ impl Runner {
         if !self.prepare_noble_phantasm_gauge_before_attack() {
             return false;
         }
-        if self.config.auto_capture_battle_before_attack {
-            match self.capture_battle_before_attack_screenshot() {
-                Ok(path) => self.emit_debug(
-                    "Battle",
-                    &format!("点击攻击前截图已保存: {}", path.display()),
-                ),
-                Err(err) => self.emit_warn(
-                    "Battle",
-                    &format!("点击攻击前截图保存失败，继续攻击: {err}"),
-                ),
-            }
-        }
+        self.capture_before_attack_if_enabled();
         if !self.tap_at("Battle", ATTACK_BUTTON) {
             return false;
         }

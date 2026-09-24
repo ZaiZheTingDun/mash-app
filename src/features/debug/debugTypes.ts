@@ -128,6 +128,14 @@ export interface NoblePhantasmMatchDto {
   readySource?: "glow" | "gauge" | "unknown" | string;
   gaugeDigitCount?: number | null;
   gaugeHundredsVisible?: boolean | null;
+  gaugeDigitModelLabels?: string[] | null;
+  turnCountModelLabel?: string | null;
+  gaugeSequenceValue?: string | null;
+  gaugeSequenceConfidence?: number | null;
+  gaugeSequenceAccepted?: boolean | null;
+  turnSequenceValue?: string | null;
+  turnSequenceConfidence?: number | null;
+  turnSequenceAccepted?: boolean | null;
   gaugeRegion?: NormRectDto | null;
   npGlowRegion?: NormRectDto | null;
   npGlowScore?: number | null;

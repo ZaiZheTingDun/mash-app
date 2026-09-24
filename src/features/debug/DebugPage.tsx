@@ -153,6 +153,9 @@ export function DebugPage({
   const [coordinates, setCoordinates] = useState<RunnerCoordinatesDto | null>(
     null
   );
+  const [showDigitRecognitionRegions, setShowDigitRecognitionRegions] = useState(
+    initialPrefs.showDigitRecognitionRegions === true
+  );
   const [showCoordOverlay, setShowCoordOverlay] = useState(
     initialPrefs.showCoordOverlay === true
   );
@@ -178,6 +181,7 @@ export function DebugPage({
   const [findingCards, setFindingCards] = useState(false);
   const [npGaugeSlots, setNpGaugeSlots] = useState<NoblePhantasmMatchDto[]>([]);
   const [debuggingNpGauges, setDebuggingNpGauges] = useState(false);
+  const [recognizingDigitRegions, setRecognizingDigitRegions] = useState(false);
   const [dynamicNpGaugeDebug, setDynamicNpGaugeDebug] = useState(false);
   const [battleScene, setBattleScene] =
     useState<BattleSceneResultDto | null>(null);
@@ -353,6 +357,7 @@ export function DebugPage({
       supportGrandStarMapScoreMin,
       enhancementServantId,
       enhancementServantThreshold,
+      showDigitRecognitionRegions,
       showCoordOverlay,
       visibleCoordGroups: visibleCoordGroupIds,
     });
@@ -374,6 +379,7 @@ export function DebugPage({
     supportGrandStarMapScoreMin,
     enhancementServantId,
     enhancementServantThreshold,
+    showDigitRecognitionRegions,
     showCoordOverlay,
     visibleCoordGroupIds,
   ]);
@@ -788,6 +794,7 @@ export function DebugPage({
       if (options.logResult) {
         const cardReadyCount = slots.filter((s) => s.cardReady === true).length;
         const gaugeReadyCount = slots.filter((s) => s.npGlowReady === true).length;
+        const turnCount = slots[0]?.turnCountModelLabel ?? "未识别";
         const summary = slots
           .map(
             (s) =>
@@ -799,15 +806,47 @@ export function DebugPage({
                   : ""
               }${
                 s.cardReady != null ? ` edge:${(s.edgeFrac * 100).toFixed(2)}%` : ""
-              })`
+              } 模型:${s.gaugeDigitModelLabels?.join("/") ?? "未识别"})`
           )
           .join("  ");
         const label = options.live ? "动态宝具识别" : "宝具识别";
-        log(`${label}: 卡 ${cardReadyCount}/${slots.length} · 条 ${gaugeReadyCount}/${slots.length} | ${summary}`);
+        const ctcSummary = slots[0]?.turnSequenceValue != null
+          ? ` · CNN-CTC 回合 ${slots[0].turnSequenceValue || "未识别"}；${slots.map((slot) =>
+              `NP${slot.slot + 1}=${slot.gaugeSequenceValue || "未识别"}(${(slot.gaugeSequenceConfidence ?? 0).toFixed(3)}${slot.gaugeSequenceAccepted ? "" : " 拒绝"})`
+            ).join("；")}`
+          : "";
+        log(`${label}: 回合 ${turnCount} · 卡 ${cardReadyCount}/${slots.length} · 条 ${gaugeReadyCount}/${slots.length} | ${summary}${ctcSummary}`);
       }
+      return slots;
     },
     [log]
   );
+
+  const handleRecognizeDigitRegions = useCallback(async () => {
+    if (!capture) return;
+    setRecognizingDigitRegions(true);
+    try {
+      const slots = await readNpGauges({ logResult: false, live: false });
+      const turnCount = slots[0]?.turnCountModelLabel ?? "未识别";
+      const gauges = [...slots]
+        .sort((left, right) => left.slot - right.slot)
+        .map((slot) => {
+          const digits = slot.gaugeDigitModelLabels ?? ["未识别", "未识别", "未识别"];
+          return `NP${slot.slot + 1}[百=${digits[0] ?? "未识别"} 十=${digits[1] ?? "未识别"} 个=${digits[2] ?? "未识别"}]`;
+        })
+        .join("；");
+      const ctcSummary = slots[0]?.turnSequenceValue != null
+        ? `；CNN-CTC 回合=${slots[0].turnSequenceValue || "未识别"}；${slots.map((slot) =>
+            `NP${slot.slot + 1}=${slot.gaugeSequenceValue || "未识别"}(${(slot.gaugeSequenceConfidence ?? 0).toFixed(3)}${slot.gaugeSequenceAccepted ? "" : " 拒绝"})`
+          ).join("；")}`
+        : "";
+      log(`数字识别：回合=${turnCount}${gauges ? `；${gauges}` : ""}${ctcSummary}`);
+    } catch (err) {
+      log(`数字识别失败: ${err}`, "error");
+    } finally {
+      setRecognizingDigitRegions(false);
+    }
+  }, [capture, log, readNpGauges]);
 
   const handleDebugNpGauges = useCallback(async () => {
     if (!capture) return;
@@ -1285,6 +1324,7 @@ export function DebugPage({
       enhancementServantResult,
       supportResult,
       coordinates,
+      showDigitRecognitionRegions,
       showCoordOverlay,
       visibleCoordGroups: Array.from(visibleCoordGroups),
     }),
@@ -1298,6 +1338,7 @@ export function DebugPage({
       enhancementServantResult,
       supportResult,
       coordinates,
+      showDigitRecognitionRegions,
       showCoordOverlay,
       visibleCoordGroups,
     ]
@@ -1908,6 +1949,36 @@ export function DebugPage({
           </DebugSection>
 
           <DebugSection
+            title="数字识别区域"
+            badge={showDigitRecognitionRegions ? "on" : "off"}
+          >
+            <Flex justify="between" align="center" gap="3" wrap="wrap">
+              <Flex gap="2" align="center" wrap="wrap" className="debug-toolbar">
+                <label className="debug-coord-toggle">
+                  <Checkbox
+                    checked={showDigitRecognitionRegions}
+                    onCheckedChange={(checked) =>
+                      setShowDigitRecognitionRegions(checked === true)
+                    }
+                  />
+                  <Text size="1">标记数字取值位置</Text>
+                </label>
+                <Text size="1" color="gray">
+                  标记当前回合数，以及三个宝具槽的百位、十位和个位。
+                </Text>
+              </Flex>
+              <Button
+                type="button"
+                size="1"
+                disabled={!capture || recognizingDigitRegions}
+                onClick={handleRecognizeDigitRegions}
+              >
+                {recognizingDigitRegions ? "识别中…" : "识别"}
+              </Button>
+            </Flex>
+          </DebugSection>
+
+          <DebugSection
             title="坐标叠层"
             badge={
               showCoordOverlay
@@ -2121,6 +2192,17 @@ export function DebugPage({
                   暂无调试结果
                 </Text>
               )}
+              {npGaugeSlots[0]?.turnCountModelLabel && (
+                <Text size="1" color="gray">
+                  模型当前回合：{npGaugeSlots[0].turnCountModelLabel}
+                </Text>
+              )}
+              {npGaugeSlots[0]?.turnSequenceValue != null && (
+                <Text size="1" color="gray">
+                  CNN-CTC 当前回合：{npGaugeSlots[0].turnSequenceValue || "未识别"}
+                  {npGaugeSlots[0].turnSequenceAccepted ? "" : "（置信度不足）"}
+                </Text>
+              )}
               {npGaugeSlots.map((s) => (
                 <Box
                   key={`np-row-${s.slot}`}
@@ -2151,6 +2233,12 @@ export function DebugPage({
                     {s.gaugeDigitCount != null ? ` · digit ${s.gaugeDigitCount}位` : ""}
                     {s.gaugeHundredsVisible != null
                       ? ` · 百位${s.gaugeHundredsVisible ? "有" : "无"}`
+                      : ""}
+                    {s.gaugeDigitModelLabels?.length === 3
+                      ? ` · 模型 百/十/个 ${s.gaugeDigitModelLabels.join(" / ")}`
+                      : ""}
+                    {s.gaugeSequenceValue != null
+                      ? ` · CNN-CTC ${s.gaugeSequenceValue || "未识别"} (${(s.gaugeSequenceConfidence ?? 0).toFixed(3)}${s.gaugeSequenceAccepted ? "" : " 拒绝"})`
                       : ""}
                   </Text>
                 </Box>

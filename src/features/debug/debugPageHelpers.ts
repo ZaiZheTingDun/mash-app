@@ -40,6 +40,7 @@ export interface DebugPagePrefs {
   supportGrandStarMapScoreMin?: number | null;
   enhancementServantId?: number | null;
   enhancementServantThreshold?: string;
+  showDigitRecognitionRegions?: boolean;
   showCoordOverlay?: boolean;
   visibleCoordGroups?: string[];
 }

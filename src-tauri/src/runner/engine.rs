@@ -277,10 +277,13 @@ impl Runner {
         }
 
         // Read the current battle scene (m of n) from the BATTLE label HUD.
-        let screen_scene = self
-            .sidecar()
-            .read_battle_scene(None, BATTLE_SCENE_REGION)
-            .unwrap_or(None);
+        let screen_scene = match self.sidecar().read_battle_scene(None, BATTLE_SCENE_REGION) {
+            Ok(scene) => scene,
+            Err(error) => {
+                self.fail_action("Battle", "读取战斗场次", error);
+                return;
+            }
+        };
         match post_attack_hud_read_gate(
             self.advanced_mode,
             attack_returned_after_submit,

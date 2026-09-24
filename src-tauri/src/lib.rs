@@ -336,6 +336,8 @@ pub fn run() {
             commands::settings::set_server,
             commands::settings::get_recognition_settings,
             commands::settings::get_debug_settings,
+            commands::settings::set_image_recognition_debug_mode,
+            commands::settings::set_sequence_recognition_debug_mode,
             commands::settings::set_noble_phantasm_detection_mode,
             commands::settings::set_support_ce_threshold,
             commands::settings::set_support_ce_full_gate_threshold,

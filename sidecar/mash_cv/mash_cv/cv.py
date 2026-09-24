@@ -13,6 +13,9 @@ Lifecycle / streaming:
 → {"cmd":"load_templates","dir":"..."}              ← {"ok":true,"count":3}
 → {"cmd":"load_config","path":"..."}                ← {"ok":true,"screens":4}
 → {"cmd":"set_server","server":"JP"|"CN"}           ← {"ok":true,"server":"CN","ocrReset":true}
+→ {"cmd":"set_digit_recognition_mode","mode":"disabled"|"enabled"|"shadow"}
+→ {"cmd":"set_sequence_recognition_mode","mode":"disabled"|"enabled"|"shadow"}
+                                                    ← {"ok":true,"mode":"shadow"}
 → {"cmd":"start_stream","adbPath":"...","jarPath":"...","serial":"...","maxSize":1920,"bitRate":12000000,"maxFps":15}
                                                     ← {"ok":true,"width":1080,"height":1920}
 → {"cmd":"stop_stream"}                             ← {"ok":true,"running":false}
@@ -87,6 +90,20 @@ from typing import TYPE_CHECKING, Any, Optional
 import cv2
 import numpy as np
 
+from mash_cv.battle_digit_policy import (
+    compare_np_sequence,
+    decode_battle_progress,
+    decode_np_gauge,
+    select_recognition,
+)
+from mash_cv.digit_classifier import DigitPrediction, get_digit_classifier
+from mash_cv.digit_regions import (
+    BATTLE_SEQUENCE_REGIONS,
+    DEFAULT_NP_GAUGE_DIGIT_REGIONS,
+    DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS,
+)
+from mash_cv.sequence_classifier import SequencePrediction, get_sequence_classifier
+
 if TYPE_CHECKING:
     from mash_cv.stream import ScrcpyStream
 
@@ -114,6 +131,42 @@ _servant_catalog_cache: Optional[list[dict]] = None
 # inside _start_stream so commands that never touch live video don't load
 # PyAV's FFmpeg stack.
 stream: Optional["ScrcpyStream"] = None
+
+DIGIT_RECOGNITION_MODES = frozenset(("disabled", "enabled", "shadow"))
+_digit_recognition_mode = "disabled"
+_sequence_recognition_mode = "disabled"
+
+
+class DigitRecognitionMismatch(RuntimeError):
+    """Raised when shadow inference disagrees with the legacy reader."""
+
+
+def _set_digit_recognition_mode(mode: str) -> dict:
+    global _digit_recognition_mode
+    normalized = str(mode).strip().lower()
+    if normalized not in DIGIT_RECOGNITION_MODES:
+        return {"ok": False, "error": f"unsupported digit recognition mode: {mode}"}
+    if normalized != "disabled":
+        try:
+            get_digit_classifier()
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"failed to load digit classifier: {exc}"}
+    _digit_recognition_mode = normalized
+    return {"ok": True, "mode": normalized}
+
+
+def _set_sequence_recognition_mode(mode: str) -> dict:
+    global _sequence_recognition_mode
+    normalized = str(mode).strip().lower()
+    if normalized not in DIGIT_RECOGNITION_MODES:
+        return {"ok": False, "error": f"unsupported sequence recognition mode: {mode}"}
+    if normalized != "disabled":
+        try:
+            get_sequence_classifier()
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"failed to load sequence classifier: {exc}"}
+    _sequence_recognition_mode = normalized
+    return {"ok": True, "mode": normalized}
 
 DEFAULT_REGION = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 
@@ -270,23 +323,12 @@ DEFAULT_NP_CARD_SLOTS: tuple[dict, ...] = (
     {"x": 0.410, "y": 0.097, "w": 0.187, "h": 0.396},
     {"x": 0.603, "y": 0.097, "w": 0.187, "h": 0.396},
 )
-# Bottom NP-gauge percentage ROIs on the battle / attack screen. These
-# regions cover the numeric part of the gauge, not the trailing percent
-# sign. A value below 100 is two digits; 100% and overcharge values are
-# three digits, so readiness can be decided without classifying each glyph.
-DEFAULT_NP_GAUGE_DIGIT_REGIONS: tuple[dict, ...] = (
-    {"x": 0.182, "y": 0.913, "w": 0.0297, "h": 0.0278},
-    {"x": 0.429, "y": 0.913, "w": 0.0297, "h": 0.0278},
-    {"x": 0.678, "y": 0.913, "w": 0.0297, "h": 0.0278},
-)
-# Slot-relative digit regions inside each bottom NP-gauge ROI. The gauge
-# text is right-aligned: values below 100 populate only tens + ones, while
-# 100% and overcharge values also populate the hundreds slot.
-DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS: tuple[dict, ...] = (
-    {"x": -2.0 / 57.0, "y": 0.0, "w": 21.0 / 57.0, "h": 1.0},
-    {"x": 17.0 / 57.0, "y": 0.0, "w": 23.0 / 57.0, "h": 1.0},
-    {"x": 38.0 / 57.0, "y": 0.0, "w": 21.0 / 57.0, "h": 1.0},
-)
+# Bottom NP-gauge parent and fixed hundreds/tens/ones regions are loaded from
+# one shared JSON config used by runtime recognition and training extraction.
+# Full Battle-HUD row used by the training cropper for the current turn.
+# Non-digit glyphs in this row are deliberately passed through the model and
+# ignored unless they are accepted as a numeric class.
+TURN_COUNT_DIGIT_REGION = {"x": 0.680, "y": 0.112, "w": 0.075, "h": 0.038}
 NP_READY_EDGE_HIGH = 0.07
 NP_READY_EDGE_LOW = 0.035
 NP_EMPTY_EDGE_HINT = 0.03
@@ -2945,7 +2987,7 @@ def _read_crit_digits(
     return value, reads
 
 
-def _read_battle_scene(
+def _read_battle_scene_legacy(
     img: np.ndarray, region: dict, debug: bool = False
 ) -> dict:
     """Recognize the ``BATTLE m/n`` indicator drawn inside ``region``.
@@ -3211,6 +3253,203 @@ def _read_battle_scene(
     if not (1 <= scene <= total):
         return _wrap(None, None, fail="invalid_scene_range")
     return _wrap(scene, total)
+
+
+def _battle_hud_digit_components(
+    img: np.ndarray,
+    region: dict,
+) -> list[tuple[int, int, int, int]]:
+    """Segment digit-sized bright components using the training crop rules."""
+
+    height, width = img.shape[:2]
+    rx = max(0, min(width - 1, round(float(region["x"]) * width)))
+    ry = max(0, min(height - 1, round(float(region["y"]) * height)))
+    right = max(rx + 1, min(width, round((float(region["x"]) + float(region["w"])) * width)))
+    bottom = max(ry + 1, min(height, round((float(region["y"]) + float(region["h"])) * height)))
+    roi = img[ry:bottom, rx:right]
+    if roi.size == 0:
+        return []
+
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    mask = cv2.inRange(gray, 140, 255)
+    count, _labels, stats, _centroids = cv2.connectedComponentsWithStats(mask, 8)
+    min_height = max(8, round(height * 0.015))
+    max_height = max(min_height, round(height * 0.036))
+    min_width = max(2, round(width * 0.0015))
+    max_width = max(min_width, round(width * 0.017))
+    min_area = max(12, round(width * height * 0.000012))
+
+    boxes: list[tuple[int, int, int, int]] = []
+    for index in range(1, count):
+        x, y, component_width, component_height, area = [int(value) for value in stats[index]]
+        if component_width < min_width or component_width > max_width:
+            continue
+        if component_height < min_height or component_height > max_height:
+            continue
+        if area < min_area:
+            continue
+        padding_x = max(2, round(component_width * 0.18))
+        padding_y = max(2, round(component_height * 0.18))
+        left = max(0, rx + x - padding_x)
+        top = max(0, ry + y - padding_y)
+        padded_right = min(width, rx + x + component_width + padding_x)
+        padded_bottom = min(height, ry + y + component_height + padding_y)
+        boxes.append((left, top, padded_right - left, padded_bottom - top))
+    boxes.sort(key=lambda box: box[0])
+    return boxes
+
+
+def _read_battle_scene_model(
+    img: np.ndarray,
+    strip_region: Optional[dict],
+) -> tuple[Optional[tuple[int, int]], dict]:
+    diagnostics: dict = {"candidates": [], "splitAt": None, "failReason": None}
+    if strip_region is None:
+        diagnostics["failReason"] = "anchor_unavailable"
+        return None, diagnostics
+
+    candidates: list[dict] = []
+    for x, y, width, height in _battle_hud_digit_components(img, strip_region):
+        prediction = get_digit_classifier().predict(img[y : y + height, x : x + width])
+        record = {
+            "x": x,
+            "y": y,
+            "w": width,
+            "h": height,
+            "label": prediction.label,
+            "confidence": prediction.confidence,
+            "margin": prediction.margin,
+            "accepted": prediction.accepted,
+        }
+        diagnostics["candidates"].append(record)
+        if prediction.digit is not None:
+            candidates.append({**record, "digit": prediction.digit})
+
+    if len(candidates) < 2:
+        diagnostics["failReason"] = "fewer_than_two_digits"
+        return None, diagnostics
+
+    average_width = sum(float(candidate["w"]) for candidate in candidates) / len(candidates)
+    best_gap = float("-inf")
+    split_at = -1
+    for index in range(len(candidates) - 1):
+        gap = float(candidates[index + 1]["x"]) - (
+            float(candidates[index]["x"]) + float(candidates[index]["w"])
+        )
+        if gap > best_gap:
+            best_gap = gap
+            split_at = index + 1
+    diagnostics["bestGap"] = best_gap
+    diagnostics["averageWidth"] = average_width
+    diagnostics["splitAt"] = split_at if split_at >= 1 else None
+    if split_at < 1 or best_gap < average_width * 0.5:
+        diagnostics["failReason"] = "no_separator_gap"
+        return None, diagnostics
+
+    left = candidates[:split_at]
+    right = candidates[split_at:]
+    scene = int("".join(str(candidate["digit"]) for candidate in left))
+    total = int("".join(str(candidate["digit"]) for candidate in right))
+    if not (1 <= scene <= total):
+        diagnostics["failReason"] = "invalid_scene_range"
+        return None, diagnostics
+    return (scene, total), diagnostics
+
+
+def _format_optional_scene(value: Optional[tuple[int, int]]) -> str:
+    return "未识别" if value is None else f"{value[0]}/{value[1]}"
+
+
+def _read_battle_scene_digit(
+    img: np.ndarray, region: dict, debug: bool = False
+) -> dict:
+    if _digit_recognition_mode == "disabled":
+        return _read_battle_scene_legacy(img, region, debug)
+
+    legacy = _read_battle_scene_legacy(img, region, True)
+    legacy_value = (
+        (int(legacy["scene"]), int(legacy["total"]))
+        if legacy.get("scene") is not None and legacy.get("total") is not None
+        else None
+    )
+    strip_region = (legacy.get("diagnostics") or {}).get("stripRegion")
+    model_value, model_diagnostics = _read_battle_scene_model(img, strip_region)
+
+    choice = select_recognition(legacy_value, model_value, _digit_recognition_mode)
+    if choice.mismatch:
+        message = (
+            "图像识别影子模式不一致：战斗场次 "
+            f"现有={_format_optional_scene(legacy_value)}，"
+            f"模型={_format_optional_scene(model_value)}"
+        )
+        result: dict = {"scene": None, "total": None, "error": message}
+    else:
+        selected = choice.value
+        result = {
+            "scene": selected[0] if selected is not None else None,
+            "total": selected[1] if selected is not None else None,
+        }
+    if debug:
+        result["diagnostics"] = legacy.get("diagnostics")
+        result["modelDiagnostics"] = model_diagnostics
+        result["digitRecognitionMode"] = _digit_recognition_mode
+    return result
+
+
+def _read_battle_scene(
+    img: np.ndarray, region: dict, debug: bool = False
+) -> dict:
+    if _sequence_recognition_mode == "disabled":
+        return _read_battle_scene_digit(img, region, debug)
+
+    baseline = _read_battle_scene_digit(img, region, True)
+    # A sequence crop outside Battle can still look like digits. Keep the
+    # existing BATTLE anchor as the screen-presence gate.
+    diagnostics = baseline.get("diagnostics") or {}
+    if baseline.get("error") or diagnostics.get("anchorBox") is None:
+        if not debug:
+            baseline.pop("diagnostics", None)
+            baseline.pop("modelDiagnostics", None)
+        return baseline
+
+    prediction = _predict_sequence_in_region(
+        img, BATTLE_SEQUENCE_REGIONS["battle_progress"][0]
+    )
+    value = decode_battle_progress(prediction)
+    baseline_value = (
+        (int(baseline["scene"]), int(baseline["total"]))
+        if baseline.get("scene") is not None and baseline.get("total") is not None
+        else None
+    )
+    choice = select_recognition(baseline_value, value, _sequence_recognition_mode)
+    if choice.mismatch:
+        result = {
+            "scene": None,
+            "total": None,
+            "error": (
+                "CNN-CTC 影子模式不一致：战斗场次 "
+                f"现有={_format_optional_scene(baseline_value)}，"
+                f"模型={_format_optional_scene(value)} "
+                f"(原始={prediction.value or '未识别'}, 置信度={prediction.confidence:.3f})"
+            ),
+        }
+    else:
+        selected = choice.value
+        result = {
+            "scene": selected[0] if selected is not None else None,
+            "total": selected[1] if selected is not None else None,
+        }
+    if debug:
+        result["diagnostics"] = diagnostics
+        if "modelDiagnostics" in baseline:
+            result["modelDiagnostics"] = baseline["modelDiagnostics"]
+        result["sequenceDiagnostics"] = {
+            "value": prediction.value,
+            "confidence": prediction.confidence,
+            "accepted": prediction.accepted,
+        }
+        result["sequenceRecognitionMode"] = _sequence_recognition_mode
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -3873,7 +4112,7 @@ def _np_gauge_digit_slot_visible(img: np.ndarray, region: dict) -> bool:
     return False
 
 
-def _np_gauge_hundreds_slot_visible(img: np.ndarray, region: dict) -> bool:
+def _np_gauge_hundreds_slot_visible_legacy(img: np.ndarray, region: dict) -> bool:
     if not _np_gauge_digit_slot_visible(img, region):
         return False
 
@@ -3887,6 +4126,95 @@ def _np_gauge_hundreds_slot_visible(img: np.ndarray, region: dict) -> bool:
         and 1 <= digit <= 5
         and score >= NP_GAUGE_HUNDREDS_TEMPLATE_MIN_SCORE
     )
+
+
+def _predict_digit_in_region(img: np.ndarray, region: dict) -> DigitPrediction:
+    height, width = img.shape[:2]
+    x = max(0, min(width - 1, round(float(region["x"]) * width)))
+    y = max(0, min(height - 1, round(float(region["y"]) * height)))
+    right = max(x + 1, min(width, round((float(region["x"]) + float(region["w"])) * width)))
+    bottom = max(y + 1, min(height, round((float(region["y"]) + float(region["h"])) * height)))
+    return get_digit_classifier().predict(img[y:bottom, x:right])
+
+
+def _predict_sequence_in_region(img: np.ndarray, region: dict) -> SequencePrediction:
+    height, width = img.shape[:2]
+    x = max(0, min(width - 1, round(float(region["x"]) * width)))
+    y = max(0, min(height - 1, round(float(region["y"]) * height)))
+    right = max(x + 1, min(width, round((float(region["x"]) + float(region["w"])) * width)))
+    bottom = max(y + 1, min(height, round((float(region["y"]) + float(region["h"])) * height)))
+    return get_sequence_classifier().predict(img[y:bottom, x:right])
+
+
+def _model_digit_label(prediction: DigitPrediction) -> str:
+    return str(prediction.digit) if prediction.digit is not None else "未识别"
+
+
+def _read_turn_count_model_label(img: np.ndarray) -> str:
+    digits: list[str] = []
+    for x, y, width, height in _battle_hud_digit_components(
+        img,
+        TURN_COUNT_DIGIT_REGION,
+    ):
+        prediction = get_digit_classifier().predict(img[y : y + height, x : x + width])
+        if prediction.digit is not None:
+            digits.append(str(prediction.digit))
+    return "".join(digits) if digits else "未识别"
+
+
+def _format_shadow_battle_digit_summary(
+    turn_count: str,
+    gauge_digits: list[list[str]],
+) -> str:
+    gauges = "；".join(
+        f"宝具{index + 1}[百={digits[0]} 十={digits[1]} 个={digits[2]}]"
+        for index, digits in enumerate(gauge_digits)
+        if len(digits) == 3
+    )
+    return f"影子模式数字验证：回合={turn_count}；{gauges}"
+
+
+def _np_gauge_hundreds_slot_visible_model(
+    img: np.ndarray, region: dict
+) -> tuple[Optional[bool], DigitPrediction]:
+    prediction = _predict_digit_in_region(img, region)
+    if prediction.digit is not None:
+        return prediction.digit in (1, 2, 3), prediction
+    classifier = get_digit_classifier()
+    confidently_invalid = (
+        prediction.label == classifier.invalid_label
+        and prediction.confidence >= classifier.minimum_confidence
+        and prediction.margin >= classifier.minimum_margin
+    )
+    return (False if confidently_invalid else None), prediction
+
+
+def _np_gauge_hundreds_slot_visible(
+    img: np.ndarray, region: dict
+) -> Optional[bool]:
+    visible, _prediction, mismatch = _np_gauge_hundreds_slot_read(img, region)
+    if mismatch is not None:
+        raise DigitRecognitionMismatch(mismatch)
+    return visible
+
+
+def _np_gauge_hundreds_slot_read(
+    img: np.ndarray, region: dict
+) -> tuple[Optional[bool], Optional[DigitPrediction], Optional[str]]:
+    legacy = _np_gauge_hundreds_slot_visible_legacy(img, region)
+    if _digit_recognition_mode == "disabled":
+        return legacy, None, None
+
+    model, prediction = _np_gauge_hundreds_slot_visible_model(img, region)
+    if _digit_recognition_mode == "shadow" and model != legacy:
+        return model, prediction, (
+            "图像识别影子模式不一致：宝具百位 "
+            f"现有={'有' if legacy else '无'}，"
+            f"模型={'未识别' if model is None else '有' if model else '无'} "
+            f"(类别={prediction.label}, 置信度={prediction.confidence:.3f}, "
+            f"差值={prediction.margin:.3f})"
+        )
+    return model, prediction, None
 
 
 def _np_gauge_glow_region(region: dict) -> dict:
@@ -3914,7 +4242,11 @@ def _np_gauge_glow_score(img: np.ndarray, region: dict) -> Optional[float]:
     return float(gray.mean() / 255.0)
 
 
-def _read_np_gauge_digit_count(img: np.ndarray, region: dict) -> Optional[int]:
+def _read_np_gauge_digit_count(
+    img: np.ndarray,
+    region: dict,
+    hundreds_visible: Optional[bool],
+) -> Optional[int]:
     """Return the stable two- or three-digit shape of one NP gauge.
 
     The bottom gauge uses fixed right-aligned digit slots. Values below
@@ -3927,7 +4259,7 @@ def _read_np_gauge_digit_count(img: np.ndarray, region: dict) -> Optional[int]:
         for digit_region in DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS
     ]
     digits = [
-        _np_gauge_hundreds_slot_visible(img, digit_regions[0]),
+        hundreds_visible,
         _np_gauge_digit_slot_visible(img, digit_regions[1]),
         _np_gauge_digit_slot_visible(img, digit_regions[2]),
     ]
@@ -3970,6 +4302,8 @@ def _find_noble_phantasms(
     img: np.ndarray,
     np_regions: list[dict],
     np_gauge_regions: Optional[list[dict]] = None,
+    include_digit_model_debug: bool = False,
+    include_sequence_recognition: bool = False,
 ) -> dict:
     """Report Noble Phantasm readiness for each fixed NP slot.
 
@@ -4011,11 +4345,34 @@ def _find_noble_phantasms(
         edge_fracs, std_bgrs, bright_fracs, None
     )
 
+    collect_model_digits = (
+        _digit_recognition_mode == "shadow"
+        or (include_sequence_recognition and _sequence_recognition_mode == "shadow")
+        or include_digit_model_debug
+    )
+    collect_sequences = (
+        include_sequence_recognition and _sequence_recognition_mode != "disabled"
+    ) or include_digit_model_debug
     slots: list[dict] = []
+    shadow_turn_count = (
+        _read_turn_count_model_label(img)
+        if collect_model_digits
+        else None
+    )
+    sequence_turn = (
+        _predict_sequence_in_region(img, BATTLE_SEQUENCE_REGIONS["turn_count"][0])
+        if collect_sequences
+        else None
+    )
+    shadow_gauge_digit_labels: list[list[str]] = []
+    shadow_mismatches: list[str] = []
     for slot, (measurement, card_ready) in enumerate(zip(measurements, card_ready_flags)):
         sx, sy, sw, sh, edge_frac, std_bgr, _bright_frac = measurement
         gauge_digit_count: Optional[int] = None
         gauge_hundreds_visible: Optional[bool] = None
+        gauge_digit_model_labels: Optional[list[str]] = None
+        gauge_sequence: Optional[SequencePrediction] = None
+        gauge_sequence_usable: Optional[bool] = None
         gauge_region = None
         if slot < len(gauge_regions):
             gauge_region = gauge_regions[slot]
@@ -4023,10 +4380,57 @@ def _find_noble_phantasms(
                 _child_norm_rect(gauge_region, digit_region)
                 for digit_region in DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS
             ]
-            gauge_hundreds_visible = _np_gauge_hundreds_slot_visible(
-                img, digit_regions[0]
+            gauge_hundreds_visible, prediction, mismatch = (
+                _np_gauge_hundreds_slot_read(img, digit_regions[0])
             )
-            gauge_digit_count = _read_np_gauge_digit_count(img, gauge_region)
+            if collect_model_digits:
+                if prediction is None:
+                    prediction = _predict_digit_in_region(img, digit_regions[0])
+                gauge_digit_model_labels = [
+                    _model_digit_label(prediction),
+                    _model_digit_label(_predict_digit_in_region(img, digit_regions[1])),
+                    _model_digit_label(_predict_digit_in_region(img, digit_regions[2])),
+                ]
+                shadow_gauge_digit_labels.append(gauge_digit_model_labels)
+            if mismatch is not None:
+                shadow_mismatches.append(f"槽位{slot + 1}: {mismatch}")
+            gauge_digit_count = _read_np_gauge_digit_count(
+                img,
+                gauge_region,
+                gauge_hundreds_visible,
+            )
+            if collect_sequences and slot < len(BATTLE_SEQUENCE_REGIONS["np_gauge"]):
+                gauge_sequence = _predict_sequence_in_region(
+                    img, BATTLE_SEQUENCE_REGIONS["np_gauge"][slot]
+                )
+                gauge_candidate = decode_np_gauge(gauge_sequence)
+                gauge_sequence_usable = gauge_candidate.usable
+                if include_sequence_recognition and _sequence_recognition_mode == "shadow":
+                    comparison = compare_np_sequence(
+                        gauge_digit_model_labels,
+                        gauge_hundreds_visible,
+                        gauge_candidate,
+                    )
+                    if comparison.mismatch_kind == "full":
+                        shadow_mismatches.append(
+                            f"槽位{slot + 1}: CNN-CTC 影子模式不一致：宝具完整数字 "
+                            f"单字={comparison.single_value}，序列={gauge_candidate.value or '未识别'} "
+                            f"(置信度={gauge_sequence.confidence:.3f})"
+                        )
+                    elif comparison.mismatch_kind == "hundreds":
+                        shadow_mismatches.append(
+                            f"槽位{slot + 1}: CNN-CTC 影子模式不一致：宝具百位 "
+                            f"现有={gauge_hundreds_visible}，序列={gauge_candidate.hundreds_visible} "
+                            f"(原始={gauge_sequence.value or '未识别'}, "
+                            f"置信度={gauge_sequence.confidence:.3f})"
+                        )
+                elif include_sequence_recognition and _sequence_recognition_mode == "enabled":
+                    gauge_hundreds_visible = select_recognition(
+                        gauge_hundreds_visible,
+                        gauge_candidate.hundreds_visible,
+                        _sequence_recognition_mode,
+                    ).value
+                    gauge_digit_count = gauge_candidate.digit_count
         glow_region = _np_gauge_glow_region(gauge_region) if gauge_region else None
         glow_score = (
             _np_gauge_glow_score(img, glow_region)
@@ -4054,11 +4458,42 @@ def _find_noble_phantasms(
             "readySource": "glow" if glow_ready is not None else "unknown",
             "gaugeDigitCount": gauge_digit_count,
             "gaugeHundredsVisible": gauge_hundreds_visible,
+            "gaugeDigitModelLabels": gauge_digit_model_labels,
+            "turnCountModelLabel": shadow_turn_count,
+            "gaugeSequenceValue": gauge_sequence.value if gauge_sequence else None,
+            "gaugeSequenceConfidence": gauge_sequence.confidence if gauge_sequence else None,
+            "gaugeSequenceAccepted": gauge_sequence_usable,
+            "turnSequenceValue": sequence_turn.value if sequence_turn else None,
+            "turnSequenceConfidence": sequence_turn.confidence if sequence_turn else None,
+            "turnSequenceAccepted": sequence_turn.accepted if sequence_turn else None,
             "gaugeRegion": gauge_region,
             "npGlowRegion": glow_region,
             "npGlowScore": glow_score,
             "npGlowReady": glow_ready,
         })
+
+    if shadow_mismatches:
+        summary = _format_shadow_battle_digit_summary(
+            shadow_turn_count or "未识别",
+            shadow_gauge_digit_labels,
+        )
+        if collect_sequences:
+            sequence_summary = "；".join(
+                f"宝具{slot['slot'] + 1}={slot['gaugeSequenceValue'] or '未识别'}"
+                f"({slot['gaugeSequenceConfidence'] or 0.0:.3f}"
+                f"{' 已接受' if slot['gaugeSequenceAccepted'] else ' 拒绝'})"
+                for slot in slots
+            )
+            summary += (
+                f"；CNN-CTC 数字验证：回合="
+                f"{sequence_turn.value if sequence_turn and sequence_turn.value else '未识别'}"
+                f"；{sequence_summary}"
+            )
+        return {
+            "slots": [],
+            "edgeThreshold": edge_thr,
+            "error": summary + "；" + "；".join(shadow_mismatches),
+        }
 
     return {"slots": slots, "edgeThreshold": edge_thr}
 
@@ -6717,6 +7152,10 @@ def _main_repl() -> None:
             _reply(req_id, _load_config(cmd["path"], bool(cmd.get("merge", False))))
         elif action == "set_server":
             _reply(req_id, _set_server(str(cmd.get("server", ""))))
+        elif action == "set_digit_recognition_mode":
+            _reply(req_id, _set_digit_recognition_mode(str(cmd.get("mode", ""))))
+        elif action == "set_sequence_recognition_mode":
+            _reply(req_id, _set_sequence_recognition_mode(str(cmd.get("mode", ""))))
         elif action == "start_stream":
             _reply(req_id, _start_stream(cmd))
         elif action == "stop_stream":
@@ -6872,7 +7311,13 @@ def _main_repl() -> None:
                 gauge_regions = cmd.get("npGaugeRegions")
                 _reply(
                     req_id,
-                    _find_noble_phantasms(img, regions, gauge_regions),
+                    _find_noble_phantasms(
+                        img,
+                        regions,
+                        gauge_regions,
+                        bool(cmd.get("includeDigitModelDebug", False)),
+                        bool(cmd.get("includeSequenceRecognition", False)),
+                    ),
                 )
         elif action == "find_supports":
             img, err = _load_frame(cmd)

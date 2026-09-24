@@ -2056,12 +2056,77 @@ class TestReadBattleScene:
         result = mash_cv._read_battle_scene(img, BATTLE_SCENE_REGION)
         assert result == {"scene": None, "total": None}
 
+    def test_model_mode_returns_model_result(self, monkeypatch):
+        from mash_cv import cv as _cv_module
+
+        monkeypatch.setattr(_cv_module, "_digit_recognition_mode", "enabled")
+        monkeypatch.setattr(
+            _cv_module,
+            "_read_battle_scene_legacy",
+            lambda _img, _region, _debug: {
+                "scene": 1,
+                "total": 3,
+                "diagnostics": {"stripRegion": {"x": 0.6, "y": 0.0, "w": 0.1, "h": 0.1}},
+            },
+        )
+        monkeypatch.setattr(
+            _cv_module,
+            "_read_battle_scene_model",
+            lambda _img, _region: ((2, 3), {"candidates": []}),
+        )
+
+        result = _cv_module._read_battle_scene(
+            _make_bgr_image(320, 180), BATTLE_SCENE_REGION
+        )
+
+        assert result == {"scene": 2, "total": 3}
+
+    def test_shadow_mode_returns_error_when_model_disagrees(self, monkeypatch):
+        from mash_cv import cv as _cv_module
+
+        monkeypatch.setattr(_cv_module, "_digit_recognition_mode", "shadow")
+        monkeypatch.setattr(
+            _cv_module,
+            "_read_battle_scene_legacy",
+            lambda _img, _region, _debug: {
+                "scene": 1,
+                "total": 3,
+                "diagnostics": {"stripRegion": {"x": 0.6, "y": 0.0, "w": 0.1, "h": 0.1}},
+            },
+        )
+        monkeypatch.setattr(
+            _cv_module,
+            "_read_battle_scene_model",
+            lambda _img, _region: ((2, 3), {"candidates": []}),
+        )
+
+        result = _cv_module._read_battle_scene(
+            _make_bgr_image(320, 180), BATTLE_SCENE_REGION
+        )
+
+        assert result["scene"] is None
+        assert result["total"] is None
+        assert "图像识别影子模式不一致" in result["error"]
+
     def test_battle_screenshot_reads_one_of_three(self):
         self._load_real_templates()
         img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle.png"))
         assert img is not None
         result = mash_cv._read_battle_scene(img, BATTLE_SCENE_REGION)
         assert result == {"scene": 1, "total": 3}
+
+    def test_battle_screenshot_reads_one_of_three_with_sequence_mode(self, monkeypatch):
+        from mash_cv import cv as _cv_module
+
+        self._load_real_templates()
+        monkeypatch.setattr(_cv_module, "_sequence_recognition_mode", "enabled")
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle.png"))
+        assert img is not None
+        for frame in (img, cv2.resize(img, (1920, 1080), interpolation=cv2.INTER_AREA)):
+            assert mash_cv._read_battle_scene(frame, BATTLE_SCENE_REGION) == {
+                "scene": 1,
+                "total": 3,
+            }
 
     def test_battle_screenshot_reads_one_of_three_when_downsampled(self):
         self._load_real_templates()
@@ -2207,6 +2272,32 @@ class TestReadBattleScene:
         # Score floor must sit above the label-seam digit_1 artefact
         # (observed at ~0.89 in this fixture) so the artefact is dropped.
         assert diag["scoreFloor"] > 0.89
+
+    @pytest.mark.skipif(
+        not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
+        reason="CN production templates dir not available",
+    )
+    def test_cn_battle_scene_model_and_shadow_modes_read_two_of_three(
+        self, monkeypatch
+    ):
+        from mash_cv import cv as _cv_module
+
+        _cv_module.templates.clear()
+        _cv_module._load_templates(_PROD_CN_TEMPLATES_DIR)
+        img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, "battle_scene_cn.png"))
+        assert img is not None
+
+        monkeypatch.setattr(_cv_module, "_digit_recognition_mode", "enabled")
+        assert _cv_module._read_battle_scene(img, BATTLE_SCENE_REGION) == {
+            "scene": 2,
+            "total": 3,
+        }
+
+        monkeypatch.setattr(_cv_module, "_digit_recognition_mode", "shadow")
+        assert _cv_module._read_battle_scene(img, BATTLE_SCENE_REGION) == {
+            "scene": 2,
+            "total": 3,
+        }
 
 
 # ── _read_level_digits ──────────────────────────────────────────────────
@@ -2931,6 +3022,160 @@ class TestFindNoblePhantasms:
     counts and upper-card texture scores are returned for debugging but do
     not participate in the current ready flag.
     """
+
+    def test_shadow_mode_reports_np_hundreds_disagreement(self, monkeypatch):
+        from mash_cv import cv as _cv_module
+        from mash_cv.digit_classifier import DigitPrediction
+
+        monkeypatch.setattr(_cv_module, "_digit_recognition_mode", "shadow")
+        monkeypatch.setattr(
+            _cv_module,
+            "_np_gauge_hundreds_slot_visible_legacy",
+            lambda _img, _region: True,
+        )
+        monkeypatch.setattr(
+            _cv_module,
+            "_np_gauge_hundreds_slot_visible_model",
+            lambda _img, _region: (
+                False,
+                DigitPrediction("invalid", 0.8, 0.6, False),
+            ),
+        )
+        monkeypatch.setattr(
+            _cv_module,
+            "_predict_digit_in_region",
+            lambda _img, _region: DigitPrediction("invalid", 0.8, 0.6, False),
+        )
+        monkeypatch.setattr(
+            _cv_module,
+            "_read_turn_count_model_label",
+            lambda _img: "4",
+        )
+
+        result = _cv_module._find_noble_phantasms(
+            _make_bgr_image(1920, 1080),
+            list(_cv_module.DEFAULT_NP_CARD_SLOTS),
+        )
+
+        assert result["slots"] == []
+        assert "图像识别影子模式不一致" in result["error"]
+        assert "影子模式数字验证：回合=4" in result["error"]
+        assert "宝具1[百=未识别 十=未识别 个=未识别]" in result["error"]
+
+    def test_shadow_mode_returns_all_three_np_model_digits(self, monkeypatch):
+        from mash_cv import cv as _cv_module
+        from mash_cv.digit_classifier import DigitPrediction
+
+        monkeypatch.setattr(_cv_module, "_digit_recognition_mode", "shadow")
+        monkeypatch.setattr(
+            _cv_module,
+            "_np_gauge_hundreds_slot_visible_legacy",
+            lambda _img, _region: True,
+        )
+        predictions = iter(
+            [
+                DigitPrediction("1", 0.99, 0.90, True),
+                DigitPrediction("2", 0.98, 0.88, True),
+                DigitPrediction("3", 0.97, 0.86, True),
+            ]
+        )
+        monkeypatch.setattr(
+            _cv_module,
+            "_np_gauge_hundreds_slot_visible_model",
+            lambda _img, _region: (True, next(predictions)),
+        )
+        remaining_predictions = iter(
+            [
+                DigitPrediction("0", 0.99, 0.90, True),
+                DigitPrediction("0", 0.99, 0.90, True),
+                DigitPrediction("6", 0.99, 0.90, True),
+                DigitPrediction("0", 0.99, 0.90, True),
+                DigitPrediction("9", 0.99, 0.90, True),
+                DigitPrediction("0", 0.99, 0.90, True),
+            ]
+        )
+        monkeypatch.setattr(
+            _cv_module,
+            "_predict_digit_in_region",
+            lambda _img, _region: next(remaining_predictions),
+        )
+        monkeypatch.setattr(
+            _cv_module,
+            "_read_turn_count_model_label",
+            lambda _img: "4",
+        )
+
+        result = _cv_module._find_noble_phantasms(
+            _make_bgr_image(1920, 1080),
+            list(_cv_module.DEFAULT_NP_CARD_SLOTS),
+        )
+
+        assert [slot["gaugeDigitModelLabels"] for slot in result["slots"]] == [
+            ["1", "0", "0"],
+            ["2", "6", "0"],
+            ["3", "9", "0"],
+        ]
+        assert {slot["turnCountModelLabel"] for slot in result["slots"]} == {"4"}
+
+    def test_debug_request_reads_all_model_digits_while_runtime_mode_is_disabled(
+        self, monkeypatch
+    ):
+        from mash_cv import cv as _cv_module
+        from mash_cv.digit_classifier import DigitPrediction
+
+        monkeypatch.setattr(_cv_module, "_digit_recognition_mode", "disabled")
+        monkeypatch.setattr(
+            _cv_module,
+            "_np_gauge_hundreds_slot_visible_legacy",
+            lambda _img, _region: False,
+        )
+        labels = iter(("1", "0", "0", "2", "6", "0", "3", "9", "0"))
+        monkeypatch.setattr(
+            _cv_module,
+            "_predict_digit_in_region",
+            lambda _img, _region: DigitPrediction(next(labels), 0.99, 0.90, True),
+        )
+        monkeypatch.setattr(
+            _cv_module,
+            "_read_turn_count_model_label",
+            lambda _img: "4",
+        )
+
+        result = _cv_module._find_noble_phantasms(
+            _make_bgr_image(1920, 1080),
+            list(_cv_module.DEFAULT_NP_CARD_SLOTS),
+            include_digit_model_debug=True,
+        )
+
+        assert [slot["gaugeDigitModelLabels"] for slot in result["slots"]] == [
+            ["1", "0", "0"],
+            ["2", "6", "0"],
+            ["3", "9", "0"],
+        ]
+        assert {slot["turnCountModelLabel"] for slot in result["slots"]} == {"4"}
+        assert [slot["gaugeHundredsVisible"] for slot in result["slots"]] == [
+            False,
+            False,
+            False,
+        ]
+
+    def test_model_mode_keeps_low_confidence_hundreds_unknown(self, monkeypatch):
+        from mash_cv import cv as _cv_module
+        from mash_cv.digit_classifier import DigitPrediction
+
+        monkeypatch.setattr(_cv_module, "_digit_recognition_mode", "enabled")
+        monkeypatch.setattr(
+            _cv_module,
+            "_predict_digit_in_region",
+            lambda _img, _region: DigitPrediction("1", 0.55, 0.10, False),
+        )
+
+        visible = _cv_module._np_gauge_hundreds_slot_visible(
+            _make_bgr_image(1920, 1080),
+            {"x": 0.1, "y": 0.1, "w": 0.02, "h": 0.03},
+        )
+
+        assert visible is None
 
     def test_returns_empty_when_no_regions(self):
         img = _make_bgr_image(2560, 1440)

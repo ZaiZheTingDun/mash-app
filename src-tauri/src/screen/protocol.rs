@@ -32,6 +32,8 @@ pub(super) enum SidecarCommand {
     ReadLevelDigits,
     ReadRegionLuma,
     ReleaseOcr,
+    SetDigitRecognitionMode,
+    SetSequenceRecognitionMode,
     SetServer,
     StartStream,
     StopStream,
@@ -67,5 +69,18 @@ mod tests {
 
         assert_eq!(value["cmd"], "find_supports");
         assert_eq!(value["expectedName"], "Mash");
+
+        let mode = request(
+            SidecarCommand::SetDigitRecognitionMode,
+            serde_json::json!({ "mode": "shadow" }),
+        )
+        .unwrap();
+        assert_eq!(mode["cmd"], "set_digit_recognition_mode");
+        let sequence_mode = request(
+            SidecarCommand::SetSequenceRecognitionMode,
+            serde_json::json!({ "mode": "shadow" }),
+        )
+        .unwrap();
+        assert_eq!(sequence_mode["cmd"], "set_sequence_recognition_mode");
     }
 }

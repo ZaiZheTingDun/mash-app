@@ -1,4 +1,5 @@
 import { Box, Flex, Text } from "@radix-ui/themes";
+import screenshotRegionConfig from "../../../sidecar/mash_cv/mash_cv/assets/digit_classifier/screenshot-regions-v1.json";
 import type {
   AttackButtonResultDto,
   BattleSceneResultDto,
@@ -65,14 +66,46 @@ const SUPPORT_GRAND_BADGE_H = 0.019;
 // overlay classifies a per-anchor score as a hit iff it clears this.
 const SUPPORT_GRAND_BADGE_MATCH_THRESHOLD = 0.65;
 
-// Mirrors `DEFAULT_NP_GAUGE_DIGIT_SLOT_REGIONS` in
-// `sidecar/mash_cv/mash_cv/cv.py`. These boxes are display-only: the
-// sidecar still owns the actual gauge read.
-const NP_GAUGE_DIGIT_SLOT_REGIONS = [
-  { x: -2 / 57, y: 0, w: 21 / 57, h: 1 },
-  { x: 17 / 57, y: 0, w: 23 / 57, h: 1 },
-  { x: 38 / 57, y: 0, w: 21 / 57, h: 1 },
-] as const;
+const BATTLE_DIGIT_SOURCES = screenshotRegionConfig.screenshotTypes.battle.sources;
+const NP_GAUGE_CONFIG = BATTLE_DIGIT_SOURCES.find(
+  (source) => source.name === "np_gauge"
+);
+if (!NP_GAUGE_CONFIG?.digitSlots) {
+  throw new Error("battle screenshot regions must define NP gauge digit slots");
+}
+const NP_GAUGE_REGIONS = NP_GAUGE_CONFIG.regions;
+const NP_GAUGE_SEQUENCE_REGIONS = NP_GAUGE_CONFIG.sequenceRegions;
+const NP_GAUGE_DIGIT_SLOT_REGIONS = NP_GAUGE_CONFIG.digitSlots.slots.map((slot) => ({
+  x: slot.x / NP_GAUGE_CONFIG.digitSlots.referenceWidth,
+  y: 0,
+  w: slot.w / NP_GAUGE_CONFIG.digitSlots.referenceWidth,
+  h: 1,
+}));
+const TURN_COUNT_DIGIT_REGION = (() => {
+  const region = BATTLE_DIGIT_SOURCES.find(
+    (source) => source.name === "turn_count"
+  )?.regions[0];
+  if (!region) {
+    throw new Error("battle screenshot regions must define turn_count");
+  }
+  return region;
+})();
+const DIGIT_POSITION_LABELS = ["百位", "十位", "个位"] as const;
+const DIGIT_SOURCE_LABELS: Record<string, string> = {
+  enemy_hp: "敌方生命值",
+  ally_hp: "己方生命值",
+  battle_progress: "战斗场次",
+  enemy_count: "敌方单位",
+};
+const OTHER_DIGIT_SOURCE_REGIONS = BATTLE_DIGIT_SOURCES.filter(
+  (source) => source.name !== "np_gauge" && source.name !== "turn_count"
+).flatMap((source) =>
+  source.regions.map((region) => ({
+    key: `${source.name}-${region.slot}`,
+    label: `CTC ${DIGIT_SOURCE_LABELS[source.name] ?? source.name}${source.regions.length > 1 ? region.slot + 1 : ""}`,
+    region,
+  }))
+);
 
 /**
  * All overlay state the canvas renders. The host component owns the
@@ -90,6 +123,7 @@ export interface DebugCanvasState {
   enhancementServantResult: EnhancementServantMatchResultDto | null;
   supportResult: FindSupportsResultDto | null;
   coordinates: RunnerCoordinatesDto | null;
+  showDigitRecognitionRegions: boolean;
   showCoordOverlay: boolean;
   visibleCoordGroups: string[];
 }
@@ -119,6 +153,7 @@ export function DebugCanvas({
   enhancementServantResult,
   supportResult,
   coordinates,
+  showDigitRecognitionRegions,
   showCoordOverlay,
   visibleCoordGroups,
   onImgLoad,
@@ -282,6 +317,80 @@ export function DebugCanvas({
           }
           return overlays;
         })}
+        {showDigitRecognitionRegions && (
+          <>
+            {OTHER_DIGIT_SOURCE_REGIONS.map(({ key, label, region }) => (
+              <Box
+                key={`digit-source-${key}`}
+                className="debug-overlay-box debug-overlay-digit-source debug-overlay-other-digit-source"
+                style={{
+                  left: `${region.x * 100}%`,
+                  top: `${region.y * 100}%`,
+                  width: `${region.w * 100}%`,
+                  height: `${region.h * 100}%`,
+                }}
+              >
+                <span className="debug-overlay-label">{label}</span>
+              </Box>
+            ))}
+            {NP_GAUGE_SEQUENCE_REGIONS.map((region, slot) => (
+              <Box
+                key={`np-sequence-${slot}`}
+                className="debug-overlay-box debug-overlay-digit-source debug-overlay-sequence-source"
+                style={{
+                  left: `${region.x * 100}%`,
+                  top: `${region.y * 100}%`,
+                  width: `${region.w * 100}%`,
+                  height: `${region.h * 100}%`,
+                }}
+              >
+                <span className="debug-overlay-label">CTC NP{slot + 1}</span>
+              </Box>
+            ))}
+            <Box
+              className="debug-overlay-box debug-overlay-digit-source debug-overlay-turn-count"
+              style={{
+                left: `${TURN_COUNT_DIGIT_REGION.x * 100}%`,
+                top: `${TURN_COUNT_DIGIT_REGION.y * 100}%`,
+                width: `${TURN_COUNT_DIGIT_REGION.w * 100}%`,
+                height: `${TURN_COUNT_DIGIT_REGION.h * 100}%`,
+              }}
+            >
+              <span className="debug-overlay-label">
+                回合数 {npGaugeSlots[0]?.turnCountModelLabel ?? "?"}
+              </span>
+            </Box>
+            {NP_GAUGE_REGIONS.flatMap((gaugeRegion, slot) =>
+              NP_GAUGE_DIGIT_SLOT_REGIONS.map((digitRegion, digitIndex) => {
+                const value = npGaugeSlots.find((result) => result.slot === slot)
+                  ?.gaugeDigitModelLabels?.[digitIndex];
+                return {
+                  key: `digit-region-${slot}-${digitIndex}`,
+                  label: `NP${slot + 1} ${DIGIT_POSITION_LABELS[digitIndex]} ${value ?? "?"}`,
+                  region: {
+                    x: gaugeRegion.x + digitRegion.x * gaugeRegion.w,
+                    y: gaugeRegion.y + digitRegion.y * gaugeRegion.h,
+                    w: digitRegion.w * gaugeRegion.w,
+                    h: digitRegion.h * gaugeRegion.h,
+                  },
+                };
+              })
+            ).map(({ key, label, region }) => (
+              <Box
+                key={key}
+                className="debug-overlay-box debug-overlay-digit-source debug-overlay-np-digit-source"
+                style={{
+                  left: `${region.x * 100}%`,
+                  top: `${region.y * 100}%`,
+                  width: `${region.w * 100}%`,
+                  height: `${region.h * 100}%`,
+                }}
+              >
+                <span className="debug-overlay-label">{label}</span>
+              </Box>
+            ))}
+          </>
+        )}
         {npGaugeSlots.map((s) => {
           const region = s.gaugeRegion ?? s.cardRegion;
           return (
@@ -304,19 +413,6 @@ export function DebugCanvas({
                   : "端帽 ?"}
                 {s.gaugeDigitCount != null ? ` · gauge ${s.gaugeDigitCount}位` : ""}
               </span>
-              {s.gaugeRegion &&
-                NP_GAUGE_DIGIT_SLOT_REGIONS.map((digitRegion, idx) => (
-                  <span
-                    key={`np-gauge-${s.slot}-digit-${idx}`}
-                    className="debug-overlay-np-digit-slot"
-                    style={{
-                      left: `${digitRegion.x * 100}%`,
-                      top: `${digitRegion.y * 100}%`,
-                      width: `${digitRegion.w * 100}%`,
-                      height: `${digitRegion.h * 100}%`,
-                    }}
-                  />
-                ))}
               {s.npGlowRegion && (
                 <span
                   className={`debug-overlay-np-glow-slot ${

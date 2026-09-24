@@ -439,6 +439,23 @@ fn start_automation_with_config(
             }
         };
 
+        if let Err(err) = sidecar.set_digit_recognition_mode(
+            debug_settings
+                .image_recognition_debug_mode
+                .as_sidecar_value(),
+        ) {
+            fail_automation_start(&app, &state, format!("配置图像识别调试模式失败: {err}"));
+            return;
+        }
+        if let Err(err) = sidecar.set_sequence_recognition_mode(
+            debug_settings
+                .sequence_recognition_debug_mode
+                .as_sidecar_value(),
+        ) {
+            fail_automation_start(&app, &state, format!("配置序列识别调试模式失败: {err}"));
+            return;
+        }
+
         let (w, h) = match sidecar.start_stream(
             adb_dev.path(),
             &jar_path,

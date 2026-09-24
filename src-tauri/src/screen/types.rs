@@ -530,6 +530,26 @@ pub struct NoblePhantasmMatch {
     /// visible hundreds digit means the gauge is at least 100%.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gauge_hundreds_visible: Option<bool>,
+    /// Hundreds, tens, and ones produced by the trained classifier while
+    /// shadow mode is active. ``"未识别"`` keeps an uncertain position
+    /// visible in the operation log instead of silently dropping it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gauge_digit_model_labels: Option<Vec<String>>,
+    /// Current turn count read from the same Battle frame in shadow mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_count_model_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gauge_sequence_value: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gauge_sequence_confidence: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gauge_sequence_accepted: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_sequence_value: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_sequence_confidence: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_sequence_accepted: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gauge_region: Option<NormRect>,
     /// Probe for the bright NP-charge slot near the right end of the

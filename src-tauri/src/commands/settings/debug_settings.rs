@@ -7,9 +7,32 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::Manager;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ImageRecognitionDebugMode {
+    Enabled,
+    Shadow,
+    #[default]
+    Disabled,
+}
+
+impl ImageRecognitionDebugMode {
+    pub(crate) fn as_sidecar_value(self) -> &'static str {
+        match self {
+            Self::Enabled => "enabled",
+            Self::Shadow => "shadow",
+            Self::Disabled => "disabled",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DebugSettings {
+    #[serde(default)]
+    pub image_recognition_debug_mode: ImageRecognitionDebugMode,
+    #[serde(default)]
+    pub sequence_recognition_debug_mode: ImageRecognitionDebugMode,
     #[serde(default)]
     pub auto_capture_battle_before_attack: bool,
     #[serde(default)]
@@ -93,6 +116,22 @@ fn debug_settings_with_auto_capture_battle_result_loot(
     settings
 }
 
+fn debug_settings_with_image_recognition_debug_mode(
+    mut settings: DebugSettings,
+    value: ImageRecognitionDebugMode,
+) -> DebugSettings {
+    settings.image_recognition_debug_mode = value;
+    settings
+}
+
+fn debug_settings_with_sequence_recognition_debug_mode(
+    mut settings: DebugSettings,
+    value: ImageRecognitionDebugMode,
+) -> DebugSettings {
+    settings.sequence_recognition_debug_mode = value;
+    settings
+}
+
 fn debug_settings_with_auto_capture_battle_before_attack(
     mut settings: DebugSettings,
     value: bool,
@@ -141,6 +180,28 @@ pub(crate) fn set_auto_capture_battle_before_attack(
 ) -> Result<DebugSettings, String> {
     update_debug_settings(&app, state.inner(), |settings| {
         *settings = debug_settings_with_auto_capture_battle_before_attack(*settings, value);
+    })
+}
+
+#[tauri::command]
+pub(crate) fn set_image_recognition_debug_mode(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<DebugSettings>>,
+    value: ImageRecognitionDebugMode,
+) -> Result<DebugSettings, String> {
+    update_debug_settings(&app, state.inner(), |settings| {
+        *settings = debug_settings_with_image_recognition_debug_mode(*settings, value);
+    })
+}
+
+#[tauri::command]
+pub(crate) fn set_sequence_recognition_debug_mode(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<DebugSettings>>,
+    value: ImageRecognitionDebugMode,
+) -> Result<DebugSettings, String> {
+    update_debug_settings(&app, state.inner(), |settings| {
+        *settings = debug_settings_with_sequence_recognition_debug_mode(*settings, value);
     })
 }
 

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "screenshotTypes": {
+    "battle": {
+      "referenceResolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "sources": [
+        {
+          "name": "enemy_hp",
+          "style": "battle_hud",
+          "extractor": "components",
+          "previewColor": [64, 64, 255],
+          "regions": [
+            { "slot": 0, "x": 0.100, "y": 0.055, "w": 0.080, "h": 0.036 },
+            { "slot": 1, "x": 0.285, "y": 0.055, "w": 0.090, "h": 0.036 },
+            { "slot": 2, "x": 0.480, "y": 0.055, "w": 0.090, "h": 0.036 }
+          ]
+        },
+        {
+          "name": "ally_hp",
+          "style": "battle_hud",
+          "extractor": "components",
+          "previewColor": [255, 160, 32],
+          "regions": [
+            { "slot": 0, "x": 0.160, "y": 0.858, "w": 0.070, "h": 0.036 },
+            { "slot": 1, "x": 0.408, "y": 0.858, "w": 0.070, "h": 0.036 },
+            { "slot": 2, "x": 0.658, "y": 0.858, "w": 0.070, "h": 0.036 }
+          ]
+        },
+        {
+          "name": "np_gauge",
+          "style": "battle_hud_fixed_slot",
+          "extractor": "fixed_digit_slots",
+          "previewColor": [32, 220, 255],
+          "regions": [
+            { "slot": 0, "x": 0.182, "y": 0.913, "w": 0.0297, "h": 0.0278 },
+            { "slot": 1, "x": 0.429, "y": 0.913, "w": 0.0297, "h": 0.0278 },
+            { "slot": 2, "x": 0.678, "y": 0.913, "w": 0.0297, "h": 0.0278 }
+          ],
+          "sequenceRegions": [
+            { "slot": 0, "x": 0.182, "y": 0.913, "w": 0.0308, "h": 0.0278 },
+            { "slot": 1, "x": 0.430, "y": 0.913, "w": 0.0308, "h": 0.0278 },
+            { "slot": 2, "x": 0.677, "y": 0.913, "w": 0.0308, "h": 0.0278 }
+          ],
+          "digitSlots": {
+            "referenceWidth": 58,
+            "slots": [
+              { "position": "hundreds", "x": -3, "w": 24 },
+              { "position": "tens", "x": 16, "w": 24 },
+              { "position": "ones", "x": 34, "w": 24 }
+            ]
+          }
+        },
+        {
+          "name": "battle_progress",
+          "style": "battle_hud",
+          "extractor": "components",
+          "previewColor": [64, 255, 64],
+          "regions": [
+            { "slot": 0, "x": 0.683, "y": 0.012, "w": 0.050, "h": 0.040 }
+          ]
+        },
+        {
+          "name": "enemy_count",
+          "style": "battle_hud",
+          "extractor": "components",
+          "previewColor": [255, 64, 220],
+          "regions": [
+            { "slot": 0, "x": 0.680, "y": 0.066, "w": 0.075, "h": 0.038 }
+          ]
+        },
+        {
+          "name": "turn_count",
+          "style": "battle_hud",
+          "extractor": "components",
+          "previewColor": [220, 220, 64],
+          "regions": [
+            { "slot": 0, "x": 0.680, "y": 0.112, "w": 0.075, "h": 0.038 }
+          ]
+        }
+      ]
+    }
+  }
+}

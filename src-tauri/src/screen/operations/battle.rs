@@ -73,7 +73,49 @@ impl SidecarClient {
         image_path: Option<&Path>,
         np_regions: Option<&[NormRect]>,
     ) -> Result<Vec<NoblePhantasmMatch>, String> {
-        let mut req = request(SidecarCommand::FindNoblePhantasms, serde_json::json!({}))?;
+        self.find_noble_phantasms_with_options(image_path, np_regions, false, false)
+    }
+
+    /// Battle-only gauge read. Complete-number regions do not align with the
+    /// Attack card screen, so sequence recognition is explicitly opted in.
+    pub fn find_battle_noble_phantasms(
+        &mut self,
+        image_path: Option<&Path>,
+        np_regions: Option<&[NormRect]>,
+    ) -> Result<Vec<NoblePhantasmMatch>, String> {
+        self.find_noble_phantasms_with_options(image_path, np_regions, false, true)
+    }
+
+    /// Debug variant that also classifies the current turn and all three
+    /// fixed NP-gauge digit positions without changing readiness decisions.
+    pub fn find_noble_phantasms_with_digit_debug(
+        &mut self,
+        image_path: Option<&Path>,
+        np_regions: Option<&[NormRect]>,
+        include_digit_model_debug: bool,
+    ) -> Result<Vec<NoblePhantasmMatch>, String> {
+        self.find_noble_phantasms_with_options(
+            image_path,
+            np_regions,
+            include_digit_model_debug,
+            include_digit_model_debug,
+        )
+    }
+
+    fn find_noble_phantasms_with_options(
+        &mut self,
+        image_path: Option<&Path>,
+        np_regions: Option<&[NormRect]>,
+        include_digit_model_debug: bool,
+        include_sequence_recognition: bool,
+    ) -> Result<Vec<NoblePhantasmMatch>, String> {
+        let mut req = request(
+            SidecarCommand::FindNoblePhantasms,
+            serde_json::json!({
+                "includeDigitModelDebug": include_digit_model_debug,
+                "includeSequenceRecognition": include_sequence_recognition,
+            }),
+        )?;
         if let Some(regions) = np_regions {
             if let Some(obj) = req.as_object_mut() {
                 obj.insert(
@@ -167,6 +209,9 @@ impl SidecarClient {
         region: NormRect,
     ) -> Result<Option<(u32, u32)>, String> {
         let resp = self.send_read_battle_scene(image_path, region, false)?;
+        if let Some(error) = resp.get("error").and_then(|value| value.as_str()) {
+            return Err(error.to_string());
+        }
         let scene = resp["scene"].as_u64().map(|number| number as u32);
         let total = resp["total"].as_u64().map(|number| number as u32);
         Ok(scene.zip(total))

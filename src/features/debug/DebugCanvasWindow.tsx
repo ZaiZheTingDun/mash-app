@@ -13,6 +13,7 @@ const EMPTY_STATE: DebugCanvasState = {
   enhancementServantResult: null,
   supportResult: null,
   coordinates: null,
+  showDigitRecognitionRegions: false,
   showCoordOverlay: false,
   visibleCoordGroups: [],
 };
