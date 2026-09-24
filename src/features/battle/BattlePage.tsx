@@ -128,6 +128,7 @@ interface BattlePageProps {
   onOpenProjectSettings: () => void;
   onUpdateProject: (project: Project) => Promise<void>;
   onBack: () => void;
+  onOpenHome?: () => void;
   onAutomationStart?: (maxRuns: number | null) => void;
   onAutomationStartFailed?: () => void;
   onLogEntry?: (message: string) => void;
@@ -427,6 +428,7 @@ export function BattlePage({
   onOpenProjectSettings,
   onUpdateProject,
   onBack,
+  onOpenHome,
   onAutomationStart,
   onAutomationStartFailed,
   onLogEntry,
@@ -681,6 +683,7 @@ export function BattlePage({
           onReorderProjectGroups={onReorderProjectGroups}
           onReorderProjectsInGroup={onReorderProjectsInGroup}
           onOpenProjectSettings={onOpenProjectSettings}
+          onOpenHome={onOpenHome}
         />
       </Box>
 

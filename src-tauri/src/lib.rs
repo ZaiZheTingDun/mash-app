@@ -310,6 +310,8 @@ pub fn run() {
             commands::projects::reorder_projects_in_group,
             commands::projects::get_grand_class_definitions,
             commands::projects::get_active_project_id,
+            commands::projects::get_home_master_figure_id,
+            commands::projects::set_home_master_figure_id,
             commands::projects::set_active_project_id,
             commands::projects::get_app_theme,
             commands::projects::set_app_theme,

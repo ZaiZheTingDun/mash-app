@@ -26659,7 +26659,7 @@
     "id": 9408850,
     "collectionNo": 2459,
     "name": "京乱怒濤",
-    "name_cn": null,
+    "name_cn": "京乱怒涛",
     "rarity": 5,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26670,7 +26670,7 @@
     "id": 9408860,
     "collectionNo": 2460,
     "name": "蛍の夜に",
-    "name_cn": null,
+    "name_cn": "于萤火之夜",
     "rarity": 4,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26681,7 +26681,7 @@
     "id": 9408870,
     "collectionNo": 2461,
     "name": "ぐだぐだ新選組",
-    "name_cn": null,
+    "name_cn": "唠唠叨叨新选组",
     "rarity": 3,
     "flag": "svtEquipEvent",
     "flags": [
@@ -26692,7 +26692,7 @@
     "id": 9408880,
     "collectionNo": 2462,
     "name": "デュアル・バーニング",
-    "name_cn": null,
+    "name_cn": "双重燃烧",
     "rarity": 5,
     "flag": "svtEquipEventReward",
     "flags": [
@@ -26703,7 +26703,7 @@
     "id": 9809570,
     "collectionNo": 2463,
     "name": "概念礼装EXPカード：もぐもぐ彦斎",
-    "name_cn": null,
+    "name_cn": "概念礼装经验卡：大口吃饭的彦斋",
     "rarity": 4,
     "flag": "svtEquipExp",
     "flags": [
@@ -26714,7 +26714,7 @@
     "id": 9809580,
     "collectionNo": 2464,
     "name": "概念礼装EXPカード：死に損ねの赤狼",
-    "name_cn": null,
+    "name_cn": "概念礼装经验卡：死未遂的赤狼",
     "rarity": 3,
     "flag": "svtEquipExp",
     "flags": [
@@ -26725,7 +26725,7 @@
     "id": 9310940,
     "collectionNo": 2465,
     "name": "ただの握り飯",
-    "name_cn": null,
+    "name_cn": "普通的饭团",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -26736,7 +26736,7 @@
     "id": 9310970,
     "collectionNo": 2466,
     "name": "からくり義肢",
-    "name_cn": null,
+    "name_cn": "机关义肢",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -26747,7 +26747,7 @@
     "id": 9310950,
     "collectionNo": 2467,
     "name": "大陸の風",
-    "name_cn": null,
+    "name_cn": "大陆之风",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [
@@ -26758,7 +26758,7 @@
     "id": 9310960,
     "collectionNo": 2468,
     "name": "誠の旗",
-    "name_cn": null,
+    "name_cn": "诚之旗",
     "rarity": 4,
     "flag": "svtEquipFriendShip",
     "flags": [

@@ -18,6 +18,7 @@ import { EnhancementPage } from "./features/enhancement/EnhancementPage";
 import { CraftEssenceEnhancementPage } from "./features/craft-essence-enhancement/CraftEssenceEnhancementPage";
 import { FriendPointSummonPage } from "./features/friend-point-summon/FriendPointSummonPage";
 import { RankUpQuestPage } from "./features/rank-up-quest/RankUpQuestPage";
+import { HomePage } from "./features/home/HomePage";
 import { DebugPage } from "./features/debug/DebugPage";
 import { StatusBar } from "./features/status/StatusBar";
 import { ProjectBar } from "./features/projects/ProjectBar";
@@ -65,11 +66,11 @@ import {
   type LogLevel,
   type OperationLogEntry,
 } from "./operationLog";
-// Linear flow: 队伍设置 → 指令设置 → 开始任务. Each forward step is
-// triggered by the bottom-right primary button on the previous page;
-// `debug` is reached out-of-band from the sidebar. Replaces the older
-// horizontal `StageNavigator` (queue/support/command tabs).
+// The battle flow remains 队伍设置 → 指令设置 → 开始任务.
+// Home is an optional entry point for battle and the standalone tools;
+// `debug` remains an out-of-band view.
 type View =
+  | "home"
   | "team"
   | "command"
   | "battle"
@@ -118,6 +119,7 @@ function App({
   startupReady = true,
 }: AppProps) {
   const [view, setView] = useState<View>("team");
+  const [homeMasterFigureId, setHomeMasterFigureId] = useState(470);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("basic");
@@ -518,13 +520,21 @@ function App({
   }, []);
 
   useEffect(() => {
+    if (!setupReady) return;
     void invoke<MysticCode[]>("get_mystic_codes")
       .then((value) => setMysticCodes(value ?? []))
       .catch((err) => {
         console.warn("御主礼装资源不可用", err);
         setMysticCodes([]);
       });
-  }, []);
+  }, [setupReady]);
+
+  useEffect(() => {
+    if (!startupReady) return;
+    void invoke<number>("get_home_master_figure_id")
+      .then((id) => setHomeMasterFigureId(id))
+      .catch((error) => console.warn("无法读取主页立绘设置", error));
+  }, [startupReady]);
 
   // Load both static catalogs in parallel. The CE catalog is small (just
   // id/name) and shared across all projects, so caching it on the App
@@ -886,11 +896,6 @@ function App({
     setView("debug");
   }, []);
 
-  const handleOpenEnhancement = useCallback(() => {
-    if (!featureToggles.servantEnhancement) return;
-    setView("enhancement");
-  }, []);
-
   const handleOpenCraftEssenceEnhancement = useCallback(() => {
     if (!featureToggles.craftEssenceEnhancement) return;
     setView("craftEssenceEnhancement");
@@ -920,6 +925,15 @@ function App({
   // the linear flow) rather than to "config", which no longer exists.
   const handleBackToConfig = useCallback(() => {
     setView("team");
+  }, []);
+
+  const handleOpenHome = useCallback(() => {
+    setView("home");
+  }, []);
+
+  const handleSelectHomeFigure = useCallback(async (id: number) => {
+    const savedId = await invoke<number>("set_home_master_figure_id", { id });
+    setHomeMasterFigureId(savedId);
   }, []);
 
   const handleGotoCommand = useCallback(() => {
@@ -976,7 +990,21 @@ function App({
     <Flex direction="column" className="app-root" data-theme={theme}>
       <Flex className="app-container">
         <Box className="main-content">
-          {view === "battle" ? (
+          {view === "home" ? (
+            <HomePage
+              mysticCodes={mysticCodes}
+              figureId={homeMasterFigureId}
+              gender={mysticCodeGender}
+              showSummon={featureToggles.friendPointSummon}
+              showEnhancement={featureToggles.craftEssenceEnhancement}
+              showRankUpQuest={featureToggles.rankUpQuest}
+              onSelectFigure={handleSelectHomeFigure}
+              onOpenTeam={handleBackToConfig}
+              onOpenSummon={handleOpenFriendPointSummon}
+              onOpenCraftEssenceEnhancement={handleOpenCraftEssenceEnhancement}
+              onOpenRankUpQuest={handleOpenRankUpQuest}
+            />
+          ) : view === "battle" ? (
             <BattlePage
               projects={projects}
               projectCatalog={projectCatalog}
@@ -997,6 +1025,7 @@ function App({
               onOpenProjectSettings={handleOpenProjectSettings}
               onUpdateProject={handleUpdateProject}
               onBack={handleBackToConfig}
+              onOpenHome={handleOpenHome}
               onAutomationStart={handleBattleAutomationStart}
               onAutomationStartFailed={handleBattleAutomationStartFailed}
               onLogEntry={appendOperationLog}
@@ -1007,7 +1036,7 @@ function App({
               projects={projects}
               activeProjectId={activeProjectId}
               onProjectSelect={handleProjectSelect}
-              onBack={handleBackToConfig}
+              onBack={handleOpenHome}
               onAutomationStart={() => handleBattleAutomationStart(null)}
               onAutomationStartFailed={handleBattleAutomationStartFailed}
               onLogEntry={appendOperationLog}
@@ -1022,14 +1051,14 @@ function App({
           ) : view === "craftEssenceEnhancement" &&
             featureToggles.craftEssenceEnhancement ? (
             <CraftEssenceEnhancementPage
-              onBack={handleBackToConfig}
+              onBack={handleOpenHome}
               onAutomationStart={handleStandaloneAutomationStart}
               onLogEntry={appendOperationLog}
             />
           ) : view === "friendPointSummon" &&
             featureToggles.friendPointSummon ? (
             <FriendPointSummonPage
-              onBack={handleBackToConfig}
+              onBack={handleOpenHome}
               onAutomationStart={handleStandaloneAutomationStart}
               onLogEntry={appendOperationLog}
             />
@@ -1059,6 +1088,7 @@ function App({
                 onReorderProjectGroups={handleReorderProjectGroups}
                 onReorderProjectsInGroup={handleReorderProjectsInGroup}
                 onOpenProjectSettings={handleOpenProjectSettings}
+                onOpenHome={handleOpenHome}
               />
               {loading ? (
                 <Flex align="center" justify="center" style={{ flex: 1 }}>
@@ -1161,56 +1191,8 @@ function App({
                           void handleUpdateProject({ ...activeProject, mysticCodeId: id });
                         }}
                       />
-                      {featureToggles.friendPointSummon && (
-                        <Button
-                          type="button"
-                          variant="soft"
-                          color="gray"
-                          onClick={handleOpenFriendPointSummon}
-                        >
-                          <Text size="2" weight="medium">
-                            友情点抽取
-                          </Text>
-                        </Button>
-                      )}
-                      {featureToggles.craftEssenceEnhancement && (
-                        <Button
-                          type="button"
-                          variant="soft"
-                          color="gray"
-                          onClick={handleOpenCraftEssenceEnhancement}
-                        >
-                          <Text size="2" weight="medium">
-                            强化概念礼装
-                          </Text>
-                        </Button>
-                      )}
-                      {featureToggles.rankUpQuest && (
-                        <Button
-                          type="button"
-                          variant="soft"
-                          color="gray"
-                          onClick={handleOpenRankUpQuest}
-                        >
-                          <Text size="2" weight="medium">
-                            强化任务
-                          </Text>
-                        </Button>
-                      )}
                     </Flex>
                     <Flex align="center" gap="3">
-                      {featureToggles.servantEnhancement && (
-                        <Button
-                          type="button"
-                          variant="soft"
-                          color="gray"
-                          onClick={handleOpenEnhancement}
-                        >
-                          <Text size="2" weight="medium">
-                            强化从者
-                          </Text>
-                        </Button>
-                      )}
                       <Button type="button" onClick={handleGotoCommand}>
                         <Text size="2" weight="bold">
                           指令设置

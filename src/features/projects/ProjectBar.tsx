@@ -51,6 +51,7 @@ interface ProjectBarProps {
   onReorderProjectGroups: (groupIds: string[]) => Promise<void>;
   onReorderProjectsInGroup: (groupId: string | null, projectIds: string[]) => Promise<void>;
   onOpenProjectSettings: () => void;
+  onOpenHome?: () => void;
 }
 
 type NameDialogMode = "create" | "rename" | "duplicate";
@@ -82,6 +83,7 @@ export function ProjectBar({
   onReorderProjectGroups,
   onReorderProjectsInGroup,
   onOpenProjectSettings,
+  onOpenHome,
 }: ProjectBarProps) {
   const [nameDialogMode, setNameDialogMode] = useState<NameDialogMode | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -203,6 +205,11 @@ export function ProjectBar({
 
   return (
     <Box className="project-bar">
+      {onOpenHome && (
+        <Button type="button" variant="surface" color="gray" className="project-home-button" disabled={disabled} onClick={onOpenHome}>
+          主页
+        </Button>
+      )}
       <Flex align="center" justify="center" gap="2" className="project-bar-controls">
         <ProjectSelector
           projects={projects}

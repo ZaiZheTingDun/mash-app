@@ -152,6 +152,11 @@ pub(crate) fn refresh_asset_protocol_scope(app: &tauri::AppHandle) -> Result<(),
             .allow_directory(dir, true)
             .map_err(|e| e.to_string())?;
     }
+    if let Some(dir) = resolve_mystic_code_assets_dir(app) {
+        asset_scope
+            .allow_directory(dir, true)
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 

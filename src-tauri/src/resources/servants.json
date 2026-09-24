@@ -1414,18 +1414,10 @@
     "rarity": 5,
     "noblePhantasms": [
       {
-        "id": 102701,
+        "id": 102702,
         "name": "Mumyo Sandan Zuki",
         "nameJP": "無明三段突き",
         "nameCN": "无明三段突",
-        "card": "3",
-        "cardName": "quick"
-      },
-      {
-        "id": 102702,
-        "name": "むみょうさんだんづき",
-        "nameJP": "無明三段突き",
-        "nameCN": "無明三段突き",
         "card": "3",
         "cardName": "quick"
       }
@@ -9575,7 +9567,7 @@
   {
     "id": 605100,
     "collectionNo": 453,
-    "nameCN": "河上彦斎",
+    "nameCN": "河上彦斋",
     "nameJP": "河上彦斎",
     "classId": 6,
     "className": "assassin",
@@ -9584,9 +9576,9 @@
     "noblePhantasms": [
       {
         "id": 605101,
-        "name": "ばっとう・かむい",
+        "name": "Battou Kamui",
         "nameJP": "抜刀・神威",
-        "nameCN": "抜刀・神威",
+        "nameCN": "拔刀·神威",
         "card": "2",
         "cardName": "buster"
       }
@@ -9604,9 +9596,9 @@
     "noblePhantasms": [
       {
         "id": 1102101,
-        "name": "さきがけ・いちばんぼし！！",
+        "name": "Sakigake Ichibannboshi！！",
         "nameJP": "魁・一番星！！",
-        "nameCN": "魁・一番星！！",
+        "nameCN": "魁·一番星！！",
         "card": "3",
         "cardName": "quick"
       }
@@ -9624,9 +9616,9 @@
     "noblePhantasms": [
       {
         "id": 306101,
-        "name": "しなずいちもんじ",
+        "name": "Shinazu Ichimonnji",
         "nameJP": "死損ね一文字",
-        "nameCN": "死損ね一文字",
+        "nameCN": "死未遂一文字",
         "card": "2",
         "cardName": "buster"
       }
@@ -9644,9 +9636,9 @@
     "noblePhantasms": [
       {
         "id": 106401,
-        "name": "まことのはた",
+        "name": "Makoto no Hata",
         "nameJP": "誠の旗",
-        "nameCN": "誠の旗",
+        "nameCN": "诚之旗",
         "card": "1",
         "cardName": "arts"
       }

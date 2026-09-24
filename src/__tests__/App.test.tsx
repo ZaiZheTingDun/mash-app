@@ -63,6 +63,8 @@ function installAppMock(
         return savedActiveProjectId;
       case "get_battle_start_panel":
         return options.battleStartPanel ?? "operationLog";
+      case "get_home_master_figure_id":
+        return 470;
       case "check_adb":
         return { connected: false, deviceName: null };
       case "get_server":
@@ -135,6 +137,8 @@ describe("App active project restore", () => {
     await user.click(await screen.findByRole("button", { name: "开始任务" }));
     await user.click(await screen.findByRole("button", { name: "开始" }));
 
+    expect(screen.getByRole("button", { name: "主页" })).toBeDisabled();
+
     expect(screen.getByRole("button", { name: "关闭运行状态" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "关闭操作日志" })
@@ -175,7 +179,8 @@ describe("App active project restore", () => {
       screen.getByRole("button", { name: "关闭操作日志" })
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "强化概念礼装" }));
+    await user.click(screen.getByRole("button", { name: "主页" }));
+    await user.click(screen.getByRole("button", { name: "强化" }));
     await user.click(
       screen.getByRole("button", { name: "制作丸子（节省 QP 策略）" })
     );
@@ -232,7 +237,8 @@ describe("App active project restore", () => {
     );
 
     expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "友情点抽取" }));
+    await user.click(screen.getByRole("button", { name: "主页" }));
+    await user.click(screen.getByRole("button", { name: "召唤" }));
 
     expect(
       screen.getByRole("button", { name: "开始友情点抽取" })
@@ -240,6 +246,37 @@ describe("App active project restore", () => {
     expect(
       screen.getByText(/程序只执行“100次召唤”流程，并在无法继续时停止。/)
     ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "返回" }));
+    expect(screen.getByRole("navigation", { name: "主页菜单" })).toBeInTheDocument();
+  });
+
+  it("keeps the team page as the startup view and routes through the home battle menu", async () => {
+    installAppMock("project-1");
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "主页" })).toBeInTheDocument();
+    for (const label of ["友情点抽取", "强化概念礼装", "强化任务", "强化从者"]) {
+      expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
+    }
+
+    await user.click(screen.getByRole("button", { name: "主页" }));
+    expect(screen.getByRole("navigation", { name: "主页菜单" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "战斗" }));
+    expect(screen.getByRole("button", { name: "编队/开始" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "强化任务" }));
+    expect(screen.getByText("强化任务")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "返回" }));
+    expect(screen.getByRole("navigation", { name: "主页菜单" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "战斗" }));
+    await user.click(screen.getByRole("button", { name: "编队/开始" }));
+    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "指令设置" }));
+    expect(screen.getByRole("button", { name: "主页" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "主页" }));
+    expect(screen.getByRole("navigation", { name: "主页菜单" })).toBeInTheDocument();
   });
 
   it("opens the self-check dialog from the menu event", async () => {

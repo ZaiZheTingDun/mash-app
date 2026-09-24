@@ -28,8 +28,10 @@
             "$APPDATA/**",
             "$RESOURCE/assets/servants/**",
             "$RESOURCE/assets/ces/**",
+            "$RESOURCE/assets/mystic-codes/**",
             "**/src-tauri/assets/servants/**",
-            "**/src-tauri/assets/ces/**"
+            "**/src-tauri/assets/ces/**",
+            "**/src-tauri/assets/mystic-codes/**"
           ]
         }
       }
