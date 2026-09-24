@@ -7,10 +7,14 @@ use super::*;
 
 impl Runner {
     pub(crate) fn handle_support_select(&mut self) {
-        // No servant pinned → fall back to "tap the top of the list" so
-        // existing setups that never picked a support still work.
+        // No servant pinned → preserve the legacy top-row pick unless a CE
+        // is configured, in which case the CE alone identifies the row.
         let Some(servant_id) = self.config.support_servant_id else {
-            self.legacy_pick_first_support();
+            if self.support_ce_filter_enabled() {
+                self.handle_support_ce_only_select();
+            } else {
+                self.legacy_pick_first_support();
+            }
             return;
         };
 
@@ -99,6 +103,7 @@ impl Runner {
             meta.require_np_match,
             include_support_details,
             support_full_list_ocr_fallback,
+            false,
         ) {
             Ok(r) => r,
             Err(e) => {
@@ -318,6 +323,125 @@ impl Runner {
                 "SupportSelect",
                 "查找助战",
                 format!("刷新 {} 次仍未找到 {}", SUPPORT_MAX_REFRESHES, meta.name),
+            );
+        }
+    }
+
+    /// Select a support by its equipped Craft Essence when no servant is
+    /// pinned. The sidecar returns the visible row anchors without applying
+    /// name matching, then the ordinary/grand CE verifier chooses a row.
+    pub(crate) fn handle_support_ce_only_select(&mut self) {
+        let missing_template = if self.config.support_grand_mode {
+            let expected = (0..3).find(|&index| {
+                !grand_support_ce_ids(&self.config, index).is_empty()
+                    && self.resolve_support_grand_ce_templates()[index].is_empty()
+            });
+            expected.map(|index| format!("冠位礼装 {} 模板不可用", index + 1))
+        } else if !ordinary_support_ce_ids(&self.config).is_empty()
+            && self.resolve_support_ce_templates().is_empty()
+        {
+            Some("已配置礼装的识别模板不可用".to_string())
+        } else {
+            None
+        };
+        if let Some(reason) = missing_template {
+            self.fail_action("SupportSelect", "按礼装查找助战", reason);
+            return;
+        }
+
+        let support_full_list_ocr_fallback = self.config.support_full_list_ocr_fallback;
+        let result = match self.sidecar().find_supports(
+            None,
+            "",
+            &[],
+            &[],
+            &[],
+            false,
+            false,
+            support_full_list_ocr_fallback,
+            true,
+        ) {
+            Ok(result) => result,
+            Err(error) => {
+                self.release_support_ocr();
+                self.fail_action("SupportSelect", "OCR 助战识别", error);
+                return;
+            }
+        };
+
+        for (index, row) in result.supports.iter().enumerate() {
+            if self.support_row_ce_mismatch(row).is_none() {
+                self.release_support_ocr();
+                let label = if row.name_text.is_empty() {
+                    format!("第 {} 行", index + 1)
+                } else {
+                    row.name_text.clone()
+                };
+                self.emit("SupportSelect", &format!("找到礼装匹配的助战: {label}"));
+                self.emit_debug("SupportSelect", &format!("礼装匹配助战 {label}"));
+                if !self.tap_at("SupportSelect", support_row_tap_point(row)) {
+                    return;
+                }
+                self.support_selected = true;
+                self.support_scroll_count = 0;
+                self.support_refresh_count = 0;
+                self.support_grand_section_seen = false;
+                self.support_grand_section_misses = 0;
+                thread::sleep(ACTION_DELAY);
+                return;
+            }
+        }
+
+        let grand_section_exhausted = self.config.support_grand_mode
+            && self.update_support_grand_section_exhausted(
+                result.diagnostics.is_grand_section_visible,
+            );
+        if !grand_section_exhausted && !self.support_scroll_bar_at_end() {
+            self.emit(
+                "SupportSelect",
+                &format!(
+                    "当前助战列表没有匹配礼装，继续滚动… ({})",
+                    self.support_scroll_count + 1
+                ),
+            );
+            if !self.scroll_support_list(&result.diagnostics.confirm_button_anchors) {
+                return;
+            }
+            self.support_scroll_count += 1;
+            thread::sleep(SUPPORT_SCROLL_SETTLE);
+        } else if self.support_refresh_count < SUPPORT_MAX_REFRESHES {
+            let reason = if grand_section_exhausted {
+                "冠位助战已扫完"
+            } else {
+                "已到底部"
+            };
+            self.emit(
+                "SupportSelect",
+                &format!(
+                    "{reason}，刷新助战列表 ({}/{})",
+                    self.support_refresh_count + 1,
+                    SUPPORT_MAX_REFRESHES
+                ),
+            );
+            if !self.wait_for_support_refresh_available() {
+                return;
+            }
+            if !self.tap_at("SupportSelect", SUPPORT_REFRESH_BUTTON) {
+                return;
+            }
+            self.support_scroll_count = 0;
+            self.support_refresh_count += 1;
+            self.support_grand_section_seen = false;
+            self.support_grand_section_misses = 0;
+            if !self.confirm_support_refresh_dialog_if_needed() {
+                return;
+            }
+        } else {
+            self.release_support_ocr();
+            self.fail_action(
+                "SupportSelect",
+                "查找助战",
+                format!("刷新 {} 次仍未找到匹配礼装的助战", SUPPORT_MAX_REFRESHES),
             );
         }
     }

@@ -207,6 +207,7 @@ pub fn debug_find_supports(
         meta.require_np_match,
         true,
         support_full_list_ocr_fallback,
+        false,
     );
     let release_result = client.release_ocr();
     let result = find_result?;
