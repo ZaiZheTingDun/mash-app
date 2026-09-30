@@ -1,17 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Avatar, Button, Dialog, Flex, IconButton, Text } from "@radix-ui/themes";
-import {
-  ArrowLeftIcon,
-  CardStackIcon,
-  ChevronRightIcon,
-  LightningBoltIcon,
-  StarIcon,
-  TargetIcon,
-  ThickArrowUpIcon,
-} from "@radix-ui/react-icons";
+import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { convertFileSrc } from "../../tauri";
 import { masterFacePath, masterFigurePath, type MysticCode } from "../../types/mysticCode";
 import type { MysticCodeGender } from "../../types/appUiSettings";
+import { TaskCard } from "./TaskCard";
 
 interface HomePageProps {
   mysticCodes: MysticCode[];
@@ -120,6 +113,7 @@ export function HomePage({
     <main className="home-page">
       <div className="home-panel">
         <div className="home-figure-area">
+          <div className="home-magic-circle" aria-hidden="true" />
           <div className="home-figure-trigger">
             {imagePath ? (
               <img
@@ -171,39 +165,19 @@ export function HomePage({
           </div>
           {battleMenuOpen ? (
             <>
-              <button type="button" className="home-action home-action--battle" aria-label="编队/开始" onClick={onOpenTeam}>
-                <span className="home-action-icon"><CardStackIcon aria-hidden="true" /></span>
-                <span className="home-action-copy"><strong>编队/开始</strong><small>选择队伍并开始战斗</small></span>
-                <ChevronRightIcon className="home-action-arrow" aria-hidden="true" />
-              </button>
+              <TaskCard appearance="battle" number="01" caption="PARTY" title="编队/开始" description="选择队伍并开始战斗" onClick={onOpenTeam} />
               {showRankUpQuest && (
-                <button type="button" className="home-action home-action--rank-up" aria-label="强化任务" onClick={onOpenRankUpQuest}>
-                  <span className="home-action-icon"><LightningBoltIcon aria-hidden="true" /></span>
-                  <span className="home-action-copy"><strong>强化任务</strong><small>进入强化任务</small></span>
-                  <ChevronRightIcon className="home-action-arrow" aria-hidden="true" />
-                </button>
+                <TaskCard appearance="enhance" number="02" caption="RANK UP" title="强化任务" description="进入强化任务" onClick={onOpenRankUpQuest} />
               )}
             </>
           ) : (
             <>
-              <button type="button" className="home-action home-action--battle" aria-label="战斗" onClick={() => setBattleMenuOpen(true)}>
-                <span className="home-action-icon"><TargetIcon aria-hidden="true" /></span>
-                <span className="home-action-copy"><strong>战斗</strong><small>编队、开始与强化任务</small></span>
-                <ChevronRightIcon className="home-action-arrow" aria-hidden="true" />
-              </button>
+              <TaskCard appearance="battle" number="01" caption="BATTLE" title="战斗" description="编队、开始与强化任务" onClick={() => setBattleMenuOpen(true)} />
               {showSummon && (
-                <button type="button" className="home-action home-action--summon" aria-label="召唤" onClick={onOpenSummon}>
-                  <span className="home-action-icon"><StarIcon aria-hidden="true" /></span>
-                  <span className="home-action-copy"><strong>召唤</strong><small>友情点召唤</small></span>
-                  <ChevronRightIcon className="home-action-arrow" aria-hidden="true" />
-                </button>
+                <TaskCard appearance="summon" number="02" caption="SUMMON" title="召唤" description="友情点召唤" onClick={onOpenSummon} />
               )}
               {showEnhancement && (
-                <button type="button" className="home-action home-action--enhance" aria-label="强化" onClick={onOpenCraftEssenceEnhancement}>
-                  <span className="home-action-icon"><ThickArrowUpIcon aria-hidden="true" /></span>
-                  <span className="home-action-copy"><strong>强化</strong><small>概念礼装强化</small></span>
-                  <ChevronRightIcon className="home-action-arrow" aria-hidden="true" />
-                </button>
+                <TaskCard appearance="enhance" number="03" caption="ENHANCE" title="强化" description="概念礼装强化" onClick={onOpenCraftEssenceEnhancement} />
               )}
             </>
           )}
