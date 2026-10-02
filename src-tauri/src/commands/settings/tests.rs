@@ -1,6 +1,22 @@
 use super::*;
 
 #[test]
+fn adb_selection_revision_is_runtime_only() {
+    let settings = AdbDeviceSettings {
+        selected_adb_serial: Some("emulator-5554".into()),
+        selection_revision: 42,
+    };
+    let json = serde_json::to_value(&settings).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!({ "selectedAdbSerial": "emulator-5554" })
+    );
+    let loaded: AdbDeviceSettings = serde_json::from_value(json).unwrap();
+    assert_eq!(loaded.selection_revision, 0);
+    assert_eq!(loaded.selected_adb_serial, settings.selected_adb_serial);
+}
+
+#[test]
 fn support_ce_threshold_accepts_configured_range() {
     assert_eq!(normalize_support_ce_threshold(0.60).unwrap(), 0.60);
     assert_eq!(normalize_support_ce_threshold(0.70).unwrap(), 0.70);

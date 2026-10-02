@@ -214,6 +214,9 @@ fn apply_stop_on_bond_max_level(settings: &mut RecognitionSettings, value: bool)
 pub(crate) struct AdbDeviceSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) selected_adb_serial: Option<String>,
+    // Runtime generation invalidates in-flight queries, including A -> B -> A.
+    #[serde(skip)]
+    pub(crate) selection_revision: u64,
 }
 
 fn normalize_adb_serial(value: Option<String>) -> Option<String> {
@@ -237,6 +240,7 @@ fn adb_device_settings_from_value(v: &serde_json::Value) -> AdbDeviceSettings {
     });
     AdbDeviceSettings {
         selected_adb_serial,
+        ..Default::default()
     }
 }
 
@@ -533,7 +537,11 @@ pub(crate) async fn run_startup_migration(
             .await
             .map_err(|e| format!("startup migration task failed: {e}"))??;
     if status.migrated {
-        *adb_settings_state.lock().unwrap() = load_adb_device_settings(&app)?;
+        let mut settings = adb_settings_state.lock().unwrap();
+        let mut loaded = load_adb_device_settings(&app)?;
+        loaded.selection_revision = settings.selection_revision.wrapping_add(1);
+        *settings = loaded;
+        drop(settings);
         *server_state.lock().unwrap() = load_server_setting(&app)?;
     }
     crate::battle_statistics::initialize(&app)?;

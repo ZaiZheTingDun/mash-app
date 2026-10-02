@@ -653,6 +653,8 @@ export function StatusBar({
   // normal run; flip this toggle to surface them for triage.
   const [showDebugLogs, setShowDebugLogs] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const adbPollRef = useRef<Promise<void> | null>(null);
+  const adbStatusRevisionRef = useRef(0);
   const runnerRunning =
     battleRunnerRunning ||
     enhancementRunnerRunning ||
@@ -695,9 +697,20 @@ export function StatusBar({
   }, []);
 
   const pollAdb = useCallback(() => {
-    invoke<AdbStatus>("check_adb")
-      .then(setStatus)
-      .catch(() => setStatus({ connected: false, deviceName: null }));
+    if (adbPollRef.current) return adbPollRef.current;
+    const revision = adbStatusRevisionRef.current;
+    const request = invoke<AdbStatus>("check_adb")
+      .then((nextStatus) => {
+        if (revision === adbStatusRevisionRef.current) setStatus(nextStatus);
+      })
+      .catch(() => {
+        if (revision === adbStatusRevisionRef.current) {
+          setStatus({ connected: false, deviceName: null });
+        }
+      })
+      .finally(() => { adbPollRef.current = null; });
+    adbPollRef.current = request;
+    return request;
   }, []);
 
   useEffect(() => {
@@ -755,11 +768,9 @@ export function StatusBar({
 
   const handleConnect = useCallback(() => {
     setChecking(true);
-    invoke<AdbStatus>("check_adb")
-      .then(setStatus)
-      .catch(() => setStatus({ connected: false, deviceName: null }))
+    pollAdb()
       .finally(() => setChecking(false));
-  }, []);
+  }, [pollAdb]);
 
   const refreshDevicePreviews = useCallback((refresh = false) => {
     setDeviceDialogOpen(true);
@@ -772,6 +783,7 @@ export function StatusBar({
         setDeviceScanState(devices.length > 0 ? "ready" : "empty");
         const selected = devices.find((device) => device.selected);
         if (selected) {
+          adbStatusRevisionRef.current += 1;
           setStatus({ connected: true, deviceName: selected.serial });
         } else {
           pollAdb();
@@ -787,6 +799,7 @@ export function StatusBar({
     setSelectingSerial(serial);
     invoke<AdbStatus>("select_adb_device", { serial })
       .then((nextStatus) => {
+        adbStatusRevisionRef.current += 1;
         setStatus(nextStatus);
         setDeviceDialogOpen(false);
       })
