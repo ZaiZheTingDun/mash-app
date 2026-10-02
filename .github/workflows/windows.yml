@@ -1,0 +1,52 @@
+name: Windows validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend dependencies
+        shell: pwsh
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.0 --activate
+          pnpm install --frozen-lockfile
+      - name: Install Poetry
+        run: python -m pip install poetry==2.2.1
+      - name: Test and build CV runtime
+        working-directory: sidecar/mash_cv
+        run: |
+          poetry install --no-root
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          poetry run pytest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          poetry run python build_sidecar.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          poetry run pytest tests/test_windows_runtime.py
+      - name: Test and build Windows installer
+        shell: pwsh
+        run: ./scripts/build-windows.ps1 -Unsigned
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mash-windows-x64
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            sidecar/mash_cv/dist/*.zip
+          if-no-files-found: error

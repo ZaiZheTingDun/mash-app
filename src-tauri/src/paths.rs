@@ -1,6 +1,7 @@
 //! App data and resource path resolution.
 //! All persisted user data must be rooted under Tauri's app_data_dir.
 
+use crate::platform::copy_symlink;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
@@ -42,21 +43,6 @@ pub(crate) fn legacy_app_data_candidates(current: &Path) -> Vec<PathBuf> {
         .map(|name| parent.join(name))
         .filter(|path| path != current)
         .collect()
-}
-
-#[cfg(unix)]
-pub(crate) fn copy_symlink(src: &Path, dst: &Path) -> Result<(), String> {
-    use std::os::unix::fs::symlink;
-
-    let target = fs::read_link(src).map_err(|e| format!("read symlink failed: {e}"))?;
-    symlink(target, dst).map_err(|e| format!("create symlink failed: {e}"))
-}
-
-#[cfg(not(unix))]
-pub(crate) fn copy_symlink(src: &Path, dst: &Path) -> Result<(), String> {
-    fs::copy(src, dst)
-        .map(|_| ())
-        .map_err(|e| format!("copy symlink target failed: {e}"))
 }
 
 pub(crate) fn copy_dir_contents_preserving_links(src: &Path, dst: &Path) -> Result<(), String> {

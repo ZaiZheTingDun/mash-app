@@ -15,10 +15,10 @@ fn tauri_bundle_resources_cover_template_subdirectories() {
     let config: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
     let resources: HashSet<String> = config["bundle"]["resources"]
-        .as_array()
+        .as_object()
         .unwrap()
-        .iter()
-        .map(|item| item.as_str().unwrap().to_string())
+        .keys()
+        .cloned()
         .collect();
 
     assert!(
@@ -2437,6 +2437,81 @@ fn runtime_platform_key_normalizes_macos_to_darwin() {
         "darwin-x86_64"
     );
     assert_eq!(runtime_platform_key_from("linux", "x86_64"), "linux-x86_64");
+    assert_eq!(
+        runtime_platform_key_from("windows", "x86_64"),
+        "windows-x86_64"
+    );
+    assert_eq!(
+        runtime_platform_key_from("windows", "aarch64"),
+        "windows-aarch64"
+    );
+}
+
+#[test]
+fn windows_runtime_manifest_and_installer_are_configured() {
+    let manifest = parse_runtime_manifest(RUNTIME_MANIFEST_JSON).unwrap();
+    let artifact = manifest.platforms.get("windows-x86_64").unwrap();
+    assert!(artifact
+        .runtime_url
+        .starts_with("https://mash.xiaotongx.com/"));
+    assert!(artifact
+        .code_url
+        .contains(&format!("v{}.zip", manifest.mash_cv_code_version)));
+    for digest in [&artifact.runtime_sha256, &artifact.code_sha256] {
+        assert_eq!(digest.len(), 64);
+        assert!(digest.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(digest, &"0".repeat(64));
+    }
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(root.join("tauri.windows.conf.json")).unwrap())
+            .unwrap();
+    assert_eq!(config["bundle"]["targets"], serde_json::json!(["nsis"]));
+    assert_eq!(
+        config["bundle"]["windows"]["nsis"]["installMode"],
+        "currentUser"
+    );
+    for name in ["adb.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll"] {
+        let contents = fs::read(root.join("resources/adb").join(name)).unwrap();
+        assert!(
+            contents.starts_with(b"MZ"),
+            "invalid Windows binary: {name}"
+        );
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn locally_built_windows_bundles_install_and_report_ready() {
+    let mut manifest = parse_runtime_manifest(RUNTIME_MANIFEST_JSON).unwrap();
+    let dist = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sidecar/mash_cv/dist");
+    let runtime = dist.join(format!(
+        "mash-cv-runtime-windows-x86_64-v{}.zip",
+        manifest.mash_cv_runtime_version
+    ));
+    let code = dist.join(format!(
+        "mash-cv-code-v{}.zip",
+        manifest.mash_cv_code_version
+    ));
+    if !runtime.is_file() || !code.is_file() {
+        // CI builds these archives first. Source-only unit tests stay offline.
+        return;
+    }
+    // Native runtime builds embed host-specific paths/timestamps. Validate a
+    // fresh local build against its own artifact hashes, as release tooling
+    // does, rather than requiring byte identity with the published build.
+    let artifact = manifest.platforms.get_mut("windows-x86_64").unwrap();
+    artifact.runtime_sha256 = sha256_file(&runtime).unwrap();
+    artifact.code_sha256 = sha256_file(&code).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("中文 runtime");
+    for path in [&runtime, &code] {
+        import_runtime_bundle_from_zip_path(path, &manifest, &root, "windows-x86_64").unwrap();
+    }
+    let status = runtime_status_from_manifest(&manifest, &root, "windows-x86_64");
+    assert!(status.installed);
+    assert!(status.executable_path.ends_with("mash-cv.exe"));
+    assert!(runtime_models_path(&root, &manifest.mash_cv_runtime_version).is_dir());
 }
 
 #[test]

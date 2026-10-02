@@ -272,6 +272,7 @@ if has_changes_since "$RUNTIME_BASE_REF" \
   sidecar/mash_cv/pyproject.toml \
   sidecar/mash_cv/poetry.lock \
   sidecar/mash_cv/build_sidecar.sh \
+  sidecar/mash_cv/build_sidecar.py \
   src-tauri/resources/scrcpy; then
   CV_RUNTIME_CHANGED=true
 fi

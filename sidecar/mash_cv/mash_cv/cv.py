@@ -88,6 +88,7 @@ import unicodedata
 from typing import TYPE_CHECKING, Any, Optional
 
 import cv2
+from mash_cv.host.io import configure_stdio, read_image
 import numpy as np
 
 from mash_cv.battle_digit_policy import (
@@ -1721,7 +1722,7 @@ def _find_enhancement_servant_grid(img: np.ndarray, cmd: dict) -> dict:
     best: Optional[dict] = None
     if not grid_fail_reason and template_paths:
         for template_path in template_paths:
-            raw = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE)
+            raw = read_image(template_path, cv2.IMREAD_GRAYSCALE)
             if raw is None:
                 matches.append(
                     {
@@ -2864,7 +2865,7 @@ def _load_crit_digit_templates(
         mask: Optional[np.ndarray] = None
         path = _template_path_for_key(key)
         if path:
-            raw = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+            raw = read_image(path, cv2.IMREAD_UNCHANGED)
             if raw is not None and raw.ndim == 3 and raw.shape[2] == 4:
                 mask = (raw[:, :, 3] > 32).astype(np.uint8) * 255
         refs.append((digit, tmpl, mask))
@@ -3508,7 +3509,7 @@ def _ensure_icon_color_sigs(templates_dir_hint: Optional[str] = None) -> None:
                 break
         if path is None:
             continue
-        raw = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        raw = read_image(path, cv2.IMREAD_UNCHANGED)
         if raw is None:
             continue
         if raw.ndim == 3 and raw.shape[2] == 4:
@@ -3560,7 +3561,7 @@ def _load_face_template_pair(
     if cached is not None:
         return cached
 
-    img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    img = read_image(path, cv2.IMREAD_UNCHANGED)
     if img is None:
         return None
     if img.ndim == 3 and img.shape[2] == 4:
@@ -6494,7 +6495,7 @@ def _load_ce_template(
     if cached is not None:
         return cached
 
-    raw = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    raw = read_image(path, cv2.IMREAD_UNCHANGED)
     if raw is None:
         return None
     if raw.ndim == 3 and raw.shape[2] == 4:
@@ -6929,7 +6930,7 @@ def _read_template_png(
     otherwise be baked into the template and dragged the score down for any
     on-screen instance whose surroundings were not also black).
     """
-    raw = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    raw = read_image(path, cv2.IMREAD_UNCHANGED)
     if raw is None:
         return None, None
     if raw.ndim == 2:
@@ -6999,7 +7000,7 @@ def _reply(req_id, obj: dict) -> None:
 def _load_frame(cmd: dict) -> tuple[Optional[np.ndarray], Optional[str]]:
     image_path = cmd.get("imagePath")
     if image_path:
-        img = cv2.imread(image_path)
+        img = read_image(image_path)
         if img is None:
             return None, f"failed to read image: {image_path}"
         return img, None
@@ -7133,7 +7134,7 @@ def _handle_find_region_command(cmd: dict) -> dict:
         return {"found": False, "error": err}
 
     use_alpha_mask = cmd.get("alphaMask") is True
-    raw_tmpl = cv2.imread(
+    raw_tmpl = read_image(
         cmd["templatePath"],
         cv2.IMREAD_UNCHANGED if use_alpha_mask else cv2.IMREAD_GRAYSCALE,
     )
@@ -7542,6 +7543,7 @@ def _main_repl() -> None:
 
 
 def main() -> None:
+    configure_stdio()
     if os.environ.get("MASH_CV_PROCESS_MODE") == "ocr-worker":
         from mash_cv.ocr_worker import main as ocr_worker_main
 

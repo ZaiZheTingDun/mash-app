@@ -1,6 +1,11 @@
 # CV Resources
 
-These files ship with the app (declared in `tauri.conf.json` → `bundle.resources`) and are resolved at runtime via `app.path().resolve("resources/...", BaseDirectory::Resource)`.
+These files ship with the app (declared in `tauri.conf.json` and platform configs → `bundle.resources`) and are resolved at runtime via `app.path().resolve("resources/...", BaseDirectory::Resource)`.
+
+Resource maps preserve installed paths while allowing Tauri to merge common and
+platform entries. ADB is listed only in `tauri.macos.conf.json` (`adb`) or
+`tauri.windows.conf.json` (`adb.exe`, its two DLLs, and `NOTICE.txt`). Do not add
+`resources/adb/*` to the common config: it bundles both platforms' binaries.
 
 ## Layout
 

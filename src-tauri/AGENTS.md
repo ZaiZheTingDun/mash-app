@@ -11,6 +11,8 @@
 
 ### Rust Backend
 
+- Keep runtime OS detection, native APIs, executable naming, process flags, filesystem differences, and native menu layout inside `src/platform/`. Shared commands and runners call its OS-neutral interfaces. The executable-level `windows_subsystem` attribute in `main.rs` and host-specific test fixtures are exceptions; build/release scripts own their build-time platform selection.
+
 - Use `tauri::AppHandle` or `tauri::State<T>` for shared state instead of global mutables. For read-only data, `OnceLock` is acceptable.
 - Use `app.path().app_data_dir()` for user data persistence. Never hardcode paths.
 - Register plugins in the `tauri::Builder` chain inside `run()`. Only add plugins you actually use.

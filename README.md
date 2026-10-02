@@ -144,6 +144,9 @@ poetry run pytest
 
 ## Production Build
 
+Windows x64 prerequisites, native CV builds, NSIS installers, and updater
+publishing are documented in [docs/windows.md](docs/windows.md).
+
 ```bash
 pnpm tauri build
 ```

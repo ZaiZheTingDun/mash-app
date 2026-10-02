@@ -1,5 +1,7 @@
 # Python Sidecar (`mash-cv`)
 
+- Keep runtime OS detection and native APIs inside `mash_cv/host/`. CV, OCR, and streaming code call `host.io` or `host.process` without branching on OS. Import only the needed submodule so process callers do not eagerly load image libraries. Build-time platform selection belongs in `build_sidecar.py`; host-specific fixtures belong in tests.
+
 - Lives in `sidecar/mash_cv/` as a Poetry-managed package. Source is under `sidecar/mash_cv/mash_cv/` (package) with `cv.py` as the JSON-line REPL entry point, `stream.py` for the scrcpy/PyAV pipeline, and `region_tool.py` for template-region extraction.
 - Communication with the Rust side is one JSON object per line over stdin/stdout. Every request may carry an `id`; responses echo it so the Rust client can drop stale replies after a timeout.
 - Templates are loaded by filename stem from `src-tauri/resources/templates/`. Most are referenced via `cv.json`, but the battle-scene OCR set (`text_battle_label`, `digit_0`..`digit_9`) is looked up by name directly by `_read_battle_scene`, which anchors on the gold `BATTLE` label and splits the digits to its right into `(m, n)` by the largest x-gap.

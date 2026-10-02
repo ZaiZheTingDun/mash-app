@@ -11,7 +11,9 @@
     "tauri": "tauri",
     "templates:diff": "node scripts/diff-server-templates.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:scripts": "node --test scripts/__tests__/*.test.mjs",
+    "build:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

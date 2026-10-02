@@ -1,18 +1,24 @@
 {
   "mashCvRuntimeVersion": "2026.05.08-runtime1",
-  "mashCvCodeVersion": "0.4.25",
+  "mashCvCodeVersion": "0.4.26",
   "platforms": {
     "darwin-aarch64": {
       "runtimeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/runtime/darwin-aarch64/mash-cv-runtime-darwin-aarch64-v2026.05.08-runtime1.zip",
       "runtimeSha256": "3a80a0d595cfa54e7d907ccfce335dc99ba29428e2970057476b0b973ff3bf88",
-      "codeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/code/mash-cv-code-v0.4.25.zip",
-      "codeSha256": "61933d18c199e42ee1eae8f8f9684409c8c4a52db749dfb530febd34609b0f57"
+      "codeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/code/mash-cv-code-v0.4.26.zip",
+      "codeSha256": "a8f85934965ea2d381cfb2b5f22abcf969515329623fceeaa1f6b5c14bedc657"
+    },
+    "windows-x86_64": {
+      "runtimeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/runtime/windows-x86_64/mash-cv-runtime-windows-x86_64-v2026.05.08-runtime1.zip",
+      "runtimeSha256": "1722c23bed33bc94cc0335c1c489755441d6fc9088462bda757a439808557208",
+      "codeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/code/mash-cv-code-v0.4.26.zip",
+      "codeSha256": "a8f85934965ea2d381cfb2b5f22abcf969515329623fceeaa1f6b5c14bedc657"
     },
     "darwin-x86_64": {
       "runtimeUrl": "https://cdn.example.com/mash-cv-runtime-darwin-x86_64-v2026.05.08-runtime1.zip",
       "runtimeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "codeUrl": "https://cdn.example.com/mash-cv-code-v0.4.0.zip",
-      "codeSha256": "e170adafed371598a5c7bae5149578ed6a146ca999becd55b729c12d4a1ed1fb"
+      "codeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/code/mash-cv-code-v0.4.26.zip",
+      "codeSha256": "a8f85934965ea2d381cfb2b5f22abcf969515329623fceeaa1f6b5c14bedc657"
     }
   }
 }

@@ -4,7 +4,7 @@ set -euo pipefail
 AWS_PROFILE="${AWS_PROFILE:-mash}"
 R2_PREFIX="${R2_PREFIX:-mash}"
 RELEASE_CHANNEL="${RELEASE_CHANNEL:-stable}"
-TAURI_TARGET="${TAURI_TARGET:-darwin-aarch64}"
+TAURI_TARGET="${TAURI_TARGET:-}"
 
 LONG_CACHE_CONTROL="${LONG_CACHE_CONTROL:-public, max-age=31536000, immutable}"
 LATEST_CACHE_CONTROL="${LATEST_CACHE_CONTROL:-no-cache}"
@@ -23,7 +23,7 @@ Optional environment:
   AWS_PROFILE       AWS CLI profile to use (default: mash; set to empty to use AWS env credentials)
   R2_PREFIX         Object key prefix (default: mash)
   RELEASE_CHANNEL   Mutable channel directory (default: stable)
-  TAURI_TARGET      Tauri updater platform key (default: darwin-aarch64)
+  TAURI_TARGET      Tauri updater platform key (default: detected native platform)
 
 The script must run from a clean worktree at an exact vX.Y.Z git tag.
 EOF
@@ -49,10 +49,10 @@ fi
 
 require_cmd aws
 require_cmd curl
-require_cmd find
 require_cmd git
 require_cmd node
 require_cmd pnpm
+require_cmd uname
 
 aws_s3_cp() {
   if [[ -n "${AWS_PROFILE:-}" ]]; then
@@ -65,6 +65,22 @@ aws_s3_cp() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
+
+case "$(uname -s)" in
+  Darwin) TARGET_OS=darwin ;;
+  MINGW*|MSYS*|CYGWIN*) TARGET_OS=windows ;;
+  *) fail "unsupported native release host" ;;
+esac
+TARGET_ARCH="$(uname -m)"
+[[ "$TARGET_ARCH" != arm64 ]] || TARGET_ARCH=aarch64
+NATIVE_TARGET="$TARGET_OS-$TARGET_ARCH"
+TAURI_TARGET="${TAURI_TARGET:-$NATIVE_TARGET}"
+[[ "$TAURI_TARGET" == "$NATIVE_TARGET" ]] || fail "TAURI_TARGET must match the native build host ($NATIVE_TARGET)"
+case "$TAURI_TARGET" in
+  darwin-*) BUNDLE_KIND=app ;;
+  windows-*) BUNDLE_KIND=nsis ;;
+  *) fail "unsupported updater platform: $TAURI_TARGET" ;;
+esac
 
 TAG="$(git describe --tags --exact-match 2>/dev/null || true)"
 [[ -n "$TAG" ]] || fail "current commit is not an exact git tag"
@@ -90,32 +106,21 @@ CHANNEL_LATEST_KEY="$R2_PREFIX/releases/$RELEASE_CHANNEL/latest.json"
 WORK_DIR="$REPO_ROOT/src-tauri/target/release-updater/$TAG"
 LATEST_JSON="$WORK_DIR/latest.json"
 REMOTE_LATEST_JSON="$WORK_DIR/remote-latest.json"
+PREVIOUS_VERSION_JSON="$WORK_DIR/previous-version.json"
+PREVIOUS_CHANNEL_JSON="$WORK_DIR/previous-channel.json"
 
 rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"
 
 echo "Building Tauri release for $TAG ($TAURI_TARGET)"
-pnpm tauri build --bundles app
+pnpm tauri build --bundles "$BUNDLE_KIND"
 
 BUNDLE_DIR="$REPO_ROOT/src-tauri/target/release/bundle"
 [[ -d "$BUNDLE_DIR" ]] || fail "bundle directory not found: $BUNDLE_DIR"
 
-SIG_FILES=()
-while IFS= read -r sig_file; do
-  SIG_FILES+=("$sig_file")
-done < <(find "$BUNDLE_DIR" -type f -name '*.sig' | sort)
-if [[ "${#SIG_FILES[@]}" -eq 0 ]]; then
-  fail "no updater .sig files found under $BUNDLE_DIR; ensure TAURI_SIGNING_PRIVATE_KEY is configured"
-fi
-if [[ "${#SIG_FILES[@]}" -gt 1 ]]; then
-  printf 'found updater signatures:\n' >&2
-  printf '  %s\n' "${SIG_FILES[@]}" >&2
-  fail "multiple updater artifacts found; set up the script for the desired target before publishing"
-fi
-
-SIG_FILE="${SIG_FILES[0]}"
-ARTIFACT_FILE="${SIG_FILE%.sig}"
-[[ -f "$ARTIFACT_FILE" ]] || fail "artifact for signature not found: $ARTIFACT_FILE"
+ARTIFACT_FILE="$(node scripts/updater-artifact.mjs "$BUNDLE_DIR" src-tauri/tauri.conf.json "$TAURI_TARGET")" \
+  || fail "selecting the current updater artifact failed"
+SIG_FILE="$ARTIFACT_FILE.sig"
 
 ARTIFACT_NAME="$(basename "$ARTIFACT_FILE")"
 SIG_NAME="$(basename "$SIG_FILE")"
@@ -125,23 +130,19 @@ ARTIFACT_URL="$RELEASE_BASE_URL/$ARTIFACT_KEY"
 SIGNATURE="$(tr -d '\r\n' < "$SIG_FILE")"
 PUB_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-node - "$LATEST_JSON" "$VERSION" "$PUB_DATE" "$TAURI_TARGET" "$ARTIFACT_URL" "$SIGNATURE" <<'NODE'
-const fs = require("fs");
-const [out, version, pubDate, target, url, signature] = process.argv.slice(2);
-const doc = {
-  version,
-  notes: `mash ${version}`,
-  pub_date: pubDate,
-  platforms: {
-    [target]: {
-      signature,
-      url,
-    },
-  },
-};
-fs.writeFileSync(out, `${JSON.stringify(doc, null, 2)}\n`);
-JSON.parse(fs.readFileSync(out, "utf8"));
-NODE
+fetch_optional_manifest() {
+  local status
+  status="$(curl --location --silent --show-error --output "$2" --write-out '%{http_code}' "$1")"
+  case "$status" in
+    200) ;;
+    404) rm -f "$2" ;;
+    *) fail "cannot read existing updater manifest: HTTP $status ($1)" ;;
+  esac
+}
+fetch_optional_manifest "$RELEASE_BASE_URL/$VERSION_LATEST_KEY" "$PREVIOUS_VERSION_JSON"
+fetch_optional_manifest "$RELEASE_BASE_URL/$CHANNEL_LATEST_KEY" "$PREVIOUS_CHANNEL_JSON"
+node scripts/updater-manifest.mjs "$LATEST_JSON" "$VERSION" "$PUB_DATE" \
+  "$TAURI_TARGET" "$ARTIFACT_URL" "$SIGNATURE" "$PREVIOUS_VERSION_JSON" "$PREVIOUS_CHANNEL_JSON"
 
 echo "Uploading immutable artifacts"
 aws_s3_cp "$ARTIFACT_FILE" "s3://$R2_BUCKET/$ARTIFACT_KEY" \
@@ -149,7 +150,7 @@ aws_s3_cp "$ARTIFACT_FILE" "s3://$R2_BUCKET/$ARTIFACT_KEY" \
 aws_s3_cp "$SIG_FILE" "s3://$R2_BUCKET/$SIG_KEY" \
   --cache-control "$LONG_CACHE_CONTROL"
 aws_s3_cp "$LATEST_JSON" "s3://$R2_BUCKET/$VERSION_LATEST_KEY" \
-  --cache-control "$LONG_CACHE_CONTROL" \
+  --cache-control "$LATEST_CACHE_CONTROL" \
   --content-type "application/json"
 
 echo "Publishing channel latest.json"
