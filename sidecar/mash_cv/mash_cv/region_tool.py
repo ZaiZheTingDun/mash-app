@@ -8,6 +8,7 @@ from typing import Any
 import cv2
 
 from .cv import _match_template_region
+from .host.io import read_image
 
 
 def _build_padded_roi(region: dict, pad_x: float, pad_y: float) -> dict:
@@ -71,12 +72,12 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _parser().parse_args()
 
-    screenshot = cv2.imread(args.screenshot)
+    screenshot = read_image(args.screenshot)
     if screenshot is None:
         print(json.dumps({"found": False, "error": "failed to read screenshot"}))
         sys.exit(2)
 
-    template = cv2.imread(args.template, cv2.IMREAD_GRAYSCALE)
+    template = read_image(args.template, cv2.IMREAD_GRAYSCALE)
     if template is None:
         print(json.dumps({"found": False, "error": "failed to read template"}))
         sys.exit(2)
@@ -99,4 +100,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

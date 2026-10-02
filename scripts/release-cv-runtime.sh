@@ -53,6 +53,7 @@ detect_platform() {
   arch="$(uname -m)"
   case "$os" in
     darwin) platform_os="darwin" ;;
+    mingw*|msys*|cygwin*) platform_os="windows" ;;
     *) platform_os="$os" ;;
   esac
   case "$arch" in

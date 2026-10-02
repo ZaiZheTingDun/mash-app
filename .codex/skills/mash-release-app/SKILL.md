@@ -66,7 +66,7 @@ git tag --list 'cv-code/*' --sort=-v:refname | head -5
 git tag --list 'cv-runtime/*/*' --sort=-v:refname | head -10
 git tag --list 'v*' --sort=-v:refname | head -5
 git diff --name-only <last-cv-code-tag>..HEAD -- sidecar/mash_cv/mash_cv sidecar/mash_cv/tests src-tauri/resources/cv.json src-tauri/resources/templates
-git diff --name-only <last-cv-runtime-tag>..HEAD -- sidecar/mash_cv/pyproject.toml sidecar/mash_cv/poetry.lock sidecar/mash_cv/build_sidecar.sh sidecar/mash_cv/mash_cv src-tauri/resources/scrcpy
+git diff --name-only <last-cv-runtime-tag>..HEAD -- sidecar/mash_cv/pyproject.toml sidecar/mash_cv/poetry.lock sidecar/mash_cv/build_sidecar.sh sidecar/mash_cv/build_sidecar.py sidecar/mash_cv/mash_cv src-tauri/resources/scrcpy
 git diff --name-only <last-app-tag>..HEAD
 ```
 

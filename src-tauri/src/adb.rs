@@ -1,8 +1,10 @@
+use crate::platform::adb_executable_name;
 use std::path::PathBuf;
-use std::process::Command;
 use tauri::Manager;
 
 pub(crate) const BLUESTACKS_SERIAL: &str = "127.0.0.1:5555";
+
+pub(crate) use crate::platform::external_command as adb_command;
 
 #[derive(Clone)]
 pub struct Adb {
@@ -16,16 +18,6 @@ pub(crate) struct AdbDevice {
     pub(crate) serial: String,
     pub(crate) status: String,
     pub(crate) description: String,
-}
-
-#[cfg(windows)]
-fn adb_executable_name() -> &'static str {
-    "adb.exe"
-}
-
-#[cfg(not(windows))]
-fn adb_executable_name() -> &'static str {
-    "adb"
 }
 
 fn bundled_adb_candidates(resource_dir: PathBuf) -> Vec<PathBuf> {
@@ -145,12 +137,12 @@ impl Adb {
             ["start-server"].as_slice(),
             ["connect", BLUESTACKS_SERIAL].as_slice(),
         ] {
-            Command::new(adb_path).args(args).output().ok();
+            adb_command(adb_path).args(args).output().ok();
         }
     }
 
     pub(crate) fn connect_bluestacks(adb_path: &std::path::Path) {
-        Command::new(adb_path)
+        adb_command(adb_path)
             .args(["connect", BLUESTACKS_SERIAL])
             .output()
             .ok();
@@ -161,7 +153,7 @@ impl Adb {
         if serial.is_empty() {
             return;
         }
-        Command::new(adb_path)
+        adb_command(adb_path)
             .args(["connect", serial])
             .output()
             .ok();
@@ -191,7 +183,7 @@ impl Adb {
     pub fn connect(&mut self) -> Result<(), String> {
         Self::connect_preferred_serial(&self.adb_path, self.selected_serial.as_deref());
 
-        let output = Command::new(&self.adb_path)
+        let output = adb_command(&self.adb_path)
             .arg("devices")
             .arg("-l")
             .output()
@@ -213,7 +205,7 @@ impl Adb {
     pub fn screen_size(&self) -> Option<(u32, u32)> {
         let mut args = self.base_args();
         args.extend(["shell".into(), "wm".into(), "size".into()]);
-        let output = Command::new(&self.adb_path).args(&args).output().ok()?;
+        let output = adb_command(&self.adb_path).args(&args).output().ok()?;
         if !output.status.success() {
             return None;
         }
@@ -239,7 +231,7 @@ impl Adb {
         let mut args = self.base_args();
         args.extend(["exec-out".into(), "screencap".into(), "-p".into()]);
 
-        let output = Command::new(&self.adb_path)
+        let output = adb_command(&self.adb_path)
             .args(&args)
             .output()
             .map_err(|e| format!("adb screencap failed: {e}"))?;
@@ -279,7 +271,7 @@ impl Adb {
             y.to_string(),
         ]);
 
-        let output = Command::new(&self.adb_path)
+        let output = adb_command(&self.adb_path)
             .args(&args)
             .output()
             .map_err(|e| format!("adb tap failed: {e}"))?;
@@ -303,7 +295,7 @@ impl Adb {
             duration_ms.to_string(),
         ]);
 
-        let output = Command::new(&self.adb_path)
+        let output = adb_command(&self.adb_path)
             .args(&args)
             .output()
             .map_err(|e| format!("adb swipe failed: {e}"))?;
@@ -350,7 +342,7 @@ impl Adb {
         let mut args = self.base_args();
         args.extend(["shell".into(), script]);
 
-        let output = Command::new(&self.adb_path)
+        let output = adb_command(&self.adb_path)
             .args(&args)
             .output()
             .map_err(|e| format!("adb swipe_with_settle failed: {e}"))?;
@@ -456,16 +448,18 @@ mod tests {
         #[cfg(debug_assertions)]
         assert_eq!(
             bundled_adb_candidates(base.clone())[0],
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/adb/adb")
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("resources/adb")
+                .join(adb_executable_name())
         );
         let offset = if cfg!(debug_assertions) { 1 } else { 0 };
         assert_eq!(
             bundled_adb_candidates(base.clone())[offset],
-            base.join("adb/adb")
+            base.join("adb").join(adb_executable_name())
         );
         assert_eq!(
             bundled_adb_candidates(base.clone())[offset + 1],
-            base.join("resources/adb/adb")
+            base.join("resources/adb").join(adb_executable_name())
         );
     }
 

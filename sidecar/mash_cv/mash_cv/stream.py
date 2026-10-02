@@ -12,7 +12,6 @@ Protocol reference: https://github.com/Genymobile/scrcpy/blob/v2.7/server
 
 from __future__ import annotations
 
-import os
 import random
 import socket
 import struct
@@ -29,6 +28,12 @@ import numpy as np
 # on the sidecar main thread before the decoder thread starts, while keeping
 # non-stream commands from loading a second FFmpeg stack during cold start.
 import av
+
+from mash_cv.host.process import (
+    clean_external_env,
+    external_process_scope,
+    hidden_process_options,
+)
 
 SCRCPY_VERSION = "2.7"
 
@@ -50,27 +55,16 @@ def _is_tcp_serial(serial: Optional[str]) -> bool:
 
 
 def _clean_env() -> dict[str, str]:
-    """Return an env without PyInstaller's bundle-specific dyld hints.
-
-    When the sidecar is frozen with PyInstaller, ``DYLD_LIBRARY_PATH``/
-    ``LD_LIBRARY_PATH`` are rewritten to point inside the onefile unpack
-    directory. If those leak into child processes they break ``adb`` (the
-    host client) and any other system binary we shell out to, often in
-    non-obvious ways (e.g. the adb tunnel half-works and then closes).
-    PyInstaller stashes the originals under ``*_ORIG``; restore them.
-    """
-    env = os.environ.copy()
-    for key in ("DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH", "LD_LIBRARY_PATH"):
-        orig = env.pop(f"{key}_ORIG", None)
-        if orig is not None:
-            env[key] = orig
-        else:
-            env.pop(key, None)
-    return env
+    """Return the host environment for external tools."""
+    return clean_external_env()
 
 
 def _run_adb(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
-    proc = subprocess.run(args, capture_output=True, text=True, env=_clean_env())
+    with external_process_scope():
+        proc = subprocess.run(
+            args, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env=_clean_env(), **hidden_process_options(),
+        )
     if check and proc.returncode != 0:
         raise RuntimeError(
             f"adb {' '.join(args[1:])} failed ({proc.returncode}): {proc.stderr.strip()}"
@@ -281,13 +275,15 @@ class ScrcpyStream:
         # sidecar's own stdin (a pipe of JSON commands from Rust) and forwards
         # those bytes to the device-side scrcpy server, which then closes the
         # video tunnel as soon as spurious input arrives.
-        self._server_proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            env=env,
-        )
+        with external_process_scope():
+            self._server_proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=env,
+                **hidden_process_options(),
+            )
 
         def pump_log(pipe) -> None:
             for raw in iter(pipe.readline, b""):

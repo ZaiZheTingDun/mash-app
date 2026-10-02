@@ -14,6 +14,7 @@ from typing import Optional
 import numpy as np
 
 from mash_cv.ocr_protocol import read_message, write_message
+from mash_cv.host.process import hidden_process_options
 
 
 OCR_WORKER_MAX_REQUESTS = 200
@@ -76,6 +77,7 @@ class _WorkerProcess:
             stderr=subprocess.PIPE,
             env=env,
             bufsize=0,
+            **hidden_process_options(),
         )
         self.generation = generation
         self.responses: queue.Queue[tuple[dict, bytes] | BaseException] = queue.Queue()

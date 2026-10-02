@@ -81,6 +81,9 @@ mise exec -- scripts/release.sh 0.2.2 \
 
 ## App 发布
 
+Windows x64 的原生构建和 PowerShell 发布入口见 [Windows 构建与验证](windows.md)。
+跨平台 updater 必须串行发布，并合并同一版本的 `platforms` 条目。
+
 应用通过 Tauri updater 分发；客户端仅读取 channel manifest：
 
 ```text
@@ -100,13 +103,15 @@ scripts/bump-app-version.sh 0.2.2
 git push --follow-tags
 ```
 
-推送 `v*.*.*` tag 会触发 `.github/workflows/release-app.yml`，构建 macOS app 并将 updater artifact 上传到 R2。也支持本地发布：
+应用 updater 使用本地发布入口：
 
 ```bash
 R2_ENDPOINT=... R2_BUCKET=... RELEASE_BASE_URL=... scripts/release-tauri-updater.sh
 ```
 
-本地脚本要求当前 commit 恰好位于 `vX.Y.Z` tag 且 worktree 干净。它只构建 `app` bundle，不生成 DMG。
+本地脚本要求当前 commit 恰好位于 `vX.Y.Z` tag 且 worktree 干净。
+macOS 构建 `app` bundle，不生成 DMG；Windows 构建 NSIS 安装包。
+脚本保留同版本已发布的平台，并拒绝将 channel 降级到更旧版本。
 
 ## DMG 安装包下载
 

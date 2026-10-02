@@ -87,7 +87,9 @@ impl SidecarClient {
                 "MASH_CV_SERVANTS_JSON_PATH",
                 servants_json.to_string_lossy().to_string(),
             )
-            .env("PYTHONPATH", code_dir.to_string_lossy().to_string());
+            .env("PYTHONPATH", code_dir.to_string_lossy().to_string())
+            .env("PYTHONIOENCODING", "utf-8")
+            .env("PYTHONUTF8", "1");
         let (mut rx, child) = cmd
             .spawn()
             .map_err(|e| format!("failed to spawn sidecar: {e}"))?;

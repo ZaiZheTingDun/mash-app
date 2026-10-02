@@ -1405,14 +1405,16 @@ class TestFindElement:
 
     def test_below_threshold(self):
         img = _make_bgr_image(200, 200, bgr=(128, 128, 128))
-        patch = np.zeros((20, 20), dtype=np.uint8)
-        patch[:] = 100
+        # A constant template makes CCOEFF_NORMED degenerate (zero
+        # variance); OpenCV can report a perfect score on Windows.
+        patch = _gradient_patch(20)
         mash_cv.templates["gray"] = patch
 
         result = mash_cv._find_element(
             img, "gray", {"x": 0, "y": 0, "w": 1, "h": 1}, 0.9999
         )
         assert result["found"] is False
+        assert result["score"] < 0.9999
 
     def test_returns_region_for_match(self):
         img = _make_bgr_image(200, 200, bgr=(200, 200, 200))

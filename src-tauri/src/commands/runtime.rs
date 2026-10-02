@@ -99,25 +99,9 @@ pub(crate) struct RuntimeDownloadInstallResult {
     pub(crate) installed: Vec<RuntimeInstallResult>,
 }
 
-pub(crate) fn runtime_platform_key() -> String {
-    runtime_platform_key_from(std::env::consts::OS, std::env::consts::ARCH)
-}
-
-pub(crate) fn runtime_platform_key_from(os: &str, arch: &str) -> String {
-    let os = match os {
-        "macos" => "darwin",
-        other => other,
-    };
-    format!("{os}-{arch}")
-}
-
-pub(crate) fn runtime_exe_name() -> &'static str {
-    if cfg!(windows) {
-        "mash-cv.exe"
-    } else {
-        "mash-cv"
-    }
-}
+#[cfg(test)]
+pub(crate) use crate::platform::runtime_platform_key_from;
+pub(crate) use crate::platform::{runtime_exe_name, runtime_platform_key};
 
 pub(crate) fn runtime_bundle_root() -> &'static str {
     "mash-cv-runtime"

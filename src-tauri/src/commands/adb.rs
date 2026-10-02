@@ -10,7 +10,6 @@ use crate::commands::settings::{save_adb_device_settings, AdbDeviceSettings};
 use crate::paths::app_data_dir;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
@@ -113,7 +112,7 @@ pub(crate) fn check_adb(
     let adb_path = adb::resolve_adb_path(&app);
     let selected_serial = state.lock().unwrap().selected_adb_serial.clone();
     adb::Adb::connect_preferred_serial(&adb_path, selected_serial.as_deref());
-    let device_name = Command::new(&adb_path)
+    let device_name = adb::adb_command(&adb_path)
         .arg("devices")
         .arg("-l")
         .output()
@@ -156,7 +155,7 @@ pub(crate) fn select_adb_device(
     }
     let adb_path = adb::resolve_adb_path(&app);
     adb::Adb::connect_serial(&adb_path, &serial);
-    let output = Command::new(&adb_path)
+    let output = adb::adb_command(&adb_path)
         .args(["devices", "-l"])
         .output()
         .map_err(|e| format!("failed to run adb: {e}"))?;
@@ -187,7 +186,7 @@ pub(crate) fn connect_adb_port(app: tauri::AppHandle, port: u16) -> Result<Strin
     }
     let serial = format!("127.0.0.1:{port}");
     let adb_path = adb::resolve_adb_path(&app);
-    let output = Command::new(&adb_path)
+    let output = adb::adb_command(&adb_path)
         .args(["connect", serial.as_str()])
         .output()
         .map_err(|e| format!("failed to run adb connect: {e}"))?;
@@ -223,7 +222,7 @@ pub(crate) async fn refresh_adb_devices_with_previews(
         }
         adb::Adb::connect_preferred_serial(&adb_path, selected_serial.as_deref());
         clear_device_previews(&app_for_task);
-        let output = Command::new(&adb_path)
+        let output = adb::adb_command(&adb_path)
             .args(["devices", "-l"])
             .output()
             .map_err(|e| format!("failed to run adb: {e}"))?;
@@ -374,7 +373,7 @@ fn capture_device_preview(
     adb_path: &Path,
     serial: &str,
 ) -> Option<PathBuf> {
-    let output = Command::new(adb_path)
+    let output = adb::adb_command(adb_path)
         .args(["-s", serial, "exec-out", "screencap", "-p"])
         .output()
         .ok()?;
@@ -421,7 +420,7 @@ fn sanitize_serial_filename(serial: &str) -> String {
 fn run_adb_reset_step(adb_path: &Path, args: &[String]) -> AdbResetStep {
     let command = format!("{} {}", adb_path.display(), args.join(" "));
     eprintln!("[adb-reset] running: {command}");
-    match std::process::Command::new(adb_path).args(args).output() {
+    match adb::adb_command(adb_path).args(args).output() {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();

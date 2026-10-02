@@ -7,7 +7,9 @@ listed below.
 
 ## Android Debug Bridge (ADB)
 
-- Bundled file: `src-tauri/resources/adb/adb`
+- Bundled files: `src-tauri/resources/adb/adb` (macOS), `adb.exe`,
+  `AdbWinApi.dll`, `AdbWinUsbApi.dll` (Windows), and the Windows package's
+  original `NOTICE.txt`.
 - Bundled version: Android Debug Bridge 1.0.41, Platform Tools 36.0.2-14143358
 - Project: Android Open Source Project
 - Source: https://android.googlesource.com/platform/packages/modules/adb/

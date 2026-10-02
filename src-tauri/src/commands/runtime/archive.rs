@@ -1,6 +1,7 @@
 //! Runtime ZIP validation and extraction helpers.
 
 use super::{code_bundle_root, runtime_bundle_root, runtime_exe_name};
+use crate::platform::{extract_zip_symlink, make_runtime_executable};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, Read, Write};
@@ -34,97 +35,6 @@ pub(crate) fn zip_entry_is_unix_symlink(entry: &zip::read::ZipFile<'_>) -> bool 
     entry
         .unix_mode()
         .is_some_and(|mode| (mode & 0o170000) == 0o120000)
-}
-
-pub(crate) fn relative_target_stays_within_root(
-    root: &Path,
-    link_parent: &Path,
-    target: &Path,
-) -> bool {
-    if target.is_absolute() {
-        return false;
-    }
-
-    let Ok(stripped_parent) = link_parent.strip_prefix(root) else {
-        return false;
-    };
-
-    let mut parts: Vec<std::ffi::OsString> = stripped_parent
-        .components()
-        .filter_map(|component| match component {
-            std::path::Component::Normal(name) => Some(name.to_os_string()),
-            _ => None,
-        })
-        .collect();
-
-    for component in target.components() {
-        match component {
-            std::path::Component::CurDir => {}
-            std::path::Component::Normal(name) => parts.push(name.to_os_string()),
-            std::path::Component::ParentDir => {
-                if parts.pop().is_none() {
-                    return false;
-                }
-            }
-            std::path::Component::RootDir | std::path::Component::Prefix(_) => return false,
-        }
-    }
-
-    true
-}
-
-#[cfg(unix)]
-pub(crate) fn extract_zip_symlink(
-    entry: &mut zip::read::ZipFile<'_>,
-    output: &Path,
-    destination: &Path,
-) -> Result<(), String> {
-    use std::os::unix::fs::symlink;
-
-    let mut target = String::new();
-    entry
-        .read_to_string(&mut target)
-        .map_err(|e| format!("读取 runtime 符号链接失败: {e}"))?;
-    let target = target.trim_end_matches('\0').trim();
-    if target.is_empty() {
-        return Err("runtime zip 内包含空符号链接目标".to_string());
-    }
-    let target_path = Path::new(target);
-    let Some(parent) = output.parent() else {
-        return Err("runtime 符号链接缺少父目录".to_string());
-    };
-    if !relative_target_stays_within_root(destination, parent, target_path) {
-        return Err("runtime zip 内包含越界符号链接".to_string());
-    }
-    symlink(target_path, output).map_err(|e| format!("创建 runtime 符号链接失败: {e}"))
-}
-
-#[cfg(not(unix))]
-pub(crate) fn extract_zip_symlink(
-    entry: &mut zip::read::ZipFile<'_>,
-    output: &Path,
-    _destination: &Path,
-) -> Result<(), String> {
-    let mut out = fs::File::create(output).map_err(|e| format!("写入 runtime 文件失败: {e}"))?;
-    io::copy(entry, &mut out).map_err(|e| format!("解压 runtime 文件失败: {e}"))?;
-    out.flush()
-        .map_err(|e| format!("写入 runtime 文件失败: {e}"))?;
-    Ok(())
-}
-
-#[cfg(unix)]
-pub(crate) fn make_runtime_executable(path: &Path) -> Result<(), String> {
-    use std::os::unix::fs::PermissionsExt;
-    let mut permissions = fs::metadata(path)
-        .map_err(|e| format!("读取 runtime 可执行权限失败: {e}"))?
-        .permissions();
-    permissions.set_mode(permissions.mode() | 0o755);
-    fs::set_permissions(path, permissions).map_err(|e| format!("设置 runtime 可执行权限失败: {e}"))
-}
-
-#[cfg(not(unix))]
-pub(crate) fn make_runtime_executable(_path: &Path) -> Result<(), String> {
-    Ok(())
 }
 
 pub(crate) fn extract_zip_with_root(

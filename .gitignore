@@ -22,6 +22,8 @@ dist-ssr
 *.pywz
 *.pyzw
 __pycache__/
+.pytest_cache/
+pytest-cache-files-*/
 
 # Sidecar build artifacts
 sidecar/*/build/
