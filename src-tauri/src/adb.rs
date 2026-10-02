@@ -150,13 +150,34 @@ impl Adb {
 
     pub(crate) fn connect_serial(adb_path: &std::path::Path, serial: &str) {
         let serial = serial.trim();
-        if serial.is_empty() {
+        if !Self::is_tcp_serial(serial) {
             return;
         }
         adb_command(adb_path)
             .args(["connect", serial])
             .output()
             .ok();
+    }
+
+    pub(crate) fn is_tcp_serial(serial: &str) -> bool {
+        if serial.chars().any(char::is_whitespace) {
+            return false;
+        }
+        // Wireless ADB also reports TCP transports as mDNS service names.
+        // https://android.googlesource.com/platform/packages/modules/adb/+/HEAD/docs/dev/adb_wifi.md
+        if ["._adb-tls-connect._tcp", "._adb._tcp"]
+            .iter()
+            .any(|suffix| {
+                serial
+                    .strip_suffix(suffix)
+                    .is_some_and(|instance| !instance.is_empty())
+            })
+        {
+            return true;
+        }
+        serial.rsplit_once(':').is_some_and(|(host, port)| {
+            !host.is_empty() && port.parse::<u16>().is_ok_and(|port| port != 0)
+        })
     }
 
     pub(crate) fn connect_preferred_serial(
@@ -560,6 +581,34 @@ mod tests {
             std::fs::read_to_string(log_path).unwrap(),
             "connect 127.0.0.1:5565\nconnect 127.0.0.1:5555\n"
         );
+    }
+
+    #[test]
+    fn tcp_serials_accept_endpoints_and_wireless_adb_services() {
+        for serial in [
+            "127.0.0.1:5555",
+            "localhost:5565",
+            "[::1]:5555",
+            "192.168.1.2:37123",
+            "adb-device._adb-tls-connect._tcp",
+            "adb-device._adb._tcp",
+        ] {
+            assert!(Adb::is_tcp_serial(serial), "{serial}");
+        }
+        for serial in [
+            "",
+            "emulator-5554",
+            "R58M123456",
+            "adb-device._adb-tls-pairing._tcp",
+            "._adb-tls-connect._tcp",
+            "host:0",
+            "host:65536",
+            "host:abc",
+            ":5555",
+            "bad host:5555",
+        ] {
+            assert!(!Adb::is_tcp_serial(serial), "{serial}");
+        }
     }
 
     #[test]

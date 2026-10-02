@@ -11,7 +11,7 @@ use crate::paths::app_data_dir;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
@@ -75,10 +75,16 @@ pub(crate) async fn save_adb_screenshot(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
 ) -> Result<Option<String>, String> {
-    let selected_serial = state.lock().unwrap().selected_adb_serial.clone();
-    let mut adb_dev = adb::Adb::new(&app, selected_serial);
+    let snapshot = state.lock().unwrap().clone();
+    let mut adb_dev = adb::Adb::new(&app, snapshot.selected_adb_serial);
     adb_dev.connect()?;
-    persist_auto_selected_serial(&app, &state, adb_dev.serial(), None)?;
+    persist_auto_selected_serial(
+        &app,
+        &state,
+        adb_dev.serial(),
+        None,
+        snapshot.selection_revision,
+    )?;
     let screenshot_path = adb_dev.screenshot_to_file()?;
 
     let target = app
@@ -104,35 +110,75 @@ pub(crate) async fn save_adb_screenshot(
 }
 
 #[tauri::command]
-pub(crate) fn check_adb(
+pub(crate) async fn check_adb(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<AdbDeviceSettings>>,
     debug_state: tauri::State<'_, DebugSidecar>,
-) -> AdbStatus {
+) -> Result<AdbStatus, String> {
     let adb_path = adb::resolve_adb_path(&app);
-    let selected_serial = state.lock().unwrap().selected_adb_serial.clone();
-    adb::Adb::connect_preferred_serial(&adb_path, selected_serial.as_deref());
-    let device_name = adb::adb_command(&adb_path)
-        .arg("devices")
-        .arg("-l")
-        .output()
-        .ok()
-        .and_then(|out| {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            let devices = adb::Adb::ready_devices_from_output(&stdout);
-            match adb::Adb::select_ready_serial(&devices, selected_serial.as_deref()) {
-                Ok(serial) => serial,
-                Err(_) => None,
-            }
-        });
-    if let Some(serial) = device_name.as_deref() {
-        let _ = persist_auto_selected_serial(&app, &state, Some(serial), Some(&debug_state));
+    let snapshot = state.lock().unwrap().clone();
+    let mut deadline = None;
+    let status = poll_adb_status(snapshot.selected_adb_serial, move |args| {
+        // The entire devices/connect/devices sequence shares one five-second budget.
+        let deadline = *deadline.get_or_insert_with(|| Instant::now() + Duration::from_secs(5));
+        let remaining = deadline.checked_duration_since(Instant::now())?;
+        let output =
+            crate::platform::output_with_timeout(adb::adb_command(&adb_path).args(args), remaining)
+                .ok()?;
+        output
+            .status
+            .success()
+            .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+    })
+    .await?;
+    if let Some(serial) = status.device_name.as_deref() {
+        let _ = persist_auto_selected_serial(
+            &app,
+            &state,
+            Some(serial),
+            Some(&debug_state),
+            snapshot.selection_revision,
+        );
     }
 
-    AdbStatus {
-        connected: device_name.is_some(),
-        device_name,
-    }
+    Ok(status)
+}
+
+// All ADB subprocess waits run on the blocking pool, including a reconnect
+// when the preferred TCP device is missing. Online preferred devices need one query.
+async fn poll_adb_status(
+    selected_serial: Option<String>,
+    mut run_adb: impl FnMut(&[&str]) -> Option<String> + Send + 'static,
+) -> Result<AdbStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let select = |stdout: &str| {
+            let devices = adb::Adb::ready_devices_from_output(stdout);
+            adb::Adb::select_ready_serial(&devices, selected_serial.as_deref())
+                .ok()
+                .flatten()
+        };
+        let device_name = run_adb(&["devices", "-l"]).and_then(|stdout| {
+            let online = select(&stdout);
+            let preferred_tcp_missing = selected_serial.as_deref().is_some_and(|serial| {
+                adb::Adb::is_tcp_serial(serial) && online.as_deref() != Some(serial)
+            });
+            if online.is_some() && !preferred_tcp_missing {
+                return online;
+            }
+            let target = selected_serial.as_deref().unwrap_or(adb::BLUESTACKS_SERIAL);
+            if !adb::Adb::is_tcp_serial(target) {
+                return None;
+            }
+            run_adb(&["connect", target]);
+            run_adb(&["devices", "-l"]).and_then(|stdout| select(&stdout))
+        });
+        AdbStatus {
+            connected: device_name.is_some(),
+            device_name,
+        }
+    })
+    .await
+    .map_err(|e| format!("ADB 状态检查任务失败: {e}"))
 }
 
 #[tauri::command]
@@ -164,12 +210,9 @@ pub(crate) fn select_adb_device(
     if !devices.iter().any(|device| device.serial == serial) {
         return Err(format!("ADB 设备不在线: {serial}"));
     }
-    let next = AdbDeviceSettings {
-        selected_adb_serial: Some(serial.clone()),
-    };
-    save_adb_device_settings(&app, &next)?;
-    let changed = state.lock().unwrap().selected_adb_serial.as_deref() != Some(serial.as_str());
-    *state.lock().unwrap() = next;
+    let changed = update_selected_serial(&state, &serial, None, |next| {
+        save_adb_device_settings(&app, next)
+    })?;
     if changed {
         stop_debug_stream(&debug_state);
     }
@@ -213,7 +256,8 @@ pub(crate) async fn refresh_adb_devices_with_previews(
     refresh: Option<bool>,
 ) -> Result<Vec<AdbDevicePreview>, String> {
     let app_for_task = app.clone();
-    let selected_serial = state.lock().unwrap().selected_adb_serial.clone();
+    let snapshot = state.lock().unwrap().clone();
+    let selected_serial = snapshot.selected_adb_serial;
     let should_refresh = refresh.unwrap_or(false);
     let previews = tauri::async_runtime::spawn_blocking(move || {
         let adb_path = adb::resolve_adb_path(&app_for_task);
@@ -251,19 +295,16 @@ pub(crate) async fn refresh_adb_devices_with_previews(
     .map_err(|e| format!("ADB 设备扫描任务失败: {e}"))??;
 
     let (mut previews, selected) = previews;
-    if selected.is_some() {
-        let changed = state.lock().unwrap().selected_adb_serial != selected;
-        let next = AdbDeviceSettings {
-            selected_adb_serial: selected.clone(),
-        };
-        save_adb_device_settings(&app, &next)?;
-        *state.lock().unwrap() = next;
-        if changed {
-            stop_debug_stream(&debug_state);
-        }
-        for preview in &mut previews {
-            preview.selected = selected.as_deref() == Some(preview.serial.as_str());
-        }
+    persist_auto_selected_serial(
+        &app,
+        &state,
+        selected.as_deref(),
+        Some(&debug_state),
+        snapshot.selection_revision,
+    )?;
+    let selected = state.lock().unwrap().selected_adb_serial.clone();
+    for preview in &mut previews {
+        preview.selected = selected.as_deref() == Some(preview.serial.as_str());
     }
     Ok(previews)
 }
@@ -340,21 +381,46 @@ fn persist_auto_selected_serial(
     state: &tauri::State<'_, Mutex<AdbDeviceSettings>>,
     serial: Option<&str>,
     debug_state: Option<&DebugSidecar>,
+    expected_revision: u64,
 ) -> Result<(), String> {
     let Some(serial) = serial else {
         return Ok(());
     };
-    let mut guard = state.lock().unwrap();
-    if guard.selected_adb_serial.as_deref() == Some(serial) {
-        return Ok(());
-    }
-    guard.selected_adb_serial = Some(serial.to_string());
-    save_adb_device_settings(app, &guard)?;
-    drop(guard);
-    if let Some(debug_state) = debug_state {
-        stop_debug_stream(debug_state);
+    let changed = update_selected_serial(state, serial, Some(expected_revision), |next| {
+        save_adb_device_settings(app, next)
+    })?;
+    if changed {
+        if let Some(debug_state) = debug_state {
+            stop_debug_stream(debug_state);
+        }
     }
     Ok(())
+}
+
+fn update_selected_serial(
+    state: &Mutex<AdbDeviceSettings>,
+    serial: &str,
+    expected_revision: Option<u64>,
+    persist: impl FnOnce(&AdbDeviceSettings) -> Result<(), String>,
+) -> Result<bool, String> {
+    let mut settings = state.lock().unwrap();
+    if expected_revision.is_some_and(|revision| settings.selection_revision != revision) {
+        return Ok(false);
+    }
+    let changed = settings.selected_adb_serial.as_deref() != Some(serial);
+    if !changed && expected_revision.is_some() {
+        return Ok(false);
+    }
+    let mut next = settings.clone();
+    next.selected_adb_serial = Some(serial.into());
+    next.selection_revision = next.selection_revision.wrapping_add(1);
+    // Both manual and automatic changes hold the same lock through persistence.
+    // A failed write leaves the previous selection and revision intact.
+    if changed {
+        persist(&next)?;
+    }
+    *settings = next;
+    Ok(changed)
 }
 
 fn stop_debug_stream(debug_state: &DebugSidecar) {
@@ -484,6 +550,206 @@ fn format_adb_reset_step_message(step: &AdbResetStep) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn old_poll_cannot_overwrite_a_new_device_selection() {
+        let state = Mutex::new(AdbDeviceSettings::default());
+        update_selected_serial(&state, "A", None, |_| Ok(())).unwrap();
+        let snapshot = state.lock().unwrap().selection_revision;
+        update_selected_serial(&state, "B", None, |_| Ok(())).unwrap();
+        update_selected_serial(&state, "A", None, |_| Ok(())).unwrap();
+        assert!(!update_selected_serial(&state, "C", Some(snapshot), |_| {
+            panic!("stale selection must not be persisted")
+        })
+        .unwrap());
+        assert_eq!(
+            state.lock().unwrap().selected_adb_serial.as_deref(),
+            Some("A")
+        );
+
+        // Explicitly selecting the same device also invalidates older queries.
+        let snapshot = state.lock().unwrap().selection_revision;
+        update_selected_serial(&state, "A", None, |_| Ok(())).unwrap();
+        assert!(!update_selected_serial(&state, "C", Some(snapshot), |_| Ok(())).unwrap());
+        let current = state.lock().unwrap().selection_revision;
+        assert!(update_selected_serial(&state, "C", Some(current), |_| Ok(())).unwrap());
+    }
+
+    #[test]
+    fn failed_selection_save_preserves_memory_and_revision() {
+        let state = Mutex::new(AdbDeviceSettings::default());
+        update_selected_serial(&state, "A", None, |_| Ok(())).unwrap();
+        let revision = state.lock().unwrap().selection_revision;
+        for expected in [None, Some(revision)] {
+            assert!(
+                update_selected_serial(&state, "B", expected, |_| Err("disk full".into())).is_err()
+            );
+            let settings = state.lock().unwrap();
+            assert_eq!(settings.selected_adb_serial.as_deref(), Some("A"));
+            assert_eq!(settings.selection_revision, revision);
+        }
+    }
+
+    #[test]
+    fn selection_save_and_memory_update_exclude_concurrent_poll() {
+        use std::sync::{mpsc, Arc, TryLockError};
+        use std::time::Duration;
+        let state = Arc::new(Mutex::new(AdbDeviceSettings::default()));
+        let disk = Arc::new(Mutex::new(String::new()));
+        let snapshot = state.lock().unwrap().selection_revision;
+        let (saved_tx, saved_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let manual_state = state.clone();
+        let manual_disk = disk.clone();
+        let manual = std::thread::spawn(move || {
+            update_selected_serial(&manual_state, "B", None, |next| {
+                *manual_disk.lock().unwrap() = next.selected_adb_serial.clone().unwrap();
+                saved_tx.send(()).unwrap();
+                release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        saved_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(state.try_lock(), Err(TryLockError::WouldBlock)));
+        let poll_state = state.clone();
+        let poll_disk = disk.clone();
+        let poll = std::thread::spawn(move || {
+            update_selected_serial(&poll_state, "C", Some(snapshot), |next| {
+                *poll_disk.lock().unwrap() = next.selected_adb_serial.clone().unwrap();
+                Ok(())
+            })
+            .unwrap()
+        });
+        release_tx.send(()).unwrap();
+        manual.join().unwrap();
+        assert!(!poll.join().unwrap());
+        assert_eq!(
+            state.lock().unwrap().selected_adb_serial.as_deref(),
+            Some("B")
+        );
+        assert_eq!(*disk.lock().unwrap(), "B");
+    }
+
+    #[test]
+    fn polling_online_devices_only_queries_the_device_list() {
+        for serial in ["127.0.0.1:5555", "emulator-5554", "R58M123456"] {
+            let caller = std::thread::current().id();
+            let status =
+                tauri::async_runtime::block_on(poll_adb_status(Some(serial.into()), move |args| {
+                    assert_ne!(std::thread::current().id(), caller);
+                    assert_eq!(args, ["devices", "-l"]);
+                    Some(format!("List of devices attached\n{serial}\tdevice\n"))
+                }))
+                .unwrap();
+            assert!(status.connected);
+            assert_eq!(status.device_name.as_deref(), Some(serial));
+        }
+    }
+
+    #[test]
+    fn polling_disconnected_usb_and_emulator_serials_never_attempts_tcp_connect() {
+        for serial in ["emulator-5554", "R58M123456"] {
+            let status =
+                tauri::async_runtime::block_on(poll_adb_status(Some(serial.into()), |args| {
+                    assert_eq!(args, ["devices", "-l"]);
+                    Some("List of devices attached\n".into())
+                }))
+                .unwrap();
+            assert!(!status.connected);
+        }
+    }
+
+    #[test]
+    fn polling_reconnects_missing_tcp_devices_and_then_queries_their_status() {
+        for (selected, first_devices) in [
+            (None, "List of devices attached\n"),
+            (
+                Some("adb-device._adb-tls-connect._tcp".to_string()),
+                "List of devices attached\n",
+            ),
+            (
+                Some("127.0.0.1:5565".to_string()),
+                "List of devices attached\n",
+            ),
+            // A missing saved TCP endpoint is tried before selecting another
+            // device, preserving the user's connection preference.
+            (
+                Some("127.0.0.1:5565".to_string()),
+                "List of devices attached\nR58M123456\tdevice\n",
+            ),
+        ] {
+            let target = selected.clone().unwrap_or(adb::BLUESTACKS_SERIAL.into());
+            let expected_target = target.clone();
+            let calls = std::sync::Arc::new(Mutex::new(Vec::new()));
+            let calls_for_task = calls.clone();
+            let status = tauri::async_runtime::block_on(poll_adb_status(selected, move |args| {
+                let mut calls = calls_for_task.lock().unwrap();
+                calls.push(args.join(" "));
+                Some(match calls.len() {
+                    1 => first_devices.into(),
+                    2 => "connected".into(),
+                    3 => format!("List of devices attached\n{target}\tdevice\n"),
+                    _ => panic!("unexpected ADB call"),
+                })
+            }))
+            .unwrap();
+            assert!(status.connected);
+            assert_eq!(
+                status.device_name.as_deref(),
+                Some(expected_target.as_str())
+            );
+            assert_eq!(
+                *calls.lock().unwrap(),
+                vec![
+                    "devices -l".to_string(),
+                    format!("connect {expected_target}"),
+                    "devices -l".to_string(),
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn failed_queries_and_offline_devices_report_disconnected() {
+        let status = tauri::async_runtime::block_on(poll_adb_status(None, |_| None)).unwrap();
+        assert!(!status.connected);
+        let status =
+            tauri::async_runtime::block_on(poll_adb_status(Some("127.0.0.1:5555".into()), |_| {
+                Some("List of devices attached\n127.0.0.1:5555\toffline\n".into())
+            }))
+            .unwrap();
+        assert!(!status.connected);
+        assert!(status.device_name.is_none());
+    }
+
+    #[test]
+    fn slow_adb_query_yields_to_the_caller_until_the_worker_finishes() {
+        use std::future::Future;
+        use std::sync::{mpsc, Arc};
+        use std::task::{Context, Poll, Wake, Waker};
+        use std::time::Duration;
+
+        struct NoopWake;
+        impl Wake for NoopWake {
+            fn wake(self: Arc<Self>) {}
+        }
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let mut pending = Box::pin(poll_adb_status(Some("emulator-5554".into()), move |_| {
+            started_tx.send(()).unwrap();
+            release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            Some("List of devices attached\nemulator-5554\tdevice\n".into())
+        }));
+        let waker = Waker::from(Arc::new(NoopWake));
+        assert!(matches!(
+            pending.as_mut().poll(&mut Context::from_waker(&waker)),
+            Poll::Pending
+        ));
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        release_tx.send(()).unwrap();
+        assert!(tauri::async_runtime::block_on(pending).unwrap().connected);
+    }
 
     #[test]
     fn screenshot_save_path_keeps_or_adds_png_extension() {

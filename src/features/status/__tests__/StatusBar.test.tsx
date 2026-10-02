@@ -92,6 +92,49 @@ describe("StatusBar", () => {
     vi.mocked(listen).mockImplementation(async () => () => {});
   });
 
+  it.each(["failure", "timeout"])("keeps one ADB poll in flight and resumes after %s", async (outcome) => {
+    vi.useFakeTimers();
+    let rejectQuery: (reason: Error) => void = () => {};
+    let resolveQuery: (value: unknown) => void = () => {};
+    let polls = 0;
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_server") return "JP";
+      if (cmd === "check_adb") {
+        polls += 1;
+        return new Promise((resolve, reject) => {
+          resolveQuery = resolve;
+          rejectQuery = reject;
+        });
+      }
+      return null;
+    });
+    const view = renderWithTheme(<StatusBar />);
+    try {
+      await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
+      expect(polls).toBe(1);
+      await act(async () => {
+        if (outcome === "timeout") {
+          // The backend kills a timed-out ADB process and reports disconnected.
+          resolveQuery({ connected: false, deviceName: null });
+        } else {
+          rejectQuery(new Error("ADB query failed"));
+        }
+      });
+      await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+      expect(polls).toBe(2);
+      await act(async () => {
+        resolveQuery({ connected: true, deviceName: "emulator-5554" });
+      });
+      expect(screen.getByRole("button", { name: "游戏已连接" })).toBeInTheDocument();
+      await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+      expect(polls).toBe(3);
+      await act(async () => { resolveQuery({ connected: false, deviceName: null }); });
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
+
   it("hydrates the server button from get_server on mount", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_server") return "CN";
@@ -800,10 +843,13 @@ describe("StatusBar", () => {
     expect(screen.getByText("已自动选择：127.0.0.1:5555")).toBeInTheDocument();
   });
 
-  it("selects an adb device from the preview grid", async () => {
+  it("selects an adb device without letting an older poll overwrite its status", async () => {
+    let resolvePoll: (value: unknown) => void = () => {};
     vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
       if (cmd === "get_server") return "JP";
-      if (cmd === "check_adb") return { connected: false, deviceName: null };
+      if (cmd === "check_adb") {
+        return new Promise((resolve) => { resolvePoll = resolve; });
+      }
       if (cmd === "refresh_adb_devices_with_previews") {
         return [
           {
@@ -833,6 +879,8 @@ describe("StatusBar", () => {
       expect(invoke).toHaveBeenCalledWith("select_adb_device", { serial: "emulator-5554" });
     });
     expect(await screen.findByText("游戏已连接")).toBeInTheDocument();
+    await act(async () => { resolvePoll({ connected: false, deviceName: null }); });
+    expect(screen.getByRole("button", { name: "游戏已连接" })).toBeInTheDocument();
   });
 
   it("shows an empty adb device state with a rescan action", async () => {
