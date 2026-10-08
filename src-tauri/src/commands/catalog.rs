@@ -18,6 +18,9 @@ pub(crate) use craft_essences::*;
 mod skills;
 pub(crate) use skills::*;
 
+mod append_skills;
+pub(crate) use append_skills::*;
+
 mod mystic_codes;
 pub(crate) use mystic_codes::*;
 

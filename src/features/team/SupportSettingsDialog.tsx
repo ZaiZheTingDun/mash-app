@@ -12,12 +12,8 @@ import {
 import { ChevronDownIcon, ChevronRightIcon, Cross2Icon, MinusIcon, PlusIcon } from "@radix-ui/react-icons";
 import { DiamondSwitch } from "../../components/common/DiamondSwitch";
 import { useServantSkillIcons } from "./useServantSkillIcons";
+import { useAppendSkillIcons } from "./useAppendSkillIcons";
 import type { Servant } from "../../types/servant";
-import append1 from "../../../src-tauri/resources/images/append-skills/skill_00301.png";
-import append2 from "../../../src-tauri/resources/images/append-skills/skill_00601.png";
-import append3 from "../../../src-tauri/resources/images/append-skills/skill_00300.png";
-import append4 from "../../../src-tauri/resources/images/append-skills/skill_00303.png";
-import append5 from "../../../src-tauri/resources/images/append-skills/skill_00613.png";
 import {
   ThresholdLevelPicker,
   ThresholdLevelLegend,
@@ -212,6 +208,7 @@ export function SupportSettingsDialog({
 }: SupportSettingsDialogProps) {
   const [grandMode, setGrandMode] = useState(project?.supportGrandMode ?? false);
   const skillIcons = useServantSkillIcons([servant]);
+  const appendSkillIcons = useAppendSkillIcons();
   const [servantLevel, setServantLevel] = useState<number | null>(
     () => project?.supportServantLevelMin ?? null,
   );
@@ -354,7 +351,7 @@ export function SupportSettingsDialog({
             <section className="support-settings-append">
               <h3 className="support-settings-heading">追加技能</h3>
               <div className="support-settings-skills">
-                {appendSkillLevels.map((level, index) => <SupportSkillControl key={index} index={index} kind="append" level={level} iconSrc={[append1, append2, append3, append4, append5][index]} onPick={() => openLevelPicker({ kind: "append", index })} onChange={(nextLevel) => setAppendSkillLevels(prev => prev.map((value, i) => i === index ? nextLevel : value) as SupportAppendSkillLevelMins)} />)}
+                {appendSkillLevels.map((level, index) => <SupportSkillControl key={index} index={index} kind="append" level={level} iconSrc={appendSkillIcons[index]?.src} onPick={() => openLevelPicker({ kind: "append", index })} onChange={(nextLevel) => setAppendSkillLevels(prev => prev.map((value, i) => i === index ? nextLevel : value) as SupportAppendSkillLevelMins)} />)}
               </div>
             </section>
 
