@@ -1,3 +1,4 @@
+import { commandEditorDevBridge } from "../commandEditorDevMock";
 import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
@@ -9,6 +10,11 @@ import { renderWithTheme } from "../test/renderWithTheme";
 import { createInitialProjectSlots } from "../features/team/projectSlots";
 import type { Project } from "../types/project";
 import type { SelfCheckStatus } from "../types/selfCheck";
+
+function mockInvoke(handler: Parameters<typeof commandEditorDevBridge>[0]) {
+  const adapted=commandEditorDevBridge((command,args)=>invoke(command,args));
+  vi.mocked(invoke).mockImplementation(((command:string,args:Record<string,unknown>)=> command === "load_command_editor" || command === "mutate_command_editor" ? adapted(command,args) : handler(command,args)) as typeof invoke);
+}
 
 const projects: Project[] = [
   {
@@ -42,7 +48,7 @@ function installAppMock(
     battleStartPanel?: "operationLog" | "runStatus" | "none";
   } = {},
 ) {
-  vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+  mockInvoke(async (cmd: string) => {
     switch (cmd) {
       case "get_runtime_status":
       case "get_asset_bundle_status":
@@ -92,7 +98,7 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第二套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第二套")).toBeInTheDocument();
   });
 
   it("falls back to the first project when the saved project no longer exists", async () => {
@@ -102,7 +108,7 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
   });
 
   it("switches operation-log and run-status panels exclusively", async () => {
@@ -112,7 +118,7 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /操作日志/ }));
     expect(screen.getByRole("button", { name: "关闭操作日志" })).toBeInTheDocument();
 
@@ -132,12 +138,12 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "指令设置" }));
     await user.click(await screen.findByRole("button", { name: "开始任务" }));
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
-    expect(screen.getByRole("button", { name: "主页" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "返回" })).toBeDisabled();
 
     expect(screen.getByRole("button", { name: "关闭运行状态" })).toBeInTheDocument();
     expect(
@@ -152,10 +158,10 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "指令设置" }));
     await user.click(await screen.findByRole("button", { name: "开始任务" }));
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     expect(
       screen.queryByRole("button", { name: "关闭运行状态" })
@@ -173,7 +179,7 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /操作日志/ }));
     expect(
       screen.getByRole("button", { name: "关闭操作日志" })
@@ -210,7 +216,7 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     act(() => {
       debugLogHandler?.(
         "[mash-cv stderr] [scrcpy] first frame decoded (1920x1080)"
@@ -236,7 +242,7 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "主页" }));
     await user.click(screen.getByRole("button", { name: "召唤" }));
 
@@ -255,7 +261,7 @@ describe("App active project restore", () => {
     const user = userEvent.setup();
     renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "主页" })).toBeInTheDocument();
     for (const label of ["友情点抽取", "强化概念礼装", "强化任务", "强化从者"]) {
       expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
@@ -271,10 +277,14 @@ describe("App active project restore", () => {
     expect(screen.getByRole("navigation", { name: "主页菜单" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "战斗" }));
     await user.click(screen.getByRole("button", { name: "编队/开始" }));
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "指令设置" }));
-    expect(screen.getByRole("button", { name: "主页" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "队伍操作" }));
+    expect(screen.queryByRole("menuitem", { name: "主页" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "队伍设置" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "返回队伍" }));
     await user.click(screen.getByRole("button", { name: "主页" }));
     expect(screen.getByRole("navigation", { name: "主页菜单" })).toBeInTheDocument();
   });
@@ -298,7 +308,7 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     await act(async () => {
       selfCheckHandler?.();
     });
@@ -331,7 +341,7 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     await act(async () => {
       selfCheckHandler?.();
     });
@@ -359,7 +369,7 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     await act(async () => {
       resourceHandler?.();
     });
@@ -368,7 +378,7 @@ describe("App active project restore", () => {
     await user.click(screen.getByRole("button", { name: "关闭设置" }));
 
     expect(invoke).toHaveBeenCalledWith("cancel_resource_downloads");
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
   });
 
   it("opens the software update dialog over resource management after a manual check", async () => {
@@ -406,7 +416,7 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     await act(async () => {
       resourceHandler?.();
     });
@@ -423,7 +433,7 @@ describe("App active project restore", () => {
     expect(downloadAndInstall).toHaveBeenCalledTimes(1);
   });
 
-  it("opens the settings dialog from the status bar and switches sections", async () => {
+  it("opens settings as a page, switches sections and returns to the selected project", async () => {
     installAppMock("project-1");
     const user = userEvent.setup();
 
@@ -431,11 +441,14 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "设置" }));
 
     expect(await screen.findByText("宝具识别方式")).toBeInTheDocument();
+    expect(screen.getByRole("main", { name: "设置" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText("第一套")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "基础设置" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "阈值设置" }));
 
@@ -446,12 +459,15 @@ describe("App active project restore", () => {
 
     expect(await screen.findByRole("button", { name: "导入队伍" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导出队伍" })).toBeInTheDocument();
-    expect(screen.getByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(screen.queryByText("第一套")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "资源管理" }));
 
     expect(await screen.findByText("CV 运行时")).toBeInTheDocument();
     expect(screen.getByText("CV 运行时")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "关闭设置" }));
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
+    expect(screen.queryByRole("main", { name: "设置" })).not.toBeInTheDocument();
   });
 
   it("allows command setup when custom card rules reference removed servants", async () => {
@@ -477,7 +493,7 @@ describe("App active project restore", () => {
         ],
       },
     };
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    mockInvoke(async (cmd: string) => {
       switch (cmd) {
         case "get_runtime_status":
         case "get_asset_bundle_status":
@@ -518,10 +534,10 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 失效规则 ～")).toBeInTheDocument();
+    expect(await screen.findByText("失效规则")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "指令设置" }));
 
-    expect(await screen.findByText("主力输出")).toBeInTheDocument();
+    expect(await screen.findByText("冠位配置")).toBeInTheDocument();
     expect(screen.queryByText("需要修复出牌规则")).not.toBeInTheDocument();
   });
 
@@ -538,7 +554,7 @@ describe("App active project restore", () => {
       }
       return () => {};
     });
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    mockInvoke(async (cmd: string) => {
       if (cmd === "save_adb_screenshot") return "/tmp/mash-screenshot.png";
       switch (cmd) {
         case "get_runtime_status":
@@ -568,7 +584,7 @@ describe("App active project restore", () => {
       <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
     );
 
-    expect(await screen.findByText("～ 第一套 ～")).toBeInTheDocument();
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
     await act(async () => {
       screenshotHandler?.();
     });

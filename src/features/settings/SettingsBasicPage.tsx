@@ -5,11 +5,12 @@ import {
   Dialog,
   Flex,
   Select,
-  Switch,
   Text,
   TextField,
   Tooltip,
 } from "@radix-ui/themes";
+import { DiamondSwitch } from "../../components/common/DiamondSwitch";
+import { SettingsRow } from "./SettingsRow";
 import preAttackNpGaugeDialogImage from "../../../src-tauri/resources/images/battle/pre_attack_np_gauge_dialog.png";
 import { invoke } from "../../tauri";
 import {
@@ -362,342 +363,86 @@ export function SettingsBasicPage({
   }, [applySettings]);
 
   return (
-    <Box className="settings-section-panel">
-      <Flex direction="column" gap="4" className="recognition-setting-block">
-        <Flex
-          align="start"
-          justify="between"
-          gap="4"
-          wrap="wrap"
-          className="basic-setting-row"
-        >
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">
-              御主礼装显示性别
-            </Text>
-            <Text size="1" color="gray">
-              选择队伍配置中御主礼装图标使用的服装款式
-            </Text>
-          </Flex>
-          <Select.Root
-            value={mysticCodeGender ?? "female"}
-            onValueChange={(value) => void saveMysticCodeGender(value as MysticCodeGender)}
-            disabled={saving || savingGender}
-          >
+    <Box className="settings-section-panel settings-basic">
+      <Flex direction="column" className="recognition-setting-block">
+        <SettingsRow label="御主礼装显示性别" description="选择队伍配置中御主礼装图标使用的服装款式">
+          <Select.Root value={mysticCodeGender ?? "female"}
+            onValueChange={(value) => void saveMysticCodeGender(value as MysticCodeGender)} disabled={saving || savingGender}>
             <Select.Trigger aria-label="御主礼装显示性别" className="recognition-mode-select" />
-            <Select.Content>
+            <Select.Content position="popper" className="settings-select-menu">
               <Select.Item value="female">女</Select.Item>
               <Select.Item value="male">男</Select.Item>
             </Select.Content>
           </Select.Root>
-        </Flex>
-
-        <Flex
-          align="start"
-          justify="between"
-          gap="4"
-          wrap="wrap"
-          className="basic-setting-row"
-        >
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">
-              开始后展开
-            </Text>
-            <Text size="1" color="gray">
-              点击战斗页面的开始后，自动展开所选底栏面板
-            </Text>
-          </Flex>
-
-          <Select.Root
-            value={battleStartPanel}
-            onValueChange={(value) => void saveBattleStartPanel(value as BattleStartPanel)}
-            disabled={saving}
-          >
+        </SettingsRow>
+        <SettingsRow label="开始后展开" description="点击战斗页面的开始后，自动展开所选底栏面板">
+          <Select.Root value={battleStartPanel}
+            onValueChange={(value) => void saveBattleStartPanel(value as BattleStartPanel)} disabled={saving}>
             <Select.Trigger aria-label="开始后展开" className="recognition-mode-select" />
-            <Select.Content>
+            <Select.Content position="popper" className="settings-select-menu">
               <Select.Item value="operationLog">操作日志</Select.Item>
               <Select.Item value="runStatus">运行状态</Select.Item>
               <Select.Item value="none">不弹出</Select.Item>
             </Select.Content>
           </Select.Root>
-        </Flex>
-
-        <Flex
-          align="start"
-          justify="between"
-          gap="4"
-          wrap="wrap"
-          className="basic-setting-row"
-        >
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">
-              宝具识别方式
-            </Text>
-            <Text size="1" color="gray">
-              出现宝具识别问题可尝试切换，仍在实验中可能导致选卡速度变慢
-            </Text>
-            {mode === "gaugeBeforeAttack" && (
-              <Text size="1" color="orange">
-                攻击前识别可能被从者台词遮挡，请关闭台词
-              </Text>
-            )}
-          </Flex>
-
-          <Select.Root
-            value={mode}
-            onValueChange={(value) => void saveMode(value as NoblePhantasmDetectionMode)}
-            disabled={saving}
-          >
+        </SettingsRow>
+        <SettingsRow label="宝具识别方式" description="出现宝具识别问题可尝试切换，仍在实验中可能导致选卡速度变慢"
+          help={mode === "gaugeBeforeAttack" && <Text size="1" color="orange">攻击前识别可能被从者台词遮挡，请关闭台词</Text>}>
+          <Select.Root value={mode} onValueChange={(value) => void saveMode(value as NoblePhantasmDetectionMode)} disabled={saving}>
             <Select.Trigger aria-label="宝具识别方式" className="recognition-mode-select" />
-            <Select.Content>
+            <Select.Content position="popper" className="settings-select-menu">
               <Select.Item value="card">指令卡识别</Select.Item>
-              <Select.Item value="gaugeBeforeAttack">
-                宝具条识别（选卡前）
-              </Select.Item>
+              <Select.Item value="gaugeBeforeAttack">宝具条识别（选卡前）</Select.Item>
               <Select.Item value="gauge">宝具条识别（选卡时）</Select.Item>
             </Select.Content>
           </Select.Root>
-        </Flex>
-
-        <Flex
-          align="start"
-          justify="between"
-          gap="4"
-          wrap="wrap"
-          className="basic-setting-row"
-        >
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">
-              牵绊升级时自动截图
-            </Text>
-            <Text size="1" color="gray">
-              出现牵绊等级提升页面时自动保存当前截图
-            </Text>
-          </Flex>
-
-          <Flex align="center" gap="2">
-            <Button
-              size="1"
-              variant="soft"
-              onClick={() => void openBondLevelUpScreenshotFolder()}
-              disabled={saving}
-            >
-              打开截图文件夹
-            </Button>
-            <Switch
-              checked={autoCaptureBondLevelUp}
-              onCheckedChange={(value) =>
-                void saveBondStopSetting("set_auto_capture_bond_level_up", value)
-              }
-              disabled={saving}
-              aria-label="牵绊升级时自动截图"
-            />
-          </Flex>
-        </Flex>
-
-        <Flex
-          align="start"
-          justify="between"
-          gap="4"
-          wrap="wrap"
-          className="basic-setting-row"
-        >
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">
-              牵绊升级自动停止
-            </Text>
-            <Text size="1" color="gray">
-              出现牵绊等级提升页面时自动停止
-            </Text>
-          </Flex>
-
+        </SettingsRow>
+        <SettingsRow label="牵绊升级时自动截图" description="出现牵绊等级提升页面时自动保存当前截图">
+          <Button size="1" variant="ghost" className="settings-folder-action"
+            onClick={() => void openBondLevelUpScreenshotFolder()} disabled={saving}>打开截图文件夹 <span aria-hidden="true">↗</span></Button>
+          <DiamondSwitch checked={autoCaptureBondLevelUp} disabled={saving} aria-label="牵绊升级时自动截图"
+            onCheckedChange={(value) => void saveBondStopSetting("set_auto_capture_bond_level_up", value)} />
+        </SettingsRow>
+        <SettingsRow label="牵绊升级自动停止" description="出现牵绊等级提升页面时自动停止">
           {stopOnBondMaxLevel ? (
             <Tooltip content="牵绊满级自动停止已开启；关闭满级开关后可修改此项">
               <Box tabIndex={0}>
-                <Switch
-                  checked={stopOnBondLevelUp}
-                  onCheckedChange={(value) =>
-                    void saveBondStopSetting("set_stop_on_bond_level_up", value)
-                  }
-                  disabled
-                  aria-label="牵绊升级自动停止"
-                />
+                <DiamondSwitch checked={stopOnBondLevelUp} disabled aria-label="牵绊升级自动停止"
+                  onCheckedChange={(value) => void saveBondStopSetting("set_stop_on_bond_level_up", value)} />
               </Box>
             </Tooltip>
-          ) : (
-            <Box>
-              <Switch
-                checked={stopOnBondLevelUp}
-                onCheckedChange={(value) =>
-                  void saveBondStopSetting("set_stop_on_bond_level_up", value)
-                }
-                disabled={saving}
-                aria-label="牵绊升级自动停止"
-              />
-            </Box>
-          )}
-        </Flex>
-
-        <Flex
-          align="start"
-          justify="between"
-          gap="4"
-          wrap="wrap"
-          className="basic-setting-row"
-        >
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">
-              牵绊满级自动停止
-            </Text>
-            <Text size="1" color="gray">
-              出现牵绊等级提升页面且等级达到 10 或以上时自动停止；开启后会关闭牵绊升级自动停止
-            </Text>
-          </Flex>
-
-          <Switch
-            checked={stopOnBondMaxLevel}
-            onCheckedChange={(value) =>
-              void saveBondStopSetting("set_stop_on_bond_max_level", value)
-            }
-            disabled={saving}
-            aria-label="牵绊满级自动停止"
-          />
-        </Flex>
-
-        <Flex
-          align="start"
-          justify="between"
-          gap="4"
-          wrap="wrap"
-          className="basic-setting-row"
-        >
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">
-              Extra 职阶筛选
-            </Text>
-            <Text size="1" color="gray">
-              国服助战目标为 Extra 职阶时，长按并选择具体职阶；队伍可以单独覆盖此设置
-            </Text>
-          </Flex>
-
-          <Switch
-            checked={enableExtraClassFilter}
-            onCheckedChange={(value) => void saveEnableExtraClassFilter(value)}
-            disabled={saving}
-            aria-label="全局 Extra 职阶筛选"
-          />
-        </Flex>
-
-        <Flex
-          align="start"
-          justify="between"
-          gap="4"
-          wrap="wrap"
-          className="basic-setting-row"
-        >
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">
-              使用全列表 OCR
-            </Text>
-            <Text size="1" color="gray">
-              默认使用锚点进行识别，开启后会在识别失败时回退到全列表 OCR 识别，可能会降低识别速度
-            </Text>
-          </Flex>
-
-          <Switch
-            checked={supportFullListOcrFallback}
-            onCheckedChange={(value) => void saveSupportFullListOcrFallback(value)}
-            disabled={saving}
-            aria-label="使用全列表 OCR"
-          />
-        </Flex>
-
-        <Flex
-          align="start"
-          justify="between"
-          gap="4"
-          wrap="wrap"
-          className="basic-setting-row"
-        >
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">
-              技能使用确认
-            </Text>
-            <Text size="1" color="gray">
-              开启后会确认技能使用成功，失败会进行重试，一般无需开启
-            </Text>
-          </Flex>
-
-          <Switch
-            checked={verifySkillActivation}
-            onCheckedChange={(value) => void saveVerifySkillActivation(value)}
-            disabled={saving}
-            aria-label="技能使用确认"
-          />
-        </Flex>
-
-        <Flex
-          align="start"
-          justify="between"
-          gap="4"
-          wrap="wrap"
-          className="basic-setting-row"
-        >
-          <Flex direction="column" gap="1" className="basic-setting-copy">
-            <Text size="2" weight="bold">
-              识别超时限制
-            </Text>
-            <Text size="1" color="gray">
-              连续无法识别达到此次数后停止
-            </Text>
-          </Flex>
-
-          <Flex align="center" gap="2">
-            <TextField.Root
-              type="number"
-              min={UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN}
-              max={UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX}
-              step={1}
-              value={timeoutDraft}
-              onChange={(event) => updateTimeoutDraft(event.currentTarget.value)}
-              onBlur={normalizeTimeoutDraft}
-              aria-label="识别超时次数"
-              className="recognition-threshold-input"
-              disabled={saving || !timeoutEnabled}
-            />
-            <Text size="2" color="gray">
-              次
-            </Text>
-            <Switch
-              checked={timeoutEnabled}
-              onCheckedChange={toggleTimeoutLimit}
-              disabled={saving}
-              aria-label="识别超时限制"
-            />
-          </Flex>
-        </Flex>
-
+          ) : <DiamondSwitch checked={stopOnBondLevelUp} disabled={saving} aria-label="牵绊升级自动停止"
+            onCheckedChange={(value) => void saveBondStopSetting("set_stop_on_bond_level_up", value)} />}
+        </SettingsRow>
+        <SettingsRow label="牵绊满级自动停止" description="出现牵绊等级提升页面且等级达到 10 或以上时自动停止；开启后会关闭牵绊升级自动停止">
+          <DiamondSwitch checked={stopOnBondMaxLevel} disabled={saving} aria-label="牵绊满级自动停止"
+            onCheckedChange={(value) => void saveBondStopSetting("set_stop_on_bond_max_level", value)} />
+        </SettingsRow>
+        <SettingsRow label="Extra 职阶筛选" description="国服助战目标为 Extra 职阶时，长按并选择具体职阶；队伍可以单独覆盖此设置">
+          <DiamondSwitch checked={enableExtraClassFilter} onCheckedChange={(value) => void saveEnableExtraClassFilter(value)}
+            disabled={saving} aria-label="全局 Extra 职阶筛选" />
+        </SettingsRow>
+        <SettingsRow label="使用全列表 OCR" description="默认使用锚点进行识别，开启后会在识别失败时回退到全列表 OCR 识别，可能会降低识别速度">
+          <DiamondSwitch checked={supportFullListOcrFallback} onCheckedChange={(value) => void saveSupportFullListOcrFallback(value)}
+            disabled={saving} aria-label="使用全列表 OCR" />
+        </SettingsRow>
+        <SettingsRow label="技能使用确认" description="开启后会确认技能使用成功，失败会进行重试，一般无需开启">
+          <DiamondSwitch checked={verifySkillActivation} onCheckedChange={(value) => void saveVerifySkillActivation(value)}
+            disabled={saving} aria-label="技能使用确认" />
+        </SettingsRow>
+        <SettingsRow label="识别超时限制" description="连续无法识别达到此次数后停止">
+          <TextField.Root type="number" min={UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN} max={UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX}
+            step={1} value={timeoutDraft} onChange={(event) => updateTimeoutDraft(event.currentTarget.value)}
+            onBlur={normalizeTimeoutDraft} aria-label="识别超时次数" className="recognition-threshold-input"
+            disabled={saving || !timeoutEnabled} />
+          <Text size="2" color="gray">次</Text>
+          <DiamondSwitch checked={timeoutEnabled} onCheckedChange={toggleTimeoutLimit} disabled={saving} aria-label="识别超时限制" />
+        </SettingsRow>
         {featureToggles.autoFriendRequest && (
-          <Flex
-            align="start"
-            justify="between"
-            gap="4"
-            wrap="wrap"
-            className="basic-setting-row"
-          >
-            <Flex direction="column" gap="1" className="basic-setting-copy">
-              <Text size="2" weight="bold">自动申请好友</Text>
-              <Text size="1" color="gray">
-                结算页的申请好友按钮处于激活状态时自动申请好友
-              </Text>
-            </Flex>
-            <Switch
-              checked={autoFriendRequest}
-              onCheckedChange={(value) => void saveAutoFriendRequest(value)}
-              disabled={saving}
-              aria-label="自动申请好友"
-            />
-          </Flex>
+          <SettingsRow label="自动申请好友" description="结算页的申请好友按钮处于激活状态时自动申请好友">
+            <DiamondSwitch checked={autoFriendRequest} onCheckedChange={(value) => void saveAutoFriendRequest(value)}
+              disabled={saving} aria-label="自动申请好友" />
+          </SettingsRow>
         )}
 
         <Flex align="center" gap="2">

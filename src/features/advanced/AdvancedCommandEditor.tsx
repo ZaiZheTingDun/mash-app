@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Avatar, Dialog, Flex, Text, Button, IconButton, Select } from "@radix-ui/themes";
+import { ActionRowControls } from "../../components/common/ActionRowControls";
+import { SectionHeading } from "../../components/common/SectionHeading";
+import { CommandWorkspace, type CommandStep } from "../battle/CommandWorkspace";
+import { useCommandDocument } from "../battle/useCommandDocument";
+import { useEffect, useMemo, useState } from "react";
+import { Avatar, Dialog, Flex, Text, Button, Select } from "@radix-ui/themes";
 import {
   Cross2Icon,
-  PlusIcon,
-  TrashIcon,
 } from "@radix-ui/react-icons";
-import { convertFileSrc, invoke } from "../../tauri";
+import { convertFileSrc } from "../../tauri";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
 import { AddRowTrigger } from "../../components/common/AddRowTrigger";
@@ -19,10 +21,8 @@ import {
   SKILL_LABELS,
   createId,
   createDefaultAdvancedTurn,
-  createDefaultScene,
   defaultCommandCard,
   mainGrandBackSlot,
-  normalizeScene,
   prepSummary,
   type FrontServant,
   type PartySlot,
@@ -63,10 +63,13 @@ import type {
 } from "../../types/project";
 import type { Servant } from "../../types/servant";
 import { mysticCodeSkill, type MysticCode } from "../../types/mysticCode";
+import { MysticCodeChoice } from "../../components/common/MysticCodeChoice";
+import { CommandDraftHeading } from "../../components/common/CommandDraftHeading";
 import orderChangeIcon from "../../../src-tauri/resources/images/icon_order_change.png";
 
 interface AdvancedCommandEditorProps {
   projectId: string | null;
+  onBusyChange?: (busy: boolean) => void;
   partyLineup: (Servant | null)[];
   partyMembers?: PartyMember[];
   disableAutoSkillTargetRecognition?: boolean;
@@ -229,19 +232,17 @@ function AdvancedPreparationActionSummary({
 
   return (
     <span className="battle-action-summary" aria-label={prepSummary(resolvedAction, partyLineup)}>
-      {sourceFace}
-      <Text size="2" weight="medium" className="battle-action-name">
-        {sourceText}{" "}
-        {resolvedAction.type === "servant"
-          ? <>释放{" "}<span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span></>
-          : resolvedAction.type === "equipment" ? <>{actionText} <span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span></> : actionText}
-        {resolvedAction.type === "servant" && resolvedAction.skillSelection
-          ? `并选择 ${resolvedAction.skillSelection.label ?? `选项 ${resolvedAction.skillSelection.index + 1}`}`
-          : ""}
-      </Text>
+      <span className="command-row-source">{sourceFace}<Text size="2" weight="medium" className="battle-action-name">
+        {sourceText}{" "}{resolvedAction.type === "commandSpell" ? "" : resolvedAction.type === "equipment" ? actionText : "释放"}
+      </Text></span>
+      <span className="command-row-skill">
+        {resolvedAction.type === "commandSpell" ? <Text size="2">{actionText}</Text> : <span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span>}
+        {resolvedAction.type === "servant" && resolvedAction.skillSelection ? <small>并选择 {resolvedAction.skillSelection.label ?? `选项 ${resolvedAction.skillSelection.index + 1}`}</small> : null}
+      </span>
+      <span className="command-row-outcome">
       {orderChangeSlots?.front != null && orderChangeSlots.back != null ? (
         <>
-          <span className="battle-action-to">Order Change</span>
+
           <AdvancedInlineFace
             servant={partyLineup[orderChangeSlots.front] ?? null}
             index={orderChangeSlots.front}
@@ -286,6 +287,7 @@ function AdvancedPreparationActionSummary({
           </>
         )
       )}
+      </span>
     </span>
   );
 }
@@ -306,7 +308,8 @@ function AdvancedStrategyEditor({
   onGrandServantsChange,
   onGrandCardStrategyChange,
   activeTurnIndex,
-  onActiveTurnIndexChange,
+  step,
+  onSelectEnemy,
   onChange,
 }: {
   scene: AdvancedBattleScene;
@@ -324,12 +327,28 @@ function AdvancedStrategyEditor({
   onGrandServantsChange?: (grandServants: GrandServantConfig[]) => void;
   onGrandCardStrategyChange?: (strategy: GrandCardStrategy) => void;
   activeTurnIndex: number;
-  onActiveTurnIndexChange: (index: number) => void;
+  step: CommandStep;
+  onSelectEnemy: () => void;
   onChange: (scene: AdvancedBattleScene) => void;
 }) {
   const [editingCardSlot, setEditingCardSlot] = useState<number | null>(null);
+  const [editingControlIndex, setEditingControlIndex] = useState<number | null>(null);
+  const [editingPrepIndex, setEditingPrepIndex] = useState<number | null>(null);
   const [controlDraft, setControlDraft] = useState<PrepDraft | null>(null);
   const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
+  const hasActionDraft = Boolean(prepDraft || controlDraft);
+  useEffect(() => {
+    if (!hasActionDraft) return;
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setPrepDraft(null);
+      setControlDraft(null);
+      setEditingPrepIndex(null);
+      setEditingControlIndex(null);
+    };
+    document.addEventListener("keydown", cancel);
+    return () => document.removeEventListener("keydown", cancel);
+  }, [hasActionDraft]);
   const partyLineup = useMemo(() => partyMembersToServants(partyMembers), [partyMembers]);
   const mysticSkillEntries: SkillIcons = [1, 2, 3].map((slot) => {
     const skill = mysticCode?.skills.find((entry) => entry.slot === slot);
@@ -421,25 +440,20 @@ function AdvancedStrategyEditor({
     });
   };
 
-  const addTurn = () => {
-    const nextTurns = [...turns, createDefaultAdvancedTurn()];
-    onChange({ ...scene, turns: nextTurns, startupActions: [] });
-    onActiveTurnIndexChange(nextTurns.length - 1);
-    setPrepDraft(null);
-  };
-
-  const deleteTurn = () => {
-    if (activeTurnIndex === 0) return;
-    const nextTurns = turns.filter((_, index) => index !== activeTurnIndex);
-    onChange({ ...scene, turns: nextTurns, startupActions: [] });
-    onActiveTurnIndexChange(activeTurnIndex - 1);
-    setPrepDraft(null);
-  };
-
   const updateControlActions = (actions: PreparationAction[]) => {
     onChange({ ...scene, controlActions: actions });
   };
 
+  const prepMembers = editingPrepIndex == null ? currentPartyMembers : startupActionLineups[editingPrepIndex] ?? turnStartMembers;
+  const controlMembers = editingControlIndex == null ? postControlMembers : controlActionLineups[editingControlIndex] ?? partyMembers;
+  const commitPrep = (action: PreparationAction) => {
+    updateStartupActions(editingPrepIndex == null ? [...startupActions, action] : startupActions.map((existing,index) => index === editingPrepIndex ? {...action,id:existing.id} : existing));
+    setPrepDraft(null); setEditingPrepIndex(null);
+  };
+  const commitControl = (action: PreparationAction) => {
+    updateControlActions(editingControlIndex == null ? [...controlActions, action] : controlActions.map((existing,index) => index === editingControlIndex ? {...action,id:existing.id} : existing));
+    setControlDraft(null); setEditingControlIndex(null);
+  };
   const targetRef = (members: PartyMember[], target: string | null) => {
     const ref = memberRefAt(members, target);
     return {
@@ -518,16 +532,14 @@ function AdvancedStrategyEditor({
     draft: Extract<PrepDraft, { step: "target" }>,
     target: string | null
   ) => {
-    updateStartupActions([...startupActions, makePrepAction(draft, target, currentPartyMembers)]);
-    setPrepDraft(null);
+    commitPrep(makePrepAction(draft, target, prepMembers));
   };
 
   const finishControlAction = (
     draft: Extract<PrepDraft, { step: "target" }>,
     target: string | null
   ) => {
-    updateControlActions([...controlActions, makePrepAction(draft, target, postControlMembers)]);
-    setControlDraft(null);
+    commitControl(makePrepAction(draft, target, controlMembers));
   };
 
   const finishOrderChangeAction = (
@@ -535,22 +547,18 @@ function AdvancedStrategyEditor({
     back: PartySlot
   ) => {
     if (draft.front == null) return;
-    updateStartupActions([
-      ...startupActions,
-      {
+    commitPrep({
         type: "equipment",
         id: createId("eq"),
         skill: draft.option,
         target: null,
         orderChange: {
           front: draft.front,
-          ...orderChangeRef(currentPartyMembers, "front", draft.front),
+          ...orderChangeRef(prepMembers, "front", draft.front),
           back,
-          ...orderChangeRef(currentPartyMembers, "back", back),
+          ...orderChangeRef(prepMembers, "back", back),
         } satisfies OrderChangeSelection,
-      } satisfies EquipmentAction,
-    ]);
-    setPrepDraft(null);
+      } satisfies EquipmentAction);
   };
 
   const finishControlOrderChangeAction = (
@@ -558,22 +566,18 @@ function AdvancedStrategyEditor({
     back: PartySlot
   ) => {
     if (draft.front == null) return;
-    updateControlActions([
-      ...controlActions,
-      {
+    commitControl({
         type: "equipment",
         id: createId("eq"),
         skill: draft.option,
         target: null,
         orderChange: {
           front: draft.front,
-          ...orderChangeRef(postControlMembers, "front", draft.front),
+          ...orderChangeRef(controlMembers, "front", draft.front),
           back,
-          ...orderChangeRef(postControlMembers, "back", back),
+          ...orderChangeRef(controlMembers, "back", back),
         } satisfies OrderChangeSelection,
-      } satisfies EquipmentAction,
-    ]);
-    setControlDraft(null);
+      } satisfies EquipmentAction);
   };
 
   const selectControlSkill = (source: PrepSource, skill: string) => {
@@ -590,7 +594,7 @@ function AdvancedStrategyEditor({
       }
       return;
     }
-    const servant = postControlMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
+    const servant = controlMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
     const selection = skillSelection(servant, skill);
     if (selection) {
       setControlDraft({
@@ -636,7 +640,7 @@ function AdvancedStrategyEditor({
       }
       return;
     }
-    const servant = currentPartyMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
+    const servant = prepMembers[servantSlotIndex(source) ?? 0]?.servant ?? null;
     const selection = skillSelection(servant, skill);
     if (selection) {
       setPrepDraft({
@@ -683,7 +687,7 @@ function AdvancedStrategyEditor({
         label: option.label,
       },
     } satisfies Extract<PrepDraft, { step: "target" }>;
-    const servant = postControlMembers[servantSlotIndex(draft.source) ?? 0]?.servant ?? null;
+    const servant = controlMembers[servantSlotIndex(draft.source) ?? 0]?.servant ?? null;
     const status = disableAutoSkillTargetRecognition
       ? "unknown"
       : skillTargetStatus(servant, draft.option);
@@ -715,7 +719,7 @@ function AdvancedStrategyEditor({
         label: option.label,
       },
     } satisfies Extract<PrepDraft, { step: "target" }>;
-    const servant = currentPartyMembers[servantSlotIndex(draft.source) ?? 0]?.servant ?? null;
+    const servant = prepMembers[servantSlotIndex(draft.source) ?? 0]?.servant ?? null;
     const status = disableAutoSkillTargetRecognition
       ? "unknown"
       : skillTargetStatus(servant, draft.option);
@@ -734,8 +738,8 @@ function AdvancedStrategyEditor({
 
   return (
     <div className="advanced-strategy-editor">
-      <section className="battle-phase advanced-strategy-section">
-        <div className="battle-phase-label">主力输出</div>
+      {step === "prep" && <section className="battle-phase advanced-strategy-section">
+        <SectionHeading rail english="GRAND">冠位配置</SectionHeading>
         <div className="advanced-main-output-grid">
           <span className="advanced-delete-spacer" aria-hidden />
           <GrandOutputSettings
@@ -746,10 +750,10 @@ function AdvancedStrategyEditor({
             onChange={onGrandServantsChange}
           />
         </div>
-      </section>
+      </section>}
 
-      <section className="battle-phase advanced-strategy-section">
-        <div className="battle-phase-label">启动条件</div>
+      {step === "prep" && <section className="battle-phase advanced-strategy-section">
+        <SectionHeading rail english="CONDITIONS">启动条件</SectionHeading>
         <div className="advanced-condition-row">
           <span className="advanced-delete-spacer" aria-hidden />
           {mainGrandSlot != null && grandAutoOrderChange == null ? (
@@ -814,10 +818,10 @@ function AdvancedStrategyEditor({
             </div>
           )}
         </div>
-      </section>
+      </section>}
 
-      <section className="battle-phase advanced-strategy-section">
-        <div className="battle-phase-label">控制栏</div>
+      {step === "control" && <section className="battle-phase advanced-strategy-section">
+        <SectionHeading rail english="CONTROL ACTIONS">控制行动</SectionHeading>
         <div className="advanced-rule-section">
           {controlActions.map((action, index) => (
             <div className="battle-action-row committed advanced-action-row" key={action.id}>
@@ -825,10 +829,14 @@ function AdvancedStrategyEditor({
                 type="button"
                 className="advanced-inline-delete"
                 aria-label="删除控制行动"
+                disabled={controlDraft != null}
                 onClick={() => updateControlActions(controlActions.filter((_, i) => i !== index))}
               >
                 <Cross2Icon width={13} height={13} />
               </button>
+              <ActionRowControls index={index} count={controlActions.length} disabled={controlDraft != null}
+                onEdit={() => {setEditingControlIndex(index);setControlDraft({step:"source"});}}
+                onMove={direction => {const next=[...controlActions];[next[index],next[index+direction]]=[next[index+direction],next[index]];updateControlActions(next);}} />
               <AdvancedPreparationActionSummary
                 action={action}
                 partyMembers={controlActionLineups[index] ?? partyMembers}
@@ -850,7 +858,7 @@ function AdvancedStrategyEditor({
               <span className="advanced-delete-spacer" aria-hidden />
               {controlDraft.step === "source" ? (
                 <>
-                  {postControlMembers
+                  {controlMembers
                     .slice(0, 3)
                     .map((member, index) => {
                       const servant = member.servant;
@@ -897,7 +905,7 @@ function AdvancedStrategyEditor({
                       <SkillOptionButtons
                         servant={
                           controlDraft.source !== "equipment"
-                            ? (postControlMembers[servantSlotIndex(controlDraft.source) ?? 0]?.servant ?? null)
+                            ? (controlMembers[servantSlotIndex(controlDraft.source) ?? 0]?.servant ?? null)
                             : null
                         }
                         skillIcons={skillIcons}
@@ -932,7 +940,7 @@ function AdvancedStrategyEditor({
                       无目标
                     </button>
                   )}
-                  {postControlMembers
+                  {controlMembers
                     .slice(0, 3)
                     .map((member, index) => {
                       const servant = member.servant;
@@ -981,7 +989,7 @@ function AdvancedStrategyEditor({
                 <>
                   {Array.from(
                     { length: 6 },
-                    (_, index) => postControlMembers[index] ?? { servant: null, isSupport: false }
+                    (_, index) => controlMembers[index] ?? { servant: null, isSupport: false }
                   ).map((member, index) => {
                     const servant = member.servant;
                     const slot = `servant_${index + 1}` as PartySlot;
@@ -994,6 +1002,7 @@ function AdvancedStrategyEditor({
                         index={index}
                         src={servant ? faces[servant.variantKey] : null}
                         active={selectable || controlDraft.front === slot}
+                        selected={controlDraft.front === slot}
                         isSupport={member.isSupport}
                         onClick={() => {
                           if (!selectable) return;
@@ -1014,57 +1023,24 @@ function AdvancedStrategyEditor({
             </div>
           )}
         </div>
-      </section>
+      </section>}
 
-      <section className="battle-phase advanced-strategy-section">
-        <div className="battle-phase-label">使用技能</div>
+      {step === "prep" && <section className="battle-phase advanced-strategy-section">
         <div className="advanced-rule-section">
-          <Flex align="center" gap="2" className="advanced-turn-controls">
-            <Text size="2" weight="bold">轮次</Text>
-            {turns.map((turn, index) => (
-              <button
-                type="button"
-                key={turn.id}
-                className={`battle-turn-tab${activeTurn.id === turn.id ? " is-selected" : ""}`}
-                aria-label={`Turn ${index + 1}`}
-                onClick={() => {
-                  onActiveTurnIndexChange(index);
-                  setPrepDraft(null);
-                }}
-              >
-                {index + 1}
-              </button>
-            ))}
-            <IconButton
-              type="button"
-              variant="surface"
-              color="gray"
-              aria-label="添加 Turn"
-              onClick={addTurn}
-            >
-              <PlusIcon width={16} height={16} />
-            </IconButton>
-            <IconButton
-              type="button"
-              variant="surface"
-              color="red"
-              aria-label="删除当前 Turn"
-              disabled={activeTurnIndex === 0}
-              onClick={deleteTurn}
-            >
-              <TrashIcon width={16} height={16} />
-            </IconButton>
-          </Flex>
           {startupActions.map((action, index) => (
             <div className="battle-action-row committed advanced-action-row" key={action.id}>
               <button
                 type="button"
                 className="advanced-inline-delete"
                 aria-label="删除行动"
+                disabled={prepDraft != null}
                 onClick={() => updateStartupActions(startupActions.filter((_, i) => i !== index))}
               >
                 <Cross2Icon width={13} height={13} />
               </button>
+              <ActionRowControls index={index} count={startupActions.length} disabled={prepDraft != null}
+                onEdit={() => {setEditingPrepIndex(index);setPrepDraft({step:"source"});}}
+                onMove={direction => {const next=[...startupActions];[next[index],next[index+direction]]=[next[index+direction],next[index]];updateStartupActions(next);}} />
               <AdvancedPreparationActionSummary
                 action={action}
                 partyMembers={startupActionLineups[index] ?? partyMembers}
@@ -1075,19 +1051,20 @@ function AdvancedStrategyEditor({
             </div>
           ))}
           {!prepDraft ? (
-            <AddRowTrigger
-              leading={<span className="advanced-delete-spacer" aria-hidden />}
+            <div className="command-entry-actions">            <AddRowTrigger
               onClick={() => setPrepDraft({ step: "source" })}
             >
-              添加行动
+              添加技能指令
             </AddRowTrigger>
+<button type="button" onClick={() => setPrepDraft({step:"option",source:"commandSpell"})}><i className="command-diamond" />使用令咒</button><button type="button" onClick={onSelectEnemy}><i className="command-diamond" />选择敌方目标</button></div>
           ) : (
-            <div className="battle-choice-row">
-              <span className="advanced-delete-spacer" aria-hidden />
+            <div className="command-inline-draft">
+              <CommandDraftHeading title={editingPrepIndex != null ? "编辑技能指令" : prepDraft.step !== "source" && prepDraft.source === "commandSpell" ? "使用令咒" : "添加技能指令"} hint={prepDraft.step === "source" ? "选择前排从者或御主礼装" : prepDraft.step === "option" ? "选择技能" : prepDraft.step === "target" ? "选择目标" : prepDraft.step === "orderChange" ? "从前排和后排各选择一名从者" : "选择技能选项"} onCancel={() => {setPrepDraft(null);setEditingPrepIndex(null);}} />
+              <div className="battle-choice-row">
               {prepDraft.step === "source" ? (
                 <>
-                  {startupSelectableSlots.map((index) => {
-                    const member = currentPartyMembers[index] ?? { servant: null, isSupport: false };
+                  {[0, 1, 2].map((index) => {
+                    const member = prepMembers[index] ?? { servant: null, isSupport: false };
                     const servant = member.servant;
                     return (
                       <FaceChip
@@ -1105,15 +1082,7 @@ function AdvancedStrategyEditor({
                       />
                     );
                   })}
-                  <button type="button" className="battle-option-btn" onClick={() => setPrepDraft({ step: "option", source: "equipment" })}>
-                    御主礼装
-                  </button>
-                  <button type="button" className="battle-option-btn" onClick={() => setPrepDraft({ step: "option", source: "commandSpell" })}>
-                    令咒
-                  </button>
-                  <button type="button" className="battle-option-btn" onClick={() => setPrepDraft({ step: "target", source: "enemyTarget", option: "select" })}>
-                    敌方目标
-                  </button>
+                  <MysticCodeChoice code={mysticCode} onClick={() => setPrepDraft({ step: "option", source: "equipment" })} />
                 </>
               ) : prepDraft.step === "option" ? (
                 <>
@@ -1132,7 +1101,7 @@ function AdvancedStrategyEditor({
                       <SkillOptionButtons
                         servant={
                           prepDraft.source !== "equipment"
-                            ? (currentPartyMembers[servantSlotIndex(prepDraft.source) ?? 0]?.servant ?? null)
+                            ? (prepMembers[servantSlotIndex(prepDraft.source) ?? 0]?.servant ?? null)
                             : null
                         }
                         skillIcons={skillIcons}
@@ -1168,7 +1137,7 @@ function AdvancedStrategyEditor({
                     </button>
                   )}
                   {startupSelectableSlots.map((index) => {
-                    const member = currentPartyMembers[index] ?? { servant: null, isSupport: false };
+                    const member = prepMembers[index] ?? { servant: null, isSupport: false };
                     const servant = member.servant;
                     return (
                       <FaceChip
@@ -1215,7 +1184,7 @@ function AdvancedStrategyEditor({
                 <>
                   {Array.from(
                     { length: 6 },
-                    (_, index) => currentPartyMembers[index] ?? { servant: null, isSupport: false }
+                    (_, index) => prepMembers[index] ?? { servant: null, isSupport: false }
                   ).map((member, index) => {
                     const servant = member.servant;
                     const slot = `servant_${index + 1}` as PartySlot;
@@ -1232,6 +1201,7 @@ function AdvancedStrategyEditor({
                         index={index}
                         src={servant ? faces[servant.variantKey] : null}
                         active={selectable || prepDraft.front === slot}
+                        selected={prepDraft.front === slot}
                         isSupport={member.isSupport}
                         onClick={() => {
                           if (!selectable) return;
@@ -1250,19 +1220,21 @@ function AdvancedStrategyEditor({
                 </>
               )}
             </div>
+              </div>
           )}
         </div>
-      </section>
+      </section>}
 
-      <EnemyTargetSelector
+      {step === "enemy" && <EnemyTargetSelector
         className="advanced-strategy-section"
         value={scene.enemyTarget}
         onChange={(enemyTarget) => onChange({ ...scene, enemyTarget })}
-      />
+      />}
 
-      {grandCardPriorityEnabled && (
+      {step === "attack" && grandCardPriorityEnabled && (
         <GrandCardStrategyPanel
           strategy={grandCardStrategy}
+          embedded
           partyMembers={partyMembers}
           faces={faces}
           onChange={onGrandCardStrategyChange}
@@ -1346,6 +1318,7 @@ function AdvancedStrategyEditor({
 
 export function AdvancedCommandEditor({
   projectId,
+  onBusyChange,
   partyLineup,
   partyMembers,
   disableAutoSkillTargetRecognition = false,
@@ -1357,14 +1330,20 @@ export function AdvancedCommandEditor({
   onGrandServantsChange,
   onGrandCardStrategyChange,
 }: AdvancedCommandEditorProps) {
-  // Coronation mode is single-scene by design — the runner only ever
-  // executes one battle. We still persist as an array on disk so the
-  // backend schema (`save_advanced_battle_scenes`) stays compatible
-  // with existing project files; older multi-scene drafts collapse to
-  // the first scene.
-  const [scene, setScene] = useState<AdvancedBattleScene>(() => createDefaultScene());
-  const [activeTurnIndex, setActiveTurnIndex] = useState(0);
-  const [loaded, setLoaded] = useState(() => !projectId);
+  const [step, setStep] = useState<CommandStep>("prep");
+  const editor = useCommandDocument<AdvancedBattleScene>(projectId, true);
+  const [projectBusy, setProjectBusy] = useState(false);
+  const [projectError, setProjectError] = useState<string | null>(null);
+  useEffect(() => {
+    onBusyChange?.(editor.busy || projectBusy || !editor.document);
+    return () => onBusyChange?.(false);
+  }, [editor.busy, editor.document, projectBusy, onBusyChange]);
+  const persistProject = async (save: () => unknown) => {
+    setProjectBusy(true); setProjectError(null);
+    try { await save(); }
+    catch(reason) { setProjectError(String(reason)); }
+    finally { setProjectBusy(false); }
+  };
   const initialPartyMembers = useMemo(
     () => partyMembers ?? toPartyMembers(partyLineup),
     [partyMembers, partyLineup]
@@ -1378,66 +1357,25 @@ export function AdvancedCommandEditor({
   const skillTargetStatus = useServantSkillTargeting(initialPartyLineup);
   const skillSelection = useServantSkillSelections(initialPartyLineup);
 
-  useEffect(() => {
-    if (!projectId) return;
-    let cancelled = false;
-    invoke<AdvancedBattleScene[]>("load_advanced_battle_scenes", { projectId })
-      .then((saved) => {
-        if (cancelled) return;
-        const first = saved.length > 0 ? normalizeScene(saved[0]) : createDefaultScene();
-        setScene(first);
-        setActiveTurnIndex(0);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setScene(createDefaultScene());
-        setActiveTurnIndex(0);
-      })
-      .finally(() => {
-        if (!cancelled) setLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
-
-  const handleSceneChange = useCallback(
-    (updatedScene: AdvancedBattleScene) => {
-      setScene(updatedScene);
-      if (!projectId) return;
-      invoke("save_advanced_battle_scenes", {
-        projectId,
-        scenes: [updatedScene],
-      }).catch(console.error);
-    },
-    [projectId]
-  );
-
-  if (!loaded) return null;
-
-  return (
-    <Flex direction="column" className="command-editor advanced-command-editor">
-      <div className="command-scroll-region">
-      <AdvancedStrategyEditor
-          scene={scene}
-          partyMembers={initialPartyMembers}
-          faces={faces}
-          skillIcons={skillIcons}
-          mysticCode={mysticCode}
-          skillTargetStatus={skillTargetStatus}
-          skillSelection={skillSelection}
+  const document = editor.document;
+  if (!document) return <Text color={editor.error ? "red" : "gray"}>{editor.error ?? (projectId ? "加载指令…" : "请先选择队伍")}</Text>;
+  const scene = document.scenes[0];
+  const activeTurnIndex = document.turn;
+  return <CommandWorkspace advanced wave={0} waveCount={1} turn={activeTurnIndex} turns={scene.turns ?? []}
+    step={step} onStep={setStep} busy={editor.busy || projectBusy} error={projectError ?? editor.error} canUndo={document.canUndo}
+    onWave={() => {}} onTurn={turn => editor.navigate(0, turn)}
+    onAddTurn={() => void editor.mutate({type:"addTurn"})} onDeleteTurn={() => void editor.mutate({type:"deleteTurn"})}
+    onUndo={() => void editor.mutate({type:"undo"})} configuredTurn={Boolean(scene.turns?.[activeTurnIndex]?.actions.length)}
+  >
+      <AdvancedStrategyEditor key={`${scene.id}:${activeTurnIndex}:${step}`}
+          scene={scene} partyMembers={initialPartyMembers} faces={faces} skillIcons={skillIcons}
+          mysticCode={mysticCode} skillTargetStatus={skillTargetStatus} skillSelection={skillSelection}
           disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
-        grandServants={grandServants}
-        grandClassDefinition={grandClassDefinition}
-          grandCardStrategy={grandCardStrategy}
-          grandCardPriorityEnabled={grandCardPriorityEnabled}
-          onGrandServantsChange={onGrandServantsChange}
-          onGrandCardStrategyChange={onGrandCardStrategyChange}
-          activeTurnIndex={activeTurnIndex}
-          onActiveTurnIndexChange={setActiveTurnIndex}
-          onChange={handleSceneChange}
+          grandServants={grandServants} grandClassDefinition={grandClassDefinition}
+          grandCardStrategy={grandCardStrategy} grandCardPriorityEnabled={grandCardPriorityEnabled}
+          onGrandServantsChange={value => void persistProject(() => onGrandServantsChange?.(value))} onGrandCardStrategyChange={value => void persistProject(() => onGrandCardStrategyChange?.(value))}
+          activeTurnIndex={activeTurnIndex} step={step} onSelectEnemy={() => setStep("enemy")}
+          onChange={scene => void editor.mutate({type:"updateScene",scene})}
         />
-      </div>
-    </Flex>
-  );
+  </CommandWorkspace>;
 }

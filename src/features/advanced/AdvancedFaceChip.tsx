@@ -1,5 +1,4 @@
-import { BattleActorIcon } from "../../components/common/BattleActorIcon";
-import { servantLabel } from "../../components/common/battleActorLabels";
+import { ServantChoice } from "../../components/common/ServantChoice";
 import type { Servant } from "../../types/servant";
 
 interface FaceChipProps {
@@ -23,22 +22,5 @@ export function FaceChip({
   isSupport = false,
   onClick,
 }: FaceChipProps) {
-  return (
-    <button
-      type="button"
-      className={`advanced-face-chip${active ? "" : " dim"}${selected ? " selected" : ""}`}
-      aria-label={servantLabel(index, servant)}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <BattleActorIcon
-        kind="servant"
-        src={src}
-        label={servantLabel(index, servant)}
-        isSupport={isSupport}
-        size="button"
-        className="advanced-face-chip-icon"
-      />
-    </button>
-  );
+  return <ServantChoice servant={servant} index={index} src={src} isSupport={isSupport} selected={selected} disabled={disabled || !active} onClick={onClick} className={`advanced-face-chip${active ? "" : " dim"}`} />;
 }

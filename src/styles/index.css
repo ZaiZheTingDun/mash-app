@@ -2,6 +2,7 @@
 @import "./components.css";
 @import "./layout.css";
 @import "./settings.css";
+@import "./diamond-switch.css";
 @import "./project.css";
 @import "./home.css";
 @import "./team/index.css";
@@ -11,3 +12,6 @@
 @import "./status-and-battle.css";
 @import "./debug.css";
 @import "./rank-up-quest.css";
+@import "./command-workspace.css";
+@import "./page-header.css";
+@import "./workspace-page.css";

@@ -5,6 +5,8 @@ import { mysticCodeItemPath, type MysticCode } from "../../types/mysticCode";
 import type { MysticCodeGender } from "../../types/appUiSettings";
 
 interface MysticCodeSelectorProps {
+  expanded?: boolean;
+  disabled?: boolean;
   codes: MysticCode[] | null;
   selectedId: number | null;
   gender: MysticCodeGender;
@@ -13,6 +15,8 @@ interface MysticCodeSelectorProps {
 
 export function MysticCodeSelector({
   codes,
+  expanded = false,
+  disabled = false,
   selectedId,
   gender,
   onSelect,
@@ -29,12 +33,14 @@ export function MysticCodeSelector({
     <>
       <Button
         type="button"
+        disabled={disabled}
         variant="ghost"
-        className="mystic-code-trigger"
+        className={`mystic-code-trigger${expanded ? " is-expanded" : ""}`}
         aria-label={selected ? `御主礼装：${selected.name}` : "选择御主礼装"}
         title={selected ? selected.name : "选择御主礼装"}
         onClick={() => setOpen(true)}
       >
+        {expanded && <span className="mystic-code-label">MYSTIC CODE</span>}
         <span className="mystic-code-trigger-image">
           <Avatar
             src={selectedPath ? convertFileSrc(selectedPath) : undefined}
@@ -44,6 +50,7 @@ export function MysticCodeSelector({
             size="3"
           />
         </span>
+        {expanded && <><span className="mystic-code-name">{selected?.name ?? "选择御主礼装"}</span><span className="mystic-code-chevron" aria-hidden="true">⌄</span></>}
       </Button>
 
       <Dialog.Root open={open} onOpenChange={setOpen}>

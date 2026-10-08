@@ -1,3 +1,4 @@
+import { SectionHeading } from "../../components/common/SectionHeading";
 import { ENEMY_TARGETS, type EnemyTarget } from "./battleSceneModel";
 
 interface EnemyTargetSelectorProps {
@@ -43,7 +44,7 @@ export function EnemyTargetSelector({
 }: EnemyTargetSelectorProps) {
   return (
     <section className={`battle-phase${className ? ` ${className}` : ""}`}>
-      <div className="battle-phase-label">敌方目标选择</div>
+      <SectionHeading rail english="TARGET">敌方目标选择</SectionHeading>
       <div className="battle-action-list">
         <div className="battle-action-row committed">
           <span className="battle-action-delete-placeholder" aria-hidden />

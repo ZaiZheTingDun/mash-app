@@ -33,6 +33,8 @@ export function GrandOutputSettings({
   grandClassDefinition,
   onChange,
 }: GrandOutputSettingsProps) {
+  const [replacementSlot, setReplacementSlot] = useState<number | null>(null);
+  const [selectingRole, setSelectingRole] = useState<string | null>(null);
   const [settingsIndex, setSettingsIndex] = useState<number | null>(null);
   const partyLineup = partyMembersToServants(partyMembers);
   const roles = grandClassDefinition?.roles ?? [
@@ -53,29 +55,13 @@ export function GrandOutputSettings({
   const persist = (next: GrandServantConfig[]) => {
     onChange?.(normalizeGrandServants(next, grandClassDefinition));
   };
-  const addGrandServant = (slotIndex: number) => {
+  const selectGrandServant = (slotIndex: number) => {
     const member = partyMembers[slotIndex];
-    if (
-      normalized.length >= roles.length ||
-      selectedSlots.has(slotIndex) ||
-      member?.servant == null
-    ) {
-      return;
-    }
-    persist([
-      ...normalized,
-      {
-        memberId: member.memberId ?? null,
-        slotIndex,
-        servantId: member.servant.id,
-        isSupport: member.isSupport,
-        npCard: "auto",
-        priority: "damage",
-        role: activeRole,
-      },
-    ]);
-    const nextRole = roles.find((role) => role.role !== activeRole && !normalized.some((config) => config.role === role.role));
-    if (nextRole) setSelectedRole(nextRole.role);
+    if (!selectingRole || !member?.servant) return;
+    const existing = normalized.find(config => config.role === selectingRole);
+    const next = { ...existing, memberId: member.memberId ?? null, slotIndex, servantId: member.servant.id, isSupport: member.isSupport, npCard: existing?.npCard ?? "auto" as const, priority: existing?.priority ?? "damage" as const, role: selectingRole };
+    persist([...normalized.filter(config => config.role !== selectingRole), next]);
+    setSelectingRole(null);
   };
   const removeGrandServant = (index: number) => {
     persist(normalized.filter((_, itemIndex) => itemIndex !== index));
@@ -124,7 +110,7 @@ export function GrandOutputSettings({
                     className={`grand-servant-tile grand-servant-role-empty${activeRole === role ? " selected" : ""}`}
                     aria-label={`选择${label}冠位`}
                     aria-pressed={activeRole === role}
-                    onClick={() => setSelectedRole(role)}
+                    onClick={() => {setSelectedRole(role);setReplacementSlot(null);setSelectingRole(role);}}
                   >
                     <span className="grand-role-badge">{label}</span>
                     <span className="grand-servant-placeholder">未选择</span>
@@ -170,30 +156,12 @@ export function GrandOutputSettings({
             })}
           </div>
         </div>
-        <div className="advanced-grand-output-row">
-          <Text size="2" weight="medium" className="advanced-grand-output-label">
-            辅助
-          </Text>
-          <div className="battle-choice-row">
-            {partyLineup.slice(0, 6).map((servant, index) => (
-              <FaceChip
-                key={index}
-                servant={servant}
-                index={index}
-                src={servant ? faces[servant.variantKey] : null}
-                selected={selectedSlots.has(index)}
-                disabled={
-                  servant == null ||
-                  selectedSlots.has(index) ||
-                  normalized.length >= roles.length
-                }
-                isSupport={partyMembers[index]?.isSupport ?? false}
-                onClick={() => addGrandServant(index)}
-              />
-            ))}
-          </div>
-        </div>
       </div>
+      <Dialog.Root open={selectingRole != null} onOpenChange={open => {if(!open)setSelectingRole(null);}}>
+        <Dialog.Content maxWidth="620px" className="grand-replace-dialog"><Dialog.Title>更换冠位从者</Dialog.Title><Dialog.Description className="sr-only">选择队伍内的从者</Dialog.Description><div className="grand-replace-candidates">
+          {Array.from({length:6}, (_, index) => partyMembers[index] ?? {servant:null,isSupport:false}).map((member,index) => <FaceChip key={member.memberId ?? index} servant={member.servant} index={index} src={member.servant ? faces[member.servant.variantKey] : null} isSupport={member.isSupport} selected={replacementSlot === index} disabled={selectedSlots.has(index) && !normalized.some(config => config.role === selectingRole && config.slotIndex === index)} onClick={() => setReplacementSlot(index)} />)}
+        </div><Flex justify="end" gap="3" mt="4"><Dialog.Close><Button variant="ghost" color="gray">取消</Button></Dialog.Close><Button disabled={replacementSlot == null} onClick={() => {if(replacementSlot != null) selectGrandServant(replacementSlot);}}>确认更换</Button></Flex></Dialog.Content>
+      </Dialog.Root>
 
       <Dialog.Root
         open={settings != null}
@@ -250,6 +218,7 @@ export function GrandOutputSettings({
                   </Select.Content>
                 </Select.Root>
               </label>}
+              <Button variant="ghost" onClick={() => {setReplacementSlot(settings.slotIndex);setSelectingRole(settings.role ?? roles[0].role);setSettingsIndex(null);}}>更换从者</Button>
               <Flex justify="between" gap="3">
                 <Button
                   type="button"

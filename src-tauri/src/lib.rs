@@ -80,6 +80,7 @@ pub fn run() {
             app.manage(Mutex::new(CraftEssenceEnhancementRunnerHandle::new_idle()));
             app.manage(Mutex::new(FriendPointSummonRunnerHandle::new_idle()));
             app.manage(AutomationCoordinator::default());
+            app.manage(commands::projects::CommandEditorHistory::default());
             app.manage(Arc::new(ResourceDownloadCancelState::default()));
             app.manage(commands::debug::DebugSidecar::new());
             app.manage(commands::rank_up_quest::RankUpQuestCaptureState::default());
@@ -111,6 +112,8 @@ pub fn run() {
             commands::catalog::save_servant_portrait_selection,
             commands::projects::save_battle_scenes,
             commands::projects::load_battle_scenes,
+            commands::projects::load_command_editor,
+            commands::projects::mutate_command_editor,
             commands::projects::save_advanced_battle_scenes,
             commands::projects::load_advanced_battle_scenes,
             commands::projects::list_exportable_configs,

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Dialog, Flex, Button } from "@radix-ui/themes";
 import {
   ChevronDownIcon,
@@ -182,7 +182,7 @@ function GrandRuleEditorServantPicker({
             冠位从者
           </button>
         )}
-        {partyMembers.map((member, index) => {
+        {Array.from({length:6}, (_, index) => partyMembers[index] ?? {servant:null,isSupport:false}).map((member, index) => {
           const servant = member.servant;
           const selected =
             !grandSelected &&
@@ -194,7 +194,7 @@ function GrandRuleEditorServantPicker({
             editingCard.isSupport === member.isSupport;
           return (
             <div className="grand-rule-editor-servant-cell" key={`${servant?.variantKey ?? "empty"}-${index}`}>
-              {index === 3 && <span className="battle-choice-separator" aria-hidden />}
+
               <FaceChip
                 servant={servant}
                 index={index}
@@ -231,6 +231,7 @@ function GrandRuleEditorKindPicker({
     <div className="grand-rule-editor-section">
       <SectionHeading className="grand-rule-section-heading">指令卡类型</SectionHeading>
       <OptionCardRadioGroup
+        indicator="diamond"
         value={value}
         className="grand-rule-kind-cards"
         onValueChange={(kind) => onChange(kind as GrandRuleKind)}
@@ -256,6 +257,7 @@ function GrandRuleEditorColorPicker({
     <div className="grand-rule-editor-section">
       <SectionHeading className="grand-rule-section-heading">指令卡颜色</SectionHeading>
       <OptionCardRadioGroup
+        indicator="diamond"
         value={value}
         className="grand-rule-color-cards"
         onValueChange={(color) => onChange(color as GrandRuleColor)}
@@ -361,18 +363,22 @@ export function GrandCardStrategyPanel({
   onChange?: (strategy: GrandCardStrategy) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [cardDraft, setCardDraft] = useState<GrandCardRuleSlotConfig | null>(null);
+  const inlineRef = useRef<HTMLElement>(null);
+  const [newRule, setNewRule] = useState<GrandCardRuleConfig | null>(null);
   const [editingSlot, setEditingSlot] = useState<{ ruleId: string; slotIndex: number } | null>(null);
+  useEffect(() => { if (editingSlot) inlineRef.current?.scrollIntoView({block:"nearest"}); }, [editingSlot]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const normalized = normalizeGrandCardStrategy(strategy);
   const customRules = normalized.customRules ?? [];
   const partyLineup = partyMembersToServants(partyMembers);
   const editingRule = editingSlot
-    ? customRules.find((rule) => rule.id === editingSlot.ruleId) ?? null
+    ? (newRule?.id === editingSlot.ruleId ? newRule : customRules.find((rule) => rule.id === editingSlot.ruleId)) ?? null
     : null;
-  const editingCard =
+  const editingCard = cardDraft ?? (
     editingRule && editingSlot
       ? editingRule.slots[editingSlot.slotIndex] ?? defaultRuleSlot()
-      : null;
+      : null);
   const editingServant =
     editingCard?.slotIndex == null
       ? null
@@ -393,12 +399,14 @@ export function GrandCardStrategyPanel({
 
   const addRule = () => {
     const rule = createDefaultCustomRule();
-    persist({ customRules: [...customRules, rule] });
+    setNewRule(rule);
+    setCardDraft({...rule.slots[0]});
     setEditingSlot({ ruleId: rule.id, slotIndex: 0 });
   };
 
   const updateRule = (ruleId: string, updater: (rule: GrandCardRuleConfig) => GrandCardRuleConfig) => {
-    updateRules(customRules.map((rule) => (rule.id === ruleId ? normalizeCustomRule(updater(rule), 0) : rule)));
+    const rules = newRule?.id === ruleId ? [...customRules,newRule] : customRules;
+    updateRules(rules.map((rule) => (rule.id === ruleId ? normalizeCustomRule(updater(rule), 0) : rule)));
   };
 
   const resetCustomRules = () => {
@@ -406,7 +414,7 @@ export function GrandCardStrategyPanel({
       customRules: [],
       chainPriority: [...DEFAULT_GRAND_CHAIN_PRIORITY],
     });
-    setEditingSlot(null);
+    setEditingSlot(null); setCardDraft(null); setNewRule(null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -418,7 +426,7 @@ export function GrandCardStrategyPanel({
     updateRules(arrayMove(customRules, oldIndex, newIndex));
   };
 
-  const updateEditingSlot = (patch: Partial<GrandCardRuleSlotConfig>) => {
+  const commitEditingSlot = (patch: Partial<GrandCardRuleSlotConfig>) => {
     if (!editingSlot) return;
     updateRule(editingSlot.ruleId, (rule) => ({
       ...rule,
@@ -447,27 +455,38 @@ export function GrandCardStrategyPanel({
     }));
   };
 
+  const closeEditor = () => { setEditingSlot(null); setCardDraft(null); setNewRule(null); };
+  const editSlot = (rule: GrandCardRuleConfig, slotIndex: number) => {setCardDraft({...rule.slots[slotIndex]}); setEditingSlot({ruleId:rule.id,slotIndex});};
+  const updateEditingSlot = (patch: Partial<GrandCardRuleSlotConfig>) => setCardDraft(previous => previous ? {...previous,...patch} : previous);
+  const editorFields = editingCard && <div className="grand-rule-editor">
+    <GrandRuleEditorServantPicker editingCard={editingCard} partyMembers={partyMembers} faces={faces} allowGrandServant={allowGrandServant} onSelect={updateEditingSlot} />
+    <GrandRuleEditorKindPicker value={editingCard.kind} onChange={kind => updateEditingSlot({kind})} />
+    {editingCard.kind !== "np" && <GrandRuleEditorColorPicker value={editingCard.color} onChange={color => updateEditingSlot({color})} />}
+  </div>;
+  const editorActions = <Flex justify="end" gap="3" mt="4"><Button type="button" variant="ghost" color="gray" onClick={closeEditor}>取消</Button><Button type="button" disabled={editingCard?.slotIndex != null && !editingServant} onClick={() => {if(editingCard)commitEditingSlot(editingCard);closeEditor();}}>保存策略</Button></Flex>;
+  const inlineEditor = editingCard && <section ref={inlineRef} className="command-inline-editor" aria-label="设置策略"><h3>设置策略</h3>{editorFields}{editorActions}</section>;
+
+  const visibleRules = newRule ? [...customRules,newRule] : customRules;
   const strategyBody = (
     <div className="grand-strategy-body">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={customRules.map((rule) => rule.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={visibleRules.map((rule) => rule.id)} strategy={verticalListSortingStrategy}>
           <div className="grand-rule-list">
-            {customRules.map((rule, index) => (
-              <SortableGrandRuleRow
-                key={rule.id}
+            {visibleRules.map((rule, index) => (
+              <Fragment key={rule.id}><SortableGrandRuleRow
                 rule={rule}
                 index={index}
                 partyMembers={partyMembers}
                 faces={faces}
-                onDelete={() => updateRules(customRules.filter((item) => item.id !== rule.id))}
-                onEditSlot={(slotIndex) => setEditingSlot({ ruleId: rule.id, slotIndex })}
-              />
+                onDelete={() => { if (editingSlot?.ruleId === rule.id) closeEditor(); if (newRule?.id !== rule.id) updateRules(customRules.filter((item) => item.id !== rule.id)); }}
+                onEditSlot={slotIndex => editSlot(rule, slotIndex)}
+              />{embedded && editingSlot?.ruleId === rule.id && inlineEditor}</Fragment>
             ))}
           </div>
         </SortableContext>
       </DndContext>
       <Flex gap="3" wrap="wrap">
-        <Button type="button" variant="soft" onClick={addRule}>
+        <Button type="button" variant="soft" disabled={editingSlot != null} onClick={addRule}>
           添加规则
         </Button>
         <Button type="button" variant="soft" color="gray" onClick={resetCustomRules}>
@@ -481,37 +500,12 @@ export function GrandCardStrategyPanel({
     <Dialog.Root
       open={editingCard != null}
       onOpenChange={(dialogOpen) => {
-        if (!dialogOpen) setEditingSlot(null);
+        if (!dialogOpen) closeEditor();
       }}
     >
       <Dialog.Content maxWidth="640px" className="grand-rule-editor-dialog">
         <Dialog.Title>设置策略</Dialog.Title>
-        {editingCard && (
-          <div className="grand-rule-editor">
-            <GrandRuleEditorServantPicker
-              editingCard={editingCard}
-              partyMembers={partyMembers}
-              faces={faces}
-              allowGrandServant={allowGrandServant}
-              onSelect={(patch) => updateEditingSlot(patch)}
-            />
-            <GrandRuleEditorKindPicker
-              value={editingCard.kind}
-              onChange={(kind) => updateEditingSlot({ kind })}
-            />
-            {editingCard.kind !== "np" && (
-              <GrandRuleEditorColorPicker
-                value={editingCard.color}
-                onChange={(color) => updateEditingSlot({ color })}
-              />
-            )}
-          </div>
-        )}
-        <Flex justify="end" mt="4">
-          <Dialog.Close>
-            <Button type="button">完成</Button>
-          </Dialog.Close>
-        </Flex>
+        {editorFields}{editorActions}
       </Dialog.Content>
     </Dialog.Root>
   );
@@ -520,7 +514,6 @@ export function GrandCardStrategyPanel({
     return (
       <div className="grand-card-strategy-section embedded">
         {strategyBody}
-        {editorDialog}
       </div>
     );
   }

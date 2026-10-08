@@ -395,6 +395,7 @@ export function ContentGrid({
   );
 
   const handleSupportSettingsConfirm = (next: {
+    grandMode: boolean;
     servantLevel: number | null;
     starMapScore: number | null;
     grandStarMapScore: number | null;
@@ -405,6 +406,7 @@ export function ContentGrid({
     if (!activeProject) return;
     void onUpdateActiveProject({
       ...activeProject,
+      supportGrandMode: next.grandMode,
       supportServantLevelMin: next.servantLevel,
       supportStarMapScoreMin: next.starMapScore,
       supportGrandStarMapScoreMin: next.grandStarMapScore,
@@ -446,6 +448,7 @@ export function ContentGrid({
     <SortableSlot
       key={slot.id}
       slot={slot}
+      slotIndex={displaySlots.findIndex(item => item.id === slot.id)}
       portraitSrc={slot.servant ? portraitMap[slot.servant.variantKey] : null}
       ceCardSrc={slot.craftEssence ? ceCardMap[slot.craftEssence.id] : null}
       craftEssences={
@@ -505,10 +508,12 @@ export function ContentGrid({
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={slotIds} strategy={rectSortingStrategy}>
-          <Box className="content-unified-grid">
+          <Box className="formation-grid-viewport"><Box className="content-unified-grid formation-grid">
+            <div className="formation-group-label frontline">前排 · FRONTLINE</div>
+            <div className="formation-group-label backline">后排 · BACKLINE</div>
             {leftSlots.map(renderSlot)}
             {rightSlots.map(renderSlot)}
-          </Box>
+          </Box></Box>
         </SortableContext>
       </DndContext>
 
@@ -570,6 +575,22 @@ export function ContentGrid({
         <SupportSettingsDialog
           open={supportSettingsOpen}
           project={activeProject}
+          servant={supportPinned}
+          portraitSrc={supportPinned ? portraitMap[supportPinned.variantKey] : null}
+          slotNumber={displaySlots.findIndex(slot => slot.type === "support") + 1}
+          craftEssenceGroups={[
+            (() => {
+              const slot = displaySlots.find(item => item.type === "support");
+              const ces = slot?.craftEssences?.length ? slot.craftEssences : slot?.craftEssence ? [slot.craftEssence] : [];
+              return { count: ces.length, images: ces.map(ce => ceCardMap[ce.id]) };
+            })(),
+            ...supportGrandCraftEssenceGroups.map((group, index) => ({ count: group.length, images: supportGrandCeCardSrcGroups[index] })),
+          ]}
+          onCraftEssenceOpen={(index, grandMode) => {
+            const slot = displaySlots.find(item => item.type === "support");
+            if (grandMode) openCeManager({ type: "grand", index });
+            else if (slot) openCeManager({ type: "slot", slotId: slot.id });
+          }}
           onOpenChange={setSupportSettingsOpen}
           onConfirm={handleSupportSettingsConfirm}
         />

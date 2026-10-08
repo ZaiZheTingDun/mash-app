@@ -180,7 +180,7 @@ describe("BattlePage", () => {
     mockProjectCommands();
     renderBattlePage(project);
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
     await user.click(screen.getByRole("button", { name: "确认开始" }));
 
     await waitFor(() => {
@@ -206,7 +206,7 @@ describe("BattlePage", () => {
     mockProjectCommands();
     const callbacks = renderBattlePage(PROJECT);
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     expect(callbacks.onAutomationStart).toHaveBeenCalledTimes(1);
   });
@@ -223,8 +223,8 @@ describe("BattlePage", () => {
     mockProjectCommands();
     renderBattlePage(PROJECT);
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
-    expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
+    expect(screen.getByRole("button", { name: "停止任务" })).toBeEnabled();
 
     act(() => {
       automationHandler?.({
@@ -235,7 +235,7 @@ describe("BattlePage", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "开始" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "开始任务" })).toBeEnabled();
     });
   });
 
@@ -251,7 +251,7 @@ describe("BattlePage", () => {
       supportAppendSkillLevelMins: [null, 10, null, null, 6],
     });
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("start_automation", {
@@ -274,7 +274,7 @@ describe("BattlePage", () => {
       preferHigherCriticalChance: true,
     });
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("start_automation", {
@@ -294,7 +294,7 @@ describe("BattlePage", () => {
       supportServantVariantKey: "444:1",
     });
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("start_automation", {
@@ -316,7 +316,7 @@ describe("BattlePage", () => {
       supportGrandCraftEssenceIdLists: [[1001, 1002], [], [1003]],
     });
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("start_automation", {
@@ -338,7 +338,7 @@ describe("BattlePage", () => {
       grandServants: [],
     });
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     expect(screen.getByText("无法开始战斗")).toBeInTheDocument();
     expect(screen.getByText("戴冠战需要选择 1 到 2 名冠位从者")).toBeInTheDocument();
@@ -358,7 +358,7 @@ describe("BattlePage", () => {
       ],
     });
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     expect(screen.getByText("枪阶戴冠战需要分别选择单体和光炮从者")).toBeInTheDocument();
     expect(callbacks.onAutomationStart).not.toHaveBeenCalled();
@@ -381,7 +381,7 @@ describe("BattlePage", () => {
       ],
     });
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("start_automation", {
@@ -411,7 +411,7 @@ describe("BattlePage", () => {
       ],
     });
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("start_automation", {
@@ -442,7 +442,7 @@ describe("BattlePage", () => {
       ],
     });
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("start_automation", {
@@ -500,12 +500,12 @@ describe("BattlePage", () => {
       },
     );
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     expect(screen.queryByRole("spinbutton", { name: "重复次数" })).not.toBeInTheDocument();
     expect(screen.getByText("1/10")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "开始" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "开始任务" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "停止任务" })).toBeEnabled();
   });
 
   it("opens advanced loot settings and persists five-star CE drop options", async () => {
@@ -557,7 +557,7 @@ describe("BattlePage", () => {
       },
     });
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("start_automation", {
@@ -574,7 +574,7 @@ describe("BattlePage", () => {
     mockProjectCommands();
     renderBattlePage(PROJECT);
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("start_automation", {
@@ -602,7 +602,7 @@ describe("BattlePage", () => {
       });
     });
 
-    await user.click(screen.getByRole("button", { name: "开始" }));
+    await user.click(screen.getByRole("button", { name: "开始任务" }));
 
     expect(screen.getByText("确认开始任务")).toBeInTheDocument();
     expect(vi.mocked(invoke).mock.calls.some(([cmd]) => cmd === "start_automation")).toBe(false);
@@ -629,7 +629,8 @@ describe("BattlePage", () => {
     const unlimited = await screen.findByRole("button", {
       name: "黄金果实当前无限使用，点击设置数量",
     });
-    expect(unlimited).toHaveClass("is-active");
+    expect(unlimited).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "黄金果实无限使用" })).toHaveAttribute("aria-pressed", "true");
     expect(
       screen.queryByRole("spinbutton", { name: "黄金果实使用数量" })
     ).not.toBeInTheDocument();
@@ -648,7 +649,8 @@ describe("BattlePage", () => {
     });
     expect(
       screen.getByRole("button", { name: "黄金果实当前限量使用，点击改为无限" })
-    ).not.toHaveClass("is-active");
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "黄金果实数量使用" })).toHaveAttribute("aria-pressed", "true");
     expect(quantity).toBeEnabled();
     expect(quantity).toHaveValue(1);
 
@@ -685,7 +687,7 @@ describe("BattlePage", () => {
     });
 
     await user.click(await screen.findByRole("button", { name: "增加重复次数" }));
-    await user.click(screen.getByRole("button", { name: "开始" }));
+    await user.click(screen.getByRole("button", { name: "开始任务" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("start_automation", {
@@ -714,7 +716,7 @@ describe("BattlePage", () => {
     });
     renderBattlePage(PROJECT);
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
     expect(screen.getByRole("button", { name: "返回" })).toBeDisabled();
     const stopAfterCurrentButton = screen.getByRole("button", {
       name: "运行完当前轮次后停止",
@@ -731,8 +733,8 @@ describe("BattlePage", () => {
     mockProjectCommands();
     const callbacks = renderBattlePage(PROJECT);
 
-    await user.click(await screen.findByRole("button", { name: "开始" }));
-    await user.click(screen.getByRole("button", { name: "停止" }));
+    await user.click(await screen.findByRole("button", { name: "开始任务" }));
+    await user.click(screen.getByRole("button", { name: "停止任务" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("stop_automation");

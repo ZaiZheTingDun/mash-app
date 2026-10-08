@@ -72,6 +72,65 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(screen.getAllByRole("button", { name: /敌人/ })).toHaveLength(6);
   });
 
+  it("edits an existing skill without appending it or changing its identity", async () => {
+    const user = userEvent.setup(); const onChange = vi.fn();
+    const original = {type:"servant" as const,id:"existing",servant:"servant_1",skill:"skill_1",target:null};
+    renderWithTheme(<BattleSceneBlock scene={makeScene({preparationActions:[original]})} partyServants={PARTY} onChange={onChange} />);
+    expect(screen.queryByText("技能指令")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button",{name:"编辑行动 1"}));
+    await user.click(screen.getByRole("button",{name:"乙"}));
+    await user.click(screen.getByRole("button",{name:"技能 2"}));
+    await user.click(screen.getByRole("button",{name:"无目标"}));
+    expect(onChange.mock.calls[0][0].preparationActions).toEqual([expect.objectContaining({id:"existing",servant:"servant_2",skill:"skill_2"})]);
+  });
+
+  it("cancels skill editing and disables invalid reorder directions", async () => {
+    const user = userEvent.setup(); const onChange = vi.fn();
+    renderWithTheme(<BattleSceneBlock scene={makeScene({preparationActions:[{type:"equipment",id:"original",skill:"skill_1",target:null}]})} partyServants={PARTY} onChange={onChange} />);
+    expect(screen.getByRole("button",{name:"上移行动 1"})).toBeDisabled();
+    expect(screen.getByRole("button",{name:"下移行动 1"})).toBeDisabled();
+    await user.click(screen.getByRole("button",{name:"编辑行动 1"}));
+    expect(screen.getByRole("button",{name:"删除行动"})).toBeDisabled();
+    await user.click(screen.getByRole("button",{name:"撤销添加行动"}));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("cancels an inline edit with Escape without changing the saved action", async () => {
+    const user = userEvent.setup(); const onChange = vi.fn();
+    renderWithTheme(<BattleSceneBlock scene={makeScene({preparationActions:[{type:"equipment",id:"original",skill:"skill_1",target:null}]})} partyServants={PARTY} onChange={onChange} />);
+    await user.click(screen.getByRole("button",{name:"编辑行动 1"}));
+    await user.click(screen.getByRole("button",{name:"甲"}));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("button",{name:"撤销添加行动"})).not.toBeInTheDocument();
+    expect(screen.getByRole("button",{name:"删除行动"})).toBeEnabled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("cancels a new advanced rule without persisting an empty rule", async () => {
+    const onChange=vi.fn(); const user=userEvent.setup();
+    renderWithTheme(<BattleSceneBlock scene={makeScene({attackMode:"advanced"})} partyServants={PARTY} turnAttackModesEnabled onChange={onChange} />);
+    await user.click(screen.getByRole("button",{name:"添加规则"}));
+    await user.click(screen.getByRole("button",{name:"取消"}));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button",{name:/第 1 张，任意从者/})).not.toBeInTheDocument();
+  });
+
+  it("allows all six configured servants in advanced card rules and pads unavailable slots", async () => {
+    const user = userEvent.setup(); const onChange = vi.fn();
+    const rules = [{id:"rule",name:"自定义规则",slots:[0,1,2].map(()=>({memberId:null,slotIndex:null,servantId:null,isSupport:false,grandServant:false,kind:"any" as const,color:"any" as const}))}];
+    renderWithTheme(<BattleSceneBlock scene={makeScene({attackMode:"advanced",advancedCardStrategy:{customRules:rules}})} partyServants={PARTY.slice(0,5)} turnAttackModesEnabled onChange={onChange} />);
+    await user.click(screen.getByRole("button",{name:/第 1 张，任意从者/}));
+    expect(screen.getByRole("button",{name:"位置 6 未配置从者"})).toBeDisabled();
+    await user.click(screen.getByRole("button",{name:"戊"}));
+    expect(onChange).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button",{name:"取消"}));
+    expect(onChange).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button",{name:/第 1 张，任意从者/}));
+    await user.click(screen.getByRole("button",{name:"戊"}));
+    await user.click(screen.getByRole("button",{name:"保存策略"}));
+    expect(onChange.mock.calls[0][0].advancedCardStrategy.customRules[0].slots[0]).toMatchObject({slotIndex:4,servantId:5});
+  });
+
   it("updates and toggles off the enemy target", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
@@ -104,14 +163,14 @@ describe("BattleSceneBlock staged action editor", () => {
       <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={vi.fn()} />
     );
 
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "添加技能指令" }));
 
     expect(screen.getByRole("button", { name: "甲" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "乙" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "丙" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /御主/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "令咒" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /敌方/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "令咒" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /敌方/ })).not.toBeInTheDocument();
   });
 
   it("appends an enemy target preparation action", async () => {
@@ -121,8 +180,7 @@ describe("BattleSceneBlock staged action editor", () => {
       <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
     );
 
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
-    await user.click(screen.getByRole("button", { name: /敌方/ }));
+    await user.click(screen.getByRole("button", { name: "选择敌方目标" }));
     await user.click(within(screen.getByRole("group", { name: "选择敌方目标" })).getByRole("button", { name: "敌人 3" }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
@@ -139,7 +197,7 @@ describe("BattleSceneBlock staged action editor", () => {
       <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
     );
 
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "添加技能指令" }));
     await user.click(screen.getByRole("button", { name: "甲" }));
     await user.click(screen.getByRole("button", { name: "技能 3" }));
     await user.click(screen.getByRole("button", { name: "乙" }));
@@ -193,7 +251,7 @@ describe("BattleSceneBlock staged action editor", () => {
         variantKey: "1",
       })
     );
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "添加技能指令" }));
     await user.click(screen.getByRole("button", { name: "甲" }));
     await user.click(screen.getByRole("button", { name: "技能 2" }));
 
@@ -252,7 +310,7 @@ describe("BattleSceneBlock staged action editor", () => {
         variantKey: "1",
       })
     );
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "添加技能指令" }));
     await user.click(screen.getByRole("button", { name: "甲" }));
     await user.click(screen.getByRole("button", { name: "技能 1" }));
 
@@ -281,7 +339,7 @@ describe("BattleSceneBlock staged action editor", () => {
       <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={onChange} />
     );
 
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "添加技能指令" }));
     await user.click(screen.getByRole("button", { name: /御主/ }));
     await user.click(screen.getByRole("button", { name: "技能 2" }));
     await user.click(screen.getByRole("button", { name: "Order Change" }));
@@ -326,7 +384,7 @@ describe("BattleSceneBlock staged action editor", () => {
       />
     );
 
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "添加技能指令" }));
     await user.click(screen.getByRole("button", { name: /御主/ }));
     await user.click(screen.getByRole("button", { name: "技能 2" }));
     await user.click(screen.getByRole("button", { name: "Order Change" }));
@@ -349,14 +407,14 @@ describe("BattleSceneBlock staged action editor", () => {
       />
     );
 
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "添加技能指令" }));
     await user.click(screen.getByRole("button", { name: /御主/ }));
     await user.click(screen.getByRole("button", { name: "技能 2" }));
     await user.click(screen.getByRole("button", { name: "Order Change" }));
     await user.click(screen.getByRole("button", { name: "甲" }));
 
-    expect(screen.getByRole("button", { name: "从者 5" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "从者 5" }));
+    expect(screen.getByRole("button", { name: "位置 5 未配置从者" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "位置 5 未配置从者" }));
 
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -384,7 +442,7 @@ describe("BattleSceneBlock staged action editor", () => {
       />
     );
 
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "添加技能指令" }));
 
     expect(screen.getByRole("button", { name: "丁" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "乙" })).toBeInTheDocument();
@@ -488,8 +546,7 @@ describe("BattleSceneBlock staged action editor", () => {
       />
     );
 
-    await user.click(screen.getByRole("combobox", { name: "攻击模式" }));
-    await user.click(await screen.findByRole("option", { name: "普通模式" }));
+    await user.click(screen.getByRole("button", { name: "普通模式" }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
       attackMode: "normal",
@@ -594,7 +651,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getAllByRole("button", { name: "未设置攻击" })[1]);
 
     expect(screen.getByRole("button", { name: "甲" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /添加一项新的行动/ })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /添加一项新的行动/ })).toHaveLength(1);
 
     await user.click(screen.getByRole("button", { name: "甲" }));
     await user.click(screen.getByRole("button", { name: "ALL" }));
@@ -681,7 +738,7 @@ describe("BattleSceneBlock staged action editor", () => {
       />
     );
 
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[1]);
+    await user.click(screen.getByRole("button", { name: /添加一项新的行动/ }));
     await user.click(screen.getByRole("button", { name: "甲" }));
     await user.click(screen.getByRole("button", { name: "B" }));
 
@@ -772,12 +829,12 @@ describe("BattleSceneBlock staged action editor", () => {
     );
 
     const summary = container.querySelector(".battle-action-summary");
-    const children = Array.from(summary?.children ?? []);
+    const children = Array.from(summary?.querySelectorAll(".command-row-source > *, .command-row-skill > *, .command-row-outcome > *") ?? []);
     expect(children[0]).toHaveClass("battle-inline-face");
     expect(summary).toHaveAccessibleName("甲 释放 技能 1 to 乙");
-    expect(children[2]).toHaveClass("battle-action-to");
-    expect(children[3]).toHaveClass("battle-inline-face");
-    expect(children[4]).toHaveTextContent("乙");
+    expect(children[3]).toHaveClass("battle-action-to");
+    expect(children[4]).toHaveClass("battle-inline-face");
+    expect(children[5]).toHaveTextContent("乙");
   });
 
   it("shows localized skill names on servant action summary icons", async () => {
@@ -941,10 +998,11 @@ describe("BattleSceneBlock staged action editor", () => {
     );
 
     const summary = container.querySelector(".battle-action-summary");
-    const children = Array.from(summary?.children ?? []);
+    const children = Array.from(summary?.querySelectorAll(".command-row-source > *, .command-row-skill > *, .command-row-outcome > *") ?? []);
     expect(children[0]).toHaveClass("battle-inline-square");
     expect(children[1]).toHaveTextContent("御主礼装 释放 技能 3");
-    expect(children[2]).toHaveTextContent("Order Change");
+    expect(summary?.querySelector(".battle-inline-skill-icon")).not.toBeNull();
+    expect(screen.queryByText("Order Change")).not.toBeInTheDocument();
     expect(children[3]).toHaveClass("battle-inline-face");
     expect(children[4]).toHaveTextContent("甲");
     expect(children[5]).toHaveTextContent("↔");
@@ -971,11 +1029,12 @@ describe("BattleSceneBlock staged action editor", () => {
     );
 
     const summary = container.querySelector(".battle-action-summary");
-    const children = Array.from(summary?.children ?? []);
+    const children = Array.from(summary?.querySelectorAll(".command-row-source > *, .command-row-skill > *, .command-row-outcome > *") ?? []);
     expect(children[0]).toHaveClass("battle-inline-square");
     expect(children[0]).toHaveAccessibleName("令咒");
     expect(children[0].querySelector(".battle-support-badge")).toBeNull();
-    expect(children[1]).toHaveTextContent("令咒 灵基修复");
+    expect(children[1]).toHaveTextContent("令咒");
+    expect(children[2]).toHaveTextContent("灵基修复");
   });
 
   it("cancels an in-progress preparation action from the left-side delete control", async () => {
@@ -984,10 +1043,10 @@ describe("BattleSceneBlock staged action editor", () => {
       <BattleSceneBlock scene={makeScene()} partyServants={PARTY} onChange={vi.fn()} />
     );
 
-    await user.click(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]);
+    await user.click(screen.getByRole("button", { name: "添加技能指令" }));
     await user.click(screen.getByRole("button", { name: "撤销添加行动" }));
 
     expect(screen.queryByRole("button", { name: "甲" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /添加一项新的行动/ })[0]).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "添加技能指令" })).toBeInTheDocument();
   });
 });

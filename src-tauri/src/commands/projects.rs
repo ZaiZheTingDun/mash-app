@@ -251,6 +251,9 @@ pub(crate) use catalog::*;
 mod normalization;
 pub(crate) use normalization::*;
 
+mod command_editor;
+pub(crate) use command_editor::*;
+
 mod ui_settings;
 pub(crate) use ui_settings::*;
 

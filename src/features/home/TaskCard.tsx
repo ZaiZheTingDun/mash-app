@@ -1,4 +1,4 @@
-import { ChevronRightIcon } from "@radix-ui/react-icons";
+import { ChevronRightIcon, TargetIcon, StarIcon, ThickArrowUpIcon } from "@radix-ui/react-icons";
 
 interface TaskCardProps {
   appearance: "battle" | "summon" | "enhance";
@@ -15,16 +15,15 @@ export function TaskCard({ appearance, number, caption, title, description, onCl
     <button
       type="button"
       className={`home-action home-action--${appearance}`}
+      data-task-number={number}
+      data-task-caption={caption}
       aria-label={title}
       onClick={onClick}
     >
-      <span className="home-action-orbit" aria-hidden="true" />
+      <span className="home-action-icon" aria-hidden="true">
+        {appearance === "battle" ? <TargetIcon /> : appearance === "summon" ? <StarIcon /> : <ThickArrowUpIcon />}
+      </span>
       <span className="home-action-copy">
-        <span className="home-action-label" aria-hidden="true">
-          <span className="home-action-number">{number}</span>
-          <span className="home-action-diamond">◇</span>
-          <span>{caption}</span>
-        </span>
         <strong>{title}</strong>
         <small>{description}</small>
       </span>

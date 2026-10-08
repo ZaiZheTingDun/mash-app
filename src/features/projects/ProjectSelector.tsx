@@ -66,6 +66,7 @@ interface ProjectSelectorProps {
   projectCatalog: ProjectCatalog;
   activeProjectId: string | null;
   disabled?: boolean;
+  plainLabel?: boolean;
   onProjectSelect: (id: string) => void;
   onRequestCreate: (groupId: string | null) => void;
   onRequestRename: (projectId: string) => void;
@@ -240,6 +241,7 @@ export function ProjectSelector({
   projectCatalog,
   activeProjectId,
   disabled = false,
+  plainLabel = false,
   onProjectSelect,
   onRequestCreate,
   onRequestRename,
@@ -379,7 +381,7 @@ export function ProjectSelector({
             disabled={disabled}
           >
             <Text size="3" weight="bold" className="project-bar-title">
-              {`～ ${triggerLabel} ～`}
+              {plainLabel ? triggerLabel : `～ ${triggerLabel} ～`}
             </Text>
             <ChevronDownIcon width={15} height={15} className="project-bar-menu-icon" />
           </Button>
