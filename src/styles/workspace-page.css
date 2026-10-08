@@ -35,11 +35,35 @@
   padding: 0 12px 9px;
   margin: 0;
 }
-.workspace-page .mystic-code-trigger.is-expanded .rt-AvatarRoot { width: 30px; height: 30px; }
-.workspace-page .mystic-code-label { position: relative; gap: 9px; font-size: 10px; line-height: 10px; }
-.workspace-page .mystic-code-label::before { position: absolute; left: -11.25px; top: 1.25px; width: 3.75px; height: 7.5px; }
-.workspace-page .mystic-code-name { font-size: 11px; line-height: 14px; }
-.workspace-page .mystic-code-chevron { font-size: 16px; }
+
+.workspace-page .mystic-code-trigger.is-expanded .rt-AvatarRoot {
+  width: 30px;
+  height: 30px;
+}
+
+.workspace-page .mystic-code-label {
+  position: relative;
+  gap: 9px;
+  font-size: 10px;
+  line-height: 10px;
+}
+
+.workspace-page .mystic-code-label::before {
+  position: absolute;
+  left: -11.25px;
+  top: 1.25px;
+  width: 3.75px;
+  height: 7.5px;
+}
+
+.workspace-page .mystic-code-name {
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.workspace-page .mystic-code-chevron {
+  font-size: 16px;
+}
 
 .workspace-page .task-action-button.rt-Button {
   box-sizing: border-box;
@@ -52,11 +76,30 @@
   background: transparent;
   box-shadow: none;
 }
-.workspace-page .task-action-copy { gap: 7.5px; }
-.workspace-page .task-action-copy small { font-size: 10px; line-height: 12px; }
-.workspace-page .task-action-copy strong { font-size: 18px; line-height: 22px; }
-.workspace-page .task-action-button > span:last-child { font-size: 24px; margin-left: 12px; }
-.workspace-page .task-action-button svg { width: 24px; height: 24px; }
+
+.workspace-page .task-action-copy {
+  gap: 7.5px;
+}
+
+.workspace-page .task-action-copy small {
+  font-size: 10px;
+  line-height: 12px;
+}
+
+.workspace-page .task-action-copy strong {
+  font-size: 18px;
+  line-height: 22px;
+}
+
+.workspace-page .task-action-button > span:last-child {
+  font-size: 24px;
+  margin-left: 12px;
+}
+
+.workspace-page .task-action-button svg {
+  width: 24px;
+  height: 24px;
+}
 
 @media (max-width: 600px) {
   .workspace-page .mystic-code-trigger.is-expanded.rt-Button {
@@ -64,6 +107,13 @@
     gap: 11px 10px;
     padding-inline: 6px;
   }
-  .workspace-page .task-action-button.rt-Button { width: 150px; min-width: 150px; }
-  .workspace-page .task-action-copy strong { font-size: 16px; }
+
+  .workspace-page .task-action-button.rt-Button {
+    width: 150px;
+    min-width: 150px;
+  }
+
+  .workspace-page .task-action-copy strong {
+    font-size: 16px;
+  }
 }

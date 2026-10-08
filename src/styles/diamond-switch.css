@@ -1,8 +1,61 @@
-.diamond-switch.rt-SwitchRoot { width: 40px; height: 20px; min-height: 20px; border: 0; border-radius: 0; background: transparent; box-shadow: none; cursor: pointer; }
-.diamond-switch.rt-SwitchRoot::before { position: absolute; left: 4px; top: 9px; width: 32px; height: 2px; border-radius: 0; background: var(--gray-6); box-shadow: none; filter: none; }
-.diamond-switch.rt-SwitchRoot[data-state="checked"]::before { background: var(--blue-9); }
-.diamond-switch.rt-SwitchRoot .rt-SwitchThumb { left: 2px; top: 6px; width: 8px; height: 8px; box-sizing: border-box; border-radius: 0; border: 1px solid var(--gray-8); background: var(--gray-1); box-shadow: none; transform: rotate(45deg); }
-.diamond-switch.rt-SwitchRoot .rt-SwitchThumb[data-state="checked"] { border-color: var(--blue-9); background: var(--blue-9); transform: translateX(28px) rotate(45deg); }
-.diamond-switch.rt-SwitchRoot:disabled { opacity: .45; cursor: not-allowed; }
-.diamond-switch.rt-SwitchRoot:focus-visible { outline: 2px solid var(--blue-8); outline-offset: 3px; }
-@media (prefers-reduced-motion: reduce) { .diamond-switch.rt-SwitchRoot .rt-SwitchThumb { transition: none; } }
+.diamond-switch.rt-SwitchRoot {
+  width: 40px;
+  height: 20px;
+  min-height: 20px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.diamond-switch.rt-SwitchRoot::before {
+  position: absolute;
+  left: 4px;
+  top: 9px;
+  width: 32px;
+  height: 2px;
+  border-radius: 0;
+  background: var(--gray-6);
+  box-shadow: none;
+  filter: none;
+}
+
+.diamond-switch.rt-SwitchRoot[data-state="checked"]::before {
+  background: var(--blue-9);
+}
+
+.diamond-switch.rt-SwitchRoot .rt-SwitchThumb {
+  left: 2px;
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  border-radius: 0;
+  border: 1px solid var(--gray-8);
+  background: var(--gray-1);
+  box-shadow: none;
+  transform: rotate(45deg);
+}
+
+.diamond-switch.rt-SwitchRoot .rt-SwitchThumb[data-state="checked"] {
+  border-color: var(--blue-9);
+  background: var(--blue-9);
+  transform: translateX(28px) rotate(45deg);
+}
+
+.diamond-switch.rt-SwitchRoot:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.diamond-switch.rt-SwitchRoot:focus-visible {
+  outline: 2px solid var(--blue-8);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diamond-switch.rt-SwitchRoot .rt-SwitchThumb {
+    transition: none;
+  }
+}
