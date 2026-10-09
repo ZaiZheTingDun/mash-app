@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { CommandWorkspace } from "../CommandWorkspace";
 
@@ -14,5 +15,19 @@ describe("CommandWorkspace step numbering", () => {
     expect(Array.from(container.querySelectorAll(".command-step-node"), node => node.textContent)).toEqual(advanced ? ["01", "02", "03", "04"] : ["01", "02", "03"]);
     expect(container.querySelector(".command-phase-header strong")).toHaveTextContent(advanced ? "04" : "03");
     expect(screen.queryByRole("button", { name: /控制行动/ }) != null).toBe(advanced);
+  });
+
+  it("prevents changing steps while a command mutation is pending", async () => {
+    const onStep = vi.fn();
+    renderWithTheme(
+      <CommandWorkspace wave={0} waveCount={1} turn={0} turns={[{ id: "turn-1" }]} step="prep" busy
+        onStep={onStep} onWave={vi.fn()} onTurn={vi.fn()} onAddTurn={vi.fn()} onDeleteTurn={vi.fn()}>
+        <span>内容</span>
+      </CommandWorkspace>
+    );
+    const attack = screen.getByRole("button", { name: /攻击阶段/ });
+    expect(attack).toBeDisabled();
+    await userEvent.setup().click(attack);
+    expect(onStep).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Button, Dialog, Flex, Select, Text } from "@radix-ui/themes";
+import { Button, Dialog, Flex, IconButton, Select, Text } from "@radix-ui/themes";
+import { Cross2Icon } from "@radix-ui/react-icons";
+import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { FaceChip } from "./AdvancedFaceChip";
 import {
   autoNpOptionLabel,
@@ -24,6 +26,7 @@ interface GrandOutputSettingsProps {
   grandServants: GrandServantConfig[];
   grandClassDefinition?: GrandClassDefinition;
   onChange?: (grandServants: GrandServantConfig[]) => void;
+  compact?: boolean;
 }
 
 export function GrandOutputSettings({
@@ -32,6 +35,7 @@ export function GrandOutputSettings({
   grandServants,
   grandClassDefinition,
   onChange,
+  compact = false,
 }: GrandOutputSettingsProps) {
   const [replacementSlot, setReplacementSlot] = useState<number | null>(null);
   const [selectingRole, setSelectingRole] = useState<string | null>(null);
@@ -101,6 +105,47 @@ export function GrandOutputSettings({
               const role = roleDefinition.role;
               const index = normalized.findIndex((config) => config.role === role);
               const config = index >= 0 ? normalized[index] : null;
+              const servant = config ? partyLineup[config.slotIndex] ?? null : null;
+              const roleLabel = roleDefinition.label;
+              if (compact) {
+                return (
+                  <div className="command-grand-role" key={role}>
+                    <div className="command-grand-identity">
+                      <BattleActorIcon kind="servant" label={servant?.name_cn ?? "未选择"}
+                        src={servant ? faces[servant.variantKey] : null} isSupport={config?.isSupport} />
+                      <button type="button" className="command-grand-summary"
+                        aria-label={config ? `${roleLabel}冠位${servant ? `：${servant.name_cn}` : ""}` : `选择${roleLabel}冠位`}
+                        aria-pressed={!config ? activeRole === role : undefined}
+                        onClick={() => {
+                          if (config) setSettingsIndex(index);
+                          else { setSelectedRole(role); setReplacementSlot(null); setSelectingRole(role); }
+                        }}>
+                        <span>{roleLabel}冠位 <small>{roleDefinition.required ? "必选" : "可选"}</small></span>
+                        <small>{servant ? `${servant.name_cn} · 队伍位置 ${config!.slotIndex + 1}` : "未选择"}</small>
+                      </button>
+                      <Button type="button" variant="ghost" color="gray" onClick={() => {
+                        setReplacementSlot(config?.slotIndex ?? null); setSelectingRole(role);
+                      }}>更换</Button>
+                      {config && <IconButton type="button" variant="ghost" color="gray"
+                        aria-label={`移除${roleLabel}冠位`} onClick={() => removeGrandServant(index)}><Cross2Icon /></IconButton>}
+                    </div>
+                    {config && <>
+                      <label className="command-grand-field"><span>宝具颜色</span>
+                        <Select.Root value={config.npCard ?? "auto"} onValueChange={value => updateGrandServant(index, { npCard: value as GrandNpCard })}>
+                          <Select.Trigger variant="ghost" aria-label={`${roleLabel}冠位宝具颜色`} />
+                          <Select.Content><Select.Item value="auto">{autoNpOptionLabel(servant)}</Select.Item><Select.Item value="buster">红卡</Select.Item><Select.Item value="arts">蓝卡</Select.Item><Select.Item value="quick">绿卡</Select.Item></Select.Content>
+                        </Select.Root>
+                      </label>
+                      {grandClassDefinition?.cardPriorityEnabled !== false && <label className="command-grand-field"><span>出卡策略</span>
+                        <Select.Root value={config.priority ?? "damage"} onValueChange={value => updateGrandServant(index, { priority: value as GrandCardPriority })}>
+                          <Select.Trigger variant="ghost" aria-label={`${roleLabel}冠位出卡策略`} />
+                          <Select.Content><Select.Item value="damage">伤害优先</Select.Item><Select.Item value="np">NP 优先</Select.Item></Select.Content>
+                        </Select.Root>
+                      </label>}
+                    </>}
+                  </div>
+                );
+              }
               if (!config) {
                 const label = roleDefinition.label;
                 return (
@@ -117,8 +162,6 @@ export function GrandOutputSettings({
                   </button>
                 );
               }
-              const servant = partyLineup[config.slotIndex] ?? null;
-              const roleLabel = roleDefinition.label;
               return (
                 <button
                   key={`${config.slotIndex}-${index}`}

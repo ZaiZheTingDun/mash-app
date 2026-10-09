@@ -236,16 +236,17 @@ function PreparationActionSummary({
       aria-label={actionSummary(action, partyMembers)}
     >
       <span className="command-row-source">{sourceFace}<Text size="2" weight="medium" className="battle-action-name">
-        {sourceText}{" "}{action.type === "commandSpell" ? "" : action.type === "equipment" ? actionText : "释放"}
+        {sourceText}
       </Text></span>
       <span className="command-row-skill">
+        {action.type !== "commandSpell" && <span>释放</span>}
         {action.type === "commandSpell" ? <Text size="2">{actionText}</Text> : <span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span>}
         {action.type === "servant" && action.skillSelection ? <small>并选择 {action.skillSelection.label ?? `选项 ${action.skillSelection.index + 1}`}</small> : null}
       </span>
       <span className="command-row-outcome">
       {orderChangeSlots?.front != null && orderChangeSlots.back != null ? (
         <>
-
+          <span className="battle-action-to">换位</span>
           <ServantInlineFace
             servant={partyServants[orderChangeSlots.front] ?? null}
             index={orderChangeSlots.front}
@@ -277,7 +278,7 @@ function PreparationActionSummary({
       ) : (
         targetIndex != null && (
           <>
-            <span className="battle-action-to">to</span>
+            <span className="battle-action-to">给</span>
             <ServantInlineFace
               servant={partyServants[targetIndex] ?? null}
               index={targetIndex}
@@ -335,12 +336,15 @@ function AttackActionFace({
   const member = partyMembers[index] ?? { servant: null, isSupport: false };
   const servant = member.servant;
   return (
+    <span className="command-attack-source">
     <ServantInlineFace
       servant={servant}
       index={index}
       faceSrc={servant ? faces[servant.variantKey] : null}
       isSupport={member.isSupport}
     />
+    <Text className="battle-action-name">{servantLabel(index, servant)}</Text>
+    </span>
   );
 }
 
@@ -1101,7 +1105,7 @@ export function BattleSceneBlock({
             <div className="command-mode-options" role="group" aria-label="攻击模式">
               {([['normal', '普通模式'], ['critical', '暴击模式'], ['advanced', '高级模式']] as const).map(([mode, label]) => <button type="button" key={mode} aria-pressed={attackMode === mode} onClick={() => updateAttackMode(mode)}><i className="command-diamond" />{label}</button>)}
             </div>
-            <div className="battle-phase-label">攻击阶段</div>
+            <div className="battle-phase-label">攻击模式</div>
           </div>
         ) : (
           <div className="battle-phase-label">攻击阶段</div>
@@ -1114,7 +1118,7 @@ export function BattleSceneBlock({
               attackActionLineups[index] ?? currentPartyMembers;
             const attackPartyServants = partyMembersToServants(attackPartyMembers);
             return (
-              <div className="battle-action-row committed" key={card.id}>
+              <div className={`battle-action-row committed command-attack-row${rowDraft ? " is-editing" : ""}`} key={card.id}>
                 {index >= FIXED_ATTACK_CARD_COUNT ? (
                   <ActionDeleteButton
                     onClick={() =>
@@ -1143,10 +1147,11 @@ export function BattleSceneBlock({
                     <button
                       type="button"
                       className="battle-attack-edit"
+                      aria-label={attackSummary(card, attackPartyServants)}
                       onClick={() => setAttackDraft({ step: "source", targetIndex: index })}
                     >
                       <Text size="2" weight="medium">
-                        {attackSummary(card, attackPartyServants)}
+                        {CARD_LABELS[card.card?.match(/^servant_[1-3]_(np|buster|arts|quick|all)$/)?.[1] ?? ""] ?? "未设置攻击"}
                       </Text>
                     </button>
                   </>
@@ -1160,13 +1165,13 @@ export function BattleSceneBlock({
               onClick={() => setAttackDraft(null)}
             />
             {attackDraft?.targetIndex !== null ? (
-              <AddRowTrigger
+              <AddRowTrigger iconSize={16} transparentIconBackground
                 onClick={() => setAttackDraft({ step: "source", targetIndex: null })}
               >
                 添加一项新的行动
               </AddRowTrigger>
             ) : !attackDraft ? (
-              <AddRowTrigger
+              <AddRowTrigger iconSize={16} transparentIconBackground
                 onClick={() => setAttackDraft({ step: "source", targetIndex: null })}
               >
                 添加一项新的行动

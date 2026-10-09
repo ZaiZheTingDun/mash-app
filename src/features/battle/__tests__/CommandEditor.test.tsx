@@ -96,7 +96,7 @@ describe("CommandEditor pagination", () => {
     await waitFor(()=>expect(screen.queryByRole("button",{name:"Turn 2"})).not.toBeInTheDocument());
     await userEvent.click(screen.getByRole("button",{name:"撤销上次修改"}));
     expect(await screen.findByRole("button",{name:"Turn 2"})).toBeInTheDocument();
-    expect(screen.getByText("御主礼装 释放 技能 1")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^御主礼装 (?:释放 )?技能 1(?: |$)/)).toBeInTheDocument();
   });
 
   it("reports a failed Grand save without replacing the saved role", async () => {
@@ -143,15 +143,15 @@ describe("CommandEditor pagination", () => {
     );
 
     expect(await screen.findByLabelText("第 1/2 面")).toBeInTheDocument();
-    expect(screen.getByText("御主礼装 释放 技能 1")).toBeInTheDocument();
-    expect(screen.queryByText("御主礼装 释放 技能 3")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^御主礼装 (?:释放 )?技能 1(?: |$)/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^御主礼装 (?:释放 )?技能 3(?: |$)/)).not.toBeInTheDocument();
     expect(container.querySelector(".command-scroll-region")).not.toBeNull();
 
     await user.click(screen.getByRole("button", { name: "下一场战斗" }));
 
     expect(screen.getByLabelText("第 2/2 面")).toBeInTheDocument();
-    expect(screen.getByText("御主礼装 释放 技能 3")).toBeInTheDocument();
-    expect(screen.queryByText("御主礼装 释放 技能 1")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^御主礼装 (?:释放 )?技能 3(?: |$)/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^御主礼装 (?:释放 )?技能 1(?: |$)/)).not.toBeInTheDocument();
   });
 
   it("adds, switches, and protects battle turns", async () => {
@@ -185,7 +185,7 @@ describe("CommandEditor pagination", () => {
 
     expect(screen.getByRole("button", { name: "Turn 2" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "删除当前 Turn" })).toBeEnabled();
-    expect(screen.queryByText("御主礼装 释放 技能 1")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^御主礼装 (?:释放 )?技能 1(?: |$)/)).not.toBeInTheDocument();
     await waitFor(() => {
       expect(vi.mocked(invoke)).toHaveBeenCalledWith(
         "save_battle_scenes",
@@ -203,7 +203,7 @@ describe("CommandEditor pagination", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Turn 1" }));
-    expect(screen.getByText("御主礼装 释放 技能 1")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^御主礼装 (?:释放 )?技能 1(?: |$)/)).toBeInTheDocument();
   });
 
   it("uses the advanced scene commands in advanced mode", async () => {
@@ -280,13 +280,13 @@ describe("CommandEditor pagination", () => {
       firstTurn.compareDocumentPosition(screen.getByRole("button", { name: "添加技能指令" }))
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByRole("button", { name: "删除当前 Turn" })).toBeDisabled();
-    expect(screen.getByText("御主礼装 释放 技能 1")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^御主礼装 (?:释放 )?技能 1(?: |$)/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "添加 Turn" }));
 
     expect(screen.getByRole("button", { name: "Turn 2" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "删除当前 Turn" })).toBeEnabled();
-    expect(screen.queryByText("御主礼装 释放 技能 1")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^御主礼装 (?:释放 )?技能 1(?: |$)/)).not.toBeInTheDocument();
     await waitFor(() => {
       expect(vi.mocked(invoke)).toHaveBeenCalledWith(
         "save_advanced_battle_scenes",
@@ -307,7 +307,7 @@ describe("CommandEditor pagination", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Turn 1" }));
-    expect(screen.getByText("御主礼装 释放 技能 1")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^御主礼装 (?:释放 )?技能 1(?: |$)/)).toBeInTheDocument();
   });
 
   it("saves and clears one enemy target for the advanced battle", async () => {
@@ -650,7 +650,7 @@ describe("CommandEditor pagination", () => {
       />
     );
 
-    expect(await screen.findByText("御主礼装 释放 技能 1")).toBeInTheDocument();
+    expect(await screen.findByLabelText(/^御主礼装 (?:释放 )?技能 1(?: |$)/)).toBeInTheDocument();
     const summary = container.querySelector(".battle-action-summary");
     const icon = summary?.querySelector(".command-row-source > .battle-inline-square");
     expect(icon).toHaveClass("battle-inline-square");
@@ -927,7 +927,7 @@ describe("CommandEditor pagination", () => {
       />
     );
 
-    expect(await screen.findByText("自动红")).toBeInTheDocument();
+    expect(await screen.findByRole("combobox", { name: "主冠位宝具颜色" })).toHaveTextContent("自动读取（红）");
 
     await user.click(screen.getByRole("button", { name: "主冠位：甲" }));
     await user.click(screen.getByRole("combobox", { name: "宝具颜色" }));
@@ -1280,8 +1280,8 @@ describe("CommandEditor pagination", () => {
       />
     );
 
-    expect(await screen.findByText("御主礼装 释放 技能 1")).toBeInTheDocument();
-    expect(screen.getByText("to")).toBeInTheDocument();
+    expect(await screen.findByLabelText(/^御主礼装 (?:释放 )?技能 1(?: |$)/)).toBeInTheDocument();
+    expect(screen.getByText("给")).toBeInTheDocument();
     expect(screen.getAllByText("丁").length).toBeGreaterThan(0);
   });
 

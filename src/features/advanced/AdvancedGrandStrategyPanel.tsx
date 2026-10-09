@@ -4,6 +4,8 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   Cross2Icon,
+  DragHandleDots2Icon,
+  PlusIcon,
 } from "@radix-ui/react-icons";
 import {
   DndContext,
@@ -119,7 +121,8 @@ function GrandRuleCardButton({
         <span className="grand-rule-card-empty">任</span>
       )}
       <span className="grand-rule-card-meta">
-        <span>{RULE_KIND_LABELS[slot.kind]}</span>
+        <span className="command-rule-servant-name">{usesGrandServant ? "冠位从者" : servant?.name_cn ?? "任意从者"}</span>
+        <span>{RULE_KIND_LABELS[slot.kind]} · {RULE_COLOR_LABELS[color]}</span>
       </span>
     </button>
   );
@@ -318,6 +321,7 @@ function SortableGrandRuleRow({
       {...attributes}
       {...listeners}
     >
+      <span className="command-rule-label"><DragHandleDots2Icon /><small>{String(index + 1).padStart(2, "0")}</small><span>{rule.name || `规则 ${index + 1}`}</span></span>
       <button
         type="button"
         className="advanced-inline-delete"
@@ -485,11 +489,12 @@ export function GrandCardStrategyPanel({
           </div>
         </SortableContext>
       </DndContext>
-      <Flex gap="3" wrap="wrap">
+      <Flex gap="3" wrap="wrap" className="command-rule-actions">
         <Button type="button" variant="soft" disabled={editingSlot != null} onClick={addRule}>
+          {embedded && <PlusIcon />}
           添加规则
         </Button>
-        <Button type="button" variant="soft" color="gray" onClick={resetCustomRules}>
+        <Button type="button" variant="soft" color="gray" className="command-rule-reset" onClick={resetCustomRules}>
           恢复默认
         </Button>
       </Flex>
@@ -513,6 +518,7 @@ export function GrandCardStrategyPanel({
   if (embedded) {
     return (
       <div className="grand-card-strategy-section embedded">
+        <SectionHeading rail english="CARD STRATEGY">指令卡策略</SectionHeading>
         {strategyBody}
       </div>
     );

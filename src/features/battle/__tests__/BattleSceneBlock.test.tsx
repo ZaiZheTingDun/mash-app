@@ -809,7 +809,7 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(next.preparationActions).toEqual([]);
   });
 
-  it("renders targeted servant actions with the target face after to", () => {
+  it("renders targeted servant actions with separate source, skill and target columns", () => {
     const { container } = renderWithTheme(
       <BattleSceneBlock
         scene={makeScene({
@@ -832,9 +832,11 @@ describe("BattleSceneBlock staged action editor", () => {
     const children = Array.from(summary?.querySelectorAll(".command-row-source > *, .command-row-skill > *, .command-row-outcome > *") ?? []);
     expect(children[0]).toHaveClass("battle-inline-face");
     expect(summary).toHaveAccessibleName("甲 释放 技能 1 to 乙");
-    expect(children[3]).toHaveClass("battle-action-to");
-    expect(children[4]).toHaveClass("battle-inline-face");
-    expect(children[5]).toHaveTextContent("乙");
+    expect(children[2]).toHaveTextContent("释放");
+    expect(children[3]).toHaveClass("battle-inline-skill-icon");
+    expect(children[4]).toHaveTextContent("给");
+    expect(children[5]).toHaveClass("battle-inline-face");
+    expect(children[6]).toHaveTextContent("乙");
   });
 
   it("shows localized skill names on servant action summary icons", async () => {
@@ -1000,14 +1002,16 @@ describe("BattleSceneBlock staged action editor", () => {
     const summary = container.querySelector(".battle-action-summary");
     const children = Array.from(summary?.querySelectorAll(".command-row-source > *, .command-row-skill > *, .command-row-outcome > *") ?? []);
     expect(children[0]).toHaveClass("battle-inline-square");
-    expect(children[1]).toHaveTextContent("御主礼装 释放 技能 3");
+    expect(children[1]).toHaveTextContent("御主礼装");
+    expect(summary).toHaveAccessibleName("御主礼装 释放 技能 3 Order Change 甲 ↔ 丁");
     expect(summary?.querySelector(".battle-inline-skill-icon")).not.toBeNull();
     expect(screen.queryByText("Order Change")).not.toBeInTheDocument();
-    expect(children[3]).toHaveClass("battle-inline-face");
-    expect(children[4]).toHaveTextContent("甲");
-    expect(children[5]).toHaveTextContent("↔");
-    expect(children[6]).toHaveClass("battle-inline-face");
-    expect(children[7]).toHaveTextContent("丁");
+    expect(children[4]).toHaveTextContent("换位");
+    expect(children[5]).toHaveClass("battle-inline-face");
+    expect(children[6]).toHaveTextContent("甲");
+    expect(children[7]).toHaveTextContent("↔");
+    expect(children[8]).toHaveClass("battle-inline-face");
+    expect(children[9]).toHaveTextContent("丁");
   });
 
   it("renders command spell actions with a square actor icon", () => {

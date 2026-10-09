@@ -233,16 +233,17 @@ function AdvancedPreparationActionSummary({
   return (
     <span className="battle-action-summary" aria-label={prepSummary(resolvedAction, partyLineup)}>
       <span className="command-row-source">{sourceFace}<Text size="2" weight="medium" className="battle-action-name">
-        {sourceText}{" "}{resolvedAction.type === "commandSpell" ? "" : resolvedAction.type === "equipment" ? actionText : "释放"}
+        {sourceText}
       </Text></span>
       <span className="command-row-skill">
+        {resolvedAction.type !== "commandSpell" && <span>释放</span>}
         {resolvedAction.type === "commandSpell" ? <Text size="2">{actionText}</Text> : <span className="battle-inline-skill-icon" title={skillLabel}><Avatar src={skillIconSrc ?? undefined} fallback={String(skillSlot + 1)} size="1" radius="small" /></span>}
         {resolvedAction.type === "servant" && resolvedAction.skillSelection ? <small>并选择 {resolvedAction.skillSelection.label ?? `选项 ${resolvedAction.skillSelection.index + 1}`}</small> : null}
       </span>
       <span className="command-row-outcome">
       {orderChangeSlots?.front != null && orderChangeSlots.back != null ? (
         <>
-
+          <span className="battle-action-to">换位</span>
           <AdvancedInlineFace
             servant={partyLineup[orderChangeSlots.front] ?? null}
             index={orderChangeSlots.front}
@@ -274,7 +275,7 @@ function AdvancedPreparationActionSummary({
       ) : (
         targetIndex != null && (
           <>
-            <span className="battle-action-to">to</span>
+            <span className="battle-action-to">给</span>
             <AdvancedInlineFace
               servant={partyLineup[targetIndex] ?? null}
               index={targetIndex}
@@ -743,6 +744,7 @@ function AdvancedStrategyEditor({
         <div className="advanced-main-output-grid">
           <span className="advanced-delete-spacer" aria-hidden />
           <GrandOutputSettings
+            compact
             partyMembers={partyMembers}
             faces={faces}
             grandServants={grandServants}
@@ -753,7 +755,7 @@ function AdvancedStrategyEditor({
       </section>}
 
       {step === "prep" && <section className="battle-phase advanced-strategy-section">
-        <SectionHeading rail english="CONDITIONS">启动条件</SectionHeading>
+        <SectionHeading rail english="STARTUP">启动条件</SectionHeading>
         <div className="advanced-condition-row">
           <span className="advanced-delete-spacer" aria-hidden />
           {mainGrandSlot != null && grandAutoOrderChange == null ? (
