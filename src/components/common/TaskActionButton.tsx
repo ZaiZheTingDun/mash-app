@@ -1,5 +1,5 @@
 import { Button } from "@radix-ui/themes";
-import { ArrowRightIcon, StopIcon } from "@radix-ui/react-icons";
+import { ArrowRightIcon } from "@radix-ui/react-icons";
 
 interface TaskActionButtonProps {
   label?: string;
@@ -22,7 +22,7 @@ export function TaskActionButton({
       aria-label={label}
       variant="ghost"
       color={running ? "red" : "blue"}
-      className="task-action-button"
+      className={`task-action-button${running ? " task-action-button-stop" : ""}`}
       disabled={disabled}
       onClick={onClick}
     >
@@ -30,7 +30,9 @@ export function TaskActionButton({
         <small>{eyebrow}</small>
         <strong>{label}</strong>
       </span>
-      <span aria-hidden="true">{running ? <StopIcon /> : <ArrowRightIcon />}</span>
+      <span className="task-action-icon" aria-hidden="true">
+        {running ? <span className="task-action-stop-square" /> : <ArrowRightIcon />}
+      </span>
     </Button>
   );
 }

@@ -67,7 +67,7 @@ import {
   type LogLevel,
   type OperationLogEntry,
 } from "./operationLog";
-// The battle flow remains 队伍设置 → 指令设置 → 开始任务.
+// The battle flow remains 队伍设置 → 指令设置 → 运行设置.
 // Home is an optional entry point for battle and the standalone tools;
 // `debug` remains an out-of-band view.
 type View =
@@ -877,7 +877,7 @@ function App({
     [],
   );
 
-  const handleStartRun = useCallback(() => {
+  const handleGotoRunSettings = useCallback(() => {
     setView("battle");
   }, []);
 
@@ -1037,7 +1037,7 @@ function App({
               onReorderProjectsInGroup={handleReorderProjectsInGroup}
               onOpenProjectSettings={handleOpenProjectSettings}
               onUpdateProject={handleUpdateProject}
-              onBack={handleBackToConfig}
+              onBack={handleGotoCommand}
               onOpenHome={handleOpenHome}
               onAutomationStart={handleBattleAutomationStart}
               onAutomationStartFailed={handleBattleAutomationStartFailed}
@@ -1164,7 +1164,7 @@ function App({
                       if (id != null && activeProject.mysticCodeId != null && id !== activeProject.mysticCodeId && !window.confirm("更换御主礼装后，已配置的御主礼装行动仍会保留，但技能名称和图标会按新礼装显示。是否继续？")) return;
                       void handleUpdateProject({...activeProject,mysticCodeId:id});
                     }} />
-                    <TaskActionButton onClick={handleStartRun} disabled={!activeProject || commandBusy} />
+                    <TaskActionButton label="运行设置" eyebrow="NEXT" onClick={handleGotoRunSettings} disabled={!activeProject || commandBusy} />
                   </Flex>
                 </>
               ) : (

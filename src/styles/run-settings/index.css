@@ -363,8 +363,7 @@
   align-items: flex-end;
 }
 
-.battle-page .battle-advanced-settings-button.rt-Button,
-.battle-page .battle-stop-after-button.rt-Button {
+.battle-page .battle-advanced-settings-button.rt-Button {
   height: 30px;
   margin: 0 0 12px;
   padding: 0 6px;
@@ -376,6 +375,19 @@
 
 .battle-page .battle-advanced-settings-button .rt-Text {
   font-size: 11px;
+}
+
+.battle-task-actions {
+  gap: 15.5px;
+}
+
+.battle-task-action-divider {
+  width: 1px;
+  height: 42px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 9px;
+  background: var(--gray-5);
 }
 
 @media (max-width: 900px) {
@@ -431,9 +443,5 @@
   .battle-page .battle-footer > .rt-Flex:last-child {
     flex: 1;
     gap: 6px;
-  }
-
-  .battle-page .battle-stop-after-button.rt-Button {
-    font-size: 10px;
   }
 }

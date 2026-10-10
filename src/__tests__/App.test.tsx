@@ -131,6 +131,27 @@ describe("App active project restore", () => {
     expect(screen.getByRole("button", { name: "关闭操作日志" })).toBeInTheDocument();
   });
 
+  it("opens run settings from commands and returns to commands without starting a task", async () => {
+    installAppMock("project-2");
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+
+    await screen.findByText("第二套");
+    await user.click(screen.getByRole("button", { name: "指令设置" }));
+    const runSettingsButton = await screen.findByRole("button", { name: "运行设置" });
+    expect(screen.queryByRole("button", { name: "开始任务" })).not.toBeInTheDocument();
+    await user.click(runSettingsButton);
+
+    expect(screen.getByRole("heading", { name: "运行设置" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "开始任务" })).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith("start_automation", expect.anything());
+    await user.click(screen.getByRole("button", { name: "返回" }));
+
+    expect(screen.getByRole("heading", { name: "指令" })).toBeInTheDocument();
+    expect(screen.getByText("第二套")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "运行设置" })).toBeEnabled();
+  });
+
   it("opens the configured run-status panel when battle automation starts", async () => {
     installAppMock("project-1", { battleStartPanel: "runStatus" });
     const user = userEvent.setup();
@@ -140,7 +161,7 @@ describe("App active project restore", () => {
 
     expect(await screen.findByText("第一套")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "指令设置" }));
-    await user.click(await screen.findByRole("button", { name: "开始任务" }));
+    await user.click(await screen.findByRole("button", { name: "运行设置" }));
     await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     expect(screen.getByRole("button", { name: "返回" })).toBeDisabled();
@@ -160,7 +181,7 @@ describe("App active project restore", () => {
 
     expect(await screen.findByText("第一套")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "指令设置" }));
-    await user.click(await screen.findByRole("button", { name: "开始任务" }));
+    await user.click(await screen.findByRole("button", { name: "运行设置" }));
     await user.click(await screen.findByRole("button", { name: "开始任务" }));
 
     expect(

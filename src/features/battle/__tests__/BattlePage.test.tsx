@@ -705,7 +705,7 @@ describe("BattlePage", () => {
     });
   });
 
-  it("disables stop-after-current after it is requested", async () => {
+  it("shows stop-after-current only while running and selects it after a successful request", async () => {
     const user = userEvent.setup();
     vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
       const typedArgs = args as { project?: Project } | undefined;
@@ -716,6 +716,7 @@ describe("BattlePage", () => {
     });
     renderBattlePage(PROJECT);
 
+    expect(screen.queryByRole("button", { name: "运行完当前轮次后停止" })).not.toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "开始任务" }));
     expect(screen.getByRole("button", { name: "返回" })).toBeDisabled();
     const stopAfterCurrentButton = screen.getByRole("button", {
@@ -725,7 +726,40 @@ describe("BattlePage", () => {
 
     await waitFor(() => {
       expect(stopAfterCurrentButton).toBeDisabled();
+      expect(stopAfterCurrentButton).toHaveAccessibleName("本轮结束后将停止");
+      expect(stopAfterCurrentButton).toHaveAttribute("aria-pressed", "true");
+      expect(invoke).toHaveBeenCalledWith("stop_automation_after_current");
     });
+
+    await user.click(screen.getByRole("button", { name: "停止任务" }));
+    await screen.findByRole("button", { name: "开始任务" });
+    expect(screen.queryByRole("button", { name: "本轮结束后将停止" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "开始任务" }));
+    expect(screen.getByRole("button", { name: "运行完当前轮次后停止" })).toBeEnabled();
+  });
+
+  it("hides the selected stop-after-current action when the task completes", async () => {
+    let automationHandler: ((event: Event<{ status: "finished" }>) => void) | null = null;
+    vi.mocked(listen).mockImplementationOnce(async (event, handler) => {
+      if (event === "automation-status") {
+        automationHandler = handler as (event: Event<{ status: "finished" }>) => void;
+      }
+      return () => {};
+    });
+    mockProjectCommands();
+    const user = userEvent.setup();
+    renderBattlePage(PROJECT);
+    await user.click(screen.getByRole("button", { name: "开始任务" }));
+    await user.click(screen.getByRole("button", { name: "运行完当前轮次后停止" }));
+    await screen.findByRole("button", { name: "本轮结束后将停止" });
+
+    act(() => {
+      automationHandler?.({ event: "automation-status", id: 0, payload: { status: "finished" } });
+    });
+
+    expect(screen.getByRole("button", { name: "开始任务" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "本轮结束后将停止" })).not.toBeInTheDocument();
   });
 
   it("marks automation stopped immediately when stop is requested", async () => {

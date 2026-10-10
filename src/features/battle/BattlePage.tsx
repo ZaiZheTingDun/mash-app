@@ -1,5 +1,6 @@
 import { PageHeader } from "../../components/common/PageHeader";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
+import { StopAfterRoundButton } from "../../components/common/StopAfterRoundButton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertDialog,
@@ -885,16 +886,13 @@ export function BattlePage({
             <Text size="2">高级设置</Text>
           </Button>
         </Flex>
-        <Flex align="center" gap="3" wrap="wrap" justify="end">
-          <Button
-            color="red"
-            variant="soft"
-            className="battle-stop-after-button"
-            disabled={!running || stopAfterCurrentRequested}
-            onClick={handleStopAfterCurrent}
-          >
-            运行完当前轮次后停止
-          </Button>
+        <Flex align="center" justify="end" className="battle-task-actions">
+          {running && (
+            <>
+              <StopAfterRoundButton selected={stopAfterCurrentRequested} onClick={handleStopAfterCurrent} />
+              <span className="battle-task-action-divider" aria-hidden="true" />
+            </>
+          )}
           <TaskActionButton running={running} disabled={!selectedProject} onClick={running ? handleStop : handleStart} />
         </Flex>
       </Flex>

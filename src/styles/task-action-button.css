@@ -1,4 +1,9 @@
 /* Shared footer action: formation, commands, and run settings. */
+.task-action-button.rt-Button:enabled,
+.stop-after-round-button.rt-Button:enabled {
+  cursor: pointer;
+}
+
 .task-action-button.rt-Button {
   box-sizing: border-box;
   display: flex;
@@ -48,6 +53,115 @@
   height: 24px;
 }
 
+.task-action-button-stop.rt-Button {
+  align-items: flex-start;
+  color: var(--red-9);
+}
+
+.task-action-button-stop.rt-Button:hover,
+.task-action-button-stop.rt-Button:active {
+  background: transparent;
+}
+
+.task-action-button-stop.rt-Button:disabled {
+  color: var(--red-6);
+}
+
+.task-action-button-stop .task-action-icon {
+  width: 30px;
+  height: 25.5px;
+  margin-top: 3.75px;
+  justify-content: center;
+  border-radius: 3px;
+}
+
+.task-action-stop-square {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid currentColor;
+  border-radius: 1px;
+}
+
+.task-action-button-stop:enabled:hover .task-action-icon {
+  background: var(--red-a3);
+}
+
+.task-action-button-stop:enabled:active .task-action-stop-square {
+  background: currentColor;
+}
+
+.stop-after-round-button.rt-Button {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 13.5px;
+  width: 216px;
+  min-width: 216px;
+  height: 66px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 7.5px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--gray-10);
+}
+
+.stop-after-round-diamond {
+  width: 19.5px;
+  height: 19.5px;
+  margin-top: 9px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.stop-after-round-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7.5px;
+  white-space: nowrap;
+}
+
+.stop-after-round-copy small {
+  font-size: 8.25px;
+  font-weight: 500;
+  line-height: 12px;
+  letter-spacing: 1.8px;
+}
+
+.stop-after-round-copy > span {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 21.75px;
+}
+
+.stop-after-round-button.rt-Button:enabled:hover,
+.stop-after-round-button.rt-Button:enabled:active {
+  color: var(--blue-9);
+  background: transparent;
+}
+
+.stop-after-round-button.rt-Button:disabled {
+  color: var(--gray-6);
+  background: transparent;
+}
+
+.stop-after-round-button.rt-Button[data-selected="true"] {
+  color: var(--red-9);
+  background: transparent;
+  opacity: 1;
+}
+
+.stop-after-round-button[data-selected="true"] .stop-after-round-diamond {
+  fill: currentColor;
+}
+
 @media (max-width: 600px) {
   .task-action-button.rt-Button {
     width: 150px;
@@ -56,5 +170,15 @@
 
   .task-action-copy strong {
     font-size: 16px;
+  }
+
+  .stop-after-round-button.rt-Button {
+    width: 194px;
+    min-width: 194px;
+    gap: 10px;
+  }
+
+  .stop-after-round-copy > span {
+    font-size: 13px;
   }
 }
