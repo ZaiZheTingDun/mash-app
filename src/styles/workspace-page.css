@@ -65,42 +65,6 @@
   font-size: 16px;
 }
 
-.workspace-page .task-action-button.rt-Button {
-  box-sizing: border-box;
-  width: 195px;
-  min-width: 195px;
-  height: 66px;
-  padding: 7.5px 0 12px;
-  margin: 0;
-  flex-shrink: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.workspace-page .task-action-copy {
-  gap: 7.5px;
-}
-
-.workspace-page .task-action-copy small {
-  font-size: 10px;
-  line-height: 12px;
-}
-
-.workspace-page .task-action-copy strong {
-  font-size: 18px;
-  line-height: 22px;
-}
-
-.workspace-page .task-action-button > span:last-child {
-  font-size: 24px;
-  margin-left: 12px;
-}
-
-.workspace-page .task-action-button svg {
-  width: 24px;
-  height: 24px;
-}
-
 @media (max-width: 600px) {
   .workspace-page .mystic-code-trigger.is-expanded.rt-Button {
     width: min(264px, 45vw);
@@ -108,12 +72,4 @@
     padding-inline: 6px;
   }
 
-  .workspace-page .task-action-button.rt-Button {
-    width: 150px;
-    min-width: 150px;
-  }
-
-  .workspace-page .task-action-copy strong {
-    font-size: 16px;
-  }
 }

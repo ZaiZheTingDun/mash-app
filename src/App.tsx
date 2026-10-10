@@ -2,7 +2,6 @@ import { PageHeader } from "./components/common/PageHeader";
 import { TaskActionButton } from "./components/common/TaskActionButton";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { AlertDialog, Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
-import { ArrowRightIcon } from "@radix-ui/react-icons";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { invoke, listen } from "./tauri";
 import { ContentGrid } from "./features/team/ContentGrid";
@@ -1207,10 +1206,7 @@ function App({
                       />
                     </Flex>
                     <Flex align="center" gap="3">
-                      <Button type="button" variant="ghost" aria-label="指令设置" className="task-action-button formation-next-action" onClick={handleGotoCommand}>
-                        <span className="task-action-copy"><small>NEXT</small><strong>指令设置</strong></span>
-                        <span aria-hidden="true"><ArrowRightIcon /></span>
-                      </Button>
+                      <TaskActionButton label="指令设置" eyebrow="NEXT" onClick={handleGotoCommand} />
                     </Flex>
                   </Flex>
                 </>

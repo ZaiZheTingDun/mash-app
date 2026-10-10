@@ -664,7 +664,7 @@ export function BattlePage({
       : null;
 
   return (
-    <Flex direction="column" className="battle-page">
+    <Flex direction="column" className="battle-page workspace-page">
       <Box className="battle-topbar">
         <PageHeader title="运行设置" english="RUN SETTINGS" onBack={onBack} backDisabled={running}><ProjectBar headerStyle
           projects={projects}
@@ -712,6 +712,7 @@ export function BattlePage({
               {
                 value: "count",
                 title: "设置次数",
+                description: "按指定次数执行任务",
                 className: "battle-repeat-card-count",
                 onSelect: enableRepeatCount,
                 accessory: (
@@ -876,6 +877,7 @@ export function BattlePage({
             type="button"
             variant="soft"
             color="gray"
+            className="battle-advanced-settings-button"
             disabled={running || !selectedProject}
             onClick={() => setAdvancedSettingsOpen(true)}
           >
@@ -887,6 +889,7 @@ export function BattlePage({
           <Button
             color="red"
             variant="soft"
+            className="battle-stop-after-button"
             disabled={!running || stopAfterCurrentRequested}
             onClick={handleStopAfterCurrent}
           >

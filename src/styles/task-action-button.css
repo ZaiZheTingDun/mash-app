@@ -1,0 +1,60 @@
+/* Shared footer action: formation, commands, and run settings. */
+.task-action-button.rt-Button {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 195px;
+  min-width: 195px;
+  height: 66px;
+  padding: 7.5px 0 12px;
+  margin: 0;
+  flex-shrink: 0;
+  border: 0;
+  border-bottom: 1px solid var(--accent-7);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.task-action-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7.5px;
+}
+
+.task-action-copy small {
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 12px;
+  letter-spacing: 2px;
+}
+
+.task-action-copy strong {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.task-action-button > span:last-child {
+  display: flex;
+  align-items: center;
+  margin-left: 12px;
+}
+
+.task-action-button svg {
+  width: 24px;
+  height: 24px;
+}
+
+@media (max-width: 600px) {
+  .task-action-button.rt-Button {
+    width: 150px;
+    min-width: 150px;
+  }
+
+  .task-action-copy strong {
+    font-size: 16px;
+  }
+}

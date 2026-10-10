@@ -14,40 +14,6 @@
   margin-left: 16px;
 }
 
-.task-action-button.rt-Button {
-  height: 72px;
-  min-width: 190px;
-  padding: 8px 18px;
-  display: flex;
-  justify-content: space-between;
-  border: 0;
-  border-bottom: 1px solid var(--accent-7);
-  border-radius: 0;
-}
-
-.task-action-copy {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.task-action-copy small {
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: 2px;
-}
-
-.task-action-copy strong {
-  font-size: 23px;
-  font-weight: 600;
-}
-
-.task-action-button > span:last-child {
-  font-size: 30px;
-  margin-left: 24px;
-}
-
 .mystic-code-trigger.is-expanded.rt-Button {
   display: grid;
   grid-template-columns: 46px minmax(0,1fr) 20px;
@@ -842,14 +808,6 @@
     font-size: 8px;
   }
 
-  .task-action-button.rt-Button {
-    min-width: 150px;
-  }
-
-  .task-action-copy strong {
-    font-size: 20px;
-  }
-
   .mystic-code-trigger.is-expanded.rt-Button {
     gap: 4px 10px;
   }
@@ -895,14 +853,6 @@
     font-size: 11px;
   }
 
-  .task-action-button.rt-Button {
-    min-width: 130px;
-    padding-inline: 8px;
-  }
-
-  .task-action-button > span:last-child {
-    margin-left: 12px;
-  }
 }
 
 .command-row-controls {
