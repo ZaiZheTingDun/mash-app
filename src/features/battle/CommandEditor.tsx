@@ -91,11 +91,10 @@ export function CommandEditor({
   const configured = (turn: BattleTurn) => Boolean(turn.preparationActions?.length || turn.enemyTarget || turn.attackPriority.some(card => card.card) || turn.attackMode !== "normal");
   return <CommandWorkspace
     wave={activeIndex} waveCount={scenes.length} turn={activeTurnIndex} turns={activeScene.turns}
-    step={step} onStep={setStep} busy={editor.busy} error={editor.error} canUndo={document.canUndo}
+    step={step} onStep={setStep} busy={editor.busy} error={editor.error}
     onWave={wave => editor.navigate(wave, 0)} onTurn={turn => editor.navigate(activeIndex, turn)}
     onAddWave={() => void editor.mutate({ type: "addWave" })} onDeleteWave={() => void editor.mutate({ type: "deleteWave" })}
     onAddTurn={() => void editor.mutate({ type: "addTurn" })} onDeleteTurn={() => void editor.mutate({ type: "deleteTurn" })}
-    onUndo={() => void editor.mutate({ type: "undo" })}
     configuredWave={activeScene.turns.some(configured)} configuredTurn={configured(activeTurn)}
   >
     <BattleSceneBlock key={`${activeScene.id}:${activeTurn.id}:${step}`} scene={activeTurn}

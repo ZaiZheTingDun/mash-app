@@ -421,7 +421,7 @@ export function GrandCardStrategyPanel({
   if (embedded) {
     return (
       <div className="grand-card-strategy-section embedded">
-        <SectionHeading rail english="CARD STRATEGY" accessory={<Button type="button" variant="ghost" color="gray" className="command-rule-reset" onClick={resetCustomRules}>恢复默认</Button>}>指令卡策略</SectionHeading>
+        <SectionHeading rail english="CARD STRATEGY" className="command-heading-with-action" accessory={<Button type="button" variant="ghost" color="gray" className="command-rule-reset command-heading-action" onClick={resetCustomRules}>恢复默认</Button>}>指令卡策略</SectionHeading>
         {strategyBody}
       </div>
     );

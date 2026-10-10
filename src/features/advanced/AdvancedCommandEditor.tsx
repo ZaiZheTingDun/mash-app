@@ -13,6 +13,7 @@ import {
   Cross2Icon,
 } from "@radix-ui/react-icons";
 import { convertFileSrc } from "../../tauri";
+import { MysticCodeIcon } from "../../components/common/MysticCodeIcon";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
 import { AddRowTrigger } from "../../components/common/AddRowTrigger";
@@ -70,7 +71,7 @@ import type { Servant } from "../../types/servant";
 import { mysticCodeSkill, type MysticCode } from "../../types/mysticCode";
 import { MysticCodeChoice } from "../../components/common/MysticCodeChoice";
 import { CommandDraftHeading } from "../../components/common/CommandDraftHeading";
-import orderChangeIcon from "../../../src-tauri/resources/images/icon_order_change.png";
+import { SkillTargetChoices } from "../../components/common/SkillTargetChoices";
 
 interface AdvancedCommandEditorProps {
   projectId: string | null;
@@ -215,7 +216,9 @@ function AdvancedPreparationActionSummary({
 
   } else {
     const kind = action.type === "equipment" ? "equipment" : "commandSpell";
-    sourceFace = (
+    sourceFace = action.type === "equipment" ? (
+      <MysticCodeIcon code={mysticCode} gender={mysticCodeGender} label="御主礼装" size="2" inline />
+    ) : (
       <BattleActorIcon kind={kind} gender={mysticCodeGender} label={battleActorLabel({ kind })} size="inline" />
     );
     sourceText = action.type === "equipment" ? (mysticCode?.name ?? "御主礼装") : "令咒";
@@ -254,9 +257,6 @@ function AdvancedPreparationActionSummary({
             }
             isSupport={partyMembers[orderChangeSlots.front]?.isSupport ?? false}
           />
-          <Text size="2" weight="medium" className="battle-action-name">
-            {servantLabel(orderChangeSlots.front, partyLineup[orderChangeSlots.front] ?? null)}
-          </Text>
           <span className="battle-action-to">↔</span>
           <AdvancedInlineFace
             servant={partyLineup[orderChangeSlots.back] ?? null}
@@ -268,9 +268,6 @@ function AdvancedPreparationActionSummary({
             }
             isSupport={partyMembers[orderChangeSlots.back]?.isSupport ?? false}
           />
-          <Text size="2" weight="medium" className="battle-action-name">
-            {servantLabel(orderChangeSlots.back, partyLineup[orderChangeSlots.back] ?? null)}
-          </Text>
         </>
       ) : (
         targetIndex != null && (
@@ -743,7 +740,7 @@ function AdvancedStrategyEditor({
 
   return (
     <div className="advanced-strategy-editor">
-      {step === "prep" && <section className="battle-phase advanced-strategy-section">
+      {step === "basic" && activeTurnIndex === 0 && <section className="battle-phase advanced-strategy-section">
         <SectionHeading rail english="GRAND">冠位配置</SectionHeading>
         <div className="advanced-main-output-grid">
           <span className="advanced-delete-spacer" aria-hidden />
@@ -758,8 +755,20 @@ function AdvancedStrategyEditor({
         </div>
       </section>}
 
-      {step === "prep" && <section className="battle-phase advanced-strategy-section">
-        <SectionHeading rail english="STARTUP">启动条件</SectionHeading>
+      {step === "basic" && activeTurnIndex === 0 && <section className="battle-phase advanced-strategy-section">
+        <SectionHeading rail english="STARTUP" className="command-heading-with-action" accessory={
+          mainGrandSlot != null && grandAutoOrderChange != null ? (
+            <Button
+              type="button"
+              variant="ghost"
+              color="gray"
+              className="command-heading-action"
+              onClick={() => onChange({ ...scene, grandAutoOrderChange: !grandAutoOrderChange })}
+            >
+              {grandAutoOrderChange ? "改为配置指令卡" : "改为自动换位"}
+            </Button>
+          ) : undefined
+        }>启动条件</SectionHeading>
         <div className="advanced-condition-row">
           <span className="advanced-delete-spacer" aria-hidden />
           {mainGrandSlot != null && grandAutoOrderChange == null ? (
@@ -791,13 +800,6 @@ function AdvancedStrategyEditor({
                 {mainGrandServant ? ` ${mainGrandServant.name_cn} ` : orderChangeLabel}
                 和前排指令卡最多的从者交换。
               </Text>
-              <button
-                type="button"
-                className="battle-option-btn"
-                onClick={() => onChange({ ...scene, grandAutoOrderChange: false })}
-              >
-                改为配置指令卡
-              </button>
             </div>
           ) : (
             <div className="advanced-manual-startup-condition">
@@ -812,22 +814,12 @@ function AdvancedStrategyEditor({
                   />
                 ))}
               </div>
-              {mainGrandSlot != null && grandAutoOrderChange === false && (
-                <button
-                  type="button"
-                  className="battle-option-btn"
-                  onClick={() => onChange({ ...scene, grandAutoOrderChange: true })}
-                >
-                  改为自动换位
-                </button>
-              )}
             </div>
           )}
         </div>
       </section>}
 
-      {step === "control" && <section className="battle-phase advanced-strategy-section">
-        <SectionHeading rail english="CONTROL ACTIONS">控制行动</SectionHeading>
+      {step === "control" && activeTurnIndex === 0 && <section className="battle-phase advanced-strategy-section">
         <div className="advanced-rule-section">
           {controlActions.map((action, index) => (
             <div className="battle-action-row committed advanced-action-row" key={action.id}>
@@ -854,20 +846,24 @@ function AdvancedStrategyEditor({
             </div>
           ))}
           {!controlDraft ? (
-            <AddRowTrigger
-              leading={<span className="advanced-delete-spacer" aria-hidden />}
-              onClick={() => setControlDraft({ step: "source" })}
-            >
-              添加控制行动
-            </AddRowTrigger>
+            <div className="command-entry-actions">
+              <AddRowTrigger iconSize={16} transparentIconBackground onClick={() => setControlDraft({ step: "source" })}>
+                添加控制指令
+              </AddRowTrigger>
+            </div>
           ) : (
+            <div className="command-inline-draft">
+              <CommandDraftHeading
+                title={editingControlIndex != null ? "编辑控制指令" : "添加控制指令"}
+                hint={controlDraft.step === "source" ? "选择前排从者或御主礼装" : controlDraft.step === "option" ? "选择技能" : controlDraft.step === "target" ? "选择目标" : controlDraft.step === "orderChange" ? "从前排和后排各选择一名从者" : "选择技能选项"}
+                onReselect={controlDraft.step === "option" ? () => setControlDraft({ step: "source" }) : undefined}
+                onCancel={() => { setControlDraft(null); setEditingControlIndex(null); }}
+              />
             <div className="battle-choice-row">
-              <span className="advanced-delete-spacer" aria-hidden />
               {controlDraft.step === "source" ? (
                 <>
-                  {controlMembers
-                    .slice(0, 3)
-                    .map((member, index) => {
+                  {[0, 1, 2].map((index) => {
+                      const member = controlMembers[index] ?? { servant: null, isSupport: false };
                       const servant = member.servant;
                       return (
                         <FaceChip
@@ -885,20 +881,20 @@ function AdvancedStrategyEditor({
                         />
                       );
                     })}
-                  <button type="button" className="battle-option-btn" onClick={() => setControlDraft({ step: "option", source: "equipment" })}>
-                    御主礼装
-                  </button>
-                  <CommandSpellChoice gender={mysticCodeGender} onClick={() => setControlDraft({ step: "option", source: "commandSpell" })} />
-                  <button type="button" className="battle-option-btn" onClick={() => setControlDraft({ step: "target", source: "enemyTarget", option: "select" })}>
-                    敌方目标
-                  </button>
+                  <MysticCodeChoice code={mysticCode} gender={mysticCodeGender} onClick={() => setControlDraft({ step: "option", source: "equipment" })} />
                 </>
               ) : controlDraft.step === "option" ? (
                 <>
-                  {controlDraft.source === "commandSpell"
-                    ? <CommandSpellOptionButtons onSelect={option => setControlDraft({ step: "target", source: controlDraft.source, option })} />
-                    : (
+                  {controlDraft.source !== "equipment" && (() => {
+                    const index = servantSlotIndex(controlDraft.source) ?? 0;
+                    const member = controlMembers[index] ?? { servant: null, isSupport: false };
+                    const servant = member.servant;
+                    return <FaceChip servant={servant} index={index} src={servant ? faces[servant.variantKey] : null} isSupport={member.isSupport} selected onClick={() => setControlDraft({ step: "source" })} />;
+                  })()}
+                  {controlDraft.source === "equipment" && <MysticCodeChoice code={mysticCode} gender={mysticCodeGender} selected onClick={() => setControlDraft({ step: "source" })} />}
+                  <div className="battle-option-group command-skill-options">
                       <SkillOptionButtons
+                        showLabel
                         servant={
                           controlDraft.source !== "equipment"
                             ? (controlMembers[servantSlotIndex(controlDraft.source) ?? 0]?.servant ?? null)
@@ -908,7 +904,7 @@ function AdvancedStrategyEditor({
                         entries={controlDraft.source === "equipment" ? mysticSkillEntries : undefined}
                         onSelect={(skill) => selectControlSkill(controlDraft.source, skill)}
                       />
-                    )}
+                  </div>
                 </>
               ) : controlDraft.step === "skillSelection" ? (
                 <>
@@ -925,61 +921,44 @@ function AdvancedStrategyEditor({
                 </>
               ) : controlDraft.step === "target" ? (
                 <>
-                  {controlDraft.source === "enemyTarget" ? (
-                    <EnemyTargetButtons
-                      ariaLabel="选择敌方目标"
-                      onChange={(target) => { if (target) finishControlAction(controlDraft, target); }}
-                    />
-                  ) : <>
-                  {controlDraft.allowNoTarget !== false && (
-                    <button type="button" className="battle-option-btn" onClick={() => finishControlAction(controlDraft, null)}>
-                      无目标
-                    </button>
-                  )}
-                  {controlMembers
-                    .slice(0, 3)
-                    .map((member, index) => {
-                      const servant = member.servant;
-                      return (
-                        <FaceChip
-                          key={index}
-                          servant={servant}
-                          index={index}
-                          src={servant ? faces[servant.variantKey] : null}
-                          isSupport={member.isSupport}
-                          onClick={() => finishControlAction(controlDraft, `servant_${index + 1}`)}
-                        />
-                      );
-                    })}
-                  {controlDraft.source === "equipment" &&
-                    (disableAutoSkillTargetRecognition ||
-                      mysticCodeSkill(mysticCode, controlDraft.option)?.targetingMode == null ||
-                      mysticCodeSkill(mysticCode, controlDraft.option)?.targetingMode === "unknown") && (
-                    <>
-                      <span className="battle-choice-separator" aria-hidden />
-                      <button
-                        type="button"
-                        className="battle-option-btn order-change"
-                        aria-label="Order Change"
-                        onClick={() =>
-                          setControlDraft({
+                  <SkillTargetChoices
+                    allowNoTarget={controlDraft.allowNoTarget !== false}
+                    onNoTarget={() => finishControlAction(controlDraft, null)}
+                    onOrderChange={
+                      controlDraft.source === "equipment" &&
+                      (disableAutoSkillTargetRecognition ||
+                        mysticCodeSkill(mysticCode, controlDraft.option)?.targetingMode == null ||
+                        mysticCodeSkill(mysticCode, controlDraft.option)?.targetingMode === "unknown")
+                        ? () => setControlDraft({
                             step: "orderChange",
                             source: "equipment",
                             option: controlDraft.option,
                             front: null,
                           })
-                        }
-                      >
-                        <img src={orderChangeIcon} alt="" draggable={false} />
-                      </button>
-                    </>
-                  )}
+                        : undefined
+                    }
+                  >
+                    {controlMembers
+                      .slice(0, 3)
+                      .map((member, index) => {
+                        const servant = member.servant;
+                        return (
+                          <FaceChip
+                            key={index}
+                            servant={servant}
+                            index={index}
+                            src={servant ? faces[servant.variantKey] : null}
+                            isSupport={member.isSupport}
+                            onClick={() => finishControlAction(controlDraft, `servant_${index + 1}`)}
+                          />
+                        );
+                      })}
+                  </SkillTargetChoices>
                   {controlDraft.allowNoTarget === true && (
                     <Text size="1" color="gray" className="battle-targeting-mode-hint">
                       该技能存在可选择目标与无需选择目标两种形态
                     </Text>
                   )}
-                  </>}
                 </>
               ) : (
                 <>
@@ -1016,6 +995,7 @@ function AdvancedStrategyEditor({
                   </Text>
                 </>
               )}
+            </div>
             </div>
           )}
         </div>
@@ -1079,7 +1059,7 @@ function AdvancedStrategyEditor({
                       />
                     );
                   })}
-                  <MysticCodeChoice code={mysticCode} onClick={() => setPrepDraft({ step: "option", source: "equipment" })} />
+                  <MysticCodeChoice code={mysticCode} gender={mysticCodeGender} onClick={() => setPrepDraft({ step: "option", source: "equipment" })} />
                 </>
               ) : prepDraft.step === "option" ? (
                 <>
@@ -1089,7 +1069,7 @@ function AdvancedStrategyEditor({
                     const servant = member.servant;
                     return <FaceChip servant={servant} index={index} src={servant ? faces[servant.variantKey] : null} isSupport={member.isSupport} selected onClick={() => setPrepDraft({ step: "source" })} />;
                   })()}
-                  {prepDraft.source === "equipment" && <MysticCodeChoice code={mysticCode} selected onClick={() => setPrepDraft({ step: "source" })} />}
+                  {prepDraft.source === "equipment" && <MysticCodeChoice code={mysticCode} gender={mysticCodeGender} selected onClick={() => setPrepDraft({ step: "source" })} />}
                   {prepDraft.source === "commandSpell" && <CommandSpellChoice gender={mysticCodeGender} selected onClick={() => setPrepDraft({ step: "source" })} />}
                   {prepDraft.source === "commandSpell"
                     ? <div className="battle-option-group command-skill-options"><CommandSpellOptionButtons onSelect={option => setPrepDraft({ step: "target", source: prepDraft.source, option })} /></div>
@@ -1130,48 +1110,38 @@ function AdvancedStrategyEditor({
                       onChange={(target) => { if (target) finishPrepAction(prepDraft, target); }}
                     />
                   ) : <>
-                  {prepDraft.allowNoTarget !== false && (
-                    <button type="button" className="battle-option-btn" onClick={() => finishPrepAction(prepDraft, null)}>
-                      无目标
-                    </button>
-                  )}
-                  {startupSelectableSlots.map((index) => {
-                    const member = prepMembers[index] ?? { servant: null, isSupport: false };
-                    const servant = member.servant;
-                    return (
-                      <FaceChip
-                        key={index}
-                        servant={servant}
-                        index={index}
-                        src={servant ? faces[servant.variantKey] : null}
-                        isSupport={member.isSupport}
-                        onClick={() => finishPrepAction(prepDraft, `servant_${index + 1}`)}
-                      />
-                    );
-                  })}
-                  {prepDraft.source === "equipment" &&
-                    (disableAutoSkillTargetRecognition ||
-                      mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode == null ||
-                      mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode === "unknown") && (
-                    <>
-                      <span className="battle-choice-separator" aria-hidden />
-                      <button
-                        type="button"
-                        className="battle-option-btn order-change"
-                        aria-label="Order Change"
-                        onClick={() =>
-                          setPrepDraft({
+                  <SkillTargetChoices
+                    allowNoTarget={prepDraft.allowNoTarget !== false}
+                    onNoTarget={() => finishPrepAction(prepDraft, null)}
+                    onOrderChange={
+                      prepDraft.source === "equipment" &&
+                      (disableAutoSkillTargetRecognition ||
+                        mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode == null ||
+                        mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode === "unknown")
+                        ? () => setPrepDraft({
                             step: "orderChange",
                             source: "equipment",
                             option: prepDraft.option,
                             front: null,
                           })
-                        }
-                      >
-                        <img src={orderChangeIcon} alt="" draggable={false} />
-                      </button>
-                    </>
-                  )}
+                        : undefined
+                    }
+                  >
+                    {startupSelectableSlots.map((index) => {
+                      const member = prepMembers[index] ?? { servant: null, isSupport: false };
+                      const servant = member.servant;
+                      return (
+                        <FaceChip
+                          key={index}
+                          servant={servant}
+                          index={index}
+                          src={servant ? faces[servant.variantKey] : null}
+                          isSupport={member.isSupport}
+                          onClick={() => finishPrepAction(prepDraft, `servant_${index + 1}`)}
+                        />
+                      );
+                    })}
+                  </SkillTargetChoices>
                   {prepDraft.allowNoTarget === true && (
                     <Text size="1" color="gray" className="battle-targeting-mode-hint">
                       该技能存在可选择目标与无需选择目标两种形态
@@ -1331,7 +1301,7 @@ export function AdvancedCommandEditor({
   onGrandServantsChange,
   onGrandCardStrategyChange,
 }: AdvancedCommandEditorProps) {
-  const [step, setStep] = useState<CommandStep>("prep");
+  const [step, setStep] = useState<CommandStep>("basic");
   const editor = useCommandDocument<AdvancedBattleScene>(projectId, true);
   const [projectBusy, setProjectBusy] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
@@ -1363,20 +1333,21 @@ export function AdvancedCommandEditor({
   if (!document) return <Text color={editor.error ? "red" : "gray"}>{editor.error ?? (projectId ? "加载指令…" : "请先选择队伍")}</Text>;
   const scene = document.scenes[0];
   const activeTurnIndex = document.turn;
+  const activeStep = activeTurnIndex > 0 && (step === "basic" || step === "control") ? "prep" : step;
   return <CommandWorkspace advanced wave={0} waveCount={1} turn={activeTurnIndex} turns={scene.turns ?? []}
-    step={step} onStep={setStep} busy={editor.busy || projectBusy} error={projectError ?? editor.error} canUndo={document.canUndo}
+    step={activeStep} onStep={setStep} busy={editor.busy || projectBusy} error={projectError ?? editor.error}
     onWave={() => {}} onTurn={turn => editor.navigate(0, turn)}
     onAddTurn={() => void editor.mutate({type:"addTurn"})} onDeleteTurn={() => void editor.mutate({type:"deleteTurn"})}
-    onUndo={() => void editor.mutate({type:"undo"})} configuredTurn={Boolean(scene.turns?.[activeTurnIndex]?.actions.length)}
+    configuredTurn={Boolean(scene.turns?.[activeTurnIndex]?.actions.length)}
   >
-      <AdvancedStrategyEditor key={`${scene.id}:${activeTurnIndex}:${step}`}
+      <AdvancedStrategyEditor key={`${scene.id}:${activeTurnIndex}:${activeStep}`}
           scene={scene} partyMembers={initialPartyMembers} faces={faces} skillIcons={skillIcons} commandSpellIcons={commandSpellIcons}
           mysticCode={mysticCode} homeMasterCode={homeMasterCode} mysticCodeGender={mysticCodeGender} skillTargetStatus={skillTargetStatus} skillSelection={skillSelection}
           disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
           grandServants={grandServants} grandClassDefinition={grandClassDefinition}
           grandCardStrategy={grandCardStrategy} grandCardPriorityEnabled={grandCardPriorityEnabled}
           onGrandServantsChange={value => void persistProject(() => onGrandServantsChange?.(value))} onGrandCardStrategyChange={value => void persistProject(() => onGrandCardStrategyChange?.(value))}
-          activeTurnIndex={activeTurnIndex} step={step}
+          activeTurnIndex={activeTurnIndex} step={activeStep}
           onChange={scene => void editor.mutate({type:"updateScene",scene})}
         />
   </CommandWorkspace>;

@@ -504,40 +504,15 @@
   background: var(--gray-1);
 }
 
-.advanced-face-chip {
-  appearance: none;
-  position: relative;
-  width: 52px;
-  height: 52px;
-  padding: 0;
-  border: 1px solid var(--gray-8);
-  border-radius: var(--radius-2);
-  background: var(--gray-1);
-  color: var(--gray-12);
-  cursor: pointer;
-  display: inline-grid;
-  place-items: center;
-  overflow: hidden;
-  font-weight: 700;
-}
-
 .advanced-face-chip.dim {
   filter: grayscale(1);
   opacity: 0.42;
 }
 
-.advanced-face-chip.selected,
 .battle-option-btn.selected {
   border-color: var(--blue-9);
   background: var(--blue-3);
   box-shadow: 0 0 0 2px var(--blue-5);
-}
-
-.advanced-face-chip img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
 }
 
 .advanced-card-row,

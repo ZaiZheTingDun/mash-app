@@ -276,11 +276,6 @@
   color: var(--blue-11);
 }
 
-.command-undo {
-  margin: 18px 0 0 20px;
-  font-size: 11px;
-}
-
 .command-content {
   display: flex;
   flex-direction: column;

@@ -12,9 +12,24 @@ describe("CommandWorkspace step numbering", () => {
         <span>内容</span>
       </CommandWorkspace>
     );
-    expect(Array.from(container.querySelectorAll(".command-step-node"), node => node.textContent)).toEqual(advanced ? ["01", "02", "03", "04"] : ["01", "02", "03"]);
-    expect(container.querySelector(".command-phase-header strong")).toHaveTextContent(advanced ? "04" : "03");
+    expect(Array.from(container.querySelectorAll(".command-step-node"), node => node.textContent)).toEqual(advanced ? ["01", "02", "03", "04", "05"] : ["01", "02", "03"]);
+    expect(container.querySelector(".command-phase-header strong")).toHaveTextContent(advanced ? "05" : "03");
+    expect(screen.queryByRole("button", { name: /基础配置/ }) != null).toBe(advanced);
     expect(screen.queryByRole("button", { name: /控制行动/ }) != null).toBe(advanced);
+  });
+
+  it("shows only preparation, target, and attack in later Grand Battle turns", () => {
+    const { container } = renderWithTheme(
+      <CommandWorkspace wave={0} waveCount={1} turn={1} turns={[{ id: "turn-1" }, { id: "turn-2" }]} step="prep" advanced
+        onStep={vi.fn()} onWave={vi.fn()} onTurn={vi.fn()} onAddTurn={vi.fn()} onDeleteTurn={vi.fn()}>
+        <span>内容</span>
+      </CommandWorkspace>
+    );
+    const steps = within(container.querySelector(".command-step-list")!);
+    expect(steps.getAllByRole("button").map(button => button.textContent)).toEqual([
+      "01准备阶段PREPARATION", "02敌方目标TARGET", "03攻击阶段ATTACK",
+    ]);
+    expect(screen.queryByRole("button", { name: /基础配置|控制行动/ })).not.toBeInTheDocument();
   });
 
   it("prevents changing steps while a command mutation is pending", async () => {

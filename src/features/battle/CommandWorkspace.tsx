@@ -4,8 +4,9 @@ import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, TrashIcon } from "@radix-u
 import { SectionRailIcon } from "../../components/common/SectionRailIcon";
 import { TurnHelpTooltip } from "../../components/common/TurnHelpTooltip";
 
-export type CommandStep = "prep" | "enemy" | "control" | "attack";
+export type CommandStep = "basic" | "prep" | "enemy" | "control" | "attack";
 const STEPS = [
+  { id: "basic", label: "基础配置", english: "BASIC SETTINGS", description: "配置冠位从者与战斗启动条件。" },
   { id: "prep", label: "准备阶段", english: "PREPARATION", description: "配置从者在本阶段需要释放的技能。" },
   { id: "enemy", label: "敌方目标", english: "TARGET", description: "选择本回合需要锁定的敌方目标。" },
   { id: "control", label: "控制行动", english: "CONTROL ACTIONS", description: "配置战斗启动时需要执行的控制行动。" },
@@ -14,16 +15,17 @@ const STEPS = [
 
 interface CommandWorkspaceProps {
   wave: number; waveCount: number; turn: number; turns: { id: string }[];
-  step: CommandStep; advanced?: boolean; busy?: boolean; canUndo?: boolean;
+  step: CommandStep; advanced?: boolean; busy?: boolean;
   onStep: (step: CommandStep) => void; onWave: (wave: number) => void; onTurn: (turn: number) => void;
-  onAddWave?: () => void; onDeleteWave?: () => void; onAddTurn: () => void; onDeleteTurn: () => void; onUndo?: () => void;
+  onAddWave?: () => void; onDeleteWave?: () => void; onAddTurn: () => void; onDeleteTurn: () => void;
   configuredWave?: boolean; configuredTurn?: boolean; error?: string | null; children: ReactNode;
 }
 
-export function CommandWorkspace({ wave, waveCount, turn, turns, step, advanced = false, busy = false, canUndo = false, onStep, onWave, onTurn, onAddWave, onDeleteWave, onAddTurn, onDeleteTurn, onUndo, configuredWave = false, configuredTurn = false, error, children }: CommandWorkspaceProps) {
+export function CommandWorkspace({ wave, waveCount, turn, turns, step, advanced = false, busy = false, onStep, onWave, onTurn, onAddWave, onDeleteWave, onAddTurn, onDeleteTurn, configuredWave = false, configuredTurn = false, error, children }: CommandWorkspaceProps) {
   const [deleting, setDeleting] = useState<"wave" | "turn" | null>(null);
   const scroll = useRef<HTMLDivElement>(null);
-  const visibleSteps = STEPS.filter(item => advanced || item.id !== "control")
+  const visibleSteps = STEPS.filter(item =>
+    item.id === "basic" || item.id === "control" ? advanced && turn === 0 : true)
     .map((item, index) => ({ ...item, number: String(index + 1).padStart(2, "0") }));
   const phase = visibleSteps.find(item => item.id === step)!;
   useEffect(() => { if (scroll.current) scroll.current.scrollTop = 0; }, [wave, turn, step]);
@@ -48,12 +50,11 @@ export function CommandWorkspace({ wave, waveCount, turn, turns, step, advanced 
       </div>
       <div className="command-rail-label"><SectionRailIcon /><span>STEPS</span></div>
       <nav className="command-step-list">{visibleSteps.map(item => <button type="button" key={item.id} aria-pressed={step === item.id} disabled={busy} onClick={() => onStep(item.id)}><span className="command-step-node"><span>{item.number}</span></span><span className="command-step-copy"><b>{item.label}</b><small>{item.english}</small></span></button>)}</nav>
-      {canUndo && <Button variant="ghost" color="gray" className="command-undo" disabled={busy} onClick={onUndo}>撤销上次修改</Button>}
     </aside>
     <section className="command-content"><div className="command-phase-header" data-step={step}><small>WAVE {String(wave + 1).padStart(2, "0")} / TURN {String(turn + 1).padStart(2, "0")}</small><div><strong>{phase.number}</strong><span className="command-phase-title"><h2>{phase.label}</h2><small>{phase.english}</small></span><p>{phase.description}</p></div></div>
       {error && <div role="alert" className="command-error">{error}</div>}
       <div className="command-scroll-region" ref={scroll}><fieldset className="command-edit-surface" disabled={busy}>{children}</fieldset></div>
     </section>
-    <AlertDialog.Root open={deleting != null} onOpenChange={open => { if (!open) setDeleting(null); }}><AlertDialog.Content maxWidth="440px"><AlertDialog.Title>删除当前{deleting === "wave" ? "面" : "回合"}？</AlertDialog.Title><AlertDialog.Description>该场景已有配置。删除后后续回合将按新顺序显示，可通过撤销恢复。</AlertDialog.Description><Flex justify="end" gap="3" mt="4"><AlertDialog.Cancel><Button variant="soft" color="gray">取消</Button></AlertDialog.Cancel><AlertDialog.Action><Button color="red" disabled={busy} onClick={() => { (deleting === "wave" ? onDeleteWave : onDeleteTurn)?.(); setDeleting(null); }}>确认删除</Button></AlertDialog.Action></Flex></AlertDialog.Content></AlertDialog.Root>
+    <AlertDialog.Root open={deleting != null} onOpenChange={open => { if (!open) setDeleting(null); }}><AlertDialog.Content maxWidth="440px"><AlertDialog.Title>删除当前{deleting === "wave" ? "面" : "回合"}？</AlertDialog.Title><AlertDialog.Description>该场景已有配置。删除后后续回合将按新顺序显示。</AlertDialog.Description><Flex justify="end" gap="3" mt="4"><AlertDialog.Cancel><Button variant="soft" color="gray">取消</Button></AlertDialog.Cancel><AlertDialog.Action><Button color="red" disabled={busy} onClick={() => { (deleting === "wave" ? onDeleteWave : onDeleteTurn)?.(); setDeleting(null); }}>确认删除</Button></AlertDialog.Action></Flex></AlertDialog.Content></AlertDialog.Root>
   </div>;
 }

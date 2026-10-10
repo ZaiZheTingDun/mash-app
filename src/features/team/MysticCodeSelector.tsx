@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { Avatar, Button, Dialog, Flex, Text } from "@radix-ui/themes";
-import { convertFileSrc } from "../../tauri";
-import { mysticCodeItemPath, type MysticCode } from "../../types/mysticCode";
+import { Button, Dialog, Flex, Text } from "@radix-ui/themes";
+import { MysticCodeIcon } from "../../components/common/MysticCodeIcon";
+import type { MysticCode } from "../../types/mysticCode";
 import type { MysticCodeGender } from "../../types/appUiSettings";
 
 interface MysticCodeSelectorProps {
@@ -27,7 +27,6 @@ export function MysticCodeSelector({
     () => codeList.find((code) => code.id === selectedId) ?? null,
     [codeList, selectedId],
   );
-  const selectedPath = selected ? mysticCodeItemPath(selected, gender) : null;
 
   return (
     <>
@@ -42,12 +41,10 @@ export function MysticCodeSelector({
       >
         {expanded && <span className="mystic-code-label">MYSTIC CODE</span>}
         <span className="mystic-code-trigger-image">
-          <Avatar
-            src={selectedPath ? convertFileSrc(selectedPath) : undefined}
-            fallback="礼"
-            alt={selected?.name ?? "未选择御主礼装"}
-            radius="full"
-            size="3"
+          <MysticCodeIcon
+            code={selected}
+            gender={gender}
+            label={selected?.name ?? "未选择御主礼装"}
           />
         </span>
         {expanded && <><span className="mystic-code-name">{selected?.name ?? "选择御主礼装"}</span><span className="mystic-code-chevron" aria-hidden="true">⌄</span></>}
@@ -66,7 +63,6 @@ export function MysticCodeSelector({
           ) : (
             <div className="mystic-code-grid">
               {codeList.map((code) => {
-                const path = mysticCodeItemPath(code, gender);
                 return (
                   <button
                     type="button"
@@ -79,11 +75,10 @@ export function MysticCodeSelector({
                       setOpen(false);
                     }}
                   >
-                    <Avatar
-                      src={path ? convertFileSrc(path) : undefined}
-                      fallback="礼"
-                      alt={code.name}
-                      radius="full"
+                    <MysticCodeIcon
+                      code={code}
+                      gender={gender}
+                      label={code.name}
                       size="5"
                     />
                     <Text size="1" align="center" className="mystic-code-option-name">

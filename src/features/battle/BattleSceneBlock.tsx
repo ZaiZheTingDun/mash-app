@@ -8,8 +8,9 @@ import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { Text } from "@radix-ui/themes";
 import { Cross2Icon } from "@radix-ui/react-icons";
-import orderChangeIcon from "../../../src-tauri/resources/images/icon_order_change.png";
+import { SkillTargetChoices } from "../../components/common/SkillTargetChoices";
 import { convertFileSrc } from "../../tauri";
+import { MysticCodeIcon } from "../../components/common/MysticCodeIcon";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { battleActorLabel, servantLabel } from "../../components/common/battleActorLabels";
 import { useServantFaceImages } from "../team/useServantFaceImages";
@@ -217,7 +218,9 @@ function PreparationActionSummary({
 
   } else {
     const kind = action.type === "equipment" ? "equipment" : "commandSpell";
-    sourceFace = (
+    sourceFace = action.type === "equipment" ? (
+      <MysticCodeIcon code={mysticCode} gender={mysticCodeGender} label="御主礼装" size="2" inline />
+    ) : (
       <BattleActorIcon kind={kind} gender={mysticCodeGender} label={battleActorLabel({ kind })} size="inline" />
     );
     sourceText = action.type === "equipment" ? (mysticCode?.name ?? "御主礼装") : "令咒";
@@ -259,9 +262,6 @@ function PreparationActionSummary({
             }
             isSupport={partyMembers[orderChangeSlots.front]?.isSupport ?? false}
           />
-          <Text size="2" weight="medium" className="battle-action-name">
-            {servantLabel(orderChangeSlots.front, partyServants[orderChangeSlots.front] ?? null)}
-          </Text>
           <span className="battle-action-to">↔</span>
           <ServantInlineFace
             servant={partyServants[orderChangeSlots.back] ?? null}
@@ -273,9 +273,6 @@ function PreparationActionSummary({
             }
             isSupport={partyMembers[orderChangeSlots.back]?.isSupport ?? false}
           />
-          <Text size="2" weight="medium" className="battle-action-name">
-            {servantLabel(orderChangeSlots.back, partyServants[orderChangeSlots.back] ?? null)}
-          </Text>
         </>
       ) : (
         targetIndex != null && (
@@ -843,7 +840,7 @@ export function BattleSceneBlock({
                     />
                   );
                 })}
-                <MysticCodeChoice code={mysticCode} onClick={() => setPrepDraft({ step: "option", source: "equipment" })} />
+                <MysticCodeChoice code={mysticCode} gender={mysticCodeGender} onClick={() => setPrepDraft({ step: "option", source: "equipment" })} />
               </div>
             ) : prepDraft.step === "option" ? (
               <div className="battle-choice-row">
@@ -866,7 +863,7 @@ export function BattleSceneBlock({
                     })()
                   )}
                 {prepDraft.source === "equipment" && (
-                  <MysticCodeChoice code={mysticCode} selected onClick={() => setPrepDraft({ step: "source" })} />
+                  <MysticCodeChoice code={mysticCode} gender={mysticCodeGender} selected onClick={() => setPrepDraft({ step: "source" })} />
                 )}
                 {prepDraft.source === "commandSpell" && (
                   <CommandSpellChoice gender={mysticCodeGender} selected onClick={() => setPrepDraft({ step: "source" })} />
@@ -914,56 +911,42 @@ export function BattleSceneBlock({
                     }}
                   />
                 ) : <>
-                {prepDraft.allowNoTarget !== false && (
-                  <button
-                    type="button"
-                    className="battle-option-btn"
-                    onClick={() => finishPrepAction(prepDraft, null)}
+                  <SkillTargetChoices
+                    allowNoTarget={prepDraft.allowNoTarget !== false}
+                    onNoTarget={() => finishPrepAction(prepDraft, null)}
+                    onOrderChange={
+                      prepDraft.source === "equipment" &&
+                      (disableAutoSkillTargetRecognition ||
+                        mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode == null ||
+                        mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode === "unknown")
+                        ? () => setPrepDraft({
+                            step: "orderChange",
+                            source: "equipment",
+                            option: prepDraft.option,
+                            front: null,
+                          })
+                        : undefined
+                    }
                   >
-                    无目标
-                  </button>
-                )}
-                {draftPartyMembers.slice(0, 3).map((member, index) => {
-                  const servant = member.servant;
-                  return (
-                    <ServantFaceButton
-                      key={index}
-                      servant={servant}
-                      index={index}
-                      faceSrc={servant ? faces[servant.variantKey] : null}
-                      isSupport={member.isSupport}
-                      onClick={() => finishPrepAction(prepDraft, `servant_${index + 1}`)}
-                    />
-                  );
-                })}
-                {prepDraft.source === "equipment" &&
-                  (disableAutoSkillTargetRecognition ||
-                    mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode == null ||
-                    mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode === "unknown") && (
-                  <>
-                    <span className="battle-choice-separator" aria-hidden />
-                    <button
-                      type="button"
-                      className="battle-option-btn order-change"
-                      aria-label="Order Change"
-                      onClick={() =>
-                        setPrepDraft({
-                          step: "orderChange",
-                          source: "equipment",
-                          option: prepDraft.option,
-                          front: null,
-                        })
-                      }
-                    >
-                      <img src={orderChangeIcon} alt="" draggable={false} />
-                    </button>
-                  </>
-                )}
-                {prepDraft.allowNoTarget === true && (
-                  <Text size="1" color="gray" className="battle-targeting-mode-hint">
-                    该技能存在可选择目标与无需选择目标两种形态
-                  </Text>
-                )}
+                    {draftPartyMembers.slice(0, 3).map((member, index) => {
+                      const servant = member.servant;
+                      return (
+                        <ServantFaceButton
+                          key={index}
+                          servant={servant}
+                          index={index}
+                          faceSrc={servant ? faces[servant.variantKey] : null}
+                          isSupport={member.isSupport}
+                          onClick={() => finishPrepAction(prepDraft, `servant_${index + 1}`)}
+                        />
+                      );
+                    })}
+                  </SkillTargetChoices>
+                  {prepDraft.allowNoTarget === true && (
+                    <Text size="1" color="gray" className="battle-targeting-mode-hint">
+                      该技能存在可选择目标与无需选择目标两种形态
+                    </Text>
+                  )}
                 </>}
               </div>
             ) : (

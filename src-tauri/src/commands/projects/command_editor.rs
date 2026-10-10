@@ -1,18 +1,10 @@
-//! Command editor mutations and recoverable scene deletion stay backend-owned.
+//! Command editor mutations stay backend-owned.
 use super::*;
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::sync::Mutex;
 
 #[derive(Default)]
-pub(crate) struct CommandEditorHistory(Mutex<HashMap<String, Snapshot>>);
-
-struct Snapshot {
-    before: Vec<Value>,
-    after: Vec<Value>,
-    wave: usize,
-    turn: usize,
-}
+pub(crate) struct CommandEditorLock(Mutex<()>);
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,7 +12,6 @@ pub(crate) struct CommandEditorState {
     scenes: Vec<Value>,
     wave: usize,
     turn: usize,
-    can_undo: bool,
 }
 
 #[derive(serde::Deserialize)]
@@ -32,7 +23,6 @@ pub(crate) enum CommandEditorMutation {
     DeleteTurn,
     UpdateTurn { turn: Value },
     UpdateScene { scene: Value },
-    Undo,
 }
 
 fn default_turn(advanced: bool) -> Value {
@@ -105,24 +95,6 @@ fn normalize_documents(scenes: Vec<Value>, advanced: bool) -> Result<Vec<Value>,
             }
         })
         .collect()
-}
-
-impl Snapshot {
-    fn restore(&self, current: &[Value]) -> Result<CommandEditorState, String> {
-        if current != self.after {
-            return Err("配置已被其他操作更改，无法撤销".into());
-        }
-        Ok(CommandEditorState {
-            scenes: self.before.clone(),
-            wave: self.wave,
-            turn: self.turn,
-            can_undo: false,
-        })
-    }
-}
-
-fn history_key(project_id: &str, advanced: bool) -> String {
-    format!("{project_id}:{advanced}")
 }
 
 fn read_document(
@@ -217,69 +189,46 @@ fn mutate_document(
             }
             scenes[wave] = scene;
         }
-        CommandEditorMutation::Undo => return Err("撤销需要历史记录".into()),
     }
     Ok(CommandEditorState {
         scenes: normalize_documents(scenes, advanced)?,
         wave: next_wave,
         turn: next_turn,
-        can_undo: true,
     })
 }
 
 #[tauri::command]
 pub(crate) fn load_command_editor(
     app: tauri::AppHandle,
-    history: tauri::State<'_, CommandEditorHistory>,
+    editor_lock: tauri::State<'_, CommandEditorLock>,
     project_id: String,
     advanced: bool,
 ) -> Result<CommandEditorState, String> {
-    let history = history.0.lock().map_err(|e| e.to_string())?;
+    let _guard = editor_lock.0.lock().map_err(|e| e.to_string())?;
     let scenes = read_document(&app, &project_id, advanced)?;
     // Persist backend defaults once so subsequent mutations use the same identities.
     write_document(&app, &project_id, advanced, &scenes)?;
-    let can_undo = history
-        .get(&history_key(&project_id, advanced))
-        .is_some_and(|s| s.after == scenes);
     Ok(CommandEditorState {
         scenes,
         wave: 0,
         turn: 0,
-        can_undo,
     })
 }
 
 #[tauri::command]
 pub(crate) fn mutate_command_editor(
     app: tauri::AppHandle,
-    history: tauri::State<'_, CommandEditorHistory>,
+    editor_lock: tauri::State<'_, CommandEditorLock>,
     project_id: String,
     advanced: bool,
     mutation: CommandEditorMutation,
     wave: usize,
     turn: usize,
 ) -> Result<CommandEditorState, String> {
-    let mut history = history.0.lock().map_err(|e| e.to_string())?;
-    let key = history_key(&project_id, advanced);
-    let before = read_document(&app, &project_id, advanced)?;
-    if matches!(mutation, CommandEditorMutation::Undo) {
-        let snapshot = history.get(&key).ok_or("没有可撤销的修改")?;
-        let restored = snapshot.restore(&before)?;
-        write_document(&app, &project_id, advanced, &restored.scenes)?;
-        history.remove(&key);
-        return Ok(restored);
-    }
-    let next = mutate_document(before.clone(), advanced, mutation, wave, turn)?;
+    let _guard = editor_lock.0.lock().map_err(|e| e.to_string())?;
+    let scenes = read_document(&app, &project_id, advanced)?;
+    let next = mutate_document(scenes, advanced, mutation, wave, turn)?;
     write_document(&app, &project_id, advanced, &next.scenes)?;
-    history.insert(
-        key,
-        Snapshot {
-            before,
-            after: next.scenes.clone(),
-            wave,
-            turn,
-        },
-    );
     Ok(next)
 }
 
@@ -333,31 +282,17 @@ mod tests {
         assert_eq!(last.scenes[0]["turns"][0]["id"], first_id);
     }
     #[test]
-    fn undo_restores_deleted_turn_and_rejects_external_changes() {
-        let original = normalize_documents(vec![], false).unwrap();
-        let added = mutate_document(original, false, CommandEditorMutation::AddTurn, 0, 0).unwrap();
-        let before = added.scenes;
-        let deleted = mutate_document(
-            before.clone(),
-            false,
-            CommandEditorMutation::DeleteTurn,
-            0,
-            1,
-        )
-        .unwrap();
-        let snapshot = Snapshot {
-            before: before.clone(),
-            after: deleted.scenes.clone(),
-            wave: 0,
-            turn: 1,
-        };
-        let restored = snapshot.restore(&deleted.scenes).unwrap();
-        assert_eq!(restored.scenes, before);
-        assert_eq!(restored.turn, 1);
-        assert!(!restored.can_undo);
-        let external =
-            mutate_document(deleted.scenes, false, CommandEditorMutation::AddWave, 0, 0).unwrap();
-        assert!(snapshot.restore(&external.scenes).is_err());
+    fn editor_state_has_no_undo_and_rejects_undo_mutations() {
+        for advanced in [false, true] {
+            let scenes = normalize_documents(vec![], advanced).unwrap();
+            let added =
+                mutate_document(scenes, advanced, CommandEditorMutation::AddTurn, 0, 0).unwrap();
+            let state = serde_json::to_value(added).unwrap();
+            assert!(state.get("canUndo").is_none());
+            assert_eq!(state["turn"], 1);
+            assert_eq!(state["scenes"][0]["turns"].as_array().unwrap().len(), 2);
+        }
+        assert!(serde_json::from_value::<CommandEditorMutation>(json!({"type": "undo"})).is_err());
     }
     #[test]
     fn wave_boundaries_and_scene_identity_are_checked() {

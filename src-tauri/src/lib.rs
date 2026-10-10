@@ -80,7 +80,7 @@ pub fn run() {
             app.manage(Mutex::new(CraftEssenceEnhancementRunnerHandle::new_idle()));
             app.manage(Mutex::new(FriendPointSummonRunnerHandle::new_idle()));
             app.manage(AutomationCoordinator::default());
-            app.manage(commands::projects::CommandEditorHistory::default());
+            app.manage(commands::projects::CommandEditorLock::default());
             app.manage(Arc::new(ResourceDownloadCancelState::default()));
             app.manage(commands::debug::DebugSidecar::new());
             app.manage(commands::rank_up_quest::RankUpQuestCaptureState::default());

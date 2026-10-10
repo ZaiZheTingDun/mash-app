@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "../../tauri";
 import type { BattleTurn, AdvancedBattleScene, BattleScene } from "../../types/command";
 
-export interface CommandDocument<T> { scenes: T[]; wave: number; turn: number; canUndo: boolean }
-export type CommandMutation = { type: "addWave" | "deleteWave" | "addTurn" | "deleteTurn" | "undo" } | { type: "updateTurn"; turn: BattleTurn } | { type: "updateScene"; scene: BattleScene | AdvancedBattleScene };
+export interface CommandDocument<T> { scenes: T[]; wave: number; turn: number }
+export type CommandMutation = { type: "addWave" | "deleteWave" | "addTurn" | "deleteTurn" } | { type: "updateTurn"; turn: BattleTurn } | { type: "updateScene"; scene: BattleScene | AdvancedBattleScene };
 
 export function useCommandDocument<T extends BattleScene | AdvancedBattleScene>(projectId: string | null, advanced: boolean) {
   const [document, setDocument] = useState<CommandDocument<T> | null>(null);

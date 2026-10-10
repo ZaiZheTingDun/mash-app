@@ -95,6 +95,18 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("uses the shared mystic code fallback in saved equipment actions", async () => {
+    renderWithTheme(<BattleSceneBlock
+      scene={makeScene({ preparationActions: [{ type: "equipment", id: "equipment", skill: "skill_1", target: null }] })}
+      partyServants={PARTY}
+      onChange={vi.fn()}
+    />);
+    const summary = screen.getByLabelText("御主礼装 释放 技能 1");
+    const icon = summary.querySelector(".battle-mystic-code-icon") as HTMLElement;
+    expect(await within(icon).findByText("礼", { exact: true })).toBeInTheDocument();
+    expect(within(summary).queryByText("御主", { exact: true })).not.toBeInTheDocument();
+  });
+
   it("cancels an inline edit with Escape without changing the saved action", async () => {
     const user = userEvent.setup(); const onChange = vi.fn();
     renderWithTheme(<BattleSceneBlock scene={makeScene({preparationActions:[{type:"equipment",id:"original",skill:"skill_1",target:null}]})} partyServants={PARTY} onChange={onChange} />);
@@ -342,7 +354,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "添加技能指令" }));
     await user.click(screen.getByRole("button", { name: /御主/ }));
     await user.click(screen.getByRole("button", { name: "技能 2" }));
-    await user.click(screen.getByRole("button", { name: "Order Change" }));
+    await user.click(screen.getByRole("button", { name: "换人技能" }));
 
     expect(screen.getByRole("button", { name: "丁" })).toBeInTheDocument();
 
@@ -387,7 +399,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "添加技能指令" }));
     await user.click(screen.getByRole("button", { name: /御主/ }));
     await user.click(screen.getByRole("button", { name: "技能 2" }));
-    await user.click(screen.getByRole("button", { name: "Order Change" }));
+    await user.click(screen.getByRole("button", { name: "换人技能" }));
 
     const altriaButtons = screen.getAllByRole("button", { name: "甲" });
     expect(altriaButtons).toHaveLength(2);
@@ -410,7 +422,7 @@ describe("BattleSceneBlock staged action editor", () => {
     await user.click(screen.getByRole("button", { name: "添加技能指令" }));
     await user.click(screen.getByRole("button", { name: /御主/ }));
     await user.click(screen.getByRole("button", { name: "技能 2" }));
-    await user.click(screen.getByRole("button", { name: "Order Change" }));
+    await user.click(screen.getByRole("button", { name: "换人技能" }));
     await user.click(screen.getByRole("button", { name: "甲" }));
 
     expect(screen.getByRole("button", { name: "位置 5 未配置从者" })).toBeDisabled();
@@ -1039,10 +1051,12 @@ describe("BattleSceneBlock staged action editor", () => {
     expect(children[4]).toHaveTextContent("技能 3");
     expect(children[5]).toHaveTextContent("换位");
     expect(children[6]).toHaveClass("battle-inline-face");
-    expect(children[7]).toHaveTextContent("甲");
-    expect(children[8]).toHaveTextContent("↔");
-    expect(children[9]).toHaveClass("battle-inline-face");
-    expect(children[10]).toHaveTextContent("丁");
+    expect(children[7]).toHaveTextContent("↔");
+    expect(children[8]).toHaveClass("battle-inline-face");
+    const outcome = summary?.querySelector(".command-row-outcome") as HTMLElement;
+    expect(outcome.querySelectorAll(".battle-inline-face")).toHaveLength(2);
+    expect(within(outcome).queryByText("甲", { exact: true })).not.toBeInTheDocument();
+    expect(within(outcome).queryByText("丁", { exact: true })).not.toBeInTheDocument();
   });
 
   it("renders command spell actions with a square actor icon", () => {

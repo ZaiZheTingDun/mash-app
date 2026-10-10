@@ -407,11 +407,11 @@
   margin-right: 3px;
 }
 
-.command-workspace .grand-card-strategy-section.embedded .battle-section-heading > .rt-Flex::after {
+.command-workspace .command-heading-with-action > .rt-Flex::after {
   order: 1;
 }
 
-.command-workspace .grand-card-strategy-section.embedded .command-rule-reset.rt-Button {
+.command-workspace .command-heading-action.rt-Button {
   order: 2;
   flex-shrink: 0;
   height: 21px;
@@ -569,6 +569,18 @@
 
 .command-workspace .advanced-command-card::before {
   content: none;
+}
+
+.command-workspace .advanced-command-card[data-suit="buster"] {
+  border-bottom-color: var(--red-9);
+}
+
+.command-workspace .advanced-command-card[data-suit="arts"] {
+  border-bottom-color: var(--blue-9);
+}
+
+.command-workspace .advanced-command-card[data-suit="quick"] {
+  border-bottom-color: var(--green-9);
 }
 
 .command-workspace .advanced-command-card-face,

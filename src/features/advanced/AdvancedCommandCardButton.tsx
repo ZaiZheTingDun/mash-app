@@ -37,6 +37,7 @@ export function AdvancedCommandCardButton({
     <button
       type="button"
       className={`advanced-command-card${grayscale ? " unset" : ""}`}
+      data-suit={card.suit}
       style={style}
       aria-label={commandCardAria(card)}
       onClick={onClick}
