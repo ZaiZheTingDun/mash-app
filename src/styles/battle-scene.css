@@ -310,6 +310,12 @@
   text-align: center;
 }
 
+.battle-inline-square.battle-command-spell-icon {
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
 .battle-inline-skill-icon {
   display: inline-flex;
   align-items: center;

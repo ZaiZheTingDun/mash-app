@@ -139,6 +139,8 @@
 
 .command-workspace .battle-enemy-target.selected {
   background: none;
+  border-bottom-color: var(--blue-6);
+  box-shadow: none;
 }
 
 .command-workspace .battle-enemy-target.selected::before {
@@ -190,28 +192,59 @@
 }
 
 .command-rule-label small {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--gray-10);
 }
 
 .command-workspace .grand-rule-row {
-  grid-template-columns: 112px minmax(0, 1fr) 24px;
-  gap: 12px;
+  grid-template-columns: 107.25px minmax(0, 1fr) 22px;
+  gap: 9px;
   box-sizing: border-box;
   min-height: 48px;
-  padding: 3px 0;
+  padding: 5.25px 0 0;
+  border: 0;
+  border-bottom: .75px solid var(--gray-a3);
+  border-radius: 0;
+  background: transparent;
 }
 
 .command-workspace .grand-rule-row > .advanced-inline-delete {
   grid-column: 3;
   grid-row: 1;
+  color: var(--gray-10);
+}
+
+.command-workspace .grand-rule-row > .advanced-inline-delete svg {
+  width: 17px;
+  height: 17px;
+}
+
+.command-workspace .grand-rule-row .command-rule-label {
+  gap: 0;
+  min-width: 0;
+}
+
+.command-workspace .grand-rule-row .command-rule-label svg {
+  width: 7px;
+  flex-shrink: 0;
+}
+
+.command-workspace .grand-rule-row .command-rule-label small {
+  margin-left: 14.7px;
+}
+
+.command-workspace .grand-rule-row .command-rule-label > span {
+  margin-left: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .command-workspace .grand-rule-cards {
   grid-column: 2;
   grid-row: 1;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 9px;
 }
 
 .command-workspace .grand-rule-row-spacer {
@@ -224,54 +257,69 @@
   gap: 9px;
   min-width: 0;
   width: 100%;
-  height: 42px;
+  height: 41.625px;
   padding: 0 9px;
   border: 0;
-  border-left: 3px solid var(--gray-7);
+  border-bottom: .75px solid var(--blue-5);
   border-radius: 0;
   background: none;
   background-image: none !important;
   box-shadow: none;
 }
 
-.command-workspace .grand-rule-card.buster {
-  border-left-color: var(--red-9);
+.command-workspace .grand-rule-card::before {
+  content: "";
+  width: 3px;
+  height: 22.5px;
+  flex: 0 0 3px;
+  background: var(--gray-8);
 }
 
-.command-workspace .grand-rule-card.arts {
-  border-left-color: var(--blue-9);
+.command-workspace .grand-rule-card.buster::before {
+  background: var(--red-9);
 }
 
-.command-workspace .grand-rule-card.quick {
-  border-left-color: var(--green-9);
+.command-workspace .grand-rule-card.arts::before {
+  background: var(--blue-9);
+}
+
+.command-workspace .grand-rule-card.quick::before {
+  background: var(--green-9);
+}
+
+.command-workspace .grand-rule-card:hover,
+.command-workspace .grand-rule-card.is-editing {
+  background: var(--blue-a2);
+  border-bottom-color: var(--blue-9);
 }
 
 .command-workspace .grand-rule-card-face,
 .command-workspace .grand-rule-card-face .rt-AvatarRoot {
-  width: 30px;
-  height: 30px;
+  width: 28.5px;
+  height: 28.5px;
   flex-shrink: 0;
 }
 
 .command-workspace .grand-rule-card-empty {
-  width: 8px;
-  height: 8px;
+  width: 8.5px;
+  height: 8.5px;
   flex-shrink: 0;
   transform: rotate(45deg);
   border-radius: 0;
   font-size: 0;
+  margin-inline: 1.75px;
 }
 
 .command-workspace .grand-rule-card-meta {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 5.625px;
   min-width: 0;
   width: auto;
   font-size: 10px;
   font-weight: 400;
-  line-height: 15px;
+  line-height: 12px;
   color: var(--gray-10);
 }
 
@@ -282,6 +330,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--gray-12);
+  font-weight: 500;
+}
+
+.command-workspace .grand-rule-card-meta > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .command-workspace .grand-strategy-body > .rt-Flex > .rt-Button {
@@ -323,15 +379,63 @@
   margin: 0;
 }
 
-.command-workspace .grand-card-strategy-section.embedded .grand-strategy-body {
-  position: relative;
+.command-workspace .grand-card-strategy-section.embedded {
+  box-sizing: border-box;
+  padding-right: 8.25px;
 }
 
-.command-workspace .grand-card-strategy-section.embedded .command-rule-reset {
-  position: absolute;
-  right: 8px;
-  top: -33px;
+.command-workspace .grand-card-strategy-section.embedded .grand-strategy-body {
+  gap: 13.5px;
+}
+
+.command-workspace .grand-card-strategy-section.embedded .grand-rule-list {
+  gap: 0;
+}
+
+.command-workspace .grand-card-strategy-section.embedded .battle-section-heading {
+  min-height: 21px;
+  margin-bottom: 13.5px;
+}
+
+.command-workspace .grand-card-strategy-section.embedded .battle-section-heading .rt-Text {
+  font-weight: 600;
+}
+
+.command-workspace .grand-card-strategy-section.embedded .section-rail-icon {
+  width: 9px;
+  flex-basis: 9px;
+  margin-right: 3px;
+}
+
+.command-workspace .grand-card-strategy-section.embedded .battle-section-heading > .rt-Flex::after {
+  order: 1;
+}
+
+.command-workspace .grand-card-strategy-section.embedded .command-rule-reset.rt-Button {
+  order: 2;
+  flex-shrink: 0;
+  height: 21px;
+  padding: 0;
+  margin: 0;
+  font-size: 10px;
+  font-weight: 400;
   color: var(--gray-10);
+}
+
+.command-workspace .grand-card-strategy-section.embedded .command-rule-actions {
+  min-height: 32px;
+  align-items: center;
+}
+
+.command-workspace .grand-card-strategy-section.embedded .command-rule-actions > .rt-Button {
+  gap: 9px;
+  padding: 0 3px;
+  color: var(--blue-11);
+}
+
+.command-workspace .grand-card-strategy-section.embedded .command-rule-actions svg {
+  width: 18px;
+  height: 18px;
 }
 
 .command-workspace .advanced-main-output-grid,

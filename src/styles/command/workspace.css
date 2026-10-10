@@ -176,83 +176,38 @@
   height: 13px;
 }
 
-.command-wave-controls {
-  display: flex;
+.command-scene-controls {
+  display: grid;
+  grid-template-columns: 30px minmax(30px, 1fr) 30px 30px 24px;
   align-items: center;
-  gap: 3px;
-  margin-left: 21px;
+  margin: 0 0 27px 21px;
   min-height: 27px;
 }
 
-.command-wave-controls strong {
+.command-turn-controls {
+  margin-bottom: 34.5px;
+}
+
+.command-scene-controls strong {
   font-size: 18px;
   font-weight: 700;
   line-height: 27px;
 }
 
-.command-wave-controls > span {
+.command-scene-controls > span {
   font-size: 10px;
   color: var(--gray-10);
   margin-right: auto;
   white-space: nowrap;
 }
 
-.command-wave-controls .rt-IconButton {
+.command-scene-controls .rt-IconButton {
   box-sizing: border-box;
-  width: 18px;
-  height: 27px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   margin: 0;
   flex-shrink: 0;
-}
-
-.command-divider {
-  height: 1px;
-  background: var(--blue-6);
-  margin: 12px 0 14px;
-  position: relative;
-}
-
-.command-divider::after {
-  content: "";
-  width: 6px;
-  height: 6px;
-  transform: rotate(45deg);
-  border: 1px solid var(--blue-9);
-  position: absolute;
-  left: 50%;
-  top: -3px;
-  background: var(--color-background);
-}
-
-.command-turn-track {
-  display: flex;
-  gap: 41.5px;
-  margin: 0;
-  flex: 1;
-  min-width: 0;
-  position: relative;
-  overflow-y: hidden;
-  padding: 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.command-turn-track button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 32px;
-  border: 0;
-  background: none;
-  color: var(--gray-10);
-  cursor: pointer;
-  font-size: 10px;
-  line-height: 15px;
-  padding: 0;
-  height: 33px;
-  position: relative;
 }
 
 .command-diamond {
@@ -268,10 +223,6 @@
 [aria-pressed="true"] > .command-diamond {
   background: var(--blue-9);
   border-color: var(--blue-9);
-}
-
-.command-turn-track [aria-pressed="true"] {
-  color: var(--blue-11);
 }
 
 .command-step-list {
@@ -582,11 +533,13 @@
 }
 
 .command-actor-choice {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 12px;
-  min-width: 56px;
+  min-width: 0;
+  max-width: 100%;
   border: 0;
   border-bottom: 1px solid var(--blue-6);
   border-radius: 0;
@@ -642,13 +595,14 @@
   align-items: flex-start;
   gap: 8px;
   min-width: 0;
+  flex: 1;
   text-align: left;
 }
 
 .command-actor-copy b {
   font-size: 12px;
   font-weight: 500;
-  max-width: 135px;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -657,6 +611,10 @@
 .command-actor-copy small {
   font-size: 10px;
   color: var(--gray-10);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .command-mode-options {
@@ -869,7 +827,8 @@
     letter-spacing: .6px;
   }
 
-  .command-wave-controls {
+  .command-scene-controls {
+    display: flex;
     gap: 4px;
     margin-left: 14px;
     flex-wrap: wrap;
@@ -1028,17 +987,17 @@
 
 @media (max-width:680px) {
 
-  .command-wave-controls {
+  .command-scene-controls {
     display: grid;
     grid-template-columns: repeat(3,1fr);
     margin-left: 12px;
   }
 
-  .command-wave-controls > strong {
+  .command-scene-controls > strong {
     grid-column: 1;
   }
 
-  .command-wave-controls > span {
+  .command-scene-controls > span {
     grid-column: 2 / -1;
     margin-right: 0;
   }
@@ -1256,7 +1215,7 @@
   grid-column: 2;
   grid-row: 1;
   display: grid;
-  grid-template-columns: 201px 66px minmax(0,1fr);
+  grid-template-columns: 201px 210px minmax(0,1fr);
   gap: 12px;
 }
 
@@ -1271,17 +1230,39 @@
   font-weight: 500;
 }
 
-.command-row-source .battle-action-name {
+.command-row-source .battle-action-name,
+.command-row-outcome .battle-action-name,
+.command-row-skill-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .command-row-skill {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 9px;
+}
+
+.command-row-skill > .command-row-skill-name:only-child {
+  grid-column: 1 / -1;
+}
+
+.command-row-skill > span:first-child,
+.command-row-outcome .battle-action-to,
+.command-row-skill .battle-inline-skill-icon {
+  flex-shrink: 0;
+}
+
+.command-row-skill .battle-inline-skill-icon {
+  margin-left: 0;
 }
 
 .command-row-skill small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
   color: var(--gray-10);
 }
@@ -1289,7 +1270,7 @@
 .command-inline-draft {
   position: relative;
   display: grid !important;
-  grid-template-columns: minmax(0,1fr) 48px;
+  grid-template-columns: minmax(0,1fr) auto 48px;
   padding: 16px !important;
   border-top: 1px solid var(--blue-6);
   border-bottom: 1px solid var(--blue-4);
@@ -1303,6 +1284,7 @@
   align-items: center;
   gap: 14px;
   height: 36px;
+  min-width: 0;
 }
 
 .command-draft-heading strong {
@@ -1321,10 +1303,14 @@
   margin: auto;
   font-size: 12px;
   color: var(--gray-10);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.command-inline-draft > .battle-draft-cancel {
-  grid-column: 2;
+.command-inline-draft > .battle-draft-cancel,
+.command-inline-draft > .command-draft-reselect {
   align-self: center;
   justify-self: end;
   width: 48px;
@@ -1332,6 +1318,21 @@
   color: var(--gray-10);
   font: inherit;
   font-size: 12px;
+}
+
+.command-inline-draft > .battle-draft-cancel {
+  grid-column: 3;
+}
+
+.command-inline-draft > .command-draft-reselect {
+  grid-column: 2;
+  width: auto;
+  min-width: 48px;
+  white-space: nowrap;
+  color: var(--blue-11);
+  border: 0;
+  background: none;
+  cursor: pointer;
 }
 
 .command-inline-draft > .battle-choice-row,
@@ -1346,6 +1347,94 @@
   display: grid;
   grid-template-columns: repeat(4,minmax(0,1fr));
   gap: 12px;
+}
+
+.command-inline-draft > .battle-choice-row > .battle-enemy-target-row {
+  grid-column: 1 / -1;
+}
+
+.command-inline-draft .command-actor-choice {
+  min-height: 60px;
+  padding: 9px;
+  gap: 9px;
+}
+
+.command-inline-draft .command-actor-choice.selected {
+  border-radius: 3px 3px 0 0;
+  color: var(--blue-11);
+  box-shadow: none;
+  padding-right: 21px;
+}
+
+.command-inline-draft .command-actor-choice.selected::after {
+  top: calc(50% - 3px);
+  bottom: auto;
+  right: 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--blue-9);
+  background: none;
+}
+
+.command-inline-draft .command-actor-choice .battle-actor-icon,
+.command-inline-draft .command-actor-choice .rt-AvatarRoot,
+.command-inline-draft .command-empty-face {
+  width: 33px;
+  height: 33px;
+  flex-basis: 33px;
+}
+
+.command-inline-draft .command-actor-copy {
+  gap: 6px;
+}
+
+.command-inline-draft .command-actor-copy b {
+  font-size: 10.5px;
+}
+
+.command-inline-draft .command-actor-copy small {
+  font-size: 9px;
+}
+
+.command-inline-draft .command-skill-options {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.command-inline-draft .command-skill-option {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: flex-start;
+  gap: 9px;
+  min-width: 0;
+  height: 60px;
+  padding: 9px;
+  border: 0;
+  border-bottom: 1px solid var(--blue-6);
+  border-radius: 0;
+  background: none;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.command-inline-draft .command-skill-option:hover {
+  border-color: var(--blue-9);
+  background: var(--blue-a2);
+  transform: none;
+}
+
+.command-inline-draft .command-skill-option .rt-AvatarRoot {
+  width: 28.5px;
+  height: 28.5px;
+  flex: 0 0 28.5px;
+}
+
+.command-skill-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .command-workspace .battle-action-delete,
@@ -1370,7 +1459,7 @@
 @container command-body (max-width: 680px) {
 
   .command-workspace .battle-action-row.committed:has(.command-row-source) > .battle-action-summary {
-    grid-template-columns: minmax(60px,1fr) 66px minmax(60px,1fr);
+    grid-template-columns: minmax(30px,1fr) 190px minmax(30px,1fr);
   }
 }
 
@@ -1481,12 +1570,62 @@
   align-items: center;
   gap: 9px;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
 }
 
 .command-attack-source .battle-action-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.command-attack-source-placeholder {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gray-10);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.command-inline-draft .command-attack-options {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.command-inline-draft > .command-rule-sources {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.command-inline-draft .command-rule-colors {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.command-rule-draft .battle-draft-cancel {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+@container command-body (max-width: 600px) {
+  .command-rule-draft .command-skill-options {
+    grid-column: 1 / -1;
+  }
+}
+
+.command-attack-options .command-skill-option {
+  padding-inline: 5px;
+  gap: 6px;
 }
 
 .command-attack-row > .battle-attack-edit {
@@ -1534,38 +1673,17 @@
 @container command-body (max-width: 600px) {
 
   .command-workspace .command-attack-row:not(.is-editing) {
-    grid-template-columns: 64px 30px minmax(0, 1fr) 24px;
+    grid-template-columns: 64px minmax(90px, 188px) minmax(0, 1fr) 24px;
+  }
+
+  .command-inline-draft .command-attack-options {
+    grid-column: 1 / -1;
   }
 }
 
 .command-workspace .add-row-trigger .rt-Text {
   font-size: 11px;
   font-weight: 400;
-}
-
-.command-turn-controls {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 12px 0 16.5px 6.5px;
-}
-
-.command-turn-controls > .rt-IconButton {
-  width: 24px;
-  height: 15px;
-  margin: 0;
-  padding: 0;
-  flex-shrink: 0;
-}
-
-.command-turn-track::before {
-  content: "";
-  position: absolute;
-  top: 5px;
-  left: 16px;
-  right: 0;
-  height: 1px;
-  background: var(--blue-6);
 }
 
 .command-phase-header strong::after {

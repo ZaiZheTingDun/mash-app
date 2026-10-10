@@ -22,20 +22,10 @@ interface CommandWorkspaceProps {
 
 export function CommandWorkspace({ wave, waveCount, turn, turns, step, advanced = false, busy = false, canUndo = false, onStep, onWave, onTurn, onAddWave, onDeleteWave, onAddTurn, onDeleteTurn, onUndo, configuredWave = false, configuredTurn = false, error, children }: CommandWorkspaceProps) {
   const [deleting, setDeleting] = useState<"wave" | "turn" | null>(null);
-  const track = useRef<HTMLDivElement>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const visibleSteps = STEPS.filter(item => advanced || item.id !== "control")
     .map((item, index) => ({ ...item, number: String(index + 1).padStart(2, "0") }));
   const phase = visibleSteps.find(item => item.id === step)!;
-  useEffect(() => {
-    const strip=track.current;
-    const active=strip?.querySelector<HTMLElement>('[aria-pressed="true"]');
-    if(strip && active) {
-      const left=active.offsetLeft-strip.offsetLeft;
-      if(left < strip.scrollLeft) strip.scrollLeft=left;
-      else if(left+active.offsetWidth > strip.scrollLeft+strip.clientWidth) strip.scrollLeft=left+active.offsetWidth-strip.clientWidth;
-    }
-  }, [turn, turns.length]);
   useEffect(() => { if (scroll.current) scroll.current.scrollTop = 0; }, [wave, turn, step]);
   const remove = (kind: "wave" | "turn") => {
     if (kind === "wave" ? configuredWave : configuredTurn) setDeleting(kind);
@@ -44,14 +34,18 @@ export function CommandWorkspace({ wave, waveCount, turn, turns, step, advanced 
   return <div className={`command-workspace${advanced ? " is-grand" : ""}`}>
     <aside className="command-sidebar" aria-label="指令导航">
       <div className="command-rail-label"><SectionRailIcon /><span>WAVE</span>{onDeleteWave && <IconButton variant="ghost" color="gray" aria-label="删除当前 Battle" disabled={busy || waveCount <= 1} onClick={() => remove("wave")}><TrashIcon /></IconButton>}</div>
-      <div className="command-wave-controls" aria-label={`第 ${wave + 1}/${waveCount} 面`}><strong>{String(wave + 1).padStart(2, "0")}</strong><span>/ {String(waveCount).padStart(2, "0")}</span>
+      <div className="command-scene-controls" role="group" aria-label={`第 ${wave + 1}/${waveCount} 面`}><strong>{String(wave + 1).padStart(2, "0")}</strong><span>/ {String(waveCount).padStart(2, "0")}</span>
         <IconButton variant="ghost" color="gray" aria-label="上一场战斗" disabled={busy || wave === 0} onClick={() => onWave(wave - 1)}><ChevronLeftIcon /></IconButton>
         <IconButton variant="ghost" color="gray" aria-label="下一场战斗" disabled={busy || wave + 1 === waveCount} onClick={() => onWave(wave + 1)}><ChevronRightIcon /></IconButton>
         {onAddWave && <IconButton variant="ghost" aria-label="添加 Battle" disabled={busy} onClick={onAddWave}><PlusIcon /></IconButton>}
       </div>
-      <div className="command-divider" />
-      <div className="command-rail-label"><SectionRailIcon /><span>TURN ({turns.length})</span><TurnHelpTooltip /><IconButton variant="ghost" color="gray" aria-label="删除当前 Turn" disabled={busy || turns.length <= 1} onClick={() => remove("turn")}><TrashIcon /></IconButton></div>
-      <div className="command-turn-controls"><div className="command-turn-track" ref={track}>{turns.map((item, index) => <button type="button" key={item.id} aria-label={`Turn ${index + 1}`} aria-pressed={turn === index} disabled={busy} onClick={() => onTurn(index)}><i className="command-diamond" />{String(index + 1).padStart(2, "0")}</button>)}</div><IconButton variant="ghost" aria-label="添加 Turn" disabled={busy} onClick={onAddTurn}><PlusIcon /></IconButton></div>
+      <div className="command-rail-label"><SectionRailIcon /><span>TURN</span><TurnHelpTooltip /><IconButton variant="ghost" color="gray" aria-label="删除当前 Turn" disabled={busy || turns.length <= 1} onClick={() => remove("turn")}><TrashIcon /></IconButton></div>
+      <div className="command-scene-controls command-turn-controls" role="group" aria-label={`第 ${turn + 1}/${turns.length} 回合`}>
+        <strong>{String(turn + 1).padStart(2, "0")}</strong><span>/ {String(turns.length).padStart(2, "0")}</span>
+        <IconButton variant="ghost" color="gray" aria-label="上一回合" disabled={busy || turn === 0} onClick={() => onTurn(turn - 1)}><ChevronLeftIcon /></IconButton>
+        <IconButton variant="ghost" color="gray" aria-label="下一回合" disabled={busy || turn + 1 >= turns.length} onClick={() => onTurn(turn + 1)}><ChevronRightIcon /></IconButton>
+        <IconButton variant="ghost" aria-label="添加 Turn" disabled={busy} onClick={onAddTurn}><PlusIcon /></IconButton>
+      </div>
       <div className="command-rail-label"><SectionRailIcon /><span>STEPS</span></div>
       <nav className="command-step-list">{visibleSteps.map(item => <button type="button" key={item.id} aria-pressed={step === item.id} disabled={busy} onClick={() => onStep(item.id)}><span className="command-step-node"><span>{item.number}</span></span><span className="command-step-copy"><b>{item.label}</b><small>{item.english}</small></span></button>)}</nav>
       {canUndo && <Button variant="ghost" color="gray" className="command-undo" disabled={busy} onClick={onUndo}>撤销上次修改</Button>}

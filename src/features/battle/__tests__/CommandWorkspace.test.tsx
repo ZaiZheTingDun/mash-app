@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { CommandWorkspace } from "../CommandWorkspace";
@@ -29,5 +29,54 @@ describe("CommandWorkspace step numbering", () => {
     expect(attack).toBeDisabled();
     await userEvent.setup().click(attack);
     expect(onStep).not.toHaveBeenCalled();
+  });
+});
+
+describe("CommandWorkspace turn pagination", () => {
+  const turns = [{ id: "first" }, { id: "second" }, { id: "third" }];
+
+  it.each([0, 1, 2])("navigates from turn %s and disables the boundary arrows", async turn => {
+    const onTurn = vi.fn();
+    const onAddTurn = vi.fn();
+    const user = userEvent.setup();
+    renderWithTheme(
+      <CommandWorkspace wave={0} waveCount={1} turn={turn} turns={turns} step="prep"
+        onStep={vi.fn()} onWave={vi.fn()} onTurn={onTurn} onAddTurn={onAddTurn} onDeleteTurn={vi.fn()}>
+        <span>内容</span>
+      </CommandWorkspace>
+    );
+    const pager = within(screen.getByRole("group", { name: `第 ${turn + 1}/3 回合` }));
+    expect(pager.getByText(String(turn + 1).padStart(2, "0"))).toBeInTheDocument();
+    expect(pager.getByText("/ 03")).toBeInTheDocument();
+    const previous = pager.getByRole("button", { name: "上一回合" });
+    const next = pager.getByRole("button", { name: "下一回合" });
+    expect(previous).toHaveProperty("disabled", turn === 0);
+    expect(next).toHaveProperty("disabled", turn === 2);
+    await user.click(previous);
+    await user.click(next);
+    expect(onTurn.mock.calls).toEqual([
+      ...(turn > 0 ? [[turn - 1]] : []),
+      ...(turn < 2 ? [[turn + 1]] : []),
+    ]);
+    await user.click(pager.getByRole("button", { name: "添加 Turn" }));
+    expect(onAddTurn).toHaveBeenCalledOnce();
+  });
+
+  it("disables turn navigation and addition while saving", async () => {
+    const onTurn = vi.fn();
+    const onAddTurn = vi.fn();
+    renderWithTheme(
+      <CommandWorkspace wave={0} waveCount={1} turn={1} turns={turns} step="prep" busy
+        onStep={vi.fn()} onWave={vi.fn()} onTurn={onTurn} onAddTurn={onAddTurn} onDeleteTurn={vi.fn()}>
+        <span>内容</span>
+      </CommandWorkspace>
+    );
+    const pager = within(screen.getByRole("group", { name: "第 2/3 回合" }));
+    for (const button of pager.getAllByRole("button")) {
+      expect(button).toBeDisabled();
+      await userEvent.setup().click(button);
+    }
+    expect(onTurn).not.toHaveBeenCalled();
+    expect(onAddTurn).not.toHaveBeenCalled();
   });
 });

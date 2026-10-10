@@ -1130,6 +1130,8 @@ function App({
               ) : view === "command" ? (
                 <>
                   <CommandEditor
+                    homeMasterCode={mysticCodes.find(code => code.id === homeMasterFigureId) ?? null}
+                    mysticCodeGender={mysticCodeGender}
                     onBusyChange={setCommandBusy}
                     key={activeProjectId ?? "no-project"}
                     projectId={activeProjectId}

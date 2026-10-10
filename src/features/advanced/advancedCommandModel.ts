@@ -87,7 +87,7 @@ export const RULE_COLOR_LABELS: Record<GrandRuleColor, string> = {
   quick: "绿",
 };
 export const RULE_KIND_DIALOG_LABELS: Record<GrandRuleKind, string> = {
-  any: "任意",
+  any: "指令卡/宝具",
   command: "指令卡",
   np: "宝具",
 };

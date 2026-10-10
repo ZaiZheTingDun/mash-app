@@ -665,6 +665,10 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       return [{ path: null, name: "" }, { path: null, name: "" }, { path: null, name: "" }] as T;
     case "get_append_skill_icon_paths":
       return Array.from({ length: 5 }, () => ({ path: null, name: "" })) as T;
+    case "get_command_spell_icon_paths":
+      return [{ path: null, name: "宝具解放" }, { path: null, name: "灵基修复" }] as T;
+    case "get_attack_card_icon_paths":
+      return ["宝具", "红卡", "蓝卡", "绿卡", "任意"].map(name => ({ path: null, name })) as T;
     case "get_runtime_status":
       return {
         requiredRuntimeVersion: "2026.05.08-runtime1",

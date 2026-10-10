@@ -1,3 +1,4 @@
+import type { MysticCodeGender } from "../../types/appUiSettings";
 import { useEffect, useState } from "react";
 import { Text } from "@radix-ui/themes";
 import { AdvancedCommandEditor } from "../advanced/AdvancedCommandEditor";
@@ -23,6 +24,8 @@ interface CommandEditorProps {
   advancedMode?: boolean;
   disableAutoSkillTargetRecognition?: boolean;
   mysticCode?: MysticCode | null;
+  homeMasterCode?: MysticCode | null;
+  mysticCodeGender?: MysticCodeGender;
   grandServants?: GrandServantConfig[];
   grandClass?: GrandClass;
   grandClassDefinition?: GrandClassDefinition;
@@ -41,6 +44,8 @@ export function CommandEditor({
   advancedMode = false,
   disableAutoSkillTargetRecognition = false,
   mysticCode = null,
+  homeMasterCode = null,
+  mysticCodeGender = "female",
   grandServants = [],
   grandClassDefinition,
   grandCardStrategy,
@@ -66,7 +71,7 @@ export function CommandEditor({
         partyLineup={partyLineup}
         partyMembers={initialPartyMembers}
         disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition}
-        mysticCode={mysticCode}
+        mysticCode={mysticCode} homeMasterCode={homeMasterCode} mysticCodeGender={mysticCodeGender}
         grandServants={grandServants}
         grandClassDefinition={grandClassDefinition}
         grandCardStrategy={grandCardStrategy}
@@ -95,8 +100,8 @@ export function CommandEditor({
   >
     <BattleSceneBlock key={`${activeScene.id}:${activeTurn.id}:${step}`} scene={activeTurn}
       partyServants={partyMembersToServants(activePartyMembers)} partyMembers={activePartyMembers}
-      disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition} mysticCode={mysticCode}
-      turnAttackModesEnabled={turnAttackModesEnabled} step={step} onSelectEnemy={() => setStep("enemy")}
+      disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition} mysticCode={mysticCode} homeMasterCode={homeMasterCode} mysticCodeGender={mysticCodeGender}
+      turnAttackModesEnabled={turnAttackModesEnabled} step={step}
       onChange={turn => void editor.mutate({ type: "updateTurn", turn })} />
   </CommandWorkspace>;
 }

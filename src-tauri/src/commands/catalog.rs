@@ -21,6 +21,12 @@ pub(crate) use skills::*;
 mod append_skills;
 pub(crate) use append_skills::*;
 
+mod command_spells;
+pub(crate) use command_spells::*;
+
+mod attack_cards;
+pub(crate) use attack_cards::*;
+
 mod mystic_codes;
 pub(crate) use mystic_codes::*;
 

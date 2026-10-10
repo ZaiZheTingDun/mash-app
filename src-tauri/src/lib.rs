@@ -108,6 +108,8 @@ pub fn run() {
             commands::catalog::get_craft_essence_card_path,
             commands::catalog::get_skill_icon_paths,
             commands::catalog::get_append_skill_icon_paths,
+            commands::catalog::get_command_spell_icon_paths,
+            commands::catalog::get_attack_card_icon_paths,
             commands::catalog::get_template_asset_path,
             commands::catalog::list_servant_portraits,
             commands::catalog::save_servant_portrait_selection,
