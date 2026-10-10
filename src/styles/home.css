@@ -10,20 +10,20 @@
 }
 
 .home-page {
-  --home-background: var(--gray-1);
+  --home-background: #ffffff;
   --home-ink: var(--slate-12);
   --home-muted: var(--slate-11);
-  --home-kicker: var(--gray-12);
-  --home-card: var(--gray-1);
-  --home-card-border: var(--gray-6);
+  --home-kicker: #527baa;
+  --home-card: #f7f8fc;
+  --home-card-border: #02022c26;
   --home-card-shadow: #26354a14;
-  --home-primary: var(--blue-9);
+  --home-primary: #0090ff;
   --home-primary-shadow: #0090ff33;
   --home-primary-ink: #ffffff;
   --home-primary-muted: #ffffffc2;
   --home-battle-accent: #ffffffc2;
-  --home-summon-accent: var(--cyan-9);
-  --home-enhance-accent: var(--amber-9);
+  --home-summon-accent: #0090ff;
+  --home-enhance-accent: #ba8a16;
   --home-circle: url("../features/home/assets/magic-circle-light.svg");
   flex: 1;
   min-height: 0;
@@ -33,7 +33,7 @@
   container: home / size;
   overflow: hidden;
   box-sizing: border-box;
-  background: radial-gradient(ellipse at 22% 52%, color-mix(in srgb, var(--blue-5) 38%, transparent), transparent 58%), var(--home-background);
+  background: var(--home-background);
 }
 
 .app-root[data-theme="dark"] .home-page {
@@ -54,15 +54,13 @@
 }
 
 .home-panel {
-  /* 1100 × 670 画布：两列居中，右侧任务入口宽 400px。 */
+  /* Figma 的 1024px 画布：任务卡从 x=547 开始，宽度 400px。 */
   flex: 1;
   min-height: 0;
-  width: min(952px, 100%);
-  max-width: 952px;
+  max-width: 1024px;
   margin-inline: auto;
   display: grid;
-  grid-template-columns: minmax(0, 511px) 400px;
-  column-gap: 41px;
+  grid-template-columns: 547px 400px;
   position: relative;
 }
 
@@ -77,13 +75,20 @@
 }
 
 .home-magic-circle {
-  display: none;
+  /* 原始矢量组件 560×560，坐标与 Figma 保持一致。 */
+  position: absolute;
+  width: 560px;
+  aspect-ratio: 1;
+  left: -3px;
+  top: 38px;
+  background: var(--home-circle) center / contain no-repeat;
+  pointer-events: none;
 }
 
 .home-figure-trigger {
-  /* 立绘保持 440px 原尺寸，与底栏上缘对齐。 */
+  /* 保留当前水平位置（1024px 画布的 16% ≈ 164px），立绘不随窗口缩放。 */
   position: absolute;
-  left: 36px;
+  left: 164px;
   bottom: 0;
   display: flex;
   align-items: end;
@@ -124,13 +129,13 @@
   align-items: stretch;
   justify-content: flex-start;
   width: 100%;
-  gap: 14px;
-  padding: 53px 0 24px;
+  gap: 16px;
+  padding: 40px 0 24px;
   box-sizing: border-box;
 }
 
 .home-menu-heading {
-  margin-bottom: 24px;
+  margin-bottom: 12px;
   color: var(--home-ink);
 }
 
@@ -138,8 +143,8 @@
   display: block;
   width: fit-content;
   margin-bottom: 8px;
-  padding-bottom: 0;
-  border: 0;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--home-kicker);
   color: var(--home-kicker);
   font-size: 11px;
   line-height: 16px;
@@ -150,8 +155,7 @@
   font-size: 24px;
   line-height: 1.3;
   font-weight: 650;
-  letter-spacing: 0;
-  white-space: nowrap;
+  letter-spacing: 0.08em;
 }
 
 .home-menu-title-row {
@@ -167,14 +171,14 @@
   overflow: hidden;
   flex-shrink: 0;
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) 20px;
+  grid-template-columns: minmax(0, 1fr) 20px;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   width: 100%;
   min-height: 106px;
-  padding: 14px 24px;
+  padding: 14px 20px;
   border: 1px solid var(--home-card-border);
-  border-radius: 16px;
+  border-radius: 3px;
   background: var(--home-card);
   box-shadow: 0 12px 32px -20px var(--home-card-shadow);
   color: var(--home-ink);
@@ -198,7 +202,7 @@
   --home-action-accent: var(--home-battle-accent);
   --home-orbit: url("../features/home/assets/orbit-battle.svg");
   border-color: transparent;
-  background: linear-gradient(105deg, var(--home-primary), var(--indigo-9));
+  background: var(--home-primary);
   box-shadow: 0 12px 34px -10px var(--home-primary-shadow);
   color: var(--home-primary-ink);
 }
@@ -213,24 +217,16 @@
   --home-orbit: url("../features/home/assets/orbit-enhance.svg");
 }
 
-.home-action-icon {
-  width: 54px;
-  height: 54px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  color: var(--home-primary-ink);
-  background: var(--home-action-accent);
-}
-
-.home-action-icon svg {
-  width: 24px;
-  height: 24px;
-}
-
-.home-action--battle .home-action-icon {
-  background: color-mix(in srgb, var(--home-primary-ink) 22%, transparent);
+.home-action-orbit {
+  position: absolute;
+  z-index: -1;
+  width: 150px;
+  height: 106px;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--home-orbit) center right / auto no-repeat;
+  pointer-events: none;
 }
 
 .home-action-copy {
@@ -241,11 +237,32 @@
   min-width: 0;
 }
 
+.home-action-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--home-action-accent);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 10px;
+  line-height: 14px;
+  letter-spacing: 0.16em;
+}
+
+.home-action-number {
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.home-action-diamond {
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
 .home-action-copy strong {
   font-size: 19px;
   line-height: 26px;
   font-weight: 500;
-  letter-spacing: 0;
+  letter-spacing: 0.07em;
 }
 
 .home-action-copy small {
