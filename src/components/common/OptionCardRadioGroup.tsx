@@ -20,6 +20,7 @@ interface OptionCardRadioGroupProps {
   value: string;
   options: OptionCardRadioOption[];
   disabled?: boolean;
+  indicator?: "round" | "diamond";
   className?: string;
   onValueChange: (value: string) => void;
 }
@@ -28,13 +29,14 @@ export function OptionCardRadioGroup({
   value,
   options,
   disabled = false,
+  indicator = "round",
   className,
   onValueChange,
 }: OptionCardRadioGroupProps) {
   return (
     <RadioGroup.Root
       value={value}
-      className={`option-card-radio-group${className ? ` ${className}` : ""}`}
+      className={`option-card-radio-group${indicator === "diamond" ? " mash-diamond-options" : ""}${className ? ` ${className}` : ""}`}
       disabled={disabled}
       onValueChange={onValueChange}
     >

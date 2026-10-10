@@ -1,5 +1,4 @@
 import {
-  Button,
   ContextMenu,
   Flex,
   Text,
@@ -11,8 +10,8 @@ import {
   CraftEssenceOverlay,
   GrandCraftEssenceOverlay,
 } from "./ContentGridOverlays";
-import { SupportRequirementSummary } from "./SupportSettingsDialog";
-import { hasConfiguredLevels } from "./supportSettingsModel";
+
+import { FormationLevels } from "./FormationLevels";
 import type { CraftEssence } from "../../types/craftEssence";
 import type {
   SupportAppendSkillLevelMins,
@@ -24,6 +23,7 @@ import type { SlotItem } from "./contentGridTypes";
 
 interface SortableSlotProps {
   slot: SlotItem;
+  slotIndex: number;
   portraitSrc: string | null | undefined;
   ceCardSrc: string | null | undefined;
   craftEssences: CraftEssence[];
@@ -70,6 +70,7 @@ function rarityFrameClass(rarity: number): string {
  */
 export function SortableSlot({
   slot,
+  slotIndex,
   portraitSrc,
   ceCardSrc,
   craftEssences,
@@ -121,13 +122,6 @@ export function SortableSlot({
   const { servant } = slot;
   const isSupport = slot.type === "support";
   const rarityClass = servant ? rarityFrameClass(servant.rarity) : "";
-  const hasSupportRequirements =
-    supportServantLevel != null ||
-    supportStarMapScore != null ||
-    (supportGrandMode && supportGrandStarMapScore != null) ||
-    supportNpLevel != null ||
-    hasConfiguredLevels(supportSkillLevels) ||
-    hasConfiguredLevels(supportAppendSkillLevels);
 
   return (
     <div
@@ -137,13 +131,13 @@ export function SortableSlot({
       {...attributes}
       {...listeners}
     >
-      <Flex direction="column" className="slot-card">
-        <div className="slot-header" />
+      <Flex direction="column" className={`slot-card${isSupport ? " is-support" : ""}${servant ? " is-filled" : " is-empty"}`}>
         <ContextMenu.Root>
           <ContextMenu.Trigger disabled={!servant}>
+            <div className="formation-portrait-select" onClick={onSelect}>
+              <div className="slot-header"><span className="formation-slot-number">{String(slotIndex + 1).padStart(2,"0")}</span><span className="formation-servant-name" title={servant?.name_cn}>{servant?.name_cn}</span></div>
             <div
               className={`servant-portrait${servant ? " filled" : " empty"}${isSupport ? " support" : ""}${isSupport && supportGrandMode ? " grand-support" : ""}${rarityClass ? ` ${rarityClass}` : ""}`}
-              onClick={onSelect}
             >
               {servant ? (
                 portraitSrc ? (
@@ -154,16 +148,7 @@ export function SortableSlot({
                     draggable={false}
                   />
                 ) : (
-                  <Flex
-                    direction="column"
-                    align="center"
-                    justify="center"
-                    className="servant-portrait-placeholder"
-                  >
-                    <Text size="2" weight="bold" align="center">
-                      {servant.name_cn}
-                    </Text>
-                  </Flex>
+                  <Flex align="center" justify="center" className="servant-portrait-placeholder"><PersonIcon width={32} height={32} /></Flex>
                 )
               ) : isSupport ? (
                 <Flex
@@ -193,7 +178,7 @@ export function SortableSlot({
                 </Flex>
               )}
               {isSupport && (
-                <span className="support-corner-badge">SUPPORT</span>
+                <span className="support-corner-badge">支援</span>
               )}
               {isSupport && (
                 <button
@@ -209,33 +194,32 @@ export function SortableSlot({
                   冠位
                 </button>
               )}
-              {isSupport && hasSupportRequirements && (
-                <SupportRequirementSummary
-                  grandMode={supportGrandMode}
-                  servantLevel={supportServantLevel}
-                  starMapScore={supportStarMapScore}
-                  grandStarMapScore={supportGrandStarMapScore}
-                  npLevel={supportNpLevel}
-                  skillLevels={supportSkillLevels}
-                  appendSkillLevels={supportAppendSkillLevels}
-                  onOpen={onSupportSettingsOpen}
-                />
-              )}
-              {isSupport && !hasSupportRequirements && (
-                <Button
-                  type="button"
-                  size="1"
-                  variant="surface"
-                  color="gray"
-                  className="support-settings-button support-settings-overlay-button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSupportSettingsOpen();
-                  }}
-                >
-                  助战筛选设置
-                </Button>
-              )}
+
+            </div>
+            </div>
+          </ContextMenu.Trigger>
+          <ContextMenu.Content>
+
+            <ContextMenu.Item
+              disabled={!onPortraitSettingsOpen}
+              onSelect={() => onPortraitSettingsOpen?.()}
+            >
+              立绘设置
+            </ContextMenu.Item>
+            <ContextMenu.Separator />
+            <ContextMenu.Item
+              color="red"
+              onSelect={() => onDeleteRequest?.()}
+            >
+              删除
+            </ContextMenu.Item>
+          </ContextMenu.Content>
+        </ContextMenu.Root>
+
+        {(servant || isSupport || slot.craftEssence) && <div className="formation-card-details">
+          {isSupport && (
+              <FormationLevels onOpen={onSupportSettingsOpen} support level={supportServantLevel} np={supportNpLevel} skills={supportSkillLevels} append={supportAppendSkillLevels} starMapScore={supportStarMapScore} grandStarMapScore={supportGrandMode ? supportGrandStarMapScore : null} />
+          )}
               {isSupport && supportGrandMode ? (
                 <GrandCraftEssenceOverlay
                   craftEssenceGroups={supportGrandCraftEssenceGroups}
@@ -264,25 +248,7 @@ export function SortableSlot({
                   onClear={onCeClear}
                 />
               )}
-            </div>
-          </ContextMenu.Trigger>
-          <ContextMenu.Content>
-
-            <ContextMenu.Item
-              disabled={!onPortraitSettingsOpen}
-              onSelect={() => onPortraitSettingsOpen?.()}
-            >
-              立绘设置
-            </ContextMenu.Item>
-            <ContextMenu.Separator />
-            <ContextMenu.Item
-              color="red"
-              onSelect={() => onDeleteRequest?.()}
-            >
-              删除
-            </ContextMenu.Item>
-          </ContextMenu.Content>
-        </ContextMenu.Root>
+        </div>}
       </Flex>
     </div>
   );

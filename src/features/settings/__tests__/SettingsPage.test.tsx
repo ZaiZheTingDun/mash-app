@@ -4,7 +4,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
-import { SettingsDialog, type SettingsSection } from "../SettingsPage";
+import { SettingsPage, type SettingsSection } from "../SettingsPage";
 import type { AssetBundleImportResult, AssetBundleStatus } from "../../../types/assets";
 import type { SelfCheckStatus } from "../../../types/selfCheck";
 import type { Project } from "../../../types/project";
@@ -37,7 +37,7 @@ function SettingsHarness({
 }) {
   const [section, setSection] = useState<SettingsSection>(initialSection);
   return (
-    <SettingsDialog
+    <SettingsPage
       open
       section={section}
       onOpenChange={vi.fn()}
@@ -76,7 +76,7 @@ function resourceAssetStatus(version: number): AssetBundleStatus {
   };
 }
 
-describe("SettingsDialog", () => {
+describe("SettingsPage", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -319,6 +319,20 @@ describe("SettingsDialog", () => {
     });
   });
 
+  it("closes a dropdown with Escape before exiting the page", async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsPage open section="basic" onOpenChange={onOpenChange} onSectionChange={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "关闭设置" })).toHaveFocus();
+    await user.click(await screen.findByRole("combobox", { name: "御主礼装显示性别" }));
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    await user.keyboard("{Escape}");
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it("runs self-check on entry and can run it again", async () => {
     const user = userEvent.setup();
     renderWithTheme(<SettingsHarness />);
@@ -382,7 +396,7 @@ describe("SettingsDialog", () => {
     const user = userEvent.setup();
 
     renderWithTheme(
-      <SettingsDialog
+      <SettingsPage
         open
         section="resources"
         onOpenChange={onOpenChange}
@@ -431,10 +445,10 @@ describe("SettingsDialog", () => {
   it("hides debug settings outside local development", async () => {
     vi.stubEnv("DEV", false);
     vi.resetModules();
-    const { SettingsDialog: ProductionSettingsDialog } = await import("../SettingsPage");
+    const { SettingsPage: ProductionSettingsPage } = await import("../SettingsPage");
 
     renderWithTheme(
-      <ProductionSettingsDialog
+      <ProductionSettingsPage
         open
         section="debug"
         onOpenChange={vi.fn()}

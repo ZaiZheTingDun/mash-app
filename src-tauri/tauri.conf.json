@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "Mash",
-        "width": 1018,
-        "height": 646,
+        "width": 1100,
+        "height": 702,
         "resizable": true,
         "fullscreen": false
       }

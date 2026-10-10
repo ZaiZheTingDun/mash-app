@@ -1,4 +1,6 @@
 import { Text } from "@radix-ui/themes";
+import { DragHandleDots2Icon } from "@radix-ui/react-icons";
+import { SectionHeading } from "../../components/common/SectionHeading";
 import {
   DndContext,
   KeyboardSensor,
@@ -105,9 +107,11 @@ function normalizedMembers(
 function SortableMember({
   item,
   face,
+  rank,
 }: {
   item: ConfiguredMember;
   face: string | null | undefined;
+  rank: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.key });
@@ -122,6 +126,8 @@ function SortableMember({
       {...attributes}
       {...listeners}
     >
+      <DragHandleDots2Icon className="command-priority-grip" />
+      <span className="command-priority-rank">{String(rank).padStart(2, "0")}</span>
       <BattleActorIcon
         kind="servant"
         src={face}
@@ -129,11 +135,12 @@ function SortableMember({
         isSupport={item.member.isSupport}
         size="button"
       />
+      <span className="command-priority-name">{label}</span>
     </button>
   );
 }
 
-function SortableChain({ chain }: { chain: CriticalChainType }) {
+function SortableChain({ chain, rank }: { chain: CriticalChainType; rank: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `chain:${chain}` });
   return (
@@ -146,6 +153,8 @@ function SortableChain({ chain }: { chain: CriticalChainType }) {
       {...attributes}
       {...listeners}
     >
+      <DragHandleDots2Icon className="command-priority-grip" />
+      <span className="command-priority-rank">{String(rank).padStart(2, "0")}</span>
       {CHAIN_LABELS[chain]}
     </button>
   );
@@ -195,6 +204,7 @@ export function CriticalStrategyEditor({
 
   return (
     <div className="critical-strategy-editor">
+      <SectionHeading rail english="CRITICAL">暴击优先级</SectionHeading>
       <div className="critical-priority-row">
         <Text size="2" weight="medium" className="critical-priority-label">
           从者优先级
@@ -202,10 +212,11 @@ export function CriticalStrategyEditor({
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMemberDrag}>
           <SortableContext items={members.map((item) => item.key)} strategy={horizontalListSortingStrategy}>
             <div className="critical-priority-items">
-              {members.map((item) => (
+              {members.map((item, index) => (
                 <SortableMember
                   key={item.key}
                   item={item}
+                  rank={index + 1}
                   face={item.member.servant ? faces[item.member.servant.variantKey] : null}
                 />
               ))}
@@ -220,11 +231,12 @@ export function CriticalStrategyEditor({
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleChainDrag}>
           <SortableContext items={chains.map((chain) => `chain:${chain}`)} strategy={horizontalListSortingStrategy}>
             <div className="critical-priority-items">
-              {chains.map((chain) => <SortableChain key={chain} chain={chain} />)}
+              {chains.map((chain, index) => <SortableChain key={chain} chain={chain} rank={index + 1} />)}
             </div>
           </SortableContext>
         </DndContext>
       </div>
+      <p className="command-priority-hint">从左到右为优先顺序，可拖动调整。</p>
     </div>
   );
 }

@@ -34,6 +34,7 @@ interface ProjectBarProps {
   grandClassDefinitions?: GrandClassDefinition[];
   activeProjectId: string | null;
   disabled?: boolean;
+  headerStyle?: boolean;
   onProjectSelect: (id: string) => void;
   onCreateProject: (
     name: string,
@@ -71,6 +72,7 @@ export function ProjectBar({
   grandClassDefinitions = [],
   activeProjectId,
   disabled = false,
+  headerStyle = false,
   onProjectSelect,
   onCreateProject,
   onRenameProject,
@@ -204,14 +206,17 @@ export function ProjectBar({
         : "新建";
 
   return (
-    <Box className="project-bar">
-      {onOpenHome && (
+    <Box className={`project-bar${headerStyle ? " is-page-context" : ""}`}>
+      {onOpenHome && !headerStyle && (
         <Button type="button" variant="surface" color="gray" className="project-home-button" disabled={disabled} onClick={onOpenHome}>
           主页
         </Button>
       )}
       <Flex align="center" justify="center" gap="2" className="project-bar-controls">
+        <div className="project-context-selector">
+        {headerStyle && <span className="project-context-label">PARTY</span>}
         <ProjectSelector
+          plainLabel={headerStyle}
           projects={projects}
           projectCatalog={projectCatalog}
           activeProjectId={activeProjectId}
@@ -227,6 +232,7 @@ export function ProjectBar({
           onReorderProjectGroups={onReorderProjectGroups}
           onReorderProjectsInGroup={onReorderProjectsInGroup}
         />
+        </div>
 
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>

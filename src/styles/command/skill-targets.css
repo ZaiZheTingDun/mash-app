@@ -1,0 +1,70 @@
+.command-target-options {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(var(--target-option-count), minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.command-target-options .command-actor-choice {
+  width: 100%;
+}
+
+.command-target-options .command-actor-choice:hover,
+.command-target-options .command-actor-choice.selected {
+  color: var(--blue-11);
+  border-color: var(--blue-9);
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.command-target-options .command-actor-choice.selected::after {
+  content: none;
+}
+
+.command-target-symbol {
+  display: grid;
+  place-items: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 33px;
+  color: var(--gray-10);
+}
+
+.command-target-symbol .command-diamond {
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  background: transparent;
+}
+
+.command-no-target-choice:hover .command-target-symbol,
+.command-no-target-choice.selected .command-target-symbol {
+  color: var(--blue-9);
+}
+
+.command-no-target-choice.selected .command-diamond {
+  background: currentColor;
+}
+
+.command-target-options .command-actor-choice:disabled {
+  color: var(--gray-10);
+  border-color: var(--blue-6);
+  cursor: default;
+}
+
+.command-target-skill-icon {
+  width: 33px;
+  height: 33px;
+  flex: 0 0 33px;
+  object-fit: contain;
+  border-radius: 3px;
+}
+
+.command-target-options + .battle-targeting-mode-hint {
+  grid-column: 1 / -1;
+  white-space: normal;
+}

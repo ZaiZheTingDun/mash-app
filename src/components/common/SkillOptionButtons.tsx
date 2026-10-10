@@ -7,10 +7,11 @@ interface SkillOptionButtonsProps {
   servant?: Servant | null;
   skillIcons?: Record<string, SkillIcons>;
   entries?: SkillIcons | null;
+  showLabel?: boolean;
   onSelect: (skill: string) => void;
 }
 
-export function SkillOptionButtons({ servant, skillIcons = {}, entries, onSelect }: SkillOptionButtonsProps) {
+export function SkillOptionButtons({ servant, skillIcons = {}, entries, showLabel = false, onSelect }: SkillOptionButtonsProps) {
   return SKILLS.map((skill, skillIndex) => {
     const entry = entries?.[skillIndex] ?? (servant ? (skillIcons[servant.variantKey]?.[skillIndex] ?? null) : null);
     const iconSrc = entry?.src ?? null;
@@ -19,7 +20,7 @@ export function SkillOptionButtons({ servant, skillIcons = {}, entries, onSelect
       <button
         type="button"
         key={skill}
-        className="battle-option-btn skill-icon"
+        className={`battle-option-btn skill-icon${showLabel ? " command-skill-option" : ""}`}
         aria-label={label}
         title={label}
         onClick={() => onSelect(skill)}
@@ -31,6 +32,7 @@ export function SkillOptionButtons({ servant, skillIcons = {}, entries, onSelect
           radius="small"
           size="3"
         />
+        {showLabel && <span className="command-skill-name">{label}</span>}
       </button>
     );
   });

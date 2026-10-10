@@ -1,9 +1,11 @@
-import { useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Dialog, Flex, Button } from "@radix-ui/themes";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
   Cross2Icon,
+  DragHandleDots2Icon,
+  PlusIcon,
 } from "@radix-ui/react-icons";
 import {
   DndContext,
@@ -22,17 +24,16 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { BattleActorIcon } from "../../components/common/BattleActorIcon";
 import { servantLabel } from "../../components/common/battleActorLabels";
-import { FaceChip } from "./AdvancedFaceChip";
-import { OptionCardRadioGroup } from "../../components/common/OptionCardRadioGroup";
+import { ServantChoice } from "../../components/common/ServantChoice";
+import { CommandDraftHeading } from "../../components/common/CommandDraftHeading";
+import { AttackCardOptionButtons } from "../../components/common/AttackCardOptionButtons";
 import { SectionHeading } from "../../components/common/SectionHeading";
 import {
   COMMAND_BG_BY_RULE_COLOR,
   DEFAULT_GRAND_CHAIN_PRIORITY,
-  RULE_COLOR_DIALOG_DESCRIPTIONS,
   RULE_COLOR_DIALOG_LABELS,
   RULE_COLOR_LABELS,
   RULE_COLOR_OPTIONS,
-  RULE_KIND_DIALOG_DESCRIPTIONS,
   RULE_KIND_DIALOG_LABELS,
   RULE_KIND_LABELS,
   RULE_KIND_OPTIONS,
@@ -51,7 +52,6 @@ import type {
   GrandCardRuleSlotConfig,
   GrandCardStrategy,
   GrandRuleColor,
-  GrandRuleKind,
 } from "../../types/project";
 import type { Servant } from "../../types/servant";
 
@@ -71,12 +71,14 @@ function GrandRuleCardButton({
   slotIndex,
   partyMembers,
   faces,
+  isEditing,
   onClick,
 }: {
   slot: GrandCardRuleSlotConfig;
   slotIndex: number;
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
+  isEditing: boolean;
   onClick: () => void;
 }) {
   const partyLineup = partyMembersToServants(partyMembers);
@@ -99,13 +101,14 @@ function GrandRuleCardButton({
   return (
     <button
       type="button"
-      className={`grand-rule-card${ruleCardColorClass(color)}`}
+      className={`grand-rule-card${ruleCardColorClass(color)}${isEditing ? " is-editing" : ""}`}
       aria-label={ruleCardLabel({ ...slot, color }, servant, slotIndex)}
+      aria-expanded={isEditing}
       style={style}
       onClick={onClick}
     >
       {usesGrandServant ? (
-        <span className="grand-rule-card-grand">冠</span>
+        <span className="grand-rule-card-grand" aria-hidden="true" />
       ) : servant ? (
         <BattleActorIcon
           kind="servant"
@@ -119,165 +122,47 @@ function GrandRuleCardButton({
         <span className="grand-rule-card-empty">任</span>
       )}
       <span className="grand-rule-card-meta">
-        <span>{RULE_KIND_LABELS[slot.kind]}</span>
+        <span className="command-rule-servant-name">{usesGrandServant ? "冠位从者" : servant?.name_cn ?? "任意从者"}</span>
+        <span>{RULE_KIND_LABELS[slot.kind]}{slot.kind !== "np" && ` · ${RULE_COLOR_LABELS[color]}`}</span>
       </span>
     </button>
   );
 }
 
-function GrandRuleEditorServantPicker({
-  editingCard,
-  partyMembers,
-  faces,
-  allowGrandServant,
-  onSelect,
-}: {
+function GrandRuleServantChoices({ editingCard, partyMembers, faces, allowGrandServant, selectedOnly = false, onSelect }: {
   editingCard: GrandCardRuleSlotConfig;
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   allowGrandServant: boolean;
+  selectedOnly?: boolean;
   onSelect: (patch: Partial<GrandCardRuleSlotConfig>) => void;
 }) {
   const grandSelected = editingCard.grandServant === true;
-  const anyServantSelected =
-    !grandSelected &&
-    editingCard.memberId == null &&
-    editingCard.slotIndex == null &&
-    editingCard.servantId == null;
-  return (
-    <div className="grand-rule-editor-section">
-      <SectionHeading className="grand-rule-section-heading">从者</SectionHeading>
-      <div className="grand-rule-editor-servants">
-        <button
-          type="button"
-          className={`grand-rule-editor-grand-option${anyServantSelected ? " selected" : ""}`}
-          aria-pressed={anyServantSelected}
-          onClick={() =>
-            onSelect({
-              grandServant: false,
-              memberId: null,
-              slotIndex: null,
-              servantId: null,
-              isSupport: false,
-            })
-          }
-        >
-          任意从者
-        </button>
-        {allowGrandServant && (
-          <button
-            type="button"
-            className={`grand-rule-editor-grand-option${grandSelected ? " selected" : ""}`}
-            aria-pressed={grandSelected}
-            onClick={() =>
-              onSelect({
-                grandServant: !grandSelected,
-                memberId: null,
-                slotIndex: null,
-                servantId: null,
-                isSupport: false,
-              })
-            }
-          >
-            冠位从者
-          </button>
-        )}
-        {partyMembers.map((member, index) => {
-          const servant = member.servant;
-          const selected =
-            !grandSelected &&
-            servant != null &&
-            (editingCard.memberId != null
-              ? editingCard.memberId === member.memberId
-              : editingCard.slotIndex === index) &&
-            editingCard.servantId === servant.id &&
-            editingCard.isSupport === member.isSupport;
-          return (
-            <div className="grand-rule-editor-servant-cell" key={`${servant?.variantKey ?? "empty"}-${index}`}>
-              {index === 3 && <span className="battle-choice-separator" aria-hidden />}
-              <FaceChip
-                servant={servant}
-                index={index}
-                src={servant ? faces[servant.variantKey] : null}
-                selected={selected}
-                disabled={!servant}
-                isSupport={member.isSupport}
-                onClick={() =>
-                  onSelect({
-                    grandServant: false,
-                    memberId: selected ? null : member.memberId ?? null,
-                    slotIndex: selected ? null : index,
-                    servantId: selected ? null : servant?.id ?? null,
-                    isSupport: selected ? false : member.isSupport,
-                  })
-                }
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function GrandRuleEditorKindPicker({
-  value,
-  onChange,
-}: {
-  value: GrandRuleKind;
-  onChange: (kind: GrandRuleKind) => void;
-}) {
-  return (
-    <div className="grand-rule-editor-section">
-      <SectionHeading className="grand-rule-section-heading">指令卡类型</SectionHeading>
-      <OptionCardRadioGroup
-        value={value}
-        className="grand-rule-kind-cards"
-        onValueChange={(kind) => onChange(kind as GrandRuleKind)}
-        options={RULE_KIND_OPTIONS.map((kind) => ({
-          value: kind,
-          title: RULE_KIND_DIALOG_LABELS[kind],
-          description: RULE_KIND_DIALOG_DESCRIPTIONS[kind],
-          className: "grand-rule-kind-card",
-        }))}
-      />
-    </div>
-  );
-}
-
-function GrandRuleEditorColorPicker({
-  value,
-  onChange,
-}: {
-  value: GrandRuleColor;
-  onChange: (color: GrandRuleColor) => void;
-}) {
-  return (
-    <div className="grand-rule-editor-section">
-      <SectionHeading className="grand-rule-section-heading">指令卡颜色</SectionHeading>
-      <OptionCardRadioGroup
-        value={value}
-        className="grand-rule-color-cards"
-        onValueChange={(color) => onChange(color as GrandRuleColor)}
-        options={RULE_COLOR_OPTIONS.map((color) => ({
-          value: color,
-          title: RULE_COLOR_DIALOG_LABELS[color],
-          ariaLabel: RULE_COLOR_LABELS[color],
-          description: RULE_COLOR_DIALOG_DESCRIPTIONS[color],
-          visual:
-            color === "any" ? (
-              <span className="grand-rule-color-wheel" />
-            ) : (
-              <span
-                className={`grand-rule-color-swatch ${color}`}
-                style={{ backgroundImage: `url(${COMMAND_BG_BY_RULE_COLOR[color]})` }}
-              />
-            ),
-          className: `grand-rule-color-card ${color}`,
-        }))}
-      />
-    </div>
-  );
+  const anySelected = !grandSelected && editingCard.memberId == null && editingCard.slotIndex == null && editingCard.servantId == null;
+  const specialChoice = (grand: boolean) => {
+    const selected = grand ? grandSelected : anySelected;
+    if (selectedOnly && !selected) return null;
+    const label = grand ? "冠位从者" : "任意从者";
+    return <button type="button" className={`command-actor-choice command-rule-special-choice${grand ? " command-rule-grand-choice" : ""}${selectedOnly ? " selected" : ""}`}
+      aria-label={label} aria-pressed={selected} onClick={() => onSelect({ grandServant: grand, memberId: null, slotIndex: null, servantId: null, isSupport: false })}>
+      <span className="command-empty-face" aria-hidden="true"><i className="command-diamond" /></span>
+      <span className="command-actor-copy"><b>{label}</b></span>
+    </button>;
+  };
+  return <>
+    {Array.from({ length: 6 }, (_, index) => partyMembers[index] ?? { servant: null, isSupport: false }).map((member, index) => {
+      const servant = member.servant;
+      const selected = !grandSelected && servant != null &&
+        (editingCard.memberId != null ? editingCard.memberId === member.memberId : editingCard.slotIndex === index) &&
+        editingCard.servantId === servant.id && editingCard.isSupport === member.isSupport;
+      if (selectedOnly && !selected) return null;
+      return <ServantChoice key={index} servant={servant} index={index} src={servant ? faces[servant.variantKey] : null}
+        isSupport={member.isSupport} selected={selectedOnly && selected}
+        onClick={() => onSelect({ grandServant: false, memberId: member.memberId ?? null, slotIndex: index, servantId: servant?.id ?? null, isSupport: member.isSupport })} />;
+    })}
+    {allowGrandServant && specialChoice(true)}
+    {specialChoice(false)}
+  </>;
 }
 
 function SortableGrandRuleRow({
@@ -286,6 +171,7 @@ function SortableGrandRuleRow({
   partyMembers,
   faces,
   onDelete,
+  editingSlotIndex,
   onEditSlot,
 }: {
   rule: GrandCardRuleConfig;
@@ -293,6 +179,7 @@ function SortableGrandRuleRow({
   partyMembers: PartyMember[];
   faces: Record<string, string | null>;
   onDelete: () => void;
+  editingSlotIndex: number | null;
   onEditSlot: (slotIndex: number) => void;
 }) {
   const {
@@ -316,6 +203,7 @@ function SortableGrandRuleRow({
       {...attributes}
       {...listeners}
     >
+      <span className="command-rule-label"><DragHandleDots2Icon /><small>{String(index + 1).padStart(2, "0")}</small><span>{rule.name || `规则 ${index + 1}`}</span></span>
       <button
         type="button"
         className="advanced-inline-delete"
@@ -336,6 +224,7 @@ function SortableGrandRuleRow({
             slotIndex={slotIndex}
             partyMembers={partyMembers}
             faces={faces}
+            isEditing={editingSlotIndex === slotIndex}
             onClick={() => onEditSlot(slotIndex)}
           />
         ))}
@@ -361,7 +250,11 @@ export function GrandCardStrategyPanel({
   onChange?: (strategy: GrandCardStrategy) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [cardDraft, setCardDraft] = useState<GrandCardRuleSlotConfig | null>(null);
+  const inlineRef = useRef<HTMLElement>(null);
+  const [editorStep, setEditorStep] = useState<"source" | "kind" | "color">("source");
   const [editingSlot, setEditingSlot] = useState<{ ruleId: string; slotIndex: number } | null>(null);
+  useEffect(() => { if (editingSlot) inlineRef.current?.scrollIntoView({block:"nearest"}); }, [editingSlot]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const normalized = normalizeGrandCardStrategy(strategy);
   const customRules = normalized.customRules ?? [];
@@ -369,10 +262,10 @@ export function GrandCardStrategyPanel({
   const editingRule = editingSlot
     ? customRules.find((rule) => rule.id === editingSlot.ruleId) ?? null
     : null;
-  const editingCard =
+  const editingCard = cardDraft ?? (
     editingRule && editingSlot
       ? editingRule.slots[editingSlot.slotIndex] ?? defaultRuleSlot()
-      : null;
+      : null);
   const editingServant =
     editingCard?.slotIndex == null
       ? null
@@ -392,9 +285,7 @@ export function GrandCardStrategyPanel({
   };
 
   const addRule = () => {
-    const rule = createDefaultCustomRule();
-    persist({ customRules: [...customRules, rule] });
-    setEditingSlot({ ruleId: rule.id, slotIndex: 0 });
+    updateRules([...customRules, createDefaultCustomRule()]);
   };
 
   const updateRule = (ruleId: string, updater: (rule: GrandCardRuleConfig) => GrandCardRuleConfig) => {
@@ -406,7 +297,7 @@ export function GrandCardStrategyPanel({
       customRules: [],
       chainPriority: [...DEFAULT_GRAND_CHAIN_PRIORITY],
     });
-    setEditingSlot(null);
+    setEditingSlot(null); setCardDraft(null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -418,7 +309,7 @@ export function GrandCardStrategyPanel({
     updateRules(arrayMove(customRules, oldIndex, newIndex));
   };
 
-  const updateEditingSlot = (patch: Partial<GrandCardRuleSlotConfig>) => {
+  const commitEditingSlot = (patch: Partial<GrandCardRuleSlotConfig>) => {
     if (!editingSlot) return;
     updateRule(editingSlot.ruleId, (rule) => ({
       ...rule,
@@ -447,32 +338,68 @@ export function GrandCardStrategyPanel({
     }));
   };
 
+  const closeEditor = () => { setEditingSlot(null); setCardDraft(null); };
+  const editSlot = (rule: GrandCardRuleConfig, slotIndex: number) => {
+    setCardDraft({ ...rule.slots[slotIndex] });
+    setEditorStep("source");
+    setEditingSlot({ ruleId: rule.id, slotIndex });
+  };
+  const updateEditingSlot = (patch: Partial<GrandCardRuleSlotConfig>) => setCardDraft(previous => previous ? { ...previous, ...patch } : previous);
+  const saveSlot = (patch: Partial<GrandCardRuleSlotConfig>) => {
+    if (editingCard) commitEditingSlot({ ...editingCard, ...patch });
+    closeEditor();
+  };
+  const editorFields = editingCard && <div className="command-inline-draft command-rule-draft">
+    <CommandDraftHeading title="设置策略" hint={editorStep === "source" ? "选择从者" : editorStep === "kind" ? "选择指令卡类型" : "选择指令卡颜色"}
+      onCancel={closeEditor} reselectLabel={editorStep === "color" ? "重选类型" : "重选"}
+      onReselect={editorStep !== "source" ? () => setEditorStep(editorStep === "color" ? "kind" : "source") : undefined} />
+    <div className={`battle-choice-row${editorStep === "source" ? " command-rule-sources" : ""}`}>
+      <GrandRuleServantChoices editingCard={editingCard} partyMembers={partyMembers} faces={faces} allowGrandServant={allowGrandServant}
+        selectedOnly={editorStep !== "source"} onSelect={patch => {
+          if (editorStep !== "source") { setEditorStep("source"); return; }
+          updateEditingSlot(patch);
+          setEditorStep("kind");
+        }} />
+      {editorStep === "kind" && <AttackCardOptionButtons label="指令卡类型"
+        options={RULE_KIND_OPTIONS.map(kind => ({ value: kind, label: RULE_KIND_DIALOG_LABELS[kind], iconIndex: kind === "any" ? null : kind === "np" ? 0 : 4 }))}
+        onSelect={kind => {
+          if (kind === "np") saveSlot({ kind });
+          else { updateEditingSlot({ kind }); setEditorStep("color"); }
+        }} />}
+      {editorStep === "color" && <AttackCardOptionButtons label="指令卡颜色" className="command-rule-colors"
+          options={RULE_COLOR_OPTIONS.map(color => ({ value: color, label: RULE_COLOR_DIALOG_LABELS[color], iconIndex: ({ any: 4, buster: 1, arts: 2, quick: 3 })[color] }))}
+          onSelect={color => saveSlot({ color })} />}
+    </div>
+  </div>;
+  const inlineEditor = editingCard && <section ref={inlineRef} className="command-rule-inline-editor" aria-label="设置策略">{editorFields}</section>;
+
   const strategyBody = (
     <div className="grand-strategy-body">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={customRules.map((rule) => rule.id)} strategy={verticalListSortingStrategy}>
           <div className="grand-rule-list">
             {customRules.map((rule, index) => (
-              <SortableGrandRuleRow
-                key={rule.id}
+              <Fragment key={rule.id}><SortableGrandRuleRow
                 rule={rule}
                 index={index}
                 partyMembers={partyMembers}
                 faces={faces}
-                onDelete={() => updateRules(customRules.filter((item) => item.id !== rule.id))}
-                onEditSlot={(slotIndex) => setEditingSlot({ ruleId: rule.id, slotIndex })}
-              />
+                editingSlotIndex={editingSlot?.ruleId === rule.id ? editingSlot.slotIndex : null}
+                onDelete={() => { if (editingSlot?.ruleId === rule.id) closeEditor(); updateRules(customRules.filter((item) => item.id !== rule.id)); }}
+                onEditSlot={slotIndex => editSlot(rule, slotIndex)}
+              />{embedded && editingSlot?.ruleId === rule.id && inlineEditor}</Fragment>
             ))}
           </div>
         </SortableContext>
       </DndContext>
-      <Flex gap="3" wrap="wrap">
-        <Button type="button" variant="soft" onClick={addRule}>
+      <Flex gap="3" wrap="wrap" className="command-rule-actions">
+        <Button type="button" variant="soft" disabled={editingSlot != null} onClick={addRule}>
+          {embedded && <PlusIcon />}
           添加规则
         </Button>
-        <Button type="button" variant="soft" color="gray" onClick={resetCustomRules}>
+        {!embedded && <Button type="button" variant="soft" color="gray" className="command-rule-reset" onClick={resetCustomRules}>
           恢复默认
-        </Button>
+        </Button>}
       </Flex>
     </div>
   );
@@ -481,37 +408,12 @@ export function GrandCardStrategyPanel({
     <Dialog.Root
       open={editingCard != null}
       onOpenChange={(dialogOpen) => {
-        if (!dialogOpen) setEditingSlot(null);
+        if (!dialogOpen) closeEditor();
       }}
     >
       <Dialog.Content maxWidth="640px" className="grand-rule-editor-dialog">
-        <Dialog.Title>设置策略</Dialog.Title>
-        {editingCard && (
-          <div className="grand-rule-editor">
-            <GrandRuleEditorServantPicker
-              editingCard={editingCard}
-              partyMembers={partyMembers}
-              faces={faces}
-              allowGrandServant={allowGrandServant}
-              onSelect={(patch) => updateEditingSlot(patch)}
-            />
-            <GrandRuleEditorKindPicker
-              value={editingCard.kind}
-              onChange={(kind) => updateEditingSlot({ kind })}
-            />
-            {editingCard.kind !== "np" && (
-              <GrandRuleEditorColorPicker
-                value={editingCard.color}
-                onChange={(color) => updateEditingSlot({ color })}
-              />
-            )}
-          </div>
-        )}
-        <Flex justify="end" mt="4">
-          <Dialog.Close>
-            <Button type="button">完成</Button>
-          </Dialog.Close>
-        </Flex>
+        <Dialog.Title className="sr-only">设置策略</Dialog.Title>
+        {editorFields}
       </Dialog.Content>
     </Dialog.Root>
   );
@@ -519,8 +421,8 @@ export function GrandCardStrategyPanel({
   if (embedded) {
     return (
       <div className="grand-card-strategy-section embedded">
+        <SectionHeading rail english="CARD STRATEGY" className="command-heading-with-action" accessory={<Button type="button" variant="ghost" color="gray" className="command-rule-reset command-heading-action" onClick={resetCustomRules}>恢复默认</Button>}>指令卡策略</SectionHeading>
         {strategyBody}
-        {editorDialog}
       </div>
     );
   }

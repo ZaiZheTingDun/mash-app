@@ -39,6 +39,33 @@ function renderHome(overrides: Partial<React.ComponentProps<typeof HomePage>> = 
 }
 
 describe("HomePage", () => {
+  it("routes each task card to its existing action", async () => {
+    const onOpenTeam = vi.fn();
+    const onOpenSummon = vi.fn();
+    const onOpenCraftEssenceEnhancement = vi.fn();
+    const onOpenRankUpQuest = vi.fn();
+    renderHome({ onOpenTeam, onOpenSummon, onOpenCraftEssenceEnhancement, onOpenRankUpQuest });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "召唤" }));
+    expect(onOpenSummon).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "强化" }));
+    expect(onOpenCraftEssenceEnhancement).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "战斗" }));
+    await user.click(screen.getByRole("button", { name: "编队/开始" }));
+    expect(onOpenTeam).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "强化任务" }));
+    expect(onOpenRankUpQuest).toHaveBeenCalledOnce();
+  });
+
+  it("keeps disabled feature entries hidden in both menus", async () => {
+    renderHome({ showSummon: false, showEnhancement: false, showRankUpQuest: false });
+    expect(screen.queryByRole("button", { name: "召唤" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "强化" })).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "战斗" }));
+    expect(screen.getByRole("button", { name: "编队/开始" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "强化任务" })).not.toBeInTheDocument();
+  });
+
   it("returns from the battle menu with an icon-only heading button", async () => {
     renderHome();
     const user = userEvent.setup();
@@ -83,6 +110,8 @@ describe("HomePage", () => {
       } as DOMRect);
       fireEvent.load(figure);
       expect(figure).toHaveStyle({ clipPath: "inset(0% 50% 50% 0%)" });
+      // 透明留白只影响右键命中区域，不能额外移动 Figma 定位的图片。
+      expect(figure.style.transform).toBe("");
 
       fireEvent.contextMenu(figure, { clientX: 15, clientY: 5 });
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

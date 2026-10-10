@@ -73,4 +73,21 @@ describe("SkillOptionButtons", () => {
     await user.click(screen.getByRole("button", { name: "技能 2" }));
     expect(onSelect).toHaveBeenCalledWith("skill_2");
   });
+
+  it("shows resource skill names and fallback labels in the command layout", async () => {
+    const onSelect = vi.fn();
+    const entries: SkillIcons = [
+      { src: null, name: "这是一个需要在有限宽度内显示的很长技能名称 A+++" },
+      { src: null, name: "技能乙" },
+      { src: null, name: "" },
+    ];
+    renderWithTheme(<SkillOptionButtons entries={entries} showLabel onSelect={onSelect} />);
+    for (const label of [entries[0]!.name, "技能乙", "技能 3"]) {
+      const button = screen.getByRole("button", { name: label });
+      expect(button.querySelector(".command-skill-name")).toHaveTextContent(label!);
+      expect(button).toHaveAttribute("title", label);
+    }
+    await userEvent.setup().click(screen.getByRole("button", { name: "技能乙" }));
+    expect(onSelect).toHaveBeenCalledWith("skill_2");
+  });
 });

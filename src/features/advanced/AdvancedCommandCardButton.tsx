@@ -37,6 +37,7 @@ export function AdvancedCommandCardButton({
     <button
       type="button"
       className={`advanced-command-card${grayscale ? " unset" : ""}`}
+      data-suit={card.suit}
       style={style}
       aria-label={commandCardAria(card)}
       onClick={onClick}
@@ -51,6 +52,10 @@ export function AdvancedCommandCardButton({
           className="advanced-command-card-face"
         />
       )}
+      <span className="command-startup-card-copy">
+        <span>{servant?.name_cn ?? "任意从者"}</span>
+        <small>{{ any: "任意", buster: "红卡", arts: "蓝卡", quick: "绿卡" }[card.suit]}{card.minCritChance != null ? ` · 暴击 ≥ ${card.minCritChance}%` : ""}</small>
+      </span>
     </button>
   );
 }

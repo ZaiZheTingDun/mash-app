@@ -116,7 +116,7 @@ describe("createInitialProjectSlots", () => {
 });
 
 describe("ContentGrid", () => {
-  it("renders six CE picker plates, all showing the empty placeholder", () => {
+  it("keeps empty owned slots as one servant picker and exposes the support CE picker", () => {
     renderWithTheme(
       <ContentGrid
         servants={SERVANTS}
@@ -128,17 +128,45 @@ describe("ContentGrid", () => {
       />
     );
 
-    // Six empty CE plates, one per slot. The empty plate carries
-    // `aria-label="选择礼装"` on its outer button (the visible glyph
-    // is just a `+` icon, no text).
+    // Empty owned slots use a single picker; support filters retain a CE picker.
     const placeholders = screen.getAllByLabelText("选择礼装");
-    expect(placeholders).toHaveLength(6);
+    expect(placeholders).toHaveLength(1);
 
     // The 5 party servant slots show "选择从者"; the support slot shows
     // its dedicated "助战" affordance instead, so we expect 5 picks of
     // the party label.
     const servantPlaceholders = screen.getAllByText("选择从者");
     expect(servantPlaceholders).toHaveLength(5);
+  });
+
+  it("shows six numbered slots and renders filter requirements only for support", () => {
+    const slots = buildSlots();
+    slots[0] = { ...slots[0], servant: MASH, craftEssence: CES[0] };
+    const { container } = renderWithTheme(
+      <ContentGrid
+        servants={SERVANTS}
+        craftEssences={CES}
+        slots={slots}
+        onSlotsChange={vi.fn()}
+        activeProject={{ ...PROJECT, supportSkillLevelMins: [10, 8, null], supportAppendSkillLevelMins: [null, 5, null, null, 10] }}
+        onUpdateActiveProject={vi.fn()}
+      />
+    );
+    expect(screen.getByText("前排 · FRONTLINE")).toBeInTheDocument();
+    expect(screen.getByText("后排 · BACKLINE")).toBeInTheDocument();
+    expect(Array.from(container.querySelectorAll(".formation-slot-number"), item => item.textContent)).toEqual(["01", "02", "03", "04", "05", "06"]);
+    const owned = screen.getByText("玛修").closest(".slot-card") as HTMLElement;
+    expect(owned.querySelector(".formation-levels")).toBeNull();
+    expect(screen.queryByLabelText("从者等级未记录")).not.toBeInTheDocument();
+    expect(owned.querySelector(".servant-portrait .ce-overlay")).toBeNull();
+    expect(owned.querySelector(".formation-card-details .ce-overlay")).not.toBeNull();
+    expect(screen.getByLabelText("持有技能 1 至少 10 级")).toBeInTheDocument();
+    expect(screen.getByLabelText("追加技能 5 至少 10 级")).toBeInTheDocument();
+    const support = screen.getByLabelText("编辑助战筛选设置");
+    expect(support.querySelectorAll(".formation-levels-skills .skill")).toHaveLength(3);
+    expect(support.querySelectorAll(".formation-levels-append .append")).toHaveLength(5);
+    expect(screen.getAllByLabelText("编辑助战筛选设置")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "助战筛选设置" })).not.toBeInTheDocument();
   });
 
   it("opens the CE picker dialog when an empty CE plate is clicked", async () => {
@@ -186,7 +214,7 @@ describe("ContentGrid", () => {
     // Filled plate is labelled with the CE name (not "选择礼装").
     expect(screen.getByLabelText("礼装：Kaleidoscope")).toBeInTheDocument();
     // Five remaining CE slots still show the empty placeholder.
-    expect(screen.getAllByLabelText("选择礼装")).toHaveLength(5);
+    expect(screen.getAllByLabelText("选择礼装")).toHaveLength(1);
     // Filled plates expose a clear button (Cross2Icon
     // `aria-label="清除礼装"`).
     expect(screen.getByLabelText("清除礼装")).toBeInTheDocument();
@@ -629,7 +657,7 @@ describe("ContentGrid", () => {
 
   // --- Support badge -------------------------------------------------
 
-  it("shows a SUPPORT corner badge on an empty support slot", () => {
+  it("shows a support settings badge on an empty support slot", () => {
     renderWithTheme(
       <ContentGrid
         servants={SERVANTS}
@@ -641,12 +669,12 @@ describe("ContentGrid", () => {
       />
     );
 
-    // The corner badge is text-only, fixed copy "SUPPORT".
-    const badges = screen.getAllByText("SUPPORT");
+    // The support marker also opens the filter settings.
+    const badges = screen.getAllByText("支援");
     expect(badges).toHaveLength(1);
   });
 
-  it("keeps the SUPPORT badge when the support slot has a pinned servant", () => {
+  it("keeps the support settings badge when the support slot has a pinned servant", () => {
     const projectWithSupport: Project = {
       ...PROJECT,
       supportServantId: MASH.id,
@@ -663,7 +691,7 @@ describe("ContentGrid", () => {
       />
     );
 
-    expect(screen.getAllByText("SUPPORT")).toHaveLength(1);
+    expect(screen.getAllByText("支援")).toHaveLength(1);
   });
 
   it("opens support skill settings and persists confirmed requirements", async () => {
@@ -681,9 +709,10 @@ describe("ContentGrid", () => {
       />
     );
 
+    expect(document.querySelector(".support-requirement-summary")).toBeNull();
     await user.click(screen.getByRole("button", { name: "助战筛选设置" }));
     expect(await screen.findByRole("dialog")).toHaveTextContent("助战筛选设置");
-    await user.click(screen.getByRole("button", { name: "从者等级 120" }));
+    await user.type(screen.getByRole("spinbutton", { name: "从者等级" }), "120");
     expect(screen.getByRole("spinbutton", { name: "从者等级" })).toHaveValue(120);
     expect(screen.getByRole("spinbutton", { name: "星图分值" })).toBeInTheDocument();
     expect(screen.queryByRole("spinbutton", { name: "冠位星图分值" })).not.toBeInTheDocument();
@@ -695,7 +724,7 @@ describe("ContentGrid", () => {
     await user.click(screen.getByRole("button", { name: "持有技能 1" }));
     await user.click(await screen.findByRole("radio", { name: "10" }));
     await user.click(screen.getByRole("button", { name: "确认" }));
-    await user.click(screen.getByRole("button", { name: "确认" }));
+    await user.click(screen.getByRole("button", { name: "应用并关闭" }));
 
     expect(onUpdateActiveProject).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -726,7 +755,7 @@ describe("ContentGrid", () => {
     await user.click(screen.getByRole("button", { name: "助战筛选设置" }));
     await user.type(screen.getByRole("spinbutton", { name: "星图分值" }), "62");
     await user.type(screen.getByRole("spinbutton", { name: "冠位星图分值" }), "16");
-    await user.click(screen.getByRole("button", { name: "确认" }));
+    await user.click(screen.getByRole("button", { name: "应用并关闭" }));
 
     expect(onUpdateActiveProject).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -765,7 +794,7 @@ describe("ContentGrid", () => {
     expect(await screen.findByRole("dialog")).toHaveTextContent("助战筛选设置");
   });
 
-  it("keeps servant level and score requirements on one summary row", () => {
+  it("separates servant level from the score threshold row", () => {
     renderWithTheme(
       <ContentGrid
         servants={SERVANTS}
@@ -785,10 +814,25 @@ describe("ContentGrid", () => {
 
     const scoreRow = document.querySelector(".support-requirement-score-row");
     expect(scoreRow).not.toBeNull();
-    expect(scoreRow).toHaveTextContent("Lv.100");
+    expect(document.querySelector(".formation-levels-stats")).toHaveTextContent("Lv.100");
+    expect(scoreRow).not.toHaveTextContent("Lv.100");
     expect(scoreRow).toHaveTextContent("星图 62");
     expect(scoreRow).toHaveTextContent("冠位 16");
-    expect(scoreRow?.querySelectorAll(".support-requirement-chip")).toHaveLength(3);
+    expect(scoreRow?.querySelectorAll(".support-requirement-chip")).toHaveLength(2);
+  });
+
+  it.each([false, true])("shows grand score filters only while grand mode is %s", (grandMode) => {
+    renderWithTheme(<ContentGrid servants={SERVANTS} craftEssences={CES} slots={buildSlots()}
+      onSlotsChange={vi.fn()} activeProject={{ ...PROJECT, supportGrandMode: grandMode, supportGrandStarMapScoreMin: 16 }}
+      onUpdateActiveProject={vi.fn()} />);
+    if (grandMode) {
+      expect(screen.getByLabelText("冠位至少 16")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "助战筛选设置" })).not.toBeInTheDocument();
+    } else {
+      expect(screen.queryByLabelText("冠位至少 16")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "助战筛选设置" })).toBeInTheDocument();
+      expect(document.querySelector(".support-requirement-summary")).toBeNull();
+    }
   });
 
   it("toggles grand support mode from the support slot", async () => {
@@ -917,7 +961,7 @@ describe("ContentGrid", () => {
     );
     expect(supportPortrait).toBeInTheDocument();
     expect(
-      supportPortrait?.querySelectorAll(".grand-ce-overlay .grand-ce-slot"),
+      supportPortrait?.closest(".slot-card")?.querySelectorAll(".grand-ce-overlay .grand-ce-slot"),
     ).toHaveLength(3);
 
     const image = await screen.findByAltText("Kaleidoscope");
@@ -949,10 +993,8 @@ describe("ContentGrid", () => {
     expect(screen.getByLabelText("持有技能 1 任意等级")).toBeInTheDocument();
     expect(screen.getByLabelText("持有技能 2 任意等级")).toBeInTheDocument();
     expect(screen.getByLabelText("持有技能 3 至少 5 级")).toBeInTheDocument();
-    // Row 1 is rendered (owned skills are set), so the NP slot in
-    // cols 4-5 also emits a placeholder even though NP itself isn't
-    // configured — keeps the grid stable.
-    expect(screen.getByLabelText("宝具任意等级")).toBeInTheDocument();
+    // Scalar requirements do not add an empty stats row.
+    expect(screen.queryByLabelText("宝具任意等级")).not.toBeInTheDocument();
 
     expect(screen.getByLabelText("追加技能 1 任意等级")).toBeInTheDocument();
     expect(screen.getByLabelText("追加技能 2 至少 7 级")).toBeInTheDocument();
@@ -961,10 +1003,7 @@ describe("ContentGrid", () => {
     expect(screen.getByLabelText("追加技能 5 任意等级")).toBeInTheDocument();
   });
 
-  it("renders owned-skill placeholders alongside NP when only NP is configured", () => {
-    // With only NP set, row 1 still renders all 3 owned-skill slots as
-    // dashes so the NP chip stays anchored at cols 4-5 instead of
-    // sliding to the left of the grid.
+  it("renders only the stats row when only NP is configured", () => {
     renderWithTheme(
       <ContentGrid
         servants={SERVANTS}
@@ -980,15 +1019,15 @@ describe("ContentGrid", () => {
     );
 
     expect(screen.getByLabelText("宝具至少 5 级")).toBeInTheDocument();
-    expect(screen.getByLabelText("持有技能 1 任意等级")).toBeInTheDocument();
-    expect(screen.getByLabelText("持有技能 2 任意等级")).toBeInTheDocument();
-    expect(screen.getByLabelText("持有技能 3 任意等级")).toBeInTheDocument();
+    expect(screen.queryByLabelText("持有技能 1 任意等级")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("持有技能 2 任意等级")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("持有技能 3 任意等级")).not.toBeInTheDocument();
     expect(
       screen.queryByLabelText("追加技能 1 任意等级"),
     ).not.toBeInTheDocument();
   });
 
-  it("hides the entire append row when no append skill is configured", () => {
+  it("hides the append row when unconfigured", () => {
     // NP / owned skills set, append untouched: the append row should
     // not render any placeholder chips since there's nothing real to
     // align against in that row.
@@ -1096,6 +1135,23 @@ describe("ContentGrid", () => {
     await user.click(await screen.findByRole("radio", { name: "7" }));
     await user.click(screen.getByRole("button", { name: "取消等级选择" }));
     expect(skillButton).toHaveTextContent("5");
+  });
+
+  it("keeps unapplied support drafts while managing craft essences", async () => {
+    const user = userEvent.setup();
+    const onUpdateActiveProject = vi.fn();
+    renderWithTheme(<ContentGrid servants={SERVANTS} craftEssences={CES} slots={buildSlots()}
+      onSlotsChange={vi.fn()} activeProject={PROJECT} onUpdateActiveProject={onUpdateActiveProject} />);
+    await user.click(screen.getByRole("button", { name: "助战筛选设置" }));
+    await user.type(screen.getByRole("spinbutton", { name: "从者等级" }), "120");
+    await user.click(screen.getByRole("button", { name: "配置助战礼装" }));
+    expect(await screen.findByRole("dialog", { name: "管理礼装" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "完成" }));
+    expect(screen.getByRole("dialog", { name: "助战筛选设置" })).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "从者等级" })).toHaveValue(120);
+    expect(onUpdateActiveProject).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "应用并关闭" }));
+    expect(onUpdateActiveProject).toHaveBeenCalledWith(expect.objectContaining({ supportServantLevelMin: 120 }));
   });
 
   // --- Rarity frame --------------------------------------------------

@@ -1,8 +1,9 @@
+import { PageHeader } from "./components/common/PageHeader";
+import { TaskActionButton } from "./components/common/TaskActionButton";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { AlertDialog, Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { invoke, listen } from "./tauri";
-import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { ContentGrid } from "./features/team/ContentGrid";
 import { MysticCodeSelector } from "./features/team/MysticCodeSelector";
 import {
@@ -24,7 +25,7 @@ import { StatusBar } from "./features/status/StatusBar";
 import { ProjectBar } from "./features/projects/ProjectBar";
 import { ProjectSettingsDialog } from "./features/projects/ProjectSettingsDialog";
 import { SetupPage } from "./features/setup/SetupPage";
-import { SettingsDialog, type SettingsSection } from "./features/settings/SettingsPage";
+import { SettingsPage, type SettingsSection } from "./features/settings/SettingsPage";
 import { SelfCheckDialog } from "./features/settings/SelfCheckDialog";
 import { SoftwareUpdateDialog } from "./features/settings/SoftwareUpdateDialog";
 import { createInitialProjectSlots } from "./features/team/projectSlots";
@@ -66,7 +67,7 @@ import {
   type LogLevel,
   type OperationLogEntry,
 } from "./operationLog";
-// The battle flow remains 队伍设置 → 指令设置 → 开始任务.
+// The battle flow remains 队伍设置 → 指令设置 → 运行设置.
 // Home is an optional entry point for battle and the standalone tools;
 // `debug` remains an out-of-band view.
 type View =
@@ -118,6 +119,7 @@ function App({
   onMysticCodeGenderChange = () => {},
   startupReady = true,
 }: AppProps) {
+  const [commandBusy, setCommandBusy] = useState(false);
   const [view, setView] = useState<View>("team");
   const [homeMasterFigureId, setHomeMasterFigureId] = useState(470);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -875,7 +877,7 @@ function App({
     [],
   );
 
-  const handleStartRun = useCallback(() => {
+  const handleGotoRunSettings = useCallback(() => {
     setView("battle");
   }, []);
 
@@ -964,8 +966,8 @@ function App({
   if (!setupReady) {
     return (
       <Flex direction="column" className="app-root" data-theme={theme}>
-        <SetupPage onReady={() => setSetupReady(true)} />
-        <SettingsDialog
+        {!settingsOpen && <SetupPage onReady={() => setSetupReady(true)} />}
+        <SettingsPage
           open={settingsOpen}
           section={settingsSection}
           onOpenChange={setSettingsOpen}
@@ -990,7 +992,18 @@ function App({
     <Flex direction="column" className="app-root" data-theme={theme}>
       <Flex className="app-container">
         <Box className="main-content">
-          {view === "home" ? (
+          {settingsOpen ? (
+            <SettingsPage
+              open={settingsOpen}
+              section={settingsSection}
+              onOpenChange={setSettingsOpen}
+              onSectionChange={setSettingsSection}
+              onProjectsImported={handleProjectsImported}
+              onBattleStartPanelChange={setBattleStartPanel}
+              mysticCodeGender={mysticCodeGender}
+              onMysticCodeGenderChange={onMysticCodeGenderChange}
+            />
+          ) : view === "home" ? (
             <HomePage
               mysticCodes={mysticCodes}
               figureId={homeMasterFigureId}
@@ -1024,7 +1037,7 @@ function App({
               onReorderProjectsInGroup={handleReorderProjectsInGroup}
               onOpenProjectSettings={handleOpenProjectSettings}
               onUpdateProject={handleUpdateProject}
-              onBack={handleBackToConfig}
+              onBack={handleGotoCommand}
               onOpenHome={handleOpenHome}
               onAutomationStart={handleBattleAutomationStart}
               onAutomationStartFailed={handleBattleAutomationStartFailed}
@@ -1070,8 +1083,11 @@ function App({
               defaultCardServantIds={partyServantIds}
             />
           ) : (
-            <Box className="main-content-inner">
+            <Box className={`main-content-inner workspace-page ${view === "command" ? "command-stage" : "formation-stage"}`}>
+              <PageHeader title={view === "command" ? "指令" : "编队"} english={view === "command" ? "COMMAND" : "FORMATION"} onBack={view === "command" ? handleBackToTeam : handleOpenHome} backLabel={view === "command" ? "返回队伍" : "主页"} backDisabled={view === "command" && commandBusy}>
               <ProjectBar
+                headerStyle
+                disabled={view === "command" && commandBusy}
                 projects={projects}
                 projectCatalog={projectCatalog}
                 grandClassDefinitions={grandClassDefinitions}
@@ -1090,6 +1106,7 @@ function App({
                 onOpenProjectSettings={handleOpenProjectSettings}
                 onOpenHome={handleOpenHome}
               />
+              </PageHeader>
               {loading ? (
                 <Flex align="center" justify="center" style={{ flex: 1 }}>
                   <Spinner size="3" />
@@ -1112,6 +1129,9 @@ function App({
               ) : view === "command" ? (
                 <>
                   <CommandEditor
+                    homeMasterCode={mysticCodes.find(code => code.id === homeMasterFigureId) ?? null}
+                    mysticCodeGender={mysticCodeGender}
+                    onBusyChange={setCommandBusy}
                     key={activeProjectId ?? "no-project"}
                     projectId={activeProjectId}
                     partyLineup={partyLineup}
@@ -1131,28 +1151,20 @@ function App({
                     turnAttackModesEnabled={featureToggles.turnAttackModes}
                     onGrandServantsChange={(grandServants) => {
                       if (!activeProject) return;
-                      void handleUpdateProject({ ...activeProject, grandServants });
+                      return handleUpdateProject({ ...activeProject, grandServants });
                     }}
                     onGrandCardStrategyChange={(grandCardStrategy) => {
                       if (!activeProject) return;
-                      void handleUpdateProject({ ...activeProject, grandCardStrategy });
+                      return handleUpdateProject({ ...activeProject, grandCardStrategy });
                     }}
                   />
                   <Flex justify="between" align="center" className="page-footer">
-                    <Button
-                      type="button"
-                      variant="soft"
-                      color="gray"
-                      onClick={handleBackToTeam}
-                    >
-                      <ArrowLeftIcon width={14} height={14} />
-                      <Text size="2">队伍设置</Text>
-                    </Button>
-                    <Button type="button" onClick={handleStartRun}>
-                      <Text size="2" weight="bold">
-                        开始任务
-                      </Text>
-                    </Button>
+                    <MysticCodeSelector expanded disabled={commandBusy} codes={mysticCodes} selectedId={activeProject?.mysticCodeId ?? null} gender={mysticCodeGender} onSelect={id => {
+                      if (!activeProject) return;
+                      if (id != null && activeProject.mysticCodeId != null && id !== activeProject.mysticCodeId && !window.confirm("更换御主礼装后，已配置的御主礼装行动仍会保留，但技能名称和图标会按新礼装显示。是否继续？")) return;
+                      void handleUpdateProject({...activeProject,mysticCodeId:id});
+                    }} />
+                    <TaskActionButton label="运行设置" eyebrow="NEXT" onClick={handleGotoRunSettings} disabled={!activeProject || commandBusy} />
                   </Flex>
                 </>
               ) : (
@@ -1173,6 +1185,7 @@ function App({
                   <Flex justify="between" align="center" className="page-footer" gap="3">
                     <Flex align="center" gap="3">
                       <MysticCodeSelector
+                        expanded
                         codes={mysticCodes}
                         selectedId={activeProject?.mysticCodeId ?? null}
                         gender={mysticCodeGender}
@@ -1193,11 +1206,7 @@ function App({
                       />
                     </Flex>
                     <Flex align="center" gap="3">
-                      <Button type="button" onClick={handleGotoCommand}>
-                        <Text size="2" weight="bold">
-                          指令设置
-                        </Text>
-                      </Button>
+                      <TaskActionButton label="指令设置" eyebrow="NEXT" onClick={handleGotoCommand} />
                     </Flex>
                   </Flex>
                 </>
@@ -1249,16 +1258,6 @@ function App({
           </Flex>
         </AlertDialog.Content>
       </AlertDialog.Root>
-      <SettingsDialog
-        open={settingsOpen}
-        section={settingsSection}
-        onOpenChange={setSettingsOpen}
-        onSectionChange={setSettingsSection}
-        onProjectsImported={handleProjectsImported}
-          onBattleStartPanelChange={setBattleStartPanel}
-          mysticCodeGender={mysticCodeGender}
-          onMysticCodeGenderChange={onMysticCodeGenderChange}
-      />
       <ProjectSettingsDialog
         open={projectSettingsOpen}
         project={activeProject}

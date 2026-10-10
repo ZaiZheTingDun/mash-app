@@ -1,12 +1,19 @@
 import { useState } from "react";
 import {
-  Box,
+  Avatar,
   Button,
   Dialog,
+  DropdownMenu,
   Flex,
+  IconButton,
   Text,
   TextField,
 } from "@radix-ui/themes";
+import { ChevronDownIcon, ChevronRightIcon, Cross2Icon, MinusIcon, PlusIcon } from "@radix-ui/react-icons";
+import { DiamondSwitch } from "../../components/common/DiamondSwitch";
+import { useServantSkillIcons } from "./useServantSkillIcons";
+import { useAppendSkillIcons } from "./useAppendSkillIcons";
+import type { Servant } from "../../types/servant";
 import {
   ThresholdLevelPicker,
   ThresholdLevelLegend,
@@ -171,8 +178,14 @@ export function SupportRequirementSummary({
 interface SupportSettingsDialogProps {
   open: boolean;
   project: Project | null;
+  servant: Servant | null;
+  portraitSrc: string | null | undefined;
+  slotNumber: number;
+  craftEssenceGroups: { count: number; images: (string | null | undefined)[] }[];
+  onCraftEssenceOpen: (index: number, grandMode: boolean) => void;
   onOpenChange: (open: boolean) => void;
   onConfirm: (next: {
+    grandMode: boolean;
     servantLevel: number | null;
     starMapScore: number | null;
     grandStarMapScore: number | null;
@@ -185,10 +198,17 @@ interface SupportSettingsDialogProps {
 export function SupportSettingsDialog({
   open,
   project,
+  servant,
+  portraitSrc,
+  slotNumber,
+  craftEssenceGroups,
+  onCraftEssenceOpen,
   onOpenChange,
   onConfirm,
 }: SupportSettingsDialogProps) {
-  const grandMode = project?.supportGrandMode ?? false;
+  const [grandMode, setGrandMode] = useState(project?.supportGrandMode ?? false);
+  const skillIcons = useServantSkillIcons([servant]);
+  const appendSkillIcons = useAppendSkillIcons();
   const [servantLevel, setServantLevel] = useState<number | null>(
     () => project?.supportServantLevelMin ?? null,
   );
@@ -257,164 +277,109 @@ export function SupportSettingsDialog({
   return (
     <>
       <Dialog.Root open={open} onOpenChange={onOpenChange}>
-        <Dialog.Content maxWidth="560px">
-          <Dialog.Title>助战筛选设置</Dialog.Title>
-          <Flex direction="column" gap="5">
-            <Flex gap="5">
-              <Box>
-                <Text as="div" size="2" weight="medium" mb="2">星图分值</Text>
-                <TextField.Root
-                  type="number"
-                  min={0}
-                  max={62}
-                  value={starMapScore ?? ""}
-                  placeholder="任意"
-                  aria-label="星图分值"
-                  onChange={(event) => {
+        <Dialog.Content className="support-settings-drawer" aria-describedby={undefined}>
+          <header className="support-settings-header">
+            <Dialog.Title className="support-settings-accessible-title">助战筛选设置</Dialog.Title>
+            <div className="support-settings-identity">
+              <span className="support-settings-slot-number">{String(slotNumber).padStart(2, "0")}</span>
+              <span className="support-settings-badge">支援</span>
+            </div>
+            <div className="support-settings-servant-name" title={servant?.name_cn}>{servant?.name_cn ?? "未选择支援从者"}</div>
+            <Text as="div" className="support-settings-subtitle">支援从者配置</Text>
+            {portraitSrc && <div className="support-settings-portrait"><img src={portraitSrc} alt="" /></div>}
+            <Dialog.Close>
+              <IconButton type="button" variant="ghost" color="gray" className="support-settings-close" aria-label="关闭助战筛选设置"><Cross2Icon width={12} height={12} /></IconButton>
+            </Dialog.Close>
+          </header>
+
+          <div className="support-settings-body">
+            <section className="support-settings-basic">
+              <h3 className="support-settings-heading">基础配置</h3>
+              <div className="support-settings-base-row">
+                <label className="support-settings-field">
+                  <span>从者等级</span>
+                  <TextField.Root size="1" type="number" min={1} max={120} value={servantLevel ?? ""} placeholder="任意" aria-label="从者等级" onChange={(event) => {
                     const value = event.currentTarget.valueAsNumber;
-                    setStarMapScore(Number.isFinite(value) ? Math.min(62, Math.max(0, Math.trunc(value))) : null);
-                  }}
-                />
-                <Text as="div" size="1" color="gray" mt="1">最高 62</Text>
-              </Box>
-              {grandMode && (
-                <Box>
-                  <Text as="div" size="2" weight="medium" mb="2">冠位星图分值</Text>
-                  <TextField.Root
-                    type="number"
-                    min={0}
-                    max={16}
-                    value={grandStarMapScore ?? ""}
-                    placeholder="任意"
-                    aria-label="冠位星图分值"
-                    onChange={(event) => {
+                    setServantLevel(Number.isFinite(value) ? Math.min(120, Math.max(1, Math.trunc(value))) : null);
+                  }} />
+                </label>
+                <div className="support-settings-field">
+                  <span>宝具等级</span>
+                  <Button type="button" size="1" variant="surface" color="gray" aria-label="宝具等级" className="support-settings-np" onClick={() => openLevelPicker({ kind: "np" })}>
+                    {supportLevelLabel(npLevel)}<ChevronDownIcon width={12} height={12} />
+                  </Button>
+                </div>
+              </div>
+              <div className="support-settings-grand-row">
+                <span>冠位从者</span>
+                <span>开启后可设置冠位星图</span>
+                <DiamondSwitch size="1" checked={grandMode} onCheckedChange={setGrandMode} aria-label="冠位从者" />
+                <span>{grandMode ? "冠位" : "非冠位"}</span>
+              </div>
+              <div className="support-settings-score-row">
+                <div>
+                  <label className="support-settings-field">
+                    <span>星图分值</span>
+                    <TextField.Root size="1" type="number" min={0} max={62} value={starMapScore ?? ""} placeholder="任意" aria-label="星图分值" onChange={(event) => {
+                      const value = event.currentTarget.valueAsNumber;
+                      setStarMapScore(Number.isFinite(value) ? Math.min(62, Math.max(0, Math.trunc(value))) : null);
+                    }} />
+                  </label>
+                  <div className="support-settings-limit">最高 62</div>
+                </div>
+                {grandMode && <div>
+                  <label className="support-settings-field">
+                    <span>冠位星图</span>
+                    <TextField.Root size="1" type="number" min={0} max={16} value={grandStarMapScore ?? ""} placeholder="任意" aria-label="冠位星图分值" onChange={(event) => {
                       const value = event.currentTarget.valueAsNumber;
                       setGrandStarMapScore(Number.isFinite(value) ? Math.min(16, Math.max(0, Math.trunc(value))) : null);
-                    }}
-                  />
-                  <Text as="div" size="1" color="gray" mt="1">最高 16</Text>
-                </Box>
-              )}
-              <Box>
-                <Text as="div" size="2" weight="medium" mb="2">从者等级</Text>
-                <Flex align="center" gap="1">
-                  <TextField.Root
-                    type="number"
-                    min={1}
-                    max={120}
-                    value={servantLevel ?? ""}
-                    placeholder="任意"
-                    aria-label="从者等级"
-                    style={{ width: "72px" }}
-                    onChange={(event) => {
-                      const value = event.currentTarget.valueAsNumber;
-                      setServantLevel(
-                        Number.isFinite(value)
-                          ? Math.min(120, Math.max(1, Math.trunc(value)))
-                          : null,
-                      );
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    size="1"
-                    variant="soft"
-                    color="gray"
-                    aria-label="从者等级 100"
-                    onClick={() => setServantLevel(100)}
-                  >
-                    100
-                  </Button>
-                  <Button
-                    type="button"
-                    size="1"
-                    variant="soft"
-                    color="gray"
-                    aria-label="从者等级 120"
-                    onClick={() => setServantLevel(120)}
-                  >
-                    120
-                  </Button>
-                </Flex>
-                <Text as="div" size="1" color="gray" mt="1">最低等级，最高 120</Text>
-              </Box>
-            </Flex>
-            <Flex gap="5">
-              <Box>
-                <Text as="div" size="2" weight="medium" mb="2">宝具等级</Text>
-                <button
-                  type="button"
-                  data-kind="np"
-                  aria-label="宝具等级"
-                  className="support-skill-level-button"
-                  onClick={() => openLevelPicker({ kind: "np" })}
-                >
-                  {supportLevelLabel(npLevel)}
-                </button>
-              </Box>
-              <Box>
-                <Text as="div" size="2" weight="medium" mb="2">持有技能</Text>
-                <Flex gap="2" wrap="wrap">
-                  {skillLevels.map((level, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      data-kind="skill"
-                      aria-label={`持有技能 ${index + 1}`}
-                      className="support-skill-level-button"
-                      onClick={() => openLevelPicker({ kind: "skill", index })}
-                    >
-                      {supportLevelLabel(level)}
-                    </button>
-                  ))}
-                </Flex>
-              </Box>
-              <Box>
-                <Text as="div" size="2" weight="medium" mb="2">追加技能</Text>
-                <Flex gap="2" wrap="wrap">
-                  {appendSkillLevels.map((level, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      data-kind="append"
-                      aria-label={`追加技能 ${index + 1}`}
-                      className="support-skill-level-button"
-                      onClick={() => openLevelPicker({ kind: "append", index })}
-                    >
-                      {supportLevelLabel(level)}
-                    </button>
-                  ))}
-                </Flex>
-              </Box>
-            </Flex>
+                    }} />
+                  </label>
+                  <div className="support-settings-limit">最高 16</div>
+                </div>}
+              </div>
+              <Text as="p" className="support-settings-hint">未设置时不限制；已设置的等级为最低要求。</Text>
+            </section>
 
-            <Flex justify="between" gap="3" align="center">
-              <Button type="button" variant="soft" color="gray" onClick={reset}>
-                重置
-              </Button>
-              <Flex gap="2">
-                <Dialog.Close>
-                  <Button type="button" variant="soft" color="gray">取消</Button>
-                </Dialog.Close>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    onConfirm({
-                      servantLevel,
-                      starMapScore,
-                      grandStarMapScore,
-                      npLevel,
-                      skillLevels,
-                      appendSkillLevels,
-                    });
-                    onOpenChange(false);
-                  }}
-                >
-                  确认
-                </Button>
-              </Flex>
-            </Flex>
-          </Flex>
+            <section className="support-settings-owned">
+              <h3 className="support-settings-heading">技能等级</h3>
+              <div className="support-settings-skills">
+                {skillLevels.map((level, index) => <SupportSkillControl key={index} index={index} kind="skill" level={level} iconSrc={servant ? skillIcons[servant.variantKey]?.[index]?.src : null} onPick={() => openLevelPicker({ kind: "skill", index })} onChange={(nextLevel) => setSkillLevels(prev => prev.map((value, i) => i === index ? nextLevel : value) as SupportSkillLevelMins)} />)}
+              </div>
+            </section>
+
+            <section className="support-settings-append">
+              <h3 className="support-settings-heading">追加技能</h3>
+              <div className="support-settings-skills">
+                {appendSkillLevels.map((level, index) => <SupportSkillControl key={index} index={index} kind="append" level={level} iconSrc={appendSkillIcons[index]?.src} onPick={() => openLevelPicker({ kind: "append", index })} onChange={(nextLevel) => setAppendSkillLevels(prev => prev.map((value, i) => i === index ? nextLevel : value) as SupportAppendSkillLevelMins)} />)}
+              </div>
+            </section>
+
+            <section className="support-settings-ce-section">
+              <h3 className="support-settings-heading">概念礼装</h3>
+              {grandMode ? <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                  <Button type="button" variant="surface" color="gray" className="support-settings-ce" aria-label="配置冠位助战礼装">
+                    <SupportCraftEssenceSummary groups={craftEssenceGroups.slice(1, 4)} />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content>
+                  {["普通礼装", "羁绊礼装", "冠位礼装"].map((label, index) => <DropdownMenu.Item key={label} onSelect={() => onCraftEssenceOpen(index, true)}>{label}</DropdownMenu.Item>)}
+                </DropdownMenu.Content>
+              </DropdownMenu.Root> : <Button type="button" variant="surface" color="gray" className="support-settings-ce" aria-label="配置助战礼装" onClick={() => onCraftEssenceOpen(0, false)}>
+                <SupportCraftEssenceSummary groups={craftEssenceGroups.slice(0, 1)} />
+              </Button>}
+
+            </section>
+          </div>
+
+          <footer className="support-settings-footer">
+            <Button type="button" variant="ghost" color="red" onClick={reset}>清空配置</Button>
+            <Button type="button" className="support-settings-apply" onClick={() => {
+              onConfirm({ grandMode, servantLevel, starMapScore, grandStarMapScore, npLevel, skillLevels, appendSkillLevels });
+              onOpenChange(false);
+            }}>应用并关闭</Button>
+          </footer>
         </Dialog.Content>
       </Dialog.Root>
 
@@ -464,4 +429,41 @@ export function SupportSettingsDialog({
       </Dialog.Root>
     </>
   );
+}
+
+
+function SupportSkillControl({ index, kind, level, iconSrc, onPick, onChange }: {
+  index: number;
+  kind: "skill" | "append";
+  level: number | null;
+  iconSrc: string | null | undefined;
+  onPick: () => void;
+  onChange: (level: number | null) => void;
+}) {
+  const label = `${kind === "skill" ? "持有技能" : "追加技能"} ${index + 1}`;
+  return <div className="support-settings-skill">
+    <Avatar src={iconSrc ?? undefined} fallback={String(index + 1)} radius="small" className="support-settings-skill-icon" />
+    <span className="support-settings-skill-label">{kind === "skill" ? "技能" : "追加"} {index + 1}</span>
+    <div className="support-settings-stepper">
+      <IconButton type="button" variant="ghost" color="gray" aria-label={`降低${label}等级`} disabled={level == null} onClick={() => onChange(level != null && level > 1 ? level - 1 : null)}><MinusIcon width={12} height={12} /></IconButton>
+      <Button type="button" variant="ghost" color="gray" aria-label={label} data-configured={level != null} onClick={onPick}>{level ?? "—"}</Button>
+      <IconButton type="button" variant="ghost" color="gray" aria-label={`提高${label}等级`} disabled={level === 10} onClick={() => onChange(level == null ? 1 : level + 1)}><PlusIcon width={12} height={12} /></IconButton>
+    </div>
+  </div>;
+}
+
+
+function SupportCraftEssenceSummary({ groups }: {
+  groups: SupportSettingsDialogProps["craftEssenceGroups"];
+}) {
+  const configured = groups.filter(group => group.count > 0).length;
+  const count = groups.reduce((total, group) => total + group.count, 0);
+  const images = groups.flatMap(group => group.images).filter((src): src is string => Boolean(src)).slice(0, 3);
+  return <>
+    <span className="support-settings-ce-count">{configured}/{groups.length} 已配置<ChevronRightIcon width={12} height={12} /></span>
+    <span className="support-settings-ce-content">
+      <span className="support-settings-ce-images">{images.map((src, index) => <img key={index} src={src} alt="" style={{ left: index * 10.5, top: index * 6, zIndex: 3 - index }} />)}</span>
+      <span><span>{count ? `已选择 ${count} 张礼装` : "未选择礼装"}</span><span className="support-settings-ce-link">点击配置礼装</span></span>
+    </span>
+  </>;
 }

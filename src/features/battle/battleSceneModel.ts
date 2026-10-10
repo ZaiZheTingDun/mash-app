@@ -55,10 +55,10 @@ export const COMMAND_SPELL_LABELS: Record<string, string> = {
 
 export const ATTACK_OPTIONS = [
   { value: "np", label: "宝具" },
-  { value: "buster", label: "B" },
-  { value: "arts", label: "A" },
-  { value: "quick", label: "Q" },
-  { value: "all", label: "ALL" },
+  { value: "buster", label: "红卡" },
+  { value: "arts", label: "蓝卡" },
+  { value: "quick", label: "绿卡" },
+  { value: "all", label: "任意" },
 ] as const;
 
 export const ENEMY_TARGETS = [

@@ -1,3 +1,6 @@
+import { PageHeader } from "../../components/common/PageHeader";
+import { TaskActionButton } from "../../components/common/TaskActionButton";
+import { StopAfterRoundButton } from "../../components/common/StopAfterRoundButton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertDialog,
@@ -13,7 +16,6 @@ import {
 } from "@radix-ui/themes";
 import { invoke, listen } from "../../tauri";
 import {
-  ChevronLeftIcon,
   Cross1Icon,
   GearIcon,
   MinusIcon,
@@ -663,9 +665,9 @@ export function BattlePage({
       : null;
 
   return (
-    <Flex direction="column" className="battle-page">
+    <Flex direction="column" className="battle-page workspace-page">
       <Box className="battle-topbar">
-        <ProjectBar
+        <PageHeader title="运行设置" english="RUN SETTINGS" onBack={onBack} backDisabled={running}><ProjectBar headerStyle
           projects={projects}
           projectCatalog={projectCatalog}
           grandClassDefinitions={grandClassDefinitions}
@@ -684,13 +686,14 @@ export function BattlePage({
           onReorderProjectsInGroup={onReorderProjectsInGroup}
           onOpenProjectSettings={onOpenProjectSettings}
           onOpenHome={onOpenHome}
-        />
+        /></PageHeader>
       </Box>
 
       <Flex direction="column" className="battle-body battle-body-scroll">
         <Box className="battle-panel">
-          <SectionHeading>重复任务</SectionHeading>
+          <SectionHeading rail stacked english="REPEAT">重复任务</SectionHeading>
           <OptionCardRadioGroup
+            indicator="diamond"
             value={repeatMode}
             className="battle-repeat-cards"
             disabled={running || !selectedProject}
@@ -710,6 +713,7 @@ export function BattlePage({
               {
                 value: "count",
                 title: "设置次数",
+                description: "按指定次数执行任务",
                 className: "battle-repeat-card-count",
                 onSelect: enableRepeatCount,
                 accessory: (
@@ -767,7 +771,7 @@ export function BattlePage({
         </Box>
 
         <Box className="battle-panel">
-          <SectionHeading
+          <SectionHeading rail stacked english="AP RECOVERY"
             accessory={
               <HelpTooltip
                 ariaLabel="行动力恢复说明"
@@ -799,32 +803,23 @@ export function BattlePage({
                     aria-label={`${option.label} ${option.recoveryLabel}`}
                   >
                     <img src={option.imageSrc} alt="" className="battle-recovery-image" />
-                    {!checked && (
-                      <>
-                        <Text size="3" weight="bold">{option.label}</Text>
-                        <Text size="2" weight="bold" className="battle-recovery-amount">
-                          {option.recoveryLabel}
-                        </Text>
-                      </>
-                    )}
+                    <Text size="3" weight="bold">{option.label}</Text>
+                    <Text size="2" weight="bold" className="battle-recovery-amount">
+                      {option.recoveryLabel}
+                    </Text>
                   </CheckboxCards.Item>
                   {checked && (
                     <div className="battle-recovery-limit" aria-label={`${option.label}使用限制`}>
-                      <button
-                        type="button"
-                        className={`battle-recovery-infinity ${
-                          limit == null ? "is-active" : ""
-                        }`}
-                        disabled={running || !selectedProject}
-                        aria-label={
-                          limit == null
-                            ? `${option.label}当前无限使用，点击设置数量`
-                            : `${option.label}当前限量使用，点击改为无限`
-                        }
-                        onClick={() => setApRecoveryLimit(option.value, limit == null ? 1 : null)}
-                      >
-                        ∞
-                      </button>
+                      <div className="battle-recovery-limit-modes">
+                        <button type="button" className={`battle-recovery-infinity ${limit == null ? "is-active" : ""}`} disabled={running || !selectedProject}
+                          aria-pressed={limit == null}
+                          aria-label={limit == null ? `${option.label}无限使用` : `${option.label}当前限量使用，点击改为无限`}
+                          onClick={() => {if(limit != null) setApRecoveryLimit(option.value,null);}}>∞ 无限</button>
+                        <button type="button" className={`battle-recovery-infinity ${limit != null ? "is-active" : ""}`} disabled={running || !selectedProject}
+                          aria-pressed={limit != null}
+                          aria-label={limit == null ? `${option.label}当前无限使用，点击设置数量` : `${option.label}数量使用`}
+                          onClick={() => {if(limit == null) setApRecoveryLimit(option.value,1);}}>数量</button>
+                      </div>
                       {limit != null && (
                         <div className="battle-recovery-counter">
                           <Button
@@ -879,14 +874,11 @@ export function BattlePage({
 
       <Flex justify="between" align="center" className="battle-footer" gap="3">
         <Flex align="center" gap="2">
-          <Button type="button" variant="soft" color="gray" disabled={running} onClick={onBack}>
-            <ChevronLeftIcon width={16} height={16} />
-            <Text size="2">返回</Text>
-          </Button>
           <Button
             type="button"
             variant="soft"
             color="gray"
+            className="battle-advanced-settings-button"
             disabled={running || !selectedProject}
             onClick={() => setAdvancedSettingsOpen(true)}
           >
@@ -894,21 +886,14 @@ export function BattlePage({
             <Text size="2">高级设置</Text>
           </Button>
         </Flex>
-        <Flex align="center" gap="3" wrap="wrap" justify="end">
-          <Button
-            color="red"
-            variant="soft"
-            disabled={!running || stopAfterCurrentRequested}
-            onClick={handleStopAfterCurrent}
-          >
-            运行完当前轮次后停止
-          </Button>
-          <Button color="red" variant="soft" disabled={!running} onClick={handleStop}>
-            停止
-          </Button>
-          <Button disabled={running || !selectedProject} onClick={handleStart}>
-            开始
-          </Button>
+        <Flex align="center" justify="end" className="battle-task-actions">
+          {running && (
+            <>
+              <StopAfterRoundButton selected={stopAfterCurrentRequested} onClick={handleStopAfterCurrent} />
+              <span className="battle-task-action-divider" aria-hidden="true" />
+            </>
+          )}
+          <TaskActionButton running={running} disabled={!selectedProject} onClick={running ? handleStop : handleStart} />
         </Flex>
       </Flex>
 

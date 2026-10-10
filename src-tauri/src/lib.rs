@@ -80,6 +80,7 @@ pub fn run() {
             app.manage(Mutex::new(CraftEssenceEnhancementRunnerHandle::new_idle()));
             app.manage(Mutex::new(FriendPointSummonRunnerHandle::new_idle()));
             app.manage(AutomationCoordinator::default());
+            app.manage(commands::projects::CommandEditorLock::default());
             app.manage(Arc::new(ResourceDownloadCancelState::default()));
             app.manage(commands::debug::DebugSidecar::new());
             app.manage(commands::rank_up_quest::RankUpQuestCaptureState::default());
@@ -106,11 +107,16 @@ pub fn run() {
             commands::catalog::get_servant_face_path,
             commands::catalog::get_craft_essence_card_path,
             commands::catalog::get_skill_icon_paths,
+            commands::catalog::get_append_skill_icon_paths,
+            commands::catalog::get_command_spell_icon_paths,
+            commands::catalog::get_attack_card_icon_paths,
             commands::catalog::get_template_asset_path,
             commands::catalog::list_servant_portraits,
             commands::catalog::save_servant_portrait_selection,
             commands::projects::save_battle_scenes,
             commands::projects::load_battle_scenes,
+            commands::projects::load_command_editor,
+            commands::projects::mutate_command_editor,
             commands::projects::save_advanced_battle_scenes,
             commands::projects::load_advanced_battle_scenes,
             commands::projects::list_exportable_configs,

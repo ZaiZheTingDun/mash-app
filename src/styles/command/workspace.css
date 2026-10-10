@@ -1,0 +1,1647 @@
+/* Shared primitives use theme colors in both light and dark appearances. */
+
+.section-rail-icon {
+  width: 12px;
+  height: 28px;
+  flex: 0 0 12px;
+  color: var(--blue-9);
+}
+
+.section-heading-english {
+  color: var(--gray-10);
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  margin-left: 16px;
+}
+
+.mystic-code-trigger.is-expanded.rt-Button {
+  display: grid;
+  grid-template-columns: 46px minmax(0,1fr) 20px;
+  grid-template-rows: 20px 50px;
+  gap: 4px 18px;
+  width: min(340px, 40vw);
+  height: auto;
+  padding: 0 6px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--blue-7);
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+  justify-content: stretch;
+}
+
+.mystic-code-label {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 1.7px;
+  color: var(--gray-11);
+}
+
+.mystic-code-label::before {
+  content: "";
+  flex: 0 0 5px;
+  width: 5px;
+  height: 10px;
+  background: var(--blue-9);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.mystic-code-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--blue-6);
+}
+
+.mystic-code-trigger.is-expanded .rt-AvatarRoot {
+  width: 42px;
+  height: 48px;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+}
+
+.mystic-code-trigger.is-expanded .rt-AvatarImage {
+  object-fit: contain;
+}
+
+.mystic-code-name {
+  text-align: left;
+  font-size: 13px;
+  color: var(--gray-12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mystic-code-chevron {
+  color: var(--gray-10);
+  font-size: 22px;
+}
+
+.command-stage {
+  overflow: hidden;
+  background: linear-gradient(var(--blue-a2) 1px, transparent 1px), linear-gradient(90deg, var(--blue-a2) 1px, transparent 1px), var(--color-background);
+  background-size: 32px 32px;
+}
+
+.command-workspace {
+  display: grid;
+  grid-template-columns: 181.5px minmax(0, 1fr);
+  gap: 16.5px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin: 18px max(16px, calc((100% - 930px) / 2)) 9px;
+  position: relative;
+}
+
+.command-sidebar {
+  box-sizing: border-box;
+  padding-right: 15px;
+  border-right: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  min-height: 0;
+}
+
+.command-rail-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 15px;
+  color: var(--blue-11);
+  font-size: 10px;
+  letter-spacing: 1.8px;
+  white-space: nowrap;
+  height: 15px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+.command-rail-label > .rt-IconButton:first-of-type {
+  margin-left: auto;
+}
+
+.command-rail-label .rt-IconButton {
+  box-sizing: border-box;
+  width: 18px;
+  height: 15px;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.command-rail-label .rt-IconButton svg {
+  width: 13px;
+  height: 13px;
+}
+
+.command-scene-controls {
+  display: grid;
+  grid-template-columns: 30px minmax(30px, 1fr) 30px 30px 24px;
+  align-items: center;
+  margin: 0 0 27px 21px;
+  min-height: 27px;
+}
+
+.command-turn-controls {
+  margin-bottom: 34.5px;
+}
+
+.command-scene-controls strong {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 27px;
+}
+
+.command-scene-controls > span {
+  font-size: 10px;
+  color: var(--gray-10);
+  margin-right: auto;
+  white-space: nowrap;
+}
+
+.command-scene-controls .rt-IconButton {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.command-diamond {
+  display: inline-block;
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--gray-9);
+  transform: rotate(45deg);
+  background: var(--color-background);
+}
+
+[aria-pressed="true"] > .command-diamond {
+  background: var(--blue-9);
+  border-color: var(--blue-9);
+}
+
+.command-step-list {
+  position: relative;
+  display: grid;
+  margin: 6px 0 0 3px;
+  gap: 9px;
+}
+
+.command-step-list::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 21px;
+  bottom: 21px;
+  width: 1px;
+  background: var(--blue-6);
+}
+
+.command-step-list button {
+  border: 0;
+  background: none;
+  color: var(--gray-12);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  min-height: 42px;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.command-step-node {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 1px solid var(--gray-7);
+  transform: rotate(45deg);
+  background: var(--color-background);
+}
+
+.command-step-node span {
+  transform: rotate(-45deg);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.command-step-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  padding: 5.25px 9px;
+  border-radius: 3px;
+  min-width: 0;
+}
+
+.command-step-copy b {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 13.5px;
+}
+
+.command-step-copy small {
+  font-size: 10px;
+  color: var(--gray-10);
+  font-weight: 500;
+  line-height: 15px;
+}
+
+.command-step-list [aria-pressed="true"] .command-step-node {
+  border-color: var(--blue-9);
+  color: var(--blue-11);
+}
+
+.command-step-list [aria-pressed="true"] .command-step-copy {
+  background: var(--blue-a3);
+  color: var(--blue-11);
+}
+
+.command-step-list [aria-pressed="true"] small {
+  color: var(--blue-11);
+}
+
+.command-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.command-phase-header {
+  flex-shrink: 0;
+  min-height: 54px;
+  padding-left: 24px;
+  box-sizing: border-box;
+}
+
+.command-phase-header > small {
+  font-size: 10px;
+  color: var(--gray-10);
+  font-weight: 700;
+  display: block;
+  line-height: 15px;
+}
+
+.command-phase-header > div {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  margin-top: 0;
+  min-height: 39px;
+}
+
+.command-phase-header strong {
+  align-self: flex-start;
+  margin-top: 1.5px;
+  font-size: 18px;
+  font-weight: 700;
+  width: 36px;
+  border-right: 0;
+  flex: 0 0 36px;
+  line-height: 27px;
+  position: relative;
+}
+
+.command-phase-header h2 {
+  margin: 0 0 3px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+}
+
+.command-phase-header span small {
+  display: block;
+  font-size: 10px;
+  color: var(--gray-10);
+  letter-spacing: 0;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+.command-content > .command-scroll-region {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  scrollbar-width: thin;
+  padding: 0 0 20px;
+  container: command-body / inline-size;
+  margin-top: 12px;
+}
+
+.command-edit-surface {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.command-error {
+  font-size: 12px;
+  color: var(--red-11);
+  padding: 8px;
+}
+
+.command-workspace .battle-phase {
+  padding: 0;
+  margin: 0 0 28px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.command-workspace .battle-section-heading {
+  border: 0;
+  padding: 0 0 12px;
+  margin: 0;
+}
+
+.command-workspace .battle-section-heading > .rt-Flex {
+  gap: 12px;
+}
+
+.command-workspace .battle-section-heading .rt-Text {
+  font-size: 15px;
+}
+
+.command-workspace .battle-action-list,
+.command-workspace .advanced-rule-section {
+  gap: 0;
+  background: none;
+}
+
+.command-workspace .battle-action-row {
+  min-height: 54px;
+  border-bottom: 1px solid var(--blue-a4);
+  padding: 6px 0;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+.command-workspace .battle-action-summary {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.command-workspace .battle-inline-face,
+.command-workspace .battle-inline-square {
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+
+.command-workspace .battle-inline-face .rt-AvatarRoot,
+.command-workspace .battle-inline-square .rt-AvatarRoot {
+  width: 30px;
+  height: 30px;
+  border-radius: 3px;
+}
+
+.command-workspace .battle-action-name {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.command-workspace .battle-inline-skill-icon .rt-AvatarRoot {
+  width: 21px;
+  height: 21px;
+}
+
+.command-entry-actions {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  flex: 1;
+  gap: 24px;
+  padding: 0 24px;
+  color: var(--blue-11);
+  margin-top: 21px;
+  flex-wrap: wrap;
+}
+
+.command-entry-actions > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  font-size: 11px;
+  white-space: nowrap;
+  color: inherit;
+  cursor: pointer;
+  height: 33px;
+  min-height: 33px;
+  padding: 0;
+}
+
+.command-entry-actions > .add-row-trigger {
+  width: auto;
+  padding: 0;
+}
+
+.command-entry-actions .add-row-trigger-icon {
+  width: 16px !important;
+  height: 16px !important;
+  flex-basis: 16px !important;
+  background: none;
+  border: 0;
+}
+
+.command-workspace .battle-add-row {
+  align-items: flex-start;
+  margin: 0;
+  min-width: 0;
+}
+
+.command-workspace .battle-choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 0;
+}
+
+.command-workspace .battle-square-btn {
+  width: 64px;
+  height: 64px;
+  border: 0;
+  border-bottom: 1px solid var(--blue-6);
+  border-radius: 0;
+  background: none;
+}
+
+.command-actor-choice {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--blue-6);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 10px 8px;
+  background: transparent;
+  color: var(--gray-12);
+  cursor: pointer;
+  position: relative;
+  height: auto;
+}
+
+.command-actor-choice.selected {
+  border-color: var(--blue-9);
+  background: var(--blue-a2);
+}
+
+.command-actor-choice.selected::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  transform: rotate(45deg);
+  background: var(--blue-9);
+}
+
+.command-actor-choice:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.command-actor-choice .battle-actor-icon,
+.command-actor-choice .rt-AvatarRoot,
+.command-empty-face {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 3px;
+}
+
+.command-empty-face {
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--gray-7);
+  background: var(--gray-a2);
+}
+
+.command-actor-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.command-actor-copy b {
+  font-size: 12px;
+  font-weight: 500;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-actor-copy small {
+  font-size: 10px;
+  color: var(--gray-10);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-mode-options {
+  display: flex;
+  gap: 24px;
+}
+
+.command-mode-options button {
+  position: relative;
+  border: 0;
+  border-bottom: 1px solid var(--blue-6);
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  background: none;
+  color: var(--gray-10);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.command-mode-options [aria-pressed="true"] {
+  color: var(--blue-11);
+  border-color: var(--blue-9);
+}
+
+.command-workspace .battle-attack-heading {
+  position: static;
+  min-height: 42px;
+  margin-bottom: 18px;
+  justify-content: space-between;
+}
+
+.command-workspace .battle-attack-heading > .battle-phase-label {
+  display: block;
+  order: -1;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--gray-10);
+}
+
+.command-workspace .battle-attack-mode-select {
+  display: none;
+}
+
+.command-inline-editor {
+  padding: 16px 20px;
+  margin: 16px 0;
+  border-block: 1px solid var(--blue-6);
+  background: var(--color-panel-solid);
+}
+
+.command-inline-editor h3 {
+  font-size: 15px;
+  margin: 0 0 16px;
+}
+
+.command-inline-editor .grand-rule-editor-servants {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 12px;
+}
+
+.command-inline-editor .grand-rule-editor-grand-option {
+  grid-column: 1 / -1;
+}
+
+.command-inline-editor .grand-rule-editor-servant-cell {
+  min-width: 0;
+}
+
+.command-inline-editor .command-actor-choice {
+  width: 100%;
+}
+
+.command-workspace .grand-rule-kind-card,
+.command-workspace .grand-rule-color-card {
+  padding: 10px;
+  border-radius: 0;
+  border-width: 0 0 1px;
+  box-shadow: none;
+  background: transparent;
+}
+
+.command-workspace .option-card-radio-content > .rt-Text:nth-child(2) {
+  display: none;
+}
+
+.command-workspace .battle-enemy-target:nth-child(1),
+.command-workspace .battle-enemy-target:nth-child(4) {
+  grid-column: 1;
+}
+
+.command-workspace .battle-enemy-target:nth-child(2),
+.command-workspace .battle-enemy-target:nth-child(5) {
+  grid-column: 2;
+}
+
+.command-workspace .battle-enemy-target:nth-child(3),
+.command-workspace .battle-enemy-target:nth-child(6) {
+  grid-column: 3;
+}
+
+.command-workspace button:focus-visible {
+  outline: 2px solid var(--blue-9);
+  outline-offset: 3px;
+}
+
+/* Running setup keeps its real repeat/AP controls; only their visual shell changes. */
+
+.battle-page {
+  background: linear-gradient(var(--blue-a2) 1px, transparent 1px),linear-gradient(90deg,var(--blue-a2) 1px,transparent 1px),var(--color-background);
+  background-size: 40px 40px;
+}
+
+.battle-page .battle-panel {
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.battle-page .battle-section-heading {
+  border: 0;
+  padding-left: 0;
+}
+
+.battle-page .battle-section-heading > .rt-Flex {
+  gap: 12px;
+}
+
+.battle-page .battle-repeat-cards .option-card-radio-item {
+  border: 0;
+  border-bottom: 1px solid var(--blue-6);
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.battle-page .battle-repeat-cards .option-card-radio-item.is-selected {
+  border-color: var(--blue-9);
+}
+
+.battle-page .battle-recovery-option {
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.battle-page .battle-recovery-card {
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.battle-page .battle-footer {
+  border-top: 1px solid var(--blue-6);
+  background: none;
+}
+
+@container command-body (max-width:600px) {
+
+  .command-actor-copy {
+    display: none;
+  }
+
+  .command-actor-choice {
+    justify-content: center;
+    padding: 8px;
+  }
+
+  .command-inline-editor .grand-rule-editor-servants {
+    grid-template-columns: repeat(6,minmax(0,1fr));
+    gap: 8px;
+  }
+
+  .command-entry-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 20px;
+  }
+
+  .section-heading-english {
+    display: none;
+  }
+}
+
+@container command-body (max-width:380px) {
+
+  .command-inline-editor .grand-rule-editor-servants {
+    grid-template-columns: repeat(3,minmax(0,1fr));
+  }
+}
+
+@media (max-width:900px) {
+
+  .command-workspace {
+    grid-template-columns: 166px minmax(0,1fr);
+    gap: 20px;
+  }
+
+  .command-sidebar {
+    padding-right: 16px;
+  }
+
+  .command-rail-label {
+    gap: 6px;
+    letter-spacing: .6px;
+  }
+
+  .command-scene-controls {
+    display: flex;
+    gap: 4px;
+    margin-left: 14px;
+    flex-wrap: wrap;
+  }
+
+  .command-step-copy {
+    padding: 6px;
+  }
+
+  .command-step-copy small {
+    font-size: 8px;
+  }
+
+  .mystic-code-trigger.is-expanded.rt-Button {
+    gap: 4px 10px;
+  }
+}
+
+@media (max-width:680px) {
+
+  .command-workspace {
+    grid-template-columns: 134px minmax(0,1fr);
+    gap: 12px;
+  }
+
+  .command-sidebar {
+    padding-right: 12px;
+  }
+
+  .command-rail-label .turn-help-trigger {
+    display: none;
+  }
+
+  .command-step-list button {
+    gap: 8px;
+  }
+
+  .command-step-copy small {
+    font-size: 7px;
+  }
+
+  .command-mode-options {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .command-mode-options {
+    gap: 12px;
+  }
+
+  .command-phase-header > div {
+    gap: 14px;
+  }
+
+  .mystic-code-name {
+    font-size: 11px;
+  }
+
+}
+
+.command-row-controls {
+  display: grid;
+  align-items: center;
+  gap: 0 3px;
+  flex-shrink: 0;
+  grid-template-columns: 18px 30px;
+  grid-template-rows: 18px 18px;
+}
+
+.command-row-controls button {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--gray-10);
+  cursor: pointer;
+  padding: 0;
+  font-size: 10px;
+}
+
+.command-row-controls button:disabled {
+  opacity: .3;
+  cursor: default;
+}
+
+.command-row-controls svg {
+  width: 12px;
+  height: 12px;
+}
+
+.grand-replace-candidates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 12px;
+}
+
+.grand-replace-candidates .command-actor-choice {
+  width: 100%;
+}
+
+.command-workspace .battle-choice-row:has(.battle-order-change-hint) {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  width: 100%;
+}
+
+.command-workspace .battle-order-change-hint {
+  grid-column: 1 / -1;
+}
+
+@media (max-width:680px) {
+
+  .grand-replace-candidates .command-actor-copy {
+    display: none;
+  }
+}
+
+.command-workspace .battle-section-heading::before,
+.battle-page .battle-section-heading::before {
+  content: none;
+}
+
+@container command-body (max-width:600px) {
+
+  .battle-action-summary .battle-action-name {
+    display: none;
+  }
+
+  .battle-action-summary .battle-action-name:has(.battle-inline-skill-icon) {
+    display: inline-flex;
+    font-size: 0;
+  }
+
+  .battle-inline-skill-icon {
+    font-size: 12px;
+  }
+}
+
+@media (max-width:680px) {
+
+  .command-scene-controls {
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    margin-left: 12px;
+  }
+
+  .command-scene-controls > strong {
+    grid-column: 1;
+  }
+
+  .command-scene-controls > span {
+    grid-column: 2 / -1;
+    margin-right: 0;
+  }
+}
+
+/* Opt-in diamond indicators leave other feature controls unchanged. */
+
+.mash-diamond-options .rt-BaseRadioRoot {
+  --radio-size: 10px;
+}
+
+.mash-diamond-options .rt-BaseRadioRoot::before {
+  border-radius: 0;
+  transform: rotate(45deg);
+  background: none;
+  box-shadow: none;
+  border: 1px solid var(--gray-9);
+}
+
+.mash-diamond-options .rt-BaseRadioRoot[data-state="checked"]::before {
+  border-color: var(--blue-9);
+  background: var(--blue-9);
+}
+
+.mash-diamond-options .rt-BaseRadioRoot::after {
+  content: none;
+}
+
+.command-workspace .grand-rule-editor-grand-option {
+  height: 36px;
+  border: 0;
+  border-bottom: 1px solid var(--blue-6);
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+  color: var(--gray-11);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.command-workspace .grand-rule-editor-grand-option.selected {
+  border-color: var(--blue-9);
+  background: var(--blue-a2);
+  color: var(--blue-11);
+  box-shadow: none;
+}
+
+.command-workspace .grand-rule-editor-grand-option::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--gray-9);
+  transform: rotate(45deg);
+}
+
+.command-workspace .grand-rule-editor-grand-option.selected::before {
+  background: var(--blue-9);
+  border-color: var(--blue-9);
+}
+
+.command-workspace .option-card-radio-item.is-selected {
+  border-color: var(--blue-9);
+  background: var(--blue-a2);
+  box-shadow: none;
+}
+
+.battle-page .battle-recovery-option.is-selected {
+  height: auto;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.battle-page .battle-recovery-option.is-selected .battle-recovery-card {
+  height: auto;
+  min-height: 130px;
+  flex-basis: auto;
+  padding: 16px 10px;
+}
+
+.battle-page .battle-recovery-card .rt-CheckboxButton {
+  border-radius: 0;
+  transform: rotate(45deg);
+  width: 10px;
+  height: 10px;
+}
+
+.battle-page .battle-recovery-card .rt-CheckboxButton svg {
+  display: none;
+}
+
+.battle-page .battle-recovery-card .rt-CheckboxButton[data-state="checked"] {
+  background: var(--blue-9);
+}
+
+.battle-page .battle-topbar {
+  display: block;
+  width: 100%;
+}
+
+.battle-page .mash-page-header {
+  width: 100%;
+  padding-inline: clamp(16px,3vw,48px);
+  box-sizing: border-box;
+}
+
+.section-heading-stacked > .rt-Flex {
+  gap: 16px;
+}
+
+.section-heading-stacked > .rt-Flex::after {
+  content: "";
+  height: 1px;
+  background: var(--blue-6);
+  flex: 1;
+  margin-left: 16px;
+}
+
+.section-heading-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.section-heading-labels .section-heading-english {
+  margin: 0;
+  color: var(--blue-11);
+  font-weight: 600;
+}
+
+.section-heading-labels .rt-Text {
+  font-size: 20px;
+}
+
+.battle-page .battle-recovery-card::before,
+.battle-page .battle-recovery-card::after {
+  content: none;
+  box-shadow: none;
+  background: none;
+}
+
+.battle-page .battle-recovery-image {
+  width: 72px;
+  height: 72px;
+}
+
+.battle-page .rt-CheckboxCardCheckbox {
+  position: absolute;
+  left: calc(50% - 5px);
+  top: 0;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  background: none;
+  border-radius: 0;
+}
+
+.battle-page .rt-CheckboxCardCheckbox::before {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--gray-9);
+  box-shadow: none;
+  border-radius: 0;
+  background: none;
+}
+
+.battle-page .rt-CheckboxCardCheckbox[data-state="checked"]::before {
+  background: var(--blue-9);
+  border-color: var(--blue-9);
+}
+
+.battle-page .rt-CheckboxCardCheckbox svg {
+  display: none;
+}
+
+.battle-recovery-limit-modes {
+  display: flex;
+  gap: 16px;
+}
+
+.battle-page .battle-recovery-infinity {
+  width: auto;
+  height: 28px;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--gray-6);
+  background: none;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+.battle-page .battle-recovery-infinity.is-active {
+  border-color: var(--blue-9);
+  color: var(--blue-11);
+}
+
+/* Align preparation source, skill and target in consistent columns. */
+
+.command-workspace .battle-action-row.committed:has(.command-row-source) {
+  display: grid;
+  grid-template-columns: 12px minmax(0,1fr) 51px 24px;
+  gap: 12px;
+}
+
+.command-workspace .battle-action-row.committed:has(.command-row-source) > .command-row-controls {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.command-workspace .battle-action-row.committed:has(.command-row-source) > .battle-action-summary {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: 201px 210px minmax(0,1fr);
+  gap: 12px;
+}
+
+.command-row-source,
+.command-row-outcome,
+.command-row-skill {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.command-row-source .battle-action-name,
+.command-row-outcome .battle-action-name,
+.command-row-skill-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-row-skill {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 9px;
+}
+
+.command-row-skill > .command-row-skill-name:only-child {
+  grid-column: 1 / -1;
+}
+
+.command-row-skill > span:first-child,
+.command-row-outcome .battle-action-to,
+.command-row-skill .battle-inline-skill-icon {
+  flex-shrink: 0;
+}
+
+.command-row-skill .battle-inline-skill-icon {
+  margin-left: 0;
+}
+
+.command-row-skill small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--gray-10);
+}
+
+.command-inline-draft {
+  position: relative;
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) auto 48px;
+  padding: 16px !important;
+  border-top: 1px solid var(--blue-6);
+  border-bottom: 1px solid var(--blue-4);
+  background: var(--color-panel-solid);
+  margin-top: 24px !important;
+}
+
+.command-draft-heading {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 36px;
+  min-width: 0;
+}
+
+.command-draft-heading strong {
+  font-size: 16px;
+}
+
+.command-draft-heading .command-diamond {
+  border-color: var(--blue-9);
+}
+
+.command-mystic-choice .rt-AvatarImage {
+  object-fit: contain;
+}
+
+.command-draft-heading > span {
+  margin: auto;
+  font-size: 12px;
+  color: var(--gray-10);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-inline-draft > .battle-draft-cancel,
+.command-inline-draft > .command-draft-reselect {
+  align-self: center;
+  justify-self: end;
+  width: 48px;
+  height: 36px;
+  color: var(--gray-10);
+  font: inherit;
+  font-size: 12px;
+}
+
+.command-inline-draft > .battle-draft-cancel {
+  grid-column: 3;
+}
+
+.command-inline-draft > .command-draft-reselect {
+  grid-column: 2;
+  width: auto;
+  min-width: 48px;
+  white-space: nowrap;
+  color: var(--blue-11);
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.command-inline-draft > .battle-choice-row,
+.command-inline-draft > .battle-order-change-grid {
+  grid-column: 1 / -1;
+  width: 100%;
+  border-top: 1px solid var(--blue-4);
+  margin-top: 10px;
+}
+
+.command-inline-draft > .battle-choice-row {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 12px;
+}
+
+.command-inline-draft > .battle-choice-row > .battle-enemy-target-row {
+  grid-column: 1 / -1;
+}
+
+.command-inline-draft .command-actor-choice {
+  min-height: 60px;
+  padding: 9px;
+  gap: 9px;
+}
+
+.command-inline-draft .command-actor-choice.selected {
+  border-radius: 3px 3px 0 0;
+  color: var(--blue-11);
+  box-shadow: none;
+  padding-right: 21px;
+}
+
+.command-inline-draft .command-actor-choice.selected::after {
+  top: calc(50% - 3px);
+  bottom: auto;
+  right: 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--blue-9);
+  background: none;
+}
+
+.command-inline-draft .command-actor-choice .battle-actor-icon,
+.command-inline-draft .command-actor-choice .rt-AvatarRoot,
+.command-inline-draft .command-empty-face {
+  width: 33px;
+  height: 33px;
+  flex-basis: 33px;
+}
+
+.command-inline-draft .command-actor-copy {
+  gap: 6px;
+}
+
+.command-inline-draft .command-actor-copy b {
+  font-size: 10.5px;
+}
+
+.command-inline-draft .command-actor-copy small {
+  font-size: 9px;
+}
+
+.command-inline-draft .command-skill-options {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.command-inline-draft .command-skill-option {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: flex-start;
+  gap: 9px;
+  min-width: 0;
+  height: 60px;
+  padding: 9px;
+  border: 0;
+  border-bottom: 1px solid var(--blue-6);
+  border-radius: 0;
+  background: none;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.command-inline-draft .command-skill-option:hover {
+  border-color: var(--blue-9);
+  background: var(--blue-a2);
+  transform: none;
+}
+
+.command-inline-draft .command-skill-option .rt-AvatarRoot {
+  width: 28.5px;
+  height: 28.5px;
+  flex: 0 0 28.5px;
+}
+
+.command-skill-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-workspace .battle-action-delete,
+.command-workspace .advanced-inline-delete {
+  opacity: 1;
+  width: 20px;
+}
+
+.command-workspace .battle-action-delete:disabled,
+.command-workspace .advanced-inline-delete:disabled {
+  opacity: .4;
+}
+
+.command-entry-actions .command-diamond {
+  width: 10px;
+  height: 10px;
+  flex-basis: 10px;
+  margin: 0 3px;
+  border-color: var(--blue-9);
+}
+
+@container command-body (max-width: 680px) {
+
+  .command-workspace .battle-action-row.committed:has(.command-row-source) > .battle-action-summary {
+    grid-template-columns: minmax(30px,1fr) 190px minmax(30px,1fr);
+  }
+}
+
+@container command-body (max-width: 600px) {
+
+  .command-row-source .battle-action-name,
+  .command-row-outcome .battle-action-name,
+  .command-row-outcome .battle-action-to,
+  .command-draft-heading > span {
+    display: none;
+  }
+
+  .command-inline-draft > .battle-choice-row {
+    grid-template-columns: repeat(4,minmax(0,1fr));
+  }
+}
+
+.command-phase-title {
+  flex: 0 0 129px;
+}
+
+.command-phase-header p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 15px;
+  color: var(--gray-11);
+}
+
+.command-rail-label .section-rail-icon {
+  height: 21px;
+}
+
+.command-step-list button:disabled {
+  cursor: default;
+  opacity: .5;
+}
+
+.command-row-controls button:first-child {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+
+.command-workspace .battle-action-row.committed:has(.command-row-source) > .battle-action-delete,
+.command-workspace .battle-action-row.committed:has(.command-row-source) > .advanced-inline-delete {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+@media (max-width: 680px) {
+
+  .command-phase-header p {
+    display: none;
+  }
+
+  .command-phase-title {
+    flex: 1;
+  }
+}
+
+.command-workspace::before {
+  content: "";
+  position: absolute;
+  left: 180px;
+  top: 0;
+  width: 1.5px;
+  height: min(270px, 100%);
+  background: var(--blue-6);
+}
+
+.command-mode-options .command-diamond {
+  position: absolute;
+  right: 2px;
+  bottom: -3px;
+  width: 4px;
+  height: 4px;
+  border: 0;
+  visibility: hidden;
+}
+
+.command-mode-options [aria-pressed="true"] .command-diamond {
+  visibility: visible;
+}
+
+.command-workspace .command-attack-row:not(.is-editing) {
+  display: grid;
+  grid-template-columns: 64px 188px minmax(0, 1fr) 24px;
+  padding-inline: 9px;
+}
+
+.command-attack-row > .battle-action-delete,
+.command-attack-row > .battle-action-clear,
+.command-attack-row > .battle-action-delete-placeholder {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+.command-attack-row > .battle-attack-slot-label {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.command-attack-source {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.command-attack-source .battle-action-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-attack-source-placeholder {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gray-10);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.command-inline-draft .command-attack-options {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.command-inline-draft > .command-rule-sources {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.command-inline-draft .command-rule-colors {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.command-rule-draft .battle-draft-cancel {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+@container command-body (max-width: 600px) {
+  .command-rule-draft .command-skill-options {
+    grid-column: 1 / -1;
+  }
+}
+
+.command-attack-options .command-skill-option {
+  padding-inline: 5px;
+  gap: 6px;
+}
+
+.command-attack-row > .battle-attack-edit {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.command-workspace .battle-attack-edit .rt-Text {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.command-workspace .battle-attack-phase > .battle-action-list > .battle-add-row {
+  padding: 21px 24px 0;
+}
+
+.command-workspace .battle-attack-phase .add-row-trigger {
+  width: auto;
+  font-size: 11px;
+  min-height: 33px;
+}
+
+.command-workspace .battle-attack-phase .add-row-trigger-icon {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+  border: 0;
+  background: none;
+}
+
+@media (max-width: 900px) {
+
+  .command-workspace::before {
+    left: 164.5px;
+  }
+}
+
+@media (max-width: 680px) {
+
+  .command-workspace::before {
+    left: 132.5px;
+  }
+}
+
+@container command-body (max-width: 600px) {
+
+  .command-workspace .command-attack-row:not(.is-editing) {
+    grid-template-columns: 64px minmax(90px, 188px) minmax(0, 1fr) 24px;
+  }
+
+  .command-inline-draft .command-attack-options {
+    grid-column: 1 / -1;
+  }
+}
+
+.command-workspace .add-row-trigger .rt-Text {
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.command-phase-header strong::after {
+  content: "";
+  position: absolute;
+  right: -7px;
+  top: 0;
+  width: 1px;
+  height: 27px;
+  background: var(--blue-6);
+}
+
+.command-phase-header[data-step="enemy"] h2,
+.command-phase-header[data-step="attack"] h2 {
+  font-weight: 700;
+}

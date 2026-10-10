@@ -1,6 +1,8 @@
 import { Avatar, Badge } from "@radix-ui/themes";
 import { PersonIcon } from "@radix-ui/react-icons";
 import type { BattleActorKind } from "./battleActorLabels";
+import type { MysticCodeGender } from "../../types/appUiSettings";
+import { CommandSpellIcon } from "./CommandSpellIcon";
 
 const FALLBACK_BY_KIND: Record<BattleActorKind, string> = {
   servant: "",
@@ -17,6 +19,7 @@ interface BattleActorIconProps {
   isSupport?: boolean;
   size?: BattleActorIconSize;
   className?: string;
+  gender?: MysticCodeGender;
 }
 
 function iconClass(kind: BattleActorKind, size: BattleActorIconSize, className?: string): string {
@@ -26,7 +29,7 @@ function iconClass(kind: BattleActorKind, size: BattleActorIconSize, className?:
         ? "battle-inline-face"
         : "battle-inline-square"
       : "battle-actor-icon";
-  return className ? `${base} ${className}` : base;
+  return [base, kind === "commandSpell" ? "battle-command-spell-icon" : "", className].filter(Boolean).join(" ");
 }
 
 export function BattleActorIcon({
@@ -36,6 +39,7 @@ export function BattleActorIcon({
   isSupport = false,
   size = "inline",
   className,
+  gender,
 }: BattleActorIconProps) {
   const fallback =
     kind === "servant" ? (
@@ -46,7 +50,7 @@ export function BattleActorIcon({
 
   return (
     <span className={iconClass(kind, size, className)} aria-label={size === "inline" ? label : undefined}>
-      <Avatar
+      {kind === "commandSpell" ? <CommandSpellIcon gender={gender} label={size === "inline" ? "" : label} /> : <Avatar
         src={src ?? undefined}
         alt={size === "inline" ? "" : label}
         radius="none"
@@ -54,7 +58,7 @@ export function BattleActorIcon({
         color={kind === "servant" ? undefined : "gray"}
         draggable={false}
         fallback={fallback}
-      />
+      />}
       {kind === "servant" && isSupport && (
         <Badge className="battle-support-badge" color="gray" variant="surface" aria-label="助战">
           助

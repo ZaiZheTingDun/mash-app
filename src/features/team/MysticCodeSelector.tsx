@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
-import { Avatar, Button, Dialog, Flex, Text } from "@radix-ui/themes";
-import { convertFileSrc } from "../../tauri";
-import { mysticCodeItemPath, type MysticCode } from "../../types/mysticCode";
+import { Button, Dialog, Flex, Text } from "@radix-ui/themes";
+import { MysticCodeIcon } from "../../components/common/MysticCodeIcon";
+import type { MysticCode } from "../../types/mysticCode";
 import type { MysticCodeGender } from "../../types/appUiSettings";
 
 interface MysticCodeSelectorProps {
+  expanded?: boolean;
+  disabled?: boolean;
   codes: MysticCode[] | null;
   selectedId: number | null;
   gender: MysticCodeGender;
@@ -13,6 +15,8 @@ interface MysticCodeSelectorProps {
 
 export function MysticCodeSelector({
   codes,
+  expanded = false,
+  disabled = false,
   selectedId,
   gender,
   onSelect,
@@ -23,27 +27,27 @@ export function MysticCodeSelector({
     () => codeList.find((code) => code.id === selectedId) ?? null,
     [codeList, selectedId],
   );
-  const selectedPath = selected ? mysticCodeItemPath(selected, gender) : null;
 
   return (
     <>
       <Button
         type="button"
+        disabled={disabled}
         variant="ghost"
-        className="mystic-code-trigger"
+        className={`mystic-code-trigger${expanded ? " is-expanded" : ""}`}
         aria-label={selected ? `御主礼装：${selected.name}` : "选择御主礼装"}
         title={selected ? selected.name : "选择御主礼装"}
         onClick={() => setOpen(true)}
       >
+        {expanded && <span className="mystic-code-label">MYSTIC CODE</span>}
         <span className="mystic-code-trigger-image">
-          <Avatar
-            src={selectedPath ? convertFileSrc(selectedPath) : undefined}
-            fallback="礼"
-            alt={selected?.name ?? "未选择御主礼装"}
-            radius="full"
-            size="3"
+          <MysticCodeIcon
+            code={selected}
+            gender={gender}
+            label={selected?.name ?? "未选择御主礼装"}
           />
         </span>
+        {expanded && <><span className="mystic-code-name">{selected?.name ?? "选择御主礼装"}</span><span className="mystic-code-chevron" aria-hidden="true">⌄</span></>}
       </Button>
 
       <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -59,7 +63,6 @@ export function MysticCodeSelector({
           ) : (
             <div className="mystic-code-grid">
               {codeList.map((code) => {
-                const path = mysticCodeItemPath(code, gender);
                 return (
                   <button
                     type="button"
@@ -72,11 +75,10 @@ export function MysticCodeSelector({
                       setOpen(false);
                     }}
                   >
-                    <Avatar
-                      src={path ? convertFileSrc(path) : undefined}
-                      fallback="礼"
-                      alt={code.name}
-                      radius="full"
+                    <MysticCodeIcon
+                      code={code}
+                      gender={gender}
+                      label={code.name}
                       size="5"
                     />
                     <Text size="1" align="center" className="mystic-code-option-name">
