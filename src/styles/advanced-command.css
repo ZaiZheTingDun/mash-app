@@ -308,17 +308,12 @@
 }
 
 .grand-rule-card-grand {
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--amber-8);
-  border-radius: var(--radius-2);
-  background: var(--amber-4);
-  color: var(--amber-12);
-  display: inline-grid;
-  place-items: center;
-  font-size: 17px;
-  font-weight: 900;
-  line-height: 1;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--amber-11);
+  border-radius: 0;
+  background: transparent;
+  transform: rotate(45deg);
 }
 
 .grand-rule-card-face {

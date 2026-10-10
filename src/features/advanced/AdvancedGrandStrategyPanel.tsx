@@ -108,7 +108,7 @@ function GrandRuleCardButton({
       onClick={onClick}
     >
       {usesGrandServant ? (
-        <span className="grand-rule-card-grand">冠</span>
+        <span className="grand-rule-card-grand" aria-hidden="true" />
       ) : servant ? (
         <BattleActorIcon
           kind="servant"
@@ -143,7 +143,7 @@ function GrandRuleServantChoices({ editingCard, partyMembers, faces, allowGrandS
     const selected = grand ? grandSelected : anySelected;
     if (selectedOnly && !selected) return null;
     const label = grand ? "冠位从者" : "任意从者";
-    return <button type="button" className={`command-actor-choice${selectedOnly ? " selected" : ""}`}
+    return <button type="button" className={`command-actor-choice command-rule-special-choice${grand ? " command-rule-grand-choice" : ""}${selectedOnly ? " selected" : ""}`}
       aria-label={label} aria-pressed={selected} onClick={() => onSelect({ grandServant: grand, memberId: null, slotIndex: null, servantId: null, isSupport: false })}>
       <span className="command-empty-face" aria-hidden="true"><i className="command-diamond" /></span>
       <span className="command-actor-copy"><b>{label}</b></span>

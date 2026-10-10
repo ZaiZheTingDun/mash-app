@@ -300,7 +300,8 @@
   flex-shrink: 0;
 }
 
-.command-workspace .grand-rule-card-empty {
+.command-workspace .grand-rule-card-empty,
+.command-workspace .grand-rule-card-grand {
   width: 8.5px;
   height: 8.5px;
   flex-shrink: 0;
@@ -338,6 +339,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.command-rule-special-choice .command-empty-face {
+  border: 0;
+  background: transparent;
+}
+
+.command-rule-special-choice .command-diamond {
+  background: transparent;
+}
+
+.command-rule-grand-choice .command-diamond {
+  border-color: var(--amber-11);
 }
 
 .command-workspace .grand-strategy-body > .rt-Flex > .rt-Button {
