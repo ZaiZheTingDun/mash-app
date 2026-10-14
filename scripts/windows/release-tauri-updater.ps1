@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param([string]$Channel = $(if ($env:RELEASE_CHANNEL) { $env:RELEASE_CHANNEL } else { 'windows-stable' }))
+param(
+    [string]$Channel = $(if ($env:RELEASE_CHANNEL) { $env:RELEASE_CHANNEL } else { 'windows-stable' }),
+    [switch]$SkipBuild
+)
 . (Join-Path $PSScriptRoot 'common.ps1')
 Assert-ReleaseEnvironment -Signing
 if ($Channel -notmatch '^[A-Za-z0-9._-]+$') { throw 'Invalid channel.' }
@@ -23,7 +26,7 @@ try {
     $version = $config.version
     $tag = "v$version"
     $target = Get-WindowsPlatform
-    & (Join-Path $PSScriptRoot 'build-windows.ps1')
+    if (-not $SkipBuild) { & (Join-Path $PSScriptRoot 'build-windows.ps1') }
     $bundle = Join-Path $repoRoot 'src-tauri/target/release/bundle'
     $artifact = Invoke-Native node @('scripts/shared/updater-artifact.mjs', $bundle, 'src-tauri/tauri.conf.json', $target)
     $signatureFile = Get-Item -LiteralPath "$artifact.sig"

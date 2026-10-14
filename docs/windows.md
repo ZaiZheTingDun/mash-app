@@ -178,3 +178,4 @@ runtime 版本相对目标平台递增；CV code 版本仍跨平台共用。
 | `frontend.yml` | Ubuntu         | 前端源码、配置或依赖变更：ESLint、TypeScript、Vitest、Vite 构建                                        |
 | `rust.yml`     | Windows、macOS | Rust/Tauri 变更：Cargo 测试；发布脚本、Tauri 资源、前端依赖及发布 skill 变更：独立的脚本测试           |
 | `cv.yml`       | Windows、macOS | CV 源码、测试、依赖、模板或构建输入变更：pytest；影响运行时/code ZIP 时额外执行 Windows 打包及集成测试 |
+| `windows-release.yml` | Windows、Ubuntu | 手动发布：锁定 App tag，构建并签名一次 NSIS，安装/启动 smoke，复用候选包发布 direct download 与 Windows updater |

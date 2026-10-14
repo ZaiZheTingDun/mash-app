@@ -1,0 +1,212 @@
+name: Windows app release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: App tag to release (for example v0.16.0)
+        type: string
+        required: true
+      app_version:
+        description: App version in the selected tag (x.y.z)
+        type: string
+        required: true
+      channel:
+        description: Updater channel
+        type: string
+        default: windows-stable
+        required: true
+      publish:
+        description: Publish the already verified installer and updater manifest
+        type: boolean
+        default: false
+      publish_installer:
+        description: Also publish the direct downloads/latest installer link
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-app-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_BASE_URL: ${{ vars.RELEASE_BASE_URL || 'https://mash.xiaotongx.com' }}
+  R2_PREFIX: ${{ vars.R2_PREFIX || 'mash' }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      source_sha: ${{ steps.plan.outputs.source_sha }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Require release tooling from the default branch
+        env:
+          WORKFLOW_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: test "$WORKFLOW_REF" = "refs/heads/$DEFAULT_BRANCH"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate the tagged app and pinned CV artifacts
+        id: plan
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+          APP_VERSION: ${{ inputs.app_version }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          node scripts/shared/windows-release.mjs plan "$APP_VERSION" "$SOURCE_REF" "$CHANNEL" plan.json
+          node -e 'const p=require("./plan.json"); require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `source_sha=${p.sourceSha}\nversion=${p.version}\n`);'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-plan
+          path: plan.json
+          if-no-files-found: error
+          retention-days: 30
+
+  build:
+    needs: plan
+    runs-on: windows-2022
+    timeout-minutes: 45
+    environment: windows-release
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: windows-app-release-${{ runner.arch }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-release-plan
+          path: candidate
+      - name: Install locked JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build the signed NSIS installer once
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: ./scripts/windows/build-windows.ps1
+      - name: Record the exact installer and signature bytes
+        run: node scripts/shared/windows-release.mjs record candidate/plan.json src-tauri/target/release/bundle candidate
+      - name: Run the explicit Windows CV import test when local CV artifacts are available
+        if: ${{ hashFiles('sidecar/mash_cv/dist/mash-cv-code-*.zip', 'sidecar/mash_cv/dist/mash-cv-runtime-windows-*.zip') != '' }}
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib tests::locally_built_platform_bundles_install_and_report_ready -- --ignored --exact
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-candidate
+          path: candidate/*
+          if-no-files-found: error
+          retention-days: 30
+
+  verify:
+    needs: [plan, build]
+    runs-on: windows-2022
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-release-candidate
+          path: candidate
+      - name: Verify the candidate was not changed in transit
+        run: node scripts/shared/windows-release.mjs validate candidate/release.json candidate
+      - name: Verify NSIS and signature files are present
+        run: |
+          $receipt = Get-Content candidate/release.json -Raw | ConvertFrom-Json
+          $installer = Join-Path candidate $receipt.artifact
+          $bytes = [IO.File]::ReadAllBytes($installer)
+          if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'Installer is not a Windows PE file.' }
+          if (-not (Get-Content "$installer.sig" -Raw).Trim()) { throw 'Updater signature is empty.' }
+      - name: Install, launch and uninstall the candidate
+        run: |
+          $receipt = Get-Content candidate/release.json -Raw | ConvertFrom-Json
+          ./scripts/windows/verify-installer.ps1 -Installer "candidate/$($receipt.artifact)"
+
+  publish:
+    needs: [plan, build, verify]
+    if: ${{ inputs.publish }}
+    runs-on: windows-2022
+    timeout-minutes: 20
+    environment: windows-release
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-release-candidate
+          path: candidate
+      - name: Verify and stage the exact build output
+        run: |
+          node scripts/shared/windows-release.mjs validate candidate/release.json candidate
+          $receipt = Get-Content candidate/release.json -Raw | ConvertFrom-Json
+          $bundle = Join-Path $PWD 'src-tauri/target/release/bundle/nsis'
+          New-Item -ItemType Directory -Path $bundle -Force | Out-Null
+          Copy-Item (Join-Path candidate $receipt.artifact) $bundle
+          Copy-Item (Join-Path candidate "$($receipt.artifact).sig") "$bundle/$($receipt.artifact).sig"
+      - name: Publish the immutable direct installer first
+        if: ${{ inputs.publish_installer }}
+        env:
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'mash' }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: ./scripts/windows/release-installer.ps1 -SkipBuild
+      - name: Publish the updater manifest last
+        env:
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'mash' }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: ./scripts/windows/release-tauri-updater.ps1 -Channel "$env:RELEASE_CHANNEL" -SkipBuild

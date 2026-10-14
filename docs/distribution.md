@@ -109,6 +109,31 @@ Windows 编排在新版本检测到 CV 改动时要求显式版本号；对同�
 
 ## App 发布
 
+### Windows GitHub Actions 发布
+
+Windows App 发布使用 `.github/workflows/windows-release.yml`，并且必须在 CV code
+发布 PR 合并后、App 版本 tag 已创建时运行。workflow 只接受默认分支上的 workflow
+版本，`source_ref` 应指向待发布的 `vX.Y.Z` tag。
+
+workflow 分为四个阶段：
+
+1. `plan` 检查 tag、Tauri/Cargo/`versions.toml` 版本一致性，并锁定 Windows
+   manifest 中的 CV code/runtime URL 与 SHA-256；
+2. `build` 在 Windows runner 上安装锁定依赖、准备 ADB、执行前端/脚本/Rust 测试，
+   只构建一次签名 NSIS 安装包，并保存安装包、`.sig` 与 SHA-256 receipt；
+3. `verify` 校验候选包在 job 之间没有被替换，确认它是 Windows PE/NSIS 文件且有
+   updater signature，并在干净 runner 上静默安装、启动、退出和卸载；
+4. `publish` 只复用候选包：先发布版本化 direct download，再发布 updater artifact
+   和同版本 manifest，最后更新 `latest.json`。发布脚本要求 R2 object 与公开 CDN
+   可访问；重复运行时不会重新构建安装包。
+
+`windows-release` environment 需要 `R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、
+`TAURI_SIGNING_PRIVATE_KEY`（以及可选的
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）secrets，以及 `R2_ENDPOINT`、`R2_BUCKET`、可选的
+`RELEASE_BASE_URL`、`R2_PREFIX` variables。默认 `publish=false` 只跑候选构建和验证；
+人工确认后再勾选 `publish`。`publish_installer=false` 可只更新 updater channel，
+保留已有 direct download。
+
 Windows x64 的原生构建和 PowerShell 发布入口见 [Windows 构建与验证](windows.md)。
 跨平台 updater 必须串行发布，并合并同一版本的 `platforms` 条目。
 
