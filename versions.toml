@@ -2,7 +2,7 @@
 version = "0.19.0"
 
 [mash_cv]
-code = "0.4.28"
+code = "0.4.29"
 
 [mash_cv.runtime]
 darwin-aarch64 = "2026.05.08-runtime1"
