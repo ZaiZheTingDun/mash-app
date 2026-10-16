@@ -1,0 +1,62 @@
+name: Release preflight
+run-name: Release preflight app v${{ inputs.app_version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Reviewed source on the default branch
+        type: string
+        required: true
+        default: main
+      app_version:
+        description: New app version (x.y.z)
+        type: string
+        required: true
+      cv_code_version:
+        description: New CV code version if its packaged source changed (otherwise leave empty)
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Require default-branch release tooling
+        env:
+          WORKFLOW_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: test "$WORKFLOW_REF" = "refs/heads/$DEFAULT_BRANCH"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check release helpers
+        run: node --test scripts/__tests__/*.test.mjs
+      - name: Resolve source, classify changes and check dependencies
+        id: plan
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+          APP_VERSION: ${{ inputs.app_version }}
+          CV_CODE_VERSION: ${{ inputs.cv_code_version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_BASE_URL: ${{ vars.RELEASE_BASE_URL || 'https://mash.xiaotongx.com' }}
+          R2_PREFIX: ${{ vars.R2_PREFIX || 'mash' }}
+        run: node scripts/shared/app-release.mjs plan release-plan.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-plan
+          path: release-plan.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Require an executable plan
+        env:
+          READY: ${{ steps.plan.outputs.ready }}
+        run: test "$READY" = true

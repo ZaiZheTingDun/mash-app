@@ -32,6 +32,37 @@ Tag 分别为 `vX.Y.Z`、`cv-code/X.Y.Z` 和 `cv-runtime/<platform>/X.Y.Z`。
 
 ## 发布入口
 
+### GitHub Actions：预检查与联合发布
+
+应用 CI 发布分为两个手动 workflow：
+
+1. 在默认分支运行 [Release preflight](../.github/workflows/release-preflight.yml)，填写 `source_ref` 和目标 `app_version`。若实际 CV 包源码变化，另填递增的 `cv_code_version`；未变化时留空。
+2. 查看 Actions Summary 中的发布范围、源码 SHA、CV 基准及阻塞原因。预检查只读 Git 对象，不修改版本、创建 tag 或上传发布物；`release-plan` artifact 保存 `release-plan.json`，保留 30 天。
+3. 只有成功的预检查可用于发布。在默认分支运行 [App release](../.github/workflows/app-release.yml)，填写预检查的 **run ID**。该操作执行正式发布；workflow 不接受任意上传的计划，也不重新选择最新 main。
+4. 发布成功后合并自动创建的 `codex/app-release-<version>` 版本同步 PR，使默认分支保存实际发布的版本、CV 清单和日志。若 main 已发生冲突，sync job 会失败，已完成的发布仍然有效；需手动同步该发布提交的元数据。
+
+预检查以 App 当前 `runtime-manifest.json` 引用的 `cv-code/<version>` tag 为 CV 基准，比较实际被打包的源码；不取最新 CV tag。测试变更会记录，但不会单独要求 CV 升版；App 内的模板随 App 发布。模型、原生依赖、启动器和 runtime 构建脚本变化会阻塞发布，要求先独立发布并应用对应平台的 runtime。历史 runtime 没有对应 tag 时，以该平台版本在 `versions.toml` 中的引入提交为基准；缺少基准时阻塞。
+
+执行时，共享 CV ZIP 只构建一次；无变化时下载并校验 App 已引用的 ZIP。随后写入准确的 CV URL/SHA-256、应用版本和日志，生成以所选源码为父提交的固定发布提交。这个提交在构建阶段仅通过 Git bundle 传递，不提前推送 tag。Windows x64 与 macOS Apple Silicon 使用同一份 CV ZIP 和固定 runtime，运行源码测试、冻结 runtime 的协议/OCR 检查、Rust 安装集成测试和应用构建。macOS Intel 暂不参与该矩阵。
+
+所有平台通过后，候选会保存源码 bundle、依赖记录、平台测试记录、文件大小与 SHA-256；updater 签名使用各平台已配置的公钥通过 minisign 验证。publish job 复用这些候选文件，条件上传 R2 并下载校验，再检查公开 CDN 的完整文件哈希；随后创建源码 tag、验证 GitHub Release 附件，最后更新 `stable` 和 `windows-stable` 两个通道及直接下载链接。两个通道都包含本批次的平台条目。
+
+配置如下（R2 bucket 默认 `mash`，对象前缀默认 `mash`）：
+
+| 位置 | 配置 |
+| --- | --- |
+| Repository variables | 可选 `RELEASE_BASE_URL`、`R2_PREFIX`，预检查与执行必须一致 |
+| `app-release-build` environment variables | `R2_ENDPOINT`，可选 `R2_BUCKET` |
+| `app-release-build` environment secrets | 只读 R2 的 `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`；`TAURI_SIGNING_PRIVATE_KEY_WINDOWS` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD_WINDOWS`；`TAURI_SIGNING_PRIVATE_KEY_MACOS` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD_MACOS` |
+| `app-release` environment variables | `R2_ENDPOINT`，可选 `R2_BUCKET`，与构建 environment 指向相同存储 |
+| `app-release` environment secrets | 可读写 R2 的 `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` |
+
+Windows 与 macOS 当前公钥不同，需分别提供匹配的 updater 私钥。签名私钥只传给对应平台的打包步骤；R2 写凭据只传给 publish job。可按维护策略为 `app-release` environment 配置审批；构建 environment 的审批也会影响候选准备和测试。仓库还需允许 Actions 创建 PR。
+
+重试时优先选择 **Re-run failed jobs**，复用已验证的候选。已有同路径文件只有哈希相同才允许复用；tag 不移动，通道拒绝降级，并通过 ETag 条件写入防止覆盖并发发布。两个通道、GitHub 和直接下载链接之间不是原子事务，中断后可能部分入口已推进；重试会完成剩余步骤。不要同时运行本地发布脚本与 CI 发布，也不要在同一版本下重新构建不同的二进制。
+
+### 本地发布
+
 先提交工作区改动，在 `CHANGELOG.md` 的“未发布”或目标版本标题下准备更新说明。以下为命令用法，版本参数均替换为目标递增版本。
 
 macOS：

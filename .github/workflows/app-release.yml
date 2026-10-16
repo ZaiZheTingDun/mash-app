@@ -1,0 +1,402 @@
+name: App release
+run-name: App release from preflight ${{ inputs.preflight_run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      preflight_run_id:
+        description: Successful Release preflight run ID (not an artifact ID)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: app-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_BASE_URL: ${{ vars.RELEASE_BASE_URL || 'https://mash.xiaotongx.com' }}
+  R2_PREFIX: ${{ vars.R2_PREFIX || 'mash' }}
+  AWS_DEFAULT_REGION: auto
+  AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+  AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      source_sha: ${{ steps.origin.outputs.source_sha }}
+      tooling_sha: ${{ steps.origin.outputs.tooling_sha }}
+      app_version: ${{ steps.origin.outputs.app_version }}
+    steps:
+      - name: Require default-branch release tooling
+        env:
+          WORKFLOW_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: test "$WORKFLOW_REF" = "refs/heads/$DEFAULT_BRANCH"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read preflight provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFLIGHT_RUN_ID: ${{ inputs.preflight_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$PREFLIGHT_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PREFLIGHT_RUN_ID" > preflight-run.json
+          gh run download "$PREFLIGHT_RUN_ID" --name release-plan --dir plan
+      - name: Validate workflow, repository and tooling identity
+        id: origin
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node scripts/shared/app-release.mjs validate-run plan/release-plan.json preflight-run.json
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.origin.outputs.tooling_sha }}
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.origin.outputs.source_sha }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Revalidate the fixed plan against current tags and dependencies
+        working-directory: source
+        run: node ../tooling/scripts/shared/app-release.mjs validate ../plan/release-plan.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release-plan
+          path: plan/release-plan.json
+          if-no-files-found: error
+          retention-days: 30
+
+  prepare:
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: app-release-build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.tooling_sha }}
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-release-plan
+          path: candidate
+      - name: Build shared CV code once, or download the pinned published ZIP
+        working-directory: source
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'mash' }}
+        run: node ../tooling/scripts/shared/app-release.mjs code ../candidate/release-plan.json ../candidate
+      - name: Freeze versions and the exact CV manifest in a reproducible release commit
+        working-directory: source
+        run: node ../tooling/scripts/shared/app-release.mjs prepare ../candidate/release-plan.json ../candidate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release-prepared
+          path: candidate/*
+          if-no-files-found: error
+          retention-days: 30
+
+  build:
+    name: App and CV compatibility (${{ matrix.platform }})
+    needs: [plan, prepare]
+    environment: app-release-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            platform: windows-x86_64
+          - os: macos-15
+            platform: darwin-aarch64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      POETRY_VIRTUALENVS_IN_PROJECT: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.tooling_sha }}
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-release-prepared
+          path: candidate
+      - name: Check out the prepared release snapshot
+        working-directory: source
+        run: |
+          git fetch ../candidate/source.bundle refs/heads/release-candidate
+          git checkout --detach FETCH_HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: source/src-tauri -> target
+          shared-key: app-release-${{ runner.os }}-${{ runner.arch }}
+      - name: Install locked frontend and source-test dependencies
+        working-directory: source
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.0 --activate
+          pnpm install --frozen-lockfile
+          python -m pip install poetry==2.2.1
+          cd sidecar/mash_cv
+          poetry install --no-root
+      - name: CV source tests
+        working-directory: source/sidecar/mash_cv
+        run: poetry run pytest --ignore=tests/test_windows_runtime.py
+      - name: Validate the exact code ZIP with the pinned native runtime
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'mash' }}
+          TARGET_PLATFORM: ${{ matrix.platform }}
+        run: |
+          python tooling/sidecar/mash_cv/verify_code_release.py candidate/release.json \
+            --dist source/sidecar/mash_cv/dist --report "reports/$TARGET_PLATFORM.json"
+      - name: Prepare Windows ADB resources
+        if: runner.os == 'Windows'
+        working-directory: source
+        shell: pwsh
+        run: ./scripts/windows/prepare-windows-adb.ps1
+      - name: Backend tests and exact ZIP installation through Rust
+        working-directory: source
+        run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib tests::locally_built_platform_bundles_install_and_report_ready -- --ignored --exact
+      - name: Build signed Windows updater and installer
+        if: runner.os == 'Windows'
+        working-directory: source
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_WINDOWS }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD_WINDOWS }}
+        run: pnpm tauri build --bundles nsis
+      - name: Build signed macOS updater and DMG
+        if: runner.os == 'macOS'
+        working-directory: source
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_MACOS }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD_MACOS }}
+        run: |
+          test "$(uname -m)" = arm64
+          pnpm tauri build --bundles app,dmg
+      - name: Record tested platform artifacts and embedded manifest identity
+        working-directory: source
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+        run: |
+          node ../tooling/scripts/shared/app-release.mjs record ../candidate/prepared.json \
+            "$TARGET_PLATFORM" "../builds/$TARGET_PLATFORM" "../reports/$TARGET_PLATFORM.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release-build-${{ matrix.platform }}
+          path: builds/*
+          if-no-files-found: error
+          retention-days: 30
+
+  candidate:
+    needs: [plan, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.tooling_sha }}
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install signature verifier
+        run: sudo apt-get update && sudo apt-get install -y minisign
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-release-prepared
+          path: candidate
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: app-release-build-*
+          path: builds
+          merge-multiple: true
+      - name: Verify both platform builds and updater signatures
+        working-directory: source
+        run: |
+          git fetch ../candidate/source.bundle refs/heads/release-candidate
+          git checkout --detach FETCH_HEAD
+          node ../tooling/scripts/shared/app-release.mjs assemble ../candidate ../builds
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release-candidate
+          path: candidate/*
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: [plan, candidate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: app-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.tooling_sha }}
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install signature verifier
+        run: sudo apt-get update && sudo apt-get install -y minisign
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-release-candidate
+          path: candidate
+      - name: Revalidate source and tags immediately before publishing
+        working-directory: source
+        run: |
+          node ../tooling/scripts/shared/app-release.mjs validate ../candidate/release-plan.json
+          git fetch ../candidate/source.bundle refs/heads/release-candidate
+          git checkout --detach FETCH_HEAD
+          node ../tooling/scripts/shared/app-release.mjs assemble ../candidate ../candidate
+      - name: Upload immutable files and verify R2 and public CDN downloads
+        working-directory: source
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'mash' }}
+        run: node ../tooling/scripts/shared/app-release.mjs upload ../candidate
+      - name: Publish source tags and verified GitHub Releases
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          node ../tooling/scripts/shared/app-release.mjs tags ../candidate
+          node ../tooling/scripts/shared/app-release.mjs github ../candidate
+      - name: Promote app update channels and direct downloads
+        working-directory: source
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'mash' }}
+        run: node ../tooling/scripts/shared/app-release.mjs promote ../candidate
+
+  sync:
+    needs: [plan, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.tooling_sha }}
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-release-candidate
+          path: candidate
+      - name: Open or reuse the release metadata synchronization PR
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_VERSION: ${{ needs.plan.outputs.app_version }}
+          PREFLIGHT_RUN_ID: ${{ inputs.preflight_run_id }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          branch="codex/app-release-$APP_VERSION"
+          gh auth setup-git
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch ../candidate/source.bundle refs/heads/release-candidate
+          existing=$(gh pr list --head "$branch" --base "$DEFAULT_BRANCH" --state open --json url --jq '.[0].url // empty')
+          if [ -n "$existing" ]; then
+            echo "$existing" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
+            git switch -c "$branch" "origin/$branch"
+          else
+            git switch -c "$branch"
+          fi
+          node ../tooling/scripts/shared/app-release.mjs sync ../candidate/app-release.json
+          if git diff --quiet "origin/$DEFAULT_BRANCH" HEAD; then
+            echo 'Release metadata is already synchronized.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git push --set-upstream origin "$branch"
+          printf 'Synchronize app versions, changelog and the exact CV manifest from the published release.\n\nApp: %s\nPreflight run: %s\n' \
+            "$APP_VERSION" "$PREFLIGHT_RUN_ID" > "$RUNNER_TEMP/app-release-pr.md"
+          gh pr create --base "$DEFAULT_BRANCH" --head "$branch" \
+            --title "chore(release): synchronize app $APP_VERSION" \
+            --body-file "$RUNNER_TEMP/app-release-pr.md" >> "$GITHUB_STEP_SUMMARY"
