@@ -267,7 +267,7 @@ jobs:
           set -euo pipefail
           helper="$GITHUB_WORKSPACE/tooling/scripts/shared/cv-code-release.mjs"
           receipt="$GITHUB_WORKSPACE/candidate/release.json"
-          branch="codex/cv-code-$CODE_VERSION"
+          branch="feat/cv-code-$CODE_VERSION"
           node "$helper" validate-apply "$receipt"
           gh auth setup-git
           git config user.name 'github-actions[bot]'
