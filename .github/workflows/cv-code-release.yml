@@ -14,7 +14,7 @@ on:
         type: string
         required: true
       publish:
-        description: Upload verified code, create its tag, and open a manifest PR
+        description: Publish verified code to R2 and GitHub Releases, then open a manifest PR
         type: boolean
         default: false
 
@@ -171,8 +171,8 @@ jobs:
         run: |
           python tooling/sidecar/mash_cv/verify_code_release.py candidate/release.json \
             --dist source/sidecar/mash_cv/dist --report "reports/$TARGET_PLATFORM.json"
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: source/src-tauri -> target
           shared-key: cv-code-release-${{ runner.os }}-${{ runner.arch }}
@@ -230,6 +230,19 @@ jobs:
         run: |
           gh auth setup-git
           node scripts/shared/cv-code-release.mjs tag candidate/release.json
+      - name: Publish the verified ZIP and release record to GitHub Releases
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
+        with:
+          tag_name: cv-code/${{ needs.plan.outputs.version }}
+          target_commitish: ${{ needs.plan.outputs.source_sha }}
+          name: mash-cv code v${{ needs.plan.outputs.version }}
+          body: Shared CV code for Windows x64 and macOS Apple Silicon. Build metadata and SHA-256 are included in release.json.
+          make_latest: "false"
+          overwrite_files: false
+          fail_on_unmatched_files: true
+          files: |
+            candidate/mash-cv-code-v${{ needs.plan.outputs.version }}.zip
+            candidate/release.json
 
   manifest-pr:
     needs: [plan, publish]
