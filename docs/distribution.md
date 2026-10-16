@@ -30,6 +30,8 @@ Tag 分别为 `vX.Y.Z`、`cv-code/X.Y.Z` 和 `cv-runtime/<platform>/X.Y.Z`。
 
 对象前缀默认 `mash`；macOS 通道默认 `stable`，Windows 默认 `windows-stable`。凭据放在本机环境或 CI secrets。Windows Authenticode 与 updater 签名独立；未签名安装包仅供手动安装。
 
+## 发布入口
+
 先提交工作区改动，在 `CHANGELOG.md` 的“未发布”或目标版本标题下准备更新说明。以下为命令用法，版本参数均替换为目标递增版本。
 
 macOS：
