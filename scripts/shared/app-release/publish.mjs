@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { digest, publishImmutable } from "../release-artifacts.mjs";
 import { compareVersions, mergeUpdaterManifest } from "../updater-manifest.mjs";
-import { readJson, writeJson, hashBytes, objectKeyFromUrl, createR2Client } from "./common.mjs";
+import { readJson, writeJson, objectKeyFromUrl, createR2Client } from "./common.mjs";
 import { verifySignature, validateFile } from "./candidate.mjs";
 
 function artifactKey(plan, platform, name) {
@@ -22,52 +22,28 @@ async function uploadBuildArtifacts(receipt, directory, aws) {
   }
 }
 
-function publicDownloads(receipt) {
-  const { plan } = receipt;
-  const downloads = [];
-  for (const runtime of Object.values(plan.runtimes)) {
-    downloads.push({
-      key: objectKeyFromUrl(runtime.runtimeUrl, plan.baseUrl),
-      sha256: runtime.runtimeSha256,
-    });
-  }
-  for (const build of receipt.builds) {
-    for (const file of build.files) {
-      downloads.push({ key: artifactKey(plan, build.platform, file.name), sha256: file.sha256 });
-    }
-  }
-  return downloads;
-}
-
-async function verifyPublicDownload({
-  url,
-  sha256,
-  errorMessage,
-  fetcher = fetch,
-  noCache = false,
-}) {
-  const options = { signal: AbortSignal.timeout(300000) };
-  if (noCache) {
-    options.cache = "no-store";
-  }
-  const response = await fetcher(url, options);
-  if (!response.ok || hashBytes(Buffer.from(await response.arrayBuffer())) !== sha256) {
-    throw new Error(errorMessage);
+function verifyR2Download(aws, key, sha256, directory) {
+  const download = path.join(directory, "download");
+  aws(["s3api", "get-object", "--key", key, download]);
+  const actualSha256 = digest(download);
+  if (actualSha256 !== sha256) {
+    throw new Error(`R2 object SHA-256 mismatch: ${key}; expected ${sha256}, got ${actualSha256}`);
   }
 }
 
 export async function uploadRelease(receipt, directory, aws = createR2Client()) {
-  await uploadBuildArtifacts(receipt, directory, aws);
-  const releaseRecord = path.join(directory, "app-release.json");
-  const releaseKey = `${receipt.plan.prefix}/releases/versions/v${receipt.plan.appVersion}/release.json`;
-  await publishImmutable(releaseRecord, releaseKey, { aws });
-  // Clients use the public URLs. Successful R2 API reads alone are insufficient.
-  for (const { key, sha256 } of publicDownloads(receipt)) {
-    await verifyPublicDownload({
-      url: `${receipt.plan.baseUrl}/${key}`,
-      sha256,
-      errorMessage: `Public CDN verification failed: ${key}`,
-    });
+  const workDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "mash-upload-"));
+  try {
+    for (const runtime of Object.values(receipt.plan.runtimes)) {
+      const key = objectKeyFromUrl(runtime.runtimeUrl, receipt.plan.baseUrl);
+      verifyR2Download(aws, key, runtime.runtimeSha256, workDirectory);
+    }
+    await uploadBuildArtifacts(receipt, directory, aws);
+    const releaseRecord = path.join(directory, "app-release.json");
+    const releaseKey = `${receipt.plan.prefix}/releases/versions/v${receipt.plan.appVersion}/release.json`;
+    await publishImmutable(releaseRecord, releaseKey, { aws });
+  } finally {
+    fs.rmSync(workDirectory, { recursive: true, force: true });
   }
 }
 
@@ -170,14 +146,12 @@ function conditionalWriteArgs(etag) {
   return ["--if-none-match", "*"];
 }
 
-async function updateChannel({
-  plan,
+function updateChannel({
   manifest,
   manifestFile,
   channel,
   aws,
   workDirectory,
-  fetcher,
 }) {
   const { key, previous } = channel;
   aws([
@@ -197,16 +171,9 @@ async function updateChannel({
   if (JSON.stringify(publishedManifest) !== JSON.stringify(manifest)) {
     throw new Error(`Published channel mismatch: ${key}`);
   }
-  await verifyPublicDownload({
-    url: `${plan.baseUrl}/${key}`,
-    sha256: digest(manifestFile),
-    errorMessage: `Public channel verification failed: ${key}`,
-    fetcher,
-    noCache: true,
-  });
 }
 
-async function updateInstaller(plan, download, aws, fetcher) {
+function updateInstaller(plan, download, aws, workDirectory) {
   const { key, previous, localFile, installer } = download;
   aws([
     "s3api",
@@ -221,13 +188,7 @@ async function updateInstaller(plan, download, aws, fetcher) {
     JSON.stringify({ "app-version": plan.appVersion }),
     ...conditionalWriteArgs(previous?.ETag),
   ]);
-  await verifyPublicDownload({
-    url: `${plan.baseUrl}/${key}`,
-    sha256: installer.sha256,
-    errorMessage: `Public installer verification failed: ${key}`,
-    fetcher,
-    noCache: true,
-  });
+  verifyR2Download(aws, key, installer.sha256, workDirectory);
 }
 
 export async function promoteRelease(
@@ -235,7 +196,6 @@ export async function promoteRelease(
   directory,
   aws = createR2Client(),
   signatureVerifier = verifySignature,
-  fetcher = fetch,
 ) {
   const { plan } = receipt;
   const workDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "mash-promote-"));
@@ -257,10 +217,10 @@ export async function promoteRelease(
       });
     }
     for (const channel of channels) {
-      await updateChannel({ plan, manifest, manifestFile, channel, aws, workDirectory, fetcher });
+      updateChannel({ manifest, manifestFile, channel, aws, workDirectory });
     }
     for (const download of downloads) {
-      await updateInstaller(plan, download, aws, fetcher);
+      updateInstaller(plan, download, aws, workDirectory);
     }
   } finally {
     fs.rmSync(workDirectory, { recursive: true, force: true });

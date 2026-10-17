@@ -13,6 +13,7 @@ Use this workflow to publish Mash end to end. Python CV code ships in the app; o
 - Do not publish mutable app updater metadata until immutable versioned artifacts are uploaded and validated.
 - Keep `versions.toml`, `src-tauri/resources/runtime-manifest.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock` aligned.
 - CV code has no independent version, tag, remote ZIP, or download/install step. `build.rs` stages it into app resources, excluding OCR models and Python caches. Internal code ZIPs are compatibility-test candidates only; never publish them separately.
+- App release CI downloads and verifies runtimes, uploaded artifacts, channel manifests and direct installers through the R2 API. Keep public CDN URLs in app metadata, but do not block CI on public CDN fetches. Local release wrappers may retain their own public URL probes.
 - Preserve existing user changes. If the worktree is dirty, inspect it and stop unless the dirty files are the intended release edits.
 - User-facing release notes should describe only visible changes. Use `$mash-release-notes` when drafting them.
 

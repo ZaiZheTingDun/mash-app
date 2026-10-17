@@ -21,7 +21,9 @@ CV 识别代码随 App 内置；只有 Python 解释器、原生依赖和 OCR �
 
 流水线每次从固定源码构建一个内部 code 验证 ZIP，版本名跟随目标 App；它只用于两个平台的兼容性验证和候选留存，不上传 R2，不创建独立 GitHub Release。Windows x64 和 macOS Apple Silicon 使用同一份 code 候选与各自固定的 runtime，运行源码测试、冻结 runtime 协议/OCR 检查、Rust 安装测试和 App 构建。
 
-构建时将 code 打入 App。只有两个平台都通过后，才验证 updater 签名、条件上传 App 产物、检查公开 CDN 哈希、创建 App tag/GitHub Release，最后更新 `stable`、`windows-stable` 以及直接下载入口。两个通道包含本批次的平台条目。macOS Intel 暂不参与该发布矩阵。
+构建时将 code 打入 App。只有两个平台都通过后，才验证 updater 签名、条件上传 App 产物、通过 R2 API 回读校验 SHA-256、创建 App tag/GitHub Release，最后更新 `stable`、`windows-stable` 以及直接下载入口。两个通道包含本批次的平台条目。macOS Intel 暂不参与该发布矩阵。
+
+CI 的 runtime 下载、产物回读、通道和直接下载入口校验统一走 R2 API，不把 runner 对公开 CDN 的访问结果作为发布门槛。App 清单与安装包下载地址继续使用公开 CDN；API 校验确认存储内容一致，不证明每个用户的 CDN 访问结果。
 
 ## 发布入口
 
@@ -55,4 +57,4 @@ pnpm release:windows <app-version> -Installer -Push -Publish
 
 优先使用 **Re-run failed jobs**，复用固定版本和已验证候选，不重新构建不同内容的同版本二进制。已存在的版本化对象只有哈希相同才允许复用；tag 不移动，通道拒绝降级，指针通过 ETag 条件写入保护。
 
-通道、GitHub 和直接下载入口之间不是原子事务；中断后可能部分推进，重试完成剩余步骤。不要同时运行本地发布脚本和 CI。发布完成需确认版本、tag、签名、CDN 内容和通道一致；本地测试不代表已通过真实 Windows 安装或设备验证。资源回滚见[资源流程](asset-bundle-update.md#回滚)。
+通道、GitHub 和直接下载入口之间不是原子事务；中断后可能部分推进，重试完成剩余步骤。不要同时运行本地发布脚本和 CI。发布完成需确认版本、tag、签名、R2 内容和通道一致；本地测试不代表已通过真实 Windows 安装或设备验证。资源回滚见[资源流程](asset-bundle-update.md#回滚)。

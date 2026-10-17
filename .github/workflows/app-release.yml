@@ -302,7 +302,7 @@ jobs:
           git fetch ../candidate/source.bundle refs/heads/release-candidate
           git checkout --detach FETCH_HEAD
           node ../tooling/scripts/shared/app-release.mjs assemble ../candidate ../candidate
-      - name: Upload immutable files and verify R2 and public CDN downloads
+      - name: Upload immutable files and verify R2 API downloads
         working-directory: source
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

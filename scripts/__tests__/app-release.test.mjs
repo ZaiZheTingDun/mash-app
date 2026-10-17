@@ -491,41 +491,39 @@ function fakeStore() {
     );
     return "{}";
   };
-  const fetcher = async (url) => ({
-    ok: objects.has(new URL(url).pathname.slice(1)),
-    arrayBuffer: async () => objects.get(new URL(url).pathname.slice(1)).bytes,
-  });
-  return { objects, calls, aws, seed, fetcher };
+  return { objects, calls, aws, seed };
 }
 
-test("uploads verify immutable R2 and public CDN bytes before any channel promotion", async (t) => {
+test("uploads verify runtime and immutable artifact bytes through R2 without public downloads", async (t) => {
   const release = createReleaseFixture(t);
   const receipt = release.assembled();
   const store = fakeStore();
   for (const [platform, runtime] of Object.entries(receipt.plan.runtimes)) {
     store.seed(new URL(runtime.runtimeUrl).pathname.slice(1), `runtime ${platform}`);
   }
-  t.mock.method(globalThis, "fetch", async (url) => ({
-    ok: true,
-    arrayBuffer: async () => store.objects.get(url.slice(receipt.plan.baseUrl.length + 1)).bytes,
-  }));
+  t.mock.method(globalThis, "fetch", async () => assert.fail("Publishing must use the R2 API"));
   await uploadRelease(receipt, release.candidate, store.aws);
   await uploadRelease(receipt, release.candidate, store.aws);
   assert.equal(
     store.calls.some((call) => /releases\/(stable|windows-stable)\//.test(call.key)),
     false,
   );
-  t.mock.method(globalThis, "fetch", async () => ({
-    ok: true,
-    arrayBuffer: async () => Buffer.from("wrong CDN bytes"),
-  }));
+  for (const build of receipt.builds) {
+    for (const file of build.files) {
+      const key = `mash/releases/versions/v1.1.0/${build.platform}/${file.name}`;
+      assert.ok(store.calls.some(call => call.operation === "get-object" && call.key === key));
+    }
+  }
+  const runtime = receipt.plan.runtimes["windows-x86_64"];
+  store.seed(new URL(runtime.runtimeUrl).pathname.slice(1), "wrong runtime bytes");
   await assert.rejects(
     uploadRelease(receipt, release.candidate, store.aws),
-    /Public CDN verification failed/,
+    /R2 object SHA-256 mismatch/,
   );
 });
 
 test("both channels are validated before writes, and successful promotion can resume", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => assert.fail("Promotion must use the R2 API"));
   const release = createReleaseFixture(t);
   const receipt = release.assembled();
   const store = fakeStore();
@@ -538,7 +536,7 @@ test("both channels are validated before writes, and successful promotion can re
     JSON.stringify({ version: "2.0.0", platforms: {} }),
   );
   await assert.rejects(
-    promoteRelease(receipt, release.candidate, store.aws, () => {}, store.fetcher),
+    promoteRelease(receipt, release.candidate, store.aws, () => {}),
     /newer release/,
   );
   assert.equal(
@@ -566,7 +564,6 @@ test("both channels are validated before writes, and successful promotion can re
         return store.aws(args);
       },
       () => {},
-      store.fetcher,
     ),
     /temporary interruption/,
   );
@@ -578,8 +575,8 @@ test("both channels are validated before writes, and successful promotion can re
     JSON.parse(store.objects.get("mash/releases/windows-stable/latest.json").bytes).version,
     "1.0.0",
   );
-  await promoteRelease(receipt, release.candidate, store.aws, () => {}, store.fetcher);
-  await promoteRelease(receipt, release.candidate, store.aws, () => {}, store.fetcher);
+  await promoteRelease(receipt, release.candidate, store.aws, () => {});
+  await promoteRelease(receipt, release.candidate, store.aws, () => {});
   for (const channel of ["stable", "windows-stable"]) {
     const manifest = JSON.parse(store.objects.get(`mash/releases/${channel}/latest.json`).bytes);
     assert.equal(manifest.version, "1.1.0");
@@ -594,7 +591,7 @@ test("both channels are validated before writes, and successful promotion can re
       call.operation === "put-object" && /releases\/(stable|windows-stable)\//.test(call.key),
   ).length;
   await assert.rejects(
-    promoteRelease(receipt, release.candidate, store.aws, () => {}, store.fetcher),
+    promoteRelease(receipt, release.candidate, store.aws, () => {}),
     /newer direct installer/,
   );
   assert.equal(
@@ -604,6 +601,20 @@ test("both channels are validated before writes, and successful promotion can re
     ).length,
     writes,
   );
+});
+
+test("promotion verifies the direct installer bytes through R2", async t => {
+  const release = createReleaseFixture(t);
+  const receipt = release.assembled();
+  const store = fakeStore();
+  await assert.rejects(promoteRelease(receipt, release.candidate, args => {
+    const result = store.aws(args);
+    const key = args[args.indexOf("--key") + 1];
+    if (args[1] === "get-object" && key.startsWith("mash/downloads/latest/")) {
+      fs.writeFileSync(args.at(-1), "corrupt installer bytes");
+    }
+    return result;
+  }, () => {}), /R2 object SHA-256 mismatch: mash\/downloads\/latest\//);
 });
 
 test("a racing publisher fails conditional promotion without overwriting its channel", async (t) => {
@@ -624,7 +635,6 @@ test("a racing publisher fails conditional promotion without overwriting its cha
         return store.aws(args);
       },
       () => {},
-      store.fetcher,
     ),
     /412/,
   );
@@ -645,7 +655,6 @@ test("a racing publisher fails conditional promotion without overwriting its cha
         return installers.aws(args);
       },
       () => {},
-      installers.fetcher,
     ),
     /412/,
   );
