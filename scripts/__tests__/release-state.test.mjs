@@ -83,6 +83,15 @@ test("shared release CLIs execute through a directory alias", t => {
   run("updater-manifest.mjs", "latest.json", "1.1.0", "2026-10-14T00:00:00Z", "windows-x86_64",
     "https://example.invalid/installer.exe", "fixture signature");
   assert.equal(JSON.parse(f.read("latest.json")).platforms["windows-x86_64"].signature, "fixture signature");
+
+  // Preserve the alias in import.meta.url to exercise differing entry/module paths
+  // on every host, including the native path normalization needed on Windows.
+  const runtime = (...refs) => invoke(process.execPath, ["--preserve-symlinks-main",
+    path.join(alias, "runtime-inputs.mjs"), ...refs, "windows-x86_64"], f.root).trim();
+  assert.equal(runtime("HEAD", "HEAD"), "false");
+  f.write("sidecar/cv-runtime/build_runtime.py", "changed runtime builder");
+  f.commit();
+  assert.equal(runtime("HEAD^", "HEAD"), "true");
 });
 
 test("app bump aligns four files and leaves unrelated lock packages untouched", t => {

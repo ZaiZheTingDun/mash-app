@@ -27,7 +27,7 @@ export function runtimeChangedFiles(base, source, platform) {
   return output.trim().split("\n").filter(Boolean);
 }
 
-if (process.argv[1] && fs.realpathSync.native(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync.native(process.argv[1]) === fs.realpathSync.native(fileURLToPath(import.meta.url))) {
   const [base, source, platform] = process.argv.slice(2);
   console.log(Boolean(base && runtimeChangedFiles(base, source, platform).length));
 }
