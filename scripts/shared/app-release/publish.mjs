@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { digest, publishImmutable } from "../cv-code-release.mjs";
+import { digest, publishImmutable } from "../release-artifacts.mjs";
 import { compareVersions, mergeUpdaterManifest } from "../updater-manifest.mjs";
 import { readJson, writeJson, hashBytes, objectKeyFromUrl, createR2Client } from "./common.mjs";
 import { verifySignature, validateFile } from "./candidate.mjs";
@@ -22,23 +22,9 @@ async function uploadBuildArtifacts(receipt, directory, aws) {
   }
 }
 
-async function uploadCodeArtifact(receipt, directory, aws) {
-  const codeFile = path.join(directory, receipt.code.artifact);
-  validateFile(codeFile, {
-    name: receipt.code.artifact,
-    size: receipt.code.size,
-    sha256: receipt.code.sha256,
-  });
-  if (receipt.plan.code.changed) {
-    await publishImmutable(codeFile, receipt.code.objectKey, { aws });
-    const codeRecord = path.join(directory, "release.json");
-    await publishImmutable(codeRecord, `${receipt.code.objectKey}.release.json`, { aws });
-  }
-}
-
 function publicDownloads(receipt) {
   const { plan } = receipt;
-  const downloads = [{ key: receipt.code.objectKey, sha256: receipt.code.sha256 }];
+  const downloads = [];
   for (const runtime of Object.values(plan.runtimes)) {
     downloads.push({
       key: objectKeyFromUrl(runtime.runtimeUrl, plan.baseUrl),
@@ -72,7 +58,6 @@ async function verifyPublicDownload({
 
 export async function uploadRelease(receipt, directory, aws = createR2Client()) {
   await uploadBuildArtifacts(receipt, directory, aws);
-  await uploadCodeArtifact(receipt, directory, aws);
   const releaseRecord = path.join(directory, "app-release.json");
   const releaseKey = `${receipt.plan.prefix}/releases/versions/v${receipt.plan.appVersion}/release.json`;
   await publishImmutable(releaseRecord, releaseKey, { aws });

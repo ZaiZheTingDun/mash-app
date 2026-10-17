@@ -2424,21 +2424,16 @@ fn verify_asset_artifact_rejects_size_and_sha_mismatches() {
 
 fn build_runtime_manifest(
     runtime_version: &str,
-    code_version: &str,
     platform: &str,
     runtime_sha256: &str,
-    code_sha256: &str,
 ) -> RuntimeManifest {
     parse_runtime_manifest(&format!(
         r#"{{
-                "mashCvCodeVersion": "{code_version}",
                 "platforms": {{
                     "{platform}": {{
                         "runtimeVersion": "{runtime_version}",
                         "runtimeUrl": "https://cdn.example.com/runtime.zip",
-                        "runtimeSha256": "{runtime_sha256}",
-                        "codeUrl": "https://cdn.example.com/code.zip",
-                        "codeSha256": "{code_sha256}"
+                        "runtimeSha256": "{runtime_sha256}"
                     }}
                 }}
             }}"#
@@ -2452,20 +2447,11 @@ fn sha256_bytes(bytes: &[u8]) -> String {
 
 #[test]
 fn runtime_manifest_selects_platform_artifact() {
-    let manifest = build_runtime_manifest(
-        "2026.05.08-runtime1",
-        "2026.05.08-code1",
-        "darwin-aarch64",
-        "runtime-sha",
-        "code-sha",
-    );
+    let manifest = build_runtime_manifest("2026.05.08-runtime1", "darwin-aarch64", "runtime-sha");
     let artifact = manifest.platforms.get("darwin-aarch64").unwrap();
     assert_eq!(artifact.runtime_version, "2026.05.08-runtime1");
-    assert_eq!(manifest.mash_cv_code_version, "2026.05.08-code1");
     assert_eq!(artifact.runtime_url, "https://cdn.example.com/runtime.zip");
     assert_eq!(artifact.runtime_sha256, "runtime-sha");
-    assert_eq!(artifact.code_url, "https://cdn.example.com/code.zip");
-    assert_eq!(artifact.code_sha256, "code-sha");
     assert!(manifest.platforms.get("darwin-x86_64").is_none());
 }
 
@@ -2497,14 +2483,12 @@ fn windows_runtime_manifest_and_installer_are_configured() {
     assert!(artifact
         .runtime_url
         .starts_with("https://mash.xiaotongx.com/"));
+    assert_eq!(artifact.runtime_sha256.len(), 64);
     assert!(artifact
-        .code_url
-        .contains(&format!("v{}.zip", manifest.mash_cv_code_version)));
-    for digest in [&artifact.runtime_sha256, &artifact.code_sha256] {
-        assert_eq!(digest.len(), 64);
-        assert!(digest.chars().all(|c| c.is_ascii_hexdigit()));
-        assert_ne!(digest, &"0".repeat(64));
-    }
+        .runtime_sha256
+        .chars()
+        .all(|c| c.is_ascii_hexdigit()));
+    assert_ne!(artifact.runtime_sha256, "0".repeat(64));
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let config: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(root.join("tauri.windows.conf.json")).unwrap())
@@ -2535,37 +2519,23 @@ fn windows_runtime_manifest_and_installer_are_configured() {
 #[ignore = "requires locally built native CV ZIPs; run explicitly in CV CI"]
 fn locally_built_platform_bundles_install_and_report_ready() {
     let mut manifest = parse_runtime_manifest(RUNTIME_MANIFEST_JSON).unwrap();
-    let dist = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sidecar/mash_cv/dist");
+    let dist = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sidecar/cv-runtime/dist");
     let platform = runtime_platform_key();
     let runtime = dist.join(format!(
         "mash-cv-runtime-{}-v{}.zip",
         platform, manifest.platforms[&platform].runtime_version
     ));
-    let code = dist.join(format!(
-        "mash-cv-code-v{}.zip",
-        manifest.mash_cv_code_version
-    ));
-    assert!(
-        runtime.is_file(),
-        "missing locally built runtime: {}",
-        runtime.display()
-    );
-    assert!(
-        code.is_file(),
-        "missing locally built code package: {}",
-        code.display()
-    );
+    assert!(runtime.is_file(), "missing runtime: {}", runtime.display());
     // Native runtime builds embed host-specific paths/timestamps. Validate a
     // fresh local build against its own artifact hashes, as release tooling
     // does, rather than requiring byte identity with the published build.
     let artifact = manifest.platforms.get_mut(&platform).unwrap();
     artifact.runtime_sha256 = sha256_file(&runtime).unwrap();
-    artifact.code_sha256 = sha256_file(&code).unwrap();
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("中文 runtime");
-    for path in [&runtime, &code] {
-        import_runtime_bundle_from_zip_path(path, &manifest, &root, &platform).unwrap();
-    }
+    import_runtime_bundle_from_zip_path(&runtime, &manifest, &root, &platform).unwrap();
+    let resources = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/mash-cv-code");
+    assert!(resources.join("mash_cv/__init__.py").is_file());
     let status = runtime_status_from_manifest(&manifest, &root, &platform);
     assert!(status.installed);
     assert!(status.executable_path.ends_with(runtime_exe_name()));
@@ -2576,25 +2546,17 @@ fn locally_built_platform_bundles_install_and_report_ready() {
 fn runtime_status_reports_missing_matching_and_stale_versions() {
     let tmp = tempfile::tempdir().unwrap();
     let platform = "darwin-aarch64";
-    let manifest = build_runtime_manifest("runtime-v2", "code-v2", platform, "abc", "def");
+    let manifest = build_runtime_manifest("runtime-v2", platform, "abc");
 
     let missing = runtime_status_from_manifest(&manifest, tmp.path(), platform);
     assert!(!missing.installed);
     assert!(!missing.runtime_installed);
-    assert!(!missing.code_installed);
     assert_eq!(missing.installed_runtime_version, None);
-    assert_eq!(missing.installed_code_version, None);
 
     fs::create_dir_all(runtime_version_path(tmp.path()).parent().unwrap()).unwrap();
     fs::write(
         runtime_version_path(tmp.path()),
         r#"{"version":"runtime-v1","platform":"darwin-aarch64"}"#,
-    )
-    .unwrap();
-    fs::create_dir_all(code_version_path(tmp.path()).parent().unwrap()).unwrap();
-    fs::write(
-        code_version_path(tmp.path()),
-        r#"{"version":"code-v1","platform":"darwin-aarch64"}"#,
     )
     .unwrap();
     let stale = runtime_status_from_manifest(&manifest, tmp.path(), platform);
@@ -2603,21 +2565,13 @@ fn runtime_status_reports_missing_matching_and_stale_versions() {
         stale.installed_runtime_version.as_deref(),
         Some("runtime-v1")
     );
-    assert_eq!(stale.installed_code_version.as_deref(), Some("code-v1"));
 
     let exe = runtime_executable_path(tmp.path(), "runtime-v2");
     fs::create_dir_all(exe.parent().unwrap()).unwrap();
     fs::write(&exe, b"exe").unwrap();
-    let code_pkg = runtime_code_path(tmp.path(), "code-v2").join("mash_cv");
-    fs::create_dir_all(&code_pkg).unwrap();
     fs::write(
         runtime_version_path(tmp.path()),
         r#"{"version":"runtime-v2","platform":"darwin-aarch64"}"#,
-    )
-    .unwrap();
-    fs::write(
-        code_version_path(tmp.path()),
-        r#"{"version":"code-v2","platform":"darwin-aarch64"}"#,
     )
     .unwrap();
     let matching = runtime_status_from_manifest(&manifest, tmp.path(), platform);
@@ -2626,7 +2580,6 @@ fn runtime_status_reports_missing_matching_and_stale_versions() {
         matching.installed_runtime_version.as_deref(),
         Some("runtime-v2")
     );
-    assert_eq!(matching.installed_code_version.as_deref(), Some("code-v2"));
     assert!(matching.executable_path.ends_with(runtime_exe_name()));
 }
 
@@ -2639,18 +2592,10 @@ fn runtime_install_and_status_use_independent_platform_versions() {
     fs::write(&zip_path, &bytes).unwrap();
     let mut manifest = build_runtime_manifest(
         "2026.05.08-runtime1",
-        "0.4.26",
         "darwin-aarch64",
         &sha256_bytes(&bytes),
-        "code-sha",
     );
-    let windows = build_runtime_manifest(
-        "0.1.0",
-        "0.4.26",
-        "windows-x86_64",
-        &sha256_bytes(&bytes),
-        "code-sha",
-    );
+    let windows = build_runtime_manifest("0.1.0", "windows-x86_64", &sha256_bytes(&bytes));
     manifest.platforms.extend(windows.platforms);
 
     for (platform, version) in [
@@ -2664,7 +2609,6 @@ fn runtime_install_and_status_use_independent_platform_versions() {
         assert_eq!(read_runtime_version(&root).unwrap().version, version);
         let status = runtime_status_from_manifest(&manifest, &root, platform);
         assert_eq!(status.required_runtime_version, version);
-        assert_eq!(status.required_code_version, "0.4.26");
         assert!(status.runtime_installed);
         assert_eq!(
             PathBuf::from(status.executable_path),
@@ -2703,13 +2647,7 @@ fn import_runtime_bundle_rejects_sha_mismatch() {
         build_zip(&[("mash-cv-runtime/mash-cv", b"runtime executable")]),
     )
     .unwrap();
-    let manifest = build_runtime_manifest(
-        "runtime-v1",
-        "code-v1",
-        "darwin-aarch64",
-        "bad-runtime-sha",
-        "bad-code-sha",
-    );
+    let manifest = build_runtime_manifest("runtime-v1", "darwin-aarch64", "bad-runtime-sha");
 
     let err = import_runtime_bundle_from_zip_path(
         &zip_path,
@@ -2727,13 +2665,7 @@ fn import_runtime_bundle_rejects_missing_executable() {
     let zip_path = tmp.path().join("runtime.zip");
     let bytes = build_zip(&[("mash-cv-runtime/readme.txt", b"no exe")]);
     fs::write(&zip_path, &bytes).unwrap();
-    let manifest = build_runtime_manifest(
-        "runtime-v1",
-        "code-v1",
-        "darwin-aarch64",
-        &sha256_bytes(&bytes),
-        "code-sha",
-    );
+    let manifest = build_runtime_manifest("runtime-v1", "darwin-aarch64", &sha256_bytes(&bytes));
 
     let err = import_runtime_bundle_from_zip_path(
         &zip_path,
@@ -2754,13 +2686,7 @@ fn import_runtime_bundle_rejects_path_traversal_entries() {
         ("../evil.txt", b"evil"),
     ]);
     fs::write(&zip_path, &bytes).unwrap();
-    let manifest = build_runtime_manifest(
-        "runtime-v1",
-        "code-v1",
-        "darwin-aarch64",
-        &sha256_bytes(&bytes),
-        "code-sha",
-    );
+    let manifest = build_runtime_manifest("runtime-v1", "darwin-aarch64", &sha256_bytes(&bytes));
 
     let err = import_runtime_bundle_from_zip_path(
         &zip_path,
@@ -2780,13 +2706,7 @@ fn import_runtime_bundle_installs_version_record_and_executable() {
     let exe_entry = format!("mash-cv-runtime/{}", runtime_exe_name());
     let bytes = build_zip(&[(exe_entry.as_str(), b"runtime executable")]);
     fs::write(&zip_path, &bytes).unwrap();
-    let manifest = build_runtime_manifest(
-        "runtime-v1",
-        "code-v1",
-        "darwin-aarch64",
-        &sha256_bytes(&bytes),
-        "code-sha",
-    );
+    let manifest = build_runtime_manifest("runtime-v1", "darwin-aarch64", &sha256_bytes(&bytes));
     let runtime_root = tmp.path().join("runtime");
 
     let result =
@@ -2822,13 +2742,7 @@ fn import_runtime_bundle_preserves_unix_symlinked_dylibs() {
         ),
     ]);
     fs::write(&zip_path, &bytes).unwrap();
-    let manifest = build_runtime_manifest(
-        "runtime-v1",
-        "code-v1",
-        "darwin-aarch64",
-        &sha256_bytes(&bytes),
-        "code-sha",
-    );
+    let manifest = build_runtime_manifest("runtime-v1", "darwin-aarch64", &sha256_bytes(&bytes));
     let runtime_root = tmp.path().join("runtime");
 
     import_runtime_bundle_from_zip_path(&zip_path, &manifest, &runtime_root, "darwin-aarch64")
@@ -2853,36 +2767,55 @@ fn import_runtime_bundle_preserves_unix_symlinked_dylibs() {
 }
 
 #[test]
-fn import_runtime_bundle_installs_code_package() {
-    let tmp = tempfile::tempdir().unwrap();
-    let zip_path = tmp.path().join("code.zip");
-    let bytes = build_zip(&[
-        ("mash-cv-code/mash_cv/__init__.py", b""),
-        ("mash-cv-code/mash_cv/cv.py", b"code"),
-    ]);
-    fs::write(&zip_path, &bytes).unwrap();
-    let manifest = build_runtime_manifest(
-        "runtime-v1",
-        "code-v1",
-        "darwin-aarch64",
-        "runtime-sha",
-        &sha256_bytes(&bytes),
+fn bundled_code_resolution_requires_app_resources_and_ignores_old_external_code() {
+    let root = tempfile::tempdir().unwrap();
+    let external = root
+        .path()
+        .join("runtime/mash-cv/code/old/mash-cv-code/mash_cv");
+    fs::create_dir_all(&external).unwrap();
+    fs::write(external.join("__init__.py"), b"old code").unwrap();
+    assert!(bundled_code_dir(root.path()).is_none());
+    let package = root.path().join("resources/mash-cv-code/mash_cv");
+    fs::create_dir_all(&package).unwrap();
+    assert!(bundled_code_dir(root.path()).is_none());
+    fs::write(package.join("__init__.py"), b"bundled code").unwrap();
+    assert_eq!(
+        bundled_code_dir(root.path()).unwrap(),
+        package.parent().unwrap()
     );
-    let runtime_root = tmp.path().join("runtime");
+}
 
-    let result =
-        import_runtime_bundle_from_zip_path(&zip_path, &manifest, &runtime_root, "darwin-aarch64")
-            .expect("import should work");
+#[path = "../build_support.rs"]
+mod build_support;
 
-    assert_eq!(result.installed_kind, "code");
-    assert_eq!(result.installed_version, "code-v1");
-    assert!(runtime_code_path(&runtime_root, "code-v1")
-        .join("mash_cv")
-        .join("cv.py")
-        .is_file());
-    let record = read_code_version(&runtime_root).unwrap();
-    assert_eq!(record.version, "code-v1");
-    assert_eq!(record.platform, "darwin-aarch64");
+#[test]
+fn bundled_code_staging_preserves_assets_and_excludes_models_caches_and_stale_files() {
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("source");
+    let output = root.path().join("output");
+    for dir in ["models", "__pycache__", "assets/digit_classifier"] {
+        fs::create_dir_all(source.join(dir)).unwrap();
+    }
+    fs::write(source.join("__init__.py"), b"line\r\n").unwrap();
+    fs::write(source.join("models/ocr.onnx"), b"heavy").unwrap();
+    fs::write(source.join("__pycache__/cache.pyc"), b"cache").unwrap();
+    fs::write(source.join("module.pyc"), b"cache").unwrap();
+    fs::write(
+        source.join("assets/digit_classifier/weights.npz"),
+        b"light model",
+    )
+    .unwrap();
+    fs::create_dir_all(&output).unwrap();
+    fs::write(output.join("stale.py"), b"stale").unwrap();
+    build_support::stage_cv_code(&source, &output).unwrap();
+    assert_eq!(fs::read(output.join("__init__.py")).unwrap(), b"line\n");
+    assert_eq!(
+        fs::read(output.join("assets/digit_classifier/weights.npz")).unwrap(),
+        b"light model"
+    );
+    for excluded in ["models", "__pycache__", "module.pyc", "stale.py"] {
+        assert!(!output.join(excluded).exists());
+    }
 }
 
 #[test]

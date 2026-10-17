@@ -140,7 +140,7 @@ fi
 
 TAG="cv-runtime/$PLATFORM/$VERSION"
 ARTIFACT="mash-cv-runtime-${PLATFORM}-v${VERSION}.zip"
-DIST_PATH="$REPO_ROOT/sidecar/mash_cv/dist/$ARTIFACT"
+DIST_PATH="$REPO_ROOT/sidecar/cv-runtime/dist/$ARTIFACT"
 R2_PREFIX="${R2_PREFIX#/}"
 R2_PREFIX="${R2_PREFIX%/}"
 RELEASE_BASE_URL="${RELEASE_BASE_URL%/}"
@@ -159,7 +159,7 @@ fi
 node scripts/shared/release-state.mjs version runtime "$VERSION" "$PLATFORM"
 
 (
-  cd sidecar/mash_cv
+  cd sidecar/cv-runtime
   MASH_CV_RUNTIME_VERSION="$VERSION" "$REPO_ROOT/scripts/macos/build-cv.sh" --runtime-only
 )
 

@@ -1,6 +1,6 @@
-"""Verify a candidate code ZIP with the exact published native runtime.
+"""Verify app-bundled code using a local candidate ZIP and the pinned native runtime.
 
-Release tooling only: no runtime rebuild, Python package fallback, or device needed.
+The code ZIP is an internal test artifact, not an independently published release.
 """
 
 import argparse
@@ -18,7 +18,13 @@ from urllib.parse import urlsplit
 import zipfile
 import zlib
 
-from build_sidecar import platform_key
+def platform_key(system: str, machine: str) -> str:
+    os_name = {"Darwin": "darwin", "Windows": "windows", "Linux": "linux"}.get(system)
+    arch = {"arm64": "aarch64", "aarch64": "aarch64", "amd64": "x86_64",
+            "x86_64": "x86_64"}.get(machine.lower())
+    if os_name is None or arch is None:
+        raise ValueError(f"Unsupported build platform: {system}/{machine}")
+    return f"{os_name}-{arch}"
 
 
 def digest(path: Path) -> str:
@@ -127,6 +133,26 @@ def smoke(executable: Path, code: Path, models: Path, work: Path) -> None:
         raise RuntimeError(f"Frozen CV protocol/OCR check failed: {replies}")
 
 
+def verify_bundled_code(receipt_file: Path, bundled_code: Path) -> None:
+    """Ensure the app carries exactly the code checked with the frozen runtime."""
+    receipt = json.loads(receipt_file.read_text(encoding="utf-8"))
+    candidate = receipt_file.parent / receipt["artifact"]
+    if candidate.name != f"mash-cv-code-v{receipt['version']}.zip" or digest(candidate) != receipt["sha256"]:
+        raise ValueError("Candidate code SHA-256 mismatch")
+    with zipfile.ZipFile(candidate) as archive:
+        expected = {}
+        for entry in archive.infolist():
+            relative = PurePosixPath(entry.filename)
+            if not relative.parts or relative.parts[0] != "mash-cv-code" or ".." in relative.parts:
+                raise ValueError("Invalid bundled-code ZIP entry")
+            if not entry.is_dir():
+                expected[relative.relative_to("mash-cv-code").as_posix()] = archive.read(entry)
+    actual = {path.relative_to(bundled_code).as_posix(): path.read_bytes()
+              for path in bundled_code.rglob("*") if path.is_file()}
+    if "mash_cv/__init__.py" not in expected or actual != expected:
+        raise ValueError("App bundled code differs from the tested candidate")
+
+
 def verify(receipt_file: Path, dist: Path, report: Path) -> None:
     import platform
 
@@ -157,7 +183,13 @@ def verify(receipt_file: Path, dist: Path, report: Path) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("receipt", type=Path)
-    parser.add_argument("--dist", type=Path, required=True)
-    parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--dist", type=Path)
+    parser.add_argument("--report", type=Path)
+    parser.add_argument("--bundled-code", type=Path)
     args = parser.parse_args()
-    verify(args.receipt.resolve(), args.dist.resolve(), args.report.resolve())
+    if args.bundled_code:
+        verify_bundled_code(args.receipt.resolve(), args.bundled_code.resolve())
+    elif args.dist and args.report:
+        verify(args.receipt.resolve(), args.dist.resolve(), args.report.resolve())
+    else:
+        parser.error("provide --bundled-code, or both --dist and --report")

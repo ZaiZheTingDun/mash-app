@@ -12,19 +12,12 @@ function runtimeStatus(installed: boolean): RuntimeStatus {
     requiredRuntimeVersion: "2026.05.08-runtime1",
     installedRuntimeVersion: installed ? "2026.05.08-runtime1" : null,
     runtimeInstalled: installed,
-    requiredCodeVersion: "2026.05.08-code1",
-    installedCodeVersion: installed ? "2026.05.08-code1" : null,
-    codeInstalled: installed,
     installed,
     platform: "darwin-aarch64",
     runtimeDownloadUrl: "https://cdn.example.com/runtime.zip",
     runtimeExpectedSha256: "runtime-sha",
     runtimeInstallDir: "/tmp/runtime/base",
     executablePath: "/tmp/runtime/base/mash-cv-runtime/mash-cv",
-    codeDownloadUrl: "https://cdn.example.com/code.zip",
-    codeExpectedSha256: "code-sha",
-    codeInstallDir: "/tmp/runtime/code",
-    codePath: "/tmp/runtime/code/mash-cv-code",
   };
 }
 
@@ -89,7 +82,7 @@ describe("SetupPage", () => {
     renderWithTheme(<SetupPage onReady={onReady} />);
 
     expect(await screen.findByText("资源管理")).toBeInTheDocument();
-    expect(screen.getByText("需要安装 runtime base 和 code 包")).toBeInTheDocument();
+    expect(screen.getByText("需要安装 CV 运行时")).toBeInTheDocument();
     expect(
       screen.getByText("需要下载包含 assets/servants 和 assets/ces 的素材包")
     ).toBeInTheDocument();
@@ -123,7 +116,7 @@ describe("SetupPage", () => {
     renderWithTheme(<SetupPage mode="manage" onReady={onReady} />);
 
     expect(await screen.findByText("资源管理")).toBeInTheDocument();
-    expect(screen.getByText("已安装运行时 base 和 code 包")).toBeInTheDocument();
+    expect(screen.getByText("CV 运行时已安装")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "手动上传" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "手动导入" })).not.toBeInTheDocument();
     expect(onReady).not.toHaveBeenCalled();
@@ -138,7 +131,7 @@ describe("SetupPage", () => {
 
     renderWithTheme(<SetupPage mode="manage" />);
 
-    await screen.findByText("已安装运行时 base 和 code 包");
+    await screen.findByText("CV 运行时已安装");
     expect(vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "get_runtime_status"))
       .toHaveLength(1);
     expect(vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "get_asset_bundle_status"))

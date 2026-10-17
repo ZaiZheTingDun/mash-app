@@ -101,7 +101,7 @@ pub struct SupportCeVerificationResult {
     /// the runner's `SUPPORT_CE_THRESHOLD` for normal rows, but is
     /// relaxed (currently to 0.65) for Grand-Saber bond / bondNp slots
     /// because bond-CE artwork matches sit closer to the threshold —
-    /// see `BOND_CE_ARTWORK_THRESHOLD` in `sidecar/mash_cv/mash_cv/cv.py`.
+    /// see `BOND_CE_ARTWORK_THRESHOLD` in `sidecar/cv-code/mash_cv/cv.py`.
     /// Surfacing this lets the runner log and the debug overlay display
     /// the threshold that was actually applied instead of the static
     /// `SUPPORT_CE_THRESHOLD`, which would otherwise contradict the

@@ -16,7 +16,6 @@ const invoke = (command, args, cwd) => execFileSync(command, args, {
 test("configured runtime versions match each platform in the bundled manifest", () => {
   const versions = JSON.parse(invoke(process.execPath, [helper, "versions"], repo));
   const manifest = JSON.parse(fs.readFileSync(path.join(repo, "src-tauri/resources/runtime-manifest.json"), "utf8"));
-  assert.equal(manifest.mashCvCodeVersion, versions.code);
   assert.deepEqual(Object.keys(manifest.platforms).sort(), Object.keys(versions.runtimes).sort());
   for (const [platform, version] of Object.entries(versions.runtimes)) {
     assert.equal(manifest.platforms[platform].runtimeVersion, version, platform);
@@ -30,16 +29,16 @@ function fixture(t) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, text);
   };
-  write("versions.toml", '[app]\nversion = "1.0.0"\n[mash_cv]\ncode = "1.0.0"\n[mash_cv.runtime]\ndarwin-aarch64 = "2.0.0"\nwindows-x86_64 = "1.0.0"\n');
+  write("versions.toml", '[app]\nversion = "1.0.0"\n[mash_cv.runtime]\ndarwin-aarch64 = "2.0.0"\nwindows-x86_64 = "1.0.0"\n');
   write("src-tauri/tauri.conf.json", JSON.stringify({ version: "1.0.0", productName: "Mash" }));
   write("src-tauri/Cargo.toml", '[package]\nname = "mash"\nversion = "1.0.0"\n');
   write("src-tauri/Cargo.lock", '[[package]]\nname = "other"\nversion = "1.0.0"\n[[package]]\nname = "mash"\nversion = "1.0.0"\n');
-  write("src-tauri/resources/runtime-manifest.json", JSON.stringify({ mashCvCodeVersion: "1.0.0", platforms: {
-    "darwin-aarch64": { runtimeVersion: "2.0.0", runtimeUrl: "https://example.invalid/runtime.zip", runtimeSha256: "a".repeat(64), codeUrl: "https://example.invalid/code.zip", codeSha256: "b".repeat(64) },
+  write("src-tauri/resources/runtime-manifest.json", JSON.stringify({ platforms: {
+    "darwin-aarch64": { runtimeVersion: "2.0.0", runtimeUrl: "https://example.invalid/runtime.zip", runtimeSha256: "a".repeat(64) },
   } }));
   write("CHANGELOG.md", "# Changes\n\n## 未发布\n\nRelease notes\n");
-  write("sidecar/mash_cv/build_sidecar.py", "# fixture builder\n");
-  write(".gitignore", "sidecar/mash_cv/dist/\nsrc-tauri/target/\n*.log\n");
+  write("sidecar/cv-runtime/build_runtime.py", "# fixture builder\n");
+  write(".gitignore", "sidecar/cv-code/dist/\nsidecar/cv-runtime/dist/\nsrc-tauri/target/\n*.log\n");
   // Node 22's native recursive copier converts Unicode Windows paths through
   // std::filesystem. A filter keeps directory traversal in the JS implementation.
   const copyOptions = { recursive: true, filter: () => true };
@@ -54,7 +53,6 @@ function fixture(t) {
   git("config", "tag.gpgsign", "false");
   const commit = () => { git("add", "."); git("commit", "--quiet", "-m", "fixture"); };
   commit();
-  git("tag", "cv-code/1.0.0");
   git("tag", "v1.0.0");
   const run = (...args) => invoke(process.execPath, [helper, ...args], root);
   return { root, write, git, commit, run, read: name => fs.readFileSync(path.join(root, name), "utf8") };
@@ -104,19 +102,14 @@ test("invalid bump or missing lock entry fails before changing version files", t
   assert.throws(() => f.run("version", "app", "1.1.0"), /Missing mash package/);
   assert.equal(f.read("versions.toml"), original);
 });
-test("CV code is shared by all platforms while runtime updates stay platform-specific", t => {
+test("runtime artifacts update only their target platform", t => {
   const f = fixture(t);
   const mac = JSON.parse(f.read("src-tauri/resources/runtime-manifest.json")).platforms["darwin-aarch64"];
   f.run("artifact", "runtime", "1.1.0", "windows-x86_64", "https://example.invalid/win.zip", "c".repeat(64));
-  f.run("artifact", "code", "1.2.0", "windows-x86_64", "https://example.invalid/code.zip", "d".repeat(64));
   const doc = JSON.parse(f.read("src-tauri/resources/runtime-manifest.json"));
-  assert.deepEqual(doc.platforms["darwin-aarch64"], { ...mac,
-    codeUrl: "https://example.invalid/code.zip", codeSha256: "d".repeat(64) });
-  assert.equal(doc.platforms["windows-x86_64"].runtimeSha256, "c".repeat(64));
+  assert.deepEqual(doc.platforms["darwin-aarch64"], mac);
   assert.equal(doc.platforms["windows-x86_64"].runtimeVersion, "1.1.0");
-  assert.equal(doc.mashCvRuntimeVersion, undefined);
-  assert.equal(doc.mashCvCodeVersion, "1.2.0");
-  assert.throws(() => f.run("artifact", "code", "1.3.0", "windows-x86_64", "https://example.invalid/x", "bad"), /Invalid SHA/);
+  assert.throws(() => f.run("artifact", "code", "1.0.0", "windows-x86_64", "https://example.invalid/code.zip", "d".repeat(64)), /Only external runtime/);
 });
 test("runtime bumps require a platform and preserve other platform versions", t => {
   const f = fixture(t);
@@ -126,52 +119,59 @@ test("runtime bumps require a platform and preserve other platform versions", t 
   f.run("version", "runtime", "1.1.0", "windows-x86_64");
   assert.equal(JSON.parse(f.run("versions", "windows-x86_64")).runtime, "1.1.0");
   assert.equal(JSON.parse(f.run("versions", "darwin-aarch64")).runtime, "2.0.0");
-  assert.equal(JSON.parse(f.run("versions")).code, "1.0.0");
+  assert.equal(JSON.parse(f.run("versions")).code, undefined);
   f.run("version", "runtime", "1.0.0", "windows-aarch64");
   assert.equal(JSON.parse(f.run("versions", "windows-aarch64")).runtime, "1.0.0");
 });
 test("runtime release planning compares against the target platform version", t => {
   const f = fixture(t);
-  assert.equal(JSON.parse(f.run("plan", "1.1.0", "-", "1.1.0", "windows-x86_64", "plan")).current.runtime, "1.0.0");
-  assert.throws(() => f.run("plan", "1.1.0", "-", "1.0.0", "windows-x86_64", "plan"), /must increase/);
+  assert.equal(JSON.parse(f.run("plan", "1.1.0", "1.1.0", "windows-x86_64", "plan")).current.runtime, "1.0.0");
+  assert.throws(() => f.run("plan", "1.1.0", "1.0.0", "windows-x86_64", "plan"), /must increase/);
 });
 test("publishing another platform does not reset the target runtime change baseline", t => {
   const f = fixture(t);
   f.git("tag", "cv-runtime/windows-x86_64/1.0.0");
-  f.write("sidecar/mash_cv/build_sidecar.py", "changed shared runtime builder");
+  f.write("sidecar/cv-runtime/build_runtime.py", "changed shared runtime builder");
   f.commit();
   f.run("version", "runtime", "2.1.0", "darwin-aarch64");
   f.commit();
   f.git("tag", "cv-runtime/darwin-aarch64/2.1.0");
-  const plan = JSON.parse(f.run("plan", "1.1.0", "-", "-", "windows-x86_64", "plan"));
+  const plan = JSON.parse(f.run("plan", "1.1.0", "-", "windows-x86_64", "plan"));
   assert.equal(plan.runtimeChanged, true);
-  assert.throws(() => f.run("plan", "1.1.0", "-", "-", "windows-x86_64", "publish"), /CV runtime changes detected/);
+  assert.throws(() => f.run("plan", "1.1.0", "-", "windows-x86_64", "publish"), /CV runtime changes detected/);
+});
+test("Windows runtime detection ignores build CLI changes", t => {
+  const f = fixture(t);
+  f.write("sidecar/cv-code/build_code.py", "changed build CLI");
+  f.commit();
+  const plan = JSON.parse(f.run("plan", "1.1.0", "-", "windows-x86_64", "publish"));
+  assert.equal(plan.runtimeChanged, false);
 });
 test("release planning is read-only, detects changed builder and enforces the runtime gate", t => {
   const f = fixture(t);
-  f.write("sidecar/mash_cv/build_sidecar.py", "changed builder");
+  f.write("sidecar/cv-runtime/build_runtime.py", "changed builder");
   f.commit();
   const before = f.git("rev-parse", "HEAD");
-  const plan = JSON.parse(f.run("plan", "1.1.0", "-", "-", "windows-x86_64", "plan"));
+  const plan = JSON.parse(f.run("plan", "1.1.0", "-", "windows-x86_64", "plan"));
   assert.equal(plan.runtimeChanged, true);
-  assert.throws(() => f.run("plan", "1.1.0", "-", "-", "windows-x86_64", "publish"), /CV runtime changes detected/);
+  assert.throws(() => f.run("plan", "1.1.0", "-", "windows-x86_64", "publish"), /CV runtime changes detected/);
   assert.equal(f.git("status", "--porcelain"), "");
   assert.equal(f.git("rev-parse", "HEAD"), before);
 });
 test("runtime change detection uses the configured version tag rather than a legacy date version", t => {
   const f = fixture(t);
   f.git("tag", "cv-runtime/windows-x86_64/2026.05.08-runtime1");
-  f.write("sidecar/mash_cv/build_sidecar.py", "new runtime builder");
+  f.write("sidecar/cv-runtime/build_runtime.py", "new runtime builder");
   f.run("version", "runtime", "1.1.0", "windows-x86_64");
   f.commit();
   f.git("tag", "cv-runtime/windows-x86_64/1.1.0");
-  assert.equal(JSON.parse(f.run("plan", "1.1.0", "-", "-", "windows-x86_64", "plan")).runtimeChanged, false);
+  assert.equal(JSON.parse(f.run("plan", "1.1.0", "-", "windows-x86_64", "plan")).runtimeChanged, false);
 });
 test("adding a second platform reuses the exact app tag and refuses CV mutations", t => {
   const f = fixture(t);
-  assert.equal(JSON.parse(f.run("plan", "1.0.0", "-", "-", "windows-x86_64", "publish")).sameVersion, true);
-  assert.throws(() => f.run("plan", "1.0.0", "1.1.0", "-", "windows-x86_64", "publish"), /requires a new app version/);
-  assert.throws(() => f.run("plan", "0.9.0", "-", "-", "windows-x86_64", "plan"), /backwards/);
+  assert.equal(JSON.parse(f.run("plan", "1.0.0", "-", "windows-x86_64", "publish")).sameVersion, true);
+  assert.throws(() => f.run("plan", "1.0.0", "1.1.0", "windows-x86_64", "publish"), /requires a new app version/);
+  assert.throws(() => f.run("plan", "0.9.0", "-", "windows-x86_64", "plan"), /backwards/);
 });
 test("changelog finalization handles CRLF and preserves the release notes", t => {
   const f = fixture(t);
@@ -205,17 +205,15 @@ test("Windows full release runs offline through CV, updater and installer public
   const output = invoke("pwsh", pwshArgs(`& ${ps(bootstrap)}`, f.root), repo);
   assert.match(output, /Release complete: v1.1.0/);
   assert.equal(f.git("status", "--porcelain"), "");
-  for (const tag of ["v1.1.0", "cv-code/1.1.0", "cv-runtime/windows-x86_64/1.1.0"]) {
+  for (const tag of ["v1.1.0", "cv-runtime/windows-x86_64/1.1.0"]) {
     assert.equal(f.git("tag", "--list", tag), tag);
   }
   const manifest = JSON.parse(f.read("src-tauri/resources/runtime-manifest.json"));
-  assert.equal(manifest.mashCvCodeVersion, "1.1.0");
   assert.equal(manifest.platforms["windows-x86_64"].runtimeVersion, "1.1.0");
   assert.equal(manifest.platforms["darwin-aarch64"].runtimeVersion, "2.0.0");
-  assert.match(manifest.platforms["windows-x86_64"].codeSha256, /^[a-f0-9]{64}$/);
   assert.ok(manifest.platforms["darwin-aarch64"]);
   const uploads = f.read("uploads.log");
-  const order = ["runtime/mash-cv/runtime/windows-x86_64/", "runtime/mash-cv/code/",
+  const order = ["runtime/mash-cv/runtime/windows-x86_64/",
     "releases/versions/v1.1.0/windows-x86_64/", "releases/versions/v1.1.0/latest.json",
     "releases/windows-stable/latest.json", "downloads/versions/", "downloads/latest/"];
   let offset = -1;

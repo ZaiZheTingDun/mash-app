@@ -26,15 +26,17 @@ __pycache__/
 pytest-cache-files-*/
 
 # Sidecar build artifacts
+sidecar/cv-runtime/.venv/
 sidecar/*/build/
 sidecar/*/dist/
 src-tauri/binaries/
+src-tauri/resources/mash-cv-code/
 
 # Local digit-classifier training data and runs
-sidecar/mash_cv/training/digit_classifier/.venv/
-sidecar/mash_cv/training/digit_classifier/.pytest_cache/
-sidecar/mash_cv/training/digit_classifier/data/
-sidecar/mash_cv/training/digit_classifier/runs/
+sidecar/cv-code/training/digit_classifier/.venv/
+sidecar/cv-code/training/digit_classifier/.pytest_cache/
+sidecar/cv-code/training/digit_classifier/data/
+sidecar/cv-code/training/digit_classifier/runs/
 
 # Editor directories and files
 .vscode/*

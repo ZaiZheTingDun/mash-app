@@ -1,6 +1,6 @@
 //! Runtime ZIP validation and extraction helpers.
 
-use super::{code_bundle_root, runtime_bundle_root, runtime_exe_name};
+use super::{runtime_bundle_root, runtime_exe_name};
 use crate::platform::{extract_zip_symlink, make_runtime_executable};
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -92,14 +92,5 @@ pub(crate) fn extract_runtime_zip(zip_path: &Path, destination: &Path) -> Result
         ));
     }
     make_runtime_executable(&exe)?;
-    Ok(())
-}
-
-pub(crate) fn extract_code_zip(zip_path: &Path, destination: &Path) -> Result<(), String> {
-    extract_zip_with_root(zip_path, destination, code_bundle_root())?;
-    let package = destination.join(code_bundle_root()).join("mash_cv");
-    if !package.is_dir() {
-        return Err(format!("code zip 内未找到 {}/mash_cv/", code_bundle_root()));
-    }
     Ok(())
 }

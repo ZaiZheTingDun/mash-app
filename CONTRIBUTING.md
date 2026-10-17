@@ -19,7 +19,7 @@ pnpm tauri dev
 
 `pnpm dev` 仅启动前端，地址为 `http://localhost:1420`，不提供 Tauri 命令。
 
-运行设备功能前，在应用中安装清单要求的 CV 运行时和资源。开发模式优先读取 `sidecar/mash_cv/` 中的 Python 源码，仍需要已安装的原生运行时和 OCR 模型；仅运行离线测试无需连接设备。
+运行设备功能前，在应用中安装清单要求的 CV 运行时和资源。开发模式优先读取 `sidecar/cv-code/` 中的 Python 源码，仍需要已安装的原生运行时和 OCR 模型；仅运行离线测试无需连接设备。
 
 ## 代码约定
 
@@ -29,7 +29,7 @@ pnpm tauri dev
 - 修改自动化状态、页面路由或模板探针时，同步更新对应的[状态机文档](docs/README.md#自动化与识别)。
 - 平台差异集中在 Rust 的 `src-tauri/src/platform/` 和 Python 的 `mash_cv/host/`，共享业务代码调用统一接口。
 
-各层的详细约定见 [前端](src/AGENTS.md)、[Rust 后端](src-tauri/AGENTS.md)和 [Python sidecar](sidecar/mash_cv/AGENTS.md)。
+各层的详细约定见 [前端](src/AGENTS.md)、[Rust 后端](src-tauri/AGENTS.md)和 [Python sidecar](sidecar/cv-code/AGENTS.md)。
 
 ## 测试
 
@@ -43,8 +43,8 @@ pnpm tauri dev
 | Python sidecar | 见下方命令 |
 
 ```bash
-cd sidecar/mash_cv
-poetry install
+cd sidecar/cv-runtime
+poetry install --no-root
 poetry run pytest
 ```
 
@@ -64,7 +64,7 @@ Windows 本地未签名安装包使用：
 ./scripts/windows/build-windows.ps1 -Unsigned
 ```
 
-CV 单独打包，见 [mash-cv](sidecar/mash_cv/README.md#build)。维护者发布流程见[发布指南](docs/distribution.md)。
+CV 业务代码随 App 打包，原生 runtime 独立发布，见 [mash-cv](sidecar/cv-code/README.md#build)。维护者发布流程见[发布指南](docs/distribution.md)。
 
 ## 提交 Pull Request
 

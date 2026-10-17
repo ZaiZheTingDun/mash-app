@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { readJson, writeJson, assertStableVersion } from "./common.mjs";
-import { createPlan, validatePlan, validatePreflightRun, summary } from "./plan.mjs";
+import { readJson, writeJson } from "./common.mjs";
+import { createPlan, validatePlan, summary } from "./plan.mjs";
 import {
   prepareCodeArchive,
   prepareSource,
@@ -26,7 +26,6 @@ function writeReleasePlan(planFile) {
   const plan = createPlan({
     ref: process.env.SOURCE_REF,
     appVersion: process.env.APP_VERSION,
-    codeVersion: process.env.CV_CODE_VERSION || "",
     branch: process.env.DEFAULT_BRANCH,
     toolingSha: process.env.GITHUB_SHA,
     baseUrl: process.env.RELEASE_BASE_URL,
@@ -35,23 +34,14 @@ function writeReleasePlan(planFile) {
   writeJson(planFile, plan);
   const summaryFile = process.env.GITHUB_STEP_SUMMARY || `${planFile}.md`;
   fs.appendFileSync(summaryFile, summary(plan));
-  writeGithubOutputs({ ready: plan.ready });
-}
-
-function validatePlanOrigin(planFile, runFile) {
-  const plan = readJson(planFile);
-  validatePreflightRun(
-    plan,
-    readJson(runFile),
-    process.env.GITHUB_REPOSITORY,
-    process.env.DEFAULT_BRANCH,
-  );
-  if (process.env.GITHUB_OUTPUT) {
-    writeGithubOutputs({
-      source_sha: plan.sourceSha,
-      tooling_sha: plan.toolingSha,
-      app_version: assertStableVersion(plan.appVersion),
-    });
+  writeGithubOutputs({
+    ready: plan.ready,
+    source_sha: plan.sourceSha,
+    tooling_sha: plan.toolingSha,
+    app_version: plan.appVersion,
+  });
+  if (!plan.ready) {
+    throw new Error(`Release plan is blocked: ${plan.blockers.join("; ")}`);
   }
 }
 
@@ -66,9 +56,6 @@ export async function runReleaseCommand(commandLineArgs) {
   switch (command) {
     case "plan":
       writeReleasePlan(args[0]);
-      break;
-    case "validate-run":
-      validatePlanOrigin(args[0], args[1]);
       break;
     case "validate":
       validatePlan(readJson(args[0]));

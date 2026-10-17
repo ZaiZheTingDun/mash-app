@@ -1,5 +1,5 @@
 import { Box, Flex, Text } from "@radix-ui/themes";
-import screenshotRegionConfig from "../../../sidecar/mash_cv/mash_cv/assets/digit_classifier/screenshot-regions-v1.json";
+import screenshotRegionConfig from "../../../sidecar/cv-code/mash_cv/assets/digit_classifier/screenshot-regions-v1.json";
 import type {
   AttackButtonResultDto,
   BattleSceneResultDto,
@@ -48,7 +48,7 @@ function npAnyReady(slot: NoblePhantasmMatchDto) {
 }
 
 // Mirror of `SUPPORT_GRAND_BADGE_*` in
-// `sidecar/mash_cv/mash_cv/cv.py`. The sidecar template-matches the
+// `sidecar/cv-code/mash_cv/cv.py`. The sidecar template-matches the
 // "冠位从者" ribbon inside this rectangle (one per confirm-button
 // anchor) and surfaces a per-anchor score in
 // `diagnostics.grandRibbonAnchorScores`; the overlay shows the exact

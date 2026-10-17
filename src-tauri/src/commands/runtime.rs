@@ -29,7 +29,6 @@ pub(crate) fn ensure_download_not_cancelled(cancel: &AtomicBool) -> Result<(), S
 #[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RuntimeManifest {
-    pub(crate) mash_cv_code_version: String,
     pub(crate) platforms: HashMap<String, RuntimePlatformArtifact>,
 }
 
@@ -39,8 +38,6 @@ pub(crate) struct RuntimePlatformArtifact {
     pub(crate) runtime_version: String,
     pub(crate) runtime_url: String,
     pub(crate) runtime_sha256: String,
-    pub(crate) code_url: String,
-    pub(crate) code_sha256: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -56,19 +53,12 @@ pub(crate) struct RuntimeStatus {
     pub(crate) required_runtime_version: String,
     pub(crate) installed_runtime_version: Option<String>,
     pub(crate) runtime_installed: bool,
-    pub(crate) required_code_version: String,
-    pub(crate) installed_code_version: Option<String>,
-    pub(crate) code_installed: bool,
     pub(crate) installed: bool,
     pub(crate) platform: String,
     pub(crate) runtime_download_url: Option<String>,
     pub(crate) runtime_expected_sha256: Option<String>,
     pub(crate) runtime_install_dir: String,
     pub(crate) executable_path: String,
-    pub(crate) code_download_url: Option<String>,
-    pub(crate) code_expected_sha256: Option<String>,
-    pub(crate) code_install_dir: String,
-    pub(crate) code_path: String,
 }
 
 #[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
@@ -79,7 +69,6 @@ pub(crate) struct RuntimeInstallResult {
     pub(crate) platform: String,
     pub(crate) install_dir: String,
     pub(crate) executable_path: Option<String>,
-    pub(crate) code_path: Option<String>,
 }
 
 #[derive(serde::Serialize, Clone, Debug, PartialEq)]
@@ -107,10 +96,6 @@ pub(crate) fn runtime_bundle_root() -> &'static str {
     "mash-cv-runtime"
 }
 
-pub(crate) fn code_bundle_root() -> &'static str {
-    "mash-cv-code"
-}
-
 pub(crate) fn parse_runtime_manifest(contents: &str) -> Result<RuntimeManifest, String> {
     serde_json::from_str(contents).map_err(|e| format!("解析 runtime manifest 失败: {e}"))
 }
@@ -136,24 +121,12 @@ pub(crate) fn runtime_base_root(runtime_root: &Path) -> PathBuf {
     runtime_root.join("runtime")
 }
 
-pub(crate) fn runtime_code_root(runtime_root: &Path) -> PathBuf {
-    runtime_root.join("code")
-}
-
 pub(crate) fn runtime_version_path(runtime_root: &Path) -> PathBuf {
     runtime_root.join("runtime").join("runtime-version.json")
 }
 
-pub(crate) fn code_version_path(runtime_root: &Path) -> PathBuf {
-    runtime_root.join("code").join("code-version.json")
-}
-
 pub(crate) fn runtime_version_dir(runtime_root: &Path, version: &str) -> PathBuf {
     runtime_base_root(runtime_root).join(version)
-}
-
-pub(crate) fn code_version_dir(runtime_root: &Path, version: &str) -> PathBuf {
-    runtime_code_root(runtime_root).join(version)
 }
 
 pub(crate) fn runtime_executable_path(runtime_root: &Path, version: &str) -> PathBuf {
@@ -166,16 +139,6 @@ pub(crate) fn read_runtime_version(runtime_root: &Path) -> Option<RuntimeVersion
     fs::read_to_string(runtime_version_path(runtime_root))
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-}
-
-pub(crate) fn read_code_version(runtime_root: &Path) -> Option<RuntimeVersionRecord> {
-    fs::read_to_string(code_version_path(runtime_root))
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-}
-
-pub(crate) fn runtime_code_path(runtime_root: &Path, version: &str) -> PathBuf {
-    code_version_dir(runtime_root, version).join(code_bundle_root())
 }
 
 pub(crate) fn runtime_models_path(runtime_root: &Path, version: &str) -> PathBuf {
@@ -193,30 +156,22 @@ pub(crate) fn runtime_status_from_manifest(
 ) -> RuntimeStatus {
     let runtime_record = read_runtime_version(runtime_root);
     let installed_runtime_version = runtime_record.as_ref().map(|record| record.version.clone());
-    let installed_code_version = read_code_version(runtime_root).map(|record| record.version);
     let artifact = manifest.platforms.get(platform);
     let runtime_version = artifact
         .map(|item| item.runtime_version.as_str())
         .unwrap_or("");
     let executable = runtime_executable_path(runtime_root, runtime_version);
-    let code_path = runtime_code_path(runtime_root, &manifest.mash_cv_code_version);
     let runtime_installed = artifact.is_some()
         && runtime_record
             .as_ref()
             .is_some_and(|record| record.version == runtime_version && record.platform == platform)
         && executable.is_file();
-    let code_installed = installed_code_version.as_deref()
-        == Some(manifest.mash_cv_code_version.as_str())
-        && code_path.join("mash_cv").is_dir();
 
     RuntimeStatus {
         required_runtime_version: runtime_version.to_string(),
         installed_runtime_version,
         runtime_installed,
-        required_code_version: manifest.mash_cv_code_version.clone(),
-        installed_code_version,
-        code_installed,
-        installed: runtime_installed && code_installed,
+        installed: runtime_installed,
         platform: platform.to_string(),
         runtime_download_url: artifact.map(|item| item.runtime_url.clone()),
         runtime_expected_sha256: artifact.map(|item| item.runtime_sha256.clone()),
@@ -224,12 +179,6 @@ pub(crate) fn runtime_status_from_manifest(
             .to_string_lossy()
             .into_owned(),
         executable_path: executable.to_string_lossy().into_owned(),
-        code_download_url: artifact.map(|item| item.code_url.clone()),
-        code_expected_sha256: artifact.map(|item| item.code_sha256.clone()),
-        code_install_dir: code_version_dir(runtime_root, &manifest.mash_cv_code_version)
-            .to_string_lossy()
-            .into_owned(),
-        code_path: code_path.to_string_lossy().into_owned(),
     }
 }
 

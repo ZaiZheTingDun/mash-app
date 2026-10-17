@@ -3515,7 +3515,7 @@ def test_support_servant_level_parser_reads_current_level_and_caps_at_120(text, 
 def test_support_detail_extracts_servant_level_above_portrait():
     from mash_cv.cv import _support_extract_servant_level
 
-    image = cv2.imread("tests/test_data/screenshots/support_select.png")
+    image = cv2.imread(str(Path(__file__).parent / "test_data/screenshots/support_select.png"))
     assert image is not None
     assert _support_extract_servant_level(
         image,

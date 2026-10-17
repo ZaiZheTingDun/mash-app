@@ -1,10 +1,10 @@
 [tool.poetry]
 name = "mash-cv"
 version = "0.1.0"
-description = "OpenCV-based screen detection sidecar for mash"
+description = "Native dependencies and packaging tools for Mash CV"
 authors = []
 readme = "README.md"
-packages = [{ include = "mash_cv" }]
+package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.15"
@@ -20,14 +20,9 @@ pytest = "*"
 # pyinstaller out-of-band on top of poetry.
 pyinstaller = "^6.15"
 
-[tool.poetry.scripts]
-run = "mash_cv:main"
-region = "mash_cv.region_tool:main"
-unit = "mash_cv.run_tests:unit"
-integration = "mash_cv.run_tests:integration"
-
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["../cv-code/tests", "tests"]
+pythonpath = ["../cv-code"]
 
 [build-system]
 requires = ["poetry-core"]

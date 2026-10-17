@@ -12,19 +12,12 @@ function runtimeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatus {
     requiredRuntimeVersion: "2026.05.08-runtime1",
     installedRuntimeVersion: null,
     runtimeInstalled: false,
-    requiredCodeVersion: "2026.05.08-code1",
-    installedCodeVersion: null,
-    codeInstalled: false,
     installed: false,
     platform: "darwin-aarch64",
     runtimeDownloadUrl: "https://cdn.example.com/runtime.zip",
     runtimeExpectedSha256: "runtime-sha",
     runtimeInstallDir: "/tmp/runtime/base",
     executablePath: "/tmp/runtime/base/mash-cv-runtime/mash-cv",
-    codeDownloadUrl: "https://cdn.example.com/code.zip",
-    codeExpectedSha256: "code-sha",
-    codeInstallDir: "/tmp/runtime/code",
-    codePath: "/tmp/runtime/code/mash-cv-code",
     ...overrides,
   };
 }
@@ -42,11 +35,11 @@ describe("RuntimeBundleButton", () => {
 
     expect(
       await screen.findByText(
-        "CV 运行时未就绪：需要 base 2026.05.08-runtime1，code 2026.05.08-code1"
+        "CV 运行时未就绪：需要 2026.05.08-runtime1"
       )
     ).toBeInTheDocument();
-    expect(screen.getByText("base：https://cdn.example.com/runtime.zip")).toBeInTheDocument();
-    expect(screen.getByText("code：https://cdn.example.com/code.zip")).toBeInTheDocument();
+    expect(screen.getByText("https://cdn.example.com/runtime.zip")).toBeInTheDocument();
+    expect(screen.queryByText("code：https://cdn.example.com/code.zip")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始下载" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "手动上传" })).not.toBeInTheDocument();
   });
@@ -57,8 +50,6 @@ describe("RuntimeBundleButton", () => {
         return runtimeStatus({
           installedRuntimeVersion: "2026.05.08-runtime1",
           runtimeInstalled: true,
-          installedCodeVersion: "2026.05.08-code1",
-          codeInstalled: true,
           installed: true,
         });
       }
@@ -69,7 +60,7 @@ describe("RuntimeBundleButton", () => {
 
     expect(
       await screen.findByText(
-        "CV 运行时已安装：base 2026.05.08-runtime1 / code 2026.05.08-code1"
+        "CV 运行时已安装：2026.05.08-runtime1"
       )
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重新下载" })).toBeInTheDocument();
@@ -83,8 +74,6 @@ describe("RuntimeBundleButton", () => {
         return runtimeStatus({
           installedRuntimeVersion: installed ? "2026.05.08-runtime1" : null,
           runtimeInstalled: installed,
-          installedCodeVersion: installed ? "2026.05.08-code1" : null,
-          codeInstalled: installed,
           installed,
         });
       }
@@ -98,15 +87,6 @@ describe("RuntimeBundleButton", () => {
               platform: "darwin-aarch64",
               installDir: "/tmp/runtime",
               executablePath: "/tmp/runtime/mash-cv/mash-cv",
-              codePath: null,
-            },
-            {
-              installedKind: "code",
-              installedVersion: "2026.05.08-code1",
-              platform: "darwin-aarch64",
-              installDir: "/tmp/code",
-              executablePath: null,
-              codePath: "/tmp/code/mash-cv-code",
             },
           ],
         };
@@ -120,10 +100,10 @@ describe("RuntimeBundleButton", () => {
     await user.click(await screen.findByRole("button", { name: "开始下载" }));
 
     expect(
-      await screen.findByText("安装完成：base 2026.05.08-runtime1 / code 2026.05.08-code1")
+      await screen.findByText("安装完成：2026.05.08-runtime1")
     ).toBeInTheDocument();
     expect(
-      screen.getByText("CV 运行时已安装：base 2026.05.08-runtime1 / code 2026.05.08-code1")
+      screen.getByText("CV 运行时已安装：2026.05.08-runtime1")
     ).toBeInTheDocument();
     expect(vi.mocked(invoke)).toHaveBeenCalledWith("download_runtime_bundles", { force: false });
     expect(onInstalled).toHaveBeenCalledTimes(1);
@@ -135,8 +115,6 @@ describe("RuntimeBundleButton", () => {
         return runtimeStatus({
           installedRuntimeVersion: "2026.05.08-runtime1",
           runtimeInstalled: true,
-          installedCodeVersion: "2026.05.08-code1",
-          codeInstalled: true,
           installed: true,
         });
       }
@@ -149,15 +127,6 @@ describe("RuntimeBundleButton", () => {
               platform: "darwin-aarch64",
               installDir: "/tmp/runtime",
               executablePath: "/tmp/runtime/mash-cv/mash-cv",
-              codePath: null,
-            },
-            {
-              installedKind: "code",
-              installedVersion: "2026.05.08-code1",
-              platform: "darwin-aarch64",
-              installDir: "/tmp/code",
-              executablePath: null,
-              codePath: "/tmp/code/mash-cv-code",
             },
           ],
         };
@@ -172,7 +141,7 @@ describe("RuntimeBundleButton", () => {
 
     expect(vi.mocked(invoke)).toHaveBeenCalledWith("download_runtime_bundles", { force: true });
     expect(
-      await screen.findByText("重新下载完成：base 2026.05.08-runtime1 / code 2026.05.08-code1")
+      await screen.findByText("重新下载完成：2026.05.08-runtime1")
     ).toBeInTheDocument();
   });
 
@@ -187,8 +156,6 @@ describe("RuntimeBundleButton", () => {
         return runtimeStatus({
           installedRuntimeVersion: "2026.05.08-runtime1",
           runtimeInstalled: true,
-          installedCodeVersion: "2026.05.08-code1",
-          codeInstalled: true,
           installed: true,
         });
       }
@@ -197,7 +164,7 @@ describe("RuntimeBundleButton", () => {
           event: "runtime-download-progress",
           id: 1,
           payload: {
-            kind: "code",
+            kind: "runtime",
             phase: "installed",
             downloadedBytes: 0,
             totalBytes: null,
@@ -213,15 +180,6 @@ describe("RuntimeBundleButton", () => {
               platform: "darwin-aarch64",
               installDir: "/tmp/runtime",
               executablePath: "/tmp/runtime/mash-cv/mash-cv",
-              codePath: null,
-            },
-            {
-              installedKind: "code",
-              installedVersion: "2026.05.08-code1",
-              platform: "darwin-aarch64",
-              installDir: "/tmp/code",
-              executablePath: null,
-              codePath: "/tmp/code/mash-cv-code",
             },
           ],
         };
@@ -235,10 +193,10 @@ describe("RuntimeBundleButton", () => {
     await user.click(await screen.findByRole("button", { name: "重新下载" }));
 
     expect(
-      await screen.findByText("重新下载完成：base 2026.05.08-runtime1 / code 2026.05.08-code1")
+      await screen.findByText("重新下载完成：2026.05.08-runtime1")
     ).toBeInTheDocument();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(screen.queryByText("code 安装完成")).not.toBeInTheDocument();
+    expect(screen.queryByText("CV 运行时 安装完成")).not.toBeInTheDocument();
   });
 
   it("shows download progress speed and eta from runtime events", async () => {
@@ -272,7 +230,7 @@ describe("RuntimeBundleButton", () => {
     });
 
     expect(
-      await screen.findByText("正在下载 base：5.0 MB / 20.0 MB · 2.5 MB/s · 预计剩余 6秒")
+      await screen.findByText("正在下载 CV 运行时：5.0 MB / 20.0 MB · 2.5 MB/s · 预计剩余 6秒")
     ).toBeInTheDocument();
   });
 

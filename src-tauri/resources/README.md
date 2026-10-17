@@ -6,7 +6,8 @@ Bundled CV configuration, templates and device-streaming resources. Installation
 
 ```text
 resources/
-  runtime-manifest.json       Required CV versions, URLs and SHA-256
+  runtime-manifest.json       Required native runtime versions, URLs and SHA-256
+  mash-cv-code/mash_cv/        Generated bundled Python code (no OCR models)
   assets-manifest.json        Target image-asset version
   servers/
     shared/{cv.json,templates/}
@@ -92,25 +93,27 @@ State and probe changes also require updating the matching [automation document]
 
 ## runtime-manifest.json
 
-The app bundles the manifest and installs CV packages separately. Its fields are:
+The app bundles the manifest; it describes only external native runtimes:
 
 | Field | Meaning |
 | --- | --- |
-| `mashCvCodeVersion` | Shared Python code version |
 | `platforms.<platform>.runtimeVersion` | Native runtime version for that platform |
 | `runtimeUrl` / `runtimeSha256` | Runtime download and checksum |
-| `codeUrl` / `codeSha256` | Code download and checksum |
 
-Archive roots must be `mash-cv-runtime/` and `mash-cv-code/`. The runtime root contains `mash-cv` on macOS or `mash-cv.exe` on Windows; the code root contains the `mash_cv/` package.
+The external ZIP root is `mash-cv-runtime/`, containing `mash-cv` on macOS or
+`mash-cv.exe` on Windows, native dependencies and OCR models. The app verifies
+SHA-256, extracts through staging, then writes `runtime-version.json`. Its path is
+`app_data_dir()/runtime/mash-cv/runtime/<runtimeVersion>/mash-cv-runtime/`.
 
-Before installation the app verifies SHA-256, extracts through staging, then writes separate `runtime-version.json` and `code-version.json` records. Installed paths:
+Python code and its lightweight assets are staged by `build.rs` into
+`resources/mash-cv-code/mash_cv/` and bundled with the app. There is no separate
+code version, download or installation; old downloaded code directories are not
+loaded. Development still reads `sidecar/cv-code/` directly. The launcher receives
+`MASH_CV_CODE_DIR` for this code and `MASH_CV_MODELS_DIR` for the external models.
 
-```text
-app_data_dir()/runtime/mash-cv/runtime/<runtimeVersion>/mash-cv-runtime/
-app_data_dir()/runtime/mash-cv/code/<mashCvCodeVersion>/mash-cv-code/
-```
-
-Change runtime versions only for native dependencies, OCR models, the launcher or archive layout. Python-only updates change the shared code version and all platforms' code URLs/checksums; other platforms' runtime fields remain unchanged.
+Change runtime versions only for native dependencies, OCR models, the launcher or
+native packaging inputs. The app's bundled scrcpy JAR and Python code follow the
+app version. Validate bundled code against the exact pinned runtime on each platform.
 
 ## scrcpy-server.jar
 

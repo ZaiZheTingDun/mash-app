@@ -11,11 +11,11 @@ try {
     & (Join-Path $PSScriptRoot 'prepare-windows-adb.ps1')
     if ($BuildCv) {
         if ($Python) {
-            Push-Location (Join-Path $repoRoot 'sidecar/mash_cv')
+            Push-Location (Join-Path $repoRoot 'sidecar/cv-runtime')
             try { & $Python -m pytest } finally { Pop-Location }
             if ($LASTEXITCODE -ne 0) { throw 'CV tests failed.' }
         } else {
-            Push-Location (Join-Path $repoRoot 'sidecar/mash_cv')
+            Push-Location (Join-Path $repoRoot 'sidecar/cv-runtime')
             try {
                 poetry install --no-root
                 if ($LASTEXITCODE -ne 0) { throw 'Installing CV dependencies failed.' }

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import {
@@ -20,9 +21,9 @@ import {
   syncMetadata,
   uploadRelease,
   validatePlan,
-  validatePreflightRun,
 } from "../shared/app-release.mjs";
-import { digest, platforms } from "../shared/cv-code-release.mjs";
+import { digest, platforms } from "../shared/release-artifacts.mjs";
+
 
 function createReleaseFixture(t) {
   const previous = process.cwd();
@@ -51,9 +52,7 @@ function createReleaseFixture(t) {
   git("config", "tag.gpgsign", "false");
   const candidate = path.join(directory, "candidate");
   fs.mkdirSync(candidate);
-  write(path.join(candidate, "mash-cv-code-v1.0.0.zip"), "original code ZIP");
   const manifest = {
-    mashCvCodeVersion: "1.0.0",
     platforms: Object.fromEntries(
       platforms.map((platform) => [
         platform,
@@ -61,16 +60,14 @@ function createReleaseFixture(t) {
           runtimeVersion: "1.0.0",
           runtimeUrl: `https://example.invalid/mash/runtime/${platform}.zip`,
           runtimeSha256: createHash("sha256").update(`runtime ${platform}`).digest("hex"),
-          codeUrl: "https://example.invalid/mash/runtime/mash-cv/code/mash-cv-code-v1.0.0.zip",
-          codeSha256: digest(path.join(candidate, "mash-cv-code-v1.0.0.zip")),
         },
       ]),
     ),
   };
-  write(".gitignore", "src-tauri/target/\nsidecar/mash_cv/dist/\n");
+  write(".gitignore", "src-tauri/target/\nsidecar/cv-code/dist/\nsidecar/cv-runtime/dist/\n");
   write(
     "versions.toml",
-    '[app]\nversion = "1.0.0"\n[mash_cv]\ncode = "1.0.0"\n[mash_cv.runtime]\nwindows-x86_64 = "1.0.0"\ndarwin-aarch64 = "1.0.0"\n',
+    '[app]\nversion = "1.0.0"\n[mash_cv.runtime]\nwindows-x86_64 = "1.0.0"\ndarwin-aarch64 = "1.0.0"\n',
   );
   write("src-tauri/resources/runtime-manifest.json", JSON.stringify(manifest));
   write(
@@ -87,9 +84,9 @@ function createReleaseFixture(t) {
   );
   write("src-tauri/Cargo.toml", '[package]\nname = "mash"\nversion = "1.0.0"\n');
   write("src-tauri/Cargo.lock", '[[package]]\nname = "mash"\nversion = "1.0.0"\n');
-  write("sidecar/mash_cv/mash_cv/cv.py", "# original\n");
-  write("sidecar/mash_cv/runtime_launcher.py", "# launcher\n");
-  write("sidecar/mash_cv/tests/test_cv.py", "# tests\n");
+  write("sidecar/cv-code/mash_cv/cv.py", "# original\n");
+  write("sidecar/cv-runtime/runtime_launcher.py", "# launcher\n");
+  write("sidecar/cv-code/tests/test_cv.py", "# tests\n");
   write("CHANGELOG.md", "# Changelog\n\n## 未发布\n\n- Feature\n");
   const commit = () => {
     git("add", ".");
@@ -97,7 +94,6 @@ function createReleaseFixture(t) {
     git("update-ref", "refs/remotes/origin/main", "HEAD");
   };
   commit();
-  git("tag", "cv-code/1.0.0");
   git("tag", "v1.0.0");
   for (const platform of platforms) {
     git("tag", `cv-runtime/${platform}/1.0.0`);
@@ -118,8 +114,8 @@ function createReleaseFixture(t) {
   const plan = (extra) => createPlan({ ...options, ...extra });
   const prepare = (selected) => {
     const selectedPlan = selected || plan();
-    if (selectedPlan.code.changed) {
-      write(path.join(candidate, selectedPlan.code.artifact), "new code ZIP");
+    if (!fs.existsSync(path.join(candidate, selectedPlan.code.artifact))) {
+      write(path.join(candidate, selectedPlan.code.artifact), "bundled code ZIP");
     }
     fs.writeFileSync(path.join(candidate, "release-plan.json"), JSON.stringify(selectedPlan));
     return prepareSource(selectedPlan, candidate);
@@ -184,15 +180,13 @@ test("release notes select the target section before unreleased entries and reje
   );
 });
 
-test("preflight is read-only, pins the chosen ref, and ignores a newer unrelated CV release", (t) => {
+test("planning is read-only, pins the chosen ref, and ignores a newer unrelated CV release", (t) => {
   const release = createReleaseFixture(t);
   const before = release.git("status", "--porcelain");
   release.git("tag", "cv-code/9.0.0");
   const plan = release.plan();
   assert.equal(plan.ready, true, plan.blockers.join("; "));
   assert.equal(plan.sourceSha, release.source);
-  assert.equal(plan.code.baselineSha, release.git("rev-parse", "cv-code/1.0.0"));
-  assert.equal(plan.code.changed, false);
   assert.equal(release.git("status", "--porcelain"), before);
   assert.match(summary(plan), /READY/);
   release.write("app.txt", "newer main\n");
@@ -201,28 +195,23 @@ test("preflight is read-only, pins the chosen ref, and ignores a newer unrelated
   assert.doesNotThrow(() => validatePlan(plan, release.env));
 });
 
-test("actual packaged source changes require a CV version; tests and app templates do not", (t) => {
+test("code changes follow the app without requiring a CV release or code tag", t => {
   const release = createReleaseFixture(t);
-  release.write("sidecar/mash_cv/tests/test_cv.py", "# more tests\n");
-  release.write("src-tauri/resources/servers/jp/templates/new.png", "template");
-  release.write("sidecar/mash_cv/mash_cv/__pycache__/cache.pyc", "ignored");
+  const previous = codeDigest("HEAD");
+  release.write("sidecar/cv-code/mash_cv/cv.py", "# changed code\n");
   release.commit();
-  assert.equal(release.plan().ready, true);
-  assert.equal(release.plan().code.testChanges.length, 1);
-  assert.equal(codeDigest("HEAD"), codeDigest("cv-code/1.0.0"));
-  release.write("sidecar/mash_cv/mash_cv/cv.py", "# changed\n");
-  release.commit();
-  assert.equal(release.plan().ready, false);
-  assert.match(summary(release.plan()), /provide a new cv_code_version/);
-  assert.equal(release.plan({ codeVersion: "1.0.1" }).ready, true);
-  assert.equal(release.plan({ codeVersion: "1.0.0" }).ready, false);
+  const plan = release.plan();
+  assert.equal(plan.ready, true, plan.blockers.join("; "));
+  assert.notEqual(plan.code.sourceDigest, previous);
+  assert.equal(plan.code.artifact, "mash-cv-code-v1.1.0.zip");
 });
 
 for (const file of [
-  "sidecar/mash_cv/runtime_launcher.py",
-  "sidecar/mash_cv/mash_cv/models/model.onnx",
-  "sidecar/mash_cv/build_sidecar.py",
-  "sidecar/mash_cv/poetry.lock",
+  "sidecar/cv-runtime/runtime_launcher.py",
+  "sidecar/cv-runtime/models/model.onnx",
+  "sidecar/cv-runtime/build_runtime.py",
+  "sidecar/cv-runtime/poetry.lock",
+  "sidecar/cv-runtime/pyproject.toml",
 ]) {
   test(`runtime changes block app-only and joint releases: ${file}`, (t) => {
     const release = createReleaseFixture(t);
@@ -230,7 +219,6 @@ for (const file of [
     release.commit();
     const plan = release.plan();
     assert.equal(plan.ready, false);
-    assert.equal(plan.code.changed, false);
     for (const platform of platforms) {
       assert.ok(plan.runtimeChanges[platform].files.includes(file));
     }
@@ -248,13 +236,30 @@ test("native runtime build changes affect only their platform", (t) => {
   assert.deepEqual(plan.runtimeChanges["darwin-aarch64"].files, []);
 });
 
+test("runtime detection ignores CLI edits and tracks packaging file changes", (t) => {
+  const release = createReleaseFixture(t);
+  release.write("sidecar/cv-code/build_code.py", "# CLI\n");
+  release.write("sidecar/cv-runtime/build_runtime.py", "# runtime packaging\n");
+  release.commit();
+  for (const platform of platforms) {
+    release.git("tag", "-d", `cv-runtime/${platform}/1.0.0`);
+    release.git("tag", `cv-runtime/${platform}/1.0.0`);
+  }
+  release.write("sidecar/cv-code/build_code.py", "# changed CLI\n");
+  release.commit();
+  assert.equal(release.plan().ready, true);
+  release.write("sidecar/cv-runtime/build_runtime.py", "# changed runtime packaging\n");
+  release.commit();
+  const plan = release.plan();
+  assert.equal(plan.ready, false);
+  for (const platform of platforms) {
+    assert.deepEqual(plan.runtimeChanges[platform].files, ["sidecar/cv-runtime/build_runtime.py"]);
+  }
+});
+
 test("missing baseline, bad runtime, conflicting tags, versions and outside refs fail closed", (t) => {
   const release = createReleaseFixture(t);
   assert.equal(release.plan({ appVersion: "1.0.0" }).ready, false);
-  assert.equal(release.plan({ codeVersion: "1.0.1" }).ready, false);
-  release.git("tag", "-d", "cv-code/1.0.0");
-  assert.match(release.plan().blockers.join(";"), /Missing source tag/);
-  release.git("tag", "cv-code/1.0.0", release.source);
   const manifest = structuredClone(release.manifest);
   manifest.platforms["windows-x86_64"].runtimeSha256 = "0".repeat(64);
   release.write("src-tauri/resources/runtime-manifest.json", JSON.stringify(manifest));
@@ -279,47 +284,57 @@ test("execution rejects edited plans, destination changes and newer releases but
   assert.throws(() => validatePlan(plan, release.env), /Newer app tag/);
 });
 
-test("only a successful same-repository default-branch preflight is accepted", (t) => {
+test("release planning emits pinned job outputs and fails immediately for a blocked plan", (t) => {
   const release = createReleaseFixture(t);
-  const plan = release.plan();
-  const metadata = {
-    path: ".github/workflows/release-preflight.yml",
-    event: "workflow_dispatch",
-    conclusion: "success",
-    status: "completed",
-    head_branch: "main",
-    head_sha: plan.toolingSha,
-    repository: { full_name: "owner/mash" },
-    head_repository: { full_name: "owner/mash" },
+  const planFile = path.join(release.directory, "plan.json");
+  const outputs = path.join(release.directory, "outputs.txt");
+  const summaryFile = path.join(release.directory, "summary.md");
+  const env = {
+    ...process.env,
+    ...release.env,
+    SOURCE_REF: release.source,
+    APP_VERSION: "1.1.0",
+    DEFAULT_BRANCH: "main",
+    GITHUB_SHA: release.source,
+    GITHUB_OUTPUT: outputs,
+    GITHUB_STEP_SUMMARY: summaryFile,
   };
-  validatePreflightRun(plan, metadata, "owner/mash", "main");
-  for (const patch of [
-    { conclusion: "failure" },
-    { event: "pull_request" },
-    { head_branch: "feature" },
-    { head_sha: "0".repeat(40) },
-    { path: ".github/workflows/other.yml" },
-    { head_repository: { full_name: "fork/mash" } },
-  ]) {
-    assert.throws(
-      () => validatePreflightRun(plan, { ...metadata, ...patch }, "owner/mash", "main"),
-      /successful default-branch/,
-    );
-  }
+  const command = [fileURLToPath(new URL("../shared/app-release.mjs", import.meta.url)), "plan", planFile];
+  execFileSync(process.execPath, command, { env, stdio: "pipe", windowsHide: true });
+  const plan = JSON.parse(fs.readFileSync(planFile, "utf8"));
+  assert.equal(plan.ready, true);
+  assert.equal(plan.sourceSha, release.source);
+  assert.equal(fs.readFileSync(outputs, "utf8"),
+    `ready=true\nsource_sha=${release.source}\ntooling_sha=${release.source}\napp_version=1.1.0\n`);
+  assert.match(fs.readFileSync(summaryFile, "utf8"), /validate bundled code against each pinned native runtime/);
+  assert.equal(release.git("status", "--porcelain"), "");
+
+  release.write("sidecar/cv-runtime/runtime_launcher.py", "# changed launcher\n");
+  release.commit();
+  const blocked = spawnSync(process.execPath, command, {
+    env: { ...env, SOURCE_REF: release.git("rev-parse", "HEAD") },
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  assert.ifError(blocked.error);
+  assert.equal(blocked.status, 1);
+  assert.match(blocked.stderr, /Release plan is blocked:.*Runtime inputs changed/);
+  assert.equal(JSON.parse(fs.readFileSync(planFile, "utf8")).ready, false);
+  assert.match(fs.readFileSync(summaryFile, "utf8"), /BLOCKED/);
 });
 
 test("joint preparation embeds the tested CV bytes and makes a deterministic, fetchable release commit", (t) => {
   const release = createReleaseFixture(t);
-  release.write("sidecar/mash_cv/mash_cv/cv.py", "# changed CV\n");
+  release.write("sidecar/cv-code/mash_cv/cv.py", "# changed CV\n");
   release.commit();
-  const plan = release.plan({ codeVersion: "1.0.1" });
+  const plan = release.plan();
   assert.equal(plan.ready, true);
   const prepared = release.prepare(plan);
   assert.equal(prepared.planSha256, planDigest(plan));
-  assert.equal(prepared.manifest.mashCvCodeVersion, "1.0.1");
+  assert.equal(prepared.manifest.mashCvCodeVersion, undefined);
   assert.equal(prepared.code.sha256, digest(path.join(release.candidate, plan.code.artifact)));
   for (const platform of platforms) {
-    assert.equal(prepared.manifest.platforms[platform].codeSha256, prepared.code.sha256);
+    assert.equal(prepared.manifest.platforms[platform].codeSha256, undefined);
   }
   assert.equal(release.git("rev-parse", "HEAD"), prepared.releaseSha);
   assert.equal(release.git("rev-parse", "HEAD^"), plan.sourceSha);
@@ -356,13 +371,12 @@ test("joint preparation embeds the tested CV bytes and makes a deterministic, fe
   assert.equal(release.prepare(plan).releaseSha, prepared.releaseSha);
 });
 
-test("app-only preparation rejects altered reused CV bytes", (t) => {
+test("assembly rejects tampered internal bundled-code candidates", t => {
   const release = createReleaseFixture(t);
-  fs.writeFileSync(
-    path.join(release.candidate, "mash-cv-code-v1.0.0.zip"),
-    "wrong published bytes",
-  );
-  assert.throws(() => release.prepare(), /Published CV code hash mismatch/);
+  const prepared = release.prepare();
+  const builds = release.build(prepared);
+  fs.writeFileSync(path.join(release.candidate, prepared.code.artifact), "tampered");
+  assert.throws(() => assemble(prepared, builds, release.candidate, () => {}), /Candidate file changed/);
 });
 
 test("assembly requires both matching native builds, embedded manifest, files and signatures", (t) => {
@@ -402,9 +416,17 @@ test("compatibility reports and build checkout cannot be substituted", (t) => {
   const builds = release.build(prepared);
   const file = path.join(builds, "darwin-aarch64", "platform.json");
   const receipt = JSON.parse(fs.readFileSync(file));
-  receipt.compatibility.codeSha256 = "0".repeat(64);
-  fs.writeFileSync(file, JSON.stringify(receipt));
-  assert.throws(() => assemble(prepared, builds, release.candidate, () => {}), /compatibility/);
+  for (const mismatch of [
+    { status: "failed" },
+    { codeSha256: "0".repeat(64) },
+    { runtimeSha256: "0".repeat(64) },
+  ]) {
+    fs.writeFileSync(file, JSON.stringify({
+      ...receipt,
+      compatibility: { ...receipt.compatibility, ...mismatch },
+    }));
+    assert.throws(() => assemble(prepared, builds, release.candidate, () => {}), /compatibility/);
+  }
   release.git("checkout", "--detach", prepared.plan.sourceSha);
   assert.throws(() => release.build(prepared), /Build source/);
 });
@@ -460,10 +482,6 @@ test("uploads verify immutable R2 and public CDN bytes before any channel promot
   const release = createReleaseFixture(t);
   const receipt = release.assembled();
   const store = fakeStore();
-  store.seed(
-    receipt.code.objectKey,
-    fs.readFileSync(path.join(release.candidate, receipt.code.artifact)),
-  );
   for (const [platform, runtime] of Object.entries(receipt.plan.runtimes)) {
     store.seed(new URL(runtime.runtimeUrl).pathname.slice(1), `runtime ${platform}`);
   }
@@ -616,9 +634,9 @@ test("a racing publisher fails conditional promotion without overwriting its cha
 
 test("GitHub draft verification reuses matching assets and never clobbers conflicts", (t) => {
   const release = createReleaseFixture(t);
-  release.write("sidecar/mash_cv/mash_cv/cv.py", "# joint release\n");
+  release.write("sidecar/cv-code/mash_cv/cv.py", "# joint release\n");
   release.commit();
-  const prepared = release.prepare(release.plan({ codeVersion: "1.0.1" }));
+  const prepared = release.prepare(release.plan());
   const receipt = assemble(prepared, release.build(prepared), release.candidate, () => {});
   const releases = new Map();
   const calls = [];
@@ -656,7 +674,7 @@ test("GitHub draft verification reuses matching assets and never clobbers confli
     return "";
   };
   publishGithub(receipt, release.candidate, gh);
-  assert.equal(releases.size, 2);
+  assert.equal(releases.size, 1);
   assert.ok(
     calls.findIndex((args) => args[1] === "edit") >
       calls.findLastIndex((args) => args[1] === "download"),

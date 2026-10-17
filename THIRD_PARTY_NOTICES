@@ -37,10 +37,10 @@ The bundled JAR matches the official scrcpy 2.7 server artifact documented in
 The following recognition models and dictionaries identify themselves as, or
 are derived from, PaddleOCR resources:
 
-- `sidecar/mash_cv/mash_cv/models/chinese_PP-OCRv4_rec_infer.onnx`
-- `sidecar/mash_cv/mash_cv/models/japan_PP-OCRv4_rec_infer.onnx`
-- `sidecar/mash_cv/mash_cv/models/ppocr_keys_v1.txt`
-- `sidecar/mash_cv/mash_cv/models/japan_dict.txt`
+- `sidecar/cv-runtime/models/chinese_PP-OCRv4_rec_infer.onnx`
+- `sidecar/cv-runtime/models/japan_PP-OCRv4_rec_infer.onnx`
+- `sidecar/cv-runtime/models/ppocr_keys_v1.txt`
+- `sidecar/cv-runtime/models/japan_dict.txt`
 
 - Project: PaddleOCR
 - Copyright: Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved.
@@ -65,7 +65,7 @@ versions are recorded in:
 
 - `pnpm-lock.yaml`
 - `src-tauri/Cargo.lock`
-- `sidecar/mash_cv/poetry.lock`
+- `sidecar/cv-runtime/poetry.lock`
 
 Those packages remain under their respective licenses. Their inclusion here
 does not relicense them under the Mash MIT License.

@@ -7,20 +7,32 @@ import test from "node:test";
 
 const source = fs.readFileSync(new URL("../macos/release.sh", import.meta.url), "utf8").replaceAll("\r\n", "\n");
 const changeFunction = source.match(/^has_changes_since\(\) \{\n[\s\S]*?^\}/m)[0];
-const runtimeDetection = source.slice(source.indexOf("CV_RUNTIME_CHANGED=false\n"), source.indexOf('\nif [[ "$CV_CODE_CHANGED"'));
+const runtimeDetection = source.match(/^CV_RUNTIME_CHANGED=.*$/m)[0];
 const runtimeGate = source.match(/^if \[\[ "\$CV_RUNTIME_CHANGED"[\s\S]*?^fi/m)[0];
 const bash = process.platform === "win32" ? path.join(process.env.ProgramFiles, "Git/bin/bash.exe") : "bash";
 
 for (const [changed, expected] of [
-  ["sidecar/mash_cv/build_sidecar.py", true],
+  ["sidecar/cv-code/build_code.py", false],
+  ["sidecar/cv-runtime/build_runtime.py", true],
   ["scripts/macos/build-cv.sh", true],
-  ["sidecar/mash_cv/mash_cv/cv.py", false],
+  ["scripts/windows/build-cv.ps1", false],
+  ["src-tauri/resources/scrcpy/scrcpy-server.jar", false],
+  ["sidecar/cv-runtime/runtime_launcher.py", true],
+  ["sidecar/cv-runtime/models/model.onnx", true],
+  ["sidecar/cv-code/mash_cv/cv.py", false],
+  ["sidecar/cv-code/mash_cv/assets/classifier.onnx", false],
+  ["sidecar/cv-code/tests/test_cv.py", false],
+  ["sidecar/cv-runtime/tests/test_build_runtime.py", false],
+  ["sidecar/cv-runtime/README.md", false],
+  ["sidecar/cv-runtime/new-native-input.dat", true],
 ]) {
   test(`runtime release gate detects ${changed}: ${expected}`, t => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "mash-release-detection-"));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     const git = args => execFileSync("git", args, { cwd: root, encoding: "utf8", windowsHide: true });
     git(["init", "--quiet"]);
+    fs.mkdirSync(path.join(root, "scripts/shared"), { recursive: true });
+    fs.copyFileSync(new URL("../shared/runtime-inputs.mjs", import.meta.url), path.join(root, "scripts/shared/runtime-inputs.mjs"));
     const file = path.join(root, changed);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, "baseline");
@@ -34,7 +46,7 @@ for (const [changed, expected] of [
     commit("change");
     // Execute the actual detection and publication gate with a real Git diff.
     const script = `set -euo pipefail\nfail() { echo "$*" >&2; exit 1; }\n${changeFunction}\n` +
-      `RUNTIME_BASE_REF=${ref}\nPUBLISH=true\nCV_RUNTIME_VERSION=\n${runtimeDetection}\n${runtimeGate}\n` +
+      `RUNTIME_BASE_REF=${ref}\nPLATFORM=darwin-aarch64\nPUBLISH=true\nCV_RUNTIME_VERSION=\n${runtimeDetection}\n${runtimeGate}\n` +
       'echo "$CV_RUNTIME_CHANGED"\n';
     const result = spawnSync(bash, ["-c", script], { cwd: root, encoding: "utf8", windowsHide: true });
     assert.ifError(result.error);
@@ -43,9 +55,3 @@ for (const [changed, expected] of [
     else assert.equal(result.stdout.trim(), "false");
   });
 }
-
-test("release skill includes the Python builder in its runtime detection example", () => {
-  const skill = fs.readFileSync(new URL("../../.codex/skills/mash-release-app/SKILL.md", import.meta.url), "utf8");
-  const example = skill.split(/\r?\n/).find(line => line.startsWith("git diff --name-only <last-cv-runtime-tag>"));
-  assert.ok(example?.split(" ").includes("sidecar/mash_cv/build_sidecar.py"));
-});

@@ -54,4 +54,4 @@ stateDiagram-v2
 
 `friend-point-summon-automation-status` 包含 `status`、`currentScreen`、`message`、`completedBatches` 和 `summonedCount`，计数由 Rust 维护。
 
-[离线测试](../../sidecar/mash_cv/tests/test_friend_point_summon.py)覆盖常规 / 限时池、1080p / 720p 缩放、压缩、余额与日期变化，以及标题替换和弹窗遮挡等负例。尚未覆盖所有卡池布局；特征不稳定时停止并调整采样区域。
+[离线测试](../../sidecar/cv-code/tests/test_friend_point_summon.py)覆盖常规 / 限时池、1080p / 720p 缩放、压缩、余额与日期变化，以及标题替换和弹窗遮挡等负例。尚未覆盖所有卡池布局；特征不稳定时停止并调整采样区域。

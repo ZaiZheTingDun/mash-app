@@ -16,7 +16,7 @@ try {
     $env:MASH_CV_RUNTIME_VERSION = $Version
     & (Join-Path $PSScriptRoot 'build-cv.ps1') -Mode runtime -Python $Python
     $artifact = "mash-cv-runtime-$Platform-v$Version.zip"
-    $file = Join-Path $repoRoot "sidecar/mash_cv/dist/$artifact"
+    $file = Join-Path $repoRoot "sidecar/cv-runtime/dist/$artifact"
     $sha = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
     $key = "$(Get-ReleasePrefix)/runtime/mash-cv/runtime/$Platform/$artifact"
     Publish-Artifact $file $key

@@ -23,11 +23,11 @@ pnpm tauri dev
 
 ```powershell
 ./scripts/windows/build-windows.ps1 -Unsigned
-# 同时测试并构建 CV runtime 和 code ZIP
+# 同时测试并构建 CV runtime 和内部 code 验证 ZIP（code 随 App 内置）
 ./scripts/windows/build-windows.ps1 -BuildCv -Unsigned
 ```
 
-构建入口运行脚本测试、Rust 测试和前端检查。安装包输出到 `src-tauri/target/release/bundle/nsis/`，CV ZIP 输出到 `sidecar/mash_cv/dist/`。
+构建入口运行脚本测试、Rust 测试和前端检查。安装包输出到 `src-tauri/target/release/bundle/nsis/`，runtime ZIP 输出到 `sidecar/cv-runtime/dist/`，内部 code ZIP 输出到 `sidecar/cv-code/dist/`。
 
 单独构建 CV：
 
@@ -39,7 +39,7 @@ pnpm tauri dev
 ./scripts/windows/build-cv.ps1 -Python C:/Python312/python.exe
 ```
 
-CV 使用原生 Windows Python 和共享的 `build_sidecar.py` 打包，runtime 平台必须匹配构建主机。测试与协议见 [mash-cv](../sidecar/mash_cv/README.md)。
+CV 使用原生 Windows Python 和`sidecar/cv-runtime/build_runtime.py` 打包，runtime 平台必须匹配构建主机。测试与协议见 [mash-cv](../sidecar/cv-code/README.md)。
 
 ## ADB 与安装
 

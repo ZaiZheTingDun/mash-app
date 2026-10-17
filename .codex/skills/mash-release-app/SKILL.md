@@ -1,18 +1,18 @@
 ---
 name: mash-release-app
-description: Delegate to mash-releaser subagent. Use this skill when publishing the full Mash desktop app release, including detecting mash-cv code/runtime changes, bumping CV versions, uploading CV code/runtime artifacts, applying the latest runtime manifest to the app, bumping the Tauri app version, publishing the updater release, and validating tags, CDN assets, and release readiness.
+description: Delegate to mash-releaser subagent. Use this skill when publishing the full Mash desktop app release, with app-bundled Python CV code, independently versioned native runtimes, updater publication, and release validation.
 ---
 
 # Mash Full App Release
 
-Use this workflow to publish Mash end to end. It coordinates the Python CV sidecar artifacts and the Tauri desktop updater release.
+Use this workflow to publish Mash end to end. Python CV code ships in the app; only native runtimes are downloaded separately. See `docs/distribution.md` for the maintained CI workflow and environment settings.
 
 ## Release Invariants
 
 - Start from repo root and a clean worktree unless you are intentionally preparing a release commit.
 - Do not publish mutable app updater metadata until immutable versioned artifacts are uploaded and validated.
 - Keep `versions.toml`, `src-tauri/resources/runtime-manifest.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock` aligned.
-- Treat `release-cv-code.sh` output as an input to a required manifest update; it uploads code but does not edit `runtime-manifest.json`.
+- CV code has no independent version, tag, remote ZIP, or download/install step. `build.rs` stages it into app resources, excluding OCR models and Python caches. Internal code ZIPs are compatibility-test candidates only; never publish them separately.
 - Preserve existing user changes. If the worktree is dirty, inspect it and stop unless the dirty files are the intended release edits.
 - User-facing release notes should describe only visible changes. Use `$mash-release-notes` when drafting them.
 
@@ -48,8 +48,6 @@ The configured R2-backed AWS profile can reject STS even when artifact uploads a
 working. Prefer validating required environment variables up front and rely on the
 release scripts' real checks:
 
-- `scripts/macos/release-cv-code.sh` uploads the code zip, runs `head-object`, and
-  validates the public artifact URL.
 - `scripts/macos/release-cv-runtime.sh` uploads the runtime zip and validates the
   public runtime URL after the upload completes.
 - `scripts/macos/release-tauri-updater.sh` uploads immutable artifacts, publishes
@@ -62,21 +60,18 @@ For app releases, default scripts assume `TAURI_TARGET=darwin-aarch64` and `RELE
 Compare against the latest relevant tags:
 
 ```bash
-git tag --list 'cv-code/*' --sort=-v:refname | head -5
 git tag --list 'cv-runtime/*/*' --sort=-v:refname | head -10
 git tag --list 'v*' --sort=-v:refname | head -5
-git diff --name-only <last-cv-code-tag>..HEAD -- sidecar/mash_cv/mash_cv sidecar/mash_cv/tests src-tauri/resources/cv.json src-tauri/resources/templates
-git diff --name-only <last-cv-runtime-tag>..HEAD -- sidecar/mash_cv/pyproject.toml sidecar/mash_cv/poetry.lock scripts/macos/build-cv.sh scripts/windows/build-cv.ps1 sidecar/mash_cv/build_sidecar.py sidecar/mash_cv/mash_cv src-tauri/resources/scrcpy
+node scripts/shared/runtime-inputs.mjs <current-platform-runtime-tag> HEAD <platform>
 git diff --name-only <last-app-tag>..HEAD
 ```
 
 Use judgment:
 
-- CV code bump: Python package source, CV logic, templates, `cv.json`, tests, or sidecar code packaging changed.
-- CV runtime bump: runtime dependencies, PyInstaller/build layout, Python/Poetry lockfiles, binary runtime assets, scrcpy runtime, or anything requiring a new heavy runtime bundle changed.
+- CV runtime bump: `sidecar/cv-runtime/` (excluding tests and Markdown docs) or the target platform build script changed. Python code, app templates and the scrcpy JAR follow the app version.
 - App bump: any user-visible app behavior, frontend, Rust backend, updater config, runtime manifest, resources consumed by the app, or published CV version changed.
 
-If no CV runtime changed, do not rebuild/publish the runtime. If no CV code changed and the manifest already points to the desired code artifact, do not republish code.
+Reuse unchanged native runtimes. Code always follows the selected app source; validate that bundled code against the pinned runtime on each release platform. Missing historical runtime provenance requires review, not a guessed unchanged result.
 
 ## Version Selection
 
@@ -90,7 +85,7 @@ node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync("src-tauri/r
 Choose versions before running scripts and apply Semantic Versioning (SemVer)
 consistently:
 
-- Every newly selected app, CV code, and CV runtime version must be a stable
+- Every newly selected app and CV runtime version must be a stable
   `MAJOR.MINOR.PATCH` value (`x.y.z`). Do not introduce date-based versions,
   arbitrary suffixes, or a new pre-release/build identifier for a stable
   channel release.
@@ -113,7 +108,6 @@ consistently:
   date-style release.
 
 - App version: semver `x.y.z`, matching `src-tauri/tauri.conf.json`, Cargo package, and tag `vX.Y.Z`.
-- CV code version: semver `x.y.z`, tag `cv-code/x.y.z`.
 - CV runtime version: semver `x.y.z`, tag `cv-runtime/<platform>/x.y.z`. Existing
   date-style runtime values are legacy inputs only and must not be used for a
   new stable release.
@@ -125,7 +119,7 @@ Run the suites for touched layers before uploading artifacts:
 ```bash
 pnpm test
 cargo test --manifest-path src-tauri/Cargo.toml
-(cd sidecar/mash_cv && poetry run pytest)
+(cd sidecar/cv-runtime && poetry run pytest)
 ```
 
 If the release touches multiple layers, run all three. For final app confidence, run:
@@ -144,7 +138,7 @@ Only when runtime changed:
 mise exec -- scripts/macos/release-cv-runtime.sh --platform darwin-aarch64 <runtime-version>
 ```
 
-This script updates only `[mash_cv.runtime].<platform>` and that platform's `runtimeVersion`/URL/SHA in `runtime-manifest.json`, builds the runtime zip, uploads it, validates the URL, commits, and tags `cv-runtime/<platform>/<runtime-version>`. Runtime versions are independent per platform; CV code remains shared.
+This script updates only `[mash_cv.runtime].<platform>` and that platform's `runtimeVersion`/URL/SHA in `runtime-manifest.json`, builds the runtime zip, uploads it, validates the URL, commits, and tags `cv-runtime/<platform>/<runtime-version>`. Runtime versions are independent per platform; Python code is bundled with the app.
 
 After it finishes, verify:
 
@@ -155,34 +149,9 @@ cat versions.toml
 node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync("src-tauri/resources/runtime-manifest.json","utf8")); console.log(m.platforms["darwin-aarch64"].runtimeVersion, m.platforms["darwin-aarch64"].runtimeUrl, m.platforms["darwin-aarch64"].runtimeSha256)'
 ```
 
-## Publish CV Code
-
-Only when CV code changed:
-
-```bash
-mise exec -- scripts/macos/bump-cv-code-version.sh <code-version>
-mise exec -- scripts/macos/release-cv-code.sh <code-version>
-```
-
-Capture the printed `artifact` URL and `sha256`, then update `src-tauri/resources/runtime-manifest.json`:
-
-- `mashCvCodeVersion`
-- `platforms["darwin-aarch64"].codeUrl`
-- `platforms["darwin-aarch64"].codeSha256`
-
-Commit the manifest update after validating JSON:
-
-```bash
-node -e 'JSON.parse(require("fs").readFileSync("src-tauri/resources/runtime-manifest.json","utf8"))'
-git add src-tauri/resources/runtime-manifest.json
-git commit -m "Apply mash-cv code <code-version>"
-```
-
-If publishing multiple app targets that share the same code artifact, update each platform entry that the updater/runtime installer expects.
-
 ## Apply Latest CV To App
 
-Before bumping the app, verify the app commit includes the intended CV runtime/code manifest:
+Before bumping the app, verify the app commit includes the intended per-platform runtime manifest and bundled Python source:
 
 ```bash
 mise exec -- cat versions.toml
@@ -190,7 +159,7 @@ mise exec -- node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync
 mise exec -- git diff --stat $(git describe --tags --abbrev=0 --match 'v*')..HEAD
 ```
 
-The app release must include the newest intended `runtime-manifest.json`, because installed apps use this file to discover sidecar runtime/code artifacts.
+The app release must include the newest intended `runtime-manifest.json`, because installed apps use this file to discover external native runtime artifacts.
 
 ## Bump And Publish App
 
@@ -218,12 +187,12 @@ Also verify:
 - The channel `latest.json` version matches the app tag.
 - The artifact URL in `latest.json` is reachable.
 - The app bundle signature was generated from the intended signing key.
-- Published CV code/runtime URLs in `runtime-manifest.json` are reachable.
+- Published runtime URLs in `runtime-manifest.json` are reachable.
 - Commits and tags that must leave the machine are pushed deliberately:
 
 ```bash
 git push origin HEAD
-git push origin cv-code/<code-version> cv-runtime/darwin-aarch64/<runtime-version> v<app-version>
+git push origin cv-runtime/darwin-aarch64/<runtime-version> v<app-version>
 ```
 
 Push only tags that were actually created in this release.
@@ -231,7 +200,6 @@ Push only tags that were actually created in this release.
 ## Common Omissions To Catch
 
 - Release notes/changelog for visible changes.
-- Updating `runtime-manifest.json` after publishing CV code.
 - Publishing the runtime for every supported platform, not just the local default.
 - Signing key and updater password availability before the app build.
 - CDN cache behavior: immutable artifacts use long cache; channel `latest.json` must be no-cache.
@@ -244,8 +212,8 @@ Push only tags that were actually created in this release.
 
 Use native PowerShell scripts in scripts/windows/ on Windows. The complete entry
 point is release.ps1 <app-version> (read-only by default); add -Publish to execute,
--CvCode <version>, -CvRuntime <version>, -Installer and -Push as needed.
-Individual entry points are bump-app-version.ps1, bump-cv-code-version.ps1,
-release-cv-code.ps1, release-cv-runtime.ps1, release-tauri-updater.ps1 and
+-CvRuntime <version>, -Installer and -Push as needed. Code ships with the app.
+Individual entry points are bump-app-version.ps1, release-cv-runtime.ps1,
+release-tauri-updater.ps1 and
 release-installer.ps1. Shared Node helpers live in scripts/shared/.
 See docs/windows.md for Windows environment setup and multi-platform ordering.

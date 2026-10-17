@@ -41,7 +41,7 @@
 - Ensure icon files exist under `src-tauri/icons/` before running `pnpm tauri build` (the build will fail otherwise).
 - Test with `pnpm tauri dev` frequently; the Rust compiler catches many issues that TypeScript won't.
 - Vite is configured to ignore `src-tauri/` in its watcher — Rust changes trigger Tauri's own rebuild, not Vite's.
-- The `mash-cv` sidecar is shipped as independent artifacts, not inside the Tauri app bundle: a heavy PyInstaller `--onedir` runtime base zip plus a lightweight Python code zip. `scripts/macos/build-cv.sh` and `scripts/windows/build-cv.ps1` call the shared `sidecar/mash_cv/build_sidecar.py` builder to write `dist/mash-cv-runtime-<platform>-v<runtimeVersion>.zip` and `dist/mash-cv-code-v<codeVersion>.zip`, then print both SHA-256 values; publish those artifacts and update `src-tauri/resources/runtime-manifest.json`. The app installs them under `app_data_dir()/runtime/mash-cv/runtime/<version>/...` and `app_data_dir()/runtime/mash-cv/code/<version>/...`.
+- Python CV code ships inside the app: `build.rs` stages `sidecar/cv-code/mash_cv/` into `resources/mash-cv-code/mash_cv/`, excluding OCR models and Python caches. Release apps load only that bundled code; development reads source. Only the native PyInstaller runtime, dependencies and OCR models are external, installed under `app_data_dir()/runtime/mash-cv/runtime/<version>/...`. Runtime versions remain per-platform in `versions.toml` and `runtime-manifest.json`. Code ZIPs are internal compatibility-test artifacts named after the app version; never publish them or create independent code tags/versions.
 
 ## Device Automation
 

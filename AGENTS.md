@@ -45,10 +45,16 @@ src-tauri/                        # Tauri / Rust backend
   capabilities/                   # Tauri permission capabilities
   tauri.conf.json                 # Tauri app configuration
   Cargo.toml                      # Rust dependencies
-sidecar/mash_cv/                  # Python image recognition process (Poetry)
+sidecar/cv-code/                  # App-bundled Python business code
   mash_cv/                        # Package source (cv.py REPL, stream.py, region_tool.py)
   tests/                          # pytest suite + sample screenshots/templates
-  build_sidecar.py                # Shared native PyInstaller builder
+  build_code.py                   # Internal code candidate ZIP
+sidecar/cv-runtime/               # Independently versioned native runtime
+  models/                         # OCR models
+  pyproject.toml, poetry.lock      # Shared locked Python environment
+  runtime_launcher.py             # Frozen launcher for app-bundled code
+  build_runtime.py                # Native PyInstaller builder
+  tests/                          # Native build and frozen runtime checks
 scripts/{macos,windows,shared}/   # Platform entry points and shared release helpers
 ```
 
@@ -87,12 +93,13 @@ Backend Rust tests (run from repo root):
 cargo test --manifest-path src-tauri/Cargo.toml    # Unit tests under #[cfg(test)]
 ```
 
-Sidecar commands (run from `sidecar/mash_cv/`):
+Sidecar commands (run from `sidecar/cv-runtime/`):
 
 ```bash
-poetry install              # Install Python deps
-poetry run pytest           # Run the CV test suite
-poetry run python build_sidecar.py # Build runtime base zip + lightweight code zip artifacts
+poetry install --no-root    # Install locked Python deps
+poetry run pytest           # Run business + runtime test suites
+poetry run python build_runtime.py # Build the native runtime ZIP
+python ../cv-code/build_code.py    # Build the internal code candidate ZIP
 ```
 
 ## Testing
@@ -101,7 +108,7 @@ Three independent test runners cover the three layers — none of them require a
 
 - **Frontend** — Vitest + `@testing-library/react` + jsdom. See `src/AGENTS.md` for setup and conventions.
 - **Rust** — `cargo test` against sibling `tests.rs` modules and local `#[cfg(test)]` blocks. See `src-tauri/AGENTS.md` for conventions.
-- **Python sidecar** — pytest under `sidecar/mash_cv/tests/`. See `sidecar/mash_cv/AGENTS.md` for conventions.
+- **Python sidecar** — pytest under `sidecar/cv-code/tests/`. See `sidecar/cv-code/AGENTS.md` for conventions.
 
 `pnpm build` runs `eslint . && tsc && vitest run && vite build` in order, so a broken test fails the production build (and therefore `pnpm tauri build`). Always run the layer-appropriate test command after edits. The Vite dev server runs on port **1420** with `strictPort: true`.
 
@@ -113,7 +120,7 @@ Three independent test runners cover the three layers — none of them require a
 2. **Does this change break an existing test?** Run the relevant suite locally:
    - Frontend / TS edits → `pnpm test` (or `pnpm build` for full lint+types+test+build).
    - Rust edits in `src-tauri/` → `cargo test --manifest-path src-tauri/Cargo.toml`.
-   - Python edits in `sidecar/mash_cv/` → `cd sidecar/mash_cv && poetry run pytest`.
+   - Python edits in `sidecar/` → `cd sidecar/cv-runtime && poetry run pytest`.
 3. **Does this change cross layers?** (e.g. a new Tauri command, a new sidecar REPL verb, a new serde field.) Run **all three** suites; type alignment between Rust serde structs and TS interfaces is one of the easiest things to silently break.
 
 The only acceptable reasons to skip writing a test are: (a) the change is purely cosmetic (CSS, Chinese copy, comment tweaks), (b) the surface is genuinely untestable without a live ADB device / scrcpy stream / PyInstaller bundle (document this in the PR), or (c) the change is a pure rename whose behaviour is already pinned by an existing test.
@@ -134,4 +141,4 @@ The Rust backend is the single source of truth for all application state. The fr
 
 - **JSON field naming**: camelCase on the wire — Rust structs use `#[serde(rename = "...")]` to match TypeScript field names.
 
-See `src/AGENTS.md` for React/TypeScript conventions, `src-tauri/AGENTS.md` for Rust/Tauri conventions, and `sidecar/mash_cv/AGENTS.md` for Python sidecar conventions.
+See `src/AGENTS.md` for React/TypeScript conventions, `src-tauri/AGENTS.md` for Rust/Tauri conventions, and `sidecar/cv-code/AGENTS.md` for Python sidecar conventions.

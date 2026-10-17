@@ -6,7 +6,7 @@
 
 - [模块结构](module-structure.md)：代码目录、职责与扩展约定。
 - [Windows 开发](windows.md)：依赖、本地构建和 MuMu 画面采集排查。
-- [mash-cv](../sidecar/mash_cv/README.md)：Python 环境、通信协议、测试与打包。
+- [mash-cv](../sidecar/cv-code/README.md)：Python 环境、通信协议、测试与打包。
 - [CV 资源](../src-tauri/resources/README.md)：区服配置、模板与运行时清单。
 - [队伍成员身份](team-member-identity.md)：成员标识、持久化与换人解析。
 

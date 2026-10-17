@@ -40,13 +40,15 @@ jobs:
           predicate-quantifier: some-with-excludes
           filters: |
             cv:
-              - 'sidecar/mash_cv/**'
+              - 'sidecar/cv-code/**'
+              - 'sidecar/cv-runtime/**'
               - 'src-tauri/src/screen.rs'
               - 'src-tauri/src/screen/**'
               - 'src-tauri/resources/scrcpy/**'
               - 'src-tauri/resources/runtime-manifest.json'
               - 'scripts/{macos,windows}/build-cv.{sh,ps1}'
-              - 'scripts/shared/cv-code-release.mjs'
+              - 'src-tauri/build_support.rs'
+              - 'src-tauri/build.rs'
               - 'scripts/windows/common.ps1'
               - '.github/workflows/cv.yml'
               - 'src-tauri/src/commands/**'
@@ -56,16 +58,10 @@ jobs:
               - '!**/*.md'
               - '!**/{LICENSE,NOTICE}{,.*}'
             cvBuild:
-              - 'sidecar/mash_cv/**'
-              - 'src-tauri/src/screen.rs'
-              - 'src-tauri/src/screen/**'
-              - 'src-tauri/resources/scrcpy/**'
-              - 'src-tauri/resources/runtime-manifest.json'
+              - 'sidecar/cv-runtime/**'
               - 'scripts/{macos,windows}/build-cv.{sh,ps1}'
-              - 'scripts/shared/cv-code-release.mjs'
               - 'scripts/windows/common.ps1'
               - '.github/workflows/cv.yml'
-              - '!sidecar/mash_cv/tests/**'
               - '!**/*.md'
               - '!**/{LICENSE,NOTICE}{,.*}'
             unknown:
@@ -73,7 +69,7 @@ jobs:
               - '!src/**'
               - '!public/**'
               - '!src-tauri/**'
-              - '!sidecar/mash_cv/**'
+              - '!sidecar/{cv-code,cv-runtime}/**'
               - '!scripts/**'
               - '!docs/**'
               - '!**/*.md'
@@ -101,21 +97,21 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: sidecar/mash_cv/poetry.lock
+          cache-dependency-path: sidecar/cv-runtime/poetry.lock
       - name: Install Poetry
         shell: bash
         run: python -m pip install poetry==2.2.1
       - uses: actions/cache@v4
         with:
-          path: sidecar/mash_cv/.venv
-          key: cv-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-poetry2.2.1-${{ hashFiles('sidecar/mash_cv/poetry.lock', 'sidecar/mash_cv/pyproject.toml') }}
+          path: sidecar/cv-runtime/.venv
+          key: cv-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-poetry2.2.1-${{ hashFiles('sidecar/cv-runtime/poetry.lock', 'sidecar/cv-runtime/pyproject.toml') }}
       - name: Install CV dependencies
         shell: bash
-        working-directory: sidecar/mash_cv
+        working-directory: sidecar/cv-runtime
         run: poetry install --no-root
       - name: Source CV tests
         shell: bash
-        working-directory: sidecar/mash_cv
+        working-directory: sidecar/cv-runtime
         run: poetry run pytest --ignore=tests/test_windows_runtime.py
 
   runtime:
@@ -134,17 +130,17 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: sidecar/mash_cv/poetry.lock
+          cache-dependency-path: sidecar/cv-runtime/poetry.lock
       - name: Install Poetry
         shell: bash
         run: python -m pip install poetry==2.2.1
       - uses: actions/cache@v4
         with:
-          path: sidecar/mash_cv/.venv
-          key: cv-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-poetry2.2.1-${{ hashFiles('sidecar/mash_cv/poetry.lock', 'sidecar/mash_cv/pyproject.toml') }}
+          path: sidecar/cv-runtime/.venv
+          key: cv-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-poetry2.2.1-${{ hashFiles('sidecar/cv-runtime/poetry.lock', 'sidecar/cv-runtime/pyproject.toml') }}
       - name: Install CV dependencies
         shell: bash
-        working-directory: sidecar/mash_cv
+        working-directory: sidecar/cv-runtime
         run: poetry install --no-root
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -154,11 +150,11 @@ jobs:
       - name: Build Windows CV artifacts
         run: |
           ./scripts/windows/build-cv.ps1 -SkipInstall
-          if (-not (Test-Path -LiteralPath 'sidecar/mash_cv/dist/mash-cv-runtime/mash-cv.exe' -PathType Leaf)) {
+          if (-not (Test-Path -LiteralPath 'sidecar/cv-runtime/dist/mash-cv-runtime/mash-cv.exe' -PathType Leaf)) {
             throw 'The CV build did not produce mash-cv.exe.'
           }
       - name: Frozen runtime smoke tests
-        working-directory: sidecar/mash_cv
+        working-directory: sidecar/cv-runtime
         run: poetry run pytest tests/test_windows_runtime.py
       - name: Prepare Windows ADB resources
         run: ./scripts/windows/prepare-windows-adb.ps1
@@ -167,7 +163,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: mash-cv-windows-x64
-          path: sidecar/mash_cv/dist/*.zip
+          path: |
+            sidecar/cv-code/dist/*.zip
+            sidecar/cv-runtime/dist/*.zip
           if-no-files-found: error
 
   result:

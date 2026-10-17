@@ -1,5 +1,6 @@
-import { location, platforms } from "../cv-code-release.mjs";
+import { platforms } from "../release-artifacts.mjs";
 import { compareVersions } from "../updater-manifest.mjs";
+import { runtimeChangedFiles } from "../runtime-inputs.mjs";
 import {
   runtimeManifestPath,
   gitCommand,
@@ -8,18 +9,9 @@ import {
   assertStableVersion,
   assertCommitSha,
   resolveTagCommit,
-  listChangedFiles,
   objectKeyFromUrl,
+  validatePublicUrl,
 } from "./common.mjs";
-
-const runtimeInputPaths = [
-  "sidecar/mash_cv/pyproject.toml",
-  "sidecar/mash_cv/poetry.lock",
-  "sidecar/mash_cv/runtime_launcher.py",
-  "sidecar/mash_cv/build_sidecar.py",
-  "sidecar/mash_cv/mash_cv/models",
-  "src-tauri/resources/scrcpy",
-];
 
 export function planDigest(plan) {
   return hashBytes(JSON.stringify(plan));
@@ -37,7 +29,7 @@ function isPackagedCodeEntry(treeEntry) {
 }
 
 export function codeDigest(ref) {
-  const tree = gitCommand("ls-tree", "-r", ref, "--", "sidecar/mash_cv/mash_cv");
+  const tree = gitCommand("ls-tree", "-r", ref, "--", "sidecar/cv-code/mash_cv");
   const entries = tree.split("\n").filter(isPackagedCodeEntry);
   return hashBytes(entries.join("\n"));
 }
@@ -84,11 +76,7 @@ function readReleaseSource(sourceSha) {
 
 function checkSourceVersions(source, blockers) {
   const appVersion = readVersionValue(source.versions, "app", "version");
-  const codeVersion = readVersionValue(source.versions, "mash_cv", "code");
-  if (
-    appVersion !== source.appConfig.version ||
-    codeVersion !== source.manifest.mashCvCodeVersion
-  ) {
+  if (appVersion !== source.appConfig.version) {
     blockers.push("Source versions and manifests are inconsistent");
   }
   if (
@@ -112,40 +100,6 @@ function checkAppVersion(appVersion, sourceVersion, executing, blockers) {
       blockers.push(`Newer app tag already exists: ${tag}`);
     }
   }
-}
-
-function inspectCvCode(sourceSha, currentVersion, requestedVersion, executing, blockers) {
-  const baselineSha = resolveTagCommit(`cv-code/${currentVersion}`);
-  if (!baselineSha) {
-    blockers.push(`Missing source tag for referenced CV code ${currentVersion}`);
-  }
-  const sourceDigest = codeDigest(sourceSha);
-  const changed = !baselineSha || codeDigest(baselineSha) !== sourceDigest;
-  const testChanges = baselineSha
-    ? listChangedFiles(baselineSha, sourceSha, ["sidecar/mash_cv/tests"])
-    : [];
-  if (changed && !requestedVersion) {
-    blockers.push("CV code changed; provide a new cv_code_version");
-  }
-  if (requestedVersion && !changed) {
-    blockers.push("CV code is unchanged; omit cv_code_version");
-  }
-  if (requestedVersion && compareVersions(requestedVersion, currentVersion) <= 0) {
-    blockers.push("CV code version must increase");
-  }
-  const existingTag = requestedVersion ? resolveTagCommit(`cv-code/${requestedVersion}`) : null;
-  const isSameReleaseRetry = executing && existingTag === sourceSha;
-  if (existingTag && !isSameReleaseRetry) {
-    blockers.push("Target CV code tag already exists");
-  }
-  return {
-    changed,
-    version: requestedVersion || currentVersion,
-    baselineVersion: currentVersion,
-    baselineSha,
-    sourceDigest,
-    testChanges,
-  };
 }
 
 function isPublishedRuntime(entry, configuredVersion) {
@@ -188,12 +142,8 @@ function inspectRuntimes(source, sourceSha, baseUrl, blockers) {
     }
     try {
       objectKeyFromUrl(entry.runtimeUrl, baseUrl);
-      objectKeyFromUrl(entry.codeUrl, baseUrl);
     } catch (error) {
       blockers.push(`${platform}: ${error.message}`);
-    }
-    if (!/^[a-f0-9]{64}$/.test(entry.codeSha256) || /^0+$/.test(entry.codeSha256)) {
-      blockers.push(`Invalid CV code hash: ${platform}`);
     }
     runtimes[platform] = {
       runtimeVersion: entry.runtimeVersion,
@@ -201,10 +151,8 @@ function inspectRuntimes(source, sourceSha, baseUrl, blockers) {
       runtimeSha256: entry.runtimeSha256,
     };
     const baselineSha = runtimeBaseline(platform, entry.runtimeVersion, sourceSha);
-    const nativeBuildScript =
-      platform === "windows-x86_64" ? "scripts/windows/build-cv.ps1" : "scripts/macos/build-cv.sh";
     const files = baselineSha
-      ? listChangedFiles(baselineSha, sourceSha, [...runtimeInputPaths, nativeBuildScript])
+      ? runtimeChangedFiles(baselineSha, sourceSha, platform)
       : [];
     runtimeChanges[platform] = { sourceSha: baselineSha || null, files };
     if (!baselineSha) {
@@ -216,34 +164,10 @@ function inspectRuntimes(source, sourceSha, baseUrl, blockers) {
   return { runtimes, runtimeChanges };
 }
 
-function inspectSharedCodeArtifact(manifest, baseUrl, blockers) {
-  const entries = platforms.map((platform) => manifest.platforms?.[platform]);
-  const sharedEntry = entries[0];
-  const artifactsDiffer = entries.some((entry) => {
-    return entry?.codeUrl !== sharedEntry?.codeUrl || entry?.codeSha256 !== sharedEntry?.codeSha256;
-  });
-  if (artifactsDiffer) {
-    blockers.push("Platforms reference different shared CV code artifacts");
-  }
-  let objectKey = null;
-  try {
-    objectKey = objectKeyFromUrl(sharedEntry?.codeUrl, baseUrl);
-  } catch {
-    // inspectRuntimes already reports invalid artifact URLs for each platform.
-  }
-  return {
-    artifact: `mash-cv-code-v${manifest.mashCvCodeVersion}.zip`,
-    url: sharedEntry?.codeUrl,
-    objectKey,
-    sha256: sharedEntry?.codeSha256,
-  };
-}
-
 // Read Git objects without changing the worktree, even if ref is not HEAD.
 export function createPlan({
   ref,
   appVersion,
-  codeVersion = "",
   branch,
   baseUrl,
   prefix = "mash",
@@ -252,10 +176,10 @@ export function createPlan({
   executing = false,
 }) {
   assertStableVersion(appVersion);
-  if (codeVersion) {
-    assertStableVersion(codeVersion);
+  validatePublicUrl(baseUrl);
+  if (!/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(prefix)) {
+    throw new Error("Invalid R2 prefix");
   }
-  location("0.0.0", baseUrl, prefix); // Validate the shared publication destination.
   assertCommitSha(toolingSha);
   if (new Date(createdAt).toISOString() !== createdAt) {
     throw new Error("Invalid plan date");
@@ -268,17 +192,7 @@ export function createPlan({
   const blockers = [];
   checkSourceVersions(source, blockers);
   checkAppVersion(appVersion, source.appConfig.version, executing, blockers);
-  const code = inspectCvCode(
-    sourceSha,
-    source.manifest.mashCvCodeVersion,
-    codeVersion,
-    executing,
-    blockers,
-  );
   const { runtimes, runtimeChanges } = inspectRuntimes(source, sourceSha, baseUrl, blockers);
-  const sharedArtifact = inspectSharedCodeArtifact(source.manifest, baseUrl, blockers);
-  const codeArtifact =
-    code.changed && codeVersion ? location(codeVersion, baseUrl, prefix) : sharedArtifact;
   const publicKeys = {
     "windows-x86_64": source.windowsConfig.plugins?.updater?.pubkey,
     "darwin-aarch64": source.appConfig.plugins?.updater?.pubkey,
@@ -293,7 +207,7 @@ export function createPlan({
     blockers.push("Prepare a nonempty unreleased or target-version changelog section first");
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: "mash-app-release",
     createdAt,
     toolingSha,
@@ -305,7 +219,7 @@ export function createPlan({
     productName: source.appConfig.productName,
     platforms,
     publicKeys,
-    code: { ...code, ...codeArtifact },
+    code: { artifact: `mash-cv-code-v${appVersion}.zip`, sourceDigest: codeDigest(sourceSha) },
     runtimes,
     runtimeChanges,
     ready: blockers.length === 0,
@@ -314,19 +228,18 @@ export function createPlan({
 }
 
 export function validatePlan(plan, env = process.env) {
-  const isSupported = plan.schemaVersion === 1 && plan.kind === "mash-app-release";
+  const isSupported = plan.schemaVersion === 2 && plan.kind === "mash-app-release";
   if (!isSupported || !plan.ready || plan.blockers?.length) {
     throw new Error("Release plan is blocked or unsupported");
   }
   const baseUrl = env.RELEASE_BASE_URL?.replace(/\/+$/, "");
   const prefix = env.R2_PREFIX || "mash";
   if (plan.baseUrl !== baseUrl || plan.prefix !== prefix) {
-    throw new Error("Release destination changed since preflight");
+    throw new Error("Release destination changed since planning");
   }
   const regenerated = createPlan({
     ref: plan.sourceSha,
     appVersion: plan.appVersion,
-    codeVersion: plan.code.changed ? plan.code.version : "",
     branch: plan.branch,
     baseUrl: plan.baseUrl,
     prefix: plan.prefix,
@@ -336,47 +249,26 @@ export function validatePlan(plan, env = process.env) {
   });
   if (JSON.stringify(regenerated) !== JSON.stringify(plan)) {
     throw new Error(
-      `Release plan changed; run preflight again: ${regenerated.blockers.join("; ")}`,
+      `Release plan changed; start a new release run: ${regenerated.blockers.join("; ")}`,
     );
   }
   return plan;
 }
 
-export function validatePreflightRun(plan, metadata, repository, branch) {
-  const isSuccessfulPreflight =
-    metadata.path === ".github/workflows/release-preflight.yml" &&
-    metadata.event === "workflow_dispatch" &&
-    metadata.conclusion === "success" &&
-    metadata.status === "completed";
-  const isSameRepository =
-    metadata.repository?.full_name === repository &&
-    metadata.head_repository?.full_name === repository;
-  const isDefaultBranch = metadata.head_branch === branch && plan.branch === branch;
-  const hasExpectedTooling = metadata.head_sha === plan.toolingSha;
-  if (!isSuccessfulPreflight || !isSameRepository || !isDefaultBranch || !hasExpectedTooling) {
-    throw new Error("Plan must come from a successful default-branch preflight in this repository");
-  }
-}
-
 export function summary(plan) {
   const status = plan.ready ? "READY" : "BLOCKED";
-  const codeRelease = plan.code.changed
-    ? `joint release ${plan.code.version}`
-    : `reuse ${plan.code.version}`;
   const details = [
     `Status: **${status}**`,
     `Source: \`${plan.sourceSha}\``,
     `App: ${plan.appVersion}`,
-    `CV code: ${codeRelease}`,
+    "CV code: bundled with the app",
     `Platforms: ${plan.platforms.join(", ")}`,
-    `CV baseline: \`${plan.code.baselineSha ?? "unknown"}\` (${plan.code.baselineVersion})`,
-    `CV test changes: ${plan.code.testChanges.length}`,
   ].join("\n\n");
   let nextSteps =
-    "Pass this preflight run ID to App release. No source, tags or published objects were changed.";
+    "The pipeline will validate bundled code against each pinned native runtime before publishing.";
   if (plan.blockers.length) {
     const issues = plan.blockers.map((message) => `- ${message}`).join("\n");
     nextSteps = `Blocking issues:\n\n${issues}`;
   }
-  return `# Mash release preflight\n\n${details}\n\n${nextSteps}\n`;
+  return `# Mash release plan\n\n${details}\n\n${nextSteps}\n`;
 }

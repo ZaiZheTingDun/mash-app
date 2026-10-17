@@ -12,12 +12,13 @@ import pytest
 
 
 ROOT = Path(__file__).parents[1]
+CODE = ROOT.parent / "cv-code"
 EXE = ROOT / "dist" / "mash-cv-runtime" / "mash-cv.exe"
 pytestmark = pytest.mark.skipif(sys.platform != "win32" or not EXE.is_file(),
                                reason="Requires locally built Windows CV runtime")
 
 
-@pytest.mark.parametrize("code_dir", [ROOT, ROOT / "dist" / "mash-cv-code"],
+@pytest.mark.parametrize("code_dir", [CODE, CODE / "dist" / "mash-cv-code"],
                          ids=["source", "packaged-code"])
 def test_frozen_runtime_reads_unicode_templates_and_starts_ocr_worker(tmp_path, code_dir):
     assert (code_dir / "mash_cv").is_dir(), "Build the local code artifact before this smoke test"

@@ -1,78 +1,56 @@
 # 发布指南
 
-供维护者发布应用与 CV 组件。开发构建见[贡献指南](../CONTRIBUTING.md)，图片资源的打包和回滚见[资源更新流程](asset-bundle-update.md)。
+CV 识别代码随 App 内置；只有 Python 解释器、原生依赖和 OCR 模型组成的 runtime 独立下载。开发环境见[贡献指南](../CONTRIBUTING.md)，资源包发布见[资源更新流程](asset-bundle-update.md)。
 
-## 组件版本
+## 版本与打包
 
-| 改动 | 更新位置 |
-| --- | --- |
-| 应用发布 | `versions.toml` 的 `[app].version` |
-| Python 识别代码 | `[mash_cv].code` 及运行时清单中的 code 版本、URL、SHA-256 |
-| 原生依赖、OCR 模型、启动器或包结构 | `[mash_cv.runtime].<platform>` 及该平台的 runtime 清单 |
-| 图片资源 | 先发布远端资源包，再更新 `assets-manifest.json` 的目标版本 |
+- App 使用 `versions.toml` 的 `[app].version`，与 Tauri、Cargo 和 `vX.Y.Z` tag 一致。
+- runtime 使用 `[mash_cv.runtime].<platform>`，各平台独立版本，对应 `cv-runtime/<platform>/X.Y.Z` tag。
+- CV code 没有独立版本、远端 ZIP、下载状态或发布 tag。修改识别代码时发布新 App。
 
-CV code 跨平台共用，runtime 按平台独立版本化；仅修改 UI 或 Rust 时不升级 CV。版本与清单由发布入口更新，格式见 [CV 资源](../src-tauri/resources/README.md#runtime-manifestjson)。
+`src-tauri/build.rs` 将 `sidecar/cv-code/mash_cv/` 复制到生成的 `resources/mash-cv-code/mash_cv/`，排除 `models`、Python 缓存和字节码，保留轻量分类器资源。OCR 模型、依赖锁文件、启动器和原生构建器位于 `sidecar/cv-runtime/`。正式版仅从 App 资源目录加载代码；开发模式读取源码。旧版下载的 code 目录不再加载，也不会删除，以免影响仍使用它的旧 App。
 
-Tag 分别为 `vX.Y.Z`、`cv-code/X.Y.Z` 和 `cv-runtime/<platform>/X.Y.Z`。
+`runtime-manifest.json` 仅保存每个平台的 runtime 版本、URL 和 SHA-256，格式见 [CV 资源](../src-tauri/resources/README.md#runtime-manifestjson)。
 
-## 发布环境
+## GitHub Actions 发布
 
-应用和 runtime 在对应原生平台构建，需开发依赖、AWS CLI、R2 凭据和 Tauri updater 签名私钥。
+1. 在默认分支运行 [App release](../.github/workflows/app-release.yml)，填写已审查的 `source_ref` 和递增的 `app_version`。无需填写 CV code 版本或其他 workflow 的 run ID。
+2. 流水线先固定源码 SHA、构建工具 SHA 和 runtime 清单，检查版本、tag 和 runtime 输入。检查不通过时直接失败，原因显示在 Summary；发布计划 artifact 保留 30 天。
+3. 两个平台分别校验内置 CV code 与清单指定的 runtime。任一平台校验或构建失败，后续发布 job 不会执行，更新通道保持不变。
+4. 发布成功后合并 `codex/app-release-<version>` 版本同步 PR；发生冲突时手动同步发布提交。发布已完成的产物不会因同步失败而撤回。
 
-| 环境变量 | 用途 |
-| --- | --- |
-| `R2_ENDPOINT` / `R2_BUCKET` | R2 S3 API 地址与 bucket |
-| `RELEASE_BASE_URL` | 公开下载域名 |
-| `TAURI_SIGNING_PRIVATE_KEY` | updater 签名私钥或路径 |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | 私钥密码，按需设置 |
-| `AWS_PROFILE` | 凭据配置；Windows 默认使用 AWS 凭据链，macOS 默认 `mash` |
-| `R2_PREFIX` / `RELEASE_CHANNEL` | 可选对象前缀与更新通道 |
+流水线每次从固定源码构建一个内部 code 验证 ZIP，版本名跟随目标 App；它只用于两个平台的兼容性验证和候选留存，不上传 R2，不创建独立 GitHub Release。Windows x64 和 macOS Apple Silicon 使用同一份 code 候选与各自固定的 runtime，运行源码测试、冻结 runtime 协议/OCR 检查、Rust 安装测试和 App 构建。
 
-对象前缀默认 `mash`；macOS 通道默认 `stable`，Windows 默认 `windows-stable`。凭据放在本机环境或 CI secrets。Windows Authenticode 与 updater 签名独立；未签名安装包仅供手动安装。
+构建时将 code 打入 App。只有两个平台都通过后，才验证 updater 签名、条件上传 App 产物、检查公开 CDN 哈希、创建 App tag/GitHub Release，最后更新 `stable`、`windows-stable` 以及直接下载入口。两个通道包含本批次的平台条目。macOS Intel 暂不参与该发布矩阵。
 
 ## 发布入口
 
 先提交工作区改动，在 `CHANGELOG.md` 的“未发布”或目标版本标题下准备更新说明。以下为命令用法，版本参数均替换为目标递增版本。
 
-macOS：
+在对应原生平台先发布并应用需要更新的 runtime，再重新运行 App release。例如：
+
+```text
+scripts/macos/release-cv-runtime.sh --platform darwin-aarch64 <runtime-version>
+./scripts/windows/release-cv-runtime.ps1 <runtime-version> -Platform windows-x86_64
+```
+
+runtime 发布脚本构建、上传、校验并更新目标平台版本和清单，创建提交与 tag；将这些提交和 tag 同步到远端后再发布引用它的 App。不要覆盖已发布的 runtime ZIP。
+
+## 本地 App 发布
+
+本地需开发依赖、Poetry、AWS CLI、R2 凭据和匹配的 updater 私钥。macOS 默认使用 AWS profile `mash`；Windows 使用默认凭据链。对象前缀默认 `mash`，通道分别为 `stable` 和 `windows-stable`。Windows Authenticode 与 updater 签名独立。
 
 ```text
 scripts/macos/release.sh <app-version>
 scripts/macos/release.sh <app-version> --dmg --push --publish
-```
-
-Windows：
-
-```text
 pnpm release:windows <app-version>
 pnpm release:windows <app-version> -Installer -Push -Publish
 ```
 
-第一条只输出计划，第二条发布 updater、直接安装包并推送 Git refs。需要升级 CV 时，分别加 `--cv-code <version>` / `--cv-runtime <version>`，或 Windows 的 `-CvCode <version>` / `-CvRuntime <version>`。脚本检测到未发布的 CV 改动而未提供版本号时会停止。
+不带发布开关时仅打印计划。需要升级 runtime 时，加 `--cv-runtime <version>` 或 `-CvRuntime <version>`。先提交工作区，并在 `CHANGELOG.md` 中准备用户可见的更新说明。完整验证应包含前端、Rust 与 Python 三套测试。
 
-CV code 也可单独通过 [CV code release workflow](../.github/workflows/cv-code-release.yml) 发布：在默认分支手动运行，填写 `source_ref` 和 `code_version`，默认仅构建候选，勾选 `publish` 才上传并创建清单 PR。候选会使用已发布的 Windows / macOS runtime 验证，PR 合并后再发布引用它的应用。
+## 重试与恢复
 
-发布时，同一份已验证的 `mash-cv-code-vX.Y.Z.zip` 和 `release.json` 会上传到 R2 与 `cv-code/X.Y.Z` 对应的 GitHub Release。GitHub 发布使用 `softprops/action-gh-release`：缺少附件时失败，重试时跳过已有同名附件，不覆盖。CV Release 不设为 Latest，应用清单继续使用 R2 下载地址。
+优先使用 **Re-run failed jobs**，复用固定版本和已验证候选，不重新构建不同内容的同版本二进制。已存在的版本化对象只有哈希相同才允许复用；tag 不移动，通道拒绝降级，指针通过 ETag 条件写入保护。
 
-该 workflow 的 `cv-code-release` environment 需配置审批、`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` secrets，以及 `R2_ENDPOINT` / `R2_BUCKET` variables；下载域名和对象前缀可选配置。
-
-兼容性测试和发布 job 均使用该 environment：候选测试需对象读取权限，发布还需写入权限；配置了人工审批时，候选测试也须获批。runtime 下载和上传后的 SHA-256 校验通过 R2 S3 API 完成；workflow 不验证公网 CDN 下载。runtime object key 由清单 URL 移除 `RELEASE_BASE_URL` 前缀得到，URL 必须属于该前缀；清单仍保存供应用使用的公开 URL。
-
-## 发布顺序
-
-1. 运行检查、定稿日志，发布有变化的 CV 组件并更新 `runtime-manifest.json`。
-2. 确认清单引用的组件已可下载，再更新应用版本并创建 tag。
-3. 上传版本化应用产物与签名，验证后更新 updater 通道及直接安装包链接。
-4. 全部验证通过后推送 commit 和 tag。
-
-完整入口负责上述顺序。若手动上传 CV code，仍须把输出的版本、URL 和 SHA-256 写回清单并提交；仅推送 code tag 不会上传。
-
-不同平台串行发布。同一应用版本补发另一平台时，检出相同 tag，确保其清单已包含目标平台可用的 CV 组件。updater 合并同版本的平台条目，不覆盖更高版本通道或不同内容的已登记产物。
-
-## 验证与恢复
-
-- 从公开下载地址验证产物可用、SHA-256 与清单一致；updater 产物还须有匹配签名。
-- 检查应用版本、Git tag、更新通道和目标平台条目一致；直接安装包与 updater 分别确认。
-- 失败后先检查已上传产物和本地 commit / tag，再决定从哪一步重试；code workflow 可复用同 SHA-256 的对象。
-- 不覆盖已发布的版本化文件或重打已有 tag。应用与 CV 问题通过递增版本发布修复，必要时以已验证代码为基础重发；脚本拒绝通道降级，不提供自动降级回滚。
-- 资源包可暂时把远端 latest 指回已验证 manifest，具体限制见[资源回滚](asset-bundle-update.md#回滚)。
+通道、GitHub 和直接下载入口之间不是原子事务；中断后可能部分推进，重试完成剩余步骤。不要同时运行本地发布脚本和 CI。发布完成需确认版本、tag、签名、CDN 内容和通道一致；本地测试不代表已通过真实 Windows 安装或设备验证。资源回滚见[资源流程](asset-bundle-update.md#回滚)。

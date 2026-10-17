@@ -125,7 +125,7 @@ export function ResourceManagementPanel({
           CV 运行时
         </Text>
         <Text size="2" color="gray">
-          {runtimeReady ? "已安装运行时 base 和 code 包" : "需要安装 runtime base 和 code 包"}
+          {runtimeReady ? "CV 运行时已安装" : "需要安装 CV 运行时"}
         </Text>
         <RuntimeBundleButton
           status={runtimeStatus}

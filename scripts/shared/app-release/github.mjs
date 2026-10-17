@@ -1,15 +1,12 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { digest } from "../cv-code-release.mjs";
+import { digest } from "../release-artifacts.mjs";
 import { runCommand, gitCommand, resolveTagCommit, hashBytes } from "./common.mjs";
 import { releaseNotes } from "./plan.mjs";
 
 export function publishTags(receipt) {
   const tags = [{ name: `v${receipt.plan.appVersion}`, commit: receipt.releaseSha }];
-  if (receipt.plan.code.changed) {
-    tags.push({ name: `cv-code/${receipt.code.version}`, commit: receipt.plan.sourceSha });
-  }
   for (const tag of tags) {
     const existingCommit = resolveTagCommit(tag.name);
     if (existingCommit && existingCommit !== tag.commit) {
@@ -37,14 +34,6 @@ function githubReleases(receipt, directory) {
       notes: releaseNotes(fs.readFileSync("CHANGELOG.md", "utf8"), receipt.plan.appVersion),
     },
   ];
-  if (receipt.plan.code.changed) {
-    releases.unshift({
-      tag: `cv-code/${receipt.code.version}`,
-      title: `mash-cv code v${receipt.code.version}`,
-      files: [path.join(directory, receipt.code.artifact), path.join(directory, "release.json")],
-      notes: `Released with Mash ${receipt.plan.appVersion}. Source: ${receipt.plan.sourceSha}. SHA-256: ${receipt.code.sha256}.`,
-    });
-  }
   return releases;
 }
 
@@ -111,9 +100,9 @@ export function publishGithub(receipt, directory, gh = (args) => runCommand("gh"
         verifyGithubAsset(release, existing, file, workDirectory, gh);
       }
     }
-    // Both drafts must pass attachment verification before either becomes public.
+    // Verify every attachment before publishing.
     for (const release of releases) {
-      const latestFlag = release.tag.startsWith("cv-code/") ? "--latest=false" : "--latest";
+      const latestFlag = "--latest";
       gh(["release", "edit", release.tag, "--draft=false", latestFlag]);
     }
   } finally {

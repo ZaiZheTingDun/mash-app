@@ -1,4 +1,13 @@
+mod build_support;
+
 fn main() {
+    let root = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    println!("cargo:rerun-if-changed=../sidecar/cv-code/mash_cv");
+    build_support::stage_cv_code(
+        &root.join("../sidecar/cv-code/mash_cv"),
+        &root.join("resources/mash-cv-code/mash_cv"),
+    )
+    .expect("stage bundled mash-cv code");
     write_template_inventory();
     tauri_build::build()
 }

@@ -1,0 +1,5 @@
+# Dependencies are locked in ../cv-runtime/pyproject.toml.
+# From this directory: poetry -P ../cv-runtime run pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

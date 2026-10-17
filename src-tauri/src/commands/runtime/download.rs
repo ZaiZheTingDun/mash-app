@@ -192,11 +192,5 @@ pub(crate) fn download_and_install_runtime_bundles_inner(
         )?);
     }
 
-    if force || !status.code_installed {
-        let filename = format!("mash-cv-code-v{}.zip", manifest.mash_cv_code_version);
-        let zip_path = downloads_dir.join(filename);
-        installed.push(download.download_and_install("code", &artifact.code_url, &zip_path)?);
-    }
-
     Ok(RuntimeDownloadInstallResult { installed })
 }

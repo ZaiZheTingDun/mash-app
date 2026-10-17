@@ -58,7 +58,7 @@ jobs:
               - '!src/**'
               - '!public/**'
               - '!src-tauri/**'
-              - '!sidecar/mash_cv/**'
+              - '!sidecar/{cv-code,cv-runtime}/**'
               - '!scripts/**'
               - '!docs/**'
               - '!**/*.md'

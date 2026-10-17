@@ -20,7 +20,8 @@ test("common resources preserve their installed paths and exclude ADB", async ()
   }
   for (const source of ["resources/servers/shared/cv.json", "resources/servers/jp/cv.json",
     "resources/servers/cn/cv.json", "resources/images/*", "resources/scrcpy/scrcpy-server.jar",
-    "src/resources/servants.json", "resources/assets-manifest.json", "resources/runtime-manifest.json"]) {
+    "src/resources/servants.json", "resources/assets-manifest.json", "resources/runtime-manifest.json",
+    "resources/mash-cv-code/"]) {
     assert.ok(source in common, `Missing shared resource: ${source}`);
   }
 });

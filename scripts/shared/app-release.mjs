@@ -10,7 +10,6 @@ export {
   releaseNotes,
   createPlan,
   validatePlan,
-  validatePreflightRun,
   summary,
 } from "./app-release/plan.mjs";
 

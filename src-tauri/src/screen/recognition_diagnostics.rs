@@ -13,7 +13,7 @@ impl SidecarClient {
     ) -> Result<(), String> {
         self.diagnostic_enabled = false;
         if !self.diagnostic_supported {
-            return Err("当前 CV 代码包不支持识别诊断，请更新 CV 代码包".into());
+            return Err("当前版本不支持识别诊断，请更新应用".into());
         }
         let response = self
             .send_recv(&request(
@@ -29,7 +29,7 @@ impl SidecarClient {
 
     pub(crate) fn recognition_report(&mut self) -> Result<Value, String> {
         if !self.diagnostic_enabled {
-            return Err("当前 CV 代码包未启用识别诊断".into());
+            return Err("当前版本未启用识别诊断".into());
         }
         self.send_recv_with_timeout(
             &request(SidecarCommand::GetRecognitionDiagnostics, json!({}))?,

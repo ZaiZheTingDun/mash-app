@@ -1,18 +1,11 @@
 //! Verified runtime bundle installation and version-record updates.
 
 use super::{
-    code_version_dir, code_version_path, extract_code_zip, extract_runtime_zip, runtime_code_path,
-    runtime_executable_path, runtime_version_dir, runtime_version_path, sha256_file,
-    RuntimeInstallResult, RuntimeManifest, RuntimeVersionRecord,
+    extract_runtime_zip, runtime_executable_path, runtime_version_dir, runtime_version_path,
+    sha256_file, RuntimeInstallResult, RuntimeManifest, RuntimeVersionRecord,
 };
 use std::fs;
 use std::path::Path;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum RuntimeBundleKind {
-    Runtime,
-    Code,
-}
 
 pub(crate) fn import_runtime_bundle_from_zip_path(
     zip_path: &Path,
@@ -28,34 +21,18 @@ pub(crate) fn import_runtime_bundle_from_zip_path(
         .get(platform)
         .ok_or_else(|| format!("当前平台不支持独立 CV runtime: {platform}"))?;
     let actual_sha = sha256_file(zip_path)?;
-    let kind = if actual_sha.eq_ignore_ascii_case(&artifact.runtime_sha256) {
-        RuntimeBundleKind::Runtime
-    } else if actual_sha.eq_ignore_ascii_case(&artifact.code_sha256) {
-        RuntimeBundleKind::Code
-    } else {
+    if !actual_sha.eq_ignore_ascii_case(&artifact.runtime_sha256) {
         return Err(format!(
-            "runtime 压缩包 sha256 不匹配，期望 runtime={} 或 code={}，实际 {}",
-            artifact.runtime_sha256, artifact.code_sha256, actual_sha
+            "runtime 压缩包 sha256 不匹配，期望 {}，实际 {}",
+            artifact.runtime_sha256, actual_sha
         ));
-    };
-
+    }
     fs::create_dir_all(runtime_root).map_err(|e| format!("创建 runtime 目录失败: {e}"))?;
-    let (kind_name, version, target, version_path) = match kind {
-        RuntimeBundleKind::Runtime => (
-            "runtime",
-            artifact.runtime_version.as_str(),
-            runtime_version_dir(runtime_root, &artifact.runtime_version),
-            runtime_version_path(runtime_root),
-        ),
-        RuntimeBundleKind::Code => (
-            "code",
-            manifest.mash_cv_code_version.as_str(),
-            code_version_dir(runtime_root, &manifest.mash_cv_code_version),
-            code_version_path(runtime_root),
-        ),
-    };
+    let version = artifact.runtime_version.as_str();
+    let target = runtime_version_dir(runtime_root, version);
+    let version_path = runtime_version_path(runtime_root);
     let staging = runtime_root.join(format!(
-        ".install-{kind_name}-{version}-{}",
+        ".install-runtime-{version}-{}",
         uuid::Uuid::new_v4()
     ));
     if staging.exists() {
@@ -63,10 +40,7 @@ pub(crate) fn import_runtime_bundle_from_zip_path(
     }
     fs::create_dir_all(&staging).map_err(|e| format!("创建 runtime 临时目录失败: {e}"))?;
 
-    let extract_result = match kind {
-        RuntimeBundleKind::Runtime => extract_runtime_zip(zip_path, &staging),
-        RuntimeBundleKind::Code => extract_code_zip(zip_path, &staging),
-    };
+    let extract_result = extract_runtime_zip(zip_path, &staging);
     if let Err(err) = extract_result {
         fs::remove_dir_all(&staging).ok();
         return Err(err);
@@ -91,15 +65,11 @@ pub(crate) fn import_runtime_bundle_from_zip_path(
     .map_err(|e| format!("写入 runtime 版本记录失败: {e}"))?;
 
     let exe = runtime_executable_path(runtime_root, &artifact.runtime_version);
-    let code_path = runtime_code_path(runtime_root, &manifest.mash_cv_code_version);
     Ok(RuntimeInstallResult {
-        installed_kind: kind_name.to_string(),
+        installed_kind: "runtime".to_string(),
         installed_version: version.to_string(),
         platform: platform.to_string(),
         install_dir: target.to_string_lossy().into_owned(),
-        executable_path: matches!(kind, RuntimeBundleKind::Runtime)
-            .then(|| exe.to_string_lossy().into_owned()),
-        code_path: matches!(kind, RuntimeBundleKind::Code)
-            .then(|| code_path.to_string_lossy().into_owned()),
+        executable_path: Some(exe.to_string_lossy().into_owned()),
     })
 }

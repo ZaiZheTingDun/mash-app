@@ -17,7 +17,7 @@ def _models_dir() -> Optional[str]:
     configured = os.environ.get("MASH_CV_MODELS_DIR")
     if configured:
         candidates.append(configured)
-    candidates.append(os.path.join(os.path.dirname(__file__), "models"))
+    candidates.append(os.path.join(os.path.dirname(__file__), "..", "..", "cv-runtime", "models"))
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
         candidates.append(os.path.join(meipass, "mash_cv", "models"))

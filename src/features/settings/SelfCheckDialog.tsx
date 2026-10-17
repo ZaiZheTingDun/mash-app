@@ -114,15 +114,6 @@ export function SelfCheckContent({
               </Flex>
             </DataList.Value>
           </DataList.Item>
-          <DataList.Item align="center">
-            <DataList.Label minWidth="120px">CV code</DataList.Label>
-            <DataList.Value>
-              <Flex align="center" justify="between" gap="4" className="self-check-data-value">
-                <Text size="2">{status.cvCodeVersion}</Text>
-                {installBadge(status.cvCodeInstalled)}
-              </Flex>
-            </DataList.Value>
-          </DataList.Item>
           <DataList.Item>
             <DataList.Label minWidth="120px">资源包版本</DataList.Label>
             <DataList.Value>

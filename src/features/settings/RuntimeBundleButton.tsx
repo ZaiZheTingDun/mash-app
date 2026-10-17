@@ -14,28 +14,12 @@ interface RuntimeBundleButtonProps {
 }
 
 function statusText(status: RuntimeStatus | null): string {
-  if (!status) {
-    return "正在检查 CV 运行时…";
-  }
-  if (status.installed) {
-    return `CV 运行时已安装：base ${status.requiredRuntimeVersion} / code ${status.requiredCodeVersion}`;
-  }
-  const missing: string[] = [];
-  if (!status.runtimeInstalled) {
-    missing.push(
-      status.installedRuntimeVersion
-        ? `base ${status.installedRuntimeVersion} → ${status.requiredRuntimeVersion}`
-        : `base ${status.requiredRuntimeVersion}`
-    );
-  }
-  if (!status.codeInstalled) {
-    missing.push(
-      status.installedCodeVersion
-        ? `code ${status.installedCodeVersion} → ${status.requiredCodeVersion}`
-        : `code ${status.requiredCodeVersion}`
-    );
-  }
-  return `CV 运行时未就绪：需要 ${missing.join("，")}`;
+  if (!status) return "正在检查 CV 运行时…";
+  if (status.installed) return `CV 运行时已安装：${status.requiredRuntimeVersion}`;
+  const version = status.installedRuntimeVersion
+    ? `${status.installedRuntimeVersion} → ${status.requiredRuntimeVersion}`
+    : status.requiredRuntimeVersion;
+  return `CV 运行时未就绪：需要 ${version}`;
 }
 
 function formatBytes(value: number): string {
@@ -61,7 +45,7 @@ function progressLabel(progress: RuntimeDownloadProgress | null): string {
   if (!progress) {
     return "";
   }
-  const target = progress.kind === "runtime" ? "base" : "code";
+  const target = "CV 运行时";
   if (progress.phase === "connecting") {
     return `正在连接 ${target} 下载源…`;
   }
@@ -161,10 +145,7 @@ export function RuntimeBundleButton({
         setMessage("CV 运行时已是最新。");
       } else {
         const installed = result.installed
-          .map(
-            (item) =>
-              `${item.installedKind === "runtime" ? "base" : "code"} ${item.installedVersion}`
-          )
+          .map((item) => item.installedVersion)
           .join(" / ");
         setMessage(`${needsInstall ? "安装完成" : "重新下载完成"}：${installed}`);
       }
@@ -213,12 +194,7 @@ export function RuntimeBundleButton({
       )}
       {status?.runtimeDownloadUrl && !status.runtimeInstalled && (
         <Text size="1" color="gray" className="runtime-download-url">
-          base：{status.runtimeDownloadUrl}
-        </Text>
-      )}
-      {status?.codeDownloadUrl && !status.codeInstalled && (
-        <Text size="1" color="gray" className="runtime-download-url">
-          code：{status.codeDownloadUrl}
+          {status.runtimeDownloadUrl}
         </Text>
       )}
       {message && (

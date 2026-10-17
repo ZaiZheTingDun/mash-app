@@ -8,8 +8,6 @@ export interface SelfCheckStatus {
   appVersion: string;
   cvRuntimeVersion: string;
   cvRuntimeInstalled: boolean;
-  cvCodeVersion: string;
-  cvCodeInstalled: boolean;
   assetVersion: number | null;
   appAssetsVersion: number;
   servants: SelfCheckAssetGroup;

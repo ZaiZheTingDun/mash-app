@@ -85,4 +85,4 @@ stateDiagram-v2
 
 本次运行首次进入筛选弹窗时，定位 `scroll_bar_enhancement_filter_top`，中心 `y ≤ 0.148` 才算到顶；最多拖动两次，无法确认则停止。列表翻页前检查 `ui_scroll_bar_end`，命中即按当前阶段处理穷尽；最多扫描 12 页作保底。点击和滑动保留物理坐标抖动。
 
-策略与交互回归位于 [runner tests](../../src-tauri/src/craft_essence_enhancement_runner/tests.rs) 和 [CV tests](../../sidecar/mash_cv/tests/)。
+策略与交互回归位于 [runner tests](../../src-tauri/src/craft_essence_enhancement_runner/tests.rs) 和 [CV tests](../../sidecar/cv-code/tests/)。

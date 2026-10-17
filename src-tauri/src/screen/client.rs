@@ -59,10 +59,10 @@ impl SidecarClient {
             ));
         }
         let code_dir = crate::resolve_sidecar_code_dir(app)
-            .ok_or_else(|| "无法解析 mash-cv code runtime，请先安装 CV 代码包".to_string())?;
+            .ok_or_else(|| "未找到应用内置的 CV 代码，请重新安装应用".to_string())?;
         if !code_dir.join("mash_cv").is_dir() {
             return Err(format!(
-                "未找到 mash-cv code 包 ({}). 请先下载并安装当前版本需要的 CV 代码包。",
+                "未找到 mash-cv code 包 ({}). 请重新安装应用。",
                 code_dir.display()
             ));
         }
@@ -87,6 +87,7 @@ impl SidecarClient {
             .shell()
             .command(&exe)
             .env("MASH_CV_CODE_DIR", code_dir.to_string_lossy().to_string())
+            .env("PYTHONDONTWRITEBYTECODE", "1")
             .env(
                 "MASH_CV_MODELS_DIR",
                 models_dir.to_string_lossy().to_string(),

@@ -4,11 +4,11 @@ OpenCV / OCR sidecar for Mash, including scrcpy video decoding through PyAV. It 
 
 ## Setup
 
-Requires Python 3.11–3.14 and Poetry. CI uses Python 3.12. Run these commands from `sidecar/mash_cv/`:
+Requires Python 3.11–3.14 and Poetry. CI uses Python 3.12. Run these commands from `sidecar/cv-code/`:
 
 ```bash
-poetry install
-poetry run python -m mash_cv
+poetry -P ../cv-runtime install --no-root
+poetry -P ../cv-runtime run python -m mash_cv
 ```
 
 The Tauri development build reads Python source from this directory, using the installed CV runtime and OCR models.
@@ -22,7 +22,8 @@ The Tauri development build reads Python source from this directory, using the i
 | `mash_cv/host/` | OS-specific I/O and process handling |
 | `mash_cv/region_tool.py` | Template-region CLI |
 | `tests/` | Offline tests and fixtures |
-| `build_sidecar.py` | Shared runtime and code ZIP builder |
+| `build_code.py` | Internal code candidate ZIP, using only the Python standard library |
+| `../cv-runtime/` | Locked native dependencies, OCR models, launcher and runtime builder |
 | `training/` | Digit classifier training and labeling tools |
 
 ## Protocol
@@ -59,7 +60,7 @@ Command handling lives in [cv.py](mash_cv/cv.py), with Rust request types and wr
 ## Region CLI
 
 ```bash
-poetry run region --screenshot /path/to/screenshot.png --template /path/to/template.png --padding 0.02 --threshold 0.8
+poetry -P ../cv-runtime run python -m mash_cv.region_tool --screenshot /path/to/screenshot.png --template /path/to/template.png --padding 0.02 --threshold 0.8
 ```
 
 Outputs JSON with `found`, `score`, the normalized center `x` / `y`, matched `region` / `originalRegion`, and expanded `paddedRoi`. Use `--padding-x` and `--padding-y` to override padding per axis.
@@ -67,7 +68,7 @@ Outputs JSON with `found`, `score`, the normalized center `x` / `y`, matched `re
 ## Tests
 
 ```bash
-poetry run pytest
+poetry -P ../cv-runtime run pytest
 ```
 
 For focused runs, pass a test path such as `tests/test_cv.py`. Keep fixtures under `tests/test_data/`; routine tests need no ADB device or running stream. Tests of packaged runtimes additionally require the built artifacts.
@@ -76,35 +77,19 @@ New template probes should include a 1920×1080 downscaled fixture to check reso
 
 ## Build
 
-Run the shared builder in the native host environment:
+The app build stages `mash_cv/` into `src-tauri/resources/mash-cv-code/mash_cv/`.
+Business code and lightweight classifier assets ship with the app. OCR models,
+native dependencies and the launcher live in [cv-runtime](../cv-runtime/README.md)
+and retain their per-platform runtime versions.
+
+From this directory, build the internal compatibility-test candidate with:
 
 ```bash
-poetry run python build_sidecar.py
-poetry run python build_sidecar.py --code-only
-poetry run python build_sidecar.py --runtime-only
+python build_code.py
 ```
 
-Platform wrappers also install Poetry dependencies:
-
-```bash
-# macOS, from sidecar/mash_cv/
-bash ../../scripts/macos/build-cv.sh
-```
-
-```powershell
-# Windows, from sidecar/mash_cv/
-../../scripts/windows/build-cv.ps1
-# Or select one package
-../../scripts/windows/build-cv.ps1 -Mode code
-```
-
-Windows accepts `-Mode runtime` and `-Python <path>` for an existing environment. Outputs:
-
-```text
-dist/mash-cv-runtime-<platform>-v<runtimeVersion>.zip
-dist/mash-cv-code-v<codeVersion>.zip
-```
-
-The builder reads `versions.toml`: code has one shared version, while runtime versions are keyed by platform. One-off overrides use `MASH_CV_CODE_VERSION` and `MASH_CV_RUNTIME_VERSION`.
-
-The runtime ZIP contains the PyInstaller launcher, native dependencies and OCR models under `mash-cv-runtime/`; the code ZIP contains `mash_cv/` under `mash-cv-code/`. Python-only changes need only a code package update. Publishing and manifest updates are covered in [distribution](../../docs/distribution.md).
+It writes `dist/mash-cv-code-v<appVersion>.zip`, using `[app].version` from
+`versions.toml` or the candidate override `MASH_APP_VERSION`. The ZIP is used
+for native-runtime compatibility checks and comparison with app resources;
+it is not published independently. It requires no Poetry environment or
+runtime build. See [distribution](../../docs/distribution.md) for publishing.

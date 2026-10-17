@@ -1,6 +1,6 @@
 # 宝具就绪检测
 
-Sidecar 提供宝具卡、底部条亮度及数字槽的原始测量，Rust 根据配置选择就绪规则。识别位于 [cv.py](../sidecar/mash_cv/mash_cv/cv.py)，采样位于 [attack/selection_runtime.rs](../src-tauri/src/runner/attack/selection_runtime.rs)，完整性与聚合规则位于 [attack/noble_phantasm.rs](../src-tauri/src/runner/attack/noble_phantasm.rs)。
+Sidecar 提供宝具卡、底部条亮度及数字槽的原始测量，Rust 根据配置选择就绪规则。识别位于 [cv.py](../sidecar/cv-code/mash_cv/cv.py)，采样位于 [attack/selection_runtime.rs](../src-tauri/src/runner/attack/selection_runtime.rs)，完整性与聚合规则位于 [attack/noble_phantasm.rs](../src-tauri/src/runner/attack/noble_phantasm.rs)。
 
 ## 三种模式
 
@@ -49,8 +49,8 @@ Attack 页面先等待全部五张普通卡都有 suit / icon 信号，再读取
 `debug_read_noble_phantasm_gauges_live` 对实时亮度采样一秒，无需落盘截图。测试覆盖未满 / 已满、超过 100%、变暗、标签和字幕遮挡、百位误匹配，以及 Rust 聚合与模式选择。
 
 ```bash
-cd sidecar/mash_cv
-poetry run pytest tests/test_cv.py -k NoblePhantasms
+cd sidecar/cv-code
+poetry -P ../cv-runtime run pytest tests/test_cv.py -k NoblePhantasms
 cd ../..
 cargo test --manifest-path src-tauri/Cargo.toml np_gauge
 ```

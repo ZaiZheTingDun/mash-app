@@ -1,6 +1,6 @@
 """PyInstaller entrypoint for the heavy mash-cv runtime base.
 
-The actual ``mash_cv`` package is installed separately as a small code zip.
+The app supplies its bundled ``mash_cv`` package (source code in development).
 Rust sets ``MASH_CV_CODE_DIR`` before spawning this launcher.
 """
 

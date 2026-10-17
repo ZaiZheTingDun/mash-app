@@ -1,6 +1,6 @@
 # 战斗场景检测
 
-`read_battle_scene` 读取 HUD 的 `m/n`，用于选择场次配置并避免重复执行技能。识别入口为 [cv.py](../sidecar/mash_cv/mash_cv/cv.py) 的 `_read_battle_scene`，Rust 状态转换位于 [runner/state.rs](../src-tauri/src/runner/state.rs)。
+`read_battle_scene` 读取 HUD 的 `m/n`，用于选择场次配置并避免重复执行技能。识别入口为 [cv.py](../sidecar/cv-code/mash_cv/cv.py) 的 `_read_battle_scene`，Rust 状态转换位于 [runner/state.rs](../src-tauri/src/runner/state.rs)。
 
 ## 模板识别
 
@@ -27,7 +27,7 @@
 | 打开 | 使用模型结果，保留置信度与合法范围校验 |
 | 影子模式 | 保留基线结果并比较模型；任何不一致，包括仅一方识别成功，都会报错并停止 |
 
-单数字模型利用标签右侧区域识别数字并分割。CNN-CTC 在当前基线上读取完整数字区域，仍经过标签探针入口，避免非战斗区域误读。启用或影子模式要求启动时成功加载模型，不静默降级。选择与数值解释见 [battle_digit_policy.py](../sidecar/mash_cv/mash_cv/battle_digit_policy.py)。
+单数字模型利用标签右侧区域识别数字并分割。CNN-CTC 在当前基线上读取完整数字区域，仍经过标签探针入口，避免非战斗区域误读。启用或影子模式要求启动时成功加载模型，不静默降级。选择与数值解释见 [battle_digit_policy.py](../sidecar/cv-code/mash_cv/battle_digit_policy.py)。
 
 ## 场次与回合
 
@@ -66,8 +66,8 @@
 模板识别覆盖 JP / CN、标签缺失、遮挡、孤立数字及非法场次；模型与切换策略另由数字 / 序列识别测试覆盖。
 
 ```bash
-cd sidecar/mash_cv
-poetry run pytest tests/test_cv.py::TestReadBattleScene tests/test_battle_digit_policy.py tests/test_digit_classifier.py tests/test_sequence_classifier.py
+cd sidecar/cv-code
+poetry -P ../cv-runtime run pytest tests/test_cv.py::TestReadBattleScene tests/test_battle_digit_policy.py tests/test_digit_classifier.py tests/test_sequence_classifier.py
 cd ../..
 cargo test --manifest-path src-tauri/Cargo.toml tick_scene_state
 ```

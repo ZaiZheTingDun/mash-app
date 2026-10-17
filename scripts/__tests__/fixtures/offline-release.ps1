@@ -21,11 +21,10 @@ function pnpm {
     $global:LASTEXITCODE = 0
 }
 function poetry {
-    if ($args -contains 'build_sidecar.py') {
-        $dir = Join-Path $fixtureRoot 'sidecar/mash_cv/dist'
+    if ($args -contains 'build_runtime.py') {
+        $dir = Join-Path $fixtureRoot 'sidecar/cv-runtime/dist'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        $name = if ($args -contains '--code-only') { "mash-cv-code-v$env:MASH_CV_CODE_VERSION.zip" }
-                else { "mash-cv-runtime-windows-x86_64-v$env:MASH_CV_RUNTIME_VERSION.zip" }
+        $name = "mash-cv-runtime-windows-x86_64-v$env:MASH_CV_RUNTIME_VERSION.zip"
         Set-Content -LiteralPath (Join-Path $dir $name) -Value 'fixture zip' -Encoding ascii
     }
     $global:LASTEXITCODE = 0
@@ -48,4 +47,4 @@ function Invoke-RestMethod {
     param($Uri)
     Get-Content -LiteralPath $global:publishedManifest -Raw | ConvertFrom-Json
 }
-& (Join-Path $fixtureRoot 'scripts/windows/release.ps1') 1.1.0 -CvCode 1.1.0 -CvRuntime 1.1.0 -Installer -Publish
+& (Join-Path $fixtureRoot 'scripts/windows/release.ps1') 1.1.0 -CvRuntime 1.1.0 -Installer -Publish

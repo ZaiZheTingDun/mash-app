@@ -188,8 +188,6 @@ vi.mock("@tauri-apps/api/core", () => ({
           cvRuntimeVersion: "2026.05.08-runtime1",
           templates: [],
           cvRuntimeInstalled: false,
-          cvCodeVersion: "2026.05.08-code1",
-          cvCodeInstalled: false,
           assetVersion: null,
           appAssetsVersion: 2,
           servants: { entries: 0, hasImage: false, hasJson: false },
@@ -200,9 +198,6 @@ vi.mock("@tauri-apps/api/core", () => ({
           requiredRuntimeVersion: "2026.05.08-runtime1",
           installedRuntimeVersion: null,
           runtimeInstalled: false,
-          requiredCodeVersion: "2026.05.08-code1",
-          installedCodeVersion: null,
-          codeInstalled: false,
           installed: false,
           platform: "darwin-aarch64",
           runtimeDownloadUrl:
@@ -212,12 +207,6 @@ vi.mock("@tauri-apps/api/core", () => ({
           runtimeInstallDir: "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1",
           executablePath:
             "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
-          codeDownloadUrl:
-            "https://cdn.example.com/mash-cv-code-v2026.05.08-code1.zip",
-          codeExpectedSha256:
-            "0000000000000000000000000000000000000000000000000000000000000000",
-          codeInstallDir: "/tmp/runtime/mash-cv/code/2026.05.08-code1",
-          codePath: "/tmp/runtime/mash-cv/code/2026.05.08-code1/mash-cv-code",
         };
       case "import_runtime_bundle":
         return {
@@ -227,7 +216,6 @@ vi.mock("@tauri-apps/api/core", () => ({
           installDir: "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1",
           executablePath:
             "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
-          codePath: null,
         };
       case "download_runtime_bundles":
         return {
@@ -239,15 +227,6 @@ vi.mock("@tauri-apps/api/core", () => ({
               installDir: "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1",
               executablePath:
                 "/tmp/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
-              codePath: null,
-            },
-            {
-              installedKind: "code",
-              installedVersion: "2026.05.08-code1",
-              platform: "darwin-aarch64",
-              installDir: "/tmp/runtime/mash-cv/code/2026.05.08-code1",
-              executablePath: null,
-              codePath: "/tmp/runtime/mash-cv/code/2026.05.08-code1/mash-cv-code",
             },
           ],
         };

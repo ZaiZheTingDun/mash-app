@@ -71,7 +71,7 @@ Battle index 和 turn index，可作为宝具条与其他战斗数字的首批�
 ## 环境与命令
 
 ```bash
-cd sidecar/mash_cv/training/digit_classifier
+cd sidecar/cv-code/training/digit_classifier
 poetry install
 
 # 校验清单
@@ -147,7 +147,7 @@ Battle 页面比较整串结果，不一致或单侧未识别就停止；打开�
 门槛，便于用新截图核对；HP、敌人数和回合数当前只用于训练或调试，
 尚未替换对应自动化判断。模型文件缺失时无法启用影子或打开模式。
 
-不要放进现有的 `mash_cv/models/`。构建脚本会从轻量 CV code 包中移除
+不要放进原生 runtime 的 `sidecar/cv-runtime/models/`。构建脚本会从轻量 CV code 包中移除
 `models/`，而 `assets/` 会随 code 包发布，数字模型更新不需要重发重量级
 runtime。
 

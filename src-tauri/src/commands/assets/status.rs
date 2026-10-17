@@ -40,8 +40,6 @@ pub(crate) struct SelfCheckStatus {
     pub(crate) app_version: String,
     pub(crate) cv_runtime_version: String,
     pub(crate) cv_runtime_installed: bool,
-    pub(crate) cv_code_version: String,
-    pub(crate) cv_code_installed: bool,
     pub(crate) asset_version: Option<u32>,
     pub(crate) app_assets_version: u32,
     pub(crate) servants: SelfCheckAssetGroup,
@@ -148,10 +146,6 @@ pub(crate) fn self_check_status_for_app(app: &tauri::AppHandle) -> Result<SelfCh
             .installed_runtime_version
             .unwrap_or(runtime.required_runtime_version),
         cv_runtime_installed: runtime.runtime_installed,
-        cv_code_version: runtime
-            .installed_code_version
-            .unwrap_or(runtime.required_code_version),
-        cv_code_installed: runtime.code_installed,
         asset_version: assets.current_version,
         app_assets_version: assets.app_assets_version,
         servants: scan_self_check_asset_group(&assets_root.join("servants")),

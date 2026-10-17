@@ -1,12 +1,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { digest, platforms, recordRelease, validateReceipt } from "../cv-code-release.mjs";
+import { digest, platforms } from "../release-artifacts.mjs";
 import {
   finalizeChangelog,
   readVersions,
   updateVersion,
-  applyCvArtifact,
 } from "../release-state.mjs";
 import { compareVersions } from "../updater-manifest.mjs";
 import { selectUpdaterArtifact } from "../updater-artifact.mjs";
@@ -18,7 +17,6 @@ import {
   runCommand,
   gitCommand,
   resolveTagCommit,
-  createR2Client,
 } from "./common.mjs";
 import { planDigest, codeDigest } from "./plan.mjs";
 
@@ -27,31 +25,16 @@ export function prepareCodeArchive(plan, directory) {
   if (gitCommand("rev-parse", "HEAD") !== plan.sourceSha) {
     throw new Error("Code checkout differs from plan");
   }
-  const outputFile = path.resolve(directory, plan.code.artifact);
-  if (plan.code.changed) {
-    runCommand("python", ["build_sidecar.py", "--code-only"], {
-      cwd: "sidecar/mash_cv",
-      env: { ...process.env, MASH_CV_CODE_VERSION: plan.code.version },
-    });
-    fs.copyFileSync(path.join("sidecar/mash_cv/dist", plan.code.artifact), outputFile);
-  } else {
-    const aws = createR2Client();
-    aws(["s3api", "get-object", "--key", plan.code.objectKey, outputFile]);
-  }
+  runCommand("python", ["build_code.py"], {
+    cwd: "sidecar/cv-code",
+    env: { ...process.env, MASH_APP_VERSION: plan.appVersion },
+  });
+  const archive = path.join("sidecar/cv-code/dist", plan.code.artifact);
+  fs.copyFileSync(archive, path.join(directory, plan.code.artifact));
 }
 
-function applyReleaseMetadata(plan, codeReceipt) {
+function applyReleaseMetadata(plan) {
   updateVersion("app", plan.appVersion);
-  if (plan.code.changed) {
-    updateVersion("code", plan.code.version);
-    applyCvArtifact(
-      "code",
-      plan.code.version,
-      "windows-x86_64",
-      codeReceipt.url,
-      codeReceipt.sha256,
-    );
-  }
   const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
   const hasVersionHeading = changelog
     .split(/\r?\n/)
@@ -115,23 +98,17 @@ export function prepareSource(plan, directory) {
     throw new Error("Prepare requires a clean checkout at the planned SHA");
   }
   const archive = path.join(directory, plan.code.artifact);
-  if (!plan.code.changed && digest(archive) !== plan.code.sha256) {
-    throw new Error("Published CV code hash mismatch");
-  }
-  const codeReceipt = recordRelease(
-    {
-      schemaVersion: 1,
-      version: plan.code.version,
-      sourceSha: plan.sourceSha,
-      artifact: plan.code.artifact,
-      objectKey: plan.code.objectKey,
-      url: plan.code.url,
-      runtimes: plan.runtimes,
-    },
-    archive,
-    directory,
-  );
-  applyReleaseMetadata(plan, codeReceipt);
+  const codeReceipt = {
+    schemaVersion: 1,
+    version: plan.appVersion,
+    sourceSha: plan.sourceSha,
+    artifact: plan.code.artifact,
+    sha256: digest(archive),
+    size: fs.statSync(archive).size,
+    runtimes: plan.runtimes,
+  };
+  writeJson(path.join(directory, "release.json"), codeReceipt);
+  applyReleaseMetadata(plan);
   const releaseSha = createReleaseCommit(plan);
   writeSourceBundle(plan, releaseSha, directory);
   const prepared = {
@@ -260,29 +237,17 @@ function validatePreparedSource(prepared) {
 
 function validateCodeDependency(prepared, directory) {
   const { code, plan, manifest } = prepared;
-  validateReceipt(code);
-  const matchesArtifact = ["version", "url", "objectKey", "artifact"].every(
-    (key) => code[key] === plan.code[key],
-  );
   const matchesSource =
     code.sourceSha === plan.sourceSha && codeDigest("HEAD") === plan.code.sourceDigest;
   const matchesRuntime = JSON.stringify(code.runtimes) === JSON.stringify(plan.runtimes);
-  if (
-    !matchesArtifact ||
-    !matchesSource ||
-    !matchesRuntime ||
-    manifest.mashCvCodeVersion !== code.version
-  ) {
-    throw new Error("Candidate CV dependency differs from plan");
+  const matchesArtifact = code.artifact === plan.code.artifact && code.version === plan.appVersion;
+  if (!matchesArtifact || !matchesSource || !matchesRuntime) {
+    throw new Error("Bundled CV code differs from plan");
   }
   for (const platform of platforms) {
     const embedded = manifest.platforms[platform];
-    const matchesCode = embedded.codeUrl === code.url && embedded.codeSha256 === code.sha256;
-    const matchesPlatformRuntime = Object.entries(plan.runtimes[platform]).every(
-      ([key, value]) => embedded[key] === value,
-    );
-    if (!matchesCode || !matchesPlatformRuntime) {
-      throw new Error("Embedded manifest differs from tested dependencies");
+    if (!Object.entries(plan.runtimes[platform]).every(([key, value]) => embedded[key] === value)) {
+      throw new Error("Embedded runtime manifest differs from tested dependencies");
     }
   }
   validateFile(path.join(directory, code.artifact), {

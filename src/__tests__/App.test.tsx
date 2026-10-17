@@ -34,8 +34,6 @@ const selfCheckStatus: SelfCheckStatus = {
   appVersion: "0.5.4",
   cvRuntimeVersion: "2026.05.08-runtime1",
   cvRuntimeInstalled: true,
-  cvCodeVersion: "v0.3.5",
-  cvCodeInstalled: true,
   assetVersion: 2,
   appAssetsVersion: 2,
   servants: { entries: 3, hasImage: true, hasJson: true },

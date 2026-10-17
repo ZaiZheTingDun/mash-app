@@ -279,7 +279,7 @@ pub(crate) fn resolve_sidecar_code_dir(app: &tauri::AppHandle) -> Option<PathBuf
     {
         let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
-            .map(|root| root.join("sidecar").join("mash_cv"));
+            .map(|root| root.join("sidecar").join("cv-code"));
         if let Some(dev) = dev {
             if dev.join("mash_cv").is_dir() {
                 return Some(dev);
@@ -287,11 +287,8 @@ pub(crate) fn resolve_sidecar_code_dir(app: &tauri::AppHandle) -> Option<PathBuf
         }
     }
 
-    let manifest = runtime_manifest(app).ok()?;
-    Some(runtime_code_path(
-        &runtime_root_dir(app),
-        &manifest.mash_cv_code_version,
-    ))
+    let resources = app.path().resource_dir().ok()?;
+    bundled_code_dir(&resources)
 }
 
 pub(crate) fn resolve_sidecar_models_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
@@ -301,4 +298,13 @@ pub(crate) fn resolve_sidecar_models_dir(app: &tauri::AppHandle) -> Option<PathB
         &runtime_root_dir(app),
         &artifact.runtime_version,
     ))
+}
+
+/// Production code is owned by the app bundle, never an external installation.
+pub(crate) fn bundled_code_dir(resources: &Path) -> Option<PathBuf> {
+    let directory = resources.join("resources/mash-cv-code");
+    directory
+        .join("mash_cv/__init__.py")
+        .is_file()
+        .then_some(directory)
 }

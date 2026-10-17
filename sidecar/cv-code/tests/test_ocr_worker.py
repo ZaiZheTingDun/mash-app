@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -213,3 +214,20 @@ def test_client_recycles_immediately_after_large_detector_request(monkeypatch) -
 
     assert workers[0].closed is True
     assert client._worker is None
+
+
+def test_development_models_live_in_sibling_runtime_directory(tmp_path, monkeypatch):
+    from mash_cv import ocr_worker
+
+    package = tmp_path / "cv-code" / "mash_cv"
+    package.mkdir(parents=True)
+    models = tmp_path / "cv-runtime" / "models"
+    models.mkdir(parents=True)
+    monkeypatch.setattr(ocr_worker, "__file__", str(package / "ocr_worker.py"))
+    monkeypatch.delenv("MASH_CV_MODELS_DIR", raising=False)
+    assert Path(ocr_worker._models_dir()).resolve() == models
+
+    installed_models = tmp_path / "installed-models"
+    installed_models.mkdir()
+    monkeypatch.setenv("MASH_CV_MODELS_DIR", str(installed_models))
+    assert ocr_worker._models_dir() == str(installed_models)

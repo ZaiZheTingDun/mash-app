@@ -681,9 +681,6 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
         requiredRuntimeVersion: "2026.05.08-runtime1",
         installedRuntimeVersion: null,
         runtimeInstalled: commandPreview,
-        requiredCodeVersion: "2026.05.08-code1",
-        installedCodeVersion: null,
-        codeInstalled: commandPreview,
         installed: commandPreview,
         platform: "darwin-aarch64",
         runtimeDownloadUrl:
@@ -693,11 +690,6 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
         runtimeInstallDir: "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1",
         executablePath:
           "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
-        codeDownloadUrl: "https://cdn.example.com/mash-cv-code-v2026.05.08-code1.zip",
-        codeExpectedSha256:
-          "0000000000000000000000000000000000000000000000000000000000000000",
-        codeInstallDir: "/dev/runtime/mash-cv/code/2026.05.08-code1",
-        codePath: "/dev/runtime/mash-cv/code/2026.05.08-code1/mash-cv-code",
       } as T;
     case "get_asset_bundle_status":
       return {
@@ -728,8 +720,6 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
           { server: "CN", checked: 150, errors: [] },
         ],
         cvRuntimeInstalled: false,
-        cvCodeVersion: "2026.05.08-code1",
-        cvCodeInstalled: false,
         assetVersion: null,
         appAssetsVersion: 2,
         servants: { entries: 0, hasImage: false, hasJson: false },
@@ -762,7 +752,6 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
         installDir: "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1",
         executablePath:
           "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
-        codePath: null,
       } as T;
     case "download_runtime_bundles":
       return {
@@ -774,15 +763,6 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
             installDir: "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1",
             executablePath:
               "/dev/runtime/mash-cv/runtime/2026.05.08-runtime1/mash-cv-runtime/mash-cv",
-            codePath: null,
-          },
-          {
-            installedKind: "code",
-            installedVersion: "2026.05.08-code1",
-            platform: "darwin-aarch64",
-            installDir: "/dev/runtime/mash-cv/code/2026.05.08-code1",
-            executablePath: null,
-            codePath: "/dev/runtime/mash-cv/code/2026.05.08-code1/mash-cv-code",
           },
         ],
       } as T;

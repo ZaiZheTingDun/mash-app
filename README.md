@@ -37,7 +37,8 @@ pnpm tauri dev
 ```text
 src/                  React 界面
 src-tauri/            Rust 后端、自动化引擎与应用资源
-sidecar/mash_cv/      Python 图像识别与视频流处理
+sidecar/cv-code/      随 App 打包的 Python 图像识别与视频流处理
+sidecar/cv-runtime/   原生依赖、OCR 模型、启动器与独立 runtime 构建
 scripts/              构建与发布脚本
 docs/                 开发与设计文档
 ```

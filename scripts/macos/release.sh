@@ -3,7 +3,6 @@ set -euo pipefail
 
 PLATFORM="darwin-aarch64"
 REMOTE="origin"
-CV_CODE_VERSION=""
 CV_RUNTIME_VERSION=""
 PUBLISH=false
 PUBLISH_DMG=false
@@ -20,7 +19,6 @@ Plans or publishes a complete Mash release. Without --publish, the script is
 read-only and prints the release plan.
 
 Options:
-  --cv-code <version>     Publish and apply a mash-cv code package.
   --cv-runtime <version>  Publish and apply a mash-cv runtime package.
   --platform <platform>   Runtime/updater platform (default: darwin-aarch64).
   --dmg                   Also publish the versioned/latest DMG installer.
@@ -32,8 +30,6 @@ Options:
 
 Examples:
   mise exec -- scripts/macos/release.sh 0.12.3
-  mise exec -- scripts/macos/release.sh 0.13.0 --cv-code 0.4.25 --publish
-  mise exec -- scripts/macos/release.sh 0.13.0 --cv-code 0.4.25 --dmg --push --publish
 
 Before an actual release, commit the current worktree and add user-facing notes
 under "## 未发布" in CHANGELOG.md. The script converts that heading to the
@@ -125,18 +121,13 @@ run_command() {
 run_cv_tests() {
   print_command poetry run pytest
   (
-    cd sidecar/mash_cv
+    cd sidecar/cv-runtime
     poetry run pytest
   )
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --cv-code)
-      require_value "$1" "${2:-}"
-      CV_CODE_VERSION="$2"
-      shift 2
-      ;;
     --cv-runtime)
       require_value "$1" "${2:-}"
       CV_RUNTIME_VERSION="$2"
@@ -189,7 +180,6 @@ done
 }
 
 validate_version "app version" "$APP_VERSION"
-[[ -z "$CV_CODE_VERSION" ]] || validate_version "CV code version" "$CV_CODE_VERSION"
 [[ -z "$CV_RUNTIME_VERSION" ]] || validate_version "CV runtime version" "$CV_RUNTIME_VERSION"
 [[ "$PLATFORM" =~ ^darwin-(aarch64|x86_64)$ ]] || fail "invalid macOS platform: $PLATFORM; use scripts/windows/release.ps1 on Windows"
 [[ "$REMOTE" =~ ^[A-Za-z0-9._/-]+$ ]] || fail "invalid git remote: $REMOTE"
@@ -203,17 +193,13 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
 
 CURRENT_APP_VERSION="$(read_toml_version app version)"
-CURRENT_CV_CODE_VERSION="$(read_toml_version mash_cv code)"
 CURRENT_CV_RUNTIME_VERSION="$(read_toml_version mash_cv.runtime "$PLATFORM")"
 LAST_APP_TAG="$(latest_tag 'v*')"
-LAST_CV_CODE_TAG="$(latest_tag 'cv-code/*')"
 RUNTIME_BASE_REF="$(git tag --list "cv-runtime/$PLATFORM/$CURRENT_CV_RUNTIME_VERSION")"
 [[ -n "$RUNTIME_BASE_REF" ]] || RUNTIME_BASE_REF="$(git log -1 --format='%H' -S "$PLATFORM = \"$CURRENT_CV_RUNTIME_VERSION\"" -- versions.toml)"
 [[ -n "$RUNTIME_BASE_REF" ]] || RUNTIME_BASE_REF="$LAST_APP_TAG"
 APP_TAG="v$APP_VERSION"
-CV_CODE_TAG=""
 CV_RUNTIME_TAG=""
-[[ -z "$CV_CODE_VERSION" ]] || CV_CODE_TAG="cv-code/$CV_CODE_VERSION"
 [[ -z "$CV_RUNTIME_VERSION" ]] || CV_RUNTIME_TAG="cv-runtime/$PLATFORM/$CV_RUNTIME_VERSION"
 
 if [[ "$CURRENT_APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -228,11 +214,6 @@ if [[ "$CURRENT_APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   fi
 fi
 
-if [[ -n "$CV_CODE_VERSION" && "$CURRENT_CV_CODE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  if ! version_relation "$CURRENT_CV_CODE_VERSION" "$CV_CODE_VERSION"; then
-    fail "CV code version $CV_CODE_VERSION must be newer than current version $CURRENT_CV_CODE_VERSION"
-  fi
-fi
 if [[ -n "$CV_RUNTIME_VERSION" && "$CURRENT_CV_RUNTIME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   if ! version_relation "$CURRENT_CV_RUNTIME_VERSION" "$CV_RUNTIME_VERSION"; then
     fail "CV runtime version $CV_RUNTIME_VERSION must be newer than current version $CURRENT_CV_RUNTIME_VERSION"
@@ -241,9 +222,6 @@ fi
 
 if [[ "$APP_VERSION" != "$CURRENT_APP_VERSION" ]] && git rev-parse -q --verify "refs/tags/$APP_TAG" >/dev/null; then
   fail "tag already exists: $APP_TAG"
-fi
-if [[ -n "$CV_CODE_TAG" ]] && git rev-parse -q --verify "refs/tags/$CV_CODE_TAG" >/dev/null; then
-  fail "tag already exists: $CV_CODE_TAG"
 fi
 if [[ -n "$CV_RUNTIME_TAG" ]] && git rev-parse -q --verify "refs/tags/$CV_RUNTIME_TAG" >/dev/null; then
   fail "tag already exists: $CV_RUNTIME_TAG"
@@ -258,33 +236,8 @@ else
   fail "CHANGELOG.md must contain either '## 未发布' or a v$APP_VERSION release heading"
 fi
 
-CV_CODE_CHANGED=false
-if has_changes_since "$LAST_CV_CODE_TAG" \
-  sidecar/mash_cv/mash_cv \
-  sidecar/mash_cv/tests \
-  src-tauri/resources/cv.json \
-  src-tauri/resources/templates \
-  src-tauri/resources/servers; then
-  CV_CODE_CHANGED=true
-fi
+CV_RUNTIME_CHANGED="$(node scripts/shared/runtime-inputs.mjs "$RUNTIME_BASE_REF" HEAD "$PLATFORM")"
 
-CV_RUNTIME_CHANGED=false
-if has_changes_since "$RUNTIME_BASE_REF" \
-  sidecar/mash_cv/pyproject.toml \
-  sidecar/mash_cv/poetry.lock \
-  scripts/macos/build-cv.sh \
-  scripts/windows/build-cv.ps1 \
-  sidecar/mash_cv/build_sidecar.py \
-  src-tauri/resources/scrcpy; then
-  CV_RUNTIME_CHANGED=true
-fi
-
-if [[ "$CV_CODE_CHANGED" == true && -z "$CV_CODE_VERSION" ]]; then
-  if [[ "$PUBLISH" == true ]]; then
-    fail "CV code changes detected since ${LAST_CV_CODE_TAG:-the beginning}; pass --cv-code <version>"
-  fi
-  echo "warning: CV code changes detected; an actual release requires --cv-code <version>" >&2
-fi
 if [[ "$CV_RUNTIME_CHANGED" == true && -z "$CV_RUNTIME_VERSION" ]]; then
   if [[ "$PUBLISH" == true ]]; then
     fail "CV runtime changes detected since the current runtime was selected; pass --cv-runtime <version>"
@@ -295,7 +248,6 @@ fi
 note "Release summary"
 echo "  app:             $CURRENT_APP_VERSION -> $APP_VERSION"
 echo "  changelog:       $CHANGELOG_STATE"
-echo "  CV code:         ${CV_CODE_VERSION:-unchanged} (changes detected: $CV_CODE_CHANGED)"
 echo "  CV runtime:      ${CV_RUNTIME_VERSION:-unchanged} (changes detected: $CV_RUNTIME_CHANGED)"
 echo "  platform:        $PLATFORM"
 echo "  publish DMG:     $PUBLISH_DMG"
@@ -307,20 +259,13 @@ if [[ "$PUBLISH" != true ]]; then
   if [[ "$SKIP_TESTS" != true ]]; then
     print_command pnpm build
     print_command cargo test --manifest-path src-tauri/Cargo.toml
-    if [[ -n "$CV_CODE_VERSION" || -n "$CV_RUNTIME_VERSION" ]]; then
-      echo "  + (cd sidecar/mash_cv && poetry run pytest)"
-    fi
+    echo "  + (cd sidecar/cv-runtime && poetry run pytest)"
   fi
   if [[ "$CHANGELOG_STATE" == "unreleased" ]]; then
     echo "  + finalize and commit CHANGELOG.md for v$APP_VERSION"
   fi
   if [[ -n "$CV_RUNTIME_VERSION" ]]; then
     print_command scripts/macos/release-cv-runtime.sh --platform "$PLATFORM" "$CV_RUNTIME_VERSION"
-  fi
-  if [[ -n "$CV_CODE_VERSION" ]]; then
-    print_command scripts/macos/bump-cv-code-version.sh "$CV_CODE_VERSION"
-    print_command scripts/macos/release-cv-code.sh "$CV_CODE_VERSION"
-    echo "  + apply CV code URL/SHA to runtime-manifest.json and commit"
   fi
   print_command scripts/macos/bump-app-version.sh "$APP_VERSION"
   print_command scripts/macos/release-tauri-updater.sh
@@ -347,7 +292,7 @@ require_cmd curl
 require_cmd date
 require_cmd pnpm
 require_cmd shasum
-[[ -z "$CV_CODE_VERSION" && -z "$CV_RUNTIME_VERSION" ]] || require_cmd poetry
+[[ "$SKIP_TESTS" == true && -z "$CV_RUNTIME_VERSION" ]] || require_cmd poetry
 
 [[ -n "${R2_ENDPOINT:-}" ]] || fail "R2_ENDPOINT is required; run through 'mise exec --'"
 [[ -n "${R2_BUCKET:-}" ]] || fail "R2_BUCKET is required; run through 'mise exec --'"
@@ -385,9 +330,7 @@ if [[ "$SKIP_TESTS" != true ]]; then
   note "Running release validation"
   run_command pnpm build
   run_command cargo test --manifest-path src-tauri/Cargo.toml
-  if [[ -n "$CV_CODE_VERSION" || -n "$CV_RUNTIME_VERSION" ]]; then
-    run_cv_tests
-  fi
+  run_cv_tests
 else
   note "Skipping tests by request"
 fi
@@ -417,39 +360,6 @@ if [[ -n "$CV_RUNTIME_VERSION" ]]; then
   CREATED_TAGS+=("$CV_RUNTIME_TAG")
 fi
 
-if [[ -n "$CV_CODE_VERSION" ]]; then
-  note "Publishing mash-cv code $CV_CODE_VERSION"
-  run_command scripts/macos/bump-cv-code-version.sh "$CV_CODE_VERSION"
-  CREATED_TAGS+=("$CV_CODE_TAG")
-  run_command scripts/macos/release-cv-code.sh "$CV_CODE_VERSION"
-
-  CODE_ARTIFACT="mash-cv-code-v${CV_CODE_VERSION}.zip"
-  CODE_PATH="$REPO_ROOT/sidecar/mash_cv/dist/$CODE_ARTIFACT"
-  [[ -f "$CODE_PATH" ]] || fail "CV code artifact not found after publication: $CODE_PATH"
-  CODE_SHA256="$(shasum -a 256 "$CODE_PATH" | awk '{print $1}')"
-  CODE_URL="${RELEASE_BASE_URL%/}/$RELEASE_PREFIX/runtime/mash-cv/code/$CODE_ARTIFACT"
-
-  note "Applying mash-cv code artifact to runtime manifest"
-  node - "$CV_CODE_VERSION" "$PLATFORM" "$CODE_URL" "$CODE_SHA256" <<'NODE'
-const fs = require("fs");
-const [version, platform, codeUrl, codeSha256] = process.argv.slice(2);
-const path = "src-tauri/resources/runtime-manifest.json";
-const manifest = JSON.parse(fs.readFileSync(path, "utf8"));
-manifest.mashCvCodeVersion = version;
-manifest.platforms ??= {};
-manifest.platforms[platform] ??= {};
-manifest.platforms[platform].codeUrl = codeUrl;
-manifest.platforms[platform].codeSha256 = codeSha256;
-fs.writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
-
-const reread = JSON.parse(fs.readFileSync(path, "utf8"));
-if (reread.mashCvCodeVersion !== version) throw new Error("CV code version did not update");
-if (reread.platforms?.[platform]?.codeUrl !== codeUrl) throw new Error("CV code URL did not update");
-if (reread.platforms?.[platform]?.codeSha256 !== codeSha256) throw new Error("CV code SHA did not update");
-NODE
-  run_command git add src-tauri/resources/runtime-manifest.json
-  run_command git commit -m "Apply mash-cv code $CV_CODE_VERSION"
-fi
 
 if [[ "$APP_VERSION" != "$CURRENT_APP_VERSION" ]]; then
   note "Bumping app to $APP_VERSION"

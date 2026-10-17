@@ -41,16 +41,9 @@ pub(crate) fn launch_context(
         .and_then(|p| p.parent())
         .and_then(|p| p.file_name())
         .and_then(|s| s.to_str());
-    let code_version = (code.file_name().and_then(|s| s.to_str())
-        == Some(crate::code_bundle_root()))
-    .then(|| {
-        code.parent()
-            .and_then(|p| p.file_name())
-            .and_then(|s| s.to_str())
-    })
-    .flatten();
-    json!({"runtimeVersion": runtime_version, "codeVersion": code_version,
-           "codeSource": if code_version.is_some() { "installed" } else { "development_or_unknown" },
+    let bundled = code.file_name().and_then(|name| name.to_str()) == Some("mash-cv-code");
+    json!({"runtimeVersion": runtime_version, "codeVersion": env!("CARGO_PKG_VERSION"),
+           "codeSource": if bundled { "bundled" } else { "development" },
            "server": server.to_string(), "platform": crate::runtime_platform_key(),
            "runtimeExecutable": exe, "codeDirectory": code,
            "codeEntrySha256": std::fs::read(code.join("mash_cv").join("cv.py")).ok().map(|b| archive::sha256(&b)),
@@ -132,14 +125,14 @@ mod tests {
             crate::Server::Cn,
         );
         assert_eq!(context["runtimeVersion"], "1.2");
-        assert_eq!(context["codeVersion"], "3.4");
+        assert_eq!(context["codeVersion"], env!("CARGO_PKG_VERSION"));
         let dev = launch_context(
             std::path::Path::new("custom/mash-cv"),
-            std::path::Path::new("sidecar/mash_cv"),
+            std::path::Path::new("sidecar/cv-code"),
             &[],
             crate::Server::Jp,
         );
         assert!(dev["runtimeVersion"].is_null());
-        assert!(dev["codeVersion"].is_null());
+        assert_eq!(dev["codeVersion"], env!("CARGO_PKG_VERSION"));
     }
 }

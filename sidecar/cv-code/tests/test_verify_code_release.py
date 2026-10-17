@@ -10,6 +10,33 @@ import zipfile
 import pytest
 
 
+@pytest.mark.parametrize("change", [None, "changed", "missing", "extra"])
+def test_app_bundled_code_must_match_the_tested_candidate(release, tmp_path, change):
+    archive_path = tmp_path / "mash-cv-code-v1.0.0.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("mash-cv-code/mash_cv/__init__.py", b"tested code\n")
+        archive.writestr("mash-cv-code/mash_cv/assets/weights.npz", b"light model")
+    receipt = tmp_path / "release.json"
+    receipt.write_text(json.dumps({"artifact": archive_path.name, "version": "1.0.0",
+                                   "sha256": release.digest(archive_path)}), encoding="utf-8")
+    code = tmp_path / "app" / "mash-cv-code"
+    package = code / "mash_cv"
+    (package / "assets").mkdir(parents=True)
+    (package / "__init__.py").write_bytes(b"tested code\n")
+    (package / "assets" / "weights.npz").write_bytes(b"light model")
+    if change == "changed":
+        (package / "__init__.py").write_bytes(b"different code\n")
+    elif change == "missing":
+        (package / "assets" / "weights.npz").unlink()
+    elif change == "extra":
+        (package / "stale.py").write_bytes(b"stale code")
+    if change is None:
+        release.verify_bundled_code(receipt, code)
+    else:
+        with pytest.raises(ValueError, match="differs from the tested candidate"):
+            release.verify_bundled_code(receipt, code)
+
+
 @pytest.fixture
 def release(monkeypatch):
     root = Path(__file__).parents[1]

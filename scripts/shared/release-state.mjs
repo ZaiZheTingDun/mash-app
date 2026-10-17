@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { compareVersions } from "./updater-manifest.mjs";
+import { runtimeChangedFiles } from "./runtime-inputs.mjs";
 
 const manifestPath = "src-tauri/resources/runtime-manifest.json";
 const read = file => fs.readFileSync(file, "utf8");
@@ -36,12 +37,12 @@ export function readVersions(platform) {
   const runtimeBody = source.match(sectionPattern("mash_cv.runtime"))?.[2];
   if (runtimeBody === undefined) throw new Error("Missing mash_cv.runtime");
   const runtimes = Object.fromEntries([...runtimeBody.matchAll(/^([\w-]+)\s*=\s*"([^"]+)"/gm)].map(match => [match[1], match[2]]));
-  return { app: value("app", "version"), code: value("mash_cv", "code"), runtimes,
+  return { app: value("app", "version"), runtimes,
     ...(platform ? { runtime: runtimes[platform] ?? "" } : {}) };
 }
 export function updateVersion(kind, version, platform) {
   validateVersion(version);
-  if (!["app", "code", "runtime"].includes(kind)) throw new Error(`Unknown version kind: ${kind}`);
+  if (!["app", "runtime"].includes(kind)) throw new Error(`Unknown version kind: ${kind}`);
   if (kind === "runtime") validatePlatform(platform);
   const section = kind === "app" ? "app" : kind === "runtime" ? "mash_cv.runtime" : "mash_cv";
   const key = kind === "app" ? "version" : kind === "runtime" ? platform : kind;
@@ -60,25 +61,16 @@ export function updateVersion(kind, version, platform) {
 }
 export function applyCvArtifact(kind, version, platform, url, sha256) {
   validateVersion(version);
-  if (!["runtime", "code"].includes(kind)) throw new Error("Invalid CV artifact kind");
+  if (kind !== "runtime") throw new Error("Only external runtime artifacts are supported");
   validatePlatform(platform);
   if (!/^[a-f0-9]{64}$/.test(sha256)) throw new Error("Invalid SHA-256");
   if (new URL(url).protocol !== "https:") throw new Error("Artifact URL must use HTTPS");
   const manifest = JSON.parse(read(manifestPath));
   manifest.platforms ??= {};
   manifest.platforms[platform] ??= {};
-  if (kind === "code") {
-    manifest.mashCvCodeVersion = version;
-    // One code version is shared by every runtime platform.
-    for (const artifact of Object.values(manifest.platforms)) {
-      artifact.codeUrl = url;
-      artifact.codeSha256 = sha256;
-    }
-  } else {
-    manifest.platforms[platform].runtimeVersion = version;
-    manifest.platforms[platform].runtimeUrl = url;
-    manifest.platforms[platform].runtimeSha256 = sha256;
-  }
+  manifest.platforms[platform].runtimeVersion = version;
+  manifest.platforms[platform].runtimeUrl = url;
+  manifest.platforms[platform].runtimeSha256 = sha256;
   writeJson(manifestPath, manifest);
 }
 export function finalizeChangelog(version, date) {
@@ -88,15 +80,11 @@ export function finalizeChangelog(version, date) {
   if (!/^## 未发布\r?$/m.test(original)) throw new Error("Missing unreleased changelog heading");
   fs.writeFileSync("CHANGELOG.md", original.replace(/^## 未发布\r?$/m, `## v${version} - ${date}`));
 }
-export const runtimePaths = ["sidecar/mash_cv/pyproject.toml", "sidecar/mash_cv/poetry.lock",
-  "sidecar/mash_cv/build_sidecar.py", "scripts/macos/build-cv.sh", "scripts/windows/build-cv.ps1",
-  "src-tauri/resources/scrcpy"];
 export function hasChangesSince(ref, paths) {
   return Boolean(ref && git("diff", "--name-only", `${ref}..HEAD`, "--", ...paths));
 }
-export function releasePlan(app, code, runtime, platform, publish = false) {
+export function releasePlan(app, runtime, platform, publish = false) {
   validateVersion(app);
-  if (code) validateVersion(code);
   if (runtime) validateVersion(runtime);
   if (!/^windows-(x86_64|aarch64)$/.test(platform)) throw new Error("Unsupported Windows platform");
   const current = readVersions(platform);
@@ -105,29 +93,26 @@ export function releasePlan(app, code, runtime, platform, publish = false) {
   if (compareVersions(app, current.app) < 0) throw new Error("App version cannot go backwards");
   const sameVersion = app === current.app;
   if (sameVersion && !git("tag", "--points-at", "HEAD", "--list", appTag)) throw new Error(`Current app version requires HEAD at ${appTag}`);
-  if (sameVersion && (code || runtime)) throw new Error("Changing CV packages requires a new app version");
-  const tags = [!sameVersion && appTag, code && `cv-code/${code}`, runtime && `cv-runtime/${platform}/${runtime}`].filter(Boolean);
+  if (sameVersion && runtime) throw new Error("Changing CV packages requires a new app version");
+  const tags = [!sameVersion && appTag, runtime && `cv-runtime/${platform}/${runtime}`].filter(Boolean);
   for (const tag of tags) {
     if (git("tag", "--list", tag)) throw new Error(`Tag already exists: ${tag}`);
   }
-  for (const [kind, target] of [["code", code], ["runtime", runtime]]) {
-    if (target && /^\d+\.\d+\.\d+$/.test(current[kind]) && compareVersions(target, current[kind]) <= 0) throw new Error(`CV ${kind} version must increase`);
+  if (runtime && /^\d+\.\d+\.\d+$/.test(current.runtime) && compareVersions(runtime, current.runtime) <= 0) {
+    throw new Error("CV runtime version must increase");
   }
   const changelog = read("CHANGELOG.md");
   const ready = new RegExp(`^## v${app.replaceAll(".", "\\.")} - \\d{4}-\\d{2}-\\d{2}\\r?$`, "m").test(changelog);
   const unreleased = /^## 未发布\r?$/m.test(changelog);
   if (!ready && !unreleased) throw new Error("Missing target release or unreleased changelog heading");
-  const lastCode = latestTag("cv-code/*");
   const runtimeTag = `cv-runtime/${platform}/${current.runtime}`;
   const base = git("tag", "--list", runtimeTag) || git("log", "-1", "--format=%H", "-S", `${platform} = "${current.runtime}"`, "--", "versions.toml") || latestTag("v*");
-  const codeChanged = hasChangesSince(lastCode, ["sidecar/mash_cv/mash_cv", "sidecar/mash_cv/tests", "src-tauri/resources/servers"]);
-  const runtimeChanged = hasChangesSince(base, runtimePaths);
+  const runtimeChanged = Boolean(base && runtimeChangedFiles(base, "HEAD", platform).length);
   // A second platform publishes the exact same tagged source without new CV releases.
   if (publish && !sameVersion) {
-    if (codeChanged && !code) throw new Error("CV code changes detected; pass -CvCode <version>");
     if (runtimeChanged && !runtime) throw new Error("CV runtime changes detected; pass -CvRuntime <version>");
   }
-  return { current, app, code, runtime, platform, tags, sameVersion, changelog: ready ? "ready" : "unreleased", codeChanged, runtimeChanged };
+  return { current, app, runtime, platform, tags, sameVersion, changelog: ready ? "ready" : "unreleased", runtimeChanged };
 }
 
 if (process.argv[1] && fs.realpathSync.native(fileURLToPath(import.meta.url)) === fs.realpathSync.native(process.argv[1])) {
@@ -137,7 +122,7 @@ if (process.argv[1] && fs.realpathSync.native(fileURLToPath(import.meta.url)) ==
     case "version": updateVersion(...args); break;
     case "artifact": applyCvArtifact(...args); break;
     case "changelog": finalizeChangelog(...args); break;
-    case "plan": console.log(JSON.stringify(releasePlan(args[0], args[1] === "-" ? "" : args[1], args[2] === "-" ? "" : args[2], args[3], args[4] === "publish"))); break;
+    case "plan": console.log(JSON.stringify(releasePlan(args[0], args[1] === "-" ? "" : args[1], args[2], args[3] === "publish"))); break;
     default: throw new Error(`Unknown release command: ${command}`);
   }
 }
