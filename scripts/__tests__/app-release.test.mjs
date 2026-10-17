@@ -64,6 +64,7 @@ function createReleaseFixture(t) {
       ]),
     ),
   };
+  write(".gitattributes", fs.readFileSync(new URL("../../.gitattributes", import.meta.url), "utf8"));
   write(".gitignore", "src-tauri/target/\nsidecar/cv-code/dist/\nsidecar/cv-runtime/dist/\n");
   write(
     "versions.toml",
@@ -350,6 +351,44 @@ test("joint preparation embeds the tested CV bytes and makes a deterministic, fe
   assert.equal(release.git("-C", consumer, "rev-parse", "FETCH_HEAD"), prepared.releaseSha);
   release.git("checkout", "--detach", plan.sourceSha);
   assert.equal(release.prepare(plan).releaseSha, prepared.releaseSha);
+});
+
+test("macOS packaging selects system xattr ahead of Poetry's Python command", {
+  skip: process.platform !== "darwin" || process.arch !== "arm64",
+}, t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mash-xattr-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const tools = path.join(root, "tools");
+  const bundle = path.join(root, "Test.app");
+  fs.mkdirSync(tools);
+  fs.mkdirSync(bundle);
+  fs.writeFileSync(path.join(tools, "xattr"), "#!/bin/bash\necho 'Python xattr selected' >&2\nexit 64\n", { mode: 0o755 });
+  fs.writeFileSync(path.join(tools, "pnpm"), '#!/bin/bash\nexec xattr -crs "$XATTR_TEST_BUNDLE"\n', { mode: 0o755 });
+  const workflow = fs.readFileSync(new URL("../../.github/workflows/app-release.yml", import.meta.url), "utf8");
+  const step = workflow.split("      - name: Build signed macOS updater and DMG\n")[1]
+    .split("\n      - name: ")[0];
+  const command = step.split("        run: |\n")[1].split("\n")
+    .map(line => line.slice(10)).join("\n");
+  const result = spawnSync("/bin/bash", ["-e", "-c", command], {
+    env: { ...process.env, PATH: `${tools}:${process.env.PATH}`, XATTR_TEST_BUNDLE: bundle },
+    encoding: "utf8",
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /\/usr\/bin\/xattr/);
+});
+
+test("Windows checkout preserves the exact prepared runtime manifest bytes", t => {
+  const release = createReleaseFixture(t);
+  const manifest = "src-tauri/resources/runtime-manifest.json";
+  release.write(manifest, `${JSON.stringify(release.manifest, null, 2)}\n`);
+  release.commit();
+  const prepared = release.prepare();
+  release.git("config", "core.autocrlf", "true");
+  fs.unlinkSync(manifest);
+  release.git("checkout-index", "--force", "--", manifest);
+  assert.equal(digest(manifest), prepared.manifestSha256);
+  assert.doesNotThrow(() => release.build(prepared));
 });
 
 test("assembly rejects tampered internal bundled-code candidates", t => {

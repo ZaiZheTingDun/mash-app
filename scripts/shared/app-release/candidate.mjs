@@ -159,11 +159,16 @@ function validateCompatibilityReport(prepared, platform, report, message) {
 }
 
 export function recordPlatform(prepared, platform, directory, reportFile) {
-  const matchesSnapshot =
-    gitCommand("rev-parse", "HEAD") === prepared.releaseSha &&
-    digest(runtimeManifestPath) === prepared.manifestSha256;
-  if (!platforms.includes(platform) || !matchesSnapshot) {
-    throw new Error("Build source or embedded CV manifest differs from the release snapshot");
+  if (!platforms.includes(platform)) {
+    throw new Error(`Unsupported build platform: ${platform}`);
+  }
+  const sourceSha = gitCommand("rev-parse", "HEAD");
+  if (sourceSha !== prepared.releaseSha) {
+    throw new Error(`Build source differs from the release snapshot: expected ${prepared.releaseSha}, got ${sourceSha}`);
+  }
+  const manifestSha256 = digest(runtimeManifestPath);
+  if (manifestSha256 !== prepared.manifestSha256) {
+    throw new Error(`Embedded CV manifest differs from the release snapshot: expected ${prepared.manifestSha256}, got ${manifestSha256}`);
   }
   const report = readJson(reportFile);
   validateCompatibilityReport(

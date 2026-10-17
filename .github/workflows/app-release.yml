@@ -205,6 +205,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD_MACOS }}
         run: |
           test "$(uname -m)" = arm64
+          # Poetry's Python xattr command lacks the recursive flag Tauri uses.
+          export PATH="/usr/bin:$PATH"
+          command -v xattr
           pnpm tauri build --bundles app,dmg
       - name: Record tested platform artifacts and embedded manifest identity
         working-directory: source
