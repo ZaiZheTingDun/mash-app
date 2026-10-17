@@ -1,6 +1,5 @@
 import { platforms } from "../release-artifacts.mjs";
 import { compareVersions } from "../updater-manifest.mjs";
-import { runtimeChangedFiles } from "../runtime-inputs.mjs";
 import {
   runtimeManifestPath,
   gitCommand,
@@ -111,28 +110,8 @@ function isPublishedRuntime(entry, configuredVersion) {
   return validVersion && validHash && entry.runtimeVersion === configuredVersion;
 }
 
-function runtimeBaseline(platform, version, sourceSha) {
-  const taggedCommit = resolveTagCommit(`cv-runtime/${platform}/${version}`);
-  if (taggedCommit) {
-    return taggedCommit;
-  }
-  // Historical runtimes predate the tags. Use the commit that introduced this
-  // platform's configured version, rather than another platform's latest tag.
-  return gitCommand(
-    "log",
-    sourceSha,
-    "-1",
-    "--format=%H",
-    "-S",
-    `${platform} = "${version}"`,
-    "--",
-    "versions.toml",
-  );
-}
-
-function inspectRuntimes(source, sourceSha, baseUrl, blockers) {
+function inspectRuntimes(source, baseUrl, blockers) {
   const runtimes = {};
-  const runtimeChanges = {};
   for (const platform of platforms) {
     const entry = source.manifest.platforms?.[platform];
     const configuredVersion = readVersionValue(source.versions, "mash_cv.runtime", platform);
@@ -150,18 +129,8 @@ function inspectRuntimes(source, sourceSha, baseUrl, blockers) {
       runtimeUrl: entry.runtimeUrl,
       runtimeSha256: entry.runtimeSha256,
     };
-    const baselineSha = runtimeBaseline(platform, entry.runtimeVersion, sourceSha);
-    const files = baselineSha
-      ? runtimeChangedFiles(baselineSha, sourceSha, platform)
-      : [];
-    runtimeChanges[platform] = { sourceSha: baselineSha || null, files };
-    if (!baselineSha) {
-      blockers.push(`Cannot determine runtime baseline: ${platform}`);
-    } else if (files.length) {
-      blockers.push(`Runtime inputs changed for ${platform}; publish and apply its runtime first`);
-    }
   }
-  return { runtimes, runtimeChanges };
+  return runtimes;
 }
 
 // Read Git objects without changing the worktree, even if ref is not HEAD.
@@ -192,7 +161,7 @@ export function createPlan({
   const blockers = [];
   checkSourceVersions(source, blockers);
   checkAppVersion(appVersion, source.appConfig.version, executing, blockers);
-  const { runtimes, runtimeChanges } = inspectRuntimes(source, sourceSha, baseUrl, blockers);
+  const runtimes = inspectRuntimes(source, baseUrl, blockers);
   const publicKeys = {
     "windows-x86_64": source.windowsConfig.plugins?.updater?.pubkey,
     "darwin-aarch64": source.appConfig.plugins?.updater?.pubkey,
@@ -204,7 +173,9 @@ export function createPlan({
     blockers.push("Both platform updater public keys are required");
   }
   if (!releaseNotes(source.changelog, appVersion)) {
-    blockers.push("Prepare a nonempty unreleased or target-version changelog section first");
+    blockers.push(
+      `Prepare nonempty release notes in CHANGELOG.md at ${sourceSha}: use "## 未发布" or "## v${appVersion} - YYYY-MM-DD"`,
+    );
   }
   return {
     schemaVersion: 2,
@@ -221,7 +192,6 @@ export function createPlan({
     publicKeys,
     code: { artifact: `mash-cv-code-v${appVersion}.zip`, sourceDigest: codeDigest(sourceSha) },
     runtimes,
-    runtimeChanges,
     ready: blockers.length === 0,
     blockers,
   };

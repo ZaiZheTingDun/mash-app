@@ -15,7 +15,7 @@ CV 识别代码随 App 内置；只有 Python 解释器、原生依赖和 OCR �
 ## GitHub Actions 发布
 
 1. 在默认分支运行 [App release](../.github/workflows/app-release.yml)，填写已审查的 `source_ref` 和递增的 `app_version`。无需填写 CV code 版本或其他 workflow 的 run ID。
-2. 流水线先固定源码 SHA、构建工具 SHA 和 runtime 清单，检查版本、tag 和 runtime 输入。检查不通过时直接失败，原因显示在 Summary；发布计划 artifact 保留 30 天。
+2. 流水线先固定源码 SHA、构建工具 SHA 和 runtime 清单，检查版本、tag、更新说明和 runtime 清单的版本、URL、SHA-256。检查不通过时直接失败，原因显示在 Summary；发布计划 artifact 保留 30 天。
 3. 两个平台分别校验内置 CV code 与清单指定的 runtime。任一平台校验或构建失败，后续发布 job 不会执行，更新通道保持不变。
 4. 发布成功后合并 `codex/app-release-<version>` 版本同步 PR；发生冲突时手动同步发布提交。发布已完成的产物不会因同步失败而撤回。
 
@@ -27,7 +27,9 @@ CV 识别代码随 App 内置；只有 Python 解释器、原生依赖和 OCR �
 
 先提交工作区改动，在 `CHANGELOG.md` 的“未发布”或目标版本标题下准备更新说明。以下为命令用法，版本参数均替换为目标递增版本。
 
-在对应原生平台先发布并应用需要更新的 runtime，再重新运行 App release。例如：
+App release 不再根据 runtime 源码文件变更或历史 tag 判断是否必须重发 runtime。它下载清单固定的原生 runtime，验证 SHA-256，并在 Windows 和 macOS 上运行内置识别代码的协议与 OCR 冒烟检查；任一检查失败，发布终止。这些检查覆盖启动和基础 OCR 链路，不代表所有识别功能都经过验证。
+
+仅目录移动或打包脚本整理不要求重发 runtime。确实需要新的原生依赖、OCR 模型或启动器时，在对应平台先发布并应用新 runtime，再重新运行 App release。例如：
 
 ```text
 scripts/macos/release-cv-runtime.sh --platform darwin-aarch64 <runtime-version>

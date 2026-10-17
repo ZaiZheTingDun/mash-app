@@ -46,8 +46,11 @@ comes from `[mash_cv.runtime].<platform>` in `versions.toml` or the explicit
 `MASH_CV_RUNTIME_VERSION` override. Wrappers also build the internal code
 candidate by default; its ZIP goes into `../cv-code/dist/`.
 
-Release checks compare this directory (excluding tests and Markdown docs)
-and the target platform wrapper against the pinned runtime tag. Business
-changes in `cv-code/` do not require rebuilding or publishing the runtime.
-App releases still test their bundled code against the exact pinned runtime.
+App release validates the manifest's runtime version, URL and SHA-256, then
+runs its bundled code against the exact pinned runtime on each platform.
+Source file changes and directory moves do not by themselves require a new
+runtime release. Publish a new runtime when native dependencies, OCR models
+or launcher behavior actually need updating. Protocol/OCR smoke checks cover
+the startup path and basic OCR, rather than every recognition feature.
+Local release wrappers still use Git path checks to flag runtime source edits.
 See [distribution](../../docs/distribution.md).

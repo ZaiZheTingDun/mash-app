@@ -206,58 +206,39 @@ test("code changes follow the app without requiring a CV release or code tag", t
   assert.equal(plan.code.artifact, "mash-cv-code-v1.1.0.zip");
 });
 
-for (const file of [
-  "sidecar/cv-runtime/runtime_launcher.py",
-  "sidecar/cv-runtime/models/model.onnx",
-  "sidecar/cv-runtime/build_runtime.py",
-  "sidecar/cv-runtime/poetry.lock",
-  "sidecar/cv-runtime/pyproject.toml",
-]) {
-  test(`runtime changes block app-only and joint releases: ${file}`, (t) => {
-    const release = createReleaseFixture(t);
-    release.write(file, "changed runtime input");
-    release.commit();
-    const plan = release.plan();
-    assert.equal(plan.ready, false);
-    for (const platform of platforms) {
-      assert.ok(plan.runtimeChanges[platform].files.includes(file));
-    }
-    assert.match(plan.blockers.join("; "), /publish and apply its runtime first/);
-  });
-}
-
-test("native runtime build changes affect only their platform", (t) => {
+test("runtime source and build edits reuse the pinned artifacts pending compatibility checks", (t) => {
   const release = createReleaseFixture(t);
-  release.write("scripts/windows/build-cv.ps1", "# native build change\n");
+  for (const file of [
+    "sidecar/cv-runtime/runtime_launcher.py",
+    "sidecar/cv-runtime/models/model.onnx",
+    "sidecar/cv-runtime/build_runtime.py",
+    "sidecar/cv-runtime/poetry.lock",
+    "sidecar/cv-runtime/pyproject.toml",
+    "scripts/windows/build-cv.ps1",
+    "scripts/macos/build-cv.sh",
+  ]) {
+    release.write(file, "changed runtime source input");
+  }
   release.commit();
   const plan = release.plan();
-  assert.equal(plan.ready, false);
-  assert.deepEqual(plan.runtimeChanges["windows-x86_64"].files, ["scripts/windows/build-cv.ps1"]);
-  assert.deepEqual(plan.runtimeChanges["darwin-aarch64"].files, []);
+  assert.equal(plan.ready, true, plan.blockers.join("; "));
+  assert.deepEqual(plan.runtimes, release.manifest.platforms);
+  assert.doesNotThrow(() => validatePlan(plan, release.env));
 });
 
-test("runtime detection ignores CLI edits and tracks packaging file changes", (t) => {
+test("runtime directory moves and missing historical tags do not block an app release", (t) => {
   const release = createReleaseFixture(t);
-  release.write("sidecar/cv-code/build_code.py", "# CLI\n");
-  release.write("sidecar/cv-runtime/build_runtime.py", "# runtime packaging\n");
+  fs.renameSync("sidecar/cv-runtime", "sidecar/old-runtime-location");
   release.commit();
   for (const platform of platforms) {
     release.git("tag", "-d", `cv-runtime/${platform}/1.0.0`);
-    release.git("tag", `cv-runtime/${platform}/1.0.0`);
   }
-  release.write("sidecar/cv-code/build_code.py", "# changed CLI\n");
-  release.commit();
-  assert.equal(release.plan().ready, true);
-  release.write("sidecar/cv-runtime/build_runtime.py", "# changed runtime packaging\n");
-  release.commit();
   const plan = release.plan();
-  assert.equal(plan.ready, false);
-  for (const platform of platforms) {
-    assert.deepEqual(plan.runtimeChanges[platform].files, ["sidecar/cv-runtime/build_runtime.py"]);
-  }
+  assert.equal(plan.ready, true, plan.blockers.join("; "));
+  assert.deepEqual(plan.runtimes, release.manifest.platforms);
 });
 
-test("missing baseline, bad runtime, conflicting tags, versions and outside refs fail closed", (t) => {
+test("bad runtime metadata, conflicting tags, versions and outside refs fail closed", (t) => {
   const release = createReleaseFixture(t);
   assert.equal(release.plan({ appVersion: "1.0.0" }).ready, false);
   const manifest = structuredClone(release.manifest);
@@ -309,7 +290,7 @@ test("release planning emits pinned job outputs and fails immediately for a bloc
   assert.match(fs.readFileSync(summaryFile, "utf8"), /validate bundled code against each pinned native runtime/);
   assert.equal(release.git("status", "--porcelain"), "");
 
-  release.write("sidecar/cv-runtime/runtime_launcher.py", "# changed launcher\n");
+  release.write("CHANGELOG.md", "# Changelog\n\n## v1.0.0 - 2026-10-15\n\n- Old release\n");
   release.commit();
   const blocked = spawnSync(process.execPath, command, {
     env: { ...env, SOURCE_REF: release.git("rev-parse", "HEAD") },
@@ -318,7 +299,7 @@ test("release planning emits pinned job outputs and fails immediately for a bloc
   });
   assert.ifError(blocked.error);
   assert.equal(blocked.status, 1);
-  assert.match(blocked.stderr, /Release plan is blocked:.*Runtime inputs changed/);
+  assert.match(blocked.stderr, /Release plan is blocked:.*CHANGELOG.md/);
   assert.equal(JSON.parse(fs.readFileSync(planFile, "utf8")).ready, false);
   assert.match(fs.readFileSync(summaryFile, "utf8"), /BLOCKED/);
 });

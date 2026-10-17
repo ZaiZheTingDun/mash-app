@@ -68,10 +68,10 @@ git diff --name-only <last-app-tag>..HEAD
 
 Use judgment:
 
-- CV runtime bump: `sidecar/cv-runtime/` (excluding tests and Markdown docs) or the target platform build script changed. Python code, app templates and the scrcpy JAR follow the app version.
+- CV runtime bump: the app actually needs updated native dependencies, OCR models or launcher behavior. Source moves and build-script refactors alone do not require publishing another runtime. Python code, app templates and the scrcpy JAR follow the app version.
 - App bump: any user-visible app behavior, frontend, Rust backend, updater config, runtime manifest, resources consumed by the app, or published CV version changed.
 
-Reuse unchanged native runtimes. Code always follows the selected app source; validate that bundled code against the pinned runtime on each release platform. Missing historical runtime provenance requires review, not a guessed unchanged result.
+Reuse native runtimes when they meet the app requirements. App release CI validates the pinned manifest and tests the bundled code against that exact runtime on each release platform; it does not use source-file changes or historical tags as a compatibility gate. These protocol/OCR smoke checks cover startup and basic OCR, not every recognition path. Local release wrappers retain their Git path checks for runtime source edits.
 
 ## Version Selection
 
