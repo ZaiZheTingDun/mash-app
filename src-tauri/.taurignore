@@ -1,0 +1,2 @@
+# build.rs regenerates this bundled copy; development loads sidecar/cv-code instead.
+/resources/mash-cv-code/

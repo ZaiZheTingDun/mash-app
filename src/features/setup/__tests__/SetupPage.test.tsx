@@ -58,6 +58,37 @@ function staleAssetStatus(): AssetBundleStatus {
 }
 
 describe("SetupPage", () => {
+  it("completes setup after importing the missing runtime locally", async () => {
+    const onReady = vi.fn();
+    let installed = false;
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") return runtimeStatus(installed);
+      if (cmd === "get_asset_bundle_status") return assetStatus(true);
+      if (cmd === "pick_runtime_bundle") return "/tmp/runtime.zip";
+      if (cmd === "import_runtime_bundle") {
+        installed = true;
+        return {
+          installedKind: "runtime",
+          installedVersion: "2026.05.08-runtime1",
+          platform: "darwin-aarch64",
+          installDir: "/tmp/runtime",
+          executablePath: "/tmp/runtime/mash-cv-runtime/mash-cv",
+        };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<SetupPage onReady={onReady} />);
+
+    await screen.findByText("需要安装 CV 运行时");
+    const runtimeSection = screen.getByText("CV 运行时").closest(".setup-requirement");
+    await user.click(within(runtimeSection as HTMLElement).getByRole("button", { name: "从本地导入" }));
+
+    await waitFor(() => expect(onReady).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("CV 运行时已安装")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("import_runtime_bundle", { zipPath: "/tmp/runtime.zip" });
+  });
+
   it("calls onReady when runtime and assets are installed", async () => {
     const onReady = vi.fn();
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {

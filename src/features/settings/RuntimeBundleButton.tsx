@@ -4,6 +4,7 @@ import { invoke, listen } from "../../tauri";
 import type {
   RuntimeDownloadInstallResult,
   RuntimeDownloadProgress,
+  RuntimeInstallResult,
   RuntimeStatus,
 } from "../../types/runtime";
 
@@ -92,7 +93,8 @@ export function RuntimeBundleButton({
   onBusyChange,
 }: RuntimeBundleButtonProps) {
   const [localStatus, setLocalStatus] = useState<RuntimeStatus | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"download" | "import" | null>(null);
+  const busy = busyAction !== null;
   const [message, setMessage] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<RuntimeDownloadProgress | null>(null);
   const status = controlledStatus !== undefined ? controlledStatus : localStatus;
@@ -134,7 +136,7 @@ export function RuntimeBundleButton({
   }, []);
 
   const handleDownload = useCallback(async () => {
-    setBusy(true);
+    setBusyAction("download");
     setMessage(null);
     setDownloadProgress(null);
     try {
@@ -155,9 +157,28 @@ export function RuntimeBundleButton({
     } catch (err) {
       setMessage(`下载失败：${String(err)}`);
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }, [needsInstall, onInstalled, refreshStatus]);
+
+  const handleImport = useCallback(async () => {
+    setBusyAction("import");
+    setMessage(null);
+    setDownloadProgress(null);
+    try {
+      const zipPath = await invoke<string | null>("pick_runtime_bundle");
+      if (!zipPath) return;
+
+      const result = await invoke<RuntimeInstallResult>("import_runtime_bundle", { zipPath });
+      setMessage(`导入完成：${result.installedVersion}`);
+      await refreshStatus();
+      onInstalled?.();
+    } catch (err) {
+      setMessage(`导入失败：${String(err)}`);
+    } finally {
+      setBusyAction(null);
+    }
+  }, [onInstalled, refreshStatus]);
 
   const progressValue = progressPercent(downloadProgress);
 
@@ -171,9 +192,21 @@ export function RuntimeBundleButton({
           disabled={busy || !status}
           onClick={handleDownload}
         >
-          {busy ? <Spinner size="1" /> : null}
+          {busyAction === "download" ? <Spinner size="1" /> : null}
           <Text size="2" weight="medium">
-            {busy ? "下载中…" : needsInstall ? "开始下载" : "重新下载"}
+            {busyAction === "download" ? "下载中…" : needsInstall ? "开始下载" : "重新下载"}
+          </Text>
+        </Button>
+        <Button
+          type="button"
+          variant="soft"
+          color="gray"
+          disabled={busy || !status}
+          onClick={handleImport}
+        >
+          {busyAction === "import" ? <Spinner size="1" /> : null}
+          <Text size="2" weight="medium">
+            {busyAction === "import" ? "导入中…" : "从本地导入"}
           </Text>
         </Button>
       </div>
@@ -201,7 +234,9 @@ export function RuntimeBundleButton({
         <Text
           size="1"
           color={
-            message.startsWith("安装失败") || message.startsWith("下载失败") ? "red" : "gray"
+            message.startsWith("安装失败") || message.startsWith("下载失败") || message.startsWith("导入失败")
+              ? "red"
+              : "gray"
           }
         >
           {message}

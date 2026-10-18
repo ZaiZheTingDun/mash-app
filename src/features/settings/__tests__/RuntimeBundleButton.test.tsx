@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type Event } from "@tauri-apps/api/event";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { RuntimeBundleButton } from "../RuntimeBundleButton";
-import type { RuntimeDownloadProgress, RuntimeStatus } from "../../../types/runtime";
+import type { RuntimeDownloadProgress, RuntimeInstallResult, RuntimeStatus } from "../../../types/runtime";
 
 function runtimeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatus {
   return {
@@ -41,7 +41,7 @@ describe("RuntimeBundleButton", () => {
     expect(screen.getByText("https://cdn.example.com/runtime.zip")).toBeInTheDocument();
     expect(screen.queryByText("code：https://cdn.example.com/code.zip")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始下载" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "手动上传" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "从本地导入" })).toBeEnabled();
   });
 
   it("shows installed runtime state", async () => {
@@ -64,6 +64,105 @@ describe("RuntimeBundleButton", () => {
       )
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重新下载" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "从本地导入" })).toBeEnabled();
+  });
+
+  it("imports a local runtime ZIP and refreshes installation state", async () => {
+    const onInstalled = vi.fn();
+    const onBusyChange = vi.fn();
+    let installed = false;
+    let finishImport!: (result: RuntimeInstallResult) => void;
+    const importPromise = new Promise<RuntimeInstallResult>((resolve) => {
+      finishImport = resolve;
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") return runtimeStatus({ installed, runtimeInstalled: installed });
+      if (cmd === "pick_runtime_bundle") return "/tmp/CV 运行时.zip";
+      if (cmd === "import_runtime_bundle") return importPromise;
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<RuntimeBundleButton onInstalled={onInstalled} onBusyChange={onBusyChange} />);
+    await user.click(await screen.findByRole("button", { name: "从本地导入" }));
+
+    expect(invoke).toHaveBeenCalledWith("import_runtime_bundle", { zipPath: "/tmp/CV 运行时.zip" });
+    expect(screen.getByRole("button", { name: "导入中…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "开始下载" })).toBeDisabled();
+    expect(onBusyChange).toHaveBeenLastCalledWith(true);
+    expect(onInstalled).not.toHaveBeenCalled();
+
+    await act(async () => {
+      installed = true;
+      finishImport({
+        installedKind: "runtime",
+        installedVersion: "2026.05.08-runtime1",
+        platform: "darwin-aarch64",
+        installDir: "/tmp/runtime",
+        executablePath: "/tmp/runtime/mash-cv-runtime/mash-cv",
+      });
+    });
+
+    expect(await screen.findByText("导入完成：2026.05.08-runtime1")).toBeInTheDocument();
+    expect(screen.getByText("CV 运行时已安装：2026.05.08-runtime1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重新下载" })).toBeEnabled();
+    expect(onInstalled).toHaveBeenCalledTimes(1);
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("does not import or notify when file selection is cancelled", async () => {
+    const onInstalled = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") return runtimeStatus();
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<RuntimeBundleButton onInstalled={onInstalled} />);
+    await user.click(await screen.findByRole("button", { name: "从本地导入" }));
+
+    expect(invoke).toHaveBeenCalledWith("pick_runtime_bundle");
+    expect(invoke).not.toHaveBeenCalledWith("import_runtime_bundle", expect.anything());
+    expect(onInstalled).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "从本地导入" })).toBeEnabled();
+    expect(screen.queryByText(/导入失败/)).not.toBeInTheDocument();
+  });
+
+  it.each(["pick_runtime_bundle", "import_runtime_bundle"])(
+    "shows an error and restores actions when %s fails",
+    async (failingCommand) => {
+      const onInstalled = vi.fn();
+      vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+        if (cmd === "get_runtime_status") return runtimeStatus();
+        if (cmd === failingCommand) throw new Error("无法导入运行时");
+        if (cmd === "pick_runtime_bundle") return "/tmp/runtime.zip";
+        return null;
+      });
+      const user = userEvent.setup();
+      renderWithTheme(<RuntimeBundleButton onInstalled={onInstalled} />);
+      await user.click(await screen.findByRole("button", { name: "从本地导入" }));
+
+      expect(await screen.findByText("导入失败：Error: 无法导入运行时")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "从本地导入" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "开始下载" })).toBeEnabled();
+      expect(onInstalled).not.toHaveBeenCalled();
+    }
+  );
+
+  it("blocks download and import while the file picker is open", async () => {
+    let closePicker!: (path: null) => void;
+    const pickerPromise = new Promise<null>((resolve) => { closePicker = resolve; });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_runtime_status") return runtimeStatus();
+      if (cmd === "pick_runtime_bundle") return pickerPromise;
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<RuntimeBundleButton />);
+    await user.click(await screen.findByRole("button", { name: "从本地导入" }));
+
+    expect(screen.getByRole("button", { name: "开始下载" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "导入中…" })).toBeDisabled();
+    await act(async () => { closePicker(null); });
+    await waitFor(() => expect(screen.getByRole("button", { name: "从本地导入" })).toBeEnabled());
   });
 
   it("downloads missing runtime bundles and refreshes status", async () => {

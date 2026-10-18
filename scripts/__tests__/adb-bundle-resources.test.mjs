@@ -12,6 +12,14 @@ function resourceMap(value) {
   return value;
 }
 
+test("dev watcher excludes the generated CV bundle to prevent rebuild loops", async () => {
+  const ignored = (await readFile(new URL("../../src-tauri/.taurignore", import.meta.url), "utf8"))
+    .split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith("#"));
+  assert.deepEqual(ignored, ["/resources/mash-cv-code/"]);
+  const resources = resourceMap((await config("tauri.conf.json")).bundle.resources);
+  assert.ok("resources/mash-cv-code/" in resources, "Watcher exclusion must preserve app bundling");
+});
+
 test("common resources preserve their installed paths and exclude ADB", async () => {
   const common = resourceMap((await config("tauri.conf.json")).bundle.resources);
   for (const [source, destination] of Object.entries(common)) {

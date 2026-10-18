@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
@@ -401,7 +401,7 @@ describe("SettingsPage", () => {
 
     const close = await screen.findByRole("button", { name: "关闭设置" });
     await waitFor(() => expect(close).toBeEnabled());
-    await user.click(screen.getByRole("button", { name: "从本地导入" }));
+    await user.click(within(screen.getByText("素材包").parentElement!).getByRole("button", { name: "从本地导入" }));
 
     expect(await screen.findByRole("button", { name: "导入中…" })).toBeInTheDocument();
     expect(close).toBeDisabled();
