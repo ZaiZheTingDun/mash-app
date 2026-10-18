@@ -175,7 +175,7 @@ fn shared_cv_defines_battle_close_button_elements() {
     assert_close(detect["region"]["y"].as_f64().unwrap(), 0.0);
     assert_close(detect["region"]["w"].as_f64().unwrap(), 0.103);
     assert_close(detect["region"]["h"].as_f64().unwrap(), 0.127);
-    assert_close(detect["threshold"].as_f64().unwrap(), 0.85);
+    assert_close(detect["threshold"].as_f64().unwrap(), 0.8);
 }
 
 #[test]
