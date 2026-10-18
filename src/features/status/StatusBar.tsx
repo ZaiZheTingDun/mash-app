@@ -32,6 +32,7 @@ import type {
 } from "../../types/battleRunStatus";
 import { BattleRunStatusPanel } from "./BattleRunStatusPanel";
 import { RecognitionDiagnosticActions } from "./RecognitionDiagnosticActions";
+import { EmulatorSelector } from "./EmulatorSelector";
 import { SupportAuthorDialog } from "./SupportAuthorDialog";
 
 type LogLevel = "info" | "warn" | "debug" | "localDebug";
@@ -630,6 +631,8 @@ export function StatusBar({
   const [checking, setChecking] = useState(false);
   const [resettingAdb, setResettingAdb] = useState(false);
   const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
+  const [emulatorDialogOpen, setEmulatorDialogOpen] = useState(false);
+  const [emulatorSupported, setEmulatorSupported] = useState(false);
   const [deviceScanState, setDeviceScanState] = useState<"idle" | "loading" | "ready" | "empty" | "error">("idle");
   const [deviceScanError, setDeviceScanError] = useState<string | null>(null);
   const [devicePreviews, setDevicePreviews] = useState<AdbDevicePreview[]>([]);
@@ -886,6 +889,12 @@ export function StatusBar({
 
   return (
     <>
+      <EmulatorSelector
+        disabled={runnerRunning}
+        open={emulatorDialogOpen}
+        onOpenChange={setEmulatorDialogOpen}
+        onSupportChange={setEmulatorSupported}
+      />
       <Dialog.Root open={deviceDialogOpen} onOpenChange={setDeviceDialogOpen}>
         <Dialog.Content maxWidth="720px" className="adb-device-dialog">
           <Flex align="center" justify="between" gap="3" mb="3">
@@ -1230,6 +1239,13 @@ export function StatusBar({
                   {deviceScanState === "loading" ? <Spinner size="1" /> : <DesktopIcon width={14} height={14} />}
                   选择设备
                 </Button>
+
+                {emulatorSupported && (
+                  <Button size="1" variant="soft" disabled={runnerRunning}
+                    onClick={() => setEmulatorDialogOpen(true)}>
+                    <DesktopIcon width={14} height={14} />选择模拟器
+                  </Button>
+                )}
 
                 <Button
                   size="1"

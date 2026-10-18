@@ -15,6 +15,15 @@ pub struct Adb {
     selected_serial: Option<String>,
     display_id: u32,
     mumu_lookup: std::sync::Arc<std::sync::Mutex<()>>,
+    emulator_selection:
+        std::sync::Arc<std::sync::Mutex<crate::commands::emulator::EmulatorSettings>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DisplayBinding {
+    Ordinary,
+    Preview,
+    Automation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,6 +77,10 @@ impl Adb {
             selected_serial: None,
             display_id: 0,
             mumu_lookup: app.state::<crate::platform::MuMuLookupState>().0.clone(),
+            emulator_selection: app
+                .state::<crate::commands::emulator::EmulatorSelectionState>()
+                .0
+                .clone(),
         }
     }
 
@@ -78,6 +91,10 @@ impl Adb {
             selected_serial,
             display_id: 0,
             mumu_lookup: app.state::<crate::platform::MuMuLookupState>().0.clone(),
+            emulator_selection: app
+                .state::<crate::commands::emulator::EmulatorSelectionState>()
+                .0
+                .clone(),
         }
     }
 
@@ -100,13 +117,66 @@ impl Adb {
         self.bind_game_display(server)
     }
 
+    pub(crate) fn connect_for_automation(&mut self, server: crate::Server) -> Result<(), String> {
+        self.connect()?;
+        self.bind_game_display_with_policy(server, DisplayBinding::Automation)
+    }
+
     pub(crate) fn bind_game_display(&mut self, server: crate::Server) -> Result<(), String> {
+        self.bind_game_display_with_policy(server, DisplayBinding::Ordinary)
+    }
+
+    /// Device previews may fall back to display 0 without consuming a
+    /// one-time user override intended for a task startup.
+    pub(crate) fn bind_game_display_preview(
+        &mut self,
+        server: crate::Server,
+    ) -> Result<(), String> {
+        self.bind_game_display_with_policy(server, DisplayBinding::Preview)
+    }
+
+    fn bind_game_display_with_policy(
+        &mut self,
+        server: crate::Server,
+        binding: DisplayBinding,
+    ) -> Result<(), String> {
         self.display_id = 0;
         let _lookup = self.mumu_lookup.lock().map_err(|_| "MuMu SDK 查询锁异常")?;
         let serial = self.serial().ok_or("ADB 尚未连接")?;
-        self.display_id =
-            crate::platform::resolve_mumu_display(self.path(), serial, server.game_package())?
+        let selection = self.emulator_selection.lock().unwrap().clone();
+        match selection.mode {
+            crate::commands::emulator::EmulatorMode::Other => {
+                if crate::platform::is_mumu_device(self.path(), serial)? {
+                    let mut settings = self.emulator_selection.lock().unwrap();
+                    let allowed = binding == DisplayBinding::Automation
+                        && settings.skip_other_once_for.as_deref() == Some(serial);
+                    if allowed {
+                        settings.skip_other_once_for = None;
+                    } else {
+                        return Err("所选 ADB 设备具有 MuMu 显示屏。请在右下角“选择模拟器”中选择安装路径，或确认本次按其他模拟器使用".into());
+                    }
+                }
+            }
+            mode => {
+                let root = if mode == crate::commands::emulator::EmulatorMode::Mumu {
+                    Some(
+                        selection
+                            .selected_path
+                            .as_deref()
+                            .ok_or("请选择 MuMu 安装路径")?,
+                    )
+                } else {
+                    None
+                };
+                self.display_id = crate::platform::resolve_mumu_display(
+                    self.path(),
+                    serial,
+                    server.game_package(),
+                    root,
+                )?
                 .unwrap_or(0);
+            }
+        }
         Ok(())
     }
 
@@ -565,6 +635,7 @@ mod tests {
                 selected_serial: None,
                 display_id,
                 mumu_lookup: Default::default(),
+                emulator_selection: Default::default(),
             };
             let info = adb.diagnostic_display_info();
             assert_eq!(info["displayId"], display_id);

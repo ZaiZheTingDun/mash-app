@@ -119,6 +119,7 @@ mod tests {
             selected_serial: None,
             display_id: 2,
             mumu_lookup: Default::default(),
+            emulator_selection: Default::default(),
         };
         assert_eq!(
             adb.input_args(),

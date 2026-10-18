@@ -13,15 +13,42 @@ pub(crate) fn resolve_mumu_display(
     adb_path: &Path,
     serial: &str,
     package: &str,
+    selected_root: Option<&Path>,
 ) -> Result<Option<u32>, String> {
-    imp::resolve(adb_path, serial, package)
+    imp::resolve(adb_path, serial, package, selected_root)
+}
+
+pub(crate) fn discover_mumu_installations() -> Result<Vec<std::path::PathBuf>, String> {
+    imp::discover()
+}
+
+pub(crate) fn validate_mumu_installation(root: &Path) -> Result<(), String> {
+    imp::validate(root)
+}
+
+pub(crate) fn is_mumu_device(adb_path: &Path, serial: &str) -> Result<bool, String> {
+    imp::is_mumu_device(adb_path, serial)
 }
 
 #[cfg(not(windows))]
 mod imp {
     use super::*;
-    pub(super) fn resolve(_: &Path, _: &str, _: &str) -> Result<Option<u32>, String> {
+    pub(super) fn resolve(
+        _: &Path,
+        _: &str,
+        _: &str,
+        _: Option<&Path>,
+    ) -> Result<Option<u32>, String> {
         Ok(None)
+    }
+    pub(super) fn discover() -> Result<Vec<std::path::PathBuf>, String> {
+        Ok(Vec::new())
+    }
+    pub(super) fn validate(_: &Path) -> Result<(), String> {
+        Err("仅 Windows 支持 MuMu 安装路径".into())
+    }
+    pub(super) fn is_mumu_device(_: &Path, _: &str) -> Result<bool, String> {
+        Ok(false)
     }
 }
 
@@ -104,29 +131,96 @@ mod imp {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 
-    fn installations() -> Result<Vec<(PathBuf, PathBuf)>, String> {
-        // Resolve the actual running installation, including custom locations
-        // and device-only sessions. Never load a DLL from the working directory.
+    fn manager_path(root: &Path) -> Option<PathBuf> {
+        ["nx_main/MuMuManager.exe", "shell/MuMuManager.exe"]
+            .iter()
+            .map(|part| root.join(part))
+            .find(|path| path.is_file())
+    }
+
+    fn sdk_path(root: &Path) -> Option<PathBuf> {
+        let direct = [
+            "nx_device/15.0/shell/sdk/external_renderer_ipc.dll",
+            "nx_device/15.0/shell/sdk/external_renderer_ipc/external_renderer_ipc.dll",
+            "nx_device/12.0/shell/sdk/external_renderer_ipc.dll",
+            "nx_device/12.0/shell/sdk/external_renderer_ipc/external_renderer_ipc.dll",
+            "nx_main/sdk/external_renderer_ipc.dll",
+            "shell/sdk/external_renderer_ipc.dll",
+            "shell/sdk/external_renderer_ipc/external_renderer_ipc.dll",
+        ]
+        .iter()
+        .map(|part| root.join(part))
+        .find(|path| path.is_file());
+        if direct.is_some() {
+            return direct;
+        }
+        let versions = std::fs::read_dir(root.join("nx_device")).ok()?;
+        for version in versions.flatten().filter(|entry| entry.path().is_dir()) {
+            for part in [
+                "shell/sdk/external_renderer_ipc.dll",
+                "shell/sdk/external_renderer_ipc/external_renderer_ipc.dll",
+            ] {
+                let candidate = version.path().join(part);
+                if candidate.is_file() {
+                    return Some(candidate);
+                }
+            }
+        }
+        None
+    }
+
+    pub(super) fn validate(root: &Path) -> Result<(), String> {
+        if !root.is_dir() {
+            return Err("MuMu 安装目录不存在".into());
+        }
+        if manager_path(root).is_none() {
+            return Err("所选目录中找不到 MuMuManager.exe，请选择 MuMu 安装根目录".into());
+        }
+        Ok(())
+    }
+
+    pub(super) fn discover() -> Result<Vec<PathBuf>, String> {
+        // Process paths cover portable installations; uninstall records also
+        // make an installation available when only the device process runs.
         let paths = run(Path::new("powershell.exe"), &["-NoProfile", "-NonInteractive", "-Command",
             "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); Get-Process MuMuNxMain,MuMuNxDevice,MuMuPlayer -ErrorAction SilentlyContinue | ForEach-Object { $_.Path }; exit 0"])?;
         let mut roots = BTreeSet::new();
         for path in paths.lines().map(str::trim).filter(|path| !path.is_empty()) {
-            for root in Path::new(path).ancestors().skip(1).take(5) {
-                for relative in ["nx_main/MuMuManager.exe", "shell/MuMuManager.exe"] {
-                    let manager = root.join(relative);
-                    if manager.is_file() {
-                        roots.insert((root.to_path_buf(), manager));
-                    }
+            for root in Path::new(path).ancestors().skip(1).take(6) {
+                if validate(root).is_ok() {
+                    roots.insert(root.to_path_buf());
                 }
             }
         }
-        Ok(roots.into_iter().collect())
+        let registered = run(Path::new("powershell.exe"), &["-NoProfile", "-NonInteractive", "-Command",
+            "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $keys = @('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'); Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match 'MuMu' } | ForEach-Object { $_.InstallLocation }; exit 0"])?;
+        for path in registered
+            .lines()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+        {
+            let root = PathBuf::from(path.trim_matches('"'));
+            if validate(&root).is_ok() {
+                roots.insert(root);
+            }
+        }
+        let mut paths: Vec<_> = roots.into_iter().collect();
+        paths.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+        paths.dedup_by(|left, right| {
+            left.to_string_lossy()
+                .eq_ignore_ascii_case(&right.to_string_lossy())
+        });
+        Ok(paths)
+    }
+
+    pub(super) fn is_mumu_device(adb_path: &Path, serial: &str) -> Result<bool, String> {
+        let display = run(adb_path, &["-s", serial, "shell", "dumpsys", "display"])?;
+        Ok(display.to_ascii_lowercase().contains("mumuscreen"))
     }
 
     fn unrelated_device(adb_path: &Path, serial: &str) -> Result<Option<u32>, String> {
-        let display = run(adb_path, &["-s", serial, "shell", "dumpsys", "display"])?;
-        if display.to_ascii_lowercase().contains("mumuscreen") {
-            Err("无法将所选 MuMu 设备匹配到运行中的模拟器实例，请确认 MuMu 管理工具与模拟器均已启动".into())
+        if is_mumu_device(adb_path, serial)? {
+            Err("无法匹配所选 MuMu 设备。请在右下角核对“选择设备”，并在“选择模拟器”中指定 MuMu 安装路径".into())
         } else {
             Ok(None)
         }
@@ -136,8 +230,23 @@ mod imp {
         adb_path: &Path,
         serial: &str,
         package: &str,
+        selected_root: Option<&Path>,
     ) -> Result<Option<u32>, String> {
-        let installations = installations()?;
+        let roots = match selected_root {
+            Some(root) => {
+                validate(root).map_err(|error| {
+                    format!("所选 MuMu 安装路径不可用，请在“选择模拟器”中重新选择：{error}")
+                })?;
+                vec![root.to_path_buf()]
+            }
+            None => discover().map_err(|error| {
+                format!("自动发现 MuMu 失败，请在右下角“选择模拟器”中指定安装路径：{error}")
+            })?,
+        };
+        let installations: Vec<_> = roots
+            .into_iter()
+            .filter_map(|root| manager_path(&root).map(|manager| (root, manager)))
+            .collect();
         if installations.is_empty() {
             return unrelated_device(adb_path, serial);
         }
@@ -153,12 +262,19 @@ mod imp {
         )?;
         let identity = super::boot_id(&identity).ok_or("无法确定所选 ADB 设备的启动标识")?;
         let mut matches = Vec::new();
+        let mut query_errors = Vec::new();
+        let mut running_count = 0usize;
         for (root, manager) in installations {
             let indexes = run(&manager, &["info", "--vmindex", "all"])
                 .and_then(|info| super::running_indexes(&info));
-            let Ok(indexes) = indexes else {
-                continue;
+            let indexes = match indexes {
+                Ok(indexes) => indexes,
+                Err(error) => {
+                    query_errors.push(format!("{}: {error}", root.display()));
+                    continue;
+                }
             };
+            running_count += indexes.len();
             for index in indexes {
                 let index_string = index.to_string();
                 let candidate = run(
@@ -171,24 +287,50 @@ mod imp {
                         "shell cat /proc/sys/kernel/random/boot_id",
                     ],
                 );
-                if candidate
-                    .as_deref()
-                    .ok()
-                    .and_then(super::boot_id)
-                    .as_deref()
-                    == Some(&identity)
-                {
-                    matches.push(Instance {
-                        root: root.clone(),
-                        index,
-                    });
+                match candidate {
+                    Ok(value) => {
+                        if super::boot_id(&value).as_deref() == Some(&identity) {
+                            matches.push(Instance {
+                                root: root.clone(),
+                                index,
+                            });
+                        }
+                    }
+                    Err(error) => {
+                        query_errors.push(format!("{} 实例 {index}: {error}", root.display()))
+                    }
                 }
             }
         }
         let instance = match matches.len() {
+            0 if selected_root.is_some() => {
+                if !query_errors.is_empty() {
+                    return Err(format!(
+                        "所选 MuMu 安装目录查询失败：{}",
+                        query_errors.join("；")
+                    ));
+                }
+                if running_count == 0 {
+                    return Err("所选 MuMu 安装目录没有运行中的实例，请启动模拟器或在“选择模拟器”中切换路径".into());
+                }
+                return Err(
+                    "所选 MuMu 安装目录中的实例与 ADB 设备不一致，请核对“选择设备”和“选择模拟器”"
+                        .into(),
+                );
+            }
+            0 if !query_errors.is_empty() && is_mumu_device(adb_path, serial)? => {
+                return Err(format!(
+                    "MuMu 实例查询失败，请在“选择模拟器”中核对安装路径：{}",
+                    query_errors.join("；")
+                ));
+            }
             0 => return unrelated_device(adb_path, serial),
             1 => matches.remove(0),
-            _ => return Err("多个 MuMu 实例匹配同一设备，无法确定目标实例".into()),
+            _ => {
+                return Err(
+                    "多个 MuMu 实例匹配同一 ADB 设备，请在“选择模拟器”中指定安装路径".into(),
+                )
+            }
         };
         // The SDK returns display 0 for any package when keep-alive is off.
         // Check the package is running before trusting that result.
@@ -206,14 +348,7 @@ mod imp {
     }
 
     fn sdk_display(instance: &Instance, package: &str) -> Result<u32, String> {
-        let path = [
-            "nx_main/sdk/external_renderer_ipc.dll",
-            "shell/sdk/external_renderer_ipc.dll",
-        ]
-        .iter()
-        .map(|relative| instance.root.join(relative))
-        .find(|path| path.is_file())
-        .ok_or("MuMu SDK 不存在，请更新 MuMu 模拟器")?;
+        let path = sdk_path(&instance.root).ok_or("MuMu SDK 不存在，请更新 MuMu 模拟器")?;
         let root: Vec<u16> = instance
             .root
             .as_os_str()
@@ -252,11 +387,11 @@ mod imp {
             let serial = std::env::var("MASH_LIVE_ADB_SERIAL").expect("set selected ADB serial");
             let package = std::env::var("MASH_LIVE_GAME_PACKAGE").expect("set target package");
             let adb = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/adb/adb.exe");
-            let display = resolve(&adb, &serial, &package)
+            let display = resolve(&adb, &serial, &package, None)
                 .expect("SDK lookup failed")
                 .expect("not MuMu");
             println!("SDK resolved {package} on {serial} to display {display}");
-            assert!(resolve(&adb, &serial, "com.mash.nonexistent.test.package").is_err());
+            assert!(resolve(&adb, &serial, "com.mash.nonexistent.test.package", None).is_err());
         }
     }
 }

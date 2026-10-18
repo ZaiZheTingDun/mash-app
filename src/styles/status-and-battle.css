@@ -373,6 +373,22 @@
   bottom: 10px;
 }
 
+.emulator-dialog {
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.option-card-radio-group.emulator-choices {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.emulator-choices .option-card-radio-item {
+  padding: 10px 12px;
+}
+
+.emulator-choice-path { overflow-wrap: anywhere; }
+
 /* ── Battle Page ── */
 
 .battle-page {

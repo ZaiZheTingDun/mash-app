@@ -61,6 +61,8 @@ pub fn run() {
         .setup(|app| {
             let adb_device_settings =
                 load_adb_device_settings(app.handle()).map_err(std::io::Error::other)?;
+            let emulator_settings = commands::emulator::load_emulator_settings(app.handle())
+                .map_err(std::io::Error::other)?;
             let server = load_server_setting(app.handle()).map_err(std::io::Error::other)?;
             let recognition_settings =
                 load_recognition_settings(app.handle()).map_err(std::io::Error::other)?;
@@ -73,6 +75,9 @@ pub fn run() {
             platform::configure_app_menu(app)?;
             refresh_asset_protocol_scope(app.handle())?;
             app.manage(Mutex::new(adb_device_settings));
+            app.manage(commands::emulator::EmulatorSelectionState::new(
+                emulator_settings,
+            ));
             app.manage(Mutex::new(server));
             app.manage(platform::MuMuLookupState::default());
             app.manage(Mutex::new(recognition_settings));
@@ -164,6 +169,11 @@ pub fn run() {
             commands::adb::reset_bluestacks_adb_connection,
             commands::adb::save_adb_screenshot,
             commands::adb::select_adb_device,
+            commands::emulator::get_emulator_options,
+            commands::emulator::supports_emulator_selection,
+            commands::emulator::add_mumu_installation,
+            commands::emulator::select_emulator,
+            commands::emulator::allow_other_emulator_once,
             commands::settings::run_startup_migration,
             commands::settings::get_use_bluestack,
             commands::settings::set_use_bluestack,

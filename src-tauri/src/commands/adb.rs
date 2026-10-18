@@ -216,6 +216,7 @@ pub(crate) fn select_adb_device(
     })?;
     if changed {
         stop_debug_stream(&debug_state);
+        crate::commands::emulator::clear_other_override(&app);
     }
     Ok(AdbStatus {
         connected: true,
@@ -391,6 +392,7 @@ fn persist_auto_selected_serial(
         save_adb_device_settings(app, next)
     })?;
     if changed {
+        crate::commands::emulator::clear_other_override(app);
         if let Some(debug_state) = debug_state {
             stop_debug_stream(debug_state);
         }
@@ -444,7 +446,7 @@ fn capture_device_preview(
     let mut device = adb::Adb::from_ready_serial(app, adb_path.to_path_buf(), serial.to_string());
     // Device discovery must also work before FGO is launched. Preview the
     // primary screen if game lookup fails; task startup/export stay strict.
-    if let Err(error) = device.bind_game_display(server) {
+    if let Err(error) = device.bind_game_display_preview(server) {
         eprintln!("[adb] game preview unavailable, showing device screen: {error}");
     }
     let png = device.screenshot_png().ok()?;
