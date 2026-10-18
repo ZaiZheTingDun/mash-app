@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::adb;
 use crate::commands::settings::AdbDeviceSettings;
+use crate::commands::stream::validate_stream_resolution;
 use crate::craft_essence_enhancement_runner::{
     CraftEssenceEnhancementRunnerHandle, CraftEssenceEnhancementRunnerState,
 };
@@ -167,12 +168,7 @@ pub(super) fn ensure_debug_stream(
         STREAM_MAX_FPS,
     )?;
     eprintln!("[debug] scrcpy stream started: {w}x{h}");
-    if !crate::stream_meets_minimum_resolution(w, h) {
-        if let Err(e) = client.stop_stream() {
-            eprintln!("[debug] stop unsupported-resolution stream failed: {e}");
-        }
-        return Err(crate::stream_resolution_error(w, h));
-    }
+    validate_stream_resolution(app, client, adb_dev, (w, h))?;
     Ok(())
 }
 

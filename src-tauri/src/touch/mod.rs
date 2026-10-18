@@ -63,7 +63,7 @@ pub fn build(adb: &Adb, app: &tauri::AppHandle, screen_size: (u32, u32)) -> Box<
     ));
     let message = format!("[touch] backend selected: {}", backend.name());
     eprintln!("{message}");
-    crate::operation_log::emit_debug(app, message);
+    crate::operation_log::emit_debug(app, crate::operation_log::DebugSource::App, message);
     backend
 }
 

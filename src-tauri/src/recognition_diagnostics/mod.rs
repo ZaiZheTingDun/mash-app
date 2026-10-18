@@ -5,9 +5,11 @@ mod commands;
 mod description;
 pub(crate) mod logs;
 mod maintenance;
+mod stream;
 
 pub(crate) use commands::*;
 pub(crate) use logs::DiagnosticLogs;
+pub(crate) use stream::save_stream_resolution_failure;
 #[derive(Default)]
 pub(crate) struct DiagnosticStore(pub std::sync::Mutex<()>);
 use serde_json::{json, Value};
@@ -72,6 +74,17 @@ pub(crate) fn save_failure(
     {
         missing.push("没有可用的界面识别现场".into());
     }
+    save_report(app, sidecar, reason, device, report, missing)
+}
+
+fn save_report(
+    app: &tauri::AppHandle,
+    sidecar: &crate::screen::SidecarClient,
+    reason: &str,
+    device: Option<&str>,
+    report: Value,
+    missing: Vec<String>,
+) -> Result<(), String> {
     let (run_id, logs) = logs::snapshot(app);
     let mut environment = sidecar.recognition_context.clone();
     environment["appVersion"] = json!(app.package_info().version.to_string());

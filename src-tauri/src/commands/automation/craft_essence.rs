@@ -20,6 +20,7 @@ fn emit_ce_enhancement_status(
         let state = state.lock().unwrap();
         (format!("{:?}", *state), state.status())
     };
+    crate::recognition_diagnostics::logs::record(app, screen, message);
     let _ = app.emit(
         CE_EVENT_NAME,
         CraftEssenceEnhancementAutomationEvent {
@@ -86,58 +87,28 @@ pub(crate) fn start_craft_essence_enhancement_automation(
     let mode = mode.unwrap_or_default();
     std::thread::spawn(move || {
         let _automation_lease = automation_lease;
-        emit_ce_enhancement_status(&app, &state, "", "正在连接 ADB…");
-        let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
-        if let Err(err) = adb_dev.connect_for_server(server) {
-            fail_ce_enhancement_start(&app, &state, err);
-            return;
-        }
-        if cancel.load(Ordering::Relaxed) {
-            stop_ce_enhancement_start(&app, &state);
-            return;
-        }
-        let Some(jar_path) = resolve_scrcpy_jar(&app) else {
-            fail_ce_enhancement_start(&app, &state, "找不到 scrcpy-server.jar 资源".into());
+        let Some(AutomationSession {
+            adb: adb_dev,
+            sidecar,
+            input_size,
+            ..
+        }) = prepare_automation_session(
+            &app,
+            server,
+            selected_adb_serial,
+            &debug::DebugSidecar(debug_sidecar.clone()),
+            &cancel,
+            StartupFeedback {
+                scope: "ce-enhancement",
+                progress: &|message| emit_ce_enhancement_status(&app, &state, "", message),
+                failed: &|message| fail_ce_enhancement_start(&app, &state, message),
+                cancelled: &|| stop_ce_enhancement_start(&app, &state),
+            },
+            |_| Ok(()),
+        )
+        else {
             return;
         };
-        if !jar_path.exists() {
-            fail_ce_enhancement_start(
-                &app,
-                &state,
-                format!("scrcpy-server.jar 不存在: {}", jar_path.display()),
-            );
-            return;
-        }
-
-        emit_ce_enhancement_status(&app, &state, "", "正在启动视频流…");
-        let debug_state = debug::DebugSidecar(debug_sidecar.clone());
-        let mut sidecar = match take_or_spawn_sidecar(&app, &debug_state, server) {
-            Ok(sidecar) => sidecar,
-            Err(err) => {
-                fail_ce_enhancement_start(&app, &state, err);
-                return;
-            }
-        };
-        let (w, h) = match sidecar.start_stream(
-            &adb_dev,
-            &jar_path,
-            STREAM_MAX_SIZE,
-            STREAM_BIT_RATE,
-            STREAM_MAX_FPS,
-        ) {
-            Ok(size) => size,
-            Err(err) => {
-                fail_ce_enhancement_start(&app, &state, format!("启动 scrcpy 视频流失败: {err}"));
-                return;
-            }
-        };
-        if !stream_meets_minimum_resolution(w, h) {
-            let _ = sidecar.stop_stream();
-            fail_ce_enhancement_start(&app, &state, stream_resolution_error(w, h));
-            return;
-        }
-        let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
-        emit_stream_mapping_debug(&app, "ce-enhancement", input_size, (w, h));
         let runner = CraftEssenceEnhancementRunner::new(
             adb_dev,
             sidecar,

@@ -2,6 +2,7 @@
 
 use super::error::{template_response_error, CvError, CvResult};
 use super::protocol::{request, SidecarCommand};
+use crate::operation_log::{self, DebugSource};
 use base64::Engine;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Mutex};
@@ -124,13 +125,13 @@ impl SidecarClient {
                         for line in msg.lines().map(str::trim).filter(|line| !line.is_empty()) {
                             let message = format!("[mash-cv stderr] {line}");
                             eprintln!("{message}");
-                            crate::operation_log::emit_debug(&log_app, message);
+                            operation_log::emit_debug(&log_app, DebugSource::Sidecar, message);
                         }
                     }
                     CommandEvent::Error(e) => {
                         let message = format!("[mash-cv error] {e}");
                         eprintln!("{message}");
-                        crate::operation_log::emit_debug(&log_app, message);
+                        operation_log::emit_debug(&log_app, DebugSource::Sidecar, message);
                     }
                     CommandEvent::Terminated(_) => break,
                     _ => {}

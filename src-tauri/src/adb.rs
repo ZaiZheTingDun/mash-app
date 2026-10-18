@@ -110,7 +110,7 @@ impl Adb {
         Ok(())
     }
 
-    /// Small, bounded property reads used only after recognition has failed.
+    /// Small, bounded property reads used only after a diagnostic failure.
     pub(crate) fn diagnostic_device_info(&self) -> serde_json::Value {
         let property = |name: &str| -> Option<String> {
             let mut command = adb_command(&self.adb_path);
@@ -136,6 +136,33 @@ impl Adb {
             Some(d) => vec!["-s".into(), d.clone()],
             None => vec![],
         }
+    }
+
+    /// Preserve physical and override values for the captured Android display.
+    /// Keep raw output so a density setting cannot be confused with pixel size.
+    pub(crate) fn diagnostic_display_info(&self) -> serde_json::Value {
+        let read = |setting: &str| -> serde_json::Value {
+            let mut command = adb_command(&self.adb_path);
+            command
+                .args(self.base_args())
+                .args(["shell", "wm", setting]);
+            if self.display_id != 0 {
+                command.args(["-d", &self.display_id.to_string()]);
+            }
+            match crate::platform::output_with_timeout(
+                &mut command,
+                std::time::Duration::from_secs(2),
+            ) {
+                Ok(output) if output.status.success() => serde_json::json!({
+                    "output": String::from_utf8_lossy(&output.stdout).trim(),
+                }),
+                Ok(output) => serde_json::json!({
+                    "error": String::from_utf8_lossy(&output.stderr).trim(),
+                }),
+                Err(error) => serde_json::json!({"error": error.to_string()}),
+            }
+        };
+        serde_json::json!({"displayId": self.display_id, "wmSize": read("size"), "wmDensity": read("density")})
     }
 
     pub(crate) fn parse_devices(output: &str) -> Vec<AdbDevice> {
@@ -515,6 +542,46 @@ fn build_settle_swipe_script_for_display(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn display_diagnostics_preserve_physical_and_override_values_for_selected_display() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let adb_path = dir.path().join("adb");
+        for display_id in [0, 2] {
+            let display_arg = if display_id == 0 { "" } else { " -d 2" };
+            std::fs::write(&adb_path, format!(
+                "#!/bin/sh\ncase \"$*\" in\n\
+                 '-s emulator-5554 shell wm size{display_arg}') printf 'Physical size: 1080x1920\\nOverride size: 720x1280\\n';;\n\
+                 '-s emulator-5554 shell wm density{display_arg}') printf 'Physical density: 320\\nOverride density: 240\\n';;\n\
+                 *) echo 'unexpected device or display' >&2; exit 1;;\nesac\n"
+            )).unwrap();
+            std::fs::set_permissions(&adb_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let adb = Adb {
+                adb_path: adb_path.clone(),
+                device: Some("emulator-5554".into()),
+                selected_serial: None,
+                display_id,
+                mumu_lookup: Default::default(),
+            };
+            let info = adb.diagnostic_display_info();
+            assert_eq!(info["displayId"], display_id);
+            assert_eq!(
+                info["wmSize"]["output"],
+                "Physical size: 1080x1920\nOverride size: 720x1280"
+            );
+            assert_eq!(
+                info["wmDensity"]["output"],
+                "Physical density: 320\nOverride density: 240"
+            );
+            std::fs::remove_file(&adb_path).unwrap();
+            let unavailable = adb.diagnostic_display_info();
+            assert!(unavailable["wmSize"]["error"].is_string());
+            assert!(unavailable["wmDensity"]["error"].is_string());
+        }
+    }
 
     #[test]
     fn bundled_adb_candidates_cover_dev_and_bundle_resource_layouts() {

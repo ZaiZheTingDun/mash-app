@@ -38,16 +38,14 @@ use crate::friend_point_summon_runner::{
     EVENT_NAME as FRIEND_POINT_SUMMON_EVENT_NAME,
 };
 use crate::models::ProjectRecognitionSettings;
+use crate::operation_log::{self, DebugSource};
 use crate::paths::{AppUiSettings, MysticCodeGender};
 use crate::runner::{
     grand_strategy, runner_lifecycle_transition, AutomationEvent, LogLevel,
     RankUpQuestStartRequest, RunConfig, Runner, RunnerHandle, RunnerLifecycleEvent, RunnerState,
 };
 use crate::screen;
-use crate::server::{
-    stream_meets_minimum_resolution, stream_resolution_error, Server, STREAM_BIT_RATE,
-    STREAM_MAX_FPS, STREAM_MAX_SIZE,
-};
+use crate::server::{Server, STREAM_BIT_RATE, STREAM_MAX_FPS, STREAM_MAX_SIZE};
 use crate::{resolve_cv_config_paths, resolve_template_dirs};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -128,7 +126,7 @@ fn emit_stream_mapping_debug(
         return;
     };
     eprintln!("{message}");
-    crate::operation_log::emit_debug(app, message);
+    operation_log::emit_debug(app, DebugSource::App, message);
 }
 
 fn resolve_mystic_code_item_template(
@@ -210,22 +208,6 @@ fn fail_automation_start(app: &tauri::AppHandle, state: &Arc<Mutex<RunnerState>>
         },
     );
     emit_automation_status(app, state, "", &format!("启动失败: {message}"));
-}
-
-fn fail_automation_start_with_debug(
-    app: &tauri::AppHandle,
-    state: &Arc<Mutex<RunnerState>>,
-    user_message: String,
-    debug_message: String,
-) {
-    apply_runner_lifecycle_event(
-        state,
-        RunnerLifecycleEvent::Failed {
-            message: user_message.clone(),
-        },
-    );
-    emit_automation_status_with_level(app, state, "CV", &debug_message, LogLevel::Debug);
-    emit_automation_status(app, state, "", &format!("启动失败: {user_message}"));
 }
 
 fn stop_automation_start(app: &tauri::AppHandle, state: &Arc<Mutex<RunnerState>>) {
@@ -398,100 +380,45 @@ fn start_automation_with_config(
             recorder: run_recorder.clone(),
             state: state.clone(),
         };
-        crate::recognition_diagnostics::logs::begin(&app);
-        emit_automation_status(&app, &state, "", "正在连接 ADB…");
-        let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
-        if let Err(err) = adb_dev.connect_for_server(server) {
-            fail_automation_start(&app, &state, err);
-            return;
-        }
-        if cancel.load(Ordering::Relaxed) {
-            stop_automation_start(&app, &state);
-            return;
-        }
-
-        let Some(jar_path) = resolve_scrcpy_jar(&app) else {
-            fail_automation_start(&app, &state, "找不到 scrcpy-server.jar 资源".into());
+        let Some(AutomationSession {
+            adb: adb_dev,
+            sidecar,
+            input_size,
+            frame_size,
+        }) = prepare_automation_session(
+            &app,
+            server,
+            selected_adb_serial,
+            &debug::DebugSidecar(debug_sidecar.clone()),
+            &cancel,
+            StartupFeedback {
+                scope: "runner",
+                progress: &|message| emit_automation_status(&app, &state, "", message),
+                failed: &|message| fail_automation_start(&app, &state, message),
+                cancelled: &|| stop_automation_start(&app, &state),
+            },
+            |sidecar| {
+                sidecar
+                    .set_digit_recognition_mode(
+                        debug_settings
+                            .image_recognition_debug_mode
+                            .as_sidecar_value(),
+                    )
+                    .map_err(|error| format!("配置图像识别调试模式失败: {error}"))?;
+                sidecar
+                    .set_sequence_recognition_mode(
+                        debug_settings
+                            .sequence_recognition_debug_mode
+                            .as_sidecar_value(),
+                    )
+                    .map_err(|error| format!("配置序列识别调试模式失败: {error}"))
+            },
+        )
+        else {
             return;
         };
-        if !jar_path.exists() {
-            fail_automation_start(
-                &app,
-                &state,
-                format!("scrcpy-server.jar 不存在: {}", jar_path.display()),
-            );
-            return;
-        }
-
-        emit_automation_status(&app, &state, "", "正在启动视频流…");
-        let debug_state = debug::DebugSidecar(debug_sidecar.clone());
-        let mut sidecar = match take_or_spawn_sidecar(&app, &debug_state, server) {
-            Ok(sidecar) => sidecar,
-            Err(err) => {
-                if let Some(user_message) = screen::sidecar_startup_user_message(&err) {
-                    fail_automation_start_with_debug(
-                        &app,
-                        &state,
-                        user_message.to_string(),
-                        format!("CV 运行时启动失败详情: {err}"),
-                    );
-                } else {
-                    fail_automation_start(&app, &state, err);
-                }
-                return;
-            }
-        };
-
-        if let Err(err) = sidecar.set_digit_recognition_mode(
-            debug_settings
-                .image_recognition_debug_mode
-                .as_sidecar_value(),
-        ) {
-            fail_automation_start(&app, &state, format!("配置图像识别调试模式失败: {err}"));
-            return;
-        }
-        if let Err(err) = sidecar.set_sequence_recognition_mode(
-            debug_settings
-                .sequence_recognition_debug_mode
-                .as_sidecar_value(),
-        ) {
-            fail_automation_start(&app, &state, format!("配置序列识别调试模式失败: {err}"));
-            return;
-        }
-
-        let (w, h) = match sidecar.start_stream(
-            &adb_dev,
-            &jar_path,
-            STREAM_MAX_SIZE,
-            STREAM_BIT_RATE,
-            STREAM_MAX_FPS,
-        ) {
-            Ok(size) => size,
-            Err(err) => {
-                if let Some(user_message) = scrcpy_stream_start_user_message(&err.to_string()) {
-                    fail_automation_start_with_debug(
-                        &app,
-                        &state,
-                        user_message.to_string(),
-                        format!("scrcpy 视频流启动失败详情: {err}"),
-                    );
-                } else {
-                    fail_automation_start(&app, &state, format!("启动 scrcpy 视频流失败: {err}"));
-                }
-                return;
-            }
-        };
-        if !stream_meets_minimum_resolution(w, h) {
-            if let Err(err) = sidecar.stop_stream() {
-                eprintln!("[runner] stop unsupported-resolution stream failed: {err}");
-            }
-            fail_automation_start(&app, &state, stream_resolution_error(w, h));
-            return;
-        }
-        let input_size = input_size_for_taps(adb_dev.screen_size(), (w, h));
-        emit_stream_mapping_debug(&app, "runner", input_size, (w, h));
         let screen_size = Some(input_size);
-        let frame_size = Some((w, h));
+        let frame_size = Some(frame_size);
         let assets_dir = resolve_servant_assets_dir(&app);
         let ce_assets_dir = resolve_ce_assets_dir(&app);
         let runner = Runner::new(
@@ -550,9 +477,11 @@ pub(crate) fn get_automation_status(
 mod craft_essence;
 mod enhancement;
 mod friend_point;
+mod startup;
 pub(crate) use craft_essence::*;
 pub(crate) use enhancement::*;
 pub(crate) use friend_point::*;
+use startup::{prepare_automation_session, AutomationSession, StartupFeedback};
 
 #[cfg(test)]
 mod tests {
