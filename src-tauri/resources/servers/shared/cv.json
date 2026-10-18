@@ -263,7 +263,7 @@
           "w": 0.103,
           "h": 0.127
         },
-        "threshold": 0.85
+        "threshold": 0.8
       },
       "variants": {
         "main": {
