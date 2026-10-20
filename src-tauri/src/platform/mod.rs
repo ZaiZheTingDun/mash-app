@@ -20,8 +20,8 @@ pub(crate) use filesystem::{copy_symlink, extract_zip_symlink, make_runtime_exec
 #[cfg(desktop)]
 pub(crate) use menu::configure_app_menu;
 pub(crate) use mumu::{
-    discover_mumu_installations, is_mumu_device, resolve_mumu_display, validate_mumu_installation,
-    MuMuLookupState,
+    discover_mumu_installations, is_mumu_device, matching_mumu_adb_serials, resolve_mumu_display,
+    validate_mumu_installation, MuMuLookupState,
 };
 pub(crate) use process::{external_command, output_with_timeout};
 

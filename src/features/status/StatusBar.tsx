@@ -47,6 +47,7 @@ interface AdbDevicePreview {
   description: string;
   previewPath: string;
   selected: boolean;
+  selectedMumu: boolean;
 }
 
 interface AdbResetStep {
@@ -977,6 +978,7 @@ export function StatusBar({
                       {device.description && (
                         <span className="adb-device-description">{device.description}</span>
                       )}
+                      {device.selectedMumu && <span className="adb-device-mumu">所选 MuMu 设备</span>}
                       {device.selected && <span className="adb-device-selected">当前选择</span>}
                     </span>
                     {selectingSerial === device.serial && (

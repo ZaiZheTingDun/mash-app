@@ -30,6 +30,14 @@ pub(crate) fn is_mumu_device(adb_path: &Path, serial: &str) -> Result<bool, Stri
     imp::is_mumu_device(adb_path, serial)
 }
 
+pub(crate) fn matching_mumu_adb_serials(
+    adb_path: &Path,
+    root: &Path,
+    serials: &[String],
+) -> Result<Vec<String>, String> {
+    imp::matching_adb_serials(adb_path, root, serials)
+}
+
 #[cfg(not(windows))]
 mod imp {
     use super::*;
@@ -50,13 +58,20 @@ mod imp {
     pub(super) fn is_mumu_device(_: &Path, _: &str) -> Result<bool, String> {
         Ok(false)
     }
+    pub(super) fn matching_adb_serials(
+        _: &Path,
+        _: &Path,
+        _: &[String],
+    ) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
 }
 
 #[cfg(windows)]
 mod imp {
     use super::*;
     use crate::platform::{external_command, output_with_timeout};
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeSet, HashSet};
     use std::ffi::CString;
     use std::os::windows::ffi::OsStrExt;
     use std::path::PathBuf;
@@ -216,6 +231,56 @@ mod imp {
     pub(super) fn is_mumu_device(adb_path: &Path, serial: &str) -> Result<bool, String> {
         let display = run(adb_path, &["-s", serial, "shell", "dumpsys", "display"])?;
         Ok(display.to_ascii_lowercase().contains("mumuscreen"))
+    }
+
+    pub(super) fn matching_adb_serials(
+        adb_path: &Path,
+        root: &Path,
+        serials: &[String],
+    ) -> Result<Vec<String>, String> {
+        validate(root)?;
+        let manager = manager_path(root).ok_or("找不到 MuMuManager.exe")?;
+        let indexes = super::running_indexes(&run(&manager, &["info", "--vmindex", "all"])?)?;
+        let mut boot_ids = HashSet::new();
+        for index in indexes {
+            let index = index.to_string();
+            if let Ok(output) = run(
+                &manager,
+                &[
+                    "adb",
+                    "--vmindex",
+                    &index,
+                    "--cmd",
+                    "shell cat /proc/sys/kernel/random/boot_id",
+                ],
+            ) {
+                if let Some(boot_id) = super::boot_id(&output) {
+                    boot_ids.insert(boot_id);
+                }
+            }
+        }
+        if boot_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(serials
+            .iter()
+            .filter(|serial| {
+                run(
+                    adb_path,
+                    &[
+                        "-s",
+                        serial.as_str(),
+                        "shell",
+                        "cat",
+                        "/proc/sys/kernel/random/boot_id",
+                    ],
+                )
+                .ok()
+                .and_then(|output| super::boot_id(&output))
+                .is_some_and(|boot_id| boot_ids.contains(&boot_id))
+            })
+            .cloned()
+            .collect())
     }
 
     fn unrelated_device(adb_path: &Path, serial: &str) -> Result<Option<u32>, String> {

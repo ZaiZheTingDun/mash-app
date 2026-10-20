@@ -6,8 +6,11 @@
 
 use crate::adb;
 use crate::commands::debug::DebugSidecar;
+use crate::commands::emulator;
 use crate::commands::settings::{save_adb_device_settings, AdbDeviceSettings};
 use crate::paths::app_data_dir;
+use crate::platform;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -56,6 +59,7 @@ pub(crate) struct AdbDevicePreview {
     pub(crate) description: String,
     pub(crate) preview_path: String,
     pub(crate) selected: bool,
+    pub(crate) selected_mumu: bool,
 }
 
 fn with_png_extension(path: PathBuf) -> PathBuf {
@@ -260,6 +264,7 @@ pub(crate) async fn refresh_adb_devices_with_previews(
     let app_for_task = app.clone();
     let snapshot = state.lock().unwrap().clone();
     let selected_serial = snapshot.selected_adb_serial;
+    let selected_mumu_root = emulator::selected_mumu_installation(&app);
     let should_refresh = refresh.unwrap_or(false);
     let previews = tauri::async_runtime::spawn_blocking(move || {
         let adb_path = adb::resolve_adb_path(&app_for_task);
@@ -274,6 +279,19 @@ pub(crate) async fn refresh_adb_devices_with_previews(
             .map_err(|e| format!("failed to run adb: {e}"))?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let devices = adb::Adb::ready_devices_from_output(&stdout);
+        let matching_mumu_serials: HashSet<String> = selected_mumu_root
+            .as_deref()
+            .map(|root| {
+                let serials: Vec<_> = devices.iter().map(|device| device.serial.clone()).collect();
+                platform::matching_mumu_adb_serials(&adb_path, root, &serials)
+            })
+            .unwrap_or_else(|| Ok(Vec::new()))
+            .unwrap_or_else(|error| {
+                eprintln!("[adb] MuMu device label unavailable: {error}");
+                Vec::new()
+            })
+            .into_iter()
+            .collect();
         let selected = adb::Adb::select_ready_serial(&devices, selected_serial.as_deref())
             .ok()
             .flatten();
@@ -286,6 +304,7 @@ pub(crate) async fn refresh_adb_devices_with_previews(
             };
             previews.push(AdbDevicePreview {
                 selected: selected.as_deref() == Some(device.serial.as_str()),
+                selected_mumu: matching_mumu_serials.contains(&device.serial),
                 serial: device.serial,
                 description: device.description,
                 preview_path: preview_path.to_string_lossy().into_owned(),
@@ -554,6 +573,20 @@ fn format_adb_reset_step_message(step: &AdbResetStep) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn device_preview_serializes_selected_mumu_marker_in_camel_case() {
+        let preview = AdbDevicePreview {
+            serial: "emulator-5554".into(),
+            description: String::new(),
+            preview_path: String::new(),
+            selected: false,
+            selected_mumu: true,
+        };
+        let value = serde_json::to_value(preview).unwrap();
+        assert_eq!(value["selectedMumu"], true);
+        assert!(value.get("selected_mumu").is_none());
+    }
 
     #[test]
     fn old_poll_cannot_overwrite_a_new_device_selection() {

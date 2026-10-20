@@ -357,13 +357,15 @@
 }
 
 .adb-device-description,
-.adb-device-selected {
+.adb-device-selected,
+.adb-device-mumu {
   font-size: 11px;
   color: var(--gray-10);
   overflow-wrap: anywhere;
 }
 
-.adb-device-selected {
+.adb-device-selected,
+.adb-device-mumu {
   color: var(--blue-11);
 }
 

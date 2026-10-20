@@ -835,12 +835,14 @@ describe("StatusBar", () => {
           description: "product:bluestacks",
           previewPath: "/tmp/device.png",
           selected: true,
+          selectedMumu: true,
         },
       ]);
     });
 
     expect(await screen.findByText("127.0.0.1:5555")).toBeInTheDocument();
     expect(screen.getByText("已自动选择：127.0.0.1:5555")).toBeInTheDocument();
+    expect(screen.getByText("所选 MuMu 设备")).toBeInTheDocument();
   });
 
   it("selects an adb device without letting an older poll overwrite its status", async () => {
@@ -857,6 +859,7 @@ describe("StatusBar", () => {
             description: "model:Pixel",
             previewPath: "/tmp/emulator.png",
             selected: false,
+            selectedMumu: false,
           },
         ];
       }
@@ -874,6 +877,7 @@ describe("StatusBar", () => {
     await user.click(screen.getByRole("button", { name: /游戏未连接/ }));
     await user.click(screen.getByRole("button", { name: "选择设备" }));
     await user.click(await screen.findByRole("button", { name: /emulator-5554/ }));
+    expect(screen.queryByText("所选 MuMu 设备")).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("select_adb_device", { serial: "emulator-5554" });

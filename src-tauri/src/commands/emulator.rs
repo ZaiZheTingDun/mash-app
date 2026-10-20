@@ -50,6 +50,16 @@ pub(crate) fn clear_other_override(app: &tauri::AppHandle) {
         .skip_other_once_for = None;
 }
 
+pub(crate) fn selected_mumu_installation(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let settings = app.state::<EmulatorSelectionState>();
+    let settings = settings.0.lock().unwrap();
+    if settings.mode == EmulatorMode::Mumu {
+        settings.selected_path.clone()
+    } else {
+        None
+    }
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct EmulatorOptions {
