@@ -9,10 +9,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Default)]
 pub(crate) struct MuMuLookupState(pub(crate) Arc<Mutex<()>>);
 
-pub(crate) fn resolve_mumu_display(
-    adb_path: &Path,
-    serial: &str,
-) -> Result<Option<u32>, String> {
+pub(crate) fn resolve_mumu_display(adb_path: &Path, serial: &str) -> Result<Option<u32>, String> {
     imp::resolve(adb_path, serial)
 }
 
@@ -317,13 +314,22 @@ fn running_game_package(
         [] => Err("请先启动 FGO".into()),
         [package] => Ok((*package).into()),
         _ => {
-            let windows = query(&["dumpsys", "window"])?;
-            if let Some(package) = focused_package(&windows) {
-                if running.contains(&package) {
-                    return Ok(package.into());
+            let reason = match query(&["dumpsys", "window"]) {
+                Ok(windows) => {
+                    if let Some(package) = focused_package(&windows) {
+                        if running.contains(&package) {
+                            return Ok(package.into());
+                        }
+                    }
+                    "无法确定前台目标游戏".to_string()
                 }
-            }
-            Err("检测到多个运行中的 FGO，请将目标游戏切换到前台后重试".into())
+                Err(error) => format!("查询前台窗口失败：{error}"),
+            };
+            let package = running[0];
+            eprintln!(
+                "[mumu] warning: {reason}，检测到多个运行中的 FGO {running:?}，选择首个目标游戏 {package} 继续运行"
+            );
+            Ok(package.into())
         }
     }
 }
@@ -332,20 +338,26 @@ fn running_game_package(
 /// top-focused display represents the user's foreground when these differ.
 #[cfg(any(windows, test))]
 fn focused_package(output: &str) -> Option<&str> {
+    // ANR history contains another display dump before the current state.
+    // Keep the final display section and its following windows section only.
+    const HEADER: &str = "WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)";
+    let lines: Vec<_> = output.lines().collect();
+    let start = lines.iter().rposition(|line| line.trim_end() == HEADER)?;
+    let current = &lines[start + 1..];
     let display_id = |value: &str| {
         value
             .split(|ch: char| !ch.is_ascii_digit())
             .next()
             .and_then(|id| id.parse::<u32>().ok())
     };
-    let top = output.lines().find_map(|line| {
+    let top = current.iter().find_map(|line| {
         line.trim()
             .strip_prefix("mTopFocusedDisplayId=")
             .and_then(display_id)
     });
     let mut current_display = None;
     let mut focused = std::collections::BTreeSet::new();
-    for line in output.lines().map(str::trim) {
+    for line in current.iter().map(|line| line.trim()) {
         if let Some(id) = line
             .strip_prefix("Display: mDisplayId=")
             .or_else(|| line.strip_prefix("Display #"))
@@ -504,42 +516,93 @@ mod tests {
     }
 
     #[test]
-    fn multiple_running_games_select_only_the_focused_candidate() {
-        let packages = ["com.bilibili.fgo.mi", "com.aniplex.fategrandorder"];
+    fn multiple_running_games_prefer_the_focused_candidate() {
+        let packages = ["com.aniplex.fategrandorder", "com.bilibili.fgo.mi"];
         assert_eq!(
-            discover(&packages, &packages, Some(
-                "mFocusedApp=ActivityRecord{ignored com.bilibili.fgo.mi/.Main}\n\
-                 mCurrentFocus=Window{a1 u0 com.aniplex.fategrandorder/.MainActivity}"
-            )),
+            discover(
+                &packages,
+                &packages,
+                Some(
+                    "WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)\n\
+                 mFocusedApp=ActivityRecord{ignored com.aniplex.fategrandorder/.Main}\n\
+                 mCurrentFocus=Window{a1 u0 com.bilibili.fgo.mi/.MainActivity}"
+                )
+            ),
             Ok(packages[1].into())
         );
         assert_eq!(
-            discover(&packages, &packages, Some(
-                "mTopFocusedDisplayId=2\n\
+            discover(
+                &packages,
+                &packages,
+                Some(
+                    "WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)\n\
                  Display: mDisplayId=0\n\
-                   mCurrentFocus=Window{a1 u0 com.bilibili.fgo.mi/.Main}\n\
+                   mCurrentFocus=Window{a1 u0 com.aniplex.fategrandorder/.Main}\n\
                  Display: mDisplayId=2 (organized)\n\
-                   mCurrentFocus=Window{b2 u0 com.aniplex.fategrandorder/.Main}"
-            )),
+                   mCurrentFocus=Window{b2 u0 com.bilibili.fgo.mi/.Main}\n\
+                 WINDOW MANAGER WINDOWS (dumpsys window windows)\n\
+                 mTopFocusedDisplayId=2"
+                )
+            ),
             Ok(packages[1].into())
         );
-        for windows in [
+    }
+
+    #[test]
+    fn anr_history_does_not_override_current_foreground() {
+        let packages = ["com.aniplex.fategrandorder", "com.bilibili.fgo.mi"];
+        let windows = "WINDOW MANAGER LAST ANR (dumpsys window lastanr)\n\
+            WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)\n\
+              Display: mDisplayId=1\n\
+                mCurrentFocus=Window{a1 u0 com.aniplex.fategrandorder/.Main}\n\
+              Display: mDisplayId=2\n\
+                mCurrentFocus=Window{b2 u0 com.bilibili.fgo.mi/.Main}\n\
+              mTopFocusedDisplayId=1\n\
+            WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)\n\
+              Display: mDisplayId=1\n\
+                mCurrentFocus=Window{a1 u0 com.aniplex.fategrandorder/.Main}\n\
+              Display: mDisplayId=2\n\
+                mCurrentFocus=Window{b2 u0 com.bilibili.fgo.mi/.Main}\n\
+            WINDOW MANAGER WINDOWS (dumpsys window windows)\n\
+              mTopFocusedDisplayId=2";
+        assert_eq!(focused_package(windows), Some(packages[1]));
+        assert_eq!(
+            discover(&packages, &packages, Some(windows)),
+            Ok(packages[1].into())
+        );
+    }
+
+    #[test]
+    fn uncertain_foreground_falls_back_to_first_running_game() {
+        let packages = ["com.bilibili.fgo.mi", "com.aniplex.fategrandorder"];
+        for focus in [
             "mCurrentFocus=Window{a1 u0 com.android.launcher/.Main}",
             "mCurrentFocus=null",
             "",
             "mCurrentFocus=Window{a1 u0 com.bilibili.fgo.mi/.Main}\n\
              mCurrentFocus=Window{b2 u0 com.aniplex.fategrandorder/.Main}",
         ] {
+            let windows =
+                format!("WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)\n{focus}");
+            assert_eq!(
+                discover(&packages, &packages, Some(&windows)),
+                Ok(packages[1].into())
+            );
+        }
+        // Without the current-section header, do not trust any focus fields.
+        let incomplete = "mCurrentFocus=Window{a1 u0 com.bilibili.fgo.mi/.Main}";
+        assert_eq!(focused_package(incomplete), None);
+        for windows in ["", incomplete] {
             assert_eq!(
                 discover(&packages, &packages, Some(windows)),
-                Err("检测到多个运行中的 FGO，请将目标游戏切换到前台后重试".into())
+                Ok(packages[1].into())
             );
         }
     }
 
     #[test]
     fn adb_query_failures_are_not_reported_as_stopped_games() {
-        for failing in ["pm", "pidof", "dumpsys"] {
+        for failing in ["pm", "pidof"] {
             let result = running_game_package(|args| {
                 if args[0] == failing {
                     return Err("device offline".into());
@@ -552,6 +615,23 @@ mod tests {
             });
             assert_eq!(result, Err("device offline".into()));
         }
+    }
+
+    #[test]
+    fn foreground_query_failure_falls_back_to_first_running_game() {
+        let packages = concat!(
+            "package:com.bilibili.fgo.uc\n",
+            "package:com.bilibili.fgo.mi\n",
+            "package:com.aniplex.fategrandorder"
+        );
+        let result = running_game_package(|args| match args {
+            ["pm", "list", "packages"] => Ok(packages.into()),
+            ["pidof", "com.aniplex.fategrandorder"] => Ok(String::new()),
+            ["pidof", _] => Ok("123".into()),
+            ["dumpsys", "window"] => Err("window service unavailable".into()),
+            _ => panic!("unexpected ADB query: {args:?}"),
+        });
+        assert_eq!(result, Ok("com.bilibili.fgo.mi".into()));
     }
 
     #[test]
