@@ -95,17 +95,17 @@ impl Adb {
         self.display_id
     }
 
-    pub(crate) fn connect_for_server(&mut self, server: crate::Server) -> Result<(), String> {
+    pub(crate) fn connect_for_game(&mut self) -> Result<(), String> {
         self.connect()?;
-        self.bind_game_display(server)
+        self.bind_game_display()
     }
 
-    pub(crate) fn bind_game_display(&mut self, server: crate::Server) -> Result<(), String> {
+    pub(crate) fn bind_game_display(&mut self) -> Result<(), String> {
         self.display_id = 0;
         let _lookup = self.mumu_lookup.lock().map_err(|_| "MuMu SDK 查询锁异常")?;
         let serial = self.serial().ok_or("ADB 尚未连接")?;
         self.display_id =
-            crate::platform::resolve_mumu_display(self.path(), serial, server.game_package())?
+            crate::platform::resolve_mumu_display(self.path(), serial)?
                 .unwrap_or(0);
         Ok(())
     }

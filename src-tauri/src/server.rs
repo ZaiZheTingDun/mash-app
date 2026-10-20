@@ -26,13 +26,6 @@ impl Default for Server {
 }
 
 impl Server {
-    pub(crate) fn game_package(self) -> &'static str {
-        match self {
-            Self::Jp => "com.aniplex.fategrandorder",
-            Self::Cn => "com.bilibili.fatego",
-        }
-    }
-
     /// Lowercase directory token used under `resources/servers/{token}/...`.
     /// Kept intentionally tiny so the resource resolvers stay one-liners.
     pub fn dir_token(&self) -> &'static str {
@@ -60,17 +53,6 @@ impl FromStr for Server {
             "CN" => Ok(Self::Cn),
             other => Err(format!("unknown server: {other}")),
         }
-    }
-}
-
-#[cfg(test)]
-mod package_tests {
-    use super::*;
-
-    #[test]
-    fn game_package_follows_selected_server() {
-        assert_eq!(Server::Cn.game_package(), "com.bilibili.fatego");
-        assert_eq!(Server::Jp.game_package(), "com.aniplex.fategrandorder");
     }
 }
 

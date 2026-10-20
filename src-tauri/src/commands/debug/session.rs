@@ -185,7 +185,7 @@ pub(super) fn ensure_debug_stream_for_current_device(
         .clone();
     let server = current_server(server_state);
     let mut adb_dev = adb::Adb::new(app, selected_adb_serial);
-    adb_dev.connect_for_server(server)?;
+    adb_dev.connect_for_game()?;
     ensure_debug_stream(app, debug_state, server, &adb_dev)
 }
 

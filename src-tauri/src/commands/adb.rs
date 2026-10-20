@@ -77,8 +77,7 @@ pub(crate) async fn save_adb_screenshot(
 ) -> Result<Option<String>, String> {
     let snapshot = state.lock().unwrap().clone();
     let mut adb_dev = adb::Adb::new(&app, snapshot.selected_adb_serial);
-    let server = *app.state::<Mutex<crate::Server>>().lock().unwrap();
-    adb_dev.connect_for_server(server)?;
+    adb_dev.connect_for_game()?;
     persist_auto_selected_serial(
         &app,
         &state,
@@ -440,11 +439,10 @@ fn capture_device_preview(
     adb_path: &Path,
     serial: &str,
 ) -> Option<PathBuf> {
-    let server = *app.state::<Mutex<crate::Server>>().lock().unwrap();
     let mut device = adb::Adb::from_ready_serial(app, adb_path.to_path_buf(), serial.to_string());
     // Device discovery must also work before FGO is launched. Preview the
-    // primary screen if game lookup fails; task startup/export stay strict.
-    if let Err(error) = device.bind_game_display(server) {
+    // primary screen if game lookup fails on a multi-display device.
+    if let Err(error) = device.bind_game_display() {
         eprintln!("[adb] game preview unavailable, showing device screen: {error}");
     }
     let png = device.screenshot_png().ok()?;

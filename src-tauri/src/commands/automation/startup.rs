@@ -84,7 +84,7 @@ pub(super) fn prepare_automation_session(
     let prepared = (|| -> Result<AutomationSession, StartupError> {
         (feedback.progress)("正在连接 ADB…");
         let mut adb = adb::Adb::new(app, selected_adb_serial);
-        adb.connect_for_server(server)?;
+        adb.connect_for_game()?;
         check_cancelled(cancel)?;
 
         let jar = resolve_scrcpy_jar(app).ok_or("找不到 scrcpy-server.jar 资源".to_string())?;

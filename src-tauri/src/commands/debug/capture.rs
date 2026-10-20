@@ -29,7 +29,7 @@ pub fn debug_capture(
     );
 
     let mut adb_dev = adb::Adb::new(&app, selected_adb_serial);
-    adb_dev.connect_for_server(server).map_err(|e| {
+    adb_dev.connect_for_game().map_err(|e| {
         eprintln!("[debug_capture] adb connect failed: {e}");
         e
     })?;
