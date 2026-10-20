@@ -112,34 +112,27 @@ impl Adb {
         self.display_id
     }
 
-    pub(crate) fn connect_for_server(&mut self, server: crate::Server) -> Result<(), String> {
+    pub(crate) fn connect_for_game(&mut self) -> Result<(), String> {
         self.connect()?;
-        self.bind_game_display(server)
+        self.bind_game_display()
     }
 
-    pub(crate) fn connect_for_automation(&mut self, server: crate::Server) -> Result<(), String> {
+    pub(crate) fn connect_for_automation(&mut self) -> Result<(), String> {
         self.connect()?;
-        self.bind_game_display_with_policy(server, DisplayBinding::Automation)
+        self.bind_game_display_with_policy(DisplayBinding::Automation)
     }
 
-    pub(crate) fn bind_game_display(&mut self, server: crate::Server) -> Result<(), String> {
-        self.bind_game_display_with_policy(server, DisplayBinding::Ordinary)
+    pub(crate) fn bind_game_display(&mut self) -> Result<(), String> {
+        self.bind_game_display_with_policy(DisplayBinding::Ordinary)
     }
 
     /// Device previews may fall back to display 0 without consuming a
     /// one-time user override intended for a task startup.
-    pub(crate) fn bind_game_display_preview(
-        &mut self,
-        server: crate::Server,
-    ) -> Result<(), String> {
-        self.bind_game_display_with_policy(server, DisplayBinding::Preview)
+    pub(crate) fn bind_game_display_preview(&mut self) -> Result<(), String> {
+        self.bind_game_display_with_policy(DisplayBinding::Preview)
     }
 
-    fn bind_game_display_with_policy(
-        &mut self,
-        server: crate::Server,
-        binding: DisplayBinding,
-    ) -> Result<(), String> {
+    fn bind_game_display_with_policy(&mut self, binding: DisplayBinding) -> Result<(), String> {
         self.display_id = 0;
         let _lookup = self.mumu_lookup.lock().map_err(|_| "MuMu SDK 查询锁异常")?;
         let serial = self.serial().ok_or("ADB 尚未连接")?;
@@ -168,13 +161,8 @@ impl Adb {
                 } else {
                     None
                 };
-                self.display_id = crate::platform::resolve_mumu_display(
-                    self.path(),
-                    serial,
-                    server.game_package(),
-                    root,
-                )?
-                .unwrap_or(0);
+                self.display_id =
+                    crate::platform::resolve_mumu_display(self.path(), serial, root)?.unwrap_or(0);
             }
         }
         Ok(())

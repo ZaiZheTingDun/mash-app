@@ -46,7 +46,7 @@ pub(crate) fn capture_rank_up_quest_page(
 
     let selected_serial = adb_settings.lock().unwrap().selected_adb_serial.clone();
     let mut adb_dev = adb::Adb::new(&app, selected_serial);
-    adb_dev.connect_for_server(server)?;
+    adb_dev.connect_for_game()?;
     let temporary = adb_dev.screenshot_to_file()?;
 
     ensure_debug_sidecar(&app, &debug_sidecar, server)?;
