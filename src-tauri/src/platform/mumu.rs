@@ -30,6 +30,10 @@ pub(crate) fn is_mumu_device(adb_path: &Path, serial: &str) -> Result<bool, Stri
     imp::is_mumu_device(adb_path, serial)
 }
 
+pub(crate) fn supports_emulator_selection() -> bool {
+    cfg!(windows)
+}
+
 pub(crate) fn matching_mumu_adb_serials(
     adb_path: &Path,
     root: &Path,

@@ -112,7 +112,7 @@ fn options(
     }
     paths.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
     EmulatorOptions {
-        supported: cfg!(windows),
+        supported: platform::supports_emulator_selection(),
         mode: settings.mode,
         selected_path: settings
             .selected_path
@@ -129,7 +129,7 @@ fn options(
 
 #[tauri::command]
 pub(crate) fn supports_emulator_selection() -> bool {
-    cfg!(windows)
+    platform::supports_emulator_selection()
 }
 
 #[tauri::command]
@@ -154,7 +154,7 @@ pub(crate) async fn add_mumu_installation(
     coordinator: tauri::State<'_, AutomationCoordinator>,
 ) -> Result<Option<EmulatorOptions>, String> {
     coordinator.require_idle()?;
-    if !cfg!(windows) {
+    if !platform::supports_emulator_selection() {
         return Err("仅 Windows 支持选择 MuMu 安装目录".into());
     }
     let picked = app
@@ -193,7 +193,7 @@ pub(crate) fn select_emulator(
     path: Option<String>,
 ) -> Result<(), String> {
     coordinator.require_idle()?;
-    if !cfg!(windows) {
+    if !platform::supports_emulator_selection() {
         return Err("仅 Windows 支持选择模拟器".into());
     }
     let path = match mode {
@@ -221,7 +221,7 @@ pub(crate) fn allow_other_emulator_once(
     coordinator: tauri::State<'_, AutomationCoordinator>,
 ) -> Result<(), String> {
     coordinator.require_idle()?;
-    if !cfg!(windows) {
+    if !platform::supports_emulator_selection() {
         return Err("仅 Windows 支持选择模拟器".into());
     }
     let serial = adb_settings
