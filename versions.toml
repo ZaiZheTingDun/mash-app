@@ -1,5 +1,5 @@
 [app]
-version = "0.21.0"
+version = "0.22.0"
 
 [mash_cv.runtime]
 darwin-aarch64 = "2026.05.08-runtime1"
