@@ -338,13 +338,29 @@ impl Adb {
         }
     }
 
-    #[allow(dead_code)]
     fn parse_size_token(text: &str) -> Option<(u32, u32)> {
         let token = text.split_whitespace().find(|part| part.contains('x'))?;
         let (w, h) = token.split_once('x')?;
         let width = w.parse::<u32>().ok()?;
         let height = h.parse::<u32>().ok()?;
-        Some((width, height))
+        (width > 0 && height > 0).then_some((width, height))
+    }
+
+    fn parse_screen_size(output: &str) -> Option<(u32, u32)> {
+        // Android input uses the logical override, not the physical panel size.
+        output
+            .lines()
+            .find_map(|line| {
+                line.trim()
+                    .strip_prefix("Override size:")
+                    .and_then(Self::parse_size_token)
+            })
+            .or_else(|| {
+                output.lines().find_map(|line| {
+                    let size = line.split_once(':').map_or(line, |(_, size)| size);
+                    Self::parse_size_token(size)
+                })
+            })
     }
 
     /// Detect and connect to a device. Must be called before other operations.
@@ -383,14 +399,7 @@ impl Adb {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        stdout.lines().find_map(|line| {
-            let trimmed = line.trim();
-            if let Some((_, rhs)) = trimmed.split_once(':') {
-                Self::parse_size_token(rhs.trim())
-            } else {
-                Self::parse_size_token(trimmed)
-            }
-        })
+        Self::parse_screen_size(&stdout)
     }
 
     /// Capture a screenshot and write the PNG to a temp file.
@@ -601,6 +610,51 @@ fn build_settle_swipe_script_for_display(
 mod tests {
     use super::*;
 
+    #[test]
+    fn screen_size_prefers_valid_override_regardless_of_output_order() {
+        for output in [
+            "Physical size: 1080x2400\nOverride size: 1080x1920\n",
+            "Override size: 1080x1920\nPhysical size: 1080x2400\n",
+            " Physical size: 1080x2400\r\n Override size: 1080x1920\r\n",
+        ] {
+            assert_eq!(Adb::parse_screen_size(output), Some((1080, 1920)));
+        }
+    }
+
+    #[test]
+    fn screen_size_falls_back_when_override_is_missing_or_invalid() {
+        for output in [
+            "Physical size: 1080x2400\n",
+            "Physical size: 1080x2400\nOverride size: invalid\n",
+            "Physical size: 1080x2400\nOverride size: 0x1920\n",
+            "Physical size: 1080x2400\nOverride size: 1080x0\n",
+            "1080x2400\n",
+        ] {
+            assert_eq!(Adb::parse_screen_size(output), Some((1080, 2400)));
+        }
+        for output in ["", "error: device offline", "Physical size: invalid", "0x0"] {
+            assert_eq!(Adb::parse_screen_size(output), None);
+        }
+    }
+
+    #[test]
+    fn screen_size_preserves_native_16_9_and_honors_its_override() {
+        for (output, expected) in [
+            ("Physical size: 1080x1920\n", (1080, 1920)),
+            ("Physical size: 1920x1080\n", (1920, 1080)),
+            (
+                "Physical size: 1080x1920\nOverride size: 1080x1920\n",
+                (1080, 1920),
+            ),
+            (
+                "Physical size: 1080x1920\nOverride size: 720x1280\n",
+                (720, 1280),
+            ),
+        ] {
+            assert_eq!(Adb::parse_screen_size(output), Some(expected));
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn display_diagnostics_preserve_physical_and_override_values_for_selected_display() {
@@ -634,6 +688,11 @@ mod tests {
             assert_eq!(
                 info["wmDensity"]["output"],
                 "Physical density: 320\nOverride density: 240"
+            );
+            assert_eq!(
+                adb.screen_size(),
+                Some((720, 1280)),
+                "input coordinates must use the selected display's override size"
             );
             std::fs::remove_file(&adb_path).unwrap();
             let unavailable = adb.diagnostic_display_info();

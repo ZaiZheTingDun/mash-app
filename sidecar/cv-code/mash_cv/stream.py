@@ -12,6 +12,7 @@ Protocol reference: https://github.com/Genymobile/scrcpy/blob/v2.7/server
 
 from __future__ import annotations
 
+import errno
 import random
 import socket
 import struct
@@ -122,6 +123,7 @@ class ScrcpyStream:
         self._stream_id = uuid.uuid4().hex
         self._frame_id = 0
         self._decoded_at_ms = None
+        self._color_metadata_fallback_logged = False
 
         self.width = 0
         self.height = 0
@@ -429,6 +431,35 @@ class ScrcpyStream:
             flush=True,
         )
 
+    def _frame_to_bgr(self, frame: av.VideoFrame) -> np.ndarray:
+        try:
+            return frame.to_ndarray(format="bgr24")
+        except av.error.OSError as exc:
+            metadata = (frame.colorspace, frame.color_primaries, frame.color_trc)
+            # The Meizu encoder tags limited-range SDR as YCgCo/log316.
+            # Only repair that observed signature when FFmpeg rejects it.
+            if (
+                exc.errno != errno.ENOTSUP
+                or frame.format.name != "yuv420p"
+                or frame.color_range != 1
+                or metadata != (8, 2, 10)
+            ):
+                raise
+
+        try:
+            frame.colorspace, frame.color_primaries, frame.color_trc = 6, 6, 6  # BT.601 SDR
+            bgr = frame.to_ndarray(format="bgr24")
+        finally:
+            frame.colorspace, frame.color_primaries, frame.color_trc = metadata
+        if not self._color_metadata_fallback_logged:
+            self._color_metadata_fallback_logged = True
+            print(
+                "[scrcpy] using BT.601 for mislabeled SDR frames (YCgCo/log316)",
+                file=sys.stderr,
+                flush=True,
+            )
+        return bgr
+
     def _decode_loop(self) -> None:
         codec = av.CodecContext.create("h264", "r")
         first_frame_logged = False
@@ -452,7 +483,7 @@ class ScrcpyStream:
                 try:
                     packet = av.Packet(payload)
                     for frame in codec.decode(packet):
-                        bgr = frame.to_ndarray(format="bgr24")
+                        bgr = self._frame_to_bgr(frame)
                         self._publish_frame(bgr)
                         if not first_frame_logged:
                             first_frame_logged = True
@@ -477,7 +508,7 @@ class ScrcpyStream:
         finally:
             try:
                 for frame in codec.decode(None):
-                    bgr = frame.to_ndarray(format="bgr24")
+                    bgr = self._frame_to_bgr(frame)
                     self._publish_frame(bgr)
             except Exception:  # noqa: BLE001
                 pass

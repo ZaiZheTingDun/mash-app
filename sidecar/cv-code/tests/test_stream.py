@@ -1,7 +1,11 @@
 import base64
+import errno
+from types import SimpleNamespace
 
+import av
 import cv2
 import numpy as np
+import pytest
 
 from mash_cv import cv
 from mash_cv import stream as stream_module
@@ -44,6 +48,69 @@ def test_scrcpy_server_command_limits_stream_to_configured_fps():
 def test_scrcpy_defaults_to_main_display_for_existing_callers():
     stream = ScrcpyStream(jar_path="/tmp/scrcpy-server.jar")
     assert "display_id=0" in stream._server_command()
+
+
+def test_frame_conversion_recovers_mislabeled_android_sdr_metadata(capsys):
+    stream = ScrcpyStream(jar_path="/tmp/scrcpy-server.jar")
+    pixels = np.full((24, 32, 3), (32, 128, 224), dtype=np.uint8)
+    frame = av.VideoFrame.from_ndarray(pixels, format="bgr24").reformat(format="yuv420p")
+    frame.colorspace, frame.color_primaries, frame.color_trc = 6, 6, 6
+    frame.color_range = 1
+    expected = frame.to_ndarray(format="bgr24")
+    frame.colorspace, frame.color_primaries, frame.color_trc = 8, 2, 10
+
+    # Reproduce the metadata emitted by the Meizu encoder, without a device.
+    with pytest.raises(av.error.OSError) as error:
+        frame.to_ndarray(format="bgr24")
+    assert error.value.errno == errno.ENOTSUP
+
+    for _ in range(2):
+        assert np.array_equal(stream._frame_to_bgr(frame), expected)
+        assert (frame.colorspace, frame.color_primaries, frame.color_trc) == (8, 2, 10)
+        assert frame.color_range == 1
+    assert capsys.readouterr().err.count("using BT.601 for mislabeled SDR frames") == 1
+
+
+@pytest.mark.parametrize("colorspace,primaries,trc", [(1, 1, 1), (6, 6, 6), (2, 2, 2)])
+def test_frame_conversion_preserves_supported_color_metadata(colorspace, primaries, trc, capsys):
+    stream = ScrcpyStream(jar_path="/tmp/scrcpy-server.jar")
+    pixels = np.full((24, 32, 3), (32, 128, 224), dtype=np.uint8)
+    frame = av.VideoFrame.from_ndarray(pixels, format="bgr24").reformat(format="yuv420p")
+    frame.colorspace, frame.color_primaries, frame.color_trc = colorspace, primaries, trc
+
+    assert np.array_equal(stream._frame_to_bgr(frame), frame.to_ndarray(format="bgr24"))
+    assert (frame.colorspace, frame.color_primaries, frame.color_trc) == (colorspace, primaries, trc)
+    assert not capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "error_number,pixel_format,metadata,color_range",
+    [
+        (errno.EINVAL, "yuv420p", (8, 2, 10), 1),
+        (errno.ENOTSUP, "yuv420p", (1, 1, 1), 1),
+        (errno.ENOTSUP, "yuv420p10le", (8, 2, 10), 1),
+        (errno.ENOTSUP, "yuv420p", (8, 2, 10), 2),
+        (errno.ENOTSUP, "yuv420p", (8, 2, 10), 1),
+    ],
+)
+def test_frame_conversion_does_not_mask_other_failures(error_number, pixel_format, metadata, color_range):
+    failure = av.error.OSError(error_number, "conversion failed")
+
+    class FailingFrame:
+        format = SimpleNamespace(name=pixel_format)
+
+        def __init__(self):
+            self.colorspace, self.color_primaries, self.color_trc = metadata
+            self.color_range = color_range
+
+        def to_ndarray(self, **kwargs):
+            raise failure
+
+    frame = FailingFrame()
+    with pytest.raises(av.error.OSError) as error:
+        ScrcpyStream(jar_path="/tmp/scrcpy-server.jar")._frame_to_bgr(frame)
+    assert error.value is failure
+    assert (frame.colorspace, frame.color_primaries, frame.color_trc) == metadata
 
 
 def test_get_latest_png_preserves_frame_pixels(monkeypatch):
