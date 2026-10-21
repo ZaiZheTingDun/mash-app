@@ -2201,7 +2201,7 @@ fn build_assets_remote_manifest(latest: u32, patches: &str) -> AssetsRemoteManif
 #[test]
 fn assets_app_manifest_parses_target_version_and_latest_url() {
     let manifest = parse_assets_app_manifest(ASSETS_MANIFEST_JSON).unwrap();
-    assert_eq!(manifest.assets_version, 14);
+    assert_eq!(manifest.assets_version, 18);
     assert_eq!(
         manifest.latest_url,
         "https://mash.xiaotongx.com/mash/assets/latest.json"
@@ -2853,6 +2853,19 @@ fn first_np_name_prefers_server_cn_then_cn_then_legacy_name() {
         "noble_phantasms": [{ "name": "Stella" }]
     });
     assert_eq!(first_np_name(&fallback).as_deref(), Some("Stella"));
+}
+
+#[test]
+fn servants_data_preserves_atlas_id_without_changing_wire_identity() {
+    let servant = servants_data()
+        .iter()
+        .find(|servant| servant.id == 2)
+        .unwrap();
+    assert_eq!(servant.atlas_id, 100100);
+    let wire = serde_json::to_value(servant).unwrap();
+    assert_eq!(wire["id"], 2);
+    assert!(wire.get("atlasId").is_none());
+    assert!(wire.get("atlas_id").is_none());
 }
 
 #[test]

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
@@ -6,6 +6,16 @@ import { renderWithTheme } from "../../../test/renderWithTheme";
 import { CraftEssenceSelectDialog } from "../CraftEssenceSelectDialog";
 import type { CraftEssence } from "../../../types/craftEssence";
 import type { ComponentProps } from "react";
+import { useCraftEssencePickerData } from "../useCraftEssencePickerData";
+
+vi.mock("../useCraftEssencePickerData", () => ({ useCraftEssencePickerData: vi.fn() }));
+
+beforeEach(() => {
+  vi.mocked(useCraftEssencePickerData).mockImplementation((catalog) => ({
+    craftEssences: catalog, recommendedIds: catalog.map((ce) => ce.id),
+    bonusDetails: {}, emptyReason: null, loading: false, error: null,
+  }));
+});
 
 const FIXTURE: CraftEssence[] = [
   { id: 1, rarity: 5, category: "normal", name: "Kaleidoscope" },
@@ -28,12 +38,103 @@ function setup(
       mlbRequired={overrides?.mlbRequired}
       onMlbRequiredChange={overrides?.onMlbRequiredChange}
       disabledIds={overrides?.disabledIds}
+      grandBondOnly={overrides?.grandBondOnly}
+      servantId={overrides?.servantId}
     />
   );
   return { ...utils, onSelect, onOpenChange };
 }
 
 describe("CraftEssenceSelectDialog", () => {
+  it("defaults to ordered recommendations, keeps all types accessible, and resets on close", async () => {
+    vi.mocked(useCraftEssencePickerData).mockReturnValue({
+      craftEssences: FIXTURE, recommendedIds: [3, 1], bonusDetails: {},
+      emptyReason: null, loading: false, error: null,
+    });
+    const user = userEvent.setup();
+    setup();
+    const group = screen.getByRole("group", { name: "礼装类型筛选" });
+    expect(within(group).getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "全部类型", "推荐", "常规", "魔力棱镜/进阶关卡礼装", "活动礼装", "活动报酬礼装",
+    ]);
+    expect(screen.getByRole("button", { name: "推荐" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "#3The Imaginary Element", "#1Kaleidoscope",
+    ]);
+    await user.click(screen.getByRole("button", { name: "全部类型" }));
+    expect(screen.getByText("Heaven's Feel")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByPlaceholderText("搜索礼装名称..."), { key: "Escape" });
+    expect(screen.getByRole("button", { name: "推荐" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("renders MLB details beside the name and before the card, with full details on hover", async () => {
+    vi.mocked(useCraftEssencePickerData).mockReturnValue({
+      craftEssences: FIXTURE, recommendedIds: [1], bonusDetails: { 1: [
+        { text: "+2", icons: [{ path: "/assets/icons/items/10.png", name: "武藏乌冬" }] },
+        { text: "[兽科] 牵绊10%" },
+      ] },
+      emptyReason: null, loading: false, error: null,
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) =>
+      cmd === "get_craft_essence_card_path" ? "/tmp/ces/1/card_ce.png" : null
+    );
+    const user = userEvent.setup();
+    setup();
+    const summary = screen.getByText("+2").closest(".ce-bonus-summary")!;
+    const thumbnail = await waitFor(() => {
+      const trigger = document.querySelector(".ce-card-thumbnail-trigger");
+      expect(trigger).toBeInTheDocument();
+      return trigger!;
+    });
+    expect(screen.getByRole("option")).toHaveStyle({ height: "40px", top: "0px" });
+    expect(summary).not.toHaveTextContent("满破：");
+    expect(summary.previousElementSibling).toHaveClass("ce-option-text");
+    expect(summary.nextElementSibling).toBe(thumbnail);
+    expect(within(summary as HTMLElement).getAllByAltText("武藏乌冬")).toHaveLength(1);
+    expect(screen.getByText("[兽科] 牵绊10%")).toBeInTheDocument();
+    expect(screen.queryByText(/掉落获得数增加/)).not.toBeInTheDocument();
+    await user.hover(summary);
+    await waitFor(() => expect(screen.getAllByText("+2").length).toBeGreaterThan(1));
+  });
+
+  it("combines recommendations with search and rarity filters without duplicating entries", async () => {
+    vi.mocked(useCraftEssencePickerData).mockReturnValue({
+      craftEssences: FIXTURE, recommendedIds: [3, 1], bonusDetails: { 1: [{ text: "活动道具 +1" }, { text: "牵绊 +5%" }] },
+      emptyReason: null, loading: false, error: null,
+    });
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByRole("button", { name: "★5" }));
+    await user.type(screen.getByPlaceholderText("搜索礼装名称..."), "kal");
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(screen.getByText("Kaleidoscope")).toBeInTheDocument();
+    expect(screen.getByText("活动道具 +1")).toBeInTheDocument();
+    expect(screen.getByText("牵绊 +5%")).toBeInTheDocument();
+  });
+
+  it("bypasses recommendation and rarity filters for the servant's sole grand bond CE", () => {
+    vi.mocked(useCraftEssencePickerData).mockReturnValue({
+      craftEssences: [FIXTURE[3]], recommendedIds: [], bonusDetails: {},
+      emptyReason: null, loading: false, error: null,
+    });
+    setup({ grandBondOnly: true, servantId: 2 });
+    expect(screen.queryByRole("group", { name: "礼装类型筛选" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "礼装星级筛选" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(screen.getByText("Heaven's Feel")).toBeInTheDocument();
+    expect(useCraftEssencePickerData).toHaveBeenCalledWith(FIXTURE, true, 2);
+  });
+
+  it.each(["请先选择冠位从者", "未找到该从者的牵绊礼装数据"])("shows backend empty state: %s", (emptyReason) => {
+    vi.mocked(useCraftEssencePickerData).mockReturnValue({
+      craftEssences: [], recommendedIds: [], bonusDetails: {},
+      emptyReason, loading: false, error: null,
+    });
+    setup({ grandBondOnly: true });
+    expect(screen.getByText(emptyReason)).toBeInTheDocument();
+    expect(screen.queryByRole("option")).not.toBeInTheDocument();
+  });
+
   it("renders the dialog with the title and search field when open", () => {
     setup();
     expect(screen.getByRole("dialog")).toBeInTheDocument();

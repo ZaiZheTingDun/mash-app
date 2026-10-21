@@ -169,6 +169,7 @@
 .ce-option-content {
   display: flex;
   align-items: center;
+  gap: var(--space-2);
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -176,6 +177,31 @@
 
 .ce-option-text {
   min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.ce-bonus-summary {
+  display: block;
+  flex: 0 1 50%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  line-height: 1.35;
+}
+
+.ce-option-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-bonus-summary:focus-visible {
+  outline: 2px solid var(--accent-8);
+  border-radius: var(--radius-1);
 }
 
 .ce-card-thumbnail {
@@ -189,6 +215,7 @@
 
 .ce-card-thumbnail-trigger {
   display: block;
+  flex-shrink: 0;
   margin-left: auto;
 }
 
@@ -416,4 +443,18 @@
   border-radius: var(--radius-1);
   pointer-events: none;
   white-space: nowrap;
+}
+
+.ce-bonus-effect {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  vertical-align: middle;
+}
+
+.ce-bonus-item-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex-shrink: 0;
 }

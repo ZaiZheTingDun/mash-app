@@ -15,6 +15,9 @@ pub(crate) use portraits::*;
 mod craft_essences;
 pub(crate) use craft_essences::*;
 
+mod craft_essence_picker;
+pub(crate) use craft_essence_picker::*;
+
 mod skills;
 pub(crate) use skills::*;
 

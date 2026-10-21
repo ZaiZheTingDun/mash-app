@@ -160,8 +160,61 @@ pub(crate) fn update_project(app: tauri::AppHandle, project: Project) -> Result<
         return Err(format!("project not found: {}", project.id));
     };
     projects[index] = normalize_project(project);
+    let project = &mut projects[index];
+    if project.support_grand_craft_essence_ids[1].is_some() {
+        let server = *app.state::<Mutex<Server>>().lock().unwrap();
+        let picker = crate::commands::catalog::craft_essence_picker_data(
+            &app,
+            server,
+            true,
+            project.support_servant_id,
+        )?;
+        normalize_grand_bond_selection(project, picker.craft_essences.first().map(|ce| ce.id));
+    }
     write_projects(&app, &projects)?;
     Ok(projects[index].clone())
+}
+
+fn normalize_grand_bond_selection(project: &mut Project, allowed_id: Option<u32>) {
+    if project.support_grand_craft_essence_ids[1].is_some()
+        && project.support_grand_craft_essence_ids[1] != allowed_id
+    {
+        project.support_grand_craft_essence_ids[1] = None;
+        project.support_grand_craft_essence_id_lists[1].clear();
+        project.support_grand_bond_ce_mode = SupportGrandBondCeMode::Any;
+    }
+}
+
+#[cfg(test)]
+mod grand_bond_tests {
+    use super::*;
+
+    #[test]
+    fn preserves_matching_ce_and_clears_both_legacy_and_list_fields_on_mismatch() {
+        let mut project: Project = serde_json::from_value(serde_json::json!({
+            "id":"grand-bond-test", "name":"冠位", "slots":[],
+            "supportGrandCraftEssenceIds":[10,191,30],
+            "supportGrandCraftEssenceIdLists":[[10],[191],[30]],
+            "supportGrandBondCeMode":"bondNp"
+        }))
+        .unwrap();
+        normalize_grand_bond_selection(&mut project, Some(191));
+        assert_eq!(project.support_grand_craft_essence_ids[1], Some(191));
+        assert_eq!(
+            project.support_grand_bond_ce_mode,
+            SupportGrandBondCeMode::BondNp
+        );
+        normalize_grand_bond_selection(&mut project, Some(192));
+        assert_eq!(
+            project.support_grand_craft_essence_ids,
+            [Some(10), None, Some(30)]
+        );
+        assert!(project.support_grand_craft_essence_id_lists[1].is_empty());
+        assert_eq!(
+            project.support_grand_bond_ce_mode,
+            SupportGrandBondCeMode::Any
+        );
+    }
 }
 
 #[tauri::command]

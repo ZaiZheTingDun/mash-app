@@ -101,6 +101,7 @@ pub fn run() {
             commands::window_chrome::window_chrome_action,
             commands::catalog::get_servants,
             commands::catalog::get_craft_essences,
+            commands::catalog::get_craft_essence_picker_data,
             commands::catalog::get_mystic_codes,
             commands::catalog::get_servant_skill_selection,
             commands::catalog::get_servant_skill_targeting,

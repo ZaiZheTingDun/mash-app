@@ -7,6 +7,13 @@ import type { CraftEssence } from "../../../types/craftEssence";
 import type { Servant } from "../../../types/servant";
 import { invoke } from "@tauri-apps/api/core";
 
+vi.mock("../../team/useCraftEssencePickerData", () => ({
+  useCraftEssencePickerData: vi.fn((catalog: CraftEssence[]) => ({
+    craftEssences: catalog, recommendedIds: catalog.map((ce) => ce.id),
+    bonusDetails: {}, emptyReason: null, loading: false, error: null,
+  })),
+}));
+
 vi.mock("@tauri-apps/api/webviewWindow", () => ({
   WebviewWindow: class {
     static getByLabel = vi.fn(async () => null);

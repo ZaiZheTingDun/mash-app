@@ -1,3 +1,4 @@
+import { convertFileSrc } from "../../tauri";
 import { useState, useMemo, useRef, useCallback } from "react";
 import {
   Checkbox,
@@ -12,9 +13,18 @@ import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import type {
   CraftEssence,
   CraftEssenceCategory,
+  CraftEssenceBonusDetail,
 } from "../../types/craftEssence";
 import type { SupportGrandBondCeMode } from "../../types/project";
 import { useCeCards } from "./contentGridAssets";
+import { useCraftEssencePickerData } from "./useCraftEssencePickerData";
+
+function BonusContent({ detail }: { detail: CraftEssenceBonusDetail }) {
+  return <span className="ce-bonus-effect">
+    {detail.icons?.map((icon) => <img key={icon.path} className="ce-bonus-item-icon" src={convertFileSrc(icon.path)} alt={icon.name} title={icon.name} />)}
+    <span>{detail.text}</span>
+  </span>;
+}
 
 interface CraftEssenceSelectDialogProps {
   open: boolean;
@@ -26,6 +36,8 @@ interface CraftEssenceSelectDialogProps {
   grandBondCeMode?: SupportGrandBondCeMode;
   onGrandBondCeModeChange?: (mode: SupportGrandBondCeMode) => void;
   disabledIds?: number[];
+  grandBondOnly?: boolean;
+  servantId?: number | null;
 }
 
 const ROW_HEIGHT = 40;
@@ -34,12 +46,12 @@ const VIEWPORT_H = 420;
 const RARITY_FILTER_OPTIONS = [null, 5, 4, 3, 2, 1] as const;
 
 const CATEGORY_FILTER_OPTIONS: {
-  value: CraftEssenceCategory | null;
+  value: CraftEssenceCategory | "recommended" | null;
   label: string;
 }[] = [
   { value: null, label: "全部类型" },
+  { value: "recommended", label: "推荐" },
   { value: "normal", label: "常规" },
-  { value: "bond", label: "牵绊礼装" },
   { value: "manaExchange", label: "魔力棱镜/进阶关卡礼装" },
   { value: "event", label: "活动礼装" },
   { value: "eventReward", label: "活动报酬礼装" },
@@ -79,8 +91,7 @@ function CraftEssenceCardThumbnail({
 
 /**
  * Picker for craft essences. Modeled after `ServantSelectDialog` but
- * simpler: Rust normalizes the bundled `craft_essences.json` to
- * collectionNo-as-id + Chinese name (+ optional wiki link), so we don't
+ * simpler: Rust normalizes the catalog and owns recommendation eligibility.
  * `disabledIds` only prevents selecting the same CE twice inside one
  * managed support slot; duplicate CEs across different team slots remain
  * valid.
@@ -90,29 +101,46 @@ function CraftEssenceCardThumbnail({
  * Only the rows visible in the 420px viewport (+ overscan) are mounted,
  * keeping open/scroll snappy.
  */
-export function CraftEssenceSelectDialog({
+export function CraftEssenceSelectDialog(props: CraftEssenceSelectDialogProps) {
+  return props.open ? (
+    <OpenCraftEssenceSelectDialog
+      key={props.grandBondOnly ? `bond:${props.servantId ?? "none"}` : "normal"}
+      {...props}
+    />
+  ) : null;
+}
+
+function OpenCraftEssenceSelectDialog({
   open,
   onOpenChange,
   onSelect,
-  craftEssences,
+  craftEssences: fallbackCatalog,
   mlbRequired,
   onMlbRequiredChange,
   grandBondCeMode,
   onGrandBondCeModeChange,
   disabledIds = [],
+  grandBondOnly = false,
+  servantId = null,
 }: CraftEssenceSelectDialogProps) {
+  const { craftEssences, recommendedIds, bonusDetails, emptyReason, loading, error } =
+    useCraftEssencePickerData(fallbackCatalog, grandBondOnly, servantId);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] =
-    useState<CraftEssenceCategory | null>(null);
+    useState<CraftEssenceCategory | "recommended" | null>("recommended");
   const [rarityFilter, setRarityFilter] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
-    const categoryAndRarityFiltered = craftEssences.filter((ce) => {
-      if (categoryFilter !== null && ce.category !== categoryFilter) return false;
-      if (rarityFilter !== null && ce.rarity !== rarityFilter) return false;
+    const byId = new Map(craftEssences.map((ce) => [ce.id, ce]));
+    const candidates = !grandBondOnly && categoryFilter === "recommended"
+      ? recommendedIds.map((id) => byId.get(id)).filter((ce): ce is CraftEssence => ce !== undefined)
+      : craftEssences;
+    const categoryAndRarityFiltered = candidates.filter((ce) => {
+      if (!grandBondOnly && categoryFilter !== null && categoryFilter !== "recommended" && ce.category !== categoryFilter) return false;
+      if (!grandBondOnly && rarityFilter !== null && ce.rarity !== rarityFilter) return false;
       return true;
     });
     if (!search.trim()) return categoryAndRarityFiltered;
@@ -120,7 +148,7 @@ export function CraftEssenceSelectDialog({
     return categoryAndRarityFiltered.filter((ce) =>
       craftEssenceSearchText(ce).includes(q)
     );
-  }, [craftEssences, search, categoryFilter, rarityFilter]);
+  }, [craftEssences, recommendedIds, grandBondOnly, search, categoryFilter, rarityFilter]);
   const disabledIdSet = useMemo(() => new Set(disabledIds), [disabledIds]);
 
   // Clamp at read-time rather than via a setState-in-effect (which the
@@ -156,7 +184,7 @@ export function CraftEssenceSelectDialog({
       onSelect(ce);
       onOpenChange(false);
       setSearch("");
-      setCategoryFilter(null);
+      setCategoryFilter("recommended");
       setRarityFilter(null);
       setActiveIndex(0);
       resetScroll();
@@ -174,7 +202,7 @@ export function CraftEssenceSelectDialog({
       onOpenChange(nextOpen);
       if (!nextOpen) {
         setSearch("");
-        setCategoryFilter(null);
+        setCategoryFilter("recommended");
         setRarityFilter(null);
         setActiveIndex(0);
         resetScroll();
@@ -251,7 +279,7 @@ export function CraftEssenceSelectDialog({
           </TextField.Slot>
         </TextField.Root>
 
-        <Flex gap="2" className="ce-filter-row">
+        {!grandBondOnly && <Flex gap="2" className="ce-filter-row">
           <div
             className="ce-category-filter-grid"
             role="group"
@@ -303,7 +331,7 @@ export function CraftEssenceSelectDialog({
               );
             })}
           </div>
-        </Flex>
+        </Flex>}
 
         {onMlbRequiredChange && (
           <Flex gap="3" align="center" wrap="wrap" mt="3">
@@ -339,15 +367,17 @@ export function CraftEssenceSelectDialog({
           </Flex>
         )}
 
+        {error && <Text as="p" size="2" color="red">加载礼装推荐失败：{error}</Text>}
+
         <div
           className="ce-list-scroll"
           ref={scrollRef}
           onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
         >
-          {filtered.length === 0 ? (
+          {loading || filtered.length === 0 ? (
             <Flex align="center" justify="center" py="6">
               <Text size="2" color="gray">
-                未找到匹配的礼装
+                {loading ? "正在加载礼装…" : emptyReason ?? "未找到匹配的礼装"}
               </Text>
             </Flex>
           ) : (
@@ -381,18 +411,34 @@ export function CraftEssenceSelectDialog({
                     onMouseEnter={() => setActiveIndex(index)}
                   >
                     <div className="ce-option-content">
-                      <Flex align="center" gap="3" className="ce-option-text">
-                        <Text
-                          size="1"
-                          color="gray"
-                          style={{ minWidth: "3em" }}
-                        >
-                          #{ce.id}
-                        </Text>
-                        <Text size="2" weight="medium">
-                          {ce.name}
-                        </Text>
-                      </Flex>
+                      <div className="ce-option-text">
+                        <Flex align="center" gap="3">
+                          <Text size="1" color="gray" style={{ minWidth: "3em" }}>
+                            #{ce.id}
+                          </Text>
+                          <Text size="2" weight="medium" className="ce-option-name" title={ce.name}>
+                            {ce.name}
+                          </Text>
+                        </Flex>
+                      </div>
+                      {bonusDetails[ce.id]?.length > 0 && (
+                        <HoverCard.Root openDelay={150}>
+                          <HoverCard.Trigger>
+                            <Text size="1" color="gray" className="ce-bonus-summary" tabIndex={0}>
+                              {bonusDetails[ce.id].map((detail, i) => <span key={i}>
+                                {i > 0 && "；"}<BonusContent detail={detail} />
+                              </span>)}
+                            </Text>
+                          </HoverCard.Trigger>
+                          <HoverCard.Content maxWidth="440px">
+                            <Flex direction="column" gap="2">
+                              {bonusDetails[ce.id].map((detail, i) => (
+                                <Text key={i} size="2"><BonusContent detail={detail} /></Text>
+                              ))}
+                            </Flex>
+                          </HoverCard.Content>
+                        </HoverCard.Root>
+                      )}
                       {cardSrc && (
                         <CraftEssenceCardThumbnail craftEssence={ce} src={cardSrc} />
                       )}

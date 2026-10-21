@@ -7,7 +7,14 @@ pub(crate) const ASSETS_MANIFEST_JSON: &str = include_str!("../../resources/asse
 pub(crate) const ASSET_DOWNLOAD_PROGRESS_EVENT: &str = "asset-download-progress";
 // To add a new asset directory: append its name here. install_asset_directories and
 // cleanup_replaced_asset_trees will handle it automatically.
-pub(crate) const ASSET_DIRS: &[&str] = &["servants", "ces", "icons", "skills", "mystic-codes"];
+pub(crate) const ASSET_DIRS: &[&str] = &[
+    "servants",
+    "ces",
+    "icons",
+    "skills",
+    "mystic-codes",
+    "events",
+];
 
 #[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

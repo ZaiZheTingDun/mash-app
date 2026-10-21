@@ -1,9 +1,8 @@
 /**
  * One Craft Essence entry surfaced by the `get_craft_essences` Tauri
  * command. Mirrors the Rust `CraftEssenceInfo` struct. The wire payload
- * is intentionally minimal — full Atlas Academy metadata stays in
- * `assets/ces/{id}/craft-essence.json`, where `id` is the CE
- * collectionNo, and is loaded on demand by the runner only when needed.
+ * is intentionally minimal. Recommendation details are returned separately
+ * by `get_craft_essence_picker_data`; `id` is the CE collectionNo.
  */
 export type CraftEssenceCategory =
   | "normal"
@@ -20,4 +19,17 @@ export interface CraftEssence {
   name: string;
   nameAliases?: string[];
   nameLink?: string;
+}
+
+export interface CraftEssenceBonusDetail {
+  text: string;
+  icons?: { path: string; name: string }[];
+}
+
+/** Backend-owned candidate list and recommendation order for one picker. */
+export interface CraftEssencePickerData {
+  craftEssences: CraftEssence[];
+  recommendedIds: number[];
+  bonusDetails: Record<string, CraftEssenceBonusDetail[]>;
+  emptyReason: string | null;
 }

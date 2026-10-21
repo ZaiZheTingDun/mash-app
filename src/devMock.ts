@@ -270,6 +270,15 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       return clone(servants) as T;
     case "get_craft_essences":
       return clone(craftEssences) as T;
+    case "get_craft_essence_picker_data":
+      return {
+        craftEssences: args.grandBondOnly ? [] : clone(craftEssences),
+        recommendedIds: args.grandBondOnly ? [] : [1003],
+        bonusDetails: { 1003: [{ text: "牵绊点数增加10%" }] },
+        emptyReason: args.grandBondOnly
+          ? args.servantId == null ? "请先选择冠位从者" : "未找到该从者的牵绊礼装数据"
+          : null,
+      } as T;
     case "get_mystic_codes":
       return [{
         id: 470,

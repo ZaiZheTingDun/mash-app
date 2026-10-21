@@ -9,6 +9,16 @@ import { createInitialProjectSlots } from "../projectSlots";
 import type { Servant } from "../../../types/servant";
 import type { CraftEssence } from "../../../types/craftEssence";
 import type { GrandClassDefinition, Project } from "../../../types/project";
+import { useCraftEssencePickerData } from "../useCraftEssencePickerData";
+
+vi.mock("../useCraftEssencePickerData", () => ({
+  useCraftEssencePickerData: vi.fn((catalog: CraftEssence[], grandBondOnly: boolean, servantId: number | null) => ({
+    craftEssences: grandBondOnly ? servantId == null ? [] : catalog.slice(1, 2) : catalog,
+    recommendedIds: catalog.map((ce) => ce.id),
+    bonusDetails: {}, emptyReason: grandBondOnly && servantId == null ? "请先选择冠位从者" : null,
+    loading: false, error: null,
+  })),
+}));
 
 const GRAND_CLASS_DEFINITIONS: GrandClassDefinition[] = [
   { id: "saber", label: "剑阶冠位", servantClass: "Saber", roles: [], cardPriorityEnabled: true, autoOrderChangeRoles: [], validationMessage: "" },
@@ -870,6 +880,7 @@ describe("ContentGrid", () => {
         onSlotsChange={vi.fn()}
         activeProject={{
           ...PROJECT,
+          supportServantId: ALTRIA_CASTER.id,
           supportGrandMode: true,
           supportGrandCraftEssenceIds: [1, null, 2],
         }}
@@ -882,7 +893,9 @@ describe("ContentGrid", () => {
     expect(screen.getByLabelText("冠位礼装 3：Black Grail")).toBeInTheDocument();
 
     await user.click(screen.getByLabelText("选择冠位礼装 2"));
+    expect(useCraftEssencePickerData).toHaveBeenCalledWith(CES, true, ALTRIA_CASTER.id);
     const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getAllByRole("option")).toHaveLength(1);
     await user.click(within(dialog).getByText("Black Grail"));
     expect(onUpdateActiveProject).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -930,6 +943,16 @@ describe("ContentGrid", () => {
 
     await user.click(screen.getByLabelText("冠位礼装 2：Black Grail"));
     expect(await screen.findByRole("dialog", { name: "选择礼装" })).toBeInTheDocument();
+  });
+
+  it("requires a pinned servant before offering a grand second-slot CE", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<ContentGrid servants={SERVANTS} craftEssences={CES} slots={buildSlots()}
+      onSlotsChange={vi.fn()} activeProject={{ ...PROJECT, supportGrandMode: true }}
+      onUpdateActiveProject={vi.fn()} />);
+    await user.click(screen.getByLabelText("选择冠位礼装 2"));
+    expect(screen.getByText("请先选择冠位从者")).toBeInTheDocument();
+    expect(screen.queryByRole("option")).not.toBeInTheDocument();
   });
 
   it("stacks grand support craft essences and falls back when card art fails", async () => {

@@ -5,9 +5,8 @@ use std::sync::OnceLock;
 
 /// One craft-essence entry exposed to the frontend. Mirrors the shape of
 /// `resources/craft_essences.json` (using Atlas `collectionNo` as the
-/// stable app-facing CE id). Kept minimal — additional metadata lives in the per-CE
-/// `assets/ces/{id}/craft-essence.json` Atlas dump and is loaded lazily
-/// only when the runner actually needs it.
+/// stable app-facing CE id). Recommendation metadata stays in the backend's
+/// cached picker index rather than traveling with every catalog entry.
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CraftEssenceInfo {
@@ -41,7 +40,7 @@ struct CraftEssenceTranslationFix {
     name: String,
 }
 
-fn craft_essence_category(value: &serde_json::Value) -> CraftEssenceCategory {
+pub(super) fn craft_essence_category(value: &serde_json::Value) -> CraftEssenceCategory {
     let has_flag = |expected: &str| {
         value
             .get("flags")
@@ -128,8 +127,22 @@ pub(crate) fn craft_essences_data() -> &'static [CraftEssenceInfo] {
 }
 
 #[tauri::command]
-pub(crate) fn get_craft_essences() -> &'static [CraftEssenceInfo] {
-    craft_essences_data()
+pub(crate) async fn get_craft_essences(
+    app: tauri::AppHandle,
+    server_state: tauri::State<'_, std::sync::Mutex<crate::server::Server>>,
+) -> Result<Vec<CraftEssenceInfo>, String> {
+    let server = *server_state.lock().unwrap();
+    tauri::async_runtime::spawn_blocking(move || {
+        match super::craft_essence_picker_data(&app, server, false, None) {
+            Ok(data) => data.craft_essences,
+            Err(error) => {
+                eprintln!("[craft_essences] using bundled catalog: {error}");
+                craft_essences_data().to_vec()
+            }
+        }
+    })
+    .await
+    .map_err(|error| format!("加载礼装目录任务失败: {error}"))
 }
 
 pub(crate) fn ce_card_path(ce_root: &Path, ce_id: u32) -> PathBuf {

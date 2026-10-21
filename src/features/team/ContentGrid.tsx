@@ -540,6 +540,8 @@ export function ContentGrid({
         }}
         onSelect={handleCeSelect}
         craftEssences={craftEssences}
+        grandBondOnly={showGrandBondOption}
+        servantId={activeProject?.supportServantId ?? null}
         mlbRequired={activeCeTargetMlbRequired}
         onMlbRequiredChange={showCeMlbOption ? handleCeMlbRequiredChange : undefined}
         grandBondCeMode={supportGrandBondCeMode}

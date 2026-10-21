@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "traits": {
+    "2": {
+      "label": "女性",
+      "sourceRegion": "CN",
+      "sourceCeId": 2233
+    },
+    "100": {
+      "label": "剑士",
+      "sourceRegion": "JP",
+      "sourceCeId": 2607
+    },
+    "101": {
+      "label": "枪兵",
+      "sourceRegion": "CN",
+      "sourceCeId": 2264
+    },
+    "102": {
+      "label": "弓兵",
+      "sourceRegion": "JP",
+      "sourceCeId": 2494
+    },
+    "103": {
+      "label": "骑兵",
+      "sourceRegion": "CN",
+      "sourceCeId": 2142
+    },
+    "104": {
+      "label": "魔术师",
+      "sourceRegion": "CN",
+      "sourceCeId": 2124
+    },
+    "105": {
+      "label": "暗匿者",
+      "sourceRegion": "JP",
+      "sourceCeId": 2701
+    },
+    "106": {
+      "label": "狂战士",
+      "sourceRegion": "CN",
+      "sourceCeId": 2239
+    },
+    "107": {
+      "label": "盾兵",
+      "sourceRegion": "CN",
+      "sourceCeId": 2403
+    },
+    "108": {
+      "label": "裁定者",
+      "sourceRegion": "CN",
+      "sourceCeId": 2403
+    },
+    "109": {
+      "label": "他人格",
+      "sourceRegion": "CN",
+      "sourceCeId": 2404
+    },
+    "110": {
+      "label": "复仇者",
+      "sourceRegion": "CN",
+      "sourceCeId": 2403
+    },
+    "115": {
+      "label": "月之癌",
+      "sourceRegion": "CN",
+      "sourceCeId": 2403
+    },
+    "117": {
+      "label": "降临者",
+      "sourceRegion": "CN",
+      "sourceCeId": 2404
+    },
+    "120": {
+      "label": "伪装者",
+      "sourceRegion": "CN",
+      "sourceCeId": 2404
+    },
+    "132": {
+      "label": "兽（奥尔加玛丽）",
+      "sourceRegion": "JP",
+      "sourceCeId": 2404
+    },
+    "135": {
+      "label": "兽",
+      "sourceRegion": "CN",
+      "sourceCeId": 2404
+    },
+    "203": {
+      "label": "星",
+      "sourceRegion": "CN",
+      "sourceCeId": 2437
+    },
+    "300": {
+      "label": "秩序",
+      "sourceRegion": "CN",
+      "sourceCeId": 2052
+    },
+    "301": {
+      "label": "混沌",
+      "sourceRegion": "JP",
+      "sourceCeId": 2509
+    },
+    "302": {
+      "label": "中立",
+      "sourceRegion": "JP",
+      "sourceCeId": 2583
+    },
+    "303": {
+      "label": "善",
+      "sourceRegion": "CN",
+      "sourceCeId": 2052
+    },
+    "304": {
+      "label": "恶",
+      "sourceRegion": "CN",
+      "sourceCeId": 2437
+    },
+    "1000": {
+      "label": "自身",
+      "sourceRegion": "CN",
+      "sourceCeId": 1147
+    },
+    "2654": {
+      "label": "活在当下的人类",
+      "sourceRegion": "CN",
+      "sourceCeId": 2020
+    },
+    "2780": {
+      "label": "拥有灵衣",
+      "sourceRegion": "CN",
+      "sourceCeId": 2209
+    },
+    "2821": {
+      "label": "兽科",
+      "sourceRegion": "CN",
+      "sourceCeId": 1949
+    },
+    "2858": {
+      "label": "七骑士",
+      "sourceRegion": "JP",
+      "sourceCeId": 2509
+    },
+    "2883": {
+      "label": "FSN从者",
+      "sourceRegion": "CN",
+      "sourceCeId": 1973
+    },
+    "800100": {
+      "label": "玛修装备",
+      "sourceRegion": "CN",
+      "sourceCeId": 1397
+    },
+    "2801200": {
+      "label": "所罗门",
+      "sourceRegion": "JP",
+      "sourceCeId": 2509
+    }
+  },
+  "rewardFunctions": {
+    "8014": "主线/团体战",
+    "22974": "主线/团体战"
+  },
+  "progressTargets": {
+    "1": "军务",
+    "2": "政务",
+    "3": "内务"
+  },
+  "eventTargets": {
+    "1138": "〔吞噬者系〕",
+    "1130": "〔素体〕",
+    "1129": "〔公寓灵、骷髅兵〕",
+    "2469": "〔奖励敌人〕",
+    "2990": "〔稀有敌人〕",
+    "1128": "〔尸人〕",
+    "2749": "(强者)",
+    "2023": "（真）敌人",
+    "2807": "[鬼][铁皮][南瓜]",
+    "1136": "[骸骨系][鬼魂系][蛇女系]",
+    "1137": "[虫系][魔偶系]",
+    "2024": "（伪）敌人",
+    "1135": "[兽人系][人工生命体系][骑士系]",
+    "2663": "〔稀有敌人〕",
+    "1140": "〔TYPEⅠ系〕",
+    "2403": "〔稀有敌人〕",
+    "1131": "〔七人御佐姬〕",
+    "2806": "[猴子][蛇][童话]",
+    "2808": "[稻草人][玩具][幽灵]",
+    "1157": "[骷髅兵系][稻草人系]",
+    "1156": "[无人机系][人工生命体系][自动人偶系]",
+    "1155": "[骑士系][凝视者系][量产型系]",
+    "1171": "〔迷你信系〕",
+    "1139": "〔变形者系〕",
+    "1141": "〔樱系〕"
+  }
+}

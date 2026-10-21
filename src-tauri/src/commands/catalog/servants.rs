@@ -17,7 +17,10 @@ pub(crate) struct ServantNameAlias {
 
 #[derive(serde::Serialize, Clone)]
 pub(crate) struct ServantInfo {
+    /// App-facing collection number. Atlas effect ownership uses `atlas_id`.
     pub(crate) id: u32,
+    #[serde(skip_serializing)]
+    pub(crate) atlas_id: u32,
     #[serde(skip_serializing)]
     pub(crate) servant_type: String,
     #[serde(rename = "variantKey")]
@@ -310,6 +313,7 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
             .flat_map(|(idx, s)| {
                 let result = (|| {
                     let id = u32_field(s, &["collectionNo", "id"])?;
+                    let atlas_id = u32_field(s, &["id"])?;
                     let name_cn = string_field(s, &["nameCN", "name_cn"])?;
                     let name_cn_server = string_field(s, &["nameCNServer", "name_cn_server"]);
                     let name_jp = string_field(s, &["nameJP", "name_jp"])?;
@@ -382,6 +386,7 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                                 };
                                 ServantInfo {
                                     id,
+                                    atlas_id,
                                     servant_type: servant_type.clone(),
                                     variant_key: format!("{id}:{}", variant_idx + 1),
                                     face_id,
@@ -407,6 +412,7 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                     } else {
                         vec![ServantInfo {
                             id,
+                            atlas_id,
                             servant_type,
                             variant_key: id.to_string(),
                             face_id: None,

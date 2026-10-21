@@ -734,6 +734,10 @@ export function DebugPage({
           prev.includes(servant.id) ? prev : [...prev, servant.id]
         );
       } else if (servantPickerTarget === "support") {
+        if (servant.id !== supportServantId) {
+          setSupportGrandCraftEssenceIds((previous) => [previous[0], null, previous[2]]);
+          setSupportGrandBondCeMode("any");
+        }
         setSupportServantId(servant.id);
         setSupportServantVariantKey(servant.variantKey);
         setSupportMetadata(null);
@@ -744,7 +748,7 @@ export function DebugPage({
       }
       setServantPickerTarget(null);
     },
-    [servantPickerTarget]
+    [servantPickerTarget, supportServantId]
   );
 
   const handleRemoveCardServant = useCallback((id: number) => {
@@ -2778,6 +2782,8 @@ export function DebugPage({
           setSupportResult(null);
         }}
         craftEssences={craftEssences}
+        grandBondOnly={craftEssencePickerTarget === 1}
+        servantId={supportServantId}
         mlbRequired={
           craftEssencePickerTarget === "single"
             ? supportCraftEssenceMlbRequired

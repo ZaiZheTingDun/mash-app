@@ -210,6 +210,10 @@ pub(crate) fn install_asset_directories(
         return Err(format!("压缩包内未找到素材目录 ({})", ASSET_DIRS.join("/")));
     }
 
+    // Invalidate before and after any writes, including failed or same-version
+    // installs. A picker opened during installation must not retain partial data.
+    let _picker_cache_reset = crate::commands::catalog::reset_picker_cache_on_drop();
+
     fs::create_dir_all(assets_root).map_err(|e| format!("创建素材目录失败: {e}"))?;
     let install_tree = |source: &Path, destination: PathBuf| {
         if replace_existing {
@@ -331,6 +335,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn events_are_installed_merged_and_replaced() {
+        let temp = tempfile::tempdir().unwrap();
+        let import_root = temp.path().join("import");
+        let assets_root = temp.path().join("assets");
+        fs::create_dir_all(import_root.join("events")).unwrap();
+        fs::write(import_root.join("events/catalog.json"), b"first").unwrap();
+        install_asset_directories(&import_root, &assets_root, true).unwrap();
+        assert_eq!(
+            fs::read(assets_root.join("events/catalog.json")).unwrap(),
+            b"first"
+        );
+        fs::write(assets_root.join("events/stale.json"), b"stale").unwrap();
+        fs::write(import_root.join("events/catalog.json"), b"patched").unwrap();
+        install_asset_directories(&import_root, &assets_root, false).unwrap();
+        assert_eq!(
+            fs::read(assets_root.join("events/catalog.json")).unwrap(),
+            b"patched"
+        );
+        assert!(assets_root.join("events/stale.json").exists());
+        install_asset_directories(&import_root, &assets_root, true).unwrap();
+        assert!(!assets_root.join("events/stale.json").exists());
+    }
+
+    #[test]
     fn install_asset_directories_accepts_skills_without_servants_or_ces() {
         let temp = tempfile::tempdir().unwrap();
         let import_root = temp.path().join("import");
@@ -368,7 +396,7 @@ mod tests {
 
         let err = install_asset_directories(&import_root, &assets_root, true).unwrap_err();
 
-        assert!(err.contains("servants/ces/icons/skills/mystic-codes"));
+        assert!(err.contains("servants/ces/icons/skills/mystic-codes/events"));
     }
 
     #[test]
@@ -378,10 +406,12 @@ mod tests {
         let stale_icons = assets_root.join("icons.replaced-123");
         let stale_skills = assets_root.join("skills.replaced-234");
         let stale_codes = assets_root.join("mystic-codes.replaced-456");
+        let stale_events = assets_root.join("events.replaced-567");
         let keep = assets_root.join("other.replaced-789");
         fs::create_dir_all(&stale_icons).unwrap();
         fs::create_dir_all(&stale_skills).unwrap();
         fs::create_dir_all(&stale_codes).unwrap();
+        fs::create_dir_all(&stale_events).unwrap();
         fs::create_dir_all(&keep).unwrap();
 
         cleanup_replaced_asset_trees(assets_root);
@@ -389,6 +419,7 @@ mod tests {
         assert!(!stale_icons.exists());
         assert!(!stale_skills.exists());
         assert!(!stale_codes.exists());
+        assert!(!stale_events.exists());
         assert!(keep.exists());
     }
 }
