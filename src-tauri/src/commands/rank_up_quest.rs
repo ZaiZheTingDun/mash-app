@@ -1,7 +1,7 @@
 use crate::adb;
-use crate::automation_coordinator::AutomationCoordinator;
 use crate::commands::debug::{ensure_debug_sidecar, DebugSidecar};
 use crate::commands::settings::AdbDeviceSettings;
+use crate::device_operation::DeviceOperationCoordinator;
 use crate::paths::app_data_dir;
 use crate::runner::{RankUpQuestMode, RankUpQuestStartRequest, RankUpQuestTarget, RunConfig};
 use crate::screen::{RankUpQuestRow, Screen};
@@ -34,7 +34,7 @@ pub(crate) fn capture_rank_up_quest_page(
     app: tauri::AppHandle,
     adb_settings: tauri::State<'_, Mutex<AdbDeviceSettings>>,
     server_state: tauri::State<'_, Mutex<Server>>,
-    coordinator: tauri::State<'_, AutomationCoordinator>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
     debug_sidecar: tauri::State<'_, DebugSidecar>,
     capture_state: tauri::State<'_, RankUpQuestCaptureState>,
 ) -> Result<RankUpQuestCaptureResult, String> {

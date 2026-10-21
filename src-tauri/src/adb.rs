@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use tauri::Manager;
 
 mod display;
+pub(crate) use display::{DisplaySize, PixelSize};
 
 pub(crate) const BLUESTACKS_SERIAL: &str = "127.0.0.1:5555";
 

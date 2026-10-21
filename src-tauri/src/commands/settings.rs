@@ -6,8 +6,8 @@
 //! server resources.
 
 use crate::adb::BLUESTACKS_SERIAL;
-use crate::automation_coordinator::AutomationCoordinator;
 use crate::commands::debug;
+use crate::device_operation::DeviceOperationCoordinator;
 use crate::paths::{app_data_dir, migrate_legacy_app_data, StartupMigrationStatus};
 use crate::runner::bond_level_up_screenshot_dir;
 use crate::storage::{read_json_or_default, write_json_atomic};
@@ -558,7 +558,7 @@ mod tests;
 pub(crate) fn set_server(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<Server>>,
-    coordinator: tauri::State<'_, AutomationCoordinator>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
     value: Server,
 ) -> Result<(), String> {

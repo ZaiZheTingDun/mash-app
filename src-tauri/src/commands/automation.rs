@@ -7,7 +7,6 @@
 //! existing command names and event payloads.
 
 use crate::adb;
-use crate::automation_coordinator::{AutomationCoordinator, AutomationKind};
 use crate::battle_statistics::BattleRunRecorder;
 use crate::commands::catalog::load_enhancement_target;
 use crate::commands::debug;
@@ -25,6 +24,7 @@ use crate::craft_essence_enhancement_runner::{
     CraftEssenceEnhancementRunnerState, LifecycleEvent as CeLifecycleEvent,
     EVENT_NAME as CE_EVENT_NAME,
 };
+use crate::device_operation::{AutomationKind, DeviceOperation, DeviceOperationCoordinator};
 use crate::enhancement_runner::{
     enhancement_lifecycle_transition, server_supported as enhancement_server_supported,
     EnhancementAutomationEvent, EnhancementConfig, EnhancementLifecycleEvent, EnhancementRunner,
@@ -255,7 +255,7 @@ pub(crate) fn start_automation(
     app: tauri::AppHandle,
     config: RunConfig,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
-    coordinator: tauri::State<'_, AutomationCoordinator>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
     start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
@@ -267,7 +267,7 @@ pub(crate) fn start_rank_up_quest_automation(
     mut config: RunConfig,
     workflow: RankUpQuestStartRequest,
     handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
-    coordinator: tauri::State<'_, AutomationCoordinator>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
     capture_state: tauri::State<'_, RankUpQuestCaptureState>,
 ) -> Result<(), String> {
@@ -283,10 +283,11 @@ fn start_automation_with_config(
     app: &tauri::AppHandle,
     mut config: RunConfig,
     handle_state: &Mutex<RunnerHandle>,
-    coordinator: &AutomationCoordinator,
+    coordinator: &DeviceOperationCoordinator,
     debug_state: &debug::DebugSidecar,
 ) -> Result<(), String> {
-    let automation_lease = coordinator.reserve(AutomationKind::Battle)?;
+    let automation_lease =
+        coordinator.reserve(DeviceOperation::Automation(AutomationKind::Battle))?;
 
     let project = read_projects(app)?
         .into_iter()

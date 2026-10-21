@@ -4,7 +4,79 @@
 use super::{adb_command, Adb};
 use std::time::Duration;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct PixelSize {
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DisplaySize {
+    pub(crate) physical_size: PixelSize,
+    pub(crate) override_size: Option<PixelSize>,
+}
+
+impl DisplaySize {
+    fn parse(output: &str) -> Result<Self, String> {
+        let parse = |value: &str| -> Result<PixelSize, String> {
+            let (width, height) = value.trim().split_once('x').ok_or("分辨率格式无效")?;
+            let size = PixelSize {
+                width: width.parse().map_err(|_| "分辨率宽度无效")?,
+                height: height.parse().map_err(|_| "分辨率高度无效")?,
+            };
+            if size.width == 0 || size.height == 0 {
+                return Err("设备返回了空分辨率".into());
+            }
+            Ok(size)
+        };
+        let mut physical_size = None;
+        let mut override_size = None;
+        for line in output.lines().map(str::trim) {
+            if let Some(value) = line.strip_prefix("Physical size:") {
+                physical_size = Some(parse(value)?);
+            } else if let Some(value) = line.strip_prefix("Override size:") {
+                override_size = Some(parse(value)?);
+            }
+        }
+        Ok(Self {
+            physical_size: physical_size
+                .ok_or_else(|| format!("无法读取设备默认分辨率：{output}"))?,
+            override_size,
+        })
+    }
+}
+
 impl Adb {
+    pub(crate) fn read_display_size(&self) -> Result<DisplaySize, String> {
+        DisplaySize::parse(&self.wm_size_output(false)?)
+    }
+
+    pub(crate) fn reset_display_size(&self) -> Result<(), String> {
+        self.wm_size_output(true).map(|_| ())
+    }
+
+    fn wm_size_output(&self, reset: bool) -> Result<String, String> {
+        // Never let an unbound ADB invocation choose another connected device.
+        self.serial().ok_or("ADB 尚未连接")?;
+        let mut command = adb_command(self.path());
+        command.args(self.base_args()).args(["shell", "wm", "size"]);
+        if reset {
+            command.arg("reset");
+        }
+        command.args(["-d", &self.display_id().to_string()]);
+        let output = crate::platform::output_with_timeout(&mut command, Duration::from_secs(5))
+            .map_err(|error| format!("执行设备分辨率命令失败：{error}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "设备分辨率命令失败（{}）：{} {}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout).trim(),
+                String::from_utf8_lossy(&output.stderr).trim(),
+            ));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
     pub(crate) fn screenshot_png(&self) -> Result<Vec<u8>, String> {
         let mut args = self.base_args();
         args.extend(["exec-out".into(), "screencap".into(), "-p".into()]);
@@ -95,6 +167,88 @@ mod tests {
     use super::super::build_settle_swipe_script_for_display;
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn display_size_distinguishes_override_from_physical_size() {
+        let size =
+            DisplaySize::parse("Physical size: 1440x2560\r\nOverride size: 720x1280\r\n").unwrap();
+        assert_eq!(
+            size.physical_size,
+            PixelSize {
+                width: 1440,
+                height: 2560
+            }
+        );
+        assert_eq!(
+            size.override_size,
+            Some(PixelSize {
+                width: 720,
+                height: 1280
+            })
+        );
+        assert_eq!(
+            DisplaySize::parse("Physical size: 1440x2560")
+                .unwrap()
+                .override_size,
+            None
+        );
+        for output in [
+            "",
+            "Error: display not found",
+            "Physical size: 0x1920",
+            "Physical size: 1080x1920\nOverride size: invalid",
+        ] {
+            assert!(DisplaySize::parse(output).is_err(), "{output}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolution_reset_is_device_and_display_scoped_and_preserves_failures() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("adb");
+        std::fs::write(&path, r#"#!/bin/sh
+printf '%s\n' "$*" >> "$0.calls"
+case "$*" in
+  '-s emulator-5554 shell wm size -d 0') printf 'Physical size: 1440x2560\nOverride size: 720x1280\n';;
+  '-s emulator-5554 shell wm size reset -d 0') exit 0;;
+  '-s emulator-5554 shell wm size reset -d 2') printf 'permission denied' >&2; exit 1;;
+  *) exit 2;;
+esac
+"#).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut adb = Adb {
+            adb_path: path.clone(),
+            device: Some("emulator-5554".into()),
+            selected_serial: None,
+            display_id: 0,
+            mumu_lookup: Default::default(),
+            emulator_selection: Default::default(),
+        };
+        assert!(adb.read_display_size().unwrap().override_size.is_some());
+        adb.reset_display_size().unwrap();
+        adb.display_id = 2;
+        assert!(adb
+            .reset_display_size()
+            .unwrap_err()
+            .contains("permission denied"));
+        let calls = std::fs::read_to_string(path.with_extension("calls")).unwrap();
+        assert_eq!(
+            calls.lines().collect::<Vec<_>>(),
+            [
+                "-s emulator-5554 shell wm size -d 0",
+                "-s emulator-5554 shell wm size reset -d 0",
+                "-s emulator-5554 shell wm size reset -d 2",
+            ]
+        );
+        adb.device = None;
+        assert!(adb.reset_display_size().is_err());
+        assert_eq!(
+            std::fs::read_to_string(path.with_extension("calls")).unwrap(),
+            calls
+        );
+    }
 
     #[test]
     fn screenshot_maps_logical_id_to_its_own_physical_display() {

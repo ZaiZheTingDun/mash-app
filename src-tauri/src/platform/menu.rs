@@ -11,6 +11,8 @@ const RESOURCE_MANAGER_MENU_ID: &str = "resource-manager";
 const RESOURCE_MANAGER_EVENT: &str = "resource-manager-requested";
 const SAVE_ADB_SCREENSHOT_MENU_ID: &str = "save-adb-screenshot";
 const SAVE_ADB_SCREENSHOT_EVENT: &str = "save-adb-screenshot-requested";
+const DEVICE_RESOLUTION_MENU_ID: &str = "device-resolution";
+const DEVICE_RESOLUTION_EVENT: &str = "device-resolution-requested";
 
 pub(crate) fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     // Windows puts these actions in the webview's compact titlebar menu.
@@ -76,13 +78,22 @@ pub(crate) fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> taur
         "tools",
         "工具",
         true,
-        &[&MenuItem::with_id(
-            handle,
-            SAVE_ADB_SCREENSHOT_MENU_ID,
-            "截图...",
-            true,
-            None::<&str>,
-        )?],
+        &[
+            &MenuItem::with_id(
+                handle,
+                SAVE_ADB_SCREENSHOT_MENU_ID,
+                "截图...",
+                true,
+                None::<&str>,
+            )?,
+            &MenuItem::with_id(
+                handle,
+                DEVICE_RESOLUTION_MENU_ID,
+                "重置设备分辨率...",
+                true,
+                None::<&str>,
+            )?,
+        ],
     )?;
 
     let menu = Menu::with_items(
@@ -173,6 +184,8 @@ pub(crate) fn configure_app_menu<R: tauri::Runtime>(app: &tauri::App<R>) -> taur
             let _ = app.emit(RESOURCE_MANAGER_EVENT, ());
         } else if event.id() == SAVE_ADB_SCREENSHOT_MENU_ID {
             let _ = app.emit(SAVE_ADB_SCREENSHOT_EVENT, ());
+        } else if event.id() == DEVICE_RESOLUTION_MENU_ID {
+            let _ = app.emit(DEVICE_RESOLUTION_EVENT, ());
         }
     });
     Ok(())

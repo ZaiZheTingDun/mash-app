@@ -59,11 +59,13 @@ fn stop_ce_enhancement_start(
 pub(crate) fn start_craft_essence_enhancement_automation(
     app: tauri::AppHandle,
     handle_state: tauri::State<'_, Mutex<CraftEssenceEnhancementRunnerHandle>>,
-    coordinator: tauri::State<'_, AutomationCoordinator>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
     mode: Option<CraftEssenceEnhancementMode>,
 ) -> Result<(), String> {
-    let automation_lease = coordinator.reserve(AutomationKind::CraftEssenceEnhancement)?;
+    let automation_lease = coordinator.reserve(DeviceOperation::Automation(
+        AutomationKind::CraftEssenceEnhancement,
+    ))?;
 
     let server = *app.state::<Mutex<Server>>().lock().unwrap();
     if !ce_server_supported(server) {

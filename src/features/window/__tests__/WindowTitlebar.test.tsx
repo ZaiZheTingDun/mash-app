@@ -71,6 +71,7 @@ describe("WindowTitlebar", () => {
 
   it.each([
     ["截图…", "save-adb-screenshot-requested"],
+    ["重置设备分辨率…", "device-resolution-requested"],
     ["自检…", "self-check-requested"],
     ["资源管理…", "resource-manager-requested"],
     ["检查更新…", "updater-check-requested"],

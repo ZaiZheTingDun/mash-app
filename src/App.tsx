@@ -28,6 +28,7 @@ import { ProjectSettingsDialog } from "./features/projects/ProjectSettingsDialog
 import { SetupPage } from "./features/setup/SetupPage";
 import { SettingsPage, type SettingsSection } from "./features/settings/SettingsPage";
 import { SelfCheckDialog } from "./features/settings/SelfCheckDialog";
+import { DeviceResolutionDialog } from "./features/device-resolution/DeviceResolutionDialog";
 import { SoftwareUpdateDialog } from "./features/settings/SoftwareUpdateDialog";
 import { createInitialProjectSlots } from "./features/team/projectSlots";
 import { relocateGrandCardStrategySlots, relocateGrandServants } from "./features/advanced/grandRuleSlots";
@@ -166,6 +167,7 @@ function App({
   const [updateProgressText, setUpdateProgressText] = useState<string | null>(null);
   const [updateInstallError, setUpdateInstallError] = useState<string | null>(null);
   const [selfCheckOpen, setSelfCheckOpen] = useState(false);
+  const [deviceResolutionOpen, setDeviceResolutionOpen] = useState(false);
   const [selfCheckLoading, setSelfCheckLoading] = useState(false);
   const [selfCheckStatus, setSelfCheckStatus] = useState<SelfCheckStatus | null>(null);
   const [selfCheckError, setSelfCheckError] = useState<string | null>(null);
@@ -495,6 +497,9 @@ function App({
     const unlistenSaveAdbScreenshot = listen("save-adb-screenshot-requested", () => {
       void saveAdbScreenshot();
     });
+    const unlistenDeviceResolution = listen("device-resolution-requested", () => {
+      setDeviceResolutionOpen(true);
+    });
 
     return () => {
       cancelled = true;
@@ -502,6 +507,7 @@ function App({
       unlistenSelfCheck.then((fn) => fn());
       unlistenResourceManager.then((fn) => fn());
       unlistenSaveAdbScreenshot.then((fn) => fn());
+      unlistenDeviceResolution.then((fn) => fn());
     };
   }, [checkForUpdates, runSelfCheck, saveAdbScreenshot]);
 
@@ -955,6 +961,10 @@ function App({
     setView("team");
   }, []);
 
+  const deviceResolutionDialog = (
+    <DeviceResolutionDialog open={deviceResolutionOpen} onOpenChange={setDeviceResolutionOpen} onLogEntry={appendOperationLog} />
+  );
+
   if (setupChecking) {
     return (
       <Flex direction="column" className="app-root" data-theme={theme}>
@@ -968,6 +978,7 @@ function App({
           error={selfCheckError}
           onOpenChange={setSelfCheckOpen}
         />
+        {deviceResolutionDialog}
       </Flex>
     );
   }
@@ -998,6 +1009,7 @@ function App({
           error={selfCheckError}
           onOpenChange={setSelfCheckOpen}
         />
+        {deviceResolutionDialog}
       </Flex>
     );
   }
@@ -1297,6 +1309,7 @@ function App({
         error={selfCheckError}
         onOpenChange={setSelfCheckOpen}
       />
+      {deviceResolutionDialog}
       <SoftwareUpdateDialog
         open={softwareUpdateOpen}
         currentVersion={availableUpdate?.currentVersion ?? null}

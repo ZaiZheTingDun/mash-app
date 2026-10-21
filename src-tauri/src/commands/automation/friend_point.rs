@@ -64,10 +64,12 @@ fn stop_friend_point_summon_start(
 pub(crate) fn start_friend_point_summon_automation(
     app: tauri::AppHandle,
     handle_state: tauri::State<'_, Mutex<FriendPointSummonRunnerHandle>>,
-    coordinator: tauri::State<'_, AutomationCoordinator>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
-    let automation_lease = coordinator.reserve(AutomationKind::FriendPointSummon)?;
+    let automation_lease = coordinator.reserve(DeviceOperation::Automation(
+        AutomationKind::FriendPointSummon,
+    ))?;
 
     let server = *app.state::<Mutex<Server>>().lock().unwrap();
     if !friend_point_summon_server_supported(server) {

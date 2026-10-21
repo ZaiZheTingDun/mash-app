@@ -5,6 +5,7 @@ import type { CraftEssence } from "./types/craftEssence";
 import type { Project, ProjectCatalog } from "./types/project";
 import type { Servant } from "./types/servant";
 import type { Server } from "./types/server";
+import type { DeviceResolutionStatus } from "./types/deviceResolution";
 import { isAppColorTheme, type AppColorTheme } from "./types/theme";
 
 type InvokeArgs = Record<string, unknown>;
@@ -88,6 +89,14 @@ const craftEssences: CraftEssence[] = [
 ];
 
 let selectedAdbSerial: string | null = null;
+let deviceResolutionOverridden = true;
+
+function deviceResolutionStatus(): DeviceResolutionStatus {
+  if (!selectedAdbSerial) throw new Error("请先在右下角选择 ADB 设备");
+  const physicalSize = { width: 1440, height: 2560 };
+  const overrideSize = deviceResolutionOverridden ? { width: 720, height: 1280 } : null;
+  return { serial: selectedAdbSerial, displayId: 0, physicalSize, overrideSize, effectiveSize: overrideSize ?? physicalSize };
+}
 let server: Server = "JP";
 let mysticCodeGender: "female" | "male" = "female";
 let homeMasterFigureId = 470;
@@ -517,6 +526,14 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       return { importedProjects: [] } as T;
     case "check_adb":
       return { connected: selectedAdbSerial != null, deviceName: selectedAdbSerial } as T;
+    case "get_device_resolution":
+      return deviceResolutionStatus() as T;
+    case "reset_device_resolution": {
+      if (args.serial !== selectedAdbSerial) throw new Error("所选 ADB 设备已变化，请刷新后重试");
+      const before = deviceResolutionStatus();
+      deviceResolutionOverridden = false;
+      return { before, after: deviceResolutionStatus(), verified: true, message: "已恢复设备默认分辨率" } as T;
+    }
     case "get_selected_adb_device":
       return selectedAdbSerial as T;
     case "refresh_adb_devices_with_previews":

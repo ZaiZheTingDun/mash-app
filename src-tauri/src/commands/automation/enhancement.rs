@@ -70,10 +70,12 @@ pub(crate) fn start_enhancement_automation(
     app: tauri::AppHandle,
     config: EnhancementConfig,
     handle_state: tauri::State<'_, Mutex<EnhancementRunnerHandle>>,
-    coordinator: tauri::State<'_, AutomationCoordinator>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
     debug_state: tauri::State<'_, debug::DebugSidecar>,
 ) -> Result<(), String> {
-    let automation_lease = coordinator.reserve(AutomationKind::ServantEnhancement)?;
+    let automation_lease = coordinator.reserve(DeviceOperation::Automation(
+        AutomationKind::ServantEnhancement,
+    ))?;
 
     let selected_adb_serial = app
         .state::<Mutex<AdbDeviceSettings>>()

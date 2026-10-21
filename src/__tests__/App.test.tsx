@@ -72,6 +72,13 @@ function installAppMock(
         return 470;
       case "check_adb":
         return { connected: false, deviceName: null };
+      case "get_device_resolution":
+        return {
+          serial: "emulator-5554", displayId: 0,
+          physicalSize: { width: 1440, height: 2560 },
+          overrideSize: { width: 720, height: 1280 },
+          effectiveSize: { width: 720, height: 1280 },
+        };
       case "get_server":
         return "JP";
       case "should_check_updates_today":
@@ -441,6 +448,24 @@ describe("App active project restore", () => {
     });
 
     expect(await screen.findByText(/自检失败：Error: boom/)).toBeInTheDocument();
+  });
+
+  it("opens the independent resolution tool from its menu event without resetting", async () => {
+    let openTool: (() => void) | undefined;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "device-resolution-requested") {
+        openTool = () => handler({ event, id: 0, payload: null } as Parameters<typeof handler>[0]);
+      }
+      return () => {};
+    });
+    installAppMock("project-1");
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    await screen.findByText("第一套");
+    await act(async () => openTool?.());
+    expect(await screen.findByRole("dialog", { name: "重置设备分辨率" })).toBeInTheDocument();
+    expect(await screen.findByText("emulator-5554")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("get_device_resolution");
+    expect(invoke).not.toHaveBeenCalledWith("reset_device_resolution", expect.anything());
   });
 
   it("opens resource management from the menu event and returns to the team page", async () => {

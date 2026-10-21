@@ -1,8 +1,8 @@
 //! User choice of a Windows emulator installation. Discovery and native
 //! inspection stay in `platform`; this module owns persistence and IPC.
 
-use crate::automation_coordinator::AutomationCoordinator;
 use crate::commands::settings::AdbDeviceSettings;
+use crate::device_operation::DeviceOperationCoordinator;
 use crate::paths::app_data_dir;
 use crate::platform;
 use crate::storage::{read_json_or_default, write_json_atomic};
@@ -151,7 +151,7 @@ pub(crate) async fn get_emulator_options(
 pub(crate) async fn add_mumu_installation(
     app: tauri::AppHandle,
     state: tauri::State<'_, EmulatorSelectionState>,
-    coordinator: tauri::State<'_, AutomationCoordinator>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
 ) -> Result<Option<EmulatorOptions>, String> {
     coordinator.require_idle()?;
     if !platform::supports_emulator_selection() {
@@ -188,7 +188,7 @@ pub(crate) async fn add_mumu_installation(
 pub(crate) fn select_emulator(
     app: tauri::AppHandle,
     state: tauri::State<'_, EmulatorSelectionState>,
-    coordinator: tauri::State<'_, AutomationCoordinator>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
     mode: EmulatorMode,
     path: Option<String>,
 ) -> Result<(), String> {
@@ -218,7 +218,7 @@ pub(crate) fn select_emulator(
 pub(crate) fn allow_other_emulator_once(
     state: tauri::State<'_, EmulatorSelectionState>,
     adb_settings: tauri::State<'_, Mutex<AdbDeviceSettings>>,
-    coordinator: tauri::State<'_, AutomationCoordinator>,
+    coordinator: tauri::State<'_, DeviceOperationCoordinator>,
 ) -> Result<(), String> {
     coordinator.require_idle()?;
     if !platform::supports_emulator_selection() {

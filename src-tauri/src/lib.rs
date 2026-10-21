@@ -1,9 +1,9 @@
 mod adb;
-mod automation_coordinator;
 mod automation_error;
 mod battle_statistics;
 mod commands;
 mod craft_essence_enhancement_runner;
+mod device_operation;
 mod enhancement_runner;
 mod friend_point_summon_runner;
 mod models;
@@ -28,8 +28,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
-use automation_coordinator::AutomationCoordinator;
 use craft_essence_enhancement_runner::CraftEssenceEnhancementRunnerHandle;
+use device_operation::DeviceOperationCoordinator;
 use enhancement_runner::EnhancementRunnerHandle;
 use friend_point_summon_runner::FriendPointSummonRunnerHandle;
 use runner::RunnerHandle;
@@ -87,7 +87,7 @@ pub fn run() {
             app.manage(Mutex::new(EnhancementRunnerHandle::new_idle()));
             app.manage(Mutex::new(CraftEssenceEnhancementRunnerHandle::new_idle()));
             app.manage(Mutex::new(FriendPointSummonRunnerHandle::new_idle()));
-            app.manage(AutomationCoordinator::default());
+            app.manage(DeviceOperationCoordinator::default());
             app.manage(recognition_diagnostics::DiagnosticLogs::default());
             app.manage(recognition_diagnostics::DiagnosticStore::default());
             app.manage(commands::projects::CommandEditorLock::default());
@@ -169,6 +169,8 @@ pub fn run() {
             commands::adb::refresh_adb_devices_with_previews,
             commands::adb::reset_bluestacks_adb_connection,
             commands::adb::save_adb_screenshot,
+            commands::adb::resolution::get_device_resolution,
+            commands::adb::resolution::reset_device_resolution,
             commands::adb::select_adb_device,
             commands::emulator::get_emulator_options,
             commands::emulator::supports_emulator_selection,
