@@ -195,15 +195,15 @@ export function AssetBundleButton({
     setStatus(null);
     setDownloadProgress(null);
     try {
-      const zipPath = await invoke<string | null>("pick_asset_bundle");
-      if (!zipPath) {
+      const zipPaths = await invoke<string[] | null>("pick_asset_bundle");
+      if (!zipPaths?.length) {
         return;
       }
 
       setBusyAction("import");
       setCancelling(false);
-      await invoke<AssetBundleImportResult>("import_asset_bundle", { zipPath });
-      setStatus("导入完成：素材包已安装。");
+      const result = await invoke<AssetBundleImportResult>("import_asset_bundle", { zipPaths });
+      setStatus(`导入完成：素材包 v${result.installedVersion}`);
       await refreshStatus();
       onImported?.();
     } catch (err) {

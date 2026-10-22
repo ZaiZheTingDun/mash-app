@@ -362,6 +362,7 @@ describe("SettingsPage", () => {
       finishImport = () => {
         installedVersion = 1;
         resolve({
+          installedVersion: 1,
           importedServants: true,
           importedCraftEssences: true,
           servantFiles: 12,
@@ -373,7 +374,7 @@ describe("SettingsPage", () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_runtime_status") return { installed: true };
       if (cmd === "get_asset_bundle_status") return resourceAssetStatus(installedVersion);
-      if (cmd === "pick_asset_bundle") return "/tmp/mash-assets-v1.zip";
+      if (cmd === "pick_asset_bundle") return ["/tmp/mash-assets-v1.zip"];
       if (cmd === "import_asset_bundle") return importPromise;
       if (cmd === "download_asset_bundles") {
         installedVersion = 2;

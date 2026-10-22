@@ -35,11 +35,64 @@ function assetStatus(overrides: Partial<AssetBundleStatus> = {}): AssetBundleSta
 }
 
 describe("AssetBundleButton", () => {
+  it("passes multiple selected patches to the backend and shows a partial upgrade", async () => {
+    const onImported = vi.fn();
+    const zipPaths = ["/tmp/v15-to-v17.zip", "/tmp/v14-to-v15.zip"];
+    let currentVersion = 14;
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_asset_bundle_status") {
+        return assetStatus({ installed: true, currentVersion, targetVersion: 19 });
+      }
+      if (cmd === "pick_asset_bundle") return zipPaths;
+      if (cmd === "import_asset_bundle") {
+        currentVersion = 17;
+        return { installedVersion: 17 };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<AssetBundleButton onImported={onImported} />);
+    await user.click(await screen.findByRole("button", { name: "从本地导入" }));
+    expect(invoke).toHaveBeenCalledWith("import_asset_bundle", { zipPaths });
+    expect(await screen.findByText("导入完成：素材包 v17")).toBeInTheDocument();
+    expect(await screen.findByText("素材包需要更新：v17 → v19")).toBeInTheDocument();
+    expect(onImported).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows backend chain validation failures and allows selecting again", async () => {
+    const onImported = vi.fn();
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_asset_bundle_status") return assetStatus();
+      if (cmd === "pick_asset_bundle") return ["/tmp/patch.zip"];
+      if (cmd === "import_asset_bundle") throw "升级包无法连续衔接：需要从 v14 升级";
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<AssetBundleButton onImported={onImported} />);
+    await user.click(await screen.findByRole("button", { name: "从本地导入" }));
+    expect(await screen.findByText("导入失败：升级包无法连续衔接：需要从 v14 升级")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "从本地导入" })).toBeEnabled();
+    expect(onImported).not.toHaveBeenCalled();
+  });
+
+  it("does not import after dismissing the picker", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_asset_bundle_status") return assetStatus();
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<AssetBundleButton />);
+    await user.click(await screen.findByRole("button", { name: "从本地导入" }));
+    expect(invoke).not.toHaveBeenCalledWith("import_asset_bundle", expect.anything());
+    expect(screen.getByRole("button", { name: "从本地导入" })).toBeEnabled();
+  });
+
   it("imports a local asset bundle", async () => {
     const onImported = vi.fn();
     let finishImport!: () => void;
     const importPromise = new Promise<AssetBundleImportResult>((resolve) => {
       finishImport = () => resolve({
+        installedVersion: 2,
         importedServants: true,
         importedCraftEssences: true,
         servantFiles: 12,
@@ -49,7 +102,7 @@ describe("AssetBundleButton", () => {
     });
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_asset_bundle_status") return assetStatus();
-      if (cmd === "pick_asset_bundle") return "/tmp/mash-assets-v2.zip";
+      if (cmd === "pick_asset_bundle") return ["/tmp/mash-assets-v2.zip"];
       if (cmd === "import_asset_bundle") return importPromise;
       return null;
     });
@@ -62,13 +115,13 @@ describe("AssetBundleButton", () => {
 
     expect(invoke).toHaveBeenCalledWith("pick_asset_bundle");
     expect(invoke).toHaveBeenCalledWith("import_asset_bundle", {
-      zipPath: "/tmp/mash-assets-v2.zip",
+      zipPaths: ["/tmp/mash-assets-v2.zip"],
     });
     expect(await screen.findByRole("button", { name: "导入中…" })).toBeInTheDocument();
     expect(screen.queryByText("下载中…")).not.toBeInTheDocument();
 
     finishImport();
-    expect(await screen.findByText("导入完成：素材包已安装。")).toBeInTheDocument();
+    expect(await screen.findByText("导入完成：素材包 v2")).toBeInTheDocument();
     expect(onImported).toHaveBeenCalledTimes(1);
   });
 
@@ -134,7 +187,7 @@ describe("AssetBundleButton", () => {
     });
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_asset_bundle_status") return assetStatus();
-      if (cmd === "pick_asset_bundle") return "/tmp/mash-assets-v2.zip";
+      if (cmd === "pick_asset_bundle") return ["/tmp/mash-assets-v2.zip"];
       if (cmd === "import_asset_bundle") return importPromise;
       if (cmd === "cancel_asset_operation") {
         rejectImport("导入已取消");

@@ -150,6 +150,7 @@ function App({
   const [error, setError] = useState<string | null>(null);
   const [setupChecking, setSetupChecking] = useState(true);
   const [setupReady, setSetupReady] = useState(false);
+  const [assetsRefreshKey, setAssetsRefreshKey] = useState(0);
   const [operationLogs, setOperationLogs] = useState<OperationLogEntry[]>([]);
   const [operationLogOpen, setOperationLogOpen] = useState(false);
   const [mysticCodeWarning, setMysticCodeWarning] = useState<string | null>(null);
@@ -513,38 +514,51 @@ function App({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      invoke<RuntimeStatus>("get_runtime_status"),
-      invoke<AssetBundleStatus>("get_asset_bundle_status"),
-    ])
-      .then(([runtime, assets]) => {
-        if (cancelled) return;
-        setSetupReady(runtime.installed && assets.installed);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(String(err));
-        setSetupReady(false);
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setSetupChecking(false);
-        }
-      });
+    let request = 0;
+    const refreshResources = (assetsChanged = false) => {
+      const currentRequest = ++request;
+      void Promise.all([
+        invoke<RuntimeStatus>("get_runtime_status"),
+        invoke<AssetBundleStatus>("get_asset_bundle_status"),
+      ])
+        .then(([runtime, assets]) => {
+          if (cancelled || currentRequest !== request) return;
+          setSetupReady(runtime.installed && assets.installed);
+          if (assetsChanged) setAssetsRefreshKey((key) => key + 1);
+        })
+        .catch((err) => {
+          if (cancelled || currentRequest !== request) return;
+          setError(String(err));
+          setSetupReady(false);
+        })
+        .finally(() => {
+          if (!cancelled && currentRequest === request) setSetupChecking(false);
+        });
+    };
+    const unlisten = listen("catalogs-updated", () => refreshResources(true));
+    refreshResources();
     return () => {
       cancelled = true;
+      void unlisten.then((stop) => stop());
     };
   }, []);
 
   useEffect(() => {
     if (!setupReady) return;
+    let active = true;
     void invoke<MysticCode[]>("get_mystic_codes")
-      .then((value) => setMysticCodes(value ?? []))
+      .then((value) => {
+        if (active) setMysticCodes(value ?? []);
+      })
       .catch((err) => {
+        if (!active) return;
         console.warn("御主礼装资源不可用", err);
         setMysticCodes([]);
       });
-  }, [setupReady]);
+    return () => {
+      active = false;
+    };
+  }, [setupReady, assetsRefreshKey]);
 
   useEffect(() => {
     if (!startupReady) return;
@@ -557,32 +571,26 @@ function App({
   useEffect(() => {
     if (!startupReady || !setupReady) return;
     let active = true;
-    let request = 0;
-    const loadCatalogs = () => {
-      const currentRequest = ++request;
-      Promise.all([
-        invoke<Servant[]>("get_servants"),
-        invoke<CraftEssence[]>("get_craft_essences"),
-      ])
-        .then(([s, ce]) => {
-          if (!active || currentRequest !== request) return;
-          setServants(s);
-          setCraftEssences(ce);
-        })
-        .catch((err) => {
-          if (active && currentRequest === request) setError(String(err));
-        })
-        .finally(() => {
-          if (active && currentRequest === request) setLoading(false);
-        });
-    };
-    const unlisten = listen("catalogs-updated", loadCatalogs);
-    loadCatalogs();
+    void Promise.all([
+      invoke<Servant[]>("get_servants"),
+      invoke<CraftEssence[]>("get_craft_essences"),
+    ])
+      .then(([s, ce]) => {
+        if (!active) return;
+        setServants(s);
+        setCraftEssences(ce);
+        setError(null);
+      })
+      .catch((err) => {
+        if (active) setError(String(err));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
-      void unlisten.then((stop) => stop());
     };
-  }, [startupReady, setupReady]);
+  }, [startupReady, setupReady, assetsRefreshKey]);
 
   const persistActiveProjectId = useCallback((id: string | null) => {
     void invoke("set_active_project_id", { activeProjectId: id }).catch(console.error);
@@ -998,42 +1006,11 @@ function App({
     );
   }
 
-  if (!setupReady) {
-    return (
-      <Flex direction="column" className="app-root" data-theme={theme}>
-        <ObservatoryBackground density="minimal" />
-        {!settingsOpen && <SetupPage onReady={() => setSetupReady(true)} />}
-        <SettingsPage
-          open={settingsOpen}
-          section={settingsSection}
-          onOpenChange={setSettingsOpen}
-          onSectionChange={setSettingsSection}
-          onProjectsImported={handleProjectsImported}
-          onBattleStartPanelChange={setBattleStartPanel}
-          colorTheme={colorTheme}
-          colorThemeError={colorThemeError}
-          onColorThemeReload={onColorThemeReload}
-          onColorThemeChange={onColorThemeChange}
-          mysticCodeGender={mysticCodeGender}
-          onMysticCodeGenderChange={onMysticCodeGenderChange}
-        />
-        <SelfCheckDialog
-          open={selfCheckOpen}
-          loading={selfCheckLoading}
-          status={selfCheckStatus}
-          error={selfCheckError}
-          onOpenChange={setSelfCheckOpen}
-        />
-        {deviceResolutionDialog}
-      </Flex>
-    );
-  }
-
   return (
     <Flex direction="column" className="app-root" data-theme={theme}>
       <ObservatoryBackground
-        composition={!settingsOpen && view === "home" ? "home" : "observatory"}
-        density={settingsOpen || view === "command" ? "minimal" : "observatory"}
+        composition={setupReady && !settingsOpen && view === "home" ? "home" : "observatory"}
+        density={!setupReady || settingsOpen || view === "command" ? "minimal" : "observatory"}
       />
       <Flex className="app-container">
         <Box className="main-content">
@@ -1055,7 +1032,9 @@ function App({
           )}
           {/* Keep task pages subscribed to runtime events while settings cover them. */}
           <Box style={{ display: settingsOpen ? "none" : "contents" }}>
-          {view === "home" ? (
+          {!setupReady ? (
+            !settingsOpen && <SetupPage onReady={() => setSetupReady(true)} />
+          ) : view === "home" ? (
             <HomePage
               mysticCodes={mysticCodes}
               figureId={homeMasterFigureId}
@@ -1268,7 +1247,7 @@ function App({
           </Box>
         </Box>
       </Flex>
-      <StatusBar
+      {setupReady && <StatusBar
         onOpenSettings={handleOpenSettings}
         onOpenDebug={featureToggles.cvDebug ? handleOpenDebug : undefined}
         theme={theme}
@@ -1288,7 +1267,7 @@ function App({
         updateProgressText={updateProgressText}
         onInstallUpdate={handleInstallUpdate}
         onLogEntry={appendOperationLog}
-      />
+      />}
       <AlertDialog.Root
         open={mysticCodeWarning != null}
         onOpenChange={(open) => {

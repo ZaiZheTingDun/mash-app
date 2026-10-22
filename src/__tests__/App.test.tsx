@@ -1,5 +1,5 @@
 import { commandEditorDevBridge } from "../commandEditorDevMock";
-import { act, screen } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -45,14 +45,23 @@ function installAppMock(
   options: {
     selfCheckError?: string;
     resourcesInstalled?: boolean;
+    runtimeInstalled?: boolean;
+    assetVersion?: number;
+    catalogError?: string;
     battleStartPanel?: "operationLog" | "runStatus" | "none";
   } = {},
 ) {
   mockInvoke(async (cmd: string) => {
     switch (cmd) {
       case "get_runtime_status":
+        return { installed: options.runtimeInstalled ?? options.resourcesInstalled ?? true };
       case "get_asset_bundle_status":
-        return { installed: options.resourcesInstalled ?? true };
+        return {
+          installed: options.resourcesInstalled ?? true,
+          currentVersion: options.assetVersion ?? null,
+          targetVersion: options.assetVersion != null && options.assetVersion < 19 ? 19 : null,
+          updateAvailable: options.assetVersion != null && options.assetVersion < 19,
+        };
       case "get_self_check_status":
         if (options.selfCheckError) {
           throw new Error(options.selfCheckError);
@@ -60,6 +69,7 @@ function installAppMock(
         return selfCheckStatus;
       case "get_servants":
       case "get_craft_essences":
+        if (options.catalogError) throw new Error(options.catalogError);
         return [];
       case "list_projects":
         return projects;
@@ -130,9 +140,119 @@ describe("App active project restore", () => {
       updated?.({ event: "catalogs-updated", id: 1, payload: null });
     });
     expect(calls()).toHaveLength(4);
+    expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "get_mystic_codes")).toHaveLength(2);
     unmount();
     await act(async () => {});
     expect(unlisten).toHaveBeenCalledOnce();
+  });
+
+  it("clears a missing servants.json error only after an imported catalog loads successfully", async () => {
+    const options = { catalogError: "读取汇总资源失败 (catalogs/servants.json): 文件不存在" };
+    installAppMock("project-1", options);
+    let updated: Parameters<typeof listen>[1] | undefined;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "catalogs-updated") updated = handler;
+      return () => {};
+    });
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    expect(await screen.findByText("加载从者数据失败")).toBeInTheDocument();
+    expect(screen.getByText(new RegExp("servants.json"))).toBeInTheDocument();
+
+    // A package that still lacks the catalog must retain the real error.
+    await act(async () => {
+      updated?.({ event: "catalogs-updated", id: 1, payload: null });
+    });
+    expect(screen.getByText("加载从者数据失败")).toBeInTheDocument();
+
+    options.catalogError = "";
+    await act(async () => {
+      updated?.({ event: "catalogs-updated", id: 2, payload: null });
+    });
+    expect(screen.queryByText("加载从者数据失败")).not.toBeInTheDocument();
+    expect(screen.queryByText(new RegExp("servants.json"))).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "指令设置" })).toBeInTheDocument();
+  });
+
+  it("loads catalogs when resources are installed through settings while setup is incomplete", async () => {
+    const options = { resourcesInstalled: false };
+    installAppMock("project-1", options);
+    let updated: Parameters<typeof listen>[1] | undefined;
+    let openResources: Parameters<typeof listen>[1] | undefined;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "catalogs-updated") updated = handler;
+      if (event === "resource-manager-requested") openResources = handler;
+      return () => {};
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    await screen.findByText("资源管理");
+    await act(async () => {
+      openResources?.({ event: "resource-manager-requested", id: 1, payload: null });
+    });
+    await screen.findByRole("main", { name: "设置" });
+
+    options.resourcesInstalled = true;
+    await act(async () => {
+      updated?.({ event: "catalogs-updated", id: 2, payload: null });
+    });
+    expect(invoke).toHaveBeenCalledWith("get_servants");
+    expect(invoke).toHaveBeenCalledWith("get_craft_essences");
+    await user.click(await screen.findByRole("button", { name: "关闭设置" }));
+    expect(await screen.findByRole("button", { name: "指令设置" })).toBeInTheDocument();
+  });
+
+  it("keeps resource management mounted and usable across a partial v18 import and final v19 import", async () => {
+    const options = { resourcesInstalled: true, runtimeInstalled: true, assetVersion: 19 };
+    installAppMock("project-1", options);
+    const baseInvoke = vi.mocked(invoke).getMockImplementation()!;
+    let updated: Parameters<typeof listen>[1] | undefined;
+    let openResources: Parameters<typeof listen>[1] | undefined;
+    let nextVersion = 18;
+    let finishImport!: () => void;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "catalogs-updated") updated = handler;
+      if (event === "resource-manager-requested") openResources = handler;
+      return () => {};
+    });
+    mockInvoke(async (command, args) => {
+      if (command === "pick_asset_bundle") return [`/tmp/assets-v${nextVersion}.zip`];
+      if (command === "import_asset_bundle") {
+        options.assetVersion = nextVersion;
+        options.resourcesInstalled = nextVersion >= 19;
+        // The backend notifies before its import command returns to the picker.
+        updated?.({ event: "catalogs-updated", id: nextVersion, payload: null });
+        return new Promise((resolve) => {
+          finishImport = () => resolve({ installedVersion: nextVersion });
+        });
+      }
+      return baseInvoke(command, args);
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="dark" themePreference="dark" onThemeChange={vi.fn()} />);
+    await screen.findByText("第一套");
+    await act(async () => {
+      openResources?.({ event: "resource-manager-requested", id: 1, payload: null });
+    });
+    const settings = await screen.findByRole("main", { name: "设置" });
+    const assetSection = within(settings).getByText("素材包").closest(".setup-requirement") as HTMLElement;
+    const localImport = () => within(assetSection).getByRole("button", { name: "从本地导入" });
+    await user.click(localImport());
+    expect(await screen.findByRole("button", { name: "导入中…" })).toBeInTheDocument();
+    expect(screen.getByRole("main", { name: "设置" })).toBe(settings);
+    expect(settings.closest(".app-container .main-content")).not.toBeNull();
+    await act(async () => { finishImport(); });
+    expect(await screen.findByText("导入完成：素材包 v18")).toBeInTheDocument();
+    expect(await screen.findByText("需要更新素材包 v18 → v19")).toBeInTheDocument();
+    expect(localImport()).toBeEnabled();
+
+    nextVersion = 19;
+    await user.click(localImport());
+    expect(await screen.findByRole("button", { name: "导入中…" })).toBeInTheDocument();
+    expect(screen.getByRole("main", { name: "设置" })).toBe(settings);
+    await act(async () => { finishImport(); });
+    expect(await screen.findByText("导入完成：素材包 v19")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "关闭设置" }));
+    expect(await screen.findByRole("button", { name: "指令设置" })).toBeInTheDocument();
   });
 
   it("opens the last selected project on startup", async () => {

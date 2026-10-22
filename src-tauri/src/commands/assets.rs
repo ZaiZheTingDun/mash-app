@@ -345,6 +345,8 @@ pub(crate) fn asset_patch_chain(
 mod import;
 pub(crate) use import::*;
 
+mod patches;
+
 mod status;
 pub(crate) use status::*;
 

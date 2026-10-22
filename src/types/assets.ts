@@ -19,6 +19,7 @@ export interface AssetBundleStatus {
 }
 
 export interface AssetBundleImportResult {
+  installedVersion: number;
   importedServants: boolean;
   importedCraftEssences: boolean;
   servantFiles: number;

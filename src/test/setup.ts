@@ -145,6 +145,7 @@ vi.mock("@tauri-apps/api/core", () => ({
         return { importedProjects: [] };
       case "import_asset_bundle":
         return {
+          installedVersion: 2,
           importedServants: false,
           importedCraftEssences: false,
           servantFiles: 0,
