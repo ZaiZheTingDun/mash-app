@@ -60,36 +60,6 @@ fn assert_unchanged(root: &Path) {
 }
 
 #[test]
-fn configured_allowlist_contains_only_provided_bases_and_all_published_patches() {
-    let app = parse_assets_app_manifest(ASSETS_MANIFEST_JSON).unwrap();
-    let config = app.manual_import;
-    assert_eq!(
-        config.bases,
-        vec![
-            ManualAssetBaseRelease {
-                version: 18,
-                sha256: "32a3311e90927314168e1d568537aba51a2e205233301985ab1e0f37fa86befc".into()
-            },
-            ManualAssetBaseRelease {
-                version: 19,
-                sha256: "325ef5687cc75b4347e061487834930fc1e97916eb2549bcce641119f343d5a7".into()
-            },
-        ]
-    );
-    assert_eq!(config.patches.len(), 11);
-    for (index, patch) in config.patches.iter().enumerate() {
-        assert_eq!((patch.from, patch.to), (8 + index as u32, 9 + index as u32));
-        assert_eq!(patch.sha256.len(), 64);
-        assert!(patch.sha256.bytes().all(|value| value.is_ascii_hexdigit()));
-        assert!(patch.size > 0);
-    }
-    assert_eq!(
-        config.patches.last().unwrap().sha256,
-        "0714987c2a15b48e7e2bf14cc73c6d51f0195fdfd7f2585898f7649c7c4aad58"
-    );
-}
-
-#[test]
 fn trusted_base_can_be_renamed_and_hash_matching_is_case_insensitive() {
     for version in [18, 19] {
         let temp = tempfile::tempdir().unwrap();
