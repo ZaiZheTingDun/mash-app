@@ -22,6 +22,22 @@ pub(crate) const ASSET_DIRS: &[&str] = &[
 pub(crate) struct AssetsAppManifest {
     pub(crate) assets_version: u32,
     pub(crate) latest_url: String,
+    #[serde(default)]
+    pub(crate) manual_import: ManualAssetImportManifest,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ManualAssetImportManifest {
+    #[serde(default)]
+    pub(crate) bases: Vec<ManualAssetBaseRelease>,
+    #[serde(default)]
+    pub(crate) patches: Vec<AssetsPatchRelease>,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ManualAssetBaseRelease {
+    pub(crate) version: u32,
+    pub(crate) sha256: String,
 }
 
 #[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -346,6 +362,8 @@ mod import;
 pub(crate) use import::*;
 
 mod patches;
+
+mod import_validation;
 
 mod status;
 pub(crate) use status::*;

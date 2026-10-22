@@ -22,6 +22,15 @@ pub(super) struct PreparedPatch {
     deletes: Vec<PathBuf>,
 }
 
+impl PreparedPatch {
+    pub(super) fn from_version(&self) -> u32 {
+        self.manifest.from_version
+    }
+    pub(super) fn to_version(&self) -> u32 {
+        self.manifest.to_version
+    }
+}
+
 fn metadata_path(extracted: &Path, root: &Path, name: &str) -> PathBuf {
     let nested = root.join(name);
     if nested.exists() {

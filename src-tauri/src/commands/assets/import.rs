@@ -264,12 +264,15 @@ pub(crate) fn import_asset_bundle_from_zip_path_with_cancel(
     assets_root: &Path,
     cancel: &AtomicBool,
 ) -> Result<AssetBundleImportResult, String> {
-    import_asset_bundles_from_zip_paths(&[zip_path.to_path_buf()], assets_root, cancel)
+    let paths = [zip_path.to_path_buf()];
+    let manifest = super::import_validation::fixture_manual_import_manifest(&paths);
+    import_asset_bundles_from_zip_paths(&paths, assets_root, &manifest, cancel)
 }
 
 pub(crate) fn import_asset_bundles_from_zip_paths(
     zip_paths: &[PathBuf],
     assets_root: &Path,
+    manifest: &ManualAssetImportManifest,
     cancel: &AtomicBool,
 ) -> Result<AssetBundleImportResult, String> {
     if zip_paths.is_empty() {
@@ -288,14 +291,31 @@ pub(crate) fn import_asset_bundles_from_zip_paths(
     let mut roots = Vec::new();
     let mut patches = Vec::new();
     for (index, zip_path) in zip_paths.iter().enumerate() {
+        let snapshot = temp.path().join(format!("verified-{index}.zip"));
+        let verified = super::import_validation::stage_verified_archive(
+            zip_path, &snapshot, manifest, cancel,
+        )?;
         let extracted_root = temp.path().join(format!("unzipped-{index}"));
         fs::create_dir_all(&extracted_root).map_err(|e| format!("创建临时目录失败: {e}"))?;
-        extract_zip_archive_inner(zip_path, &extracted_root, Some(cancel))?;
+        extract_zip_archive_inner(&snapshot, &extracted_root, Some(cancel))?;
         let import_root = locate_import_root(&extracted_root);
-        if let Some(patch) = super::patches::read_patch(&extracted_root, &import_root)? {
+        let version = if let Some(patch) =
+            super::patches::read_patch(&extracted_root, &import_root)?
+        {
+            verified.verify_metadata(super::import_validation::VerifiedManualRelease::Patch {
+                from: patch.from_version(),
+                to: patch.to_version(),
+            })?;
             patches.push(patch);
-        }
-        roots.push((extracted_root, import_root));
+            None
+        } else {
+            let version = read_import_asset_version(&extracted_root, &import_root)?;
+            verified.verify_metadata(super::import_validation::VerifiedManualRelease::Base(
+                version,
+            ))?;
+            Some(version)
+        };
+        roots.push((import_root, version));
     }
     if !patches.is_empty() {
         if patches.len() != roots.len() {
@@ -306,8 +326,8 @@ pub(crate) fn import_asset_bundles_from_zip_paths(
     if roots.len() != 1 {
         return Err("完整素材包请单独导入；多选仅支持连续升级包".to_string());
     }
-    let (extracted_root, import_root) = roots.remove(0);
-    let imported_version = read_import_asset_version(&extracted_root, &import_root)?;
+    let (import_root, imported_version) = roots.remove(0);
+    let imported_version = imported_version.ok_or("文件不是素材包文件")?;
     ensure_asset_import_not_cancelled(cancel)?;
     let (has_servants, has_ces, servant_stats, ce_stats) =
         install_asset_directories(&import_root, assets_root, true)?;
@@ -359,10 +379,16 @@ pub(crate) async fn import_asset_bundle(
         return Err("选择的压缩包不存在".to_string());
     }
     let assets_root = app_assets_dir(&app);
+    let manifest = assets_app_manifest(&app)?.manual_import;
     let cancel_state = cancel_state.inner().clone();
     cancel_state.assets.store(false, Ordering::Relaxed);
     let result = tauri::async_runtime::spawn_blocking(move || {
-        import_asset_bundles_from_zip_paths(&zip_paths, &assets_root, &cancel_state.assets)
+        import_asset_bundles_from_zip_paths(
+            &zip_paths,
+            &assets_root,
+            &manifest,
+            &cancel_state.assets,
+        )
     })
     .await
     .map_err(|e| format!("素材包导入任务失败: {e}"))??;

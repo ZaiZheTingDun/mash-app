@@ -32,7 +32,8 @@ fn patch(path: &Path, from: u32, to: u32, entries: &[(&str, &[u8])], deletes: &[
 }
 
 fn import(paths: &[PathBuf], root: &Path) -> Result<AssetBundleImportResult, String> {
-    import_asset_bundles_from_zip_paths(paths, root, &AtomicBool::new(false))
+    let manifest = super::super::import_validation::fixture_manual_import_manifest(paths);
+    import_asset_bundles_from_zip_paths(paths, root, &manifest, &AtomicBool::new(false))
 }
 
 #[test]
