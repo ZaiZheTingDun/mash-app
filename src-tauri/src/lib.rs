@@ -59,6 +59,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            commands::catalog::initialize_catalogs(paths::app_assets_dir(app.handle()));
             let adb_device_settings =
                 load_adb_device_settings(app.handle()).map_err(std::io::Error::other)?;
             let emulator_settings = commands::emulator::load_emulator_settings(app.handle())

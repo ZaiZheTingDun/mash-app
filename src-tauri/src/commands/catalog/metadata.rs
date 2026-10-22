@@ -3,6 +3,7 @@
 //! This module owns JP/CN name indexes, variant-aware recognition names,
 //! Noble Phantasm localization, and the cached metadata command.
 
+use super::data::{catalog_json, CatalogCache};
 use super::servants::{
     preferred_cn_name, push_unique_nonempty, servants_data, string_field, ServantInfo,
 };
@@ -10,7 +11,7 @@ use crate::commands::runtime::resolve_servant_assets_dir;
 use crate::server::Server;
 use std::collections::HashMap;
 use std::fs;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 /// Subset of `assets/servants/{id}/servant.json` needed by the OCR-based
 /// support detector: the servant's primary name and every Noble Phantasm
@@ -56,7 +57,7 @@ pub(crate) fn normalize_jp_key(s: &str) -> String {
 }
 
 /// Process-wide `nameJP/name_jp -> CN OCR name` map for every servant Noble
-/// Phantasm we know about, built once from `resources/servants.json`.
+/// Phantasm we know about, built once from `catalogs/servants.json`.
 /// Handles both shapes the source file uses:
 ///   - Atlas list:          `noblePhantasms: [ {...}, ... ]`
 ///   - legacy flat list:    `noble_phantasms: [ {...}, ... ]`
@@ -66,12 +67,10 @@ pub(crate) fn normalize_jp_key(s: &str) -> String {
 /// legitimate names are identical across both languages. Used only when
 /// the active server is `Server::Cn` to translate Atlas JP NP names into
 /// the strings the OCR will actually see on a CN client.
-pub(crate) fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
-    static INDEX: OnceLock<HashMap<String, String>> = OnceLock::new();
-    INDEX.get_or_init(|| {
-        let raw: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("../../resources/servants.json"))
-                .expect("invalid servants.json");
+pub(crate) fn np_jp_to_cn_index() -> Result<Arc<HashMap<String, String>>, String> {
+    static INDEX: CatalogCache<HashMap<String, String>> = CatalogCache::new();
+    INDEX.get_or_try_init(|| {
+        let raw: Vec<serde_json::Value> = catalog_json("servants.json")?;
 
         let mut map: HashMap<String, String> = HashMap::new();
         let mut consider = |entry: &serde_json::Value| {
@@ -105,7 +104,7 @@ pub(crate) fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
                 }
             }
         }
-        map
+        Ok(map)
     })
 }
 
@@ -116,11 +115,11 @@ pub(crate) fn np_jp_to_cn_index() -> &'static HashMap<String, String> {
 /// is missing. This is only a fallback for data without a stable servant
 /// id; id-aware lookups must use `localize_servant_name_by_id` because
 /// several servants share the same JP display name.
-pub(crate) fn servant_jp_to_cn_index() -> &'static HashMap<String, String> {
-    static INDEX: OnceLock<HashMap<String, String>> = OnceLock::new();
-    INDEX.get_or_init(|| {
+pub(crate) fn servant_jp_to_cn_index() -> Result<Arc<HashMap<String, String>>, String> {
+    static INDEX: CatalogCache<HashMap<String, String>> = CatalogCache::new();
+    INDEX.get_or_try_init(|| {
         let mut map: HashMap<String, String> = HashMap::new();
-        for s in servants_data() {
+        for s in servants_data()?.iter() {
             let jp = s.name_jp.trim();
             let cn = s.name_cn_server.as_deref().unwrap_or(&s.name_cn).trim();
             if jp.is_empty() || cn.is_empty() {
@@ -132,34 +131,36 @@ pub(crate) fn servant_jp_to_cn_index() -> &'static HashMap<String, String> {
             }
             map.entry(key).or_insert_with(|| cn.to_string());
         }
-        map
+        Ok(map)
     })
 }
 
-pub(crate) fn servant_id_to_cn_index() -> &'static HashMap<u32, String> {
-    static INDEX: OnceLock<HashMap<u32, String>> = OnceLock::new();
-    INDEX.get_or_init(|| {
+pub(crate) fn servant_id_to_cn_index() -> Result<Arc<HashMap<u32, String>>, String> {
+    static INDEX: CatalogCache<HashMap<u32, String>> = CatalogCache::new();
+    INDEX.get_or_try_init(|| {
         let mut map: HashMap<u32, String> = HashMap::new();
-        for s in servants_data() {
+        for s in servants_data()?.iter() {
             let cn = s.name_cn_server.as_deref().unwrap_or(&s.name_cn).trim();
             if !cn.is_empty() {
                 map.entry(s.id).or_insert_with(|| cn.to_string());
             }
         }
-        map
+        Ok(map)
     })
 }
 
-pub(crate) fn servant_id_to_names_index(server: Server) -> &'static HashMap<u32, Vec<String>> {
-    static JP_INDEX: OnceLock<HashMap<u32, Vec<String>>> = OnceLock::new();
-    static CN_INDEX: OnceLock<HashMap<u32, Vec<String>>> = OnceLock::new();
+pub(crate) fn servant_id_to_names_index(
+    server: Server,
+) -> Result<Arc<HashMap<u32, Vec<String>>>, String> {
+    static JP_INDEX: CatalogCache<HashMap<u32, Vec<String>>> = CatalogCache::new();
+    static CN_INDEX: CatalogCache<HashMap<u32, Vec<String>>> = CatalogCache::new();
     let index = match server {
         Server::Jp => &JP_INDEX,
         Server::Cn => &CN_INDEX,
     };
-    index.get_or_init(|| {
+    index.get_or_try_init(|| {
         let mut map: HashMap<u32, Vec<String>> = HashMap::new();
-        for s in servants_data() {
+        for s in servants_data()?.iter() {
             let names = map.entry(s.id).or_default();
             match server {
                 Server::Jp => {
@@ -181,7 +182,7 @@ pub(crate) fn servant_id_to_names_index(server: Server) -> &'static HashMap<u32,
                 }
             }
         }
-        map
+        Ok(map)
     })
 }
 
@@ -192,9 +193,12 @@ pub(crate) fn localized_servant_names_by_id(
 ) -> Vec<String> {
     let mut names = Vec::new();
     push_unique_nonempty(&mut names, primary_name);
-    if let Some(alias_names) = servant_id_to_names_index(server).get(&id) {
+    if let Some(alias_names) = servant_id_to_names_index(server)
+        .ok()
+        .and_then(|index| index.get(&id).cloned())
+    {
         for name in alias_names {
-            push_unique_nonempty(&mut names, name);
+            push_unique_nonempty(&mut names, &name);
         }
     }
     names
@@ -223,10 +227,10 @@ fn servant_names_overlap(left: &str, right: &str) -> bool {
 /// working for unrelated servants.
 pub(crate) fn servant_name_overlaps_other_id(meta: &ServantMetadata, server: Server) -> bool {
     let target_names = meta.names.clone();
-    for sibling in servants_data()
-        .iter()
-        .filter(|servant| servant.id != meta.id)
-    {
+    let Ok(servants) = servants_data() else {
+        return false;
+    };
+    for sibling in servants.iter().filter(|servant| servant.id != meta.id) {
         for sibling_name in localized_variant_names(sibling, server) {
             if target_names
                 .iter()
@@ -279,7 +283,8 @@ pub(crate) fn servant_variant_name_candidates(
     variant_key: &str,
     server: Server,
 ) -> Result<ServantVariantCandidates, String> {
-    let target = servants_data()
+    let servants = servants_data()?;
+    let target = servants
         .iter()
         .find(|servant| servant.id == id && servant.variant_key == variant_key)
         .ok_or_else(|| format!("从者 #{id} 不包含立绘集合 {variant_key}"))?;
@@ -294,7 +299,7 @@ pub(crate) fn servant_variant_name_candidates(
 
     let mut excluded_names = Vec::new();
     let mut shares_name_with_sibling = false;
-    for sibling in servants_data().iter().filter(|servant| servant.id == id) {
+    for sibling in servants.iter().filter(|servant| servant.id == id) {
         if sibling.variant_key == variant_key {
             continue;
         }
@@ -307,7 +312,7 @@ pub(crate) fn servant_variant_name_candidates(
         }
     }
     if target_names.iter().any(|target_name| {
-        servants_data()
+        servants
             .iter()
             .filter(|servant| servant.id != id)
             .flat_map(|servant| localized_variant_names(servant, server))
@@ -358,8 +363,8 @@ pub(crate) fn apply_servant_variant_candidates(
 
 pub(crate) fn localize_servant_name_by_id(id: u32, jp: &str) -> String {
     servant_id_to_cn_index()
-        .get(&id)
-        .cloned()
+        .ok()
+        .and_then(|index| index.get(&id).cloned())
         .unwrap_or_else(|| localize_servant_name(jp))
 }
 
@@ -369,8 +374,8 @@ pub(crate) fn localize_servant_name_by_id(id: u32, jp: &str) -> String {
 pub(crate) fn localize_servant_name(jp: &str) -> String {
     let key = normalize_jp_key(jp);
     servant_jp_to_cn_index()
-        .get(&key)
-        .cloned()
+        .ok()
+        .and_then(|index| index.get(&key).cloned())
         .unwrap_or_else(|| jp.to_string())
 }
 
@@ -380,7 +385,9 @@ pub(crate) fn localize_servant_name(jp: &str) -> String {
 /// the resulting list is empty. Preserves input order and dedupes after
 /// translation in case two JP entries map to the same CN string.
 pub(crate) fn localize_np_names(jp_names: &[String]) -> Vec<String> {
-    let index = np_jp_to_cn_index();
+    let Ok(index) = np_jp_to_cn_index() else {
+        return Vec::new();
+    };
     let mut out: Vec<String> = Vec::new();
     for jp in jp_names {
         let key = normalize_jp_key(jp);
@@ -399,7 +406,7 @@ pub(crate) fn localize_np_names(jp_names: &[String]) -> Vec<String> {
 /// `<servant_assets_dir>/{id}/servant-cn.json` for CN when available,
 /// pulling the top-level `name` field plus every distinct
 /// `noblePhantasms[].name`. Older asset packs without `servant-cn.json`
-/// fall back to JP metadata translated through `resources/servants.json`
+/// fall back to JP metadata translated through `catalogs/servants.json`
 /// (`nameJP/name_jp -> nameCN/name_cn`). Unmapped NPs are dropped — when
 /// the resulting `np_names` list is empty the sidecar transparently
 /// falls back to name-only matching, so support detection still proceeds
@@ -414,7 +421,12 @@ pub(crate) fn load_servant_metadata(
     id: u32,
     server: Server,
 ) -> Result<ServantMetadata, String> {
-    static CACHE: OnceLock<Mutex<HashMap<(u32, Server), ServantMetadata>>> = OnceLock::new();
+    servants_data()?;
+    if server == Server::Cn {
+        np_jp_to_cn_index()?;
+    }
+    static CACHE: CatalogCache<Mutex<HashMap<(u32, Server), ServantMetadata>>> =
+        CatalogCache::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     {
         let map = cache.lock().unwrap();

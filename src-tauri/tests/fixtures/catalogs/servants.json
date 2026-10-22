@@ -1,0 +1,683 @@
+[
+  {
+    "id": 800100,
+    "collectionNo": 1,
+    "nameCN": "玛修·基列莱特",
+    "nameJP": "マシュ・キリエライト",
+    "className": "shielder",
+    "type": "heroine",
+    "rarity": 4,
+    "noblePhantasms": [
+      {
+        "id": 800101,
+        "name": "Lord Chaldeas",
+        "nameJP": "仮想宝具 疑似展開／人理の礎",
+        "nameCN": "假想宝具 拟似展开/人理之础",
+        "card": "1",
+        "cardName": "arts"
+      },
+      {
+        "id": 800104,
+        "name": "Lord Camelot",
+        "nameJP": "いまは遙か理想の城",
+        "nameCN": "已然遥远的理想之城",
+        "card": "1",
+        "cardName": "arts"
+      },
+      {
+        "id": 800105,
+        "name": "Mold Camelot",
+        "nameJP": "いまは脆き夢想の城",
+        "nameCN": "已然脆弱的梦想之城",
+        "card": "1",
+        "cardName": "arts"
+      },
+      {
+        "id": 800196,
+        "name": "Lord Camelot",
+        "nameJP": "いまに在りし夢想の城",
+        "nameCN": "依然存在的梦想之城",
+        "card": "1",
+        "cardName": "arts"
+      },
+      {
+        "id": 800197,
+        "name": "Lord Chaldeas",
+        "nameJP": "希望築く人理の盾",
+        "nameCN": "构筑希望的人理之盾",
+        "card": "1",
+        "cardName": "arts"
+      },
+      {
+        "id": 800108,
+        "name": "Rayproof Kyrielight",
+        "nameJP": "希望証す人理の剣",
+        "nameCN": "印证希望的人理之剑",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ]
+  },
+  {
+    "id": 100100,
+    "collectionNo": 2,
+    "nameCN": "阿尔托莉雅·潘德拉贡",
+    "nameJP": "アルトリア・ペンドラゴン",
+    "className": "saber",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 100102,
+        "name": "Excalibur",
+        "nameJP": "約束された勝利の剣",
+        "nameCN": "誓约胜利之剑",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ]
+  },
+  {
+    "id": 201300,
+    "collectionNo": 16,
+    "nameCN": "阿拉什",
+    "nameJP": "アーラシュ",
+    "className": "archer",
+    "type": "normal",
+    "rarity": 1,
+    "noblePhantasms": [
+      {
+        "id": 201302,
+        "name": "Stella",
+        "nameJP": "流星一条",
+        "nameCN": "流星一条",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ]
+  },
+  {
+    "id": 400100,
+    "collectionNo": 23,
+    "nameCN": "歌果",
+    "nameJP": "メドゥーサ",
+    "className": "rider",
+    "type": "normal",
+    "rarity": 3,
+    "noblePhantasms": [
+      {
+        "id": 400102,
+        "name": "Bellerophon",
+        "nameJP": "騎英の手綱",
+        "nameCN": "骑英之缰绳",
+        "card": "3",
+        "cardName": "quick"
+      }
+    ]
+  },
+  {
+    "id": 700500,
+    "collectionNo": 50,
+    "nameCN": "斯巴达克斯",
+    "nameJP": "スパルタクス",
+    "className": "berserker",
+    "type": "normal",
+    "rarity": 1,
+    "noblePhantasms": [
+      {
+        "id": 700502,
+        "name": "Crying Warmonger",
+        "nameJP": "疵獣の咆吼",
+        "nameCN": "伤兽的咆吼",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ]
+  },
+  {
+    "id": 1700100,
+    "collectionNo": 83,
+    "nameCN": "所罗门",
+    "nameJP": "ソロモン",
+    "className": "loreGrandCaster",
+    "type": "enemyCollectionDetail",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 1700101,
+        "name": "Ars Almadel Salomonis",
+        "nameJP": "誕生の時きたれり、其は全てを修めるもの",
+        "nameCN": "诞生之时已至，以此修习万象",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 1100300,
+    "collectionNo": 106,
+    "nameCN": "贞德〔Alter〕",
+    "nameJP": "ジャンヌ・ダルク〔オルタ〕",
+    "className": "avenger",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 1100302,
+        "name": "Le Grondement Du Haine",
+        "nameJP": "吼え立てよ、我が憤怒",
+        "nameCN": "咆哮吧，吾之愤怒",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ]
+  },
+  {
+    "id": 302600,
+    "collectionNo": 141,
+    "nameCN": "贞德·Alter·Santa·Lily",
+    "nameJP": "ジャンヌ・ダルク・オルタ・サンタ・リリィ",
+    "className": "lancer",
+    "type": "normal",
+    "rarity": 4,
+    "noblePhantasms": [
+      {
+        "id": 302602,
+        "name": "La Grace Fille Noel",
+        "nameJP": "優雅に歌え、かの聖誕を",
+        "nameCN": "优雅歌唱吧，为那圣诞",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ]
+  },
+  {
+    "id": 9935400,
+    "collectionNo": 149,
+    "nameCN": "提亚马特",
+    "nameJP": "ティアマト",
+    "className": "beastII",
+    "type": "enemyCollectionDetail",
+    "rarity": 5,
+    "noblePhantasms": []
+  },
+  {
+    "id": 9935500,
+    "collectionNo": 151,
+    "nameCN": "盖提亚",
+    "nameJP": "ゲーティア",
+    "className": "beastI",
+    "type": "enemyCollectionDetail",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 470,
+        "name": "-",
+        "nameJP": "焼却式 ベレト",
+        "nameCN": "烧却式 贝雷特",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 9935530,
+    "collectionNo": 152,
+    "nameCN": "所罗门",
+    "nameJP": "ソロモン",
+    "className": "caster",
+    "type": "enemyCollectionDetail",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 9935531,
+        "name": "Ars Nova",
+        "nameJP": "訣別の時きたれり、其は、世界を手放すもの",
+        "nameCN": "诀别之时已至，以此，舍弃世界",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ]
+  },
+  {
+    "id": 9939130,
+    "collectionNo": 168,
+    "nameCN": "BeastⅢ／R",
+    "nameJP": "ビーストⅢ／Ｒ",
+    "className": "beastIIIR",
+    "type": "enemyCollectionDetail",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 9939131,
+        "name": "Sukhavati Heaven's Hole",
+        "nameJP": "スカーヴァティー・ヘブンズホール",
+        "nameCN": "Sukhavati Heaven's Hole",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 900600,
+    "collectionNo": 229,
+    "nameCN": "祖政",
+    "nameJP": "始皇帝",
+    "className": "ruler",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 900601,
+        "name": "The Domination Beginning",
+        "nameJP": "始皇帝",
+        "nameCN": "祖政",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 9941730,
+    "collectionNo": 240,
+    "nameCN": "BeastⅢ／L",
+    "nameJP": "ビーストⅢ／L",
+    "className": "beastIIIL",
+    "type": "enemyCollectionDetail",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 9941731,
+        "name": "Mara Avaruddha",
+        "nameJP": "愛の世界、燃える宇宙",
+        "nameCN": "爱的世界，燃烧的宇宙",
+        "card": "3",
+        "cardName": "quick"
+      }
+    ]
+  },
+  {
+    "id": 2300300,
+    "collectionNo": 244,
+    "nameCN": "吉娜可·加里吉利",
+    "nameJP": "ジナコ＝カリギリ",
+    "className": "moonCancer",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 2300301,
+        "name": "Ganesh Impact",
+        "nameJP": "肉弾よ、翌日から本気であれ",
+        "nameCN": "肉弹啊，明天再开始努力吧",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "ids": [
+          1
+        ],
+        "nameJP": "大いなる石像神",
+        "nameCN": "伟大的石像神"
+      }
+    ]
+  },
+  {
+    "id": 403700,
+    "collectionNo": 296,
+    "nameCN": "尼莫",
+    "nameJP": "ネモ",
+    "className": "rider",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 403701,
+        "name": "Great Ram Nautilus",
+        "nameJP": "我は征く、鸚鵡貝の大衝角",
+        "nameCN": "吾将远征，鹦鹉螺的大冲角",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 9943610,
+    "collectionNo": 333,
+    "nameCN": "Beast Ⅳ",
+    "nameJP": "ビーストⅣ",
+    "className": "beastIV",
+    "type": "enemyCollectionDetail",
+    "rarity": 5,
+    "noblePhantasms": []
+  },
+  {
+    "id": 2800200,
+    "collectionNo": 335,
+    "nameCN": "赫费斯提翁",
+    "nameJP": "ヘファイスティオン",
+    "className": "pretender",
+    "type": "normal",
+    "rarity": 4,
+    "noblePhantasms": [
+      {
+        "id": 2800201,
+        "name": "Hecatic Wheel",
+        "nameJP": "魔天の車輪",
+        "nameCN": "魔天之车轮",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 3300100,
+    "collectionNo": 377,
+    "nameCN": "所多玛之兽／德拉科",
+    "nameJP": "ソドムズビースト／ドラコー",
+    "className": "beast",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 3300101,
+        "name": "Babalon Domus Aurea",
+        "nameJP": "抱き融す黄金劇場",
+        "nameCN": "拥抱融解的黄金剧场",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 105600,
+    "collectionNo": 384,
+    "nameCN": "美杜莎",
+    "nameJP": "メドゥーサ",
+    "className": "saber",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 105601,
+        "name": "Chrysaor",
+        "nameJP": "怪物の黄金剣",
+        "nameCN": "怪物的黄金剑",
+        "card": "3",
+        "cardName": "quick"
+      }
+    ]
+  },
+  {
+    "id": 205000,
+    "collectionNo": 394,
+    "nameCN": "托勒密",
+    "nameJP": "プトレマイオス",
+    "className": "archer",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 205001,
+        "name": "Pharos Tis Alexandreias",
+        "nameJP": "月は知らず、久遠の光",
+        "nameCN": "月所未知，久远之光",
+        "card": "2",
+        "cardName": "buster"
+      },
+      {
+        "id": 205002,
+        "name": "Bibliotheca Basileus",
+        "nameJP": "王の書庫",
+        "nameCN": "王之书库",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 9945590,
+    "collectionNo": 411,
+    "nameCN": "Ｅ－火玛丽",
+    "nameJP": "Ｅ－フレアマリー",
+    "className": "uOlgaMarieFlareCollection",
+    "type": "enemyCollectionDetail",
+    "rarity": 0,
+    "noblePhantasms": []
+  },
+  {
+    "id": 9945600,
+    "collectionNo": 412,
+    "nameCN": "Ｅ－水玛丽",
+    "nameJP": "Ｅ－アクアマリー",
+    "className": "uOlgaMarieAquaCollection",
+    "type": "enemyCollectionDetail",
+    "rarity": 0,
+    "noblePhantasms": []
+  },
+  {
+    "id": 3300200,
+    "collectionNo": 417,
+    "nameCN": "埃列什基伽勒",
+    "nameJP": "エレシュキガル",
+    "className": "beastEresh",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 3300298,
+        "name": "Edin Shugrra Collapsar",
+        "nameJP": "終局宇宙に閃く獣冠",
+        "nameCN": "闪烁于终局宇宙的兽冠",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "ids": [
+          2
+        ],
+        "nameJP": "アンキ・エレシュキガル",
+        "nameCN": "安基埃列什基伽勒"
+      },
+      {
+        "ids": [
+          3,
+          4
+        ],
+        "nameJP": "スペース・エレシュキガル",
+        "nameCN": "太空埃列什基伽勒"
+      }
+    ]
+  },
+  {
+    "id": 2300900,
+    "collectionNo": 418,
+    "nameCN": "谜之代行者C.I.E.L",
+    "nameJP": "謎の代行者C.I.E.L",
+    "className": "moonCancer",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 2300901,
+        "name": "Code：Original Sin",
+        "nameJP": "第七聖典・断罪死",
+        "nameCN": "第七圣典·断罪死",
+        "card": "2",
+        "cardName": "buster"
+      },
+      {
+        "id": 2300901,
+        "name": "Calvaria Galgalim",
+        "nameJP": "原理血戒・断頭台",
+        "nameCN": "原理血戒·断头台",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "ids": [
+          2,
+          2300940
+        ],
+        "nameJP": "教えて！シエル先生",
+        "nameCN": "教教我吧！希耶尔老师"
+      },
+      {
+        "ids": [
+          3,
+          4
+        ],
+        "nameJP": "スターシエル",
+        "nameCN": "星之希耶尔"
+      }
+    ]
+  },
+  {
+    "id": 9946280,
+    "collectionNo": 436,
+    "nameCN": "Ｅ－宏玛丽",
+    "nameJP": "Ｅ－グランマリー",
+    "className": "uOlgaMarieGrandCollection",
+    "type": "enemyCollectionDetail",
+    "rarity": 0,
+    "noblePhantasms": []
+  },
+  {
+    "id": 305900,
+    "collectionNo": 442,
+    "nameCN": "因陀罗",
+    "nameJP": "インドラ",
+    "className": "lancer",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 305901,
+        "name": "Śakra Vajra",
+        "nameJP": "神の雷",
+        "nameCN": "神之雷",
+        "card": "3",
+        "cardName": "quick"
+      }
+    ]
+  },
+  {
+    "id": 9946760,
+    "collectionNo": 443,
+    "nameCN": "Ｅ－星玛丽",
+    "nameJP": "Ｅ－ステラマリー",
+    "className": "uOlgaMarieStellarCollection",
+    "type": "enemyCollectionDetail",
+    "rarity": 0,
+    "noblePhantasms": []
+  },
+  {
+    "id": 4000100,
+    "collectionNo": 444,
+    "nameCN": "Ｕ－奥尔加玛丽",
+    "nameJP": "Ｕ－オルガマリー",
+    "className": "unBeastOlgaMarie",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 4000101,
+        "name": "Planet Olgamarie",
+        "nameJP": "すでに過ぎし人理の終",
+        "nameCN": "既已过去的人理之终",
+        "card": "2",
+        "cardName": "buster"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "ids": [
+          3,
+          4
+        ],
+        "nameJP": "オルガマリー・アニムスフィア",
+        "nameCN": "奥尔加玛丽·阿尼姆斯菲亚"
+      }
+    ]
+  },
+  {
+    "id": 405700,
+    "collectionNo": 452,
+    "nameCN": "尼莫／诺亚",
+    "nameJP": "ネモ／ノア",
+    "className": "rider",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 405701,
+        "name": "Noah's Ark",
+        "nameJP": "ノアの方舟",
+        "nameCN": "诺亚方舟",
+        "card": "1",
+        "cardName": "arts"
+      },
+      {
+        "id": 405701,
+        "name": "Great Ram Noah's Ark",
+        "nameJP": "再創世の試練",
+        "nameCN": "再创世的试炼",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ]
+  },
+  {
+    "id": 9947530,
+    "collectionNo": 460,
+    "nameCN": "マリス・カルデアス",
+    "nameJP": "マリス・カルデアス",
+    "className": "beastVII",
+    "type": "enemyCollectionDetail",
+    "rarity": 0,
+    "noblePhantasms": []
+  },
+  {
+    "id": 1002200,
+    "collectionNo": 471,
+    "nameCN": "アスカラポス",
+    "nameJP": "アスカラポス",
+    "className": "alterEgo",
+    "type": "normal",
+    "rarity": 5,
+    "noblePhantasms": [
+      {
+        "id": 1002201,
+        "name": "プロミニマ・ティ・サティヒアス",
+        "nameJP": "我は告げる、逃れられぬ絶望を",
+        "nameCN": "我は告げる、逃れられぬ絶望を",
+        "card": "1",
+        "cardName": "arts"
+      },
+      {
+        "id": 1002201,
+        "name": "ポタモス・トゥ・カトコズム",
+        "nameJP": "飲み込み来たれ、冥府の河",
+        "nameCN": "飲み込み来たれ、冥府の河",
+        "card": "1",
+        "cardName": "arts"
+      }
+    ],
+    "overWriteServantNames": [
+      {
+        "ids": [
+          3,
+          4
+        ],
+        "nameJP": "アスカラポス＝アケローン",
+        "nameCN": "アスカラポス＝アケローン"
+      }
+    ]
+  }
+]

@@ -44,6 +44,7 @@ function installAppMock(
   savedActiveProjectId: string | null,
   options: {
     selfCheckError?: string;
+    resourcesInstalled?: boolean;
     battleStartPanel?: "operationLog" | "runStatus" | "none";
   } = {},
 ) {
@@ -51,7 +52,7 @@ function installAppMock(
     switch (cmd) {
       case "get_runtime_status":
       case "get_asset_bundle_status":
-        return { installed: true };
+        return { installed: options.resourcesInstalled ?? true };
       case "get_self_check_status":
         if (options.selfCheckError) {
           throw new Error(options.selfCheckError);
@@ -95,6 +96,43 @@ describe("App active project restore", () => {
     vi.mocked(listen).mockReset();
     vi.mocked(listen).mockResolvedValue(() => {});
     vi.mocked(check).mockResolvedValue(null);
+  });
+
+  it("waits for resource installation before requesting catalogs", async () => {
+    installAppMock(null, { resourcesInstalled: false });
+    renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+    await screen.findByText("资源管理");
+    expect(vi.mocked(invoke).mock.calls.some(([command]) =>
+      command === "get_servants" || command === "get_craft_essences")).toBe(false);
+  });
+
+  it("reloads both backend catalogs after resource installation and removes the listener", async () => {
+    installAppMock("project-1");
+    let updated: Parameters<typeof listen>[1] | undefined;
+    const unlisten = vi.fn();
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "catalogs-updated") {
+        updated = handler;
+        return unlisten;
+      }
+      return () => {};
+    });
+    const { unmount } = renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} />
+    );
+    await screen.findByText("第一套");
+    const calls = () => vi.mocked(invoke).mock.calls.filter(([command]) =>
+      command === "get_servants" || command === "get_craft_essences");
+    expect(calls()).toHaveLength(2);
+    await act(async () => {
+      updated?.({ event: "catalogs-updated", id: 1, payload: null });
+    });
+    expect(calls()).toHaveLength(4);
+    unmount();
+    await act(async () => {});
+    expect(unlisten).toHaveBeenCalledOnce();
   });
 
   it("opens the last selected project on startup", async () => {

@@ -236,8 +236,8 @@ fn variant_skill_ids_returns_none_for_missing_variant() {
 
 #[test]
 fn mash_runtime_skill_does_not_replace_the_latest_static_icon_form() {
-    let static_ids = variant_skill_ids(variants_raw_data(), 1, "1:3").unwrap();
-    let form_ids = variant_skill_form_ids(variants_raw_data(), 1, "1:3").unwrap();
+    let static_ids = variant_skill_ids(&variants_raw_data().unwrap(), 1, "1:3").unwrap();
+    let form_ids = variant_skill_form_ids(&variants_raw_data().unwrap(), 1, "1:3").unwrap();
 
     // Asset v9 adds a later non-runtime skill form (2550) after 970660.
     // Keep choosing that latest static form while retaining the runtime

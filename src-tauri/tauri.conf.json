@@ -84,7 +84,6 @@
       "resources/servers/cn/templates/summon_friends_point/*": "resources/servers/cn/templates/summon_friends_point/",
       "resources/images/*": "resources/images/",
       "resources/scrcpy/scrcpy-server.jar": "resources/scrcpy/scrcpy-server.jar",
-      "src/resources/servants.json": "src/resources/servants.json",
       "resources/assets-manifest.json": "resources/assets-manifest.json",
       "resources/runtime-manifest.json": "resources/runtime-manifest.json",
       "resources/mash-cv-code/": "resources/mash-cv-code/"

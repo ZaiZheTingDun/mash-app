@@ -1,5 +1,6 @@
 use super::*;
 use serde_json::json;
+use std::fs;
 use std::sync::{Arc, Barrier};
 
 fn texts(data: &CraftEssencePickerData, id: u32) -> Vec<&str> {
@@ -14,40 +15,41 @@ fn texts(data: &CraftEssencePickerData, id: u32) -> Vec<&str> {
 fn fixture() -> (tempfile::TempDir, Source) {
     let temp = tempfile::tempdir().unwrap();
     let ces = temp.path().join("ces");
-    let events = temp.path().join("events");
+    let summaries = temp.path().join("summaries");
     fs::create_dir_all(&ces).unwrap();
-    fs::create_dir_all(&events).unwrap();
+    fs::create_dir_all(&summaries).unwrap();
+    fs::write(summaries.join("craft_essences.json"), "[]").unwrap();
     fs::write(
-        events.join("catalog.json"),
-        json!({"regions": {
-            "JP": [
-                {"id":1,"startedAt":0,"endedAt":100,"finishedAt":999},
-                {"id":2,"startedAt":100,"endedAt":110},
-                {"id":3,"startedAt":110,"endedAt":120}
-            ],
-            "CN": [{"id":4,"startedAt":100,"endedAt":110}]
-        }})
+        summaries.join("events.json"),
+        json!({"events": [
+            {"id":1,"JP":{"startedAt":0,"endedAt":100,"finishedAt":999}},
+            {"id":2,"JP":{"startedAt":100,"endedAt":110}},
+            {"id":3,"JP":{"startedAt":110,"endedAt":120}},
+            {"id":4,"CN":{"startedAt":100,"endedAt":110}}
+        ]})
         .to_string(),
     )
     .unwrap();
-    fs::create_dir_all(temp.path().join("icons/items")).unwrap();
+    let icons = temp.path().join("icons/items");
+    fs::create_dir_all(&icons).unwrap();
     for file in ["1.png", "2.png", "3.png"] {
-        fs::write(temp.path().join("icons/items").join(file), "test image").unwrap();
+        fs::write(icons.join(file), "test image").unwrap();
     }
     fs::write(
-        events.join("items.json"),
-        json!({"regions": {
-            "JP": [{"name":"武藏乌冬", "icon":"icons/items/1.png", "traits":[11016]},
-                   {"name":"复刻道具", "icon":"icons/items/2.png"}],
-            "CN": [{"name":"国服道具", "icon":"icons/items/3.png"}]
-        }})
+        summaries.join("event_items.json"),
+        json!({"items":[
+            {"name":"武藏乌冬", "nameCN":null, "icon":"icons/items/1.png"},
+            {"name":"复刻道具", "nameCN":null, "icon":"icons/items/2.png"},
+            {"name":"CN item", "nameCN":"国服道具", "icon":"icons/items/3.png"}
+        ]})
         .to_string(),
     )
     .unwrap();
     let source = Source {
         ces: Some(ces),
-        events: Some(events),
+        icons: Some(icons),
         version: Some(1),
+        summaries: Some(summaries),
     };
     write_ce(
         &source,
@@ -74,13 +76,28 @@ fn fixture() -> (tempfile::TempDir, Source) {
 }
 
 fn write_ce(source: &Source, id: u32, extra: serde_json::Value) {
-    let dir = source.ces.as_ref().unwrap().join(id.to_string());
-    fs::create_dir_all(&dir).unwrap();
-    let mut ce = json!({"collectionNo":id,"name":format!("礼装 {id}"),"rarity":5,"flag":"normal"});
-    ce.as_object_mut()
+    write_region(source, id, Server::Jp, extra);
+}
+
+fn write_region(source: &Source, id: u32, server: Server, extra: serde_json::Value) {
+    let path = source
+        .summaries
+        .as_ref()
         .unwrap()
-        .extend(extra.as_object().unwrap().clone());
-    fs::write(dir.join("craft-essence.json"), ce.to_string()).unwrap();
+        .join("craft_essences.json");
+    let mut ces: Vec<serde_json::Value> = read_json(&path).unwrap();
+    let pos = ces.iter().position(|ce| ce["collectionNo"] == id).unwrap_or_else(|| {
+        ces.push(json!({"collectionNo":id,"name":format!("礼装 {id}"),"rarity":5,"flag":"normal","regions":{}}));
+        ces.len() - 1
+    });
+    let ce = &mut ces[pos];
+    for key in ["name", "rarity", "flag", "flags"] {
+        if let Some(value) = extra.get(key) {
+            ce[key] = value.clone();
+        }
+    }
+    ce["regions"][server.to_string()] = extra;
+    fs::write(path, serde_json::to_vec(&ces).unwrap()).unwrap();
 }
 
 #[test]
@@ -454,7 +471,7 @@ fn keeps_only_current_and_future_events_and_prunes_without_io() {
     assert_eq!(texts(&data, 9001), vec!["+2", "牵绊5%"]);
     // If any subsequent open reads JSON again, these requests must fail.
     fs::remove_dir_all(source.ces.as_ref().unwrap()).unwrap();
-    fs::remove_dir_all(source.events.as_ref().unwrap()).unwrap();
+    fs::remove_dir_all(source.summaries.as_ref().unwrap()).unwrap();
     let future = cache
         .index(&source, Server::Jp, 110)
         .unwrap()
@@ -539,7 +556,7 @@ fn bond_recommendations_require_positive_percent_and_an_active_event_when_limite
     assert!(texts(&data, 9014).contains(&"牵绊30%"));
     // Activity boundaries must apply to bond bonuses on the cached path too.
     fs::remove_dir_all(source.ces.as_ref().unwrap()).unwrap();
-    fs::remove_dir_all(source.events.as_ref().unwrap()).unwrap();
+    fs::remove_dir_all(source.summaries.as_ref().unwrap()).unwrap();
     let data = cache
         .index(&source, Server::Jp, 110)
         .unwrap()
@@ -621,18 +638,15 @@ fn recommends_percentage_qp_with_mlb_and_support_details_and_no_duplicates() {
 #[test]
 fn separates_servers_and_does_not_fall_back_to_jp_effects() {
     let (_temp, source) = fixture();
-    let path = source
-        .ces
-        .as_ref()
-        .unwrap()
-        .join("9001/craft-essence-cn.json");
-    fs::write(
-        path,
-        json!({"collectionNo":9001,"name":"国服礼装","rarity":5,
-        "eventBonuses":[{"eventId":4,"type":"dropCount","flat":1,"limitBreak":4,"group":{"icon":"https://static.atlasacademy.io/CN/Items/3.png"}}]})
-        .to_string(),
-    )
-    .unwrap();
+    write_region(
+        &source,
+        9001,
+        Server::Cn,
+        json!({
+            "eventBonuses":[{"eventId":4,"type":"dropCount","flat":1,"limitBreak":4,
+            "group":{"icon":"https://static.atlasacademy.io/CN/Items/3.png"}}]
+        }),
+    );
     let mut cache = PickerCache::default();
     let cn = cache
         .index(&source, Server::Cn, 100)
@@ -660,10 +674,11 @@ fn separates_servers_and_does_not_fall_back_to_jp_effects() {
 
 #[test]
 fn grand_second_slot_matches_servant_id_and_has_clear_empty_states() {
+    let catalog_servants = super::super::servants_data().unwrap();
     let (_temp, source) = fixture();
     let mut cache = PickerCache::default();
     let index = cache.index(&source, Server::Jp, 100).unwrap();
-    let servant = super::super::servants_data()
+    let servant = catalog_servants
         .iter()
         .find(|servant| servant.id == 2)
         .unwrap();
@@ -695,10 +710,11 @@ fn grand_second_slot_matches_servant_id_and_has_clear_empty_states() {
 
 #[test]
 fn grand_second_slot_uses_base_atlas_id_for_every_servant_variant() {
+    let catalog_servants = super::super::servants_data().unwrap();
     let (_temp, source) = fixture();
     write_ce(&source, 9005, json!({"bondEquipOwner":4000100}));
     let index = PickerIndex::load(&source, Server::Jp, 100).unwrap();
-    let variants: Vec<_> = super::super::servants_data()
+    let variants: Vec<_> = catalog_servants
         .iter()
         .filter(|servant| servant.id == 444)
         .collect();
@@ -733,7 +749,7 @@ fn reloads_after_version_change_or_same_version_invalidation_and_retries_errors(
         Some(300300)
     );
     cache.invalidate();
-    let path = source.events.as_ref().unwrap().join("catalog.json");
+    let path = source.summaries.as_ref().unwrap().join("events.json");
     let original = fs::read(&path).unwrap();
     fs::write(&path, "invalid").unwrap();
     assert!(cache.index(&source, Server::Jp, 100).is_err());
@@ -772,7 +788,7 @@ fn concurrent_initialization_loads_once() {
 }
 
 #[test]
-fn legacy_compact_data_keeps_catalog_and_infers_no_bonus() {
+fn summary_without_bonus_keeps_catalog_and_infers_no_bonus() {
     let (_temp, source) = fixture();
     write_ce(&source, 9005, json!({"skills":[]}));
     let index = PickerIndex::load(&source, Server::Jp, 100).unwrap();
@@ -780,7 +796,8 @@ fn legacy_compact_data_keeps_catalog_and_infers_no_bonus() {
     assert!(!index.bonuses.contains_key(&9005));
     let empty = Source {
         ces: None,
-        events: None,
+        icons: None,
+        summaries: None,
         version: None,
     };
     assert_eq!(
@@ -788,7 +805,7 @@ fn legacy_compact_data_keeps_catalog_and_infers_no_bonus() {
             .unwrap()
             .catalog
             .len(),
-        craft_essences_data().len()
+        craft_essences_data().unwrap().len()
     );
 }
 
@@ -798,7 +815,8 @@ fn local_resource_data() {
     let root = PathBuf::from(std::env::var("MASH_PICKER_TEST_ASSETS").unwrap());
     let source = Source {
         ces: Some(root.join("ces")),
-        events: Some(root.join("events")),
+        icons: Some(root.join("icons/items")),
+        summaries: None,
         version: Some(1),
     };
     let mut cache = PickerCache::default();
@@ -852,7 +870,8 @@ fn local_qp_resource_data() {
     let root = PathBuf::from(std::env::var("MASH_PICKER_TEST_ASSETS").unwrap());
     let source = Source {
         ces: Some(root.join("ces")),
-        events: Some(root.join("events")),
+        icons: Some(root.join("icons/items")),
+        summaries: None,
         version: Some(17),
     };
     let now = 1792497600;
@@ -885,53 +904,13 @@ fn local_qp_resource_data() {
 }
 
 #[test]
-#[ignore = "optional published ZIP check; set MASH_PICKER_TEST_BASE_ZIP and MASH_PICKER_TEST_PATCH_ZIP"]
-fn published_archives_install_and_invalidate_warmed_index() {
-    use crate::commands::assets::{install_asset_zip_base_replace, install_asset_zip_merge};
-
-    let base = PathBuf::from(std::env::var("MASH_PICKER_TEST_BASE_ZIP").unwrap());
-    let patch = PathBuf::from(std::env::var("MASH_PICKER_TEST_PATCH_ZIP").unwrap());
-    let temp = tempfile::tempdir().unwrap();
-    let root = temp.path().join("assets");
-    install_asset_zip_base_replace(&[base], &root).unwrap();
-    // Keep the source key unchanged to also exercise explicit invalidation
-    // before the installer writes its new version record (same-version imports).
-    let source = Source {
-        ces: Some(root.join("ces")),
-        events: Some(root.join("events")),
-        version: Some(16),
-    };
-    let now = 1792497600;
-    assert!(cache()
-        .lock()
-        .unwrap()
-        .index(&source, Server::Jp, now)
-        .unwrap()
-        .events
-        .is_empty());
-
-    install_asset_zip_merge(&patch, &root).unwrap();
-    assert!(root.join("events/catalog.json").is_file());
-    let mut cache = cache().lock().unwrap();
-    let index = cache.index(&source, Server::Jp, now).unwrap();
-    let data = index.picker_data(now, false, None);
-    for id in [1966, 1967, 1968, 1969] {
-        assert!(data.recommended_ids.contains(&id));
-        assert!(!data.bonus_details[&id].is_empty());
-    }
-    assert_eq!(
-        index.picker_data(now, true, Some(2)).craft_essences[0].id,
-        191
-    );
-}
-
-#[test]
 #[ignore = "optional v18 real-data presentation check; set MASH_PICKER_TEST_ASSETS"]
 fn local_v18_bonus_presentation() {
     let root = PathBuf::from(std::env::var("MASH_PICKER_TEST_ASSETS").unwrap());
     let source = Source {
         ces: Some(root.join("ces")),
-        events: Some(root.join("events")),
+        icons: Some(root.join("icons/items")),
+        summaries: None,
         version: Some(18),
     };
     let mut cache = PickerCache::default();
@@ -998,4 +977,165 @@ fn local_v18_bonus_presentation() {
             }
         }
     }
+}
+
+fn write_detail(source: &Source, id: u32, server: Server, detail: serde_json::Value) -> PathBuf {
+    let dir = source.ces.as_ref().unwrap().join(id.to_string());
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(match server {
+        Server::Jp => "craft-essence.json",
+        Server::Cn => "craft-essence-cn.json",
+    });
+    fs::write(&path, detail.to_string()).unwrap();
+    path
+}
+
+#[test]
+fn summary_lists_and_recommendations_do_not_depend_on_external_catalogs_or_details() {
+    let (temp, mut source) = fixture();
+    // A broken legacy external catalog and an unlisted CE must be ignored.
+    let events = temp.path().join("events");
+    fs::create_dir_all(&events).unwrap();
+    fs::write(events.join("catalog.json"), "invalid").unwrap();
+    fs::write(events.join("items.json"), "invalid").unwrap();
+    let unlisted = write_detail(&source, 9999, Server::Jp, json!({}));
+    fs::write(unlisted, "invalid").unwrap();
+    let data = PickerIndex::load(&source, Server::Jp, 100)
+        .unwrap()
+        .picker_data(100, false, None);
+    assert_eq!(data.recommended_ids, vec![9001, 9002, 9003]);
+    assert!(!data.craft_essences.iter().any(|ce| ce.id == 9999));
+    assert_eq!(data.bonus_details[&9001][0].icons[0].name, "武藏乌冬");
+    source.ces = None;
+    source.icons = None;
+    let data = PickerIndex::load(&source, Server::Jp, 100)
+        .unwrap()
+        .picker_data(100, false, None);
+    assert_eq!(data.recommended_ids, vec![9001, 9002, 9003]);
+    assert_eq!(texts(&data, 9001), vec!["武藏乌冬 +2", "牵绊5%"]);
+    assert_eq!(
+        data.craft_essences
+            .iter()
+            .find(|ce| ce.id == 9004)
+            .unwrap()
+            .rarity,
+        5
+    );
+}
+
+#[test]
+fn targeted_detail_enrichment_keeps_summary_values_ownership_and_cache() {
+    let (_temp, source) = fixture();
+    write_ce(
+        &source,
+        9006,
+        json!({"bondBonuses":[{
+            "skillId":1,"functionId":21275,"limitBreak":4,"values":[{"percent":20}]
+        }]}),
+    );
+    write_detail(
+        &source,
+        9006,
+        Server::Jp,
+        json!({
+            "bondEquipOwner":100100,
+            "bondBonuses":[{
+                "skillId":1,"functionId":21275,"limitBreak":4,"values":[{"percent":999}],
+                "conditions":{"function":{"functvals":[{"id":2821}]}}
+            }]
+        }),
+    );
+    write_ce(
+        &source,
+        9007,
+        json!({"eventBonuses":[{
+            "skillId":2,"functionId":10,"eventId":2,"type":"dropCount","flat":2,"limitBreak":4
+        }]}),
+    );
+    write_detail(
+        &source,
+        9007,
+        Server::Jp,
+        json!({"eventBonuses":[{
+            "skillId":2,"functionId":10,"eventId":2,"type":"dropCount","flat":999,"limitBreak":4,
+            "group":{"icon":"https://static.atlasacademy.io/JP/Items/1.png"}
+        }]}),
+    );
+    let mut cache = PickerCache::default();
+    let index = cache.index(&source, Server::Jp, 100).unwrap();
+    let data = index.picker_data(100, false, None);
+    assert_eq!(texts(&data, 9006), vec!["[兽科] 牵绊20%"]);
+    assert_eq!(index.bonuses[&9006].owner, None);
+    assert_eq!(texts(&data, 9007), vec!["+2"]);
+    assert_eq!(data.bonus_details[&9007][0].icons[0].name, "武藏乌冬");
+    // Warm requests retain enriched presentation without reopening any JSON.
+    fs::remove_dir_all(source.ces.as_ref().unwrap()).unwrap();
+    fs::remove_dir_all(source.summaries.as_ref().unwrap()).unwrap();
+    let warm = cache
+        .index(&source, Server::Jp, 100)
+        .unwrap()
+        .picker_data(100, false, None);
+    assert_eq!(texts(&warm, 9006), texts(&data, 9006));
+    assert_eq!(texts(&warm, 9007), texts(&data, 9007));
+    assert_eq!(cache.loads, 1);
+}
+
+#[test]
+fn missing_or_malformed_server_detail_keeps_summary_and_marks_unknown_conditions() {
+    let (_temp, source) = fixture();
+    let bonus = json!({"bondBonuses":[{
+        "skillId":1,"functionId":21275,"limitBreak":4,"values":[{"percent":20}]
+    }]});
+    write_ce(&source, 9006, bonus.clone());
+    write_region(&source, 9006, Server::Cn, bonus);
+    let path = write_detail(
+        &source,
+        9006,
+        Server::Jp,
+        json!({"bondBonuses":[{
+            "skillId":1,"functionId":21275,"limitBreak":4,
+            "conditions":{"function":{"functvals":[{"id":2821}]}}
+        }]}),
+    );
+    let cn = PickerIndex::load(&source, Server::Cn, 100)
+        .unwrap()
+        .picker_data(100, false, None);
+    assert_eq!(texts(&cn, 9006), vec!["[条件未加载] 牵绊20%"]);
+    assert!(cn.recommended_ids.contains(&9006));
+    fs::write(path, "invalid").unwrap();
+    let jp = PickerIndex::load(&source, Server::Jp, 100)
+        .unwrap()
+        .picker_data(100, false, None);
+    assert_eq!(texts(&jp, 9006), vec!["[条件未加载] 牵绊20%"]);
+    assert!(jp.recommended_ids.contains(&9006));
+}
+
+#[test]
+fn installed_catalog_fixtures_supply_lists_and_bonuses_without_details() {
+    let source = Source {
+        ces: None,
+        icons: None,
+        version: None,
+        summaries: None,
+    };
+    let now = 1792497600;
+    let mut cache = PickerCache::default();
+    for server in [Server::Jp, Server::Cn] {
+        let index = cache.index(&source, server, now).unwrap();
+        let data = index.picker_data(now, false, None);
+        assert!(data.recommended_ids.contains(&330));
+        assert!(data.recommended_ids.contains(&988));
+        assert!(texts(&data, 178).contains(&"御主经验10%"));
+        assert!(texts(&data, 242).contains(&"魔术礼装经验10%"));
+        assert!(texts(&data, 36).contains(&"友情点数75"));
+        assert_eq!(
+            index.picker_data(now, true, Some(2)).craft_essences[0].id,
+            191
+        );
+        assert_eq!(data.recommended_ids.contains(&1966), server == Server::Jp);
+        assert!(!data.bonus_details[&1949]
+            .iter()
+            .any(|d| !d.icons.is_empty()));
+    }
+    assert_eq!(cache.loads, 2);
 }

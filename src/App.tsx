@@ -553,21 +553,36 @@ function App({
       .catch((error) => console.warn("无法读取主页立绘设置", error));
   }, [startupReady]);
 
-  // Load both static catalogs in parallel. The CE catalog is small (just
-  // id/name) and shared across all projects, so caching it on the App
-  // component keeps the team-builder picker instant.
+  // Catalogs are supplied by the installed resource pack.
   useEffect(() => {
-    Promise.all([
-      invoke<Servant[]>("get_servants"),
-      invoke<CraftEssence[]>("get_craft_essences"),
-    ])
-      .then(([s, ce]) => {
-        setServants(s);
-        setCraftEssences(ce);
-      })
-      .catch((err) => setError(String(err)))
-      .finally(() => setLoading(false));
-  }, []);
+    if (!startupReady || !setupReady) return;
+    let active = true;
+    let request = 0;
+    const loadCatalogs = () => {
+      const currentRequest = ++request;
+      Promise.all([
+        invoke<Servant[]>("get_servants"),
+        invoke<CraftEssence[]>("get_craft_essences"),
+      ])
+        .then(([s, ce]) => {
+          if (!active || currentRequest !== request) return;
+          setServants(s);
+          setCraftEssences(ce);
+        })
+        .catch((err) => {
+          if (active && currentRequest === request) setError(String(err));
+        })
+        .finally(() => {
+          if (active && currentRequest === request) setLoading(false);
+        });
+    };
+    const unlisten = listen("catalogs-updated", loadCatalogs);
+    loadCatalogs();
+    return () => {
+      active = false;
+      void unlisten.then((stop) => stop());
+    };
+  }, [startupReady, setupReady]);
 
   const persistActiveProjectId = useCallback((id: string | null) => {
     void invoke("set_active_project_id", { activeProjectId: id }).catch(console.error);

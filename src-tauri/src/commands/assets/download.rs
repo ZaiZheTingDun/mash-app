@@ -340,6 +340,10 @@ pub(crate) fn download_and_install_asset_bundles_inner(
     }
     cleanup_replaced_asset_trees(&assets_root);
     refresh_asset_protocol_scope(&app)?;
+    if target_version.is_some() {
+        app.emit("catalogs-updated", ())
+            .map_err(|error| error.to_string())?;
+    }
     let final_status = asset_bundle_status_from_root(&assets_root, &app_manifest);
     Ok(AssetDownloadInstallResult {
         installed: !matches!(plan, AssetInstallPlan::None),

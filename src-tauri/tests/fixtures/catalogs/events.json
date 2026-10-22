@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "events": [
+    {
+      "id": 80040,
+      "JP": {
+        "startedAt": 1484719200,
+        "endedAt": 1485323999
+      },
+      "CN": {
+        "startedAt": 1517896800,
+        "endedAt": 1519279199
+      }
+    },
+    {
+      "id": 80457,
+      "JP": {
+        "startedAt": 1705482000,
+        "endedAt": 1707278399
+      },
+      "CN": {
+        "startedAt": 1737007200,
+        "endedAt": 1738821599
+      }
+    },
+    {
+      "id": 80540,
+      "JP": {
+        "startedAt": 1749034800,
+        "endedAt": 1750823999
+      },
+      "CN": {
+        "startedAt": 1780466400,
+        "endedAt": 1782367199
+      }
+    },
+    {
+      "id": 80549,
+      "JP": {
+        "startedAt": 1751454000,
+        "endedAt": 1752465599
+      },
+      "CN": {
+        "startedAt": 1782972000,
+        "endedAt": 1784008799
+      }
+    },
+    {
+      "id": 80632,
+      "JP": {
+        "startedAt": 1791968400,
+        "endedAt": 1793764799
+      },
+      "CN": null
+    }
+  ]
+}

@@ -1,11 +1,12 @@
 //! Servant catalog parsing and variant expansion.
 
+use super::data::{catalog_json, CatalogCache};
 use super::portraits::pick_faces_desc_in;
 use crate::commands::runtime::resolve_servant_assets_dir;
 use crate::enhancement_runner::EnhancementTarget;
 use crate::server::Server;
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::Arc;
 
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -60,7 +61,8 @@ pub(crate) fn load_enhancement_target(
     app: &tauri::AppHandle,
     variant_key: &str,
 ) -> Result<EnhancementTarget, String> {
-    let servant = servants_data()
+    let servants = servants_data()?;
+    let servant = servants
         .iter()
         .find(|s| s.variant_key == variant_key)
         .ok_or_else(|| format!("未找到目标从者 variantKey: {variant_key}"))?;
@@ -279,18 +281,15 @@ fn variant_recognition_names(
     names
 }
 
-pub(crate) fn servants_data() -> &'static [ServantInfo] {
-    static SERVANTS: OnceLock<Vec<ServantInfo>> = OnceLock::new();
-    SERVANTS.get_or_init(|| {
+pub(crate) fn servants_data() -> Result<Arc<Vec<ServantInfo>>, String> {
+    static SERVANTS: CatalogCache<Vec<ServantInfo>> = CatalogCache::new();
+    SERVANTS.get_or_try_init(|| {
         let raw: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("../../resources/servants.json"))
-                .expect("invalid servants.json");
+            catalog_json("servants.json")?;
         let variants_raw: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("../../resources/servants_variants.json"))
-                .expect("invalid servants_variants.json");
+            catalog_json("servants_variants.json")?;
         let variants_cn_raw: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("../../resources/servants_variants_cn.json"))
-                .expect("invalid servants_variants_cn.json");
+            catalog_json("servants_variants_cn.json")?;
         let variants_by_id: HashMap<u32, Vec<serde_json::Value>> = variants_raw
             .into_iter()
             .filter_map(|entry| {
@@ -308,7 +307,7 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
             })
             .collect();
 
-        raw.iter()
+        Ok(raw.iter()
             .enumerate()
             .flat_map(|(idx, s)| {
                 let result = (|| {
@@ -457,29 +456,30 @@ pub(crate) fn servants_data() -> &'static [ServantInfo] {
                 }
                 result.unwrap_or_default()
             })
-            .collect()
+            .collect())
     })
 }
 
 pub(crate) fn servant_np_card(id: u32) -> Option<String> {
     servants_data()
+        .ok()?
         .iter()
         .find(|servant| servant.id == id)
         .and_then(|servant| servant.noble_phantasm_card.clone())
 }
 
-pub(crate) fn selectable_servants_data() -> &'static [ServantInfo] {
-    static SELECTABLE_SERVANTS: OnceLock<Vec<ServantInfo>> = OnceLock::new();
-    SELECTABLE_SERVANTS.get_or_init(|| {
-        servants_data()
+pub(crate) fn selectable_servants_data() -> Result<Arc<Vec<ServantInfo>>, String> {
+    static SELECTABLE_SERVANTS: CatalogCache<Vec<ServantInfo>> = CatalogCache::new();
+    SELECTABLE_SERVANTS.get_or_try_init(|| {
+        Ok(servants_data()?
             .iter()
             .filter(|servant| is_selectable_servant_type(&servant.servant_type))
             .cloned()
-            .collect()
+            .collect())
     })
 }
 
 #[tauri::command]
-pub(crate) fn get_servants() -> &'static [ServantInfo] {
-    selectable_servants_data()
+pub(crate) fn get_servants() -> Result<Vec<ServantInfo>, String> {
+    Ok(selectable_servants_data()?.as_ref().clone())
 }

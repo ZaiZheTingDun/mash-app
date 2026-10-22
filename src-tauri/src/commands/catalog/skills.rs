@@ -3,6 +3,7 @@
 //! This module owns skill-form resolution, targeting metadata, selection
 //! options, and the associated asset lookups.
 
+use super::data::{catalog_json, CatalogCache};
 use crate::commands::runtime::resolve_servant_assets_dir;
 use crate::paths::app_assets_dir;
 use std::collections::HashMap;
@@ -16,19 +17,18 @@ pub(crate) use selection::SkillSelectionEntry;
 #[cfg(test)]
 use selection::SkillSelectionOption;
 
-fn variants_raw_data() -> &'static HashMap<u32, Vec<serde_json::Value>> {
-    static VARIANTS: OnceLock<HashMap<u32, Vec<serde_json::Value>>> = OnceLock::new();
-    VARIANTS.get_or_init(|| {
-        let raw: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("../../resources/servants_variants.json"))
-                .expect("invalid servants_variants.json");
-        raw.into_iter()
+fn variants_raw_data() -> Result<Arc<HashMap<u32, Vec<serde_json::Value>>>, String> {
+    static VARIANTS: CatalogCache<HashMap<u32, Vec<serde_json::Value>>> = CatalogCache::new();
+    VARIANTS.get_or_try_init(|| {
+        let raw: Vec<serde_json::Value> = catalog_json("servants_variants.json")?;
+        Ok(raw
+            .into_iter()
             .filter_map(|entry| {
                 let id = entry.get("id")?.as_u64()? as u32;
                 let variants = entry.get("variants")?.as_array()?.clone();
                 Some((id, variants))
             })
-            .collect()
+            .collect())
     })
 }
 
@@ -321,7 +321,7 @@ pub(crate) fn get_skill_icon_paths(
     app: tauri::AppHandle,
     servant_id: u32,
     variant_key: String,
-) -> [SkillIconEntry; 3] {
+) -> Result<[SkillIconEntry; 3], String> {
     let empty = || {
         [
             SkillIconEntry {
@@ -339,15 +339,16 @@ pub(crate) fn get_skill_icon_paths(
         ]
     };
 
-    let Some(skill_ids) = variant_skill_ids(variants_raw_data(), servant_id, &variant_key) else {
-        return empty();
+    let Some(skill_ids) = variant_skill_ids(&*variants_raw_data()?, servant_id, &variant_key)
+    else {
+        return Ok(empty());
     };
     let Some(maps) = servant_skill_maps(&app, servant_id) else {
-        return empty();
+        return Ok(empty());
     };
 
     let icons_dir = app_assets_dir(&app).join("icons");
-    skill_ids.map(|maybe_id| {
+    Ok(skill_ids.map(|maybe_id| {
         let path = maybe_id
             .and_then(|id| maps.icon_map.get(&id))
             .map(|filename| icons_dir.join(filename.as_str()))
@@ -358,7 +359,7 @@ pub(crate) fn get_skill_icon_paths(
             .cloned()
             .unwrap_or_default();
         SkillIconEntry { path, name }
-    })
+    }))
 }
 
 #[tauri::command]
@@ -367,7 +368,7 @@ pub(crate) fn get_servant_skill_targeting(
     servant_id: u32,
     variant_key: String,
 ) -> Result<Vec<SkillTargetingEntry>, String> {
-    let skill_ids = variant_skill_form_ids(variants_raw_data(), servant_id, &variant_key)
+    let skill_ids = variant_skill_form_ids(&*variants_raw_data()?, servant_id, &variant_key)
         .ok_or_else(|| format!("未找到从者技能配置: {servant_id} ({variant_key})"))?;
     let maps = servant_skill_maps(&app, servant_id)
         .ok_or_else(|| format!("未找到从者资源: {servant_id}"))?;
@@ -394,7 +395,7 @@ pub(crate) fn get_servant_skill_selection(
     servant_id: u32,
     variant_key: String,
 ) -> Result<Vec<SkillSelectionEntry>, String> {
-    let skill_ids = variant_skill_ids(variants_raw_data(), servant_id, &variant_key)
+    let skill_ids = variant_skill_ids(&*variants_raw_data()?, servant_id, &variant_key)
         .ok_or_else(|| format!("未找到从者技能配置: {servant_id} ({variant_key})"))?;
     let maps = servant_skill_maps(&app, servant_id)
         .ok_or_else(|| format!("未找到从者资源: {servant_id}"))?;

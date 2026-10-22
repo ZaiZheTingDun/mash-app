@@ -1,0 +1,1143 @@
+[
+  {
+    "id": 9400010,
+    "collectionNo": 1,
+    "name": "頑強",
+    "name_cn": "顽强",
+    "rarity": 1,
+    "flag": "normal",
+    "flags": [],
+    "regions": {
+      "JP": {},
+      "CN": {}
+    }
+  },
+  {
+    "id": 9400360,
+    "collectionNo": 36,
+    "name": "旅の始まり",
+    "name_cn": "旅途的开始",
+    "rarity": 4,
+    "flag": "svtEquipCampaign",
+    "flags": [
+      "svtEquipCampaign"
+    ],
+    "regions": {
+      "JP": {
+        "friendPointBonuses": [
+          {
+            "skillId": 990071,
+            "functionId": 93,
+            "functionType": "friendPointUp",
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": null,
+                "flat": 75,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      },
+      "CN": {
+        "friendPointBonuses": [
+          {
+            "skillId": 990071,
+            "functionId": 93,
+            "functionType": "friendPointUp",
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": null,
+                "flat": 75,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9400410,
+    "collectionNo": 41,
+    "name": "不夜の薔薇",
+    "name_cn": "不夜蔷薇",
+    "rarity": 5,
+    "flag": "svtEquipEventReward",
+    "flags": [
+      "svtEquipEventReward"
+    ],
+    "regions": {
+      "JP": {},
+      "CN": {}
+    }
+  },
+  {
+    "id": 9400430,
+    "collectionNo": 43,
+    "name": "ムーニー・ジュエル",
+    "name_cn": "月之宝石",
+    "rarity": 4,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ],
+    "regions": {
+      "JP": {
+        "eventBonuses": [
+          {
+            "eventId": 80040,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 990084,
+            "functionId": 94,
+            "limitBreak": 0,
+            "targetId": 10004,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80040,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 990085,
+            "functionId": 94,
+            "limitBreak": 4,
+            "targetId": 10004,
+            "flat": 3,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      },
+      "CN": {
+        "eventBonuses": [
+          {
+            "eventId": 80040,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 990084,
+            "functionId": 94,
+            "limitBreak": 0,
+            "targetId": 10004,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80040,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 990085,
+            "functionId": 94,
+            "limitBreak": 4,
+            "targetId": 10004,
+            "flat": 3,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9400780,
+    "collectionNo": 80,
+    "name": "モナ・リザ",
+    "name_cn": "蒙娜丽莎",
+    "rarity": 5,
+    "flag": "svtEquipManaExchange",
+    "flags": [
+      "svtEquipManaExchange"
+    ],
+    "regions": {
+      "JP": {
+        "qpBonuses": [
+          {
+            "skillId": 990157,
+            "functionId": 98,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 2,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          },
+          {
+            "skillId": 990158,
+            "functionId": 98,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 10,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      },
+      "CN": {
+        "qpBonuses": [
+          {
+            "skillId": 990157,
+            "functionId": 98,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 2,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          },
+          {
+            "skillId": 990158,
+            "functionId": 98,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 10,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9800700,
+    "collectionNo": 113,
+    "name": "カルデアスタンダード",
+    "name_cn": "迦勒底标准样式",
+    "rarity": 4,
+    "flag": "svtEquipChocolate",
+    "flags": [
+      "svtEquipChocolate"
+    ],
+    "regions": {
+      "JP": {},
+      "CN": {}
+    }
+  },
+  {
+    "id": 9401340,
+    "collectionNo": 178,
+    "name": "パーソナル・トレーニング",
+    "name_cn": "个人训练",
+    "rarity": 5,
+    "flag": "svtEquipManaExchange",
+    "flags": [
+      "svtEquipManaExchange"
+    ],
+    "regions": {
+      "JP": {
+        "masterExpBonuses": [
+          {
+            "skillId": 990311,
+            "functionId": 90,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 2,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          },
+          {
+            "skillId": 990312,
+            "functionId": 90,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 10,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      },
+      "CN": {
+        "masterExpBonuses": [
+          {
+            "skillId": 990311,
+            "functionId": 90,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 2,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          },
+          {
+            "skillId": 990312,
+            "functionId": 90,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 10,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9300010,
+    "collectionNo": 191,
+    "name": "星の王冠",
+    "name_cn": "星之王冠",
+    "rarity": 4,
+    "flag": "svtEquipFriendShip",
+    "flags": [
+      "svtEquipFriendShip"
+    ],
+    "regions": {
+      "JP": {
+        "bondEquipOwner": 100100
+      },
+      "CN": {
+        "bondEquipOwner": 100100
+      }
+    }
+  },
+  {
+    "id": 9401710,
+    "collectionNo": 242,
+    "name": "パーソナル・レッスン",
+    "name_cn": "单人教学",
+    "rarity": 5,
+    "flag": "svtEquipManaExchange",
+    "flags": [
+      "svtEquipManaExchange"
+    ],
+    "regions": {
+      "JP": {
+        "mysticCodeExpBonuses": [
+          {
+            "skillId": 990415,
+            "functionId": 96,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 2,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          },
+          {
+            "skillId": 990416,
+            "functionId": 96,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 10,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      },
+      "CN": {
+        "mysticCodeExpBonuses": [
+          {
+            "skillId": 990415,
+            "functionId": 96,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 2,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          },
+          {
+            "skillId": 990416,
+            "functionId": 96,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 10,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9401970,
+    "collectionNo": 330,
+    "name": "カルデア・ランチタイム",
+    "name_cn": "迦勒底午餐时光",
+    "rarity": 5,
+    "flag": "svtEquipManaExchange",
+    "flags": [
+      "svtEquipManaExchange"
+    ],
+    "regions": {
+      "JP": {
+        "bondBonuses": [
+          {
+            "skillId": 990554,
+            "functionId": 5136,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 2,
+                "flat": null,
+                "conditions": {
+                  "Individuality": 0
+                }
+              }
+            ],
+            "supportValues": null
+          },
+          {
+            "skillId": 990555,
+            "functionId": 5136,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 10,
+                "flat": null,
+                "conditions": {
+                  "Individuality": 0
+                }
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      },
+      "CN": {
+        "bondBonuses": [
+          {
+            "skillId": 990554,
+            "functionId": 5136,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 2,
+                "flat": null,
+                "conditions": {
+                  "Individuality": 0
+                }
+              }
+            ],
+            "supportValues": null
+          },
+          {
+            "skillId": 990555,
+            "functionId": 5136,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 10,
+                "flat": null,
+                "conditions": {
+                  "Individuality": 0
+                }
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9403690,
+    "collectionNo": 988,
+    "name": "ベラ・リザ",
+    "name_cn": "贝拉·丽莎",
+    "rarity": 5,
+    "flag": "svtEquipManaExchange",
+    "flags": [
+      "svtEquipManaExchange"
+    ],
+    "regions": {
+      "JP": {
+        "qpBonuses": [
+          {
+            "skillId": 991682,
+            "functionId": 98,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 1,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": [
+              {
+                "percent": 3,
+                "flat": null,
+                "conditions": {}
+              }
+            ]
+          },
+          {
+            "skillId": 991683,
+            "functionId": 98,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 5,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": [
+              {
+                "percent": 15,
+                "flat": null,
+                "conditions": {}
+              }
+            ]
+          }
+        ]
+      },
+      "CN": {
+        "qpBonuses": [
+          {
+            "skillId": 991682,
+            "functionId": 98,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 1,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": [
+              {
+                "percent": 3,
+                "flat": null,
+                "conditions": {}
+              }
+            ]
+          },
+          {
+            "skillId": 991683,
+            "functionId": 98,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 5,
+                "flat": null,
+                "conditions": {}
+              }
+            ],
+            "supportValues": [
+              {
+                "percent": 15,
+                "flat": null,
+                "conditions": {}
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9405950,
+    "collectionNo": 1527,
+    "name": "無尽の塵山",
+    "name_cn": "无尽的尘山",
+    "rarity": 4,
+    "flag": "unknown",
+    "flags": [
+      "svtEquipManaExchange"
+    ],
+    "regions": {
+      "JP": {},
+      "CN": {}
+    }
+  },
+  {
+    "id": 9407480,
+    "collectionNo": 1949,
+    "name": "ＮＦＦから愛をこめて",
+    "name_cn": "来自ＮＦＦ的爱",
+    "rarity": 5,
+    "flag": "svtEquipManaExchange",
+    "flags": [
+      "svtEquipManaExchange"
+    ],
+    "regions": {
+      "JP": {
+        "bondBonuses": [
+          {
+            "skillId": 994018,
+            "functionId": 21275,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 4,
+                "flat": null,
+                "conditions": {
+                  "Individuality": 0
+                }
+              }
+            ],
+            "supportValues": null
+          },
+          {
+            "skillId": 994019,
+            "functionId": 21275,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 20,
+                "flat": null,
+                "conditions": {
+                  "Individuality": 0
+                }
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      },
+      "CN": {
+        "bondBonuses": [
+          {
+            "skillId": 994018,
+            "functionId": 21275,
+            "limitBreak": 0,
+            "values": [
+              {
+                "percent": 4,
+                "flat": null,
+                "conditions": {
+                  "Individuality": 0
+                }
+              }
+            ],
+            "supportValues": null
+          },
+          {
+            "skillId": 994019,
+            "functionId": 21275,
+            "limitBreak": 4,
+            "values": [
+              {
+                "percent": 20,
+                "flat": null,
+                "conditions": {
+                  "Individuality": 0
+                }
+              }
+            ],
+            "supportValues": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9407560,
+    "collectionNo": 1966,
+    "name": "二天一流の女",
+    "name_cn": "二天一流之女",
+    "rarity": 5,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ],
+    "regions": {
+      "JP": {
+        "eventBonuses": [
+          {
+            "eventId": 80457,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994044,
+            "functionId": 21285,
+            "limitBreak": 0,
+            "targetId": 10825,
+            "flat": 1,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80457,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994045,
+            "functionId": 21285,
+            "limitBreak": 4,
+            "targetId": 10825,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80632,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 995463,
+            "functionId": 23616,
+            "limitBreak": 0,
+            "targetId": 11016,
+            "flat": 1,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80632,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 995464,
+            "functionId": 23616,
+            "limitBreak": 4,
+            "targetId": 11016,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      },
+      "CN": {
+        "eventBonuses": [
+          {
+            "eventId": 80457,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994044,
+            "functionId": 21285,
+            "limitBreak": 0,
+            "targetId": 10825,
+            "flat": 1,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80457,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994045,
+            "functionId": 21285,
+            "limitBreak": 4,
+            "targetId": 10825,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9408550,
+    "collectionNo": 2234,
+    "name": "テイスト・オブ・ウィッシュ",
+    "name_cn": "心愿之味",
+    "rarity": 5,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ],
+    "regions": {
+      "JP": {
+        "eventBonuses": [
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994683,
+            "functionId": 22593,
+            "limitBreak": 0,
+            "targetId": 10941,
+            "flat": 1,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994684,
+            "functionId": 22593,
+            "limitBreak": 4,
+            "targetId": 10941,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      },
+      "CN": {
+        "eventBonuses": [
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994683,
+            "functionId": 22593,
+            "limitBreak": 0,
+            "targetId": 10941,
+            "flat": 1,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994684,
+            "functionId": 22593,
+            "limitBreak": 4,
+            "targetId": 10941,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9408560,
+    "collectionNo": 2235,
+    "name": "ドラゴン・トレッキング",
+    "name_cn": "龙之山地徒步",
+    "rarity": 4,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ],
+    "regions": {
+      "JP": {
+        "eventBonuses": [
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994687,
+            "functionId": 22594,
+            "limitBreak": 0,
+            "targetId": 10940,
+            "flat": 1,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994688,
+            "functionId": 22594,
+            "limitBreak": 4,
+            "targetId": 10940,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      },
+      "CN": {
+        "eventBonuses": [
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994687,
+            "functionId": 22594,
+            "limitBreak": 0,
+            "targetId": 10940,
+            "flat": 1,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994688,
+            "functionId": 22594,
+            "limitBreak": 4,
+            "targetId": 10940,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9408570,
+    "collectionNo": 2236,
+    "name": "悠久のトロイア",
+    "name_cn": "悠久的特洛伊",
+    "rarity": 3,
+    "flag": "svtEquipEvent",
+    "flags": [
+      "svtEquipEvent"
+    ],
+    "regions": {
+      "JP": {
+        "eventBonuses": [
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994691,
+            "functionId": 22595,
+            "limitBreak": 0,
+            "targetId": 10939,
+            "flat": 1,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994692,
+            "functionId": 22595,
+            "limitBreak": 4,
+            "targetId": 10939,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      },
+      "CN": {
+        "eventBonuses": [
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994691,
+            "functionId": 22595,
+            "limitBreak": 0,
+            "targetId": 10939,
+            "flat": 1,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80540,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994692,
+            "functionId": 22595,
+            "limitBreak": 4,
+            "targetId": 10939,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9408580,
+    "collectionNo": 2237,
+    "name": "海へ",
+    "name_cn": "去往大海",
+    "rarity": 5,
+    "flag": "svtEquipEventReward",
+    "flags": [
+      "svtEquipEventReward"
+    ],
+    "regions": {
+      "JP": {
+        "eventBonuses": [
+          {
+            "eventId": 80540,
+            "type": "points",
+            "functionType": "eventPointUp",
+            "buffType": null,
+            "skillId": 994695,
+            "functionId": 22597,
+            "limitBreak": 0,
+            "targetId": 10943,
+            "flat": null,
+            "percent": 30,
+            "dynamic": false
+          },
+          {
+            "eventId": 80540,
+            "type": "points",
+            "functionType": "eventPointUp",
+            "buffType": null,
+            "skillId": 994696,
+            "functionId": 22597,
+            "limitBreak": 4,
+            "targetId": 10943,
+            "flat": null,
+            "percent": 60,
+            "dynamic": false
+          }
+        ]
+      },
+      "CN": {
+        "eventBonuses": [
+          {
+            "eventId": 80540,
+            "type": "points",
+            "functionType": "eventPointUp",
+            "buffType": null,
+            "skillId": 994695,
+            "functionId": 22597,
+            "limitBreak": 0,
+            "targetId": 10943,
+            "flat": null,
+            "percent": 30,
+            "dynamic": false
+          },
+          {
+            "eventId": 80540,
+            "type": "points",
+            "functionType": "eventPointUp",
+            "buffType": null,
+            "skillId": 994696,
+            "functionId": 22597,
+            "limitBreak": 4,
+            "targetId": 10943,
+            "flat": null,
+            "percent": 60,
+            "dynamic": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 9408640,
+    "collectionNo": 2262,
+    "name": "サン・シャワー",
+    "name_cn": "太阳雨",
+    "rarity": 5,
+    "flag": "svtEquipEventReward",
+    "flags": [
+      "svtEquipEventReward"
+    ],
+    "regions": {
+      "JP": {
+        "eventBonuses": [
+          {
+            "eventId": 80549,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994719,
+            "functionId": 22668,
+            "limitBreak": 0,
+            "targetId": 10947,
+            "flat": 1,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80549,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994720,
+            "functionId": 22668,
+            "limitBreak": 4,
+            "targetId": 10947,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      },
+      "CN": {
+        "eventBonuses": [
+          {
+            "eventId": 80549,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994719,
+            "functionId": 22668,
+            "limitBreak": 0,
+            "targetId": 10947,
+            "flat": 1,
+            "percent": null,
+            "dynamic": false
+          },
+          {
+            "eventId": 80549,
+            "type": "dropCount",
+            "functionType": "eventDropUp",
+            "buffType": null,
+            "skillId": 994720,
+            "functionId": 22668,
+            "limitBreak": 4,
+            "targetId": 10947,
+            "flat": 2,
+            "percent": null,
+            "dynamic": false
+          }
+        ]
+      }
+    }
+  }
+]

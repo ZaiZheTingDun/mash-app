@@ -1,6 +1,7 @@
 //! Compact CE bonus presentation. Numbers come from structured values; labels
 //! are a small manually maintained ID map, never parsed from prose at runtime.
-use super::{read_json, Bonus, RewardBonusValue};
+use super::super::summaries::ItemCatalog;
+use super::{Bonus, RewardBonusValue};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -110,6 +111,9 @@ fn conditions(bonus: &Bonus, value: Option<&RewardBonusValue>) -> String {
             .join("或")
     };
     let mut parts = Vec::new();
+    if bonus.conditions["unavailable"].as_bool() == Some(true) {
+        parts.push("[条件未加载]".to_string());
+    }
     if !target.is_empty() {
         parts.push(target);
     }
@@ -234,20 +238,9 @@ pub(super) fn reward_details(bonus: &Bonus, kind: &str) -> Vec<(u32, BonusDetail
     result
 }
 
-#[derive(Deserialize)]
-struct ItemCatalog {
-    regions: HashMap<String, Vec<Item>>,
-}
-
-#[derive(Clone, Deserialize)]
-struct Item {
-    name: String,
-    icon: Option<String>,
-}
-
 #[derive(Default)]
 pub(super) struct ItemIcons {
-    by_file: HashMap<String, Item>,
+    by_file: HashMap<String, String>,
     root: Option<std::path::PathBuf>,
 }
 
@@ -260,28 +253,32 @@ fn item_filename(path: &str) -> Option<&str> {
 }
 
 impl ItemIcons {
-    pub fn load(events: Option<&Path>) -> Result<Self, String> {
-        let Some(events) = events else {
-            return Ok(Self::default());
-        };
-        let path = events.join("items.json");
+    pub fn from_summary(root: Option<&Path>, catalog: &ItemCatalog) -> Self {
         let mut result = Self {
-            root: events.parent().map(|p| p.join("icons/items")),
+            root: root.map(Path::to_path_buf),
             ..Default::default()
         };
-        if !path.is_file() {
-            return Ok(result);
-        }
-        let mut catalog: ItemCatalog = read_json(&path)?;
-        // Chinese display labels first; JP-only items keep their source names.
-        for region in ["CN", "JP"] {
-            for item in catalog.regions.remove(region).unwrap_or_default() {
+        // Shared icon files prefer a translated name, even if the JP-only row
+        // appears first. Empty translations fall back to the JP name.
+        for translated in [true, false] {
+            for item in &catalog.items {
+                let name_cn = item
+                    .name_cn
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty());
+                if name_cn.is_some() != translated {
+                    continue;
+                }
                 if let Some(file) = item.icon.as_deref().and_then(item_filename) {
-                    result.by_file.entry(file.to_string()).or_insert(item);
+                    result
+                        .by_file
+                        .entry(file.to_string())
+                        .or_insert_with(|| name_cn.unwrap_or(&item.name).to_string());
                 }
             }
         }
-        Ok(result)
+        result
     }
 
     fn icon(&self, file: &str, name: String) -> Option<BonusIcon> {
@@ -305,7 +302,7 @@ impl ItemIcons {
             let name = self
                 .by_file
                 .get(file)
-                .map(|i| i.name.clone())
+                .cloned()
                 .or_else(|| {
                     labels()
                         .progress_targets
@@ -551,21 +548,15 @@ mod tests {
     #[test]
     fn function_group_icons_use_cn_names_and_fall_back_to_text_when_missing() {
         let temp = tempfile::tempdir().unwrap();
-        let events = temp.path().join("events");
-        std::fs::create_dir_all(&events).unwrap();
         let images = temp.path().join("icons/items");
         std::fs::create_dir_all(&images).unwrap();
         std::fs::write(images.join("10.png"), "image").unwrap();
-        std::fs::write(
-            events.join("items.json"),
-            json!({"regions":{
-                "CN":[{"name":"材料","icon":"icons/items/10.png"}],
-                "JP":[{"name":"日本語","icon":"icons/items/10.png"}]
-            }})
-            .to_string(),
-        )
+        let catalog: ItemCatalog = serde_json::from_value(json!({"items":[
+            {"name":"日本語", "nameCN":null, "icon":"icons/items/10.png"},
+            {"name":"日本語", "nameCN":"材料", "icon":"icons/items/10.png"}
+        ]}))
         .unwrap();
-        let icons = ItemIcons::load(Some(&events)).unwrap();
+        let icons = ItemIcons::from_summary(Some(&images), &catalog);
         let b = bonus(
             json!({"type":"dropCount","flat":1,"group":{"icon":"https://static.atlasacademy.io/JP/Items/10.png"}}),
         );

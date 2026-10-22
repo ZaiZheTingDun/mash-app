@@ -2683,12 +2683,6 @@ def _servants_json_path() -> Optional[str]:
     env_path = os.environ.get("MASH_CV_SERVANTS_JSON_PATH")
     if env_path and os.path.isfile(env_path):
         return env_path
-    current = os.path.abspath(os.path.dirname(__file__))
-    for _ in range(6):
-        path = os.path.join(current, "src-tauri", "src", "resources", "servants.json")
-        if os.path.isfile(path):
-            return path
-        current = os.path.dirname(current)
     return None
 
 

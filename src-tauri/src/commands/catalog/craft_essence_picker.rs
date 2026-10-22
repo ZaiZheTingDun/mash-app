@@ -1,15 +1,19 @@
-//! Versioned, server-local CE recommendation indexes. Raw JSON is discarded
-//! after loading; expired events and their bonuses never remain in the cache.
+//! Server-local indexes built from catalog summaries, with targeted detail
+//! enrichment. Expired events and their bonuses never remain in the cache.
 
+mod details;
 mod display;
 use display::{reward_details, BonusDetail, ItemIcons};
 
 use super::craft_essences::{craft_essence_category, craft_essences_data, CraftEssenceInfo};
+use super::summaries::{
+    catalog_summaries, Bonus, CatalogSummaries, EventSchedule, RegionBonuses, RewardBonusValue,
+};
 use crate::commands::assets::read_asset_version;
-use crate::commands::runtime::{resolve_ce_assets_dir, resolve_event_assets_dir};
+use crate::commands::runtime::{resolve_ce_assets_dir, resolve_item_icons_dir};
 use crate::paths::app_assets_dir;
 use crate::server::Server;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -25,82 +29,6 @@ pub(crate) struct CraftEssencePickerData {
     pub empty_reason: Option<String>,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Event {
-    id: u32,
-    started_at: u64,
-    ended_at: u64,
-}
-
-#[derive(Deserialize)]
-struct EventCatalog {
-    regions: HashMap<String, Vec<Event>>,
-}
-
-#[derive(Default, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-struct Bonus {
-    event_id: u32,
-    limit_break: u8,
-    #[serde(rename = "type")]
-    kind: String,
-    function_id: u32,
-    function_type: String,
-    buff_type: Option<String>,
-    target_id: Option<u32>,
-    flat: Option<f64>,
-    percent: Option<f64>,
-    dynamic: bool,
-    group: serde_json::Value,
-    conditions: serde_json::Value,
-    values: Vec<RewardBonusValue>,
-    support_values: Option<Vec<RewardBonusValue>>,
-}
-
-#[derive(Default, Deserialize, PartialEq)]
-#[serde(default)]
-struct RewardBonusValue {
-    percent: Option<f64>,
-    flat: Option<f64>,
-    conditions: RewardBonusConditions,
-}
-
-#[derive(Default, Deserialize, PartialEq)]
-#[serde(default)]
-struct RewardBonusConditions {
-    #[serde(rename = "EventId")]
-    event_id: u32,
-    #[serde(flatten)]
-    extra: serde_json::Map<String, serde_json::Value>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CompactCe {
-    collection_no: u32,
-    name: String,
-    rarity: u8,
-    #[serde(default)]
-    flag: String,
-    #[serde(default)]
-    flags: Vec<String>,
-    #[serde(default)]
-    bond_equip_owner: Option<u32>,
-    #[serde(default)]
-    bond_bonuses: Vec<Bonus>,
-    #[serde(default)]
-    qp_bonuses: Vec<Bonus>,
-    #[serde(default)]
-    master_exp_bonuses: Vec<Bonus>,
-    #[serde(default)]
-    mystic_code_exp_bonuses: Vec<Bonus>,
-    #[serde(default)]
-    friend_point_bonuses: Vec<Bonus>,
-    #[serde(default)]
-    event_bonuses: Vec<Bonus>,
-}
-
 #[derive(Default)]
 struct CeBonuses {
     owner: Option<u32>,
@@ -114,14 +42,16 @@ struct CeBonuses {
 struct PickerIndex {
     catalog: BTreeMap<u32, CraftEssenceInfo>,
     campaign_equip_ids: HashSet<u32>,
-    events: HashMap<u32, Event>,
+    events: HashMap<u32, EventSchedule>,
     bonuses: HashMap<u32, CeBonuses>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Source {
     ces: Option<PathBuf>,
-    events: Option<PathBuf>,
+    icons: Option<PathBuf>,
+    #[cfg(test)]
+    summaries: Option<PathBuf>,
     version: Option<u32>,
 }
 
@@ -179,11 +109,13 @@ pub(crate) struct PickerCacheReset;
 
 impl Drop for PickerCacheReset {
     fn drop(&mut self) {
+        crate::commands::catalog::invalidate_catalogs();
         reset_cache();
     }
 }
 
 pub(crate) fn reset_picker_cache_on_drop() -> PickerCacheReset {
+    crate::commands::catalog::invalidate_catalogs();
     reset_cache();
     PickerCacheReset
 }
@@ -214,53 +146,47 @@ fn push_detail(details: &mut Vec<BonusDetail>, detail: BonusDetail) {
 
 impl PickerIndex {
     fn load(source: &Source, server: Server, now: u64) -> Result<Self, String> {
+        #[cfg(test)]
+        if let Some(root) = &source.summaries {
+            let summaries = CatalogSummaries {
+                ces: read_json(&root.join("craft_essences.json"))?,
+                events: read_json(&root.join("events.json"))?,
+                items: read_json(&root.join("event_items.json"))?,
+            };
+            return Self::from_summaries(source, server, now, &summaries);
+        }
+        Self::from_summaries(source, server, now, &*catalog_summaries()?)
+    }
+
+    fn from_summaries(
+        source: &Source,
+        server: Server,
+        now: u64,
+        summaries: &CatalogSummaries,
+    ) -> Result<Self, String> {
         let mut index = Self {
-            catalog: craft_essences_data()
+            catalog: craft_essences_data()?
                 .iter()
                 .cloned()
                 .map(|ce| (ce.id, ce))
                 .collect(),
             campaign_equip_ids: HashSet::new(),
-            events: HashMap::new(),
+            events: summaries
+                .events
+                .events
+                .iter()
+                .filter_map(|event| {
+                    let schedule = match server {
+                        Server::Jp => event.jp.as_ref(),
+                        Server::Cn => event.cn.as_ref(),
+                    }?;
+                    (schedule.ended_at > now).then(|| (event.id, schedule.clone()))
+                })
+                .collect(),
             bonuses: HashMap::new(),
         };
-        if let Some(root) = &source.events {
-            let path = root.join("catalog.json");
-            if path.is_file() {
-                let mut catalog: EventCatalog = read_json(&path)?;
-                index.events = catalog
-                    .regions
-                    .remove(&server.to_string())
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|event| event.ended_at > now)
-                    .map(|event| (event.id, event))
-                    .collect();
-            }
-        }
-        let item_icons = ItemIcons::load(source.events.as_deref())?;
-        let Some(root) = &source.ces else {
-            return Ok(index);
-        };
-        let directories =
-            fs::read_dir(root).map_err(|error| format!("读取礼装目录失败: {error}"))?;
-        for entry in directories {
-            let entry = entry.map_err(|error| format!("读取礼装目录失败: {error}"))?;
-            if !entry.path().is_dir() || entry.file_name().to_string_lossy().parse::<u32>().is_err()
-            {
-                continue;
-            }
-            let jp = entry.path().join("craft-essence.json");
-            let local = entry.path().join(match server {
-                Server::Jp => "craft-essence.json",
-                Server::Cn => "craft-essence-cn.json",
-            });
-            let has_server_data = local.is_file();
-            let path = if has_server_data { &local } else { &jp };
-            if !path.is_file() {
-                continue;
-            }
-            let ce: CompactCe = read_json(path)?;
+        let item_icons = ItemIcons::from_summary(source.icons.as_deref(), &summaries.items);
+        for ce in &summaries.ces {
             if !(1..=5).contains(&ce.rarity) {
                 continue;
             }
@@ -270,9 +196,7 @@ impl PickerIndex {
                 .or_insert_with(|| CraftEssenceInfo {
                     id: ce.collection_no,
                     rarity: ce.rarity,
-                    category: craft_essence_category(
-                        &serde_json::json!({"flag": ce.flag, "flags": ce.flags}),
-                    ),
+                    category: craft_essence_category(&ce.flag, &ce.flags),
                     name: ce.name.clone(),
                     name_aliases: Vec::new(),
                     name_link: None,
@@ -282,24 +206,33 @@ impl PickerIndex {
             {
                 index.campaign_equip_ids.insert(ce.collection_no);
             }
-            // A missing CN file must not activate JP bonuses/owners in CN.
-            if !has_server_data {
+            // Region availability and all numeric/owner data come from the
+            // catalog summary. Never activate JP bonuses for a missing CN row.
+            let Some(Some(region)) = ce.regions.get(&server) else {
                 continue;
-            }
+            };
+            let mut region = region.clone();
+            region.enrich_details(
+                source.ces.as_deref(),
+                ce.collection_no,
+                server,
+                &index.events,
+            );
             let mut bonuses = CeBonuses {
-                owner: ce.bond_equip_owner,
+                owner: region.bond_equip_owner,
                 ..Default::default()
             };
-            for bonus in &ce.event_bonuses {
+            for bonus in &region.event_bonuses {
                 if index.events.contains_key(&bonus.event_id) {
                     let mut detail = item_icons.event_detail(bonus);
-                    detail.at_mlb = applies_at_mlb(bonus, &ce.event_bonuses);
+                    detail.at_mlb = applies_at_mlb(bonus, &region.event_bonuses);
                     if !bonuses.events.contains(&(bonus.event_id, detail.clone())) {
                         bonuses.events.push((bonus.event_id, detail));
                     }
                 }
             }
-            for (reward_bonuses, kind) in [(&ce.bond_bonuses, "牵绊"), (&ce.qp_bonuses, "量子")]
+            for (reward_bonuses, kind) in
+                [(&region.bond_bonuses, "牵绊"), (&region.qp_bonuses, "量子")]
             {
                 for bonus in reward_bonuses {
                     for (event_id, mut detail) in reward_details(bonus, kind) {
@@ -315,9 +248,9 @@ impl PickerIndex {
                 }
             }
             for (additional_bonuses, kind) in [
-                (&ce.master_exp_bonuses, "御主经验"),
-                (&ce.mystic_code_exp_bonuses, "魔术礼装经验"),
-                (&ce.friend_point_bonuses, "友情点数"),
+                (&region.master_exp_bonuses, "御主经验"),
+                (&region.mystic_code_exp_bonuses, "魔术礼装经验"),
+                (&region.friend_point_bonuses, "友情点数"),
             ] {
                 for bonus in additional_bonuses {
                     let applies_at_mlb = applies_at_mlb(bonus, additional_bonuses);
@@ -373,14 +306,16 @@ impl PickerIndex {
             servant_id
                 .and_then(|id| {
                     super::servants_data()
+                        .ok()?
                         .iter()
                         .find(|servant| servant.id == id)
+                        .map(|servant| servant.atlas_id)
                 })
-                .and_then(|servant| {
+                .and_then(|atlas_id| {
                     self.catalog.keys().copied().find(|id| {
                         self.bonuses
                             .get(id)
-                            .is_some_and(|bonus| bonus.owner == Some(servant.atlas_id))
+                            .is_some_and(|bonus| bonus.owner == Some(atlas_id))
                     })
                 })
         } else {
@@ -494,7 +429,9 @@ impl PickerIndex {
 fn source(app: &tauri::AppHandle) -> Source {
     Source {
         ces: resolve_ce_assets_dir(app),
-        events: resolve_event_assets_dir(app),
+        icons: resolve_item_icons_dir(app),
+        #[cfg(test)]
+        summaries: None,
         version: read_asset_version(&app_assets_dir(app)).map(|record| record.version),
     }
 }
@@ -512,6 +449,9 @@ pub(crate) fn craft_essence_picker_data(
     grand_bond_only: bool,
     servant_id: Option<u32>,
 ) -> Result<CraftEssencePickerData, String> {
+    if grand_bond_only {
+        super::servants_data()?;
+    }
     let source = source(app);
     let now = now_seconds();
     let mut cache = cache().lock().map_err(|error| error.to_string())?;

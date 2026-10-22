@@ -32,8 +32,10 @@
 
 ### Performance
 
-- Use `include_str!` or `include_bytes!` for small static resources that ship with the app (like `servants.json`).
-- For larger datasets, prefer lazy loading via commands rather than embedding at compile time.
+- Use `include_str!` or `include_bytes!` for small static resources that ship with the app. Catalog summaries are external assets.
+- **Catalog summaries come from the installed asset pack `catalogs/` directory (v19+).** Missing or invalid catalog files are errors; do not embed a compatibility copy. Offline test snapshots live under `tests/fixtures/catalogs/`. Use the `craft_essences.json`, `servants.json`, servant-variant summaries, `events.json`, and `event_items.json` for lists, filtering, recommendation eligibility, ownership, and server-specific availability/timing. Parse lazily and invalidate cached projections after asset installation; do not rebuild summaries by traversing downloaded asset directories or load external `events/catalog.json` / `events/items.json` as catalog sources.
+- **Load individual asset files only when their details are needed.** Resolve a specific entity ID and server, then read its detail JSON for fields absent from the summary (such as CE skill conditions and event function-group icons). Keep summary numbers and ownership authoritative, never substitute JP details for missing CN data, and cache derived display data. Pictures and CV templates continue to use the installed asset paths.
+- For other larger datasets, prefer lazy loading via commands rather than embedding at compile time.
 - Avoid blocking the main thread in Rust — use `async` commands for I/O-bound operations.
 
 ### Building & Distribution

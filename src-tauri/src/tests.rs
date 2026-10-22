@@ -42,8 +42,10 @@ fn tauri_bundle_resources_cover_template_subdirectories() {
         );
     }
     assert!(
-        resources.contains("src/resources/servants.json"),
-        "missing Tauri bundle resource for sidecar-readable servants.json"
+        !resources
+            .iter()
+            .any(|path| path.starts_with("src/resources/")),
+        "catalog summaries must come from the installed resource pack"
     );
     assert!(
         resources.contains("resources/images/*"),
@@ -671,6 +673,7 @@ fn portrait_preferences_prioritize_global_selection_and_sort_numerically() {
 
 #[test]
 fn portrait_preferences_are_limited_to_the_servant_variant_collection() {
+    let catalog_servants = servants_data().unwrap();
     let tmp = tempfile::tempdir().unwrap();
     for id in [1, 2, 3, 4, 4_000_130] {
         fs::write(
@@ -680,7 +683,7 @@ fn portrait_preferences_are_limited_to_the_servant_variant_collection() {
         .unwrap();
         fs::write(tmp.path().join(format!("face_servant_{id}.png")), b"face").unwrap();
     }
-    let olga = servants_data()
+    let olga = catalog_servants
         .iter()
         .find(|servant| servant.variant_key == "444:1")
         .unwrap();
@@ -2201,7 +2204,7 @@ fn build_assets_remote_manifest(latest: u32, patches: &str) -> AssetsRemoteManif
 #[test]
 fn assets_app_manifest_parses_target_version_and_latest_url() {
     let manifest = parse_assets_app_manifest(ASSETS_MANIFEST_JSON).unwrap();
-    assert_eq!(manifest.assets_version, 18);
+    assert_eq!(manifest.assets_version, 19);
     assert_eq!(
         manifest.latest_url,
         "https://mash.xiaotongx.com/mash/assets/latest.json"
@@ -2857,7 +2860,8 @@ fn first_np_name_prefers_server_cn_then_cn_then_legacy_name() {
 
 #[test]
 fn servants_data_preserves_atlas_id_without_changing_wire_identity() {
-    let servant = servants_data()
+    let catalog_servants = servants_data().unwrap();
+    let servant = catalog_servants
         .iter()
         .find(|servant| servant.id == 2)
         .unwrap();
@@ -2870,7 +2874,8 @@ fn servants_data_preserves_atlas_id_without_changing_wire_identity() {
 
 #[test]
 fn servants_data_expands_variants_with_last_cn_np_and_face_id() {
-    let mash_variants: Vec<&ServantInfo> = servants_data().iter().filter(|s| s.id == 1).collect();
+    let catalog_servants = servants_data().unwrap();
+    let mash_variants: Vec<&ServantInfo> = catalog_servants.iter().filter(|s| s.id == 1).collect();
     assert_eq!(mash_variants.len(), 3);
     assert_eq!(mash_variants[0].variant_key, "1:1");
     assert_eq!(mash_variants[0].face_id, Some(800170));
@@ -2887,7 +2892,9 @@ fn servants_data_expands_variants_with_last_cn_np_and_face_id() {
 
 #[test]
 fn servants_data_uses_variant_face_id_to_select_overwrite_name() {
-    let olga_variants: Vec<&ServantInfo> = servants_data().iter().filter(|s| s.id == 444).collect();
+    let catalog_servants = servants_data().unwrap();
+    let olga_variants: Vec<&ServantInfo> =
+        catalog_servants.iter().filter(|s| s.id == 444).collect();
     assert_eq!(olga_variants.len(), 2);
 
     assert_eq!(olga_variants[0].variant_key, "444:1");
@@ -2903,11 +2910,12 @@ fn servants_data_uses_variant_face_id_to_select_overwrite_name() {
 
 #[test]
 fn servants_data_includes_latest_cn_catalog_updates() {
-    let indra = servants_data().iter().find(|s| s.id == 442).unwrap();
+    let catalog_servants = servants_data().unwrap();
+    let indra = catalog_servants.iter().find(|s| s.id == 442).unwrap();
     assert_eq!(indra.name_cn, "因陀罗");
     assert_eq!(indra.noble_phantasm_name.as_deref(), Some("神之雷"));
 
-    let ascalaphus = servants_data().iter().find(|s| s.id == 471).unwrap();
+    let ascalaphus = catalog_servants.iter().find(|s| s.id == 471).unwrap();
     assert_eq!(ascalaphus.name_jp, "アスカラポス＝アケローン");
     assert_eq!(
         ascalaphus.noble_phantasm_name.as_deref(),
@@ -2917,7 +2925,7 @@ fn servants_data_includes_latest_cn_catalog_updates() {
 
 #[test]
 fn selectable_servants_use_catalog_type_and_group_playable_beasts() {
-    let servants = selectable_servants_data();
+    let servants = selectable_servants_data().unwrap();
 
     for id in [83, 149, 151, 152, 168, 240, 333, 411, 412, 436, 443, 460] {
         assert!(
@@ -2982,14 +2990,14 @@ fn pick_ce_card_in_returns_path_when_file_exists() {
 
 #[test]
 fn craft_essences_data_parses_and_has_unique_ids() {
-    let ces = craft_essences_data();
+    let ces = craft_essences_data().unwrap();
     assert!(
         !ces.is_empty(),
-        "bundled craft_essences.json parsed to an empty list"
+        "fixture craft_essences.json parsed to an empty list"
     );
 
     let mut seen: HashSet<u32> = HashSet::with_capacity(ces.len());
-    for ce in ces {
+    for ce in ces.iter() {
         assert!(!ce.name.is_empty(), "CE id {} has an empty name", ce.id);
         assert!(
             seen.insert(ce.id),
@@ -3001,7 +3009,7 @@ fn craft_essences_data_parses_and_has_unique_ids() {
 
 #[test]
 fn craft_essences_data_uses_collection_no_and_cn_names() {
-    let ces = craft_essences_data();
+    let ces = craft_essences_data().unwrap();
     let ce_2234 = ces.iter().find(|ce| ce.id == 2234).unwrap();
     let ce_2235 = ces.iter().find(|ce| ce.id == 2235).unwrap();
     let ce_2236 = ces.iter().find(|ce| ce.id == 2236).unwrap();
@@ -3025,7 +3033,7 @@ fn craft_essences_data_uses_collection_no_and_cn_names() {
 
 #[test]
 fn craft_essences_data_exposes_rarity_and_picker_categories() {
-    let ces = craft_essences_data();
+    let ces = craft_essences_data().unwrap();
     let ce = |id| ces.iter().find(|ce| ce.id == id).unwrap();
 
     assert_eq!(ce(1).rarity, 1);
@@ -3045,8 +3053,8 @@ fn craft_essences_data_is_memoized_via_oncelock() {
     // OnceLock-backed `&'static [CraftEssenceInfo]` should hand back
     // the exact same slice on repeated calls (same pointer + len).
     // If somebody refactors away the cache, this catches it.
-    let a = craft_essences_data();
-    let b = craft_essences_data();
+    let a = craft_essences_data().unwrap();
+    let b = craft_essences_data().unwrap();
     assert_eq!(a.as_ptr(), b.as_ptr());
     assert_eq!(a.len(), b.len());
 }
@@ -3111,10 +3119,10 @@ fn normalize_jp_key_strips_whitespace_and_nfkc_folds() {
 #[test]
 fn servant_jp_to_cn_index_maps_known_servant_name() {
     // Servant 2 = Altria Pendragon — the row exists in the
-    // bundled mooncell `servants.json` with both `name_jp` and
-    // `name_cn` populated, so the index must produce the CN
+    // catalog fixture with both JP and CN names populated,
+    // so the index must produce the CN
     // string.
-    let idx = servant_jp_to_cn_index();
+    let idx = servant_jp_to_cn_index().unwrap();
     assert_eq!(
         idx.get(&normalize_jp_key("アルトリア・ペンドラゴン"))
             .map(|s| s.as_str()),
@@ -3124,7 +3132,7 @@ fn servant_jp_to_cn_index_maps_known_servant_name() {
 
 #[test]
 fn servant_jp_to_cn_index_prefers_cn_server_alias() {
-    let idx = servant_jp_to_cn_index();
+    let idx = servant_jp_to_cn_index().unwrap();
     assert_eq!(
         idx.get(&normalize_jp_key("メドゥーサ")).map(|s| s.as_str()),
         Some("歌果")
@@ -3133,7 +3141,8 @@ fn servant_jp_to_cn_index_prefers_cn_server_alias() {
 
 #[test]
 fn servants_data_exposes_overwrite_servant_names() {
-    let jinako = servants_data().iter().find(|s| s.id == 244).unwrap();
+    let catalog_servants = servants_data().unwrap();
+    let jinako = catalog_servants.iter().find(|s| s.id == 244).unwrap();
     assert_eq!(jinako.name_cn, "吉娜可·加里吉利");
     assert!(jinako
         .over_write_servant_names
@@ -3312,8 +3321,9 @@ fn applying_variant_candidates_scopes_or_inherits_np_names() {
 
 #[test]
 fn same_name_sibling_variants_have_distinct_np_candidates() {
+    let catalog_servants = servants_data().unwrap();
     for server in [Server::Cn, Server::Jp] {
-        let servants = servants_data();
+        let servants = &catalog_servants;
         for (index, left) in servants.iter().enumerate() {
             for right in servants.iter().skip(index + 1) {
                 if left.id != right.id {
@@ -3371,7 +3381,7 @@ fn servant_variant_name_candidates_reject_mismatched_variant_key() {
 
 #[test]
 fn servant_id_cn_index_keeps_same_jp_names_distinct() {
-    let idx = servant_id_to_cn_index();
+    let idx = servant_id_to_cn_index().unwrap();
     assert_eq!(idx.get(&23).map(|s| s.as_str()), Some("歌果"));
     assert_eq!(idx.get(&384).map(|s| s.as_str()), Some("美杜莎"));
     assert_eq!(localize_servant_name_by_id(384, "メドゥーサ"), "美杜莎");
@@ -3382,7 +3392,7 @@ fn np_index_handles_both_shapes() {
     // Servant 1 uses the dict-of-variants `noble_phantasms`
     // shape; servant 2 uses the flat-list shape. Both must be
     // discoverable by the same builder.
-    let idx = np_jp_to_cn_index();
+    let idx = np_jp_to_cn_index().unwrap();
     // Dict-of-variants entry from servant 1 (variant "初始").
     assert_eq!(
         idx.get(&normalize_jp_key("いまは遙か理想の城"))
@@ -3395,14 +3405,11 @@ fn np_index_handles_both_shapes() {
             .map(|s| s.as_str()),
         Some("誓约胜利之剑"),
     );
-    // Sanity: index contains a non-trivial number of entries —
-    // catches an outright build error in the parser.
-    assert!(idx.len() > 100, "NP index too small: {}", idx.len());
 }
 
 #[test]
 fn np_index_prefers_cn_server_alias_and_keeps_jp_equal_cn() {
-    let idx = np_jp_to_cn_index();
+    let idx = np_jp_to_cn_index().unwrap();
     assert_eq!(
         idx.get(&normalize_jp_key("始皇帝")).map(|s| s.as_str()),
         Some("祖政")
@@ -3422,7 +3429,7 @@ fn np_index_dedupes_repeated_jp_names() {
     // `insert()`, the second translation would silently overwrite
     // the first, which is harmless here but a footgun for cases
     // where the two CN translations actually disagree.
-    let idx = np_jp_to_cn_index();
+    let idx = np_jp_to_cn_index().unwrap();
     let key = normalize_jp_key("約束された勝利の剣");
     assert!(idx.contains_key(&key));
 }

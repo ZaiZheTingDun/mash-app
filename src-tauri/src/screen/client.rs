@@ -76,7 +76,7 @@ impl SidecarClient {
             ));
         }
         let servants_json = crate::resolve_servants_json_path(app)
-            .ok_or_else(|| "无法解析从者元数据文件".to_string())?;
+            .ok_or_else(|| "从者汇总资源缺失或无效，请重新下载资源包".to_string())?;
         if !servants_json.is_file() {
             return Err(format!(
                 "未找到从者元数据文件 ({})",

@@ -1,10 +1,11 @@
+use super::data::CatalogCache;
+use super::summaries::catalog_summaries;
 use crate::commands::runtime::resolve_ce_assets_dir;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::Arc;
 
 /// One craft-essence entry exposed to the frontend. Mirrors the shape of
-/// `resources/craft_essences.json` (using Atlas `collectionNo` as the
+/// `catalogs/craft_essences.json` (using Atlas `collectionNo` as the
 /// stable app-facing CE id). Recommendation metadata stays in the backend's
 /// cached picker index rather than traveling with every catalog entry.
 #[derive(serde::Serialize, Clone, Debug)]
@@ -34,21 +35,9 @@ pub enum CraftEssenceCategory {
     Other,
 }
 
-#[derive(serde::Deserialize)]
-struct CraftEssenceTranslationFix {
-    id: u32,
-    name: String,
-}
-
-pub(super) fn craft_essence_category(value: &serde_json::Value) -> CraftEssenceCategory {
-    let has_flag = |expected: &str| {
-        value
-            .get("flags")
-            .and_then(serde_json::Value::as_array)
-            .is_some_and(|flags| flags.iter().any(|flag| flag.as_str() == Some(expected)))
-    };
-
-    if value.get("flag").and_then(serde_json::Value::as_str) == Some("normal") {
+pub(super) fn craft_essence_category(flag: &str, flags: &[String]) -> CraftEssenceCategory {
+    let has_flag = |expected: &str| flags.iter().any(|flag| flag == expected);
+    if flag == "normal" {
         CraftEssenceCategory::Normal
     } else if has_flag("svtEquipFriendShip") {
         CraftEssenceCategory::Bond
@@ -63,86 +52,53 @@ pub(super) fn craft_essence_category(value: &serde_json::Value) -> CraftEssenceC
     }
 }
 
-pub(crate) fn craft_essences_data() -> &'static [CraftEssenceInfo] {
-    static CES: OnceLock<Vec<CraftEssenceInfo>> = OnceLock::new();
-    CES.get_or_init(|| {
-        let raw: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("../../resources/craft_essences.json"))
-                .expect("invalid craft_essences.json");
-        let translation_fixes: HashMap<u32, String> = serde_json::from_str::<
-            Vec<CraftEssenceTranslationFix>,
-        >(include_str!(
-            "../../resources/craft_essence_translation_fixes.json"
-        ))
-        .expect("invalid craft_essence_translation_fixes.json")
-        .into_iter()
-        .map(|fix| (fix.id, fix.name))
-        .collect();
-        raw.iter()
+pub(crate) fn craft_essences_data() -> Result<Arc<Vec<CraftEssenceInfo>>, String> {
+    static CES: CatalogCache<Vec<CraftEssenceInfo>> = CatalogCache::new();
+    CES.get_or_try_init(|| {
+        Ok(catalog_summaries()?.ces.iter()
             .enumerate()
             .filter_map(|(idx, ce)| {
                 let result = (|| {
-                    let id = ce.get("collectionNo")?.as_u64()? as u32;
-                    let rarity = u8::try_from(ce.get("rarity")?.as_u64()?).ok()?;
+                    let id = ce.collection_no;
+                    let rarity = ce.rarity;
                     if !(1..=5).contains(&rarity) {
                         return None;
                     }
-                    let raw_name = ce
-                        .get("name_cn")
-                        .and_then(|v| v.as_str())
+                    let raw_name = ce.name_cn.as_deref()
                         .map(str::trim)
                         .filter(|s| !s.is_empty())
-                        .or_else(|| ce.get("name").and_then(|v| v.as_str()))
-                        .map(str::to_string)?;
-                    let fixed_name = translation_fixes.get(&id);
-                    let name = fixed_name.cloned().unwrap_or_else(|| raw_name.clone());
-                    let name_aliases = if fixed_name.is_some() && raw_name != name {
-                        vec![raw_name]
-                    } else {
-                        Vec::new()
-                    };
-                    let name_link = ce
-                        .get("name_link")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
+                        .unwrap_or(&ce.name)
+                        .to_string();
+                    let name = raw_name;
+                    let name_aliases = Vec::new();
+                    let name_link = ce.name_link.clone();
                     Some(CraftEssenceInfo {
                         id,
                         rarity,
-                        category: craft_essence_category(ce),
+                        category: craft_essence_category(&ce.flag, &ce.flags),
                         name,
                         name_aliases,
                         name_link,
                     })
                 })();
                 if result.is_none() {
-                    let id_hint = ce.get("collectionNo").and_then(|v| v.as_u64());
+                    let id_hint = ce.collection_no;
                     eprintln!(
                         "[craft_essences] dropping entry at index {idx} (id={id_hint:?}): missing or invalid fields"
                     );
                 }
                 result
             })
-            .collect()
+            .collect())
     })
 }
 
 #[tauri::command]
-pub(crate) async fn get_craft_essences(
-    app: tauri::AppHandle,
-    server_state: tauri::State<'_, std::sync::Mutex<crate::server::Server>>,
-) -> Result<Vec<CraftEssenceInfo>, String> {
-    let server = *server_state.lock().unwrap();
-    tauri::async_runtime::spawn_blocking(move || {
-        match super::craft_essence_picker_data(&app, server, false, None) {
-            Ok(data) => data.craft_essences,
-            Err(error) => {
-                eprintln!("[craft_essences] using bundled catalog: {error}");
-                craft_essences_data().to_vec()
-            }
-        }
-    })
-    .await
-    .map_err(|error| format!("加载礼装目录任务失败: {error}"))
+pub(crate) async fn get_craft_essences() -> Result<Vec<CraftEssenceInfo>, String> {
+    // Loading a basic list must not initialize recommendations or read details.
+    tauri::async_runtime::spawn_blocking(|| Ok(craft_essences_data()?.to_vec()))
+        .await
+        .map_err(|error| format!("加载礼装目录任务失败: {error}"))?
 }
 
 pub(crate) fn ce_card_path(ce_root: &Path, ce_id: u32) -> PathBuf {

@@ -159,30 +159,29 @@ pub(crate) fn pick_face_for_ids_with_preferences_in(
         })
 }
 
-fn servant_for_variant(servant_id: u32, variant_key: &str) -> Result<&'static ServantInfo, String> {
-    servants_data()
+fn servant_for_variant(servant_id: u32, variant_key: &str) -> Result<ServantInfo, String> {
+    servants_data()?
         .iter()
         .find(|servant| servant.id == servant_id && servant.variant_key == variant_key)
+        .cloned()
         .ok_or_else(|| format!("从者 #{servant_id} 不包含立绘集合 {variant_key}"))
 }
 
-fn servant_by_variant_key(variant_key: &str) -> Result<&'static ServantInfo, String> {
-    servants_data()
+fn servant_by_variant_key(variant_key: &str) -> Result<ServantInfo, String> {
+    servants_data()?
         .iter()
         .find(|servant| servant.variant_key == variant_key)
+        .cloned()
         .ok_or_else(|| format!("未找到立绘集合 {variant_key}"))
 }
 
-fn allowed_portrait_ids(
-    servant_id: u32,
-    variant_key: Option<&str>,
-) -> Result<&'static [u32], String> {
+fn allowed_portrait_ids(servant_id: u32, variant_key: Option<&str>) -> Result<Vec<u32>, String> {
     variant_key
         .map(|key| servant_for_variant(servant_id, key))
         .transpose()
         .map(|servant| {
             servant
-                .map(|servant| servant.portrait_ids.as_slice())
+                .map(|servant| servant.portrait_ids)
                 .unwrap_or_default()
         })
 }
@@ -217,7 +216,7 @@ pub(crate) fn get_servant_portrait_path(
     let picked = if allowed_ids.is_empty() {
         pick_portrait_with_preferences_in(&servant_dir, global_id, face_id)
     } else {
-        pick_portrait_for_ids_with_preferences_in(&servant_dir, global_id, face_id, allowed_ids)
+        pick_portrait_for_ids_with_preferences_in(&servant_dir, global_id, face_id, &allowed_ids)
     };
     Ok(picked.map(|path| path.to_string_lossy().into_owned()))
 }
@@ -316,6 +315,6 @@ pub(crate) fn get_servant_face_path(
     let allowed_ids = allowed_portrait_ids(servant_id, variant_key.as_deref())?;
     let global_id = saved_portrait_id(settings_state.inner(), variant_key.as_deref());
     let picked =
-        pick_face_for_ids_with_preferences_in(&servant_dir, global_id, face_id, allowed_ids);
+        pick_face_for_ids_with_preferences_in(&servant_dir, global_id, face_id, &allowed_ids);
     Ok(picked.map(|path| path.to_string_lossy().into_owned()))
 }

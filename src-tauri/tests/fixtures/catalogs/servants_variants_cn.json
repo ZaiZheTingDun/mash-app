@@ -1,0 +1,483 @@
+[
+  {
+    "id": 1,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4,
+          800130,
+          800160,
+          800170
+        ],
+        "noblePhantasms": [
+          "？？？",
+          "假想宝具 拟似展开/人理之础",
+          "已然遥远的理想之城"
+        ]
+      },
+      {
+        "ids": [
+          800140,
+          800150,
+          800151
+        ],
+        "noblePhantasms": [
+          "已然脆弱的梦想之城",
+          "依然存在的梦想之城"
+        ]
+      },
+      {
+        "ids": [
+          800190,
+          800200
+        ],
+        "noblePhantasms": [
+          "构筑希望的人理之盾"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4,
+          100130
+        ],
+        "noblePhantasms": [
+          "誓约胜利之剑"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 16,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "流星一条"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 23,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4,
+          400130
+        ],
+        "noblePhantasms": [
+          "骑英之缰绳"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 50,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "伤兽的咆吼"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 83,
+    "variants": [
+      {
+        "ids": [
+          0
+        ],
+        "noblePhantasms": [
+          "诞生之时已至，以此修习万象"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 106,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4,
+          1100330
+        ],
+        "noblePhantasms": [
+          "咆哮吧，吾之愤怒"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 141,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "优雅歌唱吧，为那圣诞"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 149,
+    "variants": [
+      {
+        "ids": [
+          0
+        ],
+        "noblePhantasms": []
+      }
+    ]
+  },
+  {
+    "id": 151,
+    "variants": [
+      {
+        "ids": [
+          0
+        ],
+        "noblePhantasms": [
+          "烧却式 贝雷特"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 152,
+    "variants": [
+      {
+        "ids": [
+          0
+        ],
+        "noblePhantasms": [
+          "诀别之时已至，以此，舍弃世界"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 168,
+    "variants": [
+      {
+        "ids": [
+          0
+        ],
+        "noblePhantasms": [
+          "Sukhavati Heaven's Hole"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 229,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "祖政"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 240,
+    "variants": [
+      {
+        "ids": [
+          0
+        ],
+        "noblePhantasms": [
+          "爱的世界，燃烧的宇宙"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 244,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "肉弹啊，明天再开始努力吧"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 296,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4,
+          403730
+        ],
+        "noblePhantasms": [
+          "吾将远征，鹦鹉螺的大冲角"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 333,
+    "variants": [
+      {
+        "ids": [
+          0
+        ],
+        "noblePhantasms": []
+      }
+    ]
+  },
+  {
+    "id": 335,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "魔天之车轮"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 377,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "拥抱融解的黄金剧场"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 384,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "怪物的黄金剑"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 394,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2
+        ],
+        "noblePhantasms": [
+          "月所未知，久远之光"
+        ]
+      },
+      {
+        "ids": [
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "王之书库"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 411,
+    "variants": [
+      {
+        "ids": [
+          0
+        ],
+        "noblePhantasms": []
+      }
+    ]
+  },
+  {
+    "id": 412,
+    "variants": [
+      {
+        "ids": [
+          0
+        ],
+        "noblePhantasms": []
+      }
+    ]
+  },
+  {
+    "id": 417,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "闪烁于终局宇宙的兽冠"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 418,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4,
+          2300930,
+          2300940
+        ],
+        "noblePhantasms": [
+          "第七圣典·断罪死",
+          "原理血戒·断头台"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 436,
+    "variants": [
+      {
+        "ids": [
+          0
+        ],
+        "noblePhantasms": []
+      }
+    ]
+  },
+  {
+    "id": 442,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "神之雷"
+        ]
+      }
+    ]
+  },
+  {
+    "id": 443,
+    "variants": [
+      {
+        "ids": [
+          0
+        ],
+        "noblePhantasms": []
+      }
+    ]
+  },
+  {
+    "id": 444,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          4000130
+        ],
+        "noblePhantasms": [
+          "既已过去的人理之终"
+        ]
+      },
+      {
+        "ids": [
+          3,
+          4
+        ],
+        "noblePhantasms": []
+      }
+    ]
+  },
+  {
+    "id": 452,
+    "variants": [
+      {
+        "ids": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "noblePhantasms": [
+          "诺亚方舟",
+          "再创世的试炼"
+        ]
+      }
+    ]
+  }
+]

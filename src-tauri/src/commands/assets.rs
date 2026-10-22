@@ -14,6 +14,7 @@ pub(crate) const ASSET_DIRS: &[&str] = &[
     "skills",
     "mystic-codes",
     "events",
+    "catalogs",
 ];
 
 #[derive(serde::Deserialize, Clone, Debug, PartialEq, Eq)]

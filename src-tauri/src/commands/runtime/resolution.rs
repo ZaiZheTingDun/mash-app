@@ -161,19 +161,34 @@ pub(crate) fn resolve_resource_image_path(
 
 /// Resolve the servant metadata JSON as a real file for the Python sidecar.
 pub(crate) fn resolve_servants_json_path(app: &tauri::AppHandle) -> Option<PathBuf> {
-    #[cfg(debug_assertions)]
-    {
-        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src")
-            .join("resources")
-            .join("servants.json");
-        if dev.is_file() {
-            return Some(dev);
-        }
-    }
+    installed_servants_json_path(&app_assets_dir(app))
+}
 
-    let base = app.path().resource_dir().ok()?;
-    Some(base.join("src").join("resources").join("servants.json"))
+fn installed_servants_json_path(assets_root: &Path) -> Option<PathBuf> {
+    let path = assets_root.join("catalogs/servants.json");
+    let raw = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str::<Vec<serde_json::Value>>(&raw).ok()?;
+    Some(path)
+}
+
+#[cfg(test)]
+mod catalog_path_tests {
+    use super::*;
+
+    #[test]
+    fn sidecar_resolves_only_installed_catalogs_and_rejects_missing_or_invalid_data() {
+        let temp = tempfile::tempdir().unwrap();
+        assert!(installed_servants_json_path(temp.path()).is_none());
+        std::fs::create_dir(temp.path().join("catalogs")).unwrap();
+        let path = temp.path().join("catalogs/servants.json");
+        std::fs::write(&path, "[{\"id\":1}]").unwrap();
+        assert_eq!(
+            installed_servants_json_path(temp.path()),
+            Some(path.clone())
+        );
+        std::fs::write(&path, "invalid").unwrap();
+        assert!(installed_servants_json_path(temp.path()).is_none());
+    }
 }
 
 /// Resolve the bundled scrcpy-server.jar path.
@@ -245,18 +260,19 @@ pub(crate) fn resolve_ce_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
     None
 }
 
-pub(crate) fn resolve_event_assets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
-    let imported = app_assets_dir(app).join("events");
+/// Item metadata comes from catalog summaries; only images use asset paths.
+pub(crate) fn resolve_item_icons_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let imported = app_assets_dir(app).join("icons/items");
     if imported.is_dir() {
         return Some(imported);
     }
     if let Ok(base) = app.path().resource_dir() {
-        let bundled = base.join("assets").join("events");
+        let bundled = base.join("assets/icons/items");
         if bundled.is_dir() {
             return Some(bundled);
         }
     }
-    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/events");
+    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/icons/items");
     dev.is_dir().then_some(dev)
 }
 

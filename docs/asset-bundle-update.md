@@ -26,9 +26,13 @@ ces/
 icons/
 skills/
 mystic-codes/
+events/
+catalogs/
 ```
 
 基础包会替换其中存在的目录；补丁包只合并文件，不会删除未出现在补丁内的旧文件。每个包只需包含本次需要更新的受管目录。资源包根目录的 `assets-version.json` 用于人工导入时记录版本；通过 CDN 安装时，App 在成功完成计划后写入版本记录。
+
+从 v19 起，六份汇总数据统一位于 `catalogs/`：`servants.json`、`servants_variants.json`、`servants_variants_cn.json`、`craft_essences.json`、`events.json` 和 `event_items.json`。App 只读取已安装的汇总数据，不内置旧包兼容副本；文件缺失或无法解析时会报错，需重新下载资源包。安装或更新资源后，后端目录及派生索引缓存自动失效。单个从者、礼装的详细 JSON 仍按需从原目录读取。
 
 ## 发布新的资源版本
 

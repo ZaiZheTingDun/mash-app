@@ -22,13 +22,15 @@ test("dev watcher excludes the generated CV bundle to prevent rebuild loops", as
 
 test("common resources preserve their installed paths and exclude ADB", async () => {
   const common = resourceMap((await config("tauri.conf.json")).bundle.resources);
+  assert.ok(!Object.keys(common).some(source => source.startsWith("src/resources/")),
+    "Catalog summaries must come from the installed resource pack");
   for (const [source, destination] of Object.entries(common)) {
     assert.ok(!source.startsWith("resources/adb"), source);
     assert.equal(destination, source.endsWith("/*") ? source.slice(0, -1) : source);
   }
   for (const source of ["resources/servers/shared/cv.json", "resources/servers/jp/cv.json",
     "resources/servers/cn/cv.json", "resources/images/*", "resources/scrcpy/scrcpy-server.jar",
-    "src/resources/servants.json", "resources/assets-manifest.json", "resources/runtime-manifest.json",
+    "resources/assets-manifest.json", "resources/runtime-manifest.json",
     "resources/mash-cv-code/"]) {
     assert.ok(source in common, `Missing shared resource: ${source}`);
   }
