@@ -157,6 +157,8 @@ pub fn run() {
             commands::projects::set_app_color_theme,
             commands::projects::get_battle_start_panel,
             commands::projects::set_battle_start_panel,
+            commands::projects::get_servant_picker_settings,
+            commands::projects::update_servant_picker_settings,
             commands::projects::get_mystic_code_gender,
             commands::projects::set_mystic_code_gender,
             commands::projects::create_project,

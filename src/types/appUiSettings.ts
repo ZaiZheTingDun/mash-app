@@ -2,6 +2,13 @@ export type BattleStartPanel = "operationLog" | "runStatus" | "none";
 
 export const DEFAULT_BATTLE_START_PANEL: BattleStartPanel = "operationLog";
 
+export interface ServantPickerSettings {
+  layout: "list" | "grid";
+  gridSize: "small" | "medium" | "large";
+}
+
+export type ServantPickerAction = "toggleLayout" | "cycleGridSize";
+
 export type MysticCodeGender = "female" | "male";
 export const DEFAULT_MYSTIC_CODE_GENDER: MysticCodeGender = "female";
 

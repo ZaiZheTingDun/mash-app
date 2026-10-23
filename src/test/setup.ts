@@ -91,6 +91,11 @@ vi.mock("@tauri-apps/api/event", () => ({
   emit: vi.fn(async () => {}),
 }));
 
+const servantPickerMock = vi.hoisted(() => ({
+  layout: "list" as "list" | "grid",
+  gridSize: "medium" as "small" | "medium" | "large",
+}));
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
     switch (cmd) {
@@ -105,6 +110,18 @@ vi.mock("@tauri-apps/api/core", () => ({
         return [];
       case "get_active_project_id":
         return null;
+      case "get_servant_picker_settings":
+        return { ...servantPickerMock };
+      case "update_servant_picker_settings":
+        if (args?.action === "toggleLayout") {
+          servantPickerMock.layout = servantPickerMock.layout === "list" ? "grid" : "list";
+        } else if (args?.action === "cycleGridSize") {
+          const next = { small: "medium", medium: "large", large: "small" } as const;
+          servantPickerMock.gridSize = next[servantPickerMock.gridSize];
+        } else {
+          throw new Error("无效的显示设置操作");
+        }
+        return { ...servantPickerMock };
       case "get_project_catalog":
         return { schemaVersion: 1, groups: [], ungroupedProjectIds: [] };
       case "get_grand_class_definitions":
@@ -337,6 +354,8 @@ vi.mock("@tauri-apps/plugin-updater", () => ({
 // into the next can't mask a real regression.
 afterEach(() => {
   cleanup();
+  servantPickerMock.layout = "list";
+  servantPickerMock.gridSize = "medium";
   vi.clearAllMocks();
   installConsoleErrorFilter();
 });

@@ -10,6 +10,7 @@ import {
 import { invoke, convertFileSrc } from "../../tauri";
 import { GridIcon, MagnifyingGlassIcon, RowsIcon, SizeIcon } from "@radix-ui/react-icons";
 import type { Servant } from "../../types/servant";
+import type { ServantPickerAction, ServantPickerSettings } from "../../types/appUiSettings";
 import { PortraitSelectDialog } from "./PortraitSelectDialog";
 import classAllIcon from "../../../src-tauri/resources/images/class/silver_all.png";
 import classSaberIcon from "../../../src-tauri/resources/images/class/silver_saber.png";
@@ -69,11 +70,11 @@ interface ServantSelectDialogProps {
 
 const RARITY_FILTER_OPTIONS = [null, 1, 2, 3, 4, 5] as const;
 const ROW_HEIGHT = 72;
-const GRID_SIZES = [
-  { label: "小", faceSize: 48 },
-  { label: "中", faceSize: 64 },
-  { label: "大", faceSize: 80 },
-] as const;
+const GRID_SIZES = {
+  small: { label: "小", faceSize: 48, nextLabel: "中" },
+  medium: { label: "中", faceSize: 64, nextLabel: "大" },
+  large: { label: "大", faceSize: 80, nextLabel: "小" },
+} as const;
 const GRID_MAX_COLUMNS = 8;
 const GRID_GAP = 8;
 const OVERSCAN = 4;
@@ -280,8 +281,9 @@ export function ServantSelectDialog({
   onPortraitSaved,
 }: ServantSelectDialogProps) {
   const [search, setSearch] = useState("");
-  const [layout, setLayout] = useState("list");
-  const [gridSizeIndex, setGridSizeIndex] = useState(0);
+  const [pickerSettings, setPickerSettings] = useState<ServantPickerSettings | null>(null);
+  const [savingPickerSettings, setSavingPickerSettings] = useState(false);
+  const [pickerSettingsError, setPickerSettingsError] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(520);
   const [classFilter, setClassFilter] = useState(
     normalizeClassFilter(defaultClassFilter)
@@ -351,15 +353,15 @@ export function ServantSelectDialog({
   const safeActiveIndex =
     filtered.length === 0 ? 0 : Math.min(activeIndex, filtered.length - 1);
 
-  const isGrid = layout === "grid";
-  const gridSize = GRID_SIZES[gridSizeIndex];
-  const columns = isGrid
+  const isGrid = pickerSettings?.layout === "grid";
+  const gridSize = pickerSettings ? GRID_SIZES[pickerSettings.gridSize] : null;
+  const columns = isGrid && gridSize
     ? Math.max(1, Math.min(
       GRID_MAX_COLUMNS,
       Math.floor((viewportWidth + GRID_GAP) / (gridSize.faceSize + 8 + GRID_GAP)),
     ))
     : 1;
-  const rowHeight = isGrid ? gridSize.faceSize + 8 + GRID_GAP : ROW_HEIGHT;
+  const rowHeight = isGrid && gridSize ? gridSize.faceSize + 8 + GRID_GAP : ROW_HEIGHT;
   const rowCount = Math.ceil(filtered.length / columns);
 
   useEffect(() => {
@@ -372,7 +374,7 @@ export function ServantSelectDialog({
     const observer = new ResizeObserver(updateWidth);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [open, layout]);
+  }, [open, isGrid]);
 
   const startIndex = Math.max(
     0,
@@ -440,6 +442,40 @@ export function ServantSelectDialog({
       scrollRef.current.scrollTop = 0;
     }
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setPickerSettings(null);
+    setPickerSettingsError(null);
+    invoke<ServantPickerSettings>("get_servant_picker_settings")
+      .then((settings) => {
+        if (cancelled) return;
+        setPickerSettings(settings);
+        setActiveIndex(0);
+        resetScroll();
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setPickerSettingsError(`读取显示设置失败：${String(error)}`);
+      });
+    return () => { cancelled = true; };
+  }, [open, resetScroll]);
+
+  const changePickerSettings = async (action: ServantPickerAction) => {
+    if (!pickerSettings || savingPickerSettings) return;
+    setSavingPickerSettings(true);
+    setPickerSettingsError(null);
+    try {
+      const saved = await invoke<ServantPickerSettings>("update_servant_picker_settings", { action });
+      setPickerSettings(saved);
+      setActiveIndex(0);
+      resetScroll();
+    } catch (error) {
+      setPickerSettingsError(`保存显示设置失败：${String(error)}`);
+    } finally {
+      setSavingPickerSettings(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -557,18 +593,15 @@ export function ServantSelectDialog({
               <MagnifyingGlassIcon />
             </TextField.Slot>
           </TextField.Root>
-          {isGrid && (
-            <Tooltip content={`头像大小：${gridSize.label}，点击切换为${GRID_SIZES[(gridSizeIndex + 1) % GRID_SIZES.length].label}`}>
+          {isGrid && gridSize && (
+            <Tooltip content={`头像大小：${gridSize.label}，点击切换为${gridSize.nextLabel}`}>
               <IconButton
                 size="2"
                 variant="outline"
                 color="gray"
                 aria-label={`调整头像大小（当前：${gridSize.label}）`}
-                onClick={() => {
-                  setGridSizeIndex((index) => (index + 1) % GRID_SIZES.length);
-                  setActiveIndex(0);
-                  resetScroll();
-                }}
+                disabled={savingPickerSettings}
+                onClick={() => void changePickerSettings("cycleGridSize")}
               >
                 <SizeIcon />
               </IconButton>
@@ -580,16 +613,15 @@ export function ServantSelectDialog({
               variant="outline"
               color="gray"
               aria-label={isGrid ? "切换为列表布局" : "切换为网格布局"}
-              onClick={() => {
-                setLayout(isGrid ? "list" : "grid");
-                setActiveIndex(0);
-                resetScroll();
-              }}
+              disabled={!pickerSettings || savingPickerSettings}
+              onClick={() => void changePickerSettings("toggleLayout")}
             >
               {isGrid ? <RowsIcon /> : <GridIcon />}
             </IconButton>
           </Tooltip>
         </Flex>
+
+        {pickerSettingsError && <Text size="1" color="red" role="alert">{pickerSettingsError}</Text>}
 
         <Flex gap="2" className="servant-filter-row">
           <div
@@ -706,25 +738,31 @@ export function ServantSelectDialog({
                     <div className="servant-option-content">
                       <div
                         className="servant-face-frame"
-                        style={isGrid ? {
+                        style={isGrid && gridSize ? {
                           width: gridSize.faceSize,
                           height: gridSize.faceSize,
                           flexBasis: gridSize.faceSize,
                         } : undefined}
                       >
                         {faceSrcByKey[servant.variantKey] ? (
-                          <img src={faceSrcByKey[servant.variantKey] ?? ""} alt="" />
+                          <img className="servant-face-image" src={faceSrcByKey[servant.variantKey] ?? ""} alt="" />
                         ) : (
                           <span>{servant.class.slice(0, 2)}</span>
                         )}
-                        {!isGrid && (
-                          <Text
-                            className="servant-rarity"
-                            aria-label={`稀有度 ${servant.rarity} 星`}
-                          >
-                            {"★".repeat(servant.rarity)}
-                          </Text>
+                        {isGrid && (
+                          <img
+                            className="servant-face-class-icon"
+                            src={classIcon.icon}
+                            alt={classIcon.label}
+                            title={classIcon.label}
+                          />
                         )}
+                        <Text
+                          className="servant-rarity"
+                          aria-label={`稀有度 ${servant.rarity} 星`}
+                        >
+                          {"★".repeat(servant.rarity)}
+                        </Text>
                       </div>
                       {!isGrid && (
                         <Flex direction="column" align="start" gap="1" className="servant-option-text">

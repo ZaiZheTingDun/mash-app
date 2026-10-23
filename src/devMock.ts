@@ -7,6 +7,7 @@ import type { Servant } from "./types/servant";
 import type { Server } from "./types/server";
 import type { DeviceResolutionStatus } from "./types/deviceResolution";
 import { isAppColorTheme, type AppColorTheme } from "./types/theme";
+import type { ServantPickerSettings } from "./types/appUiSettings";
 
 type InvokeArgs = Record<string, unknown>;
 // Explicit browser preview only; native runtime and asset checks are unchanged.
@@ -122,6 +123,7 @@ let nextProjectGroupNumber = 1;
 let activeProjectId: string | null = "dev-project-1";
 let appTheme: "light" | "dark" | "system" | null = null;
 let appColorTheme: AppColorTheme = "violet";
+let servantPickerSettings: ServantPickerSettings = { layout: "list", gridSize: "medium" };
 let battleStartPanel: "operationLog" | "runStatus" | "none" = "operationLog";
 
 let projects: Project[] = [
@@ -401,6 +403,19 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       return null as T;
     case "get_app_color_theme":
       return appColorTheme as T;
+    case "get_servant_picker_settings":
+      return { ...servantPickerSettings } as T;
+    case "update_servant_picker_settings": {
+      if (args.action === "toggleLayout") {
+        servantPickerSettings = { ...servantPickerSettings, layout: servantPickerSettings.layout === "list" ? "grid" : "list" };
+      } else if (args.action === "cycleGridSize") {
+        const next = { small: "medium", medium: "large", large: "small" } as const;
+        servantPickerSettings = { ...servantPickerSettings, gridSize: next[servantPickerSettings.gridSize] };
+      } else {
+        throw new Error("无效的显示设置操作");
+      }
+      return { ...servantPickerSettings } as T;
+    }
     case "set_app_color_theme":
       if (!isAppColorTheme(args.value)) throw new Error("无效的主题配色");
       appColorTheme = args.value;

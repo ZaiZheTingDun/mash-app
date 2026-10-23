@@ -159,8 +159,10 @@ pub(crate) struct AppUiSettings {
     pub(crate) color_theme: AppColorTheme,
     #[serde(default)]
     pub(crate) battle_start_panel: BattleStartPanel,
+    #[serde(default)]
+    pub(crate) servant_picker: ServantPickerSettings,
     /// Global portrait selections keyed by `variantKey`. When present, the
-    /// chosen portrait id overrides the default "highest ascension" pick for
+    /// chosen portrait id overrides the default first portrait for
     /// every team that includes that variant.
     #[serde(default)]
     pub(crate) servant_portrait_selections: std::collections::HashMap<String, u32>,
@@ -194,6 +196,59 @@ pub(crate) enum BattleStartPanel {
     OperationLog,
     RunStatus,
     None,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ServantPickerSettings {
+    #[serde(default)]
+    pub(crate) layout: ServantPickerLayout,
+    #[serde(default)]
+    pub(crate) grid_size: ServantPickerGridSize,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ServantPickerLayout {
+    #[default]
+    List,
+    Grid,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ServantPickerGridSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+#[derive(serde::Deserialize, Clone, Copy, Debug)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ServantPickerAction {
+    ToggleLayout,
+    CycleGridSize,
+}
+
+impl ServantPickerSettings {
+    pub(crate) fn apply(&mut self, action: ServantPickerAction) {
+        match action {
+            ServantPickerAction::ToggleLayout => {
+                self.layout = match self.layout {
+                    ServantPickerLayout::List => ServantPickerLayout::Grid,
+                    ServantPickerLayout::Grid => ServantPickerLayout::List,
+                };
+            }
+            ServantPickerAction::CycleGridSize => {
+                self.grid_size = match self.grid_size {
+                    ServantPickerGridSize::Small => ServantPickerGridSize::Medium,
+                    ServantPickerGridSize::Medium => ServantPickerGridSize::Large,
+                    ServantPickerGridSize::Large => ServantPickerGridSize::Small,
+                };
+            }
+        }
+    }
 }
 
 pub(crate) fn project_battle_scenes_path(app: &tauri::AppHandle, project_id: &str) -> PathBuf {

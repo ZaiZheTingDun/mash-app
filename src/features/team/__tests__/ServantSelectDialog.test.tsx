@@ -128,11 +128,58 @@ describe("ServantSelectDialog", () => {
     expect(screen.getByText("梅林")).toBeInTheDocument();
   });
 
-  it("cycles grid sizes from the current minimum and preserves size across layout changes", async () => {
+  it("restores the saved layout and size when a new picker mounts", async () => {
+    const user = userEvent.setup();
+    const first = setup();
+    await user.click(screen.getByRole("button", { name: "切换为网格布局" }));
+    await user.click(screen.getByRole("button", { name: "调整头像大小（当前：中）" }));
+    expect(invoke).toHaveBeenCalledWith("update_servant_picker_settings", { action: "toggleLayout" });
+    expect(invoke).toHaveBeenCalledWith("update_servant_picker_settings", { action: "cycleGridSize" });
+    first.unmount();
+
+    const second = setup();
+    expect(await screen.findByRole("button", { name: "调整头像大小（当前：大）" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "切换为列表布局" }));
+    second.unmount();
+
+    setup();
+    const toggle = screen.getByRole("button", { name: "切换为网格布局" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    expect(screen.queryByRole("button", { name: /调整头像大小/ })).not.toBeInTheDocument();
+    await user.click(toggle);
+    expect(screen.getByRole("button", { name: "调整头像大小（当前：大）" })).toBeInTheDocument();
+  });
+
+  it("keeps the saved layout when a pending settings save fails", async () => {
+    const user = userEvent.setup();
+    const defaultInvoke = vi.mocked(invoke).getMockImplementation()!;
+    let rejectSave!: (error: Error) => void;
+    vi.mocked(invoke).mockImplementation((command, args) => {
+      if (command === "update_servant_picker_settings") {
+        return new Promise((_, reject) => { rejectSave = reject; });
+      }
+      return defaultInvoke(command, args);
+    });
+    try {
+      setup();
+      const toggle = screen.getByRole("button", { name: "切换为网格布局" });
+      await user.click(toggle);
+      expect(toggle).toBeDisabled();
+      expect(screen.queryByRole("button", { name: "切换为列表布局" })).not.toBeInTheDocument();
+      await act(async () => { rejectSave(new Error("磁盘不可写")); });
+      expect(screen.getByRole("alert")).toHaveTextContent("保存显示设置失败");
+      expect(toggle).toBeEnabled();
+      expect(screen.queryByRole("button", { name: /调整头像大小/ })).not.toBeInTheDocument();
+    } finally {
+      vi.mocked(invoke).mockImplementation(defaultInvoke);
+    }
+  });
+
+  it("defaults to medium grid size and preserves size across layout changes", async () => {
     const user = userEvent.setup();
     setup({ servants: makeServants(120) });
     await user.click(screen.getByRole("button", { name: "切换为网格布局" }));
-    const sizeButton = screen.getByRole("button", { name: "调整头像大小（当前：小）" });
+    const sizeButton = screen.getByRole("button", { name: "调整头像大小（当前：中）" });
     const toggle = screen.getByRole("button", { name: "切换为列表布局" });
     expect(sizeButton.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
@@ -141,38 +188,47 @@ describe("ServantSelectDialog", () => {
       expect(options[0].querySelector(".servant-face-frame")).toHaveStyle({
         width: `${faceSize}px`, height: `${faceSize}px`,
       });
+      expect(within(options[0]).getByLabelText("稀有度 5 星")).toHaveTextContent("★★★★★");
+      expect(options[0].querySelector(".servant-face-frame")).toContainElement(
+        within(options[0]).getByRole("img", { name: "术阶" }),
+      );
       expect(options[columns - 1]).toHaveStyle({ top: "0px" });
       expect(options[columns]).toHaveStyle({ top: `${rowHeight}px` });
     };
-    expectGridSize(48, 8, 64);
+    expectGridSize(64, 6, 80);
     const scroll = screen.getByRole("listbox").parentElement!;
     fireEvent.scroll(scroll, { target: { scrollTop: 640 } });
     await user.click(sizeButton);
     expect(scroll.scrollTop).toBe(0);
-    expectGridSize(64, 6, 80);
+    expectGridSize(80, 5, 96);
     const search = screen.getByPlaceholderText("搜索从者名称...");
     fireEvent.keyDown(search, { key: "ArrowDown" });
-    expect(screen.getByRole("option", { name: "从者 7" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("option", { name: "从者 6" })).toHaveAttribute("aria-selected", "true");
 
-    await user.click(screen.getByRole("button", { name: "调整头像大小（当前：中）" }));
-    expectGridSize(80, 5, 96);
+    await user.click(screen.getByRole("button", { name: "调整头像大小（当前：大）" }));
+    expectGridSize(48, 8, 64);
     expect(screen.getByRole("option", { name: "从者 1" })).toHaveAttribute("aria-selected", "true");
     await user.click(toggle);
     expect(screen.queryByRole("button", { name: /调整头像大小/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "切换为网格布局" }));
-    expectGridSize(80, 5, 96);
-    await user.click(screen.getByRole("button", { name: "调整头像大小（当前：大）" }));
     expectGridSize(48, 8, 64);
+    await user.click(screen.getByRole("button", { name: "调整头像大小（当前：小）" }));
+    expectGridSize(64, 6, 80);
   });
 
-  it("shows only faces in the grid and reveals full details after a sustained hover", async () => {
+  it("shows faces with class and rarity in the grid and reveals full details after a sustained hover", async () => {
     const user = userEvent.setup();
     const { onSelect } = setup();
     await user.click(screen.getByRole("button", { name: "切换为网格布局" }));
     const option = screen.getByRole("option", { name: "梅林" });
     expect(option.querySelector(".servant-face-frame")).toBeInTheDocument();
     expect(option.querySelector(".servant-option-text")).toBeNull();
-    expect(option.querySelector(".servant-rarity")).toBeNull();
+    const rarity = within(option).getByLabelText("稀有度 5 星");
+    expect(rarity).toHaveTextContent("★★★★★");
+    expect(option.querySelector(".servant-face-frame")).toContainElement(rarity);
+    expect(option.querySelector(".servant-face-frame")).toContainElement(
+      within(option).getByRole("img", { name: "术阶" }),
+    );
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
     vi.useFakeTimers();
@@ -205,11 +261,11 @@ describe("ServantSelectDialog", () => {
 
     const options = screen.getAllByRole("option");
     expect(options.length).toBeLessThan(servants.length);
-    expect(options[0].style.top).toBe(options[7].style.top);
-    expect(options[8]).toHaveStyle({ top: "64px" });
+    expect(options[0].style.top).toBe(options[5].style.top);
+    expect(options[6]).toHaveStyle({ top: "80px" });
     const search = screen.getByPlaceholderText("搜索从者名称...");
     fireEvent.keyDown(search, { key: "ArrowDown" });
-    expect(options[8]).toHaveAttribute("aria-selected", "true");
+    expect(options[6]).toHaveAttribute("aria-selected", "true");
     fireEvent.keyDown(search, { key: "ArrowUp" });
     expect(options[0]).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("option", { name: "从者 120" })).not.toBeInTheDocument();
@@ -219,12 +275,12 @@ describe("ServantSelectDialog", () => {
     });
 
     const scroll = screen.getByRole("listbox").parentElement!;
-    fireEvent.scroll(scroll, { target: { scrollTop: 64 * 14 } });
+    fireEvent.scroll(scroll, { target: { scrollTop: 80 * 19 } });
     expect(screen.queryByRole("option", { name: "从者 1" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("option", { name: "从者 120" }));
     expect(onSelect).toHaveBeenCalledWith(servants[119]);
 
-    fireEvent.scroll(scroll, { target: { scrollTop: 64 * 14 } });
+    fireEvent.scroll(scroll, { target: { scrollTop: 80 * 19 } });
     await user.click(screen.getByRole("button", { name: "切换为列表布局" }));
     expect(scroll.scrollTop).toBe(0);
     expect(screen.getByText("从者 1")).toBeInTheDocument();
@@ -238,22 +294,22 @@ describe("ServantSelectDialog", () => {
       const { onSelect } = setup({ servants, disabledIds: [12] });
       await user.click(screen.getByRole("button", { name: "切换为网格布局" }));
       const options = screen.getAllByRole("option");
-      expect(options[0].style.top).toBe(options[4].style.top);
-      expect(options[5]).toHaveStyle({ top: "64px" });
+      expect(options[0].style.top).toBe(options[3].style.top);
+      expect(options[4]).toHaveStyle({ top: "80px" });
       expect(screen.queryByRole("option", { name: "从者 12" })).not.toBeInTheDocument();
 
       const search = screen.getByPlaceholderText("搜索从者名称...");
       fireEvent.keyDown(search, { key: "ArrowDown" });
-      expect(options[5]).toHaveAttribute("aria-selected", "true");
+      expect(options[4]).toHaveAttribute("aria-selected", "true");
       fireEvent.keyDown(search, { key: "ArrowUp" });
       fireEvent.keyDown(search, { key: "ArrowRight" });
       expect(options[0]).toHaveAttribute("aria-selected", "true");
       fireEvent.keyDown(options[0], { key: "ArrowRight" });
       fireEvent.keyDown(options[0], { key: "ArrowDown" });
-      expect(options[6]).toHaveAttribute("aria-selected", "true");
+      expect(options[5]).toHaveAttribute("aria-selected", "true");
       fireEvent.keyDown(options[0], { key: "ArrowLeft" });
       fireEvent.keyDown(options[0], { key: "Enter" });
-      expect(onSelect).toHaveBeenCalledWith(servants[5]);
+      expect(onSelect).toHaveBeenCalledWith(servants[4]);
     } finally {
       width.mockRestore();
     }
@@ -564,6 +620,22 @@ describe("ServantSelectDialog", () => {
     expect(goldOption?.querySelector(".servant-class-badge")).toBeNull();
   });
 
+  it.each([
+    { servantClass: "Caster", rarity: 5, label: "术阶", icon: "gold_caster.png" },
+    { servantClass: "Archer", rarity: 1, label: "弓阶", icon: "silver_archer.png" },
+    { servantClass: "BeastEresh", rarity: 5, label: "兽阶", icon: "gold_beast.png" },
+    { servantClass: "Unknown", rarity: 3, label: "Unknown", icon: "silver_unknown.png" },
+  ])("overlays the $servantClass class icon on grid faces", async ({ servantClass, rarity, label, icon }) => {
+    const user = userEvent.setup();
+    setup({ servants: [{ ...FIXTURE[0], class: servantClass, rarity }] });
+    await user.click(screen.getByRole("button", { name: "切换为网格布局" }));
+    const option = screen.getByRole("option", { name: "阿尔托莉雅·卡斯特" });
+    const classIcon = within(option).getByRole("img", { name: label });
+    expect(classIcon).toHaveAttribute("src", expect.stringContaining(icon));
+    expect(classIcon).toHaveClass("servant-face-class-icon");
+    expect(option.querySelector(".servant-face-frame")).toContainElement(classIcon);
+  });
+
   it("renders multiple variants for the same servant id", () => {
     setup({
       servants: [
@@ -643,6 +715,7 @@ describe("ServantSelectDialog", () => {
     const user = userEvent.setup();
     const onPortraitSaved = vi.fn();
     let selectedPortraitId = 4_000_130;
+    const defaultInvoke = vi.mocked(invoke).getMockImplementation()!;
     vi.mocked(invoke).mockImplementation(
       async (cmd: string, args) => {
         if (cmd === "get_servant_face_path") {
@@ -662,7 +735,7 @@ describe("ServantSelectDialog", () => {
           selectedPortraitId = (args as Record<string, unknown> | undefined)
             ?.portraitId as number;
         }
-        return null;
+        return defaultInvoke(cmd, args);
       }
     );
     const { onSelect } = setup({

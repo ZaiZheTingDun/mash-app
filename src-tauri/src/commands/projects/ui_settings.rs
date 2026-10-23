@@ -118,6 +118,25 @@ pub(crate) fn set_battle_start_panel(
 }
 
 #[tauri::command]
+pub(crate) fn get_servant_picker_settings(
+    state: tauri::State<'_, Mutex<AppUiSettings>>,
+) -> Result<ServantPickerSettings, String> {
+    Ok(state.lock().map_err(|err| err.to_string())?.servant_picker)
+}
+
+#[tauri::command]
+pub(crate) fn update_servant_picker_settings(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<AppUiSettings>>,
+    action: ServantPickerAction,
+) -> Result<ServantPickerSettings, String> {
+    let saved = update_app_ui_settings(&app, state.inner(), |settings| {
+        settings.servant_picker.apply(action);
+    })?;
+    Ok(saved.servant_picker)
+}
+
+#[tauri::command]
 pub(crate) fn get_mystic_code_gender(
     state: tauri::State<'_, Mutex<AppUiSettings>>,
 ) -> crate::paths::MysticCodeGender {
@@ -160,6 +179,65 @@ pub(crate) fn set_home_master_figure_id(
         settings.home_master_figure_id = Some(id);
     })?;
     Ok(id)
+}
+
+#[cfg(test)]
+mod servant_picker_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_preferences_default_to_list_and_medium_without_changing_other_settings() {
+        let settings: AppUiSettings =
+            serde_json::from_str(r#"{"theme":"dark","activeProjectId":"existing-project"}"#)
+                .unwrap();
+        assert_eq!(settings.servant_picker.layout, ServantPickerLayout::List);
+        assert_eq!(
+            settings.servant_picker.grid_size,
+            ServantPickerGridSize::Medium
+        );
+        assert_eq!(settings.theme.as_deref(), Some("dark"));
+        assert_eq!(
+            settings.active_project_id.as_deref(),
+            Some("existing-project")
+        );
+        let partial: AppUiSettings =
+            serde_json::from_str(r#"{"servantPicker":{"layout":"grid"}}"#).unwrap();
+        assert_eq!(partial.servant_picker.layout, ServantPickerLayout::Grid);
+        assert_eq!(
+            partial.servant_picker.grid_size,
+            ServantPickerGridSize::Medium
+        );
+    }
+
+    #[test]
+    fn picker_actions_round_trip_on_disk_and_preserve_size_when_switching_layout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("app_ui_settings.json");
+        let mut settings = AppUiSettings {
+            theme: Some("dark".into()),
+            ..Default::default()
+        };
+        for (action, layout, size) in [
+            (ServantPickerAction::ToggleLayout, "grid", "medium"),
+            (ServantPickerAction::CycleGridSize, "grid", "large"),
+            (ServantPickerAction::ToggleLayout, "list", "large"),
+            (ServantPickerAction::CycleGridSize, "list", "small"),
+            (ServantPickerAction::CycleGridSize, "list", "medium"),
+        ] {
+            settings.servant_picker.apply(action);
+            write_app_ui_settings_to_path(&path, &settings).unwrap();
+            settings = read_app_ui_settings_from_path(&path).unwrap();
+            let json = serde_json::to_value(&settings).unwrap();
+            assert_eq!(
+                json["servantPicker"],
+                serde_json::json!({ "layout": layout, "gridSize": size })
+            );
+            assert_eq!(settings.theme.as_deref(), Some("dark"));
+        }
+        assert!(serde_json::from_str::<ServantPickerSettings>(r#"{"layout":"other"}"#).is_err());
+        assert!(serde_json::from_str::<ServantPickerSettings>(r#"{"gridSize":"other"}"#).is_err());
+        assert!(serde_json::from_str::<ServantPickerAction>(r#""other""#).is_err());
+    }
 }
 
 #[cfg(test)]

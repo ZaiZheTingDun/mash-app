@@ -707,7 +707,7 @@ fn portrait_preferences_are_limited_to_the_servant_variant_collection() {
         .unwrap()
         .file_name()
         .unwrap(),
-        "narrow_servant_4000130.png"
+        "narrow_servant_1.png"
     );
     assert_eq!(
         pick_face_for_ids_with_preferences_in(
@@ -1747,23 +1747,21 @@ fn pick_portrait_in_returns_none_when_only_face_and_card_files_present() {
 }
 
 #[test]
-fn pick_portrait_in_picks_highest_ascension_stage() {
-    // With multiple `narrow_servant_<n>.png` siblings, the resolver
-    // must hand back the lexicographically-largest filename — which
-    // for the single-digit ascension scheme used by the Atlas dump
-    // is also the highest stage (i.e. the final-ascension full art).
+fn pick_portrait_in_picks_first_numeric_stage() {
     let tmp = tempfile::tempdir().unwrap();
     for name in [
         "narrow_servant_3.png",
         "narrow_servant_4.png",
         "narrow_servant_1.png",
+        "narrow_servant_10.png",
+        "narrow_servant_invalid.png",
     ] {
         fs::write(tmp.path().join(name), b"").unwrap();
     }
     let picked = pick_portrait_in(tmp.path()).expect("expected a match");
     assert_eq!(
         picked.file_name().and_then(|n| n.to_str()),
-        Some("narrow_servant_4.png")
+        Some("narrow_servant_1.png")
     );
 }
 
@@ -1782,7 +1780,7 @@ fn pick_portrait_by_id_in_prefers_exact_variant_asset() {
 }
 
 #[test]
-fn pick_face_in_picks_highest_ascension_stage() {
+fn pick_face_in_picks_first_numeric_stage() {
     let tmp = tempfile::tempdir().unwrap();
     for name in [
         "face_servant_1.png",
@@ -1794,7 +1792,7 @@ fn pick_face_in_picks_highest_ascension_stage() {
     let picked = pick_face_in(tmp.path()).expect("expected a face match");
     assert_eq!(
         picked.file_name().and_then(|n| n.to_str()),
-        Some("face_servant_4.png")
+        Some("face_servant_1.png")
     );
 }
 

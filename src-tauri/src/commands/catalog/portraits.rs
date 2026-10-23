@@ -8,23 +8,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-/// Look inside a single servant's asset directory and return the path of
-/// the highest-numbered `narrow_servant_*.png` portrait, or `None` when
-/// no such file exists. `narrow_servant_<n>.png` corresponds to
-/// ascension stage `n` (1-4 for typical servants, with `4` being the
-/// final art); picking the lexicographic max is a stable proxy for
-/// "most-recent ascension" since the source filenames are
-/// zero-prefix-free single digits.
+/// Return the first available portrait in natural numeric order.
 pub(crate) fn pick_portrait_in(servant_dir: &Path) -> Option<PathBuf> {
-    let entries = fs::read_dir(servant_dir).ok()?;
-    entries
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("narrow_servant_") && name.ends_with(".png"))
-        })
-        .max()
+    list_portraits_in(servant_dir)
+        .into_iter()
+        .next()
+        .map(|(_, path)| path)
 }
 
 pub(crate) fn pick_portrait_by_id_in(servant_dir: &Path, portrait_id: u32) -> Option<PathBuf> {
@@ -33,7 +22,7 @@ pub(crate) fn pick_portrait_by_id_in(servant_dir: &Path, portrait_id: u32) -> Op
 }
 
 pub(crate) fn pick_face_in(servant_dir: &Path) -> Option<PathBuf> {
-    pick_faces_desc_in(servant_dir).into_iter().next()
+    pick_faces_desc_in(servant_dir).into_iter().next_back()
 }
 
 pub(crate) fn pick_faces_desc_in(servant_dir: &Path) -> Vec<PathBuf> {
@@ -51,7 +40,9 @@ pub(crate) fn pick_faces_desc_in(servant_dir: &Path) -> Vec<PathBuf> {
 fn is_face_template_path(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
-        .is_some_and(|name| name.starts_with("face_servant_") && name.ends_with(".png"))
+        .and_then(|name| name.strip_prefix("face_servant_")?.strip_suffix(".png"))
+        .and_then(|id| id.parse::<u32>().ok())
+        .is_some()
 }
 
 fn face_template_stage(path: &Path) -> u32 {
@@ -100,6 +91,8 @@ pub(crate) fn list_portraits_for_ids_in(
         .collect()
 }
 
+// `face_id` represents the collection for catalog names and legacy callers.
+// A known collection defaults to its first image; only saved choices override it.
 pub(crate) fn pick_portrait_for_ids_with_preferences_in(
     servant_dir: &Path,
     global_id: Option<u32>,
@@ -111,7 +104,7 @@ pub(crate) fn pick_portrait_for_ids_with_preferences_in(
         .and_then(|id| pick_portrait_by_id_in(servant_dir, id))
         .or_else(|| {
             face_id
-                .filter(|id| portrait_id_is_allowed(allowed_ids, *id))
+                .filter(|_| allowed_ids.is_empty())
                 .and_then(|id| pick_portrait_by_id_in(servant_dir, id))
         })
         .or_else(|| {
@@ -120,7 +113,7 @@ pub(crate) fn pick_portrait_for_ids_with_preferences_in(
             } else {
                 list_portraits_for_ids_in(servant_dir, allowed_ids)
                     .into_iter()
-                    .next_back()
+                    .next()
                     .map(|(_, path)| path)
             }
         })
@@ -145,7 +138,7 @@ pub(crate) fn pick_face_for_ids_with_preferences_in(
         .and_then(|id| pick_face_by_id_in(servant_dir, id))
         .or_else(|| {
             face_id
-                .filter(|id| portrait_id_is_allowed(allowed_ids, *id))
+                .filter(|_| allowed_ids.is_empty())
                 .and_then(|id| pick_face_by_id_in(servant_dir, id))
         })
         .or_else(|| {
@@ -154,6 +147,7 @@ pub(crate) fn pick_face_for_ids_with_preferences_in(
             } else {
                 pick_faces_desc_in(servant_dir)
                     .into_iter()
+                    .rev()
                     .find(|path| portrait_id_is_allowed(allowed_ids, face_template_stage(path)))
             }
         })
@@ -195,8 +189,8 @@ fn saved_portrait_id(settings: &Mutex<AppUiSettings>, variant_key: Option<&str>)
 /// the absolute path so the frontend can hand it to `convertFileSrc()`.
 ///
 /// Priority: (1) global portrait selection stored in `app_ui_settings.json`
-/// for this `variant_key`, (2) explicit `face_id` variant default,
-/// (3) default "highest ascension" portrait via [`pick_portrait_in`].
+/// for this `variant_key`, (2) explicit `face_id` when no collection is known,
+/// (3) first available portrait in numeric order within the current collection.
 /// Returning `Ok(None)` on a missing file lets the UI fall back to a
 /// placeholder without surfacing an error toast.
 #[tauri::command]
@@ -235,9 +229,35 @@ pub(crate) struct ServantPortraitOptions {
     pub(crate) selected_id: Option<u32>,
 }
 
+fn portrait_options_in(
+    servant_dir: &Path,
+    global_id: Option<u32>,
+    face_id: Option<u32>,
+    allowed_ids: &[u32],
+) -> ServantPortraitOptions {
+    let options: Vec<PortraitOption> = list_portraits_for_ids_in(servant_dir, allowed_ids)
+        .into_iter()
+        .map(|(id, path)| PortraitOption {
+            id,
+            path: path.to_string_lossy().into_owned(),
+        })
+        .collect();
+    let selected_path =
+        pick_portrait_for_ids_with_preferences_in(servant_dir, global_id, face_id, allowed_ids);
+    let selected_id = selected_path.and_then(|path| {
+        options
+            .iter()
+            .find(|option| Path::new(&option.path) == path.as_path())
+            .map(|option| option.id)
+    });
+    ServantPortraitOptions {
+        options,
+        selected_id,
+    }
+}
+
 /// List all available full-art portraits for `servant_id` in ascending
-/// numeric order, along with the currently-selected portrait id (if any)
-/// for this `variant_key` from the global settings.
+/// numeric order, along with the effective portrait id, including the default.
 #[tauri::command]
 pub(crate) fn list_servant_portraits(
     app: tauri::AppHandle,
@@ -253,26 +273,16 @@ pub(crate) fn list_servant_portraits(
         });
     };
     let servant_dir = root.join(servant_id.to_string());
-    let options: Vec<PortraitOption> =
-        list_portraits_for_ids_in(&servant_dir, &servant.portrait_ids)
-            .into_iter()
-            .map(|(id, path)| PortraitOption {
-                id,
-                path: path.to_string_lossy().into_owned(),
-            })
-            .collect();
-    let selected_id = saved_portrait_id(settings_state.inner(), Some(&variant_key)).filter(|id| {
-        portrait_id_is_allowed(&servant.portrait_ids, *id)
-            && options.iter().any(|option| option.id == *id)
-    });
-    Ok(ServantPortraitOptions {
-        options,
-        selected_id,
-    })
+    Ok(portrait_options_in(
+        &servant_dir,
+        saved_portrait_id(settings_state.inner(), Some(&variant_key)),
+        servant.face_id,
+        &servant.portrait_ids,
+    ))
 }
 
 /// Persist a global portrait selection for `variant_key`. This overrides
-/// the default highest-ascension pick for all teams using this variant.
+/// the default first portrait for all teams using this variant.
 #[tauri::command]
 pub(crate) fn save_servant_portrait_selection(
     app: tauri::AppHandle,
@@ -317,4 +327,81 @@ pub(crate) fn get_servant_face_path(
     let picked =
         pick_face_for_ids_with_preferences_in(&servant_dir, global_id, face_id, &allowed_ids);
     Ok(picked.map(|path| path.to_string_lossy().into_owned()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collection_defaults_to_first_available_image_and_preserves_saved_choices() {
+        let tmp = tempfile::tempdir().unwrap();
+        for id in [1, 2, 4, 10, 800170] {
+            for prefix in ["narrow_servant", "face_servant"] {
+                fs::write(tmp.path().join(format!("{prefix}_{id}.png")), b"png").unwrap();
+            }
+        }
+        // The first collection ID is absent; another collection's stage 1 exists.
+        let allowed = [800171, 10, 2];
+        for saved in [None, Some(1), Some(800171), Some(10)] {
+            let expected = if saved == Some(10) { 10 } else { 2 };
+            let options = portrait_options_in(tmp.path(), saved, Some(10), &allowed);
+            assert_eq!(options.selected_id, Some(expected));
+            assert_eq!(
+                options
+                    .options
+                    .iter()
+                    .map(|option| option.id)
+                    .collect::<Vec<_>>(),
+                vec![2, 10]
+            );
+            assert_eq!(
+                pick_portrait_for_ids_with_preferences_in(tmp.path(), saved, Some(10), &allowed),
+                Some(tmp.path().join(format!("narrow_servant_{expected}.png"))),
+            );
+            assert_eq!(
+                pick_face_for_ids_with_preferences_in(tmp.path(), saved, Some(10), &allowed),
+                Some(tmp.path().join(format!("face_servant_{expected}.png"))),
+            );
+        }
+    }
+
+    #[test]
+    fn unscoped_defaults_use_first_numeric_image_and_keep_explicit_overrides() {
+        let tmp = tempfile::tempdir().unwrap();
+        for name in ["invalid", "10", "2"] {
+            for prefix in ["narrow_servant", "face_servant"] {
+                fs::write(tmp.path().join(format!("{prefix}_{name}.png")), b"png").unwrap();
+            }
+        }
+        for (saved, face_id, expected) in [
+            (None, None, 2),
+            (None, Some(10), 10),
+            (Some(2), Some(10), 2),
+            (Some(99), Some(98), 2),
+        ] {
+            assert_eq!(
+                portrait_options_in(tmp.path(), saved, face_id, &[]).selected_id,
+                Some(expected)
+            );
+            assert_eq!(
+                pick_face_for_ids_with_preferences_in(tmp.path(), saved, face_id, &[]),
+                Some(tmp.path().join(format!("face_servant_{expected}.png"))),
+            );
+        }
+    }
+
+    #[test]
+    fn missing_collection_images_do_not_fall_back_to_another_collection() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("narrow_servant_1.png"), b"png").unwrap();
+        fs::write(tmp.path().join("face_servant_1.png"), b"png").unwrap();
+        let options = portrait_options_in(tmp.path(), Some(1), Some(1), &[2]);
+        assert!(options.options.is_empty());
+        assert_eq!(options.selected_id, None);
+        assert_eq!(
+            pick_face_for_ids_with_preferences_in(tmp.path(), Some(1), Some(1), &[2]),
+            None
+        );
+    }
 }
