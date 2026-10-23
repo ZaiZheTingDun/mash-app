@@ -282,9 +282,20 @@ pub struct GrandClassDefinition {
     pub validation_message: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SupportClassFilterMode {
+    #[default]
+    CorrespondingClass,
+    AllClasses,
+    Both,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRecognitionSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_class_filter_mode: Option<SupportClassFilterMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub support_ce_threshold: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

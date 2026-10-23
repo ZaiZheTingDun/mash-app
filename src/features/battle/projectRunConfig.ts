@@ -84,6 +84,7 @@ export function buildProjectRunConfig(
     mysticCodeId: project.mysticCodeId ?? null,
     partyOrder: null,
     supportClassFilter: null,
+    supportClassFilterMode: project.recognitionSettings?.supportClassFilterMode ?? "correspondingClass",
     supportServantName: null,
     supportServantId: project.supportServantId ?? null,
     supportServantVariantKey: project.supportServantVariantKey ?? null,

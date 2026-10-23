@@ -1,6 +1,7 @@
 //! Support class-tab selection and CN EXTRA-class filtering.
 
 use super::*;
+use crate::SupportClassFilterMode;
 
 pub(crate) const SUPPORT_EXTRA_FILTER_DIALOG_ELEMENT: &str = "dialog_extra_class_filter";
 pub(crate) const SUPPORT_EXTRA_FILTER_LONG_PRESS_MS: u32 = 2000;
@@ -17,6 +18,9 @@ pub(crate) const SUPPORT_EXTRA_FILTER_CONFIRM_BUTTON: Point = Point::new(0.742, 
 /// → berserker → extra → mix. Lookup happens via `class_tab_for` which
 /// maps Atlas Academy `className` strings into one of these tabs.
 pub(crate) const SUPPORT_CLASS_TAB_Y: f64 = 0.178;
+/// The leftmost ALL slot is one ordinary class-tab interval before Saber.
+/// It is distinct from the rightmost MIX (all supports) tab.
+pub(crate) const SUPPORT_TAB_ALL: Point = Point::new(0.0719, SUPPORT_CLASS_TAB_Y);
 pub(crate) const SUPPORT_TAB_SABER: Point = Point::new(0.1246, SUPPORT_CLASS_TAB_Y);
 pub(crate) const SUPPORT_TAB_ARCHER: Point = Point::new(0.1773, SUPPORT_CLASS_TAB_Y);
 pub(crate) const SUPPORT_TAB_LANCER: Point = Point::new(0.2301, SUPPORT_CLASS_TAB_Y);
@@ -45,6 +49,50 @@ impl ExtraClassFilter {
 pub(crate) enum SupportClassFilterAction {
     Tap(Point),
     CnExtra(ExtraClassFilter),
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct SupportClassSearchProgress {
+    pub(crate) tab_done: bool,
+    searching_all_classes: bool,
+}
+
+impl SupportClassSearchProgress {
+    pub(crate) fn filter_action(
+        &self,
+        server: Server,
+        class_name: Option<&str>,
+        mode: SupportClassFilterMode,
+        cn_extra_filter_enabled: bool,
+        cn_extra_configured: bool,
+    ) -> Option<SupportClassFilterAction> {
+        // Without a pinned servant, preserve the current tab in every mode.
+        let class_name = class_name?;
+        if self.tab_done {
+            return None;
+        }
+        if mode == SupportClassFilterMode::AllClasses || self.searching_all_classes {
+            Some(SupportClassFilterAction::Tap(SUPPORT_TAB_ALL))
+        } else {
+            support_class_filter_action(
+                server,
+                class_name,
+                cn_extra_filter_enabled,
+                cn_extra_configured,
+            )
+        }
+    }
+
+    /// An exhausted corresponding-class list gets one ALL scan before a
+    /// refresh. Refreshes and new quests reset the entire progress value.
+    pub(crate) fn advance_to_all_classes(&mut self, mode: SupportClassFilterMode) -> bool {
+        if mode != SupportClassFilterMode::Both || self.searching_all_classes {
+            return false;
+        }
+        self.searching_all_classes = true;
+        self.tab_done = false;
+        true
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

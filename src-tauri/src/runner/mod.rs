@@ -150,11 +150,8 @@ pub struct Runner {
     /// How many times we've tapped the friend-list refresh button this run.
     /// Reset alongside `support_scroll_count` once a match is selected.
     support_refresh_count: u32,
-    /// True once we've tapped the class-filter tab corresponding to the
-    /// pinned servant's class. Reset on refresh (the refresh sometimes
-    /// snaps the UI back to "all") so we always re-confirm the filter
-    /// after a friend-list reload.
-    support_class_tab_done: bool,
+    /// Current class-tab scan, reset after refresh or support selection.
+    support_class_search: SupportClassSearchProgress,
     /// True after this run has saved CN's second-level EXTRA class choice.
     /// The game persists that choice, so later refreshes / repeated quests
     /// only need to tap the ordinary EXTRA tab again.
@@ -256,7 +253,7 @@ impl Runner {
             support_scroll_count: 0,
             support_scroll_end_progress: SupportScrollEndProgress::default(),
             support_refresh_count: 0,
-            support_class_tab_done: false,
+            support_class_search: SupportClassSearchProgress::default(),
             support_extra_class_filter_configured: false,
             support_meta: None,
             support_ce_templates: None,

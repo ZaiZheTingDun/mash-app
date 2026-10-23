@@ -150,7 +150,7 @@ impl Runner {
         self.support_selected = false;
         self.support_scroll_count = 0;
         self.support_refresh_count = 0;
-        self.support_class_tab_done = false;
+        self.support_class_search = SupportClassSearchProgress::default();
         // Every rank-up quest returns to the list and opens a fresh support
         // selection page. Reapply CN's second-level EXTRA filter there too;
         // its modal choice may persist in-game, but the new page still needs

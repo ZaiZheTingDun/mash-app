@@ -41,26 +41,32 @@ impl Runner {
         }
         let meta = self.support_meta.clone().unwrap();
 
-        // Filter the list to the servant's class before scanning. We avoid
-        // searching from "all" + "mix" because they interleave duplicates
-        // and lengthen every OCR pass; the class tab restricts the list to
-        // exactly the rows we care about.
-        if !self.support_class_tab_done {
-            match support_class_filter_action(
+        // Apply the current search stage before OCR. Both mode scans the
+        // corresponding class first, then the leftmost ALL slot before refresh.
+        if !self.support_class_search.tab_done {
+            match self.support_class_search.filter_action(
                 self.server,
-                &meta.class_name,
+                Some(&meta.class_name),
+                self.config.support_class_filter_mode,
                 self.config.enable_extra_class_filter,
                 self.support_extra_class_filter_configured,
             ) {
                 Some(SupportClassFilterAction::Tap(tab)) => {
                     self.emit(
                         "SupportSelect",
-                        &format!("切换职阶筛选 -> {}", meta.class_name),
+                        &format!(
+                            "切换职阶筛选 -> {}",
+                            if tab.x == SUPPORT_TAB_ALL.x {
+                                "全职阶"
+                            } else {
+                                &meta.class_name
+                            },
+                        ),
                     );
                     if !self.tap_at("SupportSelect", tab) {
                         return Ok(());
                     }
-                    self.support_class_tab_done = true;
+                    self.support_class_search.tab_done = true;
                     thread::sleep(SUPPORT_CLASS_TAB_SETTLE);
                     return Ok(());
                 }
@@ -73,7 +79,7 @@ impl Runner {
                         return Ok(());
                     }
                     self.support_extra_class_filter_configured = true;
-                    self.support_class_tab_done = true;
+                    self.support_class_search.tab_done = true;
                     thread::sleep(SUPPORT_EXTRA_FILTER_RESULT_SETTLE);
                     return Ok(());
                 }
@@ -84,7 +90,7 @@ impl Runner {
                         "[runner] no class-tab mapping for className='{}', skipping filter",
                         meta.class_name,
                     );
-                    self.support_class_tab_done = true;
+                    self.support_class_search.tab_done = true;
                 }
             }
         }
@@ -204,7 +210,7 @@ impl Runner {
             self.support_selected = true;
             self.support_scroll_count = 0;
             self.support_refresh_count = 0;
-            self.support_class_tab_done = false;
+            self.support_class_search = SupportClassSearchProgress::default();
             self.support_level_progress = SupportLevelPanelProgress::default();
             thread::sleep(ACTION_DELAY);
             return Ok(());
@@ -286,6 +292,16 @@ impl Runner {
                 self.support_scroll_count += 1;
                 self.support_level_progress = SupportLevelPanelProgress::default();
                 thread::sleep(SUPPORT_SCROLL_SETTLE);
+            } else if self
+                .support_class_search
+                .advance_to_all_classes(self.config.support_class_filter_mode)
+            {
+                self.emit(
+                    "SupportSelect",
+                    "对应职阶未找到匹配助战，切换全职阶继续查找…",
+                );
+                self.support_scroll_count = 0;
+                self.support_level_progress = SupportLevelPanelProgress::default();
             } else if self.support_refresh_count < SUPPORT_MAX_REFRESHES {
                 let reason = if grand_section_exhausted {
                     "当前页已出现普通助战，冠位区域已扫完"
@@ -311,7 +327,7 @@ impl Runner {
                 self.support_level_progress = SupportLevelPanelProgress::default();
                 // Refresh occasionally snaps the class filter back to "all";
                 // re-tap the class tab on the next poll to be safe.
-                self.support_class_tab_done = false;
+                self.support_class_search = SupportClassSearchProgress::default();
                 if !self.confirm_support_refresh_dialog_if_needed()? {
                     return Ok(());
                 }

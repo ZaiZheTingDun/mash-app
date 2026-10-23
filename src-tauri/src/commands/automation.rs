@@ -335,6 +335,11 @@ fn start_automation_with_config(
     config.auto_capture_bond_level_up = recognition_settings.auto_capture_bond_level_up;
     config.verify_skill_activation = recognition_settings.verify_skill_activation;
     config.enable_extra_class_filter = recognition_settings.enable_extra_class_filter;
+    config.support_class_filter_mode = project
+        .as_ref()
+        .and_then(|project| project.recognition_settings)
+        .and_then(|settings| settings.support_class_filter_mode)
+        .unwrap_or_default();
     config.support_full_list_ocr_fallback = recognition_settings.support_full_list_ocr_fallback;
     config.unknown_screen_timeout_count = recognition_settings.unknown_screen_timeout_count;
     let debug_settings = *app.state::<Mutex<DebugSettings>>().lock().unwrap();

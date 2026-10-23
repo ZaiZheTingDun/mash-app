@@ -7460,6 +7460,152 @@ fn support_scrollbar_visible_or_partial_observation_clears_pending_absence() {
 }
 
 #[test]
+fn support_class_search_mode_defaults_for_old_start_payloads() {
+    use crate::SupportClassFilterMode;
+    let config: RunConfig = serde_json::from_value(minimal_run_config_json()).unwrap();
+    assert_eq!(
+        config.support_class_filter_mode,
+        SupportClassFilterMode::CorrespondingClass
+    );
+    for (wire, mode) in [
+        (
+            "correspondingClass",
+            SupportClassFilterMode::CorrespondingClass,
+        ),
+        ("allClasses", SupportClassFilterMode::AllClasses),
+        ("both", SupportClassFilterMode::Both),
+    ] {
+        let mut payload = minimal_run_config_json();
+        payload["supportClassFilterMode"] = serde_json::json!(wire);
+        let config: RunConfig = serde_json::from_value(payload).unwrap();
+        assert_eq!(config.support_class_filter_mode, mode);
+    }
+}
+
+fn support_search_tap(
+    progress: &SupportClassSearchProgress,
+    mode: crate::SupportClassFilterMode,
+) -> Point {
+    match progress
+        .filter_action(Server::Jp, Some("caster"), mode, true, false)
+        .unwrap()
+    {
+        SupportClassFilterAction::Tap(point) => point,
+        _ => panic!("expected a class-tab tap"),
+    }
+}
+
+#[test]
+fn support_class_search_single_modes_repeat_the_same_tab_after_refresh() {
+    use crate::SupportClassFilterMode;
+    for (mode, expected) in [
+        (
+            SupportClassFilterMode::CorrespondingClass,
+            SUPPORT_TAB_CASTER,
+        ),
+        (SupportClassFilterMode::AllClasses, SUPPORT_TAB_ALL),
+    ] {
+        let mut progress = SupportClassSearchProgress::default();
+        for _ in 0..3 {
+            let point = support_search_tap(&progress, mode);
+            approx(point.x, expected.x);
+            approx(point.y, expected.y);
+            progress.tab_done = true;
+            assert!(progress
+                .filter_action(Server::Jp, Some("caster"), mode, true, false)
+                .is_none());
+            assert!(!progress.advance_to_all_classes(mode));
+            progress = SupportClassSearchProgress::default();
+        }
+    }
+    // Extrapolate the leftmost ALL from Saber/Archer's existing spacing.
+    approx(
+        SUPPORT_TAB_ALL.x,
+        SUPPORT_TAB_SABER.x - (SUPPORT_TAB_ARCHER.x - SUPPORT_TAB_SABER.x),
+    );
+}
+
+#[test]
+fn support_class_search_both_scans_class_then_all_before_each_refresh() {
+    use crate::SupportClassFilterMode;
+    let mode = SupportClassFilterMode::Both;
+    let mut progress = SupportClassSearchProgress::default();
+    for _ in 0..3 {
+        approx(support_search_tap(&progress, mode).x, SUPPORT_TAB_CASTER.x);
+        progress.tab_done = true;
+        assert!(progress.advance_to_all_classes(mode));
+        assert!(!progress.tab_done);
+        approx(support_search_tap(&progress, mode).x, SUPPORT_TAB_ALL.x);
+        progress.tab_done = true;
+        assert!(!progress.advance_to_all_classes(mode));
+        // The runner resets progress on refresh, selection, and new quests.
+        progress = SupportClassSearchProgress::default();
+    }
+}
+
+#[test]
+fn support_class_search_both_ends_at_mixed_grand_page_before_switching_or_refreshing() {
+    use crate::SupportClassFilterMode;
+    let mode = SupportClassFilterMode::Both;
+    let mut progress = SupportClassSearchProgress::default();
+    let mixed_page = grand_page_probe(&[0.33, 0.61], &[Some(0.96), Some(0.20)]);
+    assert!(support_list_exhausted(mixed_page.exhausted(), || Ok(false)).unwrap());
+    progress.tab_done = true;
+    assert!(progress.advance_to_all_classes(mode));
+    approx(support_search_tap(&progress, mode).x, SUPPORT_TAB_ALL.x);
+    progress.tab_done = true;
+    // Once ALL also reaches an ordinary row, the next action is refresh.
+    assert!(!progress.advance_to_all_classes(mode));
+}
+
+#[test]
+fn support_class_search_without_pinned_servant_never_taps_a_tab() {
+    use crate::SupportClassFilterMode;
+    for mode in [
+        SupportClassFilterMode::CorrespondingClass,
+        SupportClassFilterMode::AllClasses,
+        SupportClassFilterMode::Both,
+    ] {
+        let progress = SupportClassSearchProgress::default();
+        assert!(progress
+            .filter_action(Server::Cn, None, mode, true, false)
+            .is_none());
+    }
+}
+
+#[test]
+fn support_class_search_both_preserves_cn_extra_choice_across_all_scan_and_refresh() {
+    use crate::SupportClassFilterMode;
+    let mode = SupportClassFilterMode::Both;
+    let mut progress = SupportClassSearchProgress::default();
+    assert!(matches!(
+        progress.filter_action(Server::Cn, Some("foreigner"), mode, true, false),
+        Some(SupportClassFilterAction::CnExtra(_))
+    ));
+    progress.tab_done = true;
+    assert!(progress.advance_to_all_classes(mode));
+    match progress
+        .filter_action(Server::Cn, Some("foreigner"), mode, true, true)
+        .unwrap()
+    {
+        SupportClassFilterAction::Tap(point) => approx(point.x, SUPPORT_TAB_ALL.x),
+        _ => panic!("ALL must not configure the EXTRA dialog"),
+    }
+    progress = SupportClassSearchProgress::default();
+    match progress
+        .filter_action(Server::Cn, Some("foreigner"), mode, true, true)
+        .unwrap()
+    {
+        SupportClassFilterAction::Tap(point) => approx(point.x, SUPPORT_TAB_EXTRA.x),
+        _ => panic!("saved EXTRA choice only needs a tab tap after refresh"),
+    }
+    assert!(
+        matches!(progress.filter_action(Server::Cn, Some("foreigner"), SupportClassFilterMode::AllClasses, true, false),
+        Some(SupportClassFilterAction::Tap(point)) if point.x == SUPPORT_TAB_ALL.x)
+    );
+}
+
+#[test]
 fn grand_exhaustion_still_runs_the_scrollbar_probe_before_refreshing() {
     for (grand_exhausted, scrollbar_exhausted, expected) in [
         (true, false, true),

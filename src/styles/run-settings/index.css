@@ -363,20 +363,6 @@
   align-items: flex-end;
 }
 
-.battle-page .battle-advanced-settings-button.rt-Button {
-  height: 30px;
-  margin: 0 0 12px;
-  padding: 0 6px;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  font-size: 11px;
-}
-
-.battle-page .battle-advanced-settings-button .rt-Text {
-  font-size: 11px;
-}
-
 .battle-task-actions {
   gap: 15.5px;
 }

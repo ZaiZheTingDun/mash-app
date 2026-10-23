@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::commands::settings::NoblePhantasmDetectionMode;
+use crate::SupportClassFilterMode;
 
 // ---------------------------------------------------------------------------
 // Configuration (received from frontend)
@@ -159,6 +160,9 @@ pub struct RunConfig {
     pub party_order: Option<Vec<u32>>,
     /// Class filter to tap in the support list (e.g. "Caster").
     pub support_class_filter: Option<String>,
+    /// Which class tabs to search before refreshing the support list.
+    #[serde(default)]
+    pub support_class_filter_mode: SupportClassFilterMode,
     /// Legacy support servant template key. Only consulted by the no-pin
     /// fallback path in `handle_support_select`; the OCR detector reads
     /// `support_servant_id` instead.

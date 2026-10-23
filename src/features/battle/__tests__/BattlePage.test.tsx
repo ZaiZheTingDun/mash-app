@@ -508,43 +508,26 @@ describe("BattlePage", () => {
     expect(screen.getByRole("button", { name: "停止任务" })).toBeEnabled();
   });
 
-  it("opens advanced loot settings and persists five-star CE drop options", async () => {
-    const user = userEvent.setup();
+  it("removes the standalone advanced settings entry", () => {
     mockProjectCommands();
     renderBattlePage(PROJECT);
-
-    await user.click(await screen.findByRole("button", { name: "高级设置" }));
-
-    expect(await screen.findByRole("dialog")).toHaveTextContent("战利品掉落");
-    await user.click(screen.getByRole("switch", { name: "五星礼装掉落自动停止" }));
-
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("update_project", {
-        project: expect.objectContaining({
-          id: "project-1",
-          recognitionSettings: expect.objectContaining({
-            stopOnFiveStarCeDrop: true,
-            fiveStarCeDropTargetCount: 1,
-          }),
-        }),
-      });
-    });
-
-    expect(await screen.findByRole("spinbutton", { name: "五星礼装掉落个数" })).toHaveValue(1);
-    await user.click(screen.getByRole("button", { name: "增加五星礼装掉落个数" }));
-
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("update_project", {
-        project: expect.objectContaining({
-          id: "project-1",
-          recognitionSettings: expect.objectContaining({
-            stopOnFiveStarCeDrop: true,
-            fiveStarCeDropTargetCount: 2,
-          }),
-        }),
-      });
-    });
+    expect(screen.queryByRole("button", { name: "高级设置" })).not.toBeInTheDocument();
   });
+
+  it.each(["correspondingClass", "allClasses", "both"] as const)(
+    "passes the saved support class filter mode %s to automation",
+    async (supportClassFilterMode) => {
+      const user = userEvent.setup();
+      mockProjectCommands();
+      renderBattlePage({ ...PROJECT, recognitionSettings: { supportClassFilterMode } });
+      await user.click(await screen.findByRole("button", { name: "开始任务" }));
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("start_automation", {
+          config: expect.objectContaining({ supportClassFilterMode }),
+        });
+      });
+    },
+  );
 
   it("passes enabled five-star CE drop stop settings to automation", async () => {
     const user = userEvent.setup();

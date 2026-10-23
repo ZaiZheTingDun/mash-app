@@ -8,10 +8,11 @@ import {
   type ThresholdKey,
 } from "../settings/recognitionSettingsModel";
 import { RecognitionThresholdSettings } from "../settings/SettingsRecognitionPage";
+import { ProjectRunSettings } from "./ProjectRunSettings";
 import type { Project } from "../../types/project";
 import type { ProjectRecognitionSettings, RecognitionSettings } from "../../types/recognition";
 
-type ProjectSettingsSection = "basic" | "recognition";
+type ProjectSettingsSection = "basic" | "run" | "recognition";
 
 interface ProjectSettingsDialogProps {
   open: boolean;
@@ -208,6 +209,18 @@ export function ProjectSettingsDialog({
                     type="button"
                     variant="ghost"
                     color="gray"
+                    data-active={section === "run" ? "true" : undefined}
+                    aria-current={section === "run" ? "page" : undefined}
+                    onClick={() => setSection("run")}
+                    className="settings-nav-button"
+                  >
+                    <GearIcon width={14} height={14} />
+                    <Text size="2" weight="medium">运行设置</Text>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    color="gray"
                     data-active={section === "recognition" ? "true" : undefined}
                     aria-current={section === "recognition" ? "page" : undefined}
                     onClick={() => setSection("recognition")}
@@ -234,7 +247,7 @@ export function ProjectSettingsDialog({
             <Flex align="center" className="settings-content-header">
               <Flex direction="column" justify="center" className="settings-content-header-inner">
                 <Text size="5" weight="bold">
-                  {section === "basic" ? "基础设置" : "阈值设置"}
+                  {section === "basic" ? "基础设置" : section === "run" ? "运行设置" : "阈值设置"}
                 </Text>
               </Flex>
               <Dialog.Close>
@@ -338,6 +351,8 @@ export function ProjectSettingsDialog({
                       </Text>
                     )}
                   </Box>
+                ) : section === "run" ? (
+                  <ProjectRunSettings project={project} onUpdateProject={onUpdateProject} />
                 ) : (
                   <RecognitionThresholdSettings
                     active={open && project != null}

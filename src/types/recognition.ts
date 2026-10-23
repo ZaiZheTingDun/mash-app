@@ -16,7 +16,10 @@ export interface RecognitionSettings {
   unknownScreenTimeoutCount: number;
 }
 
+export type SupportClassFilterMode = "correspondingClass" | "allClasses" | "both";
+
 export interface ProjectRecognitionSettings {
+  supportClassFilterMode?: SupportClassFilterMode;
   supportCeThreshold?: number;
   supportCeFullGateThreshold?: number;
   supportMlbIconThreshold?: number;

@@ -3867,3 +3867,34 @@ fn advanced_battle_scene_defaults_missing_enemy_target_to_none() {
     assert!(scene.enemy_target.is_none());
     assert!(scene.turns.is_empty());
 }
+
+#[test]
+fn project_support_class_filter_modes_round_trip_and_default_legacy_projects() {
+    let old_project: Project = serde_json::from_value(serde_json::json!({
+        "id": "legacy", "name": "legacy", "recognitionSettings": { "stopOnFiveStarCeDrop": true }
+    }))
+    .unwrap();
+    assert_eq!(
+        old_project
+            .recognition_settings
+            .unwrap()
+            .support_class_filter_mode
+            .unwrap_or_default(),
+        SupportClassFilterMode::CorrespondingClass
+    );
+    for wire in ["correspondingClass", "allClasses", "both"] {
+        let project: Project = serde_json::from_value(serde_json::json!({
+            "id": "test", "name": "test", "recognitionSettings": {
+                "supportClassFilterMode": wire, "stopOnFiveStarCeDrop": true, "fiveStarCeDropTargetCount": 3,
+            }
+        })).unwrap();
+        let normalized = normalize_project(project);
+        let value = serde_json::to_value(&normalized).unwrap();
+        assert_eq!(value["recognitionSettings"]["supportClassFilterMode"], wire);
+        assert_eq!(value["recognitionSettings"]["fiveStarCeDropTargetCount"], 3);
+    }
+    assert!(serde_json::from_value::<ProjectRecognitionSettings>(
+        serde_json::json!({ "supportClassFilterMode": "unknown" })
+    )
+    .is_err());
+}
