@@ -770,28 +770,16 @@ pub struct SupportDiagnostics {
     #[serde(default)]
     pub confirm_button_anchors: Vec<NormRect>,
     /// Whether at least one Grand servant ("冠位从者") row is currently
-    /// visible. The sidecar probes for the gold-on-blue ribbon at a
-    /// fixed offset next to each `confirm_button_anchors` entry rather
-    /// than scanning the whole avatar column, which used to false-match
-    /// other gold-on-blue chrome and either kept the runner scrolling
-    /// past an exhausted Grand section or stopped scrolling too early
-    /// on a still-full one. `None` means the active server's template
-    /// bundle doesn't ship the ribbon (e.g. JP), so callers should fall
-    /// back to the scroll-bar end indicator.
+    /// visible. The sidecar probes for the red craft-essence icon above
+    /// the three CE slots, at a fixed offset from each confirm button.
+    /// None means no probe result; callers fall back to the scrollbar.
     #[serde(default)]
     pub is_grand_section_visible: Option<bool>,
-    /// Per-anchor TM_CCOEFF_NORMED scores for the "冠位从者" ribbon
-    /// probe, aligned 1-1 with `confirm_button_anchors`. Each entry
-    /// is the max score within that row's badge ROI, or `None` when
-    /// the ROI clipped past the frame edge / the template is
-    /// unavailable. The debug overlay colours each row's box based
-    /// on whether its score cleared the sidecar's match threshold
-    /// (currently 0.65) — the aggregate `is_grand_section_visible`
-    /// just collapses these to an "any hit" bool and loses the
-    /// per-row breakdown the operator needs to spot a non-Grand row
-    /// drawn green by a single global flag.
+    /// Per-row red craft-essence icon scores, aligned with
+    /// `confirm_button_anchors`. None means the ROI clipped past the
+    /// frame edge. The sidecar classifies scores >= 0.80 as Grand.
     #[serde(default)]
-    pub grand_ribbon_anchor_scores: Vec<Option<f64>>,
+    pub grand_icon_anchor_scores: Vec<Option<f64>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

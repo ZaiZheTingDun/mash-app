@@ -2,6 +2,28 @@ use super::*;
 use std::path::Path;
 
 #[test]
+fn support_diagnostics_preserve_per_row_grand_icon_scores_on_the_wire() {
+    let diagnostics: SupportDiagnostics = serde_json::from_value(serde_json::json!({
+        "listRegion": {"x": 0.0, "y": 0.2, "w": 1.0, "h": 0.8},
+        "nameCandidates": [], "npCandidates": [], "fragmentCount": 0,
+        "isGrandSectionVisible": true,
+        "grandIconAnchorScores": [0.94, 0.26, null]
+    }))
+    .unwrap();
+    assert_eq!(diagnostics.is_grand_section_visible, Some(true));
+    assert_eq!(
+        diagnostics.grand_icon_anchor_scores,
+        vec![Some(0.94), Some(0.26), None]
+    );
+    let wire = serde_json::to_value(&diagnostics).unwrap();
+    assert_eq!(
+        wire["grandIconAnchorScores"],
+        serde_json::json!([0.94, 0.26, null])
+    );
+    assert!(wire.get("grandRibbonAnchorScores").is_none());
+}
+
+#[test]
 fn template_initialization_requires_explicit_success_and_preserves_error_details() {
     let context = "load_templates(/tmp/templates)";
     for response in [

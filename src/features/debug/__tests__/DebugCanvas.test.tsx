@@ -259,7 +259,7 @@ describe("DebugCanvas", () => {
   });
 
   it("colors each Grand-badge ROI by its own per-anchor score, not the aggregate flag", () => {
-    // Mixed list: row 0 scored 0.71 (Grand), row 1 scored 0.31 (not
+    // Mixed list: row 0 scored 0.91 (Grand), row 1 scored 0.31 (not
     // Grand). Aggregate flag is true because at least one row hit,
     // but the overlay must render row 1 as a miss — otherwise the
     // operator gets a false-positive 冠 ✓ over a non-Grand row.
@@ -276,10 +276,10 @@ describe("DebugCanvas", () => {
               fragmentCount: 0,
               confirmButtonAnchors: [
                 { x: 0.85, y: 0.43, w: 0.07, h: 0.06 },
-                { x: 0.85, y: 0.71, w: 0.07, h: 0.06 },
+                { x: 0.85, y: 0.91, w: 0.07, h: 0.06 },
               ],
               isGrandSectionVisible: true,
-              grandRibbonAnchorScores: [0.71, 0.31],
+              grandIconAnchorScores: [0.91, 0.31],
             },
           },
         })}
@@ -295,9 +295,16 @@ describe("DebugCanvas", () => {
         ".debug-overlay-support-grand-badge.miss"
       ).length
     ).toBe(1);
+    const hitBox = mixedContainer.querySelector(".debug-overlay-support-grand-badge.hit");
+    expect(hitBox).toHaveStyle({
+      left: `${(0.85 - 0.678125) * 100}%`,
+      top: `${(0.43 - 0.01597222222222222) * 100}%`,
+      width: `${(43 / 2560) * 100}%`,
+      height: `${(50 / 1440) * 100}%`,
+    });
     // Labels must include the numeric score so operator can spot
     // borderline matches sliding under the threshold over time.
-    expect(mixedContainer.textContent).toContain("冠 ✓ 0.71");
+    expect(mixedContainer.textContent).toContain("冠 ✓ 0.91");
     expect(mixedContainer.textContent).toContain("冠 ✗ 0.31");
 
     // All-miss list: aggregate flag false, every row's score below
@@ -317,7 +324,7 @@ describe("DebugCanvas", () => {
                 { x: 0.85, y: 0.43, w: 0.07, h: 0.06 },
               ],
               isGrandSectionVisible: false,
-              grandRibbonAnchorScores: [0.12],
+              grandIconAnchorScores: [0.12],
             },
           },
         })}
@@ -346,7 +353,7 @@ describe("DebugCanvas", () => {
                 { x: 0.85, y: 0.43, w: 0.07, h: 0.06 },
               ],
               isGrandSectionVisible: null,
-              grandRibbonAnchorScores: [],
+              grandIconAnchorScores: [],
             },
           },
         })}

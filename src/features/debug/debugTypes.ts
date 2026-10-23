@@ -354,14 +354,14 @@ export interface SupportDiagnosticsDto {
   supportRowAnchorSearchRegion?: NormRectDto | null;
   confirmButtonAnchors?: NormRectDto[];
   isGrandSectionVisible?: boolean | null;
-  // Per-anchor "冠位从者" ribbon match scores aligned 1-1 with
+  // Per-anchor 冠位概念礼装图标 match scores aligned 1-1 with
   // `confirmButtonAnchors`. Each entry is the sidecar's
   // TM_CCOEFF_NORMED max within that row's badge ROI, or `null`
   // when the ROI clipped past the frame edge / the template wasn't
   // loaded. The debug overlay colours each row's box from its own
   // score so a non-Grand row in a partly-Grand list doesn't get
   // false-positively painted as Grand by the aggregate flag.
-  grandRibbonAnchorScores?: (number | null)[];
+  grandIconAnchorScores?: (number | null)[];
 }
 
 export interface FindSupportsResultDto {

@@ -47,24 +47,13 @@ function npAnyReady(slot: NoblePhantasmMatchDto) {
   return slot.cardReady === true || slot.npGlowReady === true;
 }
 
-// Mirror of `SUPPORT_GRAND_BADGE_*` in
-// `sidecar/cv-code/mash_cv/cv.py`. The sidecar template-matches the
-// "冠位从者" ribbon inside this rectangle (one per confirm-button
-// anchor) and surfaces a per-anchor score in
-// `diagnostics.grandRibbonAnchorScores`; the overlay shows the exact
-// rectangles the sidecar probed *coloured by that row's individual
-// score* so an operator can see which rows are Grand and which
-// aren't — a single global `isGrandSectionVisible` bool would draw
-// non-Grand rows green any time at least one Grand row was visible,
-// which was the false-positive the operator reported. Keep these in
-// sync with the Python constants when calibrating.
-const SUPPORT_GRAND_BADGE_DX = -0.811;
-const SUPPORT_GRAND_BADGE_DY = 0.201;
-const SUPPORT_GRAND_BADGE_W = 0.123;
-const SUPPORT_GRAND_BADGE_H = 0.019;
-// Matches `SUPPORT_GRAND_BADGE_MATCH_THRESHOLD` in the sidecar — the
-// overlay classifies a per-anchor score as a hit iff it clears this.
-const SUPPORT_GRAND_BADGE_MATCH_THRESHOLD = 0.65;
+// Mirror the sidecar's red craft-essence icon ROI, projected from each
+// confirm-button anchor. Each box uses its own score, not the aggregate.
+const SUPPORT_GRAND_BADGE_DX = -0.678125;
+const SUPPORT_GRAND_BADGE_DY = -0.01597222222222222;
+const SUPPORT_GRAND_BADGE_W = 43 / 2560;
+const SUPPORT_GRAND_BADGE_H = 50 / 1440;
+const SUPPORT_GRAND_BADGE_MATCH_THRESHOLD = 0.80;
 
 const BATTLE_DIGIT_SOURCES = screenshotRegionConfig.screenshotTypes.battle.sources;
 const NP_GAUGE_CONFIG = BATTLE_DIGIT_SOURCES.find(
@@ -769,9 +758,9 @@ export function DebugCanvas({
                 </Box>
               ) : null
             )}
-            {/* "冠位从者" ribbon ROIs — one per confirm-button anchor.
+            {/* 冠位概念礼装图标 ROIs — one per confirm-button anchor.
                Colour mirrors *that row's individual* score from
-               `grandRibbonAnchorScores` (green when the row's score
+               `grandIconAnchorScores` (green when the row's score
                clears the sidecar threshold, gray otherwise). When the
                score is null the ROI clipped past the frame edge — we
                still draw a placeholder so the operator can see why
@@ -783,12 +772,9 @@ export function DebugCanvas({
                 (anchor, i) => {
                   const badgeX = anchor.x + SUPPORT_GRAND_BADGE_DX;
                   const badgeY = anchor.y + SUPPORT_GRAND_BADGE_DY;
-                  // Per-anchor score may be missing (older sidecar,
-                  // ROI clipped) — fall back to the global flag so
-                  // the overlay still classifies *something* in
-                  // partial situations rather than greying every box.
+                  // A missing per-row score stays unclassified.
                   const score =
-                    supportResult.diagnostics.grandRibbonAnchorScores?.[i] ??
+                    supportResult.diagnostics.grandIconAnchorScores?.[i] ??
                     null;
                   const hit =
                     score == null

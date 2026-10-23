@@ -1142,16 +1142,16 @@ export function DebugPage({
               : "")
         );
       }
-      // Surface the "冠位从者" ribbon probe — info level on a hit
+      // Surface the Grand craft-essence icon probe — info level on a hit
       // so it lines up with the runner's user-facing operation log,
       // muted-gray otherwise. `null`/`undefined` means the active
-      // server bundle didn't ship the template (e.g. JP), so we
+      // probe result is unavailable, so we
       // skip the line instead of pretending we know. Include the
       // per-anchor scores so a partly-Grand list ("row 1 是冠位, row
       // 2 不是") is obvious from the log alone — the aggregate flag
       // alone reads as "everything matched" on those frames.
-      const grandScores = diag.grandRibbonAnchorScores ?? [];
-      const grandThreshold = 0.65;
+      const grandScores = diag.grandIconAnchorScores ?? [];
+      const grandThreshold = 0.80;
       const formatGrandScores = () =>
         grandScores.length === 0
           ? ""
@@ -1166,13 +1166,13 @@ export function DebugPage({
         log(
           `识别到冠位从者：助战编队确认按钮 ${
             (diag.confirmButtonAnchors ?? []).length
-          } 个，其中至少一行命中冠位 ROI${formatGrandScores()}`
+          } 个，其中至少一行命中冠位礼装图标${formatGrandScores()}`
         );
       } else if (diag.isGrandSectionVisible === false) {
         log(
           `未识别到冠位从者（${
             (diag.confirmButtonAnchors ?? []).length
-          } 个助战编队确认按钮均未命中冠位 ROI）${formatGrandScores()}`
+          } 个助战编队确认按钮均未命中冠位礼装图标）${formatGrandScores()}`
         );
       }
       if (diag.nameOnlyFallback) {
@@ -2508,11 +2508,11 @@ export function DebugPage({
                         : "✗ 未识别"}
                       （
                       {(
-                        supportResult.diagnostics.grandRibbonAnchorScores ?? []
+                        supportResult.diagnostics.grandIconAnchorScores ?? []
                       )
                         .map((s, idx) => {
                           if (s == null) return `#${idx + 1}=n/a`;
-                          const tick = s >= 0.65 ? "✓" : "✗";
+                          const tick = s >= 0.80 ? "✓" : "✗";
                           return `#${idx + 1}=${s.toFixed(2)}${tick}`;
                         })
                         .join("  ") ||

@@ -2098,6 +2098,17 @@ _PROD_CN_TEMPLATES_DIR = os.path.normpath(
         "src-tauri", "resources", "servers", "cn", "templates",
     )
 )
+
+def _load_cn_support_templates():
+    from mash_cv import cv
+
+    cv._load_templates(
+        os.path.join(_REPO_ROOT, "src-tauri/resources/servers/shared/templates"),
+        key_prefix="shared",
+    )
+    cv._load_templates(_PROD_CN_TEMPLATES_DIR, append=True)
+
+
 # Per-servant face/portrait/CE assets. Used by the command-card identifier
 # tests to drive real face matching against checked-in `card_servant_*.png`
 # templates instead of synthetic patches.
@@ -3860,7 +3871,7 @@ def test_support_skill_details_from_habetrot_screenshot(monkeypatch):
     import mash_cv.cv as cv
 
     cv._set_server("CN")
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    _load_cn_support_templates()
 
     try:
         img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "error_2_no_skill.png"))
@@ -3909,9 +3920,8 @@ def test_support_skill_details_from_habetrot_screenshot(monkeypatch):
 def test_support_skill_details_use_dedicated_digit_templates_for_non_ten_levels():
     import mash_cv.cv as cv
 
-    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     cv._set_server("CN")
-    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    _load_cn_support_templates()
     img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "debug_2-10-1.png"))
     assert img is not None
 
@@ -3941,9 +3951,8 @@ def test_support_skill_details_use_dedicated_digit_templates_for_non_ten_levels(
 def test_support_skill_details_do_not_treat_six_as_ten():
     import mash_cv.cv as cv
 
-    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     cv._set_server("CN")
-    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    _load_cn_support_templates()
     img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "debug_3.png"))
     assert img is not None
 
@@ -3970,9 +3979,8 @@ def test_support_skill_details_do_not_treat_six_as_ten():
 def test_support_skill_details_read_wide_slot_ten():
     import mash_cv.cv as cv
 
-    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     cv._set_server("CN")
-    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    _load_cn_support_templates()
     img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "error_6_10_1.png"))
     assert img is not None
 
@@ -3998,9 +4006,8 @@ def test_support_skill_details_read_wide_slot_ten():
 def test_support_skill_details_use_full_row_for_name_only_fallback():
     import mash_cv.cv as cv
 
-    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     cv._set_server("CN")
-    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    _load_cn_support_templates()
     img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "error_10_10_1.png"))
     assert img is not None
 
@@ -4027,9 +4034,8 @@ def test_support_skill_details_use_full_row_for_name_only_fallback():
 def test_support_skill_details_classifies_short_owned_panel():
     import mash_cv.cv as cv
 
-    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     cv._set_server("CN")
-    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    _load_cn_support_templates()
     img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "error_2_no_skill.png"))
     assert img is not None
 
@@ -4064,9 +4070,8 @@ def test_support_skill_details_owned_three_skills_from_score_anchor():
     """
     import mash_cv.cv as cv
 
-    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     cv._set_server("CN")
-    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    _load_cn_support_templates()
     img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "debug_1_skill_5_10_4.png"))
     assert img is not None
 
@@ -4101,9 +4106,8 @@ def test_support_skill_details_append_five_skills_from_score_anchor():
     """
     import mash_cv.cv as cv
 
-    root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     cv._set_server("CN")
-    cv._load_templates(os.path.join(root, "src-tauri/resources/servers/cn/templates"))
+    _load_cn_support_templates()
     img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "debug_2_append_5_skill.png"))
     assert img is not None
 
@@ -4195,7 +4199,7 @@ def test_support_scores_read_concrete_cn_values(fixture, expected):
     import mash_cv.cv as cv
 
     cv._set_server("CN")
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    _load_cn_support_templates()
     try:
         img = cv2.imread(os.path.join(_TEST_SCREENSHOTS_DIR, fixture))
         assert img is not None, fixture
@@ -4254,7 +4258,7 @@ def test_support_scores_read_both_grand_values_at_native_and_1080p(
 def test_support_find_confirm_button_anchors_prefers_cn_template():
     import mash_cv.cv as cv
 
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    _load_cn_support_templates()
     tmpl = cv._get_template(cv.SUPPORT_CONFIRM_BUTTON_TEMPLATE)
     assert tmpl is not None
 
@@ -4281,7 +4285,7 @@ def test_find_supports_diagnostics_include_confirm_button_anchors(monkeypatch):
     """
     import mash_cv.cv as cv
 
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    _load_cn_support_templates()
     tmpl = cv._get_template(cv.SUPPORT_CONFIRM_BUTTON_TEMPLATE)
     assert tmpl is not None
 
@@ -4317,7 +4321,7 @@ def test_find_supports_diagnostics_include_confirm_button_anchors(monkeypatch):
 def test_find_supports_confirm_button_anchors_empty_when_no_buttons(monkeypatch):
     import mash_cv.cv as cv
 
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    _load_cn_support_templates()
     img = np.full((1440, 2560, 3), 96, dtype=np.uint8)
 
     monkeypatch.setattr(cv, "_get_ocr", lambda: None)
@@ -4335,62 +4339,13 @@ def test_find_supports_confirm_button_anchors_empty_when_no_buttons(monkeypatch)
     assert result["diagnostics"]["confirmButtonAnchors"] == []
 
 
-def test_grand_badge_scores_fail_when_required_variants_are_missing(monkeypatch):
+def test_grand_badge_scores_fail_when_required_icon_is_missing(monkeypatch):
     from mash_cv import cv
     monkeypatch.setattr(cv, "templates", {})
     img = np.full((1440, 2560, 3), 96, dtype=np.uint8)
     anchors = [{"x": 0.85, "y": 0.43, "w": 0.07, "h": 0.06}]
-    with pytest.raises(TemplateLoadError, match="grand_servant"):
+    with pytest.raises(TemplateLoadError, match="icon_grand_craft_essence"):
         cv._support_grand_badge_scores_per_anchor(img, anchors)
-
-
-@pytest.mark.skipif(
-    not os.path.isdir(_PROD_CN_TEMPLATES_DIR),
-    reason="CN production templates dir not available",
-)
-def test_grand_badge_scores_takes_max_across_template_variants():
-    """Multiple ribbon templates ship for visual variants of the
-    badge (plain text and the bright gold-with-flourish version
-    that decorates highlighted Grand rows). The probe must take
-    the per-anchor *max* across all loaded variants — a row that
-    matches *either* art style should flip to a hit. The bright
-    variant scores noticeably higher on captures where the row's
-    avatar uses the highlighted art, and dropping its contribution
-    would push borderline matches under the 0.65 threshold."""
-    import mash_cv.cv as cv
-
-    fixture = os.path.join(_TEST_SCREENSHOTS_DIR, "grand_support_bond.png")
-    if not os.path.isfile(fixture):
-        pytest.skip("grand_support_bond.png fixture not available")
-
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
-    img = cv2.imread(fixture, cv2.IMREAD_COLOR)
-    anchors = cv._support_find_confirm_button_anchors(img)
-    assert len(anchors) >= 2, anchors
-
-    full_scores = cv._support_grand_badge_scores_per_anchor(img, anchors)
-    assert full_scores is not None and all(s is not None for s in full_scores)
-
-    # Drop variants one at a time and confirm the multi-variant
-    # result is at least as high as either single-variant subset —
-    # i.e. the function genuinely keeps the best variant per row,
-    # not a fixed first/last entry.
-    for keep in cv.SUPPORT_GRAND_BADGE_TEMPLATES:
-        single = {keep: cv.templates[keep]}
-        original = dict(cv.templates)
-        try:
-            cv.templates.clear()
-            cv.templates.update(single)
-            single_scores = cv._support_grand_badge_scores_per_anchor(
-                img, anchors
-            )
-        finally:
-            cv.templates.clear()
-            cv.templates.update(original)
-        assert single_scores is not None
-        for full, sub in zip(full_scores, single_scores):
-            assert full is not None and sub is not None
-            assert full >= sub - 1e-6, (keep, full, sub)
 
 
 def test_grand_badge_scores_empty_when_no_anchors():
@@ -4399,7 +4354,7 @@ def test_grand_badge_scores_empty_when_no_anchors():
     records a "section exhausted" miss for this poll."""
     import mash_cv.cv as cv
 
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    _load_cn_support_templates()
     img = np.full((1440, 2560, 3), 96, dtype=np.uint8)
     scores = cv._support_grand_badge_scores_per_anchor(img, [])
     assert scores == []
@@ -4422,7 +4377,7 @@ def test_grand_badge_scores_hit_on_real_grand_support_capture():
     if not os.path.isfile(fixture):
         pytest.skip("grand_support_bond.png fixture not available")
 
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    _load_cn_support_templates()
     img = cv2.imread(fixture, cv2.IMREAD_COLOR)
     anchors = cv._support_find_confirm_button_anchors(img)
     assert len(anchors) >= 2, anchors
@@ -4432,7 +4387,7 @@ def test_grand_badge_scores_hit_on_real_grand_support_capture():
         s is not None and s >= cv.SUPPORT_GRAND_BADGE_MATCH_THRESHOLD
         for s in scores
     ]
-    assert any(hits), scores
+    assert all(hits), scores
     assert cv._support_grand_section_visible_from_scores(scores) is True
 
 
@@ -4441,22 +4396,14 @@ def test_grand_badge_scores_hit_on_real_grand_support_capture():
     reason="CN production templates dir not available",
 )
 def test_grand_badge_scores_hit_on_1920x1080_downscale():
-    """Regression: the ribbon template (314×28 px, extracted from a
-    2560×1440 source) is wider than the per-anchor ROI on a 1920×1080
-    capture (the resolution scrcpy negotiates on most BlueStacks /
-    Pixel devices). Before the resize fix, every anchor's ROI was
-    tripped by the "ROI too small" guard and the function returned
-    ``False`` even when a Grand row was clearly visible — operators
-    saw 冠 ✗ over a perfectly aligned overlay box. Pin the
-    1920×1080-aware behaviour so a regression on the rescale path
-    fails this test before it reaches a live device."""
+    """Scale the reference icon to the 1920×1080 frame before matching."""
     import mash_cv.cv as cv
 
     fixture = os.path.join(_TEST_SCREENSHOTS_DIR, "grand_support_bond.png")
     if not os.path.isfile(fixture):
         pytest.skip("grand_support_bond.png fixture not available")
 
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    _load_cn_support_templates()
     src = cv2.imread(fixture, cv2.IMREAD_COLOR)
     downscaled = cv2.resize(src, (1920, 1080), interpolation=cv2.INTER_AREA)
     anchors = cv._support_find_confirm_button_anchors(downscaled)
@@ -4473,7 +4420,7 @@ def test_grand_badge_scores_hit_on_1920x1080_downscale():
 def test_grand_badge_scores_miss_on_ordinary_support_capture():
     """And the negative case: a regular non-Grand support-select page
     must NOT clear the per-anchor threshold. Every per-anchor score
-    on this fixture sits well under 0.65; the aggregator must report
+    on this fixture sits well under 0.80; the aggregator must report
     ``False`` so the operator's overlay shows ✗ on every row."""
     import mash_cv.cv as cv
 
@@ -4481,7 +4428,7 @@ def test_grand_badge_scores_miss_on_ordinary_support_capture():
     if not os.path.isfile(fixture):
         pytest.skip("support_select.png fixture not available")
 
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    _load_cn_support_templates()
     img = cv2.imread(fixture, cv2.IMREAD_COLOR)
     anchors = cv._support_find_confirm_button_anchors(img)
     scores = cv._support_grand_badge_scores_per_anchor(img, anchors)
@@ -4498,7 +4445,7 @@ def test_grand_badge_scores_miss_on_ordinary_support_capture():
 )
 def test_find_supports_surfaces_grand_section_diagnostics(monkeypatch):
     """`_find_supports` must publish both ``isGrandSectionVisible``
-    (the runner's aggregate signal) and ``grandRibbonAnchorScores``
+    (the runner's aggregate signal) and ``grandIconAnchorScores``
     (the debug overlay's per-row breakdown). Pin both fields — the
     Rust serde / TS DTO mirror them by exact name."""
     import mash_cv.cv as cv
@@ -4507,7 +4454,7 @@ def test_find_supports_surfaces_grand_section_diagnostics(monkeypatch):
     if not os.path.isfile(fixture):
         pytest.skip("grand_support_bond.png fixture not available")
 
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    _load_cn_support_templates()
     img = cv2.imread(fixture, cv2.IMREAD_COLOR)
     monkeypatch.setattr(cv, "_get_ocr", lambda: None)
     result = cv._find_supports(
@@ -4522,7 +4469,7 @@ def test_find_supports_surfaces_grand_section_diagnostics(monkeypatch):
     diag = result["diagnostics"]
     assert diag["isGrandSectionVisible"] is True
     anchors = diag["confirmButtonAnchors"]
-    scores = diag["grandRibbonAnchorScores"]
+    scores = diag["grandIconAnchorScores"]
     assert len(scores) == len(anchors), (scores, anchors)
     # At least one row must clear the threshold (the fixture is the
     # Grand-section capture). Per-row hits drive the overlay colour.
@@ -4530,14 +4477,14 @@ def test_find_supports_surfaces_grand_section_diagnostics(monkeypatch):
         s is not None and s >= cv.SUPPORT_GRAND_BADGE_MATCH_THRESHOLD
         for s in scores
     ]
-    assert any(hits), scores
+    assert all(hits), scores
 
 
 def test_support_skill_details_reads_merged_ten_contours_without_ocr(monkeypatch):
     import mash_cv.cv as cv
 
     cv._set_server("CN")
-    cv._load_templates(_PROD_CN_TEMPLATES_DIR)
+    _load_cn_support_templates()
 
     try:
         img = cv2.imread(os.path.join(_SUPPORT_FIXTURES_DIR, "error_10_10_1.png"))
