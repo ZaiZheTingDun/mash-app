@@ -90,6 +90,26 @@
               },
               "threshold": 0.85
             },
+            "support_scroll_thumb_start": {
+              "template": "shared/ui_scroll_bar_start",
+              "region": {
+                "x": 0.937,
+                "y": 0.191,
+                "w": 0.063,
+                "h": 0.809
+              },
+              "threshold": 0.85
+            },
+            "support_scroll_thumb_end": {
+              "template": "shared/ui_scroll_bar_end",
+              "region": {
+                "x": 0.937,
+                "y": 0.191,
+                "w": 0.063,
+                "h": 0.809
+              },
+              "threshold": 0.85
+            },
             "refresh_available": {
               "template": "shared/screen_support_refresh_button",
               "region": {

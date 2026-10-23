@@ -83,7 +83,8 @@ pub(crate) const BATTLE_ACTION_MENU_ELEMENT: &str = "battle_action_menu";
 pub(crate) const SKILL_TARGET_CLOSE_BUTTON_ELEMENT: &str = "skill_target_close_button";
 pub(crate) const COMMAND_SPELL_CLOSE_BUTTON_ELEMENT: &str = "command_spell_close_button";
 pub(crate) const ORDER_CHANGE_CLOSE_BUTTON_ELEMENT: &str = "order_change_close_button";
-pub(crate) const SUPPORT_SCROLL_START_ELEMENT: &str = "support_scroll_start";
+pub(crate) const SUPPORT_SCROLL_THUMB_START_ELEMENT: &str = "support_scroll_thumb_start";
+pub(crate) const SUPPORT_SCROLL_THUMB_END_ELEMENT: &str = "support_scroll_thumb_end";
 pub(crate) const SUPPORT_SCROLL_END_ELEMENT: &str = "support_scroll_end";
 /// Party servant auto-placement is reserved for a later implementation.
 /// Keep the config shape intact, but do not enter ServantSelect from

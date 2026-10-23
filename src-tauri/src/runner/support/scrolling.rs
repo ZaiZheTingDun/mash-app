@@ -169,3 +169,59 @@ pub(crate) fn support_not_found_scroll_message(
     };
     format!("未找到从者 {name} [{grand_label}]，{scroll_action} (第 {attempt} 次)")
 }
+
+/// Full-track thumb observations are independent of the runner's scroll
+/// count: entering a support page can preserve an intermediate scroll offset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SupportScrollEndDecision {
+    AtEnd,
+    Scrollable,
+    Unconfirmed,
+    NoScrollbar,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct SupportScrollEndProgress {
+    absent_at_scroll: Option<u32>,
+}
+
+impl SupportScrollEndProgress {
+    pub(crate) fn observe(
+        &mut self,
+        thumb_start: &crate::screen::ElementMatch,
+        thumb_end: &crate::screen::ElementMatch,
+        bottom_marker_found: bool,
+        scroll_count: u32,
+    ) -> SupportScrollEndDecision {
+        if thumb_start.found || thumb_end.found {
+            self.absent_at_scroll = None;
+            // A partial or geometrically inconsistent match is uncertain,
+            // never evidence of an exhausted or non-scrollable list.
+            if !(thumb_start.found
+                && thumb_end.found
+                && (thumb_start.x - thumb_end.x).abs() <= 0.015
+                && thumb_start.y < thumb_end.y)
+            {
+                return SupportScrollEndDecision::Unconfirmed;
+            }
+            return if bottom_marker_found && thumb_end.y >= 0.90 {
+                SupportScrollEndDecision::AtEnd
+            } else {
+                SupportScrollEndDecision::Scrollable
+            };
+        }
+
+        // A short list may have no scrollbar. Require another observation
+        // after an actual scroll attempt instead of trusting one CV miss.
+        if self
+            .absent_at_scroll
+            .is_some_and(|count| scroll_count > count)
+        {
+            self.absent_at_scroll = None;
+            SupportScrollEndDecision::NoScrollbar
+        } else {
+            self.absent_at_scroll = Some(scroll_count);
+            SupportScrollEndDecision::Unconfirmed
+        }
+    }
+}

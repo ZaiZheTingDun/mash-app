@@ -7292,3 +7292,128 @@ fn mismatch_from_ce_result_full_gate_mismatch_reason_contains_scores_but_not_sum
     );
     assert_reason_and_debug(&mismatch, mismatch.reason(), &["完整匹配"]);
 }
+
+fn scrollbar_tip(found: bool, x: f64, y: f64) -> crate::screen::ElementMatch {
+    crate::screen::ElementMatch {
+        found,
+        x,
+        y,
+        score: if found { 0.97 } else { 0.5 },
+        region: None,
+    }
+}
+
+#[test]
+fn support_scrollbar_middle_and_long_thumb_are_not_exhausted_on_first_scan() {
+    let mut progress = SupportScrollEndProgress::default();
+    for (top, bottom) in [(0.335, 0.395), (0.252, 0.85)] {
+        assert_eq!(
+            progress.observe(
+                &scrollbar_tip(true, 0.980, top),
+                &scrollbar_tip(true, 0.979, bottom),
+                false,
+                0
+            ),
+            SupportScrollEndDecision::Scrollable
+        );
+    }
+}
+
+#[test]
+fn support_scrollbar_requires_a_valid_thumb_pair_at_the_bottom() {
+    let mut progress = SupportScrollEndProgress::default();
+    assert_eq!(
+        progress.observe(
+            &scrollbar_tip(true, 0.98, 0.91),
+            &scrollbar_tip(true, 0.98, 0.96),
+            true,
+            2
+        ),
+        SupportScrollEndDecision::AtEnd
+    );
+    for (top, bottom) in [
+        (
+            scrollbar_tip(false, 0.98, 0.91),
+            scrollbar_tip(true, 0.98, 0.96),
+        ),
+        (
+            scrollbar_tip(true, 0.98, 0.91),
+            scrollbar_tip(false, 0.98, 0.96),
+        ),
+        (
+            scrollbar_tip(true, 0.90, 0.91),
+            scrollbar_tip(true, 0.98, 0.96),
+        ),
+        (
+            scrollbar_tip(true, 0.98, 0.97),
+            scrollbar_tip(true, 0.98, 0.96),
+        ),
+    ] {
+        assert_eq!(
+            progress.observe(&top, &bottom, true, 2),
+            SupportScrollEndDecision::Unconfirmed
+        );
+    }
+    // A bottom-region false positive elsewhere cannot exhaust a middle thumb.
+    assert_eq!(
+        progress.observe(
+            &scrollbar_tip(true, 0.98, 0.335),
+            &scrollbar_tip(true, 0.98, 0.395),
+            true,
+            0
+        ),
+        SupportScrollEndDecision::Scrollable
+    );
+}
+
+#[test]
+fn support_scrollbar_absence_needs_an_intervening_scroll_attempt() {
+    let mut progress = SupportScrollEndProgress::default();
+    let missing = scrollbar_tip(false, 0.0, 0.0);
+    assert_eq!(
+        progress.observe(&missing, &missing, false, 0),
+        SupportScrollEndDecision::Unconfirmed
+    );
+    assert_eq!(
+        progress.observe(&missing, &missing, false, 0),
+        SupportScrollEndDecision::Unconfirmed
+    );
+    assert_eq!(
+        progress.observe(&missing, &missing, false, 1),
+        SupportScrollEndDecision::NoScrollbar
+    );
+    // A new search starts from zero even if the previous one ended there.
+    assert_eq!(
+        progress.observe(&missing, &missing, false, 0),
+        SupportScrollEndDecision::Unconfirmed
+    );
+}
+
+#[test]
+fn support_scrollbar_visible_or_partial_observation_clears_pending_absence() {
+    let mut progress = SupportScrollEndProgress::default();
+    let missing = scrollbar_tip(false, 0.0, 0.0);
+    for partial in [false, true] {
+        assert_eq!(
+            progress.observe(&missing, &missing, false, 0),
+            SupportScrollEndDecision::Unconfirmed
+        );
+        progress.observe(
+            &scrollbar_tip(true, 0.98, 0.30),
+            &scrollbar_tip(!partial, 0.98, 0.50),
+            false,
+            1,
+        );
+        assert_eq!(
+            progress.observe(&missing, &missing, false, 2),
+            SupportScrollEndDecision::Unconfirmed
+        );
+    }
+    progress = SupportScrollEndProgress::default();
+    progress.observe(&missing, &missing, false, 5);
+    // Refresh resets the scroll counter, so an earlier miss is not reused.
+    assert_eq!(
+        progress.observe(&missing, &missing, false, 0),
+        SupportScrollEndDecision::Unconfirmed
+    );
+}

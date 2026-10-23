@@ -45,70 +45,62 @@ impl Runner {
         )
     }
 
-    /// Return true when the scroll-bar-end indicator is visible in the
-    /// bottom-right corner of the support list, meaning the user has
-    /// scrolled all the way down. If the list is still at the top and the
-    /// start indicator is absent, treat the list as non-scrollable and
-    /// therefore already exhausted. Logs the actual match score every poll
-    /// so the threshold can be tuned from real numbers; transient sidecar
-    /// errors degrade to `false` so a CV blip just means "keep scrolling"
-    /// instead of triggering a refresh loop.
+    /// Probe both thumb tips across the complete track on one frozen frame.
+    /// The list may already be between its endpoints when automation starts.
     pub(crate) fn support_scroll_bar_at_end(&mut self) -> AutomationResult<bool> {
-        match self
-            .sidecar()
-            .find_element_by_name(None, SUPPORT_SELECT_SCREEN, SUPPORT_SCROLL_END_ELEMENT)
-            .recoverable()?
-        {
-            Ok(m) if m.found => {
-                eprintln!(
-                    "[runner] scroll-bar-end score={:.3} -> {}",
-                    m.score, "AT-BOTTOM",
+        let snapshot = tempfile::tempdir().context("创建助战滚动条截图目录失败")?;
+        let image_path = snapshot.path().join("support-scrollbar.png");
+        let png = match self.sidecar().get_frame_png(0.0).recoverable()? {
+            Ok(png) => png,
+            Err(error) => {
+                self.support_scroll_end_progress = SupportScrollEndProgress::default();
+                self.emit_debug(
+                    "SupportSelect",
+                    &format!("滚动条截图失败，继续查找: {error}"),
                 );
-                return Ok(true);
+                return Ok(false);
             }
-            Ok(m) => {
-                eprintln!(
-                    "[runner] scroll-bar-end score={:.3} -> not-at-bottom",
-                    m.score,
-                );
-            }
-            Err(e) => {
-                eprintln!("[runner] scroll-bar-end check failed (treating as not-at-bottom): {e}");
-            }
-        }
-
-        if self.support_scroll_count > 0 {
-            return Ok(false);
-        }
-
-        Ok(
+        };
+        std::fs::write(&image_path, png).context("写入助战滚动条截图失败")?;
+        let mut matches = Vec::new();
+        for element in [
+            SUPPORT_SCROLL_THUMB_START_ELEMENT,
+            SUPPORT_SCROLL_THUMB_END_ELEMENT,
+            SUPPORT_SCROLL_END_ELEMENT,
+        ] {
             match self
                 .sidecar()
-                .find_element_by_name(None, SUPPORT_SELECT_SCREEN, SUPPORT_SCROLL_START_ELEMENT)
+                .find_element_by_name(Some(&image_path), SUPPORT_SELECT_SCREEN, element)
                 .recoverable()?
             {
-                Ok(m) if m.found => {
-                    eprintln!(
-                        "[runner] scroll-bar-start score={:.3} -> scrollable",
-                        m.score,
+                Ok(result) => matches.push(result),
+                Err(error) => {
+                    self.support_scroll_end_progress = SupportScrollEndProgress::default();
+                    self.emit_debug(
+                        "SupportSelect",
+                        &format!("滚动条识别失败，继续查找: {error}"),
                     );
-                    false
+                    return Ok(false);
                 }
-                Ok(m) => {
-                    eprintln!(
-                        "[runner] scroll-bar-start score={:.3} -> no-scrollbar",
-                        m.score,
-                    );
-                    true
-                }
-                Err(e) => {
-                    eprintln!(
-                        "[runner] scroll-bar-start check failed (treating as scrollable): {e}"
-                    );
-                    false
-                }
-            },
-        )
+            }
+        }
+        let decision = self.support_scroll_end_progress.observe(
+            &matches[0],
+            &matches[1],
+            matches[2].found,
+            self.support_scroll_count,
+        );
+        self.emit_debug(
+            "SupportSelect",
+            &format!(
+                "滚动条: 上端={:.3} 下端={:.3} 底部={:.3} 判定={decision:?}",
+                matches[0].score, matches[1].score, matches[2].score,
+            ),
+        );
+        Ok(matches!(
+            decision,
+            SupportScrollEndDecision::AtEnd | SupportScrollEndDecision::NoScrollbar
+        ))
     }
 
     pub(crate) fn wait_for_support_refresh_available(&mut self) -> AutomationResult<bool> {

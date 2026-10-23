@@ -146,6 +146,7 @@ pub struct Runner {
     team_changed: bool,
     support_selected: bool,
     support_scroll_count: u32,
+    support_scroll_end_progress: SupportScrollEndProgress,
     /// How many times we've tapped the friend-list refresh button this run.
     /// Reset alongside `support_scroll_count` once a match is selected.
     support_refresh_count: u32,
@@ -260,6 +261,7 @@ impl Runner {
             team_changed: false,
             support_selected: false,
             support_scroll_count: 0,
+            support_scroll_end_progress: SupportScrollEndProgress::default(),
             support_refresh_count: 0,
             support_class_tab_done: false,
             support_extra_class_filter_configured: false,
