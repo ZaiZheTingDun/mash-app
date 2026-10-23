@@ -4,8 +4,17 @@
   --dialog-content-padding: 20px;
 }
 
-.servant-search {
+.servant-search-row {
   margin-top: 12px;
+}
+
+.servant-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.servant-search-row > .rt-SegmentedControlRoot {
+  flex-shrink: 0;
 }
 
 .servant-filter-row {
@@ -164,6 +173,21 @@
   align-items: center;
   gap: 12px;
   min-width: 0;
+}
+
+.servant-options-grid .servant-option {
+  padding: 8px;
+  background: var(--gray-a2);
+}
+
+.servant-options-grid .servant-option-content {
+  justify-content: center;
+}
+
+.servant-options-grid .servant-face-frame {
+  width: 64px;
+  height: 64px;
+  flex-basis: 64px;
 }
 
 .ce-option-content {

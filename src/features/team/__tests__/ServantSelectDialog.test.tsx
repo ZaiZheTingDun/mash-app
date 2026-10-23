@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { renderWithTheme } from "../../../test/renderWithTheme";
@@ -65,6 +65,15 @@ function setup(overrides?: {
   return { ...utils, onSelect, onOpenChange };
 }
 
+function makeServants(count: number): Servant[] {
+  return Array.from({ length: count }, (_, i) => ({
+    ...FIXTURE[0],
+    id: i + 1,
+    variantKey: String(i + 1),
+    name_cn: `从者 ${i + 1}`,
+  }));
+}
+
 describe("ServantSelectDialog", () => {
   it("renders the dialog title and search field", () => {
     setup();
@@ -87,6 +96,122 @@ describe("ServantSelectDialog", () => {
     );
     expect(screen.getByText("梅林")).toBeInTheDocument();
     expect(screen.queryByText("斯卡哈")).not.toBeInTheDocument();
+  });
+
+  it("switches layouts beside the search field while keeping filters and search", async () => {
+    const user = userEvent.setup();
+    setup();
+    const search = screen.getByPlaceholderText("搜索从者名称...");
+    const layouts = screen.getByRole("group", { name: "从者布局" });
+    expect(search.closest(".servant-search-row")).toContainElement(layouts);
+    expect(screen.getByRole("radio", { name: "列表布局" })).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "术阶" }));
+    await user.click(screen.getByRole("button", { name: "★5" }));
+    await user.type(search, "Mer");
+    await user.click(screen.getByRole("radio", { name: "网格布局" }));
+
+    expect(screen.getByRole("radio", { name: "网格布局" })).toBeChecked();
+    expect(search).toHaveValue("Mer");
+    expect(screen.getByRole("button", { name: "术阶" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "★5" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(screen.getByRole("option", { name: "梅林" })).toBeInTheDocument();
+    expect(screen.queryByText("梅林")).not.toBeInTheDocument();
+    expect(screen.queryByText("永久关闭的理想乡")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "列表布局" }));
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(screen.getByText("梅林")).toBeInTheDocument();
+  });
+
+  it("shows only faces in the grid and reveals full details after a sustained hover", async () => {
+    const user = userEvent.setup();
+    const { onSelect } = setup();
+    await user.click(screen.getByRole("radio", { name: "网格布局" }));
+    const option = screen.getByRole("option", { name: "梅林" });
+    expect(option.querySelector(".servant-face-frame")).toBeInTheDocument();
+    expect(option.querySelector(".servant-option-text")).toBeNull();
+    expect(option.querySelector(".servant-rarity")).toBeNull();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerMove(option, { pointerType: "mouse" });
+      await act(async () => { vi.advanceTimersByTime(900); });
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+      fireEvent.pointerLeave(option);
+      await act(async () => { vi.advanceTimersByTime(200); });
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+      fireEvent.pointerMove(option, { pointerType: "mouse" });
+      await act(async () => { vi.advanceTimersByTime(1000); });
+      const tooltip = screen.getByRole("tooltip");
+      expect(tooltip).toHaveTextContent("梅林");
+      expect(tooltip).toHaveTextContent("宝具：永久关闭的理想乡");
+      expect(onSelect).not.toHaveBeenCalled();
+      fireEvent.pointerLeave(option);
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("virtualizes grid rows, selects scrolled items, and resets scroll on layout changes", async () => {
+    const user = userEvent.setup();
+    const servants = makeServants(120);
+    const { onSelect } = setup({ servants });
+    await user.click(screen.getByRole("radio", { name: "网格布局" }));
+
+    const options = screen.getAllByRole("option");
+    expect(options.length).toBeLessThan(servants.length);
+    expect(options[0].style.top).toBe(options[5].style.top);
+    expect(options[6]).toHaveStyle({ top: "88px" });
+    expect(screen.queryByRole("option", { name: "从者 120" })).not.toBeInTheDocument();
+    await waitFor(() => {
+      const faceCalls = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "get_servant_face_path");
+      expect(faceCalls.length).toBeLessThan(servants.length);
+    });
+
+    const scroll = screen.getByRole("listbox").parentElement!;
+    fireEvent.scroll(scroll, { target: { scrollTop: 88 * 19 } });
+    expect(screen.queryByRole("option", { name: "从者 1" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "从者 120" }));
+    expect(onSelect).toHaveBeenCalledWith(servants[119]);
+
+    fireEvent.scroll(scroll, { target: { scrollTop: 88 * 19 } });
+    await user.click(screen.getByRole("radio", { name: "列表布局" }));
+    expect(scroll.scrollTop).toBe(0);
+    expect(screen.getByText("从者 1")).toBeInTheDocument();
+  });
+
+  it("adapts grid columns to the viewport and navigates by row and column", async () => {
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(350);
+    try {
+      const user = userEvent.setup();
+      const servants = makeServants(12);
+      const { onSelect } = setup({ servants, disabledIds: [12] });
+      await user.click(screen.getByRole("radio", { name: "网格布局" }));
+      const options = screen.getAllByRole("option");
+      expect(options[0].style.top).toBe(options[3].style.top);
+      expect(options[4]).toHaveStyle({ top: "88px" });
+      expect(screen.queryByRole("option", { name: "从者 12" })).not.toBeInTheDocument();
+
+      const search = screen.getByPlaceholderText("搜索从者名称...");
+      fireEvent.keyDown(search, { key: "ArrowDown" });
+      expect(options[4]).toHaveAttribute("aria-selected", "true");
+      fireEvent.keyDown(search, { key: "ArrowUp" });
+      fireEvent.keyDown(search, { key: "ArrowRight" });
+      expect(options[0]).toHaveAttribute("aria-selected", "true");
+      fireEvent.keyDown(options[0], { key: "ArrowRight" });
+      fireEvent.keyDown(options[0], { key: "ArrowDown" });
+      expect(options[5]).toHaveAttribute("aria-selected", "true");
+      fireEvent.keyDown(options[0], { key: "ArrowLeft" });
+      fireEvent.keyDown(options[0], { key: "Enter" });
+      expect(onSelect).toHaveBeenCalledWith(servants[4]);
+    } finally {
+      width.mockRestore();
+    }
   });
 
   it("filters and displays by server Chinese name when present", async () => {
@@ -469,7 +594,7 @@ describe("ServantSelectDialog", () => {
     });
   });
 
-  it("opens portrait settings on right click and refreshes the picker avatar", async () => {
+  it.each(["list", "grid"])("opens portrait settings and refreshes the avatar in %s layout", async (layout) => {
     const user = userEvent.setup();
     const onPortraitSaved = vi.fn();
     let selectedPortraitId = 4_000_130;
@@ -511,7 +636,11 @@ describe("ServantSelectDialog", () => {
       onPortraitSaved,
     });
 
-    const option = screen.getByText("Ｕ－奥尔加玛丽").closest('[role="option"]');
+    if (layout === "grid") {
+      await user.click(screen.getByRole("radio", { name: "网格布局" }));
+    }
+
+    const option = screen.getByRole("option", { name: /Ｕ－奥尔加玛丽/ });
     await waitFor(() => {
       expect(option?.querySelector(".servant-face-frame img")).toHaveAttribute(
         "src",
