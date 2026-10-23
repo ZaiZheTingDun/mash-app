@@ -45,7 +45,7 @@ def scrollbar_frame(fixture, size):
 
 
 @pytest.mark.parametrize("size", [(2560, 1440), (1920, 1080), (1280, 720)])
-@pytest.mark.parametrize("fixture", ["support_scrollbar_middle.png", "support_scrollbar_long.png"])
+@pytest.mark.parametrize("fixture", ["support_scrollbar_middle.png", "support_scrollbar_long.png", "support_scrollbar_after_scroll.png"])
 def test_full_track_probes_find_both_tips_without_claiming_bottom(fixture, size):
     image = scrollbar_frame(fixture, size)
     upper = cv._find_element_by_name(image, "SupportSelect", "support_scroll_thumb_start")

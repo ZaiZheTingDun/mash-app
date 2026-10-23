@@ -7417,3 +7417,44 @@ fn support_scrollbar_visible_or_partial_observation_clears_pending_absence() {
         SupportScrollEndDecision::Unconfirmed
     );
 }
+
+#[test]
+fn grand_exhaustion_still_runs_the_scrollbar_probe_before_refreshing() {
+    for (grand_exhausted, scrollbar_exhausted, expected) in [
+        (true, false, true),
+        (true, true, true),
+        (false, false, false),
+        (false, true, true),
+    ] {
+        let mut calls = 0;
+        let exhausted = support_list_exhausted(grand_exhausted, || {
+            calls += 1;
+            Ok(scrollbar_exhausted)
+        })
+        .unwrap();
+        assert_eq!(calls, 1);
+        assert_eq!(exhausted, expected);
+    }
+}
+
+#[test]
+fn grand_exhaustion_does_not_hide_a_fatal_scrollbar_probe_error() {
+    let result = support_list_exhausted(true, || {
+        Err(crate::automation_error::AutomationError::Message(
+            "probe failed".into(),
+        ))
+    });
+    assert_eq!(result.unwrap_err().to_string(), "probe failed");
+}
+
+#[test]
+fn grand_exhaustion_debug_message_explains_early_refresh_with_scrollable_list() {
+    assert_eq!(
+        support_grand_section_probe_message(Some(false), true, 2, true),
+        "冠位区域: 当前可见=否 曾出现=true 连续未见=2 判定=已扫完"
+    );
+    assert_eq!(
+        support_grand_section_probe_message(None, false, 0, false),
+        "冠位区域: 当前可见=未知 曾出现=false 连续未见=0 判定=继续查找"
+    );
+}

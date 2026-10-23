@@ -166,15 +166,21 @@ impl Runner {
     /// server bundle doesn't ship the ribbon template, so callers
     /// fall back to scroll-bar-end via the helper's existing logic.
     pub(crate) fn update_support_grand_section_exhausted(&mut self, visible: Option<bool>) -> bool {
-        eprintln!(
-            "[runner] grand-servant ribbon visible={:?} (seen={}, misses={})",
-            visible, self.support_grand_section_seen, self.support_grand_section_misses,
-        );
-        support_grand_section_exhausted_after_probe(
+        let exhausted = support_grand_section_exhausted_after_probe(
             visible,
             &mut self.support_grand_section_seen,
             &mut self.support_grand_section_misses,
-        )
+        );
+        self.emit_debug(
+            "SupportSelect",
+            &support_grand_section_probe_message(
+                visible,
+                self.support_grand_section_seen,
+                self.support_grand_section_misses,
+                exhausted,
+            ),
+        );
+        exhausted
     }
 
     /// After tapping the support-list refresh button, confirm the modal when

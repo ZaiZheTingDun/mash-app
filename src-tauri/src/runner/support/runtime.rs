@@ -270,8 +270,11 @@ impl Runner {
             && self.update_support_grand_section_exhausted(
                 result.diagnostics.is_grand_section_visible,
             );
+        // Grand exhaustion must not skip the scrollbar diagnostic probe.
         Ok(
-            if !grand_section_exhausted && !self.support_scroll_bar_at_end()? {
+            if !support_list_exhausted(grand_section_exhausted, || {
+                self.support_scroll_bar_at_end()
+            })? {
                 // Surface the Grand-section signal in the normal log, so the
                 // operator can see whether this scroll continues a Grand scan
                 // or a normal support-list scan.
@@ -447,8 +450,11 @@ impl Runner {
             && self.update_support_grand_section_exhausted(
                 result.diagnostics.is_grand_section_visible,
             );
+        // Grand exhaustion must not skip the scrollbar diagnostic probe.
         Ok(
-            if !grand_section_exhausted && !self.support_scroll_bar_at_end()? {
+            if !support_list_exhausted(grand_section_exhausted, || {
+                self.support_scroll_bar_at_end()
+            })? {
                 self.emit(
                     "SupportSelect",
                     &format!(

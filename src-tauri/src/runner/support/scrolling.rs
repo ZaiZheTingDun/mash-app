@@ -225,3 +225,34 @@ impl SupportScrollEndProgress {
         }
     }
 }
+
+/// Evaluate both independent end conditions. The scrollbar probe also emits
+/// the scan diagnostics, so Grand exhaustion must not short-circuit it.
+pub(crate) fn support_list_exhausted(
+    grand_section_exhausted: bool,
+    scrollbar_probe: impl FnOnce() -> AutomationResult<bool>,
+) -> AutomationResult<bool> {
+    let scrollbar_exhausted = scrollbar_probe()?;
+    Ok(grand_section_exhausted || scrollbar_exhausted)
+}
+
+pub(crate) fn support_grand_section_probe_message(
+    visible: Option<bool>,
+    seen: bool,
+    consecutive_misses: u8,
+    exhausted: bool,
+) -> String {
+    let visible = match visible {
+        Some(true) => "是",
+        Some(false) => "否",
+        None => "未知",
+    };
+    let decision = if exhausted {
+        "已扫完"
+    } else {
+        "继续查找"
+    };
+    format!(
+        "冠位区域: 当前可见={visible} 曾出现={seen} 连续未见={consecutive_misses} 判定={decision}"
+    )
+}
