@@ -120,6 +120,7 @@ impl Runner {
         // `supports` is already sorted top-down by the sidecar. Default
         // pick = first match, but optional CE / level filters can reject
         // rows before we tap.
+        let grand_page = SupportGrandPageProbe::from_diagnostics(&result.diagnostics);
         let ce_filter_enabled = self.support_ce_filter_enabled();
         let mut waiting_for_skill_panel = false;
         let mut ce_filter_reasons: Vec<String> = Vec::new();
@@ -131,7 +132,12 @@ impl Runner {
         let mut level_filter_reasons: Vec<String> = Vec::new();
         let mut skill_wait_diagnostic: Option<String> = None;
         let mut chosen_index: Option<usize> = None;
+        let mut had_eligible_candidate = false;
         for (index, row) in result.supports.iter().enumerate() {
+            if !grand_page.allows_candidate(self.config.support_grand_mode, row) {
+                continue;
+            }
+            had_eligible_candidate = true;
             if let Some(mismatch) = self.support_row_ce_mismatch(row)? {
                 if !ce_filter_reasons.contains(&mismatch.reason) {
                     ce_filter_reasons.push(mismatch.reason);
@@ -198,8 +204,6 @@ impl Runner {
             self.support_selected = true;
             self.support_scroll_count = 0;
             self.support_refresh_count = 0;
-            self.support_grand_section_seen = false;
-            self.support_grand_section_misses = 0;
             self.support_class_tab_done = false;
             self.support_level_progress = SupportLevelPanelProgress::default();
             thread::sleep(ACTION_DELAY);
@@ -210,13 +214,13 @@ impl Runner {
         // emit a distinct message before falling through to the
         // scroll/refresh branch so the user knows it's a CE filter miss
         // (vs a name miss).
-        if ce_filter_enabled && !result.supports.is_empty() {
+        if ce_filter_enabled && had_eligible_candidate {
             let reason = if ce_filter_reasons.is_empty() {
                 "礼装不匹配".to_string()
             } else {
                 ce_filter_reasons.join("；")
             };
-            self.emit("SupportSelect", &format!("找到从者但{reason}，继续滚动…"));
+            self.emit("SupportSelect", &format!("找到从者但{reason}，继续查找…"));
             for summary in ce_filter_debug_summaries {
                 self.emit_debug("SupportSelect", &summary);
             }
@@ -253,38 +257,26 @@ impl Runner {
             self.emit(
                 "SupportSelect",
                 &format!(
-                    "找到从者但等级不匹配（{}），继续滚动…",
+                    "找到从者但等级不匹配（{}），继续查找…",
                     level_filter_reasons.join("；"),
                 ),
             );
         }
 
-        // No match in the visible viewport. Normal support scans use the
-        // scroll-bar tail indicator as the source of truth. Grand support
-        // scans can stop earlier: Grand rows are listed before ordinary
-        // rows, and the per-anchor "冠位从者" ribbon probe (run by the
-        // sidecar inside `find_supports` and surfaced via
-        // `diagnostics.is_grand_section_visible`) goes false once the
-        // visible page has scrolled past the Grand section.
-        let grand_section_exhausted = self.config.support_grand_mode
-            && self.update_support_grand_section_exhausted(
-                result.diagnostics.is_grand_section_visible,
-            );
+        // Finish this page's Grand candidates before acting on an ordinary
+        // row boundary. A mixed page ends the scan without another swipe.
+        let grand_section_exhausted =
+            self.config.support_grand_mode && self.support_grand_page_exhausted(&grand_page);
         // Grand exhaustion must not skip the scrollbar diagnostic probe.
         Ok(
             if !support_list_exhausted(grand_section_exhausted, || {
                 self.support_scroll_bar_at_end()
             })? {
-                // Surface the Grand-section signal in the normal log, so the
-                // operator can see whether this scroll continues a Grand scan
-                // or a normal support-list scan.
-                let grand_visible_in_grand_mode = self.config.support_grand_mode
-                    && result.diagnostics.is_grand_section_visible == Some(true);
                 self.emit(
                     "SupportSelect",
                     &support_not_found_scroll_message(
                         &meta.name,
-                        grand_visible_in_grand_mode,
+                        self.config.support_grand_mode,
                         self.support_scroll_count + 1,
                     ),
                 );
@@ -296,7 +288,7 @@ impl Runner {
                 thread::sleep(SUPPORT_SCROLL_SETTLE);
             } else if self.support_refresh_count < SUPPORT_MAX_REFRESHES {
                 let reason = if grand_section_exhausted {
-                    "冠位助战已扫完"
+                    "当前页已出现普通助战，冠位区域已扫完"
                 } else {
                     "已到底部"
                 };
@@ -316,8 +308,6 @@ impl Runner {
                 }
                 self.support_scroll_count = 0;
                 self.support_refresh_count += 1;
-                self.support_grand_section_seen = false;
-                self.support_grand_section_misses = 0;
                 self.support_level_progress = SupportLevelPanelProgress::default();
                 // Refresh occasionally snaps the class filter back to "all";
                 // re-tap the class tab on the next poll to be safe.
@@ -382,9 +372,13 @@ impl Runner {
             }
         };
 
+        let grand_page = SupportGrandPageProbe::from_diagnostics(&result.diagnostics);
         let mut mismatch_reasons = Vec::new();
         let mut mismatch_debug_summaries = Vec::new();
         for (index, row) in result.supports.iter().enumerate() {
+            if !grand_page.allows_candidate(self.config.support_grand_mode, row) {
+                continue;
+            }
             if let Some(mismatch) = self.support_row_ce_mismatch(row)? {
                 if !mismatch_reasons.contains(&mismatch.reason) {
                     mismatch_reasons.push(mismatch.reason);
@@ -427,8 +421,6 @@ impl Runner {
             self.support_selected = true;
             self.support_scroll_count = 0;
             self.support_refresh_count = 0;
-            self.support_grand_section_seen = false;
-            self.support_grand_section_misses = 0;
             thread::sleep(ACTION_DELAY);
             return Ok(());
         }
@@ -446,10 +438,8 @@ impl Runner {
             }
         }
 
-        let grand_section_exhausted = self.config.support_grand_mode
-            && self.update_support_grand_section_exhausted(
-                result.diagnostics.is_grand_section_visible,
-            );
+        let grand_section_exhausted =
+            self.config.support_grand_mode && self.support_grand_page_exhausted(&grand_page);
         // Grand exhaustion must not skip the scrollbar diagnostic probe.
         Ok(
             if !support_list_exhausted(grand_section_exhausted, || {
@@ -458,7 +448,12 @@ impl Runner {
                 self.emit(
                     "SupportSelect",
                     &format!(
-                        "当前助战列表没有匹配礼装，继续滚动… ({})",
+                        "当前{}助战没有匹配礼装，继续滚动… ({})",
+                        if self.config.support_grand_mode {
+                            "冠位"
+                        } else {
+                            "普通"
+                        },
                         self.support_scroll_count + 1
                     ),
                 );
@@ -469,7 +464,7 @@ impl Runner {
                 thread::sleep(SUPPORT_SCROLL_SETTLE);
             } else if self.support_refresh_count < SUPPORT_MAX_REFRESHES {
                 let reason = if grand_section_exhausted {
-                    "冠位助战已扫完"
+                    "当前页已出现普通助战，冠位区域已扫完"
                 } else {
                     "已到底部"
                 };
@@ -489,8 +484,6 @@ impl Runner {
                 }
                 self.support_scroll_count = 0;
                 self.support_refresh_count += 1;
-                self.support_grand_section_seen = false;
-                self.support_grand_section_misses = 0;
                 if !self.confirm_support_refresh_dialog_if_needed()? {
                     return Ok(());
                 }

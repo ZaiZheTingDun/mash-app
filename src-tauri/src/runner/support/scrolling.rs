@@ -133,41 +133,119 @@ pub(crate) fn format_scroll_debug(
     )
 }
 
-pub(crate) fn support_grand_section_exhausted_after_probe(
-    visible: Option<bool>,
-    seen: &mut bool,
-    consecutive_misses: &mut u8,
-) -> bool {
-    match visible {
-        Some(true) => {
-            *seen = true;
-            *consecutive_misses = 0;
-            false
+// Keep the icon geometry/threshold aligned with SUPPORT_GRAND_BADGE_* in
+// the sidecar. An icon hidden behind the class bar cannot prove an ordinary row.
+const SUPPORT_GRAND_ICON_THRESHOLD: f64 = 0.80;
+const SUPPORT_GRAND_ICON_DY: f64 = -23.0 / 1440.0;
+const SUPPORT_GRAND_ICON_H: f64 = 50.0 / 1440.0;
+const SUPPORT_GRAND_ICON_PAD_Y: f64 = 0.008;
+const SUPPORT_ROW_TO_CONFIRM_DY: f64 = 0.116;
+const SUPPORT_ROW_ANCHOR_TOLERANCE: f64 = 0.035;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SupportGrandRowKind {
+    Grand,
+    Ordinary,
+    Unconfirmed,
+}
+
+impl SupportGrandRowKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Grand => "冠位",
+            Self::Ordinary => "普通",
+            Self::Unconfirmed => "未确认",
         }
-        Some(false) if *seen => {
-            *consecutive_misses = consecutive_misses.saturating_add(1);
-            *consecutive_misses >= 2
-        }
-        Some(false) => false,
-        None => false,
     }
 }
 
-/// Format the normal-log message emitted when a support scan found no
-/// matching servant and will scroll the list. Make the visible Grand-row
-/// detection explicit so operators can distinguish a Grand scan from an
-/// ordinary support-list scroll at a glance.
+#[derive(Debug)]
+struct SupportGrandRowProbe {
+    anchor: NormRect,
+    score: Option<f64>,
+    kind: SupportGrandRowKind,
+}
+
+#[derive(Debug)]
+pub(crate) struct SupportGrandPageProbe {
+    rows: Vec<SupportGrandRowProbe>,
+}
+
+impl SupportGrandPageProbe {
+    pub(crate) fn from_diagnostics(diagnostics: &crate::screen::SupportDiagnostics) -> Self {
+        let rows = diagnostics
+            .confirm_button_anchors
+            .iter()
+            .enumerate()
+            .map(|(index, anchor)| {
+                let score = diagnostics
+                    .grand_icon_anchor_scores
+                    .get(index)
+                    .copied()
+                    .flatten();
+                let icon_top = anchor.y + SUPPORT_GRAND_ICON_DY;
+                let fully_visible = icon_top.is_finite()
+                    && diagnostics.list_region.y.is_finite()
+                    && icon_top >= diagnostics.list_region.y + SUPPORT_GRAND_ICON_PAD_Y
+                    && icon_top + SUPPORT_GRAND_ICON_H <= 1.0;
+                let kind = match score.filter(|s| s.is_finite() && (-1.0..=1.0).contains(s)) {
+                    Some(score) if fully_visible && score >= SUPPORT_GRAND_ICON_THRESHOLD => {
+                        SupportGrandRowKind::Grand
+                    }
+                    Some(_) if fully_visible => SupportGrandRowKind::Ordinary,
+                    _ => SupportGrandRowKind::Unconfirmed,
+                };
+                SupportGrandRowProbe {
+                    anchor: *anchor,
+                    score,
+                    kind,
+                }
+            })
+            .collect();
+        Self { rows }
+    }
+
+    pub(crate) fn exhausted(&self) -> bool {
+        // Grand rows precede ordinary rows. A mixed page already contains
+        // the boundary, so scan its Grand candidates and never scroll again.
+        self.rows
+            .iter()
+            .any(|row| row.kind == SupportGrandRowKind::Ordinary)
+    }
+
+    pub(crate) fn allows_candidate(&self, grand_mode: bool, row: &SupportRowMatch) -> bool {
+        if !grand_mode {
+            return true;
+        }
+        // Prefer the exact confirm-button association supplied by the sidecar.
+        // Name-only OCR rows use the same row-top projection as that association.
+        let expected_y = row
+            .score_anchor
+            .map(|a| a.y)
+            .unwrap_or(row.row_region.y - SUPPORT_ROW_TO_CONFIRM_DY);
+        self.rows
+            .iter()
+            .filter_map(|probe| {
+                let distance = (probe.anchor.y - expected_y).abs();
+                (distance <= SUPPORT_ROW_ANCHOR_TOLERANCE).then_some((distance, probe.kind))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .is_some_and(|(_, kind)| kind == SupportGrandRowKind::Grand)
+    }
+}
+
+/// Mode labels describe the configured search, not the current viewport.
 pub(crate) fn support_not_found_scroll_message(
     name: &str,
-    grand_visible_in_grand_mode: bool,
+    grand_mode: bool,
     attempt: u32,
 ) -> String {
-    let (grand_label, scroll_action) = if grand_visible_in_grand_mode {
-        ("冠位", "继续滚动识别冠位从者")
+    let mode = if grand_mode {
+        "冠位模式"
     } else {
-        ("非冠位", "继续滚动")
+        "普通模式"
     };
-    format!("未找到从者 {name} [{grand_label}]，{scroll_action} (第 {attempt} 次)")
+    format!("未找到从者 {name} [{mode}]，继续滚动 (第 {attempt} 次)")
 }
 
 /// Full-track thumb observations are independent of the runner's scroll
@@ -236,23 +314,31 @@ pub(crate) fn support_list_exhausted(
     Ok(grand_section_exhausted || scrollbar_exhausted)
 }
 
-pub(crate) fn support_grand_section_probe_message(
-    visible: Option<bool>,
-    seen: bool,
-    consecutive_misses: u8,
-    exhausted: bool,
-) -> String {
-    let visible = match visible {
-        Some(true) => "是",
-        Some(false) => "否",
-        None => "未知",
-    };
-    let decision = if exhausted {
-        "已扫完"
+pub(crate) fn support_grand_section_probe_message(probe: &SupportGrandPageProbe) -> String {
+    let count = |kind| probe.rows.iter().filter(|row| row.kind == kind).count();
+    let rows = probe
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| {
+            let score = row
+                .score
+                .filter(|s| s.is_finite())
+                .map(|s| format!("{s:.3}"))
+                .unwrap_or_else(|| "未知".into());
+            format!("#{} {}={score}", index + 1, row.kind.label())
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let decision = if probe.exhausted() {
+        "已出现普通助战，冠位区域扫描结束"
     } else {
-        "继续查找"
+        "尚未确认普通助战，继续查找"
     };
     format!(
-        "冠位区域: 当前可见={visible} 曾出现={seen} 连续未见={consecutive_misses} 判定={decision}"
+        "冠位区域: 冠位行={} 普通行={} 未确认行={} 逐行=[{rows}] 判定={decision}",
+        count(SupportGrandRowKind::Grand),
+        count(SupportGrandRowKind::Ordinary),
+        count(SupportGrandRowKind::Unconfirmed),
     )
 }

@@ -158,29 +158,10 @@ impl Runner {
         }
     }
 
-    /// In Grand support mode, given the sidecar's per-frame "is at
-    /// least one Grand row visible?" probe (from
-    /// `SupportDiagnostics::is_grand_section_visible`), update the
-    /// rolling miss counter and return whether the Grand section has
-    /// been exhausted. `None` from the sidecar means the active
-    /// server bundle doesn't ship the ribbon template, so callers
-    /// fall back to scroll-bar-end via the helper's existing logic.
-    pub(crate) fn update_support_grand_section_exhausted(&mut self, visible: Option<bool>) -> bool {
-        let exhausted = support_grand_section_exhausted_after_probe(
-            visible,
-            &mut self.support_grand_section_seen,
-            &mut self.support_grand_section_misses,
-        );
-        self.emit_debug(
-            "SupportSelect",
-            &support_grand_section_probe_message(
-                visible,
-                self.support_grand_section_seen,
-                self.support_grand_section_misses,
-                exhausted,
-            ),
-        );
-        exhausted
+    /// Call after this page's eligible Grand candidates have been checked.
+    pub(crate) fn support_grand_page_exhausted(&self, probe: &SupportGrandPageProbe) -> bool {
+        self.emit_debug("SupportSelect", &support_grand_section_probe_message(probe));
+        probe.exhausted()
     }
 
     /// After tapping the support-list refresh button, confirm the modal when

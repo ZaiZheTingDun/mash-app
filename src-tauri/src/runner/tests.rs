@@ -6900,63 +6900,104 @@ fn attack_submission_wait_gate_recovers_when_attack_screen_stays_visible() {
     assert_eq!(gate, AttackSubmissionWaitGate::TimedOut);
 }
 
-#[test]
-fn grand_support_section_requires_seen_then_two_misses_before_exhausted() {
-    let mut seen = false;
-    let mut misses = 0;
-
-    assert!(!support_grand_section_exhausted_after_probe(
-        Some(false),
-        &mut seen,
-        &mut misses
-    ));
-    assert!(!seen);
-    assert_eq!(misses, 0);
-
-    assert!(!support_grand_section_exhausted_after_probe(
-        Some(true),
-        &mut seen,
-        &mut misses
-    ));
-    assert!(seen);
-    assert_eq!(misses, 0);
-
-    assert!(!support_grand_section_exhausted_after_probe(
-        Some(false),
-        &mut seen,
-        &mut misses
-    ));
-    assert_eq!(misses, 1);
-    assert!(support_grand_section_exhausted_after_probe(
-        Some(false),
-        &mut seen,
-        &mut misses
-    ));
+fn grand_page_probe(ys: &[f64], scores: &[Option<f64>]) -> SupportGrandPageProbe {
+    let mut diagnostics: crate::screen::SupportDiagnostics =
+        serde_json::from_value(serde_json::json!({
+            "listRegion": {"x": 0.177, "y": 0.233, "w": 0.466, "h": 0.76},
+            "nameCandidates": [], "npCandidates": [], "fragmentCount": 0
+        }))
+        .unwrap();
+    diagnostics.confirm_button_anchors = ys.iter().map(|&y| anchor_at_y(y)).collect();
+    diagnostics.grand_icon_anchor_scores = scores.to_vec();
+    SupportGrandPageProbe::from_diagnostics(&diagnostics)
 }
 
 #[test]
-fn grand_support_section_ignores_unavailable_probe() {
-    let mut seen = true;
-    let mut misses = 1;
+fn mixed_grand_page_ends_the_scan_without_waiting_for_an_all_ordinary_page() {
+    for scores in [
+        vec![Some(0.96), Some(0.20)],
+        vec![Some(0.96), Some(0.95), Some(0.20)],
+    ] {
+        let ys = [0.33, 0.61, 0.89];
+        let probe = grand_page_probe(&ys[..scores.len()], &scores);
+        assert!(probe.exhausted());
+        // Even a scrollable list must end this Grand scan without another swipe.
+        assert!(support_list_exhausted(probe.exhausted(), || Ok(false)).unwrap());
+    }
+}
 
-    assert!(!support_grand_section_exhausted_after_probe(
-        None,
-        &mut seen,
-        &mut misses
-    ));
-    assert!(seen);
-    assert_eq!(misses, 1);
+#[test]
+fn first_page_with_only_ordinary_rows_already_ends_the_grand_scan() {
+    assert!(grand_page_probe(&[0.33, 0.61], &[Some(0.20), Some(0.18)]).exhausted());
+}
+
+#[test]
+fn all_grand_rows_continue_scanning() {
+    let probe = grand_page_probe(&[0.33, 0.61], &[Some(0.96), Some(0.94)]);
+    assert!(!probe.exhausted());
+    assert!(!support_list_exhausted(probe.exhausted(), || Ok(false)).unwrap());
+}
+
+#[test]
+fn unconfirmed_or_missing_row_scores_do_not_establish_a_grand_boundary() {
+    for scores in [
+        vec![None, None],
+        vec![],
+        vec![Some(0.96)],
+        vec![Some(f64::NAN), Some(2.0)],
+    ] {
+        assert!(!grand_page_probe(&[0.33, 0.61], &scores).exhausted());
+    }
+    assert!(!grand_page_probe(&[], &[]).exhausted());
+}
+
+#[test]
+fn icons_hidden_by_the_header_or_clipped_at_the_bottom_are_not_ordinary_rows() {
+    let probe = grand_page_probe(&[0.24, 0.53, 0.99], &[Some(0.20), Some(0.96), Some(0.10)]);
+    assert!(!probe.exhausted());
+    assert!(support_grand_section_probe_message(&probe).contains("未确认行=2"));
+}
+
+#[test]
+fn mixed_page_keeps_grand_candidates_but_rejects_ordinary_and_unconfirmed_candidates() {
+    let probe = grand_page_probe(&[0.33, 0.61, 0.89], &[Some(0.96), Some(0.20), None]);
+    let mut grand = support_row(None, vec![], vec![]);
+    grand.score_anchor = Some(anchor_at_y(0.33));
+    let mut ordinary = grand.clone();
+    ordinary.score_anchor = Some(anchor_at_y(0.61));
+    let mut unconfirmed = grand.clone();
+    unconfirmed.score_anchor = Some(anchor_at_y(0.89));
+    assert!(probe.exhausted());
+    // The Grand row on the boundary page is still eligible for selection.
+    assert!(probe.allows_candidate(true, &grand));
+    assert!(!probe.allows_candidate(true, &ordinary));
+    assert!(!probe.allows_candidate(true, &unconfirmed));
+    // Ordinary mode does not acquire a new icon requirement.
+    assert!(probe.allows_candidate(false, &ordinary));
+    assert!(probe.allows_candidate(false, &unconfirmed));
+}
+
+#[test]
+fn name_only_candidates_use_the_matching_row_not_a_nearby_grand_row() {
+    let probe = grand_page_probe(&[0.33, 0.61], &[Some(0.96), Some(0.20)]);
+    let mut row = support_row(None, vec![], vec![]);
+    row.row_region.y = 0.446;
+    assert!(probe.allows_candidate(true, &row));
+    row.row_region.y = 0.726;
+    assert!(!probe.allows_candidate(true, &row));
+    row.row_region.y = 0.99;
+    assert!(!probe.allows_candidate(true, &row));
 }
 
 #[test]
 fn support_not_found_scroll_message_labels_grand_and_normal_scans() {
     assert_eq!(
         support_not_found_scroll_message("Ｕ－奥尔加玛丽", true, 1),
-        "未找到从者 Ｕ－奥尔加玛丽 [冠位]，继续滚动识别冠位从者 (第 1 次)"
+        "未找到从者 Ｕ－奥尔加玛丽 [冠位模式]，继续滚动 (第 1 次)"
     );
     assert_eq!(
         support_not_found_scroll_message("Ｕ－奥尔加玛丽", false, 1),
-        "未找到从者 Ｕ－奥尔加玛丽 [非冠位]，继续滚动 (第 1 次)"
+        "未找到从者 Ｕ－奥尔加玛丽 [普通模式]，继续滚动 (第 1 次)"
     );
 }
 
@@ -7448,13 +7489,13 @@ fn grand_exhaustion_does_not_hide_a_fatal_scrollbar_probe_error() {
 }
 
 #[test]
-fn grand_exhaustion_debug_message_explains_early_refresh_with_scrollable_list() {
+fn grand_exhaustion_debug_message_explains_mixed_and_unconfirmed_rows() {
     assert_eq!(
-        support_grand_section_probe_message(Some(false), true, 2, true),
-        "冠位区域: 当前可见=否 曾出现=true 连续未见=2 判定=已扫完"
+        support_grand_section_probe_message(&grand_page_probe(&[0.33, 0.61], &[Some(0.96), Some(0.20)])),
+        "冠位区域: 冠位行=1 普通行=1 未确认行=0 逐行=[#1 冠位=0.960, #2 普通=0.200] 判定=已出现普通助战，冠位区域扫描结束"
     );
     assert_eq!(
-        support_grand_section_probe_message(None, false, 0, false),
-        "冠位区域: 当前可见=未知 曾出现=false 连续未见=0 判定=继续查找"
+        support_grand_section_probe_message(&grand_page_probe(&[0.33], &[None])),
+        "冠位区域: 冠位行=0 普通行=0 未确认行=1 逐行=[#1 未确认=未知] 判定=尚未确认普通助战，继续查找"
     );
 }

@@ -156,8 +156,6 @@ impl Runner {
         // its modal choice may persist in-game, but the new page still needs
         // the configured filter to be explicitly selected for this run.
         self.support_extra_class_filter_configured = false;
-        self.support_grand_section_seen = false;
-        self.support_grand_section_misses = 0;
         self.support_level_progress = SupportLevelPanelProgress::default();
         self.servants_placed.clear();
         self.battle = BattleState::new();

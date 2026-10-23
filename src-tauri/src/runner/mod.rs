@@ -172,13 +172,6 @@ pub struct Runner {
     /// Outer `Option` records whether resolution has already been attempted.
     support_ce_templates: Option<Vec<PathBuf>>,
     support_grand_ce_templates: Option<[Vec<PathBuf>; 3]>,
-    /// Whether the current refreshed support list has ever shown the Grand
-    /// avatar-frame probe. A missing probe before this flips true is not
-    /// enough to conclude the Grand section is exhausted, because first-page
-    /// template probes can be transiently stale while the list settles.
-    support_grand_section_seen: bool,
-    /// Consecutive Grand avatar-frame misses after the section was seen.
-    support_grand_section_misses: u8,
     /// Tracks visible skill-panel validation for the current support row.
     /// Owned and append skills are shown on alternating panels, so a row can
     /// only satisfy both groups across multiple OCR polls.
@@ -268,8 +261,6 @@ impl Runner {
             support_meta: None,
             support_ce_templates: None,
             support_grand_ce_templates: None,
-            support_grand_section_seen: false,
-            support_grand_section_misses: 0,
             support_level_progress: SupportLevelPanelProgress::default(),
             servants_placed: Vec::new(),
             battle: BattleState::new(),
