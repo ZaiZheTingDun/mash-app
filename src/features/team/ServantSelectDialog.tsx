@@ -2,13 +2,13 @@ import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import {
   Dialog,
   Flex,
-  SegmentedControl,
+  IconButton,
   Text,
   TextField,
   Tooltip,
 } from "@radix-ui/themes";
 import { invoke, convertFileSrc } from "../../tauri";
-import { GridIcon, MagnifyingGlassIcon, RowsIcon } from "@radix-ui/react-icons";
+import { GridIcon, MagnifyingGlassIcon, RowsIcon, SizeIcon } from "@radix-ui/react-icons";
 import type { Servant } from "../../types/servant";
 import { PortraitSelectDialog } from "./PortraitSelectDialog";
 import classAllIcon from "../../../src-tauri/resources/images/class/silver_all.png";
@@ -69,8 +69,12 @@ interface ServantSelectDialogProps {
 
 const RARITY_FILTER_OPTIONS = [null, 1, 2, 3, 4, 5] as const;
 const ROW_HEIGHT = 72;
-const GRID_ROW_HEIGHT = 88;
-const GRID_MIN_WIDTH = 80;
+const GRID_SIZES = [
+  { label: "小", faceSize: 48 },
+  { label: "中", faceSize: 64 },
+  { label: "大", faceSize: 80 },
+] as const;
+const GRID_MAX_COLUMNS = 8;
 const GRID_GAP = 8;
 const OVERSCAN = 4;
 const VIEWPORT_H = 330;
@@ -277,6 +281,7 @@ export function ServantSelectDialog({
 }: ServantSelectDialogProps) {
   const [search, setSearch] = useState("");
   const [layout, setLayout] = useState("list");
+  const [gridSizeIndex, setGridSizeIndex] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(520);
   const [classFilter, setClassFilter] = useState(
     normalizeClassFilter(defaultClassFilter)
@@ -347,10 +352,14 @@ export function ServantSelectDialog({
     filtered.length === 0 ? 0 : Math.min(activeIndex, filtered.length - 1);
 
   const isGrid = layout === "grid";
+  const gridSize = GRID_SIZES[gridSizeIndex];
   const columns = isGrid
-    ? Math.max(1, Math.floor((viewportWidth + GRID_GAP) / (GRID_MIN_WIDTH + GRID_GAP)))
+    ? Math.max(1, Math.min(
+      GRID_MAX_COLUMNS,
+      Math.floor((viewportWidth + GRID_GAP) / (gridSize.faceSize + 8 + GRID_GAP)),
+    ))
     : 1;
-  const rowHeight = isGrid ? GRID_ROW_HEIGHT : ROW_HEIGHT;
+  const rowHeight = isGrid ? gridSize.faceSize + 8 + GRID_GAP : ROW_HEIGHT;
   const rowCount = Math.ceil(filtered.length / columns);
 
   useEffect(() => {
@@ -548,23 +557,38 @@ export function ServantSelectDialog({
               <MagnifyingGlassIcon />
             </TextField.Slot>
           </TextField.Root>
-          <SegmentedControl.Root
-            size="2"
-            value={layout}
-            aria-label="从者布局"
-            onValueChange={(value) => {
-              setLayout(value);
-              setActiveIndex(0);
-              resetScroll();
-            }}
-          >
-            <SegmentedControl.Item value="list" aria-label="列表布局" title="列表布局">
-              <RowsIcon />
-            </SegmentedControl.Item>
-            <SegmentedControl.Item value="grid" aria-label="网格布局" title="网格布局">
-              <GridIcon />
-            </SegmentedControl.Item>
-          </SegmentedControl.Root>
+          {isGrid && (
+            <Tooltip content={`头像大小：${gridSize.label}，点击切换为${GRID_SIZES[(gridSizeIndex + 1) % GRID_SIZES.length].label}`}>
+              <IconButton
+                size="2"
+                variant="outline"
+                color="gray"
+                aria-label={`调整头像大小（当前：${gridSize.label}）`}
+                onClick={() => {
+                  setGridSizeIndex((index) => (index + 1) % GRID_SIZES.length);
+                  setActiveIndex(0);
+                  resetScroll();
+                }}
+              >
+                <SizeIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Tooltip content={isGrid ? "切换为列表布局" : "切换为网格布局"}>
+            <IconButton
+              size="2"
+              variant="outline"
+              color="gray"
+              aria-label={isGrid ? "切换为列表布局" : "切换为网格布局"}
+              onClick={() => {
+                setLayout(isGrid ? "list" : "grid");
+                setActiveIndex(0);
+                resetScroll();
+              }}
+            >
+              {isGrid ? <RowsIcon /> : <GridIcon />}
+            </IconButton>
+          </Tooltip>
         </Flex>
 
         <Flex gap="2" className="servant-filter-row">
@@ -680,7 +704,14 @@ export function ServantSelectDialog({
                     onMouseEnter={() => setActiveIndex(index)}
                   >
                     <div className="servant-option-content">
-                      <div className="servant-face-frame">
+                      <div
+                        className="servant-face-frame"
+                        style={isGrid ? {
+                          width: gridSize.faceSize,
+                          height: gridSize.faceSize,
+                          flexBasis: gridSize.faceSize,
+                        } : undefined}
+                      >
                         {faceSrcByKey[servant.variantKey] ? (
                           <img src={faceSrcByKey[servant.variantKey] ?? ""} alt="" />
                         ) : (
