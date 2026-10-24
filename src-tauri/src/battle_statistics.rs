@@ -88,7 +88,7 @@ impl BattleRunRecorder {
             RunnerState::Finished => "finished",
             RunnerState::Error { .. } => "error",
             RunnerState::Idle => "stopped",
-            RunnerState::Starting | RunnerState::Running => "interrupted",
+            RunnerState::Starting | RunnerState::Running | RunnerState::Paused => "interrupted",
         };
         let now_ms = unix_timestamp_ms();
         if let Err(err) = open_connection(&self.path).and_then(|connection| {

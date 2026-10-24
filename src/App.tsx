@@ -1,8 +1,9 @@
+import { TeamVerificationDialog } from "./features/battle/TeamVerificationDialog";
 import { PageHeader } from "./components/common/PageHeader";
 import { ObservatoryBackground } from "./components/common/ObservatoryBackground";
 import { TaskActionButton } from "./components/common/TaskActionButton";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { AlertDialog, Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
+import { Box, Flex, Text, Spinner } from "@radix-ui/themes";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { invoke, listen } from "./tauri";
 import { ContentGrid } from "./features/team/ContentGrid";
@@ -153,7 +154,6 @@ function App({
   const [assetsRefreshKey, setAssetsRefreshKey] = useState(0);
   const [operationLogs, setOperationLogs] = useState<OperationLogEntry[]>([]);
   const [operationLogOpen, setOperationLogOpen] = useState(false);
-  const [mysticCodeWarning, setMysticCodeWarning] = useState<string | null>(null);
   const [battleRunStatus, setBattleRunStatus] = useState<BattleRunStatus | null>(null);
   const [battleDailyStatistics, setBattleDailyStatistics] =
     useState<BattleDailyStatistics | null>(null);
@@ -365,17 +365,10 @@ function App({
         event.payload.attack ?? null,
         event.payload.action ?? null,
       );
-      if (
-        event.payload.level === "warn" &&
-        event.payload.currentScreen === "TeamConfirm" &&
-        event.payload.message.includes("御主礼装")
-      ) {
-        setMysticCodeWarning(event.payload.message);
-      }
       setBattleRunStatus((current) => {
         if (current == null) return current;
         const { status } = event.payload;
-        if (status === "starting" || status === "running") {
+        if (status === "starting" || status === "running" || status === "paused") {
           return { ...current, phase: status, endedAtMs: null };
         }
         if (current.endedAtMs != null) return current;
@@ -1268,28 +1261,7 @@ function App({
         onInstallUpdate={handleInstallUpdate}
         onLogEntry={appendOperationLog}
       />}
-      <AlertDialog.Root
-        open={mysticCodeWarning != null}
-        onOpenChange={(open) => {
-          if (!open) setMysticCodeWarning(null);
-        }}
-      >
-        <AlertDialog.Content maxWidth="460px">
-          <AlertDialog.Title>御主礼装检查</AlertDialog.Title>
-          <AlertDialog.Description size="2">
-            {mysticCodeWarning}
-            <br />
-            自动化已自动停止；请换好礼装后重新开始任务。
-          </AlertDialog.Description>
-          <Flex justify="end" gap="3" mt="4">
-            <AlertDialog.Action>
-              <Button type="button" onClick={() => setMysticCodeWarning(null)}>
-                知道了
-              </Button>
-            </AlertDialog.Action>
-          </Flex>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
+      <TeamVerificationDialog />
       <ProjectSettingsDialog
         open={projectSettingsOpen}
         project={activeProject}

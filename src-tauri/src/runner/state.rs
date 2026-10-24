@@ -106,6 +106,14 @@ impl BattleState {
         .unwrap_or(BattleLoadGate::NotWaiting)
     }
 
+    pub(crate) fn resume_after_team_verification(&mut self, at: Instant) {
+        if let BattleFlowState::AwaitingBattleLoad { ref mut wait, .. } = self.flow {
+            wait.last_tap_at = at;
+            wait.polls = 0;
+            wait.team_confirm_polls = 0;
+        }
+    }
+
     pub(crate) fn awaiting_attack_resolution(&self) -> bool {
         matches!(
             self.flow,

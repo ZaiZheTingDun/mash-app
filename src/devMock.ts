@@ -290,6 +290,8 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
           ? args.servantId == null ? "请先选择冠位从者" : "未找到该从者的牵绊礼装数据"
           : null,
       } as T;
+    case "get_team_verification":
+      return null as T;
     case "get_mystic_codes":
       return [{
         id: 470,

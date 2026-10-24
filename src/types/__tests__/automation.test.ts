@@ -5,6 +5,8 @@ describe("automation status helpers", () => {
   it("classifies structured runner statuses", () => {
     expect(isAutomationRunning({ status: "starting" })).toBe(true);
     expect(isAutomationRunning({ status: "running" })).toBe(true);
+    expect(isAutomationRunning({ status: "paused" })).toBe(true);
+    expect(isAutomationTerminal({ status: "paused" })).toBe(false);
     expect(isAutomationRunning({ status: "error" })).toBe(false);
     expect(isAutomationTerminal({ status: "idle" })).toBe(true);
     expect(isAutomationTerminal({ status: "finished" })).toBe(true);

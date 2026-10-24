@@ -18,6 +18,7 @@ mod results;
 mod runtime;
 mod state;
 mod support;
+mod team_verification;
 
 pub(crate) use actions::*;
 #[cfg(test)]
@@ -32,6 +33,10 @@ pub(crate) use rank_up_quest::*;
 pub(crate) use results::*;
 pub(crate) use state::*;
 pub(crate) use support::*;
+pub(crate) use team_verification::{build_team_check_targets, TeamCheckTarget};
+pub use team_verification::{
+    TeamCheckIssue, TeamVerificationControl, TeamVerificationDecision, TeamVerificationReport,
+};
 
 use crate::adb::Adb;
 use crate::battle_statistics::BattleRunRecorder;
@@ -156,9 +161,10 @@ pub struct Runner {
     /// The game persists that choice, so later refreshes / repeated quests
     /// only need to tap the ordinary EXTRA tab again.
     support_extra_class_filter_configured: bool,
-    /// Avoid repeating the same warning while the runner is unwinding after
-    /// a blocked TeamConfirm check.
-    mystic_code_warning_emitted: bool,
+    /// Per-run recoverable gate shared with the IPC commands.
+    team_verification: Arc<Mutex<TeamVerificationControl>>,
+    team_check_targets: Vec<TeamCheckTarget>,
+    mystic_code_name: Option<String>,
     /// Cached `(name, np_names, class_name)` for the pinned support
     /// servant. Loaded lazily on the first `handle_support_select` poll so
     /// we don't do disk I/O at 500ms cadence (and cleared between runs
@@ -202,7 +208,7 @@ pub struct Runner {
 }
 
 impl Runner {
-    pub fn new(
+    pub(crate) fn new(
         adb: Adb,
         sidecar: SidecarClient,
         config: RunConfig,
@@ -221,6 +227,9 @@ impl Runner {
         server: Server,
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
         run_recorder: Option<BattleRunRecorder>,
+        team_verification: Arc<Mutex<TeamVerificationControl>>,
+        team_check_targets: Vec<TeamCheckTarget>,
+        mystic_code_name: Option<String>,
     ) -> Self {
         let (screen_w, screen_h) = screen_size.unwrap_or((DEFAULT_W, DEFAULT_H));
         let (frame_w, frame_h) = frame_size.unwrap_or((DEFAULT_FRAME_W, DEFAULT_FRAME_H));
@@ -272,13 +281,16 @@ impl Runner {
             battle_result_loot_handled: false,
             battle_result_friend_request_handled: false,
             battle_result_continue_handled: false,
-            mystic_code_warning_emitted: false,
+            team_verification,
+            team_check_targets,
+            mystic_code_name,
         }
     }
 }
 
 impl Drop for Runner {
     fn drop(&mut self) {
+        self.clear_team_verification_report();
         // The touch backend's own Drop handles its cleanup. Today the
         // adb-input backend has nothing to clean up, but the trait
         // contract still lets a future backend (e.g. minitouch /

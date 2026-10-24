@@ -216,6 +216,8 @@ pub fn run() {
             commands::automation::stop_automation,
             commands::automation::stop_automation_after_current,
             commands::automation::get_automation_status,
+            commands::automation::get_team_verification,
+            commands::automation::resolve_team_verification,
             battle_statistics::get_battle_daily_statistics,
             commands::automation::start_enhancement_automation,
             commands::automation::stop_enhancement_automation,

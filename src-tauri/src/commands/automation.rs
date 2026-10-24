@@ -41,8 +41,9 @@ use crate::models::ProjectRecognitionSettings;
 use crate::operation_log::{self, DebugSource};
 use crate::paths::{AppUiSettings, MysticCodeGender};
 use crate::runner::{
-    grand_strategy, runner_lifecycle_transition, AutomationEvent, LogLevel,
-    RankUpQuestStartRequest, RunConfig, Runner, RunnerHandle, RunnerLifecycleEvent, RunnerState,
+    build_team_check_targets, grand_strategy, runner_lifecycle_transition, AutomationEvent,
+    LogLevel, RankUpQuestStartRequest, RunConfig, Runner, RunnerHandle, RunnerLifecycleEvent,
+    RunnerState, TeamVerificationControl, TeamVerificationDecision, TeamVerificationReport,
 };
 use crate::screen;
 use crate::server::{Server, STREAM_BIT_RATE, STREAM_MAX_FPS, STREAM_MAX_SIZE};
@@ -360,6 +361,22 @@ fn start_automation_with_config(
     let mystic_code_item_template =
         resolve_mystic_code_item_template(&app, &config, mystic_code_gender);
 
+    let team_check_targets = match project.as_ref() {
+        Some(project) => build_team_check_targets(
+            project,
+            resolve_servant_assets_dir(app).as_deref(),
+            resolve_ce_assets_dir(app).as_deref(),
+        )?,
+        None => return Err("未找到当前编队项目".into()),
+    };
+    let mystic_code_name = config.mystic_code_id.and_then(|id| {
+        crate::commands::catalog::get_mystic_codes(app.clone())
+            .ok()?
+            .into_iter()
+            .find(|code| code.id == id)
+            .map(|code| code.name)
+    });
+    let team_verification = Arc::new(Mutex::new(TeamVerificationControl::default()));
     let app = app.clone();
     let state = Arc::new(Mutex::new(RunnerState::Starting));
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -374,6 +391,7 @@ fn start_automation_with_config(
 
     {
         let mut handle = handle_state.lock().unwrap();
+        handle.team_verification = team_verification.clone();
         handle.state = state.clone();
         handle.cancel = cancel.clone();
         handle.stop_after_current = stop_after_current.clone();
@@ -446,11 +464,43 @@ fn start_automation_with_config(
             server,
             Some(debug_sidecar),
             run_recorder,
+            team_verification,
+            team_check_targets,
+            mystic_code_name,
         );
         runner.run();
     });
 
     Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn get_team_verification(
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+) -> Result<Option<TeamVerificationReport>, String> {
+    let handle = handle_state.lock().unwrap();
+    let report = handle.team_verification.lock().unwrap().report.clone();
+    Ok(report)
+}
+
+#[tauri::command]
+pub(crate) fn resolve_team_verification(
+    run_id: String,
+    check_id: u64,
+    decision: TeamVerificationDecision,
+    handle_state: tauri::State<'_, Mutex<RunnerHandle>>,
+) -> Result<(), String> {
+    let handle = handle_state.lock().unwrap();
+    if handle.cancel.load(Ordering::Relaxed) || *handle.state.lock().unwrap() != RunnerState::Paused
+    {
+        return Err("当前没有待处理的编队检查".into());
+    }
+    let result = handle
+        .team_verification
+        .lock()
+        .unwrap()
+        .resolve(&run_id, check_id, decision);
+    result
 }
 
 #[tauri::command]

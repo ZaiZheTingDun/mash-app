@@ -1,11 +1,11 @@
-export type AutomationStatus = "idle" | "starting" | "running" | "finished" | "error";
+export type AutomationStatus = "idle" | "starting" | "running" | "paused" | "finished" | "error";
 
 export interface AutomationStatusPayload {
   status: AutomationStatus;
 }
 
 export function isAutomationRunning(payload: AutomationStatusPayload): boolean {
-  return payload.status === "starting" || payload.status === "running";
+  return payload.status === "starting" || payload.status === "running" || payload.status === "paused";
 }
 
 export function isAutomationTerminal(payload: AutomationStatusPayload): boolean {

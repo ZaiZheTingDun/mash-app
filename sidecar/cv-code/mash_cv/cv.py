@@ -7382,6 +7382,13 @@ def _main_repl() -> None:
                             min_score=float(cmd.get("minScore", LEVEL_DIGIT_MIN_SCORE)),
                         ),
                     )
+            elif action == "verify_team_slots":
+                from mash_cv.team_verification import verify_team_slots
+                img, err = _load_frame(cmd)
+                if img is None:
+                    _reply(req_id, {"error": err})
+                else:
+                    _reply(req_id, verify_team_slots(img, cmd.get("targets", [])))
             elif action == "verify_support_ce":
                 img, err = _load_frame(cmd)
                 if img is None:

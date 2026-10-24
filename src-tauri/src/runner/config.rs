@@ -392,6 +392,7 @@ pub enum RunnerState {
     Idle,
     Starting,
     Running,
+    Paused,
     Finished,
     Error { message: String },
 }
@@ -402,6 +403,7 @@ impl RunnerState {
             Self::Idle => "idle",
             Self::Starting => "starting",
             Self::Running => "running",
+            Self::Paused => "paused",
             Self::Finished => "finished",
             Self::Error { .. } => "error",
         }
@@ -411,6 +413,8 @@ impl RunnerState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RunnerLifecycleEvent {
     WorkerStarted,
+    VerificationBlocked,
+    VerificationResolved,
     StopRequested,
     Finished,
     Failed { message: String },
@@ -430,8 +434,15 @@ pub(crate) fn runner_lifecycle_transition(
 ) -> RunnerLifecycleTransition {
     let next = match (&state, &event) {
         (RunnerState::Starting, RunnerLifecycleEvent::WorkerStarted) => Some(RunnerState::Running),
-        (RunnerState::Starting | RunnerState::Running, RunnerLifecycleEvent::StopRequested) => {
-            Some(RunnerState::Idle)
+        (
+            RunnerState::Starting | RunnerState::Running | RunnerState::Paused,
+            RunnerLifecycleEvent::StopRequested,
+        ) => Some(RunnerState::Idle),
+        (RunnerState::Running, RunnerLifecycleEvent::VerificationBlocked) => {
+            Some(RunnerState::Paused)
+        }
+        (RunnerState::Paused, RunnerLifecycleEvent::VerificationResolved) => {
+            Some(RunnerState::Running)
         }
         (RunnerState::Running, RunnerLifecycleEvent::Finished) => Some(RunnerState::Finished),
         (_, RunnerLifecycleEvent::Failed { message }) => Some(RunnerState::Error {
@@ -556,6 +567,7 @@ pub enum AttackLogPickKind {
 
 /// Handle stored in Tauri managed state to control / observe the runner.
 pub struct RunnerHandle {
+    pub team_verification: Arc<Mutex<TeamVerificationControl>>,
     pub state: Arc<Mutex<RunnerState>>,
     pub cancel: Arc<AtomicBool>,
     pub stop_after_current: Arc<AtomicBool>,
@@ -564,6 +576,7 @@ pub struct RunnerHandle {
 impl RunnerHandle {
     pub fn new_idle() -> Self {
         Self {
+            team_verification: Arc::new(Mutex::new(TeamVerificationControl::default())),
             state: Arc::new(Mutex::new(RunnerState::Idle)),
             cancel: Arc::new(AtomicBool::new(false)),
             stop_after_current: Arc::new(AtomicBool::new(false)),

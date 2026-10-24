@@ -3,6 +3,7 @@ import type { BattleApRecoveryItem } from "./project";
 export type BattleRunPhase =
   | "starting"
   | "running"
+  | "paused"
   | "finished"
   | "stopped"
   | "error";
@@ -100,7 +101,7 @@ export function displayedDailyBattleDurationMs(
   nowMs: number,
 ): number {
   const active =
-    status?.phase === "starting" || status?.phase === "running";
+    status?.phase === "starting" || status?.phase === "running" || status?.phase === "paused";
   if (!active || nowMs <= statistics.calculatedAtMs) {
     return statistics.durationMs;
   }
