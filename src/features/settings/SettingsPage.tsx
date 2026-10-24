@@ -28,6 +28,7 @@ interface SettingsPageProps {
   onOpenChange: (open: boolean) => void;
   onSectionChange: (section: SettingsSection) => void;
   onProjectsImported?: (projects: Project[]) => void;
+  onFormationImported?: (project: Project) => void;
   onBattleStartPanelChange?: (value: BattleStartPanel) => void;
   mysticCodeGender?: MysticCodeGender;
   onMysticCodeGenderChange?: (value: MysticCodeGender) => void;
@@ -39,7 +40,7 @@ interface SettingsPageProps {
 
 type SettingsRenderProps = Pick<
   SettingsPageProps,
-  "onProjectsImported" | "onBattleStartPanelChange" | "mysticCodeGender" | "onMysticCodeGenderChange" | "colorTheme" | "onColorThemeChange" | "colorThemeError" | "onColorThemeReload"
+  "onProjectsImported" | "onFormationImported" | "onBattleStartPanelChange" | "mysticCodeGender" | "onMysticCodeGenderChange" | "colorTheme" | "onColorThemeChange" | "colorThemeError" | "onColorThemeReload"
 > & {
   onResourcesExitBlockedChange: (blocked: boolean) => void;
 };
@@ -78,7 +79,7 @@ const navItems: Array<{
     section: "dataManagement",
     label: "队伍管理",
     render: (_active, props) => (
-      <SettingsDataManagementPage onProjectsImported={props.onProjectsImported} />
+      <SettingsDataManagementPage onProjectsImported={props.onProjectsImported} onFormationImported={props.onFormationImported} />
     ),
   },
   {
@@ -113,6 +114,7 @@ export function SettingsPage({
   onOpenChange,
   onSectionChange,
   onProjectsImported,
+  onFormationImported,
   onBattleStartPanelChange,
   mysticCodeGender,
   onMysticCodeGenderChange,
@@ -197,7 +199,7 @@ export function SettingsPage({
               { basic: "GENERAL", recognition: "RECOGNITION", dataManagement: "PARTY", debug: "DEBUG", resources: "RESOURCES", selfCheck: "SELF CHECK" }[activeSection]
             } stacked rail>{activeItem.label}</SectionHeading>
             {activeItem.render(open, {
-              onProjectsImported, onBattleStartPanelChange, mysticCodeGender,
+              onProjectsImported, onFormationImported, onBattleStartPanelChange, mysticCodeGender,
               colorTheme, onColorThemeChange,
               colorThemeError, onColorThemeReload,
               onMysticCodeGenderChange, onResourcesExitBlockedChange: setResourcesExitBlocked,

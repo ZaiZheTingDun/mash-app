@@ -16,6 +16,7 @@ import {
   MinusIcon,
   PlusIcon,
 } from "@radix-ui/react-icons";
+import type { FormationShareIntegration } from "../../types/formationShare";
 import { ProjectBar } from "../projects/ProjectBar";
 import { OptionCardRadioGroup } from "../../components/common/OptionCardRadioGroup";
 import { SectionHeading } from "../../components/common/SectionHeading";
@@ -99,7 +100,7 @@ const MAX_AP_RECOVERY_LIMIT = 4_294_967_295;
 const AP_RECOVERY_HELP_TEXT =
   "选中恢复道具后默认为无限使用；点击无限图标可设置本次运行的使用数量。某种道具达到上限后会继续尝试其他已选道具，全部达到上限后停止。";
 
-interface BattlePageProps {
+interface BattlePageProps extends FormationShareIntegration {
   projects: Project[];
   projectCatalog: ProjectCatalog;
   grandClassDefinitions: GrandClassDefinition[];
@@ -203,6 +204,8 @@ export function BattlePage({
   onReorderProjectGroups,
   onReorderProjectsInGroup,
   onOpenProjectSettings,
+  beforeShare,
+  onFormationImported,
   onUpdateProject,
   onBack,
   onOpenHome,
@@ -442,6 +445,8 @@ export function BattlePage({
     <Flex direction="column" className="battle-page workspace-page">
       <Box className="battle-topbar">
         <PageHeader title="运行设置" english="RUN SETTINGS" onBack={onBack} backDisabled={running}><ProjectBar headerStyle
+          beforeShare={beforeShare}
+          onFormationImported={onFormationImported}
           projects={projects}
           projectCatalog={projectCatalog}
           grandClassDefinitions={grandClassDefinitions}

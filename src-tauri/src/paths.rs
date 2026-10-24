@@ -280,13 +280,3 @@ pub(crate) fn project_advanced_battle_scenes_path_in_root(
         .join(project_id)
         .join("advanced_battle_scenes.json")
 }
-
-/// Legacy filename used before the per-scene rename. Kept around so
-/// `load_battle_scenes` can migrate any pre-existing project data on
-/// first launch after the rename.
-pub(crate) fn legacy_project_turns_path(app: &tauri::AppHandle, project_id: &str) -> PathBuf {
-    app_data_dir(app)
-        .join("projects")
-        .join(project_id)
-        .join("turns.json")
-}

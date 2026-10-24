@@ -1,10 +1,6 @@
 //! Command editor mutations stay backend-owned.
 use super::*;
 use serde_json::{json, Value};
-use std::sync::Mutex;
-
-#[derive(Default)]
-pub(crate) struct CommandEditorLock(Mutex<()>);
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,12 +99,12 @@ fn read_document(
     advanced: bool,
 ) -> Result<Vec<Value>, String> {
     let values = if advanced {
-        load_advanced_battle_scenes(app.clone(), project_id.to_string())?
+        load_advanced_battle_scenes_from_root(&app_data_dir(app), project_id)?
             .into_iter()
             .map(serde_json::to_value)
             .collect::<Result<Vec<_>, _>>()
     } else {
-        load_battle_scenes(app.clone(), project_id.to_string())?
+        load_battle_scenes_from_root(&app_data_dir(app), project_id)?
             .into_iter()
             .map(serde_json::to_value)
             .collect::<Result<Vec<_>, _>>()
@@ -200,7 +196,7 @@ fn mutate_document(
 #[tauri::command]
 pub(crate) fn load_command_editor(
     app: tauri::AppHandle,
-    editor_lock: tauri::State<'_, CommandEditorLock>,
+    editor_lock: tauri::State<'_, ProjectStoreLock>,
     project_id: String,
     advanced: bool,
 ) -> Result<CommandEditorState, String> {
@@ -218,7 +214,7 @@ pub(crate) fn load_command_editor(
 #[tauri::command]
 pub(crate) fn mutate_command_editor(
     app: tauri::AppHandle,
-    editor_lock: tauri::State<'_, CommandEditorLock>,
+    editor_lock: tauri::State<'_, ProjectStoreLock>,
     project_id: String,
     advanced: bool,
     mutation: CommandEditorMutation,

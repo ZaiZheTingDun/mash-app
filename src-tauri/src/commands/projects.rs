@@ -5,6 +5,12 @@ use super::*;
 use crate::runner::grand_class_definitions;
 use crate::storage::{read_json_or_default, write_json_atomic};
 
+/// All project/catalog/command mutations and transfer snapshots share one lock.
+/// Root-based helpers deliberately do not acquire it, so a transaction can
+/// compose them without nested locking.
+#[derive(Default)]
+pub(crate) struct ProjectStoreLock(pub(super) Mutex<()>);
+
 pub(crate) fn read_projects(app: &tauri::AppHandle) -> Result<Vec<Project>, String> {
     read_projects_from_path(&projects_file_path(app))
 }
@@ -24,6 +30,8 @@ pub(crate) fn write_projects_to_path(path: &Path, projects: &[Project]) -> Resul
 
 #[tauri::command]
 pub(crate) fn list_projects(app: tauri::AppHandle) -> Result<Vec<Project>, String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     read_projects(&app)
 }
 
@@ -40,6 +48,8 @@ pub(crate) fn create_project(
     grand_class: Option<GrandClass>,
     group_id: Option<String>,
 ) -> Result<Project, String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     let project = new_project(
         name,
         advanced_mode.unwrap_or(false),
@@ -118,6 +128,8 @@ pub(crate) fn duplicate_project(
     source_id: String,
     name: String,
 ) -> Result<Project, String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     let mut projects = read_projects(&app)?;
     let mut catalog = read_project_catalog(&app, &projects)?;
     let source = projects
@@ -155,6 +167,8 @@ pub(crate) fn duplicate_project(
 /// project-level fields don't each need their own command).
 #[tauri::command]
 pub(crate) fn update_project(app: tauri::AppHandle, project: Project) -> Result<Project, String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     let mut projects = read_projects(&app)?;
     let Some(index) = projects.iter().position(|item| item.id == project.id) else {
         return Err(format!("project not found: {}", project.id));
@@ -219,6 +233,8 @@ mod grand_bond_tests {
 
 #[tauri::command]
 pub(crate) fn delete_project(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     let mut projects = read_projects(&app)?;
     let mut catalog = read_project_catalog(&app, &projects)?;
     projects.retain(|p| p.id != id);
@@ -238,6 +254,8 @@ pub(crate) fn save_battle_scenes(
     project_id: String,
     scenes: Vec<BattleScene>,
 ) -> Result<(), String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     let path = project_battle_scenes_path(&app, &project_id);
     let scenes: Vec<BattleScene> = scenes
         .into_iter()
@@ -251,32 +269,9 @@ pub(crate) fn load_battle_scenes(
     app: tauri::AppHandle,
     project_id: String,
 ) -> Result<Vec<BattleScene>, String> {
-    let path = project_battle_scenes_path(&app, &project_id);
-    if path.exists() {
-        let scenes: Vec<BattleScene> = read_json_or_default(&path, "普通指令配置")?;
-        return Ok(scenes
-            .into_iter()
-            .map(BattleScene::normalize_turns)
-            .collect());
-    }
-
-    // One-shot migration: pre-rename projects stored their per-scene
-    // config under `turns.json`. The on-disk JSON shape is identical
-    // (BattleScene was just renamed from Turn), so we can read it as-is,
-    // write it under the new filename, and remove the legacy file.
-    let legacy = legacy_project_turns_path(&app, &project_id);
-    if legacy.exists() {
-        let scenes: Vec<BattleScene> =
-            read_json_or_default::<Vec<BattleScene>>(&legacy, "旧版普通指令配置")?
-                .into_iter()
-                .map(BattleScene::normalize_turns)
-                .collect();
-        write_json_atomic(&path, &scenes, "普通指令配置")?;
-        fs::remove_file(&legacy).map_err(|error| format!("移除旧版指令配置失败：{error}"))?;
-        return Ok(scenes);
-    }
-
-    Ok(Vec::new())
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
+    load_battle_scenes_from_root(&app_data_dir(&app), &project_id)
 }
 
 #[tauri::command]
@@ -285,6 +280,8 @@ pub(crate) fn save_advanced_battle_scenes(
     project_id: String,
     scenes: Vec<AdvancedBattleScene>,
 ) -> Result<(), String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     let path = project_advanced_battle_scenes_path(&app, &project_id);
     write_json_atomic(&path, &scenes, "高级指令配置")
 }
@@ -294,6 +291,8 @@ pub(crate) fn load_advanced_battle_scenes(
     app: tauri::AppHandle,
     project_id: String,
 ) -> Result<Vec<AdvancedBattleScene>, String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     let path = project_advanced_battle_scenes_path(&app, &project_id);
     read_json_or_default(&path, "高级指令配置")
 }
@@ -313,6 +312,10 @@ pub(crate) use ui_settings::*;
 mod config_transfer;
 pub(crate) use config_transfer::*;
 
+mod formation_share;
+mod import_commit;
+pub(crate) use formation_share::*;
+
 // ---------------------------------------------------------------------------
 // Slot-servant delete
 // ---------------------------------------------------------------------------
@@ -329,6 +332,8 @@ pub(crate) fn delete_slot_servant(
     project_id: String,
     slot_id: String,
 ) -> Result<DeleteSlotServantResult, String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     let mut projects = read_projects(&app)?;
     let idx = projects
         .iter()

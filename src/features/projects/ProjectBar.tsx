@@ -26,9 +26,11 @@ import type {
   Project,
   ProjectCatalog,
 } from "../../types/project";
+import type { FormationShareIntegration } from "../../types/formationShare";
+import { FormationShareActions } from "./FormationShareActions";
 import { ProjectSelector } from "./ProjectSelector";
 
-interface ProjectBarProps {
+interface ProjectBarProps extends FormationShareIntegration {
   projects: Project[];
   projectCatalog: ProjectCatalog;
   grandClassDefinitions?: GrandClassDefinition[];
@@ -86,6 +88,8 @@ export function ProjectBar({
   onReorderProjectsInGroup,
   onOpenProjectSettings,
   onOpenHome,
+  beforeShare,
+  onFormationImported,
 }: ProjectBarProps) {
   const [nameDialogMode, setNameDialogMode] = useState<NameDialogMode | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -233,6 +237,14 @@ export function ProjectBar({
           onReorderProjectsInGroup={onReorderProjectsInGroup}
         />
         </div>
+
+        <FormationShareActions
+          projectId={activeProjectId}
+          groups={projectCatalog.groups}
+          disabled={disabled}
+          beforeShare={beforeShare}
+          onFormationImported={onFormationImported}
+        />
 
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>

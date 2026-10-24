@@ -25,6 +25,12 @@ pub(crate) fn write_json_atomic<T>(path: &Path, value: &T, label: &str) -> Resul
 where
     T: Serialize + ?Sized,
 {
+    let json =
+        serde_json::to_vec_pretty(value).map_err(|error| format!("序列化{label}失败：{error}"))?;
+    write_bytes_atomic(path, &json, label)
+}
+
+pub(crate) fn write_bytes_atomic(path: &Path, bytes: &[u8], label: &str) -> Result<(), String> {
     let parent = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -34,12 +40,10 @@ where
             .map_err(|error| format!("创建{label}目录失败（{}）：{error}", parent.display()))?;
     }
 
-    let json =
-        serde_json::to_vec_pretty(value).map_err(|error| format!("序列化{label}失败：{error}"))?;
     let mut temporary = tempfile::NamedTempFile::new_in(parent)
         .map_err(|error| format!("创建{label}临时文件失败（{}）：{error}", parent.display()))?;
     temporary
-        .write_all(&json)
+        .write_all(bytes)
         .map_err(|error| format!("写入{label}临时文件失败：{error}"))?;
     temporary
         .as_file()

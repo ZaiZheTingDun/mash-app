@@ -92,14 +92,23 @@ pub(crate) fn load_battle_scenes_from_root(
     root: &Path,
     project_id: &str,
 ) -> Result<Vec<BattleScene>, String> {
-    let scenes: Vec<BattleScene> = read_json_or_default(
-        &project_battle_scenes_path_in_root(root, project_id),
-        "普通指令配置",
-    )?;
-    Ok(scenes
+    let path = project_battle_scenes_path_in_root(root, project_id);
+    let legacy = path.with_file_name("turns.json");
+    let source = if !path.exists() && legacy.exists() {
+        &legacy
+    } else {
+        &path
+    };
+    let scenes: Vec<BattleScene> = read_json_or_default(source, "普通指令配置")?;
+    let scenes = scenes
         .into_iter()
         .map(BattleScene::normalize_turns)
-        .collect())
+        .collect::<Vec<_>>();
+    if source == &legacy {
+        write_json_atomic(&path, &scenes, "普通指令配置")?;
+        fs::remove_file(&legacy).map_err(|error| format!("移除旧版指令配置失败：{error}"))?;
+    }
+    Ok(scenes)
 }
 
 pub(crate) fn load_advanced_battle_scenes_from_root(
@@ -390,7 +399,7 @@ pub(crate) fn import_configurations_from_path(
     }
     let bytes = read_config_package_bytes(path)?;
     let projects_path = root.join("projects.json");
-    let mut projects = read_projects_from_path(&projects_path)?;
+    let projects = read_projects_from_path(&projects_path)?;
     let existing_names: Vec<String> = projects
         .iter()
         .map(|project| project.name.clone())
@@ -406,29 +415,23 @@ pub(crate) fn import_configurations_from_path(
     if selected_entries.is_empty() {
         return Err("没有可导入的配置".to_string());
     }
-    let mut imported_projects = Vec::new();
-    for parsed_entry in selected_entries {
-        let mut project = parsed_entry.entry.project;
-        project.id = uuid::Uuid::new_v4().to_string();
-        project.name = parsed_entry.target_name;
-        let project = normalize_project(project);
-        write_battle_scenes_to_root(root, &project.id, &parsed_entry.entry.battle_scenes)?;
-        write_advanced_battle_scenes_to_root(
-            root,
-            &project.id,
-            &parsed_entry.entry.advanced_battle_scenes,
-        )?;
-        projects.push(project.clone());
-        imported_projects.push(project);
-    }
-    write_projects_to_path(&projects_path, &projects)?;
-    Ok(ConfigImportResult { imported_projects })
+    let entries = selected_entries
+        .into_iter()
+        .map(|parsed| {
+            let mut entry = parsed.entry;
+            entry.project.name = parsed.target_name;
+            entry
+        })
+        .collect();
+    super::import_commit::commit_config_import(root, entries, None)
 }
 
 #[tauri::command]
 pub(crate) fn list_exportable_configs(
     app: tauri::AppHandle,
 ) -> Result<Vec<ExportableConfigSummary>, String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     exportable_config_summaries_from_root(&app_data_dir(&app))
 }
 
@@ -438,7 +441,11 @@ pub(crate) async fn export_configs(
     project_ids: Vec<String>,
 ) -> Result<Option<ExportConfigsResult>, String> {
     let root = app_data_dir(&app);
-    let package = export_package_for_project_ids(&root, &project_ids)?;
+    let package = {
+        let store = app.state::<ProjectStoreLock>();
+        let _guard = store.0.lock().map_err(|error| error.to_string())?;
+        export_package_for_project_ids(&root, &project_ids)?
+    };
     let picked = app
         .dialog()
         .file()
@@ -481,6 +488,8 @@ pub(crate) fn preview_config_import(
     app: tauri::AppHandle,
     file_path: String,
 ) -> Result<ConfigImportPreview, String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     preview_config_import_from_path(&app_data_dir(&app), &PathBuf::from(file_path))
 }
 
@@ -490,5 +499,7 @@ pub(crate) fn import_configurations(
     file_path: String,
     import_keys: Vec<String>,
 ) -> Result<ConfigImportResult, String> {
+    let store = app.state::<ProjectStoreLock>();
+    let _guard = store.0.lock().map_err(|error| error.to_string())?;
     import_configurations_from_path(&app_data_dir(&app), &PathBuf::from(file_path), &import_keys)
 }

@@ -26,12 +26,15 @@
 | `friend_point_summon_runner.rs` | 友情点召唤 |
 | `screen/` | Python 子进程、JSON-line 协议、CV 类型和识别操作 |
 | `models/` | 项目、队伍、高级战斗规则等共享数据结构 |
+| `formation_share/` | 离线分享协议：短字段、版本／能力、身份转换、有界 Gzip 与标准 Base64 |
 | `adb.rs` / `touch/` | ADB 通信和底层输入操作 |
 | `platform/` | 操作系统适配 |
 | `paths.rs` / `server.rs` | 路径与迁移、区服与分辨率校验 |
 | `resources/` | 通过 `include_str!` 编入程序的目录数据 |
 
 `src-tauri/resources/` 则是随应用打包的 CV 配置、模板、图片、运行时清单和 scrcpy server，详见[资源说明](../src-tauri/resources/README.md)。
+
+`commands/projects/formation_share.rs` 负责分享协议的 Tauri、预览与剪贴板适配，`commands/projects/import_commit.rs` 为文件和分享码导入提供共同提交管线。协议和兼容约定见[编队快速分享](formation-sharing.md)。
 
 ## 图像识别：`sidecar/cv-code/`
 

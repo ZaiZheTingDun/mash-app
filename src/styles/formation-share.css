@@ -1,0 +1,31 @@
+.formation-share-code textarea {
+  font-family: var(--code-font-family);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.formation-share-preview {
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.formation-share-section {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--gray-5);
+}
+
+.formation-share-section summary {
+  cursor: pointer;
+  color: var(--gray-12);
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-medium);
+}
+
+.formation-share-warning {
+  display: block;
+}
+
+.formation-share-name {
+  flex: 1;
+}
