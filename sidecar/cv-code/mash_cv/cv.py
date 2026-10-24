@@ -1038,6 +1038,7 @@ CE_GRID_LEVEL_CAPS = {
     100: (5, 4),
 }
 CE_MAIN_TARGET_LEVEL_CAPS = frozenset({10, 20, 50, 100})
+CE_MAIN_LEVEL_OCR_MIN_CONFIDENCE = 0.80
 
 
 def _norm_rect_from_px(x: float, y: float, width: float, height: float, img_w: int, img_h: int) -> dict:
@@ -1348,9 +1349,39 @@ def _read_craft_essence_main_target(img: np.ndarray) -> dict:
                     "text": text,
                     "region": region,
                 }
-            cap_only = _parse_ce_main_cap_only_text(text)
-            if cap_only is not None:
-                cap_only_evidence.setdefault(cap_only, text)
+            for token in text.split():
+                cap_only = _parse_ce_main_cap_only_text(token)
+                if cap_only is not None:
+                    cap_only_evidence.setdefault(cap_only, text)
+
+    # Detection can miss narrow current-level digits (11/50 -> 150). Read the
+    # entire fixed level ROI directly so those digits reach the recognizer.
+    recognizer = getattr(_get_ocr(), "text_recognizer", None)
+    if callable(recognizer) and img.size:
+        h, w = img.shape[:2]
+        x, y, rw, rh = _slot_to_pixels(region, w, h)
+        try:
+            reads, _elapsed = recognizer([img[y : y + rh, x : x + rw]])
+        except Exception:  # noqa: BLE001 - preserve detector-only evidence
+            reads = []
+        if reads:
+            text, confidence = reads[0]
+            text = str(text).strip()
+            match = re.fullmatch(r"(\d{1,3})[/／](\d{1,3})", text)
+            if match and float(confidence or 0.0) >= CE_MAIN_LEVEL_OCR_MIN_CONFIDENCE:
+                level, cap = map(int, match.groups())
+                if (
+                    cap in CE_MAIN_TARGET_LEVEL_CAPS
+                    and 1 <= level <= cap
+                    and (not cap_only_evidence or set(cap_only_evidence) == {cap})
+                ):
+                    return {
+                        "found": True,
+                        "level": level,
+                        "levelCap": cap,
+                        "text": text,
+                        "region": region,
+                    }
     if len(cap_only_evidence) == 1:
         cap, text = next(iter(cap_only_evidence.items()))
         return {
