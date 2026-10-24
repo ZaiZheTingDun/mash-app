@@ -1,5 +1,3 @@
-import type { Project } from "./project";
-
 export interface FormationShareCode {
   code: string;
   characters: number;
@@ -19,9 +17,4 @@ export interface FormationSharePreview {
   token: string;
   targetName: string;
   members: FormationShareMember[];
-}
-
-export interface FormationShareIntegration {
-  beforeShare?: (projectId: string) => Promise<void>;
-  onFormationImported?: (project: Project) => void;
 }

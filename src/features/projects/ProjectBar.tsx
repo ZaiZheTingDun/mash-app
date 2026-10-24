@@ -28,14 +28,14 @@ import type {
   Project,
   ProjectCatalog,
 } from "../../types/project";
-import type { FormationShareIntegration, FormationSharePreview } from "../../types/formationShare";
+import type { FormationSharePreview } from "../../types/formationShare";
 import { FormationShareFeedback } from "./FormationShareFeedback";
 import { FormationShareInput } from "./FormationShareInput";
 import { useFormationShare } from "./useFormationShare";
 import { useFormationShareDraft } from "./useFormationShareDraft";
 import { ProjectSelector } from "./ProjectSelector";
 
-interface ProjectBarProps extends FormationShareIntegration {
+interface ProjectBarProps {
   projects: Project[];
   projectCatalog: ProjectCatalog;
   grandClassDefinitions?: GrandClassDefinition[];
@@ -59,6 +59,8 @@ interface ProjectBarProps extends FormationShareIntegration {
   onReorderProjectGroups: (groupIds: string[]) => Promise<void>;
   onReorderProjectsInGroup: (groupId: string | null, projectIds: string[]) => Promise<void>;
   onOpenProjectSettings: () => void;
+  beforeShare?: (projectId: string) => Promise<void>;
+  onFormationImported?: (project: Project) => void;
   onOpenHome?: () => void;
 }
 

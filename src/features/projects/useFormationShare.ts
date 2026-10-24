@@ -1,8 +1,11 @@
 import { useRef, useState } from "react";
-import type { FormationShareCode, FormationShareIntegration } from "../../types/formationShare";
+import type { FormationShareCode } from "../../types/formationShare";
 import { formationShareApi } from "./formationShareApi";
 
-export function useFormationShare(projectId: string | null, beforeShare?: FormationShareIntegration["beforeShare"]) {
+export function useFormationShare(
+  projectId: string | null,
+  beforeShare?: (projectId: string) => Promise<void>,
+) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
