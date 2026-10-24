@@ -101,6 +101,7 @@ export function ProjectBar({
     projects.find((project) => project.id === dialogProjectId) ?? activeProject;
   const deleteProject =
     projects.find((project) => project.id === deleteProjectId) ?? null;
+  const canDeleteProject = projects.length > 1;
   const activeProjectGroupId =
     projectCatalog.groups.find((group) => group.projectIds.includes(activeProjectId ?? ""))?.id ??
     null;
@@ -186,11 +187,11 @@ export function ProjectBar({
   );
 
   const handleDeleteConfirm = useCallback(() => {
-    if (deleteProject) {
+    if (deleteProject && canDeleteProject && !disabled) {
       onDeleteProject(deleteProject.id);
     }
     setDeleteProjectId(null);
-  }, [deleteProject, onDeleteProject]);
+  }, [canDeleteProject, deleteProject, disabled, onDeleteProject]);
 
   const nameDialogTitle =
     nameDialogMode === "rename"
@@ -224,7 +225,9 @@ export function ProjectBar({
           onProjectSelect={onProjectSelect}
           onRequestCreate={(groupId) => openNameDialog("create", groupId)}
           onRequestRename={(projectId) => openNameDialog("rename", undefined, projectId)}
-          onRequestDelete={setDeleteProjectId}
+          onRequestDelete={(id) => {
+            if (canDeleteProject && !disabled) setDeleteProjectId(id);
+          }}
           onCreateProjectGroup={onCreateProjectGroup}
           onRenameProjectGroup={onRenameProjectGroup}
           onDeleteProjectGroup={onDeleteProjectGroup}
@@ -279,7 +282,7 @@ export function ProjectBar({
             </DropdownMenu.Item>
             <DropdownMenu.Item
               color="red"
-              disabled={disabled || !activeProject}
+              disabled={disabled || !activeProject || !canDeleteProject}
               onSelect={() => setDeleteProjectId(activeProject?.id ?? null)}
             >
               <Flex align="center" gap="2">
@@ -441,7 +444,7 @@ export function ProjectBar({
               </Button>
             </AlertDialog.Cancel>
             <AlertDialog.Action>
-              <Button type="button" color="red" onClick={handleDeleteConfirm}>
+              <Button type="button" color="red" disabled={disabled || !canDeleteProject || !deleteProject} onClick={handleDeleteConfirm}>
                 删除
               </Button>
             </AlertDialog.Action>

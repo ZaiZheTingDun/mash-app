@@ -166,18 +166,34 @@ describe("App active project restore", () => {
     }));
   });
 
-  it("disables the next step after deleting the last project", async () => {
+  it("prevents deleting the only project", async () => {
     installAppMock("project-1", { projectList: [projects[0]] });
     const user = userEvent.setup();
     renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
 
     await screen.findByText("第一套");
     await user.click(screen.getByRole("button", { name: "队伍操作" }));
+    const remove = await screen.findByRole("menuitem", { name: "删除当前队伍" });
+    expect(remove).toHaveAttribute("aria-disabled", "true");
+    await user.click(remove);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "delete_project")).toBe(false);
+  });
+
+  it("keeps the remaining project usable and disables further deletion", async () => {
+    installAppMock("project-1");
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+
+    await screen.findByText("第一套");
+    await user.click(screen.getByRole("button", { name: "队伍操作" }));
     await user.click(await screen.findByRole("menuitem", { name: "删除当前队伍" }));
-    const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: "删除" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "指令设置" })).toBeDisabled());
+    await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "删除" }));
+    await screen.findByText("第二套");
+    expect(screen.getByRole("button", { name: "指令设置" })).toBeEnabled();
     expect(invoke).toHaveBeenCalledWith("delete_project", { id: "project-1" });
+    await user.click(screen.getByRole("button", { name: "队伍操作" }));
+    expect(await screen.findByRole("menuitem", { name: "删除当前队伍" })).toHaveAttribute("aria-disabled", "true");
   });
 
   it("waits for resource installation before requesting catalogs", async () => {

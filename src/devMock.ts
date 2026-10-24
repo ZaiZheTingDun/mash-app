@@ -486,6 +486,12 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       return clone(project) as T;
     }
     case "delete_project":
+      if (!projects.some((project) => project.id === args.id)) {
+        throw new Error(`project not found: ${String(args.id)}`);
+      }
+      if (projects.length <= 1) {
+        throw new Error("至少保留一个队伍，无法删除最后一个队伍。");
+      }
       projects = projects.filter((project) => project.id !== args.id);
       removeProjectFromCatalog(String(args.id));
       if (activeProjectId === args.id) {

@@ -466,10 +466,59 @@ describe("ProjectBar", () => {
   });
 
   describe("delete action", () => {
-    it("calls onDeleteProject only after the user confirms the dialog", async () => {
+    it("disables deleting the only project from the action menu", async () => {
       const user = userEvent.setup();
       const onDeleteProject = vi.fn();
       renderProjectBar({ onDeleteProject });
+
+      await user.click(screen.getByRole("button", { name: /队伍操作/ }));
+      const remove = await screen.findByRole("menuitem", { name: /删除当前队伍/ });
+      expect(remove).toHaveAttribute("aria-disabled", "true");
+      await user.click(remove);
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(onDeleteProject).not.toHaveBeenCalled();
+    });
+
+    it("disables deleting the only project from the management context menu", async () => {
+      const user = userEvent.setup();
+      const onDeleteProject = vi.fn();
+      renderProjectBar({ onDeleteProject });
+
+      await user.click(screen.getByRole("button", { name: /项目甲/ }));
+      await user.click(await screen.findByRole("button", { name: /管理所有队伍/ }));
+      fireEvent.contextMenu(await screen.findByRole("button", { name: /项目甲 普通/ }));
+      const remove = await screen.findByRole("menuitem", { name: "删除队伍" });
+      expect(remove).toHaveAttribute("aria-disabled", "true");
+      await user.click(remove);
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(onDeleteProject).not.toHaveBeenCalled();
+    });
+
+    it("disables a pending delete confirmation when only one project remains", async () => {
+      const user = userEvent.setup();
+      const onDeleteProject = vi.fn();
+      const first = makeProject("p1", "项目甲");
+      const rendered = renderProjectBar({
+        projects: [first, makeProject("p2", "项目乙")], onDeleteProject,
+      });
+      await user.click(screen.getByRole("button", { name: /队伍操作/ }));
+      await user.click(await screen.findByRole("menuitem", { name: /删除当前队伍/ }));
+      const dialog = await screen.findByRole("alertdialog");
+
+      rendered.rerender(<ProjectBar {...rendered.props} projects={[first]} />);
+      const confirm = within(dialog).getByRole("button", { name: "删除" });
+      expect(confirm).toBeDisabled();
+      await user.click(confirm);
+      expect(onDeleteProject).not.toHaveBeenCalled();
+    });
+
+    it("calls onDeleteProject only after the user confirms the dialog", async () => {
+      const user = userEvent.setup();
+      const onDeleteProject = vi.fn();
+      renderProjectBar({
+        projects: [makeProject("p1", "项目甲"), makeProject("p2", "项目乙")],
+        onDeleteProject,
+      });
 
       await user.click(screen.getByRole("button", { name: /队伍操作/ }));
       await user.click(
@@ -486,7 +535,10 @@ describe("ProjectBar", () => {
     it("skips onDeleteProject when the user cancels the dialog", async () => {
       const user = userEvent.setup();
       const onDeleteProject = vi.fn();
-      renderProjectBar({ onDeleteProject });
+      renderProjectBar({
+        projects: [makeProject("p1", "项目甲"), makeProject("p2", "项目乙")],
+        onDeleteProject,
+      });
 
       await user.click(screen.getByRole("button", { name: /队伍操作/ }));
       await user.click(
