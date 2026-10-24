@@ -35,7 +35,7 @@ interface BattleRunStatusPanelProps {
 }
 
 function isActive(status: BattleRunStatus): boolean {
-  return status.phase === "starting" || status.phase === "running";
+  return status.phase === "starting" || status.phase === "running" || status.phase === "paused";
 }
 
 function consumedRecoveryItems(usage: BattleRunApRecoveryUsage) {
@@ -84,6 +84,8 @@ export function BattleRunStatusPanel({
   if (status?.maxRuns != null) {
     if (status.completedRuns >= status.maxRuns) {
       estimateText = "已完成";
+    } else if (status.phase === "paused") {
+      estimateText = "已暂停";
     } else if (isActive(status)) {
       const remainingMs = battleRunRemainingMs(status, displayNowMs);
       estimateText =
@@ -107,7 +109,7 @@ export function BattleRunStatusPanel({
   return (
     <Box className="operation-log-panel battle-run-status-panel">
       <Flex align="center" justify="between" className="operation-log-header">
-        <Text size="1" weight="bold">运行状态</Text>
+        <Text size="1" weight="bold">{status?.phase === "paused" ? "运行状态 · 已暂停" : "运行状态"}</Text>
         <IconButton
           variant="ghost"
           color="gray"

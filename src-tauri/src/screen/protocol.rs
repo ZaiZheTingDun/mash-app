@@ -40,6 +40,7 @@ pub(super) enum SidecarCommand {
     StartStream,
     StopStream,
     VerifySupportCe,
+    VerifyTeamSlots,
 }
 
 pub(super) fn request(

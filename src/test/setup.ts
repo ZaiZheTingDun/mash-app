@@ -101,6 +101,8 @@ vi.mock("@tauri-apps/api/core", () => ({
     switch (cmd) {
       case "run_startup_migration":
         return { migrated: false, from: null, to: "/tmp/mash-app-data" };
+      case "get_team_verification":
+        return null;
       case "get_servants":
       case "get_craft_essences":
       case "get_mystic_codes":

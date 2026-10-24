@@ -1,0 +1,82 @@
+{
+  "project": {
+    "advancedMode": false,
+    "supportServantId": null,
+    "supportServantVariantKey": null,
+    "supportGrandMode": false,
+    "supportGrandCraftEssenceIds": [
+      null,
+      null,
+      null
+    ],
+    "supportGrandCraftEssenceIdLists": [
+      [],
+      [],
+      []
+    ],
+    "supportGrandCraftEssenceMlbRequired": [
+      true,
+      true,
+      true
+    ],
+    "supportGrandBondCeMode": "any",
+    "grandClass": "saber",
+    "grandServants": [],
+    "grandCardStrategy": {
+      "chainPriority": [
+        "mainBraveChain",
+        "mainReadyNp",
+        "deputyBraveChain",
+        "mainColorChain",
+        "deputyColorChain",
+        "fallback"
+      ],
+      "customRules": []
+    },
+    "supportServantLevelMin": null,
+    "supportNoblePhantasmLevelMin": null,
+    "supportStarMapScoreMin": null,
+    "supportGrandStarMapScoreMin": null,
+    "supportSkillLevelMins": [
+      null,
+      null,
+      null
+    ],
+    "supportAppendSkillLevelMins": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "disableAutoSkillTargetRecognition": false,
+    "mysticCodeId": null,
+    "preferHigherCriticalChance": false
+  },
+  "slot": {
+    "type": "servant",
+    "servantId": null,
+    "servantVariantKey": null,
+    "craftEssenceId": null,
+    "craftEssenceIds": [],
+    "craftEssenceMultiSelect": false,
+    "craftEssenceMlbRequired": true
+  },
+  "turn": {
+    "preparationActions": [],
+    "attackPriority": [],
+    "attackMode": "normal",
+    "criticalStrategy": {
+      "memberPriority": [],
+      "chainPriority": [
+        "mighty",
+        "buster",
+        "arts",
+        "quick"
+      ]
+    },
+    "advancedCardStrategy": {
+      "customRules": []
+    }
+  }
+}

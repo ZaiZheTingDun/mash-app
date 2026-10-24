@@ -475,4 +475,5 @@ mod battle;
 mod enhancement;
 mod rank_up_quest;
 mod support;
+mod team_verification;
 mod template_matching;

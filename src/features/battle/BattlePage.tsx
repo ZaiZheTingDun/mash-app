@@ -122,6 +122,8 @@ interface BattlePageProps {
   onReorderProjectGroups: (groupIds: string[]) => Promise<void>;
   onReorderProjectsInGroup: (groupId: string | null, projectIds: string[]) => Promise<void>;
   onOpenProjectSettings: () => void;
+  beforeShare?: (projectId: string) => Promise<void>;
+  onFormationImported?: (project: Project) => void;
   onUpdateProject: (project: Project) => Promise<void>;
   onBack: () => void;
   onOpenHome?: () => void;
@@ -203,6 +205,8 @@ export function BattlePage({
   onReorderProjectGroups,
   onReorderProjectsInGroup,
   onOpenProjectSettings,
+  beforeShare,
+  onFormationImported,
   onUpdateProject,
   onBack,
   onOpenHome,
@@ -442,6 +446,8 @@ export function BattlePage({
     <Flex direction="column" className="battle-page workspace-page">
       <Box className="battle-topbar">
         <PageHeader title="运行设置" english="RUN SETTINGS" onBack={onBack} backDisabled={running}><ProjectBar headerStyle
+          beforeShare={beforeShare}
+          onFormationImported={onFormationImported}
           projects={projects}
           projectCatalog={projectCatalog}
           grandClassDefinitions={grandClassDefinitions}

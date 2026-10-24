@@ -5,6 +5,7 @@ mod commands;
 mod craft_essence_enhancement_runner;
 mod device_operation;
 mod enhancement_runner;
+mod formation_share;
 mod friend_point_summon_runner;
 mod models;
 mod operation_log;
@@ -58,6 +59,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             commands::catalog::initialize_catalogs(paths::app_assets_dir(app.handle()));
             let adb_device_settings =
@@ -89,7 +91,8 @@ pub fn run() {
             app.manage(DeviceOperationCoordinator::default());
             app.manage(recognition_diagnostics::DiagnosticLogs::default());
             app.manage(recognition_diagnostics::DiagnosticStore::default());
-            app.manage(commands::projects::CommandEditorLock::default());
+            app.manage(commands::projects::ProjectStoreLock::default());
+            app.manage(commands::projects::FormationSharePreviews::default());
             app.manage(Arc::new(ResourceDownloadCancelState::default()));
             app.manage(commands::debug::DebugSidecar::new());
             app.manage(commands::rank_up_quest::RankUpQuestCaptureState::default());
@@ -136,6 +139,10 @@ pub fn run() {
             commands::projects::pick_config_import_file,
             commands::projects::preview_config_import,
             commands::projects::import_configurations,
+            commands::projects::create_formation_share,
+            commands::projects::preview_formation_share,
+            commands::projects::import_formation_share,
+            commands::projects::discard_formation_share_preview,
             commands::projects::list_projects,
             commands::projects::get_project_catalog,
             commands::projects::create_project_group,
@@ -214,6 +221,8 @@ pub fn run() {
             commands::automation::stop_automation,
             commands::automation::stop_automation_after_current,
             commands::automation::get_automation_status,
+            commands::automation::get_team_verification,
+            commands::automation::resolve_team_verification,
             battle_statistics::get_battle_daily_statistics,
             commands::automation::start_enhancement_automation,
             commands::automation::stop_enhancement_automation,

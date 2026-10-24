@@ -1,8 +1,9 @@
+import { TeamVerificationDialog } from "./features/battle/TeamVerificationDialog";
 import { PageHeader } from "./components/common/PageHeader";
 import { ObservatoryBackground } from "./components/common/ObservatoryBackground";
 import { TaskActionButton } from "./components/common/TaskActionButton";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { AlertDialog, Box, Button, Flex, Text, Spinner } from "@radix-ui/themes";
+import { Box, Flex, Text, Spinner } from "@radix-ui/themes";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { invoke, listen } from "./tauri";
 import { ContentGrid } from "./features/team/ContentGrid";
@@ -23,6 +24,7 @@ import { RankUpQuestPage } from "./features/rank-up-quest/RankUpQuestPage";
 import { HomePage } from "./features/home/HomePage";
 import { DebugPage } from "./features/debug/DebugPage";
 import { StatusBar } from "./features/status/StatusBar";
+import { PendingProjectWrites } from "./features/projects/pendingProjectWrites";
 import { ProjectBar } from "./features/projects/ProjectBar";
 import { ProjectSettingsDialog } from "./features/projects/ProjectSettingsDialog";
 import { SetupPage } from "./features/setup/SetupPage";
@@ -129,6 +131,8 @@ function App({
   onMysticCodeGenderChange = () => {},
   startupReady = true,
 }: AppProps) {
+  const projectWrites = useRef(new PendingProjectWrites());
+  const beforeFormationShare = useCallback((projectId: string) => projectWrites.current.wait(projectId), []);
   const [commandBusy, setCommandBusy] = useState(false);
   const [view, setView] = useState<View>("team");
   const [homeMasterFigureId, setHomeMasterFigureId] = useState(470);
@@ -153,7 +157,6 @@ function App({
   const [assetsRefreshKey, setAssetsRefreshKey] = useState(0);
   const [operationLogs, setOperationLogs] = useState<OperationLogEntry[]>([]);
   const [operationLogOpen, setOperationLogOpen] = useState(false);
-  const [mysticCodeWarning, setMysticCodeWarning] = useState<string | null>(null);
   const [battleRunStatus, setBattleRunStatus] = useState<BattleRunStatus | null>(null);
   const [battleDailyStatistics, setBattleDailyStatistics] =
     useState<BattleDailyStatistics | null>(null);
@@ -365,17 +368,10 @@ function App({
         event.payload.attack ?? null,
         event.payload.action ?? null,
       );
-      if (
-        event.payload.level === "warn" &&
-        event.payload.currentScreen === "TeamConfirm" &&
-        event.payload.message.includes("御主礼装")
-      ) {
-        setMysticCodeWarning(event.payload.message);
-      }
       setBattleRunStatus((current) => {
         if (current == null) return current;
         const { status } = event.payload;
-        if (status === "starting" || status === "running") {
+        if (status === "starting" || status === "running" || status === "paused") {
           return { ...current, phase: status, endedAtMs: null };
         }
         if (current.endedAtMs != null) return current;
@@ -655,10 +651,11 @@ function App({
 
   // Persist a project mutation through the backend and refresh local state.
   // The team-builder support slot and party slots both flow through this.
-  const handleUpdateProject = useCallback(async (next: Project) => {
-    const saved = await invoke<Project>("update_project", { project: next });
-    setProjects((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
-  }, []);
+  const handleUpdateProject = useCallback((next: Project) =>
+    projectWrites.current.track(next.id, "project", async () => {
+      const saved = await invoke<Project>("update_project", { project: next });
+      setProjects((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+    }), []);
 
   // Derive the SlotItem array shown by ContentGrid from the active project.
   // The backend owns slot order + servant ids; here we just rehydrate the
@@ -739,41 +736,33 @@ function App({
         next,
         activeProject.supportServantId
       );
-      void handleUpdateProject({ ...activeProject, slots: projectSlots, grandCardStrategy, grandServants });
       const previousPartyMembers = derivePartyMembers(slots, activeProject, servants);
       const nextPartyMembers = derivePartyMembers(
-        next,
-        { ...activeProject, slots: projectSlots },
-        servants
+        next, { ...activeProject, slots: projectSlots }, servants
       );
-      void invoke<AdvancedBattleScene[]>("load_advanced_battle_scenes", {
-        projectId: activeProject.id,
-      })
-        .then((scenes) => {
-          if (scenes.length === 0) return;
-          const relocatedScenes = scenes.map((scene) =>
-            relocateAdvancedBattleSceneMembers(scene, previousPartyMembers, nextPartyMembers)
-          );
-          return invoke("save_advanced_battle_scenes", {
-            projectId: activeProject.id,
-            scenes: relocatedScenes,
-          });
-        })
-        .catch(console.error);
-      void invoke<BattleScene[]>("load_battle_scenes", {
-        projectId: activeProject.id,
-      })
-        .then((scenes) => {
-          if (scenes.length === 0) return;
-          const relocatedScenes = scenes.map((scene) =>
-            relocateBattleSceneMembers(scene, previousPartyMembers, nextPartyMembers)
-          );
-          return invoke("save_battle_scenes", {
-            projectId: activeProject.id,
-            scenes: relocatedScenes,
-          });
-        })
-        .catch(console.error);
+      void projectWrites.current.track(activeProject.id, "formation", async () => {
+        const results = await Promise.allSettled([
+          handleUpdateProject({ ...activeProject, slots: projectSlots, grandCardStrategy, grandServants }),
+          invoke<AdvancedBattleScene[]>("load_advanced_battle_scenes", { projectId: activeProject.id })
+            .then((scenes) => {
+              if (scenes.length === 0) return;
+              return invoke("save_advanced_battle_scenes", {
+                projectId: activeProject.id,
+                scenes: scenes.map((scene) => relocateAdvancedBattleSceneMembers(scene, previousPartyMembers, nextPartyMembers)),
+              });
+            }),
+          invoke<BattleScene[]>("load_battle_scenes", { projectId: activeProject.id })
+            .then((scenes) => {
+              if (scenes.length === 0) return;
+              return invoke("save_battle_scenes", {
+                projectId: activeProject.id,
+                scenes: scenes.map((scene) => relocateBattleSceneMembers(scene, previousPartyMembers, nextPartyMembers)),
+              });
+            }),
+        ]);
+        const failed = results.find((result) => result.status === "rejected");
+        if (failed?.status === "rejected") throw failed.reason;
+      }).catch(console.error);
     },
     [activeProject, handleUpdateProject, servants, slots]
   );
@@ -932,6 +921,15 @@ function App({
       .catch(console.error);
   }, [persistActiveProjectId, refreshProjects]);
 
+  const handleFormationImported = useCallback((project: Project) => {
+    setProjects((previous) => [...previous.filter((item) => item.id !== project.id), project]);
+    setActiveProjectId(project.id);
+    persistActiveProjectId(project.id);
+    setSettingsOpen(false);
+    setView("team");
+    void refreshProjectCatalog().catch(console.error);
+  }, [persistActiveProjectId, refreshProjectCatalog]);
+
   const handleOpenDebug = useCallback(() => {
     if (!featureToggles.cvDebug) return;
     setView("debug");
@@ -1069,6 +1067,8 @@ function App({
               onReorderProjectGroups={handleReorderProjectGroups}
               onReorderProjectsInGroup={handleReorderProjectsInGroup}
               onOpenProjectSettings={handleOpenProjectSettings}
+              beforeShare={beforeFormationShare}
+              onFormationImported={handleFormationImported}
               onUpdateProject={handleUpdateProject}
               onBack={handleGotoCommand}
               onOpenHome={handleOpenHome}
@@ -1119,6 +1119,8 @@ function App({
             <Box className={`main-content-inner workspace-page ${view === "command" ? "command-stage" : "formation-stage"}`}>
               <PageHeader title={view === "command" ? "指令" : "编队"} english={view === "command" ? "COMMAND" : "FORMATION"} onBack={view === "command" ? handleBackToTeam : handleOpenHome} backLabel={view === "command" ? "返回队伍" : "主页"} backDisabled={view === "command" && commandBusy}>
               <ProjectBar
+                beforeShare={beforeFormationShare}
+                onFormationImported={handleFormationImported}
                 headerStyle
                 disabled={view === "command" && commandBusy}
                 projects={projects}
@@ -1270,28 +1272,7 @@ function App({
         onInstallUpdate={handleInstallUpdate}
         onLogEntry={appendOperationLog}
       />}
-      <AlertDialog.Root
-        open={mysticCodeWarning != null}
-        onOpenChange={(open) => {
-          if (!open) setMysticCodeWarning(null);
-        }}
-      >
-        <AlertDialog.Content maxWidth="460px">
-          <AlertDialog.Title>御主礼装检查</AlertDialog.Title>
-          <AlertDialog.Description size="2">
-            {mysticCodeWarning}
-            <br />
-            自动化已自动停止；请换好礼装后重新开始任务。
-          </AlertDialog.Description>
-          <Flex justify="end" gap="3" mt="4">
-            <AlertDialog.Action>
-              <Button type="button" onClick={() => setMysticCodeWarning(null)}>
-                知道了
-              </Button>
-            </AlertDialog.Action>
-          </Flex>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
+      <TeamVerificationDialog />
       <ProjectSettingsDialog
         open={projectSettingsOpen}
         project={activeProject}
