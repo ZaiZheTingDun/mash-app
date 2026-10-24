@@ -52,7 +52,8 @@ function installAppMock(
     battleStartPanel?: "operationLog" | "runStatus" | "none";
   } = {},
 ) {
-  mockInvoke(async (cmd: string) => {
+  let projectList = options.projectList ?? projects;
+  mockInvoke(async (cmd: string, args?: Record<string, unknown>) => {
     switch (cmd) {
       case "get_runtime_status":
         return { installed: options.runtimeInstalled ?? options.resourcesInstalled ?? true };
@@ -73,7 +74,16 @@ function installAppMock(
         if (options.catalogError) throw new Error(options.catalogError);
         return [];
       case "list_projects":
-        return options.projectList ?? projects;
+        return projectList;
+      case "get_project_catalog":
+        return {
+          schemaVersion: 1,
+          groups: [],
+          ungroupedProjectIds: projectList.map((project) => project.id),
+        };
+      case "delete_project":
+        projectList = projectList.filter((project) => project.id !== args?.id);
+        return null;
       case "get_grand_class_definitions":
         return [];
       case "get_active_project_id":
