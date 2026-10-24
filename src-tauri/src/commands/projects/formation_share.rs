@@ -48,7 +48,7 @@ fn decode_entry(text: &str) -> Result<ConfigExportEntry, String> {
         .filter_map(|member| member.role.as_ref())
         .any(|role| !roles.iter().any(|known| &known.role == role))
     {
-        return Err("不支持的冠位角色，请升级 Mash 或检查配置".into());
+        return Err("不支持的冠位职阶，请升级 Mash 或检查配置".into());
     }
     entry.project = normalize_project(entry.project);
 
@@ -189,7 +189,7 @@ fn canonicalize_member_metadata(value: &mut Value) -> Result<(), String> {
                 if object.get("grandServant") == Some(&Value::Bool(true))
                     && object.get("memberId").is_some_and(|v| !v.is_null())
                 {
-                    return Err("冠位占位规则不能同时引用固定成员".into());
+                    return Err("出卡设置冲突：设定任意冠位时不能同时指定具体从者".into());
                 }
                 for (member_key, servant_key, support_key) in [
                     ("memberId", "servantId", "isSupport"),
