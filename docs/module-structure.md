@@ -26,6 +26,7 @@
 | `friend_point_summon_runner.rs` | 友情点召唤 |
 | `screen/` | Python 子进程、JSON-line 协议、CV 类型和识别操作 |
 | `models/` | 项目、队伍、高级战斗规则等共享数据结构 |
+| `formation_share/` | 离线分享协议：短字段、版本／能力、身份转换、有界 Gzip 与标准 Base64 |
 | `adb.rs` / `touch/` | ADB 通信和底层输入操作 |
 | `platform/` | 操作系统适配 |
 | `paths.rs` / `server.rs` | 路径与迁移、区服与分辨率校验 |
