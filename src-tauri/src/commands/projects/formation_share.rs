@@ -51,16 +51,16 @@ fn decode_entry(text: &str) -> Result<ConfigExportEntry, String> {
         return Err("不支持的冠位角色，请升级 Mash 或检查配置".into());
     }
     entry.project = normalize_project(entry.project);
-    // Older draft codes may include class filtering; never import local
-    // recognition preferences from another user's formation.
-    entry.project.recognition_settings = None;
+
     // Running preferences never come from a shared strategy, including after
     // future changes to Project's persistence defaults.
+    entry.project.recognition_settings = None;
     entry.project.repeat_mission = false;
     entry.project.repeat_mode = Some(ProjectRepeatMode::Single);
     entry.project.repeat_count = None;
     entry.project.ap_recovery_items.clear();
     entry.project.ap_recovery_limits = Default::default();
+
     entry.battle_scenes = entry
         .battle_scenes
         .into_iter()
