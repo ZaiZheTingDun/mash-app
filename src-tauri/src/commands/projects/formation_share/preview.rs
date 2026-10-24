@@ -22,6 +22,9 @@ pub(crate) struct FormationSharePreview {
 pub(crate) struct FormationShareMember {
     position: usize,
     name: String,
+    servant_id: Option<u32>,
+    servant_variant_key: Option<String>,
+    face_id: Option<u32>,
     is_support: bool,
     craft_essences: Vec<String>,
     mlb_required: bool,
@@ -136,6 +139,11 @@ pub(super) fn build_preview(
             FormationShareMember {
                 position: index + 1,
                 name,
+                servant_id: id,
+                servant_variant_key: variant
+                    .map(str::to_owned)
+                    .or_else(|| servant.map(|s| s.variant_key.clone())),
+                face_id: servant.and_then(|s| s.face_id),
                 is_support: support,
                 craft_essences: ids.into_iter().map(ce_name).collect(),
                 mlb_required: slot.craft_essence_mlb_required,
@@ -376,20 +384,6 @@ pub(super) fn build_preview(
     }
     if entry.project.prefer_higher_critical_chance {
         requirements.push("同类卡优先较高暴击率".into());
-    }
-    if let Some(mode) = entry
-        .project
-        .recognition_settings
-        .and_then(|r| r.support_class_filter_mode)
-    {
-        requirements.push(format!(
-            "助战职阶筛选：{}",
-            match mode {
-                SupportClassFilterMode::CorrespondingClass => "对应职阶",
-                SupportClassFilterMode::AllClasses => "全部职阶",
-                SupportClassFilterMode::Both => "两者均可",
-            }
-        ));
     }
     warnings.sort();
     warnings.dedup();

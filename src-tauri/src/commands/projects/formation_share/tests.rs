@@ -66,7 +66,7 @@ fn omitted_descriptive_metadata_is_restored_from_member_identity() {
 }
 
 #[test]
-fn ordinary_and_advanced_documents_and_support_filters_survive_transfer() {
+fn ordinary_and_advanced_documents_transfer_without_local_recognition_settings() {
     let mut entry = fixture();
     entry.project.advanced_mode = true;
     entry.project.recognition_settings = Some(ProjectRecognitionSettings {
@@ -80,12 +80,7 @@ fn ordinary_and_advanced_documents_and_support_filters_survive_transfer() {
     assert_eq!(restored.battle_scenes.len(), 1);
     assert_eq!(restored.advanced_battle_scenes.len(), 1);
     assert!(!restored.advanced_battle_scenes[0].rules[0].np_condition_groups[0].slots[0].ready);
-    let settings = restored.project.recognition_settings.unwrap();
-    assert!(matches!(
-        settings.support_class_filter_mode,
-        Some(SupportClassFilterMode::AllClasses)
-    ));
-    assert!(settings.support_ce_threshold.is_none());
+    assert!(restored.project.recognition_settings.is_none());
 }
 
 #[test]
@@ -185,4 +180,62 @@ fn six_members_six_ces_three_waves_and_twelve_skills_fit_a_chat_message() {
         "six members / six CEs / three waves / twelve skills: {} Base64 characters",
         code.len()
     );
+}
+
+#[test]
+fn member_preview_exposes_portrait_identity_and_omits_local_filtering() {
+    let mut entry = fixture();
+    entry.project.slots[0].servant_variant_key = Some("309:1".into());
+    entry.project.support_servant_variant_key = Some("309:2".into());
+    entry.project.recognition_settings = Some(ProjectRecognitionSettings {
+        support_class_filter_mode: Some(SupportClassFilterMode::CorrespondingClass),
+        ..Default::default()
+    });
+    let preview = serde_json::to_value(build_preview(
+        &entry,
+        "token".into(),
+        "新队伍".into(),
+        Server::Jp,
+        None,
+    ))
+    .unwrap();
+    assert_eq!(preview["members"].as_array().unwrap().len(), 6);
+    assert_eq!(preview["members"][0]["servantId"], 309);
+    assert_eq!(preview["members"][0]["servantVariantKey"], "309:1");
+    assert_eq!(preview["members"][2]["servantId"], 309);
+    assert_eq!(preview["members"][2]["servantVariantKey"], "309:2");
+    assert_eq!(preview["members"][2]["isSupport"], true);
+    assert!(preview["members"][0].get("faceId").is_some());
+    assert!(!preview["supportRequirements"]
+        .to_string()
+        .contains("助战职阶筛选"));
+}
+
+#[test]
+fn older_codes_cannot_import_support_class_preferences() {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use flate2::{read::GzDecoder, Compression, GzBuilder};
+    use std::io::{Read, Write};
+
+    let packet = STANDARD
+        .decode(include_str!("../../../formation_share/fixtures/v1.txt").trim())
+        .unwrap();
+    let mut json = Vec::new();
+    GzDecoder::new(&packet[10..])
+        .read_to_end(&mut json)
+        .unwrap();
+    let mut envelope: Value = serde_json::from_slice(&json).unwrap();
+    envelope["c"]["p"]["rs"] = json!({"cf": "allClasses"});
+    envelope["f"].as_array_mut().unwrap().push(json!(5));
+    let json = serde_json::to_vec(&envelope).unwrap();
+    let mut gzip = GzBuilder::new()
+        .mtime(0)
+        .write(Vec::new(), Compression::best());
+    gzip.write_all(&json).unwrap();
+    let mut packet = b"MASH\x01\x01".to_vec();
+    packet.extend_from_slice(&(json.len() as u32).to_be_bytes());
+    packet.extend(gzip.finish().unwrap());
+
+    let restored = decode_entry(&STANDARD.encode(packet)).unwrap();
+    assert!(restored.project.recognition_settings.is_none());
 }

@@ -8,16 +8,13 @@ import type {
   ExportConfigsResult,
 } from "../../types/dataManagement";
 import type { Project } from "../../types/project";
-import { FormationShareImportButton } from "../projects/FormationShareImportButton";
 
 interface SettingsDataManagementPageProps {
   onProjectsImported?: (projects: Project[]) => void;
-  onFormationImported?: (project: Project) => void;
 }
 
 export function SettingsDataManagementPage({
   onProjectsImported,
-  onFormationImported,
 }: SettingsDataManagementPageProps) {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportableConfigs, setExportableConfigs] = useState<ExportableConfigSummary[]>([]);
@@ -176,16 +173,10 @@ export function SettingsDataManagementPage({
               选择要导入的队伍打包文件
             </Text>
           </Box>
-          <Flex gap="2" wrap="wrap">
-          <FormationShareImportButton onImported={(project) => {
-            if (onFormationImported) onFormationImported(project);
-            else onProjectsImported?.([project]);
-          }} />
           <Button type="button" variant="soft" color="gray" onClick={handlePickImportFile} disabled={importLoading}>
             {importLoading && !importDialogOpen ? <Spinner size="1" /> : null}
             <Text size="2">导入队伍</Text>
           </Button>
-          </Flex>
         </Flex>
         {importError && (
           <Text size="2" color="red" className="settings-data-status">

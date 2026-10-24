@@ -57,10 +57,7 @@ fn round_trip_preserves_owned_support_targets_order_change_and_ce_preferences() 
     assert_eq!(actions[1]["orderChange"]["backMemberId"], slots[3]["id"]);
     assert_eq!(slots[2]["craftEssenceIds"], json!([300, 400]));
     assert_eq!(slots[2]["craftEssenceMlbRequired"], false);
-    assert_eq!(
-        decoded["project"]["recognitionSettings"],
-        json!({"supportClassFilterMode":"allClasses"})
-    );
+    assert!(decoded["project"]["recognitionSettings"].is_null());
     let serialized = decoded.to_string();
     for excluded in [
         "private-project-id",
@@ -68,6 +65,7 @@ fn round_trip_preserves_owned_support_targets_order_change_and_ce_preferences() 
         "repeatMission",
         "apRecovery",
         "server",
+        "supportClassFilterMode",
         "supportCeThreshold",
         "stopOnFiveStarCeDrop",
     ] {
@@ -95,7 +93,9 @@ fn whitespace_is_allowed_but_truncation_and_wrong_base64_are_not() {
 
 #[test]
 fn future_formats_features_and_fields_are_never_silently_ignored() {
-    let code = encode(&entry()).unwrap();
+    let mut input = entry();
+    input["project"]["advancedMode"] = json!(true);
+    let code = encode(&input).unwrap();
     let mut bytes = STANDARD.decode(&code).unwrap();
     bytes[4] = 2;
     assert!(decode(&STANDARD.encode(bytes))
@@ -227,4 +227,23 @@ fn malformed_scene_and_turn_containers_return_errors_instead_of_panicking() {
         input["c"]["b"] = scenes;
         assert!(decode(&packet(&serde_json::to_vec(&input).unwrap())).is_err());
     }
+}
+
+#[test]
+fn local_support_class_and_run_preferences_never_change_the_shared_code() {
+    let original = entry();
+    let expected = encode(&original).unwrap();
+    for mode in ["correspondingClass", "allClasses", "both"] {
+        let mut input = original.clone();
+        input["project"]["recognitionSettings"]["supportClassFilterMode"] = json!(mode);
+        input["project"]["repeatMode"] = json!("single");
+        input["project"]["repeatMission"] = json!(false);
+        input["project"]["repeatCount"] = json!(99);
+        input["project"]["apRecoveryItems"] = json!([]);
+        input["project"]["apRecoveryLimits"] = json!({"gold": 10});
+        assert_eq!(encode(&input).unwrap(), expected);
+    }
+    let compact = envelope(&expected);
+    assert!(compact["c"]["p"].get("rs").is_none());
+    assert!(!compact["f"].as_array().unwrap().contains(&json!(5)));
 }

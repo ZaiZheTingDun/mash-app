@@ -176,8 +176,7 @@ pub(super) fn portable_entry(input: &Value) -> Result<Value, String> {
         .filter(|(key, _)| PROJECT_FIELDS.contains(&key.as_str()))
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
-    // Class filtering affects which supports can be selected; thresholds and
-    // run-stop preferences remain local to the receiving installation.
+    // Recognition settings, including support class filtering, stay local.
     let recognition = portable
         .remove("recognitionSettings")
         .unwrap_or(Value::Null);
@@ -199,15 +198,6 @@ pub(super) fn portable_entry(input: &Value) -> Result<Value, String> {
         {
             return Err(format!("分享协议尚未支持识别设置字段：{key}"));
         }
-    }
-    if let Some(mode) = recognition
-        .get("supportClassFilterMode")
-        .filter(|v| !v.is_null())
-    {
-        portable.insert(
-            "recognitionSettings".into(),
-            json!({"supportClassFilterMode":mode}),
-        );
     }
     Ok(json!({
         "project":portable,

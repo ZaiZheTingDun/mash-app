@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   AlertDialog,
@@ -9,6 +9,7 @@ import {
   Flex,
   IconButton,
   Select,
+  Spinner,
   Text,
   TextField,
 } from "@radix-ui/themes";
@@ -17,6 +18,7 @@ import {
   DotsHorizontalIcon,
   Pencil1Icon,
   PlusIcon,
+  Share1Icon,
   GearIcon,
   TrashIcon,
 } from "@radix-ui/react-icons";
@@ -26,8 +28,11 @@ import type {
   Project,
   ProjectCatalog,
 } from "../../types/project";
-import type { FormationShareIntegration } from "../../types/formationShare";
-import { FormationShareActions } from "./FormationShareActions";
+import type { FormationShareIntegration, FormationSharePreview } from "../../types/formationShare";
+import { FormationShareFeedback } from "./FormationShareFeedback";
+import { FormationShareInput } from "./FormationShareInput";
+import { useFormationShare } from "./useFormationShare";
+import { useFormationShareDraft } from "./useFormationShareDraft";
 import { ProjectSelector } from "./ProjectSelector";
 
 interface ProjectBarProps extends FormationShareIntegration {
@@ -99,6 +104,15 @@ export function ProjectBar({
   const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
 
+  const draftNameEdited = useRef(false);
+  const onSharePreview = useCallback((preview: FormationSharePreview) => {
+    if (!draftNameEdited.current) setDraftName(preview.targetName);
+  }, []);
+  const share = useFormationShare(activeProjectId, beforeShare);
+  const shareDraft = useFormationShareDraft(onSharePreview);
+  const { updateText: updateShareText } = shareDraft;
+  const hasShareCode = Boolean(shareDraft.text.trim());
+
   const activeProject =
     projects.find((p) => p.id === activeProjectId) ?? null;
   const dialogProject =
@@ -140,6 +154,8 @@ export function ProjectBar({
       const project = projectId
         ? projects.find((item) => item.id === projectId) ?? null
         : activeProject;
+      updateShareText("");
+      draftNameEdited.current = false;
       setNameDialogMode(mode);
       setDialogProjectId(project?.id ?? null);
       if (mode === "rename") {
@@ -159,20 +175,26 @@ export function ProjectBar({
           : null,
       );
     },
-    [activeProject, activeProjectGroupId, grandClassDefinitions, projects]
+    [activeProject, activeProjectGroupId, grandClassDefinitions, projects, updateShareText]
   );
 
   const handleNameSubmit = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
+    async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (!nameDialogMode || !trimmedDraftName) return;
-      if (nameDialogMode === "create") {
+      if (nameDialogMode === "create" && hasShareCode) {
+        if (!onFormationImported) return;
+        const project = await shareDraft.importProject(trimmedDraftName, draftGroupId);
+        if (!project) return;
+        onFormationImported(project);
+      } else if (nameDialogMode === "create") {
         onCreateProject(trimmedDraftName, draftAdvancedMode, draftGrandClass, draftGroupId);
       } else if (nameDialogMode === "rename" && dialogProject) {
         onRenameProject(dialogProject.id, trimmedDraftName);
       } else if (nameDialogMode === "duplicate" && dialogProject) {
         onDuplicateProject(dialogProject.id, trimmedDraftName);
       }
+      updateShareText("");
       setNameDialogMode(null);
       setDialogProjectId(null);
     },
@@ -186,6 +208,10 @@ export function ProjectBar({
       onDuplicateProject,
       onRenameProject,
       trimmedDraftName,
+      hasShareCode,
+      onFormationImported,
+      shareDraft,
+      updateShareText,
     ]
   );
 
@@ -238,14 +264,6 @@ export function ProjectBar({
         />
         </div>
 
-        <FormationShareActions
-          projectId={activeProjectId}
-          groups={projectCatalog.groups}
-          disabled={disabled}
-          beforeShare={beforeShare}
-          onFormationImported={onFormationImported}
-        />
-
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
             <IconButton
@@ -268,6 +286,15 @@ export function ProjectBar({
               <Flex align="center" gap="2">
                 <GearIcon width={12} height={12} />
                 <Text size="2">队伍设置</Text>
+              </Flex>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              disabled={disabled || share.busy || !activeProject}
+              onSelect={() => void share.share()}
+            >
+              <Flex align="center" gap="2">
+                {share.busy ? <Spinner size="1" /> : <Share1Icon width={12} height={12} />}
+                <Text size="2">分享编队</Text>
               </Flex>
             </DropdownMenu.Item>
             <DropdownMenu.Separator />
@@ -309,38 +336,44 @@ export function ProjectBar({
           </DropdownMenu.Content>
         </DropdownMenu.Root>
       </Flex>
+      <FormationShareFeedback {...share} />
 
       <Dialog.Root
         open={nameDialogMode !== null}
         onOpenChange={(open) => {
-          if (!open) {
+          if (!open && shareDraft.busy !== "import") {
+            updateShareText("");
             setNameDialogMode(null);
             setDialogProjectId(null);
           }
         }}
       >
-        <Dialog.Content maxWidth="420px">
+        <Dialog.Content maxWidth="420px" aria-describedby={undefined}>
           <Dialog.Title size="4">{nameDialogTitle}</Dialog.Title>
-          <form onSubmit={handleNameSubmit}>
-            <Flex direction="column" gap="4">
-              <label>
-                <Text as="div" size="2" mb="2" weight="medium">
-                  队伍名称
-                </Text>
-                <TextField.Root
-                  value={draftName}
-                  onChange={(event) => setDraftName(event.target.value)}
-                  placeholder="输入队伍名称"
-                  autoFocus
-                />
-              </label>
-              {nameDialogMode === "create" && (
-                <>
+          <form onSubmit={(event) => void handleNameSubmit(event)}>
+            <Flex direction="column" gap={hasShareCode ? "3" : "4"}>
+              <Flex direction={{ initial: "column", sm: "row" }} gap="3">
+                <Box asChild flexGrow="1">
+                  <label>
+                    <Text as="div" size="2" mb="2" weight="medium">
+                      队伍名称
+                    </Text>
+                    <TextField.Root
+                      value={draftName}
+                      disabled={shareDraft.busy === "import"}
+                      onChange={(event) => { draftNameEdited.current = true; setDraftName(event.target.value); }}
+                      placeholder="输入队伍名称"
+                      autoFocus
+                    />
+                  </label>
+                </Box>
+                {nameDialogMode === "create" && (
                   <Box>
                     <Text as="div" size="2" mb="2" weight="medium">
                       所属分组
                     </Text>
                     <Select.Root
+                      disabled={shareDraft.busy === "import"}
                       value={draftGroupId ?? "__ungrouped__"}
                       onValueChange={(value) =>
                         setDraftGroupId(value === "__ungrouped__" ? null : value)
@@ -357,76 +390,93 @@ export function ProjectBar({
                       </Select.Content>
                     </Select.Root>
                   </Box>
-                  <Box>
-                    <Text as="div" size="2" mb="2" weight="medium">
-                      队伍模式
-                    </Text>
-                    <Select.Root
-                      value={draftAdvancedMode ? "grand" : "normal"}
-                      onValueChange={(value) => setDraftAdvancedMode(value === "grand")}
-                    >
-                      <Select.Trigger aria-label="队伍模式" />
-                      <Select.Content>
-                        <Select.Item value="normal">普通模式</Select.Item>
-                        <Select.Item value="grand">戴冠战模式</Select.Item>
-                      </Select.Content>
-                    </Select.Root>
-                  </Box>
-                  {draftAdvancedMode && (
-                    <Box>
-                      <Text as="div" size="2" mb="2" weight="medium">
-                        冠位职阶
-                      </Text>
-                      <Flex align="center" gap="2">
+                )}
+              </Flex>
+              {nameDialogMode === "create" && (
+                <>
+                  {onFormationImported && <FormationShareInput
+                    text={shareDraft.text}
+                    preview={shareDraft.preview}
+                    busy={shareDraft.busy}
+                    error={shareDraft.error}
+                    onChange={updateShareText}
+                    onRetry={shareDraft.retry}
+                  />}
+                  {!hasShareCode && (
+                    <>
+                      <Box>
+                        <Text as="div" size="2" mb="2" weight="medium">
+                          队伍模式
+                        </Text>
                         <Select.Root
-                          value={draftGrandSelection}
-                          onValueChange={(value) => {
-                            const direct = grandClassDefinitions.find(
-                              (definition) => definition.id === value,
-                            );
-                            const grouped = grandClassDefinitions.find(
-                              (definition) => definition.selectionGroup === value,
-                            );
-                            setDraftGrandClass((direct ?? grouped)?.id ?? value);
-                          }}
+                          value={draftAdvancedMode ? "grand" : "normal"}
+                          onValueChange={(value) => setDraftAdvancedMode(value === "grand")}
                         >
-                          <Select.Trigger aria-label="冠位职阶" />
+                          <Select.Trigger aria-label="队伍模式" />
                           <Select.Content>
-                            {grandClassPrimaryOptions.map((option) => (
-                              <Select.Item key={option.value} value={option.value}>
-                                {option.label}
-                              </Select.Item>
-                            ))}
+                            <Select.Item value="normal">普通模式</Select.Item>
+                            <Select.Item value="grand">戴冠战模式</Select.Item>
                           </Select.Content>
                         </Select.Root>
-                        {grandClassVariantOptions.length > 0 && (
-                          <Select.Root
-                            key={draftGrandDefinition?.selectionGroup}
-                            value={draftGrandClass}
-                            onValueChange={(value) => setDraftGrandClass(value as GrandClass)}
-                          >
-                            <Select.Trigger aria-label="副本属性" />
-                            <Select.Content>
-                              {grandClassVariantOptions.map((definition) => (
-                                <Select.Item key={definition.id} value={definition.id}>
-                                  {definition.selectionOptionLabel ?? definition.label}
-                                </Select.Item>
-                              ))}
-                            </Select.Content>
-                          </Select.Root>
-                        )}
-                      </Flex>
-                    </Box>
+                      </Box>
+                      {draftAdvancedMode && (
+                        <Box>
+                          <Text as="div" size="2" mb="2" weight="medium">
+                            冠位职阶
+                          </Text>
+                          <Flex align="center" gap="2">
+                            <Select.Root
+                              value={draftGrandSelection}
+                              onValueChange={(value) => {
+                                const direct = grandClassDefinitions.find(
+                                  (definition) => definition.id === value,
+                                );
+                                const grouped = grandClassDefinitions.find(
+                                  (definition) => definition.selectionGroup === value,
+                                );
+                                setDraftGrandClass((direct ?? grouped)?.id ?? value);
+                              }}
+                            >
+                              <Select.Trigger aria-label="冠位职阶" />
+                              <Select.Content>
+                                {grandClassPrimaryOptions.map((option) => (
+                                  <Select.Item key={option.value} value={option.value}>
+                                    {option.label}
+                                  </Select.Item>
+                                ))}
+                              </Select.Content>
+                            </Select.Root>
+                            {grandClassVariantOptions.length > 0 && (
+                              <Select.Root
+                                key={draftGrandDefinition?.selectionGroup}
+                                value={draftGrandClass}
+                                onValueChange={(value) => setDraftGrandClass(value as GrandClass)}
+                              >
+                                <Select.Trigger aria-label="副本属性" />
+                                <Select.Content>
+                                  {grandClassVariantOptions.map((definition) => (
+                                    <Select.Item key={definition.id} value={definition.id}>
+                                      {definition.selectionOptionLabel ?? definition.label}
+                                    </Select.Item>
+                                  ))}
+                                </Select.Content>
+                              </Select.Root>
+                            )}
+                          </Flex>
+                        </Box>
+                      )}
+                    </>
                   )}
                 </>
               )}
               <Flex justify="end" gap="2">
                 <Dialog.Close>
-                  <Button type="button" variant="soft" color="gray">
+                  <Button type="button" variant="soft" color="gray" disabled={shareDraft.busy === "import"}>
                     取消
                   </Button>
                 </Dialog.Close>
-                <Button type="submit" disabled={!trimmedDraftName}>
+                <Button type="submit" disabled={!trimmedDraftName || (hasShareCode && (!shareDraft.preview || shareDraft.busy !== null))}>
+                  {shareDraft.busy === "import" && <Spinner size="1" />}
                   {nameDialogAction}
                 </Button>
               </Flex>

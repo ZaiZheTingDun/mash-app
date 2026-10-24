@@ -1019,7 +1019,6 @@ function App({
               onOpenChange={setSettingsOpen}
               onSectionChange={setSettingsSection}
               onProjectsImported={handleProjectsImported}
-              onFormationImported={handleFormationImported}
               onBattleStartPanelChange={setBattleStartPanel}
               colorTheme={colorTheme}
               colorThemeError={colorThemeError}

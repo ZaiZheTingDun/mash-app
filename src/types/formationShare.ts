@@ -9,6 +9,9 @@ export interface FormationShareCode {
 export interface FormationShareMember {
   position: number;
   name: string;
+  servantId: number | null;
+  servantVariantKey: string | null;
+  faceId: number | null;
   isSupport: boolean;
   craftEssences: string[];
   mlbRequired: boolean;
