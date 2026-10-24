@@ -34,8 +34,6 @@
 
 `src-tauri/resources/` 则是随应用打包的 CV 配置、模板、图片、运行时清单和 scrcpy server，详见[资源说明](../src-tauri/resources/README.md)。
 
-`commands/projects/formation_share.rs` 负责分享协议的 Tauri、预览与剪贴板适配，`commands/projects/import_commit.rs` 为文件和分享码导入提供共同提交管线。协议和兼容约定见[编队快速分享](formation-sharing.md)。
-
 ## 图像识别：`sidecar/cv-code/`
 
 Python 子进程负责 OpenCV / OCR 识别和 scrcpy 视频流处理，通过标准输入输出与 Rust 通信。业务代码、测试和训练工具位于 `cv-code/`；依赖锁文件、OCR 模型和原生构建器位于 `sidecar/cv-runtime/`。环境、测试和打包见 [mash-cv](../sidecar/cv-code/README.md)。
