@@ -37,7 +37,7 @@ use crate::friend_point_summon_runner::{
     LifecycleEvent as FriendPointSummonLifecycleEvent,
     EVENT_NAME as FRIEND_POINT_SUMMON_EVENT_NAME,
 };
-use crate::models::ProjectRecognitionSettings;
+use crate::models::{Project, ProjectRecognitionSettings};
 use crate::operation_log::{self, DebugSource};
 use crate::paths::{AppUiSettings, MysticCodeGender};
 use crate::runner::{
@@ -279,6 +279,13 @@ pub(crate) fn start_rank_up_quest_automation(
     start_automation_with_config(&app, config, &handle_state, &coordinator, &debug_state)
 }
 
+fn require_battle_project(projects: Vec<Project>, project_id: &str) -> Result<Project, String> {
+    projects
+        .into_iter()
+        .find(|project| project.id == project_id)
+        .ok_or_else(|| "当前队伍不存在，请返回队伍设置后重试。".into())
+}
+
 fn start_automation_with_config(
     app: &tauri::AppHandle,
     mut config: RunConfig,
@@ -286,16 +293,13 @@ fn start_automation_with_config(
     coordinator: &DeviceOperationCoordinator,
     debug_state: &debug::DebugSidecar,
 ) -> Result<(), String> {
+    // Reject missing/stale selections before reserving the device or changing
+    // runner state. Empty ordinary slots remain valid for automatic recognition.
+    let project = require_battle_project(read_projects(app)?, &config.project_id)?;
     let automation_lease =
         coordinator.reserve(DeviceOperation::Automation(AutomationKind::Battle))?;
 
-    let project = read_projects(app)?
-        .into_iter()
-        .find(|project| project.id == config.project_id);
-    let advanced_mode = project
-        .as_ref()
-        .map(|project| project.advanced_mode)
-        .unwrap_or(false);
+    let advanced_mode = project.advanced_mode;
     if advanced_mode {
         let strategy = grand_strategy(config.grand_class);
         strategy.normalize_servants(&mut config.grand_servants);
@@ -321,9 +325,7 @@ fn start_automation_with_config(
     let server = *app.state::<Mutex<Server>>().lock().unwrap();
     let recognition_settings = effective_recognition_settings(
         *app.state::<Mutex<RecognitionSettings>>().lock().unwrap(),
-        project
-            .as_ref()
-            .and_then(|project| project.recognition_settings),
+        project.recognition_settings,
     );
     config.support_ce_threshold = recognition_settings.support_ce_threshold;
     config.support_ce_full_gate_threshold = recognition_settings.support_ce_full_gate_threshold;
@@ -336,8 +338,7 @@ fn start_automation_with_config(
     config.verify_skill_activation = recognition_settings.verify_skill_activation;
     config.enable_extra_class_filter = recognition_settings.enable_extra_class_filter;
     config.support_class_filter_mode = project
-        .as_ref()
-        .and_then(|project| project.recognition_settings)
+        .recognition_settings
         .and_then(|settings| settings.support_class_filter_mode)
         .unwrap_or_default();
     config.support_full_list_ocr_fallback = recognition_settings.support_full_list_ocr_fallback;
@@ -349,9 +350,7 @@ fn start_automation_with_config(
     config.auto_capture_skill_use_probe = debug_settings.auto_capture_skill_use_probe;
     config.auto_capture_unrecognized_critical_chance =
         debug_settings.auto_capture_unrecognized_critical_chance;
-    config.prefer_higher_critical_chance = project
-        .as_ref()
-        .is_some_and(|project| project.prefer_higher_critical_chance);
+    config.prefer_higher_critical_chance = project.prefer_higher_critical_chance;
     let mystic_code_gender = app
         .state::<Mutex<AppUiSettings>>()
         .lock()
@@ -492,6 +491,24 @@ use startup::{prepare_automation_session, AutomationSession, StartupFeedback};
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn battle_start_rejects_empty_and_stale_project_selections() {
+        use crate::commands::projects::new_project;
+        use crate::models::GrandClass;
+
+        assert!(require_battle_project(Vec::new(), "").is_err());
+        assert!(require_battle_project(Vec::new(), "deleted").is_err());
+        let project = new_project("已有队伍".into(), false, GrandClass::default());
+        let expected_id = project.id.clone();
+        assert!(require_battle_project(vec![project.clone()], "").is_err());
+        assert!(require_battle_project(vec![project.clone()], "deleted").is_err());
+        // A saved ordinary project needs no manually pinned servants to run.
+        assert_eq!(
+            require_battle_project(vec![project], &expected_id).unwrap().id,
+            expected_id
+        );
+    }
 
     #[test]
     fn input_size_for_taps_uses_stream_when_adb_size_missing() {

@@ -217,11 +217,67 @@ mod grand_bond_tests {
     }
 }
 
+fn remove_project(projects: &mut Vec<Project>, id: &str) -> Result<(), String> {
+    let index = projects
+        .iter()
+        .position(|project| project.id == id)
+        .ok_or_else(|| format!("project not found: {id}"))?;
+    if projects.len() <= 1 {
+        return Err("至少保留一个队伍，无法删除最后一个队伍。".into());
+    }
+    projects.remove(index);
+    Ok(())
+}
+
+#[cfg(test)]
+mod deletion_tests {
+    use super::*;
+
+    #[test]
+    fn deleting_the_last_project_keeps_its_configuration() {
+        let mut projects = vec![new_project("唯一队伍".into(), false, GrandClass::default())];
+        let id = projects[0].id.clone();
+        let before = serde_json::to_value(&projects).unwrap();
+
+        let error = remove_project(&mut projects, &id).unwrap_err();
+
+        assert!(error.contains("至少保留一个队伍"));
+        assert_eq!(serde_json::to_value(&projects).unwrap(), before);
+    }
+
+    #[test]
+    fn deleting_from_multiple_projects_stops_at_one() {
+        let first = new_project("第一队".into(), false, GrandClass::default());
+        let second = new_project("第二队".into(), true, GrandClass::default());
+        let mut projects = vec![first.clone(), second.clone()];
+
+        remove_project(&mut projects, &first.id).unwrap();
+
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].id, second.id);
+        assert!(remove_project(&mut projects, &second.id).is_err());
+        assert_eq!(projects.len(), 1);
+    }
+
+    #[test]
+    fn missing_project_is_rejected_without_changing_the_list() {
+        let mut projects = vec![
+            new_project("第一队".into(), false, GrandClass::default()),
+            new_project("第二队".into(), false, GrandClass::default()),
+        ];
+        let before = serde_json::to_value(&projects).unwrap();
+
+        assert!(remove_project(&mut projects, "missing").is_err());
+        assert_eq!(serde_json::to_value(&projects).unwrap(), before);
+        assert!(remove_project(&mut Vec::new(), "missing").is_err());
+    }
+}
+
 #[tauri::command]
 pub(crate) fn delete_project(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let mut projects = read_projects(&app)?;
     let mut catalog = read_project_catalog(&app, &projects)?;
-    projects.retain(|p| p.id != id);
+    remove_project(&mut projects, &id)?;
     write_projects(&app, &projects)?;
     remove_project_from_catalog(&mut catalog, &id);
     write_project_catalog(&app, &catalog)?;
@@ -297,6 +353,9 @@ pub(crate) fn load_advanced_battle_scenes(
     let path = project_advanced_battle_scenes_path(&app, &project_id);
     read_json_or_default(&path, "高级指令配置")
 }
+
+mod bootstrap;
+pub(crate) use bootstrap::initialize_project_state;
 
 mod catalog;
 pub(crate) use catalog::*;

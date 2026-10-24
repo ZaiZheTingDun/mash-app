@@ -185,10 +185,12 @@ function ProjectGroupDropTarget({
 
 function SortableProject({
   project,
+  deleteDisabled,
   onRequestRename,
   onRequestDelete,
 }: {
   project: Project;
+  deleteDisabled: boolean;
   onRequestRename: () => void;
   onRequestDelete: () => void;
 }) {
@@ -225,7 +227,7 @@ function SortableProject({
           </Flex>
         </ContextMenu.Item>
         <ContextMenu.Separator />
-        <ContextMenu.Item color="red" onSelect={onRequestDelete}>
+        <ContextMenu.Item color="red" disabled={deleteDisabled} onSelect={onRequestDelete}>
           <Flex align="center" gap="2">
             <TrashIcon width={12} height={12} />
             <Text size="2">删除队伍</Text>
@@ -616,6 +618,7 @@ export function ProjectSelector({
                         <SortableProject
                           key={project.id}
                           project={project}
+                          deleteDisabled={disabled || projects.length <= 1}
                           onRequestRename={() => onRequestRename(project.id)}
                           onRequestDelete={() => onRequestDelete(project.id)}
                         />

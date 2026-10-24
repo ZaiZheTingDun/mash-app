@@ -916,8 +916,9 @@ function App({
   );
 
   const handleGotoRunSettings = useCallback(() => {
+    if (!activeProject) return;
     setView("battle");
-  }, []);
+  }, [activeProject]);
 
   const handleProjectsImported = useCallback((importedProjects: Project[]) => {
     void refreshProjects()
@@ -977,8 +978,9 @@ function App({
   }, []);
 
   const handleGotoCommand = useCallback(() => {
+    if (!activeProject) return;
     setView("command");
-  }, []);
+  }, [activeProject]);
 
   const handleBackToTeam = useCallback(() => {
     setView("team");
@@ -1237,7 +1239,7 @@ function App({
                       />
                     </Flex>
                     <Flex align="center" gap="3">
-                      <TaskActionButton label="指令设置" eyebrow="NEXT" onClick={handleGotoCommand} />
+                      <TaskActionButton label="指令设置" eyebrow="NEXT" onClick={handleGotoCommand} disabled={!activeProject} />
                     </Flex>
                   </Flex>
                 </>

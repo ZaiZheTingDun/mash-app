@@ -71,5 +71,12 @@ describe("invokeDevMock project catalog", () => {
     catalog = await invokeDevMock<ProjectCatalog>("get_project_catalog");
     expect(catalog.ungroupedProjectIds).not.toContain(created.id);
     expect(catalog.ungroupedProjectIds).not.toContain(duplicated.id);
+
+    const remaining = await invokeDevMock<Project[]>("list_projects");
+    expect(remaining).toHaveLength(1);
+    await expect(invokeDevMock("delete_project", { id: initialProjectId }))
+      .rejects.toThrow("至少保留一个队伍");
+    expect(await invokeDevMock<Project[]>("list_projects")).toEqual(remaining);
+    expect(await invokeDevMock<ProjectCatalog>("get_project_catalog")).toEqual(catalog);
   });
 });
