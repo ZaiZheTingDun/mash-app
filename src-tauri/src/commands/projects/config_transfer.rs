@@ -430,8 +430,7 @@ pub(crate) fn import_configurations_from_path(
 pub(crate) fn list_exportable_configs(
     app: tauri::AppHandle,
 ) -> Result<Vec<ExportableConfigSummary>, String> {
-    let store = app.state::<ProjectStoreLock>();
-    let _guard = store.0.lock().map_err(|error| error.to_string())?;
+    let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
     exportable_config_summaries_from_root(&app_data_dir(&app))
 }
 
@@ -442,8 +441,7 @@ pub(crate) async fn export_configs(
 ) -> Result<Option<ExportConfigsResult>, String> {
     let root = app_data_dir(&app);
     let package = {
-        let store = app.state::<ProjectStoreLock>();
-        let _guard = store.0.lock().map_err(|error| error.to_string())?;
+        let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
         export_package_for_project_ids(&root, &project_ids)?
     };
     let picked = app
@@ -488,8 +486,7 @@ pub(crate) fn preview_config_import(
     app: tauri::AppHandle,
     file_path: String,
 ) -> Result<ConfigImportPreview, String> {
-    let store = app.state::<ProjectStoreLock>();
-    let _guard = store.0.lock().map_err(|error| error.to_string())?;
+    let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
     preview_config_import_from_path(&app_data_dir(&app), &PathBuf::from(file_path))
 }
 
@@ -499,7 +496,6 @@ pub(crate) fn import_configurations(
     file_path: String,
     import_keys: Vec<String>,
 ) -> Result<ConfigImportResult, String> {
-    let store = app.state::<ProjectStoreLock>();
-    let _guard = store.0.lock().map_err(|error| error.to_string())?;
+    let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
     import_configurations_from_path(&app_data_dir(&app), &PathBuf::from(file_path), &import_keys)
 }

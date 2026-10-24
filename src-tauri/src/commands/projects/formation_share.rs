@@ -262,8 +262,7 @@ pub(crate) async fn create_formation_share(
 ) -> Result<FormationShareCode, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let snapshot = {
-            let store = app.state::<ProjectStoreLock>();
-            let _guard = store.0.lock().map_err(|error| error.to_string())?;
+            let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
             snapshot_from_root(&app_data_dir(&app), &project_id)?
         };
         let code = code_from_entry(&snapshot)?;
@@ -286,8 +285,7 @@ pub(crate) async fn preview_formation_share(
     tauri::async_runtime::spawn_blocking(move || {
         let entry = decode_entry(&text)?;
         let target_name = {
-            let store = app.state::<ProjectStoreLock>();
-            let _guard = store.0.lock().map_err(|error| error.to_string())?;
+            let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
             let names = read_projects(&app)?
                 .into_iter()
                 .map(|p| p.name)
@@ -342,8 +340,7 @@ pub(crate) async fn import_formation_share(
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<FormationSharePreviews>();
         let mut pending = state.0.lock().map_err(|e| e.to_string())?;
-        let store = app.state::<ProjectStoreLock>();
-        let _guard = store.0.lock().map_err(|e| e.to_string())?;
+        let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
         import_preview_from_root(
             &app_data_dir(&app),
             &mut pending,

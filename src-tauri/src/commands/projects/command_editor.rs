@@ -200,7 +200,7 @@ pub(crate) fn load_command_editor(
     project_id: String,
     advanced: bool,
 ) -> Result<CommandEditorState, String> {
-    let _guard = editor_lock.0.lock().map_err(|e| e.to_string())?;
+    let _guard = editor_lock.lock()?;
     let scenes = read_document(&app, &project_id, advanced)?;
     // Persist backend defaults once so subsequent mutations use the same identities.
     write_document(&app, &project_id, advanced, &scenes)?;
@@ -221,7 +221,7 @@ pub(crate) fn mutate_command_editor(
     wave: usize,
     turn: usize,
 ) -> Result<CommandEditorState, String> {
-    let _guard = editor_lock.0.lock().map_err(|e| e.to_string())?;
+    let _guard = editor_lock.lock()?;
     let scenes = read_document(&app, &project_id, advanced)?;
     let next = mutate_document(scenes, advanced, mutation, wave, turn)?;
     write_document(&app, &project_id, advanced, &next.scenes)?;

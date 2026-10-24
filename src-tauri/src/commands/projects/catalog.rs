@@ -136,8 +136,7 @@ pub(crate) fn reorder_catalog_ids(
 
 #[tauri::command]
 pub(crate) fn get_project_catalog(app: tauri::AppHandle) -> Result<ProjectCatalog, String> {
-    let store = app.state::<ProjectStoreLock>();
-    let _guard = store.0.lock().map_err(|error| error.to_string())?;
+    let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
     let projects = read_projects(&app)?;
     read_project_catalog(&app, &projects)
 }
@@ -147,8 +146,7 @@ pub(crate) fn create_project_group(
     app: tauri::AppHandle,
     name: String,
 ) -> Result<ProjectCatalog, String> {
-    let store = app.state::<ProjectStoreLock>();
-    let _guard = store.0.lock().map_err(|error| error.to_string())?;
+    let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
     let projects = read_projects(&app)?;
     let mut catalog = read_project_catalog(&app, &projects)?;
     let name = validate_project_group_name(&catalog, &name, None)?;
@@ -167,8 +165,7 @@ pub(crate) fn rename_project_group(
     group_id: String,
     name: String,
 ) -> Result<ProjectCatalog, String> {
-    let store = app.state::<ProjectStoreLock>();
-    let _guard = store.0.lock().map_err(|error| error.to_string())?;
+    let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
     let projects = read_projects(&app)?;
     let mut catalog = read_project_catalog(&app, &projects)?;
     let name = validate_project_group_name(&catalog, &name, Some(&group_id))?;
@@ -187,8 +184,7 @@ pub(crate) fn delete_project_group(
     app: tauri::AppHandle,
     group_id: String,
 ) -> Result<ProjectCatalog, String> {
-    let store = app.state::<ProjectStoreLock>();
-    let _guard = store.0.lock().map_err(|error| error.to_string())?;
+    let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
     let projects = read_projects(&app)?;
     let mut catalog = read_project_catalog(&app, &projects)?;
     let index = catalog
@@ -208,8 +204,7 @@ pub(crate) fn move_project_to_group(
     project_id: String,
     group_id: Option<String>,
 ) -> Result<ProjectCatalog, String> {
-    let store = app.state::<ProjectStoreLock>();
-    let _guard = store.0.lock().map_err(|error| error.to_string())?;
+    let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
     let projects = read_projects(&app)?;
     if !projects.iter().any(|project| project.id == project_id) {
         return Err(format!("project not found: {project_id}"));
@@ -225,8 +220,7 @@ pub(crate) fn reorder_project_groups(
     app: tauri::AppHandle,
     group_ids: Vec<String>,
 ) -> Result<ProjectCatalog, String> {
-    let store = app.state::<ProjectStoreLock>();
-    let _guard = store.0.lock().map_err(|error| error.to_string())?;
+    let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
     let projects = read_projects(&app)?;
     let mut catalog = read_project_catalog(&app, &projects)?;
     let mut current_group_ids: Vec<String> = catalog
@@ -253,8 +247,7 @@ pub(crate) fn reorder_projects_in_group(
     group_id: Option<String>,
     project_ids: Vec<String>,
 ) -> Result<ProjectCatalog, String> {
-    let store = app.state::<ProjectStoreLock>();
-    let _guard = store.0.lock().map_err(|error| error.to_string())?;
+    let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
     let projects = read_projects(&app)?;
     let mut catalog = read_project_catalog(&app, &projects)?;
     let current_ids = if let Some(group_id) = group_id.as_deref() {
