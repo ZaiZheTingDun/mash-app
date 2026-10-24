@@ -165,7 +165,7 @@ describe("App active project restore", () => {
     await user.click(screen.getByRole("button", { name: "队伍操作" }));
     await user.click(await screen.findByRole("menuitem", { name: "删除当前队伍" }));
     const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: "删除", exact: true }));
+    await user.click(within(dialog).getByRole("button", { name: "删除" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "指令设置" })).toBeDisabled());
     expect(invoke).toHaveBeenCalledWith("delete_project", { id: "project-1" });
   });
