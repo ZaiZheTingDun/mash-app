@@ -69,10 +69,8 @@ pub fn run() {
                 load_recognition_settings(app.handle()).map_err(std::io::Error::other)?;
             let debug_settings = commands::settings::load_debug_settings(app.handle())
                 .map_err(std::io::Error::other)?;
-            let app_ui_settings = commands::projects::read_app_ui_settings_from_path(
-                &app_ui_settings_path(app.handle()),
-            )
-            .map_err(std::io::Error::other)?;
+            let app_ui_settings = commands::projects::initialize_project_state(app.handle())
+                .map_err(std::io::Error::other)?;
             platform::configure_app_menu(app)?;
             refresh_asset_protocol_scope(app.handle())?;
             app.manage(Mutex::new(adb_device_settings));

@@ -1,5 +1,5 @@
 import { commandEditorDevBridge } from "../commandEditorDevMock";
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -48,6 +48,7 @@ function installAppMock(
     runtimeInstalled?: boolean;
     assetVersion?: number;
     catalogError?: string;
+    projectList?: Project[];
     battleStartPanel?: "operationLog" | "runStatus" | "none";
   } = {},
 ) {
@@ -72,7 +73,7 @@ function installAppMock(
         if (options.catalogError) throw new Error(options.catalogError);
         return [];
       case "list_projects":
-        return projects;
+        return options.projectList ?? projects;
       case "get_grand_class_definitions":
         return [];
       case "get_active_project_id":
@@ -106,6 +107,67 @@ describe("App active project restore", () => {
     vi.mocked(listen).mockReset();
     vi.mocked(listen).mockResolvedValue(() => {});
     vi.mocked(check).mockResolvedValue(null);
+  });
+
+  it("blocks the next step until the saved projects finish loading", async () => {
+    installAppMock("project-1");
+    const baseInvoke = vi.mocked(invoke).getMockImplementation()!;
+    let resolveProjects!: (value: Project[]) => void;
+    const pendingProjects = new Promise<Project[]>((resolve) => { resolveProjects = resolve; });
+    vi.mocked(invoke).mockImplementation((command, args) =>
+      command === "list_projects" ? pendingProjects : baseInvoke(command, args)
+    );
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+
+    expect(await screen.findByRole("button", { name: "指令设置" })).toBeDisabled();
+    await act(async () => { resolveProjects(projects); });
+    await screen.findByText("第一套");
+    expect(screen.getByRole("button", { name: "指令设置" })).toBeEnabled();
+  });
+
+  it("cannot advance when no project is available", async () => {
+    installAppMock(null, { projectList: [] });
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+
+    const next = await screen.findByRole("button", { name: "指令设置" });
+    expect(next).toBeDisabled();
+    await user.click(next);
+    expect(screen.queryByRole("button", { name: "运行设置" })).not.toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith("start_automation", expect.anything());
+  });
+
+  it("uses the backend-created default project throughout the battle setup flow", async () => {
+    const defaultProject: Project = {
+      id: "default-project", name: "默认队伍", slots: createInitialProjectSlots(),
+    };
+    installAppMock(defaultProject.id, { projectList: [defaultProject] });
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+
+    await screen.findByText("默认队伍");
+    await user.click(screen.getByRole("button", { name: "指令设置" }));
+    await user.click(await screen.findByRole("button", { name: "运行设置" }));
+    expect(await screen.findByRole("button", { name: "开始任务" })).toBeEnabled();
+    expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "create_project")).toBe(false);
+    await user.click(screen.getByRole("button", { name: "开始任务" }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("start_automation", {
+      config: expect.objectContaining({ projectId: defaultProject.id }),
+    }));
+  });
+
+  it("disables the next step after deleting the last project", async () => {
+    installAppMock("project-1", { projectList: [projects[0]] });
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+
+    await screen.findByText("第一套");
+    await user.click(screen.getByRole("button", { name: "队伍操作" }));
+    await user.click(await screen.findByRole("menuitem", { name: "删除当前队伍" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "删除", exact: true }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "指令设置" })).toBeDisabled());
+    expect(invoke).toHaveBeenCalledWith("delete_project", { id: "project-1" });
   });
 
   it("waits for resource installation before requesting catalogs", async () => {

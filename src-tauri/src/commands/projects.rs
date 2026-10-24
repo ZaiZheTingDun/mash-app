@@ -298,6 +298,9 @@ pub(crate) fn load_advanced_battle_scenes(
     read_json_or_default(&path, "高级指令配置")
 }
 
+mod bootstrap;
+pub(crate) use bootstrap::initialize_project_state;
+
 mod catalog;
 pub(crate) use catalog::*;
 
