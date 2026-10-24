@@ -1,4 +1,4 @@
-//! Frozen v1 field dictionary and defaults. Never change/reuse existing aliases.
+//! Protocol v1 field dictionary and defaults. Keep published field meanings stable.
 
 use super::identity::REFERENCES;
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
@@ -43,8 +43,6 @@ const FIELDS: &[(&str, &str)] = &[
     ("disableAutoSkillTargetRecognition", "dt"),
     ("mysticCodeId", "mc"),
     ("preferHigherCriticalChance", "pc"),
-    ("recognitionSettings", "rs"),
-    ("supportClassFilterMode", "cf"),
     ("turns", "ts"),
     ("preparationActions", "a"),
     ("enemyTarget", "et"),
@@ -127,7 +125,6 @@ const PROJECT_FIELDS: &[&str] = &[
     "disableAutoSkillTargetRecognition",
     "mysticCodeId",
     "preferHigherCriticalChance",
-    "recognitionSettings",
 ];
 
 fn project_defaults() -> Value {
@@ -141,7 +138,7 @@ fn project_defaults() -> Value {
         "supportStarMapScoreMin":null, "supportGrandStarMapScoreMin":null,
         "supportSkillLevelMins":[null,null,null], "supportAppendSkillLevelMins":[null,null,null,null,null],
         "disableAutoSkillTargetRecognition":false, "mysticCodeId":null,
-        "preferHigherCriticalChance":false, "recognitionSettings":null
+        "preferHigherCriticalChance":false
     })
 }
 
@@ -165,40 +162,18 @@ pub(super) fn portable_entry(input: &Value) -> Result<Value, String> {
         "server",
         "sourceServer",
         "region",
+        "recognitionSettings",
     ];
     for key in project.keys() {
         if !PROJECT_FIELDS.contains(&key.as_str()) && !LOCAL_FIELDS.contains(&key.as_str()) {
             return Err(format!("分享协议尚未支持项目字段：{key}"));
         }
     }
-    let mut portable: Map<String, Value> = project
+    let portable: Map<String, Value> = project
         .iter()
         .filter(|(key, _)| PROJECT_FIELDS.contains(&key.as_str()))
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
-    // Recognition settings, including support class filtering, stay local.
-    let recognition = portable
-        .remove("recognitionSettings")
-        .unwrap_or(Value::Null);
-    if let Some(settings) = recognition.as_object() {
-        const KNOWN_RECOGNITION_FIELDS: &[&str] = &[
-            "supportClassFilterMode",
-            "supportCeThreshold",
-            "supportCeFullGateThreshold",
-            "supportMlbIconThreshold",
-            "supportBondIconThreshold",
-            "verifySkillActivation",
-            "enableExtraClassFilter",
-            "stopOnFiveStarCeDrop",
-            "fiveStarCeDropTargetCount",
-        ];
-        if let Some(key) = settings
-            .keys()
-            .find(|key| !KNOWN_RECOGNITION_FIELDS.contains(&key.as_str()))
-        {
-            return Err(format!("分享协议尚未支持识别设置字段：{key}"));
-        }
-    }
     Ok(json!({
         "project":portable,
         "battleScenes":input.get("battleScenes").cloned().unwrap_or(json!([])),
@@ -207,7 +182,7 @@ pub(super) fn portable_entry(input: &Value) -> Result<Value, String> {
 }
 
 pub(super) fn required_features(entry: &Value) -> Vec<u8> {
-    let mut flags = [false; 5];
+    let mut flags = [false; 4];
     flags[0] = entry["project"]["advancedMode"] == true
         || entry["advancedBattleScenes"]
             .as_array()
@@ -229,7 +204,7 @@ pub(super) fn required_features(entry: &Value) -> Vec<u8> {
             .get(key)
             .is_some_and(|value| !value.is_null() && Some(value) != defaults.get(key));
     }
-    fn walk(value: &Value, flags: &mut [bool; 5]) {
+    fn walk(value: &Value, flags: &mut [bool; 4]) {
         match value {
             Value::Object(object) => {
                 flags[2] |= object.get("skillSelection").is_some_and(|v| !v.is_null());
@@ -247,7 +222,6 @@ pub(super) fn required_features(entry: &Value) -> Vec<u8> {
                 flags[3] |= object
                     .get("criticalStrategy")
                     .is_some_and(|v| v != &turn_defaults()["criticalStrategy"]);
-                flags[4] |= object.contains_key("supportClassFilterMode");
                 for value in object.values() {
                     walk(value, flags);
                 }
@@ -442,8 +416,8 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn v1_dictionary_and_defaults_cannot_be_reinterpreted() {
-        let historical: HashMap<String, String> =
+    fn v1_dictionary_and_defaults_match_protocol_fixtures() {
+        let expected: HashMap<String, String> =
             serde_json::from_str(include_str!("fixtures/v1-fields.json")).unwrap();
         let longs = FIELDS.iter().map(|(long, _)| *long).collect::<HashSet<_>>();
         let shorts = FIELDS
@@ -452,11 +426,21 @@ mod tests {
             .collect::<HashSet<_>>();
         assert_eq!(longs.len(), FIELDS.len());
         assert_eq!(shorts.len(), FIELDS.len());
-        for (long, short) in historical {
-            assert!(
-                FIELDS.contains(&(long.as_str(), short.as_str())),
-                "changed v1 field {long}"
-            );
+        let actual = FIELDS
+            .iter()
+            .map(|(long, short)| (long.to_string(), short.to_string()))
+            .collect::<HashMap<_, _>>();
+        assert_eq!(actual, expected);
+        for local in [
+            "recognitionSettings",
+            "supportClassFilterMode",
+            "repeatMission",
+            "repeatMode",
+            "repeatCount",
+            "apRecoveryItems",
+            "apRecoveryLimits",
+        ] {
+            assert!(!longs.contains(local), "local field in protocol: {local}");
         }
         let defaults: Value =
             serde_json::from_str(include_str!("fixtures/v1-defaults.json")).unwrap();

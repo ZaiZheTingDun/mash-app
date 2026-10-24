@@ -6,7 +6,7 @@ fn fixture() -> ConfigExportEntry {
 }
 
 #[test]
-fn historical_wire_fixture_deserializes_into_current_models_and_reexports() {
+fn fixed_v1_fixture_deserializes_into_current_models_and_reexports() {
     let entry = fixture();
     let code = transport::encode(&serde_json::to_value(&entry).unwrap()).unwrap();
     let restored = decode_entry(&code).unwrap();
@@ -223,35 +223,6 @@ fn member_preview_returns_only_avatar_summary_and_import_context() {
         assert!(member.get("craftEssences").is_none());
         assert!(member.get("mlbRequired").is_none());
     }
-}
-
-#[test]
-fn older_codes_cannot_import_support_class_preferences() {
-    use base64::{engine::general_purpose::STANDARD, Engine};
-    use flate2::{read::GzDecoder, Compression, GzBuilder};
-    use std::io::{Read, Write};
-
-    let packet = STANDARD
-        .decode(include_str!("../../../formation_share/fixtures/v1.txt").trim())
-        .unwrap();
-    let mut json = Vec::new();
-    GzDecoder::new(&packet[10..])
-        .read_to_end(&mut json)
-        .unwrap();
-    let mut envelope: Value = serde_json::from_slice(&json).unwrap();
-    envelope["c"]["p"]["rs"] = json!({"cf": "allClasses"});
-    envelope["f"].as_array_mut().unwrap().push(json!(5));
-    let json = serde_json::to_vec(&envelope).unwrap();
-    let mut gzip = GzBuilder::new()
-        .mtime(0)
-        .write(Vec::new(), Compression::best());
-    gzip.write_all(&json).unwrap();
-    let mut packet = b"MASH\x01\x01".to_vec();
-    packet.extend_from_slice(&(json.len() as u32).to_be_bytes());
-    packet.extend(gzip.finish().unwrap());
-
-    let restored = decode_entry(&STANDARD.encode(packet)).unwrap();
-    assert!(restored.project.recognition_settings.is_none());
 }
 
 #[test]

@@ -18,7 +18,7 @@ const HEADER_LEN: usize = 10;
 const CONTAINER_VERSION: u8 = 1;
 const GZIP: u8 = 1;
 const SCHEMA_VERSION: u8 = 1;
-const SUPPORTED_FEATURES: &[u8] = &[1, 2, 3, 4, 5];
+const SUPPORTED_FEATURES: &[u8] = &[1, 2, 3, 4];
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

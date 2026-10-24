@@ -32,8 +32,6 @@
   "disableAutoSkillTargetRecognition": "dt",
   "mysticCodeId": "mc",
   "preferHigherCriticalChance": "pc",
-  "recognitionSettings": "rs",
-  "supportClassFilterMode": "cf",
   "turns": "ts",
   "preparationActions": "a",
   "enemyTarget": "et",

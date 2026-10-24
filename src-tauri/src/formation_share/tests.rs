@@ -57,7 +57,7 @@ fn round_trip_preserves_owned_support_targets_order_change_and_ce_preferences() 
     assert_eq!(actions[1]["orderChange"]["backMemberId"], slots[3]["id"]);
     assert_eq!(slots[2]["craftEssenceIds"], json!([300, 400]));
     assert_eq!(slots[2]["craftEssenceMlbRequired"], false);
-    assert!(decoded["project"]["recognitionSettings"].is_null());
+    assert!(decoded["project"].get("recognitionSettings").is_none());
     let serialized = decoded.to_string();
     for excluded in [
         "private-project-id",
@@ -65,6 +65,7 @@ fn round_trip_preserves_owned_support_targets_order_change_and_ce_preferences() 
         "repeatMission",
         "apRecovery",
         "server",
+        "recognitionSettings",
         "supportClassFilterMode",
         "supportCeThreshold",
         "stopOnFiveStarCeDrop",
@@ -184,9 +185,24 @@ fn decoder_cannot_ignore_fields_discarded_by_application_models() {
 }
 
 #[test]
-fn historical_v1_fixture_remains_readable() {
+fn fixed_v1_fixture_contains_only_supported_formation_data() {
     let decoded = decode(include_str!("fixtures/v1.txt")).unwrap();
     assert_eq!(decoded["project"]["name"], "v1 固定兼容样例");
+    assert_eq!(decode(&encode(&decoded).unwrap()).unwrap(), decoded);
+    for local in [
+        "recognitionSettings",
+        "supportClassFilterMode",
+        "repeatMission",
+        "repeatMode",
+        "repeatCount",
+        "apRecoveryItems",
+        "apRecoveryLimits",
+    ] {
+        assert!(
+            decoded["project"].get(local).is_none(),
+            "local setting in fixture: {local}"
+        );
+    }
     assert_eq!(
         decoded["battleScenes"][0]["turns"][0]["preparationActions"][0]["servantMemberId"],
         decoded["project"]["slots"][2]["id"]
@@ -246,4 +262,24 @@ fn local_support_class_and_run_preferences_never_change_the_shared_code() {
     let compact = envelope(&expected);
     assert!(compact["c"]["p"].get("rs").is_none());
     assert!(!compact["f"].as_array().unwrap().contains(&json!(5)));
+}
+
+#[test]
+fn local_recognition_fields_and_removed_capabilities_are_rejected() {
+    let code = encode(&entry()).unwrap();
+    for field in ["rs", "cf"] {
+        let mut value = envelope(&code);
+        value["c"]["p"][field] = if field == "rs" {
+            json!({"cf": "allClasses"})
+        } else {
+            json!("allClasses")
+        };
+        let error = decode(&packet(&serde_json::to_vec(&value).unwrap())).unwrap_err();
+        assert!(error.contains("无法识别的分享协议字段"), "{error}");
+    }
+    let mut value = envelope(&code);
+    value["f"] = json!([5]);
+    assert!(decode(&packet(&serde_json::to_vec(&value).unwrap()))
+        .unwrap_err()
+        .contains("升级"));
 }

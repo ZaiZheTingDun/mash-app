@@ -52,9 +52,10 @@ fn decode_entry(text: &str) -> Result<ConfigExportEntry, String> {
     }
     entry.project = normalize_project(entry.project);
 
+    // Recognition preferences follow the receiving installation's settings.
+    entry.project.recognition_settings = None;
     // Running preferences never come from a shared strategy, including after
     // future changes to Project's persistence defaults.
-    entry.project.recognition_settings = None;
     entry.project.repeat_mission = false;
     entry.project.repeat_mode = Some(ProjectRepeatMode::Single);
     entry.project.repeat_count = None;

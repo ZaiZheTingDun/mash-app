@@ -51,8 +51,7 @@
     ],
     "disableAutoSkillTargetRecognition": false,
     "mysticCodeId": null,
-    "preferHigherCriticalChance": false,
-    "recognitionSettings": null
+    "preferHigherCriticalChance": false
   },
   "slot": {
     "type": "servant",
