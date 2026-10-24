@@ -299,17 +299,7 @@ pub(crate) async fn preview_formation_share(
             .state::<Mutex<Server>>()
             .lock()
             .map_err(|e| e.to_string())?;
-        let mystic_code_name = entry.project.mystic_code_id.and_then(|id| {
-            crate::commands::catalog::get_mystic_codes(app.clone())
-                .ok()
-                .and_then(|codes| {
-                    codes
-                        .into_iter()
-                        .find(|code| code.id == id)
-                        .map(|code| code.name)
-                })
-        });
-        let preview = build_preview(&entry, token.clone(), target_name, server, mystic_code_name);
+        let preview = build_preview(&entry, token.clone(), target_name, server);
         let state = app.state::<FormationSharePreviews>();
         let mut pending = state.0.lock().map_err(|e| e.to_string())?;
         pending.retain(|_, preview| preview.expires_at > Instant::now());

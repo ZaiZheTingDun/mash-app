@@ -183,7 +183,7 @@ fn six_members_six_ces_three_waves_and_twelve_skills_fit_a_chat_message() {
 }
 
 #[test]
-fn member_preview_exposes_portrait_identity_and_omits_local_filtering() {
+fn member_preview_returns_only_avatar_summary_and_import_context() {
     let mut entry = fixture();
     entry.project.slots[0].servant_variant_key = Some("309:1".into());
     entry.project.support_servant_variant_key = Some("309:2".into());
@@ -196,7 +196,6 @@ fn member_preview_exposes_portrait_identity_and_omits_local_filtering() {
         "token".into(),
         "新队伍".into(),
         Server::Jp,
-        None,
     ))
     .unwrap();
     assert_eq!(preview["members"].as_array().unwrap().len(), 6);
@@ -206,9 +205,24 @@ fn member_preview_exposes_portrait_identity_and_omits_local_filtering() {
     assert_eq!(preview["members"][2]["servantVariantKey"], "309:2");
     assert_eq!(preview["members"][2]["isSupport"], true);
     assert!(preview["members"][0].get("faceId").is_some());
-    assert!(!preview["supportRequirements"]
-        .to_string()
-        .contains("助战职阶筛选"));
+    assert_eq!(preview["token"], "token");
+    assert_eq!(preview["targetName"], "新队伍");
+    for removed in [
+        "sourceName",
+        "advancedMode",
+        "supportRequirements",
+        "sections",
+        "warnings",
+    ] {
+        assert!(
+            preview.get(removed).is_none(),
+            "unused preview field: {removed}"
+        );
+    }
+    for member in preview["members"].as_array().unwrap() {
+        assert!(member.get("craftEssences").is_none());
+        assert!(member.get("mlbRequired").is_none());
+    }
 }
 
 #[test]
@@ -238,4 +252,32 @@ fn older_codes_cannot_import_support_class_preferences() {
 
     let restored = decode_entry(&STANDARD.encode(packet)).unwrap();
     assert!(restored.project.recognition_settings.is_none());
+}
+
+#[test]
+fn member_preview_preserves_unknown_portraits_and_distinguishes_empty_slots() {
+    let mut entry = fixture();
+    entry.project.slots[0].servant_id = Some(u32::MAX);
+    entry.project.slots[0].servant_variant_key = Some("unknown:1".into());
+    entry.project.slots[3].servant_id = None;
+    entry.project.slots[3].servant_variant_key = None;
+    let preview = serde_json::to_value(build_preview(
+        &entry,
+        "token".into(),
+        "新队伍".into(),
+        Server::Cn,
+    ))
+    .unwrap();
+    let unknown = &preview["members"][0];
+    assert_eq!(unknown["position"], 1);
+    assert_eq!(unknown["name"], format!("从者 #{}", u32::MAX));
+    assert_eq!(unknown["servantId"], u32::MAX);
+    assert_eq!(unknown["servantVariantKey"], "unknown:1");
+    assert!(unknown["faceId"].is_null());
+    let empty = &preview["members"][3];
+    assert_eq!(empty["position"], 4);
+    assert_eq!(empty["name"], "空槽位");
+    assert!(empty["servantId"].is_null());
+    assert!(empty["servantVariantKey"].is_null());
+    assert!(empty["faceId"].is_null());
 }

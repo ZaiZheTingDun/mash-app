@@ -13,24 +13,12 @@ export interface FormationShareMember {
   servantVariantKey: string | null;
   faceId: number | null;
   isSupport: boolean;
-  craftEssences: string[];
-  mlbRequired: boolean;
-}
-
-export interface FormationShareSection {
-  title: string;
-  lines: string[];
 }
 
 export interface FormationSharePreview {
   token: string;
-  sourceName: string;
   targetName: string;
-  advancedMode: boolean;
   members: FormationShareMember[];
-  supportRequirements: string[];
-  sections: FormationShareSection[];
-  warnings: string[];
 }
 
 export interface FormationShareIntegration {

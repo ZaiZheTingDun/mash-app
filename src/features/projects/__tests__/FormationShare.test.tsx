@@ -36,11 +36,8 @@ async function selectAction(user: ReturnType<typeof userEvent.setup>, name: stri
 }
 
 const preview: FormationSharePreview = {
-  token: "preview-token", sourceName: "三面编队", targetName: "三面编队（导入）", advancedMode: false,
-  members: [{ position: 1, name: "从者甲", servantId: 309, servantVariantKey: "309:1", faceId: 1, isSupport: false, craftEssences: ["礼装甲"], mlbRequired: true }, { position: 3, name: "从者甲", servantId: 309, servantVariantKey: "309:2", faceId: 2, isSupport: true, craftEssences: ["礼装乙", "礼装丙"], mlbRequired: false }],
-  supportRequirements: ["技能：10 / 任意 / 10"],
-  sections: [{ title: "普通指令 · 第1面 · 第1回合", lines: ["1. 第3位（助战） · 技能1 → 第1位"] }],
-  warnings: ["第六位尚未选择从者。"],
+  token: "preview-token", targetName: "三面编队（导入）",
+  members: [{ position: 1, name: "从者甲", servantId: 309, servantVariantKey: "309:1", faceId: 1, isSupport: false }, { position: 3, name: "从者甲", servantId: 309, servantVariantKey: "309:2", faceId: 2, isSupport: true }],
 };
 
 const project = { id: "new-project", name: "新编队", slots: [] };
@@ -122,10 +119,6 @@ describe("formation share", () => {
     expect(invoke).toHaveBeenCalledWith("get_servant_face_path", { servantId: 309, variantKey: "309:1", faceId: 1 });
     expect(invoke).toHaveBeenCalledWith("get_servant_face_path", { servantId: 309, variantKey: "309:2", faceId: 2 });
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(screen.queryByText("礼装乙 / 礼装丙")).not.toBeInTheDocument();
-    expect(screen.queryByText("第六位尚未选择从者。")).not.toBeInTheDocument();
-    expect(screen.queryByText(/运行设为单次/)).not.toBeInTheDocument();
-    expect(screen.queryByText("普通指令 · 第1面 · 第1回合")).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "队伍名称" }), { target: { value: "新编队" } });
     await user.click(screen.getByRole("button", { name: "新建" }));
     await waitFor(() => expect(onImported).toHaveBeenCalledWith(project));
@@ -237,8 +230,8 @@ describe("formation share", () => {
     fireEvent.change(input, { target: { value: "OLD" } });
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("preview_formation_share", { text: "OLD" }));
     fireEvent.change(input, { target: { value: "NEW" } });
-    await act(async () => { complete({ ...preview, token: "old-token", sourceName: "旧编队" }); });
-    expect(screen.queryByText("旧编队")).not.toBeInTheDocument();
+    await act(async () => { complete({ ...preview, token: "old-token", targetName: "旧编队" }); });
+    expect(screen.getByRole("textbox", { name: "队伍名称" })).not.toHaveValue("旧编队");
     expect(invoke).toHaveBeenCalledWith("discard_formation_share_preview", { previewToken: "old-token" });
     expect(screen.getByRole("button", { name: "新建" })).toBeDisabled();
     await screen.findByRole("list", { name: "编队成员" });
@@ -257,7 +250,7 @@ describe("formation share", () => {
     await selectAction(user, "新建队伍");
     expect(screen.getByRole("textbox", { name: "编队分享码" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "队伍名称" })).toHaveValue("队伍 2");
-    expect(screen.queryByText("三面编队")).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "编队成员" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "新建" })).toBeEnabled();
   });
 
