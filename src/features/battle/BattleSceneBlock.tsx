@@ -7,7 +7,7 @@ import { SimplePreparationPanel } from "./SimplePreparationPanel";
 import { collectPreparationSkillUsage, type PreparationSkillUsage } from "./preparationSkillUsage";
 import { makePreparationAction, makeOrderChangeAction, startPreparationSkill, selectPreparationSkillOption, type PreparationResult } from "./preparationActions";
 import type { MysticCodeGender, SkillEditorLayout } from "../../types/appUiSettings";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { Text } from "@radix-ui/themes";
 import { Cross2Icon } from "@radix-ui/react-icons";
@@ -485,6 +485,7 @@ export function BattleSceneBlock({
   step,
   onChange,
 }: BattleSceneBlockProps) {
+  const preparationDraftRef = useRef<HTMLDivElement>(null);
   const [editingPrepIndex, setEditingPrepIndex] = useState<number | null>(null);
   const [prepDraft, setPrepDraft] = useState<PrepDraft | null>(null);
   const [attackDraft, setAttackDraft] = useState<AttackDraft | null>(null);
@@ -500,7 +501,10 @@ export function BattleSceneBlock({
     document.addEventListener("keydown", cancel);
     return () => document.removeEventListener("keydown", cancel);
   }, [hasDraft]);
-  useEffect(() => { if (hasDraft) document.querySelector(".command-content .battle-add-row, .command-content .battle-choice-row")?.scrollIntoView({ block: "nearest" }); }, [hasDraft, prepDraft?.step, attackDraft?.step]);
+  useEffect(() => {
+    const draft = prepDraft ? preparationDraftRef.current : attackDraft ? document.querySelector(".command-content .command-attack-draft") : null;
+    draft?.scrollIntoView({ block: "nearest" });
+  }, [prepDraft, attackDraft, editingPrepIndex]);
   const initialPartyMembers = useMemo(
     () => partyMembers ?? toPartyMembers(partyServants),
     [partyMembers, partyServants]
@@ -648,13 +652,190 @@ export function BattleSceneBlock({
       onSelect={finishAttackAction} onCancel={() => setAttackDraft(null)} />
   );
 
+  const preparationDraftEditor = (
+    <div ref={preparationDraftRef} className={`battle-add-row${prepDraft ? " command-inline-draft" : ""}`}>
+      {prepDraft && <CommandDraftHeading title={preparationDraftTitle(prepDraft, editingPrepIndex != null)} hint={prepDraft.step === "source" ? "选择前排从者或御主礼装" : prepDraft.step === "option" ? "选择技能" : prepDraft.step === "target" ? "选择目标" : prepDraft.step === "orderChange" ? "从前排和后排各选择一名从者" : "选择技能选项"} onReselect={prepDraft.step === "option" && prepDraft.source !== "commandSpell" ? () => setPrepDraft({ step: "source" }) : undefined} onCancel={() => {setPrepDraft(null);setEditingPrepIndex(null);}} />}
+      {!prepDraft ? (
+        skillEditorLayout === "simple" ? null : <div className="command-entry-actions">
+          <AddRowTrigger iconSize={16} transparentIconBackground onClick={() => setPrepDraft({ step: "source" })}>添加技能指令</AddRowTrigger>
+          <button type="button" onClick={() => setPrepDraft({ step: "option", source: "commandSpell" })}><i className="command-diamond" />使用令咒</button>
+          <button type="button" onClick={() => setPrepDraft({ step: "target", source: "enemyTarget", option: "select" })}><i className="command-diamond" />选择敌方目标</button>
+        </div>
+      ) : prepDraft.step === "source" ? (
+        <div className="battle-choice-row">
+          {draftPartyMembers.slice(0, 3).map((member, index) => {
+            const servant = member.servant;
+            return (
+              <ServantFaceButton
+                key={index}
+                servant={servant}
+                index={index}
+                faceSrc={servant ? faces[servant.variantKey] : null}
+                isSupport={member.isSupport}
+                onClick={() =>
+                  setPrepDraft({
+                    step: "option",
+                    source: `servant_${index + 1}` as PrepSource,
+                  })
+                }
+              />
+            );
+          })}
+          <MysticCodeChoice code={mysticCode} gender={mysticCodeGender} onClick={() => setPrepDraft({ step: "option", source: "equipment" })} />
+        </div>
+      ) : prepDraft.step === "option" ? (
+        <div className="battle-choice-row">
+          {prepDraft.source !== "equipment" &&
+            prepDraft.source !== "commandSpell" && (
+              (() => {
+                const index = sourceIndex(prepDraft.source) ?? 0;
+                const member = draftPartyMembers[index] ?? { servant: null, isSupport: false };
+                const servant = member.servant;
+                return (
+                  <ServantFaceButton
+                    servant={servant}
+                    index={index}
+                    faceSrc={servant ? faces[servant.variantKey] : null}
+                    isSupport={member.isSupport}
+                    selected
+                    onClick={() => setPrepDraft({ step: "source" })}
+                  />
+                );
+              })()
+            )}
+          {prepDraft.source === "equipment" && (
+            <MysticCodeChoice code={mysticCode} gender={mysticCodeGender} selected onClick={() => setPrepDraft({ step: "source" })} />
+          )}
+          {prepDraft.source === "commandSpell" && (
+            <CommandSpellChoice gender={mysticCodeGender} selected onClick={() => setPrepDraft({ step: "option", source: "commandSpell" })} />
+          )}
+          <div className="battle-option-group command-skill-options">
+            {prepDraft.source === "commandSpell"
+              ? <CommandSpellOptionButtons onSelect={option => setPrepDraft({ step: "target", source: prepDraft.source, option })} />
+              : (
+                <SkillOptionButtons
+                  showLabel
+                  servant={
+                    prepDraft.source !== "equipment"
+                      ? (draftPartyMembers[sourceIndex(prepDraft.source) ?? 0]?.servant ?? null)
+                      : null
+                  }
+                  skillIcons={skillIcons}
+                  entries={prepDraft.source === "equipment" ? mysticSkillEntries : undefined}
+                  onSelect={(skill) => selectPrepSkill(prepDraft.source, skill)}
+                />
+              )}
+          </div>
+        </div>
+      ) : prepDraft.step === "skillSelection" ? (
+        <div className="battle-choice-row">
+          <div className="battle-option-group">
+            {prepDraft.options.map((option) => (
+              <button
+                type="button"
+                key={option.index}
+                className="battle-option-btn"
+                onClick={() => finishSkillSelection(prepDraft, option)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : prepDraft.step === "target" ? (
+        <div className="battle-choice-row">
+          {prepDraft.source === "enemyTarget" ? (
+            <EnemyTargetButtons
+              ariaLabel="选择敌方目标"
+              onChange={(target) => {
+                if (target) finishPrepAction(prepDraft, target);
+              }}
+            />
+          ) : <>
+            <SkillTargetChoices
+              allowNoTarget={prepDraft.allowNoTarget !== false}
+              onNoTarget={() => finishPrepAction(prepDraft, null)}
+              onOrderChange={
+                prepDraft.source === "equipment" &&
+                (disableAutoSkillTargetRecognition ||
+                  mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode == null ||
+                  mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode === "unknown")
+                  ? () => setPrepDraft({
+                      step: "orderChange",
+                      source: "equipment",
+                      option: prepDraft.option,
+                      front: null,
+                    })
+                  : undefined
+              }
+            >
+              {draftPartyMembers.slice(0, 3).map((member, index) => {
+                const servant = member.servant;
+                return (
+                  <ServantFaceButton
+                    key={index}
+                    servant={servant}
+                    index={index}
+                    faceSrc={servant ? faces[servant.variantKey] : null}
+                    isSupport={member.isSupport}
+                    onClick={() => finishPrepAction(prepDraft, `servant_${index + 1}`)}
+                  />
+                );
+              })}
+            </SkillTargetChoices>
+            {prepDraft.allowNoTarget === true && (
+              <Text size="1" color="gray" className="battle-targeting-mode-hint">
+                该技能存在可选择目标与无需选择目标两种形态
+              </Text>
+            )}
+          </>}
+        </div>
+      ) : (
+        <div className="battle-choice-row order-change">
+          {Array.from(
+            { length: 6 },
+            (_, index) => draftPartyMembers[index] ?? { servant: null, isSupport: false }
+          ).map((member, index) => {
+            const servant = member.servant;
+            const slot = `servant_${index + 1}` as PartySlot;
+            const needsFront = prepDraft.front == null;
+            const selectable = Boolean(servant) && (needsFront ? index < 3 : index >= 3);
+            return (
+              <ServantFaceButton
+                key={index}
+                servant={servant}
+                index={index}
+                faceSrc={servant ? faces[servant.variantKey] : null}
+                isSupport={member.isSupport}
+                disabled={!selectable}
+                selected={prepDraft.front === slot}
+                onClick={() => {
+                  if (!selectable) return;
+                  if (needsFront) {
+                    setPrepDraft({ ...prepDraft, front: slot });
+                  } else {
+                    finishOrderChangeAction(prepDraft, slot);
+                  }
+                }}
+              />
+            );
+          })}
+          <Text size="2" weight="medium" className="battle-order-change-hint">
+            {prepDraft.front == null ? "选择前排" : "选择后排"}
+          </Text>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="battle-scene-editor">
       {(step == null || step === "prep") && <section className="battle-phase">
         <SimplePreparationPanel usedSkills={usedSkills} actionCount={preparationActions.length} enabled={skillEditorLayout === "simple"} members={currentPartyMembers} faces={faces} skillIcons={skillIcons} mysticCode={mysticCode} gender={mysticCodeGender} disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition} skillTargetStatus={skillTargetStatus} skillSelection={skillSelection} isSkillLoading={servant => skillTargetStatus.isLoading(servant) || skillSelection.isLoading(servant)} disabled={prepDraft != null} onAction={commitPrep}>
         <div className="battle-action-list">
           {preparationActions.map((action, index) => (
-            <div className="battle-action-row committed" key={action.id}>
+            <Fragment key={action.id}>
+            <div className="battle-action-row committed">
               <ActionDeleteButton
                 disabled={prepDraft != null}
                 onClick={() =>
@@ -675,180 +856,10 @@ export function BattleSceneBlock({
                 mysticCode={mysticCode} homeMasterCode={homeMasterCode} mysticCodeGender={mysticCodeGender}
               />
             </div>
+            {editingPrepIndex === index && preparationDraftEditor}
+            </Fragment>
           ))}
-          <div className={`battle-add-row${prepDraft ? " command-inline-draft" : ""}`}>
-            {prepDraft && <CommandDraftHeading title={preparationDraftTitle(prepDraft, editingPrepIndex != null)} hint={prepDraft.step === "source" ? "选择前排从者或御主礼装" : prepDraft.step === "option" ? "选择技能" : prepDraft.step === "target" ? "选择目标" : prepDraft.step === "orderChange" ? "从前排和后排各选择一名从者" : "选择技能选项"} onReselect={prepDraft.step === "option" && prepDraft.source !== "commandSpell" ? () => setPrepDraft({ step: "source" }) : undefined} onCancel={() => {setPrepDraft(null);setEditingPrepIndex(null);}} />}
-            {!prepDraft ? (
-              skillEditorLayout === "simple" ? null : <div className="command-entry-actions">
-                <AddRowTrigger iconSize={16} transparentIconBackground onClick={() => setPrepDraft({ step: "source" })}>添加技能指令</AddRowTrigger>
-                <button type="button" onClick={() => setPrepDraft({ step: "option", source: "commandSpell" })}><i className="command-diamond" />使用令咒</button>
-                <button type="button" onClick={() => setPrepDraft({ step: "target", source: "enemyTarget", option: "select" })}><i className="command-diamond" />选择敌方目标</button>
-              </div>
-            ) : prepDraft.step === "source" ? (
-              <div className="battle-choice-row">
-                {draftPartyMembers.slice(0, 3).map((member, index) => {
-                  const servant = member.servant;
-                  return (
-                    <ServantFaceButton
-                      key={index}
-                      servant={servant}
-                      index={index}
-                      faceSrc={servant ? faces[servant.variantKey] : null}
-                      isSupport={member.isSupport}
-                      onClick={() =>
-                        setPrepDraft({
-                          step: "option",
-                          source: `servant_${index + 1}` as PrepSource,
-                        })
-                      }
-                    />
-                  );
-                })}
-                <MysticCodeChoice code={mysticCode} gender={mysticCodeGender} onClick={() => setPrepDraft({ step: "option", source: "equipment" })} />
-              </div>
-            ) : prepDraft.step === "option" ? (
-              <div className="battle-choice-row">
-                {prepDraft.source !== "equipment" &&
-                  prepDraft.source !== "commandSpell" && (
-                    (() => {
-                      const index = sourceIndex(prepDraft.source) ?? 0;
-                      const member = draftPartyMembers[index] ?? { servant: null, isSupport: false };
-                      const servant = member.servant;
-                      return (
-                        <ServantFaceButton
-                          servant={servant}
-                          index={index}
-                          faceSrc={servant ? faces[servant.variantKey] : null}
-                          isSupport={member.isSupport}
-                          selected
-                          onClick={() => setPrepDraft({ step: "source" })}
-                        />
-                      );
-                    })()
-                  )}
-                {prepDraft.source === "equipment" && (
-                  <MysticCodeChoice code={mysticCode} gender={mysticCodeGender} selected onClick={() => setPrepDraft({ step: "source" })} />
-                )}
-                {prepDraft.source === "commandSpell" && (
-                  <CommandSpellChoice gender={mysticCodeGender} selected onClick={() => setPrepDraft({ step: "option", source: "commandSpell" })} />
-                )}
-                <div className="battle-option-group command-skill-options">
-                  {prepDraft.source === "commandSpell"
-                    ? <CommandSpellOptionButtons onSelect={option => setPrepDraft({ step: "target", source: prepDraft.source, option })} />
-                    : (
-                      <SkillOptionButtons
-                        showLabel
-                        servant={
-                          prepDraft.source !== "equipment"
-                            ? (draftPartyMembers[sourceIndex(prepDraft.source) ?? 0]?.servant ?? null)
-                            : null
-                        }
-                        skillIcons={skillIcons}
-                        entries={prepDraft.source === "equipment" ? mysticSkillEntries : undefined}
-                        onSelect={(skill) => selectPrepSkill(prepDraft.source, skill)}
-                      />
-                    )}
-                </div>
-              </div>
-            ) : prepDraft.step === "skillSelection" ? (
-              <div className="battle-choice-row">
-                <div className="battle-option-group">
-                  {prepDraft.options.map((option) => (
-                    <button
-                      type="button"
-                      key={option.index}
-                      className="battle-option-btn"
-                      onClick={() => finishSkillSelection(prepDraft, option)}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : prepDraft.step === "target" ? (
-              <div className="battle-choice-row">
-                {prepDraft.source === "enemyTarget" ? (
-                  <EnemyTargetButtons
-                    ariaLabel="选择敌方目标"
-                    onChange={(target) => {
-                      if (target) finishPrepAction(prepDraft, target);
-                    }}
-                  />
-                ) : <>
-                  <SkillTargetChoices
-                    allowNoTarget={prepDraft.allowNoTarget !== false}
-                    onNoTarget={() => finishPrepAction(prepDraft, null)}
-                    onOrderChange={
-                      prepDraft.source === "equipment" &&
-                      (disableAutoSkillTargetRecognition ||
-                        mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode == null ||
-                        mysticCodeSkill(mysticCode, prepDraft.option)?.targetingMode === "unknown")
-                        ? () => setPrepDraft({
-                            step: "orderChange",
-                            source: "equipment",
-                            option: prepDraft.option,
-                            front: null,
-                          })
-                        : undefined
-                    }
-                  >
-                    {draftPartyMembers.slice(0, 3).map((member, index) => {
-                      const servant = member.servant;
-                      return (
-                        <ServantFaceButton
-                          key={index}
-                          servant={servant}
-                          index={index}
-                          faceSrc={servant ? faces[servant.variantKey] : null}
-                          isSupport={member.isSupport}
-                          onClick={() => finishPrepAction(prepDraft, `servant_${index + 1}`)}
-                        />
-                      );
-                    })}
-                  </SkillTargetChoices>
-                  {prepDraft.allowNoTarget === true && (
-                    <Text size="1" color="gray" className="battle-targeting-mode-hint">
-                      该技能存在可选择目标与无需选择目标两种形态
-                    </Text>
-                  )}
-                </>}
-              </div>
-            ) : (
-              <div className="battle-choice-row order-change">
-                {Array.from(
-                  { length: 6 },
-                  (_, index) => draftPartyMembers[index] ?? { servant: null, isSupport: false }
-                ).map((member, index) => {
-                  const servant = member.servant;
-                  const slot = `servant_${index + 1}` as PartySlot;
-                  const needsFront = prepDraft.front == null;
-                  const selectable = Boolean(servant) && (needsFront ? index < 3 : index >= 3);
-                  return (
-                    <ServantFaceButton
-                      key={index}
-                      servant={servant}
-                      index={index}
-                      faceSrc={servant ? faces[servant.variantKey] : null}
-                      isSupport={member.isSupport}
-                      disabled={!selectable}
-                      selected={prepDraft.front === slot}
-                      onClick={() => {
-                        if (!selectable) return;
-                        if (needsFront) {
-                          setPrepDraft({ ...prepDraft, front: slot });
-                        } else {
-                          finishOrderChangeAction(prepDraft, slot);
-                        }
-                      }}
-                    />
-                  );
-                })}
-                <Text size="2" weight="medium" className="battle-order-change-hint">
-                  {prepDraft.front == null ? "选择前排" : "选择后排"}
-                </Text>
-              </div>
-            )}
-          </div>
+          {editingPrepIndex == null && preparationDraftEditor}
         </div>
         </SimplePreparationPanel>
       </section>}
