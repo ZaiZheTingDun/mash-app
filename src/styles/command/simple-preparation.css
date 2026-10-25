@@ -35,7 +35,8 @@
   color: var(--gray-12);
 }
 .simple-preparation-menu-trigger.rt-Button:hover { color: var(--blue-11); background: var(--blue-a2); }
-.simple-skill-palette { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; flex: 0 0 auto; }
+/* Keep avatar badges below the expanded sequence, regardless of their own z-index. */
+.simple-skill-palette { isolation: isolate; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; flex: 0 0 auto; }
 .simple-skill-column { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .simple-skill-eyebrow { font-size: 10px; letter-spacing: 1.4px; line-height: 16px; color: var(--gray-10); }
 .simple-skill-column .command-actor-choice {
