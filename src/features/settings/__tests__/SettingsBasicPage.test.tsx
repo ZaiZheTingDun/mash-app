@@ -25,6 +25,31 @@ const SETTINGS: RecognitionSettings = {
 };
 
 describe("SettingsBasicPage", () => {
+  it("loads the saved skill layout and only updates the app after a successful backend save", async () => {
+    let layout = "guided";
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "get_recognition_settings") return SETTINGS;
+      if (command === "get_skill_editor_layout") return layout;
+      if (command === "set_skill_editor_layout") { layout = (args as {value: string}).value; return layout; }
+      return null;
+    });
+    const change = vi.fn(); const user = userEvent.setup();
+    const { unmount } = renderWithTheme(<SettingsBasicPage active onSkillEditorLayoutChange={change} />);
+    await user.click(await screen.findByRole("combobox", { name: "技能设置布局" }));
+    await user.click(screen.getByRole("option", { name: "简易设置" }));
+    await waitFor(() => expect(change).toHaveBeenCalledWith("simple"));
+    expect(invoke).toHaveBeenCalledWith("set_skill_editor_layout", { value: "simple" });
+    unmount();
+    renderWithTheme(<SettingsBasicPage active onSkillEditorLayoutChange={change} />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "技能设置布局" })).toHaveTextContent("简易设置"));
+    vi.mocked(invoke).mockImplementation(async () => { throw new Error("保存失败"); });
+    await user.click(screen.getByRole("combobox", { name: "技能设置布局" }));
+    await user.click(screen.getByRole("option", { name: "逐步设置" }));
+    expect(await screen.findByText("Error: 保存失败")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "技能设置布局" })).toHaveTextContent("简易设置");
+    expect(change).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a failed read with a retry action instead of an endless loading placeholder", async () => {
     vi.mocked(invoke).mockImplementation(async (command) => command === "get_recognition_settings" ? SETTINGS : null);
     const retry = vi.fn().mockResolvedValue(undefined);

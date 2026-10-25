@@ -1,0 +1,138 @@
+/* Fixed four-column skill palette with an independently scrolling action list. */
+.has-simple-preparation .command-phase-header { padding-right: 180px; }
+.has-simple-preparation .command-phase-header p { display: none; }
+.has-simple-preparation .command-content > .command-scroll-region {
+  overflow: visible;
+  padding-bottom: 0;
+}
+.has-simple-preparation .command-edit-surface,
+.has-simple-preparation .battle-scene-editor,
+.has-simple-preparation .advanced-strategy-editor,
+.has-simple-preparation .battle-scene-editor > .battle-phase,
+.has-simple-preparation .advanced-strategy-editor > .battle-phase {
+  height: 100%;
+  min-height: 0;
+  margin-bottom: 0;
+}
+.simple-preparation {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 16px;
+}
+.simple-preparation-menu { position: absolute; top: -57px; right: 0; z-index: 3; }
+.simple-preparation-menu-trigger.rt-Button {
+  gap: 10px;
+  margin: 0;
+  padding: 6px 8px;
+  height: 32px;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  font-size: 12px;
+  color: var(--gray-12);
+}
+.simple-preparation-menu-trigger.rt-Button:hover { color: var(--blue-11); background: var(--blue-a2); }
+.simple-skill-palette { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; flex: 0 0 auto; }
+.simple-skill-column { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.simple-skill-eyebrow { font-size: 10px; letter-spacing: 1.4px; line-height: 16px; color: var(--gray-10); }
+.simple-skill-column .command-actor-choice {
+  width: 100%;
+  min-width: 0;
+  height: 58px;
+  min-height: 58px;
+  padding: 8px;
+  gap: 8px;
+  box-sizing: border-box;
+  background: var(--gray-a2);
+  border: 1px solid var(--gray-5);
+  border-radius: var(--radius-2);
+}
+.simple-skill-column .command-actor-choice .battle-actor-icon,
+.simple-skill-column .command-actor-choice .rt-AvatarRoot { width: 40px; height: 40px; flex: 0 0 40px; }
+.simple-skill-column .command-actor-copy { min-width: 0; gap: 4px; }
+.simple-skill-column .command-actor-copy b { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.simple-skill-column .command-actor-copy small { font-size: 10px; }
+.simple-skill-column .command-actor-choice.selected { background: var(--blue-a3); border-color: var(--blue-8); }
+.simple-skill-column .command-actor-choice.selected::after { display: none; }
+.simple-mystic-display { cursor: default; }
+.simple-mystic-display:hover { border-color: var(--gray-5); }
+.simple-skill-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.simple-skill-button.battle-option-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  min-height: 46px;
+  padding: 6px;
+  border: 1px solid var(--gray-5);
+  border-radius: var(--radius-2);
+  background: var(--gray-a2);
+}
+.simple-skill-button .rt-AvatarRoot { width: 30px; height: 30px; }
+.simple-skill-button.is-used .rt-AvatarRoot { filter: grayscale(1); opacity: 0.45; }
+.simple-skill-button.battle-option-btn:hover { border-color: var(--blue-8); background: var(--blue-a3); }
+.simple-preparation-sequence { position: relative; flex: 1; min-height: 0; padding-top: 12px; box-sizing: border-box; }
+.simple-preparation-scroll { height: 100%; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding-right: 8px; }
+.simple-preparation-scroll .battle-add-row:empty { display: none; }
+.simple-preparation-scroll .command-inline-draft { margin-top: 8px; }
+.simple-enemy-target-options { border: 0; margin: 0; padding: 0; min-width: 0; }
+.simple-preview-divider {
+  position: absolute;
+  top: -12px;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--blue-9);
+  cursor: pointer;
+}
+.simple-preview-divider::before, .simple-preview-divider::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  width: 50%;
+  height: 1px;
+  background: var(--blue-a5);
+}
+.simple-preview-divider::before { left: 0; }
+.simple-preview-divider::after { right: 0; }
+.simple-preview-divider > span { display: flex; opacity: 0; }
+.simple-preview-divider:hover > span, .simple-preview-divider:focus-visible > span { opacity: 1; }
+.simple-preview-divider:hover::before, .simple-preview-divider:hover::after,
+.simple-preview-divider:focus-visible::before, .simple-preview-divider:focus-visible::after { width: calc(50% - 12px); background: var(--blue-8); }
+.simple-preview-divider:focus-visible { outline: 1px solid var(--blue-8); outline-offset: 2px; }
+.simple-preview-divider:disabled { cursor: default; }
+.simple-preparation.is-expanded .simple-preparation-sequence {
+  position: absolute;
+  top: 57px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  background: var(--color-background);
+  box-shadow: 0 -8px 16px var(--black-a3);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .simple-preview-divider > span { transition: opacity 120ms ease; }
+}
+@container command-body (max-width: 630px) {
+  .simple-skill-palette { gap: 8px; }
+  .simple-skill-buttons { gap: 4px; }
+  .simple-skill-column .command-actor-choice { padding: 6px; gap: 6px; }
+  .simple-skill-column .command-actor-copy small { display: none; }
+  .simple-skill-column .command-actor-choice .battle-actor-icon,
+  .simple-skill-column .command-actor-choice .rt-AvatarRoot { width: 30px; height: 30px; flex-basis: 30px; }
+}
+@media (hover: none) { .simple-preview-divider > span { opacity: 1; } .simple-preview-divider::before, .simple-preview-divider::after { width: calc(50% - 12px); } }

@@ -125,6 +125,28 @@ pub(crate) fn get_servant_picker_settings(
 }
 
 #[tauri::command]
+pub(crate) fn get_skill_editor_layout(
+    state: tauri::State<'_, Mutex<AppUiSettings>>,
+) -> Result<crate::paths::SkillEditorLayout, String> {
+    Ok(state
+        .lock()
+        .map_err(|err| err.to_string())?
+        .skill_editor_layout)
+}
+
+#[tauri::command]
+pub(crate) fn set_skill_editor_layout(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<AppUiSettings>>,
+    value: crate::paths::SkillEditorLayout,
+) -> Result<crate::paths::SkillEditorLayout, String> {
+    let saved = update_app_ui_settings(&app, state.inner(), |settings| {
+        settings.skill_editor_layout = value;
+    })?;
+    Ok(saved.skill_editor_layout)
+}
+
+#[tauri::command]
 pub(crate) fn update_servant_picker_settings(
     app: tauri::AppHandle,
     state: tauri::State<'_, Mutex<AppUiSettings>>,
@@ -253,5 +275,31 @@ mod home_master_figure_tests {
         assert!(!home_master_figure_exists(temp.path(), 470));
         std::fs::write(dir.join("master-figure-male.png"), []).unwrap();
         assert!(home_master_figure_exists(temp.path(), 470));
+    }
+}
+
+#[cfg(test)]
+mod skill_editor_layout_tests {
+    use super::*;
+    use crate::paths::SkillEditorLayout;
+
+    #[test]
+    fn layout_is_backward_compatible_and_round_trips_without_changing_preferences() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("ui.json");
+        let mut settings: AppUiSettings =
+            serde_json::from_str(r#"{"theme":"dark","activeProjectId":"team"}"#).unwrap();
+        assert_eq!(settings.skill_editor_layout, SkillEditorLayout::Guided);
+        for layout in [SkillEditorLayout::Simple, SkillEditorLayout::Guided] {
+            settings.skill_editor_layout = layout;
+            write_app_ui_settings_to_path(&path, &settings).unwrap();
+            settings = read_app_ui_settings_from_path(&path).unwrap();
+            assert_eq!(settings.skill_editor_layout, layout);
+            assert_eq!(settings.theme.as_deref(), Some("dark"));
+            assert_eq!(settings.active_project_id.as_deref(), Some("team"));
+        }
+        let json = serde_json::to_value(SkillEditorLayout::Simple).unwrap();
+        assert_eq!(json, "simple");
+        assert!(serde_json::from_str::<SkillEditorLayout>(r#""invalid""#).is_err());
     }
 }

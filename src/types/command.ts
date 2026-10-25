@@ -20,6 +20,7 @@ export interface ServantAction {
   servantId?: number | null;
   servantIsSupport?: boolean;
   skill: string | null;
+  skillFormId?: number | null;
   skillSelection?: SkillSelection | null;
   target: string | null;
   targetMemberId?: string | null;

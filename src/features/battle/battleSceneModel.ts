@@ -9,7 +9,7 @@ import type {
 } from "../../types/command";
 import type { Servant } from "../../types/servant";
 
-export type PrepSource = "enemyTarget" | "equipment" | "commandSpell" | `servant_${1 | 2 | 3}`;
+export type PrepSource = "enemyTarget" | "equipment" | "commandSpell" | PartySlot;
 export type AttackSource = `servant_${1 | 2 | 3}`;
 export type PartySlot = `servant_${1 | 2 | 3 | 4 | 5 | 6}`;
 export type EnemyTarget = `enemy_${1 | 2 | 3 | 4 | 5 | 6}`;
@@ -28,6 +28,7 @@ export type PrepDraft =
     source: PrepSource;
     option: string;
     allowNoTarget?: boolean;
+    skillFormId?: number | null;
     skillSelection?: SkillSelection | null;
   }
   | {

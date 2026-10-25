@@ -15,13 +15,14 @@ const STEPS = [
 
 interface CommandWorkspaceProps {
   wave: number; waveCount: number; turn: number; turns: { id: string }[];
+  fixedPreparation?: boolean;
   step: CommandStep; advanced?: boolean; busy?: boolean;
   onStep: (step: CommandStep) => void; onWave: (wave: number) => void; onTurn: (turn: number) => void;
   onAddWave?: () => void; onDeleteWave?: () => void; onAddTurn: () => void; onDeleteTurn: () => void;
   configuredWave?: boolean; configuredTurn?: boolean; error?: string | null; children: ReactNode;
 }
 
-export function CommandWorkspace({ wave, waveCount, turn, turns, step, advanced = false, busy = false, onStep, onWave, onTurn, onAddWave, onDeleteWave, onAddTurn, onDeleteTurn, configuredWave = false, configuredTurn = false, error, children }: CommandWorkspaceProps) {
+export function CommandWorkspace({ fixedPreparation = false, wave, waveCount, turn, turns, step, advanced = false, busy = false, onStep, onWave, onTurn, onAddWave, onDeleteWave, onAddTurn, onDeleteTurn, configuredWave = false, configuredTurn = false, error, children }: CommandWorkspaceProps) {
   const [deleting, setDeleting] = useState<"wave" | "turn" | null>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const visibleSteps = STEPS.filter(item =>
@@ -33,7 +34,7 @@ export function CommandWorkspace({ wave, waveCount, turn, turns, step, advanced 
     if (kind === "wave" ? configuredWave : configuredTurn) setDeleting(kind);
     else (kind === "wave" ? onDeleteWave : onDeleteTurn)?.();
   };
-  return <div className={`command-workspace${advanced ? " is-grand" : ""}`}>
+  return <div className={`command-workspace${advanced ? " is-grand" : ""}${fixedPreparation ? " has-simple-preparation" : ""}`}>
     <aside className="command-sidebar" aria-label="指令导航">
       <div className="command-rail-label"><SectionRailIcon /><span>WAVE</span>{onDeleteWave && <IconButton variant="ghost" color="gray" aria-label="删除当前 Battle" disabled={busy || waveCount <= 1} onClick={() => remove("wave")}><TrashIcon /></IconButton>}</div>
       <div className="command-scene-controls" role="group" aria-label={`第 ${wave + 1}/${waveCount} 面`}><strong>{String(wave + 1).padStart(2, "0")}</strong><span>/ {String(waveCount).padStart(2, "0")}</span>

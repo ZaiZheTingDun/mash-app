@@ -78,7 +78,7 @@ export function useServantSkillTargeting(servants: (Servant | null)[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey]);
 
-  return (servant: Servant | null, skill: string): SkillTargetStatus => {
+  const statusFor = (servant: Servant | null, skill: string): SkillTargetStatus => {
     if (!servant) return "unknown";
     const skillIndex = skillSlotIndex(skill);
     if (skillIndex < 0) return "unknown";
@@ -86,4 +86,7 @@ export function useServantSkillTargeting(servants: (Servant | null)[]) {
     if (statuses === undefined || statuses === null) return "unknown";
     return statuses.get(skillIndex + 1) ?? "noTarget";
   };
+  return Object.assign(statusFor, {
+    isLoading: (servant: Servant | null) => Boolean(servant && targeting[servant.variantKey] === undefined),
+  });
 }

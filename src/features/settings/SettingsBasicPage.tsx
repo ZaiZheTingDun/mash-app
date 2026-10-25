@@ -17,6 +17,7 @@ import {
   DEFAULT_BATTLE_START_PANEL,
   normalizeBattleStartPanel,
   type BattleStartPanel,
+  type SkillEditorLayout,
   type MysticCodeGender,
 } from "../../types/appUiSettings";
 import type { NoblePhantasmDetectionMode, RecognitionSettings } from "../../types/recognition";
@@ -35,6 +36,7 @@ const TIMEOUT_COMMAND = "set_unknown_screen_timeout_count";
 export function SettingsBasicPage({
   active,
   onBattleStartPanelChange,
+  onSkillEditorLayoutChange,
   mysticCodeGender = "female",
   onMysticCodeGenderChange,
   colorTheme,
@@ -43,6 +45,7 @@ export function SettingsBasicPage({
   onColorThemeChange,
 }: {
   active: boolean;
+  onSkillEditorLayoutChange?: (value: SkillEditorLayout) => void;
   onBattleStartPanelChange?: (value: BattleStartPanel) => void;
   mysticCodeGender?: MysticCodeGender;
   onMysticCodeGenderChange?: (value: MysticCodeGender) => void;
@@ -51,6 +54,7 @@ export function SettingsBasicPage({
   onColorThemeReload?: () => Promise<void>;
   onColorThemeChange?: (value: AppColorTheme) => Promise<void>;
 }) {
+  const [skillEditorLayout, setSkillEditorLayout] = useState<SkillEditorLayout>("guided");
   const [battleStartPanel, setBattleStartPanel] = useState<BattleStartPanel>(
     DEFAULT_BATTLE_START_PANEL
   );
@@ -212,19 +216,32 @@ export function SettingsBasicPage({
     setError(null);
     setSavedMessage(null);
     try {
-      const [rawSettings, rawBattleStartPanel, rawGender] = await Promise.all([
+      const [rawSettings, rawBattleStartPanel, rawGender, rawLayout] = await Promise.all([
         invoke<RecognitionSettings>("get_recognition_settings"),
         invoke<BattleStartPanel>("get_battle_start_panel"),
         invoke<MysticCodeGender>("get_mystic_code_gender"),
+        invoke<SkillEditorLayout>("get_skill_editor_layout"),
       ]);
       const settings = normalizeRecognitionSettings(rawSettings);
       applySettings(settings);
       setBattleStartPanel(normalizeBattleStartPanel(rawBattleStartPanel));
+      if (rawLayout === "guided" || rawLayout === "simple") setSkillEditorLayout(rawLayout);
       onMysticCodeGenderChange?.(rawGender === "male" ? "male" : "female");
     } catch (err) {
       setError(String(err));
     }
   }, [applySettings, onMysticCodeGenderChange]);
+
+  const saveSkillEditorLayout = async (value: SkillEditorLayout) => {
+    setSaving(true); setError(null); setSavedMessage(null);
+    try {
+      const saved = await invoke<SkillEditorLayout>("set_skill_editor_layout", { value });
+      setSkillEditorLayout(saved);
+      onSkillEditorLayoutChange?.(saved);
+      setSavedMessage("已保存");
+    } catch (reason) { setError(String(reason)); }
+    finally { setSaving(false); }
+  };
 
   const saveMysticCodeGender = useCallback(async (value: MysticCodeGender) => {
     setSavingGender(true);
@@ -406,6 +423,15 @@ export function SettingsBasicPage({
           {colorThemeError && onColorThemeReload && (
             <Button size="1" variant="ghost" onClick={() => void onColorThemeReload()}>重试</Button>
           )}
+        </SettingsRow>
+        <SettingsRow label="技能设置布局" description="选择逐步设置技能，或固定显示前排从者与御主礼装的技能">
+          <Select.Root value={skillEditorLayout} onValueChange={value => void saveSkillEditorLayout(value as SkillEditorLayout)} disabled={saving}>
+            <Select.Trigger aria-label="技能设置布局" className="recognition-mode-select" />
+            <Select.Content position="popper" className="settings-select-menu">
+              <Select.Item value="guided">逐步设置</Select.Item>
+              <Select.Item value="simple">简易设置</Select.Item>
+            </Select.Content>
+          </Select.Root>
         </SettingsRow>
         <SettingsRow label="御主礼装显示性别" description="选择队伍配置中御主礼装图标使用的服装款式">
           <Select.Root value={mysticCodeGender ?? "female"}

@@ -61,6 +61,12 @@ pub enum AdvancedAction {
         #[serde(rename = "servantIsSupport", default)]
         servant_is_support: bool,
         skill: Option<String>,
+        #[serde(
+            rename = "skillFormId",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        skill_form_id: Option<u32>,
         #[serde(rename = "skillSelection", default)]
         skill_selection: Option<SkillSelection>,
         target: Option<String>,
@@ -125,6 +131,7 @@ impl AdvancedAction {
                 servant_is_support,
                 skill,
                 skill_selection,
+                skill_form_id,
                 target,
                 target_member_id,
                 target_servant_id,
@@ -137,6 +144,7 @@ impl AdvancedAction {
                 servant_is_support: *servant_is_support,
                 skill: skill.clone(),
                 skill_selection: skill_selection.clone(),
+                skill_form_id: *skill_form_id,
                 target: target.clone(),
                 target_member_id: target_member_id.clone(),
                 target_servant_id: *target_servant_id,

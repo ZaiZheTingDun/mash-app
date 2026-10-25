@@ -1,10 +1,11 @@
-import type { MysticCodeGender } from "../../types/appUiSettings";
+import type { MysticCodeGender, SkillEditorLayout } from "../../types/appUiSettings";
 import { useEffect, useState } from "react";
 import { Text } from "@radix-ui/themes";
 import { AdvancedCommandEditor } from "../advanced/AdvancedCommandEditor";
 import { CommandWorkspace, type CommandStep } from "./CommandWorkspace";
 import { useCommandDocument } from "./useCommandDocument";
 import { BattleSceneBlock } from "./BattleSceneBlock";
+import { preparationSkillUsageBeforeTurn } from "./preparationSkillUsage";
 import {
   deriveTurnPartyMembers,
   partyMembersToServants,
@@ -17,6 +18,7 @@ import type { Servant } from "../../types/servant";
 import type { MysticCode } from "../../types/mysticCode";
 
 interface CommandEditorProps {
+  skillEditorLayout?: SkillEditorLayout;
   projectId: string | null;
   onBusyChange?: (busy: boolean) => void;
   partyLineup: (Servant | null)[];
@@ -37,6 +39,7 @@ interface CommandEditorProps {
 }
 
 export function CommandEditor({
+  skillEditorLayout = "guided",
   projectId,
   onBusyChange,
   partyLineup,
@@ -66,6 +69,7 @@ export function CommandEditor({
   if (advancedMode) {
     return (
       <AdvancedCommandEditor
+        skillEditorLayout={skillEditorLayout}
         onBusyChange={onBusyChange}
         projectId={projectId}
         partyLineup={partyLineup}
@@ -91,6 +95,7 @@ export function CommandEditor({
   const configured = (turn: BattleTurn) => Boolean(turn.preparationActions?.length || turn.enemyTarget || turn.attackPriority.some(card => card.card) || turn.attackMode !== "normal");
   return <CommandWorkspace
     wave={activeIndex} waveCount={scenes.length} turn={activeTurnIndex} turns={activeScene.turns}
+    fixedPreparation={skillEditorLayout === "simple" && step === "prep"}
     step={step} onStep={setStep} busy={editor.busy} error={editor.error}
     onWave={wave => editor.navigate(wave, 0)} onTurn={turn => editor.navigate(activeIndex, turn)}
     onAddWave={() => void editor.mutate({ type: "addWave" })} onDeleteWave={() => void editor.mutate({ type: "deleteWave" })}
@@ -98,8 +103,10 @@ export function CommandEditor({
     configuredWave={activeScene.turns.some(configured)} configuredTurn={configured(activeTurn)}
   >
     <BattleSceneBlock key={`${activeScene.id}:${activeTurn.id}:${step}`} scene={activeTurn}
+      previousSkillUsage={skillEditorLayout === "simple" ? preparationSkillUsageBeforeTurn(initialPartyMembers, scenes, activeIndex, activeTurnIndex) : undefined}
       partyServants={partyMembersToServants(activePartyMembers)} partyMembers={activePartyMembers}
       disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition} mysticCode={mysticCode} homeMasterCode={homeMasterCode} mysticCodeGender={mysticCodeGender}
+      skillEditorLayout={skillEditorLayout}
       turnAttackModesEnabled={turnAttackModesEnabled} step={step}
       onChange={turn => void editor.mutate({ type: "updateTurn", turn })} />
   </CommandWorkspace>;

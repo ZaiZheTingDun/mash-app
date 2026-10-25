@@ -76,7 +76,7 @@ export function useServantSkillSelections(servants: (Servant | null)[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey]);
 
-  return (
+  const selectionFor = (
     servant: Servant | null,
     skill: string | null | undefined
   ): ServantSkillSelectionEntry | null => {
@@ -87,4 +87,7 @@ export function useServantSkillSelections(servants: (Servant | null)[]) {
     if (!bySkillNum) return null;
     return bySkillNum.get(skillIndex + 1) ?? null;
   };
+  return Object.assign(selectionFor, {
+    isLoading: (servant: Servant | null) => Boolean(servant && selections[servant.variantKey] === undefined),
+  });
 }

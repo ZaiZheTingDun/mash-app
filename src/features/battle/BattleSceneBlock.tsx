@@ -1,9 +1,12 @@
 import { AttackCommandDraft } from "./AttackCommandDraft";
-import { CommandSkillSummary } from "../../components/common/CommandSkillSummary";
+import { MashSkillTwoSummary } from "./MashSkillTwoChoice";
 import { EnemyTargetActionSummary } from "../../components/common/EnemyTargetActionSummary";
 import { useCommandSpellSkillIcons, type CommandSpellSkillIcons } from "./useCommandSpellSkillIcons";
 import { CommandSpellChoice } from "../../components/common/CommandSpellChoice";
-import type { MysticCodeGender } from "../../types/appUiSettings";
+import { SimplePreparationPanel } from "./SimplePreparationPanel";
+import { collectPreparationSkillUsage, type PreparationSkillUsage } from "./preparationSkillUsage";
+import { makePreparationAction, makeOrderChangeAction, startPreparationSkill, selectPreparationSkillOption, type PreparationResult } from "./preparationActions";
+import type { MysticCodeGender, SkillEditorLayout } from "../../types/appUiSettings";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { Text } from "@radix-ui/themes";
@@ -59,16 +62,14 @@ import {
 import type {
   AttackCard,
   BattleTurn,
-  CommandSpellAction,
-  EquipmentAction,
-  EnemyTargetAction,
   PreparationAction,
-  ServantAction,
 } from "../../types/command";
 import type { Servant } from "../../types/servant";
 import { mysticCodeSkill, type MysticCode } from "../../types/mysticCode";
 
 interface BattleSceneBlockProps {
+  previousSkillUsage?: PreparationSkillUsage;
+  skillEditorLayout?: SkillEditorLayout;
   scene: BattleTurn;
   partyServants: (Servant | null)[];
   partyMembers?: PartyMember[];
@@ -189,6 +190,7 @@ function PreparationActionSummary({
   let skillIconSrc: string | null;
   let skillLabel: string;
   let skillSlot = 0;
+  let skillServant: Servant | null = null;
 
   if (action.type === "servant") {
     const src = frontMemberIndex(
@@ -203,6 +205,7 @@ function PreparationActionSummary({
         ? { servant: null, isSupport: false }
         : partyMembers[src] ?? { servant: null, isSupport: false };
     const servant = member.servant;
+    skillServant = servant;
     sourceFace = (
       <ServantInlineFace
         servant={servant}
@@ -247,7 +250,7 @@ function PreparationActionSummary({
         {sourceText}
       </Text></span>
       <span className="command-row-skill">
-        <CommandSkillSummary src={skillIconSrc} name={skillLabel} fallback={String(skillSlot + 1)} />
+        <MashSkillTwoSummary action={action} servant={skillServant} src={skillIconSrc} name={skillLabel} fallback={String(skillSlot + 1)} />
         {action.type === "servant" && action.skillSelection ? <small>并选择 {action.skillSelection.label ?? `选项 ${action.skillSelection.index + 1}`}</small> : null}
       </span>
       <span className="command-row-outcome">
@@ -469,6 +472,8 @@ function attackSlotLabel(index: number): string {
 }
 
 export function BattleSceneBlock({
+  previousSkillUsage,
+  skillEditorLayout = "guided",
   scene,
   partyServants,
   partyMembers,
@@ -542,6 +547,10 @@ export function BattleSceneBlock({
     () => deriveMembersAfterPreparationActions(initialPartyMembers, preparationActions),
     [initialPartyMembers, preparationActions]
   );
+  const usedSkills = useMemo(
+    () => collectPreparationSkillUsage(initialPartyMembers, preparationActions, previousSkillUsage),
+    [initialPartyMembers, preparationActions, previousSkillUsage]
+  );
   const draftPartyMembers = editingPrepIndex == null ? currentPartyMembers : preparationActionLineups[editingPrepIndex] ?? initialPartyMembers;
   const commitPrep = (action: PreparationAction) => {
     updatePreparationActions(editingPrepIndex == null ? [...preparationActions, action] : preparationActions.map((existing,index) => index === editingPrepIndex ? {...action,id:existing.id} : existing));
@@ -582,169 +591,23 @@ export function BattleSceneBlock({
     onChange(emptyLegacyFields({ ...scene, enemyTarget }));
   };
 
-  const targetRef = (target: string | null) => {
-    const ref = memberRefAt(draftPartyMembers, target);
-    return {
-      targetMemberId: ref.memberId,
-      targetServantId: ref.servantId,
-      targetIsSupport: ref.isSupport,
-    };
+  const preparationContext = { members: draftPartyMembers, mysticCode, disableAutoSkillTargetRecognition, skillTargetStatus, skillSelection };
+  const applyPreparationResult = (result: PreparationResult) => {
+    if (result.type === "action") commitPrep(result.action);
+    else setPrepDraft(result.draft);
   };
-
-  const servantRef = (servant: string | null) => {
-    const ref = memberRefAt(draftPartyMembers, servant);
-    return {
-      servantMemberId: ref.memberId,
-      servantId: ref.servantId,
-      servantIsSupport: ref.isSupport,
-    };
-  };
-
-  const orderChangeRef = (key: "front" | "back", slot: PartySlot) => {
-    const ref = memberRefAt(draftPartyMembers, slot);
-    return {
-      [`${key}MemberId`]: ref.memberId,
-      [`${key}ServantId`]: ref.servantId,
-      [`${key}IsSupport`]: ref.isSupport,
-    };
-  };
-
   const finishPrepAction = (draft: Extract<PrepDraft, { step: "target" }>, target: string | null) => {
-    let action: PreparationAction;
-    if (draft.source === "enemyTarget") {
-      action = {
-        type: "enemyTarget",
-        id: createId("enemy_target"),
-        target,
-      } satisfies EnemyTargetAction;
-    } else if (draft.source === "equipment") {
-      action = {
-        type: "equipment",
-        id: createId("eq"),
-        skill: draft.option,
-        target,
-        ...targetRef(target),
-        orderChange: null,
-      } satisfies EquipmentAction;
-    } else if (draft.source === "commandSpell") {
-      action = {
-        type: "commandSpell",
-        id: createId("cs"),
-        spell: draft.option as CommandSpellAction["spell"],
-        target,
-        ...targetRef(target),
-      } satisfies CommandSpellAction;
-    } else {
-      action = {
-        type: "servant",
-        id: createId("sa"),
-        servant: draft.source,
-        ...servantRef(draft.source),
-        skill: draft.option,
-        skillSelection: draft.skillSelection ?? null,
-        target,
-        ...targetRef(target),
-      } satisfies ServantAction;
-    }
-    commitPrep(action);
+    commitPrep(makePreparationAction(draft, target, draftPartyMembers));
   };
-
   const selectPrepSkill = (source: PrepSource, skill: string) => {
-    if (source === "equipment") {
-      const meta = mysticCodeSkill(mysticCode, skill);
-      const draft = { step: "target", source, option: skill } satisfies Extract<PrepDraft, { step: "target" }>;
-      const status = disableAutoSkillTargetRecognition ? "unknown" : meta?.targetingMode ?? "unknown";
-      if (status === "noTarget") {
-        finishPrepAction(draft, null);
-      } else if (status === "orderChange") {
-        setPrepDraft({ step: "orderChange", source, option: skill, front: null });
-      } else {
-        setPrepDraft(status === "needsTarget" ? { ...draft, allowNoTarget: false } : draft);
-      }
-      return;
-    }
-    const servant = draftPartyMembers[sourceIndex(source) ?? 0]?.servant ?? null;
-    const selection = skillSelection(servant, skill);
-    if (selection) {
-      setPrepDraft({
-        step: "skillSelection",
-        source,
-        option: skill,
-        selectionType: selection.selectionType,
-        options: selection.options,
-      });
-      return;
-    }
-    const status = disableAutoSkillTargetRecognition
-      ? "unknown"
-      : skillTargetStatus(servant, skill);
-    const draft = { step: "target", source, option: skill } satisfies Extract<
-      PrepDraft,
-      { step: "target" }
-    >;
-    if (status === "noTarget") {
-      finishPrepAction(draft, null);
-      return;
-    }
-    setPrepDraft(
-      status === "needsTarget"
-        ? { ...draft, allowNoTarget: false }
-        : status === "mixed"
-          ? { ...draft, allowNoTarget: true }
-          : draft
-    );
+    applyPreparationResult(startPreparationSkill(preparationContext, source, skill));
   };
-
-  const finishSkillSelection = (
-    draft: Extract<PrepDraft, { step: "skillSelection" }>,
-    option: { index: number; label: string }
-  ) => {
-    const targetDraft = {
-      step: "target",
-      source: draft.source,
-      option: draft.option,
-      skillSelection: {
-        type: draft.selectionType,
-        index: option.index,
-        optionCount: draft.options.length,
-        label: option.label,
-      },
-    } satisfies Extract<PrepDraft, { step: "target" }>;
-    const servant = draftPartyMembers[sourceIndex(draft.source) ?? 0]?.servant ?? null;
-    const status = disableAutoSkillTargetRecognition
-      ? "unknown"
-      : skillTargetStatus(servant, draft.option);
-    if (status === "noTarget") {
-      finishPrepAction(targetDraft, null);
-      return;
-    }
-    setPrepDraft(
-      status === "needsTarget"
-        ? { ...targetDraft, allowNoTarget: false }
-        : status === "mixed"
-          ? { ...targetDraft, allowNoTarget: true }
-          : targetDraft
-    );
+  const finishSkillSelection = (draft: Extract<PrepDraft, { step: "skillSelection" }>, option: { index: number; label: string }) => {
+    applyPreparationResult(selectPreparationSkillOption(preparationContext, draft, option));
   };
-
-  const finishOrderChangeAction = (
-    draft: Extract<PrepDraft, { step: "orderChange" }>,
-    back: PartySlot
-  ) => {
-    if (draft.front == null) return;
-    const action = {
-      type: "equipment",
-      id: createId("eq"),
-      skill: draft.option,
-      target: null,
-      orderChange: {
-        front: draft.front,
-        ...orderChangeRef("front", draft.front),
-        back,
-        ...orderChangeRef("back", back),
-      },
-    } satisfies EquipmentAction;
-    commitPrep(action);
+  const finishOrderChangeAction = (draft: Extract<PrepDraft, { step: "orderChange" }>, back: PartySlot) => {
+    const action = makeOrderChangeAction(draft, back, draftPartyMembers);
+    if (action) commitPrep(action);
   };
 
   const finishAttackAction = (source: AttackSource, option: string) => {
@@ -788,6 +651,7 @@ export function BattleSceneBlock({
   return (
     <div className="battle-scene-editor">
       {(step == null || step === "prep") && <section className="battle-phase">
+        <SimplePreparationPanel usedSkills={usedSkills} actionCount={preparationActions.length} enabled={skillEditorLayout === "simple"} members={currentPartyMembers} faces={faces} skillIcons={skillIcons} mysticCode={mysticCode} gender={mysticCodeGender} disableAutoSkillTargetRecognition={disableAutoSkillTargetRecognition} skillTargetStatus={skillTargetStatus} skillSelection={skillSelection} isSkillLoading={servant => skillTargetStatus.isLoading(servant) || skillSelection.isLoading(servant)} disabled={prepDraft != null} onAction={commitPrep}>
         <div className="battle-action-list">
           {preparationActions.map((action, index) => (
             <div className="battle-action-row committed" key={action.id}>
@@ -815,7 +679,7 @@ export function BattleSceneBlock({
           <div className={`battle-add-row${prepDraft ? " command-inline-draft" : ""}`}>
             {prepDraft && <CommandDraftHeading title={preparationDraftTitle(prepDraft, editingPrepIndex != null)} hint={prepDraft.step === "source" ? "选择前排从者或御主礼装" : prepDraft.step === "option" ? "选择技能" : prepDraft.step === "target" ? "选择目标" : prepDraft.step === "orderChange" ? "从前排和后排各选择一名从者" : "选择技能选项"} onReselect={prepDraft.step === "option" && prepDraft.source !== "commandSpell" ? () => setPrepDraft({ step: "source" }) : undefined} onCancel={() => {setPrepDraft(null);setEditingPrepIndex(null);}} />}
             {!prepDraft ? (
-              <div className="command-entry-actions">
+              skillEditorLayout === "simple" ? null : <div className="command-entry-actions">
                 <AddRowTrigger iconSize={16} transparentIconBackground onClick={() => setPrepDraft({ step: "source" })}>添加技能指令</AddRowTrigger>
                 <button type="button" onClick={() => setPrepDraft({ step: "option", source: "commandSpell" })}><i className="command-diamond" />使用令咒</button>
                 <button type="button" onClick={() => setPrepDraft({ step: "target", source: "enemyTarget", option: "select" })}><i className="command-diamond" />选择敌方目标</button>
@@ -986,6 +850,7 @@ export function BattleSceneBlock({
             )}
           </div>
         </div>
+        </SimplePreparationPanel>
       </section>}
 
       {(step == null || step === "enemy") && <EnemyTargetSelector
