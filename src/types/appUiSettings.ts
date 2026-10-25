@@ -1,4 +1,5 @@
 export type BattleStartPanel = "operationLog" | "runStatus" | "none";
+export type SkillEditorLayout = "guided" | "simple";
 
 export const DEFAULT_BATTLE_START_PANEL: BattleStartPanel = "operationLog";
 

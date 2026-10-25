@@ -249,6 +249,41 @@ mod tests {
         assert!(advanced[0]["startupActions"].as_array().unwrap().is_empty());
     }
     #[test]
+    fn selected_skill_forms_survive_document_round_trips_and_legacy_actions_stay_compatible() {
+        for advanced in [false, true] {
+            for form_id in [None, Some(2550_u32), Some(2477450_u32)] {
+                let mut action = json!({"type":"servant","id":"mash-skill","servant":"servant_1","servantId":1,"skill":"skill_2","target":null});
+                if let Some(id) = form_id {
+                    action["skillFormId"] = json!(id);
+                }
+                let scene = if advanced {
+                    json!({"id":"scene","turns":[{"id":"turn","actions":[action.clone()]}]})
+                } else {
+                    json!({"id":"scene","turns":[{"id":"turn","preparationActions":[action.clone()]}]})
+                };
+                let normalized = normalize_documents(vec![scene], advanced).unwrap();
+                let saved = serde_json::to_string(&normalized).unwrap();
+                let restored =
+                    normalize_documents(serde_json::from_str(&saved).unwrap(), advanced).unwrap();
+                let key = if advanced {
+                    "actions"
+                } else {
+                    "preparationActions"
+                };
+                let restored_action = &restored[0]["turns"][0][key][0];
+                assert_eq!(
+                    restored_action.get("skillFormId"),
+                    action.get("skillFormId")
+                );
+                assert!(restored_action["target"].is_null());
+                let rule_action: AdvancedAction = serde_json::from_value(action.clone()).unwrap();
+                let converted =
+                    serde_json::to_value(rule_action.as_preparation_action().unwrap()).unwrap();
+                assert_eq!(converted.get("skillFormId"), action.get("skillFormId"));
+            }
+        }
+    }
+    #[test]
     fn deletes_first_or_last_turn_and_preserves_other_configuration() {
         let first = normalize_documents(vec![], false).unwrap();
         let first_id = first[0]["turns"][0]["id"].clone();

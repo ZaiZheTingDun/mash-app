@@ -124,6 +124,7 @@ let activeProjectId: string | null = "dev-project-1";
 let appTheme: "light" | "dark" | "system" | null = null;
 let appColorTheme: AppColorTheme = "violet";
 let servantPickerSettings: ServantPickerSettings = { layout: "list", gridSize: "medium" };
+let skillEditorLayout: "guided" | "simple" = "guided";
 let battleStartPanel: "operationLog" | "runStatus" | "none" = "operationLog";
 
 let projects: Project[] = [
@@ -432,6 +433,11 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
     case "set_home_master_figure_id":
       if (args.id === 470) homeMasterFigureId = 470;
       return homeMasterFigureId as T;
+    case "get_skill_editor_layout":
+      return skillEditorLayout as T;
+    case "set_skill_editor_layout":
+      if (args.value === "guided" || args.value === "simple") skillEditorLayout = args.value;
+      return skillEditorLayout as T;
     case "get_battle_start_panel":
       return battleStartPanel as T;
     case "set_battle_start_panel":

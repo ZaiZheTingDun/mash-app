@@ -77,6 +77,200 @@ function makeScene(id: string, skill: string): BattleScene {
 }
 
 describe("CommandEditor pagination", () => {
+  it("opens and cancels a control-action editor beside its own row", async () => {
+    const user = userEvent.setup();
+    mockInvoke(async command => command === "load_advanced_battle_scenes" ? [{
+      id: "advanced", turns: [{ id: "turn", actions: [] }], rules: [],
+      controlActions: [
+        { type: "equipment", id: "first", skill: "skill_1", target: null },
+        { type: "equipment", id: "last", skill: "skill_2", target: null },
+      ],
+    }] : []);
+    renderWithTheme(<CommandEditor projectId="control-position" advancedMode partyLineup={[makeServant(1, "甲")]} />);
+    await user.click(await screen.findByRole("button", { name: /^\d+ 控制行动/ }));
+    const row = screen.getByRole("button", { name: "编辑行动 1" }).closest(".battle-action-row")!;
+    const next = screen.getByRole("button", { name: "编辑行动 2" }).closest(".battle-action-row")!;
+    await user.click(within(row as HTMLElement).getByRole("button", { name: "编辑行动 1" }));
+    const draft = screen.getByRole("button", { name: "撤销添加行动" }).closest(".command-inline-draft");
+    expect(row.nextElementSibling).toBe(draft);
+    expect(draft?.nextElementSibling).toBe(next);
+    await user.keyboard("{Escape}");
+    expect(row.nextElementSibling).toBe(next);
+    expect(screen.queryByRole("button", { name: "撤销添加行动" })).not.toBeInTheDocument();
+    expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "mutate_command_editor")).toBe(false);
+  });
+
+  describe.each([false, true])("inline edit placement (advanced=%s)", advancedMode => {
+    it.each(["guided", "simple"] as const)("keeps the editor beside the selected row throughout the %s edit flow", async skillEditorLayout => {
+      const user = userEvent.setup();
+      const actions: PreparationAction[] = [
+        { type: "equipment", id: "first", skill: "skill_1", target: null },
+        { type: "servant", id: "middle", servant: "servant_1", skill: "skill_1", target: null },
+        { type: "equipment", id: "last", skill: "skill_3", target: null },
+      ];
+      mockInvoke(async command => {
+        if (command === "load_battle_scenes") {
+          const scene = makeScene("normal", "skill_1"); scene.turns[0].preparationActions = actions; return [scene];
+        }
+        if (command === "load_advanced_battle_scenes") return [{ id: "advanced", turns: [{ id: "turn", actions }], rules: [] }];
+        if (command === "get_servant_skill_targeting") return [{ servantCollectionNo: 1, skillNum: 2, skillId: 2000, targetingMode: "needsTarget", funcTargetTypes: ["ptOne"] }];
+        return [];
+      });
+      const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+      renderWithTheme(<CommandEditor projectId="edit-position" advancedMode={advancedMode} partyLineup={[makeServant(1, "甲"), makeServant(2, "乙"), makeServant(3, "丙")]} skillEditorLayout={skillEditorLayout} />);
+      if (advancedMode) await selectPreparation();
+      const edit = await screen.findByRole("button", { name: "编辑行动 2" });
+      const row = edit.closest(".battle-action-row")!;
+      const lastRow = screen.getByRole("button", { name: "编辑行动 3" }).closest(".battle-action-row")!;
+      const list = skillEditorLayout === "simple" ? screen.getByRole("region", { name: "已配置行动" }) : row.parentElement!;
+      list.scrollTop = 120;
+      await user.click(edit);
+      const draft = screen.getByRole("button", { name: "撤销添加行动" }).closest(".command-inline-draft")!;
+      const expectPosition = () => {
+        expect(row.nextElementSibling).toBe(draft);
+        expect(draft.nextElementSibling).toBe(lastRow);
+        expect(list.scrollTop).toBe(120);
+      };
+      expectPosition();
+      expect(scroll.mock.contexts).toContain(draft);
+      await user.click(within(draft as HTMLElement).getByRole("button", { name: "甲" }));
+      expectPosition();
+      await user.click(within(draft as HTMLElement).getByRole("button", { name: "技能 2" }));
+      expectPosition();
+      await user.click(within(draft as HTMLElement).getByRole("button", { name: "乙" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "编辑行动 2" })).toBeEnabled());
+      expect(screen.queryByRole("button", { name: "撤销添加行动" })).not.toBeInTheDocument();
+      expect(row.nextElementSibling).toBe(lastRow);
+      expect(list.scrollTop).toBe(120);
+      const save = advancedMode ? "save_advanced_battle_scenes" : "save_battle_scenes";
+      const args = vi.mocked(invoke).mock.calls.find(([command]) => command === save)![1] as { scenes: (BattleScene | AdvancedBattleScene)[] };
+      const turn = args.scenes[0].turns![0]; const saved = "actions" in turn ? turn.actions : turn.preparationActions;
+      expect(saved.map(action => action.id)).toEqual(["first", "middle", "last"]);
+      expect(saved[1]).toEqual(expect.objectContaining({ skill: "skill_2", target: "servant_2" }));
+      scroll.mockRestore();
+    });
+  });
+
+  it.each([false, true])("restores the selected Mash skill icons and names after saving (advanced=%s)", async advancedMode => {
+    const user = userEvent.setup();
+    const mash = { ...makeServant(1, "玛修"), variantKey: "1:3" };
+    const normal = makeScene("normal", "skill_1"); normal.turns[0].preparationActions = [];
+    let saved: (BattleScene | AdvancedBattleScene)[] = advancedMode
+      ? [{ id: "grand", turns: [{ id: "turn", actions: [] }], rules: [] }] : [normal];
+    mockInvoke(async (command, args) => {
+      if (command === "load_battle_scenes" || command === "load_advanced_battle_scenes") return saved;
+      if (command === "save_battle_scenes" || command === "save_advanced_battle_scenes") { saved = (args as { scenes: typeof saved }).scenes; return null; }
+      if (command === "get_skill_icon_paths") return [
+        { path: null, name: "技能一" }, { path: "/assets/icons/skill_00419.png", name: "时为朦胧的白垩之壁 A" }, { path: null, name: "技能三" },
+      ];
+      return [];
+    });
+    const editor = () => <CommandEditor projectId="mash-forms" advancedMode={advancedMode} partyLineup={[mash]} skillEditorLayout="simple" disableAutoSkillTargetRecognition />;
+    const { unmount } = renderWithTheme(editor());
+    if (advancedMode) await selectPreparation();
+    for (const name of ["测定时间的紫弹之薪 B", "时为朦胧的白垩之壁 A"]) {
+      const column = await screen.findByRole("group", { name: "前排 1 技能" });
+      const skill = await within(column).findByRole("button", { name: "时为朦胧的白垩之壁 A" });
+      await waitFor(() => expect(skill).toBeEnabled());
+      await user.hover(skill);
+      await user.click(within(screen.getByRole("dialog", { name: "选择玛修二技能形态" })).getByRole("button", { name }));
+      await within(screen.getByRole("region", { name: "已配置行动" })).findByText(name);
+    }
+    const turn = saved[0].turns![0];
+    const actions = "actions" in turn ? turn.actions : turn.preparationActions;
+    expect(actions.map(action => action.type === "servant" ? [action.skillFormId, action.target] : null)).toEqual([[2477450, null], [2550, null]]);
+    unmount();
+    renderWithTheme(editor());
+    if (advancedMode) await selectPreparation();
+    const list = await screen.findByRole("region", { name: "已配置行动" });
+    expect(await within(list).findByText("测定时间的紫弹之薪 B")).toBeInTheDocument();
+    expect(await within(list).findByText("时为朦胧的白垩之壁 A")).toBeInTheDocument();
+  });
+
+  it.each([false, true])("persists a quick-entry action through the existing document mutation (advanced=%s)", async advancedMode => {
+    const user = userEvent.setup();
+    const added = { type: "servant", servant: "servant_1", servantMemberId: null, servantId: 1, servantIsSupport: false, skill: "skill_2", skillSelection: null, target: null, targetMemberId: null, targetServantId: null, targetIsSupport: false };
+    mockInvoke(async command => {
+      if (command === "load_battle_scenes") return [makeScene("normal", "skill_1")];
+      if (command === "load_advanced_battle_scenes") return [{ id: "grand", turns: [{id:"turn",actions:[]}], rules:[] }];
+      return [];
+    });
+    renderWithTheme(<CommandEditor projectId="quick-team" advancedMode={advancedMode} partyLineup={[makeServant(1,"甲"),makeServant(2,"乙"),makeServant(3,"丙")]} skillEditorLayout="simple" />);
+    if (advancedMode) await selectPreparation();
+    const column = await screen.findByRole("group", { name: "前排 1 技能" });
+    const list = screen.getByRole("region", { name: "已配置行动" });
+    Object.defineProperty(list, "scrollHeight", { configurable: true, value: 600 });
+    list.scrollTop = 40;
+    await waitFor(() => expect(within(column).getByRole("button", { name: "技能 2" })).toBeEnabled());
+    await user.click(within(column).getByRole("button", { name: "技能 2" }));
+    const save = advancedMode ? "save_advanced_battle_scenes" : "save_battle_scenes";
+    await waitFor(() => expect(vi.mocked(invoke).mock.calls.some(([command]) => command === save)).toBe(true));
+    const args = [...vi.mocked(invoke).mock.calls].reverse().find(([command]) => command === save)![1] as { scenes: (BattleScene | AdvancedBattleScene)[] };
+    const turn = args.scenes[0].turns![0];
+    const actions = "actions" in turn ? turn.actions : turn.preparationActions;
+    expect(actions[actions.length - 1]).toEqual(expect.objectContaining(added));
+    await waitFor(() => expect(list.scrollTop).toBe(600));
+    expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "prepare_simple_skill")).toBe(false);
+    if (!advancedMode) expect(actions[0]).toEqual(expect.objectContaining({id:"normal_eq",skill:"skill_1"}));
+    const usedSkill = () => within(screen.getByRole("group", { name: "前排 1 技能" })).getByRole("button", { name: "技能 2" });
+    await waitFor(() => expect(usedSkill()).toHaveClass("is-used"));
+    expect(usedSkill()).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "添加 Turn" }));
+    await waitFor(() => expect(screen.getByRole("group", { name: "第 2/2 回合" })).toBeInTheDocument());
+    expect(usedSkill()).toHaveClass("is-used");
+    if (!advancedMode) {
+      await user.click(screen.getByRole("button", { name: "添加 Battle" }));
+      await waitFor(() => expect(screen.getByRole("group", { name: "第 2/2 面" })).toBeInTheDocument());
+      expect(usedSkill()).toHaveClass("is-used");
+    }
+    await waitFor(() => expect(usedSkill()).toBeEnabled());
+    await user.click(usedSkill());
+    await screen.findByRole("button", { name: "编辑行动 1" });
+    expect(usedSkill()).toHaveClass("is-used");
+  });
+
+  it("shows saved skill usage separately for owned and support copies of the same servant", async () => {
+    mockInvoke(async command => {
+      if (command === "load_battle_scenes") {
+        const scene = makeScene("normal", "skill_1");
+        scene.turns[0].preparationActions = [{ type: "servant", id: "used", servant: "servant_1", servantMemberId: "owned", servantId: 1, servantIsSupport: false, skill: "skill_2", target: null }];
+        return [scene];
+      }
+      return [];
+    });
+    const owned = makeServant(1, "自有"); const support = makeServant(1, "助战");
+    renderWithTheme(<CommandEditor projectId="usage-team" skillEditorLayout="simple" partyLineup={[owned, null, support]} partyMembers={[
+      { memberId: "owned", servant: owned, isSupport: false }, { servant: null, isSupport: false }, { memberId: "support", servant: support, isSupport: true },
+    ]} />);
+    const ownedColumn = await screen.findByRole("group", { name: "前排 1 技能" });
+    expect(within(ownedColumn).getByRole("button", { name: "技能 2" })).toHaveClass("is-used");
+    expect(within(screen.getByRole("group", { name: "前排 3 技能" })).getByRole("button", { name: "技能 2" })).not.toHaveClass("is-used");
+  });
+
+  it.each([false, true])("shares saved commands when switching skill layout (advanced=%s)", async advancedMode => {
+    const user = userEvent.setup();
+    const action: PreparationAction = { type: "equipment", id: "same-action", skill: "skill_1", target: null };
+    mockInvoke(async command => {
+      if (command === "load_battle_scenes") return [{ ...makeScene("scene", "skill_1"), turns: [{ ...makeScene("scene", "skill_1").turns[0], preparationActions: [action] }] }];
+      if (command === "load_advanced_battle_scenes") return [{ id: "advanced", turns: [{id:"turn",actions:[action]}], rules:[] }];
+      return [];
+    });
+    const { rerender } = renderWithTheme(<CommandEditor projectId="layout-team" advancedMode={advancedMode} partyLineup={[]} skillEditorLayout="guided" />);
+    if (advancedMode) await selectPreparation();
+    await screen.findByRole("button", { name: "添加技能指令" });
+    rerender(<CommandEditor projectId="layout-team" advancedMode={advancedMode} partyLineup={[]} skillEditorLayout="simple" />);
+    expect(screen.getByRole("group", { name: "简易技能设置" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "添加技能指令" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "编辑行动 1" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "令咒 / 敌方目标" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "编辑行动 1" }));
+    await user.click(screen.getByRole("button", { name: "撤销添加行动" }));
+    rerender(<CommandEditor projectId="layout-team" advancedMode={advancedMode} partyLineup={[]} skillEditorLayout="guided" />);
+    expect(screen.getByRole("button", { name: "添加技能指令" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "编辑行动 1" })).toHaveLength(1);
+    expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "save_battle_scenes" || command === "save_advanced_battle_scenes")).toHaveLength(0);
+  });
+
   it.each(["basic", "control"])("separates Grand settings and returns to preparation when leaving first-turn %s", async firstTurnStep => {
     const user = userEvent.setup();
     mockInvoke(async command => {

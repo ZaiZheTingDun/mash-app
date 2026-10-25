@@ -4,7 +4,7 @@ import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
 import { invoke } from "../../tauri";
 import { featureToggles } from "../../featureToggles";
-import type { BattleStartPanel, MysticCodeGender } from "../../types/appUiSettings";
+import type { BattleStartPanel, MysticCodeGender, SkillEditorLayout } from "../../types/appUiSettings";
 import type { Project } from "../../types/project";
 import type { AppColorTheme } from "../../types/theme";
 import { SettingsDataManagementPage } from "./SettingsDataManagementPage";
@@ -28,6 +28,7 @@ interface SettingsPageProps {
   onOpenChange: (open: boolean) => void;
   onSectionChange: (section: SettingsSection) => void;
   onProjectsImported?: (projects: Project[]) => void;
+  onSkillEditorLayoutChange?: (value: SkillEditorLayout) => void;
   onBattleStartPanelChange?: (value: BattleStartPanel) => void;
   mysticCodeGender?: MysticCodeGender;
   onMysticCodeGenderChange?: (value: MysticCodeGender) => void;
@@ -39,7 +40,7 @@ interface SettingsPageProps {
 
 type SettingsRenderProps = Pick<
   SettingsPageProps,
-  "onProjectsImported" | "onBattleStartPanelChange" | "mysticCodeGender" | "onMysticCodeGenderChange" | "colorTheme" | "onColorThemeChange" | "colorThemeError" | "onColorThemeReload"
+  "onProjectsImported" | "onSkillEditorLayoutChange" | "onBattleStartPanelChange" | "mysticCodeGender" | "onMysticCodeGenderChange" | "colorTheme" | "onColorThemeChange" | "colorThemeError" | "onColorThemeReload"
 > & {
   onResourcesExitBlockedChange: (blocked: boolean) => void;
 };
@@ -62,6 +63,7 @@ const navItems: Array<{
         onColorThemeReload={props.onColorThemeReload}
         onColorThemeChange={props.onColorThemeChange}
         onBattleStartPanelChange={props.onBattleStartPanelChange}
+        onSkillEditorLayoutChange={props.onSkillEditorLayoutChange}
         mysticCodeGender={props.mysticCodeGender}
         onMysticCodeGenderChange={props.onMysticCodeGenderChange}
       />
@@ -114,6 +116,7 @@ export function SettingsPage({
   onSectionChange,
   onProjectsImported,
   onBattleStartPanelChange,
+  onSkillEditorLayoutChange,
   mysticCodeGender,
   onMysticCodeGenderChange,
   colorTheme,
@@ -197,7 +200,7 @@ export function SettingsPage({
               { basic: "GENERAL", recognition: "RECOGNITION", dataManagement: "PARTY", debug: "DEBUG", resources: "RESOURCES", selfCheck: "SELF CHECK" }[activeSection]
             } stacked rail>{activeItem.label}</SectionHeading>
             {activeItem.render(open, {
-              onProjectsImported, onBattleStartPanelChange, mysticCodeGender,
+              onProjectsImported, onBattleStartPanelChange, onSkillEditorLayoutChange, mysticCodeGender,
               colorTheme, onColorThemeChange,
               colorThemeError, onColorThemeReload,
               onMysticCodeGenderChange, onResourcesExitBlockedChange: setResourcesExitBlocked,

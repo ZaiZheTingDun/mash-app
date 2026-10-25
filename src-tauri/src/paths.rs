@@ -160,6 +160,8 @@ pub(crate) struct AppUiSettings {
     #[serde(default)]
     pub(crate) battle_start_panel: BattleStartPanel,
     #[serde(default)]
+    pub(crate) skill_editor_layout: SkillEditorLayout,
+    #[serde(default)]
     pub(crate) servant_picker: ServantPickerSettings,
     /// Global portrait selections keyed by `variantKey`. When present, the
     /// chosen portrait id overrides the default first portrait for
@@ -196,6 +198,14 @@ pub(crate) enum BattleStartPanel {
     OperationLog,
     RunStatus,
     None,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum SkillEditorLayout {
+    #[default]
+    Guided,
+    Simple,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]

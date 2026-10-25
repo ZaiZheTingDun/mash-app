@@ -27,6 +27,12 @@ pub enum Action {
         #[serde(rename = "servantIsSupport", default)]
         servant_is_support: bool,
         skill: Option<String>,
+        #[serde(
+            rename = "skillFormId",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        skill_form_id: Option<u32>,
         #[serde(rename = "skillSelection", default)]
         skill_selection: Option<SkillSelection>,
         target: Option<String>,

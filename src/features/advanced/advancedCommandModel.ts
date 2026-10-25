@@ -1,11 +1,10 @@
+import { COMMAND_SPELL_LABELS, SKILL_LABELS, type PartySlot } from "../battle/battleSceneModel";
 import { servantLabel } from "../../components/common/battleActorLabels";
 import type {
   AdvancedBattleScene,
   AdvancedBattleTurn,
   AdvancedCommandCardCondition,
   PreparationAction,
-  SkillSelection,
-  SkillSelectionType,
 } from "../../types/command";
 import type {
   GrandCardPriority,
@@ -24,38 +23,10 @@ import commandBgArts from "../../../src-tauri/resources/images/command_bg/comman
 import commandBgBuster from "../../../src-tauri/resources/images/command_bg/command_bg_b.png";
 import commandBgQuick from "../../../src-tauri/resources/images/command_bg/command_bg_q.png";
 
-export type PartySlot = `servant_${1 | 2 | 3 | 4 | 5 | 6}`;
+export type { PartySlot, PrepSource, PrepDraft } from "../battle/battleSceneModel";
+export { SKILLS, SKILL_LABELS, COMMAND_SPELL_LABELS } from "../battle/battleSceneModel";
 export type FrontServant = Extract<PartySlot, "servant_1" | "servant_2" | "servant_3">;
-export type PrepSource = "enemyTarget" | "equipment" | "commandSpell" | PartySlot;
-export type PrepDraft =
-  | { step: "source" }
-  | { step: "option"; source: PrepSource }
-  | {
-    step: "skillSelection";
-    source: PrepSource;
-    option: string;
-    selectionType: SkillSelectionType;
-    options: { index: number; label: string }[];
-  }
-  | {
-    step: "target";
-    source: PrepSource;
-    option: string;
-    allowNoTarget?: boolean;
-    skillSelection?: SkillSelection | null;
-  }
-  | { step: "orderChange"; source: "equipment"; option: string; front: PartySlot | null };
 
-export const SKILLS = ["skill_1", "skill_2", "skill_3"] as const;
-export const SKILL_LABELS: Record<string, string> = {
-  skill_1: "技能 1",
-  skill_2: "技能 2",
-  skill_3: "技能 3",
-};
-export const COMMAND_SPELL_LABELS: Record<string, string> = {
-  np_release: "宝具解放",
-  restore: "灵基修复",
-};
 export const EMPTY_STARTUP_ACTIONS: PreparationAction[] = [];
 export const COMMAND_BG_BY_SUIT: Record<Exclude<AdvancedCommandCardCondition["suit"], "any">, string> = {
   arts: commandBgArts,

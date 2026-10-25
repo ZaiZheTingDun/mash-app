@@ -53,6 +53,7 @@ import {
   DEFAULT_BATTLE_START_PANEL,
   normalizeBattleStartPanel,
   type BattleStartPanel,
+  type SkillEditorLayout,
   type MysticCodeGender,
 } from "./types/appUiSettings";
 import type { AdvancedBattleScene, BattleScene } from "./types/command";
@@ -161,6 +162,7 @@ function App({
   const [battleDailyStatistics, setBattleDailyStatistics] =
     useState<BattleDailyStatistics | null>(null);
   const [battleRunStatusOpen, setBattleRunStatusOpen] = useState(false);
+  const [skillEditorLayout, setSkillEditorLayout] = useState<SkillEditorLayout>("guided");
   const [battleStartPanel, setBattleStartPanel] = useState<BattleStartPanel>(
     DEFAULT_BATTLE_START_PANEL
   );
@@ -639,6 +641,9 @@ function App({
   }, [refreshProjects]);
 
   useEffect(() => {
+    void invoke<SkillEditorLayout>("get_skill_editor_layout")
+      .then(value => { if (value === "guided" || value === "simple") setSkillEditorLayout(value); })
+      .catch(console.error);
     void invoke<BattleStartPanel>("get_battle_start_panel")
       .then((value) => setBattleStartPanel(normalizeBattleStartPanel(value)))
       .catch(console.error);
@@ -1020,6 +1025,7 @@ function App({
               onSectionChange={setSettingsSection}
               onProjectsImported={handleProjectsImported}
               onBattleStartPanelChange={setBattleStartPanel}
+              onSkillEditorLayoutChange={setSkillEditorLayout}
               colorTheme={colorTheme}
               colorThemeError={colorThemeError}
               onColorThemeReload={onColorThemeReload}
@@ -1162,6 +1168,7 @@ function App({
               ) : view === "command" ? (
                 <>
                   <CommandEditor
+                    skillEditorLayout={skillEditorLayout}
                     homeMasterCode={mysticCodes.find(code => code.id === homeMasterFigureId) ?? null}
                     mysticCodeGender={mysticCodeGender}
                     onBusyChange={setCommandBusy}
