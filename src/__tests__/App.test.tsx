@@ -118,6 +118,29 @@ describe("App active project restore", () => {
       command === "get_servants" || command === "get_craft_essences")).toBe(false);
   });
 
+  it("opens packet capture without resources or runtime and only installs on click", async () => {
+    let openTool: (() => void) | undefined;
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "packet-capture-requested") {
+        openTool = () => handler({ event, id: 0, payload: null } as Parameters<typeof handler>[0]);
+      }
+      return () => {};
+    });
+    installAppMock(null, { resourcesInstalled: false, runtimeInstalled: false });
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    await screen.findByText("资源管理");
+    await act(async () => openTool?.());
+    expect(await screen.findByRole("main", { name: "抓包" })).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith("install_capture_certificate");
+    await user.click(screen.getByRole("button", { name: "安装证书" }));
+    expect(invoke).toHaveBeenCalledWith("install_capture_certificate");
+    expect(vi.mocked(invoke).mock.calls.some(([command]) =>
+      command === "get_servants" || command === "get_craft_essences" || command === "get_mystic_codes")).toBe(false);
+    await user.click(screen.getByRole("button", { name: "返回" }));
+    expect(await screen.findByText("资源管理")).toBeInTheDocument();
+  });
+
   it("reloads both backend catalogs after resource installation and removes the listener", async () => {
     installAppMock("project-1");
     let updated: Parameters<typeof listen>[1] | undefined;

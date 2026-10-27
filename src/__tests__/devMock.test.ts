@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { invokeDevMock } from "../devMock";
 import type { Project, ProjectCatalog } from "../types/project";
 
+it("requires the desktop runtime for packet capture device operations", async () => {
+  for (const command of ["install_capture_certificate", "configure_packet_capture", "start_packet_capture"]) {
+    await expect(invokeDevMock(command)).rejects.toThrow("请在 Mash 桌面端连接设备后执行此操作");
+  }
+});
+
 describe("invokeDevMock project catalog", () => {
   it("supports the complete project grouping workflow", async () => {
     const initialProjects = await invokeDevMock<Project[]>("list_projects");

@@ -26,6 +26,9 @@ impl AutomationKind {
 pub(crate) enum DeviceOperation {
     Automation(AutomationKind),
     ResetResolution,
+    InstallCaptureCertificate,
+    ConfigurePacketCapture,
+    StartPacketCapture,
 }
 
 impl DeviceOperation {
@@ -33,6 +36,9 @@ impl DeviceOperation {
         match self {
             Self::Automation(kind) => format!("{}正在运行中，请先停止", kind.label()),
             Self::ResetResolution => "设备分辨率正在重置，请稍后重试".into(),
+            Self::InstallCaptureCertificate => "抓包证书正在安装，请稍后重试".into(),
+            Self::ConfigurePacketCapture => "Reqable 正在配置，请稍后重试".into(),
+            Self::StartPacketCapture => "抓包正在启动，请稍后重试".into(),
         }
     }
 }
@@ -116,6 +122,67 @@ mod tests {
                 AutomationKind::ServantEnhancement
             ))
             .is_ok());
+    }
+
+    #[test]
+    fn capture_certificate_installation_excludes_other_device_operations() {
+        let coordinator = DeviceOperationCoordinator::default();
+        let lease = coordinator
+            .reserve(DeviceOperation::InstallCaptureCertificate)
+            .unwrap();
+        assert!(coordinator
+            .reserve(DeviceOperation::ResetResolution)
+            .is_err());
+        assert!(coordinator
+            .reserve(DeviceOperation::InstallCaptureCertificate)
+            .is_err());
+        assert!(coordinator
+            .reserve(DeviceOperation::Automation(AutomationKind::Battle))
+            .is_err());
+        drop(lease);
+        assert!(coordinator.require_idle().is_ok());
+    }
+
+    #[test]
+    fn packet_capture_configuration_excludes_automation_and_certificate_installation() {
+        let coordinator = DeviceOperationCoordinator::default();
+        let lease = coordinator
+            .reserve(DeviceOperation::ConfigurePacketCapture)
+            .unwrap();
+        for operation in [
+            DeviceOperation::InstallCaptureCertificate,
+            DeviceOperation::ConfigurePacketCapture,
+            DeviceOperation::StartPacketCapture,
+            DeviceOperation::ResetResolution,
+            DeviceOperation::Automation(AutomationKind::Battle),
+        ] {
+            assert_eq!(
+                coordinator.reserve(operation).unwrap_err(),
+                "Reqable 正在配置，请稍后重试"
+            );
+        }
+        drop(lease);
+        assert!(coordinator.require_idle().is_ok());
+    }
+
+    #[test]
+    fn starting_capture_excludes_maintenance_and_automation_until_the_worker_finishes() {
+        let coordinator = DeviceOperationCoordinator::default();
+        let lease = coordinator
+            .reserve(DeviceOperation::StartPacketCapture)
+            .unwrap();
+        for operation in [
+            DeviceOperation::InstallCaptureCertificate,
+            DeviceOperation::ConfigurePacketCapture,
+            DeviceOperation::Automation(AutomationKind::Battle),
+        ] {
+            assert_eq!(
+                coordinator.reserve(operation).unwrap_err(),
+                "抓包正在启动，请稍后重试"
+            );
+        }
+        drop(lease);
+        assert!(coordinator.require_idle().is_ok());
     }
 
     #[test]

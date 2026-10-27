@@ -549,6 +549,12 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       return { importedProjects: [] } as T;
     case "check_adb":
       return { connected: selectedAdbSerial != null, deviceName: selectedAdbSerial } as T;
+    case "install_capture_certificate":
+    case "configure_packet_capture":
+    case "start_packet_capture":
+      throw new Error("请在 Mash 桌面端连接设备后执行此操作");
+    case "get_packet_capture_response":
+      return { phase: "idle", serial: null, message: "", response: null } as T;
     case "get_device_resolution":
       return deviceResolutionStatus() as T;
     case "reset_device_resolution": {

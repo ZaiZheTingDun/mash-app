@@ -68,6 +68,7 @@ export function WindowTitlebar({ ready }: { ready: boolean }) {
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Content size="1" align="end">
+            <DropdownMenu.Item disabled={!ready} onSelect={() => run(() => emit("packet-capture-requested"))}>抓包…</DropdownMenu.Item>
             <DropdownMenu.Item disabled={!ready} onSelect={() => run(() => emit("save-adb-screenshot-requested"))}>截图…</DropdownMenu.Item>
             <DropdownMenu.Item disabled={!ready} onSelect={() => run(() => emit("device-resolution-requested"))}>重置设备分辨率…</DropdownMenu.Item>
             <DropdownMenu.Item disabled={!ready} onSelect={() => run(() => emit("self-check-requested"))}>自检…</DropdownMenu.Item>

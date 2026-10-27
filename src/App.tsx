@@ -31,6 +31,7 @@ import { SetupPage } from "./features/setup/SetupPage";
 import { SettingsPage, type SettingsSection } from "./features/settings/SettingsPage";
 import { SelfCheckDialog } from "./features/settings/SelfCheckDialog";
 import { DeviceResolutionDialog } from "./features/device-resolution/DeviceResolutionDialog";
+import { PacketCapturePage } from "./features/packet-capture/PacketCapturePage";
 import { SoftwareUpdateDialog } from "./features/settings/SoftwareUpdateDialog";
 import { createInitialProjectSlots } from "./features/team/projectSlots";
 import { relocateGrandCardStrategySlots, relocateGrandServants } from "./features/advanced/grandRuleSlots";
@@ -84,6 +85,7 @@ type View =
   | "craftEssenceEnhancement"
   | "friendPointSummon"
   | "rankUpQuest"
+  | "packetCapture"
   | "debug";
 
 interface AutomationEvent {
@@ -499,6 +501,10 @@ function App({
     const unlistenDeviceResolution = listen("device-resolution-requested", () => {
       setDeviceResolutionOpen(true);
     });
+    const unlistenPacketCapture = listen("packet-capture-requested", () => {
+      setSettingsOpen(false);
+      setView("packetCapture");
+    });
 
     return () => {
       cancelled = true;
@@ -507,6 +513,7 @@ function App({
       unlistenResourceManager.then((fn) => fn());
       unlistenSaveAdbScreenshot.then((fn) => fn());
       unlistenDeviceResolution.then((fn) => fn());
+      unlistenPacketCapture.then((fn) => fn());
     };
   }, [checkForUpdates, runSelfCheck, saveAdbScreenshot]);
 
@@ -1036,7 +1043,9 @@ function App({
           )}
           {/* Keep task pages subscribed to runtime events while settings cover them. */}
           <Box style={{ display: settingsOpen ? "none" : "contents" }}>
-          {!setupReady ? (
+          {view === "packetCapture" ? (
+            <PacketCapturePage onBack={handleOpenHome} />
+          ) : !setupReady ? (
             !settingsOpen && <SetupPage onReady={() => setSetupReady(true)} />
           ) : view === "home" ? (
             <HomePage
