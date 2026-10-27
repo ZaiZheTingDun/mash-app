@@ -10,6 +10,7 @@ interface SetupPageProps {
   mode?: "setup" | "manage";
   onBack?: () => void;
   onReady?: () => void;
+  onExitBlockedChange?: (blocked: boolean) => void;
 }
 
 interface ResourceManagementPanelProps {
@@ -77,6 +78,8 @@ export function ResourceManagementPanel({
   useEffect(() => {
     onExitBlockedChange?.(exitBlocked);
   }, [exitBlocked, onExitBlockedChange]);
+
+  useEffect(() => () => onExitBlockedChange?.(false), [onExitBlockedChange]);
 
   return (
     <Flex direction="column" gap="4" className={embedded ? "resource-panel-embedded" : undefined}>
@@ -157,11 +160,11 @@ export function ResourceManagementPanel({
   );
 }
 
-export function SetupPage({ mode = "setup", onBack, onReady }: SetupPageProps) {
+export function SetupPage({ mode = "setup", onBack, onReady, onExitBlockedChange }: SetupPageProps) {
   return (
     <Flex direction="column" className="setup-page">
       <Box className="setup-panel">
-        <ResourceManagementPanel mode={mode} onBack={onBack} onReady={onReady} />
+        <ResourceManagementPanel mode={mode} onBack={onBack} onReady={onReady} onExitBlockedChange={onExitBlockedChange} />
       </Box>
     </Flex>
   );
