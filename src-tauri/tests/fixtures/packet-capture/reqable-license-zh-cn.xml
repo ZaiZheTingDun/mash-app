@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<!-- Reduced from the reported Chinese 1920x1080 first-run UIAutomator hierarchy. -->
+<hierarchy rotation="0"><node text="" class="android.widget.FrameLayout" package="com.reqable.android" content-desc="" enabled="true" bounds="[0,0][1920,1080]">
+  <node text="" class="android.view.View" package="com.reqable.android" content-desc="" clickable="false" enabled="true" bounds="[0,0][1920,160]">
+    <node text="" class="android.view.View" package="com.reqable.android" content-desc="用户许可协议" clickable="false" enabled="true" bounds="[36,82][238,126]" />
+  </node>
+  <node text="" class="android.widget.ScrollView" package="com.reqable.android" content-desc="" scrollable="true" enabled="true" bounds="[0,160][1920,905]">
+    <node text="" class="android.view.View" package="com.reqable.android" content-desc="欢迎您使用Reqable！" enabled="true" bounds="[24,184][405,239]" />
+    <node text="" class="android.view.View" package="com.reqable.android" content-desc="关于Reqable" enabled="true" bounds="[24,470][249,525]" />
+    <node text="" class="android.view.View" package="com.reqable.android" content-desc="隐私权限" enabled="true" bounds="[24,755][180,810]" />
+  </node>
+  <node text="" class="android.widget.Button" package="com.reqable.android" content-desc="同意" checkable="false" checked="false" clickable="false" enabled="false" focusable="true" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[36,929][1884,1044]" />
+</node></hierarchy>

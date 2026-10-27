@@ -53,6 +53,10 @@ function installAppMock(
 ) {
   mockInvoke(async (cmd: string) => {
     switch (cmd) {
+      case "get_packet_capture_workspace":
+        return { capture: { phase: "idle", serial: null, message: "", response: null }, history: { records: [], selected: null } };
+      case "setup_packet_capture":
+        return { serial: "device", packageName: "com.bilibili.fatego", reqableVersion: "3.3.5", message: "环境配置完成" };
       case "get_runtime_status":
         return { installed: options.runtimeInstalled ?? options.resourcesInstalled ?? true };
       case "get_asset_bundle_status":
@@ -118,7 +122,7 @@ describe("App active project restore", () => {
       command === "get_servants" || command === "get_craft_essences")).toBe(false);
   });
 
-  it("opens packet capture without resources or runtime and only installs on click", async () => {
+  it("opens packet capture without resources or runtime and only configures the environment on click", async () => {
     let openTool: (() => void) | undefined;
     vi.mocked(listen).mockImplementation(async (event, handler) => {
       if (event === "packet-capture-requested") {
@@ -132,9 +136,9 @@ describe("App active project restore", () => {
     await screen.findByText("资源管理");
     await act(async () => openTool?.());
     expect(await screen.findByRole("main", { name: "抓包" })).toBeInTheDocument();
-    expect(invoke).not.toHaveBeenCalledWith("install_capture_certificate");
-    await user.click(screen.getByRole("button", { name: "安装证书" }));
-    expect(invoke).toHaveBeenCalledWith("install_capture_certificate");
+    expect(invoke).not.toHaveBeenCalledWith("setup_packet_capture");
+    await user.click(screen.getByRole("button", { name: "环境配置" }));
+    expect(invoke).toHaveBeenCalledWith("setup_packet_capture");
     expect(vi.mocked(invoke).mock.calls.some(([command]) =>
       command === "get_servants" || command === "get_craft_essences" || command === "get_mystic_codes")).toBe(false);
     await user.click(screen.getByRole("button", { name: "返回" }));
@@ -478,6 +482,33 @@ describe("App active project restore", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows environment setup progress in the normal operation log and removes its listener", async () => {
+    let logHandler: ((message: string, level: "info" | "warn") => void) | undefined;
+    const unlisten = vi.fn();
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === "operation-log") {
+        logHandler = (message, level) => handler({ event, id: 0, payload: { message, level } } as Parameters<typeof handler>[0]);
+        return unlisten;
+      }
+      return () => {};
+    });
+    installAppMock("project-1");
+    const user = userEvent.setup();
+    const view = renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    await screen.findByText("第一套");
+    act(() => {
+      logHandler?.("正在安装并验证系统证书…", "info");
+      logHandler?.("抓包环境配置失败：无法取得 root 权限", "warn");
+    });
+    await user.click(screen.getByRole("button", { name: /操作日志/ }));
+    expect(screen.getByText("正在安装并验证系统证书…")).toBeInTheDocument();
+    expect(screen.getByText("抓包环境配置失败：无法取得 root 权限")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /显示调试/ })).not.toBeChecked();
+    view.unmount();
+    await act(async () => {});
+    expect(unlisten).toHaveBeenCalledOnce();
+  });
+
   it("routes runtime diagnostics into the hidden debug operation log", async () => {
     let debugLogHandler: ((message: string) => void) | null = null;
     vi.mocked(listen).mockImplementation(async (event, handler) => {
@@ -795,7 +826,11 @@ describe("App active project restore", () => {
     };
     mockInvoke(async (cmd: string) => {
       switch (cmd) {
-        case "get_runtime_status":
+        case "get_packet_capture_workspace":
+        return { capture: { phase: "idle", serial: null, message: "", response: null }, history: { records: [], selected: null } };
+      case "setup_packet_capture":
+        return { serial: "device", packageName: "com.bilibili.fatego", reqableVersion: "3.3.5", message: "环境配置完成" };
+      case "get_runtime_status":
         case "get_asset_bundle_status":
           return { installed: true };
         case "get_servants":
@@ -857,7 +892,11 @@ describe("App active project restore", () => {
     mockInvoke(async (cmd: string) => {
       if (cmd === "save_adb_screenshot") return "/tmp/mash-screenshot.png";
       switch (cmd) {
-        case "get_runtime_status":
+        case "get_packet_capture_workspace":
+        return { capture: { phase: "idle", serial: null, message: "", response: null }, history: { records: [], selected: null } };
+      case "setup_packet_capture":
+        return { serial: "device", packageName: "com.bilibili.fatego", reqableVersion: "3.3.5", message: "环境配置完成" };
+      case "get_runtime_status":
         case "get_asset_bundle_status":
           return { installed: true };
         case "get_servants":

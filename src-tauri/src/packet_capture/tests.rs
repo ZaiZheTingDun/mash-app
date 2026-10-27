@@ -48,6 +48,9 @@ fn fake_install_at_path(
         assert_eq!(&args[..3], &["-s", "device-1", "shell"]);
         let script = args[3];
         commands.push(script.to_string());
+        if script.contains("uiautomator dump") {
+            return Ok(br#"<hierarchy><node package="com.reqable.android" content-desc="Reqable" /></hierarchy>"#.to_vec());
+        }
         if script == "pm path com.reqable.android" {
             Ok(b"package:/data/app/reqable/base.apk\n".to_vec())
         } else if script == "getprop ro.build.version.sdk" {
@@ -135,7 +138,12 @@ fn install_certificate_on_authorized_device() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("resources/adb")
         .join(crate::platform::adb_executable_name());
-    let result = install(&path, Some(&serial)).unwrap();
+    let result = install(
+        &path,
+        Some(&serial),
+        &crate::device_operation::OperationCancellation::default(),
+    )
+    .unwrap();
     println!("{}: {}", result.serial, result.message);
     assert!(!result.fingerprint.is_empty());
 }

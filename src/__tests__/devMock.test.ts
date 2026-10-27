@@ -3,7 +3,7 @@ import { invokeDevMock } from "../devMock";
 import type { Project, ProjectCatalog } from "../types/project";
 
 it("requires the desktop runtime for packet capture device operations", async () => {
-  for (const command of ["install_capture_certificate", "configure_packet_capture", "start_packet_capture"]) {
+  for (const command of ["install_capture_certificate", "configure_packet_capture", "setup_packet_capture", "start_packet_capture", "stop_packet_capture"]) {
     await expect(invokeDevMock(command)).rejects.toThrow("请在 Mash 桌面端连接设备后执行此操作");
   }
 });

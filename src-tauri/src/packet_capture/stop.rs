@@ -1,6 +1,26 @@
 use super::{capture::decode_status, client, run_adb, AdbCommand};
 use std::{path::Path, time::Duration};
 
+/// Called only after the cancelled worker has released its device lease. A
+/// force-stop also dismisses pending VPN consent, so late approval cannot restart it.
+pub(crate) fn stop_interrupted_capture(adb_path: &Path, serial: &str) -> Result<(), String> {
+    stop_interrupted_using(serial, &mut |args| run_adb(adb_path, args))
+}
+
+fn stop_interrupted_using(serial: &str, run: &mut AdbCommand<'_>) -> Result<(), String> {
+    let stop = ["-s", serial, "shell", "am force-stop com.reqable.android"];
+    if run(&stop).is_err() {
+        run(&["-s", serial, "wait-for-device"])?;
+        run(&stop).map_err(|_| "无法停止 Reqable，请检查设备连接后重试")?;
+    }
+    run(&["-s", serial, "wait-for-device"])?;
+    let output = run(&["-s", serial, "shell", "command -v pidof >/dev/null || exit 1; if pidof com.reqable.android >/dev/null; then echo MASH_REQABLE_RUNNING; else echo MASH_REQABLE_STOPPED; fi"])?;
+    if output.trim_ascii() != b"MASH_REQABLE_STOPPED" {
+        return Err("无法确认 Reqable 已停止，请在设备上关闭 Reqable 后重试".into());
+    }
+    Ok(())
+}
+
 pub(super) fn stop_capture(adb_path: &Path, serial: &str) -> Result<(), String> {
     let client = client::Client::new()?;
     stop_using(
@@ -39,6 +59,46 @@ fn stop_using(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interrupted_task_stop_keeps_the_same_device_and_requires_confirmed_process_exit() {
+        for disconnected in [false, true] {
+            for running in [false, true] {
+                let mut commands = Vec::new();
+                let mut attempts = 0;
+                let result = stop_interrupted_using("pinned", &mut |args| {
+                    assert_eq!(&args[..2], &["-s", "pinned"]);
+                    commands.push(args.join(" "));
+                    if args.last() == Some(&"am force-stop com.reqable.android") {
+                        attempts += 1;
+                        if disconnected && attempts == 1 {
+                            return Err("offline".into());
+                        }
+                    }
+                    Ok(if args
+                        .last()
+                        .is_some_and(|arg| arg.contains("MASH_REQABLE_STOPPED"))
+                    {
+                        if running {
+                            "MASH_REQABLE_RUNNING"
+                        } else {
+                            "MASH_REQABLE_STOPPED"
+                        }
+                    } else {
+                        ""
+                    }
+                    .as_bytes()
+                    .to_vec())
+                });
+                assert_eq!(result.is_err(), running);
+                assert_eq!(attempts, if disconnected { 2 } else { 1 });
+                assert!(commands
+                    .last()
+                    .unwrap()
+                    .contains("pidof com.reqable.android"));
+            }
+        }
+    }
 
     #[test]
     fn stop_waits_for_inactive_and_restores_its_forward_after_transport_loss() {

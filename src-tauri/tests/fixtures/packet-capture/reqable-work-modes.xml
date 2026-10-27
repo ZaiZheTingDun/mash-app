@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<!-- Reduced from the reported first-run Work Modes hierarchy. -->
+<hierarchy rotation="0"><node text="" class="android.widget.FrameLayout" package="com.reqable.android" content-desc="" enabled="true" bounds="[0,0][1920,1080]">
+  <node text="" class="android.view.View" package="com.reqable.android" content-desc="Work Modes" clickable="false" enabled="true" bounds="[36,82][225,126]" />
+  <node NAF="true" text="" class="android.view.View" package="com.reqable.android" content-desc="" clickable="true" enabled="true" bounds="[1819,65][1896,143]" />
+  <node text="" class="android.view.View" package="com.reqable.android" content-desc="Collaborative Mode (*)&#10;Works together with the Reqable desktop app." clickable="true" enabled="true" bounds="[24,184][1896,393]" />
+  <node text="" class="android.view.View" package="com.reqable.android" content-desc="Standalone Mode&#10;Only for standalone use on mobile phone." clickable="true" enabled="true" bounds="[24,393][1896,602]" />
+</node></hierarchy>

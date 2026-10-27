@@ -8,6 +8,7 @@
 | 从者强化 | JP | [从者强化](enhancement-automation.md) |
 | 礼装强化与丸子制作 | CN | [概念礼装强化](craft-essence-enhancement-automation.md) |
 | 友情点召唤 | CN | [友情点召唤](friend-point-summon-automation.md) |
+| 抓包环境配置 | CN | [抓包环境配置](packet-capture.md) |
 
 设备使用权由 `DeviceOperationCoordinator` 统一互斥管理。`AutomationKind` 只描述自动化流程；`DeviceOperation` 区分自动化和分辨率重置等设备维护操作，各操作持有租约直到 worker 退出。Rust 持有运行状态和计数，前端根据事件展示。
 

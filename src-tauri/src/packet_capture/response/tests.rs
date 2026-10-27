@@ -75,7 +75,7 @@ fn body_reading_handles_inline_base64_and_files_without_lossy_utf8() {
     )
     .is_err());
     assert_eq!(
-        display_body(vec![0xff, 0x00]).unwrap(),
+        raw_body(vec![0xff, 0x00]).unwrap(),
         ("Base64（二进制响应）".into(), "/wA=".into())
     );
 }
@@ -153,23 +153,24 @@ fn cache_reads_use_binary_exec_out_and_reject_partial_files() {
 }
 
 #[test]
-fn encoded_cn_json_and_gzip_are_displayed_readably_while_other_text_is_preserved() {
-    let original = br#"{"cache":{"userSvt":[{"id":1}],"userItem":[]}}"#;
-    let encoded = URL_SAFE.encode(original).replace('=', "%3D");
-    for bytes in [original.to_vec(), encoded.into_bytes()] {
-        let (format, text) = display_body(bytes).unwrap();
-        assert_eq!(format, "JSON");
+fn raw_encoded_body_is_never_replaced_by_decoded_json_or_pretty_printing() {
+    let json = r#"{"cache":{"userItem":[{"itemId":100,"num":5}]}}"#;
+    let encoded = URL_SAFE.encode(json).replace('=', "%3D");
+    for text in [json.to_string(), encoded] {
+        let (format, raw) = raw_body(text.as_bytes().to_vec()).unwrap();
+        assert_eq!(format, "原始响应");
+        assert_eq!(raw, text);
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&text).unwrap(),
-            serde_json::from_slice::<serde_json::Value>(original).unwrap()
+            decoded_json(&raw).unwrap(),
+            serde_json::from_str::<serde_json::Value>(json).unwrap()
         );
     }
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-    encoder.write_all(original).unwrap();
-    assert_eq!(display_body(encoder.finish().unwrap()).unwrap().0, "JSON");
+    encoder.write_all(json.as_bytes()).unwrap();
+    assert_eq!(raw_body(encoder.finish().unwrap()).unwrap().1, json);
     assert_eq!(
-        display_body(b"raw-response".to_vec()).unwrap(),
-        ("文本".into(), "raw-response".into())
+        raw_body(b"raw-response\r\n".to_vec()).unwrap().1,
+        "raw-response\r\n"
     );
 }
 
@@ -217,6 +218,9 @@ fn state_survives_navigation_but_stale_polls_cannot_replace_a_new_session() {
 
 fn complete_response() -> LoginResponse {
     LoginResponse {
+        capture_id: uuid::Uuid::new_v4().to_string(),
+        captured_at: 1,
+        items: vec![],
         record_id: 42,
         url: target_url(URL).unwrap(),
         status_code: 200,
@@ -370,7 +374,8 @@ fn polling_ignores_baseline_uids_but_accepts_reused_numeric_ids_and_pending_resp
         .unwrap();
     worker.join().unwrap();
     assert_eq!(response.record_id, 1);
-    assert_eq!(response.format, "JSON");
+    assert_eq!(response.format, "原始响应");
+    assert_eq!(response.body, r#"{"cache":{}}"#);
     assert!(!response.url.contains("private"));
 }
 
@@ -381,7 +386,12 @@ fn display_toplogin_on_authorized_device() {
     let adb = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("resources/adb")
         .join(crate::platform::adb_executable_name());
-    let started = super::super::start_capture(&adb, Some(&serial)).unwrap();
+    let started = super::super::start_capture(
+        &adb,
+        Some(&serial),
+        &crate::device_operation::OperationCancellation::default(),
+    )
+    .unwrap();
     let store = ResponseStore::default();
     started.begin_response_watch(&store);
     println!("Waiting for a fresh CN toplogin response on {serial}");
@@ -437,4 +447,46 @@ fn read_toplogin_cache_on_authorized_device() {
         response.format,
         response.body.chars().count()
     );
+}
+
+#[test]
+fn manual_stop_preserves_waiting_on_failure_and_supersedes_an_inflight_poll_on_success() {
+    let store = ResponseStore::default();
+    store.begin("device".into(), HashSet::new());
+    assert!(store
+        .stop_using(|serial| {
+            assert_eq!(serial, "device");
+            Err("stop failed".into())
+        })
+        .is_err());
+    assert_eq!(store.0.lock().unwrap().state.phase, ResponsePhase::Waiting);
+    let result = store.poll_using(
+        |_, _| {
+            store.stop_using(|_| Ok(())).unwrap();
+            Ok(Some(complete_response()))
+        },
+        |_| panic!("a manually stopped session must not stop a newer session"),
+    );
+    assert_eq!(result.phase, ResponsePhase::Idle);
+    assert!(result.response.is_none());
+    assert_eq!(result.message, "抓包已停止");
+}
+
+#[test]
+fn waiting_copy_is_generic_and_a_stopped_task_cannot_be_revived_by_a_late_poll() {
+    let store = ResponseStore::default();
+    store.begin("device".into(), HashSet::new());
+    assert_eq!(
+        store.0.lock().unwrap().state.message,
+        "等待数据中，请重新进入游戏……"
+    );
+    let state = store.poll_using(
+        |_, _| {
+            store.mark_stopped("环境配置已停止");
+            Ok(None)
+        },
+        |_| panic!("a stopped generation must not issue device actions"),
+    );
+    assert_eq!(state.phase, ResponsePhase::Idle);
+    assert_eq!(state.message, "环境配置已停止");
 }

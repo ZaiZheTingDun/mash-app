@@ -35,6 +35,11 @@ fn state_and_application_isolation_require_explicit_valid_values() {
 #[derive(Default)]
 struct Scenario {
     unconfigured: bool,
+    pip_allowed: bool,
+    pip_set_failure: bool,
+    pip_unconfirmed: bool,
+    pip_read_failure: bool,
+    legacy_pip_key: bool,
     already_active: bool,
     never_active: bool,
     unavailable: bool,
@@ -43,16 +48,27 @@ struct Scenario {
     status_disconnect: bool,
     stop_failed: bool,
     baseline_failed: bool,
+    cancel_after_start: bool,
+    cancel_during_baseline: bool,
+    cancel_while_waiting: bool,
 }
 
 fn fake(s: Scenario) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Request>) {
+    fake_with_cancellation(s, &OperationCancellation::default())
+}
+
+fn fake_with_cancellation(
+    s: Scenario,
+    cancellation: &OperationCancellation,
+) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Request>) {
     let mut commands = Vec::new();
     let mut requests = Vec::new();
     let mut started = s.already_active;
     let mut stopped = false;
     let mut disconnected = false;
+    let mut pip_disabled = !s.pip_allowed;
     let prepared = std::cell::Cell::new(false);
-    let result = start_using(
+    let result = start_controlled_using(
         Some("device"),
         &mut |args| {
             if args == ["devices", "-l"] {
@@ -62,23 +78,66 @@ fn fake(s: Scenario) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Reques
             let command = args[2..].join(" ");
             commands.push(command.clone());
             match command.as_str() {
-            "shell dumpsys package com.reqable.android" => Ok(b"versionName=3.3.5\n".to_vec()),
-            "shell dumpsys package com.bilibili.fatego" => Ok(b"userId=10081\n".to_vec()),
-            "shell am start -W -n com.reqable.android/.MainActivity" => Ok(b"Status: ok\n".to_vec()),
-            "forward tcp:0 tcp:9016" => Ok(b"41001\n".to_vec()),
-            "forward --remove tcp:41001" | "forward tcp:41001 tcp:9016" | "wait-for-device" | "shell am force-stop com.reqable.android" => Ok(Vec::new()),
-            "shell dumpsys connectivity" => Ok(vpn(if s.wide_vpn { "0-99999" } else { "10081-10081, 20081-20081" })),
-            _ if command.contains("id -u") => Ok(b"0\n".to_vec()),
-            _ if command.contains("head -c") => Ok(serde_json::to_vec(&serde_json::json!({
-                "androidApps": if s.unconfigured { vec!["other.app"] } else { vec!["com.bilibili.fatego"] },
-                "androidAppsBypass": false, "vpnMode": true, "hostMode": false, "autoCapture": false,
-            })).unwrap()),
-            _ => panic!("unexpected command: {command}"),
-        }
+                "shell dumpsys package com.reqable.android" => Ok(b"versionName=3.3.5\n".to_vec()),
+                "shell dumpsys package com.bilibili.fatego" => Ok(b"userId=10081\n".to_vec()),
+                "shell am start -W -n com.reqable.android/.MainActivity" => {
+                    Ok(b"Status: ok\n".to_vec())
+                }
+                "forward tcp:0 tcp:9016" => Ok(b"41001\n".to_vec()),
+                "forward --remove tcp:41001"
+                | "forward tcp:41001 tcp:9016"
+                | "wait-for-device"
+                | "shell am force-stop com.reqable.android" => Ok(Vec::new()),
+                "shell dumpsys connectivity" => Ok(vpn(if s.wide_vpn {
+                    "0-99999"
+                } else {
+                    "10081-10081, 20081-20081"
+                })),
+                _ if command
+                    .contains("cmd appops get --user 0 com.reqable.android PICTURE_IN_PICTURE") =>
+                {
+                    if s.pip_read_failure {
+                        return Err("disconnected".into());
+                    }
+                    Ok(if pip_disabled && !s.pip_unconfirmed {
+                        "PICTURE_IN_PICTURE: ignore"
+                    } else {
+                        "PICTURE_IN_PICTURE: allow"
+                    }
+                    .as_bytes()
+                    .to_vec())
+                }
+                _ if command.contains(
+                    "cmd appops set --user 0 com.reqable.android PICTURE_IN_PICTURE ignore",
+                ) =>
+                {
+                    if s.pip_set_failure {
+                        return Err("denied".into());
+                    }
+                    pip_disabled = true;
+                    Ok(Vec::new())
+                }
+                _ if command.contains("id -u") => Ok(b"0\n".to_vec()),
+                _ if command.contains("head -c") => {
+                    let mut config = serde_json::json!({
+                    "androidApps": if s.unconfigured { vec!["other.app"] } else { vec!["com.bilibili.fatego"] },
+                    "androidAppsBypass": false, "vpnMode": true, "hostMode": false, "autoCapture": false,
+                    });
+                    if s.legacy_pip_key {
+                        config["pipMode"] = serde_json::json!(true);
+                    }
+                    Ok(serde_json::to_vec(&config).unwrap())
+                }
+                _ => panic!("unexpected command: {command}"),
+            }
         },
         &mut |port, request| {
             assert_eq!(port, 41001);
             requests.push(request);
+            if s.cancel_while_waiting {
+                cancellation.cancel();
+                return Err("waiting for API".into());
+            }
             if s.unavailable {
                 return Err("unavailable".into());
             }
@@ -93,6 +152,9 @@ fn fake(s: Scenario) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Reques
                     ))
                 }
                 Request::Start => {
+                    if s.cancel_after_start {
+                        cancellation.cancel();
+                    }
                     assert!(
                         prepared.get(),
                         "old response baseline must be captured before Start"
@@ -111,6 +173,9 @@ fn fake(s: Scenario) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Reques
             }
         },
         &mut |_| {
+            if s.cancel_during_baseline {
+                cancellation.cancel();
+            }
             if s.baseline_failed {
                 return Err("baseline unavailable".into());
             }
@@ -118,6 +183,7 @@ fn fake(s: Scenario) -> (Result<CaptureStarted, String>, Vec<String>, Vec<Reques
             Ok(HashSet::from(["previous-response".into()]))
         },
         &mut || {},
+        cancellation,
     );
     (result, commands, requests)
 }
@@ -165,9 +231,65 @@ fn wrong_configuration_never_opens_the_api_or_starts_capture() {
         unconfigured: true,
         ..Default::default()
     });
-    assert!(result.unwrap_err().contains("自动配置"));
+    assert!(result.unwrap_err().contains("环境配置"));
     assert!(requests.is_empty());
-    assert!(!commands.iter().any(|c| c.starts_with("forward")));
+    assert!(!commands
+        .iter()
+        .any(|c| c.starts_with("forward") || c.contains("appops")));
+}
+
+#[test]
+fn start_disables_system_pip_before_launch_and_accepts_legacy_config_without_reconfiguration() {
+    let (result, commands, requests) = fake(Scenario {
+        pip_allowed: true,
+        legacy_pip_key: true,
+        ..Default::default()
+    });
+    assert!(result.is_ok());
+    let set = commands
+        .iter()
+        .position(|c| c.contains("cmd appops set"))
+        .unwrap();
+    let launch = commands
+        .iter()
+        .position(|c| c.contains("am start -W"))
+        .unwrap();
+    assert!(set < launch);
+    assert!(commands[set + 1].contains("cmd appops get"));
+    assert_eq!(
+        commands
+            .iter()
+            .filter(|c| c.contains("cmd appops set"))
+            .count(),
+        1
+    );
+    assert!(requests.contains(&Request::Start));
+}
+
+#[test]
+fn failed_or_unconfirmed_system_pip_change_does_not_launch_or_start_capture() {
+    for scenario in [
+        Scenario {
+            pip_read_failure: true,
+            ..Default::default()
+        },
+        Scenario {
+            pip_allowed: true,
+            pip_set_failure: true,
+            ..Default::default()
+        },
+        Scenario {
+            pip_unconfirmed: true,
+            ..Default::default()
+        },
+    ] {
+        let (result, commands, requests) = fake(scenario);
+        assert!(result.unwrap_err().contains("系统画中画权限"));
+        assert!(requests.is_empty());
+        assert!(!commands
+            .iter()
+            .any(|c| c.starts_with("forward") || c.contains("am start -W")));
+    }
 }
 
 #[test]
@@ -234,6 +356,42 @@ fn start_on_authorized_device() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("resources/adb")
         .join(crate::platform::adb_executable_name());
-    let result = start_capture(&path, Some(&serial)).unwrap();
+    let result = start_capture(
+        &path,
+        Some(&serial),
+        &crate::device_operation::OperationCancellation::default(),
+    )
+    .unwrap();
     println!("{}: {}", result.serial, result.message);
+}
+
+#[test]
+fn stopping_startup_interrupts_api_waits_and_baseline_and_prevents_late_confirmation() {
+    for scenario in [
+        Scenario {
+            cancel_while_waiting: true,
+            ..Default::default()
+        },
+        Scenario {
+            cancel_during_baseline: true,
+            ..Default::default()
+        },
+        Scenario {
+            cancel_after_start: true,
+            ..Default::default()
+        },
+    ] {
+        let posted = scenario.cancel_after_start;
+        let cancellation = OperationCancellation::default();
+        let (result, commands, requests) = fake_with_cancellation(scenario, &cancellation);
+        assert!(result.is_err());
+        assert!(cancellation.is_cancelled());
+        assert_eq!(cancellation.device().as_deref(), Some("device"));
+        assert_eq!(requests.contains(&Request::Start), posted);
+        assert!(!commands.iter().any(|c| c == "shell dumpsys connectivity"));
+        assert_eq!(commands.last().unwrap(), "forward --remove tcp:41001");
+        if posted {
+            assert_eq!(requests.last(), Some(&Request::Start));
+        }
+    }
 }

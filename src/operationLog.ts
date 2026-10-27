@@ -1,5 +1,10 @@
 export type LogLevel = "info" | "warn" | "debug" | "localDebug";
 
+export interface OperationLogEvent {
+  message: string;
+  level: LogLevel;
+}
+
 export interface AttackLogCommandCard {
   slot: number;
   suit: string | null;

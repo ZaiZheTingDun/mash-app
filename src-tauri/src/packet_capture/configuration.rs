@@ -1,4 +1,5 @@
 use super::{find_root, root_shell, run_adb, select_serial, shell_quote, AdbCommand};
+use crate::device_operation::OperationCancellation;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::path::Path;
@@ -9,7 +10,7 @@ const CONFIG: &str = "/data/user/0/com.reqable.android/files/config/capture_conf
 const MAX_CONFIG_SIZE: usize = 64 * 1024;
 const ABSENT: &[u8] = b"MASH_CONFIG_ABSENT";
 
-pub(super) fn check_capture_configuration(
+pub(super) fn prepare_capture_configuration(
     shell: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(), String> {
     let info = shell("dumpsys package com.reqable.android")?;
@@ -24,12 +25,12 @@ pub(super) fn check_capture_configuration(
         root,
         &format!("head -c {} {CONFIG}", MAX_CONFIG_SIZE + 1),
     ))
-    .map_err(|_| "请先点击自动配置，将 Reqable 设置为仅抓国服 FGO")?;
+    .map_err(|_| "请先点击环境配置，将 Reqable 设置为仅抓国服 FGO")?;
     let config = parse_config(&bytes)?;
     if cn_config(config.clone()) != config {
-        return Err("请先点击自动配置，将 Reqable 设置为仅抓国服 FGO".into());
+        return Err("请先点击环境配置，将 Reqable 设置为仅抓国服 FGO".into());
     }
-    Ok(())
+    super::picture_in_picture::disable(root, shell)
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -38,14 +39,15 @@ pub(crate) struct CaptureConfiguration {
     serial: String,
     package_name: String,
     reqable_version: String,
-    message: String,
+    pub(super) message: String,
 }
 
 pub(crate) fn configure(
     adb_path: &Path,
     selected: Option<&str>,
+    cancellation: &OperationCancellation,
 ) -> Result<CaptureConfiguration, String> {
-    configure_using(selected, &mut |args| run_adb(adb_path, args))
+    configure_controlled_using(selected, &mut |args| run_adb(adb_path, args), cancellation)
 }
 
 fn parse_config(bytes: &[u8]) -> Result<Value, String> {
@@ -99,12 +101,15 @@ fn opened(output: &[u8]) -> bool {
         && !String::from_utf8_lossy(output).contains("Error:")
 }
 
-fn configure_using(
+pub(super) fn configure_controlled_using(
     selected: Option<&str>,
     run: &mut AdbCommand<'_>,
+    cancellation: &OperationCancellation,
 ) -> Result<CaptureConfiguration, String> {
+    cancellation.check()?;
     let devices = run(&["devices", "-l"])?;
     let serial = select_serial(&String::from_utf8_lossy(&devices), selected)?;
+    cancellation.bind_device(&serial)?;
     let mut shell = |script: &str| {
         let result = run(&["-s", &serial, "shell", script]);
         if script == "am force-stop com.reqable.android" {
@@ -117,16 +122,21 @@ fn configure_using(
         }
         result
     };
+    // Normal steps are cancellable; rollback and file cleanup below always run.
+    let mut forward = |script: &str| {
+        cancellation.check()?;
+        shell(script)
+    };
     for (package, message) in [
         ("com.reqable.android", "请先在设备上安装 Reqable"),
         (PACKAGE, "请先在设备上安装国服 FGO"),
     ] {
-        let output = shell(&format!("pm path {package}"))?;
+        let output = forward(&format!("pm path {package}"))?;
         if !String::from_utf8_lossy(&output).contains("package:") {
             return Err(message.into());
         }
     }
-    let info = shell("dumpsys package com.reqable.android")?;
+    let info = forward("dumpsys package com.reqable.android")?;
     let supported = String::from_utf8_lossy(&info)
         .lines()
         .any(|line| line.trim() == format!("versionName={VERSION}"));
@@ -135,20 +145,21 @@ fn configure_using(
             "当前自动配置仅支持已验证的 Reqable {VERSION}，请确认设备上的版本"
         ));
     }
-    let root = find_root(&mut shell)?;
+    let root = find_root(&mut forward)?;
     let read = format!(
         "test -d /data/user/0/com.reqable.android/files/config || exit 1; if test -f {CONFIG}; then head -c {} {CONFIG}; elif test ! -e {CONFIG}; then echo MASH_CONFIG_ABSENT; else exit 1; fi",
         MAX_CONFIG_SIZE + 1
     );
     // Check compatibility before stopping a running capture.
     snapshot(
-        shell(&root_shell(root, &read))
+        forward(&root_shell(root, &read))
             .map_err(|_| "无法读取 Reqable 配置，请先完成 Reqable 的首次初始化")?,
     )?;
-    shell("am force-stop com.reqable.android").map_err(|_| "无法停止 Reqable，请关闭抓包后重试")?;
+    forward("am force-stop com.reqable.android")
+        .map_err(|_| "无法停止 Reqable，请关闭抓包后重试")?;
     // Read again after shutdown so we preserve its last saved settings.
     let original = snapshot(
-        shell(&root_shell(root, &read))
+        forward(&root_shell(root, &read))
             .map_err(|_| "无法读取 Reqable 配置，请先完成 Reqable 的首次初始化")?,
     )?;
     let desired = cn_config(match &original {
@@ -198,16 +209,17 @@ echo MASH_CONFIG_WRITTEN"#,
         json = shell_quote(std::str::from_utf8(&bytes).unwrap()),
     );
     let attempt = (|| -> Result<(), String> {
-        let result = shell(&root_shell(root, &apply)).map_err(|_| "写入 Reqable 配置失败")?;
+        let result = forward(&root_shell(root, &apply)).map_err(|_| "写入 Reqable 配置失败")?;
         if result.trim_ascii() != b"MASH_CONFIG_WRITTEN" {
             return Err("Reqable 配置写入未返回验证结果".into());
         }
-        let launch = shell("am start -W -n com.reqable.android/.MainActivity")
+        super::picture_in_picture::disable(root, &mut forward)?;
+        let launch = forward("am start -W -n com.reqable.android/.MainActivity")
             .map_err(|_| "无法重新打开 Reqable")?;
         if !opened(&launch) {
             return Err("无法重新打开 Reqable".into());
         }
-        let actual = shell(&root_shell(root, &read)).map_err(|_| "无法回读 Reqable 配置")?;
+        let actual = forward(&root_shell(root, &read)).map_err(|_| "无法回读 Reqable 配置")?;
         let actual = parse_config(&actual)?;
         if !desired
             .as_object()
@@ -249,7 +261,9 @@ echo MASH_CONFIG_RESTORED"#
             && shell(&root_shell(root, &rollback))
                 .is_ok_and(|output| output.trim_ascii() == b"MASH_CONFIG_RESTORED");
         if restored {
-            let _ = shell("am start -W -n com.reqable.android/.MainActivity");
+            if !cancellation.is_cancelled() {
+                let _ = shell("am start -W -n com.reqable.android/.MainActivity");
+            }
             return Err(format!("{error}，已恢复原配置"));
         }
         return Err(format!(

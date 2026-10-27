@@ -2399,6 +2399,7 @@ dependencies = [
  "flate2",
  "md5",
  "png 0.17.16",
+ "quick-xml 0.38.4",
  "reqwest",
  "rusqlite",
  "serde",

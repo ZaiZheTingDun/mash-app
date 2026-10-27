@@ -1,4 +1,6 @@
 //! Device-only preparation for the independent packet capture tool.
+use crate::device_operation::OperationCancellation;
+use crate::runner::LogLevel;
 use crate::{adb::Adb, platform};
 use std::path::Path;
 use std::time::Duration;
@@ -7,10 +9,17 @@ mod capture;
 mod certificate;
 mod client;
 mod configuration;
+mod history;
+mod inventory;
+mod lifecycle;
+mod onboarding;
+mod picture_in_picture;
 mod response;
 mod stop;
 pub(crate) use capture::{start_capture, CaptureStarted};
 pub(crate) use configuration::{configure, CaptureConfiguration};
+pub(crate) use history::{CaptureHistoryState, HistoryStore};
+pub(crate) use lifecycle::stop_task;
 pub(crate) use response::{ResponseState, ResponseStore};
 #[cfg(test)]
 mod tests;
@@ -34,8 +43,73 @@ pub(crate) struct CertificateInstallation {
 pub(crate) fn install(
     adb_path: &Path,
     selected: Option<&str>,
+    cancellation: &OperationCancellation,
 ) -> Result<CertificateInstallation, String> {
-    install_using(selected, &mut |args| run_adb(adb_path, args))
+    install_with_log_using(
+        selected,
+        &mut |args| run_adb(adb_path, args),
+        &mut |_, _| {},
+        cancellation,
+    )
+}
+
+/// Keep the same device selected across both preparation steps.
+pub(crate) fn setup(
+    adb_path: &Path,
+    selected: Option<&str>,
+    log: &mut dyn FnMut(LogLevel, &str),
+    cancellation: &OperationCancellation,
+) -> Result<CaptureConfiguration, String> {
+    setup_controlled_using(
+        selected,
+        &mut |args| run_adb(adb_path, args),
+        log,
+        cancellation,
+    )
+}
+
+fn setup_controlled_using(
+    selected: Option<&str>,
+    run: &mut AdbCommand<'_>,
+    log: &mut dyn FnMut(LogLevel, &str),
+    cancellation: &OperationCancellation,
+) -> Result<CaptureConfiguration, String> {
+    cancellation.check()?;
+    log(LogLevel::Info, "开始抓包环境配置");
+    let result: Result<CaptureConfiguration, String> = (|| {
+        log(LogLevel::Info, "正在安装并验证系统证书…");
+        let installed = install_with_log_using(selected, run, log, cancellation)?;
+        cancellation.check()?;
+        log(
+            LogLevel::Info,
+            &format!("设备 {}：{}", installed.serial, installed.message),
+        );
+        log(LogLevel::Info, "正在配置 Reqable，仅抓国服 FGO…");
+        let mut configured =
+            configuration::configure_controlled_using(Some(&installed.serial), run, cancellation)
+                .map_err(|error| format!("证书已安装，环境配置未完成：{error}"))?;
+        log(LogLevel::Info, "已关闭并验证 Reqable 的系统画中画权限");
+        configured.message = "环境配置完成，请点击开始按钮（设备重启后可能需要重新配置）".into();
+        Ok(configured)
+    })();
+    if cancellation.is_cancelled() {
+        // Cancellation must not hide a failed rollback; preserve its backup path
+        // in the operation log even though this request's result is superseded.
+        if let Err(error) = &result {
+            if error.contains("未能确认回滚") {
+                log(
+                    LogLevel::Warn,
+                    &format!("停止环境配置时回滚未完成：{error}"),
+                );
+            }
+        }
+        return Err("环境配置已停止".into());
+    }
+    match &result {
+        Ok(configured) => log(LogLevel::Info, &configured.message),
+        Err(error) => log(LogLevel::Warn, &format!("抓包环境配置失败：{error}")),
+    }
+    result
 }
 
 fn run_adb(adb_path: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
@@ -94,13 +168,33 @@ fn root_shell(prefix: &str, script: &str) -> String {
     }
 }
 
+#[cfg(test)]
 fn install_using(
     selected: Option<&str>,
     run: &mut AdbCommand<'_>,
 ) -> Result<CertificateInstallation, String> {
+    install_with_log_using(
+        selected,
+        run,
+        &mut |_, _| {},
+        &OperationCancellation::default(),
+    )
+}
+
+fn install_with_log_using(
+    selected: Option<&str>,
+    run: &mut AdbCommand<'_>,
+    log: &mut dyn FnMut(LogLevel, &str),
+    cancellation: &OperationCancellation,
+) -> Result<CertificateInstallation, String> {
+    cancellation.check()?;
     let devices = run(&["devices", "-l"])?;
     let serial = select_serial(&String::from_utf8_lossy(&devices), selected)?;
-    let mut shell = |script: &str| run(&["-s", &serial, "shell", script]);
+    cancellation.bind_device(&serial)?;
+    let mut shell = |script: &str| {
+        cancellation.check()?;
+        run(&["-s", &serial, "shell", script])
+    };
     let package = shell("pm path com.reqable.android")?;
     if !String::from_utf8_lossy(&package).contains("package:") {
         return Err("请先在设备上安装 Reqable".into());
@@ -116,25 +210,8 @@ fn install_using(
     let root = find_root(&mut shell)?;
     shell("am start -W -n com.reqable.android/.MainActivity")
         .map_err(|error| format!("无法打开 Reqable：{error}"))?;
-    let mut source = None;
-    for attempt in 0..6 {
-        for path in CERT_PATHS {
-            if let Ok(bytes) = shell(&root_shell(root, &format!("cat {path}"))) {
-                if !bytes.is_empty() {
-                    source = Some((path, bytes));
-                    break;
-                }
-            }
-        }
-        if source.is_some() {
-            break;
-        }
-        if attempt < 5 {
-            std::thread::sleep(Duration::from_millis(300));
-        }
-    }
     let (source_path, bytes) =
-        source.ok_or("未找到 Reqable CA，请先完成 Reqable 的首次初始化后重试")?;
+        onboarding::certificate_after_confirmation(root, &mut shell, log, cancellation)?;
     let cert = certificate::parse(&bytes)?;
     let script = INSTALL_SCRIPT
         .replace("__CERT_PATH__", source_path)

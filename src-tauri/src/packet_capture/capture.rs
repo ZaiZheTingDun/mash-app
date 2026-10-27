@@ -1,4 +1,5 @@
 use super::{client, configuration, response, run_adb, select_serial, AdbCommand};
+use crate::device_operation::OperationCancellation;
 use std::{collections::HashSet, path::Path, time::Duration};
 
 #[derive(Debug, serde::Serialize)]
@@ -42,9 +43,10 @@ pub(super) fn decode_status(bytes: &[u8]) -> Result<bool, String> {
 pub(crate) fn start_capture(
     adb_path: &Path,
     selected: Option<&str>,
+    cancellation: &OperationCancellation,
 ) -> Result<CaptureStarted, String> {
     let client = client::Client::new()?;
-    start_using(
+    start_controlled_using(
         selected,
         &mut |args| run_adb(adb_path, args),
         &mut |port, request| {
@@ -61,7 +63,8 @@ pub(crate) fn start_capture(
             }
         },
         &mut |port| response::baseline(&client, port),
-        &mut || std::thread::sleep(Duration::from_millis(250)),
+        &mut || cancellation.wait(Duration::from_millis(250)),
+        cancellation,
     )
 }
 
@@ -114,25 +117,32 @@ fn vpn_only_cn(output: &[u8], uid: u32) -> bool {
     includes_game
 }
 
-fn start_using(
+fn start_controlled_using(
     selected: Option<&str>,
     run: &mut AdbCommand<'_>,
     api: &mut Api<'_>,
     prepare: &mut dyn FnMut(u16) -> Result<HashSet<String>, String>,
     pause: &mut dyn FnMut(),
+    cancellation: &OperationCancellation,
 ) -> Result<CaptureStarted, String> {
-    let devices = run(&["devices", "-l"])?;
+    cancellation.check()?;
+    let mut forward = |args: &[&str]| {
+        cancellation.check()?;
+        run(args)
+    };
+    let devices = forward(&["devices", "-l"])?;
     let serial = select_serial(&String::from_utf8_lossy(&devices), selected)?;
-    configuration::check_capture_configuration(&mut |command| {
-        run(&["-s", &serial, "shell", command])
+    cancellation.bind_device(&serial)?;
+    configuration::prepare_capture_configuration(&mut |command| {
+        forward(&["-s", &serial, "shell", command])
     })?;
-    let uid = package_uid(&run(&[
+    let uid = package_uid(&forward(&[
         "-s",
         &serial,
         "shell",
         "dumpsys package com.bilibili.fatego",
     ])?)?;
-    let launch = run(&[
+    let launch = forward(&[
         "-s",
         &serial,
         "shell",
@@ -144,7 +154,7 @@ fn start_using(
     {
         return Err("无法打开 Reqable，请在设备上完成首次初始化后重试".into());
     }
-    let port = run(&["-s", &serial, "forward", "tcp:0", "tcp:9016"])?;
+    let port = forward(&["-s", &serial, "forward", "tcp:0", "tcp:9016"])?;
     let port: u16 = String::from_utf8_lossy(&port)
         .trim()
         .parse()
@@ -157,6 +167,7 @@ fn start_using(
     let result = (|| {
         let mut initial = None;
         for _ in 0..12 {
+            cancellation.check()?;
             if let Ok(Some(active)) = api(port, Request::Status) {
                 initial = Some(active);
                 break;
@@ -164,7 +175,9 @@ fn start_using(
             pause();
         }
         let already_active = initial.ok_or("Reqable 控制接口尚未就绪，请稍后重试")?;
+        cancellation.check()?;
         let baseline = prepare(port)?;
+        cancellation.check()?;
         may_be_active = true;
         if !already_active {
             // POST only queues the change; its HTTP success is not capture success.
@@ -172,13 +185,15 @@ fn start_using(
             api(port, Request::Start)?;
         }
         for _ in 0..120 {
+            cancellation.check()?;
             match api(port, Request::Status) {
                 Ok(Some(true)) => {
                     // VPN toggling may briefly interrupt this emulator's ADB.
-                    let _ = run(&["-s", &serial, "wait-for-device"]);
-                    let vpn = run(&["-s", &serial, "shell", "dumpsys connectivity"])?;
+                    let _ = forward(&["-s", &serial, "wait-for-device"]);
+                    let vpn = forward(&["-s", &serial, "shell", "dumpsys connectivity"])?;
+                    cancellation.check()?;
                     if !vpn_only_cn(&vpn, uid) {
-                        return Err("无法确认仅抓国服，请重新自动配置后重试".into());
+                        return Err("无法确认仅抓国服，请重新进行环境配置后重试".into());
                     }
                     return Ok(CaptureStarted {
                         serial: serial.clone(),
@@ -193,7 +208,7 @@ fn start_using(
                     });
                 }
                 Err(_) => {
-                    let _ = run(&["-s", &serial, "forward", &local, "tcp:9016"]);
+                    let _ = forward(&["-s", &serial, "forward", &local, "tcp:9016"]);
                 }
                 _ => {}
             }
@@ -201,7 +216,11 @@ fn start_using(
         }
         Err("抓包尚未启动，请在设备上允许 Reqable 的 VPN 授权后重试".into())
     })();
-    let result = if result.is_err() && may_be_active {
+    let result = if cancellation.is_cancelled() {
+        // The stop command takes this lease after the worker exits, then closes
+        // the pinned Reqable process, including any pending VPN authorization.
+        Err("抓包启动已停止".into())
+    } else if result.is_err() && may_be_active {
         // Cancel an enqueued start as well. Force-stop is the fallback when
         // VPN permissions or a broken API prevent confirming an HTTP stop.
         let _ = api(port, Request::Stop);

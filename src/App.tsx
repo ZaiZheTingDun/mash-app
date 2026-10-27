@@ -72,6 +72,7 @@ import {
   type AttackLogMeta,
   type LogLevel,
   type OperationLogEntry,
+  type OperationLogEvent,
 } from "./operationLog";
 // The battle flow remains 队伍设置 → 指令设置 → 运行设置.
 // Home is an optional entry point for battle and the standalone tools;
@@ -432,6 +433,10 @@ function App({
         appendOperationLog(event.payload.message, event.payload.level ?? "info");
       }
     );
+    const unlistenOperation = listen<OperationLogEvent>("operation-log", (event) => {
+      if (!isCurrentListenerGeneration()) return;
+      appendOperationLog(event.payload.message, event.payload.level);
+    });
     const unlistenOperationDebug = listen<OperationDebugEvent>(
       "operation-debug-log",
       (event) => {
@@ -449,6 +454,7 @@ function App({
       unlistenCraftEssenceEnhancement.then((fn) => fn());
       unlistenFriendPointSummon.then((fn) => fn());
       unlistenOperationDebug.then((fn) => fn());
+      unlistenOperation.then((fn) => fn());
     };
   }, [appendOperationLog]);
 

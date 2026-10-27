@@ -28,21 +28,24 @@ pub(crate) enum ResponsePhase {
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ResponseState {
-    phase: ResponsePhase,
-    serial: Option<String>,
-    message: String,
-    response: Option<LoginResponse>,
+    pub(super) phase: ResponsePhase,
+    pub(super) serial: Option<String>,
+    pub(super) message: String,
+    pub(super) response: Option<LoginResponse>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct LoginResponse {
+pub(super) struct LoginResponse {
+    pub(super) capture_id: String,
+    pub(super) captured_at: u64,
     record_id: u64,
     url: String,
     status_code: u16,
     byte_length: usize,
     format: String,
-    body: String,
+    pub(super) body: String,
+    pub(super) items: Vec<super::inventory::CapturedItem>,
 }
 
 #[derive(Default)]
@@ -50,27 +53,67 @@ struct Inner {
     generation: u64,
     baseline: HashSet<String>,
     state: ResponseState,
+    interrupted_stop_target: Option<String>,
 }
 
 #[derive(Clone, Default)]
 pub(crate) struct ResponseStore(Arc<Mutex<Inner>>);
 
 impl ResponseStore {
+    pub(crate) fn mark_stopped(&self, message: &str) {
+        let mut inner = self.0.lock().unwrap();
+        inner.generation = inner.generation.wrapping_add(1);
+        inner.state.phase = ResponsePhase::Idle;
+        inner.state.message = message.into();
+        inner.interrupted_stop_target = None;
+    }
+
+    pub(crate) fn mark_stop_failed(&self, serial: &str, error: &str) {
+        let mut inner = self.0.lock().unwrap();
+        inner.generation = inner.generation.wrapping_add(1);
+        inner.interrupted_stop_target = Some(serial.into());
+        inner.state.serial = Some(serial.into());
+        inner.state.phase = ResponsePhase::Error;
+        inner.state.message = format!("停止失败：{error}");
+    }
+
+    pub(crate) fn interrupted_stop_target(&self) -> Option<String> {
+        self.0.lock().unwrap().interrupted_stop_target.clone()
+    }
+
+    pub(crate) fn stop(&self, adb_path: &Path) -> Result<(), String> {
+        self.stop_using(|serial| super::stop::stop_capture(adb_path, serial))
+    }
+
+    fn stop_using(&self, stop: impl FnOnce(&str) -> Result<(), String>) -> Result<(), String> {
+        let mut inner = self.0.lock().unwrap();
+        if let Some(serial) = &inner.state.serial {
+            stop(serial)?;
+        }
+        inner.generation = inner.generation.wrapping_add(1);
+        inner.state.phase = ResponsePhase::Idle;
+        inner.state.message = "抓包已停止".into();
+        inner.interrupted_stop_target = None;
+        Ok(())
+    }
+
     pub(crate) fn reset(&self) {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
         inner.baseline.clear();
         inner.state = ResponseState::default();
+        inner.interrupted_stop_target = None;
     }
 
     pub(crate) fn begin(&self, serial: String, baseline: HashSet<String>) {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
         inner.baseline = baseline;
+        inner.interrupted_stop_target = None;
         inner.state = ResponseState {
             phase: ResponsePhase::Waiting,
             serial: Some(serial),
-            message: "等待国服 toplogin 响应，请重新进入游戏…".into(),
+            message: "等待数据中，请重新进入游戏……".into(),
             response: None,
         };
     }
@@ -264,14 +307,22 @@ fn scan(
             continue;
         }
         let byte_length = bytes.len();
-        let (format, body) = display_body(bytes)?;
+        let (raw_format, raw_body) = raw_body(bytes)?;
+        let items = super::inventory::preview(&raw_body);
+        let captured_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| "系统时间无效")?
+            .as_millis() as u64;
         return Ok(Some(LoginResponse {
+            capture_id: uuid::Uuid::new_v4().to_string(),
+            captured_at,
             record_id: id,
             url,
             status_code: code,
             byte_length,
-            format,
-            body,
+            format: raw_format,
+            body: raw_body,
+            items,
         }));
     }
     if !super::capture::decode_status(&client.request(port, "status", None, 4096)?)? {
@@ -354,8 +405,7 @@ fn read_cache(serial: &str, path: &str, run: &mut AdbCommand<'_>) -> Result<Vec<
     Ok(bytes)
 }
 
-fn display_body(mut bytes: Vec<u8>) -> Result<(String, String), String> {
-    // Reqable may already decompress HTTP content; only decode a real gzip stream.
+fn raw_body(mut bytes: Vec<u8>) -> Result<(String, String), String> {
     if bytes.starts_with(&[0x1f, 0x8b]) {
         let mut expanded = Vec::new();
         flate2::read::GzDecoder::new(bytes.as_slice())
@@ -368,32 +418,28 @@ fn display_body(mut bytes: Vec<u8>) -> Result<(String, String), String> {
         bytes = expanded;
     }
     match String::from_utf8(bytes) {
-        Ok(text) => {
-            // CN toplogin responses are commonly URL-escaped Base64 JSON.
-            // Decode only if the result is valid JSON, otherwise preserve the text.
-            let decoded = percent_decode(&text).and_then(|value| {
-                URL_SAFE
-                    .decode(&value)
-                    .or_else(|_| URL_SAFE_NO_PAD.decode(&value))
-                    .or_else(|_| STANDARD.decode(&value))
-                    .ok()
-            });
-            let json = serde_json::from_str::<serde_json::Value>(&text)
-                .ok()
-                .or_else(|| decoded.and_then(|bytes| serde_json::from_slice(&bytes).ok()));
-            if let Some(json) = json {
-                let pretty =
-                    serde_json::to_string_pretty(&json).map_err(|_| "无法显示响应 JSON")?;
-                Ok(("JSON".into(), pretty))
-            } else {
-                Ok(("文本".into(), text))
-            }
-        }
+        Ok(text) => Ok(("原始响应".into(), text)),
         Err(error) => Ok((
             "Base64（二进制响应）".into(),
             STANDARD.encode(error.into_bytes()),
         )),
     }
+}
+
+// Decoding is exclusively for the inventory projection, never for display/copy.
+pub(super) fn decoded_json(text: &str) -> Option<serde_json::Value> {
+    serde_json::from_str(text).ok().or_else(|| {
+        let value = percent_decode(text)?;
+        let bytes = URL_SAFE
+            .decode(&value)
+            .or_else(|_| URL_SAFE_NO_PAD.decode(&value))
+            .or_else(|_| STANDARD.decode(&value))
+            .ok()?;
+        if bytes.len() > MAX_BODY {
+            return None;
+        }
+        serde_json::from_slice(&bytes).ok()
+    })
 }
 
 fn percent_decode(text: &str) -> Option<Vec<u8>> {

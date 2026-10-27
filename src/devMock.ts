@@ -551,8 +551,17 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       return { connected: selectedAdbSerial != null, deviceName: selectedAdbSerial } as T;
     case "install_capture_certificate":
     case "configure_packet_capture":
+    case "setup_packet_capture":
+    case "stop_packet_capture":
     case "start_packet_capture":
       throw new Error("请在 Mash 桌面端连接设备后执行此操作");
+    case "get_packet_capture_workspace":
+      return { capture: { phase: "idle", serial: null, message: "", response: null }, history: { records: [], selected: null } } as T;
+    case "select_packet_capture_record":
+    case "delete_packet_capture_record":
+      return { records: [], selected: null } as T;
+    case "copy_packet_capture_response":
+      throw new Error("暂无可复制的抓包结果");
     case "get_packet_capture_response":
       return { phase: "idle", serial: null, message: "", response: null } as T;
     case "get_device_resolution":
