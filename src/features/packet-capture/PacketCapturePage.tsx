@@ -1,10 +1,10 @@
-import { Button, Flex, IconButton } from "@radix-ui/themes";
+import { Button, Flex, IconButton, Skeleton } from "@radix-ui/themes";
 import { CopyIcon, TrashIcon } from "@radix-ui/react-icons";
 import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
 import type { CaptureHistoryEntry } from "../../types/packetCapture";
-import { CaptureInventory } from "./CaptureInventory";
+import { CaptureInventory, CaptureInventorySkeleton } from "./CaptureInventory";
 import { usePacketCapture } from "./usePacketCapture";
 
 function dateLabel(timestamp: number) {
@@ -24,8 +24,10 @@ function CaptureEmpty({ title, detail, loading = false }: { title: string; detai
 export function PacketCapturePage({ onBack }: { onBack: () => void }) {
   const capture = usePacketCapture();
   const history = capture.workspace?.history;
-  const selected = history?.selected;
+  const selected = capture.selected;
+  const selectedEntry = history?.records.find(entry => entry.id === capture.selectedId);
   const response = selected?.response;
+  const loading = capture.initialLoading || capture.recordLoading;
   // Date grouping is presentation only; ordering and selection come from Rust.
   const groups = new Map<string, CaptureHistoryEntry[]>();
   for (const entry of history?.records ?? []) {
@@ -41,35 +43,39 @@ export function PacketCapturePage({ onBack }: { onBack: () => void }) {
           <Button variant="ghost" color="gray" size="1" disabled={capture.busy || !history?.records.length} onClick={() => void capture.remove(null)}><TrashIcon />清空</Button>
         </header>
         <div className="capture-history-scroll">
+          {capture.initialLoading && <div className="capture-history-skeleton" role="status" aria-label="正在加载抓包历史">
+            <Skeleton width="90px" height="12px" />
+            {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} width="100%" height="40px" />)}
+          </div>}
           {Array.from(groups, ([day, entries]) => <section className="capture-history-day" key={day} aria-label={day}>
             <h3>{day}</h3>
-            {entries.map(entry => <div className={`capture-history-row${selected?.entry.id === entry.id ? " is-selected" : ""}`} key={entry.id}>
-              <button type="button" className="capture-history-select" disabled={capture.busy} aria-pressed={selected?.entry.id === entry.id} aria-label={`查看 ${day} ${timeLabel(entry.capturedAt)}`} onClick={() => void capture.select(entry.id)}>
+            {entries.map(entry => <div className={`capture-history-row${capture.selectedId === entry.id ? " is-selected" : ""}`} key={entry.id}>
+              <button type="button" className="capture-history-select" disabled={capture.busy} aria-pressed={capture.selectedId === entry.id} aria-label={`查看 ${day} ${timeLabel(entry.capturedAt)}`} onClick={() => void capture.select(entry.id)}>
                 <i className="capture-diamond" aria-hidden="true" /><time dateTime={new Date(entry.capturedAt).toISOString()}>{timeLabel(entry.capturedAt)}</time>
                 {history?.records[0]?.id === entry.id && <small>最新</small>}
               </button>
               <IconButton variant="ghost" color="gray" size="1" aria-label={`删除 ${day} ${timeLabel(entry.capturedAt)}`} disabled={capture.busy} onClick={() => void capture.remove(entry.id)}><TrashIcon /></IconButton>
             </div>)}
           </section>)}
-          {!history?.records.length && <CaptureEmpty title="暂无历史记录" detail="完成抓包后自动保存" />}
+          {!capture.initialLoading && !history?.records.length && <CaptureEmpty title="暂无历史记录" detail="完成抓包后自动保存" />}
         </div>
       </aside>
       <div className="capture-detail">
-        <section aria-label="抓包结果">
+        <section aria-label="抓包结果" aria-busy={loading}>
           <header className="capture-section-header">
             <SectionHeading rail stacked english="RESPONSE">抓包结果</SectionHeading>
-            {selected && <time>{dateLabel(selected.entry.capturedAt)} {timeLabel(selected.entry.capturedAt)}</time>}
+            {selectedEntry && <time>{dateLabel(selectedEntry.capturedAt)} {timeLabel(selectedEntry.capturedAt)}</time>}
           </header>
           <div className="capture-response-row">
-            <input aria-label="抓包原始响应" readOnly value={response?.body ?? ""} placeholder={capture.capturing ? "正在等待游戏响应…" : "等待抓包结果…"} />
-            <Button variant="ghost" className="capture-copy" size="2" aria-label="复制抓包结果" disabled={capture.busy || !response} onClick={() => void capture.copy()}><CopyIcon />{capture.copied ? "已复制" : "复制"}</Button>
+            {loading ? <Skeleton className="capture-response-skeleton" height="14px" /> : <input aria-label="抓包原始响应" readOnly value={response?.body ?? ""} placeholder={capture.capturing ? "正在等待游戏响应…" : "等待抓包结果…"} />}
+            <Button variant="ghost" className="capture-copy" size="2" aria-label="复制抓包结果" disabled={capture.busy || loading || !response} onClick={() => void capture.copy()}><CopyIcon />{capture.copied ? "已复制" : "复制"}</Button>
           </div>
         </section>
-        <section className="capture-preview" aria-label="数据预览">
+        <section className="capture-preview" aria-label="数据预览" aria-busy={loading}>
           <header className="capture-section-header">
             <SectionHeading rail stacked english="INVENTORY">数据预览</SectionHeading><span>账户物品</span>
           </header>
-          {response?.items.length ? <CaptureInventory items={response.items} /> : <CaptureEmpty
+          {loading ? <CaptureInventorySkeleton /> : capture.recordError ? <CaptureEmpty title="数据加载失败" detail="点击左侧记录重试" /> : response?.items.length ? <CaptureInventory items={response.items} /> : <CaptureEmpty
             loading={capture.capturing && !response}
             title={response ? "暂无可预览的常用物品" : capture.capturing ? "正在等待游戏数据" : "尚无账户物品"}
             detail={response ? undefined : capture.capturing ? "取得响应后，将自动保存并展示结果" : "点击下方开始，抓包完成后在此预览"}

@@ -18,9 +18,9 @@ mod response;
 mod stop;
 pub(crate) use capture::{start_capture, CaptureStarted};
 pub(crate) use configuration::{configure, CaptureConfiguration};
-pub(crate) use history::{CaptureHistoryState, HistoryStore};
+pub(crate) use history::{CaptureHistoryState, CaptureRecord, HistoryStore};
 pub(crate) use lifecycle::stop_task;
-pub(crate) use response::{ResponseState, ResponseStore};
+pub(crate) use response::{ResponseState, ResponseStatus, ResponseStore};
 #[cfg(test)]
 mod tests;
 

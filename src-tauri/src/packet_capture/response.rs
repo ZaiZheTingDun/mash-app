@@ -34,6 +34,24 @@ pub(crate) struct ResponseState {
     pub(super) response: Option<LoginResponse>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ResponseStatus {
+    phase: ResponsePhase,
+    serial: Option<String>,
+    message: String,
+}
+
+impl ResponseState {
+    pub(crate) fn status(&self) -> ResponseStatus {
+        ResponseStatus {
+            phase: self.phase.clone(),
+            serial: self.serial.clone(),
+            message: self.message.clone(),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct LoginResponse {
@@ -46,6 +64,22 @@ pub(super) struct LoginResponse {
     format: String,
     pub(super) body: String,
     pub(super) items: Vec<super::inventory::CapturedItem>,
+}
+
+impl LoginResponse {
+    /// Heap allocations retained by a history record, in addition to the struct itself.
+    pub(super) fn allocated_bytes(&self) -> usize {
+        self.capture_id.capacity()
+            + self.url.capacity()
+            + self.format.capacity()
+            + self.body.capacity()
+            + self.items.capacity() * std::mem::size_of::<super::inventory::CapturedItem>()
+            + self
+                .items
+                .iter()
+                .map(|item| item.name.capacity())
+                .sum::<usize>()
+    }
 }
 
 #[derive(Default)]

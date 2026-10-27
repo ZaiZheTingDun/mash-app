@@ -54,10 +54,10 @@ export interface CaptureRecord {
 
 export interface CaptureHistoryState {
   records: CaptureHistoryEntry[];
-  selected: CaptureRecord | null;
+  defaultRecordId: string | null;
 }
 
 export interface PacketCaptureWorkspace {
-  capture: PacketCaptureResponseState;
+  capture: Omit<PacketCaptureResponseState, "response">;
   history: CaptureHistoryState;
 }

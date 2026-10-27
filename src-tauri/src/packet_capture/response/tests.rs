@@ -231,6 +231,22 @@ fn complete_response() -> LoginResponse {
 }
 
 #[test]
+fn workspace_status_never_serializes_the_complete_response() {
+    let state = ResponseState {
+        phase: ResponsePhase::Found,
+        serial: Some("device".into()),
+        message: "已获取响应".into(),
+        response: Some(complete_response()),
+    };
+    let status = serde_json::to_value(state.status()).unwrap();
+    assert_eq!(
+        status,
+        serde_json::json!({ "phase": "found", "serial": "device", "message": "已获取响应" })
+    );
+    assert!(state.response.is_some());
+}
+
+#[test]
 fn complete_response_is_preserved_after_stop_success_or_failure_and_stop_runs_only_once() {
     for succeeds in [true, false] {
         let store = ResponseStore::default();

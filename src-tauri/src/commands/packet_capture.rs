@@ -3,8 +3,8 @@ use crate::commands::settings::AdbDeviceSettings;
 use crate::device_operation::{DeviceOperation, DeviceOperationCoordinator};
 use crate::operation_log;
 use crate::packet_capture::{
-    self, CaptureConfiguration, CaptureHistoryState, CaptureStarted, CertificateInstallation,
-    HistoryStore, ResponseState, ResponseStore,
+    self, CaptureConfiguration, CaptureHistoryState, CaptureRecord, CaptureStarted,
+    CertificateInstallation, HistoryStore, ResponseState, ResponseStatus, ResponseStore,
 };
 use crate::runner::LogLevel;
 use std::sync::{Arc, Mutex};
@@ -14,7 +14,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PacketCaptureWorkspace {
-    capture: ResponseState,
+    capture: ResponseStatus,
     history: CaptureHistoryState,
 }
 
@@ -70,7 +70,10 @@ pub(crate) async fn get_packet_capture_workspace(
     tauri::async_runtime::spawn_blocking(move || {
         let capture = responses.poll(&adb_path);
         let history = history.sync(&capture)?;
-        Ok(PacketCaptureWorkspace { capture, history })
+        Ok(PacketCaptureWorkspace {
+            capture: capture.status(),
+            history,
+        })
     })
     .await
     .map_err(|error| format!("读取抓包页面失败：{error}"))?
@@ -80,9 +83,9 @@ pub(crate) async fn get_packet_capture_workspace(
 pub(crate) async fn select_packet_capture_record(
     record_id: String,
     history: tauri::State<'_, Arc<HistoryStore>>,
-) -> Result<CaptureHistoryState, String> {
+) -> Result<Arc<CaptureRecord>, String> {
     let history = history.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || history.select(&record_id))
+    tauri::async_runtime::spawn_blocking(move || history.record(&record_id))
         .await
         .map_err(|error| format!("读取抓包记录失败：{error}"))?
 }
@@ -100,12 +103,13 @@ pub(crate) async fn delete_packet_capture_record(
 
 #[tauri::command]
 pub(crate) async fn copy_packet_capture_response(
+    record_id: String,
     app: tauri::AppHandle,
     history: tauri::State<'_, Arc<HistoryStore>>,
 ) -> Result<(), String> {
     let history = history.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let body = history.selected_body()?;
+        let body = history.body(&record_id)?;
         app.clipboard()
             .write_text(body)
             .map_err(|_| "复制失败，请重试".into())
