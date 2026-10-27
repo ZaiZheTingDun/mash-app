@@ -306,6 +306,14 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
         masterFaceFemalePath: null,
         skills: [],
       }] as T;
+    case "ensure_default_project":
+      if (projects.length === 0) {
+        const project = createProject("默认队伍");
+        projects.push(project);
+        insertProjectIntoCatalog(project.id, null);
+        activeProjectId = project.id;
+      }
+      return null as T;
     case "list_projects":
       return clone(projects) as T;
     case "get_project_catalog":

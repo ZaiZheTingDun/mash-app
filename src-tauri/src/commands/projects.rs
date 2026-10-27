@@ -336,6 +336,9 @@ pub(crate) use command_editor::*;
 mod ui_settings;
 pub(crate) use ui_settings::*;
 
+mod startup;
+pub(crate) use startup::*;
+
 mod config_transfer;
 pub(crate) use config_transfer::*;
 

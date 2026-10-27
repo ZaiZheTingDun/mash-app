@@ -162,6 +162,7 @@ pub fn run() {
             commands::projects::import_formation_share,
             commands::projects::discard_formation_share_preview,
             commands::projects::list_projects,
+            commands::projects::ensure_default_project,
             commands::projects::get_project_catalog,
             commands::projects::create_project_group,
             commands::projects::rename_project_group,

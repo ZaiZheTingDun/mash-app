@@ -666,8 +666,9 @@ function App({
   // `supportServantId` directly off the active project. The active project id
   // is also backend-owned, so app restarts reopen the last chosen lineup.
   useEffect(() => {
-    void refreshProjects().catch(console.error);
-  }, [refreshProjects]);
+    if (!startupReady) return;
+    void invoke("ensure_default_project").then(refreshProjects).catch(console.error);
+  }, [refreshProjects, startupReady]);
 
   useEffect(() => {
     void invoke<SkillEditorLayout>("get_skill_editor_layout")
@@ -939,8 +940,9 @@ function App({
   );
 
   const handleGotoRunSettings = useCallback(() => {
+    if (!activeProject || commandBusy) return;
     setView("battle");
-  }, []);
+  }, [activeProject, commandBusy]);
 
   const handleProjectsImported = useCallback((importedProjects: Project[]) => {
     void refreshProjects()
@@ -1011,8 +1013,9 @@ function App({
   }, []);
 
   const handleGotoCommand = useCallback(() => {
+    if (!activeProject) return;
     setView("command");
-  }, []);
+  }, [activeProject]);
 
   const handleBackToTeam = useCallback(() => {
     setView("team");
@@ -1280,7 +1283,7 @@ function App({
                       />
                     </Flex>
                     <Flex align="center" gap="3">
-                      <TaskActionButton label="指令设置" eyebrow="NEXT" onClick={handleGotoCommand} />
+                      <TaskActionButton label="指令设置" eyebrow="NEXT" onClick={handleGotoCommand} disabled={!activeProject} />
                     </Flex>
                   </Flex>
                 </>

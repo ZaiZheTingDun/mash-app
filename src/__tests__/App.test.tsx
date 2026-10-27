@@ -50,6 +50,7 @@ function installAppMock(
     assetVersion?: number;
     catalogError?: string;
     battleStartPanel?: "operationLog" | "runStatus" | "none";
+    projectList?: Project[];
   } = {},
 ) {
   mockInvoke(async (cmd: string) => {
@@ -77,7 +78,7 @@ function installAppMock(
         if (options.catalogError) throw new Error(options.catalogError);
         return [];
       case "list_projects":
-        return projects;
+        return options.projectList ?? projects;
       case "get_grand_class_definitions":
         return [];
       case "get_active_project_id":
@@ -400,6 +401,59 @@ describe("App active project restore", () => {
     );
 
     expect(await screen.findByText("第二套")).toBeInTheDocument();
+  });
+
+  it("waits for startup migration before initializing projects", async () => {
+    installAppMock(null);
+    const { rerender } = renderWithTheme(
+      <App theme="light" themePreference="light" onThemeChange={vi.fn()} startupReady={false} />,
+    );
+    expect(invoke).not.toHaveBeenCalledWith("ensure_default_project");
+    expect(invoke).not.toHaveBeenCalledWith("list_projects");
+    rerender(<App theme="light" themePreference="light" onThemeChange={vi.fn()} startupReady />);
+    expect(await screen.findByText("第一套")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("ensure_default_project");
+  });
+
+  it("keeps next disabled until backend default creation finishes, then selects the default", async () => {
+    const defaultProject = { ...projects[0], id: "default-project", name: "默认队伍" };
+    const options = { projectList: [] as Project[] };
+    installAppMock(null, options);
+    const appInvoke = vi.mocked(invoke).getMockImplementation()!;
+    let finishInitialization!: () => void;
+    const initialization = new Promise<void>(resolve => { finishInitialization = resolve; });
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "ensure_default_project") {
+        await initialization;
+        options.projectList = [defaultProject];
+        return;
+      }
+      return appInvoke(command, args);
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    const next = await screen.findByRole("button", { name: "指令设置" });
+    expect(next).toBeDisabled();
+    expect(invoke).not.toHaveBeenCalledWith("list_projects");
+    await user.click(next);
+    expect(screen.queryByRole("heading", { name: "指令" })).not.toBeInTheDocument();
+    await act(async () => finishInitialization());
+    expect(await screen.findByText("默认队伍")).toBeInTheDocument();
+    expect(next).toBeEnabled();
+    await user.click(next);
+    expect(await screen.findByRole("heading", { name: "指令" })).toBeInTheDocument();
+  });
+
+  it("blocks command navigation when no project is available", async () => {
+    installAppMock(null, { projectList: [] });
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    const next = await screen.findByRole("button", { name: "指令设置" });
+    expect(next).toBeDisabled();
+    await user.click(next);
+    expect(screen.queryByRole("heading", { name: "指令" })).not.toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith("load_command_editor", expect.anything());
+    expect(screen.getByRole("button", { name: "主页" })).toBeEnabled();
   });
 
   it("falls back to the first project when the saved project no longer exists", async () => {
