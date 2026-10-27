@@ -138,12 +138,19 @@ function App({
   const projectWrites = useRef(new PendingProjectWrites());
   const beforeFormationShare = useCallback((projectId: string) => projectWrites.current.wait(projectId), []);
   const [commandBusy, setCommandBusy] = useState(false);
-  const [packetCaptureNavigationLocked, setPacketCaptureNavigationLocked] = useState(false);
-  const packetCaptureNavigationLockedRef = useRef(false);
+  const [navigationLocked, setNavigationLocked] = useState(false);
+  const navigationLocksRef = useRef({ packetCapture: false, resources: false });
   const handlePacketCaptureNavigationLockChange = useCallback((locked: boolean) => {
-    packetCaptureNavigationLockedRef.current = locked;
-    setPacketCaptureNavigationLocked(locked);
+    navigationLocksRef.current.packetCapture = locked;
+    setNavigationLocked(locked || navigationLocksRef.current.resources);
   }, []);
+  const handleResourcesNavigationLockChange = useCallback((locked: boolean) => {
+    navigationLocksRef.current.resources = locked;
+    setNavigationLocked(locked || navigationLocksRef.current.packetCapture);
+  }, []);
+  const isNavigationLocked = useCallback(() => (
+    navigationLocksRef.current.packetCapture || navigationLocksRef.current.resources
+  ), []);
   const [view, setView] = useState<View>("team");
   const [homeMasterFigureId, setHomeMasterFigureId] = useState(470);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -164,6 +171,7 @@ function App({
   const [error, setError] = useState<string | null>(null);
   const [setupChecking, setSetupChecking] = useState(true);
   const [setupReady, setSetupReady] = useState(false);
+  const handleSetupReady = useCallback(() => setSetupReady(true), []);
   const [assetsRefreshKey, setAssetsRefreshKey] = useState(0);
   const [operationLogs, setOperationLogs] = useState<OperationLogEntry[]>([]);
   const [operationLogOpen, setOperationLogOpen] = useState(false);
@@ -504,7 +512,7 @@ function App({
       void runSelfCheck();
     });
     const unlistenResourceManager = listen("resource-manager-requested", () => {
-      if (packetCaptureNavigationLockedRef.current) return;
+      if (isNavigationLocked()) return;
       setSettingsSection("resources");
       setSettingsOpen(true);
     });
@@ -515,6 +523,7 @@ function App({
       setDeviceResolutionOpen(true);
     });
     const unlistenPacketCapture = listen("packet-capture-requested", () => {
+      if (navigationLocksRef.current.packetCapture) return;
       setSettingsOpen(false);
       setView("packetCapture");
     });
@@ -528,7 +537,7 @@ function App({
       unlistenDeviceResolution.then((fn) => fn());
       unlistenPacketCapture.then((fn) => fn());
     };
-  }, [checkForUpdates, runSelfCheck, saveAdbScreenshot]);
+  }, [checkForUpdates, runSelfCheck, saveAdbScreenshot, isNavigationLocked]);
 
   useEffect(() => {
     let cancelled = false;
@@ -955,9 +964,9 @@ function App({
   }, [persistActiveProjectId, refreshProjectCatalog]);
 
   const handleOpenDebug = useCallback(() => {
-    if (!featureToggles.cvDebug || packetCaptureNavigationLockedRef.current) return;
+    if (!featureToggles.cvDebug || isNavigationLocked()) return;
     setView("debug");
-  }, []);
+  }, [isNavigationLocked]);
 
   const handleOpenCraftEssenceEnhancement = useCallback(() => {
     if (!featureToggles.craftEssenceEnhancement) return;
@@ -975,10 +984,10 @@ function App({
   }, []);
 
   const handleOpenSettings = useCallback(() => {
-    if (packetCaptureNavigationLockedRef.current) return;
+    if (isNavigationLocked()) return;
     setSettingsSection("basic");
     setSettingsOpen(true);
-  }, []);
+  }, [isNavigationLocked]);
 
   const handleOpenProjectSettings = useCallback(() => {
     if (!activeProject) return;
@@ -992,9 +1001,9 @@ function App({
   }, []);
 
   const handleOpenHome = useCallback(() => {
-    if (packetCaptureNavigationLockedRef.current) return;
+    if (isNavigationLocked()) return;
     setView("home");
-  }, []);
+  }, [isNavigationLocked]);
 
   const handleSelectHomeFigure = useCallback(async (id: number) => {
     const savedId = await invoke<number>("set_home_master_figure_id", { id });
@@ -1045,6 +1054,7 @@ function App({
               section={settingsSection}
               onOpenChange={setSettingsOpen}
               onSectionChange={setSettingsSection}
+              onNavigationLockChange={handleResourcesNavigationLockChange}
               onProjectsImported={handleProjectsImported}
               onBattleStartPanelChange={setBattleStartPanel}
               onSkillEditorLayoutChange={setSkillEditorLayout}
@@ -1061,7 +1071,7 @@ function App({
           {view === "packetCapture" ? (
             <PacketCapturePage onBack={handleOpenHome} onNavigationLockChange={handlePacketCaptureNavigationLockChange} />
           ) : !setupReady ? (
-            !settingsOpen && <SetupPage onReady={() => setSetupReady(true)} />
+            !settingsOpen && <SetupPage onReady={handleSetupReady} onExitBlockedChange={handleResourcesNavigationLockChange} />
           ) : view === "home" ? (
             <HomePage
               mysticCodes={mysticCodes}
@@ -1280,8 +1290,8 @@ function App({
           </Box>
         </Box>
       </Flex>
-      {setupReady && <StatusBar
-        navigationDisabled={packetCaptureNavigationLocked}
+      <StatusBar
+        navigationDisabled={navigationLocked}
         onOpenSettings={handleOpenSettings}
         onOpenDebug={featureToggles.cvDebug ? handleOpenDebug : undefined}
         theme={theme}
@@ -1301,7 +1311,7 @@ function App({
         updateProgressText={updateProgressText}
         onInstallUpdate={handleInstallUpdate}
         onLogEntry={appendOperationLog}
-      />}
+      />
       <TeamVerificationDialog />
       <ProjectSettingsDialog
         open={projectSettingsOpen}

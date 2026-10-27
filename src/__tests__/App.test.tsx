@@ -1,5 +1,5 @@
 import { commandEditorDevBridge } from "../commandEditorDevMock";
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -135,6 +135,7 @@ describe("App active project restore", () => {
     const user = userEvent.setup();
     renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
     await screen.findByText("资源管理");
+    expect(screen.getByRole("button", { name: "操作日志" })).toBeVisible();
     await act(async () => openTool?.());
     expect(await screen.findByRole("main", { name: "抓包" })).toBeInTheDocument();
     expect(invoke).not.toHaveBeenCalledWith("setup_packet_capture");
@@ -272,7 +273,7 @@ describe("App active project restore", () => {
     expect(await screen.findByRole("button", { name: "指令设置" })).toBeInTheDocument();
   });
 
-  it("keeps resource management mounted and usable across a partial v18 import and final v19 import", async () => {
+  it.each(["light", "dark"] as const)("keeps the status bar visible and navigation locked through partial imports in %s mode", async theme => {
     const options = { resourcesInstalled: true, runtimeInstalled: true, assetVersion: 19 };
     installAppMock("project-1", options);
     const baseInvoke = vi.mocked(invoke).getMockImplementation()!;
@@ -299,7 +300,7 @@ describe("App active project restore", () => {
       return baseInvoke(command, args);
     });
     const user = userEvent.setup();
-    renderWithTheme(<App theme="dark" themePreference="dark" onThemeChange={vi.fn()} />);
+    renderWithTheme(<App theme={theme} themePreference={theme} onThemeChange={vi.fn()} />);
     await screen.findByText("第一套");
     await act(async () => {
       openResources?.({ event: "resource-manager-requested", id: 1, payload: null });
@@ -307,14 +308,31 @@ describe("App active project restore", () => {
     const settings = await screen.findByRole("main", { name: "设置" });
     const assetSection = within(settings).getByText("素材包").closest(".setup-requirement") as HTMLElement;
     const localImport = () => within(assetSection).getByRole("button", { name: "从本地导入" });
+    const expectNavigationLocked = () => {
+      for (const name of ["设置", "CV 调试", "关闭设置", "基础设置"]) {
+        expect(screen.getByRole("button", { name })).toBeDisabled();
+      }
+      expect(screen.getByRole("button", { name: "操作日志" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "运行状态" })).toBeEnabled();
+    };
     await user.click(localImport());
     expect(await screen.findByRole("button", { name: "导入中…" })).toBeInTheDocument();
     expect(screen.getByRole("main", { name: "设置" })).toBe(settings);
     expect(settings.closest(".app-container .main-content")).not.toBeNull();
+    expectNavigationLocked();
+    await act(async () => {
+      openResources?.({ event: "resource-manager-requested", id: 3, payload: null });
+    });
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("main", { name: "设置" })).toBe(settings);
+    expect(screen.queryByRole("main", { name: "抓包" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "操作日志" }));
+    expect(screen.getByRole("button", { name: "操作日志" })).toHaveAttribute("aria-pressed", "true");
     await act(async () => { finishImport(); });
     expect(await screen.findByText("导入完成：素材包 v18")).toBeInTheDocument();
     expect(await screen.findByText("需要更新素材包 v18 → v19")).toBeInTheDocument();
     expect(localImport()).toBeEnabled();
+    expectNavigationLocked();
 
     nextVersion = 19;
     await user.click(localImport());
@@ -322,8 +340,56 @@ describe("App active project restore", () => {
     expect(screen.getByRole("main", { name: "设置" })).toBe(settings);
     await act(async () => { finishImport(); });
     expect(await screen.findByText("导入完成：素材包 v19")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "设置" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "CV 调试" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "关闭设置" }));
     expect(await screen.findByRole("button", { name: "指令设置" })).toBeInTheDocument();
+  });
+
+  it.each(["startup", "settings"])("allows packet capture during a required resource upgrade from %s", async entry => {
+    const options = { resourcesInstalled: entry === "settings", runtimeInstalled: true, assetVersion: entry === "settings" ? 19 : 18 };
+    installAppMock("project-1", options);
+    const baseInvoke = vi.mocked(invoke).getMockImplementation()!;
+    let finishDownload!: () => void;
+    const menu = new Map<string, () => void>();
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      menu.set(event, () => handler({ event, id: 0, payload: null } as Parameters<typeof handler>[0]));
+      return () => {};
+    });
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "download_asset_bundles") {
+        return new Promise(resolve => {
+          finishDownload = () => {
+            options.resourcesInstalled = true;
+            options.assetVersion = 19;
+            resolve({ installed: true, installedVersion: 19 });
+          };
+        });
+      }
+      return baseInvoke(command, args);
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<App theme="light" themePreference="light" onThemeChange={vi.fn()} />);
+    if (entry === "settings") {
+      await screen.findByText("第一套");
+      options.resourcesInstalled = false;
+      options.assetVersion = 18;
+      await act(async () => menu.get("resource-manager-requested")?.());
+    }
+    await screen.findByText("需要更新素材包 v18 → v19");
+    expect(screen.getByRole("button", { name: "设置" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "操作日志" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "在线更新" }));
+    await act(async () => menu.get("packet-capture-requested")?.());
+    expect(await screen.findByRole("main", { name: "抓包" })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("button", { name: "返回" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "设置" })).toBeEnabled();
+    expect(invoke).not.toHaveBeenCalledWith("cancel_resource_downloads");
+    await act(async () => finishDownload());
+    expect(await screen.findByRole("main", { name: "抓包" })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("button", { name: "返回" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "返回" }));
+    expect(screen.getByRole("navigation", { name: "主页菜单" })).toBeVisible();
   });
 
   it("opens the last selected project on startup", async () => {

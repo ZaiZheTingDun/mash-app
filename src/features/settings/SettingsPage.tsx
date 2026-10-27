@@ -27,6 +27,7 @@ interface SettingsPageProps {
   section: SettingsSection;
   onOpenChange: (open: boolean) => void;
   onSectionChange: (section: SettingsSection) => void;
+  onNavigationLockChange?: (locked: boolean) => void;
   onProjectsImported?: (projects: Project[]) => void;
   onSkillEditorLayoutChange?: (value: SkillEditorLayout) => void;
   onBattleStartPanelChange?: (value: BattleStartPanel) => void;
@@ -114,6 +115,7 @@ export function SettingsPage({
   section,
   onOpenChange,
   onSectionChange,
+  onNavigationLockChange,
   onProjectsImported,
   onBattleStartPanelChange,
   onSkillEditorLayoutChange,
@@ -125,6 +127,10 @@ export function SettingsPage({
   onColorThemeChange,
 }: SettingsPageProps) {
   const [resourcesExitBlocked, setResourcesExitBlocked] = useState(false);
+  const handleResourcesExitBlockedChange = useCallback((blocked: boolean) => {
+    setResourcesExitBlocked(blocked);
+    onNavigationLockChange?.(blocked);
+  }, [onNavigationLockChange]);
   const pageRef = useRef<HTMLElement>(null);
   const items = visibleNavItems();
   const activeItem = items.find((item) => item.section === section) ?? items[0];
@@ -203,7 +209,7 @@ export function SettingsPage({
               onProjectsImported, onBattleStartPanelChange, onSkillEditorLayoutChange, mysticCodeGender,
               colorTheme, onColorThemeChange,
               colorThemeError, onColorThemeReload,
-              onMysticCodeGenderChange, onResourcesExitBlockedChange: setResourcesExitBlocked,
+              onMysticCodeGenderChange, onResourcesExitBlockedChange: handleResourcesExitBlockedChange,
             })}
           </Box>
         </div>
