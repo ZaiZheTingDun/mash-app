@@ -77,6 +77,80 @@ function makeScene(id: string, skill: string): BattleScene {
 }
 
 describe("CommandEditor pagination", () => {
+  it("opens and cancels a control-action editor beside its own row", async () => {
+    const user = userEvent.setup();
+    mockInvoke(async command => command === "load_advanced_battle_scenes" ? [{
+      id: "advanced", turns: [{ id: "turn", actions: [] }], rules: [],
+      controlActions: [
+        { type: "equipment", id: "first", skill: "skill_1", target: null },
+        { type: "equipment", id: "last", skill: "skill_2", target: null },
+      ],
+    }] : []);
+    renderWithTheme(<CommandEditor projectId="control-position" advancedMode partyLineup={[makeServant(1, "甲")]} />);
+    await user.click(await screen.findByRole("button", { name: /^\d+ 控制行动/ }));
+    const row = screen.getByRole("button", { name: "编辑行动 1" }).closest(".battle-action-row")!;
+    const next = screen.getByRole("button", { name: "编辑行动 2" }).closest(".battle-action-row")!;
+    await user.click(within(row as HTMLElement).getByRole("button", { name: "编辑行动 1" }));
+    const draft = screen.getByRole("button", { name: "撤销添加行动" }).closest(".command-inline-draft");
+    expect(row.nextElementSibling).toBe(draft);
+    expect(draft?.nextElementSibling).toBe(next);
+    await user.keyboard("{Escape}");
+    expect(row.nextElementSibling).toBe(next);
+    expect(screen.queryByRole("button", { name: "撤销添加行动" })).not.toBeInTheDocument();
+    expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "mutate_command_editor")).toBe(false);
+  });
+
+  describe.each([false, true])("inline edit placement (advanced=%s)", advancedMode => {
+    it.each(["guided", "simple"] as const)("keeps the editor beside the selected row throughout the %s edit flow", async skillEditorLayout => {
+      const user = userEvent.setup();
+      const actions: PreparationAction[] = [
+        { type: "equipment", id: "first", skill: "skill_1", target: null },
+        { type: "servant", id: "middle", servant: "servant_1", skill: "skill_1", target: null },
+        { type: "equipment", id: "last", skill: "skill_3", target: null },
+      ];
+      mockInvoke(async command => {
+        if (command === "load_battle_scenes") {
+          const scene = makeScene("normal", "skill_1"); scene.turns[0].preparationActions = actions; return [scene];
+        }
+        if (command === "load_advanced_battle_scenes") return [{ id: "advanced", turns: [{ id: "turn", actions }], rules: [] }];
+        if (command === "get_servant_skill_targeting") return [{ servantCollectionNo: 1, skillNum: 2, skillId: 2000, targetingMode: "needsTarget", funcTargetTypes: ["ptOne"] }];
+        return [];
+      });
+      const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+      renderWithTheme(<CommandEditor projectId="edit-position" advancedMode={advancedMode} partyLineup={[makeServant(1, "甲"), makeServant(2, "乙"), makeServant(3, "丙")]} skillEditorLayout={skillEditorLayout} />);
+      if (advancedMode) await selectPreparation();
+      const edit = await screen.findByRole("button", { name: "编辑行动 2" });
+      const row = edit.closest(".battle-action-row")!;
+      const lastRow = screen.getByRole("button", { name: "编辑行动 3" }).closest(".battle-action-row")!;
+      const list = skillEditorLayout === "simple" ? screen.getByRole("region", { name: "已配置行动" }) : row.parentElement!;
+      list.scrollTop = 120;
+      await user.click(edit);
+      const draft = screen.getByRole("button", { name: "撤销添加行动" }).closest(".command-inline-draft")!;
+      const expectPosition = () => {
+        expect(row.nextElementSibling).toBe(draft);
+        expect(draft.nextElementSibling).toBe(lastRow);
+        expect(list.scrollTop).toBe(120);
+      };
+      expectPosition();
+      expect(scroll.mock.contexts).toContain(draft);
+      await user.click(within(draft as HTMLElement).getByRole("button", { name: "甲" }));
+      expectPosition();
+      await user.click(within(draft as HTMLElement).getByRole("button", { name: "技能 2" }));
+      expectPosition();
+      await user.click(within(draft as HTMLElement).getByRole("button", { name: "乙" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "编辑行动 2" })).toBeEnabled());
+      expect(screen.queryByRole("button", { name: "撤销添加行动" })).not.toBeInTheDocument();
+      expect(row.nextElementSibling).toBe(lastRow);
+      expect(list.scrollTop).toBe(120);
+      const save = advancedMode ? "save_advanced_battle_scenes" : "save_battle_scenes";
+      const args = vi.mocked(invoke).mock.calls.find(([command]) => command === save)![1] as { scenes: (BattleScene | AdvancedBattleScene)[] };
+      const turn = args.scenes[0].turns![0]; const saved = "actions" in turn ? turn.actions : turn.preparationActions;
+      expect(saved.map(action => action.id)).toEqual(["first", "middle", "last"]);
+      expect(saved[1]).toEqual(expect.objectContaining({ skill: "skill_2", target: "servant_2" }));
+      scroll.mockRestore();
+    });
+  });
+
   it.each([false, true])("restores the selected Mash skill icons and names after saving (advanced=%s)", async advancedMode => {
     const user = userEvent.setup();
     const mash = { ...makeServant(1, "玛修"), variantKey: "1:3" };
