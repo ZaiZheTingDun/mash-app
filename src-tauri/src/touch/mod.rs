@@ -130,7 +130,7 @@ fn jittered_point(point: (u32, u32), screen_size: (u32, u32), offset: (i32, i32)
     )
 }
 
-fn jitter_offset() -> (i32, i32) {
+pub(crate) fn jitter_offset() -> (i32, i32) {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.subsec_nanos())

@@ -583,6 +583,7 @@ function PrioritySource({
 }
 
 interface StatusBarProps {
+  navigationDisabled?: boolean;
   onOpenSettings?: () => void;
   /** Wired by `App.tsx` to switch the main view to the CV debug page.
    * Optional so existing tests (and any callers that don't need the
@@ -608,6 +609,7 @@ interface StatusBarProps {
 }
 
 export function StatusBar({
+  navigationDisabled = false,
   onOpenSettings,
   onOpenDebug,
   theme,
@@ -1103,6 +1105,7 @@ export function StatusBar({
               variant="solid"
               color="gray"
               className="status-settings-btn"
+              disabled={navigationDisabled}
               onClick={onOpenSettings}
             >
               <GearIcon width={14} height={14} />
@@ -1170,6 +1173,7 @@ export function StatusBar({
               variant="solid"
               color="gray"
               className="status-debug-btn"
+              disabled={navigationDisabled}
               onClick={onOpenDebug}
             >
               <MagnifyingGlassIcon width={12} height={12} />

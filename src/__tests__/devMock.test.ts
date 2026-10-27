@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { invokeDevMock } from "../devMock";
 import type { Project, ProjectCatalog } from "../types/project";
+import type { CaptureHistoryState, PacketCaptureWorkspace } from "../types/packetCapture";
+
+it("requires the desktop runtime for packet capture device operations", async () => {
+  for (const command of ["install_capture_certificate", "configure_packet_capture", "setup_packet_capture", "start_packet_capture", "stop_packet_capture"]) {
+    await expect(invokeDevMock(command)).rejects.toThrow("请在 Mash 桌面端连接设备后执行此操作");
+  }
+});
+
+it("returns an empty packet capture index without a default record and rejects missing records", async () => {
+  const workspace = await invokeDevMock<PacketCaptureWorkspace>("get_packet_capture_workspace");
+  expect(workspace.history).toEqual({ records: [], defaultRecordId: null });
+  expect(await invokeDevMock<CaptureHistoryState>("delete_packet_capture_record", { recordId: null })).toEqual(workspace.history);
+  await expect(invokeDevMock("select_packet_capture_record", { recordId: "missing" })).rejects.toThrow("抓包记录不存在");
+});
 
 describe("invokeDevMock project catalog", () => {
   it("supports the complete project grouping workflow", async () => {

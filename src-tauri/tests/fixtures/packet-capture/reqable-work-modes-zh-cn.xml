@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<!-- Reduced from the reported Chinese first-run Work Modes hierarchy. -->
+<hierarchy rotation="0"><node text="" class="android.widget.FrameLayout" package="com.reqable.android" content-desc="" enabled="true" bounds="[0,0][1920,1080]">
+  <node text="" class="android.view.View" package="com.reqable.android" content-desc="" clickable="false" enabled="true" bounds="[0,0][1920,160]">
+    <node text="" class="android.view.View" package="com.reqable.android" content-desc="工作模式" clickable="false" enabled="true" bounds="[36,82][170,126]" />
+    <node NAF="true" text="" class="android.view.View" package="com.reqable.android" content-desc="" clickable="true" enabled="true" bounds="[1819,65][1896,143]" />
+  </node>
+  <node text="" class="android.view.View" package="com.reqable.android" content-desc="" clickable="false" enabled="true" bounds="[24,184][1896,660]">
+    <node text="" class="android.view.View" package="com.reqable.android" content-desc="协同模式（推荐）&#10;与Reqable电脑端应用协同工作。" clickable="true" enabled="true" bounds="[24,184][1896,393]" />
+    <node text="" class="android.view.View" package="com.reqable.android" content-desc="独立模式&#10;仅在手机上独立使用。" clickable="true" enabled="true" bounds="[24,393][1896,602]" />
+    <node text="" class="android.view.View" package="com.reqable.android" content-desc="*" clickable="false" enabled="true" bounds="[24,620][37,660]" />
+    <node text="" class="android.view.View" package="com.reqable.android" content-desc="添加一台电脑为协同设备，共享CA证书，使用Reqable电脑版分析和操作手机端网络流量。" clickable="false" enabled="true" bounds="[49,614][1896,654]" />
+  </node>
+</node></hierarchy>

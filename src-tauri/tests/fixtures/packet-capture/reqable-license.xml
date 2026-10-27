@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<!-- Reduced from the reported 1920x1080 first-run UIAutomator hierarchy. -->
+<hierarchy rotation="0"><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.reqable.android" content-desc="" enabled="true" bounds="[0,0][1920,1080]">
+  <node text="" class="android.view.View" package="com.reqable.android" content-desc="License Agreement" clickable="false" enabled="true" bounds="[36,82][329,126]" />
+  <node text="" class="android.widget.ScrollView" package="com.reqable.android" content-desc="" scrollable="true" enabled="true" bounds="[0,160][1920,905]">
+    <node text="" class="android.view.View" package="com.reqable.android" content-desc="Welcome to Reqable!" enabled="true" />
+    <node text="" class="android.view.View" package="com.reqable.android" content-desc='You shall confirm to fully read, understand the terms of this agreement and choose to "agree" or "disagree".' enabled="true" />
+  </node>
+  <node index="2" text="" resource-id="" class="android.widget.Button" package="com.reqable.android" content-desc="Accept" checkable="false" checked="false" clickable="false" enabled="false" focusable="true" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[36,929][1884,1044]" />
+</node></hierarchy>

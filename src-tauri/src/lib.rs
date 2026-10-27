@@ -9,6 +9,7 @@ mod formation_share;
 mod friend_point_summon_runner;
 mod models;
 mod operation_log;
+mod packet_capture;
 mod paths;
 mod platform;
 mod recognition_diagnostics;
@@ -91,6 +92,10 @@ pub fn run() {
             app.manage(Mutex::new(CraftEssenceEnhancementRunnerHandle::new_idle()));
             app.manage(Mutex::new(FriendPointSummonRunnerHandle::new_idle()));
             app.manage(DeviceOperationCoordinator::default());
+            app.manage(packet_capture::ResponseStore::default());
+            app.manage(Arc::new(packet_capture::HistoryStore::new(
+                paths::app_data_dir(app.handle()).join("packet-capture"),
+            )));
             app.manage(recognition_diagnostics::DiagnosticLogs::default());
             app.manage(recognition_diagnostics::DiagnosticStore::default());
             app.manage(commands::projects::ProjectStoreLock::default());
@@ -101,6 +106,17 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::packet_capture::install_capture_certificate,
+            commands::packet_capture::configure_packet_capture,
+            commands::packet_capture::start_packet_capture,
+            commands::packet_capture::get_packet_capture_response,
+            commands::packet_capture::setup_packet_capture,
+            commands::packet_capture::get_packet_capture_workspace,
+            commands::packet_capture::select_packet_capture_record,
+            commands::packet_capture::delete_packet_capture_record,
+            commands::packet_capture::copy_packet_capture_response,
+            commands::packet_capture::export_packet_capture_response,
+            commands::packet_capture::stop_packet_capture,
             commands::window_chrome::get_window_chrome,
             commands::window_chrome::window_chrome_action,
             commands::catalog::get_servants,

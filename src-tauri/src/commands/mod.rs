@@ -20,6 +20,7 @@ pub(crate) mod automation;
 pub(crate) mod catalog;
 pub(crate) mod debug;
 pub(crate) mod emulator;
+pub(crate) mod packet_capture;
 pub(crate) mod projects;
 pub(crate) mod rank_up_quest;
 pub(crate) mod runtime;

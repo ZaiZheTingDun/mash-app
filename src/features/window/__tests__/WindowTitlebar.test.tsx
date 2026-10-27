@@ -70,6 +70,7 @@ describe("WindowTitlebar", () => {
   });
 
   it.each([
+    ["抓包…", "packet-capture-requested"],
     ["截图…", "save-adb-screenshot-requested"],
     ["重置设备分辨率…", "device-resolution-requested"],
     ["自检…", "self-check-requested"],

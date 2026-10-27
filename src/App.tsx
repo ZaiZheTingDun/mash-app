@@ -31,6 +31,7 @@ import { SetupPage } from "./features/setup/SetupPage";
 import { SettingsPage, type SettingsSection } from "./features/settings/SettingsPage";
 import { SelfCheckDialog } from "./features/settings/SelfCheckDialog";
 import { DeviceResolutionDialog } from "./features/device-resolution/DeviceResolutionDialog";
+import { PacketCapturePage } from "./features/packet-capture/PacketCapturePage";
 import { SoftwareUpdateDialog } from "./features/settings/SoftwareUpdateDialog";
 import { createInitialProjectSlots } from "./features/team/projectSlots";
 import { relocateGrandCardStrategySlots, relocateGrandServants } from "./features/advanced/grandRuleSlots";
@@ -71,6 +72,7 @@ import {
   type AttackLogMeta,
   type LogLevel,
   type OperationLogEntry,
+  type OperationLogEvent,
 } from "./operationLog";
 // The battle flow remains 队伍设置 → 指令设置 → 运行设置.
 // Home is an optional entry point for battle and the standalone tools;
@@ -84,6 +86,7 @@ type View =
   | "craftEssenceEnhancement"
   | "friendPointSummon"
   | "rankUpQuest"
+  | "packetCapture"
   | "debug";
 
 interface AutomationEvent {
@@ -135,6 +138,12 @@ function App({
   const projectWrites = useRef(new PendingProjectWrites());
   const beforeFormationShare = useCallback((projectId: string) => projectWrites.current.wait(projectId), []);
   const [commandBusy, setCommandBusy] = useState(false);
+  const [packetCaptureNavigationLocked, setPacketCaptureNavigationLocked] = useState(false);
+  const packetCaptureNavigationLockedRef = useRef(false);
+  const handlePacketCaptureNavigationLockChange = useCallback((locked: boolean) => {
+    packetCaptureNavigationLockedRef.current = locked;
+    setPacketCaptureNavigationLocked(locked);
+  }, []);
   const [view, setView] = useState<View>("team");
   const [homeMasterFigureId, setHomeMasterFigureId] = useState(470);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -430,6 +439,10 @@ function App({
         appendOperationLog(event.payload.message, event.payload.level ?? "info");
       }
     );
+    const unlistenOperation = listen<OperationLogEvent>("operation-log", (event) => {
+      if (!isCurrentListenerGeneration()) return;
+      appendOperationLog(event.payload.message, event.payload.level);
+    });
     const unlistenOperationDebug = listen<OperationDebugEvent>(
       "operation-debug-log",
       (event) => {
@@ -447,6 +460,7 @@ function App({
       unlistenCraftEssenceEnhancement.then((fn) => fn());
       unlistenFriendPointSummon.then((fn) => fn());
       unlistenOperationDebug.then((fn) => fn());
+      unlistenOperation.then((fn) => fn());
     };
   }, [appendOperationLog]);
 
@@ -490,6 +504,7 @@ function App({
       void runSelfCheck();
     });
     const unlistenResourceManager = listen("resource-manager-requested", () => {
+      if (packetCaptureNavigationLockedRef.current) return;
       setSettingsSection("resources");
       setSettingsOpen(true);
     });
@@ -499,6 +514,10 @@ function App({
     const unlistenDeviceResolution = listen("device-resolution-requested", () => {
       setDeviceResolutionOpen(true);
     });
+    const unlistenPacketCapture = listen("packet-capture-requested", () => {
+      setSettingsOpen(false);
+      setView("packetCapture");
+    });
 
     return () => {
       cancelled = true;
@@ -507,6 +526,7 @@ function App({
       unlistenResourceManager.then((fn) => fn());
       unlistenSaveAdbScreenshot.then((fn) => fn());
       unlistenDeviceResolution.then((fn) => fn());
+      unlistenPacketCapture.then((fn) => fn());
     };
   }, [checkForUpdates, runSelfCheck, saveAdbScreenshot]);
 
@@ -935,7 +955,7 @@ function App({
   }, [persistActiveProjectId, refreshProjectCatalog]);
 
   const handleOpenDebug = useCallback(() => {
-    if (!featureToggles.cvDebug) return;
+    if (!featureToggles.cvDebug || packetCaptureNavigationLockedRef.current) return;
     setView("debug");
   }, []);
 
@@ -955,6 +975,7 @@ function App({
   }, []);
 
   const handleOpenSettings = useCallback(() => {
+    if (packetCaptureNavigationLockedRef.current) return;
     setSettingsSection("basic");
     setSettingsOpen(true);
   }, []);
@@ -971,6 +992,7 @@ function App({
   }, []);
 
   const handleOpenHome = useCallback(() => {
+    if (packetCaptureNavigationLockedRef.current) return;
     setView("home");
   }, []);
 
@@ -1036,7 +1058,9 @@ function App({
           )}
           {/* Keep task pages subscribed to runtime events while settings cover them. */}
           <Box style={{ display: settingsOpen ? "none" : "contents" }}>
-          {!setupReady ? (
+          {view === "packetCapture" ? (
+            <PacketCapturePage onBack={handleOpenHome} onNavigationLockChange={handlePacketCaptureNavigationLockChange} />
+          ) : !setupReady ? (
             !settingsOpen && <SetupPage onReady={() => setSetupReady(true)} />
           ) : view === "home" ? (
             <HomePage
@@ -1257,6 +1281,7 @@ function App({
         </Box>
       </Flex>
       {setupReady && <StatusBar
+        navigationDisabled={packetCaptureNavigationLocked}
         onOpenSettings={handleOpenSettings}
         onOpenDebug={featureToggles.cvDebug ? handleOpenDebug : undefined}
         theme={theme}

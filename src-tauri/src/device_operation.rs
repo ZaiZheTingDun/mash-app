@@ -1,7 +1,10 @@
 //! Process-wide ownership shared by device automation and maintenance.
 //! Each operation holds a lease from acceptance until its worker exits.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
+
+mod cancellation;
+pub(crate) use cancellation::OperationCancellation;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AutomationKind {
@@ -26,6 +29,10 @@ impl AutomationKind {
 pub(crate) enum DeviceOperation {
     Automation(AutomationKind),
     ResetResolution,
+    InstallCaptureCertificate,
+    ConfigurePacketCapture,
+    StartPacketCapture,
+    StopPacketCapture,
 }
 
 impl DeviceOperation {
@@ -33,13 +40,35 @@ impl DeviceOperation {
         match self {
             Self::Automation(kind) => format!("{}正在运行中，请先停止", kind.label()),
             Self::ResetResolution => "设备分辨率正在重置，请稍后重试".into(),
+            Self::InstallCaptureCertificate => "抓包证书正在安装，请稍后重试".into(),
+            Self::ConfigurePacketCapture => "Reqable 正在配置，请稍后重试".into(),
+            Self::StartPacketCapture => "抓包正在启动，请稍后重试".into(),
+            Self::StopPacketCapture => "抓包正在停止，请稍后重试".into(),
         }
     }
 }
 
+#[derive(Debug)]
+struct ActiveOperation {
+    operation: DeviceOperation,
+    cancellation: OperationCancellation,
+}
+
+#[derive(Debug, Default)]
+struct Ownership {
+    active: Option<ActiveOperation>,
+    stopping: bool,
+}
+
+#[derive(Debug, Default)]
+struct SharedOwnership {
+    state: Mutex<Ownership>,
+    changed: Condvar,
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct DeviceOperationCoordinator {
-    active: Arc<Mutex<Option<DeviceOperation>>>,
+    shared: Arc<SharedOwnership>,
 }
 
 impl DeviceOperationCoordinator {
@@ -47,44 +76,122 @@ impl DeviceOperationCoordinator {
         &self,
         operation: DeviceOperation,
     ) -> Result<DeviceOperationLease, String> {
-        let mut active = self.active.lock().unwrap();
-        if let Some(current) = *active {
-            return Err(current.busy_message());
+        let mut state = self.shared.state.lock().unwrap();
+        if state.stopping {
+            return Err(DeviceOperation::StopPacketCapture.busy_message());
         }
-        *active = Some(operation);
-        Ok(DeviceOperationLease {
-            coordinator: self.clone(),
+        if let Some(current) = &state.active {
+            return Err(current.operation.busy_message());
+        }
+        Ok(self.lease(&mut state, operation))
+    }
+
+    fn lease(&self, state: &mut Ownership, operation: DeviceOperation) -> DeviceOperationLease {
+        let cancellation = OperationCancellation::default();
+        state.active = Some(ActiveOperation {
             operation,
-        })
+            cancellation: cancellation.clone(),
+        });
+        DeviceOperationLease {
+            coordinator: self.clone(),
+            cancellation,
+        }
+    }
+
+    /// Signal a capture worker, wait for its cleanup, then take exclusive ownership
+    /// without allowing another device operation to slip into the handoff.
+    pub(crate) fn reserve_capture_stop(
+        &self,
+    ) -> Result<
+        (
+            DeviceOperationLease,
+            Option<(DeviceOperation, OperationCancellation)>,
+        ),
+        String,
+    > {
+        let mut state = self.shared.state.lock().unwrap();
+        if state.stopping {
+            return Err(DeviceOperation::StopPacketCapture.busy_message());
+        }
+        let interrupted = match &state.active {
+            Some(active)
+                if matches!(
+                    active.operation,
+                    DeviceOperation::ConfigurePacketCapture
+                        | DeviceOperation::StartPacketCapture
+                        | DeviceOperation::InstallCaptureCertificate
+                ) =>
+            {
+                Some((active.operation, active.cancellation.clone()))
+            }
+            Some(active) => return Err(active.operation.busy_message()),
+            None => None,
+        };
+        state.stopping = true;
+        if let Some((_, cancellation)) = &interrupted {
+            cancellation.cancel();
+        }
+        state = self
+            .shared
+            .changed
+            .wait_while(state, |state| state.active.is_some())
+            .unwrap();
+        state.stopping = false;
+        let lease = self.lease(&mut state, DeviceOperation::StopPacketCapture);
+        Ok((lease, interrupted))
     }
 
     pub(crate) fn require_idle(&self) -> Result<(), String> {
-        match *self.active.lock().unwrap() {
-            Some(operation) => Err(operation.busy_message()),
+        let state = self.shared.state.lock().unwrap();
+        if state.stopping {
+            return Err(DeviceOperation::StopPacketCapture.busy_message());
+        }
+        match &state.active {
+            Some(active) => Err(active.operation.busy_message()),
             None => Ok(()),
         }
     }
 
     #[cfg(test)]
     fn active(&self) -> Option<DeviceOperation> {
-        *self.active.lock().unwrap()
+        self.shared
+            .state
+            .lock()
+            .unwrap()
+            .active
+            .as_ref()
+            .map(|active| active.operation)
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct DeviceOperationLease {
     coordinator: DeviceOperationCoordinator,
-    operation: DeviceOperation,
+    cancellation: OperationCancellation,
+}
+
+impl DeviceOperationLease {
+    pub(crate) fn cancellation(&self) -> OperationCancellation {
+        self.cancellation.clone()
+    }
 }
 
 impl Drop for DeviceOperationLease {
     fn drop(&mut self) {
-        let mut active = self.coordinator.active.lock().unwrap();
-        if *active == Some(self.operation) {
-            *active = None;
+        let mut state = self.coordinator.shared.state.lock().unwrap();
+        if state
+            .active
+            .as_ref()
+            .is_some_and(|active| active.cancellation.same_operation(&self.cancellation))
+        {
+            state.active = None;
+            self.coordinator.shared.changed.notify_all();
         }
     }
 }
+
+#[cfg(test)]
+mod cancellation_tests;
 
 #[cfg(test)]
 mod tests {
@@ -116,6 +223,67 @@ mod tests {
                 AutomationKind::ServantEnhancement
             ))
             .is_ok());
+    }
+
+    #[test]
+    fn capture_certificate_installation_excludes_other_device_operations() {
+        let coordinator = DeviceOperationCoordinator::default();
+        let lease = coordinator
+            .reserve(DeviceOperation::InstallCaptureCertificate)
+            .unwrap();
+        assert!(coordinator
+            .reserve(DeviceOperation::ResetResolution)
+            .is_err());
+        assert!(coordinator
+            .reserve(DeviceOperation::InstallCaptureCertificate)
+            .is_err());
+        assert!(coordinator
+            .reserve(DeviceOperation::Automation(AutomationKind::Battle))
+            .is_err());
+        drop(lease);
+        assert!(coordinator.require_idle().is_ok());
+    }
+
+    #[test]
+    fn packet_capture_configuration_excludes_automation_and_certificate_installation() {
+        let coordinator = DeviceOperationCoordinator::default();
+        let lease = coordinator
+            .reserve(DeviceOperation::ConfigurePacketCapture)
+            .unwrap();
+        for operation in [
+            DeviceOperation::InstallCaptureCertificate,
+            DeviceOperation::ConfigurePacketCapture,
+            DeviceOperation::StartPacketCapture,
+            DeviceOperation::ResetResolution,
+            DeviceOperation::Automation(AutomationKind::Battle),
+        ] {
+            assert_eq!(
+                coordinator.reserve(operation).unwrap_err(),
+                "Reqable 正在配置，请稍后重试"
+            );
+        }
+        drop(lease);
+        assert!(coordinator.require_idle().is_ok());
+    }
+
+    #[test]
+    fn starting_capture_excludes_maintenance_and_automation_until_the_worker_finishes() {
+        let coordinator = DeviceOperationCoordinator::default();
+        let lease = coordinator
+            .reserve(DeviceOperation::StartPacketCapture)
+            .unwrap();
+        for operation in [
+            DeviceOperation::InstallCaptureCertificate,
+            DeviceOperation::ConfigurePacketCapture,
+            DeviceOperation::Automation(AutomationKind::Battle),
+        ] {
+            assert_eq!(
+                coordinator.reserve(operation).unwrap_err(),
+                "抓包正在启动，请稍后重试"
+            );
+        }
+        drop(lease);
+        assert!(coordinator.require_idle().is_ok());
     }
 
     #[test]
