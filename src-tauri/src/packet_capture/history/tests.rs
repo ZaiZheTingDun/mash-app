@@ -249,6 +249,23 @@ fn index_write_failure_does_not_commit_new_records_or_deletions_in_memory() {
 }
 
 #[test]
+fn exports_the_requested_records_original_body_without_decoding_or_json_wrapping() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = HistoryStore::new(temp.path().join("history"));
+    let id = uuid::Uuid::new_v4().to_string();
+    let raw = "encoded%3D+\r\n数据\n";
+    store.sync(&capture(&id, 1, raw)).unwrap();
+    store
+        .sync(&capture(&uuid::Uuid::new_v4().to_string(), 2, "latest"))
+        .unwrap();
+    let record = store.record(&id).unwrap();
+    let target = temp.path().join(record.export_file_name());
+    fs::write(&target, "previous export").unwrap();
+    record.export_to(&target).unwrap();
+    assert_eq!(fs::read(target).unwrap(), raw.as_bytes());
+}
+
+#[test]
 fn corrupted_and_unwritable_history_is_reported_without_overwriting_data() {
     let temp = tempfile::tempdir().unwrap();
     let id = uuid::Uuid::new_v4().to_string();

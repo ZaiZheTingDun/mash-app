@@ -115,6 +115,7 @@ pub fn run() {
             commands::packet_capture::select_packet_capture_record,
             commands::packet_capture::delete_packet_capture_record,
             commands::packet_capture::copy_packet_capture_response,
+            commands::packet_capture::export_packet_capture_response,
             commands::packet_capture::stop_packet_capture,
             commands::window_chrome::get_window_chrome,
             commands::window_chrome::window_chrome_action,

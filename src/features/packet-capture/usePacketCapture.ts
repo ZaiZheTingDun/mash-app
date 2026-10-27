@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CaptureHistoryState, CaptureRecord, PacketCaptureWorkspace } from "../../types/packetCapture";
 import { listen, type UnlistenFn } from "../../tauri";
-import { copyPacketCaptureResponse, deletePacketCaptureRecord, getPacketCaptureWorkspace, selectPacketCaptureRecord, setupPacketCapture, startPacketCapture, stopPacketCapture } from "./packetCaptureApi";
+import { copyPacketCaptureResponse, deletePacketCaptureRecord, exportPacketCaptureResponse, getPacketCaptureWorkspace, selectPacketCaptureRecord, setupPacketCapture, startPacketCapture, stopPacketCapture } from "./packetCaptureApi";
 
-type Operation = "setup" | "start" | "stop" | "delete" | "copy";
+type Operation = "setup" | "start" | "stop" | "delete" | "copy" | "export";
 const pendingMessages: Partial<Record<Operation, string>> = {
   setup: "正在配置环境，请留意设备上的首次启动协议或 root 授权提示…",
   start: "正在启动抓包，请留意设备上的 VPN 授权提示…",
   stop: "正在停止，等待当前设备操作结束…",
+  export: "正在导出抓包结果…",
 };
 
 export function usePacketCapture() {
@@ -17,6 +18,7 @@ export function usePacketCapture() {
   const [error, setError] = useState<string | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [exported, setExported] = useState(false);
   const [setupMessage, setSetupMessage] = useState<string | null>(null);
   const setupUnlisten = useRef<UnlistenFn | null>(null);
   const inFlight = useRef<Operation | null>(null);
@@ -38,6 +40,7 @@ export function usePacketCapture() {
       desiredRecordId.current = history.defaultRecordId;
       setSelectedId(history.defaultRecordId);
       setCopied(false);
+      setExported(false);
     }
     historyIndex.current = history;
   }, []);
@@ -71,7 +74,7 @@ export function usePacketCapture() {
         timer = setTimeout(() => void refresh(), 2000);
       }
     };
-    // Deletion returns the updated index; copying does not change it. Avoid an
+    // Deletion returns the updated index; copy/export do not change it. Avoid an
     // immediate duplicate request, but resume an active capture's polling.
     if (resumePollingOnly.current) {
       resumePollingOnly.current = false;
@@ -100,10 +103,10 @@ export function usePacketCapture() {
   }, [selectedId, detailRetry]);
 
   useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 2000);
+    if (!copied && !exported) return;
+    const timer = setTimeout(() => { setCopied(false); setExported(false); }, 2000);
     return () => clearTimeout(timer);
-  }, [copied]);
+  }, [copied, exported]);
 
   const capturing = workspace?.capture.phase === "waiting";
   const hasCaptureTask = capturing || (workspace?.capture.phase === "error" && workspace.capture.serial !== null);
@@ -122,10 +125,11 @@ export function usePacketCapture() {
     setError(null);
     setResult("");
     setCopied(false);
+    setExported(false);
     setSetupMessage(null);
     try {
       await request(isCurrent);
-      if (isCurrent() && readError === null) resumePollingOnly.current = action === "delete" || action === "copy";
+      if (isCurrent() && readError === null) resumePollingOnly.current = action === "delete" || action === "copy" || action === "export";
     } catch (error) {
       if (isCurrent()) setError(String(error));
     } finally {
@@ -147,7 +151,7 @@ export function usePacketCapture() {
   const initialLoading = workspace === null && readError === null;
   const recordLoading = selectedId !== null && selected === null && detailError === null;
   return {
-    workspace, operation, capturing, copied, selectedId, selected, initialLoading, recordLoading, recordError: detailError,
+    workspace, operation, capturing, copied, exported, selectedId, selected, initialLoading, recordLoading, recordError: detailError,
     canStop: hasCaptureTask || operation === "setup" || operation === "start" || operation === "stop",
     busy: operation !== null,
     error: error || (operation === null ? detailError || readError || captureError : null),
@@ -182,6 +186,7 @@ export function usePacketCapture() {
       desiredRecordId.current = id;
       setSelectedId(id);
       setCopied(false);
+      setExported(false);
       setError(null);
       if (id === selectedId && detailError) setDetailRetry(value => value + 1);
     },
@@ -193,6 +198,11 @@ export function usePacketCapture() {
       if (!selected || recordLoading) return;
       await copyPacketCaptureResponse(selected.entry.id);
       if (isCurrent()) setCopied(true);
+    }),
+    exportResponse: () => perform("export", async isCurrent => {
+      if (!selected || recordLoading) return;
+      const path = await exportPacketCaptureResponse(selected.entry.id);
+      if (isCurrent() && path !== null) setExported(true);
     }),
   };
 }

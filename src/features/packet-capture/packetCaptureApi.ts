@@ -37,6 +37,10 @@ export function copyPacketCaptureResponse(recordId: string): Promise<void> {
   return invoke<void>("copy_packet_capture_response", { recordId });
 }
 
+export function exportPacketCaptureResponse(recordId: string): Promise<string | null> {
+  return invoke<string | null>("export_packet_capture_response", { recordId });
+}
+
 export function stopPacketCapture(): Promise<void> {
   return invoke<void>("stop_packet_capture");
 }

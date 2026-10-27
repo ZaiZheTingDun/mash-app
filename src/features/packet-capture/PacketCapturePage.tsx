@@ -1,5 +1,5 @@
 import { Button, Flex, IconButton, Skeleton } from "@radix-ui/themes";
-import { CopyIcon, TrashIcon } from "@radix-ui/react-icons";
+import { CopyIcon, DownloadIcon, TrashIcon } from "@radix-ui/react-icons";
 import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
@@ -69,6 +69,7 @@ export function PacketCapturePage({ onBack }: { onBack: () => void }) {
           <div className="capture-response-row">
             {loading ? <Skeleton className="capture-response-skeleton" height="14px" /> : <input aria-label="抓包原始响应" readOnly value={response?.body ?? ""} placeholder={capture.capturing ? "正在等待游戏响应…" : "等待抓包结果…"} />}
             <Button variant="ghost" className="capture-copy" size="2" aria-label="复制抓包结果" disabled={capture.busy || loading || !response} onClick={() => void capture.copy()}><CopyIcon />{capture.copied ? "已复制" : "复制"}</Button>
+            <Button variant="ghost" className="capture-copy" size="2" aria-label="导出抓包结果" disabled={capture.busy || loading || !response} onClick={() => void capture.exportResponse()}><DownloadIcon />{capture.operation === "export" ? "导出中…" : capture.exported ? "已导出" : "导出"}</Button>
           </div>
         </section>
         <section className="capture-preview" aria-label="数据预览" aria-busy={loading}>

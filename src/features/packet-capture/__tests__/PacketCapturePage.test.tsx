@@ -59,6 +59,7 @@ describe("PacketCapturePage", () => {
     expect(screen.getByRole("region", { name: "抓包结果" })).toHaveAttribute("aria-busy", "true");
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "复制抓包结果" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "导出抓包结果" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "返回" })).toBeEnabled();
     await act(async () => finishRecord(saved));
     expect(screen.getByRole("textbox")).toHaveValue(saved.response.body);
@@ -262,6 +263,46 @@ describe("PacketCapturePage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("复制失败");
     expect(screen.getByRole("textbox")).toHaveValue("raw%3D+response");
     expect(screen.queryByText("已复制")).not.toBeInTheDocument();
+  });
+
+  it("exports the displayed record through the save dialog and blocks duplicate requests while pending", async () => {
+    const user = userEvent.setup();
+    const latest = record("latest"), older = record("older", Date.UTC(2026, 9, 25), "raw%3D+older\r\n");
+    showRecords(latest, older);
+    let finish!: (path: string | null) => void;
+    actions.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
+    await user.click((await screen.findAllByRole("button", { name: /^查看 / }))[1]);
+    await waitFor(() => expect(screen.getByRole("button", { name: "导出抓包结果" })).toBeEnabled());
+    const button = screen.getByRole("button", { name: "导出抓包结果" });
+    await user.click(button);
+    expect(actions).toHaveBeenCalledExactlyOnceWith("export_packet_capture_response", { recordId: "older" });
+    expect(button).toHaveTextContent("导出中…");
+    expect(button).toBeDisabled();
+    expect(screen.getByRole("button", { name: "复制抓包结果" })).toBeDisabled();
+    await user.click(button);
+    expect(actions).toHaveBeenCalledTimes(1);
+    await act(async () => finish("/tmp/capture.txt"));
+    expect(button).toHaveTextContent("已导出");
+    expect(button).toBeEnabled();
+    expect(screen.getByRole("textbox")).toHaveValue("raw%3D+older");
+    expect(reads).toHaveBeenCalledTimes(1);
+    expect(recordReads).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["cancel", "failure"])("retains the response after export %s and allows retry", async outcome => {
+    const user = userEvent.setup();
+    showRecords(record("a"));
+    if (outcome === "cancel") actions.mockResolvedValue(null);
+    else actions.mockRejectedValue("写入抓包结果失败");
+    renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "导出抓包结果" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "导出抓包结果" }));
+    expect(screen.getByRole("button", { name: "导出抓包结果" })).toBeEnabled();
+    expect(screen.queryByText("已导出")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue("raw%3D+response");
+    if (outcome === "failure") expect(screen.getByRole("alert")).toHaveTextContent("写入抓包结果失败");
+    else expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("selects, deletes individual records and clears history using backend results", async () => {

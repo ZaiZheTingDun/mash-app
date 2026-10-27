@@ -1,6 +1,6 @@
 //! A small persistent index, independent response files and a bounded LRU cache.
 use super::response::{LoginResponse, ResponseState};
-use crate::storage::write_json_atomic;
+use crate::storage::{write_bytes_atomic, write_json_atomic};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -29,6 +29,14 @@ pub(crate) struct CaptureRecord {
 }
 
 impl CaptureRecord {
+    pub(crate) fn export_file_name(&self) -> String {
+        format!("mash-capture-{}.txt", self.entry.captured_at)
+    }
+
+    pub(crate) fn export_to(&self, path: &Path) -> Result<(), String> {
+        write_bytes_atomic(path, self.response.body.as_bytes(), "抓包结果")
+    }
+
     fn retained_bytes(&self) -> usize {
         std::mem::size_of::<Self>()
             + 2 * std::mem::size_of::<usize>() // Arc counters

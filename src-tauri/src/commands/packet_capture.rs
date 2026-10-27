@@ -10,6 +10,7 @@ use crate::runner::LogLevel;
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_dialog::DialogExt;
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -116,6 +117,35 @@ pub(crate) async fn copy_packet_capture_response(
     })
     .await
     .map_err(|error| format!("复制抓包响应失败：{error}"))?
+}
+
+#[tauri::command]
+pub(crate) async fn export_packet_capture_response(
+    record_id: String,
+    app: tauri::AppHandle,
+    history: tauri::State<'_, Arc<HistoryStore>>,
+) -> Result<Option<String>, String> {
+    let history = history.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let record = history.record(&record_id)?;
+        let target = app
+            .dialog()
+            .file()
+            .set_title("导出抓包原始响应")
+            .add_filter("文本文件", &["txt"])
+            .set_file_name(record.export_file_name())
+            .blocking_save_file();
+        let Some(target) = target else {
+            return Ok(None);
+        };
+        let target = target
+            .into_path()
+            .map_err(|error| format!("导出路径无效：{error}"))?;
+        record.export_to(&target)?;
+        Ok(Some(target.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|error| format!("导出抓包响应失败：{error}"))?
 }
 
 #[tauri::command]
