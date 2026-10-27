@@ -8,6 +8,7 @@ import type { Server } from "./types/server";
 import type { DeviceResolutionStatus } from "./types/deviceResolution";
 import { isAppColorTheme, type AppColorTheme } from "./types/theme";
 import type { ServantPickerSettings } from "./types/appUiSettings";
+import type { CaptureHistoryState, PacketCaptureWorkspace } from "./types/packetCapture";
 
 type InvokeArgs = Record<string, unknown>;
 // Explicit browser preview only; native runtime and asset checks are unchanged.
@@ -556,10 +557,11 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
     case "start_packet_capture":
       throw new Error("请在 Mash 桌面端连接设备后执行此操作");
     case "get_packet_capture_workspace":
-      return { capture: { phase: "idle", serial: null, message: "", response: null }, history: { records: [], selected: null } } as T;
+      return { capture: { phase: "idle", serial: null, message: "" }, history: { records: [], defaultRecordId: null } } satisfies PacketCaptureWorkspace as T;
     case "select_packet_capture_record":
+      throw new Error("抓包记录不存在");
     case "delete_packet_capture_record":
-      return { records: [], selected: null } as T;
+      return { records: [], defaultRecordId: null } satisfies CaptureHistoryState as T;
     case "copy_packet_capture_response":
       throw new Error("暂无可复制的抓包结果");
     case "get_packet_capture_response":

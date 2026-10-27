@@ -1,5 +1,6 @@
 import { Button, Flex, IconButton, Skeleton } from "@radix-ui/themes";
 import { CopyIcon, DownloadIcon, TrashIcon } from "@radix-ui/react-icons";
+import { useEffect } from "react";
 import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
@@ -21,8 +22,12 @@ function CaptureEmpty({ title, detail, loading = false }: { title: string; detai
   </div>;
 }
 
-export function PacketCapturePage({ onBack }: { onBack: () => void }) {
+export function PacketCapturePage({ onBack, onNavigationLockChange }: { onBack: () => void; onNavigationLockChange?: (locked: boolean) => void }) {
   const capture = usePacketCapture();
+  useEffect(() => {
+    onNavigationLockChange?.(capture.navigationLocked);
+  }, [capture.navigationLocked, onNavigationLockChange]);
+  useEffect(() => () => onNavigationLockChange?.(false), [onNavigationLockChange]);
   const history = capture.workspace?.history;
   const selected = capture.selected;
   const selectedEntry = history?.records.find(entry => entry.id === capture.selectedId);
@@ -35,7 +40,7 @@ export function PacketCapturePage({ onBack }: { onBack: () => void }) {
     groups.set(day, [...groups.get(day) ?? [], entry]);
   }
   return <main className="main-content-inner workspace-page packet-capture-page" aria-label="抓包">
-    <PageHeader title="数据抓包" english="PACKET CAPTURE" onBack={onBack} backDisabled={capture.busy}>{null}</PageHeader>
+    <PageHeader title="数据抓包" english="PACKET CAPTURE" onBack={onBack} backDisabled={capture.navigationLocked}>{null}</PageHeader>
     <div className="capture-body">
       <aside className="capture-history" aria-label="抓包历史记录">
         <header className="capture-history-header">

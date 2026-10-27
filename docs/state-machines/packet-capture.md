@@ -19,6 +19,8 @@
 
 停止不撤销已完成的证书安装；若配置写入后被取消，会先回滚配置文件，回滚失败保留备份并记录警告。协议及轮询等待可立即唤醒，正在执行的 ADB 原子命令会在当前命令结束后停止后续步骤。界面使用请求代次忽略被停止任务的迟到进度、成功、错误及结束回调，后台停止确认后才允许新任务开始。
 
+配置、启动、等待响应及停止期间禁止离开抓包页面：禁用返回、设置和调试入口，并忽略菜单的资源管理请求。启动成功后，在后台页面状态刷新完成前继续锁定导航；轮询读取失败仍保留锁定和停止入口。只有停止确认成功或抓包完成后恢复导航；停止失败且仍绑定设备时继续锁定，允许重试停止。
+
 界面 dump 使用独立临时文件并清理，不将完整 XML 写入日志。尚未完成初始化时不会安装证书或写入 Reqable 配置。配置期间通过 `packet-capture-setup-progress` 字符串事件同步左下角状态，操作日志仍保留完整步骤。单元测试使用中英文协议页和工作模式页真实层级结构的精简 fixture，覆盖等待协议确认、选择独立模式、点击下一步及离开页面后读取 CA；真机验证仍需设备环境。
 
 系统画中画权限依据 Android 的 [ActivityRecord 权限检查](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android13-release/services/core/java/com/android/server/wm/ActivityRecord.java)及 [AppOps 命令实现](https://android.googlesource.com/platform/frameworks/base/+/b9c4862b8605b653153be29ed902142539f4ffe2/services/core/java/com/android/server/appop/AppOpsService.java)。权限回读测试覆盖命令未生效、UID 覆盖和连接失败；设备上的实际窗口效果仍需验证。

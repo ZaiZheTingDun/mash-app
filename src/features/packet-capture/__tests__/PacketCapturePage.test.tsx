@@ -5,6 +5,7 @@ import { listen, type Event } from "@tauri-apps/api/event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { PacketCapturePage } from "../PacketCapturePage";
+import { invokeDevMock } from "../../../devMock";
 import type { CaptureConfiguration, CaptureRecord, PacketCaptureWorkspace } from "../../../types/packetCapture";
 
 const actions = vi.fn();
@@ -41,6 +42,16 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); });
 
 describe("PacketCapturePage", () => {
+  it("renders the browser development mock's empty workspace without attempting a record read", async () => {
+    vi.mocked(invoke).mockImplementation((command, args) => invokeDevMock(command, args as Record<string, unknown> | undefined));
+    renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
+    expect(await screen.findByText("暂无历史记录")).toBeInTheDocument();
+    expect(screen.getByText("尚无账户物品")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "返回" })).toBeEnabled();
+    expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "select_packet_capture_record")).toBe(false);
+  });
+
   it("renders Skeletons immediately, then shows the index before the selected record finishes loading", async () => {
     const saved = record("a");
     showRecords(saved);
@@ -233,6 +244,63 @@ describe("PacketCapturePage", () => {
     await user.click(screen.getByRole("button", { name: "停止" }));
     expect(actions).toHaveBeenLastCalledWith("stop_packet_capture", undefined);
     expect(await screen.findByRole("button", { name: "开始" })).toBeEnabled();
+  });
+
+  it.each(["stop", "complete"])("locks navigation through the post-start read until capture %s", async outcome => {
+    vi.useFakeTimers();
+    const onBack = vi.fn();
+    let finishStart!: (value: unknown) => void;
+    actions.mockImplementation(() => new Promise(resolve => { finishStart = resolve; }));
+    renderWithTheme(<PacketCapturePage onBack={onBack} />);
+    await act(async () => {});
+    const back = screen.getByRole("button", { name: "返回" });
+    expect(back).toBeEnabled();
+    let finishRead!: (value: PacketCaptureWorkspace) => void;
+    reads.mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "开始" })); });
+    await act(async () => finishStart({ serial: "device", alreadyActive: false, message: "已启动抓包" }));
+    // Start has resolved, but the workspace still contains the old idle state.
+    expect(back).toBeDisabled();
+    expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
+    current = { ...current, capture: { ...idle, phase: "waiting", serial: "device", message: "等待游戏响应" } };
+    await act(async () => finishRead(current));
+    expect(back).toBeDisabled();
+    fireEvent.click(back);
+    expect(onBack).not.toHaveBeenCalled();
+    if (outcome === "stop") {
+      let finishStop!: () => void;
+      actions.mockImplementation(() => new Promise<void>(resolve => { finishStop = resolve; }));
+      await act(async () => { fireEvent.click(screen.getByRole("button", { name: "停止" })); });
+      expect(back).toBeDisabled();
+      current = { ...current, capture: idle };
+      await act(async () => finishStop());
+    } else {
+      showRecords(record("captured"));
+      current = { ...current, capture: { ...idle, phase: "found", serial: "device", message: "抓包已完成" } };
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(screen.getByRole("textbox")).toHaveValue("raw%3D+response");
+    }
+    expect(back).toBeEnabled();
+    fireEvent.click(back);
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it("keeps navigation locked and offers stop when the first post-start workspace read fails", async () => {
+    vi.useFakeTimers();
+    let finishStart!: (value: unknown) => void;
+    actions.mockImplementation(() => new Promise(resolve => { finishStart = resolve; }));
+    renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
+    await act(async () => {});
+    reads.mockRejectedValueOnce("连接中断");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "开始" })); });
+    await act(async () => finishStart({ serial: "device", alreadyActive: false, message: "已启动抓包" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("连接中断");
+    expect(screen.getByRole("button", { name: "返回" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
+    actions.mockImplementation(async () => { current = { ...current, capture: idle }; });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "停止" })); });
+    expect(screen.getByRole("button", { name: "返回" })).toBeEnabled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("shows raw response as a single read-only line and copies through the native backend", async () => {
@@ -487,8 +555,10 @@ describe("PacketCapturePage stop recovery", () => {
     renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("设备离线");
     expect(screen.getByRole("button", { name: "环境配置" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "返回" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "停止" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "开始" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "返回" })).toBeEnabled();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

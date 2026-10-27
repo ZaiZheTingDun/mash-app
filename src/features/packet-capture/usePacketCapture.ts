@@ -14,6 +14,8 @@ const pendingMessages: Partial<Record<Operation, string>> = {
 export function usePacketCapture() {
   const [workspace, setWorkspace] = useState<PacketCaptureWorkspace | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
+  const [completedOperationGeneration, setCompletedOperationGeneration] = useState(0);
+  const [awaitingCaptureStatus, setAwaitingCaptureStatus] = useState(false);
   const [result, setResult] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
@@ -65,6 +67,7 @@ export function usePacketCapture() {
         waitingForCapture.current = next.capture.phase === "waiting";
         applyHistory(next.history);
         setWorkspace(next);
+        setAwaitingCaptureStatus(false);
         setReadError(null);
         if (next.capture.phase === "waiting") timer = setTimeout(() => void refresh(), 1000);
       } catch (error) {
@@ -83,7 +86,7 @@ export function usePacketCapture() {
       void refresh();
     }
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [operation, applyHistory]);
+  }, [operation, completedOperationGeneration, applyHistory]);
 
   // Commit selection before starting the slow read. Keep one displayed record;
   // bounded caching belongs to Rust. Late results never change the selection.
@@ -129,13 +132,18 @@ export function usePacketCapture() {
     setSetupMessage(null);
     try {
       await request(isCurrent);
-      if (isCurrent() && readError === null) resumePollingOnly.current = action === "delete" || action === "copy" || action === "export";
+      if (isCurrent() && readError === null && !awaitingCaptureStatus) resumePollingOnly.current = action === "delete" || action === "copy" || action === "export";
     } catch (error) {
       if (isCurrent()) setError(String(error));
     } finally {
       if (generation === requestGeneration.current) {
         inFlight.current = null;
-        if (mounted.current) setOperation(null);
+        if (mounted.current) {
+          setOperation(null);
+          // A fast request can start and finish in one React batch. Still refresh
+          // its backend state before releasing the capture navigation lock.
+          setCompletedOperationGeneration(generation);
+        }
       }
     }
   };
@@ -152,7 +160,8 @@ export function usePacketCapture() {
   const recordLoading = selectedId !== null && selected === null && detailError === null;
   return {
     workspace, operation, capturing, copied, exported, selectedId, selected, initialLoading, recordLoading, recordError: detailError,
-    canStop: hasCaptureTask || operation === "setup" || operation === "start" || operation === "stop",
+    canStop: hasCaptureTask || awaitingCaptureStatus || operation === "setup" || operation === "start" || operation === "stop",
+    navigationLocked: initialLoading || operation !== null || hasCaptureTask || awaitingCaptureStatus,
     busy: operation !== null,
     error: error || (operation === null ? detailError || readError || captureError : null),
     message: (operation === "setup" && setupMessage) || (operation && pendingMessages[operation]) || workspace?.capture.message || result,
@@ -178,7 +187,11 @@ export function usePacketCapture() {
     }),
     start: () => perform("start", async isCurrent => {
       const response = await startPacketCapture();
-      if (isCurrent()) setResult(response.message);
+      if (isCurrent()) {
+        setResult(response.message);
+        // Keep navigation locked until the first post-start workspace read.
+        setAwaitingCaptureStatus(true);
+      }
     }),
     stop: () => perform("stop", stopPacketCapture),
     select: (id: string) => {

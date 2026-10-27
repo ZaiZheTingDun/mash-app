@@ -328,7 +328,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "should_check_updates_today":
         return false;
       case "get_packet_capture_workspace":
-        return { capture: { phase: "idle", serial: null, message: "", response: null }, history: { records: [], selected: null } };
+        return { capture: { phase: "idle", serial: null, message: "" }, history: { records: [], defaultRecordId: null } };
       case "get_packet_capture_response":
         return { phase: "idle", serial: null, message: "", response: null };
       case "mark_update_checked_today":

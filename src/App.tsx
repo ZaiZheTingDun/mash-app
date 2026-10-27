@@ -138,6 +138,12 @@ function App({
   const projectWrites = useRef(new PendingProjectWrites());
   const beforeFormationShare = useCallback((projectId: string) => projectWrites.current.wait(projectId), []);
   const [commandBusy, setCommandBusy] = useState(false);
+  const [packetCaptureNavigationLocked, setPacketCaptureNavigationLocked] = useState(false);
+  const packetCaptureNavigationLockedRef = useRef(false);
+  const handlePacketCaptureNavigationLockChange = useCallback((locked: boolean) => {
+    packetCaptureNavigationLockedRef.current = locked;
+    setPacketCaptureNavigationLocked(locked);
+  }, []);
   const [view, setView] = useState<View>("team");
   const [homeMasterFigureId, setHomeMasterFigureId] = useState(470);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -498,6 +504,7 @@ function App({
       void runSelfCheck();
     });
     const unlistenResourceManager = listen("resource-manager-requested", () => {
+      if (packetCaptureNavigationLockedRef.current) return;
       setSettingsSection("resources");
       setSettingsOpen(true);
     });
@@ -948,7 +955,7 @@ function App({
   }, [persistActiveProjectId, refreshProjectCatalog]);
 
   const handleOpenDebug = useCallback(() => {
-    if (!featureToggles.cvDebug) return;
+    if (!featureToggles.cvDebug || packetCaptureNavigationLockedRef.current) return;
     setView("debug");
   }, []);
 
@@ -968,6 +975,7 @@ function App({
   }, []);
 
   const handleOpenSettings = useCallback(() => {
+    if (packetCaptureNavigationLockedRef.current) return;
     setSettingsSection("basic");
     setSettingsOpen(true);
   }, []);
@@ -984,6 +992,7 @@ function App({
   }, []);
 
   const handleOpenHome = useCallback(() => {
+    if (packetCaptureNavigationLockedRef.current) return;
     setView("home");
   }, []);
 
@@ -1050,7 +1059,7 @@ function App({
           {/* Keep task pages subscribed to runtime events while settings cover them. */}
           <Box style={{ display: settingsOpen ? "none" : "contents" }}>
           {view === "packetCapture" ? (
-            <PacketCapturePage onBack={handleOpenHome} />
+            <PacketCapturePage onBack={handleOpenHome} onNavigationLockChange={handlePacketCaptureNavigationLockChange} />
           ) : !setupReady ? (
             !settingsOpen && <SetupPage onReady={() => setSetupReady(true)} />
           ) : view === "home" ? (
@@ -1272,6 +1281,7 @@ function App({
         </Box>
       </Flex>
       {setupReady && <StatusBar
+        navigationDisabled={packetCaptureNavigationLocked}
         onOpenSettings={handleOpenSettings}
         onOpenDebug={featureToggles.cvDebug ? handleOpenDebug : undefined}
         theme={theme}
