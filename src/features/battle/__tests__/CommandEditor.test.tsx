@@ -77,6 +77,25 @@ function makeScene(id: string, skill: string): BattleScene {
 }
 
 describe("CommandEditor pagination", () => {
+  it.each([false, true])("does not lock navigation without a project (advanced=%s)", async advancedMode => {
+    const onBusyChange = vi.fn();
+    renderWithTheme(<CommandEditor projectId={null} advancedMode={advancedMode} partyLineup={[]} onBusyChange={onBusyChange} />);
+    expect(await screen.findByText("请先选择队伍")).toBeInTheDocument();
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+    expect(invoke).not.toHaveBeenCalledWith("load_command_editor", expect.anything());
+  });
+
+  it.each([false, true])("unlocks navigation after document loading fails (advanced=%s)", async advancedMode => {
+    vi.mocked(invoke).mockImplementation(async command => {
+      if (command === "load_command_editor") throw new Error("读取指令失败");
+      return [];
+    });
+    const onBusyChange = vi.fn();
+    renderWithTheme(<CommandEditor projectId="broken-project" advancedMode={advancedMode} partyLineup={[]} onBusyChange={onBusyChange} />);
+    expect(await screen.findByText("Error: 读取指令失败")).toBeInTheDocument();
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
+  });
+
   it("opens and cancels a control-action editor beside its own row", async () => {
     const user = userEvent.setup();
     mockInvoke(async command => command === "load_advanced_battle_scenes" ? [{

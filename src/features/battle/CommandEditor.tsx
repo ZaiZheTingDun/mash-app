@@ -61,9 +61,9 @@ export function CommandEditor({
   const editor = useCommandDocument<BattleScene>(advancedMode ? null : projectId, false);
   useEffect(() => {
     if (advancedMode) return;
-    onBusyChange?.(editor.busy || !editor.document);
+    onBusyChange?.(Boolean(projectId) && (editor.busy || (!editor.document && !editor.error)));
     return () => onBusyChange?.(false);
-  }, [advancedMode, editor.busy, editor.document, onBusyChange]);
+  }, [advancedMode, projectId, editor.busy, editor.document, editor.error, onBusyChange]);
   const initialPartyMembers = partyMembers ?? toPartyMembers(partyLineup);
 
   if (advancedMode) {

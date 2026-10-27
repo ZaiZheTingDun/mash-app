@@ -1084,9 +1084,9 @@ export function AdvancedCommandEditor({
   const [projectBusy, setProjectBusy] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
   useEffect(() => {
-    onBusyChange?.(editor.busy || projectBusy || !editor.document);
+    onBusyChange?.(projectBusy || (Boolean(projectId) && (editor.busy || (!editor.document && !editor.error))));
     return () => onBusyChange?.(false);
-  }, [editor.busy, editor.document, projectBusy, onBusyChange]);
+  }, [projectId, editor.busy, editor.document, editor.error, projectBusy, onBusyChange]);
   const persistProject = async (save: () => unknown) => {
     setProjectBusy(true); setProjectError(null);
     try { await save(); }
