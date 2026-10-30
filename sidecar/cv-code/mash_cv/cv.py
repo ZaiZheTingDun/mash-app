@@ -5395,11 +5395,11 @@ def _support_parse_np_level_text(text: str) -> Optional[int]:
     m = re.search(r"等级\s*([1-5])", normalized)
     if not m:
         # JP renders NP levels as ``Lv.5``. Whole-list OCR may lose the
-        # narrow ``v`` or punctuation, so accept the observed ``LV5`` /
-        # ``L5`` variants as long as the level is the final digit in the
-        # fragment (apart from decorations such as the NP-strength arrow).
+        # narrow ``v``, read it as ``y``, or turn the dot into a comma.
+        # Accept those observed variants while requiring a level prefix
+        # and a final single digit (apart from NP-strength decorations).
         m = re.search(
-            r"L(?:V)?\s*\.?\s*([1-5])(?=\D*$)",
+            r"L\s*(?:[VY]\s*)?[.,]?\s*([1-5])(?=\D*$)",
             normalized,
             flags=re.IGNORECASE,
         )

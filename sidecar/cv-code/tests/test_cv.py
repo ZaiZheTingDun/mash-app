@@ -3505,6 +3505,57 @@ def test_support_np_level_parser_rejects_non_level_digits():
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
+        ("鎮第七聖典・断罪死Ly３", 3),
+        ("覲　図叫え立てよ、我が憤怒Ｌy1Ａ", 1),
+        ("すでに過ぎし人理の終ＬＶ,4", 4),
+        ("絶技・八岐怒濤 L y, 5", 5),
+        ("第七聖典・断罪死 Ly10", None),
+        ("サーヴァント LV,120", None),
+        ("サーヴァント Lv.100/100", None),
+        ("第七聖典・断罪死 5", None),
+        ("友情点 +25", None),
+    ],
+)
+def test_support_np_level_parser_handles_observed_jp_ocr_errors(text, expected):
+    from mash_cv.cv import _support_parse_np_level_text
+
+    assert _support_parse_np_level_text(text) == expected
+
+
+@pytest.mark.parametrize("size", [(2560, 1440), (1920, 1080)])
+def test_support_np_levels_from_jp_screenshot_with_misread_lv(size):
+    import mash_cv.cv as cv
+
+    cv._load_templates(
+        os.path.join(_REPO_ROOT, "src-tauri/resources/servers/shared/templates"),
+        key_prefix="shared",
+    )
+    cv._load_templates(_PROD_TEMPLATES_DIR, append=True)
+    img = cv2.imread(os.path.join(
+        _TEST_SCREENSHOTS_DIR, "support_score_grand_jp_31_16_0_16.png"
+    ))
+    assert img is not None
+    img = cv2.resize(img, size, interpolation=cv2.INTER_AREA)
+
+    result = cv._find_supports(
+        img,
+        cv.SUPPORT_LIST_REGION,
+        "",
+        [],
+        cv.SUPPORT_NAME_THRESHOLD,
+        cv.SUPPORT_NP_THRESHOLD,
+        cv.SUPPORT_ROW_PAIR_DY,
+        True,
+        match_any_servant=True,
+    )
+
+    assert len(result["supports"]) >= 2
+    assert [row["npLevel"] for row in result["supports"][:2]] == [3, 5]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
         ("Lv.100/100", 100),
         ("Ｌｖ．９２／９２", 92),
         ("L. 90/90", 90),
