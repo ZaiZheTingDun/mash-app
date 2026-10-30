@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import socket
@@ -10,7 +11,7 @@ import numpy as np
 import pytest
 
 from mash_cv.scrcpy_control import ScrcpyControl, touch_packet
-from mash_cv import scrcpy_control
+from mash_cv import cv, scrcpy_control
 from mash_cv.stream import ScrcpyStream
 
 
@@ -139,6 +140,77 @@ def test_stream_rejects_stale_session_and_changed_dimensions_before_sending(monk
     with pytest.raises(RuntimeError, match="dimensions"):
         stream.send_touch(command)
     assert not sock.packets
+
+
+@pytest.mark.parametrize("failure,error", [
+    ("stale_session", "stale scrcpy stream session"),
+    ("changed_dimensions", "scrcpy frame dimensions changed or stream stopped; restart the stream"),
+    ("stopped_decoder", "scrcpy frame dimensions changed or stream stopped; restart the stream"),
+    ("unavailable_control", "scrcpy control unavailable"),
+    ("invalid_events", "expected a complete scrcpy gesture"),
+    ("broken_socket", "test disconnect"),
+])
+def test_repl_touch_failure_preserves_stream_and_handles_following_requests(
+    monkeypatch, capsys, failure, error,
+):
+    stream = ScrcpyStream("unused", control=True)
+    sock = RecordingSocket(fail_at=1 if failure == "broken_socket" else None)
+    stream._control = ScrcpyControl(sock)
+    stream._publish_frame(np.zeros((1080, 1920, 3), dtype=np.uint8))
+    monkeypatch.setattr(stream, "is_decoder_alive", lambda: failure != "stopped_decoder")
+    command = {
+        "cmd": "scrcpy_touch", "id": 41,
+        "streamId": stream.control_info()["streamId"],
+        "width": 1920, "height": 1080, "events": gesture(),
+    }
+    if failure == "stale_session":
+        command["streamId"] = "old-session"
+    elif failure == "changed_dimensions":
+        command["width"] = 2560
+    elif failure == "unavailable_control":
+        stream._control = None
+    elif failure == "invalid_events":
+        command["events"] = []
+    commands = [command, {"cmd": "ping", "id": 42},
+                {"cmd": "get_frame", "format": "png", "id": 43}]
+    monkeypatch.setattr(cv, "stream", stream)
+    monkeypatch.setattr(cv.sys, "stdin", io.StringIO("\n".join(json.dumps(c) for c in commands)))
+
+    cv._main_repl()
+
+    responses = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert responses[0] == {"ok": False, "error": error, "id": 41}
+    assert responses[1] == {"ok": True, "recognitionDiagnosticsVersion": 1, "id": 42}
+    assert responses[2]["id"] == 43
+    assert responses[2]["ok"] is True
+    assert responses[2]["pngB64"]
+    assert cv.stream is stream
+    assert not stream._stop_event.is_set()
+    if failure == "broken_socket":
+        assert [packet[1] for packet in sock.packets] == [0, 1]
+    else:
+        assert not sock.packets
+
+
+def test_repl_touch_success_preserves_request_id(monkeypatch, capsys):
+    stream = ScrcpyStream("unused", control=True)
+    sock = RecordingSocket()
+    stream._control = ScrcpyControl(sock)
+    stream._publish_frame(np.zeros((1080, 1920, 3), dtype=np.uint8))
+    monkeypatch.setattr(stream, "is_decoder_alive", lambda: True)
+    command = {
+        "cmd": "scrcpy_touch", "id": 41,
+        "streamId": stream.control_info()["streamId"],
+        "width": 1920, "height": 1080, "events": gesture(),
+    }
+    monkeypatch.setattr(scrcpy_control.time, "sleep", lambda _: None)
+    monkeypatch.setattr(cv, "stream", stream)
+    monkeypatch.setattr(cv.sys, "stdin", io.StringIO(json.dumps(command)))
+
+    cv._main_repl()
+
+    assert json.loads(capsys.readouterr().out) == {"ok": True, "id": 41}
+    assert [packet[1] for packet in sock.packets] == [0, 2, 2, 1]
 
 
 def test_repl_reports_unavailable_control_and_preserves_request_id():

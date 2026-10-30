@@ -7009,6 +7009,18 @@ def _start_stream(cmd: dict) -> dict:
     return result
 
 
+def _scrcpy_touch(cmd: dict) -> dict:
+    if stream is None:
+        return {"ok": False, "error": "stream not started"}
+    try:
+        stream.send_touch(cmd)
+    except (ValueError, RuntimeError, OSError) as exc:
+        # Rejected input must not tear down the shared video/recognition process.
+        # Do not replay: a socket failure may have delivered part of the gesture.
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True}
+
+
 def _stop_stream() -> dict:
     global stream
     recognition_diagnostics.reset()
@@ -7186,11 +7198,7 @@ def _main_repl() -> None:
             elif action == "start_stream":
                 _reply(req_id, _start_stream(cmd))
             elif action == "scrcpy_touch":
-                if stream is None:
-                    _reply(req_id, {"ok": False, "error": "stream not started"})
-                else:
-                    stream.send_touch(cmd)
-                    _reply(req_id, {"ok": True})
+                _reply(req_id, _scrcpy_touch(cmd))
             elif action == "stop_stream":
                 _reply(req_id, _stop_stream())
             elif action == "release_ocr":
