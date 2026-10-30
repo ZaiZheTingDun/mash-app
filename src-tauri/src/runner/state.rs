@@ -14,6 +14,9 @@ pub(crate) struct BattleState {
     /// Counters below are context carried by this state machine; transient
     /// "where are we in the flow?" facts live in `flow` instead of booleans.
     pub(crate) flow: BattleFlowState,
+    /// Submission/last skip time while waiting for attack animations. Cleared
+    /// as soon as Battle becomes actionable or another page is recognized.
+    attack_animation_skip_at: Option<Instant>,
     /// Which battle-scene config index we're executing (0-based into the
     /// `scenes` vec). One config block = one battle scene as labeled in
     /// the HUD's `BATTLE m/n`.
@@ -65,6 +68,7 @@ impl BattleState {
     pub(crate) fn new() -> Self {
         Self {
             flow: BattleFlowState::PreBattle,
+            attack_animation_skip_at: None,
             current_scene_index: 0,
             current_turn_index: 0,
             last_screen_scene: None,
@@ -87,8 +91,38 @@ impl BattleState {
         let transition = battle_flow_transition(self.flow, event);
         if transition.accepted {
             self.flow = transition.next;
+            if let BattleFlowEvent::AttackCardsSubmitted { at } = event {
+                self.attack_animation_skip_at = Some(at);
+            } else if !matches!(self.flow, BattleFlowState::AwaitingAttackResolution { .. }) {
+                self.attack_animation_skip_at = None;
+            }
         }
         transition
+    }
+
+    pub(crate) fn attack_animation_skip_due(
+        &mut self,
+        screen: Screen,
+        actionable: bool,
+        at: Instant,
+    ) -> bool {
+        if actionable || !matches!(screen, Screen::Battle | Screen::Attack | Screen::Unknown) {
+            self.attack_animation_skip_at = None;
+            return false;
+        }
+        // A lingering card screen belongs to the existing stuck-selection
+        // recovery path. Do not tap it or disarm before animations start.
+        if screen == Screen::Attack {
+            return false;
+        }
+        let Some(last_at) = self.attack_animation_skip_at else {
+            return false;
+        };
+        if at.saturating_duration_since(last_at) < Duration::from_secs(1) {
+            return false;
+        }
+        self.attack_animation_skip_at = Some(at);
+        true
     }
 
     pub(crate) fn observe_battle_load(
