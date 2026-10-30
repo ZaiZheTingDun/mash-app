@@ -91,6 +91,12 @@ impl Runner {
                 continue;
             }
 
+            // Battle needs an attack-button probe first; other observations
+            // either keep animation skips running (Unknown) or stop them.
+            if screen != Screen::Battle && !self.skip_attack_animation_if_due(screen, false) {
+                return Ok(());
+            }
+
             if screen != Screen::BattleResultContinue {
                 self.battle_result_continue_handled = false;
             }
@@ -256,6 +262,16 @@ impl Runner {
 
     // -- battle screen handlers ----------------------------------------------
 
+    fn skip_attack_animation_if_due(&mut self, screen: Screen, actionable: bool) -> bool {
+        if self
+            .battle
+            .attack_animation_skip_due(screen, actionable, Instant::now())
+        {
+            return self.tap_skip_animation_button("出卡后等待战斗动作");
+        }
+        true
+    }
+
     /// Consume transient screen observations after a successful start tap.
     /// Keep the normal screen router from treating them as fresh setup pages.
     fn handle_battle_load_screen(&mut self, screen: Screen) -> AutomationResult<bool> {
@@ -316,6 +332,10 @@ impl Runner {
             .recoverable()?
             .map(|m| m.found)
             .unwrap_or(false);
+
+        if !self.skip_attack_animation_if_due(Screen::Battle, attack_present) {
+            return Ok(());
+        }
 
         if !attack_present {
             self.emit("Battle", "等待战斗动作…");

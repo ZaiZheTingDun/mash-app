@@ -1555,6 +1555,109 @@ fn battle_flow_runs_full_attack_cycle_through_explicit_states() {
 }
 
 #[test]
+fn attack_animation_skip_requires_a_successful_submission_and_one_second_between_taps() {
+    let mut battle = BattleState::new();
+    let at = Instant::now();
+    assert!(!battle.attack_animation_skip_due(Screen::Unknown, false, at));
+    assert!(
+        !battle
+            .transition(BattleFlowEvent::AttackCardsSubmitted { at })
+            .accepted
+    );
+    assert!(!battle.attack_animation_skip_due(Screen::Battle, false, at + Duration::from_secs(2)));
+
+    battle.transition(BattleFlowEvent::AttackScreenDetected);
+    battle.transition(BattleFlowEvent::AttackCardsSubmitted { at });
+    for (millis, screen, due) in [
+        (999, Screen::Battle, false),
+        (1000, Screen::Battle, true),
+        (1500, Screen::Unknown, false),
+        (2000, Screen::Unknown, true),
+        (5000, Screen::Battle, true),
+        (5000, Screen::Battle, false),
+        (5999, Screen::Unknown, false),
+        (6000, Screen::Unknown, true),
+    ] {
+        assert_eq!(
+            battle.attack_animation_skip_due(screen, false, at + Duration::from_millis(millis)),
+            due,
+            "at {millis} ms on {screen:?}"
+        );
+    }
+}
+
+#[test]
+fn attack_animation_skip_stops_when_actionable_even_before_hud_is_readable() {
+    let at = Instant::now();
+    let mut battle = BattleState::new();
+    battle.transition(BattleFlowEvent::AttackScreenDetected);
+    battle.transition(BattleFlowEvent::AttackCardsSubmitted { at });
+    assert!(!battle.attack_animation_skip_due(Screen::Battle, true, at + Duration::from_secs(1)));
+    // Turn progression still waits for the HUD; skips must already be disabled.
+    assert!(battle.awaiting_attack_resolution());
+    assert!(!battle.attack_animation_skip_due(Screen::Unknown, false, at + Duration::from_secs(2)));
+    battle.transition(BattleFlowEvent::PostAttackHudWaitStarted { at });
+    assert!(!battle.attack_animation_skip_due(Screen::Battle, false, at + Duration::from_secs(3)));
+}
+
+#[test]
+fn attack_animation_skip_stays_disabled_after_another_page_until_next_submission() {
+    let at = Instant::now();
+    for screen in [
+        Screen::BattleResultBond,
+        Screen::BattleResultExp,
+        Screen::BattleResultLoot,
+        Screen::BattleResultFriendRequest,
+        Screen::BattleResultContinue,
+        Screen::SupportSelect,
+        Screen::TeamConfirm,
+        Screen::TeamChange,
+        Screen::ServantSelect,
+        Screen::RankUpQuest,
+        Screen::APRecovery,
+    ] {
+        let mut battle = BattleState::new();
+        battle.transition(BattleFlowEvent::AttackScreenDetected);
+        battle.transition(BattleFlowEvent::AttackCardsSubmitted { at });
+        assert!(!battle.attack_animation_skip_due(screen, false, at + Duration::from_secs(1)));
+        assert!(!battle.attack_animation_skip_due(
+            Screen::Unknown,
+            false,
+            at + Duration::from_secs(2)
+        ));
+        assert!(!battle.attack_animation_skip_due(
+            Screen::Battle,
+            false,
+            at + Duration::from_secs(3)
+        ));
+
+        battle.transition(BattleFlowEvent::PostAttackHudResolved);
+        battle.transition(BattleFlowEvent::AttackScreenDetected);
+        let next_at = at + Duration::from_secs(4);
+        battle.transition(BattleFlowEvent::AttackCardsSubmitted { at: next_at });
+        assert!(!battle.attack_animation_skip_due(Screen::Battle, false, next_at));
+        assert!(battle.attack_animation_skip_due(
+            Screen::Unknown,
+            false,
+            next_at + Duration::from_secs(1)
+        ));
+    }
+}
+
+#[test]
+fn attack_animation_skip_preserves_lingering_card_screen_recovery() {
+    let at = Instant::now();
+    let mut battle = BattleState::new();
+    battle.transition(BattleFlowEvent::AttackScreenDetected);
+    battle.transition(BattleFlowEvent::AttackCardsSubmitted { at });
+    assert!(!battle.attack_animation_skip_due(Screen::Attack, false, at + Duration::from_secs(1)));
+    assert_eq!(battle.attack_submission_started_at(), Some(at));
+    assert!(battle.attack_animation_skip_due(Screen::Battle, false, at + Duration::from_secs(2)));
+    battle.transition(BattleFlowEvent::BattleActionable);
+    assert!(!battle.attack_animation_skip_due(Screen::Unknown, false, at + Duration::from_secs(3)));
+}
+
+#[test]
 fn battle_load_ignores_setup_frames_during_start_grace_period() {
     let mut battle = BattleState::new();
     let at = Instant::now();

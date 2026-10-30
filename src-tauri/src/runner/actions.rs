@@ -815,7 +815,7 @@ impl Runner {
         })
     }
 
-    fn tap_skip_animation_button(&mut self, reason: &str) -> bool {
+    pub(super) fn tap_skip_animation_button(&mut self, reason: &str) -> bool {
         self.emit_local_debug("Battle", &format!("点击战斗跳过区: {reason}"));
         self.tap_at("Battle", SKIP_ANIMATION_BUTTON)
     }
