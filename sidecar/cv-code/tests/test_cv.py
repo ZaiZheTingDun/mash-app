@@ -3505,6 +3505,57 @@ def test_support_np_level_parser_rejects_non_level_digits():
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
+        ("鎮第七聖典・断罪死Ly３", 3),
+        ("覲　図叫え立てよ、我が憤怒Ｌy1Ａ", 1),
+        ("すでに過ぎし人理の終ＬＶ,4", 4),
+        ("絶技・八岐怒濤 L y, 5", 5),
+        ("第七聖典・断罪死 Ly10", None),
+        ("サーヴァント LV,120", None),
+        ("サーヴァント Lv.100/100", None),
+        ("第七聖典・断罪死 5", None),
+        ("友情点 +25", None),
+    ],
+)
+def test_support_np_level_parser_handles_observed_jp_ocr_errors(text, expected):
+    from mash_cv.cv import _support_parse_np_level_text
+
+    assert _support_parse_np_level_text(text) == expected
+
+
+@pytest.mark.parametrize("size", [(2560, 1440), (1920, 1080)])
+def test_support_np_levels_from_jp_screenshot_with_misread_lv(size):
+    import mash_cv.cv as cv
+
+    cv._load_templates(
+        os.path.join(_REPO_ROOT, "src-tauri/resources/servers/shared/templates"),
+        key_prefix="shared",
+    )
+    cv._load_templates(_PROD_TEMPLATES_DIR, append=True)
+    img = cv2.imread(os.path.join(
+        _TEST_SCREENSHOTS_DIR, "support_score_grand_jp_31_16_0_16.png"
+    ))
+    assert img is not None
+    img = cv2.resize(img, size, interpolation=cv2.INTER_AREA)
+
+    result = cv._find_supports(
+        img,
+        cv.SUPPORT_LIST_REGION,
+        "",
+        [],
+        cv.SUPPORT_NAME_THRESHOLD,
+        cv.SUPPORT_NP_THRESHOLD,
+        cv.SUPPORT_ROW_PAIR_DY,
+        True,
+        match_any_servant=True,
+    )
+
+    assert len(result["supports"]) >= 2
+    assert [row["npLevel"] for row in result["supports"][:2]] == [3, 5]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
         ("Lv.100/100", 100),
         ("Ｌｖ．９２／９２", 92),
         ("L. 90/90", 90),
@@ -4873,9 +4924,68 @@ def _build_template_png(
 
 
 class TestVerifySupportCE:
-    """Synthetic-only tests for ``_verify_support_ce`` — the bundled CE
-    PNGs under ``src-tauri/assets/ces/`` are gitignored, so we build a
-    template + screenshot pair in tmp_path for each scenario."""
+    """Offline CE verification with synthetic pairs and checked-in artwork crops."""
+
+    @pytest.mark.parametrize("size", [(2560, 1440), (1920, 1080), (1280, 720)])
+    def test_full_match_ignores_event_bonus_and_mlb_on_real_jp_ce(self, size):
+        from mash_cv.cv import _load_ce_template, _support_crop, _verify_support_ce
+
+        # Retain only the CE search window from the user's screenshot;
+        # no player names or other account data are needed for this probe.
+        img = _make_bgr_image(1920, 1080)
+        img[791:877, 58:336] = cv2.imread(os.path.join(
+            _SUPPORT_FIXTURES_DIR, "ce_1966_event_bonus_jp.png"
+        ))
+        img = cv2.resize(img, size, interpolation=cv2.INTER_AREA)
+        region = {"x": 0.030, "y": 0.732, "w": 0.145, "h": 0.080}
+        template_path = os.path.join(_SUPPORT_FIXTURES_DIR, "ce_1966_card.png")
+        target_w, target_h = _ce_target_pixel_size(*size)
+        tmpl = _load_ce_template(template_path, target_w, target_h)
+        crop_gray = cv2.cvtColor(_support_crop(img, region), cv2.COLOR_BGR2GRAY)
+        unmasked_score = cv2.minMaxLoc(cv2.matchTemplate(
+            crop_gray, tmpl, cv2.TM_CCOEFF_NORMED
+        ))[1]
+
+        assert unmasked_score < 0.60
+        result = _verify_support_ce(img, region, template_path, 0.70)
+        full = next(check for check in result["artworkChecks"] if check["variant"] == "full")
+        assert full["score"] > 0.75, result
+        assert full["passed"] is True
+        assert result["threshold"] == 0.70
+        assert result["fullGateThreshold"] == 0.60
+        assert result["passed"] is True, result
+
+    @pytest.mark.parametrize("size", [(2560, 1440), (1920, 1080)])
+    @pytest.mark.parametrize("wrong_ce", [48, 910])
+    def test_masked_full_match_still_rejects_other_ce_artwork(self, size, wrong_ce):
+        from mash_cv.cv import _verify_support_ce
+
+        img = _make_bgr_image(1920, 1080)
+        img[791:877, 58:336] = cv2.imread(os.path.join(
+            _SUPPORT_FIXTURES_DIR, "ce_1966_event_bonus_jp.png"
+        ))
+        img = cv2.resize(img, size, interpolation=cv2.INTER_AREA)
+        result = _verify_support_ce(
+            img,
+            {"x": 0.030, "y": 0.732, "w": 0.145, "h": 0.080},
+            os.path.join(_SUPPORT_FIXTURES_DIR, f"ce_{wrong_ce}_card.png"),
+            0.70,
+        )
+        assert result["passed"] is False, result
+
+    @pytest.mark.parametrize("background", [0, 128, 255])
+    def test_masked_full_match_rejects_constant_search_window(self, background):
+        from mash_cv.cv import _verify_support_ce
+
+        result = _verify_support_ce(
+            _make_bgr_image(1920, 1080, (background,) * 3),
+            {"x": 0.030, "y": 0.732, "w": 0.145, "h": 0.080},
+            os.path.join(_SUPPORT_FIXTURES_DIR, "ce_1966_card.png"),
+            0.70,
+        )
+        assert np.isfinite(result["score"])
+        assert all(np.isfinite(check["score"]) for check in result["artworkChecks"])
+        assert result["passed"] is False, result
 
     def test_returns_zero_for_empty_image(self):
         from mash_cv.cv import _verify_support_ce

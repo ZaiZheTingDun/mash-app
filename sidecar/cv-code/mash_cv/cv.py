@@ -5395,11 +5395,11 @@ def _support_parse_np_level_text(text: str) -> Optional[int]:
     m = re.search(r"等级\s*([1-5])", normalized)
     if not m:
         # JP renders NP levels as ``Lv.5``. Whole-list OCR may lose the
-        # narrow ``v`` or punctuation, so accept the observed ``LV5`` /
-        # ``L5`` variants as long as the level is the final digit in the
-        # fragment (apart from decorations such as the NP-strength arrow).
+        # narrow ``v``, read it as ``y``, or turn the dot into a comma.
+        # Accept those observed variants while requiring a level prefix
+        # and a final single digit (apart from NP-strength decorations).
         m = re.search(
-            r"L(?:V)?\s*\.?\s*([1-5])(?=\D*$)",
+            r"L\s*(?:[VY]\s*)?[.,]?\s*([1-5])(?=\D*$)",
             normalized,
             flags=re.IGNORECASE,
         )
@@ -6376,16 +6376,22 @@ CE_GRAND_BOND_TEMPLATE = "shared/icon_grand_bond_ce"
 CE_GRAND_BOND_NP_TEMPLATE = "shared/icon_grand_bond_ce_np"
 CE_DECORATION_ICON_THRESHOLD = 0.70
 
-# Event bonus badges sit over the lower-left corner of the support CE strip.
-# A full-strip CCOEFF match can drop just below threshold even when the
-# correct CE is visible (for example 0.66 / 0.70). Keep the conservative
-# threshold for the full strip, but require higher scores from the smaller
-# occlusion-safe crops because less artwork means higher false-positive risk.
+# Partial artwork crops provide a fallback for additional occlusion. They
+# still require the full artwork's sanity gate so a small similar patch
+# cannot match a different CE by itself.
 CE_OCCLUSION_CENTER_LEFT_CROP_PX = 26
 CE_OCCLUSION_CENTER_RIGHT_CROP_PX = 30
 CE_OCCLUSION_TOP_RIGHT_LEFT_CROP_PX = 26
 CE_OCCLUSION_TOP_RIGHT_BOTTOM_CROP_PX = 22
 CE_OCCLUSION_SAFE_MIN_FULL_SCORE = 0.60
+# Ordinary CE strips carry an event badge / bonus text at bottom-left and
+# the MLB star at bottom-right. Ignore only those corners in the full
+# artwork check, keeping about 75% of the picture for the sanity gate.
+# Fractions are relative to the resized template, independent of frame size.
+CE_FULL_ARTWORK_OCCLUSIONS = (
+    {"x": 0.0, "y": 0.60, "w": 0.40, "h": 0.40},
+    {"x": 0.82, "y": 0.50, "w": 0.18, "h": 0.50},
+)
 
 # In Grand Saber rows the bond / bondNp slot renders the CE artwork at the
 # asset's native ~2.2:1 aspect ratio centered inside the wider 3.45:1 slot
@@ -6466,6 +6472,19 @@ def _load_ce_template(
     return gray
 
 
+def _ce_full_artwork_mask(tmpl: np.ndarray) -> np.ndarray:
+    """Exclude UI decorations without dropping the full-width artwork context."""
+    h, w = tmpl.shape[:2]
+    mask = np.full((h, w), 255, dtype=np.uint8)
+    for region in CE_FULL_ARTWORK_OCCLUSIONS:
+        x0 = int(round(region["x"] * w))
+        y0 = int(round(region["y"] * h))
+        x1 = int(round((region["x"] + region["w"]) * w))
+        y1 = int(round((region["y"] + region["h"]) * h))
+        mask[y0:y1, x0:x1] = 0
+    return mask
+
+
 def _ce_artwork_match_templates(tmpl: np.ndarray) -> list[tuple[str, np.ndarray]]:
     """Return full and occlusion-safe CE artwork templates.
 
@@ -6519,10 +6538,10 @@ def _verify_support_ce(
 ) -> dict:
     """Score a row's CE icon against ``template_path``.
 
-    ``region`` is the absolute search window (typically the row rect with
-    ``SUPPORT_CE_OFFSET_IN_ROW`` applied on the Rust side). We crop the
-    region in grayscale, resize the template to the crop's width, and
-    take ``max(matchTemplate)`` with ``TM_CCOEFF_NORMED``.
+    ``region`` is the absolute search window projected from a row anchor.
+    Match grayscale artwork at the frame's icon scale, masking ordinary
+    full-template corners occupied by UI decorations. Bond slots retain
+    their separate inset/full artwork geometry.
 
     Returns ``{"score": float, "passed": bool}``. An empty crop yields
     ``score=0.0, passed=False``. An unreadable template raises
@@ -6641,7 +6660,18 @@ def _verify_support_ce(
                 )
                 continue
 
-            res = cv2.matchTemplate(crop_gray, attempt_tmpl, cv2.TM_CCOEFF_NORMED)
+            if variant == "full" and not bond_mode_active:
+                res = cv2.matchTemplate(
+                    crop_gray,
+                    attempt_tmpl,
+                    cv2.TM_CCOEFF_NORMED,
+                    mask=_ce_full_artwork_mask(attempt_tmpl),
+                )
+                # A constant masked patch has no defined correlation. OpenCV
+                # can return NaN/inf there; it must never become a match.
+                res = np.where(np.isfinite(res), res, -1.0)
+            else:
+                res = cv2.matchTemplate(crop_gray, attempt_tmpl, cv2.TM_CCOEFF_NORMED)
             _, max_val, _, _ = cv2.minMaxLoc(res)
             score_candidate = float(max_val)
             margin = score_candidate - attempt_threshold
