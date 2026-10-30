@@ -1,6 +1,7 @@
 //! Sidecar process lifecycle, request transport, streaming, and cleanup.
 
 use super::error::{template_response_error, CvError, CvResult};
+use super::input::ScrcpyControl;
 use super::protocol::{request, SidecarCommand};
 use super::transport::SidecarTransport;
 use crate::commands::settings::{
@@ -17,19 +18,23 @@ use tauri_plugin_shell::ShellExt;
 
 pub struct SidecarClient {
     transport: Arc<Mutex<SidecarTransport>>,
-    scrcpy_control: Option<super::input::ScrcpyControl>,
     touch_settings: Arc<Mutex<TouchControlSettings>>,
-    stream_control_mode: Option<TouchControlMode>,
-    /// Last (width, height) reported by `start_stream`. None until a stream
-    /// has been started successfully.
-    stream_size: Option<(u32, u32)>,
-    stream_device: Option<(String, u32)>,
+    stream: Option<StreamSession>,
     healthy: bool,
     pub(super) detection_screens: Option<Vec<String>>,
     pub(super) diagnostic_supported: bool,
     pub(super) diagnostic_enabled: bool,
     pub(crate) recognition_context: serde_json::Value,
     pub(crate) recognition_device: serde_json::Value,
+}
+
+/// Installed together after startup succeeds and cleared together on stop.
+/// Video-only sessions remain valid when scrcpy input is unavailable.
+struct StreamSession {
+    size: (u32, u32),
+    device: Option<(String, u32)>,
+    control_mode: TouchControlMode,
+    control: Option<ScrcpyControl>,
 }
 
 #[derive(Debug, Clone)]
@@ -146,11 +151,8 @@ impl SidecarClient {
                 line_rx,
                 next_id: 1,
             })),
-            scrcpy_control: None,
             touch_settings: app.state::<TouchControlSettingsState>().0.clone(),
-            stream_control_mode: None,
-            stream_size: None,
-            stream_device: None,
+            stream: None,
             healthy: true,
             detection_screens: None,
             diagnostic_supported: false,
@@ -349,10 +351,7 @@ impl SidecarClient {
         bit_rate: u32,
         max_fps: u32,
     ) -> Result<(u32, u32), CvError> {
-        self.scrcpy_control = None;
-        self.stream_control_mode = None;
-        self.stream_size = None;
-        self.stream_device = None;
+        self.stream = None;
         let mode = self
             .touch_settings
             .lock()
@@ -389,16 +388,19 @@ impl SidecarClient {
         if w == 0 || h == 0 {
             return Err("start_stream returned invalid dimensions".into());
         }
-        self.scrcpy_control = if crate::touch::scrcpy_enabled(mode) {
-            super::input::ScrcpyControl::from_stream_response(self.transport.clone(), &resp)
+        let control = if crate::touch::scrcpy_enabled(mode) {
+            ScrcpyControl::from_stream_response(self.transport.clone(), &resp)
         } else {
             None
         };
-        self.stream_control_mode = Some(mode);
-        self.stream_size = Some((w, h));
-        self.stream_device = adb
-            .serial()
-            .map(|serial| (serial.to_string(), adb.display_id()));
+        self.stream = Some(StreamSession {
+            size: (w, h),
+            device: adb
+                .serial()
+                .map(|serial| (serial.to_string(), adb.display_id())),
+            control_mode: mode,
+            control,
+        });
         self.recognition_context["stream"] = serde_json::json!({"width": w, "height": h,
             "maxSize": max_size, "bitRate": bit_rate, "maxFps": max_fps, "displayId": adb.display_id()});
         Ok((w, h))
@@ -409,28 +411,28 @@ impl SidecarClient {
         device_serial: Option<&str>,
         display_id: u32,
     ) -> bool {
-        self.stream_device
-            .as_ref()
-            .is_some_and(|(serial, display)| {
-                Some(serial.as_str()) == device_serial
-                    && *display == display_id
-                    && self.stream_control_mode
-                        == self
-                            .touch_settings
-                            .lock()
-                            .ok()
-                            .map(|settings| settings.mode)
-            })
+        self.matching_stream(device_serial, display_id).is_some()
+    }
+
+    fn matching_stream(
+        &self,
+        device_serial: Option<&str>,
+        display_id: u32,
+    ) -> Option<&StreamSession> {
+        let stream = self.stream.as_ref()?;
+        let (serial, display) = stream.device.as_ref()?;
+        let mode = self.touch_settings.lock().ok()?.mode;
+        (Some(serial.as_str()) == device_serial
+            && *display == display_id
+            && stream.control_mode == mode)
+            .then_some(stream)
     }
 
     /// Input uses the same serialized IPC channel and is bound to this stream session.
-    pub(crate) fn scrcpy_control(
-        &self,
-        adb: &crate::adb::Adb,
-    ) -> Option<super::input::ScrcpyControl> {
-        self.stream_matches_device(adb.serial(), adb.display_id())
-            .then(|| self.scrcpy_control.clone())
-            .flatten()
+    pub(crate) fn scrcpy_control(&self, adb: &crate::adb::Adb) -> Option<ScrcpyControl> {
+        self.matching_stream(adb.serial(), adb.display_id())?
+            .control
+            .clone()
     }
 
     /// Select which battle-HUD digit reader the sidecar should use.
@@ -469,10 +471,7 @@ impl SidecarClient {
             let err = resp["error"].as_str().unwrap_or("unknown error");
             return Err(format!("stop_stream failed: {err}").into());
         }
-        self.scrcpy_control = None;
-        self.stream_control_mode = None;
-        self.stream_size = None;
-        self.stream_device = None;
+        self.stream = None;
         Ok(())
     }
 
@@ -505,7 +504,7 @@ impl SidecarClient {
 
     /// Return the (width, height) of the live stream, if one was started.
     pub fn stream_size(&self) -> Option<(u32, u32)> {
-        self.stream_size
+        self.stream.as_ref().map(|stream| stream.size)
     }
 
     /// Return the latest decoded frame as a JPEG byte buffer. ``wait_seconds``
@@ -571,7 +570,7 @@ impl SidecarClient {
         // sidecar mid-stream relies on scrcpy's `cleanup=true` to GC the
         // server -- which works most of the time but occasionally leaves a
         // zombie `app_process` on the device.
-        if self.stream_size.is_some() {
+        if self.stream.is_some() {
             if let Err(e) = self.stop_stream() {
                 eprintln!("[mash-cv] stop_stream during shutdown failed: {e}");
             }
@@ -627,11 +626,8 @@ mod tests {
                 line_rx,
                 next_id: 1,
             })),
-            scrcpy_control: None,
             touch_settings: TouchControlSettingsState::default().0,
-            stream_control_mode: None,
-            stream_size: None,
-            stream_device: None,
+            stream: None,
             healthy: true,
             detection_screens: None,
             diagnostic_supported: false,
@@ -650,25 +646,76 @@ mod tests {
     }
 
     #[test]
-    fn cached_stream_is_only_reused_for_same_device_and_display() {
+    fn unstarted_client_has_no_stream_size_or_reusable_session() {
+        let client = client_without_process();
+        assert_eq!(client.stream_size(), None);
+        assert!(client.matching_stream(Some("device"), 0).is_none());
+        assert!(!client.stream_matches_device(None, 0));
+    }
+
+    #[test]
+    fn cached_video_only_stream_is_only_reused_for_same_device_and_display() {
         let mut client = client_without_process();
-        client.stream_device = Some(("emulator-5554".into(), 2));
-        client.stream_control_mode = Some(TouchControlMode::Scrcpy);
+        client.stream = Some(StreamSession {
+            size: (1920, 1080),
+            device: Some(("emulator-5554".into(), 2)),
+            control_mode: TouchControlMode::Scrcpy,
+            control: None,
+        });
+        assert_eq!(client.stream_size(), Some((1920, 1080)));
+        assert!(client
+            .matching_stream(Some("emulator-5554"), 2)
+            .unwrap()
+            .control
+            .is_none());
         assert!(client.stream_matches_device(Some("emulator-5554"), 2));
         assert!(!client.stream_matches_device(Some("emulator-5554"), 0));
         assert!(!client.stream_matches_device(Some("emulator-5556"), 2));
         assert!(!client.stream_matches_device(None, 2));
+        client.stream.as_mut().unwrap().device = None;
+        assert!(!client.stream_matches_device(Some("emulator-5554"), 2));
+        assert!(!client.stream_matches_device(None, 2));
+    }
+
+    #[test]
+    fn failed_stop_retains_the_whole_session_until_shutdown_can_retry() {
+        let mut client = client_without_process();
+        let response = serde_json::json!({
+            "width": 1920, "height": 1080,
+            "control": {"version": 1, "streamId": "session"}
+        });
+        client.stream = Some(StreamSession {
+            size: (1920, 1080),
+            device: Some(("device".into(), 2)),
+            control_mode: TouchControlMode::Scrcpy,
+            control: ScrcpyControl::from_stream_response(client.transport.clone(), &response),
+        });
+
+        // Without a child process, stop cannot be acknowledged by the sidecar.
+        assert!(client.stop_stream().is_err());
+
+        assert_eq!(client.stream_size(), Some((1920, 1080)));
+        assert!(client.stream_matches_device(Some("device"), 2));
+        assert!(client
+            .matching_stream(Some("device"), 2)
+            .unwrap()
+            .control
+            .is_some());
     }
 
     #[test]
     fn changing_control_mode_requires_a_new_stream_even_for_the_same_device() {
         let mut client = client_without_process();
-        client.stream_device = Some(("device".into(), 0));
-        client.stream_control_mode = Some(TouchControlMode::Scrcpy);
+        client.stream = Some(StreamSession {
+            size: (1920, 1080),
+            device: Some(("device".into(), 0)),
+            control_mode: TouchControlMode::Scrcpy,
+            control: None,
+        });
         assert!(client.stream_matches_device(Some("device"), 0));
         client.touch_settings.lock().unwrap().mode = TouchControlMode::Adb;
         assert!(!client.stream_matches_device(Some("device"), 0));
-        client.stream_control_mode = Some(TouchControlMode::Adb);
+        client.stream.as_mut().unwrap().control_mode = TouchControlMode::Adb;
         assert!(client.stream_matches_device(Some("device"), 0));
     }
 
