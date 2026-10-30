@@ -2,8 +2,7 @@
 //!
 //! The [`TouchBackend`] trait is the abstraction the `Runner` calls
 //! through, so the gesture-emitting code stays decoupled from the
-//! specific transport (today only `adb-input`; previously also tried
-//! `minitouch` and raw `sendevent`, both retired). New backends can
+//! specific transport (`scrcpy`, with `adb-input` as an initialization fallback). New backends can
 //! be added by implementing the trait and wiring them into [`build`]
 //! without touching the runner.
 //!
@@ -17,10 +16,23 @@ use crate::adb::Adb;
 const TOUCH_JITTER_PX: i32 = 6;
 
 pub mod adb_input;
+mod scrcpy;
+
+/// Delivery model, independent of the backend's display name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TouchTiming {
+    CommandBased,
+    Streamed,
+}
 
 /// Unified touch-injection contract. See module docs for the
 /// motivation; implementors live in this module's submodules.
 pub trait TouchBackend: Send {
+    /// Unknown backends retain conservative command-based waiting policies.
+    fn timing(&self) -> TouchTiming {
+        TouchTiming::CommandBased
+    }
+
     /// Single tap at device pixel `(x, y)`. Backends may emit
     /// multiple ADB / protocol commands under the hood but observers
     /// should see one DOWN-UP touch cycle.
@@ -53,14 +65,31 @@ pub trait TouchBackend: Send {
     fn name(&self) -> &'static str;
 }
 
-/// Construct the runner's `TouchBackend`. Currently always returns
-/// the `adb-input` backend — kept as a factory function so future
-/// backends can be slotted in here without changing the call sites.
-pub fn build(adb: &Adb, app: &tauri::AppHandle, screen_size: (u32, u32)) -> Box<dyn TouchBackend> {
-    let backend: Box<dyn TouchBackend> = Box::new(HumanizedTouch::new(
-        Box::new(adb_input::AdbInputBackend::new(adb.clone())),
-        screen_size,
-    ));
+/// Prefer the existing scrcpy session. Unsupported/older sidecars use ADB.
+/// `MASH_TOUCH_BACKEND=adb` allows comparison without changing persistent settings.
+pub(crate) fn scrcpy_enabled(mode: crate::commands::settings::TouchControlMode) -> bool {
+    scrcpy_enabled_with_override(mode, std::env::var("MASH_TOUCH_BACKEND").ok().as_deref())
+}
+
+fn scrcpy_enabled_with_override(
+    mode: crate::commands::settings::TouchControlMode,
+    override_value: Option<&str>,
+) -> bool {
+    mode == crate::commands::settings::TouchControlMode::Scrcpy
+        && !matches!(override_value, Some("adb" | "adb-input"))
+}
+
+pub fn build(
+    adb: &Adb,
+    sidecar: &crate::screen::SidecarClient,
+    app: &tauri::AppHandle,
+    screen_size: (u32, u32),
+) -> Box<dyn TouchBackend> {
+    let inner: Box<dyn TouchBackend> = match sidecar.scrcpy_control(adb) {
+        Some(control) => Box::new(scrcpy::ScrcpyTouchBackend::new(control, screen_size)),
+        None => Box::new(adb_input::AdbInputBackend::new(adb.clone())),
+    };
+    let backend: Box<dyn TouchBackend> = Box::new(HumanizedTouch::new(inner, screen_size));
     let message = format!("[touch] backend selected: {}", backend.name());
     eprintln!("{message}");
     crate::operation_log::emit_debug(app, crate::operation_log::DebugSource::App, message);
@@ -86,6 +115,10 @@ impl HumanizedTouch {
 }
 
 impl TouchBackend for HumanizedTouch {
+    fn timing(&self) -> TouchTiming {
+        self.inner.timing()
+    }
+
     fn tap(&mut self, x: u32, y: u32) -> Result<(), String> {
         let (x, y) = self.jittered((x, y), jitter_offset());
         self.inner.tap(x, y)
@@ -145,6 +178,53 @@ pub(crate) fn jitter_offset() -> (i32, i32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn persisted_adb_choice_disables_scrcpy_with_or_without_debug_override() {
+        use crate::commands::settings::TouchControlMode;
+        assert!(scrcpy_enabled_with_override(TouchControlMode::Scrcpy, None));
+        assert!(!scrcpy_enabled_with_override(TouchControlMode::Adb, None));
+        assert!(!scrcpy_enabled_with_override(
+            TouchControlMode::Adb,
+            Some("scrcpy")
+        ));
+        assert!(!scrcpy_enabled_with_override(
+            TouchControlMode::Scrcpy,
+            Some("adb")
+        ));
+    }
+
+    #[test]
+    fn humanized_wrapper_preserves_backend_timing() {
+        struct Backend(TouchTiming);
+        impl TouchBackend for Backend {
+            fn timing(&self) -> TouchTiming {
+                self.0
+            }
+            fn tap(&mut self, _: u32, _: u32) -> Result<(), String> {
+                Ok(())
+            }
+            fn swipe(&mut self, _: (u32, u32), _: (u32, u32), _: u32) -> Result<(), String> {
+                Ok(())
+            }
+            fn swipe_with_settle(
+                &mut self,
+                _: (u32, u32),
+                _: (u32, u32),
+                _: u32,
+                _: u32,
+            ) -> Result<(), String> {
+                Ok(())
+            }
+            fn name(&self) -> &'static str {
+                "test"
+            }
+        }
+        for timing in [TouchTiming::CommandBased, TouchTiming::Streamed] {
+            let wrapper = HumanizedTouch::new(Box::new(Backend(timing)), (1920, 1080));
+            assert_eq!(wrapper.timing(), timing);
+        }
+    }
 
     #[test]
     fn jitter_is_clamped_to_screen_edges() {

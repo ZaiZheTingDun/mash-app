@@ -11,6 +11,7 @@ import {
 } from "@radix-ui/themes";
 import { DiamondSwitch } from "../../components/common/DiamondSwitch";
 import { SettingsRow } from "./SettingsRow";
+import { TouchControlSetting } from "./TouchControlSetting";
 import preAttackNpGaugeDialogImage from "../../../src-tauri/resources/images/battle/pre_attack_np_gauge_dialog.png";
 import { invoke } from "../../tauri";
 import {
@@ -443,6 +444,7 @@ export function SettingsBasicPage({
             </Select.Content>
           </Select.Root>
         </SettingsRow>
+        <TouchControlSetting active={active} />
         <SettingsRow label="开始后展开" description="点击战斗页面的开始后，自动展开所选底栏面板">
           <Select.Root value={battleStartPanel}
             onValueChange={(value) => void saveBattleStartPanel(value as BattleStartPanel)} disabled={saving}>

@@ -291,7 +291,7 @@ impl Runner {
                 }
                 self.support_scroll_count += 1;
                 self.support_level_progress = SupportLevelPanelProgress::default();
-                thread::sleep(SUPPORT_SCROLL_SETTLE);
+                thread::sleep(support_scroll_redraw_wait(self.touch.timing()));
             } else if self
                 .support_class_search
                 .advance_to_all_classes(self.config.support_class_filter_mode)
@@ -477,7 +477,7 @@ impl Runner {
                     return Ok(());
                 }
                 self.support_scroll_count += 1;
-                thread::sleep(SUPPORT_SCROLL_SETTLE);
+                thread::sleep(support_scroll_redraw_wait(self.touch.timing()));
             } else if self.support_refresh_count < SUPPORT_MAX_REFRESHES {
                 let reason = if grand_section_exhausted {
                     "当前页已出现普通助战，冠位区域已扫完"

@@ -550,6 +550,8 @@ pub(crate) async fn run_startup_migration(
 
 mod debug_settings;
 pub(crate) use debug_settings::*;
+mod touch_control;
+pub(crate) use touch_control::*;
 
 #[cfg(test)]
 mod tests;

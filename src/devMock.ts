@@ -5,6 +5,7 @@ import type { CraftEssence } from "./types/craftEssence";
 import type { Project, ProjectCatalog } from "./types/project";
 import type { Servant } from "./types/servant";
 import type { Server } from "./types/server";
+import type { TouchControlMode } from "./types/deviceControl";
 import type { DeviceResolutionStatus } from "./types/deviceResolution";
 import { isAppColorTheme, type AppColorTheme } from "./types/theme";
 import type { ServantPickerSettings } from "./types/appUiSettings";
@@ -106,6 +107,7 @@ let supportCeThreshold = 0.7;
 let supportCeFullGateThreshold = 0.6;
 let supportMlbIconThreshold = 0.7;
 let supportBondIconThreshold = 0.7;
+let touchControlMode: TouchControlMode = "scrcpy";
 let noblePhantasmDetectionMode: "card" | "gauge" | "gaugeBeforeAttack" = "card";
 let stopOnBondLevelUp = false;
 let stopOnBondMaxLevel = false;
@@ -442,6 +444,12 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
     case "set_home_master_figure_id":
       if (args.id === 470) homeMasterFigureId = 470;
       return homeMasterFigureId as T;
+    case "get_touch_control_mode":
+      return touchControlMode as T;
+    case "set_touch_control_mode":
+      if (args?.value !== "scrcpy" && args?.value !== "adb") throw new Error("无效的触控方式");
+      touchControlMode = args.value;
+      return touchControlMode as T;
     case "get_skill_editor_layout":
       return skillEditorLayout as T;
     case "set_skill_editor_layout":

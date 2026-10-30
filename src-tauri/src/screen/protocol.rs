@@ -39,6 +39,7 @@ pub(super) enum SidecarCommand {
     SetServer,
     StartStream,
     StopStream,
+    ScrcpyTouch,
     VerifySupportCe,
     VerifyTeamSlots,
 }

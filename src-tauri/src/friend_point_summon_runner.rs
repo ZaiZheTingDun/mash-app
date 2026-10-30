@@ -291,7 +291,7 @@ impl FriendPointSummonRunner {
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
         home_reference: Arc<Mutex<Option<HomeReference>>>,
     ) -> Self {
-        let touch = touch::build(&adb, &app_handle, screen_size);
+        let touch = touch::build(&adb, &sidecar, &app_handle, screen_size);
         Self {
             sidecar: Some(sidecar),
             sidecar_cache,
