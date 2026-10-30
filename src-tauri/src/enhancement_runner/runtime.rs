@@ -16,7 +16,7 @@ impl EnhancementRunner {
         target: EnhancementTarget,
         sidecar_cache: Option<Arc<Mutex<Option<SidecarClient>>>>,
     ) -> Self {
-        let touch = touch::build(&adb, &app_handle, screen_size);
+        let touch = touch::build(&adb, &sidecar, &app_handle, screen_size);
         Self {
             touch,
             sidecar: Some(sidecar),

@@ -70,6 +70,8 @@ pub fn run() {
             let server = load_server_setting(app.handle()).map_err(std::io::Error::other)?;
             let recognition_settings =
                 load_recognition_settings(app.handle()).map_err(std::io::Error::other)?;
+            let touch_control_settings =
+                load_touch_control_settings(app.handle()).map_err(std::io::Error::other)?;
             let debug_settings = commands::settings::load_debug_settings(app.handle())
                 .map_err(std::io::Error::other)?;
             let app_ui_settings = commands::projects::read_app_ui_settings_from_path(
@@ -85,6 +87,9 @@ pub fn run() {
             app.manage(Mutex::new(server));
             app.manage(platform::MuMuLookupState::default());
             app.manage(Mutex::new(recognition_settings));
+            app.manage(TouchControlSettingsState(Arc::new(Mutex::new(
+                touch_control_settings,
+            ))));
             app.manage(Mutex::new(debug_settings));
             app.manage(Mutex::new(app_ui_settings));
             app.manage(Mutex::new(RunnerHandle::new_idle()));
@@ -212,6 +217,8 @@ pub fn run() {
             commands::settings::get_server,
             commands::settings::set_server,
             commands::settings::get_recognition_settings,
+            commands::settings::get_touch_control_mode,
+            commands::settings::set_touch_control_mode,
             commands::settings::get_debug_settings,
             commands::settings::set_image_recognition_debug_mode,
             commands::settings::set_sequence_recognition_debug_mode,

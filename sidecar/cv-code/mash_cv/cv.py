@@ -6963,7 +6963,7 @@ def _start_stream(cmd: dict) -> dict:
     max_fps = int(cmd.get("maxFps", 0))
     display_id = int(cmd.get("displayId", 0))
 
-    new_stream = ScrcpyStream(
+    stream_options = dict(
         adb_path=adb_path,
         jar_path=jar_path,
         serial=serial,
@@ -6972,10 +6972,20 @@ def _start_stream(cmd: dict) -> dict:
         max_fps=max_fps,
         display_id=display_id,
     )
+    control = cmd.get("control") is True
+    new_stream = ScrcpyStream(**stream_options, control=control)
     try:
         width, height = new_stream.start()
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": f"failed to start stream: {exc}"}
+        if not control:
+            return {"ok": False, "error": f"failed to start stream: {exc}"}
+        print(f"[scrcpy-control] startup failed; using video only and ADB input: {exc}", file=sys.stderr)
+        new_stream.stop()
+        new_stream = ScrcpyStream(**stream_options, control=False)
+        try:
+            width, height = new_stream.start()
+        except Exception as fallback_exc:  # noqa: BLE001
+            return {"ok": False, "error": f"failed to start stream: {fallback_exc}"}
 
     # Wait for the first decoded frame. Scrcpy on BlueStacks / the bundled
     # sidecar can take several seconds to warm up the H.264 pipeline before
@@ -6993,7 +7003,22 @@ def _start_stream(cmd: dict) -> dict:
         }
 
     stream = new_stream
-    return {"ok": True, "width": width, "height": height, "displayId": display_id}
+    result = {"ok": True, "width": width, "height": height, "displayId": display_id}
+    if control:
+        result["control"] = new_stream.control_info()
+    return result
+
+
+def _scrcpy_touch(cmd: dict) -> dict:
+    if stream is None:
+        return {"ok": False, "error": "stream not started"}
+    try:
+        stream.send_touch(cmd)
+    except (ValueError, RuntimeError, OSError) as exc:
+        # Rejected input must not tear down the shared video/recognition process.
+        # Do not replay: a socket failure may have delivered part of the gesture.
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True}
 
 
 def _stop_stream() -> dict:
@@ -7172,6 +7197,8 @@ def _main_repl() -> None:
                 _reply(req_id, _set_sequence_recognition_mode(str(cmd.get("mode", ""))))
             elif action == "start_stream":
                 _reply(req_id, _start_stream(cmd))
+            elif action == "scrcpy_touch":
+                _reply(req_id, _scrcpy_touch(cmd))
             elif action == "stop_stream":
                 _reply(req_id, _stop_stream())
             elif action == "release_ocr":

@@ -2,18 +2,14 @@
 
 use super::*;
 
-/// Settle time after the support-list scroll swipe completes, before
-/// the next OCR pass. The settle hold *inside* `swipe_with_settle`
-/// already lifts the finger at near-zero velocity (see
-/// `SUPPORT_SCROLL_SETTLE_MS`), so the list isn't bouncing or flinging
-/// when we wake up — this is just the buffer for the row cards to
-/// re-render at their new positions. Empirically the redraw completes
-/// in well under 300 ms on real devices; 450 ms keeps comfortable
-/// headroom for slower emulators / a low-end CPU without pinning the
-/// runner at the old "wait nearly a second between every scroll"
-/// cadence (was 900 ms before the fling-avoiding settle gesture made
-/// the longer wait redundant).
-pub(crate) const SUPPORT_SCROLL_SETTLE: Duration = Duration::from_millis(450);
+/// Keep ADB's established redraw margin; shorter waiting only applies to
+/// streamed event delivery. This policy belongs to support scanning, not input.
+pub(crate) fn support_scroll_redraw_wait(timing: crate::touch::TouchTiming) -> Duration {
+    match timing {
+        crate::touch::TouchTiming::CommandBased => Duration::from_millis(450),
+        crate::touch::TouchTiming::Streamed => Duration::from_millis(150),
+    }
+}
 /// The y from which the scroll swipe starts (finger-down point). Sits in
 /// the lower half of the list so the symmetric `to` point can always
 /// stay above it for an "up" swipe even at `SUPPORT_SCROLL_MAX_DELTA`.

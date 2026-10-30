@@ -5,8 +5,7 @@
 //! `swipe_with_settle` path runs in single-digit seconds for a
 //! full-page swipe and looks jittery while it does.
 //!
-//! Kept as a no-extra-dependencies baseline — both the auto-fallback
-//! path and explicit `MASH_TOUCH_BACKEND=adb` end up here.
+//! Kept as the initialization fallback and explicit `MASH_TOUCH_BACKEND=adb` baseline.
 
 use crate::adb::Adb;
 use crate::touch::TouchBackend;

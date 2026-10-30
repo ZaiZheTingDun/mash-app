@@ -5,13 +5,16 @@
 
 mod client;
 mod error;
+mod input;
 mod operations;
 mod protocol;
 mod recognition_diagnostics;
+mod transport;
 mod types;
 
 pub use client::{SidecarClient, TemplateLoadSpec};
 pub use error::CvError;
+pub(crate) use input::{ScrcpyControl, ScrcpyTouchEvent};
 pub use types::*;
 
 pub const SIDECAR_STARTUP_REDOWNLOAD_MESSAGE: &str =

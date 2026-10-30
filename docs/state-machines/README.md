@@ -12,6 +12,8 @@
 
 设备使用权由 `DeviceOperationCoordinator` 统一互斥管理。`AutomationKind` 只描述自动化流程；`DeviceOperation` 区分自动化和分辨率重置等设备维护操作，各操作持有租约直到 worker 退出。Rust 持有运行状态和计数，前端根据事件展示。
 
+自动化共用 `TouchBackend`，按“游戏 → 基础设置 → 触控方式”的持久化偏好启动；默认优先使用现有 scrcpy 视频会话的控制通道，初始化不可用时选择 ADB Input。手动选择 ADB Input 时关闭新会话的 scrcpy 控制，保持原有手势和等待时长；偏好更改从下次任务启动生效。手势发送失败沿用各流程的输入错误处理，不在传输层自动重放。模块边界、协议和对比方法见[设备触控](../input-control.md)。
+
 ## 生命周期
 
 | 当前状态 | 事件 | 下一状态 |

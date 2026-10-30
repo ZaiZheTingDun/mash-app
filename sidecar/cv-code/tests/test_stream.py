@@ -194,3 +194,109 @@ def test_start_stream_forwards_max_fps(monkeypatch, tmp_path):
     assert result == {"ok": True, "width": 1920, "height": 1080, "displayId": 2}
     assert captured["max_fps"] == 15
     assert captured["display_id"] == 2
+
+
+def test_stream_connects_control_after_video_dummy_before_metadata(monkeypatch):
+    order = []
+
+    class FakeSocket:
+        def setsockopt(self, *args):
+            pass
+
+        def shutdown(self, *args):
+            pass
+
+        def close(self):
+            order.append("close")
+
+    video = FakeSocket()
+    control = FakeSocket()
+    stream = ScrcpyStream("unused", control=True)
+    monkeypatch.setattr(stream_module, "_ensure_tcp_connected", lambda *args: None)
+    monkeypatch.setattr(stream_module, "_alloc_free_port", lambda: 12345)
+    monkeypatch.setattr(stream_module, "_run_adb", lambda *args, **kwargs: None)
+    monkeypatch.setattr(stream, "_push_jar", lambda: None)
+    monkeypatch.setattr(stream, "_adb_forward_add", lambda: None)
+    monkeypatch.setattr(stream, "_spawn_server", lambda: None)
+
+    def video_connect():
+        order.append("video-dummy")
+        return video
+
+    def control_connect(*args, **kwargs):
+        order.append("control")
+        return control
+
+    def metadata():
+        assert stream._control is not None
+        order.append("metadata")
+        stream.width, stream.height = 1920, 1080
+
+    monkeypatch.setattr(stream, "_connect_and_handshake_dummy", video_connect)
+    monkeypatch.setattr(stream_module.socket, "create_connection", control_connect)
+    monkeypatch.setattr(stream, "_read_device_meta", metadata)
+    monkeypatch.setattr(stream, "_decode_loop", lambda: None)
+    try:
+        assert stream.start() == (1920, 1080)
+        assert order == ["video-dummy", "control", "metadata"]
+        assert stream.control_info()["version"] == 1
+        assert "control=true" in stream._server_command()
+        assert "power_on=false" in stream._server_command()
+    finally:
+        stream.stop()
+    assert stream.control_info() is None
+    assert order.count("close") == 2
+
+
+def test_control_startup_failure_retries_video_only(monkeypatch, tmp_path):
+    attempts = []
+    stopped = []
+
+    class FakeScrcpyStream:
+        def __init__(self, **options):
+            self.options = options
+
+        def start(self):
+            attempts.append(self.options)
+            if self.options["control"]:
+                raise OSError("control unavailable")
+            return 1920, 1080
+
+        def stop(self):
+            stopped.append(self.options["control"])
+
+        def wait_for_frame(self, timeout):
+            return object()
+
+        def control_info(self):
+            return None
+
+    jar = tmp_path / "server.jar"
+    jar.touch()
+    monkeypatch.setattr(stream_module, "ScrcpyStream", FakeScrcpyStream)
+    monkeypatch.setattr(cv, "stream", None)
+    result = cv._start_stream({"jarPath": str(jar), "serial": "device", "displayId": 2, "control": True})
+    assert result == {"ok": True, "width": 1920, "height": 1080, "displayId": 2, "control": None}
+    assert [attempt["control"] for attempt in attempts] == [True, False]
+    assert all(attempt["display_id"] == 2 and attempt["serial"] == "device" for attempt in attempts)
+    assert stopped == [True]
+
+
+@pytest.mark.parametrize("sdk,enabled", [("28", False), ("29", True), ("unknown", False)])
+def test_secondary_display_control_requires_android_10(monkeypatch, sdk, enabled):
+    stream = ScrcpyStream("unused", display_id=2, control=True)
+    monkeypatch.setattr(stream_module, "_ensure_tcp_connected", lambda *args: None)
+
+    def getprop(args):
+        assert args[-3:] == ["shell", "getprop", "ro.build.version.sdk"]
+        return SimpleNamespace(stdout=sdk)
+
+    monkeypatch.setattr(stream, "_run_adb", getprop)
+
+    def stop_after_capability_check():
+        raise RuntimeError("end of offline capability test")
+
+    monkeypatch.setattr(stream, "_push_jar", stop_after_capability_check)
+    with pytest.raises(RuntimeError, match="end of offline"):
+        stream.start()
+    assert stream.control_enabled is enabled

@@ -7123,6 +7123,18 @@ fn format_scroll_debug_lists_sorted_anchor_positions() {
 }
 
 #[test]
+fn support_scroll_preserves_adb_wait_and_only_shortens_streamed_input() {
+    assert_eq!(
+        support_scroll_redraw_wait(crate::touch::TouchTiming::CommandBased),
+        Duration::from_millis(450)
+    );
+    assert_eq!(
+        support_scroll_redraw_wait(crate::touch::TouchTiming::Streamed),
+        Duration::from_millis(150)
+    );
+}
+
+#[test]
 fn format_scroll_debug_handles_empty_anchors() {
     let msg = format_scroll_debug(
         &[],

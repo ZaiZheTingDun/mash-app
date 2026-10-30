@@ -99,6 +99,7 @@ class ScrcpyStream:
         bit_rate: int = 8_000_000,
         max_fps: int = 0,
         display_id: int = 0,
+        control: bool = False,
     ) -> None:
         self.adb_path = adb_path
         self.jar_path = jar_path
@@ -107,6 +108,8 @@ class ScrcpyStream:
         self.bit_rate = bit_rate
         self.max_fps = max_fps
         self.display_id = display_id
+        self.control_enabled = control
+        self._control = None
 
         self.scid = random.randint(0, 0x7FFFFFFF)
         self.socket_name = f"scrcpy_{self.scid:08x}"
@@ -137,6 +140,17 @@ class ScrcpyStream:
         Returns the (width, height) reported by the device.
         """
         _ensure_tcp_connected(self.adb_path, self.serial)
+        if self.control_enabled and self.display_id != 0:
+            # scrcpy 2.7 cannot inject into secondary displays before Android 10.
+            try:
+                sdk = self._run_adb(_adb_base(self.adb_path, self.serial)
+                                    + ["shell", "getprop", "ro.build.version.sdk"])
+                self.control_enabled = int(sdk.stdout.strip()) >= 29
+            except (RuntimeError, ValueError):
+                self.control_enabled = False
+            if not self.control_enabled:
+                print("[scrcpy-control] secondary display control unavailable; using ADB input",
+                      file=sys.stderr)
         self._push_jar()
         self.port = _alloc_free_port()
         self._adb_forward_add()
@@ -144,6 +158,13 @@ class ScrcpyStream:
         try:
             self._spawn_server()
             self._sock = self._connect_and_handshake_dummy()
+            if self.control_enabled:
+                from mash_cv.scrcpy_control import ScrcpyControl
+                # v2.7 accepts video, then control (audio is disabled), before
+                # sending device/codec metadata. Only video has a dummy byte.
+                control_sock = socket.create_connection(("127.0.0.1", self.port), timeout=2.0)
+                control_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                self._control = ScrcpyControl(control_sock)
             self._read_device_meta()
         except Exception:
             self.stop()
@@ -161,6 +182,10 @@ class ScrcpyStream:
 
     def stop(self) -> None:
         self._stop_event.set()
+
+        if self._control is not None:
+            self._control.close()
+            self._control = None
 
         if self._sock is not None:
             try:
@@ -195,6 +220,25 @@ class ScrcpyStream:
                 check=False,
             )
             self.port = None
+
+    def control_info(self):
+        if self._control is None:
+            return None
+        return {"version": 1, "streamId": self._stream_id}
+
+    def send_touch(self, cmd: dict) -> None:
+        if self._control is None:
+            raise RuntimeError("scrcpy control unavailable")
+        if cmd.get("streamId") != self._stream_id:
+            raise ValueError("stale scrcpy stream session")
+        width, height = cmd.get("width"), cmd.get("height")
+        if type(width) is not int or type(height) is not int:
+            raise ValueError("invalid scrcpy touch dimensions")
+        with self._latest_lock:
+            size = None if self._latest_frame is None else self._latest_frame.shape[:2]
+        if size != (height, width) or not self.is_decoder_alive():
+            raise RuntimeError("scrcpy frame dimensions changed or stream stopped; restart the stream")
+        self._control.send(cmd.get("events"), width, height)
 
     # -- frame access --------------------------------------------------------
 
@@ -335,7 +379,8 @@ class ScrcpyStream:
             f"scid={self.scid:08x}",
             "log_level=warn",
             "audio=false",
-            "control=false",
+            f"control={str(self.control_enabled).lower()}",
+            "power_on=false",
             "clipboard_autosync=false",
             "cleanup=true",
             "tunnel_forward=true",

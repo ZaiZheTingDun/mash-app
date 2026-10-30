@@ -1,34 +1,40 @@
 //! Sidecar process lifecycle, request transport, streaming, and cleanup.
 
 use super::error::{template_response_error, CvError, CvResult};
+use super::input::ScrcpyControl;
 use super::protocol::{request, SidecarCommand};
+use super::transport::SidecarTransport;
+use crate::commands::settings::{
+    TouchControlMode, TouchControlSettings, TouchControlSettingsState,
+};
 use crate::operation_log::{self, DebugSource};
 use base64::Engine;
 use std::path::{Path, PathBuf};
-use std::sync::{mpsc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
+use tauri::Manager;
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
 pub struct SidecarClient {
-    child: Option<tauri_plugin_shell::process::CommandChild>,
-    /// Receives stdout lines forwarded from the async task.
-    line_rx: mpsc::Receiver<String>,
-    /// Monotonic request id. Every outgoing request carries `{"id": n}` and
-    /// the sidecar echoes the same id back; responses whose id does not match
-    /// the in-flight request are dropped (they are stale leftovers from a
-    /// previously timed-out call). 0 is reserved for "no id sent yet".
-    next_id: u64,
-    /// Last (width, height) reported by `start_stream`. None until a stream
-    /// has been started successfully.
-    stream_size: Option<(u32, u32)>,
-    stream_device: Option<(String, u32)>,
+    transport: Arc<Mutex<SidecarTransport>>,
+    touch_settings: Arc<Mutex<TouchControlSettings>>,
+    stream: Option<StreamSession>,
     healthy: bool,
     pub(super) detection_screens: Option<Vec<String>>,
     pub(super) diagnostic_supported: bool,
     pub(super) diagnostic_enabled: bool,
     pub(crate) recognition_context: serde_json::Value,
     pub(crate) recognition_device: serde_json::Value,
+}
+
+/// Installed together after startup succeeds and cleared together on stop.
+/// Video-only sessions remain valid when scrcpy input is unavailable.
+struct StreamSession {
+    size: (u32, u32),
+    device: Option<(String, u32)>,
+    control_mode: TouchControlMode,
+    control: Option<ScrcpyControl>,
 }
 
 #[derive(Debug, Clone)]
@@ -140,11 +146,13 @@ impl SidecarClient {
         });
 
         let mut client = Self {
-            child: Some(child),
-            line_rx,
-            next_id: 1,
-            stream_size: None,
-            stream_device: None,
+            transport: Arc::new(Mutex::new(SidecarTransport {
+                child: Some(child),
+                line_rx,
+                next_id: 1,
+            })),
+            touch_settings: app.state::<TouchControlSettingsState>().0.clone(),
+            stream: None,
             healthy: true,
             detection_screens: None,
             diagnostic_supported: false,
@@ -309,58 +317,13 @@ impl SidecarClient {
         request: &serde_json::Value,
         timeout: Duration,
     ) -> Result<serde_json::Value, CvError> {
-        let id = self.next_id;
-        self.next_id = self.next_id.wrapping_add(1).max(1);
-
-        let mut tagged = request.clone();
-        if let Some(obj) = tagged.as_object_mut() {
-            obj.insert("id".into(), serde_json::Value::from(id));
-        } else {
-            return Err(format!("send_recv: request must be a JSON object, got {request}").into());
-        }
-
-        let mut line = tagged.to_string();
-        line.push('\n');
-        self.child
-            .as_mut()
-            .ok_or_else(|| "sidecar process already stopped".to_string())?
-            .write(line.as_bytes())
-            .map_err(|e| format!("failed to write to sidecar: {e}"))?;
-
-        let deadline = Instant::now() + timeout;
-        loop {
-            let remaining = deadline
-                .checked_duration_since(Instant::now())
-                .ok_or_else(|| format!("sidecar response timeout (waiting for id={id})"))?;
-            let response = self
-                .line_rx
-                .recv_timeout(remaining)
-                .map_err(|e| format!("sidecar response timeout: {e}"))?;
-            let parsed: serde_json::Value = serde_json::from_str(&response)
-                .map_err(|e| format!("invalid JSON from sidecar: {e}: {response}"))?;
-            match parsed.get("id").and_then(|v| v.as_u64()) {
-                Some(rid) if rid == id => {
-                    self.check_response(&parsed)?;
-                    return Ok(parsed);
-                }
-                Some(rid) => {
-                    eprintln!(
-                        "[mash-cv] dropping stale response id={rid} (expected {id}): {response}"
-                    );
-                    continue;
-                }
-                None => {
-                    // Strict mode: a sidecar built against this Rust client
-                    // must echo the id. A response without one almost certainly
-                    // means the sidecar binary is from an older build -- tell
-                    // the operator instead of silently corrupting CV results.
-                    return Err(format!(
-                        "sidecar response missing 'id' field (rebuild mash-cv sidecar): {response}"
-                    )
-                    .into());
-                }
-            }
-        }
+        let response = self
+            .transport
+            .lock()
+            .map_err(|_| "sidecar transport lock poisoned")?
+            .send_recv(request, timeout)?;
+        self.check_response(&response)?;
+        Ok(response)
     }
 
     /// Helper to inject `imagePath` into the request when the caller provided one.
@@ -388,8 +351,12 @@ impl SidecarClient {
         bit_rate: u32,
         max_fps: u32,
     ) -> Result<(u32, u32), CvError> {
-        self.stream_size = None;
-        self.stream_device = None;
+        self.stream = None;
+        let mode = self
+            .touch_settings
+            .lock()
+            .map_err(|_| "touch settings lock poisoned")?
+            .mode;
         let mut req = request(
             SidecarCommand::StartStream,
             serde_json::json!({
@@ -399,6 +366,7 @@ impl SidecarClient {
                 "bitRate": bit_rate,
                 "maxFps": max_fps,
                 "displayId": adb.display_id(),
+                "control": crate::touch::scrcpy_enabled(mode),
             }),
         )?;
         if let Some(s) = adb.serial() {
@@ -420,10 +388,19 @@ impl SidecarClient {
         if w == 0 || h == 0 {
             return Err("start_stream returned invalid dimensions".into());
         }
-        self.stream_size = Some((w, h));
-        self.stream_device = adb
-            .serial()
-            .map(|serial| (serial.to_string(), adb.display_id()));
+        let control = if crate::touch::scrcpy_enabled(mode) {
+            ScrcpyControl::from_stream_response(self.transport.clone(), &resp)
+        } else {
+            None
+        };
+        self.stream = Some(StreamSession {
+            size: (w, h),
+            device: adb
+                .serial()
+                .map(|serial| (serial.to_string(), adb.display_id())),
+            control_mode: mode,
+            control,
+        });
         self.recognition_context["stream"] = serde_json::json!({"width": w, "height": h,
             "maxSize": max_size, "bitRate": bit_rate, "maxFps": max_fps, "displayId": adb.display_id()});
         Ok((w, h))
@@ -434,11 +411,28 @@ impl SidecarClient {
         device_serial: Option<&str>,
         display_id: u32,
     ) -> bool {
-        self.stream_device
-            .as_ref()
-            .is_some_and(|(serial, display)| {
-                Some(serial.as_str()) == device_serial && *display == display_id
-            })
+        self.matching_stream(device_serial, display_id).is_some()
+    }
+
+    fn matching_stream(
+        &self,
+        device_serial: Option<&str>,
+        display_id: u32,
+    ) -> Option<&StreamSession> {
+        let stream = self.stream.as_ref()?;
+        let (serial, display) = stream.device.as_ref()?;
+        let mode = self.touch_settings.lock().ok()?.mode;
+        (Some(serial.as_str()) == device_serial
+            && *display == display_id
+            && stream.control_mode == mode)
+            .then_some(stream)
+    }
+
+    /// Input uses the same serialized IPC channel and is bound to this stream session.
+    pub(crate) fn scrcpy_control(&self, adb: &crate::adb::Adb) -> Option<ScrcpyControl> {
+        self.matching_stream(adb.serial(), adb.display_id())?
+            .control
+            .clone()
     }
 
     /// Select which battle-HUD digit reader the sidecar should use.
@@ -477,8 +471,7 @@ impl SidecarClient {
             let err = resp["error"].as_str().unwrap_or("unknown error");
             return Err(format!("stop_stream failed: {err}").into());
         }
-        self.stream_size = None;
-        self.stream_device = None;
+        self.stream = None;
         Ok(())
     }
 
@@ -511,7 +504,7 @@ impl SidecarClient {
 
     /// Return the (width, height) of the live stream, if one was started.
     pub fn stream_size(&self) -> Option<(u32, u32)> {
-        self.stream_size
+        self.stream.as_ref().map(|stream| stream.size)
     }
 
     /// Return the latest decoded frame as a JPEG byte buffer. ``wait_seconds``
@@ -577,12 +570,17 @@ impl SidecarClient {
         // sidecar mid-stream relies on scrcpy's `cleanup=true` to GC the
         // server -- which works most of the time but occasionally leaves a
         // zombie `app_process` on the device.
-        if self.child.is_some() && self.stream_size.is_some() {
+        if self.stream.is_some() {
             if let Err(e) = self.stop_stream() {
                 eprintln!("[mash-cv] stop_stream during shutdown failed: {e}");
             }
         }
-        if let Some(mut child) = self.child.take() {
+        if let Some(mut child) = self
+            .transport
+            .lock()
+            .ok()
+            .and_then(|mut transport| transport.child.take())
+        {
             let req = request(SidecarCommand::Quit, serde_json::json!({}))
                 .expect("empty sidecar quit request must serialize");
             let mut line = req.to_string();
@@ -623,11 +621,13 @@ mod tests {
     fn client_without_process() -> SidecarClient {
         let (_, line_rx) = mpsc::channel();
         SidecarClient {
-            child: None,
-            line_rx,
-            next_id: 1,
-            stream_size: None,
-            stream_device: None,
+            transport: Arc::new(Mutex::new(SidecarTransport {
+                child: None,
+                line_rx,
+                next_id: 1,
+            })),
+            touch_settings: TouchControlSettingsState::default().0,
+            stream: None,
             healthy: true,
             detection_screens: None,
             diagnostic_supported: false,
@@ -646,13 +646,77 @@ mod tests {
     }
 
     #[test]
-    fn cached_stream_is_only_reused_for_same_device_and_display() {
+    fn unstarted_client_has_no_stream_size_or_reusable_session() {
+        let client = client_without_process();
+        assert_eq!(client.stream_size(), None);
+        assert!(client.matching_stream(Some("device"), 0).is_none());
+        assert!(!client.stream_matches_device(None, 0));
+    }
+
+    #[test]
+    fn cached_video_only_stream_is_only_reused_for_same_device_and_display() {
         let mut client = client_without_process();
-        client.stream_device = Some(("emulator-5554".into(), 2));
+        client.stream = Some(StreamSession {
+            size: (1920, 1080),
+            device: Some(("emulator-5554".into(), 2)),
+            control_mode: TouchControlMode::Scrcpy,
+            control: None,
+        });
+        assert_eq!(client.stream_size(), Some((1920, 1080)));
+        assert!(client
+            .matching_stream(Some("emulator-5554"), 2)
+            .unwrap()
+            .control
+            .is_none());
         assert!(client.stream_matches_device(Some("emulator-5554"), 2));
         assert!(!client.stream_matches_device(Some("emulator-5554"), 0));
         assert!(!client.stream_matches_device(Some("emulator-5556"), 2));
         assert!(!client.stream_matches_device(None, 2));
+        client.stream.as_mut().unwrap().device = None;
+        assert!(!client.stream_matches_device(Some("emulator-5554"), 2));
+        assert!(!client.stream_matches_device(None, 2));
+    }
+
+    #[test]
+    fn failed_stop_retains_the_whole_session_until_shutdown_can_retry() {
+        let mut client = client_without_process();
+        let response = serde_json::json!({
+            "width": 1920, "height": 1080,
+            "control": {"version": 1, "streamId": "session"}
+        });
+        client.stream = Some(StreamSession {
+            size: (1920, 1080),
+            device: Some(("device".into(), 2)),
+            control_mode: TouchControlMode::Scrcpy,
+            control: ScrcpyControl::from_stream_response(client.transport.clone(), &response),
+        });
+
+        // Without a child process, stop cannot be acknowledged by the sidecar.
+        assert!(client.stop_stream().is_err());
+
+        assert_eq!(client.stream_size(), Some((1920, 1080)));
+        assert!(client.stream_matches_device(Some("device"), 2));
+        assert!(client
+            .matching_stream(Some("device"), 2)
+            .unwrap()
+            .control
+            .is_some());
+    }
+
+    #[test]
+    fn changing_control_mode_requires_a_new_stream_even_for_the_same_device() {
+        let mut client = client_without_process();
+        client.stream = Some(StreamSession {
+            size: (1920, 1080),
+            device: Some(("device".into(), 0)),
+            control_mode: TouchControlMode::Scrcpy,
+            control: None,
+        });
+        assert!(client.stream_matches_device(Some("device"), 0));
+        client.touch_settings.lock().unwrap().mode = TouchControlMode::Adb;
+        assert!(!client.stream_matches_device(Some("device"), 0));
+        client.stream.as_mut().unwrap().control_mode = TouchControlMode::Adb;
+        assert!(client.stream_matches_device(Some("device"), 0));
     }
 
     #[test]
