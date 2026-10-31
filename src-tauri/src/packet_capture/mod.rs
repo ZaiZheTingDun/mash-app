@@ -14,6 +14,8 @@ mod inventory;
 mod lifecycle;
 mod onboarding;
 mod picture_in_picture;
+mod preview;
+pub(crate) use preview::{CapturePreview, PreviewQuery};
 mod response;
 mod stop;
 pub(crate) use capture::{start_capture, CaptureStarted};
