@@ -64,6 +64,8 @@ fn unverified_legacy_pip_key_is_preserved_without_becoming_a_capture_requirement
 #[derive(Default)]
 struct Scenario {
     setup: bool,
+    apex: bool,
+    certificate_rollback_failure: bool,
     offline_after_install: bool,
     old_version: bool,
     missing_game: bool,
@@ -141,7 +143,7 @@ fn fake_with_logs(
             return Ok(br#"<hierarchy><node package="com.reqable.android" content-desc="Reqable" /></hierarchy>"#.to_vec());
         }
         if command == "getprop ro.build.version.sdk" {
-            return Ok(b"33".to_vec());
+            return Ok(if scenario.apex { b"34" } else { b"33" }.to_vec());
         }
         if command
             .contains("cat /data/user/0/com.reqable.android/files/certificate/reqable-root.crt")
@@ -151,6 +153,9 @@ fn fake_with_logs(
         if command.contains("MASH_CA_INSTALLED") {
             if scenario.cancel_certificate {
                 cancellation.cancel();
+            }
+            if scenario.certificate_rollback_failure {
+                return Err("证书安装失败，未能确认回滚，保留备份：/data/local/tmp/mash-capture-ca-test；请重启设备后重试".into());
             }
             return Ok(b"MASH_CA_INSTALLED".to_vec());
         }
@@ -571,6 +576,24 @@ fn stopping_setup_preserves_a_warning_if_rollback_cannot_be_confirmed() {
     assert!(logs.iter().any(|(level, message)| *level == LogLevel::Warn
         && message.contains("回滚未完成")
         && message.contains("备份位置")));
+    assert!(!logs
+        .iter()
+        .any(|(_, message)| message.starts_with("环境配置完成")));
+}
+
+#[test]
+fn stopping_apex_setup_preserves_the_certificate_rollback_warning() {
+    let (result, _, logs) = fake_with_logs(Scenario {
+        setup: true,
+        apex: true,
+        cancel_certificate: true,
+        certificate_rollback_failure: true,
+        ..Default::default()
+    });
+    assert_eq!(result.unwrap_err(), "环境配置已停止");
+    assert!(logs.iter().any(|(level, message)| *level == LogLevel::Warn
+        && message.contains("未能确认回滚")
+        && message.contains("/data/local/tmp/mash-capture-ca-test")));
     assert!(!logs
         .iter()
         .any(|(_, message)| message.starts_with("环境配置完成")));

@@ -29,6 +29,7 @@ const CERT_PATHS: [&str; 2] = [
     "/sdcard/Android/data/com.reqable.android/files/certificate/reqable-root.crt",
 ];
 const INSTALL_SCRIPT: &str = include_str!("install_certificate.sh");
+const APEX_INSTALL_SCRIPT: &str = include_str!("install_certificate_apex.sh");
 type AdbCommand<'a> = dyn FnMut(&[&str]) -> Result<Vec<u8>, String> + 'a;
 
 #[derive(Debug, serde::Serialize)]
@@ -204,8 +205,8 @@ fn install_with_log_using(
         .trim()
         .parse()
         .map_err(|_| "无法读取设备的 Android 版本")?;
-    if !(21..=33).contains(&sdk) {
-        return Err("当前证书安装仅支持 Android 5–13；Android 14 及以上暂未适配".into());
+    if sdk < 21 {
+        return Err("当前证书安装需要 Android 5 或以上版本".into());
     }
     let root = find_root(&mut shell)?;
     shell("am start -W -n com.reqable.android/.MainActivity")
@@ -213,11 +214,16 @@ fn install_with_log_using(
     let (source_path, bytes) =
         onboarding::certificate_after_confirmation(root, &mut shell, log, cancellation)?;
     let cert = certificate::parse(&bytes)?;
-    let script = INSTALL_SCRIPT
-        .replace("__CERT_PATH__", source_path)
-        .replace("__SOURCE_SHA256__", &cert.source_sha256)
-        .replace("__SUBJECT_HASH__", &cert.subject_hash)
-        .replace("__SESSION_ID__", &uuid::Uuid::new_v4().simple().to_string());
+    let script = if sdk >= 34 {
+        APEX_INSTALL_SCRIPT
+    } else {
+        INSTALL_SCRIPT
+    }
+    .replace("\r\n", "\n")
+    .replace("__CERT_PATH__", source_path)
+    .replace("__SOURCE_SHA256__", &cert.source_sha256)
+    .replace("__SUBJECT_HASH__", &cert.subject_hash)
+    .replace("__SESSION_ID__", &uuid::Uuid::new_v4().simple().to_string());
     let result =
         shell(&root_shell(root, &script)).map_err(|error| format!("安装系统证书失败：{error}"))?;
     let result = String::from_utf8_lossy(&result);

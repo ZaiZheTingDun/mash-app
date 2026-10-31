@@ -1,5 +1,9 @@
 use super::*;
 
+#[cfg(unix)]
+#[path = "certificate_script_tests.rs"]
+mod certificate_script_tests;
+
 const CA: &[u8] = include_bytes!("../../tests/fixtures/packet-capture/ca.pem");
 
 #[test]
@@ -116,13 +120,45 @@ fn bluestacks_install_and_idempotent_result_require_verified_backend_marker() {
 
 #[test]
 fn unsupported_android_and_invalid_certificates_never_mount_the_trust_store() {
-    for (sdk, bytes) in [("34", CA), ("33", b"broken".as_slice())] {
+    for (sdk, bytes) in [
+        ("20", CA),
+        ("33", b"broken".as_slice()),
+        ("34", b"broken".as_slice()),
+    ] {
         let (result, commands) = fake_install(sdk, bytes, "MASH_CA_INSTALLED");
         assert!(result.is_err());
         assert!(!commands
             .iter()
             .any(|command| command.contains("mount -o bind")));
     }
+}
+
+#[test]
+fn android_14_and_later_use_apex_namespace_installation() {
+    for sdk in ["34", "35", "36", "37"] {
+        for marker in ["MASH_CA_INSTALLED", "MASH_CA_ALREADY_INSTALLED"] {
+            let (result, commands) = fake_install(sdk, CA, marker);
+            assert_eq!(
+                result.unwrap().already_installed,
+                marker == "MASH_CA_ALREADY_INSTALLED"
+            );
+            let script = commands
+                .iter()
+                .find(|command| command.contains("MASH_CA_INSTALLED"))
+                .unwrap();
+            assert!(script.contains("trust_dir=/apex/com.android.conscrypt/cacerts"));
+            assert!(!script.contains('\r'));
+        }
+    }
+    let (_, commands) = fake_install("33", CA, "MASH_CA_INSTALLED");
+    assert!(commands
+        .iter()
+        .any(|command| command.contains("trust_dir=/system/etc/security/cacerts")));
+    assert!(fake_install("34", CA, "failure")
+        .0
+        .unwrap_err()
+        .contains("permission denied"));
+    assert!(fake_install("34", CA, "").0.is_err());
 }
 
 #[test]
