@@ -575,6 +575,7 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
     case "get_packet_capture_workspace":
       return { capture: { phase: "idle", serial: null, message: "" }, history: { records: [], defaultRecordId: null } } satisfies PacketCaptureWorkspace as T;
     case "select_packet_capture_record":
+    case "get_packet_capture_preview":
       throw new Error("抓包记录不存在");
     case "delete_packet_capture_record":
       return { records: [], defaultRecordId: null } satisfies CaptureHistoryState as T;

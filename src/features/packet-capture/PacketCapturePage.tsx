@@ -5,7 +5,7 @@ import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
 import type { CaptureHistoryEntry } from "../../types/packetCapture";
-import { CaptureInventory, CaptureInventorySkeleton } from "./CaptureInventory";
+import { CapturePreview } from "./CapturePreview";
 import { usePacketCapture } from "./usePacketCapture";
 
 function dateLabel(timestamp: number) {
@@ -79,13 +79,9 @@ export function PacketCapturePage({ onBack, onNavigationLockChange }: { onBack: 
         </section>
         <section className="capture-preview" aria-label="数据预览" aria-busy={loading}>
           <header className="capture-section-header">
-            <SectionHeading rail stacked english="INVENTORY">数据预览</SectionHeading><span>账户物品</span>
+            <SectionHeading rail stacked english="ACCOUNT SNAPSHOT">数据预览</SectionHeading><span>账户快照</span>
           </header>
-          {loading ? <CaptureInventorySkeleton /> : capture.recordError ? <CaptureEmpty title="数据加载失败" detail="点击左侧记录重试" /> : response?.items.length ? <CaptureInventory items={response.items} /> : <CaptureEmpty
-            loading={capture.capturing && !response}
-            title={response ? "暂无可预览的常用物品" : capture.capturing ? "正在等待游戏数据" : "尚无账户物品"}
-            detail={response ? undefined : capture.capturing ? "取得响应后，将自动保存并展示结果" : "点击下方开始，抓包完成后在此预览"}
-          />}
+          <CapturePreview recordId={response?.captureId ?? null} loading={loading} recordError={!!capture.recordError} waiting={capture.capturing && !response} />
         </section>
       </div>
     </div>

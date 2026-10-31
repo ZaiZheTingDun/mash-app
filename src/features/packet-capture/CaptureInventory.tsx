@@ -5,8 +5,14 @@ import copperFruit from "../../../src-tauri/resources/images/item_fruit_bronze.p
 import quartz from "../../../src-tauri/resources/images/item_saint_quartz.png";
 import type { CapturedItem } from "../../types/packetCapture";
 import { Skeleton } from "@radix-ui/themes";
+import { convertFileSrc } from "../../tauri";
 
 const images: Record<number, string> = { 2: quartz, 100: goldFruit, 101: silverFruit, 104: bronzeFruit, 102: copperFruit };
+
+export function CaptureItemIcon({ itemId, icon }: { itemId: number; icon?: string | null }) {
+  const source = icon ? convertFileSrc(icon) : images[itemId];
+  return source ? <img src={source} alt="" loading="lazy" /> : <span className="capture-currency-icon" aria-hidden="true"><i /><i /></span>;
+}
 
 export function CaptureInventorySkeleton() {
   return <div className="capture-inventory" role="status" aria-label="正在加载账户物品">

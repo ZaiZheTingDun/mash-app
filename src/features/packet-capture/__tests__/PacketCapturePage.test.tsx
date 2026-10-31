@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { PacketCapturePage } from "../PacketCapturePage";
 import { invokeDevMock } from "../../../devMock";
+import { previewFixture } from "./previewFixture";
+import type { CapturePreviewQuery } from "../../../types/packetCapture";
 import type { CaptureConfiguration, CaptureRecord, PacketCaptureWorkspace } from "../../../types/packetCapture";
 
 const actions = vi.fn();
@@ -36,6 +38,10 @@ beforeEach(() => {
   vi.mocked(invoke).mockReset().mockImplementation((command, args) => {
     if (command === "get_packet_capture_workspace") return reads();
     if (command === "select_packet_capture_record") return recordReads((args as { recordId: string }).recordId);
+    if (command === "get_packet_capture_preview") {
+      const { recordId, query } = args as { recordId: string; query: CapturePreviewQuery };
+      return Promise.resolve(previewFixture(recordId, query.tab));
+    }
     return actions(command, args);
   });
 });
@@ -75,7 +81,7 @@ describe("PacketCapturePage", () => {
     await act(async () => finishRecord(saved));
     expect(screen.getByRole("textbox")).toHaveValue(saved.response.body);
     expect(screen.getByRole("region", { name: "数据预览" })).toHaveAttribute("aria-busy", "false");
-    expect(screen.queryByRole("status", { name: "正在加载账户物品" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("status", { name: "正在加载账户物品" })).not.toBeInTheDocument());
   });
 
   it.each(["resolve", "reject"])("selects immediately and ignores a stale record %s after switching again", async outcome => {
