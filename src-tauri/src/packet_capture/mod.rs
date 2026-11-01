@@ -22,6 +22,8 @@ pub(crate) use history::{CaptureHistoryState, CaptureRecord, HistoryStore};
 pub(crate) use lifecycle::stop_task;
 pub(crate) use response::{ResponseState, ResponseStatus, ResponseStore};
 #[cfg(test)]
+mod root_tests;
+#[cfg(test)]
 mod tests;
 
 const CERT_PATHS: [&str; 2] = [
@@ -78,7 +80,6 @@ fn setup_controlled_using(
     cancellation.check()?;
     log(LogLevel::Info, "开始抓包环境配置");
     let result: Result<CaptureConfiguration, String> = (|| {
-        log(LogLevel::Info, "正在安装并验证系统证书…");
         let installed = install_with_log_using(selected, run, log, cancellation)?;
         cancellation.check()?;
         log(
@@ -157,6 +158,58 @@ fn select_serial(output: &str, selected: Option<&str>) -> Result<String, String>
         .ok_or_else(|| "未找到在线 ADB 设备，请先连接设备".into())
 }
 
+fn prepare_root_using(
+    serial: &str,
+    run: &mut AdbCommand<'_>,
+    log: &mut dyn FnMut(LogLevel, &str),
+    cancellation: &OperationCancellation,
+) -> Result<&'static str, String> {
+    cancellation.check()?;
+    log(LogLevel::Info, "正在检查设备 root 权限…");
+    let existing = find_root(&mut |script| {
+        cancellation.check()?;
+        run(&["-s", serial, "shell", script])
+    });
+    cancellation.check()?;
+    if let Ok(root) = existing {
+        log(LogLevel::Info, "设备 root 权限已确认");
+        return Ok(root);
+    }
+
+    log(LogLevel::Info, "未取得 root 权限，正在尝试 adb root…");
+    // A daemon restart can lose its reply. Verify the actual UID after reconnect
+    // even when this command fails, rather than trusting its text or exit status.
+    let requested = run(&["-s", serial, "root"]);
+    cancellation.check()?;
+    log(LogLevel::Info, "正在等待原设备重新连接并验证 root 权限…");
+    let reconnected = run(&["-s", serial, "wait-for-device"]);
+    cancellation.check()?;
+    reconnected.map_err(|error| format!("adb root 后等待设备 {serial} 重新连接失败：{error}"))?;
+    let verified = find_root(&mut |script| {
+        cancellation.check()?;
+        run(&["-s", serial, "shell", script])
+    });
+    cancellation.check()?;
+    match verified {
+        Ok(root) => {
+            log(LogLevel::Info, "设备 root 权限已确认");
+            Ok(root)
+        }
+        Err(error) => {
+            let detail = match requested {
+                Ok(bytes) => String::from_utf8_lossy(&bytes).trim().to_owned(),
+                Err(error) => error,
+            };
+            let detail: String = detail.chars().take(300).collect();
+            Err(if detail.is_empty() {
+                format!("adb root 后仍{error}")
+            } else {
+                format!("adb root 后仍{error}；ADB 返回：{detail}")
+            })
+        }
+    }
+}
+
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
@@ -167,6 +220,23 @@ fn root_shell(prefix: &str, script: &str) -> String {
     } else {
         format!("{prefix} {}", shell_quote(script))
     }
+}
+
+/// Preserve file bytes even when an emulator's shell translates LF to CRLF.
+/// Callers bound the source read before encoding it. Keep command failures via
+/// pipefail instead of treating an unreadable file as empty successful output.
+fn read_shell_bytes(
+    root: &str,
+    script: &str,
+    shell: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<Vec<u8>, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let script = format!("set -o pipefail; (\n{script}\n) | base64");
+    let mut encoded = shell(&root_shell(root, &script))?;
+    encoded.retain(|byte| !byte.is_ascii_whitespace());
+    STANDARD
+        .decode(encoded)
+        .map_err(|_| "设备文件编码无效，无法读取原始内容".into())
 }
 
 #[cfg(test)]
@@ -192,23 +262,30 @@ fn install_with_log_using(
     let devices = run(&["devices", "-l"])?;
     let serial = select_serial(&String::from_utf8_lossy(&devices), selected)?;
     cancellation.bind_device(&serial)?;
+    let sdk: u32 = {
+        let mut shell = |script: &str| {
+            cancellation.check()?;
+            run(&["-s", &serial, "shell", script])
+        };
+        let package = shell("pm path com.reqable.android")?;
+        if !String::from_utf8_lossy(&package).contains("package:") {
+            return Err("请先在设备上安装 Reqable".into());
+        }
+        let sdk = shell("getprop ro.build.version.sdk")?;
+        String::from_utf8_lossy(&sdk)
+            .trim()
+            .parse()
+            .map_err(|_| "无法读取设备的 Android 版本")?
+    };
+    if sdk < 21 {
+        return Err("当前证书安装需要 Android 5 或以上版本".into());
+    }
+    let root = prepare_root_using(&serial, run, log, cancellation)?;
+    log(LogLevel::Info, "正在安装并验证系统证书…");
     let mut shell = |script: &str| {
         cancellation.check()?;
         run(&["-s", &serial, "shell", script])
     };
-    let package = shell("pm path com.reqable.android")?;
-    if !String::from_utf8_lossy(&package).contains("package:") {
-        return Err("请先在设备上安装 Reqable".into());
-    }
-    let sdk = shell("getprop ro.build.version.sdk")?;
-    let sdk: u32 = String::from_utf8_lossy(&sdk)
-        .trim()
-        .parse()
-        .map_err(|_| "无法读取设备的 Android 版本")?;
-    if sdk < 21 {
-        return Err("当前证书安装需要 Android 5 或以上版本".into());
-    }
-    let root = find_root(&mut shell)?;
     shell("am start -W -n com.reqable.android/.MainActivity")
         .map_err(|error| format!("无法打开 Reqable：{error}"))?;
     let (source_path, bytes) =

@@ -9,7 +9,8 @@ impl Client {
         reqwest::blocking::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(2))
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(30))
             .user_agent("reqable-mcp/1.0.1")
             .build()
             .map(Self)
@@ -35,10 +36,18 @@ impl Client {
                 None => request,
             }
         };
-        let response = request
-            .send()
-            .and_then(reqwest::blocking::Response::error_for_status)
-            .map_err(|_| "无法连接设备上的 Reqable 控制接口")?;
+        let response = request.send().map_err(|error| {
+            if error.is_timeout() {
+                if error.is_connect() {
+                    "连接设备上的 Reqable 控制接口超时"
+                } else {
+                    "Reqable 控制接口响应超时，请保持 Reqable 运行后重试"
+                }
+            } else {
+                "无法连接设备上的 Reqable 控制接口"
+            }
+        })?;
+        let status = response.status();
         let mut bytes = Vec::new();
         response
             .take((limit + 1) as u64)
@@ -47,9 +56,28 @@ impl Client {
         if bytes.len() > limit {
             return Err("Reqable 响应超过读取上限".into());
         }
+        if !status.is_success() {
+            return Err(
+                if status == reqwest::StatusCode::FORBIDDEN
+                    && String::from_utf8_lossy(&bytes).contains("Please enable API Service")
+                {
+                    "Reqable API 服务未启用，请在 Reqable 设置中开启 API Service（API 服务）后重试"
+                        .into()
+                } else if status == reqwest::StatusCode::UNAUTHORIZED
+                    || status == reqwest::StatusCode::FORBIDDEN
+                {
+                    "Reqable 控制接口认证失败，请检查 API 服务的访问令牌设置".into()
+                } else {
+                    format!("Reqable 控制接口返回 HTTP {}", status.as_u16())
+                },
+            );
+        }
         Ok(bytes)
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 pub(super) fn forwarded<T>(
     serial: &str,

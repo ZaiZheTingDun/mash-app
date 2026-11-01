@@ -1,30 +1,49 @@
-use super::{find_root, root_shell, run_adb, select_serial, shell_quote, AdbCommand};
+use super::{
+    find_root, read_shell_bytes, root_shell, run_adb, select_serial, shell_quote, AdbCommand,
+};
 use crate::device_operation::OperationCancellation;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::path::Path;
 
 const PACKAGE: &str = "com.bilibili.fatego";
-const VERSION: &str = "3.3.5";
+const MIN_VERSION: [u32; 3] = [3, 3, 5];
 const CONFIG: &str = "/data/user/0/com.reqable.android/files/config/capture_config";
 const MAX_CONFIG_SIZE: usize = 64 * 1024;
 const ABSENT: &[u8] = b"MASH_CONFIG_ABSENT";
+
+fn reqable_version(info: &[u8]) -> Result<String, String> {
+    let info = String::from_utf8_lossy(info);
+    let version = info
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("versionName="))
+        .ok_or("无法读取 Reqable 版本")?;
+    let parts: Vec<u32> = version
+        .split('.')
+        .map(str::parse)
+        .collect::<Result<_, _>>()
+        .map_err(|_| "无法识别 Reqable 版本号")?;
+    let parts: [u32; 3] = parts.try_into().map_err(|_| "无法识别 Reqable 版本号")?;
+    if parts < MIN_VERSION {
+        return Err(format!(
+            "需要 Reqable {}.{}.{} 或以上版本（当前版本：{version}）",
+            MIN_VERSION[0], MIN_VERSION[1], MIN_VERSION[2]
+        ));
+    }
+    Ok(version.into())
+}
 
 pub(super) fn prepare_capture_configuration(
     shell: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(), String> {
     let info = shell("dumpsys package com.reqable.android")?;
-    if !String::from_utf8_lossy(&info)
-        .lines()
-        .any(|line| line.trim() == format!("versionName={VERSION}"))
-    {
-        return Err(format!("当前抓包仅支持已验证的 Reqable {VERSION}"));
-    }
+    reqable_version(&info)?;
     let root = find_root(shell)?;
-    let bytes = shell(&root_shell(
+    let bytes = read_shell_bytes(
         root,
         &format!("head -c {} {CONFIG}", MAX_CONFIG_SIZE + 1),
-    ))
+        shell,
+    )
     .map_err(|_| "请先点击环境配置，将 Reqable 设置为仅抓国服 FGO")?;
     let config = parse_config(&bytes)?;
     if cn_config(config.clone()) != config {
@@ -137,14 +156,7 @@ pub(super) fn configure_controlled_using(
         }
     }
     let info = forward("dumpsys package com.reqable.android")?;
-    let supported = String::from_utf8_lossy(&info)
-        .lines()
-        .any(|line| line.trim() == format!("versionName={VERSION}"));
-    if !supported {
-        return Err(format!(
-            "当前自动配置仅支持已验证的 Reqable {VERSION}，请确认设备上的版本"
-        ));
-    }
+    let reqable_version = reqable_version(&info)?;
     let root = find_root(&mut forward)?;
     let read = format!(
         "test -d /data/user/0/com.reqable.android/files/config || exit 1; if test -f {CONFIG}; then head -c {} {CONFIG}; elif test ! -e {CONFIG}; then echo MASH_CONFIG_ABSENT; else exit 1; fi",
@@ -152,14 +164,14 @@ pub(super) fn configure_controlled_using(
     );
     // Check compatibility before stopping a running capture.
     snapshot(
-        forward(&root_shell(root, &read))
+        read_shell_bytes(root, &read, &mut forward)
             .map_err(|_| "无法读取 Reqable 配置，请先完成 Reqable 的首次初始化")?,
     )?;
     forward("am force-stop com.reqable.android")
         .map_err(|_| "无法停止 Reqable，请关闭抓包后重试")?;
     // Read again after shutdown so we preserve its last saved settings.
     let original = snapshot(
-        forward(&root_shell(root, &read))
+        read_shell_bytes(root, &read, &mut forward)
             .map_err(|_| "无法读取 Reqable 配置，请先完成 Reqable 的首次初始化")?,
     )?;
     let desired = cn_config(match &original {
@@ -219,7 +231,8 @@ echo MASH_CONFIG_WRITTEN"#,
         if !opened(&launch) {
             return Err("无法重新打开 Reqable".into());
         }
-        let actual = forward(&root_shell(root, &read)).map_err(|_| "无法回读 Reqable 配置")?;
+        let actual =
+            read_shell_bytes(root, &read, &mut forward).map_err(|_| "无法回读 Reqable 配置")?;
         let actual = parse_config(&actual)?;
         if !desired
             .as_object()
@@ -275,7 +288,7 @@ echo MASH_CONFIG_RESTORED"#
     Ok(CaptureConfiguration {
         serial,
         package_name: PACKAGE.into(),
-        reqable_version: VERSION.into(),
+        reqable_version,
         message: "Reqable 已配置为仅抓国服 FGO，抓包未开启".into(),
     })
 }

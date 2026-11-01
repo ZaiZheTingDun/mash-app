@@ -6,6 +6,38 @@ mod certificate_script_tests;
 
 const CA: &[u8] = include_bytes!("../../tests/fixtures/packet-capture/ca.pem");
 
+pub(super) fn encoded_shell_output(bytes: &[u8]) -> Vec<u8> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    // Model the reported MuMu shell: wrapped base64 with CRLF on the wire.
+    let encoded = STANDARD.encode(bytes);
+    encoded
+        .as_bytes()
+        .chunks(64)
+        .flat_map(|line| line.iter().copied().chain(b"\r\n".iter().copied()))
+        .collect()
+}
+
+#[test]
+fn shell_file_reads_preserve_original_line_endings_and_binary_content() {
+    use sha2::{Digest, Sha256};
+    for bytes in [CA, b"line 1\nline 2\r\n\0\xff\r".as_slice()] {
+        let output = read_shell_bytes("su -c", "head -c 65537 /source", &mut |command| {
+            assert!(command.starts_with("su -c"));
+            assert!(command.contains("set -o pipefail"));
+            assert!(command.contains("| base64"));
+            Ok(encoded_shell_output(bytes))
+        })
+        .unwrap();
+        assert_eq!(output, bytes);
+        assert_eq!(Sha256::digest(&output), Sha256::digest(bytes));
+    }
+    assert!(read_shell_bytes("", "cat /source", &mut |_| Ok(b"invalid!".to_vec())).is_err());
+    assert_eq!(
+        read_shell_bytes("", "cat /source", &mut |_| Err("denied".into())).unwrap_err(),
+        "denied"
+    );
+}
+
 #[test]
 fn ca_hash_matches_openssl_subject_hash_old_and_fingerprint() {
     let cert = certificate::parse(CA).unwrap();
@@ -67,11 +99,11 @@ fn fake_install_at_path(
             }
         } else if script.starts_with("am start") {
             Ok(Vec::new())
-        } else if script.contains(&format!("cat {source_path}")) {
-            Ok(certificate.to_vec())
+        } else if script.contains(&format!("head -c 65537 {source_path}")) {
+            Ok(encoded_shell_output(certificate))
         } else if CERT_PATHS
             .iter()
-            .any(|path| script.contains(&format!("cat {path}")))
+            .any(|path| script.contains(&format!("head -c 65537 {path}")))
         {
             Err("No such file".into())
         } else if script.contains("MASH_CA_INSTALLED") {
@@ -79,6 +111,7 @@ fn fake_install_at_path(
             assert!(!script.contains("__SOURCE_SHA256__"));
             assert!(script.contains("hash=c02a2bc8"));
             assert!(script.contains(&format!("source_cert={source_path}")));
+            assert!(script.contains(&certificate::parse(certificate).unwrap().source_sha256));
             if outcome == "failure" {
                 Err("mount: permission denied".into())
             } else {
