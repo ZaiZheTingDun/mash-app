@@ -29,5 +29,7 @@ export function runtimeChangedFiles(base, source, platform) {
 
 if (process.argv[1] && fs.realpathSync.native(process.argv[1]) === fs.realpathSync.native(fileURLToPath(import.meta.url))) {
   const [base, source, platform] = process.argv.slice(2);
-  console.log(Boolean(base && runtimeChangedFiles(base, source, platform).length));
+  // Shell release gates compare this value literally. Logging a Boolean uses
+  // Node's inspector and adds ANSI colors when FORCE_COLOR is enabled.
+  process.stdout.write(`${Boolean(base && runtimeChangedFiles(base, source, platform).length)}\n`);
 }

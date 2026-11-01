@@ -4,7 +4,9 @@
 
 | 阶段 | 条件与后续行为 |
 | --- | --- |
-| 打开 Reqable | 检查设备、应用、Android 版本和 root；打开主 Activity。 |
+| 检查设备 | 固定在线设备，检查 Reqable 是否安装及 Android 版本。 |
+| 准备 root 权限 | 先检查 ADB shell 和已有 `su` 提权方式。已可取得 UID 0 时直接继续；否则仅向绑定设备发送 `adb root`，等待同一设备重连，再次验证 UID 0。命令返回成功不代表提权成功；命令回复丢失时也以重连后的实际权限为准。失败时保留 ADB 返回的原因，不安装证书或修改 Reqable 配置。检查、尝试、等待和验证结果均同步到环境配置进度。 |
+| 打开 Reqable | root 验证成功后打开主 Activity，继续证书初始化与安装。 |
 | 检查首次启动界面 | 读取有大小上限的 UIAutomator XML，只匹配 `com.reqable.android` 的协议标题及确认按钮。支持英文 `License Agreement` / `Accept` 和中文 `用户许可协议` / `同意`。Flutter 的文字从 `content-desc` 或 `text` 读取；禁用且不可点击的确认按钮仍视为待确认。 |
 | 等待用户确认 | 将提示写入普通操作日志；最多等待 120 秒，由用户在设备上阅读并确认协议。左下角实时显示“当前为服务条款页面，请滑动到底部并点击底部按钮接受条款”。此阶段不点击、不滚动、不修改协议接受标记。 |
 | 选择工作模式 | 匹配 `Work Modes` / `工作模式` 标题及可点击的 `Standalone Mode` / `独立模式` 选项，使用节点 bounds 中心加小幅偏移点击一次。重新读取页面后，点击右上角“下一步”：兼容已提供中英文 XML 中无标签的控件，限于标题所在行、屏幕右侧且唯一的可用节点。两次点击均只尝试一次，持续检测页面是否离开；按钮不可识别或点击失败时保留手动完成的等待，不读取 CA。独立出现该页时最多等待 30 秒。左下角及操作日志提示“检测到 Reqable 工作模式选择页，正在自动处理，如无响应请手动选择独立模式并进入下一步”。 |
@@ -24,6 +26,8 @@
 界面 dump 使用独立临时文件并清理，不将完整 XML 写入日志。尚未完成初始化时不会安装证书或写入 Reqable 配置。配置期间通过 `packet-capture-setup-progress` 字符串事件同步左下角状态，操作日志仍保留完整步骤。单元测试使用中英文协议页和工作模式页真实层级结构的精简 fixture，覆盖等待协议确认、选择独立模式、点击下一步及离开页面后读取 CA；真机验证仍需设备环境。
 
 系统画中画权限依据 Android 的 [ActivityRecord 权限检查](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android13-release/services/core/java/com/android/server/wm/ActivityRecord.java)及 [AppOps 命令实现](https://android.googlesource.com/platform/frameworks/base/+/b9c4862b8605b653153be29ed902142539f4ffe2/services/core/java/com/android/server/appop/AppOpsService.java)。权限回读测试覆盖命令未生效、UID 覆盖和连接失败；设备上的实际窗口效果仍需验证。
+
+控制接口分别限制连接和请求时间：建立连接最多等待 2 秒，完整请求及响应读取最多等待 30 秒，以容纳记录筛选等较慢操作。连接失败、连接超时和接口响应超时分别报告；接口响应慢时不再误报“无法连接”。
 
 ## 抓包历史
 

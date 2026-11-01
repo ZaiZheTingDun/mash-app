@@ -72,8 +72,10 @@ fn package_uid(info: &[u8]) -> Result<u32, String> {
     String::from_utf8_lossy(info)
         .lines()
         .find_map(|line| {
-            line.trim()
-                .strip_prefix("userId=")?
+            // Newer Android package dumps label the application UID as appId.
+            let line = line.trim();
+            line.strip_prefix("userId=")
+                .or_else(|| line.strip_prefix("appId="))?
                 .split_whitespace()
                 .next()?
                 .parse::<u32>()
@@ -166,15 +168,23 @@ fn start_controlled_using(
     let mut requested_start = false;
     let result = (|| {
         let mut initial = None;
+        let mut last_error = None;
         for _ in 0..12 {
             cancellation.check()?;
-            if let Ok(Some(active)) = api(port, Request::Status) {
-                initial = Some(active);
-                break;
+            match api(port, Request::Status) {
+                Ok(Some(active)) => {
+                    initial = Some(active);
+                    break;
+                }
+                Err(error) => last_error = Some(error),
+                Ok(None) => {}
             }
             pause();
         }
-        let already_active = initial.ok_or("Reqable 控制接口尚未就绪，请稍后重试")?;
+        let already_active = initial.ok_or_else(|| match last_error {
+            Some(error) => format!("Reqable 控制接口尚未就绪：{error}"),
+            None => "Reqable 控制接口尚未就绪，请稍后重试".into(),
+        })?;
         cancellation.check()?;
         let baseline = prepare(port)?;
         cancellation.check()?;
