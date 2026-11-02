@@ -45,9 +45,171 @@ fn support_identity_mismatch_is_rejected_even_with_valid_member_ids() {
     let mut entry = serde_json::to_value(fixture()).unwrap();
     entry["battleScenes"][0]["turns"][0]["preparationActions"][0]["servantIsSupport"] =
         json!(false);
-    assert!(decode_entry(&transport::encode(&entry).unwrap())
-        .unwrap_err()
-        .contains("身份不一致"));
+    let error = decode_entry(&transport::encode(&entry).unwrap()).unwrap_err();
+    assert!(error.contains("身份不一致"));
+    assert!(error.contains("普通指令 / 第 1 面 / 第 1 回合 / 第 1 项技能指令"));
+}
+
+#[test]
+fn replaced_servants_and_cleared_attacks_are_repaired_before_execution_and_sharing() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let mut entry = fixture();
+    let owned = entry.project.slots[1].id.clone();
+    let support = entry.project.slots[2].id.clone();
+    entry.project.slots[1].servant_id = Some(444);
+    entry.project.support_servant_id = Some(444);
+    write_projects_to_path(&root.join("projects.json"), &[entry.project.clone()]).unwrap();
+    let scenes: Vec<BattleScene> = serde_json::from_value(json!([{
+        "id":"scene", "turns":[{"id":"turn", "preparationActions":[{
+            "id":"skill", "type":"servant", "servant":"servant_2",
+            "servantMemberId":owned, "servantId":444, "servantIsSupport":false,
+            "skill":"skill_1", "target":"servant_3", "targetMemberId":support,
+            "targetServantId":444, "targetIsSupport":true
+        }], "attackPriority":[
+            {"id":"active", "card":"servant_2_np", "memberId":owned, "servantId":444},
+            {"id":"cleared", "card":null, "memberId":owned, "servantId":444},
+            {"id":"deleted-reference", "card":null, "memberId":"removed", "servantId":444, "isSupport":true}
+        ]}]
+    }])).unwrap();
+    write_battle_scenes_to_root(root, &entry.project.id, &scenes).unwrap();
+
+    // Change both the owned and support copies to the same servant, without
+    // rewriting any scene on the frontend. Backend reads must resolve by member.
+    entry.project.slots[1].servant_id = Some(458);
+    entry.project.support_servant_id = Some(458);
+    write_projects_to_path(&root.join("projects.json"), &[entry.project.clone()]).unwrap();
+    // Reproduce old saved blank rows as well, bypassing the new save normalizer.
+    write_json_atomic(
+        &project_battle_scenes_path_in_root(root, &entry.project.id),
+        &scenes,
+        "测试指令",
+    )
+    .unwrap();
+    let loaded = load_battle_scenes_from_root(root, &entry.project.id).unwrap();
+    let turn = serde_json::to_value(&loaded[0].turns[0]).unwrap();
+    assert_eq!(turn["preparationActions"][0]["servantId"], 458);
+    assert_eq!(turn["preparationActions"][0]["servantIsSupport"], false);
+    assert_eq!(turn["preparationActions"][0]["targetServantId"], 458);
+    assert_eq!(turn["preparationActions"][0]["targetIsSupport"], true);
+    assert_eq!(turn["attackPriority"][0]["servantId"], 458);
+    for index in [1, 2] {
+        assert!(turn["attackPriority"][index]["memberId"].is_null());
+        assert!(turn["attackPriority"][index]["servantId"].is_null());
+        assert_eq!(turn["attackPriority"][index]["isSupport"], false);
+    }
+    let snapshot = snapshot_from_root(root, &entry.project.id).unwrap();
+    let restored = decode_entry(&code_from_entry(&snapshot).unwrap()).unwrap();
+    assert_eq!(
+        restored.battle_scenes[0].turns[0].attack_priority[0].servant_id,
+        Some(458)
+    );
+    assert!(restored.battle_scenes[0].turns[0].attack_priority[1]
+        .member_id
+        .is_none());
+
+    // A stale frontend save also cannot put the old metadata back on disk.
+    write_battle_scenes_to_root(root, &entry.project.id, &scenes).unwrap();
+    let saved: Value = read_json_or_default(
+        &project_battle_scenes_path_in_root(root, &entry.project.id),
+        "测试指令",
+    )
+    .unwrap();
+    assert_eq!(saved[0]["turns"][0]["attackPriority"][0]["servantId"], 458);
+    assert!(saved[0]["turns"][0]["attackPriority"][1]["memberId"].is_null());
+}
+
+#[test]
+fn active_unknown_members_are_rejected_with_their_command_location() {
+    let dir = tempfile::tempdir().unwrap();
+    let entry = fixture();
+    write_projects_to_path(&dir.path().join("projects.json"), &[entry.project.clone()]).unwrap();
+    let scenes: Vec<BattleScene> = serde_json::from_value(json!([{
+        "id":"scene", "turns":[{"id":"turn", "attackPriority":[
+            {"id":"active", "card":"servant_2_np", "memberId":"removed", "servantId":444}
+        ]}]
+    }]))
+    .unwrap();
+    let error = write_battle_scenes_to_root(dir.path(), &entry.project.id, &scenes).unwrap_err();
+    assert!(error.contains("普通指令 / 第 1 面 / 第 1 回合 / 第 1 项出卡"));
+    assert!(error.contains("成员引用不存在"));
+    assert!(!project_battle_scenes_path_in_root(dir.path(), &entry.project.id).exists());
+}
+
+#[test]
+fn blank_attack_metadata_is_cleared_but_active_share_mismatches_stay_errors() {
+    let mut entry = fixture();
+    entry.battle_scenes[0].turns[0].attack_priority = serde_json::from_value(json!([
+        {"id":"cleared", "card":null, "memberId":"removed", "servantId":444, "isSupport":true}
+    ]))
+    .unwrap();
+    let restored = decode_entry(&code_from_entry(&entry).unwrap()).unwrap();
+    let card = &restored.battle_scenes[0].turns[0].attack_priority[0];
+    assert!(card.member_id.is_none());
+    assert!(card.servant_id.is_none());
+    assert!(!card.is_support);
+
+    entry.battle_scenes[0].turns[0].attack_priority = serde_json::from_value(json!([
+        {"id":"active", "card":"servant_3_np", "memberId":"share-3", "servantId":444, "isSupport":true}
+    ])).unwrap();
+    let error = code_from_entry(&entry).unwrap_err();
+    assert!(error.contains("身份不一致"));
+    assert!(error.contains("第 1 项出卡"));
+}
+
+#[test]
+fn advanced_conditions_targets_and_order_changes_follow_member_identity_after_replacement() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let mut entry = fixture();
+    let owned = entry.project.slots[0].id.clone();
+    let support = entry.project.slots[2].id.clone();
+    entry.project.slots[0].servant_id = Some(458);
+    entry.project.support_servant_id = Some(458);
+    write_projects_to_path(&root.join("projects.json"), &[entry.project.clone()]).unwrap();
+    let scenes: Vec<AdvancedBattleScene> = serde_json::from_value(json!([{
+        "id":"advanced", "mainOutput":{
+            "servant":"servant_1", "memberId":owned, "servantId":444,
+            "isSupport":true, "outputType":"np", "npCard":"buster"
+        }, "turns":[{"id":"turn", "actions":[{
+            "id":"swap", "type":"equipment", "skill":"skill_3", "orderChange":{
+                "front":"servant_1", "frontMemberId":owned, "frontServantId":444,
+                "frontIsSupport":true, "back":"servant_3", "backMemberId":support,
+                "backServantId":444, "backIsSupport":false
+            }
+        }]}], "rules":[{"id":"rule", "npConditionGroups":[{
+            "id":"np", "slots":[{
+                "servant":"servant_3", "memberId":support, "servantId":444,
+                "isSupport":false, "ready":true
+            }]
+        }], "actions":[
+            {"id":"active", "type":"attack", "card":"servant_1_np", "memberId":owned, "servantId":444, "isSupport":true},
+            {"id":"blank", "type":"attack", "card":null, "memberId":"removed", "servantId":444, "isSupport":true}
+        ]}]
+    }])).unwrap();
+    write_advanced_battle_scenes_to_root(root, &entry.project.id, &scenes).unwrap();
+    let normalized = load_advanced_battle_scenes_from_root(root, &entry.project.id).unwrap();
+    let scene = serde_json::to_value(&normalized[0]).unwrap();
+    assert_eq!(scene["mainOutput"]["memberId"], owned);
+    assert_eq!(scene["mainOutput"]["servantId"], 458);
+    assert_eq!(scene["mainOutput"]["isSupport"], false);
+    assert_eq!(scene["mainOutput"]["npCard"], "buster");
+    let swap = &scene["turns"][0]["actions"][0]["orderChange"];
+    assert_eq!(swap["frontMemberId"], owned);
+    assert_eq!(swap["frontServantId"], 458);
+    assert_eq!(swap["frontIsSupport"], false);
+    assert_eq!(swap["backMemberId"], support);
+    assert_eq!(swap["backServantId"], 458);
+    assert_eq!(swap["backIsSupport"], true);
+    let condition = &scene["rules"][0]["npConditionGroups"][0]["slots"][0];
+    assert_eq!(condition["memberId"], support);
+    assert_eq!(condition["servantId"], 458);
+    assert_eq!(condition["isSupport"], true);
+    assert_eq!(condition["ready"], true);
+    assert_eq!(scene["rules"][0]["actions"][0]["servantId"], 458);
+    assert!(scene["rules"][0]["actions"][1]["memberId"].is_null());
+    let snapshot = snapshot_from_root(root, &entry.project.id).unwrap();
+    assert!(decode_entry(&code_from_entry(&snapshot).unwrap()).is_ok());
 }
 
 #[test]

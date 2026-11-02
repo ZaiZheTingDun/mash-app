@@ -639,7 +639,9 @@ export function BattleSceneBlock({
   const clearAttackAction = (index: number) => {
     const next = [...attackPriority];
     if (!next[index]) return;
-    next[index] = { ...next[index], card: null };
+    next[index] = {
+      ...next[index], card: null, memberId: null, servantId: null, isSupport: false,
+    };
     updateAttackPriority(next);
     if (attackDraft?.targetIndex === index) {
       setAttackDraft(null);

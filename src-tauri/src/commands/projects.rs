@@ -286,12 +286,7 @@ pub(crate) fn save_battle_scenes(
     scenes: Vec<BattleScene>,
 ) -> Result<(), String> {
     let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
-    let path = project_battle_scenes_path(&app, &project_id);
-    let scenes: Vec<BattleScene> = scenes
-        .into_iter()
-        .map(BattleScene::normalize_turns)
-        .collect();
-    write_json_atomic(&path, &scenes, "普通指令配置")
+    write_battle_scenes_to_root(&app_data_dir(&app), &project_id, &scenes)
 }
 
 #[tauri::command]
@@ -310,8 +305,7 @@ pub(crate) fn save_advanced_battle_scenes(
     scenes: Vec<AdvancedBattleScene>,
 ) -> Result<(), String> {
     let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
-    let path = project_advanced_battle_scenes_path(&app, &project_id);
-    write_json_atomic(&path, &scenes, "高级指令配置")
+    write_advanced_battle_scenes_to_root(&app_data_dir(&app), &project_id, &scenes)
 }
 
 #[tauri::command]
@@ -320,8 +314,7 @@ pub(crate) fn load_advanced_battle_scenes(
     project_id: String,
 ) -> Result<Vec<AdvancedBattleScene>, String> {
     let _guard = app.state::<ProjectStoreLock>().inner().lock()?;
-    let path = project_advanced_battle_scenes_path(&app, &project_id);
-    read_json_or_default(&path, "高级指令配置")
+    load_advanced_battle_scenes_from_root(&app_data_dir(&app), &project_id)
 }
 
 mod catalog;
@@ -329,6 +322,8 @@ pub(crate) use catalog::*;
 
 mod normalization;
 pub(crate) use normalization::*;
+
+mod member_references;
 
 mod command_editor;
 pub(crate) use command_editor::*;
