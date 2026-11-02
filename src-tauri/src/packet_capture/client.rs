@@ -2,10 +2,28 @@
 use super::{run_adb, AdbCommand};
 use std::{io::Read, path::Path, time::Duration};
 
-pub(super) struct Client(reqwest::blocking::Client);
+pub(super) const AUTHENTICATION_FAILED: &str =
+    "Reqable 控制接口认证失败，请检查 API 服务的访问令牌设置";
+
+pub(super) struct Client(
+    reqwest::blocking::Client,
+    Option<reqwest::header::HeaderValue>,
+);
 
 impl Client {
     pub(super) fn new() -> Result<Self, String> {
+        Self::with_api_key(None)
+    }
+
+    pub(super) fn with_api_key(key: Option<&str>) -> Result<Self, String> {
+        let authorization = key
+            .map(|key| {
+                let mut value = reqwest::header::HeaderValue::from_str(&format!("Bearer {key}"))
+                    .map_err(|_| "Reqable API key 格式无效")?;
+                value.set_sensitive(true);
+                Ok::<_, String>(value)
+            })
+            .transpose()?;
         reqwest::blocking::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
@@ -13,7 +31,7 @@ impl Client {
             .timeout(Duration::from_secs(30))
             .user_agent("reqable-mcp/1.0.1")
             .build()
-            .map(Self)
+            .map(|client| Self(client, authorization))
             .map_err(|_| "无法创建 Reqable 控制连接".into())
     }
 
@@ -35,6 +53,11 @@ impl Client {
                     .body(body.to_string()),
                 None => request,
             }
+        };
+        let request = if let Some(authorization) = &self.1 {
+            request.header(reqwest::header::AUTHORIZATION, authorization.clone())
+        } else {
+            request
         };
         let response = request.send().map_err(|error| {
             if error.is_timeout() {
@@ -61,12 +84,11 @@ impl Client {
                 if status == reqwest::StatusCode::FORBIDDEN
                     && String::from_utf8_lossy(&bytes).contains("Please enable API Service")
                 {
-                    "Reqable API 服务未启用，请在 Reqable 设置中开启 API Service（API 服务）后重试"
-                        .into()
+                    "Reqable API 服务未启用，请在 Reqable 设置中开启 API 服务后重试".into()
                 } else if status == reqwest::StatusCode::UNAUTHORIZED
                     || status == reqwest::StatusCode::FORBIDDEN
                 {
-                    "Reqable 控制接口认证失败，请检查 API 服务的访问令牌设置".into()
+                    AUTHENTICATION_FAILED.into()
                 } else {
                     format!("Reqable 控制接口返回 HTTP {}", status.as_u16())
                 },

@@ -1,4 +1,59 @@
 use super::*;
+
+#[test]
+fn session_key_is_used_for_polling_and_stop_and_is_never_serialized() {
+    let store = ResponseStore::default();
+    store.begin_authenticated(
+        "device".into(),
+        HashSet::new(),
+        Some("synthetic-private-key".into()),
+    );
+    let state = store.poll_authenticated_using(
+        |serial, _, key| {
+            assert_eq!(serial, "device");
+            assert_eq!(key, Some("synthetic-private-key"));
+            Ok(Some(complete_response()))
+        },
+        |serial, key| {
+            assert_eq!(serial, "device");
+            assert_eq!(key, Some("synthetic-private-key"));
+            Ok(())
+        },
+    );
+    assert_eq!(state.phase, ResponsePhase::Found);
+    assert!(!serde_json::to_string(&state)
+        .unwrap()
+        .contains("synthetic-private-key"));
+    store
+        .stop_authenticated_using(|_, key| {
+            assert_eq!(key, Some("synthetic-private-key"));
+            Ok(())
+        })
+        .unwrap();
+    store.reset();
+    assert!(store.0.lock().unwrap().api_key.is_none());
+}
+
+#[test]
+fn superseded_poll_uses_its_original_key_and_cannot_stop_the_new_session() {
+    let store = ResponseStore::default();
+    store.begin_authenticated("old".into(), HashSet::new(), Some("old-private-key".into()));
+    let state = store.poll_authenticated_using(
+        |serial, _, key| {
+            store.begin_authenticated("new".into(), HashSet::new(), Some("new-private-key".into()));
+            assert_eq!(serial, "old");
+            assert_eq!(key, Some("old-private-key"));
+            Ok(Some(complete_response()))
+        },
+        |_, _| panic!("old poll must not stop a new capture"),
+    );
+    assert_eq!(state.serial.as_deref(), Some("new"));
+    assert_eq!(state.phase, ResponsePhase::Waiting);
+    assert_eq!(
+        store.0.lock().unwrap().api_key.as_deref(),
+        Some("new-private-key")
+    );
+}
 use std::{
     io::{Read, Write},
     net::TcpListener,
@@ -406,6 +461,9 @@ fn display_toplogin_on_authorized_device() {
         &adb,
         Some(&serial),
         &crate::device_operation::OperationCancellation::default(),
+        &super::super::ApiKeyStore::new(tempfile::tempdir().unwrap().path().join("api-keys.json")),
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/scrcpy/scrcpy-server.jar"),
+        &mut |_| {},
     )
     .unwrap();
     let store = ResponseStore::default();

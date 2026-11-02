@@ -21,8 +21,8 @@ fn stop_interrupted_using(serial: &str, run: &mut AdbCommand<'_>) -> Result<(), 
     Ok(())
 }
 
-pub(super) fn stop_capture(adb_path: &Path, serial: &str) -> Result<(), String> {
-    let client = client::Client::new()?;
+pub(super) fn stop_capture(adb_path: &Path, serial: &str, key: Option<&str>) -> Result<(), String> {
+    let client = client::Client::with_api_key(key)?;
     stop_using(
         serial,
         &mut |args| run_adb(adb_path, args),

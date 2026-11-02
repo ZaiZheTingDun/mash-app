@@ -35,9 +35,9 @@ fn reqable_version(info: &[u8]) -> Result<String, String> {
 
 pub(super) fn prepare_capture_configuration(
     shell: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let info = shell("dumpsys package com.reqable.android")?;
-    reqable_version(&info)?;
+    let version = reqable_version(&info)?;
     let root = find_root(shell)?;
     let bytes = read_shell_bytes(
         root,
@@ -49,7 +49,8 @@ pub(super) fn prepare_capture_configuration(
     if cn_config(config.clone()) != config {
         return Err("请先点击环境配置，将 Reqable 设置为仅抓国服 FGO".into());
     }
-    super::picture_in_picture::disable(root, shell)
+    super::picture_in_picture::disable(root, shell)?;
+    Ok(version)
 }
 
 #[derive(Debug, serde::Serialize)]

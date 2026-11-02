@@ -35,6 +35,8 @@ fn state_and_application_isolation_require_explicit_valid_values() {
 
 #[derive(Default)]
 struct Scenario {
+    auth_failure: bool,
+    auth_cancel: bool,
     version: Option<&'static str>,
     app_id_field: bool,
     unconfigured: bool,
@@ -141,6 +143,19 @@ fn fake_with_cancellation(
                 _ => panic!("unexpected command: {command}"),
             }
         },
+        &mut |serial, port, version| {
+            assert_eq!(serial, "device");
+            assert_eq!(port, 41001);
+            assert_eq!(version, s.version.unwrap_or("3.3.5"));
+            if s.auth_cancel {
+                cancellation.cancel();
+            }
+            if s.auth_failure {
+                Err("等待 API key 超时".into())
+            } else {
+                Ok(())
+            }
+        },
         &mut |port, request| {
             assert_eq!(port, 41001);
             requests.push(request);
@@ -234,6 +249,27 @@ fn android_15_app_id_is_recognized_and_can_start_capture() {
     })
     .0
     .is_ok());
+}
+
+#[test]
+fn api_key_failure_or_cancel_never_starts_capture_and_removes_the_forward() {
+    for scenario in [
+        Scenario {
+            version: Some("3.3.9"),
+            auth_failure: true,
+            ..Default::default()
+        },
+        Scenario {
+            version: Some("3.3.10"),
+            auth_cancel: true,
+            ..Default::default()
+        },
+    ] {
+        let (result, commands, requests) = fake(scenario);
+        assert!(result.is_err());
+        assert!(requests.is_empty());
+        assert_eq!(commands.last().unwrap(), "forward --remove tcp:41001");
+    }
 }
 
 #[test]
@@ -388,9 +424,7 @@ fn post_acknowledgement_is_not_success_and_failed_or_uncertain_starts_are_cancel
 #[test]
 fn api_configuration_errors_are_not_hidden_by_the_startup_timeout() {
     let (result, commands, requests) = fake(Scenario {
-        api_error: Some(
-            "Reqable API 服务未启用，请在 Reqable 设置中开启 API Service（API 服务）后重试",
-        ),
+        api_error: Some("Reqable API 服务未启用，请在 Reqable 设置中开启 API 服务后重试"),
         ..Default::default()
     });
     assert!(result.unwrap_err().contains("API 服务未启用"));
@@ -430,6 +464,9 @@ fn start_on_authorized_device() {
         &path,
         Some(&serial),
         &crate::device_operation::OperationCancellation::default(),
+        &ApiKeyStore::new(tempfile::tempdir().unwrap().path().join("api-keys.json")),
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/scrcpy/scrcpy-server.jar"),
+        &mut |_| {},
     )
     .unwrap();
     println!("{}: {}", result.serial, result.message);

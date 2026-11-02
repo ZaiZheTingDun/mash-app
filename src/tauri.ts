@@ -9,6 +9,7 @@ import {
   type UnlistenFn,
 } from "@tauri-apps/api/event";
 import { invokeDevMock } from "./devMock";
+import { openUrl as tauriOpenUrl } from "@tauri-apps/plugin-opener";
 
 declare global {
   interface Window {
@@ -41,6 +42,14 @@ export function convertFileSrc(filePath: string, protocol?: string): string {
     return filePath;
   }
   return tauriConvertFileSrc(filePath, protocol);
+}
+
+export function openExternalUrl(url: string): Promise<void> {
+  if (shouldUseDevMock()) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return Promise.resolve();
+  }
+  return tauriOpenUrl(url);
 }
 
 export function listen<T>(

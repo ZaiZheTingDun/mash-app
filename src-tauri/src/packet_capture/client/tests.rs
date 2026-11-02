@@ -20,6 +20,10 @@ fn delayed_request(
         "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
     );
+    let authorization = client
+        .1
+        .as_ref()
+        .map(|value| value.to_str().unwrap().to_owned());
     let server = std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
         stream
@@ -32,6 +36,15 @@ fn delayed_request(
             request.push(byte[0]);
         }
         assert!(request.starts_with(b"GET /capture/live/status HTTP/1.1\r\n"));
+        let headers = String::from_utf8(request).unwrap().to_ascii_lowercase();
+        if let Some(authorization) = authorization {
+            assert!(headers.contains(&format!(
+                "authorization: {}\r\n",
+                authorization.to_ascii_lowercase()
+            )));
+        } else {
+            assert!(!headers.contains("authorization:"));
+        }
         std::thread::sleep(delay);
         // Timeout cases intentionally close the connection before the reply.
         let _ = stream.write_all(response.as_bytes());
@@ -42,14 +55,28 @@ fn delayed_request(
 }
 
 #[test]
+fn authenticated_requests_send_a_sensitive_bearer_header() {
+    let client = Client::with_api_key(Some("synthetic-private-key")).unwrap();
+    assert!(client.1.as_ref().unwrap().is_sensitive());
+    assert!(!format!("{:?}", client.1).contains("synthetic-private-key"));
+    assert_eq!(
+        delayed_request(client, "200 OK", r#"{"status":"inactive"}"#, Duration::ZERO).unwrap(),
+        br#"{"status":"inactive"}"#
+    );
+    assert!(Client::with_api_key(Some("bad\r\nInjected: true")).is_err());
+}
+
+#[test]
 fn disabled_api_service_has_an_actionable_error() {
     let error = request(
         "403 Forbidden",
         "Access denied. Please enable API Service in Reqable settings.",
     )
     .unwrap_err();
-    assert!(error.contains("API 服务未启用"));
-    assert!(error.contains("Reqable 设置"));
+    assert_eq!(
+        error,
+        "Reqable API 服务未启用，请在 Reqable 设置中开启 API 服务后重试"
+    );
 }
 
 #[test]
@@ -95,6 +122,7 @@ fn response_timeouts_are_distinct_from_connection_failures() {
             .timeout(Duration::from_millis(100))
             .build()
             .unwrap(),
+        None,
     );
     let error = delayed_request(client, "200 OK", "{}", Duration::from_millis(250)).unwrap_err();
     assert!(error.contains("响应超时"));
