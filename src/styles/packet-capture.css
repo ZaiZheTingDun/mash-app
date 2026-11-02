@@ -67,6 +67,7 @@
 .capture-status > i { color: var(--mash-color-accent-default); }
 .capture-status[data-error="true"], .capture-status[data-error="true"] > i { color: var(--mash-color-status-danger); }
 .capture-status span { overflow-wrap: anywhere; }
+.capture-status a { color: var(--mash-color-accent-default); text-underline-offset: 2px; }
 .capture-setup.rt-Button { box-sizing: border-box; flex-shrink: 0; align-self: flex-end; justify-content: flex-start; height: 66px; width: 180px; margin: 0; padding: 7.5px 0 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; color: var(--mash-color-text-muted); }
 .capture-setup > span { align-self: flex-start; display: flex; flex-direction: column; align-items: flex-start; gap: 7.5px; }
 .capture-setup small { font-size: 8.25px; letter-spacing: 1.8px; line-height: 12px; }

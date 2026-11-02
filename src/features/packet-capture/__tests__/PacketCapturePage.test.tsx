@@ -2,11 +2,14 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type Event } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { PacketCapturePage } from "../PacketCapturePage";
 import { invokeDevMock } from "../../../devMock";
 import type { CaptureConfiguration, CaptureRecord, PacketCaptureWorkspace } from "../../../types/packetCapture";
+
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 
 const actions = vi.fn();
 const reads = vi.fn();
@@ -27,6 +30,7 @@ function showRecords(...records: CaptureRecord[]) {
   current.history = { records: records.map(r => r.entry), defaultRecordId: records[0]?.entry.id ?? null };
 }
 beforeEach(() => {
+  vi.mocked(openUrl).mockReset().mockResolvedValue(undefined);
   current = { capture: idle, history: { records: [], defaultRecordId: null } };
   savedRecords.clear();
   recordReads.mockReset().mockImplementation(async (id: string) => savedRecords.get(id));
@@ -42,6 +46,103 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); });
 
 describe("PacketCapturePage", () => {
+  it("reports a native browser-open failure with a manual URL and allows retry", async () => {
+    const user = userEvent.setup();
+    current.capture = { phase: "idle", serial: null, message: "请在 Reqable 设置中开启 API 服务后重试" };
+    vi.mocked(openUrl).mockRejectedValueOnce(new Error("native opener failed"));
+    renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
+    const link = await screen.findByRole("link", { name: "开启 API 服务" });
+    await user.click(link);
+    expect(await screen.findByRole("alert")).toHaveTextContent("无法打开浏览器，请手动访问：https://docs.mash.xiaotongx.com/");
+    await user.click(link);
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(openUrl).toHaveBeenCalledTimes(2);
+  });
+
+  it("links API service setup instructions within startup errors without changing the full message", async () => {
+    const user = userEvent.setup();
+    const message = "Reqable 控制接口尚未就绪：Reqable API 服务未启用，请在 Reqable 设置中开启 API 服务后重试";
+    actions.mockRejectedValue(message);
+    renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "开始" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "开始" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(message);
+    const guide = within(alert).getByRole("link", { name: "开启 API 服务" });
+    expect(guide).toHaveAttribute("href", "https://docs.mash.xiaotongx.com/guides/package-capture/#api-%E6%9C%8D%E5%8A%A1");
+    expect(guide).toHaveAttribute("target", "_blank");
+    expect(guide).toHaveAttribute("rel", "noopener noreferrer");
+    await user.click(guide);
+    expect(openUrl).toHaveBeenCalledExactlyOnceWith("https://docs.mash.xiaotongx.com/guides/package-capture/#api-%E6%9C%8D%E5%8A%A1");
+  });
+
+  it("shows API key copy progress during startup and stops accepting hints after cancellation", async () => {
+    const user = userEvent.setup();
+    let progress!: (event: Event<string>) => void;
+    const unlisten = vi.fn();
+    vi.mocked(listen).mockImplementation(async (name, handler) => {
+      expect(name).toBe("packet-capture-start-progress");
+      progress = handler as typeof progress;
+      return unlisten;
+    });
+    let rejectStart!: (reason: string) => void;
+    actions.mockImplementation((command: string) => {
+      if (command === "start_packet_capture") return new Promise((_resolve, reject) => { rejectStart = reject; });
+      if (command === "stop_packet_capture") { rejectStart("抓包启动已停止"); return Promise.resolve(); }
+      throw new Error(command);
+    });
+    renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "开始" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "开始" }));
+    const hint = "API 服务开启后，请创建 API key 并点击复制，mash 将自动验证并保存";
+    act(() => progress({ event: "packet-capture-start-progress", id: 1, payload: hint }));
+    expect(screen.getByRole("status")).toHaveTextContent(hint);
+    const guide = screen.getByRole("link", { name: "创建 API key" });
+    expect(guide).toHaveAttribute("href", "https://docs.mash.xiaotongx.com/guides/package-capture/#api-%E6%9C%8D%E5%8A%A1");
+    expect(guide).toHaveAttribute("target", "_blank");
+    await user.click(guide);
+    expect(openUrl).toHaveBeenCalledTimes(1);
+    const invalidFormatHint = "已收到剪贴板内容，但不是 API key 格式，请在 Reqable 中复制生成的 API key";
+    act(() => progress({ event: "packet-capture-start-progress", id: 1, payload: invalidFormatHint }));
+    expect(screen.getByRole("status")).toHaveTextContent(invalidFormatHint);
+    expect(screen.getByRole("link", { name: "复制生成的 API key" })).toHaveAttribute("href", "https://docs.mash.xiaotongx.com/guides/package-capture/#api-%E6%9C%8D%E5%8A%A1");
+    await user.click(screen.getByRole("link", { name: "复制生成的 API key" }));
+    expect(openUrl).toHaveBeenCalledTimes(2);
+    expect(openUrl).toHaveBeenLastCalledWith("https://docs.mash.xiaotongx.com/guides/package-capture/#api-%E6%9C%8D%E5%8A%A1");
+    expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "停止" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "开始" })).toBeEnabled());
+    expect(unlisten).toHaveBeenCalledTimes(1);
+    act(() => progress({ event: "packet-capture-start-progress", id: 1, payload: "late key hint" }));
+    expect(screen.queryByText("late key hint")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("removes the startup progress subscription after a successful key import and start", async () => {
+    const user = userEvent.setup();
+    let progress!: (event: Event<string>) => void;
+    const unlisten = vi.fn();
+    vi.mocked(listen).mockImplementation(async (_name, handler) => {
+      progress = handler as typeof progress; return unlisten;
+    });
+    let finish!: () => void;
+    actions.mockImplementation(() => new Promise(resolve => {
+      finish = () => {
+        current.capture = { phase: "waiting", serial: "device", message: "等待数据中，请重新进入游戏……" };
+        resolve({ serial: "device", message: "已开始抓取国服 FGO 流量" });
+      };
+    }));
+    renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "开始" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "开始" }));
+    act(() => progress({ event: "packet-capture-start-progress", id: 1, payload: "API key 已验证并保存，正在启动抓包…" }));
+    expect(screen.getByRole("status")).toHaveTextContent("API key 已验证并保存");
+    await act(async () => finish());
+    expect(unlisten).toHaveBeenCalledTimes(1);
+    act(() => progress({ event: "packet-capture-start-progress", id: 1, payload: "late hint" }));
+    expect(screen.getByRole("status")).toHaveTextContent("等待数据中");
+  });
+
   it("renders the browser development mock's empty workspace without attempting a record read", async () => {
     vi.mocked(invoke).mockImplementation((command, args) => invokeDevMock(command, args as Record<string, unknown> | undefined));
     renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);

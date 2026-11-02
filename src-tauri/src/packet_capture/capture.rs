@@ -1,4 +1,6 @@
-use super::{client, configuration, response, run_adb, select_serial, AdbCommand};
+use super::{
+    client, configuration, credentials, response, run_adb, select_serial, AdbCommand, ApiKeyStore,
+};
 use crate::device_operation::OperationCancellation;
 use std::{collections::HashSet, path::Path, time::Duration};
 
@@ -10,11 +12,17 @@ pub(crate) struct CaptureStarted {
     message: String,
     #[serde(skip)]
     pub(super) baseline: HashSet<String>,
+    #[serde(skip)]
+    api_key: Option<String>,
 }
 
 impl CaptureStarted {
     pub(crate) fn begin_response_watch(&self, store: &response::ResponseStore) {
-        store.begin(self.serial.clone(), self.baseline.clone());
+        store.begin_authenticated(
+            self.serial.clone(),
+            self.baseline.clone(),
+            self.api_key.clone(),
+        );
     }
 }
 
@@ -44,36 +52,60 @@ pub(crate) fn start_capture(
     adb_path: &Path,
     selected: Option<&str>,
     cancellation: &OperationCancellation,
+    keys: &ApiKeyStore,
+    jar_path: &Path,
+    progress: &mut dyn FnMut(&str),
 ) -> Result<CaptureStarted, String> {
-    let client = client::Client::new()?;
-    start_controlled_using(
+    let client = std::cell::RefCell::new(client::Client::new()?);
+    let api_key = std::cell::RefCell::new(None);
+    let mut started = start_controlled_using(
         selected,
         &mut |args| run_adb(adb_path, args),
+        &mut |serial, port, version| {
+            if credentials::needs_api_key(version) {
+                let key = credentials::authorize(
+                    keys,
+                    adb_path,
+                    jar_path,
+                    serial,
+                    port,
+                    cancellation,
+                    progress,
+                )?;
+                *client.borrow_mut() = client::Client::with_api_key(Some(&key))?;
+                *api_key.borrow_mut() = Some(key);
+            }
+            Ok(())
+        },
         &mut |port, request| {
             let route = match request {
                 Request::Status => "status",
                 Request::Start => "on",
                 Request::Stop => "off",
             };
-            let bytes = client.request(port, route, None, 4096)?;
+            let bytes = client.borrow().request(port, route, None, 4096)?;
             if request == Request::Status {
                 Ok(Some(decode_status(&bytes)?))
             } else {
                 Ok(None)
             }
         },
-        &mut |port| response::baseline(&client, port),
+        &mut |port| response::baseline(&client.borrow(), port),
         &mut || cancellation.wait(Duration::from_millis(250)),
         cancellation,
-    )
+    )?;
+    started.api_key = api_key.into_inner();
+    Ok(started)
 }
 
 fn package_uid(info: &[u8]) -> Result<u32, String> {
     String::from_utf8_lossy(info)
         .lines()
         .find_map(|line| {
-            line.trim()
-                .strip_prefix("userId=")?
+            // Newer Android package dumps label the application UID as appId.
+            let line = line.trim();
+            line.strip_prefix("userId=")
+                .or_else(|| line.strip_prefix("appId="))?
                 .split_whitespace()
                 .next()?
                 .parse::<u32>()
@@ -120,6 +152,7 @@ fn vpn_only_cn(output: &[u8], uid: u32) -> bool {
 fn start_controlled_using(
     selected: Option<&str>,
     run: &mut AdbCommand<'_>,
+    authorize: &mut dyn FnMut(&str, u16, &str) -> Result<(), String>,
     api: &mut Api<'_>,
     prepare: &mut dyn FnMut(u16) -> Result<HashSet<String>, String>,
     pause: &mut dyn FnMut(),
@@ -133,7 +166,7 @@ fn start_controlled_using(
     let devices = forward(&["devices", "-l"])?;
     let serial = select_serial(&String::from_utf8_lossy(&devices), selected)?;
     cancellation.bind_device(&serial)?;
-    configuration::prepare_capture_configuration(&mut |command| {
+    let version = configuration::prepare_capture_configuration(&mut |command| {
         forward(&["-s", &serial, "shell", command])
     })?;
     let uid = package_uid(&forward(&[
@@ -165,16 +198,26 @@ fn start_controlled_using(
     let mut may_be_active = false;
     let mut requested_start = false;
     let result = (|| {
+        authorize(&serial, port, &version)?;
+        cancellation.check()?;
         let mut initial = None;
+        let mut last_error = None;
         for _ in 0..12 {
             cancellation.check()?;
-            if let Ok(Some(active)) = api(port, Request::Status) {
-                initial = Some(active);
-                break;
+            match api(port, Request::Status) {
+                Ok(Some(active)) => {
+                    initial = Some(active);
+                    break;
+                }
+                Err(error) => last_error = Some(error),
+                Ok(None) => {}
             }
             pause();
         }
-        let already_active = initial.ok_or("Reqable 控制接口尚未就绪，请稍后重试")?;
+        let already_active = initial.ok_or_else(|| match last_error {
+            Some(error) => format!("Reqable 控制接口尚未就绪：{error}"),
+            None => "Reqable 控制接口尚未就绪，请稍后重试".into(),
+        })?;
         cancellation.check()?;
         let baseline = prepare(port)?;
         cancellation.check()?;
@@ -199,6 +242,7 @@ fn start_controlled_using(
                         serial: serial.clone(),
                         already_active,
                         baseline,
+                        api_key: None,
                         message: if already_active {
                             "国服抓包已在运行"
                         } else {

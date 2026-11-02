@@ -1,3 +1,4 @@
+use super::super::tests::encoded_shell_output;
 use super::*;
 use std::cell::Cell;
 
@@ -8,6 +9,53 @@ const MODES_ZH: &str =
     include_str!("../../../tests/fixtures/packet-capture/reqable-work-modes-zh-cn.xml");
 const READY: &[u8] =
     br#"<hierarchy><node package="com.reqable.android" content-desc="Reqable" /></hierarchy>"#;
+
+#[cfg(unix)]
+#[test]
+fn reads_a_fresh_dump_after_uiautomator_crashes_but_rejects_missing_or_truncated_xml() {
+    for (exit, xml, expected) in [
+        (0, Some(READY), Ok(UiState::Ready)),
+        (139, Some(READY), Ok(UiState::Ready)),
+        (
+            139,
+            None,
+            Err("无法读取 Reqable 界面结构，请保持应用打开后重试".into()),
+        ),
+        (
+            0,
+            None,
+            Err("无法读取 Reqable 界面结构，请保持应用打开后重试".into()),
+        ),
+        (
+            139,
+            Some(b"<hierarchy><node>".as_slice()),
+            Err(INVALID_XML.into()),
+        ),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let result = probe(&mut |script| {
+            // Execute the production shell script with an isolated fake dump
+            // command: no emulator, root permission or real device is needed.
+            let script = script.replace("/data/local/tmp", dir.path().to_str().unwrap());
+            let output = std::process::Command::new("/bin/sh")
+                .args(["-c", &format!(
+                    "uiautomator() {{ if [ \"$MOCK_WRITE\" = 1 ]; then printf %s \"$MOCK_XML\" > \"$2\"; fi; return \"$MOCK_EXIT\"; }}; {script}"
+                )])
+                .env("MOCK_WRITE", if xml.is_some() { "1" } else { "0" })
+                .env("MOCK_XML", std::str::from_utf8(xml.unwrap_or_default()).unwrap())
+                .env("MOCK_EXIT", exit.to_string())
+                .output()
+                .unwrap();
+            if output.status.success() {
+                Ok(output.stdout)
+            } else {
+                Err("dump failed".into())
+            }
+        });
+        assert_eq!(result, expected);
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+}
 
 #[test]
 fn recognizes_reported_chinese_license_and_work_modes_with_unlabeled_next() {
@@ -108,7 +156,9 @@ fn an_existing_certificate_does_not_bypass_the_license_and_confirmation_resumes_
             assert!(probes >= 3);
             ca_reads += 1;
             assert!(command.starts_with("su -c"));
-            Ok(include_bytes!("../../../tests/fixtures/packet-capture/ca.pem").to_vec())
+            Ok(encoded_shell_output(include_bytes!(
+                "../../../tests/fixtures/packet-capture/ca.pem"
+            )))
         },
         &mut |level, message| logs.push((level, message.to_string())),
         &mut |duration| elapsed.set(elapsed.get() + duration),
@@ -147,7 +197,7 @@ fn waits_for_certificate_generation_after_the_dialog_closes_and_times_out_withou
                 if probes < 4 {
                     return Err("not initialized".into());
                 }
-                Ok(vec![1])
+                Ok(encoded_shell_output(&[1]))
             },
             &mut |_, _| {},
             &mut |duration| elapsed.set(elapsed.get() + duration),
@@ -302,7 +352,7 @@ fn selects_standalone_then_next_once_using_fresh_bounds_before_reading_certifica
                     return Ok(Vec::new());
                 }
                 assert!(probes >= 5, "no CA reads before leaving Work Modes");
-                Ok(vec![1])
+                Ok(encoded_shell_output(&[1]))
             },
             &mut |_, message| messages.push(message.to_string()),
             &mut |duration| elapsed.set(elapsed.get() + duration),
@@ -410,7 +460,7 @@ fn missing_next_or_failed_taps_allow_manual_completion_without_reading_ca_early(
                     };
                 }
                 assert!(probes >= 4);
-                Ok(vec![1])
+                Ok(encoded_shell_output(&[1]))
             },
             &mut |_, _| {},
             &mut |duration| elapsed.set(elapsed.get() + duration),

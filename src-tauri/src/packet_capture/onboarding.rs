@@ -1,5 +1,5 @@
 //! Read Reqable's first-run UI; agreement acceptance remains on the device.
-use super::{root_shell, CERT_PATHS};
+use super::{read_shell_bytes, CERT_PATHS};
 use crate::runner::LogLevel;
 use quick_xml::{events::Event, Reader};
 use std::time::{Duration, Instant};
@@ -232,7 +232,10 @@ fn probe(shell: &mut Shell<'_>) -> Result<UiState, String> {
         "/data/local/tmp/mash-reqable-{}.xml",
         uuid::Uuid::new_v4().simple()
     );
-    let script = format!("set -e; p={path}; trap 'rm -f \"$p\"' EXIT; uiautomator dump \"$p\" >/dev/null; head -c {} \"$p\"", MAX_XML + 1);
+    // Some MuMu builds write a complete dump, then crash while shutting down
+    // uiautomator. Accept the fresh file in that case; inspect_ui still rejects
+    // incomplete/invalid XML. A failed dump without a file remains an error.
+    let script = format!("set -e; p={path}; trap 'rm -f \"$p\"' EXIT; uiautomator dump \"$p\" >/dev/null 2>&1 || test -s \"$p\"; head -c {} \"$p\"", MAX_XML + 1);
     let xml = shell(&script).map_err(|_| "无法读取 Reqable 界面结构，请保持应用打开后重试")?;
     inspect_ui(&xml)
 }
@@ -308,7 +311,7 @@ fn wait_using(
             }
         } else if page == UiState::Ready {
             for path in CERT_PATHS {
-                if let Ok(bytes) = shell(&root_shell(root, &format!("cat {path}"))) {
+                if let Ok(bytes) = read_shell_bytes(root, &format!("head -c 65537 {path}"), shell) {
                     if !bytes.is_empty() {
                         if waiting {
                             log(

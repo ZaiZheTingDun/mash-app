@@ -1,18 +1,36 @@
 import { Button, Flex, IconButton, Skeleton } from "@radix-ui/themes";
 import { CopyIcon, DownloadIcon, TrashIcon } from "@radix-ui/react-icons";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "../../components/common/PageHeader";
 import { SectionHeading } from "../../components/common/SectionHeading";
 import { TaskActionButton } from "../../components/common/TaskActionButton";
 import type { CaptureHistoryEntry } from "../../types/packetCapture";
 import { CaptureInventory, CaptureInventorySkeleton } from "./CaptureInventory";
 import { usePacketCapture } from "./usePacketCapture";
+import { openExternalUrl } from "../../tauri";
 
 function dateLabel(timestamp: number) {
   return new Date(timestamp).toLocaleDateString("sv-SE").replace(/-/g, ".");
 }
 function timeLabel(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString("zh-CN", { hour12: false });
+}
+
+const API_SERVICE_GUIDE = "https://docs.mash.xiaotongx.com/guides/package-capture/#api-%E6%9C%8D%E5%8A%A1";
+
+function CaptureStatusMessage({ message }: { message: string }) {
+  const [failedMessage, setFailedMessage] = useState<string | null>(null);
+  return <>{message.split(/(开启 API 服务|创建 API key|复制生成的 API key)/g).map((part, index) =>
+    part === "开启 API 服务" || part === "创建 API key" || part === "复制生成的 API key"
+      ? <a key={index} href={API_SERVICE_GUIDE} target="_blank" rel="noopener noreferrer" onClick={event => {
+        // Handle the desktop bridge explicitly and prevent a second open from
+        // the opener plugin's document-level anchor listener.
+        event.preventDefault();
+        setFailedMessage(null);
+        void openExternalUrl(API_SERVICE_GUIDE).catch(() => setFailedMessage(message));
+      }}>{part}</a>
+      : part,
+  )}{failedMessage === message && <small role="alert">无法打开浏览器，请手动访问：{API_SERVICE_GUIDE}</small>}</>;
 }
 
 function CaptureEmpty({ title, detail, loading = false }: { title: string; detail?: string; loading?: boolean }) {
@@ -91,7 +109,7 @@ export function PacketCapturePage({ onBack, onNavigationLockChange }: { onBack: 
     </div>
     <Flex className="page-footer capture-footer" gap="5">
       <div className="capture-status" role={capture.error ? "alert" : "status"} data-error={!!capture.error}>
-        {(capture.error || capture.message) && <><i className="capture-diamond" aria-hidden="true" /><span>{capture.error || capture.message}</span></>}
+        {(capture.error || capture.message) && <><i className="capture-diamond" aria-hidden="true" /><span><CaptureStatusMessage message={capture.error || capture.message} /></span></>}
       </div>
       <Button variant="ghost" color="gray" className="capture-setup" aria-label="环境配置" title="设备需已安装 Reqable 并具备 root 权限；设备重启后需重新配置" disabled={capture.busy || capture.canStop} onClick={() => void capture.setup()}><span><small>SETUP</small><span>环境配置</span></span></Button>
       <TaskActionButton label={capture.canStop ? "停止" : "开始"} running={capture.canStop} disabled={capture.operation === "stop" || (capture.busy && !capture.canStop)} onClick={() => void (capture.canStop ? capture.stop() : capture.start())} />

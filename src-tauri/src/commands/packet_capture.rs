@@ -209,10 +209,27 @@ pub(crate) async fn start_packet_capture(
     let cancellation = lease.cancellation();
     let responses = responses.inner().clone();
     let adb_path = crate::adb::resolve_adb_path(&app);
+    let keys = packet_capture::ApiKeyStore::new(
+        crate::paths::app_data_dir(&app).join("packet-capture/api-keys.json"),
+    );
+    let jar_path = crate::resolve_scrcpy_jar(&app).unwrap_or_default();
+    let log_app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _lease = lease;
         responses.reset();
-        let result = packet_capture::start_capture(&adb_path, selected.as_deref(), &cancellation)?;
+        let result = packet_capture::start_capture(
+            &adb_path,
+            selected.as_deref(),
+            &cancellation,
+            &keys,
+            &jar_path,
+            &mut |message| {
+                if !cancellation.is_cancelled() {
+                    operation_log::emit(&log_app, LogLevel::Info, message);
+                    let _ = log_app.emit("packet-capture-start-progress", message);
+                }
+            },
+        )?;
         cancellation.check()?;
         result.begin_response_watch(&responses);
         Ok(result)

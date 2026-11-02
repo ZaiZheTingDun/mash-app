@@ -88,6 +88,7 @@ struct Inner {
     baseline: HashSet<String>,
     state: ResponseState,
     interrupted_stop_target: Option<String>,
+    api_key: Option<String>,
 }
 
 #[derive(Clone, Default)]
@@ -116,13 +117,23 @@ impl ResponseStore {
     }
 
     pub(crate) fn stop(&self, adb_path: &Path) -> Result<(), String> {
-        self.stop_using(|serial| super::stop::stop_capture(adb_path, serial))
+        self.stop_authenticated_using(|serial, key| {
+            super::stop::stop_capture(adb_path, serial, key)
+        })
     }
 
+    #[cfg(test)]
     fn stop_using(&self, stop: impl FnOnce(&str) -> Result<(), String>) -> Result<(), String> {
+        self.stop_authenticated_using(|serial, _| stop(serial))
+    }
+
+    fn stop_authenticated_using(
+        &self,
+        stop: impl FnOnce(&str, Option<&str>) -> Result<(), String>,
+    ) -> Result<(), String> {
         let mut inner = self.0.lock().unwrap();
         if let Some(serial) = &inner.state.serial {
-            stop(serial)?;
+            stop(serial, inner.api_key.as_deref())?;
         }
         inner.generation = inner.generation.wrapping_add(1);
         inner.state.phase = ResponsePhase::Idle;
@@ -135,14 +146,26 @@ impl ResponseStore {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
         inner.baseline.clear();
+        inner.api_key = None;
         inner.state = ResponseState::default();
         inner.interrupted_stop_target = None;
     }
 
+    #[cfg(test)]
     pub(crate) fn begin(&self, serial: String, baseline: HashSet<String>) {
+        self.begin_authenticated(serial, baseline, None);
+    }
+
+    pub(crate) fn begin_authenticated(
+        &self,
+        serial: String,
+        baseline: HashSet<String>,
+        key: Option<String>,
+    ) {
         let mut inner = self.0.lock().unwrap();
         inner.generation = inner.generation.wrapping_add(1);
         inner.baseline = baseline;
+        inner.api_key = key;
         inner.interrupted_stop_target = None;
         inner.state = ResponseState {
             phase: ResponsePhase::Waiting,
@@ -153,23 +176,35 @@ impl ResponseStore {
     }
 
     pub(crate) fn poll(&self, adb_path: &Path) -> ResponseState {
-        self.poll_using(
-            |serial, baseline| {
-                let client = client::Client::new()?;
+        self.poll_authenticated_using(
+            |serial, baseline, key| {
+                let client = client::Client::with_api_key(key)?;
                 client::on_device(adb_path, serial, |port, run| {
                     scan(&client, port, serial, baseline, run)
                 })
             },
-            |serial| super::stop::stop_capture(adb_path, serial),
+            |serial, key| super::stop::stop_capture(adb_path, serial, key),
         )
     }
 
+    #[cfg(test)]
     fn poll_using(
         &self,
         scan: impl FnOnce(&str, &HashSet<String>) -> Result<Option<LoginResponse>, String>,
         stop: impl FnOnce(&str) -> Result<(), String>,
     ) -> ResponseState {
-        let (generation, serial, baseline) = {
+        self.poll_authenticated_using(
+            |serial, baseline, _| scan(serial, baseline),
+            |serial, _| stop(serial),
+        )
+    }
+
+    fn poll_authenticated_using(
+        &self,
+        scan: impl FnOnce(&str, &HashSet<String>, Option<&str>) -> Result<Option<LoginResponse>, String>,
+        stop: impl FnOnce(&str, Option<&str>) -> Result<(), String>,
+    ) -> ResponseState {
+        let (generation, serial, baseline, key) = {
             let inner = self.0.lock().unwrap();
             if inner.state.phase != ResponsePhase::Waiting {
                 return inner.state.clone();
@@ -178,9 +213,10 @@ impl ResponseStore {
                 inner.generation,
                 inner.state.serial.clone().unwrap(),
                 inner.baseline.clone(),
+                inner.api_key.clone(),
             )
         };
-        let result = scan(&serial, &baseline);
+        let result = scan(&serial, &baseline, key.as_deref());
         let mut inner = self.0.lock().unwrap();
         // A configuration change or a new start supersedes any in-flight poll.
         if inner.generation == generation && inner.state.phase == ResponsePhase::Waiting {
@@ -190,7 +226,7 @@ impl ResponseStore {
                     // Keep the complete body before stopping: Reqable may release
                     // its temporary files. Serialize stop with reset/begin so a
                     // stale poll cannot switch off a newer capture session.
-                    match stop(&serial) {
+                    match stop(&serial, key.as_deref()) {
                         Ok(()) => {
                             inner.state.phase = ResponsePhase::Found;
                             inner.state.message = "已获取国服 toplogin 响应，抓包已停止".into();

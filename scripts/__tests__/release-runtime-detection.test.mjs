@@ -48,7 +48,10 @@ for (const [changed, expected] of [
     const script = `set -euo pipefail\nfail() { echo "$*" >&2; exit 1; }\n${changeFunction}\n` +
       `RUNTIME_BASE_REF=${ref}\nPLATFORM=darwin-aarch64\nPUBLISH=true\nCV_RUNTIME_VERSION=\n${runtimeDetection}\n${runtimeGate}\n` +
       'echo "$CV_RUNTIME_CHANGED"\n';
-    const result = spawnSync(bash, ["-c", script], { cwd: root, encoding: "utf8", windowsHide: true });
+    const result = spawnSync(bash, ["-c", script], {
+      cwd: root, encoding: "utf8", windowsHide: true,
+      env: { ...process.env, FORCE_COLOR: "1" },
+    });
     assert.ifError(result.error);
     assert.equal(result.status, expected ? 1 : 0, result.stderr);
     if (expected) assert.match(result.stderr, /CV runtime changes detected.*--cv-runtime/);

@@ -1,3 +1,4 @@
+use super::super::tests::encoded_shell_output;
 use super::*;
 use crate::runner::LogLevel;
 
@@ -8,6 +9,43 @@ fn original() -> Value {
         "proxyPort": 9123, "enhancedMode": {"isEnabled": false, "socksProxy": true},
         "futureSetting": {"text": "a'b\n$(touch /should-never-run)", "values": [1, 2]}
     })
+}
+
+#[test]
+fn version_requirement_compares_numbers_and_rejects_old_or_unreadable_versions() {
+    for version in ["3.3.5", "3.3.9", "3.3.10", "3.4.0", "4.0.0"] {
+        assert_eq!(
+            reqable_version(format!("  versionName={version}\r\n").as_bytes()).unwrap(),
+            version
+        );
+    }
+    for version in ["3.3.4", "3.2.99", "2.99.99"] {
+        assert!(
+            reqable_version(format!("versionName={version}\n").as_bytes())
+                .unwrap_err()
+                .contains("或以上版本")
+        );
+    }
+    for info in [
+        "",
+        "versionName=",
+        "versionName=3.3",
+        "versionName=3.3.9.1",
+        "versionName=unknown",
+    ] {
+        assert!(reqable_version(info.as_bytes()).is_err());
+    }
+}
+
+#[test]
+fn newer_versions_can_be_configured_and_report_the_installed_version() {
+    for version in ["3.3.5", "3.3.9", "3.3.10", "3.4.0", "4.0.0"] {
+        let (result, _) = fake(Scenario {
+            version: Some(version),
+            ..Default::default()
+        });
+        assert_eq!(result.unwrap().reqable_version, version);
+    }
 }
 
 #[test]
@@ -64,10 +102,14 @@ fn unverified_legacy_pip_key_is_preserved_without_becoming_a_capture_requirement
 #[derive(Default)]
 struct Scenario {
     setup: bool,
+    apex: bool,
+    certificate_rollback_failure: bool,
     offline_after_install: bool,
     old_version: bool,
+    version: Option<&'static str>,
     missing_game: bool,
     no_root: bool,
+    requires_adb_root: bool,
     invalid_config: bool,
     write_failure: bool,
     no_marker: bool,
@@ -103,6 +145,7 @@ fn fake_with_logs(
     let mut reads = 0;
     let mut disconnected = false;
     let mut device_reads = 0;
+    let mut root_ready = !scenario.requires_adb_root;
     let mut prepare = |selected: Option<&str>, run: &mut AdbCommand<'_>| {
         if scenario.setup {
             super::super::setup_controlled_using(
@@ -127,6 +170,15 @@ fn fake_with_logs(
             commands.push("wait-for-device".into());
             return Ok(Vec::new());
         }
+        if args == ["-s", "test-device", "root"] {
+            commands.push("adb root".into());
+            root_ready = !scenario.no_root;
+            return Ok(if root_ready {
+                b"restarting adbd as root\n".to_vec()
+            } else {
+                b"adbd cannot run as root in production builds\n".to_vec()
+            });
+        }
         assert_eq!(&args[..3], &["-s", "test-device", "shell"]);
         let command = args[3];
         commands.push(command.into());
@@ -141,16 +193,21 @@ fn fake_with_logs(
             return Ok(br#"<hierarchy><node package="com.reqable.android" content-desc="Reqable" /></hierarchy>"#.to_vec());
         }
         if command == "getprop ro.build.version.sdk" {
-            return Ok(b"33".to_vec());
+            return Ok(if scenario.apex { b"34" } else { b"33" }.to_vec());
         }
-        if command
-            .contains("cat /data/user/0/com.reqable.android/files/certificate/reqable-root.crt")
-        {
-            return Ok(include_bytes!("../../../tests/fixtures/packet-capture/ca.pem").to_vec());
+        if command.contains(
+            "head -c 65537 /data/user/0/com.reqable.android/files/certificate/reqable-root.crt",
+        ) {
+            return Ok(encoded_shell_output(include_bytes!(
+                "../../../tests/fixtures/packet-capture/ca.pem"
+            )));
         }
         if command.contains("MASH_CA_INSTALLED") {
             if scenario.cancel_certificate {
                 cancellation.cancel();
+            }
+            if scenario.certificate_rollback_failure {
+                return Err("证书安装失败，未能确认回滚，保留备份：/data/local/tmp/mash-capture-ca-test；请重启设备后重试".into());
             }
             return Ok(b"MASH_CA_INSTALLED".to_vec());
         }
@@ -161,15 +218,15 @@ fn fake_with_logs(
             return Ok(b"package:/data/app/example/base.apk\n".to_vec());
         }
         if command.starts_with("dumpsys package") {
-            return Ok(if scenario.old_version {
-                b"versionName=3.2.5\n"
+            let version = if scenario.old_version {
+                "3.2.5"
             } else {
-                b"versionName=3.3.5\n"
-            }
-            .to_vec());
+                scenario.version.unwrap_or("3.3.5")
+            };
+            return Ok(format!("versionName={version}\n").into_bytes());
         }
         if command.contains("id -u") {
-            return if scenario.no_root {
+            return if scenario.no_root || !root_ready {
                 Err("denied".into())
             } else {
                 Ok(b"0\n".to_vec())
@@ -179,20 +236,22 @@ fn fake_with_logs(
             reads += 1;
             if scenario.absent_config {
                 return if reads <= 2 {
-                    Ok(b"MASH_CONFIG_ABSENT\n".to_vec())
+                    Ok(encoded_shell_output(b"MASH_CONFIG_ABSENT\n"))
                 } else {
-                    Ok(serde_json::to_vec(&cn_config(serde_json::json!({}))).unwrap())
+                    Ok(encoded_shell_output(
+                        &serde_json::to_vec(&cn_config(serde_json::json!({}))).unwrap(),
+                    ))
                 };
             }
             if scenario.invalid_config {
-                return Ok(b"{}".to_vec());
+                return Ok(encoded_shell_output(b"{}"));
             }
             let value = if reads > 2 && written && !scenario.mismatch {
                 cn_config(original())
             } else {
                 original()
             };
-            return Ok(serde_json::to_vec(&value).unwrap());
+            return Ok(encoded_shell_output(&serde_json::to_vec(&value).unwrap()));
         }
         if command.contains("cmd appops get --user 0 com.reqable.android PICTURE_IN_PICTURE") {
             return Ok(if pip_disabled && !scenario.pip_unconfirmed {
@@ -333,7 +392,7 @@ fn success_requires_restart_and_matching_readback_without_starting_capture() {
     let result = serde_json::to_value(result.unwrap()).unwrap();
     assert_eq!(result["serial"], "test-device");
     assert_eq!(result["packageName"], PACKAGE);
-    assert_eq!(result["reqableVersion"], VERSION);
+    assert_eq!(result["reqableVersion"], "3.3.5");
     let stop = commands
         .iter()
         .position(|s| s.contains("force-stop"))
@@ -452,21 +511,50 @@ fn combined_setup_installs_before_configuring_and_keeps_the_original_device_pinn
 }
 
 #[test]
+fn setup_prepares_adb_root_before_installing_the_certificate_and_configuring_reqable() {
+    let (result, commands, logs) = fake_with_logs(Scenario {
+        setup: true,
+        requires_adb_root: true,
+        ..Default::default()
+    });
+    assert!(result.is_ok());
+    let root = commands
+        .iter()
+        .position(|command| command == "adb root")
+        .unwrap();
+    assert_eq!(commands[root + 1], "wait-for-device");
+    assert!(commands[root + 2].contains("id -u"));
+    let install = commands
+        .iter()
+        .position(|command| command.contains("MASH_CA_INSTALLED"))
+        .unwrap();
+    assert!(root + 2 < install);
+    assert!(logs
+        .iter()
+        .any(|(_, message)| message.contains("正在尝试 adb root")));
+    assert!(logs
+        .iter()
+        .any(|(_, message)| message == "设备 root 权限已确认"));
+}
+
+#[test]
 fn setup_logs_each_stage_and_reports_failures_without_claiming_success() {
     let (result, _, logs) = fake_with_logs(Scenario {
         setup: true,
         ..Default::default()
     });
     assert!(result.is_ok());
-    assert_eq!(logs.len(), 6);
+    assert_eq!(logs.len(), 8);
     assert!(logs.iter().all(|(level, _)| *level == LogLevel::Info));
     assert_eq!(logs[0].1, "开始抓包环境配置");
-    assert!(logs[1].1.contains("安装并验证系统证书"));
-    assert!(logs[2].1.contains("设备 test-device：证书已安装"));
-    assert!(logs[3].1.contains("正在配置 Reqable"));
-    assert_eq!(logs[4].1, "已关闭并验证 Reqable 的系统画中画权限");
+    assert!(logs[1].1.contains("正在检查设备 root 权限"));
+    assert_eq!(logs[2].1, "设备 root 权限已确认");
+    assert!(logs[3].1.contains("安装并验证系统证书"));
+    assert!(logs[4].1.contains("设备 test-device：证书已安装"));
+    assert!(logs[5].1.contains("正在配置 Reqable"));
+    assert_eq!(logs[6].1, "已关闭并验证 Reqable 的系统画中画权限");
     assert_eq!(
-        logs[5].1,
+        logs[7].1,
         "环境配置完成，请点击开始按钮（设备重启后可能需要重新配置）"
     );
     for scenario in [
@@ -571,6 +659,24 @@ fn stopping_setup_preserves_a_warning_if_rollback_cannot_be_confirmed() {
     assert!(logs.iter().any(|(level, message)| *level == LogLevel::Warn
         && message.contains("回滚未完成")
         && message.contains("备份位置")));
+    assert!(!logs
+        .iter()
+        .any(|(_, message)| message.starts_with("环境配置完成")));
+}
+
+#[test]
+fn stopping_apex_setup_preserves_the_certificate_rollback_warning() {
+    let (result, _, logs) = fake_with_logs(Scenario {
+        setup: true,
+        apex: true,
+        cancel_certificate: true,
+        certificate_rollback_failure: true,
+        ..Default::default()
+    });
+    assert_eq!(result.unwrap_err(), "环境配置已停止");
+    assert!(logs.iter().any(|(level, message)| *level == LogLevel::Warn
+        && message.contains("未能确认回滚")
+        && message.contains("/data/local/tmp/mash-capture-ca-test")));
     assert!(!logs
         .iter()
         .any(|(_, message)| message.starts_with("环境配置完成")));

@@ -10,8 +10,8 @@ import { pwshArgs, psLiteral as ps } from "./helpers/pwsh.mjs";
 const repo = fileURLToPath(new URL("../../", import.meta.url));
 const helper = path.join(repo, "scripts/shared/release-state.mjs");
 const windows = process.platform === "win32";
-const invoke = (command, args, cwd) => execFileSync(command, args, {
-  cwd, encoding: "utf8", windowsHide: true, stdio: "pipe",
+const invoke = (command, args, cwd, env = process.env) => execFileSync(command, args, {
+  cwd, env, encoding: "utf8", windowsHide: true, stdio: "pipe",
 });
 test("configured runtime versions match each platform in the bundled manifest", () => {
   const versions = JSON.parse(invoke(process.execPath, [helper, "versions"], repo));
@@ -87,7 +87,8 @@ test("shared release CLIs execute through a directory alias", t => {
   // Preserve the alias in import.meta.url to exercise differing entry/module paths
   // on every host, including the native path normalization needed on Windows.
   const runtime = (...refs) => invoke(process.execPath, ["--preserve-symlinks-main",
-    path.join(alias, "runtime-inputs.mjs"), ...refs, "windows-x86_64"], f.root).trim();
+    path.join(alias, "runtime-inputs.mjs"), ...refs, "windows-x86_64"], f.root,
+    { ...process.env, FORCE_COLOR: "1" }).trim();
   assert.equal(runtime("HEAD", "HEAD"), "false");
   f.write("sidecar/cv-runtime/build_runtime.py", "changed runtime builder");
   f.commit();

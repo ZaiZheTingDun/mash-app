@@ -1,2 +1,3 @@
 scripts/macos/*.sh text eol=lf
+src-tauri/src/packet_capture/*.sh text eol=lf
 src-tauri/resources/runtime-manifest.json text eol=lf

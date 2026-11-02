@@ -21,8 +21,8 @@ export function usePacketCapture() {
   const [readError, setReadError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [exported, setExported] = useState(false);
-  const [setupMessage, setSetupMessage] = useState<string | null>(null);
-  const setupUnlisten = useRef<UnlistenFn | null>(null);
+  const [progressMessage, setProgressMessage] = useState<string | null>(null);
+  const progressUnlisten = useRef<UnlistenFn | null>(null);
   const inFlight = useRef<Operation | null>(null);
   const requestGeneration = useRef(0);
   const mounted = useRef(false);
@@ -51,8 +51,8 @@ export function usePacketCapture() {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      setupUnlisten.current?.();
-      setupUnlisten.current = null;
+      progressUnlisten.current?.();
+      progressUnlisten.current = null;
     };
   }, []);
 
@@ -121,15 +121,15 @@ export function usePacketCapture() {
     resumePollingOnly.current = false;
     inFlight.current = action;
     if (action === "stop") {
-      setupUnlisten.current?.();
-      setupUnlisten.current = null;
+      progressUnlisten.current?.();
+      progressUnlisten.current = null;
     }
     setOperation(action);
     setError(null);
     setResult("");
     setCopied(false);
     setExported(false);
-    setSetupMessage(null);
+    setProgressMessage(null);
     try {
       await request(isCurrent);
       if (isCurrent() && readError === null && !awaitingCaptureStatus) resumePollingOnly.current = action === "delete" || action === "copy" || action === "export";
@@ -153,6 +153,25 @@ export function usePacketCapture() {
       setWorkspace(previous => previous && { ...previous, history });
     }
   };
+  const performWithProgress = (action: "setup" | "start", request: (isCurrent: () => boolean) => Promise<void>) => perform(action, async isCurrent => {
+    let active = true;
+    // Subscribe before invoke so an immediate device prompt is not missed.
+    const unlisten = await listen<string>(`packet-capture-${action}-progress`, event => {
+      if (active && isCurrent()) setProgressMessage(event.payload);
+    });
+    if (!isCurrent()) { active = false; unlisten(); return; }
+    progressUnlisten.current = unlisten;
+    try {
+      await request(isCurrent);
+    } finally {
+      active = false;
+      if (progressUnlisten.current === unlisten) {
+        progressUnlisten.current = null;
+        unlisten();
+      }
+      if (isCurrent()) setProgressMessage(null);
+    }
+  });
   const captureError = workspace?.capture.phase === "error" ? workspace.capture.message : null;
   const selected = detail.id === selectedId ? detail.record : null;
   const detailError = detail.id === selectedId ? detail.error : null;
@@ -164,28 +183,12 @@ export function usePacketCapture() {
     navigationLocked: initialLoading || operation !== null || hasCaptureTask || awaitingCaptureStatus,
     busy: operation !== null,
     error: error || (operation === null ? detailError || readError || captureError : null),
-    message: (operation === "setup" && setupMessage) || (operation && pendingMessages[operation]) || workspace?.capture.message || result,
-    setup: () => perform("setup", async isCurrent => {
-      let active = true;
-      // Subscribe before starting: first-run prompts may arrive before invoke resolves.
-      const unlisten = await listen<string>("packet-capture-setup-progress", event => {
-        if (active && isCurrent()) setSetupMessage(event.payload);
-      });
-      if (!isCurrent()) { active = false; unlisten(); return; }
-      setupUnlisten.current = unlisten;
-      try {
-        const response = await setupPacketCapture();
-        if (isCurrent()) setResult(response.message);
-      } finally {
-        active = false;
-        if (setupUnlisten.current === unlisten) {
-          setupUnlisten.current = null;
-          unlisten();
-        }
-        if (isCurrent()) setSetupMessage(null);
-      }
+    message: ((operation === "setup" || operation === "start") && progressMessage) || (operation && pendingMessages[operation]) || workspace?.capture.message || result,
+    setup: () => performWithProgress("setup", async isCurrent => {
+      const response = await setupPacketCapture();
+      if (isCurrent()) setResult(response.message);
     }),
-    start: () => perform("start", async isCurrent => {
+    start: () => performWithProgress("start", async isCurrent => {
       const response = await startPacketCapture();
       if (isCurrent()) {
         setResult(response.message);

@@ -1,3 +1,4 @@
+use super::super::tests::encoded_shell_output;
 use super::*;
 
 fn vpn(ranges: &str) -> Vec<u8> {
@@ -34,6 +35,10 @@ fn state_and_application_isolation_require_explicit_valid_values() {
 
 #[derive(Default)]
 struct Scenario {
+    auth_failure: bool,
+    auth_cancel: bool,
+    version: Option<&'static str>,
+    app_id_field: bool,
     unconfigured: bool,
     pip_allowed: bool,
     pip_set_failure: bool,
@@ -43,6 +48,7 @@ struct Scenario {
     already_active: bool,
     never_active: bool,
     unavailable: bool,
+    api_error: Option<&'static str>,
     wide_vpn: bool,
     post_failed: bool,
     status_disconnect: bool,
@@ -78,8 +84,14 @@ fn fake_with_cancellation(
             let command = args[2..].join(" ");
             commands.push(command.clone());
             match command.as_str() {
-                "shell dumpsys package com.reqable.android" => Ok(b"versionName=3.3.5\n".to_vec()),
-                "shell dumpsys package com.bilibili.fatego" => Ok(b"userId=10081\n".to_vec()),
+                "shell dumpsys package com.reqable.android" => {
+                    Ok(format!("versionName={}\n", s.version.unwrap_or("3.3.5")).into_bytes())
+                }
+                "shell dumpsys package com.bilibili.fatego" => Ok(if s.app_id_field {
+                    b"appId=10081\r\n".to_vec()
+                } else {
+                    b"userId=10081\n".to_vec()
+                }),
                 "shell am start -W -n com.reqable.android/.MainActivity" => {
                     Ok(b"Status: ok\n".to_vec())
                 }
@@ -126,9 +138,22 @@ fn fake_with_cancellation(
                     if s.legacy_pip_key {
                         config["pipMode"] = serde_json::json!(true);
                     }
-                    Ok(serde_json::to_vec(&config).unwrap())
+                    Ok(encoded_shell_output(&serde_json::to_vec(&config).unwrap()))
                 }
                 _ => panic!("unexpected command: {command}"),
+            }
+        },
+        &mut |serial, port, version| {
+            assert_eq!(serial, "device");
+            assert_eq!(port, 41001);
+            assert_eq!(version, s.version.unwrap_or("3.3.5"));
+            if s.auth_cancel {
+                cancellation.cancel();
+            }
+            if s.auth_failure {
+                Err("等待 API key 超时".into())
+            } else {
+                Ok(())
             }
         },
         &mut |port, request| {
@@ -140,6 +165,9 @@ fn fake_with_cancellation(
             }
             if s.unavailable {
                 return Err("unavailable".into());
+            }
+            if let Some(error) = s.api_error {
+                return Err(error.into());
             }
             match request {
                 Request::Status => {
@@ -198,6 +226,71 @@ fn failed_baseline_read_does_not_start_capture_or_reuse_previous_account_data() 
     assert!(!requests.contains(&Request::Start));
     assert!(!requests.contains(&Request::Stop));
     assert_eq!(commands.last().unwrap(), "forward --remove tcp:41001");
+}
+
+#[test]
+fn android_15_app_id_is_recognized_and_can_start_capture() {
+    let info = b"  Package [com.bilibili.fatego] (5552338):\r\n    appId=10051\r\n    versionName=2.129.0\r\n";
+    assert_eq!(package_uid(info).unwrap(), 10051);
+    assert_eq!(package_uid(b"    appId=10051 flags=0\n").unwrap(), 10051);
+    for invalid in [
+        b"appId=0".as_slice(),
+        b"appId=20000",
+        b"appId=unknown",
+        b"appId=",
+        b"otherAppId=10051",
+    ] {
+        assert!(package_uid(invalid).is_err());
+    }
+    assert!(fake(Scenario {
+        version: Some("3.3.9"),
+        app_id_field: true,
+        ..Default::default()
+    })
+    .0
+    .is_ok());
+}
+
+#[test]
+fn api_key_failure_or_cancel_never_starts_capture_and_removes_the_forward() {
+    for scenario in [
+        Scenario {
+            version: Some("3.3.9"),
+            auth_failure: true,
+            ..Default::default()
+        },
+        Scenario {
+            version: Some("3.3.10"),
+            auth_cancel: true,
+            ..Default::default()
+        },
+    ] {
+        let (result, commands, requests) = fake(scenario);
+        assert!(result.is_err());
+        assert!(requests.is_empty());
+        assert_eq!(commands.last().unwrap(), "forward --remove tcp:41001");
+    }
+}
+
+#[test]
+fn capture_accepts_newer_versions_and_rejects_versions_below_the_minimum() {
+    for version in ["3.3.5", "3.3.9", "3.3.10", "3.4.0", "4.0.0"] {
+        assert!(fake(Scenario {
+            version: Some(version),
+            ..Default::default()
+        })
+        .0
+        .is_ok());
+    }
+    let (result, commands, requests) = fake(Scenario {
+        version: Some("3.3.4"),
+        ..Default::default()
+    });
+    assert!(result.unwrap_err().contains("或以上版本"));
+    assert!(requests.is_empty());
+    assert!(!commands
+        .iter()
+        .any(|command| command.starts_with("forward ")));
 }
 
 #[test]
@@ -329,6 +422,17 @@ fn post_acknowledgement_is_not_success_and_failed_or_uncertain_starts_are_cancel
 }
 
 #[test]
+fn api_configuration_errors_are_not_hidden_by_the_startup_timeout() {
+    let (result, commands, requests) = fake(Scenario {
+        api_error: Some("Reqable API 服务未启用，请在 Reqable 设置中开启 API 服务后重试"),
+        ..Default::default()
+    });
+    assert!(result.unwrap_err().contains("API 服务未启用"));
+    assert!(!requests.contains(&Request::Start));
+    assert_eq!(commands.last().unwrap(), "forward --remove tcp:41001");
+}
+
+#[test]
 fn unavailable_api_is_reported_without_sending_start_and_temporary_forward_is_cleaned() {
     let (result, commands, requests) = fake(Scenario {
         unavailable: true,
@@ -360,6 +464,9 @@ fn start_on_authorized_device() {
         &path,
         Some(&serial),
         &crate::device_operation::OperationCancellation::default(),
+        &ApiKeyStore::new(tempfile::tempdir().unwrap().path().join("api-keys.json")),
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/scrcpy/scrcpy-server.jar"),
+        &mut |_| {},
     )
     .unwrap();
     println!("{}: {}", result.serial, result.message);
