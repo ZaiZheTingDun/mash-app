@@ -223,7 +223,13 @@ pub(crate) fn mutate_command_editor(
 ) -> Result<CommandEditorState, String> {
     let _guard = editor_lock.lock()?;
     let scenes = read_document(&app, &project_id, advanced)?;
-    let next = mutate_document(scenes, advanced, mutation, wave, turn)?;
+    let mut next = mutate_document(scenes, advanced, mutation, wave, turn)?;
+    next.scenes = super::member_references::normalize_stored_member_metadata(
+        &app_data_dir(&app),
+        &project_id,
+        next.scenes,
+        advanced,
+    )?;
     write_document(&app, &project_id, advanced, &next.scenes)?;
     Ok(next)
 }

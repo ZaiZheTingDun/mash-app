@@ -744,7 +744,7 @@ describe("BattleSceneBlock staged action editor", () => {
       <BattleSceneBlock
         scene={makeScene({
           attackPriority: [
-            { id: "atk_1", card: "servant_1_buster" },
+            { id: "atk_1", card: "servant_1_buster", memberId: "slot-1", servantId: 444, isSupport: true },
             { id: "atk_2", card: null },
             { id: "atk_3", card: null },
           ],
@@ -758,7 +758,9 @@ describe("BattleSceneBlock staged action editor", () => {
 
     const next = onChange.mock.calls[0][0] as BattleTurn;
     expect(next.attackPriority).toHaveLength(3);
-    expect(next.attackPriority[0].card).toBeNull();
+    expect(next.attackPriority[0]).toEqual({
+      id: "atk_1", card: null, memberId: null, servantId: null, isSupport: false,
+    });
   });
 
   it("appends and removes fallback attack priority rows after the fixed chain", async () => {

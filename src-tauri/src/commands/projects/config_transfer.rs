@@ -104,6 +104,9 @@ pub(crate) fn load_battle_scenes_from_root(
         .into_iter()
         .map(BattleScene::normalize_turns)
         .collect::<Vec<_>>();
+    let scenes = super::member_references::normalize_stored_member_metadata(
+        root, project_id, scenes, false,
+    )?;
     if source == &legacy {
         write_json_atomic(&path, &scenes, "普通指令配置")?;
         fs::remove_file(&legacy).map_err(|error| format!("移除旧版指令配置失败：{error}"))?;
@@ -115,10 +118,11 @@ pub(crate) fn load_advanced_battle_scenes_from_root(
     root: &Path,
     project_id: &str,
 ) -> Result<Vec<AdvancedBattleScene>, String> {
-    read_json_or_default(
+    let scenes: Vec<AdvancedBattleScene> = read_json_or_default(
         &project_advanced_battle_scenes_path_in_root(root, project_id),
         "高级指令配置",
-    )
+    )?;
+    super::member_references::normalize_stored_member_metadata(root, project_id, scenes, true)
 }
 
 pub(crate) fn write_battle_scenes_to_root(
@@ -132,6 +136,9 @@ pub(crate) fn write_battle_scenes_to_root(
         .cloned()
         .map(BattleScene::normalize_turns)
         .collect();
+    let scenes = super::member_references::normalize_stored_member_metadata(
+        root, project_id, scenes, false,
+    )?;
     write_json_atomic(&path, &scenes, "普通指令配置")
 }
 
@@ -141,7 +148,13 @@ pub(crate) fn write_advanced_battle_scenes_to_root(
     scenes: &[AdvancedBattleScene],
 ) -> Result<(), String> {
     let path = project_advanced_battle_scenes_path_in_root(root, project_id);
-    write_json_atomic(&path, scenes, "高级指令配置")
+    let scenes = super::member_references::normalize_stored_member_metadata(
+        root,
+        project_id,
+        scenes.to_vec(),
+        true,
+    )?;
+    write_json_atomic(&path, &scenes, "高级指令配置")
 }
 
 pub(crate) fn exportable_config_summaries_from_root(

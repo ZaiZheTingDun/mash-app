@@ -31,7 +31,8 @@ pub(crate) struct FormationShareCode {
 fn decode_entry(text: &str) -> Result<ConfigExportEntry, String> {
     let mut value = transport::decode(text)?;
     validate_options(&value)?;
-    canonicalize_member_metadata(&mut value)?;
+    let project = value["project"].clone();
+    super::member_references::canonicalize_member_metadata(&mut value, &project, false)?;
     let mut entry: ConfigExportEntry = serde_json::from_value(value.clone())
         .map_err(|error| format!("无法识别编队中的行动或配置：{error}"))?;
     let modeled = serde_json::to_value(&entry).map_err(|error| error.to_string())?;
@@ -164,80 +165,6 @@ fn validate_options(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
-fn canonicalize_member_metadata(value: &mut Value) -> Result<(), String> {
-    let slots = value["project"]["slots"].as_array().ok_or("缺少成员列表")?;
-    let members: HashMap<String, (Option<u64>, bool)> = slots
-        .iter()
-        .map(|slot| {
-            let support = slot["type"] == "support";
-            let servant = if support {
-                &value["project"]["supportServantId"]
-            } else {
-                &slot["servantId"]
-            };
-            (
-                slot["id"].as_str().unwrap_or_default().to_string(),
-                (servant.as_u64(), support),
-            )
-        })
-        .collect();
-    fn walk(
-        value: &mut Value,
-        members: &HashMap<String, (Option<u64>, bool)>,
-    ) -> Result<(), String> {
-        match value {
-            Value::Object(object) => {
-                if object.get("grandServant") == Some(&Value::Bool(true))
-                    && object.get("memberId").is_some_and(|v| !v.is_null())
-                {
-                    return Err("出卡设置冲突：设定任意冠位时不能同时指定具体从者".into());
-                }
-                for (member_key, servant_key, support_key) in [
-                    ("memberId", "servantId", "isSupport"),
-                    ("servantMemberId", "servantId", "servantIsSupport"),
-                    ("targetMemberId", "targetServantId", "targetIsSupport"),
-                    ("frontMemberId", "frontServantId", "frontIsSupport"),
-                    ("backMemberId", "backServantId", "backIsSupport"),
-                ] {
-                    if let Some(member) = object.get(member_key).and_then(Value::as_str) {
-                        let (servant, support) = members.get(member).ok_or("成员引用不存在")?;
-                        if object
-                            .get(servant_key)
-                            .and_then(Value::as_u64)
-                            .is_some_and(|id| Some(id) != *servant)
-                            || object
-                                .get(support_key)
-                                .and_then(Value::as_bool)
-                                .is_some_and(|flag| flag != *support)
-                        {
-                            return Err("成员引用与从者或助战身份不一致".into());
-                        }
-                        // Missing descriptive metadata is derived from the
-                        // authoritative member, never from a duplicate servant.
-                        if object.get(servant_key).is_none_or(Value::is_null) {
-                            object.insert(servant_key.into(), serde_json::json!(servant));
-                        }
-                        object
-                            .entry(support_key)
-                            .or_insert(serde_json::json!(support));
-                    }
-                }
-                for value in object.values_mut() {
-                    walk(value, members)?;
-                }
-            }
-            Value::Array(values) => {
-                for value in values {
-                    walk(value, members)?;
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-    walk(value, &members)
-}
-
 fn snapshot_from_root(root: &Path, project_id: &str) -> Result<ConfigExportEntry, String> {
     let package = export_package_for_project_ids(root, &[project_id.to_string()])?;
     package
@@ -248,7 +175,9 @@ fn snapshot_from_root(root: &Path, project_id: &str) -> Result<ConfigExportEntry
 }
 
 fn code_from_entry(entry: &ConfigExportEntry) -> Result<String, String> {
-    let value = serde_json::to_value(entry).map_err(|error| error.to_string())?;
+    let mut value = serde_json::to_value(entry).map_err(|error| error.to_string())?;
+    let project = value["project"].clone();
+    super::member_references::canonicalize_member_metadata(&mut value, &project, false)?;
     let code = transport::encode(&value)?;
     // Export must not produce a code this version cannot read. Also check
     // referenced metadata before the user sends it to another installation.
