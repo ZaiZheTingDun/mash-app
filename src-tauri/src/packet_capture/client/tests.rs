@@ -14,6 +14,17 @@ fn delayed_request(
     body: &str,
     delay: Duration,
 ) -> Result<Vec<u8>, String> {
+    delayed_route_request(client, status, body, delay, "status", None)
+}
+
+fn delayed_route_request(
+    client: Client,
+    status: &str,
+    body: &str,
+    delay: Duration,
+    route: &str,
+    timeout: Option<Duration>,
+) -> Result<Vec<u8>, String> {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let response = format!(
@@ -24,6 +35,10 @@ fn delayed_request(
         .1
         .as_ref()
         .map(|value| value.to_str().unwrap().to_owned());
+    let expected = format!(
+        "{} /capture/live/{route} HTTP/1.1\r\n",
+        if route == "status" { "GET" } else { "POST" }
+    );
     let server = std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
         stream
@@ -35,7 +50,7 @@ fn delayed_request(
             assert_eq!(stream.read(&mut byte).unwrap(), 1);
             request.push(byte[0]);
         }
-        assert!(request.starts_with(b"GET /capture/live/status HTTP/1.1\r\n"));
+        assert!(request.starts_with(expected.as_bytes()));
         let headers = String::from_utf8(request).unwrap().to_ascii_lowercase();
         if let Some(authorization) = authorization {
             assert!(headers.contains(&format!(
@@ -49,7 +64,10 @@ fn delayed_request(
         // Timeout cases intentionally close the connection before the reply.
         let _ = stream.write_all(response.as_bytes());
     });
-    let result = client.request(port, "status", None, 4096);
+    let result = match timeout {
+        Some(timeout) => client.request_with_timeout(port, route, None, 4096, timeout),
+        None => client.request(port, route, None, 4096),
+    };
     server.join().unwrap();
     result
 }
@@ -116,15 +134,18 @@ fn a_connected_reqable_can_take_longer_than_two_seconds_to_respond() {
 
 #[test]
 fn response_timeouts_are_distinct_from_connection_failures() {
-    let client = Client(
-        reqwest::blocking::Client::builder()
-            .no_proxy()
-            .timeout(Duration::from_millis(100))
-            .build()
-            .unwrap(),
-        None,
-    );
-    let error = delayed_request(client, "200 OK", "{}", Duration::from_millis(250)).unwrap_err();
-    assert!(error.contains("响应超时"));
-    assert!(!error.contains("无法连接"));
+    for route in ["status", "off"] {
+        let error = delayed_route_request(
+            Client::with_api_key(Some("synthetic-private-key")).unwrap(),
+            "200 OK",
+            "{}",
+            Duration::from_millis(250),
+            route,
+            Some(Duration::from_millis(100)),
+        )
+        .unwrap_err();
+        assert!(error.contains("响应超时"));
+        assert!(!error.contains("无法连接"));
+        assert!(is_transient_error(&error));
+    }
 }

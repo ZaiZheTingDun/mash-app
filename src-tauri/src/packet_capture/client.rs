@@ -4,6 +4,17 @@ use std::{io::Read, path::Path, time::Duration};
 
 pub(super) const AUTHENTICATION_FAILED: &str =
     "Reqable 控制接口认证失败，请检查 API 服务的访问令牌设置";
+const CONNECTION_FAILED: &str = "无法连接设备上的 Reqable 控制接口";
+const CONNECTION_TIMEOUT: &str = "连接设备上的 Reqable 控制接口超时";
+const RESPONSE_TIMEOUT: &str = "Reqable 控制接口响应超时，请保持 Reqable 运行后重试";
+const READ_FAILED: &str = "无法读取 Reqable 响应";
+
+pub(super) fn is_transient_error(error: &str) -> bool {
+    matches!(
+        error,
+        CONNECTION_FAILED | CONNECTION_TIMEOUT | RESPONSE_TIMEOUT | READ_FAILED
+    )
+}
 
 pub(super) struct Client(
     reqwest::blocking::Client,
@@ -42,6 +53,17 @@ impl Client {
         body: Option<&serde_json::Value>,
         limit: usize,
     ) -> Result<Vec<u8>, String> {
+        self.request_with_timeout(port, route, body, limit, Duration::from_secs(30))
+    }
+
+    pub(super) fn request_with_timeout(
+        &self,
+        port: u16,
+        route: &str,
+        body: Option<&serde_json::Value>,
+        limit: usize,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, String> {
         let url = format!("http://127.0.0.1:{port}/capture/live/{route}");
         let request = if route == "status" {
             self.0.get(url)
@@ -59,15 +81,15 @@ impl Client {
         } else {
             request
         };
-        let response = request.send().map_err(|error| {
+        let response = request.timeout(timeout).send().map_err(|error| {
             if error.is_timeout() {
                 if error.is_connect() {
-                    "连接设备上的 Reqable 控制接口超时"
+                    CONNECTION_TIMEOUT
                 } else {
-                    "Reqable 控制接口响应超时，请保持 Reqable 运行后重试"
+                    RESPONSE_TIMEOUT
                 }
             } else {
-                "无法连接设备上的 Reqable 控制接口"
+                CONNECTION_FAILED
             }
         })?;
         let status = response.status();
@@ -75,7 +97,7 @@ impl Client {
         response
             .take((limit + 1) as u64)
             .read_to_end(&mut bytes)
-            .map_err(|_| "无法读取 Reqable 响应")?;
+            .map_err(|_| READ_FAILED)?;
         if bytes.len() > limit {
             return Err("Reqable 响应超过读取上限".into());
         }

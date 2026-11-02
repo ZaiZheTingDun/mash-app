@@ -98,6 +98,20 @@ fn device_scoped_keys_survive_restart_and_malformed_storage_is_not_overwritten()
 
 #[test]
 fn a_saved_valid_key_is_reused_without_starting_adb_or_a_clipboard_listener() {
+    check_saved_key_reuse(false, Duration::ZERO);
+}
+
+#[test]
+fn a_saved_key_survives_a_cold_start_connection_failure_without_asking_to_copy_again() {
+    check_saved_key_reuse(true, Duration::ZERO);
+}
+
+#[test]
+fn saved_key_validation_still_accepts_a_slow_status_response() {
+    check_saved_key_reuse(false, Duration::from_millis(2200));
+}
+
+fn check_saved_key_reuse(cold_start: bool, delay: Duration) {
     use std::{
         io::{Read, Write},
         net::TcpListener,
@@ -105,6 +119,12 @@ fn a_saved_valid_key_is_reused_without_starting_adb_or_a_clipboard_listener() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let server = std::thread::spawn(move || {
+        if cold_start {
+            // ADB may forward to Reqable before its HTTP listener is ready.
+            // Simulate the forwarded connection closing without a response.
+            let (stream, _) = listener.accept().unwrap();
+            drop(stream);
+        }
         let (mut stream, _) = listener.accept().unwrap();
         stream
             .set_read_timeout(Some(Duration::from_secs(5)))
@@ -120,6 +140,7 @@ fn a_saved_valid_key_is_reused_without_starting_adb_or_a_clipboard_listener() {
             .to_ascii_lowercase()
             .contains("authorization: bearer test-saved-key\r\n"));
         let body = r#"{"status":"inactive"}"#;
+        std::thread::sleep(delay);
         write!(
             stream,
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -143,6 +164,76 @@ fn a_saved_valid_key_is_reused_without_starting_adb_or_a_clipboard_listener() {
     .unwrap();
     assert_eq!(key, "test-saved-key");
     server.join().unwrap();
+}
+
+#[test]
+fn saved_key_validation_retries_transport_failures_until_the_api_is_ready() {
+    let mut attempts = 0;
+    let mut pauses = 0;
+    validate_saved_key(
+        &mut |timeout| {
+            assert!(timeout <= Duration::from_secs(30));
+            attempts += 1;
+            if attempts < 3 {
+                Err("无法连接设备上的 Reqable 控制接口".into())
+            } else {
+                Ok(())
+            }
+        },
+        &mut || pauses += 1,
+        &OperationCancellation::default(),
+    )
+    .unwrap();
+    assert_eq!(attempts, 3);
+    assert_eq!(pauses, 2);
+}
+
+#[test]
+fn saved_key_validation_is_bounded_and_does_not_retry_authentication_or_invalid_responses() {
+    for (error, expected_attempts) in [
+        ("无法连接设备上的 Reqable 控制接口", 12),
+        ("Reqable 控制接口响应超时，请保持 Reqable 运行后重试", 12),
+        (client::AUTHENTICATION_FAILED, 1),
+        ("Reqable API 服务未启用", 1),
+        ("Reqable 抓包状态无效", 1),
+    ] {
+        let mut attempts = 0;
+        let mut pauses = 0;
+        let result = validate_saved_key(
+            &mut |_| {
+                attempts += 1;
+                Err(error.into())
+            },
+            &mut || pauses += 1,
+            &OperationCancellation::default(),
+        );
+        assert_eq!(result.unwrap_err(), error);
+        assert_eq!(attempts, expected_attempts);
+        assert_eq!(pauses, expected_attempts - 1);
+    }
+}
+
+#[test]
+fn saved_key_validation_observes_cancellation_during_retry_or_a_successful_request() {
+    for cancel_in_request in [false, true] {
+        let cancellation = OperationCancellation::default();
+        let mut attempts = 0;
+        let result = validate_saved_key(
+            &mut |_| {
+                attempts += 1;
+                if cancel_in_request {
+                    cancellation.cancel();
+                    Ok(())
+                } else {
+                    Err("无法连接设备上的 Reqable 控制接口".into())
+                }
+            },
+            &mut || cancellation.cancel(),
+            &cancellation,
+        );
+        assert_eq!(result.unwrap_err(), "操作已停止");
+        assert_eq!(attempts, 1);
+    }
 }
 
 #[test]

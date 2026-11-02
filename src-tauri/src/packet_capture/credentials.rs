@@ -69,7 +69,15 @@ pub(super) fn authorize(
     cancellation.check()?;
     let saved = store.get(serial)?;
     if let Some(key) = &saved {
-        match validate(port, key) {
+        match validate_saved_key(
+            &mut |timeout| {
+                let client = client::Client::with_api_key(Some(key))?;
+                let bytes = client.request_with_timeout(port, "status", None, 4096, timeout)?;
+                decode_status(&bytes).map(|_| ())
+            },
+            &mut || cancellation.wait(Duration::from_millis(250)),
+            cancellation,
+        ) {
             Ok(()) => {
                 cancellation.check()?;
                 return Ok(key.clone());
@@ -170,6 +178,36 @@ fn validate(port: u16, key: &str) -> Result<(), String> {
     let client = client::Client::with_api_key(Some(key))?;
     let bytes = client.request(port, "status", None, 4096)?;
     decode_status(&bytes).map(|_| ())
+}
+
+fn validate_saved_key(
+    validate: &mut dyn FnMut(Duration) -> Result<(), String>,
+    pause: &mut dyn FnMut(),
+    cancellation: &OperationCancellation,
+) -> Result<(), String> {
+    // Preserve tolerance for a slow status response without multiplying the
+    // original 30-second request timeout by the number of readiness retries.
+    let started = Instant::now();
+    for attempt in 0..12 {
+        cancellation.check()?;
+        let remaining = Duration::from_secs(30).saturating_sub(started.elapsed());
+        if remaining.is_zero() {
+            return Err("Reqable 控制接口尚未就绪，请稍后重试".into());
+        }
+        let result = validate(remaining);
+        cancellation.check()?;
+        match result {
+            Err(error)
+                if attempt < 11
+                    && client::is_transient_error(&error)
+                    && started.elapsed() < Duration::from_secs(30) =>
+            {
+                pause()
+            }
+            result => return result,
+        }
+    }
+    unreachable!("the final validation attempt always returns")
 }
 
 fn wait_for_key(
