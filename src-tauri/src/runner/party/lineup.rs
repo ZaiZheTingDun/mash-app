@@ -78,18 +78,30 @@ pub(crate) fn remove_party_slot(ids: &mut [Option<u32>; 6], index: usize) {
 
 #[cfg(test)]
 pub(crate) fn withdraw_party_slot_to_back(ids: &mut [Option<u32>; 6], index: usize) {
-    if index >= 3 {
+    withdraw_to_back(ids, index);
+}
+
+fn withdraw_to_back<T>(members: &mut [Option<T>; 6], index: usize) {
+    if index >= 3
+        || members[index].is_none()
+        || members[..3].iter().flatten().count() < 2
+        || members[3..].iter().all(Option::is_none)
+    {
         return;
     }
-    let Some(servant_id) = ids[index] else {
-        return;
-    };
-    compact_backline(ids);
-    let Some(replacement) = (3..6).find(|slot| ids[*slot].is_some()) else {
-        return;
-    };
-    ids[index] = ids[replacement];
-    ids[replacement] = Some(servant_id);
+    // Move the first reserve into the vacant front slot and append the source
+    // member after all remaining reserves, retaining member-instance identity.
+    let source = members[index].take().unwrap();
+    let mut backline = members[3..]
+        .iter_mut()
+        .filter_map(Option::take)
+        .collect::<Vec<_>>()
+        .into_iter();
+    members[index] = backline.next();
+    let mut backline = backline.chain(std::iter::once(source));
+    for slot in &mut members[3..] {
+        *slot = backline.next();
+    }
 }
 
 #[cfg(test)]
@@ -141,18 +153,7 @@ pub(crate) fn withdraw_party_member_slot_to_back(
     members: &mut [Option<PartyMemberRuntime>; 6],
     index: usize,
 ) {
-    if index >= 3 {
-        return;
-    }
-    let Some(member) = members[index].clone() else {
-        return;
-    };
-    compact_member_backline(members);
-    let Some(replacement) = (3..6).find(|slot| members[*slot].is_some()) else {
-        return;
-    };
-    members[index] = members[replacement].clone();
-    members[replacement] = Some(member);
+    withdraw_to_back(members, index);
 }
 
 pub(crate) fn apply_member_change_order_effect(
