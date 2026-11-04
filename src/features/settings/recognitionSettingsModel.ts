@@ -91,6 +91,7 @@ export const DEFAULT_RECOGNITION_SETTINGS: RecognitionSettings = {
   enableExtraClassFilter: true,
   supportFullListOcrFallback: false,
   unknownScreenTimeoutCount: UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT,
+  apRecoveryConfirmWaitMs: 1000,
 };
 
 export function clampThreshold(value: number, config: ThresholdConfig) {
@@ -145,6 +146,7 @@ export function normalizeRecognitionSettings(
     enableExtraClassFilter: settings.enableExtraClassFilter !== false,
     supportFullListOcrFallback: settings.supportFullListOcrFallback === true,
     unknownScreenTimeoutCount: normalizeTimeoutCount(settings.unknownScreenTimeoutCount),
+    apRecoveryConfirmWaitMs: settings.apRecoveryConfirmWaitMs ?? 1000,
   };
 }
 

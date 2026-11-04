@@ -236,6 +236,7 @@ pub fn run() {
             commands::settings::set_support_full_list_ocr_fallback,
             commands::settings::set_auto_friend_request,
             commands::settings::set_unknown_screen_timeout_count,
+            commands::settings::set_ap_recovery_confirm_wait_ms,
             commands::settings::set_auto_capture_battle_before_attack,
             commands::settings::set_auto_capture_battle_result_loot,
             commands::settings::set_auto_capture_skill_use_probe,

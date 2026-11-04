@@ -4,9 +4,13 @@ use super::*;
 
 const AP_RECOVERY_CLOSE_POLL: Duration = Duration::from_millis(300);
 const AP_RECOVERY_CLOSE_TIMEOUT: Duration = Duration::from_secs(6);
-const AP_RECOVERY_CONFIRM_APPEAR_POLL: Duration = Duration::from_millis(200);
-const AP_RECOVERY_CONFIRM_APPEAR_TIMEOUT: Duration = Duration::from_secs(3);
 pub(crate) const AP_RECOVERY_TAP_SETTLE: Duration = Duration::from_millis(500);
+
+pub(crate) fn ap_recovery_confirm_wait_duration(wait_ms: u32) -> Duration {
+    Duration::from_millis(u64::from(
+        wait_ms.max(crate::commands::settings::AP_RECOVERY_CONFIRM_WAIT_MS_MIN),
+    ))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApRecoveryPage {
@@ -76,11 +80,11 @@ pub(crate) fn classify_ap_recovery_close_observation(screen: Screen) -> ApRecove
     }
 }
 
-pub(crate) fn ap_recovery_confirm_region(item: ApRecoveryItem) -> NormRect {
+pub(crate) fn ap_recovery_confirm_point(item: ApRecoveryItem) -> Point {
     match item {
-        ApRecoveryItem::Rainbow | ApRecoveryItem::Gold => AP_RECOVERY_CONFIRM_UPPER_REGION,
+        ApRecoveryItem::Rainbow | ApRecoveryItem::Gold => AP_RECOVERY_CONFIRM_UPPER,
         ApRecoveryItem::Silver | ApRecoveryItem::Bronze | ApRecoveryItem::Copper => {
-            AP_RECOVERY_CONFIRM_LOWER_REGION
+            AP_RECOVERY_CONFIRM_LOWER
         }
     }
 }
@@ -213,50 +217,28 @@ impl Runner {
         if !self.tap_at("APRecovery", point) {
             return Ok(ApRecoveryUseOutcome::Failed);
         }
-        thread::sleep(AP_RECOVERY_TAP_SETTLE);
-
-        let Some(confirm_point) = self.wait_for_ap_recovery_confirm(item.item)? else {
+        // The quantity dialog is not a separately recognized base screen.
+        // Wait for its animation and tap directly without running CV in between.
+        let deadline = Instant::now()
+            + ap_recovery_confirm_wait_duration(self.config.ap_recovery_confirm_wait_ms);
+        while Instant::now() < deadline {
+            if self.is_cancelled() {
+                return Ok(ApRecoveryUseOutcome::Failed);
+            }
+            thread::sleep(
+                deadline
+                    .saturating_duration_since(Instant::now())
+                    .min(Duration::from_millis(50)),
+            );
+        }
+        if self.is_cancelled() {
             return Ok(ApRecoveryUseOutcome::Failed);
-        };
-        if !self.tap_at("APRecovery", confirm_point) {
+        }
+        if !self.tap_at("APRecovery", ap_recovery_confirm_point(item.item)) {
             return Ok(ApRecoveryUseOutcome::Failed);
         }
         thread::sleep(AP_RECOVERY_TAP_SETTLE);
         Ok(self.wait_for_ap_recovery_to_close()?)
-    }
-
-    fn wait_for_ap_recovery_confirm(
-        &mut self,
-        item: ApRecoveryItem,
-    ) -> AutomationResult<Option<Point>> {
-        let start = Instant::now();
-        loop {
-            if self.is_cancelled() {
-                return Ok(None);
-            }
-            match self
-                .sidecar()
-                .find_element(
-                    None,
-                    AP_RECOVERY_CONFIRM_TEMPLATE,
-                    ap_recovery_confirm_region(item),
-                    0.8,
-                )
-                .recoverable()?
-            {
-                Ok(Some(point)) => return Ok(Some(point)),
-                Ok(None) => {}
-                Err(err) => {
-                    self.fail_action("APRecovery", "识别苹果使用确认弹窗", err.to_string());
-                    return Ok(None);
-                }
-            }
-            if start.elapsed() >= AP_RECOVERY_CONFIRM_APPEAR_TIMEOUT {
-                self.emit_warn("APRecovery", "未检测到苹果使用确认弹窗，返回主循环重试");
-                return Ok(None);
-            }
-            thread::sleep(AP_RECOVERY_CONFIRM_APPEAR_POLL);
-        }
     }
 
     fn wait_for_ap_recovery_to_close(&mut self) -> AutomationResult<ApRecoveryUseOutcome> {

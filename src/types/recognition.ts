@@ -14,6 +14,7 @@ export interface RecognitionSettings {
   enableExtraClassFilter: boolean;
   supportFullListOcrFallback: boolean;
   unknownScreenTimeoutCount: number;
+  apRecoveryConfirmWaitMs: number;
 }
 
 export type SupportClassFilterMode = "correspondingClass" | "allClasses" | "both";

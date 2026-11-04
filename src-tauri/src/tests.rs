@@ -1,8 +1,5 @@
 use super::*;
-use crate::runner::{
-    ApRecoveryItem, ApRecoveryLimits, AP_RECOVERY_CONFIRM_TEMPLATE,
-    SKILL_SELECTION_CLOSE_BUTTON_TEMPLATE,
-};
+use crate::runner::{ApRecoveryItem, ApRecoveryLimits, SKILL_SELECTION_CLOSE_BUTTON_TEMPLATE};
 use std::collections::HashSet;
 use std::io::Cursor;
 use std::str::FromStr;
@@ -106,10 +103,7 @@ fn shared_template_references_resolve_to_bundled_files() {
             .unwrap();
     let mut keys = HashSet::new();
     collect_shared_template_keys(&config, &mut keys);
-    keys.extend([
-        SKILL_SELECTION_CLOSE_BUTTON_TEMPLATE.to_string(),
-        AP_RECOVERY_CONFIRM_TEMPLATE.to_string(),
-    ]);
+    keys.extend([SKILL_SELECTION_CLOSE_BUTTON_TEMPLATE.to_string()]);
 
     for key in keys {
         let relative = key
@@ -1451,6 +1445,7 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
         enable_extra_class_filter: false,
         support_full_list_ocr_fallback: true,
         unknown_screen_timeout_count: 120,
+        ap_recovery_confirm_wait_ms: 1_500,
         auto_friend_request: false,
     };
 
@@ -1467,6 +1462,7 @@ fn effective_recognition_settings_inherit_global_without_project_override() {
     assert!(!effective.enable_extra_class_filter);
     assert!(effective.support_full_list_ocr_fallback);
     assert_eq!(effective.unknown_screen_timeout_count, 120);
+    assert_eq!(effective.ap_recovery_confirm_wait_ms, 1_500);
     assert_eq!(
         effective.noble_phantasm_detection_mode,
         commands::settings::NoblePhantasmDetectionMode::Card
@@ -1488,6 +1484,7 @@ fn effective_recognition_settings_use_project_override() {
         enable_extra_class_filter: false,
         support_full_list_ocr_fallback: true,
         unknown_screen_timeout_count: 120,
+        ap_recovery_confirm_wait_ms: 1_500,
         auto_friend_request: false,
     };
     let project = ProjectRecognitionSettings {
@@ -1513,6 +1510,7 @@ fn effective_recognition_settings_use_project_override() {
     assert!(effective.enable_extra_class_filter);
     assert!(effective.support_full_list_ocr_fallback);
     assert_eq!(effective.unknown_screen_timeout_count, 120);
+    assert_eq!(effective.ap_recovery_confirm_wait_ms, 1_500);
     assert_eq!(
         effective.noble_phantasm_detection_mode,
         commands::settings::NoblePhantasmDetectionMode::Gauge

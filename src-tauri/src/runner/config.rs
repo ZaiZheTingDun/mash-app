@@ -238,6 +238,9 @@ pub struct RunConfig {
     /// Consecutive Unknown detections allowed during ordinary screen transitions.
     #[serde(default = "default_unknown_screen_timeout_count")]
     pub unknown_screen_timeout_count: u32,
+    /// Delay after selecting an AP recovery item, before tapping confirmation.
+    #[serde(default = "default_ap_recovery_confirm_wait_ms")]
+    pub ap_recovery_confirm_wait_ms: u32,
     /// Stop this automation run once cumulative five-star CE drops reach the target.
     #[serde(default)]
     pub stop_on_five_star_ce_drop: bool,
@@ -338,6 +341,10 @@ fn default_support_ce_full_gate_threshold() -> f64 {
 
 fn default_support_icon_threshold() -> f64 {
     crate::commands::settings::SUPPORT_ICON_THRESHOLD_DEFAULT
+}
+
+fn default_ap_recovery_confirm_wait_ms() -> u32 {
+    crate::commands::settings::AP_RECOVERY_CONFIRM_WAIT_MS_DEFAULT
 }
 
 fn default_unknown_screen_timeout_count() -> u32 {

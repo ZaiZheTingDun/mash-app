@@ -294,3 +294,40 @@ fn loading_normalizes_bond_max_auto_stop_to_disable_level_up() {
     assert!(!normalized.stop_on_bond_level_up);
     assert!(normalized.stop_on_bond_max_level);
 }
+
+#[test]
+fn ap_recovery_wait_defaults_for_legacy_settings_and_round_trips_milliseconds() {
+    let legacy: RecognitionSettings = serde_json::from_value(serde_json::json!({})).unwrap();
+    assert_eq!(legacy.ap_recovery_confirm_wait_ms, 1_000);
+    assert_eq!(
+        RecognitionSettings::default().ap_recovery_confirm_wait_ms,
+        1_000
+    );
+    let settings = RecognitionSettings {
+        ap_recovery_confirm_wait_ms: 1_750,
+        ..legacy
+    };
+    let json = serde_json::to_value(settings).unwrap();
+    assert_eq!(json["apRecoveryConfirmWaitMs"], 1_750);
+    let restored: RecognitionSettings = serde_json::from_value(json).unwrap();
+    assert_eq!(restored.ap_recovery_confirm_wait_ms, 1_750);
+}
+
+#[test]
+fn ap_recovery_wait_requires_at_least_500_ms_and_rejects_excessive_waits() {
+    for value in [500, 1_000, 1_750, AP_RECOVERY_CONFIRM_WAIT_MS_MAX] {
+        assert_eq!(normalize_ap_recovery_confirm_wait_ms(value).unwrap(), value);
+    }
+    for value in [0, 1, 499] {
+        assert!(normalize_ap_recovery_confirm_wait_ms(value).is_err());
+    }
+    assert!(normalize_ap_recovery_confirm_wait_ms(AP_RECOVERY_CONFIRM_WAIT_MS_MAX + 1).is_err());
+    for value in [serde_json::json!(-1), serde_json::json!(1.5)] {
+        assert!(
+            serde_json::from_value::<RecognitionSettings>(serde_json::json!({
+                "apRecoveryConfirmWaitMs": value
+            }))
+            .is_err()
+        );
+    }
+}

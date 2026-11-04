@@ -114,6 +114,7 @@ let stopOnBondMaxLevel = false;
 let verifySkillActivation = false;
 let enableExtraClassFilter = true;
 let supportFullListOcrFallback = false;
+let apRecoveryConfirmWaitMs = 1000;
 let imageRecognitionDebugMode: "enabled" | "shadow" | "disabled" = "disabled";
 let sequenceRecognitionDebugMode: "enabled" | "shadow" | "disabled" = "disabled";
 let autoCaptureBattleBeforeAttack = false;
@@ -258,6 +259,7 @@ function recognitionSettings() {
     verifySkillActivation,
     enableExtraClassFilter,
     supportFullListOcrFallback,
+    apRecoveryConfirmWaitMs,
   };
 }
 
@@ -718,6 +720,12 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       return recognitionSettings() as T;
     case "set_enable_extra_class_filter":
       enableExtraClassFilter = Boolean(args.value);
+      return recognitionSettings() as T;
+    case "set_ap_recovery_confirm_wait_ms":
+      if (typeof args.value !== "number" || !Number.isInteger(args.value) || args.value < 500 || args.value > 60000) {
+        throw new Error("回复道具确认等待时长必须在 500 到 60000 毫秒之间");
+      }
+      apRecoveryConfirmWaitMs = args.value;
       return recognitionSettings() as T;
     case "set_support_full_list_ocr_fallback":
       supportFullListOcrFallback = Boolean(args.value);

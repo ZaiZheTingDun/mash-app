@@ -247,6 +247,7 @@ pub(crate) fn effective_recognition_settings(
             .unwrap_or(global.enable_extra_class_filter),
         support_full_list_ocr_fallback: global.support_full_list_ocr_fallback,
         unknown_screen_timeout_count: global.unknown_screen_timeout_count,
+        ap_recovery_confirm_wait_ms: global.ap_recovery_confirm_wait_ms,
         auto_friend_request: global.auto_friend_request,
     }
 }
@@ -343,6 +344,7 @@ fn start_automation_with_config(
         .unwrap_or_default();
     config.support_full_list_ocr_fallback = recognition_settings.support_full_list_ocr_fallback;
     config.unknown_screen_timeout_count = recognition_settings.unknown_screen_timeout_count;
+    config.ap_recovery_confirm_wait_ms = recognition_settings.ap_recovery_confirm_wait_ms;
     let debug_settings = *app.state::<Mutex<DebugSettings>>().lock().unwrap();
     config.auto_capture_battle_before_attack = debug_settings.auto_capture_battle_before_attack;
     config.auto_capture_battle_result_loot = debug_settings.auto_capture_battle_result_loot;
