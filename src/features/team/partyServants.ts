@@ -704,11 +704,14 @@ function withdrawToBack(members: PartyMember[], index: number) {
   if (index < 0 || index >= 3) return;
   const member = members[index];
   if (!member?.servant) return;
+  if (members.slice(0, 3).filter((candidate) => candidate.servant).length < 2) return;
   compactBackline(members);
   const replacementIndex = members.findIndex((candidate, i) => i >= 3 && candidate.servant);
   if (replacementIndex === -1) return;
-  members[index] = { ...members[replacementIndex] };
-  members[replacementIndex] = { ...member };
+  // Withdraw to the end of the reserve queue, preserving every member's identity.
+  removeAt(members, index);
+  const tailIndex = members.findIndex((candidate, i) => i >= 3 && !candidate.servant);
+  members[tailIndex] = { ...member };
 }
 
 function applyRule(

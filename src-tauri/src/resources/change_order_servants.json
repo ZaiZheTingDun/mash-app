@@ -39,6 +39,19 @@
     "source": "noble_phantasms.effects: 自身即死效果"
   },
   {
+    "servantId": 307,
+    "nameCn": "克莱恩小姐",
+    "trigger": {
+      "type": "attackCard",
+      "card": "np"
+    },
+    "effect": {
+      "type": "withdrawSelfToBack"
+    },
+    "timing": "immediate",
+    "source": "noblePhantasms.functions: moveToLastSubmember；自身撤退至队尾，场上仅剩自身时无法撤退"
+  },
+  {
     "servantId": 315,
     "nameCn": "哈贝特洛特",
     "trigger": {

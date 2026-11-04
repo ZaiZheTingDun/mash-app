@@ -4,6 +4,7 @@ import {
   deriveMembersAfterPreparationActions,
   derivePartyMembers,
   deriveLineupAfterPreparationActions,
+  deriveLineupAfterAttackCards,
   derivePartyLineup,
   derivePartyServants,
   deriveScenePartyMembers,
@@ -97,6 +98,13 @@ const CHLOE: Servant = {
   name_en: "Chloe",
   class: "Archer",
   rarity: 4,
+};
+
+const MISS_CRANE: Servant = {
+  ...MERLIN,
+  id: 307,
+  variantKey: "307",
+  name_cn: "克莱恩小姐",
 };
 
 const ULTIMATE_ELISABETH: Servant = {
@@ -430,7 +438,7 @@ describe("deriveScenePartyServants", () => {
     expect(lineups[1]).toEqual([CHEN_GONG, ALTRIA, WAVER]);
   });
 
-  it("keeps current back-line slot mapping after a servant withdraws to back", () => {
+  it("moves Chloe to the reserve tail at turn end before a later order change", () => {
     const lineups = deriveScenePartyLineups(
       [CHLOE, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG],
       [
@@ -464,8 +472,62 @@ describe("deriveScenePartyServants", () => {
       ]
     );
 
-    expect(lineups[1]).toEqual([ALTRIA, MERLIN, WAVER, CHLOE, MASH, CHEN_GONG]);
-    expect(lineups[2]).toEqual([CHLOE, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG]);
+    expect(lineups[1]).toEqual([ALTRIA, MERLIN, WAVER, MASH, CHEN_GONG, CHLOE]);
+    expect(lineups[2]).toEqual([MASH, MERLIN, WAVER, ALTRIA, CHEN_GONG, CHLOE]);
+  });
+
+  it.each([
+    {
+      name: "full reserves",
+      initial: [MISS_CRANE, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG],
+      expected: [ALTRIA, MERLIN, WAVER, MASH, CHEN_GONG, MISS_CRANE],
+    },
+    {
+      name: "gaps in the reserve queue",
+      initial: [MISS_CRANE, MERLIN, WAVER, null, ALTRIA, MASH],
+      expected: [ALTRIA, MERLIN, WAVER, MASH, MISS_CRANE, null],
+    },
+    {
+      name: "one reserve",
+      initial: [MISS_CRANE, MERLIN, WAVER, null, null, MASH],
+      expected: [MASH, MERLIN, WAVER, MISS_CRANE, null, null],
+    },
+    {
+      name: "no reserves at the next turn boundary",
+      initial: [MISS_CRANE, MERLIN, WAVER, null, null, null],
+      expected: [MISS_CRANE, MERLIN, WAVER, null, null, null],
+    },
+    {
+      name: "only one front-line ally",
+      initial: [MISS_CRANE, null, null, ALTRIA, MASH, null],
+      expected: [MISS_CRANE, null, null, ALTRIA, MASH, null],
+    },
+  ])("applies Miss Crane's NP retreat with $name", ({ initial, expected }) => {
+    expect(deriveLineupAfterAttackCards(initial, [{ card: "servant_1_np" }])).toEqual(expected);
+    expect(deriveLineupAfterAttackCards(initial, [{ card: "servant_1_a" }])).toEqual(initial);
+  });
+
+  it("preserves owned and support identities when Miss Crane retreats from slot two", () => {
+    const members = [
+      { memberId: "merlin", servant: MERLIN, isSupport: false },
+      { memberId: "crane-support", servant: MISS_CRANE, isSupport: true },
+      { memberId: "waver", servant: WAVER, isSupport: false },
+      { memberId: "crane-owned", servant: MISS_CRANE, isSupport: false },
+      { memberId: "mash", servant: MASH, isSupport: false },
+      { memberId: "altria", servant: ALTRIA, isSupport: false },
+    ];
+    const result = deriveMembersAfterAttackCards(members, [{ card: "servant_2_np" }]);
+    expect(result).toEqual([members[0], members[3], members[2], members[4], members[5], members[1]]);
+    expect(members[1].memberId).toBe("crane-support");
+  });
+
+  it("keeps Miss Crane in the current scene and applies her NP retreat to the next scene", () => {
+    const initial = [MISS_CRANE, MERLIN, WAVER, ALTRIA, MASH, CHEN_GONG];
+    const lineups = deriveScenePartyLineups(initial, [
+      makeScene({ attackPriority: [{ id: "crane-np", card: "servant_1_np" }] }),
+      makeScene({ id: "scene_2" }),
+    ]);
+    expect(lineups).toEqual([initial, [ALTRIA, MERLIN, WAVER, MASH, CHEN_GONG, MISS_CRANE]]);
   });
 
   it("replaces Habetrot after using her third skill", () => {

@@ -4375,8 +4375,72 @@ fn party_lineup_change_applies_end_of_turn_servant_skill_withdraw_rule() {
 
     assert_eq!(
         ids,
-        [Some(11), Some(434), Some(384), Some(388), Some(22), None]
+        [Some(11), Some(434), Some(384), Some(22), Some(388), None]
     );
+}
+
+#[test]
+fn miss_crane_np_moves_to_reserve_tail_and_preserves_member_identity() {
+    let original = [
+        frontline_member("merlin", 0, 150, false),
+        frontline_member("crane-support", 1, 307, true),
+        frontline_member("waver", 2, 37, false),
+        frontline_member("crane-owned", 3, 307, false),
+        frontline_member("mash", 4, 1, false),
+        frontline_member("altria", 5, 2, false),
+    ];
+    let mut members = original.clone();
+    let mut counts = HashMap::new();
+    let card: AttackCard = serde_json::from_value(serde_json::json!({
+        "id": "crane-np", "card": "servant_2_np"
+    }))
+    .unwrap();
+    apply_attack_card_member_lineup_change(&mut members, &card, &mut counts);
+    assert_eq!(
+        members,
+        [
+            original[0].clone(),
+            original[3].clone(),
+            original[2].clone(),
+            original[4].clone(),
+            original[5].clone(),
+            original[1].clone(),
+        ]
+    );
+    assert_eq!(counts.get(original[1].as_ref().unwrap()), Some(&1));
+    assert!(!counts.contains_key(original[3].as_ref().unwrap()));
+}
+
+#[test]
+fn miss_crane_np_retreat_handles_partial_reserves_and_frontline_restrictions() {
+    for (initial, expected) in [
+        (
+            [Some(307), Some(150), Some(37), None, Some(1), Some(2)],
+            [Some(1), Some(150), Some(37), Some(2), Some(307), None],
+        ),
+        (
+            [Some(307), Some(150), Some(37), None, None, Some(1)],
+            [Some(1), Some(150), Some(37), Some(307), None, None],
+        ),
+        (
+            [Some(307), Some(150), Some(37), None, None, None],
+            [Some(307), Some(150), Some(37), None, None, None],
+        ),
+        (
+            [Some(307), None, None, Some(1), Some(2), None],
+            [Some(307), None, None, Some(1), Some(2), None],
+        ),
+    ] {
+        let mut members = std::array::from_fn(|i| {
+            initial[i].map(|id| runtime_member(&format!("slot-{i}"), i, id, false))
+        });
+        let card: AttackCard = serde_json::from_value(serde_json::json!({
+            "id": "crane-np", "card": "servant_1_np"
+        }))
+        .unwrap();
+        apply_attack_card_member_lineup_change(&mut members, &card, &mut HashMap::new());
+        assert_eq!(party_member_ids(&members), expected);
+    }
 }
 
 #[test]
