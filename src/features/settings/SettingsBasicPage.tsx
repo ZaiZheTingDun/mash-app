@@ -68,6 +68,8 @@ export function SettingsBasicPage({
   const [verifySkillActivation, setVerifySkillActivation] = useState(false);
   const [enableExtraClassFilter, setEnableExtraClassFilter] = useState(true);
   const [supportFullListOcrFallback, setSupportFullListOcrFallback] = useState(false);
+  const [apRecoveryConfirmWaitMs, setApRecoveryConfirmWaitMs] = useState<number | null>(null);
+  const [apRecoveryConfirmWaitDraft, setApRecoveryConfirmWaitDraft] = useState("");
   const [timeoutCount, setTimeoutCount] = useState(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT);
   const [timeoutDraft, setTimeoutDraft] = useState(
     String(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT)
@@ -104,6 +106,8 @@ export function SettingsBasicPage({
     setVerifySkillActivation(settings.verifySkillActivation);
     setEnableExtraClassFilter(settings.enableExtraClassFilter);
     setSupportFullListOcrFallback(settings.supportFullListOcrFallback);
+    setApRecoveryConfirmWaitMs(settings.apRecoveryConfirmWaitMs);
+    setApRecoveryConfirmWaitDraft(String(settings.apRecoveryConfirmWaitMs));
     setTimeoutCount(settings.unknownScreenTimeoutCount);
     setTimeoutEnabled(
       settings.unknownScreenTimeoutCount !== UNKNOWN_SCREEN_TIMEOUT_COUNT_UNLIMITED
@@ -112,6 +116,29 @@ export function SettingsBasicPage({
       setTimeoutDraft(String(settings.unknownScreenTimeoutCount));
     }
   }, []);
+
+  const saveApRecoveryConfirmWait = async () => {
+    if (apRecoveryConfirmWaitDraft === String(apRecoveryConfirmWaitMs)) return;
+    if (apRecoveryConfirmWaitDraft.trim() === "") {
+      setError("请输入回复道具确认等待时长");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
+    try {
+      const settings = await invoke<RecognitionSettings>("set_ap_recovery_confirm_wait_ms", {
+        value: Number(apRecoveryConfirmWaitDraft),
+      });
+      setApRecoveryConfirmWaitMs(settings.apRecoveryConfirmWaitMs);
+      setApRecoveryConfirmWaitDraft(String(settings.apRecoveryConfirmWaitMs));
+      setSavedMessage("已自动保存");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const saveTimeoutCount = useCallback(async (value: number) => {
     const sequence = timeoutSaveSequence.current + 1;
@@ -499,6 +526,19 @@ export function SettingsBasicPage({
         <SettingsRow label="技能使用确认" description="开启后会确认技能使用成功，失败会进行重试，一般无需开启">
           <DiamondSwitch checked={verifySkillActivation} onCheckedChange={(value) => void saveVerifySkillActivation(value)}
             disabled={saving} aria-label="技能使用确认" />
+        </SettingsRow>
+        <SettingsRow label="回复道具确认等待时长" description="选中圣晶石或苹果后，等待此时长再点击决定；默认 1000 毫秒">
+          <TextField.Root type="number" min={0} max={60000} step={1}
+            value={apRecoveryConfirmWaitDraft}
+            onChange={(event) => {
+              setApRecoveryConfirmWaitDraft(event.currentTarget.value);
+              setError(null);
+              setSavedMessage(null);
+            }}
+            onBlur={() => void saveApRecoveryConfirmWait()}
+            aria-label="回复道具确认等待时长" className="recognition-threshold-input"
+            disabled={saving || apRecoveryConfirmWaitMs == null} />
+          <Text size="2" color="gray">毫秒</Text>
         </SettingsRow>
         <SettingsRow label="识别超时限制" description="连续无法识别达到此次数后停止">
           <TextField.Root type="number" min={UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN} max={UNKNOWN_SCREEN_TIMEOUT_COUNT_MAX}

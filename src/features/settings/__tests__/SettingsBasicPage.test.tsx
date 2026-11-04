@@ -22,9 +22,69 @@ const SETTINGS: RecognitionSettings = {
   enableExtraClassFilter: true,
   supportFullListOcrFallback: false,
   unknownScreenTimeoutCount: 100,
+  apRecoveryConfirmWaitMs: 1000,
 };
 
 describe("SettingsBasicPage", () => {
+  it("loads and persists the recovery confirmation delay in milliseconds", async () => {
+    let waitMs = 1000;
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "get_recognition_settings") {
+        return { ...SETTINGS, apRecoveryConfirmWaitMs: waitMs };
+      }
+      if (command === "set_ap_recovery_confirm_wait_ms") {
+        waitMs = (args as { value: number }).value;
+        return { ...SETTINGS, apRecoveryConfirmWaitMs: waitMs };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+    const { unmount } = renderWithTheme(<SettingsBasicPage active />);
+    const input = await screen.findByRole("spinbutton", { name: "回复道具确认等待时长" });
+    await waitFor(() => expect(input).toHaveValue(1000));
+    await user.clear(input);
+    await user.type(input, "1750");
+    await user.tab();
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("set_ap_recovery_confirm_wait_ms", { value: 1750 });
+      expect(input).not.toBeDisabled();
+    });
+    expect(await screen.findByText("已自动保存")).toBeInTheDocument();
+    unmount();
+    renderWithTheme(<SettingsBasicPage active />);
+    await waitFor(() => expect(screen.getByRole("spinbutton", {
+      name: "回复道具确认等待时长",
+    })).toHaveValue(1750));
+  });
+
+  it("reports a failed delay save and allows retrying with zero milliseconds", async () => {
+    let rejectSave = true;
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "get_recognition_settings") return SETTINGS;
+      if (command === "set_ap_recovery_confirm_wait_ms") {
+        if (rejectSave) throw new Error("无法保存设置");
+        return { ...SETTINGS, apRecoveryConfirmWaitMs: (args as { value: number }).value };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<SettingsBasicPage active />);
+    const input = await screen.findByRole("spinbutton", { name: "回复道具确认等待时长" });
+    await waitFor(() => expect(input).toHaveValue(1000));
+    await user.clear(input);
+    await user.type(input, "2000");
+    await user.tab();
+    expect(await screen.findByText("Error: 无法保存设置")).toBeInTheDocument();
+    expect(input).not.toBeDisabled();
+    rejectSave = false;
+    await user.clear(input);
+    await user.type(input, "0");
+    await user.tab();
+    expect(await screen.findByText("已自动保存")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("set_ap_recovery_confirm_wait_ms", { value: 0 });
+    expect(input).toHaveValue(0);
+  });
+
   it("loads the saved skill layout and only updates the app after a successful backend save", async () => {
     let layout = "guided";
     vi.mocked(invoke).mockImplementation(async (command, args) => {

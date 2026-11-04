@@ -225,19 +225,9 @@ pub(crate) const AP_RECOVERY_ITEMS_REGION: NormRect = NormRect {
 };
 pub(crate) const AP_RECOVERY_SCROLL_FROM: Point = Point::new(0.780, 0.166);
 pub(crate) const AP_RECOVERY_SCROLL_TO: Point = Point::new(0.780, 0.426);
-pub(crate) const AP_RECOVERY_CONFIRM_UPPER_REGION: NormRect = NormRect {
-    x: 0.676,
-    y: 0.736,
-    w: 0.079,
-    h: 0.092,
-};
-pub(crate) const AP_RECOVERY_CONFIRM_LOWER_REGION: NormRect = NormRect {
-    x: 0.675,
-    y: 0.763,
-    w: 0.079,
-    h: 0.092,
-};
-pub(crate) const AP_RECOVERY_CONFIRM_TEMPLATE: &str = "shared/button_dialog";
+// Center of the right-hand confirmation button, grouped by dialog height.
+pub(crate) const AP_RECOVERY_CONFIRM_UPPER: Point = Point::new(0.66, 0.78);
+pub(crate) const AP_RECOVERY_CONFIRM_LOWER: Point = Point::new(0.66, 0.81);
 pub(crate) const AP_RECOVERY_LIST_LABEL_TEMPLATE: &str = "items/label_item";
 pub(crate) const AP_RECOVERY_LIST_LABEL_NEW_TEMPLATE: &str = "items/label_item_new";
 pub(crate) const AP_RECOVERY_LIST_LABEL_NEW_REFERENCE_WIDTH: f64 = 1920.0;

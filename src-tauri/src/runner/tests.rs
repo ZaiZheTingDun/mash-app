@@ -6467,31 +6467,32 @@ fn ap_recovery_limits_report_no_candidate_after_every_cap_is_reached() {
 }
 
 #[test]
-fn ap_recovery_waits_half_a_second_between_item_and_confirmation_steps() {
+fn ap_recovery_defaults_to_one_second_before_confirmation() {
+    let cfg: RunConfig = serde_json::from_value(minimal_run_config_json()).unwrap();
+    assert_eq!(cfg.ap_recovery_confirm_wait_ms, 1_000);
+    let mut json = minimal_run_config_json();
+    json["apRecoveryConfirmWaitMs"] = serde_json::json!(2_500);
+    let cfg: RunConfig = serde_json::from_value(json).unwrap();
+    assert_eq!(cfg.ap_recovery_confirm_wait_ms, 2_500);
     assert_eq!(AP_RECOVERY_TAP_SETTLE, Duration::from_millis(500));
 }
 
 #[test]
-fn ap_recovery_confirm_region_uses_dialog_layout_for_each_item_group() {
+fn ap_recovery_confirm_point_uses_dialog_layout_for_each_item_group() {
     for item in [ApRecoveryItem::Rainbow, ApRecoveryItem::Gold] {
-        let region = ap_recovery_confirm_region(item);
-        approx(region.x, AP_RECOVERY_CONFIRM_UPPER_REGION.x);
-        approx(region.y, AP_RECOVERY_CONFIRM_UPPER_REGION.y);
-        approx(region.w, AP_RECOVERY_CONFIRM_UPPER_REGION.w);
-        approx(region.h, AP_RECOVERY_CONFIRM_UPPER_REGION.h);
+        let point = ap_recovery_confirm_point(item);
+        approx(point.x, 0.66);
+        approx(point.y, 0.78);
     }
     for item in [
         ApRecoveryItem::Silver,
         ApRecoveryItem::Bronze,
         ApRecoveryItem::Copper,
     ] {
-        let region = ap_recovery_confirm_region(item);
-        approx(region.x, AP_RECOVERY_CONFIRM_LOWER_REGION.x);
-        approx(region.y, AP_RECOVERY_CONFIRM_LOWER_REGION.y);
-        approx(region.w, AP_RECOVERY_CONFIRM_LOWER_REGION.w);
-        approx(region.h, AP_RECOVERY_CONFIRM_LOWER_REGION.h);
+        let point = ap_recovery_confirm_point(item);
+        approx(point.x, 0.66);
+        approx(point.y, 0.81);
     }
-    assert_eq!(AP_RECOVERY_CONFIRM_TEMPLATE, "shared/button_dialog");
 }
 
 #[test]
