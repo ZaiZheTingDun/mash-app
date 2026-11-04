@@ -314,9 +314,12 @@ fn ap_recovery_wait_defaults_for_legacy_settings_and_round_trips_milliseconds() 
 }
 
 #[test]
-fn ap_recovery_wait_accepts_zero_and_rejects_excessive_waits() {
-    for value in [0, 1_000, 1_750, AP_RECOVERY_CONFIRM_WAIT_MS_MAX] {
+fn ap_recovery_wait_requires_at_least_500_ms_and_rejects_excessive_waits() {
+    for value in [500, 1_000, 1_750, AP_RECOVERY_CONFIRM_WAIT_MS_MAX] {
         assert_eq!(normalize_ap_recovery_confirm_wait_ms(value).unwrap(), value);
+    }
+    for value in [0, 1, 499] {
+        assert!(normalize_ap_recovery_confirm_wait_ms(value).is_err());
     }
     assert!(normalize_ap_recovery_confirm_wait_ms(AP_RECOVERY_CONFIRM_WAIT_MS_MAX + 1).is_err());
     for value in [serde_json::json!(-1), serde_json::json!(1.5)] {

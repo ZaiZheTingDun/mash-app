@@ -722,8 +722,8 @@ async function invokeLegacyDevMock<T>(cmd: string, args: InvokeArgs = {}): Promi
       enableExtraClassFilter = Boolean(args.value);
       return recognitionSettings() as T;
     case "set_ap_recovery_confirm_wait_ms":
-      if (typeof args.value !== "number" || !Number.isInteger(args.value) || args.value < 0 || args.value > 60000) {
-        throw new Error("回复道具确认等待时长必须在 0 到 60000 毫秒之间");
+      if (typeof args.value !== "number" || !Number.isInteger(args.value) || args.value < 500 || args.value > 60000) {
+        throw new Error("回复道具确认等待时长必须在 500 到 60000 毫秒之间");
       }
       apRecoveryConfirmWaitMs = args.value;
       return recognitionSettings() as T;

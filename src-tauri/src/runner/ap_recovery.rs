@@ -6,6 +6,12 @@ const AP_RECOVERY_CLOSE_POLL: Duration = Duration::from_millis(300);
 const AP_RECOVERY_CLOSE_TIMEOUT: Duration = Duration::from_secs(6);
 pub(crate) const AP_RECOVERY_TAP_SETTLE: Duration = Duration::from_millis(500);
 
+pub(crate) fn ap_recovery_confirm_wait_duration(wait_ms: u32) -> Duration {
+    Duration::from_millis(u64::from(
+        wait_ms.max(crate::commands::settings::AP_RECOVERY_CONFIRM_WAIT_MS_MIN),
+    ))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApRecoveryPage {
     Top,
@@ -214,7 +220,7 @@ impl Runner {
         // The quantity dialog is not a separately recognized base screen.
         // Wait for its animation and tap directly without running CV in between.
         let deadline = Instant::now()
-            + Duration::from_millis(u64::from(self.config.ap_recovery_confirm_wait_ms));
+            + ap_recovery_confirm_wait_duration(self.config.ap_recovery_confirm_wait_ms);
         while Instant::now() < deadline {
             if self.is_cancelled() {
                 return Ok(ApRecoveryUseOutcome::Failed);

@@ -6478,6 +6478,20 @@ fn ap_recovery_defaults_to_one_second_before_confirmation() {
 }
 
 #[test]
+fn ap_recovery_confirmation_always_waits_at_least_500_ms() {
+    for wait_ms in [0, 1, 499, 500] {
+        assert_eq!(
+            ap_recovery_confirm_wait_duration(wait_ms),
+            Duration::from_millis(500)
+        );
+    }
+    assert_eq!(
+        ap_recovery_confirm_wait_duration(1_750),
+        Duration::from_millis(1_750)
+    );
+}
+
+#[test]
 fn ap_recovery_confirm_point_uses_dialog_layout_for_each_item_group() {
     for item in [ApRecoveryItem::Rainbow, ApRecoveryItem::Gold] {
         let point = ap_recovery_confirm_point(item);

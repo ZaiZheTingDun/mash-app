@@ -70,6 +70,8 @@ export function SettingsBasicPage({
   const [supportFullListOcrFallback, setSupportFullListOcrFallback] = useState(false);
   const [apRecoveryConfirmWaitMs, setApRecoveryConfirmWaitMs] = useState<number | null>(null);
   const [apRecoveryConfirmWaitDraft, setApRecoveryConfirmWaitDraft] = useState("");
+  const apRecoveryWaitSaveSequence = useRef(0);
+  const apRecoveryWaitSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const [timeoutCount, setTimeoutCount] = useState(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT);
   const [timeoutDraft, setTimeoutDraft] = useState(
     String(UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT)
@@ -117,27 +119,26 @@ export function SettingsBasicPage({
     }
   }, []);
 
-  const saveApRecoveryConfirmWait = async () => {
-    if (apRecoveryConfirmWaitDraft === String(apRecoveryConfirmWaitMs)) return;
-    if (apRecoveryConfirmWaitDraft.trim() === "") {
-      setError("请输入回复道具确认等待时长");
-      return;
-    }
-    setSaving(true);
+  const updateApRecoveryConfirmWait = (draft: string, valid: boolean) => {
+    setApRecoveryConfirmWaitDraft(draft);
+    const sequence = ++apRecoveryWaitSaveSequence.current;
     setError(null);
     setSavedMessage(null);
-    try {
-      const settings = await invoke<RecognitionSettings>("set_ap_recovery_confirm_wait_ms", {
-        value: Number(apRecoveryConfirmWaitDraft),
-      });
-      setApRecoveryConfirmWaitMs(settings.apRecoveryConfirmWaitMs);
-      setApRecoveryConfirmWaitDraft(String(settings.apRecoveryConfirmWaitMs));
-      setSavedMessage("已自动保存");
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setSaving(false);
-    }
+    if (draft.trim() === "" || !valid) return;
+
+    // Keep writes in input order without blocking typing or replacing a newer draft.
+    apRecoveryWaitSaveQueue.current = apRecoveryWaitSaveQueue.current.then(async () => {
+      try {
+        const settings = await invoke<RecognitionSettings>("set_ap_recovery_confirm_wait_ms", {
+          value: Number(draft),
+        });
+        if (apRecoveryWaitSaveSequence.current !== sequence) return;
+        setApRecoveryConfirmWaitMs(settings.apRecoveryConfirmWaitMs);
+        setSavedMessage("已自动保存");
+      } catch (err) {
+        if (apRecoveryWaitSaveSequence.current === sequence) setError(String(err));
+      }
+    });
   };
 
   const saveTimeoutCount = useCallback(async (value: number) => {
@@ -528,14 +529,11 @@ export function SettingsBasicPage({
             disabled={saving} aria-label="技能使用确认" />
         </SettingsRow>
         <SettingsRow label="回复道具确认等待时长" description="选中圣晶石或苹果后，等待此时长再点击决定；默认 1000 毫秒">
-          <TextField.Root type="number" min={0} max={60000} step={1}
+          <TextField.Root type="number" min={500} max={60000} step={1}
             value={apRecoveryConfirmWaitDraft}
-            onChange={(event) => {
-              setApRecoveryConfirmWaitDraft(event.currentTarget.value);
-              setError(null);
-              setSavedMessage(null);
-            }}
-            onBlur={() => void saveApRecoveryConfirmWait()}
+            onChange={(event) => updateApRecoveryConfirmWait(
+              event.currentTarget.value, event.currentTarget.validity.valid
+            )}
             aria-label="回复道具确认等待时长" className="recognition-threshold-input"
             disabled={saving || apRecoveryConfirmWaitMs == null} />
           <Text size="2" color="gray">毫秒</Text>

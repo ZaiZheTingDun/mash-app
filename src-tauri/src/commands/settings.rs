@@ -29,6 +29,7 @@ pub(crate) const SUPPORT_CE_FULL_GATE_THRESHOLD_DEFAULT: f64 = 0.60;
 pub(crate) const SUPPORT_CE_FULL_GATE_THRESHOLD_MIN: f64 = 0.40;
 pub(crate) const SUPPORT_CE_FULL_GATE_THRESHOLD_MAX: f64 = 0.70;
 pub(crate) const AP_RECOVERY_CONFIRM_WAIT_MS_DEFAULT: u32 = 1_000;
+pub(crate) const AP_RECOVERY_CONFIRM_WAIT_MS_MIN: u32 = 500;
 pub(crate) const AP_RECOVERY_CONFIRM_WAIT_MS_MAX: u32 = 60_000;
 pub(crate) const UNKNOWN_SCREEN_TIMEOUT_COUNT_DEFAULT: u32 = 100;
 pub(crate) const UNKNOWN_SCREEN_TIMEOUT_COUNT_MIN: u32 = 50;
@@ -126,9 +127,9 @@ fn default_ap_recovery_confirm_wait_ms() -> u32 {
 }
 
 fn normalize_ap_recovery_confirm_wait_ms(value: u32) -> Result<u32, String> {
-    if value > AP_RECOVERY_CONFIRM_WAIT_MS_MAX {
+    if !(AP_RECOVERY_CONFIRM_WAIT_MS_MIN..=AP_RECOVERY_CONFIRM_WAIT_MS_MAX).contains(&value) {
         return Err(format!(
-            "回复道具确认等待时长必须在 0 到 {AP_RECOVERY_CONFIRM_WAIT_MS_MAX} 毫秒之间"
+            "回复道具确认等待时长必须在 {AP_RECOVERY_CONFIRM_WAIT_MS_MIN} 到 {AP_RECOVERY_CONFIRM_WAIT_MS_MAX} 毫秒之间"
         ));
     }
     Ok(value)
