@@ -82,6 +82,9 @@ def test_builder_preserves_pyinstaller_inputs_and_archive(tmp_path, monkeypatch)
         output = tmp_path / "dist" / "mash-cv"
         output.mkdir()
         (output / "mash-cv.exe").write_bytes(b"runtime")
+        defaults = output / "_internal" / "rapidocr" / "models"
+        defaults.mkdir(parents=True)
+        (defaults / "duplicate.onnx").write_bytes(b"redundant")
 
     monkeypatch.setattr(builder.subprocess, "run", run)
     output, digest = builder.build_runtime("1.2.3", "windows-x86_64")
@@ -89,7 +92,7 @@ def test_builder_preserves_pyinstaller_inputs_and_archive(tmp_path, monkeypatch)
     assert len(digest) == 64
     arguments, kwargs = calls[0]
     assert arguments[:5] == [sys.executable, "-m", "PyInstaller", "--onedir", str(tmp_path / "runtime_launcher.py")]
-    for dependency in ("cv2", "numpy", "rapidocr_onnxruntime", "av"):
+    for dependency in ("cv2", "numpy", "rapidocr", "av"):
         assert dependency in arguments
     assert arguments[-2:] == ["--add-data", f"{tmp_path / 'models'}:mash_cv/models"]
     assert kwargs == {"check": True, "cwd": tmp_path}

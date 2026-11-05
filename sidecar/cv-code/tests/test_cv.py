@@ -4638,7 +4638,7 @@ def test_cn_extra_class_filter_dialog_probe_rejects_closed_support_page(width):
 
 _RAPIDOCR_AVAILABLE = True
 try:
-    import rapidocr_onnxruntime  # noqa: F401
+    import rapidocr  # noqa: F401
 except Exception:  # noqa: BLE001
     _RAPIDOCR_AVAILABLE = False
 
@@ -4647,7 +4647,7 @@ _SUPPORT_SCREENSHOT = os.path.join(_TEST_SCREENSHOTS_DIR, "support_select.png")
 
 @pytest.mark.skipif(
     not _RAPIDOCR_AVAILABLE,
-    reason="rapidocr_onnxruntime not installed",
+    reason="rapidocr not installed",
 )
 @pytest.mark.skipif(
     not os.path.isfile(_SUPPORT_SCREENSHOT),
@@ -7309,3 +7309,14 @@ def test_read_craft_essence_grid_drops_clipped_rows_during_scroll(fixture):
         and not cell["locked"]
         for cell in result["cells"]
     )
+
+
+def test_bond_servant_match_prefers_exact_variant_over_perfect_substring(monkeypatch):
+    from mash_cv import cv
+    monkeypatch.setattr(cv, "_load_servant_catalog", lambda: [
+        {"nameCN": "贞德〔Alter〕", "id": 1},
+        {"nameCN": "贞德·Alter·Santa·Lily", "id": 2},
+    ])
+    result = cv._best_servant_match("贞德·Alter·Santa·Lily", "nameCN")
+    assert result["id"] == 2
+    assert result["score"] == 1.0

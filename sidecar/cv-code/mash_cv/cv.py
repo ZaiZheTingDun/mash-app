@@ -2762,7 +2762,15 @@ def _best_servant_match(candidate_text: str, name_field: str) -> dict:
             name = servant.get("nameCNServer")
         if not name:
             continue
-        score = _fuzzy_score(candidate, _bond_normalize_text(str(name)))
+        normalized_name = _bond_normalize_text(str(name))
+        score = _fuzzy_score(candidate, normalized_name)
+        # A substring can also score 1.0. Prefer a complete exact name over
+        # an earlier catalog entry for a shorter servant variant.
+        if candidate == normalized_name:
+            return {
+                "name": str(name), "id": servant.get("id"),
+                "collectionNo": servant.get("collectionNo"), "score": 1.0,
+            }
         if score > float(best["score"]):
             best = {
                 "name": str(name),
@@ -4706,7 +4714,7 @@ def _ocr_region(img: np.ndarray, region: dict, *, scale: float = 1.0) -> dict:
         return {
             "fragments": [],
             "fullText": "",
-            "error": "rapidocr_onnxruntime not available",
+            "error": "RapidOCR not available",
         }
 
     scale = max(1.0, float(scale))
@@ -5025,7 +5033,7 @@ def _find_supports(
         return {
             "supports": [],
             "diagnostics": diag,
-            "error": "rapidocr_onnxruntime not available",
+            "error": "RapidOCR not available",
         }
 
     used_anchor_row_ocr = False

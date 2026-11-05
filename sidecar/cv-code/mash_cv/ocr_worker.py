@@ -28,54 +28,71 @@ class RapidOcrEngine:
     """Own all RapidOCR sessions inside the disposable worker process."""
 
     def __init__(self, server: str) -> None:
-        from rapidocr_onnxruntime import RapidOCR
+        try:
+            from rapidocr import RapidOCR
+            from rapidocr.utils.typings import EngineType
+        except ImportError as exc:
+            raise RuntimeError(
+                "PP-OCRv6 small requires the updated native CV runtime; "
+                "install the runtime built with RapidOCR 3.10.0"
+            ) from exc
 
-        resolved = server if server in ("JP", "CN") else "JP"
         models_dir = _models_dir()
-        if resolved == "CN":
-            rec_filename = "chinese_PP-OCRv4_rec_infer.onnx"
-            keys_filename = "ppocr_keys_v1.txt"
-        else:
-            rec_filename = "japan_PP-OCRv4_rec_infer.onnx"
-            keys_filename = "japan_dict.txt"
-
-        rec_model = os.path.join(models_dir, rec_filename) if models_dir else None
-        rec_keys = os.path.join(models_dir, keys_filename) if models_dir else None
-        if rec_model and rec_keys and os.path.isfile(rec_model) and os.path.isfile(rec_keys):
-            print(
-                f"[mash-cv-ocr] using {resolved} rec model: {rec_model}",
-                file=sys.stderr,
-                flush=True,
+        filenames = {
+            "Det.model_path": "PP-OCRv6_det_small.onnx",
+            "Rec.model_path": "PP-OCRv6_rec_small.onnx",
+            "Cls.model_path": "ch_ppocr_mobile_v2.0_cls_mobile.onnx",
+            "Rec.rec_keys_path": "PP-OCRv6_small_rec_dict.txt",
+        }
+        paths = {key: os.path.join(models_dir or "", name) for key, name in filenames.items()}
+        missing = [path for path in paths.values() if not os.path.isfile(path)]
+        if models_dir is None or missing:
+            raise FileNotFoundError(
+                "PP-OCRv6 small models are missing; install the matching CV runtime "
+                f"(dir={models_dir!r}, missing={missing!r})"
             )
-            self._engine = RapidOCR(rec_model_path=rec_model, rec_keys_path=rec_keys)
-        else:
-            print(
-                f"[mash-cv-ocr] WARNING: {resolved} rec model not found "
-                f"(dir={models_dir!r} rec={rec_model!r} keys={rec_keys!r}); "
-                "falling back to the default RapidOCR model",
-                file=sys.stderr,
-                flush=True,
-            )
-            self._engine = RapidOCR()
+        print(
+            f"[mash-cv-ocr] initializing unified PP-OCRv6 small "
+            f"server={server} backend=onnxruntime threads=1 models={models_dir}",
+            file=sys.stderr, flush=True,
+        )
+        self._engine = RapidOCR(params={
+            **paths,
+            "Global.log_level": "warning",
+            "Global.max_side_len": 2000,
+            "Global.min_side_len": 30,
+            "Det.engine_type": EngineType.ONNXRUNTIME,
+            "Rec.engine_type": EngineType.ONNXRUNTIME,
+            "Cls.engine_type": EngineType.ONNXRUNTIME,
+            "EngineConfig.onnxruntime.intra_op_num_threads": 1,
+            "EngineConfig.onnxruntime.inter_op_num_threads": 1,
+        })
+        # RapidOCR 3.10 loads sessions lazily. Keep the version-pinned private
+        # batch entry inside this adapter; worker IPC remains unchanged.
+        self._recognizer = self._engine._load_rec_model()
+        print("[mash-cv-ocr] PP-OCRv6 small recognizer ready", file=sys.stderr, flush=True)
 
     def detect(self, image: np.ndarray) -> list[list]:
-        raw, _elapsed = self._engine(image)
-        serialized: list[list] = []
-        for box, text, confidence in raw or []:
-            serialized.append(
-                [
-                    np.asarray(box, dtype=np.float32).tolist(),
-                    str(text),
-                    float(confidence) if confidence is not None else 0.0,
-                ]
-            )
-        return serialized
+        result = self._engine(image)
+        if result.boxes is None or result.txts is None:
+            return []
+        return [
+            [np.asarray(box, dtype=np.float32).tolist(), str(text),
+             float(confidence) if confidence is not None else 0.0]
+            for box, text, confidence in zip(result.boxes, result.txts, result.scores)
+        ]
 
     def recognize_batch(self, images: list[np.ndarray]) -> list[list]:
-        results, _elapsed = self._engine.text_recognizer(images)
+        if not images:
+            return []
+        from rapidocr.ch_ppocr_rec.typings import TextRecInput
+
+        result = self._recognizer(TextRecInput(img=images))
+        if result.txts is None:
+            return []
         return [
             [str(text), float(confidence) if confidence is not None else 0.0]
-            for text, confidence in (results or [])
+            for text, confidence in zip(result.txts, result.scores)
         ]
 
 
