@@ -96,3 +96,16 @@ ZIPs, compute the hash from the inner runtime ZIP, not the Actions artifact
 wrapper, and use its filename's runtime version. Do not commit these temporary
 manifest changes; publish and pin actual platform artifacts before an App
 release. Check the OCR log for `unified PP-OCRv6 small` and `recognizer ready`.
+
+### Known test-candidate regressions
+
+The v6-small candidate does not currently pass all CE-enhancement recognition
+fixtures. The unchanged tests expose a tiny inventory label `11/55` being read
+as `1/55`, a same-target marker OCR text difference, and an incomplete read on
+`enhancement_ce_inventory_clipped_rows_live.png`. These checks are retained;
+the PR is a draft for device evaluation, not a production-ready model upgrade.
+Avoid automated CE enhancement while evaluating this candidate. The existing
+CV workflow requires source tests to pass before it builds Windows artifacts,
+so these regressions can block that artifact job; the local build steps above
+remain available. No recognition threshold or material-selection guard was
+relaxed to make the candidate pass.
