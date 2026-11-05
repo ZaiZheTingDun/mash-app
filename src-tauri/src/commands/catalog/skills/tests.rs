@@ -58,11 +58,17 @@ fn parse_servant_skill_maps_extracts_ally_target_skill_types() {
     let maps = parse_servant_skill_maps(&jp, None);
 
     assert_eq!(
-        maps.target_type_map.get(&11),
+        maps.targeting_map
+            .get(&11)
+            .map(|info| &info.func_target_types),
         Some(&vec!["ptOne".to_string(), "ptOneOther".to_string()])
     );
-    assert!(maps.target_type_map.get(&22).is_some_and(Vec::is_empty));
-    assert!(maps.target_type_map.get(&33).is_some_and(Vec::is_empty));
+    assert!(maps.targeting_map.get(&11).unwrap().needs_target);
+    for id in [22, 33] {
+        let info = maps.targeting_map.get(&id).unwrap();
+        assert!(info.func_target_types.is_empty());
+        assert!(!info.needs_target);
+    }
 }
 
 #[test]
@@ -262,6 +268,115 @@ fn variant_skill_form_ids_returns_every_form_in_each_slot() {
     let ids = variant_skill_form_ids(&variants, 42, "42:1").unwrap();
 
     assert_eq!(ids, [vec![1001, 1002], vec![2001], vec![]]);
+}
+
+#[test]
+fn azrael_second_skill_requires_a_target_despite_empty_functions() {
+    let maps = parse_servant_skill_maps(
+        &json!({
+            "skills": [{
+                "id": 2660550,
+                "num": 2,
+                "name": "三十羽の鳥 A",
+                "targetingMode": "singleAllyIncludingSelf",
+                "functions": [],
+                "script": {
+                    "condBranchSkillInfo": [
+                        { "condType": "isSelfTarget", "condValue": [0], "skillId": 970921 },
+                        { "condType": "isSelfTarget", "condValue": [1], "skillId": 970922 }
+                    ]
+                }
+            }]
+        }),
+        None,
+    );
+    let temp = tempfile::tempdir().unwrap();
+
+    let entry = resolve_skill_targeting_entry(474, 2, &[2660550], &maps, temp.path()).unwrap();
+
+    assert_eq!(entry.targeting_mode, SkillTargetingMode::NeedsTarget);
+    assert!(entry.func_target_types.is_empty());
+    let wire = serde_json::to_value(entry).unwrap();
+    assert_eq!(wire["targetingMode"], "needsTarget");
+}
+
+#[test]
+fn resolve_skill_targeting_entry_honors_compact_targeting_modes() {
+    let temp = tempfile::tempdir().unwrap();
+    for (mode, expected) in [
+        ("singleAlly", SkillTargetingMode::NeedsTarget),
+        ("singleAllyExceptSelf", SkillTargetingMode::NeedsTarget),
+        ("singleAllyIncludingSelf", SkillTargetingMode::NeedsTarget),
+        // Resource "mixed" combines ptOne and ptOneOther; both need a target.
+        ("mixed", SkillTargetingMode::NeedsTarget),
+        ("Other", SkillTargetingMode::NoTarget),
+    ] {
+        let maps = parse_servant_skill_maps(
+            &json!({ "skills": [{ "id": 11, "targetingMode": mode, "functions": [] }] }),
+            None,
+        );
+        let entry = resolve_skill_targeting_entry(42, 2, &[11], &maps, temp.path()).unwrap();
+        assert_eq!(entry.targeting_mode, expected, "{mode}");
+    }
+}
+
+#[test]
+fn resolve_skill_targeting_entry_recognizes_legacy_self_target_branches() {
+    let temp = tempfile::tempdir().unwrap();
+    for (branches, expected) in [
+        (
+            json!([
+                { "condType": "isSelfTarget", "condValue": [0] },
+                { "condType": "isSelfTarget", "condValue": [1] }
+            ]),
+            SkillTargetingMode::NeedsTarget,
+        ),
+        (
+            json!([{ "condType": "isSelfTarget", "condValue": [1] }]),
+            SkillTargetingMode::NoTarget,
+        ),
+        (
+            json!([{ "condType": "otherCondition", "condValue": [0, 1] }]),
+            SkillTargetingMode::NoTarget,
+        ),
+    ] {
+        let maps = parse_servant_skill_maps(
+            &json!({ "skills": [{
+                "id": 11,
+                "functions": [],
+                "script": { "condBranchSkillInfo": branches }
+            }] }),
+            None,
+        );
+        let entry = resolve_skill_targeting_entry(42, 2, &[11], &maps, temp.path()).unwrap();
+        assert_eq!(entry.targeting_mode, expected);
+    }
+}
+
+#[test]
+fn resolve_skill_targeting_entry_reads_targeting_mode_from_runtime_asset() {
+    let maps = parse_servant_skill_maps(
+        &json!({ "skills": [{ "id": 11, "targetingMode": "Other", "functions": [] }] }),
+        None,
+    );
+    let temp = tempfile::tempdir().unwrap();
+    let runtime_dir = temp.path().join("22");
+    fs::create_dir_all(&runtime_dir).unwrap();
+    fs::write(
+        runtime_dir.join("skill.json"),
+        serde_json::to_vec(&json!({
+            "id": 22,
+            "targetingMode": "singleAllyIncludingSelf",
+            "functions": []
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let targeted = resolve_skill_targeting_entry(42, 2, &[22], &maps, temp.path()).unwrap();
+    assert_eq!(targeted.targeting_mode, SkillTargetingMode::NeedsTarget);
+    let mixed = resolve_skill_targeting_entry(42, 2, &[11, 22], &maps, temp.path()).unwrap();
+    assert_eq!(mixed.targeting_mode, SkillTargetingMode::Mixed);
 }
 
 #[test]

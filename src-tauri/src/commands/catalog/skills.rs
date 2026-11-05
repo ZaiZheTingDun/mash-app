@@ -61,11 +61,17 @@ pub(crate) enum SkillTargetingMode {
 struct ServantSkillMaps {
     icon_map: HashMap<u32, String>,
     name_map: HashMap<u32, String>,
-    target_type_map: HashMap<u32, Vec<String>>,
+    targeting_map: HashMap<u32, SkillTargetingInfo>,
     selection_map: HashMap<u32, SkillSelectionEntry>,
 }
 
-fn skill_target_types(skill: &serde_json::Value) -> Vec<String> {
+#[derive(Clone)]
+struct SkillTargetingInfo {
+    func_target_types: Vec<String>,
+    needs_target: bool,
+}
+
+fn skill_targeting_info(skill: &serde_json::Value) -> SkillTargetingInfo {
     let mut values = skill
         .get("functions")
         .and_then(|v| v.as_array())
@@ -80,7 +86,39 @@ fn skill_target_types(skill: &serde_json::Value) -> Vec<String> {
         .unwrap_or_default();
     values.sort();
     values.dedup();
-    values
+
+    let needs_target = match skill.get("targetingMode").and_then(|value| value.as_str()) {
+        Some("singleAlly" | "singleAllyExceptSelf" | "singleAllyIncludingSelf" | "mixed") => true,
+        Some("Other") => false,
+        _ => {
+            // Older assets may omit targetingMode. Branch skills can require
+            // selecting an ally even when their top-level functions are empty.
+            let mut self_target = false;
+            let mut other_target = false;
+            if let Some(branches) = skill
+                .pointer("/script/condBranchSkillInfo")
+                .and_then(|value| value.as_array())
+            {
+                for branch in branches {
+                    if branch.get("condType").and_then(|value| value.as_str())
+                        != Some("isSelfTarget")
+                    {
+                        continue;
+                    }
+                    if let Some(conditions) = branch.get("condValue").and_then(|v| v.as_array()) {
+                        self_target |= conditions.iter().any(|value| value.as_u64() == Some(1));
+                        other_target |= conditions.iter().any(|value| value.as_u64() == Some(0));
+                    }
+                }
+            }
+            !values.is_empty() || (self_target && other_target)
+        }
+    };
+
+    SkillTargetingInfo {
+        func_target_types: values,
+        needs_target,
+    }
 }
 
 fn parse_servant_skill_maps(
@@ -116,13 +154,13 @@ fn parse_servant_skill_maps(
         })
         .unwrap_or_default();
 
-    let target_type_map: HashMap<u32, Vec<String>> = skills
+    let targeting_map: HashMap<u32, SkillTargetingInfo> = skills
         .map(|skills| {
             skills
                 .iter()
                 .filter_map(|skill| {
                     let id = skill.get("id")?.as_u64()? as u32;
-                    Some((id, skill_target_types(skill)))
+                    Some((id, skill_targeting_info(skill)))
                 })
                 .collect()
         })
@@ -158,7 +196,7 @@ fn parse_servant_skill_maps(
     ServantSkillMaps {
         icon_map,
         name_map,
-        target_type_map,
+        targeting_map,
         selection_map,
     }
 }
@@ -229,11 +267,11 @@ fn variant_skill_form_ids(
     })
 }
 
-fn skill_target_types_from_asset(skills_dir: &Path, skill_id: u32) -> Option<Vec<String>> {
+fn skill_targeting_from_asset(skills_dir: &Path, skill_id: u32) -> Option<SkillTargetingInfo> {
     let raw = fs::read_to_string(skills_dir.join(skill_id.to_string()).join("skill.json")).ok()?;
     let skill: serde_json::Value = serde_json::from_str(&raw).ok()?;
     (skill.get("id").and_then(|id| id.as_u64()) == Some(skill_id as u64))
-        .then(|| skill_target_types(&skill))
+        .then(|| skill_targeting_info(&skill))
 }
 
 fn resolve_skill_targeting_entry(
@@ -250,21 +288,21 @@ fn resolve_skill_targeting_entry(
     let mut has_unresolved_form = false;
 
     for skill_id in skill_ids {
-        let target_types = maps
-            .target_type_map
+        let targeting = maps
+            .targeting_map
             .get(skill_id)
             .cloned()
-            .or_else(|| skill_target_types_from_asset(skills_dir, *skill_id));
-        let Some(target_types) = target_types else {
+            .or_else(|| skill_targeting_from_asset(skills_dir, *skill_id));
+        let Some(targeting) = targeting else {
             has_unresolved_form = true;
             continue;
         };
-        if target_types.is_empty() {
-            has_untargeted_form = true;
-        } else {
+        if targeting.needs_target {
             has_targeted_form = true;
-            func_target_types.extend(target_types);
+        } else {
+            has_untargeted_form = true;
         }
+        func_target_types.extend(targeting.func_target_types);
     }
     func_target_types.sort();
     func_target_types.dedup();
