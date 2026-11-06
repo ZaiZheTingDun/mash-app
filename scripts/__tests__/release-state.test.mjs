@@ -189,6 +189,19 @@ test("changelog finalization handles CRLF and preserves the release notes", t =>
   f.run("changelog", "1.1.0", "2026-10-12");
   assert.match(f.read("CHANGELOG.md"), /## v1.1.0 - 2026-10-12\n\r\n中文内容/);
 });
+
+test("release planning matches an exact version heading with LF or CRLF", t => {
+  const f = fixture(t);
+  for (const newline of ["\n", "\r\n"]) {
+    f.write("CHANGELOG.md", `# Changes${newline}${newline}## v1.1.0 - 2026-11-06${newline}${newline}Notes${newline}`);
+    assert.equal(JSON.parse(f.run("plan", "1.1.0", "-", "windows-x86_64")).changelog, "ready");
+    for (const heading of ["## v1x1x0 - 2026-11-06", "## v1.1.01 - 2026-11-06", "### v1.1.0 - 2026-11-06"]) {
+      f.write("CHANGELOG.md", `${heading}${newline}`);
+      assert.throws(() => f.run("plan", "1.1.0", "-", "windows-x86_64"), /Missing target release/);
+    }
+  }
+  assert.throws(() => f.run("plan", "1.1.0.*", "-", "windows-x86_64"), /Version must/);
+});
 test("PowerShell entry point prints its plan without creating files or tags", { skip: !windows }, t => {
   const f = fixture(t);
   const script = `& ${ps(path.join(f.root, "scripts/windows/release.ps1"))} 1.1.0 -Installer`;

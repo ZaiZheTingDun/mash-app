@@ -31,13 +31,12 @@ CI 的 runtime 下载、产物回读、通道和直接下载入口校验统一�
 
 在默认分支手动运行 [CV runtime release](../.github/workflows/cv-runtime-release.yml)，填写：
 
-- `source_ref`：已合入默认分支、经过审查的源码分支、tag 或 SHA，默认 `main`。
 - `runtime_version`：新的 `x.y.z` 版本。各平台独立递增；旧的日期格式版本允许迁移到语义版本。
 - `platforms`：`all`、`windows-x86_64` 或 `darwin-aarch64`。macOS Intel 暂不参与。
 
 runtime 发布入口为 `scripts/shared/runtime-release.ts`.
 
-流水线固定源码 SHA、工具 SHA 和平台选择，依次运行完整 CV 源码测试、原生构建、从实际 ZIP 解压的冻结 runtime 协议/OCR 检查，以及 Rust 后端 ZIP 安装检查。冻结验证加载选定源码生成的内部 code 包；code ZIP 不发布。任一所选平台失败，发布 job 不执行。
+流水线只发布启动时默认分支的固定提交，源码与发布工具均使用该 SHA，不接受外部 ref，也不恢复或保存依赖／Rust 缓存。依次运行完整 CV 源码测试、原生构建、从实际 ZIP 解压的冻结 runtime 协议/OCR 检查，以及 Rust 后端 ZIP 安装检查。冻结验证加载该提交生成的内部 code 包；code ZIP 不发布。任一所选平台失败，发布 job 不执行。
 
 ZIP 发布到 `<R2_PREFIX>/runtime/mash-cv/runtime/<platform>/mash-cv-runtime-<platform>-v<version>.zip`。条件写入拒绝覆盖不同内容，上传后经 R2 API 下载并验证 SHA-256。全部平台验证完成后，原子推送 `cv-runtime/<platform>/<version>` tags，指向固定的构建源码提交。不会推进 App 更新通道。
 

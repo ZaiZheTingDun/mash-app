@@ -14,6 +14,20 @@ import {
 
 const platforms = releasePlatforms as RuntimePlatform[];
 
+test("online runtime publication executes only the dispatch commit without shared caches", () => {
+  const workflow = fs.readFileSync(new URL("../../.github/workflows/cv-runtime-release.yml", import.meta.url), "utf8");
+  assert.match(workflow, /test "\$WORKFLOW_REF" = "refs\/heads\/\$DEFAULT_BRANCH"/);
+  assert.match(workflow, /SOURCE_REF: \$\{\{ github\.sha \}\}/);
+  assert.doesNotMatch(workflow, /source_ref|needs\.plan\.outputs\.(source_sha|tooling_sha)/);
+  assert.doesNotMatch(workflow, /uses: (?:actions\/cache|Swatinem\/rust-cache)|cache: pip/);
+  const checkouts = workflow.split("- uses: actions/checkout@v4").slice(1);
+  assert.ok(checkouts.length > 0);
+  for (const checkout of checkouts) {
+    assert.match(checkout.split(/\n {6}- /)[0], /ref: \$\{\{ github\.(?:sha|event\.repository\.default_branch) \}\}/);
+    assert.match(checkout.split(/\n {6}- /)[0], /persist-credentials: false/);
+  }
+});
+
 function fixture(t: TestContext) {
   const previous = process.cwd();
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mash runtime release "));
