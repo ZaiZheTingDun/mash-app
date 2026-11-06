@@ -31,8 +31,9 @@ def test_frozen_runtime_reads_unicode_templates_and_starts_ocr_worker(tmp_path, 
     path = directory / "probe.png"
     path.write_bytes(encoded.tobytes())
     # Exercise recognition as well as a detector returning no boxes. Keep the
-    # source image in a Unicode path to cover frozen Windows file loading.
-    jp_path = directory / "日本語.png"
+    # source image in a Unicode path outside the template directory to cover
+    # frozen Windows file loading without adding another template.
+    jp_path = tmp_path / "日本語.png"
     shutil.copyfile(CODE / "tests/test_data/screenshots/support_score_grand_jp_14_16_62_16.png", jp_path)
     commands = [
         {"id": 1, "cmd": "ping"},
