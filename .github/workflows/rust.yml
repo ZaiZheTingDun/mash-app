@@ -55,6 +55,7 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - '.npmrc'
+              - 'tsconfig.scripts.json'
               - '.github/workflows/rust.yml'
               - '!**/*.md'
               - '!**/{LICENSE,NOTICE}{,.*}'
@@ -116,9 +117,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install locked script type-check dependencies
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.0 --activate
+          pnpm install --frozen-lockfile
+      - name: Release script types and lint
+        shell: bash
+        run: pnpm check:scripts
       - name: Release script tests
         shell: bash
-        run: node --test scripts/__tests__/*.test.mjs
+        run: pnpm test:scripts
 
   installer:
     name: Windows installer (manual)

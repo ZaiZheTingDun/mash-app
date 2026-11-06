@@ -1,9 +1,9 @@
 {
   "platforms": {
     "darwin-aarch64": {
-      "runtimeVersion": "2026.05.08-runtime1",
-      "runtimeUrl": "https://mash.xiaotongx.com/mash/runtime/mash-cv/runtime/darwin-aarch64/mash-cv-runtime-darwin-aarch64-v2026.05.08-runtime1.zip",
-      "runtimeSha256": "3a80a0d595cfa54e7d907ccfce335dc99ba29428e2970057476b0b973ff3bf88"
+      "runtimeVersion": "2026.11.05-ocrv6-local1",
+      "runtimeUrl": "file:///Users/xiaotong/Workspace/xiaotong/mash/mash-app/sidecar/cv-runtime/dist/mash-cv-runtime-darwin-aarch64-v2026.11.05-ocrv6-local1.zip",
+      "runtimeSha256": "ef8dbce326330934429aff85c39be0f460f84f064556ecc48f62396e5de5e69a"
     },
     "windows-x86_64": {
       "runtimeVersion": "0.1.0",

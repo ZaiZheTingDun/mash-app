@@ -27,6 +27,24 @@ CI 的 runtime 下载、产物回读、通道和直接下载入口校验统一�
 
 ## 发布入口
 
+### 独立 CV runtime 流水线
+
+在默认分支手动运行 [CV runtime release](../.github/workflows/cv-runtime-release.yml)，填写：
+
+- `source_ref`：已合入默认分支、经过审查的源码分支、tag 或 SHA，默认 `main`。
+- `runtime_version`：新的 `x.y.z` 版本。各平台独立递增；旧的日期格式版本允许迁移到语义版本。
+- `platforms`：`all`、`windows-x86_64` 或 `darwin-aarch64`。macOS Intel 暂不参与。
+
+runtime 发布入口为 `scripts/shared/runtime-release.ts`.
+
+流水线固定源码 SHA、工具 SHA 和平台选择，依次运行完整 CV 源码测试、原生构建、从实际 ZIP 解压的冻结 runtime 协议/OCR 检查，以及 Rust 后端 ZIP 安装检查。冻结验证加载选定源码生成的内部 code 包；code ZIP 不发布。任一所选平台失败，发布 job 不执行。
+
+ZIP 发布到 `<R2_PREFIX>/runtime/mash-cv/runtime/<platform>/mash-cv-runtime-<platform>-v<version>.zip`。条件写入拒绝覆盖不同内容，上传后经 R2 API 下载并验证 SHA-256。全部平台验证完成后，原子推送 `cv-runtime/<platform>/<version>` tags，指向固定的构建源码提交。不会推进 App 更新通道。
+
+最后自动创建 `codex/cv-runtime-release-<version>-<platforms>` 同步 PR，仅更新所选平台的 `versions.toml` 版本和 `runtime-manifest.json` 版本、CDN URL、SHA-256。合并此 PR 后再发布引用新 runtime 的 App。若默认分支所选平台的 runtime 元数据已被其他发布修改，同步会停止并要求手动处理，不覆盖新的清单。构建计划、通过验证的各平台 ZIP、验证报告与发布回执保留 30 天。
+
+### 本地入口
+
 先提交工作区改动，在 `CHANGELOG.md` 的“未发布”或目标版本标题下准备更新说明。以下为命令用法，版本参数均替换为目标递增版本。
 
 App release 不再根据 runtime 源码文件变更或历史 tag 判断是否必须重发 runtime。它下载清单固定的原生 runtime，验证 SHA-256，并在 Windows 和 macOS 上运行内置识别代码的协议与 OCR 冒烟检查；任一检查失败，发布终止。这些检查覆盖启动和基础 OCR 链路，不代表所有识别功能都经过验证。

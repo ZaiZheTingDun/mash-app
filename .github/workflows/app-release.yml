@@ -50,7 +50,7 @@ jobs:
         with:
           node-version: 22
       - name: Check release helpers
-        run: node --test scripts/__tests__/*.test.mjs
+        run: node --experimental-strip-types --test scripts/__tests__/*.test.mjs scripts/__tests__/*.test.ts
       - name: Resolve source and validate the release plan
         id: plan
         env:

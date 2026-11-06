@@ -55,6 +55,13 @@ the startup path and basic OCR, rather than every recognition feature.
 Local release wrappers still use Git path checks to flag runtime source edits.
 See [distribution](../../docs/distribution.md).
 
+For independent CI publication, run the default branch's **CV runtime release**
+workflow with a reviewed `source_ref`, a new `runtime_version`, and `platforms`
+(`all`, `windows-x86_64`, or `darwin-aarch64`). It gates immutable R2 uploads and
+source tags on source tests, frozen ZIP/OCR checks and Rust installation, then
+opens a version/manifest synchronization PR. See the
+[runtime pipeline guide](../../docs/distribution.md#独立-cv-runtime-流水线).
+
 ## PP-OCRv6 small test candidate
 
 CN and JP share the bundled PP-OCRv6 small detector/recognizer and the legacy
