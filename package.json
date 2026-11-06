@@ -12,7 +12,8 @@
     "templates:diff": "node scripts/shared/diff-server-templates.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:scripts": "node --test scripts/__tests__/*.test.mjs",
+    "check:scripts": "tsc -p tsconfig.scripts.json && eslint scripts/shared/runtime-release.ts scripts/shared/runtime-release scripts/__tests__/runtime-release.test.ts",
+    "test:scripts": "node --experimental-strip-types --test scripts/__tests__/*.test.mjs scripts/__tests__/*.test.ts",
     "build:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/build-windows.ps1",
     "release:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/release.ps1"
   },
@@ -39,6 +40,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^22.20.5",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

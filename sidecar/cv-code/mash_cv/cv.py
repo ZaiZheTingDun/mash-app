@@ -1448,6 +1448,42 @@ def _best_ce_level_read(ocr: dict) -> tuple[Optional[tuple[int, int]], float, st
     return level_read, level_confidence, level_text
 
 
+def _recognize_ce_cell_levels(img: np.ndarray, cells: list[dict]) -> dict:
+    """Read whole fixed labels without detector splits losing narrow digits.
+
+    PP-OCRv6 can split ``11/55`` into overlapping ``级11`` and ``1/55``
+    boxes, or miss a label entirely. The grid anchors already locate each
+    label, so recognize these crops in one batch before detector fallbacks.
+    Require a complete slash-separated read and a known cap at >=0.80.
+    """
+    if not cells or not img.size:
+        return {}
+    recognizer = getattr(_get_ocr(), "text_recognizer", None)
+    if not callable(recognizer):
+        return {}
+    h, w = img.shape[:2]
+    crops = []
+    for cell in cells:
+        x, y, rw, rh = _slot_to_pixels(_ce_cell_level_region(cell["region"]), w, h)
+        crops.append(img[y : y + rh, x : x + rw])
+    try:
+        reads, _elapsed = recognizer(crops)
+    except Exception:  # noqa: BLE001 - retain detector fallbacks
+        return {}
+    if len(reads) != len(cells):
+        return {}
+    levels = {}
+    for index, (text, confidence) in enumerate(reads):
+        text = str(text).strip()
+        confidence = float(confidence or 0.0)
+        if not re.fullmatch(r"\D*\d{1,3}[/／]\d{1,3}", text) or confidence < 0.80:
+            continue
+        parsed = _parse_ce_level_text(text)
+        if parsed is not None:
+            levels[index] = (parsed, confidence, text)
+    return levels
+
+
 def _ce_cell_lock_region(cell_region: dict) -> dict:
     return _clamp_norm_rect(
         {
@@ -1633,14 +1669,18 @@ def _read_craft_essence_grid(img: np.ndarray, cmd: dict) -> dict:
     ]
     lock_template = _get_template(CE_GRID_LOCK_TEMPLATE)
     grid_ocr = _ocr_region(img, list_region)
+    direct_levels = _recognize_ce_cell_levels(img, cells)
     output_cells: list[dict] = []
     invalid_cells = 0
 
-    for cell in cells:
+    for index, cell in enumerate(cells):
         region = cell["region"]
         level_region = _ce_cell_level_region(region)
-        ocr = _ocr_region(img, level_region)
-        level_read, level_confidence, level_text = _best_ce_level_read(ocr)
+        if index in direct_levels:
+            level_read, level_confidence, level_text = direct_levels[index]
+        else:
+            ocr = _ocr_region(img, level_region)
+            level_read, level_confidence, level_text = _best_ce_level_read(ocr)
         if level_read is None:
             fallback_region = _ce_cell_level_fallback_region(region)
             for scale in (1.5, 2.5):
@@ -2762,7 +2802,15 @@ def _best_servant_match(candidate_text: str, name_field: str) -> dict:
             name = servant.get("nameCNServer")
         if not name:
             continue
-        score = _fuzzy_score(candidate, _bond_normalize_text(str(name)))
+        normalized_name = _bond_normalize_text(str(name))
+        score = _fuzzy_score(candidate, normalized_name)
+        # A substring can also score 1.0. Prefer a complete exact name over
+        # an earlier catalog entry for a shorter servant variant.
+        if candidate == normalized_name:
+            return {
+                "name": str(name), "id": servant.get("id"),
+                "collectionNo": servant.get("collectionNo"), "score": 1.0,
+            }
         if score > float(best["score"]):
             best = {
                 "name": str(name),
@@ -4706,7 +4754,7 @@ def _ocr_region(img: np.ndarray, region: dict, *, scale: float = 1.0) -> dict:
         return {
             "fragments": [],
             "fullText": "",
-            "error": "rapidocr_onnxruntime not available",
+            "error": "RapidOCR not available",
         }
 
     scale = max(1.0, float(scale))
@@ -5025,7 +5073,7 @@ def _find_supports(
         return {
             "supports": [],
             "diagnostics": diag,
-            "error": "rapidocr_onnxruntime not available",
+            "error": "RapidOCR not available",
         }
 
     used_anchor_row_ocr = False

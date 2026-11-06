@@ -102,7 +102,8 @@ export function releasePlan(app, runtime, platform, publish = false) {
     throw new Error("CV runtime version must increase");
   }
   const changelog = read("CHANGELOG.md");
-  const ready = new RegExp(`^## v${app.replaceAll(".", "\\.")} - \\d{4}-\\d{2}-\\d{2}\\r?$`, "m").test(changelog);
+  const ready = [...changelog.matchAll(/^## v(\d+\.\d+\.\d+) - \d{4}-\d{2}-\d{2}\r?$/gm)]
+    .some(match => match[1] === app);
   const unreleased = /^## 未发布\r?$/m.test(changelog);
   if (!ready && !unreleased) throw new Error("Missing target release or unreleased changelog heading");
   const runtimeTag = `cv-runtime/${platform}/${current.runtime}`;

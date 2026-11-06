@@ -43,14 +43,19 @@ def build_runtime(runtime_version: str, target: str) -> tuple[Path, str]:
         [sys.executable, "-m", "PyInstaller", "--onedir", str(ROOT / "runtime_launcher.py"),
          "--name", "mash-cv", "--distpath", str(dist), "--workpath", str(work),
          "--specpath", str(work), "--hidden-import", "cv2", "--hidden-import", "numpy",
-         "--hidden-import", "rapidocr_onnxruntime", "--collect-submodules", "av",
-         "--collect-binaries", "av", "--collect-data", "rapidocr_onnxruntime",
-         "--collect-submodules", "rapidocr_onnxruntime",
+         "--hidden-import", "rapidocr", "--collect-submodules", "av",
+         "--collect-binaries", "av", "--collect-data", "rapidocr",
+         "--collect-submodules", "rapidocr",
          "--add-data", f"{ROOT / 'models'}:mash_cv/models"],
         check=True, cwd=ROOT,
     )
     directory = dist / "mash-cv-runtime"
     (dist / "mash-cv").rename(directory)
+    # Config/fonts are needed, but the explicit runtime models above are
+    # the only weights used. Avoid shipping a second copy from the wheel.
+    bundled_defaults = directory / "_internal" / "rapidocr" / "models"
+    if bundled_defaults.is_dir():
+        shutil.rmtree(bundled_defaults)
     output = dist / f"mash-cv-runtime-{target}-v{runtime_version}.zip"
     return output, archive_directory(directory, output)
 

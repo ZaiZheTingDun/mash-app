@@ -54,3 +54,65 @@ or launcher behavior actually need updating. Protocol/OCR smoke checks cover
 the startup path and basic OCR, rather than every recognition feature.
 Local release wrappers still use Git path checks to flag runtime source edits.
 See [distribution](../../docs/distribution.md).
+
+For independent CI publication, run the default branch's **CV runtime release**
+workflow with a new `runtime_version` and `platforms`
+(`all`, `windows-x86_64`, or `darwin-aarch64`). Source and tooling are pinned to
+the default-branch commit at dispatch; arbitrary source refs and build caches
+are not used. It gates immutable R2 uploads and
+source tags on source tests, frozen ZIP/OCR checks and Rust installation, then
+opens a version/manifest synchronization PR. See the
+[runtime pipeline guide](../../docs/distribution.md#独立-cv-runtime-流水线).
+
+## PP-OCRv6 small test candidate
+
+CN and JP share the bundled PP-OCRv6 small detector/recognizer and the legacy
+text-direction classifier. RapidOCR is pinned to 3.10.0, ONNX Runtime to 1.24.4,
+and each ORT session uses one inference thread. Model provenance, SHA-256 and
+upstream license notices are under `models/`. No model download is needed at
+runtime. Missing weights or an old native runtime produce an explicit error.
+The worker's binary IPC format is unchanged.
+
+This change needs a **new native runtime**, not just a code ZIP. Published
+runtime URLs/hashes in the app manifest are deliberately left untouched until
+platform artifacts are published. Do not overwrite existing published ZIPs.
+The PR's Windows CV job builds both ZIPs as `mash-cv-windows-x64` artifacts.
+
+For a local Windows test, check out this branch, install dependencies and run:
+
+```powershell
+$env:MASH_CV_RUNTIME_VERSION = '0.2.0'
+./scripts/windows/build-cv.ps1
+```
+
+Before building/running the app from this branch, point its **local test**
+manifest at the newly built ZIP's version and real SHA-256. For example:
+
+```powershell
+$zip = 'sidecar/cv-runtime/dist/mash-cv-runtime-windows-x86_64-v0.2.0.zip'
+$path = 'src-tauri/resources/runtime-manifest.json'
+$manifest = Get-Content -Raw $path | ConvertFrom-Json
+$manifest.platforms.'windows-x86_64'.runtimeVersion = '0.2.0'
+$manifest.platforms.'windows-x86_64'.runtimeSha256 = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText((Join-Path (Get-Location) $path), ($manifest | ConvertTo-Json -Depth 10), (New-Object Text.UTF8Encoding $false))
+```
+
+Run the app from this checkout and import this runtime ZIP through resource
+settings. Use **local import**, not the production download button: the URL
+still refers to the published runtime. The app uses this checkout's new CV
+source in development and bundles it in a local release build. If using CI's
+ZIPs, compute the hash from the inner runtime ZIP, not the Actions artifact
+wrapper, and use its filename's runtime version. Do not commit these temporary
+manifest changes; publish and pin actual platform artifacts before an App
+release. Check the OCR log for `unified PP-OCRv6 small` and `recognizer ready`.
+
+### CE label recognition
+
+The v6 detector can split a tiny `11/55` label into overlapping text boxes or
+miss it during scrolling. CE grid labels are now recognized as whole anchored
+crops in a batch, requiring a complete level/cap pair, a known cap and at least
+0.80 confidence before falling back to detection. Existing lock, visibility
+and same-target material guards still apply. The same-target fixture now
+expects the correctly recognized `突破极限` instead of the old model's `突破板限`.
+Offline fixtures do not replace device evaluation; the PR remains a runtime
+candidate until platform packages and real-device behavior are validated.

@@ -231,3 +231,94 @@ def test_development_models_live_in_sibling_runtime_directory(tmp_path, monkeypa
     installed_models.mkdir()
     monkeypatch.setenv("MASH_CV_MODELS_DIR", str(installed_models))
     assert ocr_worker._models_dir() == str(installed_models)
+
+
+def test_v6_adapter_uses_shared_local_models_and_preserves_wire_results(monkeypatch):
+    import rapidocr
+    from mash_cv.ocr_worker import RapidOcrEngine
+
+    calls = []
+    result = SimpleNamespace(
+        boxes=np.array([[[0, 0], [2, 0], [2, 1], [0, 1]]]),
+        txts=("文字",), scores=[np.float32(0.9)],
+    )
+
+    class Engine:
+        def __init__(self, params):
+            calls.append(params)
+
+        def _load_rec_model(self):
+            def recognize(request):
+                assert len(request.img) == 2
+                return SimpleNamespace(txts=("中文", "日本語"), scores=[0.8, 0.9])
+            return recognize
+
+        def __call__(self, image):
+            return result
+
+    monkeypatch.setattr(rapidocr, "RapidOCR", Engine)
+    cn, jp = RapidOcrEngine("CN"), RapidOcrEngine("JP")
+    assert calls[0] == calls[1]
+    assert Path(calls[0]["Rec.model_path"]).name == "PP-OCRv6_rec_small.onnx"
+    assert calls[0]["EngineConfig.onnxruntime.intra_op_num_threads"] == 1
+    images = [np.zeros((8, 16, 3), dtype=np.uint8)] * 2
+    assert cn.recognize_batch(images) == [["中文", 0.8], ["日本語", 0.9]]
+    assert jp.recognize_batch([]) == []
+    assert cn.detect(images[0])[0][1] == "文字"
+    # numpy scalar scores/boxes must be JSON serializable through worker IPC.
+    import json
+    json.dumps(cn.detect(images[0]))
+    result.boxes = None
+    result.txts = None
+    assert cn.detect(images[0]) == []
+
+
+def test_v6_missing_models_fail_without_downloading_or_silent_fallback(tmp_path, monkeypatch):
+    import pytest
+    import rapidocr
+    from mash_cv import ocr_worker
+
+    monkeypatch.setattr(ocr_worker, "_models_dir", lambda: str(tmp_path))
+    def unexpected(*args, **kwargs):
+        raise AssertionError("must validate local models before constructing RapidOCR")
+    monkeypatch.setattr(rapidocr, "RapidOCR", unexpected)
+    with pytest.raises(FileNotFoundError, match="matching CV runtime"):
+        ocr_worker.RapidOcrEngine("CN")
+
+
+def test_v6_real_worker_recognizes_cn_jp_batches_and_detects_without_network(monkeypatch):
+    import cv2
+    import requests
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("bundled OCR must work offline")
+    monkeypatch.setattr(requests.sessions.Session, "request", unexpected)
+    # Existing real screenshots, manually checked names. Use both languages
+    # in the same batch to pin multilingual weights and output ordering.
+    fixtures = Path(__file__).parent / "test_data"
+    cases = [
+        (fixtures / "support/debug_1_skill_5_10_4.png", (542, 436, 963, 482), "伊斯坎达尔"),
+        (fixtures / "screenshots/support_score_grand_jp_14_16_62_16.png",
+         (949, 560, 1628, 625), "ジャンヌ・ダルク〔オルタ〕"),
+    ]
+    images = []
+    for path, (x0, y0, x1, y1), _text in cases:
+        frame = cv2.imread(str(path))
+        images.append(frame[y0:y1, x0:x1])
+    writer = io.BytesIO()
+    serve(_request_bytes([
+        ({"id": 1, "action": "recognize_batch", "server": "CN"}, images),
+        ({"id": 2, "action": "recognize_batch", "server": "JP"}, images),
+        ({"id": 3, "action": "detect", "server": "JP"}, [images[1]]),
+        ({"id": 4, "action": "quit"}, []),
+    ]), writer)
+    writer.seek(0)
+    for request_id in (1, 2):
+        response, _ = read_message(writer)
+        assert response["ok"], response
+        assert response["id"] == request_id
+        assert [r[0] for r in response["result"]] == [case[2] for case in cases]
+    response, _ = read_message(writer)
+    assert response["ok"], response
+    assert response["result"]
+    assert "ジャンヌ" in "".join(row[1] for row in response["result"])

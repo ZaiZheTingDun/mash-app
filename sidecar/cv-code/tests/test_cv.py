@@ -4638,7 +4638,7 @@ def test_cn_extra_class_filter_dialog_probe_rejects_closed_support_page(width):
 
 _RAPIDOCR_AVAILABLE = True
 try:
-    import rapidocr_onnxruntime  # noqa: F401
+    import rapidocr  # noqa: F401
 except Exception:  # noqa: BLE001
     _RAPIDOCR_AVAILABLE = False
 
@@ -4647,7 +4647,7 @@ _SUPPORT_SCREENSHOT = os.path.join(_TEST_SCREENSHOTS_DIR, "support_select.png")
 
 @pytest.mark.skipif(
     not _RAPIDOCR_AVAILABLE,
-    reason="rapidocr_onnxruntime not installed",
+    reason="rapidocr not installed",
 )
 @pytest.mark.skipif(
     not os.path.isfile(_SUPPORT_SCREENSHOT),
@@ -7162,6 +7162,68 @@ def test_read_craft_essence_grid_reads_level_breaks_lock_and_art():
     )
 
 
+def test_recognize_ce_cell_levels_reads_whole_labels_at_2560px():
+    _load_craft_essence_enhancement_assets()
+    img = _ce_enhancement_fixture("enhancement_ce_inventory_strategy.png")
+    cmd = {
+        "anchorTemplateKey": "enhancement_ce/item_ce_bar_bronze",
+        "anchorTemplateReferenceWidth": 1920,
+        "region": {"x": 0.055, "y": 0.251, "w": 0.755, "h": 0.747},
+    }
+    grid = mash_cv._find_item_grid(img, cmd)
+    cells = grid["gridCells"]
+    img = cv2.resize(img, (2560, 1440))
+    levels = mash_cv.cv._recognize_ce_cell_levels(img, cells)
+    assert len(levels) == 21
+    assert [levels[index][0] for index in range(11)] == (
+        [(44, 50)] + [(11, 55)] * 2 + [(9, 55)] * 3 + [(6, 50)] * 5
+    )
+    assert all(levels[index][0] == (1, 15) for index in range(11, 21))
+
+
+def test_recognize_ce_cell_levels_requires_complete_confident_known_levels(monkeypatch):
+    reads = [
+        ("级11/55", 0.99),
+        ("等级1/15", 0.95),
+        ("等级11/55", 0.79),
+        ("等级56/55", 0.99),
+        ("等级1/99", 0.99),
+        ("1155", 0.99),
+        ("级11 1/55", 0.99),
+        ("11/55 1/55", 0.99),
+    ]
+
+    class FakeOCR:
+        def text_recognizer(self, crops):
+            assert len(crops) == len(reads)
+            assert all(crop.size for crop in crops)
+            return reads, 0.01
+
+    monkeypatch.setattr(mash_cv.cv, "_get_ocr", FakeOCR)
+    cells = [{"region": {"x": 0.1, "y": 0.2, "w": 0.1, "h": 0.2}}] * len(reads)
+    assert mash_cv.cv._recognize_ce_cell_levels(
+        np.zeros((1080, 1920, 3), dtype=np.uint8), cells
+    ) == {
+        0: ((11, 55), 0.99, "级11/55"),
+        1: ((1, 15), 0.95, "等级1/15"),
+    }
+
+
+@pytest.mark.parametrize("mode", ("missing", "failure", "short_batch"))
+def test_recognize_ce_cell_levels_preserves_detector_fallback(monkeypatch, mode):
+    class FakeOCR:
+        def text_recognizer(self, _crops):
+            if mode == "failure":
+                raise RuntimeError("worker failed")
+            return [], 0.01
+
+    monkeypatch.setattr(mash_cv.cv, "_get_ocr", lambda: None if mode == "missing" else FakeOCR())
+    cells = [{"region": {"x": 0.1, "y": 0.2, "w": 0.1, "h": 0.2}}]
+    assert mash_cv.cv._recognize_ce_cell_levels(
+        np.zeros((1080, 1920, 3), dtype=np.uint8), cells
+    ) == {}
+
+
 def test_read_craft_essence_material_grid_never_marks_unlocked_food_as_locked():
     _load_craft_essence_enhancement_assets()
     img = _ce_enhancement_fixture("enhancement_ce_select_exp.png")
@@ -7234,7 +7296,7 @@ def test_read_craft_essence_material_grid_marks_only_same_target_food():
         and cell["levelCap"] == 10
         and cell["rarity"] == 1
         and not cell["locked"]
-        and cell["sameAsTargetText"] == "突破板限"
+        and cell["sameAsTargetText"] == "突破极限"
         and cell["sameAsTargetConfidence"]
         >= result["diagnostics"]["sameTargetOcrMinConfidence"]
         and cell["sameAsTargetScore"]
@@ -7309,3 +7371,14 @@ def test_read_craft_essence_grid_drops_clipped_rows_during_scroll(fixture):
         and not cell["locked"]
         for cell in result["cells"]
     )
+
+
+def test_bond_servant_match_prefers_exact_variant_over_perfect_substring(monkeypatch):
+    from mash_cv import cv
+    monkeypatch.setattr(cv, "_load_servant_catalog", lambda: [
+        {"nameCN": "贞德〔Alter〕", "id": 1},
+        {"nameCN": "贞德·Alter·Santa·Lily", "id": 2},
+    ])
+    result = cv._best_servant_match("贞德·Alter·Santa·Lily", "nameCN")
+    assert result["id"] == 2
+    assert result["score"] == 1.0

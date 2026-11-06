@@ -1,0 +1,272 @@
+name: CV runtime release
+run-name: CV runtime ${{ inputs.runtime_version }} (${{ inputs.platforms }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_version:
+        description: New runtime version (x.y.z)
+        type: string
+        required: true
+      platforms:
+        description: Native platforms to publish
+        type: choice
+        required: true
+        default: all
+        options: [all, windows-x86_64, darwin-aarch64]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cv-runtime-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_BASE_URL: ${{ vars.RELEASE_BASE_URL || 'https://mash.xiaotongx.com' }}
+  R2_PREFIX: ${{ vars.R2_PREFIX || 'mash' }}
+  AWS_DEFAULT_REGION: auto
+  AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+  AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      runtime_version: ${{ steps.plan.outputs.runtime_version }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Require default-branch release tooling
+        env:
+          WORKFLOW_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: test "$WORKFLOW_REF" = "refs/heads/$DEFAULT_BRANCH"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check release helpers
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.0 --activate
+          pnpm install --frozen-lockfile
+          pnpm check:scripts
+          pnpm test:scripts
+      - name: Freeze source, version and platform selection
+        id: plan
+        env:
+          SOURCE_REF: ${{ github.sha }}
+          RUNTIME_VERSION: ${{ inputs.runtime_version }}
+          PLATFORMS: ${{ inputs.platforms }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node --experimental-strip-types scripts/shared/runtime-release.ts plan plan/runtime-plan.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cv-runtime-release-plan
+          path: plan/runtime-plan.json
+          if-no-files-found: error
+          retention-days: 30
+
+  build:
+    name: Build and verify runtime (${{ matrix.platform }})
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      POETRY_VIRTUALENVS_IN_PROJECT: 'true'
+      MASH_CV_RUNTIME_VERSION: ${{ needs.plan.outputs.runtime_version }}
+      TARGET_PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: cv-runtime-release-plan
+          path: plan
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install locked native build and test dependencies
+        working-directory: source/sidecar/cv-runtime
+        run: |
+          python -m pip install poetry==2.2.1
+          poetry install --no-root
+      - name: CV source tests
+        working-directory: source/sidecar/cv-runtime
+        run: poetry run pytest --ignore=tests/test_windows_runtime.py
+      - name: Build native runtime
+        working-directory: source/sidecar/cv-runtime
+        run: poetry run python build_runtime.py
+      - name: Extract and verify the exact ZIP with packaged code and frozen OCR
+        working-directory: source/sidecar/cv-runtime
+        run: poetry run python ../../../tooling/sidecar/cv-runtime/verify_runtime_release.py ../../../plan/runtime-plan.json "../../../candidate/$TARGET_PLATFORM"
+      - name: Windows frozen recognition integration
+        if: runner.os == 'Windows'
+        working-directory: source/sidecar/cv-runtime
+        run: poetry run pytest tests/test_windows_runtime.py
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - name: Pin the tested ZIP for the Rust installation check
+        working-directory: source
+        run: |
+          node ../tooling/scripts/shared/release-state.mjs version runtime "$MASH_CV_RUNTIME_VERSION" "$TARGET_PLATFORM"
+          node --input-type=module -e '
+            import {readFileSync} from "node:fs";
+            import {applyCvArtifact} from "../tooling/scripts/shared/release-state.mjs";
+            const report = JSON.parse(readFileSync(`../candidate/${process.env.TARGET_PLATFORM}/report.json`));
+            applyCvArtifact("runtime", process.env.MASH_CV_RUNTIME_VERSION, process.env.TARGET_PLATFORM,
+              "https://example.invalid/local-runtime.zip", report.runtimeSha256);
+          '
+      - name: Prepare Windows ADB resources
+        if: runner.os == 'Windows'
+        working-directory: source
+        shell: pwsh
+        run: ./scripts/windows/prepare-windows-adb.ps1
+      - name: Install the exact native ZIP through Rust
+        working-directory: source
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib tests::locally_built_platform_bundles_install_and_report_ready -- --ignored --exact
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cv-runtime-release-build-${{ matrix.platform }}
+          path: candidate/*
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: [plan, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: app-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: cv-runtime-release-plan
+          path: candidate
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cv-runtime-release-build-*
+          path: candidate
+          merge-multiple: true
+      - name: Publish immutable ZIPs, verify R2 downloads and create source tags
+        working-directory: source
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'mash' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          node --experimental-strip-types ../tooling/scripts/shared/runtime-release.ts publish ../candidate/runtime-plan.json ../candidate
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('candidate/runtime-release.json') != ''
+        with:
+          name: cv-runtime-release-receipt
+          path: candidate/runtime-release.json
+          if-no-files-found: error
+          retention-days: 30
+
+  sync:
+    needs: [plan, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: cv-runtime-release-receipt
+          path: candidate
+      - name: Open or reuse the runtime metadata synchronization PR
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_VERSION: ${{ needs.plan.outputs.runtime_version }}
+          PLATFORM_SELECTION: ${{ inputs.platforms }}
+          RELEASE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          branch="codex/cv-runtime-release-$RUNTIME_VERSION-$PLATFORM_SELECTION"
+          gh auth setup-git
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          existing=$(gh pr list --head "$branch" --base "$DEFAULT_BRANCH" --state open --json url --jq '.[0].url // empty')
+          if [ -n "$existing" ]; then
+            echo "$existing" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git switch -c "$branch"
+          node --experimental-strip-types ../tooling/scripts/shared/runtime-release.ts sync ../candidate/runtime-release.json
+          if git diff --quiet; then
+            echo 'Runtime metadata is already synchronized.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git add -- versions.toml src-tauri/resources/runtime-manifest.json
+          git commit -m "chore(release): synchronize CV runtime $RUNTIME_VERSION ($PLATFORM_SELECTION)"
+          if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
+            if ! git diff --quiet "origin/$branch" HEAD; then
+              echo 'Existing synchronization branch differs; resolve it manually.' >&2
+              exit 1
+            fi
+          else
+            git push --set-upstream origin "$branch"
+          fi
+          printf 'Synchronize the published native runtime versions, CDN URLs and verified SHA-256 values.\n\nRuntime: %s\nPlatforms: %s\nRelease run: %s\n' \
+            "$RUNTIME_VERSION" "$PLATFORM_SELECTION" "$RELEASE_RUN_URL" > "$RUNNER_TEMP/cv-runtime-pr.md"
+          gh pr create --base "$DEFAULT_BRANCH" --head "$branch" \
+            --title "chore(release): synchronize CV runtime $RUNTIME_VERSION ($PLATFORM_SELECTION)" \
+            --body-file "$RUNNER_TEMP/cv-runtime-pr.md" >> "$GITHUB_STEP_SUMMARY"
