@@ -9,6 +9,14 @@ use std::{
 #[derive(Clone, Default)]
 pub(crate) struct CaptureTargetStore(Arc<Mutex<HashMap<(Server, String), String>>>);
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CaptureClientContext {
+    serial: String,
+    server: Server,
+    selected_package: Option<String>,
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CaptureAppList {
@@ -57,13 +65,46 @@ impl CaptureTargetStore {
         self.resolve_using(server, selected, &mut |args| run_adb(adb_path, args))
     }
 
+    pub(crate) fn resolve_checked(
+        &self,
+        server: Server,
+        adb_path: &Path,
+        selected: Option<&str>,
+        expected: Option<&CaptureClientContext>,
+    ) -> Result<(String, String), String> {
+        self.resolve_checked_using(server, selected, expected, &mut |args| {
+            run_adb(adb_path, args)
+        })
+    }
+
     fn resolve_using(
         &self,
         server: Server,
         selected: Option<&str>,
         run: &mut AdbCommand<'_>,
     ) -> Result<(String, String), String> {
+        self.resolve_checked_using(server, selected, None, run)
+    }
+
+    fn resolve_checked_using(
+        &self,
+        server: Server,
+        selected: Option<&str>,
+        expected: Option<&CaptureClientContext>,
+        run: &mut AdbCommand<'_>,
+    ) -> Result<(String, String), String> {
+        if expected.is_some_and(|context| context.server != server) {
+            return Err("服务器已切换，请刷新客户端列表后重试".into());
+        }
         let list = self.list_using(server, selected, run)?;
+        if let Some(context) = expected {
+            if context.serial != list.serial {
+                return Err("设备已切换，请刷新客户端列表后重试".into());
+            }
+            if context.selected_package != list.selected_package {
+                return Err("客户端已变更，请刷新客户端列表后重试".into());
+            }
+        }
         let package = list.selected_package.ok_or_else(|| {
             if list.apps.is_empty() {
                 format!("未找到{} FGO 客户端，请先安装游戏", label(server))

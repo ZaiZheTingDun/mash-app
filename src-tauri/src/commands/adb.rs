@@ -220,6 +220,7 @@ pub(crate) fn select_adb_device(
         save_adb_device_settings(&app, next)
     })?;
     if changed {
+        let _ = app.emit("packet-capture-context-changed", ());
         stop_debug_stream(&debug_state);
         crate::commands::emulator::clear_other_override(&app);
     }
@@ -412,6 +413,7 @@ fn persist_auto_selected_serial(
         save_adb_device_settings(app, next)
     })?;
     if changed {
+        let _ = app.emit("packet-capture-context-changed", ());
         crate::commands::emulator::clear_other_override(app);
         if let Some(debug_state) = debug_state {
             stop_debug_stream(debug_state);

@@ -25,7 +25,7 @@ pub(crate) use credentials::ApiKeyStore;
 pub(crate) use history::{CaptureHistoryState, CaptureRecord, HistoryStore};
 pub(crate) use lifecycle::stop_task;
 pub(crate) use response::{ResponseState, ResponseStatus, ResponseStore};
-pub(crate) use target::{CaptureAppList, CaptureTargetStore};
+pub(crate) use target::{CaptureAppList, CaptureClientContext, CaptureTargetStore};
 #[cfg(test)]
 mod root_tests;
 #[cfg(test)]

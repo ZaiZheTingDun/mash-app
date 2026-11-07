@@ -62,9 +62,12 @@ export interface PacketCaptureWorkspace {
   history: CaptureHistoryState;
 }
 
-export interface CaptureAppList {
+export interface CaptureClientContext {
   serial: string;
   server: "JP" | "CN";
-  apps: { packageName: string; name: string }[];
   selectedPackage: string | null;
+}
+
+export interface CaptureAppList extends CaptureClientContext {
+  apps: { packageName: string; name: string }[];
 }

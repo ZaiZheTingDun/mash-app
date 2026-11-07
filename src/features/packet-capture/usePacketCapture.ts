@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CaptureAppList, CaptureHistoryState, CaptureRecord, PacketCaptureWorkspace } from "../../types/packetCapture";
+import type { CaptureAppList, CaptureClientContext, CaptureHistoryState, CaptureRecord, PacketCaptureWorkspace } from "../../types/packetCapture";
 import { listen, type UnlistenFn } from "../../tauri";
 import { getPacketCaptureApps, selectPacketCaptureApp, copyPacketCaptureResponse, deletePacketCaptureRecord, exportPacketCaptureResponse, getPacketCaptureWorkspace, selectPacketCaptureRecord, setupPacketCapture, startPacketCapture, stopPacketCapture } from "./packetCaptureApi";
 
@@ -18,6 +18,10 @@ export function usePacketCapture() {
   const clientInFlight = useRef(false);
   const clientCompletion = useRef<Promise<void> | null>(null);
   const clientGeneration = useRef(0);
+  const clientSnapshot = useRef<CaptureAppList | null>(null);
+  const clientContextStale = useRef(false);
+  const clientRefreshPending = useRef(false);
+  const [clientContextVersion, setClientContextVersion] = useState(0);
   const [workspace, setWorkspace] = useState<PacketCaptureWorkspace | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
   const [completedOperationGeneration, setCompletedOperationGeneration] = useState(0);
@@ -60,6 +64,24 @@ export function usePacketCapture() {
       progressUnlisten.current?.();
       progressUnlisten.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const subscription = listen("packet-capture-context-changed", () => {
+      if (cancelled) return;
+      // Invalidate pending discovery too: its reply belongs to the old context.
+      clientGeneration.current++;
+      clientSnapshot.current = null;
+      clientContextStale.current = true;
+      clientRefreshPending.current = true;
+      setClients(null);
+      setClientError(null);
+      setResult("");
+      setClientContextVersion(version => version + 1);
+    });
+    void subscription.catch(error => { if (!cancelled) setClientError(String(error)); });
+    return () => { cancelled = true; void subscription.then(unlisten => unlisten(), () => {}); };
   }, []);
 
   useEffect(() => {
@@ -186,7 +208,7 @@ export function usePacketCapture() {
   // Client discovery and selection only update the picker. Keeping them outside
   // the capture operation avoids disabling navigation, clearing feedback, or
   // restarting workspace reads whenever the dropdown opens.
-  const performClientRequest = async (action: "load" | "select", request: () => Promise<CaptureAppList>) => {
+  const performClientRequest = useCallback(async (action: "load" | "select", request: () => Promise<CaptureAppList>) => {
     if (clientInFlight.current || inFlight.current || hasCaptureTask || awaitingCaptureStatus) return false;
     const generation = ++clientGeneration.current;
     const isCurrent = () => mounted.current && generation === clientGeneration.current;
@@ -199,19 +221,32 @@ export function usePacketCapture() {
     try {
       const next = await request();
       if (!isCurrent()) return false;
+      clientSnapshot.current = next;
+      clientContextStale.current = false;
       setClients(next);
       return true;
     } catch (error) {
       if (isCurrent()) setClientError(String(error));
       return false;
     } finally {
-      if (generation === clientGeneration.current) {
-        clientInFlight.current = false;
-        if (mounted.current) setClientOperation(null);
-      }
+      clientInFlight.current = false;
+      if (mounted.current) setClientOperation(null);
       if (clientCompletion.current === completion) clientCompletion.current = null;
       complete();
     }
+  }, [hasCaptureTask, awaitingCaptureStatus]);
+
+  useEffect(() => {
+    // Wait for the old query/operation to release its device lease before reload.
+    if (!clientRefreshPending.current || operation || clientOperation || hasCaptureTask || awaitingCaptureStatus) return;
+    clientRefreshPending.current = false;
+    void performClientRequest("load", getPacketCaptureApps);
+  }, [clientContextVersion, operation, clientOperation, hasCaptureTask, awaitingCaptureStatus, performClientRequest]);
+
+  const currentClientContext = (): CaptureClientContext | undefined => {
+    if (clientContextStale.current) throw new Error("客户端信息已变更，请刷新客户端列表后重试");
+    const list = clientSnapshot.current;
+    return list ? { serial: list.serial, server: list.server, selectedPackage: list.selectedPackage } : undefined;
   };
   const captureError = workspace?.capture.phase === "error" ? workspace.capture.message : null;
   const selected = detail.id === selectedId ? detail.record : null;
@@ -236,11 +271,11 @@ export function usePacketCapture() {
       return chosen;
     },
     setup: () => performWithProgress("setup", async isCurrent => {
-      const response = await setupPacketCapture();
+      const response = await setupPacketCapture(currentClientContext());
       if (isCurrent()) setResult(response.message);
     }),
     start: () => performWithProgress("start", async isCurrent => {
-      const response = await startPacketCapture();
+      const response = await startPacketCapture(currentClientContext());
       if (isCurrent()) {
         setResult(response.message);
         // Keep navigation locked until the first post-start workspace read.

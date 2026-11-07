@@ -16,7 +16,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 pub(crate) const SUPPORT_CE_THRESHOLD_DEFAULT: f64 = 0.70;
@@ -609,6 +609,7 @@ pub(crate) fn set_server(
     let json = serde_json::json!({ "server": value.to_string() });
     write_json_atomic(&path, &json, "服务器设置")?;
     *state.lock().unwrap() = value;
+    let _ = app.emit("packet-capture-context-changed", ());
 
     // Tear down any idle sidecar so the next debug or automation call
     // respawns it with the new server's templates / OCR model.

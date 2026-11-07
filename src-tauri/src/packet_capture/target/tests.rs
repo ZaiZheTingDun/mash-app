@@ -1,5 +1,72 @@
 use super::*;
 
+#[test]
+fn operations_reject_a_stale_displayed_server_device_or_client() {
+    let store = CaptureTargetStore::default();
+    let packages = [
+        "com.bilibili.fatego",
+        "com.bilibili.fgo.mi",
+        "com.aniplex.fategrandorder",
+    ];
+    store
+        .select_using(
+            Server::Cn,
+            None,
+            "first",
+            packages[1],
+            &mut device("first", &packages),
+        )
+        .unwrap();
+    let context: CaptureClientContext = serde_json::from_value(serde_json::json!({
+        "serial": "first", "server": "CN", "selectedPackage": packages[1]
+    }))
+    .unwrap();
+    assert!(store
+        .resolve_checked_using(Server::Jp, None, Some(&context), &mut |_| panic!(
+            "must reject before device I/O"
+        ))
+        .unwrap_err()
+        .contains("服务器已切换"));
+    assert!(store
+        .resolve_checked_using(
+            Server::Cn,
+            None,
+            Some(&context),
+            &mut device("second", &packages)
+        )
+        .unwrap_err()
+        .contains("设备已切换"));
+    assert_eq!(
+        store
+            .resolve_checked_using(
+                Server::Cn,
+                None,
+                Some(&context),
+                &mut device("first", &packages)
+            )
+            .unwrap(),
+        ("first".into(), packages[1].into())
+    );
+    store
+        .select_using(
+            Server::Cn,
+            None,
+            "first",
+            packages[0],
+            &mut device("first", &packages),
+        )
+        .unwrap();
+    assert!(store
+        .resolve_checked_using(
+            Server::Cn,
+            None,
+            Some(&context),
+            &mut device("first", &packages)
+        )
+        .unwrap_err()
+        .contains("客户端已变更"));
+}
+
 fn device<'a>(
     serial: &'a str,
     packages: &'a [&str],

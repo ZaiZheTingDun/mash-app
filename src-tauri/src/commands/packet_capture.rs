@@ -3,9 +3,9 @@ use crate::commands::settings::AdbDeviceSettings;
 use crate::device_operation::{DeviceOperation, DeviceOperationCoordinator};
 use crate::operation_log;
 use crate::packet_capture::{
-    self, CaptureAppList, CaptureConfiguration, CaptureHistoryState, CaptureRecord, CaptureStarted,
-    CaptureTargetStore, CertificateInstallation, HistoryStore, ResponseState, ResponseStatus,
-    ResponseStore,
+    self, CaptureAppList, CaptureClientContext, CaptureConfiguration, CaptureHistoryState,
+    CaptureRecord, CaptureStarted, CaptureTargetStore, CertificateInstallation, HistoryStore,
+    ResponseState, ResponseStatus, ResponseStore,
 };
 use crate::runner::LogLevel;
 use std::sync::{Arc, Mutex};
@@ -80,6 +80,7 @@ pub(crate) async fn select_packet_capture_app(
 #[tauri::command]
 pub(crate) async fn setup_packet_capture(
     app: tauri::AppHandle,
+    client_context: Option<CaptureClientContext>,
     targets: tauri::State<'_, CaptureTargetStore>,
     server: tauri::State<'_, Mutex<crate::Server>>,
     settings: tauri::State<'_, Mutex<AdbDeviceSettings>>,
@@ -98,7 +99,12 @@ pub(crate) async fn setup_packet_capture(
         let _lease = lease;
         cancellation.check()?;
         responses.ensure_client_selection_allowed()?;
-        let (serial, package) = targets.resolve(server, &adb_path, selected.as_deref())?;
+        let (serial, package) = targets.resolve_checked(
+            server,
+            &adb_path,
+            selected.as_deref(),
+            client_context.as_ref(),
+        )?;
         cancellation.bind_device(&serial)?;
         cancellation.check()?;
         responses.reset();
@@ -276,6 +282,7 @@ pub(crate) async fn install_capture_certificate(
 #[tauri::command]
 pub(crate) async fn start_packet_capture(
     app: tauri::AppHandle,
+    client_context: Option<CaptureClientContext>,
     targets: tauri::State<'_, CaptureTargetStore>,
     server: tauri::State<'_, Mutex<crate::Server>>,
     settings: tauri::State<'_, Mutex<AdbDeviceSettings>>,
@@ -298,7 +305,12 @@ pub(crate) async fn start_packet_capture(
         let _lease = lease;
         cancellation.check()?;
         responses.ensure_client_selection_allowed()?;
-        let (serial, package) = targets.resolve(server, &adb_path, selected.as_deref())?;
+        let (serial, package) = targets.resolve_checked(
+            server,
+            &adb_path,
+            selected.as_deref(),
+            client_context.as_ref(),
+        )?;
         cancellation.bind_device(&serial)?;
         responses.reset();
         let result = packet_capture::start_capture(

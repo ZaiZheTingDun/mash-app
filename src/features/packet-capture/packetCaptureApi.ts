@@ -1,5 +1,5 @@
 import { invoke } from "../../tauri";
-import type { CaptureAppList, CaptureConfiguration, CaptureStarted, CertificateInstallation, PacketCaptureResponseState, CaptureHistoryState, CaptureRecord, PacketCaptureWorkspace } from "../../types/packetCapture";
+import type { CaptureAppList, CaptureClientContext, CaptureConfiguration, CaptureStarted, CertificateInstallation, PacketCaptureResponseState, CaptureHistoryState, CaptureRecord, PacketCaptureWorkspace } from "../../types/packetCapture";
 
 export function installCaptureCertificate(): Promise<CertificateInstallation> {
   return invoke<CertificateInstallation>("install_capture_certificate");
@@ -9,16 +9,16 @@ export function configurePacketCapture(): Promise<CaptureConfiguration> {
   return invoke<CaptureConfiguration>("configure_packet_capture");
 }
 
-export function startPacketCapture(): Promise<CaptureStarted> {
-  return invoke<CaptureStarted>("start_packet_capture");
+export function startPacketCapture(clientContext?: CaptureClientContext): Promise<CaptureStarted> {
+  return invoke<CaptureStarted>("start_packet_capture", clientContext ? { clientContext } : undefined);
 }
 
 export function getPacketCaptureResponse(): Promise<PacketCaptureResponseState> {
   return invoke<PacketCaptureResponseState>("get_packet_capture_response");
 }
 
-export function setupPacketCapture(): Promise<CaptureConfiguration> {
-  return invoke<CaptureConfiguration>("setup_packet_capture");
+export function setupPacketCapture(clientContext?: CaptureClientContext): Promise<CaptureConfiguration> {
+  return invoke<CaptureConfiguration>("setup_packet_capture", clientContext ? { clientContext } : undefined);
 }
 
 export function getPacketCaptureWorkspace(): Promise<PacketCaptureWorkspace> {

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithTheme } from "../../../test/renderWithTheme";
 import { PacketCapturePage } from "../PacketCapturePage";
 import { invokeDevMock } from "../../../devMock";
-import type { CaptureConfiguration, CaptureRecord, PacketCaptureWorkspace } from "../../../types/packetCapture";
+import type { CaptureAppList, CaptureConfiguration, CaptureRecord, PacketCaptureWorkspace } from "../../../types/packetCapture";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 
@@ -82,6 +82,7 @@ describe("PacketCapturePage", () => {
     let progress!: (event: Event<string>) => void;
     const unlisten = vi.fn();
     vi.mocked(listen).mockImplementation(async (name, handler) => {
+      if (name === "packet-capture-context-changed") return () => {};
       expect(name).toBe("packet-capture-start-progress");
       progress = handler as typeof progress;
       return unlisten;
@@ -123,7 +124,8 @@ describe("PacketCapturePage", () => {
     const user = userEvent.setup();
     let progress!: (event: Event<string>) => void;
     const unlisten = vi.fn();
-    vi.mocked(listen).mockImplementation(async (_name, handler) => {
+    vi.mocked(listen).mockImplementation(async (name, handler) => {
+      if (name === "packet-capture-context-changed") return () => {};
       progress = handler as typeof progress; return unlisten;
     });
     let finish!: () => void;
@@ -290,13 +292,14 @@ describe("PacketCapturePage", () => {
     let progress!: (event: Event<string>) => void;
     const unlisten = vi.fn();
     vi.mocked(listen).mockImplementation(async (name, handler) => {
+      if (name === "packet-capture-context-changed") return () => {};
       expect(name).toBe("packet-capture-setup-progress");
       progress = handler as typeof progress;
       return unlisten;
     });
     let finish!: (value: CaptureConfiguration) => void;
     actions.mockImplementation(() => {
-      expect(listen).toHaveBeenCalledTimes(1);
+      expect(listen).toHaveBeenCalledTimes(2);
       return new Promise(resolve => { finish = resolve; });
     });
     renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
@@ -317,7 +320,7 @@ describe("PacketCapturePage", () => {
   it("unsubscribes setup progress when leaving during configuration", async () => {
     const user = userEvent.setup();
     const unlisten = vi.fn();
-    vi.mocked(listen).mockResolvedValue(unlisten);
+    vi.mocked(listen).mockImplementation(async name => name === "packet-capture-context-changed" ? () => {} : unlisten);
     let finish!: (value: CaptureConfiguration) => void;
     actions.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
     const view = renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
@@ -577,7 +580,8 @@ describe("PacketCapturePage cancellation", () => {
     const user = userEvent.setup();
     let progress!: (event: Event<string>) => void;
     const unlisten = vi.fn();
-    vi.mocked(listen).mockImplementation(async (_name, handler) => {
+    vi.mocked(listen).mockImplementation(async (name, handler) => {
+      if (name === "packet-capture-context-changed") return () => {};
       progress = handler as typeof progress;
       return unlisten;
     });
@@ -632,7 +636,7 @@ describe("PacketCapturePage cancellation", () => {
     const user = userEvent.setup();
     let finishListen!: (unlisten: () => void) => void;
     const unlisten = vi.fn();
-    vi.mocked(listen).mockImplementation(() => new Promise(resolve => { finishListen = resolve; }));
+    vi.mocked(listen).mockImplementation(name => name === "packet-capture-context-changed" ? Promise.resolve(() => {}) : new Promise(resolve => { finishListen = resolve; }));
     actions.mockResolvedValue(undefined);
     renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "环境配置" }));
@@ -668,6 +672,70 @@ describe("PacketCapturePage stop recovery", () => {
 describe("PacketCapturePage client selection", () => {
   const channel = { packageName: "com.bilibili.fgo.mi", name: "国服 FGO（渠道服）" };
   const official = { packageName: "com.bilibili.fatego", name: "国服 FGO（官服）" };
+
+  function contextChanged() {
+    const handler = vi.mocked(listen).mock.calls.find(([name]) => name === "packet-capture-context-changed")![1];
+    act(() => handler({ event: "packet-capture-context-changed", id: 1, payload: null }));
+  }
+
+  it.each(["server", "device"] as const)("refreshes the displayed target after switching %s and pins setup/start to it", async change => {
+    const user = userEvent.setup();
+    const original: CaptureAppList = { serial: "device", server: "CN", apps: [channel], selectedPackage: channel.packageName };
+    const app = change === "server" ? { name: "日服 FGO（官服）", packageName: "com.aniplex.fategrandorder" } : official;
+    const next: CaptureAppList = { serial: change === "device" ? "other-device" : "device", server: change === "server" ? "JP" : "CN", apps: [app], selectedPackage: app.packageName };
+    actions.mockResolvedValue(original);
+    renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "选择客户端" });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    await user.click(trigger);
+    await screen.findByRole("button", { name: `${channel.name} · ${channel.packageName}` });
+    await user.keyboard("{Escape}");
+    let finishRefresh!: (value: CaptureAppList) => void;
+    actions.mockImplementation(command => command === "get_packet_capture_apps" ? new Promise(resolve => { finishRefresh = resolve; }) : Promise.resolve(configured));
+    contextChanged();
+    expect(trigger).toHaveTextContent("选择客户端");
+    expect(trigger).not.toHaveTextContent(channel.packageName);
+    await waitFor(() => expect(actions).toHaveBeenLastCalledWith("get_packet_capture_apps", undefined));
+    await user.click(screen.getByRole("button", { name: "环境配置" }));
+    expect(actions.mock.calls.some(([command]) => command === "setup_packet_capture")).toBe(false);
+    await act(async () => finishRefresh(next));
+    await waitFor(() => expect(actions).toHaveBeenLastCalledWith("setup_packet_capture", { clientContext: { serial: next.serial, server: next.server, selectedPackage: next.selectedPackage } }));
+    expect(trigger).toHaveTextContent(app.packageName);
+    await waitFor(() => expect(screen.getByRole("button", { name: "开始" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "开始" }));
+    expect(actions).toHaveBeenLastCalledWith("start_packet_capture", { clientContext: { serial: next.serial, server: next.server, selectedPackage: next.selectedPackage } });
+  });
+
+  it("discards discovery from before a context change and retries after its device lease is released", async () => {
+    const user = userEvent.setup();
+    const original: CaptureAppList = { serial: "old-device", server: "CN", apps: [channel], selectedPackage: channel.packageName };
+    const next: CaptureAppList = { ...original, serial: "new-device", apps: [official], selectedPackage: official.packageName };
+    let finishOld!: (value: CaptureAppList) => void;
+    actions.mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; })).mockResolvedValue(next);
+    renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "选择客户端" });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    await user.click(trigger);
+    contextChanged();
+    expect(actions).toHaveBeenCalledTimes(1);
+    await act(async () => finishOld(original));
+    await waitFor(() => expect(trigger).toHaveTextContent(official.packageName));
+    expect(trigger).not.toHaveTextContent(channel.packageName);
+    expect(actions).toHaveBeenCalledTimes(2);
+  });
+
+  it("blocks device actions when refreshing a changed context fails", async () => {
+    const user = userEvent.setup();
+    actions.mockRejectedValue("设备暂时离线");
+    renderWithTheme(<PacketCapturePage onBack={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "环境配置" })).toBeEnabled());
+    contextChanged();
+    await waitFor(() => expect(actions).toHaveBeenCalledExactlyOnceWith("get_packet_capture_apps", undefined));
+    await user.click(screen.getByRole("button", { name: "环境配置" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("客户端信息已变更");
+    await user.click(screen.getByRole("button", { name: "开始" }));
+    expect(actions).toHaveBeenCalledTimes(1);
+  });
 
   it.each(["light", "dark"] as const)("refreshes from the adjacent action menu without clearing the selection in %s mode", async appearance => {
     const user = userEvent.setup();
@@ -769,7 +837,7 @@ describe("PacketCapturePage client selection", () => {
     expect(actions).toHaveBeenCalledExactlyOnceWith("get_packet_capture_apps", undefined);
     await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: "环境配置" }));
-    expect(actions).toHaveBeenLastCalledWith("setup_packet_capture", undefined);
+    expect(actions).toHaveBeenLastCalledWith("setup_packet_capture", { clientContext: { serial: "device", server: "CN", selectedPackage: channel.packageName } });
   });
 
   it("saves a channel choice and closes the dropdown after backend confirmation", async () => {
